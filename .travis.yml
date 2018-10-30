@@ -1,0 +1,14 @@
+language: c
+compiler:
+  - clang
+  - gcc
+script:
+  - autoreconf -i
+  - ./configure --enable-debug --enable-coverage
+  - make
+  - make ./unit-test
+  - make ./integration-test
+  - ./unit-test
+  - ./integration-test
+after_success:
+  - bash <(curl -s https://codecov.io/bash) -G "./src*"
