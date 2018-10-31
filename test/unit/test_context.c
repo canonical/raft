@@ -1,13 +1,9 @@
 #include "../../include/raft.h"
 
-#include "../../src/context.h"
-
 #include "../lib/munit.h"
 
 /**
- *
  * Setup and tear down
- *
  */
 
 static void *setup(const MunitParameter params[], void *user_data)
@@ -27,9 +23,7 @@ static void tear_down(void *data)
 }
 
 /**
- *
  * raft_context_format
- *
  */
 
 /* Format an empty context. */
@@ -112,39 +106,10 @@ static MunitTest format_tests[] = {
 };
 
 /**
- *
- * raft_context__wrapf
- *
- */
-
-/* Wrap an error message. */
-static MunitResult test_wrapf(const MunitParameter params[], void *data)
-{
-    struct raft_context *ctx = data;
-
-    (void)params;
-
-    raft_context__errorf(ctx, "boom %d", 123);
-    raft_context__wrapf(ctx, "major failure %s", "now");
-
-    munit_assert_string_equal("major failure now: boom 123", ctx->errmsg);
-
-    return MUNIT_OK;
-}
-
-static MunitTest wrapf_tests[] = {
-    {"", test_wrapf, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
-/**
- *
  * Test suite
- *
  */
 
 MunitSuite raft_context_suites[] = {
     {"/format", format_tests, NULL, 1, 0},
-    {"/wrapf", wrapf_tests, NULL, 1, 0},
     {NULL, NULL, NULL, 0, 0},
 };

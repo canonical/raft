@@ -69,6 +69,7 @@ unit_test_SOURCES += \
   test/unit/test_configuration.c \
   test/unit/test_election.c \
   test/unit/test_encoding.c \
+  test/unit/test_error.c \
   test/unit/test_log.c \
   test/unit/test_logger.c \
   test/unit/test_context.c \

@@ -2,6 +2,7 @@
 
 #include "configuration.h"
 #include "election.h"
+#include "error.h"
 #include "log.h"
 #include "logger.h"
 #include "replication.h"
@@ -157,7 +158,9 @@ int raft_state__convert_to_candidate(struct raft *r)
     /* Allocate the votes array. */
     r->candidate_state.votes = raft_malloc(n_voting * sizeof(bool));
     if (r->candidate_state.votes == NULL) {
-        return RAFT_ERR_NOMEM;
+        rv = RAFT_ERR_NOMEM;
+        raft_error__printf(r, rv, "alloc votes array");
+        goto err;
     }
 
     /* Change state */
@@ -175,12 +178,17 @@ int raft_state__convert_to_candidate(struct raft *r)
     raft_state__notify_watcher(r, RAFT_EVENT_STATE_CHANGE);
 
     return 0;
+
+ err:
+    assert(rv != 0);
+    return rv;
 }
 
 int raft_state__convert_to_leader(struct raft *r)
 {
     size_t i;
     size_t n_servers;
+    int rv;
 
     assert(r != NULL);
 
@@ -191,14 +199,15 @@ int raft_state__convert_to_leader(struct raft *r)
     n_servers = r->configuration.n;
     r->leader_state.next_index = raft_malloc(n_servers * sizeof(uint64_t));
     if (r->leader_state.next_index == NULL) {
-        raft__errorf(r, "failed to alloc next_index array");
-        return RAFT_ERR_NOMEM;
+        rv = RAFT_ERR_NOMEM;
+        raft_error__printf(r, rv, "alloc next_index array");
+        goto err;
     }
     r->leader_state.match_index = raft_malloc(n_servers * sizeof(uint64_t));
     if (r->leader_state.match_index == NULL) {
-        raft_free(r->leader_state.next_index);
-        raft__errorf(r, "failed to alloc match_index array");
-        return RAFT_ERR_NOMEM;
+        rv = RAFT_ERR_NOMEM;
+        raft_error__printf(r, rv, "alloc match_index array");
+        goto err;
     }
 
     /* Initialize the next_index and match_index arrays.
@@ -218,4 +227,8 @@ int raft_state__convert_to_leader(struct raft *r)
     raft_replication__send_heartbeat(r);
 
     return 0;
+
+err:
+    assert(rv != 0);
+    return rv;
 }

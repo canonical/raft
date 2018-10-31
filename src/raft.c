@@ -60,7 +60,7 @@ void raft_init(struct raft *r,
     /* Context. */
     r->ctx.state = &r->state;
     r->ctx.current_term = &r->current_term;
-    strcpy(r->ctx.errmsg, "");
+    strcpy(r->errmsg, "");
 
     r->io_queue.requests = NULL;
     r->io_queue.size = 0;

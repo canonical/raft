@@ -38,6 +38,7 @@ enum {
     X(RAFT_ERR_MALFORMED, "encoded data is malformed")                    \
     X(RAFT_ERR_NO_SPACE, "no space left on device")                       \
     X(RAFT_ERR_BUSY, "an append entries request is already in progress")  \
+    X(RAFT_ERR_NOT_LEADER, "server is not the leader")                    \
     X(RAFT_ERR_IO_BUSY, "a log write request is already in progress")
 
 /**
@@ -74,12 +75,6 @@ void raft_heap_set(struct raft_heap *heap);
 void raft_heap_set_default();
 
 /**
- * Size of the errmsg buffer of raft_context, holding a human-readable text
- * describing the last error occurred.
- */
-#define RAFT_CONTEXT_ERRMSG_SIZE 1024
-
-/**
  * Hold the value of a raft term. Guaranteed to be at least 64-bit long.
  */
 typedef unsigned long long raft_term;
@@ -91,19 +86,19 @@ typedef unsigned long long raft_index;
 
 /**
  * Hold contextual information about current raft's state. This information is
- * meant to be included in log and error messages.
+ * meant to be included in log messages.
  *
  * Pointers will be set to NULL when the information is not available.
  */
 struct raft_context
 {
-    unsigned short *state;
-    raft_term *current_term;
-    char errmsg[RAFT_CONTEXT_ERRMSG_SIZE];
+    unsigned short *state;   /* Raft state of the server */
+    raft_term *current_term; /* Current term */
 };
 
 /**
- * Format context information as a simple string, e.g.:
+ * Format context information as a simple string, storing it into the given
+ * buffer, e.g.:
  *
  *   "(state=follower term=2)"
  *
@@ -244,7 +239,7 @@ struct raft_log
     struct raft_entry *entries;  /* Buffer of log entries. */
     size_t size;                 /* Number of available slots in the buffer */
     size_t front, back;          /* Indexes of used slots [front, back). */
-    raft_index offset;               /* Index offest of the first entry. */
+    raft_index offset;           /* Index offest of the first entry. */
     struct raft_entry_ref *refs; /* Log entries reference counts hash table */
     size_t refs_size;            /* Size of the reference counts hash table */
 };
@@ -437,6 +432,12 @@ enum {
 #define RAFT_EVENT_N (RAFT_EVENT_STATE_CHANGE + 1)
 
 /**
+ * Size of the errmsg buffer of a raft_instance, holding a human-readable text
+ * describing the last error occurred.
+ */
+#define RAFT_ERRMSG_SIZE 1024
+
+/**
  * Hold and drive the state of a single raft server in a cluster.
  */
 struct raft
@@ -585,11 +586,6 @@ struct raft
     void (*watchers[RAFT_EVENT_N])(void *, int);
 
     /**
-     * Log and error context.
-     */
-    struct raft_context ctx;
-
-    /**
      * Hold information about in-flight I/O requests that involve memory shared
      * between this raft instance an its I/O implementation.
      */
@@ -598,6 +594,16 @@ struct raft
         struct raft_io_request *requests;
         unsigned size;
     } io_queue;
+
+    /**
+     * Context information, mainly for logging.
+     */
+    struct raft_context ctx;
+
+    /**
+     * Human-readable description of the last error occurred.
+     */
+    char errmsg[RAFT_ERRMSG_SIZE];
 };
 
 /**
@@ -638,6 +644,12 @@ void raft_set_rand(struct raft *r, int (*rand)());
  */
 void raft_set_election_timeout_(struct raft *r,
                                 const unsigned election_timeout);
+
+/**
+ * If the most recent raft_* API call associated with the given raft instance
+ * failed, return a human-readable description of the reason of the failure.
+ */
+const char *raft_errmsg(struct raft *r);
 
 /**
  * Human readable version of the current state.

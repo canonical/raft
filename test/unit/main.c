@@ -5,6 +5,7 @@ extern MunitSuite raft_configuration_suites[];
 extern MunitSuite raft_context_suites[];
 extern MunitSuite raft_election_suites[];
 extern MunitSuite raft_encoding_suites[];
+extern MunitSuite raft_error_suites[];
 extern MunitSuite raft_io_suites[];
 extern MunitSuite raft_log_suites[];
 extern MunitSuite raft_logger_suites[];
@@ -19,6 +20,7 @@ static MunitSuite suites[] = {
     {"context", NULL, raft_context_suites, 1, 0},
     {"election", NULL, raft_election_suites, 1, 0},
     {"encoding", NULL, raft_encoding_suites, 1, 0},
+    {"error", NULL, raft_error_suites, 1, 0},
     {"io", NULL, raft_io_suites, 1, 0},
     {"log", NULL, raft_log_suites, 1, 0},
     {"logger", NULL, raft_logger_suites, 1, 0},

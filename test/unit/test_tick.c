@@ -138,8 +138,9 @@ static MunitResult test_to_candidate_oom(const MunitParameter params[],
     rv = raft_tick(&f->raft, 100);
     munit_assert_int(rv, ==, RAFT_ERR_NOMEM);
 
-    munit_assert_string_equal(f->raft.ctx.errmsg,
-                              "failed to convert to candidate");
+    munit_assert_string_equal(
+        raft_errmsg(&f->raft),
+        "convert to candidate: alloc votes array: out of memory");
 
     return MUNIT_OK;
 }
@@ -161,8 +162,9 @@ static MunitResult test_to_candidate_io_err(const MunitParameter params[],
     rv = raft_tick(&f->raft, 100);
     munit_assert_int(rv, ==, RAFT_ERR_NO_SPACE);
 
-    munit_assert_string_equal(f->raft.ctx.errmsg,
-                              "failed to convert to candidate");
+    munit_assert_string_equal(
+        raft_errmsg(&f->raft),
+        "convert to candidate: write term: no space left on device");
 
     return MUNIT_OK;
 }
@@ -207,8 +209,7 @@ static MunitResult test_to_candidate(const MunitParameter params[], void *data)
     munit_assert_false(f->raft.candidate_state.votes[1]);
 
     /* We have sent vote requests */
-    test_io_get_requests(&f->io, RAFT_IO_REQUEST_VOTE, &events,
-                       &n_events);
+    test_io_get_requests(&f->io, RAFT_IO_REQUEST_VOTE, &events, &n_events);
     munit_assert_int(n_events, ==, 1);
     munit_assert_int(events[0].request_vote.server.id, ==, 2);
     munit_assert_int(events[0].request_vote.args.term, ==, 2);
@@ -294,8 +295,7 @@ static MunitResult test_heartbeat_timeout_elapsed(const MunitParameter params[],
     munit_assert_int(rv, ==, 0);
 
     /* We have sent heartbeats */
-    test_io_get_requests(&f->io, RAFT_IO_APPEND_ENTRIES, &events,
-                       &n_events);
+    test_io_get_requests(&f->io, RAFT_IO_APPEND_ENTRIES, &events, &n_events);
     munit_assert_int(n_events, ==, 1);
     munit_assert_int(events[0].append_entries.server.id, ==, 2);
     munit_assert_int(events[0].append_entries.args.term, ==, 2);
@@ -346,8 +346,7 @@ static MunitResult test_heartbeat_timeout_not_elapsed(
     munit_assert_int(rv, ==, 0);
 
     /* We have sent no heartbeats */
-    test_io_get_requests(&f->io, RAFT_IO_APPEND_ENTRIES, &events,
-                       &n_events);
+    test_io_get_requests(&f->io, RAFT_IO_APPEND_ENTRIES, &events, &n_events);
     munit_assert_int(n_events, ==, 0);
 
     free(events);
@@ -402,8 +401,7 @@ static MunitResult test_candidate_new_election(const MunitParameter params[],
     munit_assert_false(f->raft.candidate_state.votes[1]);
 
     /* We have sent vote requests again */
-    test_io_get_requests(&f->io, RAFT_IO_REQUEST_VOTE, &events,
-                       &n_events);
+    test_io_get_requests(&f->io, RAFT_IO_REQUEST_VOTE, &events, &n_events);
     munit_assert_int(n_events, ==, 1);
     munit_assert_int(events[0].request_vote.server.id, ==, 2);
     munit_assert_int(events[0].request_vote.args.term, ==, 3);
@@ -442,8 +440,7 @@ static MunitResult test_candidate_election_timer_not_expired(
     munit_assert_int(f->raft.state, ==, RAFT_STATE_CANDIDATE);
 
     /* No new vote request has been sent */
-    test_io_get_requests(&f->io, RAFT_IO_REQUEST_VOTE, &events,
-                       &n_events);
+    test_io_get_requests(&f->io, RAFT_IO_REQUEST_VOTE, &events, &n_events);
     munit_assert_int(n_events, ==, 0);
 
     free(events);
@@ -470,8 +467,7 @@ static MunitResult test_request_vote_only_to_voters(
     munit_assert_int(rv, ==, 0);
 
     /* We have sent vote requests only to the voting server */
-    test_io_get_requests(&f->io, RAFT_IO_REQUEST_VOTE, &events,
-                       &n_events);
+    test_io_get_requests(&f->io, RAFT_IO_REQUEST_VOTE, &events, &n_events);
     munit_assert_int(n_events, ==, 1);
     munit_assert_int(events[0].request_vote.server.id, ==, 2);
     munit_assert_int(events[0].request_vote.args.term, ==, 2);

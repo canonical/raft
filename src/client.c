@@ -2,6 +2,7 @@
 
 #include "../include/raft.h"
 
+#include "error.h"
 #include "io.h"
 #include "log.h"
 #include "logger.h"
@@ -12,7 +13,7 @@ int raft_accept(struct raft *r,
                 const unsigned n)
 {
     struct raft_io_request *request;
-    uint64_t index;
+    raft_index index;
     struct raft_entry *entries;
     unsigned m;
     size_t request_id;
@@ -24,7 +25,9 @@ int raft_accept(struct raft *r,
     assert(n > 0);
 
     if (r->state != RAFT_STATE_LEADER) {
-        return RAFT_ERR_NOT_LEADER;
+        rv = RAFT_ERR_NOT_LEADER;
+        raft_error__printf(r, rv, "can't accept entries");
+        goto err;
     }
 
     raft__debugf(r, "client request");
@@ -35,7 +38,7 @@ int raft_accept(struct raft *r,
     /* Append the new entries to the log. */
     for (i = 0; i < n; i++) {
         const struct raft_buffer *buf = &bufs[i];
-        const uint64_t term = r->current_term;
+        const raft_term term = r->current_term;
         rv = raft_log__append(&r->log, term, RAFT_LOG_COMMAND, buf, NULL);
         if (rv != 0) {
             return rv;
@@ -93,6 +96,7 @@ err_after_entries_acquired:
 err_after_log_append:
     raft_log__truncate(&r->log, index);
 
+err:
     assert(rv != 0);
 
     return rv;
