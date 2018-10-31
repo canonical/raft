@@ -4,7 +4,7 @@
 
 #include "binary.h"
 #include "configuration.h"
-#include "context.h"
+#include "error.h"
 #include "election.h"
 #include "log.h"
 #include "logger.h"

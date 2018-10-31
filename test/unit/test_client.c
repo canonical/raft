@@ -85,6 +85,8 @@ static MunitResult test_accept_not_leader(const MunitParameter params[],
 
     rv = raft_accept(&f->raft, &buf, 1);
     munit_assert_int(rv, ==, RAFT_ERR_NOT_LEADER);
+    munit_assert_string_equal(raft_errmsg(&f->raft),
+                              "can't accept entries: server is not the leader");
 
     return MUNIT_OK;
 }

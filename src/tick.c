@@ -3,7 +3,7 @@
 #include "../include/raft.h"
 
 #include "configuration.h"
-#include "context.h"
+#include "error.h"
 #include "election.h"
 #include "logger.h"
 #include "replication.h"
@@ -30,12 +30,12 @@ static int raft_tick__follower(struct raft *r)
             raft__debugf(r, "tick: self elect and convert to leader");
             rv = raft_state__convert_to_candidate(r);
             if (rv != 0) {
-                raft_context__errorf(&r->ctx, "failed to convert to candidate");
+                raft_error__wrapf(r, "convert to candidate");
                 return rv;
             }
             rv = raft_state__convert_to_leader(r);
             if (rv != 0) {
-                raft_context__errorf(&r->ctx, "failed to convert to leader");
+                raft_error__wrapf(r, "convert to leader");
                 return rv;
             }
             return 0;

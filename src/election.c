@@ -2,6 +2,7 @@
 
 #include "configuration.h"
 #include "election.h"
+#include "error.h"
 #include "log.h"
 #include "logger.h"
 
@@ -76,13 +77,15 @@ int raft_election__start(struct raft *r)
     term = r->current_term + 1;
     rv = r->io->write_term(r->io, term);
     if (rv != 0) {
-        return rv;
+        raft_error__printf(r, rv, "write term");
+        goto err;
     }
 
     /* Vote for self */
     rv = r->io->write_vote(r->io, r->id);
     if (rv != 0) {
-        return rv;
+        raft_error__printf(r, rv, "write vote");
+        goto err;
     }
 
     /* Update our cache too. */
@@ -119,6 +122,10 @@ int raft_election__start(struct raft *r)
     }
 
     return 0;
+
+ err:
+    assert(rv != 0);
+    return rv;
 }
 
 int raft_election__maybe_grant_vote(struct raft *r,
