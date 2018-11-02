@@ -13,8 +13,11 @@ enum {
     RAFT_ERR_NOMEM = 1,
     RAFT_ERR_INTERNAL,
     RAFT_ERR_BAD_SERVER_ID,
+    RAFT_ERR_UNKNOWN_SERVER_ID,
     RAFT_ERR_DUP_SERVER_ID,
+    RAFT_ERR_DUP_SERVER_ADDRESS,
     RAFT_ERR_NO_SERVER_ADDRESS,
+    RAFT_ERR_SERVER_ALREADY_VOTING,
     RAFT_ERR_EMPTY_CONFIGURATION,
     RAFT_ERR_CONFIGURATION_NOT_EMPTY,
     RAFT_ERR_MALFORMED,
@@ -23,23 +26,30 @@ enum {
     RAFT_ERR_IO_BUSY,
     RAFT_ERR_NOT_LEADER,
     RAFT_ERR_SHUTDOWN,
+    RAFT_ERR_CONFIGURATION_BUSY
 };
 
 /**
  * Map error codes to error messages.
  */
-#define RAFT_ERRNO_MAP(X)                                                 \
-    X(RAFT_ERR_NOMEM, "out of memory")                                    \
-    X(RAFT_ERR_BAD_SERVER_ID, "server ID is not valid")                   \
-    X(RAFT_ERR_DUP_SERVER_ID, "a server with the same ID already exists") \
-    X(RAFT_ERR_NO_SERVER_ADDRESS, "server has no address")                \
-    X(RAFT_ERR_EMPTY_CONFIGURATION, "configuration has no servers")       \
-    X(RAFT_ERR_CONFIGURATION_NOT_EMPTY, "configuration has servers")      \
-    X(RAFT_ERR_MALFORMED, "encoded data is malformed")                    \
-    X(RAFT_ERR_NO_SPACE, "no space left on device")                       \
-    X(RAFT_ERR_BUSY, "an append entries request is already in progress")  \
-    X(RAFT_ERR_NOT_LEADER, "server is not the leader")                    \
-    X(RAFT_ERR_IO_BUSY, "a log write request is already in progress")
+#define RAFT_ERRNO_MAP(X)                                                \
+    X(RAFT_ERR_NOMEM, "out of memory")                                   \
+    X(RAFT_ERR_INTERNAL, "internal error")                               \
+    X(RAFT_ERR_BAD_SERVER_ID, "server ID is not valid")                  \
+    X(RAFT_ERR_UNKNOWN_SERVER_ID, "server ID is unknown")                \
+    X(RAFT_ERR_DUP_SERVER_ID, "server ID already in use")                \
+    X(RAFT_ERR_DUP_SERVER_ADDRESS, "server address already in use")      \
+    X(RAFT_ERR_NO_SERVER_ADDRESS, "server has no address")               \
+    X(RAFT_ERR_SERVER_ALREADY_VOTING, "server is already voting")        \
+    X(RAFT_ERR_EMPTY_CONFIGURATION, "configuration has no servers")      \
+    X(RAFT_ERR_CONFIGURATION_NOT_EMPTY, "configuration has servers")     \
+    X(RAFT_ERR_MALFORMED, "encoded data is malformed")                   \
+    X(RAFT_ERR_NO_SPACE, "no space left on device")                      \
+    X(RAFT_ERR_BUSY, "an append entries request is already in progress") \
+    X(RAFT_ERR_NOT_LEADER, "server is not the leader")                   \
+    X(RAFT_ERR_IO_BUSY, "a log write request is already in progress")    \
+    X(RAFT_ERR_CONFIGURATION_BUSY,                                       \
+      "a configuration change is already in progress")
 
 /**
  * Return the error message describing the given error code.
@@ -139,9 +149,9 @@ struct raft_buffer
  */
 struct raft_server
 {
-    unsigned id;         /* Server ID, must be greater than zero. */
-    const char *address; /* Server address. User defined. */
-    bool voting;         /* Whether this is a voting server. */
+    unsigned id;   /* Server ID, must be greater than zero. */
+    char *address; /* Server address. User defined. */
+    bool voting;   /* Whether this is a voting server. */
 };
 
 /**
@@ -159,12 +169,19 @@ void raft_configuration_close(struct raft_configuration *c);
 
 /**
  * Add a server to a raft configuration. The given ID must not be already in use
- * by another server in the configuration.
+ * by another server in the configuration. The memory holding the address string
+ * will be copied and can be released after this function returns.
  */
 int raft_configuration_add(struct raft_configuration *c,
                            const unsigned id,
                            const char *address,
                            const bool voting);
+
+/**
+ * Remove a server from a raft configuration. The given ID must match the one of
+ * an existing server in the configuration.
+ */
+int raft_configuration_remove(struct raft_configuration *c, const unsigned id);
 
 /**
  * Log entry types.
@@ -342,7 +359,8 @@ struct raft_io
      * has returned.
      */
     int (*send_request_vote_request)(struct raft_io *io,
-                                     const struct raft_server *server,
+                                     const unsigned id,
+                                     const char *address,
                                      const struct raft_request_vote_args *args);
     /**
      * Asynchronously reply to a RequestVote RPC from the given @server. The
@@ -350,7 +368,8 @@ struct raft_io
      * has returned.
      */
     int (*send_request_vote_response)(struct raft_io *io,
-                                      const struct raft_server *server,
+                                      const unsigned id,
+                                      const char *address,
                                       const struct raft_request_vote_result *);
     /**
      * Asynchronously invoke an AppendEntries RPC on the given @server.
@@ -365,7 +384,8 @@ struct raft_io
      */
     int (*send_append_entries_request)(struct raft_io *io,
                                        const unsigned request_id,
-                                       const struct raft_server *server,
+                                       const unsigned id,
+                                       const char *address,
                                        const struct raft_append_entries_args *);
 
     /**
@@ -375,7 +395,8 @@ struct raft_io
      */
     int (*send_append_entries_response)(
         struct raft_io *io,
-        const struct raft_server *server,
+        const unsigned id,
+        const char *address,
         const struct raft_append_entries_result *);
 };
 
@@ -421,15 +442,46 @@ extern const char *raft_state_names[];
  */
 enum {
     /**
-     * Fired when the server state changes. The initial state is always
+     * Fired when the server state changes.
+     *
+     * The event data is a pointer to an unsigned short integer holding the
+     * value of the previous state.
+     *
+     * The initial state is always RAFT_STATE_FOLLOWER.
      */
-    RAFT_EVENT_STATE_CHANGE = 0
+    RAFT_EVENT_STATE_CHANGE = 0,
+
+    /**
+     * Fired when a log command was committed and applied.
+     *
+     * The event data is a pointer to a @raft_index holding the index of the log
+     * entry that was applied.
+     */
+    RAFT_EVENT_COMMAND_APPLIED,
+
+    /**
+     * Fired when a new configuration was committed and applied.
+     *
+     * The event data is a pointer to the new @raft_configuration.
+     */
+    RAFT_EVENT_CONFIGURATION_APPLIED,
+
+    /**
+     * Fired after @raft_promote has been called, but the server to be promoted
+     * hasn't caught up with logs within a reasonable amount of time or if this
+     * server has lost leadership while waiting for the server to be promoted to
+     * catch up.
+     *
+     * The event data is a pointer to an unsigned int holding the ID of the
+     * server that was being promoted.
+     */
+    RAFT_EVENT_PROMOTION_ABORTED
 };
 
 /**
  * Number of available event types.
  */
-#define RAFT_EVENT_N (RAFT_EVENT_STATE_CHANGE + 1)
+#define RAFT_EVENT_N (RAFT_EVENT_PROMOTION_ABORTED + 1)
 
 /**
  * Size of the errmsg buffer of a raft_instance, holding a human-readable text
@@ -467,9 +519,33 @@ struct raft
     struct raft_log log;    /* Log entries. */
 
     /**
-     * Membership configuration (Chapter 4).
+     * Current membership configuration (Chapter 4).
+     *
+     * At any given moment the current configuration can be committed or
+     * uncommitted.
+     *
+     * If a server is voting, the log entry with index 1 must always contain the
+     * first committed configuration.
+     *
+     * The possible scenarios are:
+     *
+     * 1. #configuration_index and #configuration_uncommited_index are both
+     *    zero. This should only happen when a brand new server starts joining a
+     *    cluster and is waiting to receive log entries from the current
+     *    leader. In this case #configuration must be empty and have no servers.
+     *
+     * 2. #configuration_index is non-zero while #configuration_uncommited_index
+     *    is zero. In this case the content of #configuration must match the one
+     *    of the log entry at #configuration_index.
+     *
+     * 3. #configuration_index and #configuration_uncommited_index are both
+     *    non-zero, with the latter being greater than the former. In this case
+     *    the content of #configuration must match the one of the log entry at
+     *    #configuration_uncommitted_index.
      */
     struct raft_configuration configuration;
+    raft_index configuration_index;
+    raft_index configuration_uncommitted_index;
 
     /**
      * Election timeout in milliseconds (default 1000).
@@ -531,19 +607,8 @@ struct raft
              * The fields below hold the part of the server's volatile state
              * which is specific to followers.
              */
-            const struct raft_server *current_leader;
+            unsigned current_leader_id;
         } follower_state;
-
-        struct
-        {
-            /**
-             * The fields below hold the part of the server's volatile state
-             * which is specific to leaders (Figure 3.1). This state is
-             * reinitialized after the server gets elected.
-             */
-            raft_index *next_index;  /* For each server, next entry to send */
-            raft_index *match_index; /* For each server, highest applied idx */
-        } leader_state;
 
         struct
         {
@@ -554,6 +619,26 @@ struct raft
              */
             bool *votes; /* For each server, whether vote was granted */
         } candidate_state;
+
+        struct
+        {
+            /**
+             * The fields below hold the part of the server's volatile state
+             * which is specific to leaders (Figure 3.1). This state is
+             * reinitialized after the server gets elected.
+             */
+            raft_index *next_index;  /* For each server, next entry to send */
+            raft_index *match_index; /* For each server, highest applied idx */
+
+            /**
+             * Fields used to track the progress of pushing entries to the
+             * server being promoted (4.2.1 Catching up new servers).
+             */
+            unsigned promotee_id;        /* ID of server being promoted, or 0 */
+            unsigned short round_number; /* Number of the current sync round */
+            raft_index round_index;      /* Target of the current round */
+            unsigned round_duration;     /* Duration of the current round */
+        } leader_state;
     };
 
     /**
@@ -583,7 +668,7 @@ struct raft
     /**
      * Registered watchers.
      */
-    void (*watchers[RAFT_EVENT_N])(void *, int);
+    void (*watchers[RAFT_EVENT_N])(void *, int, void *);
 
     /**
      * Hold information about in-flight I/O requests that involve memory shared
@@ -657,6 +742,14 @@ const char *raft_errmsg(struct raft *r);
 const char *raft_state_name(struct raft *r);
 
 /**
+ * Get the log entry with the given index, or NULL.
+ *
+ * The entry data buffer should be considered volatile and can be safely used
+ * only until the next raft_* API call.
+ */
+const struct raft_entry *raft_get_entry(struct raft *r, const raft_index index);
+
+/**
  * Notify the raft instance that a certain amout of time as elapsed.
  *
  * User code needs to call this function periodically, in order to
@@ -684,15 +777,31 @@ int raft_accept(struct raft *r,
                 const unsigned n);
 
 /**
+ * Add a new non-voting server to the cluster configuration.
+ */
+int raft_add_server(struct raft *r, const unsigned id, const char *address);
+
+/**
+ * Promote the given new non-voting server to be a voting one.
+ */
+int raft_promote(struct raft *r, const unsigned id);
+
+/**
+ * Remove the given server from the cluster configuration.
+ */
+int raft_remove_server(struct raft *r, const unsigned id);
+
+/**
  * Register a callback to be fired upon the given event.
  *
  * The @cb callback will be invoked the next time the event with the given ID
- * occurs and will be passed back the @data pointer set on @r and the event ID.
+ * occurs and will be passed back the @data pointer set on @r, the event ID and
+ * a pointer to event-specific information.
  *
  * At most one callback can be registered for each event. Passing a NULL
  * callback disable notifications for that event.
  */
-void raft_watch(struct raft *r, int event, void (*cb)(void *, int));
+void raft_watch(struct raft *r, int event, void (*cb)(void *, int, void *));
 
 /**
  * Process the result of an asynchronous I/O request that involves raft entries
@@ -703,9 +812,7 @@ void raft_watch(struct raft *r, int event, void (*cb)(void *, int));
  * referenced in request that has been completed. The @status parameter must be
  * set to zero if the write was successful, or non-zero otherwise.
  */
-void raft_handle_io(struct raft *r,
-                    const unsigned request_id,
-                    const int status);
+int raft_handle_io(struct raft *r, const unsigned request_id, const int status);
 
 /**
  * Process a RequestVote RPC from the given server.
@@ -714,7 +821,8 @@ void raft_handle_io(struct raft *r,
  * receives a RequestVote RPC request from another server.
  */
 int raft_handle_request_vote(struct raft *r,
-                             const struct raft_server *server,
+                             const unsigned id,
+                             const char *address,
                              const struct raft_request_vote_args *args);
 
 /**
@@ -725,7 +833,8 @@ int raft_handle_request_vote(struct raft *r,
  */
 int raft_handle_request_vote_response(
     struct raft *r,
-    const struct raft_server *server,
+    const unsigned id,
+    const char *address,
     const struct raft_request_vote_result *result);
 
 /**
@@ -735,7 +844,8 @@ int raft_handle_request_vote_response(
  * receives an AppendEntries RPC request from another server.
  */
 int raft_handle_append_entries(struct raft *r,
-                               const struct raft_server *server,
+                               const unsigned id,
+                               const char *address,
                                const struct raft_append_entries_args *args);
 
 /**
@@ -746,7 +856,8 @@ int raft_handle_append_entries(struct raft *r,
  */
 int raft_handle_append_entries_response(
     struct raft *r,
-    const struct raft_server *server,
+    const unsigned id,
+    const char *address,
     const struct raft_append_entries_result *result);
 
 /**

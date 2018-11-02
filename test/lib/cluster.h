@@ -126,6 +126,18 @@ bool test_cluster_has_no_leader(struct test_cluster *c);
 void test_cluster_accept(struct test_cluster *c);
 
 /**
+ * Simulate a client requesting the leader to accept a new entry containing a
+ * configuration change that adds a new non-voting server.
+ */
+void test_cluster_add_server(struct test_cluster *c);
+
+/**
+ * Simulate a client requesting the leader to promote the last server that was
+ * added.
+ */
+void test_cluster_promote(struct test_cluster *c);
+
+/**
  * Return true if at least two log entries were committed to the log.
  */
 bool test_cluster_committed_2(struct test_cluster *c);

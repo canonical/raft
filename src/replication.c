@@ -2,10 +2,14 @@
 #include <string.h>
 
 #include "configuration.h"
-#include "io.h"
+#include "error.h"
 #include "log.h"
 #include "logger.h"
+#include "membership.h"
+#include "queue.h"
 #include "replication.h"
+#include "state.h"
+#include "watch.h"
 
 #ifndef max
 #define max(a, b) ((a) < (b) ? (b) : (a))
@@ -64,6 +68,8 @@ int raft_replication__send_append_entries(struct raft *r, size_t i)
     } else {
         /* Set prevIndex and prevTerm to the index and term of the entry at
          * next_index - 1 */
+        assert(next_index > 1);
+
         args.prev_log_index = next_index - 1;
         args.prev_log_term = raft_log__term_of(&r->log, next_index - 1);
 
@@ -87,7 +93,7 @@ int raft_replication__send_append_entries(struct raft *r, size_t i)
 
     /* Allocate a new raft_io_request slot in the queue of inflight I/O
      * operations and fill the request fields. */
-    rv = raft_io__queue_push(r, &request_id);
+    rv = raft_queue__push(r, &request_id);
     if (rv != 0) {
         goto err_after_entries_acquired;
     }
@@ -95,14 +101,15 @@ int raft_replication__send_append_entries(struct raft *r, size_t i)
     __logf("send %ld entries to server %ld (request ID %ld) (log size %ld)",
            args.n, i, request_id, raft_log__n_entries(&r->log));
 
-    request = raft_io__queue_get(r, request_id);
+    request = raft_queue__get(r, request_id);
     request->index = next_index;
     request->type = RAFT_IO_APPEND_ENTRIES;
     request->entries = args.entries;
     request->n = args.n;
     request->leader_id = r->id;
 
-    rv = r->io->send_append_entries_request(r->io, request_id, server, &args);
+    rv = r->io->send_append_entries_request(r->io, request_id, server->id,
+                                            server->address, &args);
     if (rv != 0) {
         goto err_after_io_queue_push;
     }
@@ -110,7 +117,7 @@ int raft_replication__send_append_entries(struct raft *r, size_t i)
     return 0;
 
 err_after_io_queue_push:
-    raft_io__queue_pop(r, request_id);
+    raft_queue__pop(r, request_id);
 
 err_after_entries_acquired:
     raft_log__release(&r->log, next_index, args.entries, args.n);
@@ -121,10 +128,65 @@ err:
     return rv;
 }
 
-void raft_replication__send_heartbeat(struct raft *r)
+int raft_replication__trigger(struct raft *r, const raft_index index)
 {
+    struct raft_entry *entries;
+    unsigned n;
+    size_t request_id;
+    struct raft_io_request *request;
     size_t i;
+    int rv;
 
+    assert(r->state == RAFT_STATE_LEADER);
+
+    if (index == 0) {
+        goto send_append_entries;
+    }
+
+    /* Acquire all the entries from the given index onwards. */
+    rv = raft_log__acquire(&r->log, index, &entries, &n);
+    if (rv != 0) {
+        goto err_after_log_append;
+    }
+
+    /* We expect this function to be called only when there are actually
+     * some entries to write. */
+    assert(n > 0);
+
+    /* Allocate a new raft_io_request slot in the queue of inflight I/O
+     * operations and fill the request fields. */
+    rv = raft_queue__push(r, &request_id);
+    if (rv != 0) {
+        goto err_after_entries_acquired;
+    }
+
+    request = raft_queue__get(r, request_id);
+    request->index = index;
+    request->type = RAFT_IO_WRITE_LOG;
+    request->entries = entries;
+    request->n = n;
+    request->leader_id = r->id;
+
+    rv = r->io->write_log(r->io, request_id, entries, n);
+    if (rv != 0) {
+        goto err_after_io_queue_push;
+    }
+
+    /* Reset the heartbeat timer: for a full request_timeout period we'll be
+     * good and we won't need to contact followers again, since this was not an
+     * idle period.
+     *
+     * From Figure 3.1:
+     *
+     *   [Rules for Servers] Leaders: Upon election: send initial empty
+     *   AppendEntries RPCs (heartbeat) to each server; repeat during idle
+     *   periods to prevent election timeouts
+     */
+    r->timer = 0;
+
+send_append_entries:
+
+    /* Trigger replication. */
     for (i = 0; i < r->configuration.n; i++) {
         struct raft_server *server = &r->configuration.servers[i];
         int rv;
@@ -141,10 +203,194 @@ void raft_replication__send_heartbeat(struct raft *r)
                         server->id, raft_strerror(rv), rv);
         }
     }
+
+    return 0;
+
+err_after_io_queue_push:
+    raft_queue__pop(r, request_id);
+
+err_after_entries_acquired:
+    raft_log__release(&r->log, index, entries, n);
+
+err_after_log_append:
+    raft_log__truncate(&r->log, index);
+
+    assert(rv != 0);
+
+    return rv;
+}
+
+/**
+ * Helper to be invoked after a promotion of a non-voting server has been
+ * requested via @raft_promote and that server has caught up with logs.
+ *
+ * This function changes the local configuration marking the server being
+ * promoted as actually voting, appends the a RAFT_LOG_CONFIGURATION entry with
+ * the new configuration to the local log and triggers its replication.
+ */
+static int raft_replication__trigger_promotion(struct raft *r)
+{
+    raft_index index;
+    raft_term term = r->current_term;
+    size_t server_index;
+    struct raft_server *server;
+    int rv;
+
+    assert(r->state == RAFT_STATE_LEADER);
+    assert(r->leader_state.promotee_id != 0);
+
+    server_index = raft_configuration__index(&r->configuration,
+                                             r->leader_state.promotee_id);
+    assert(server_index < r->configuration.n);
+
+    server = &r->configuration.servers[server_index];
+
+    assert(!server->voting);
+
+    /* Update our current configuration. */
+    server->voting = true;
+
+    /* Index of the entry being appended. */
+    index = raft_log__last_index(&r->log) + 1;
+
+    /* Encode the new configuration and append it to the log. */
+    rv = raft_log__append_configuration(&r->log, term, &r->configuration);
+    if (rv != 0) {
+        goto err;
+    }
+
+    /* Start writing the new log entry to disk and send it to the followers. */
+    rv = raft_replication__trigger(r, index);
+    if (rv != 0) {
+        goto err_after_log_append;
+    }
+
+    r->leader_state.promotee_id = 0;
+    r->configuration_uncommitted_index = raft_log__last_index(&r->log);
+
+    return 0;
+
+err_after_log_append:
+    raft_log__truncate(&r->log, index);
+
+err:
+    server->voting = false;
+
+    assert(rv != 0);
+    return rv;
+}
+
+int raft_replication__update(struct raft *r,
+                             const struct raft_server *server,
+                             const struct raft_append_entries_result *result)
+{
+    size_t server_index;
+    raft_index *next_index;
+    raft_index *match_index;
+    raft_index last_log_index;
+    bool is_being_promoted;
+    int rv;
+
+    assert(r->state == RAFT_STATE_LEADER);
+
+    server_index = raft_configuration__index(&r->configuration, server->id);
+    assert(server_index < r->configuration.n);
+
+    match_index = &r->leader_state.match_index[server_index];
+    next_index = &r->leader_state.next_index[server_index];
+
+    /* If the reported index is lower than the match index, it must be an out of
+     * order response for an old append entries. Ignore it. */
+    if (*match_index > *next_index - 1) {
+        raft__debugf(r,
+                     "match index higher than reported next index -> ignore");
+        return 0;
+    }
+
+    last_log_index = raft_log__last_index(&r->log);
+
+    /* If the RPC failed because of a log mismatch, retry.
+     *
+     * From Figure 3.1:
+     *
+     *   [Rules for servers] Leaders:
+     *
+     *   - If AppendEntries fails because of log inconsistency:
+     *     decrement nextIndex and retry.
+     */
+    if (!result->success) {
+        /* If the match index is already up-to-date then the rejection must be
+         * stale and come from an out of order message. */
+        if (match_index == next_index - 1) {
+            raft__debugf(r, "match index is up to date -> ignore ");
+            return 0;
+        }
+
+        /* If the peer reports a last index lower than what we believed was its
+         * next index, decrerment the next index to whatever is shorter: our log
+         * or the peer log. Otherwise just blindly decrement next_index by 1. */
+        if (result->last_log_index < *next_index - 1) {
+            *next_index = min(result->last_log_index, last_log_index);
+        } else {
+            *next_index = *next_index - 1;
+        }
+
+        *next_index = max(*next_index, 1);
+
+        raft__infof(r, "log mismatch -> send old entries %ld", *next_index);
+
+        /* Retry, ignoring errors. */
+        raft_replication__send_append_entries(r, server_index);
+
+        return 0;
+    }
+
+    if (result->last_log_index <= *match_index) {
+        /* Like above, this must be a stale response. */
+        raft__debugf(r, "match index is up to date -> ignore ");
+
+        return 0;
+    }
+
+    /* In case of success the remote server is expected to send us back the
+     * value of prevLogIndex + len(entriesToAppend). */
+    assert(result->last_log_index <= last_log_index);
+
+    /* If the RPC succeeded, update our counters for this server.
+     *
+     * From Figure 3.1:
+     *
+     *   [Rules for servers] Leaders:
+     *
+     *   If successful update nextIndex and matchIndex for follower.
+     */
+    *next_index = result->last_log_index + 1;
+    *match_index = result->last_log_index;
+    raft__debugf(r, "match/next idx for server %ld: %ld %ld", server_index,
+                 *match_index, *next_index);
+
+    /* If the server is currently being promoted and is catching with logs,
+     * update the information about the current catch-up round, and possibly
+     * proceed with the promotion. */
+    is_being_promoted = r->leader_state.promotee_id != 0 &&
+                        r->leader_state.promotee_id == server->id;
+    if (is_being_promoted) {
+        int is_up_to_date = raft_membership__update_catch_up_round(r);
+        if (is_up_to_date) {
+            rv = raft_replication__trigger_promotion(r);
+            if (rv != 0) {
+                return rv;
+            }
+        }
+    }
+
+    return 0;
 }
 
 /**
  * Submit a write log request to the I/O implementation.
+ *
+ * It must be called only by followers.
  */
 static int raft_replication__write_log(struct raft *r,
                                        struct raft_entry *entries,
@@ -161,15 +407,14 @@ static int raft_replication__write_log(struct raft *r,
     assert(n > 0);
     assert(leader_id != 0);
 
-    /* This should be called be either followers or leaders. */
-    assert(r->state == RAFT_STATE_FOLLOWER || r->state == RAFT_STATE_LEADER);
+    assert(r->state == RAFT_STATE_FOLLOWER);
 
-    rv = raft_io__queue_push(r, &request_id);
+    rv = raft_queue__push(r, &request_id);
     if (rv != 0) {
         return rv;
     }
 
-    request = raft_io__queue_get(r, request_id);
+    request = raft_queue__get(r, request_id);
     request->type = RAFT_IO_WRITE_LOG;
     request->entries = entries;
     request->n = n;
@@ -178,22 +423,29 @@ static int raft_replication__write_log(struct raft *r,
 
     rv = r->io->write_log(r->io, request_id, entries, n);
     if (rv != 0) {
-        raft_io__queue_pop(r, request_id);
+        raft_queue__pop(r, request_id);
         return rv;
     }
 
     return 0;
 }
 
-int raft_replication__maybe_append(struct raft *r,
-                                   const struct raft_append_entries_args *args,
-                                   bool *success,
-                                   bool *async)
+int raft_replication__append(struct raft *r,
+                             const struct raft_append_entries_args *args,
+                             bool *success,
+                             bool *async)
 {
     size_t i;
     struct raft_entry *entries;
     size_t n;
     int rv;
+
+    assert(r != NULL);
+    assert(args != NULL);
+    assert(success != NULL);
+    assert(async != NULL);
+
+    assert(r->state == RAFT_STATE_FOLLOWER);
 
     *success = false;
     *async = false;
@@ -210,15 +462,15 @@ int raft_replication__maybe_append(struct raft *r,
      *   term matches prevLogTerm.
      */
     if (args->prev_log_index > 0) {
-        uint64_t our_prev_term =
+        raft_term local_prev_term =
             raft_log__term_of(&r->log, args->prev_log_index);
 
-        if (our_prev_term == 0) {
+        if (local_prev_term == 0) {
             raft__debugf(r, "no entry at previous index -> reject");
             return 0;
         }
 
-        if (our_prev_term != args->prev_log_term) {
+        if (local_prev_term != args->prev_log_term) {
             if (args->prev_log_index <= r->commit_index) {
                 /* Should never happen; something is seriously wrong! */
                 raft__errorf(r,
@@ -242,10 +494,10 @@ int raft_replication__maybe_append(struct raft *r,
      */
     for (i = 0; i < args->n; i++) {
         struct raft_entry *new_entry = &args->entries[i];
-        uint64_t new_entry_index = args->prev_log_index + 1 + i;
-        uint64_t our_term = raft_log__term_of(&r->log, new_entry_index);
+        raft_index new_entry_index = args->prev_log_index + 1 + i;
+        raft_term local_term = raft_log__term_of(&r->log, new_entry_index);
 
-        if (our_term > 0 && our_term != new_entry->term) {
+        if (local_term > 0 && local_term != new_entry->term) {
             if (new_entry_index <= r->commit_index) {
                 /* Should never happen; something is seriously wrong! */
                 raft__errorf(r,
@@ -257,6 +509,12 @@ int raft_replication__maybe_append(struct raft *r,
 
             raft__debugf(r, "log mismatch -> truncate (%ld)", new_entry_index);
 
+            /* Discard any uncommitted voting change. */
+            rv = raft_membership__rollback(r);
+            if (rv != 0) {
+                return rv;
+            }
+
             /* Delete all entries from this index on because they don't match */
             rv = r->io->truncate_log(r->io, new_entry_index);
             if (rv != 0) {
@@ -267,9 +525,9 @@ int raft_replication__maybe_append(struct raft *r,
             /* We want to append all entries from here on, replacing anything
              * that we had before. */
             break;
-        } else if (our_term == 0) {
-            /* We don't an entry at this index, so we want to append the new one
-             * and all the subsequent ones. */
+        } else if (local_term == 0) {
+            /* We don't have an entry at this index, so we want to append this
+             * new one and all the subsequent ones. */
             break;
         }
     }
@@ -278,12 +536,30 @@ int raft_replication__maybe_append(struct raft *r,
 
     n = args->n - i;
     if (n == 0) {
-        /* This is an empty AppendEntries, there's nothing write. */
+        /* This is an empty AppendEntries, there's nothing write. However we
+         * still want to check if we can commit some entry.
+         *
+         * From Figure 3.1:
+         *
+         *   AppendEntries RPC: Receiver implementation: If leaderCommit >
+         *   commitIndex, set commitIndex = min(leaderCommit, index of last new
+         *   entry).
+         */
+        if (args->leader_commit > r->commit_index) {
+            raft_index last_index = raft_log__last_index(&r->log);
+            r->commit_index = min(args->leader_commit, last_index);
+            rv = raft_replication__apply(r);
+            if (rv != 0) {
+                return rv;
+            }
+        }
         return 0;
     }
 
     *async = true;
 
+    /* If we need to write only a part of the given entries, create a new array
+     * and free the one from the request. */
     if (i == 0) {
         entries = args->entries;
     } else {
@@ -307,95 +583,88 @@ int raft_replication__maybe_append(struct raft *r,
     return 0;
 }
 
-void raft_replication__update_server(
-    struct raft *r,
-    size_t server_index,
-    const struct raft_append_entries_result *result)
+/**
+ * Apply a RAFT_LOG_CONFIGURATION entry that has been committed.
+ */
+static void raft_replication__apply_configuration(struct raft *r,
+                                                  const raft_index index)
 {
-    raft_index *next_index;
-    raft_index *match_index;
-    raft_index last_log_index;
+    assert(index > 0);
 
-    match_index = &r->leader_state.match_index[server_index];
-    next_index = &r->leader_state.next_index[server_index];
-
-    /* If the reported index is lower than the match index, it must be an out of
-     * order response for an old append entries. Ignore it. */
-    if (*match_index > *next_index - 1) {
-        raft__debugf(r,
-                     "match index higher than reported next index -> ignore");
-        return;
+    /* If this is an uncommitted configuration that we had already applied when
+     * submitting the configuration change (for leaders) or upon receiving it
+     * via an AppendEntries RPC (for followers), then reset the uncommitted
+     * index, since that uncommitted configuration is now committed. */
+    if (r->configuration_uncommitted_index == index) {
+        r->configuration_uncommitted_index = 0;
     }
 
-    last_log_index = raft_log__last_index(&r->log);
+    r->configuration_index = index;
 
-    /* If the RPC failed because of a log mismatch, retry.
+    /* If we are leader but not part of this new configuration, step down.
      *
-     * From Figure 3.1:
+     * From Section 4.2.2:
      *
-     *   [Rules for servers] Leaders:
-     *
-     *   - If AppendEntries fails because of log inconsistency:
-     *     decrement nextIndex and retry.
+     *   In this approach, a leader that is removed from the configuration steps
+     *   down once the Cnew entry is committed.
      */
-    if (!result->success) {
-        /* If the match index is already up-to-date then the rejection must be
-         * stale and come from an out of order message. */
-        if (match_index == next_index - 1) {
-            raft__debugf(r, "match index is up to date -> ignore ");
-            return;
-        }
-
-        /* If the peer reports a last index lower than what we believed was its
-         * next index, decrerment the next index to whatever is shorter: our log
-         * or the peer log. Otherwise just blindly decrement next_index by 1. */
-        if (result->last_log_index < *next_index - 1) {
-            *next_index = min(result->last_log_index, last_log_index);
-        } else {
-            *next_index = *next_index - 1;
-        }
-
-        *next_index = max(*next_index, 1);
-
-        raft__infof(r, "log mismatch -> send old entries %ld", *next_index);
-
-        /* Retry, ignoring errors. */
-        raft_replication__send_append_entries(r, server_index);
-
-        return;
+    if (r->state == RAFT_STATE_LEADER &&
+        raft_configuration__get(&r->configuration, r->id) == NULL) {
+        /* Ignore the return value, since we can't fail in this case (no actual
+	 * write for the new term will be done) */
+        raft_state__convert_to_follower(r, r->current_term);
     }
 
-    if (result->last_log_index <= *match_index) {
-        /* Like above, this must be a stale response. */
-        raft__debugf(r, "match index is up to date -> ignore ");
-
-        return;
-    }
-
-    /* In case of success the remote server is expected to send us back the
-     * value of prevLogIndex + len(entriesToAppend). */
-    assert(result->last_log_index <= last_log_index);
-
-    /* If the RPC succeeded, update our counters for this server.
-     *
-     * From Figure 3.1:
-     *
-     *   [Rules for servers] Leaders:
-     *
-     *   If successful update nextIndex and matchIndex for follower.
-     */
-    *next_index = result->last_log_index + 1;
-    *match_index = result->last_log_index;
-    raft__debugf(r, "match/next idx for server %ld: %ld %ld", server_index,
-                 *next_index, *match_index);
-
-    return;
+    raft_watch__configuration_applied(r);
 }
 
-void raft_replication__maybe_commit(struct raft *r, raft_index index)
+int raft_replication__apply(struct raft *r)
+{
+    raft_index index;
+    int rv;
+
+    assert(r->state == RAFT_STATE_LEADER || r->state == RAFT_STATE_FOLLOWER);
+    assert(r->last_applied <= r->commit_index);
+
+    if (r->last_applied == r->commit_index) {
+        /* Nothing to do. */
+        return 0;
+    }
+
+    for (index = r->last_applied + 1; index <= r->commit_index; index++) {
+        const struct raft_entry *entry = raft_log__get(&r->log, index);
+
+        assert(entry->type == RAFT_LOG_COMMAND ||
+               entry->type == RAFT_LOG_CONFIGURATION);
+
+        switch (entry->type) {
+            case RAFT_LOG_COMMAND:
+                /* TODO: Apply to user defined FSM. */
+                // raft_watch__command_applied(r, index);
+                rv = 0;
+                break;
+            case RAFT_LOG_CONFIGURATION:
+                raft_replication__apply_configuration(r, index);
+                rv = 0;
+                break;
+        }
+
+        if (rv != 0) {
+            raft_error__wrapf(r, "apply entry %ld at term %ld", index,
+                              entry->term);
+            break;
+        }
+    }
+
+    return rv;
+}
+
+void raft_replication__quorum(struct raft *r, const raft_index index)
 {
     size_t votes = 0;
     size_t i;
+
+    assert(r->state == RAFT_STATE_LEADER);
 
     if (index <= r->commit_index) {
         return;
@@ -417,5 +686,9 @@ void raft_replication__maybe_commit(struct raft *r, raft_index index)
 
     if (votes > raft_configuration__n_voting(&r->configuration) / 2) {
         r->commit_index = index;
+
+        __logf("new commit index %ld", r->commit_index);
     }
+
+    return;
 }

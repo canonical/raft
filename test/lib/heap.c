@@ -66,7 +66,12 @@ static void *test__realloc(void *data, void *ptr, size_t size)
     }
 
     ptr = realloc(ptr, size);
-    munit_assert_ptr_not_null(ptr);
+
+    if (size == 0) {
+        munit_assert_ptr_null(ptr);
+    } else {
+        munit_assert_ptr_not_null(ptr);
+    }
 
     return ptr;
 }

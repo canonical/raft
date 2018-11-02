@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 
 #include "../../src/log.h"
@@ -5,6 +6,11 @@
 #include "cluster.h"
 #include "munit.h"
 #include "raft.h"
+
+/**
+ * Maximum number of servers the cluster can grow to.
+ */
+#define TEST_CLUSTER__N 16
 
 static int test_cluster__rand()
 {
@@ -40,14 +46,14 @@ void test_cluster_setup(const MunitParameter params[], struct test_cluster *c)
     munit_assert_int(c->n, >, 0);
     munit_assert_int(c->n_voting, >, 0);
     munit_assert_int(c->n_voting, <=, c->n);
+    munit_assert_int(c->n, <=, TEST_CLUSTER__N);
 
-    c->loggers = raft_calloc(c->n, sizeof *c->loggers);
-    c->ios = raft_calloc(c->n, sizeof *c->ios);
-    c->rafts = raft_calloc(c->n, sizeof *c->rafts);
+    c->loggers = raft_calloc(TEST_CLUSTER__N, sizeof *c->loggers);
+    c->ios = raft_calloc(TEST_CLUSTER__N, sizeof *c->ios);
+    c->rafts = raft_calloc(TEST_CLUSTER__N, sizeof *c->rafts);
+    c->alive = raft_calloc(TEST_CLUSTER__N, sizeof *c->alive);
 
     c->time = 0;
-    c->alive = raft_calloc(c->n, sizeof *c->alive);
-
     c->leader_id = 0;
 
     test_network_setup(params, &c->network, c->n);
@@ -135,14 +141,19 @@ static void test_cluster__flush_io(struct test_cluster *c)
         /* TODO: simulate unsuccessful I/O ? */
 
         if (write_log_n > 0) {
+            int rv;
             munit_assert_int(write_log_n, ==, 1); /* At most one write. */
-            raft_handle_io(raft, write_log_requests[0].id, 0);
+
+            rv = raft_handle_io(raft, write_log_requests[0].id, 0);
+            munit_assert_int(rv, ==, 0);
         }
 
         if (append_entries_n > 0) {
             size_t i;
             for (i = 0; i < append_entries_n; i++) {
-                raft_handle_io(raft, append_entries_requests[i].id, 0);
+                int rv;
+                rv = raft_handle_io(raft, append_entries_requests[i].id, 0);
+                munit_assert_int(rv, ==, 0);
             }
         }
 
@@ -377,12 +388,12 @@ static bool test_cluster__update_leader(struct test_cluster *c)
                 break;
             }
 
-            if (raft->follower_state.current_leader == NULL) {
+            if (raft->follower_state.current_leader_id == 0) {
                 acked = false;
                 break;
             }
 
-            if (raft->follower_state.current_leader->id != leader_id) {
+            if (raft->follower_state.current_leader_id != leader_id) {
                 acked = false;
                 break;
             }
@@ -573,6 +584,71 @@ void test_cluster_accept(struct test_cluster *c)
     buf.len = sizeof *entry_id;
 
     rv = raft_accept(raft, &buf, 1);
+    munit_assert_int(rv, ==, 0);
+}
+
+void test_cluster_add_server(struct test_cluster *c)
+{
+    unsigned leader_id = test_cluster_leader(c);
+    unsigned id = c->n + 1;
+    char *address = munit_malloc(4);
+    struct raft_logger *logger;
+    struct raft_io *io;
+    struct raft *raft;
+    struct test_host *host;
+    struct raft *leader;
+    MunitParameter params[] = {{NULL, NULL}};
+    int rv;
+
+    /* Create a new raft instance for the new server. */
+    c->n++;
+
+    munit_assert_int(c->n, <=, TEST_CLUSTER__N);
+
+    logger = &c->loggers[c->n - 1];
+    io = &c->ios[c->n - 1];
+    raft = &c->rafts[c->n - 1];
+
+    test_network_add_host(&c->network);
+    host = test_network_host(&c->network, id);
+
+    c->alive[c->n - 1] = true;
+
+    test_logger_setup(params, logger, id);
+    test_logger_time(logger, c, test_cluster__time);
+
+    test_io_setup(params, io);
+    test_io_set_network(io, &c->network, id);
+
+    raft_init(raft, io, c, id);
+
+    raft_set_logger(raft, logger);
+    raft_set_rand(raft, test_cluster__rand);
+    raft_set_election_timeout_(raft, 250);
+
+    host->raft = raft;
+
+    sprintf(address, "%d", id);
+
+    leader = &c->rafts[leader_id - 1];
+
+    rv = raft_add_server(leader, id, address);
+    munit_assert_int(rv, ==, 0);
+
+    free(address);
+}
+
+void test_cluster_promote(struct test_cluster *c) {
+    unsigned leader_id = test_cluster_leader(c);
+    unsigned id;
+    struct raft *leader;
+    int rv;
+
+    leader = &c->rafts[leader_id - 1];
+
+    id = c->n; /* Last server that was added. */
+
+    rv = raft_promote(leader, id);
     munit_assert_int(rv, ==, 0);
 }
 

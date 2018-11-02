@@ -1,8 +1,8 @@
 #include "../../include/raft.h"
 
 #include "../../src/configuration.h"
-#include "../../src/io.h"
 #include "../../src/log.h"
+#include "../../src/queue.h"
 #include "../../src/replication.h"
 #include "../../src/state.h"
 
@@ -65,12 +65,12 @@ static void __io_completed(struct fixture *f, size_t request_id)
 {
     struct raft_io_request *request;
 
-    request = raft_io__queue_get(&f->raft, request_id);
+    request = raft_queue__get(&f->raft, request_id);
 
     raft_log__release(&f->raft.log, request->index, request->entries,
                       request->n);
 
-    raft_io__queue_pop(&f->raft, request_id);
+    raft_queue__pop(&f->raft, request_id);
 
     test_io_flush(&f->io);
 }
@@ -219,13 +219,13 @@ static MunitTest send_append_entries_tests[] = {
 };
 
 /**
- * raft_replication__send_append_entries
+ * raft_replication__trigger
  */
 
 /* A failure occurs upon submitting the I/O request for a particular server, the
  * I/O requests for other servers are still submitted. */
-static MunitResult test_send_heartbeat_io_err(const MunitParameter params[],
-                                              void *data)
+static MunitResult test_trigger_io_err(const MunitParameter params[],
+                                       void *data)
 {
     struct fixture *f = data;
     struct test_io_request request;
@@ -239,7 +239,7 @@ static MunitResult test_send_heartbeat_io_err(const MunitParameter params[],
 
     test_io_fault(&f->io, 0, 1);
 
-    raft_replication__send_heartbeat(&f->raft);
+    raft_replication__trigger(&f->raft, 0);
 
     test_io_get_one_request(&f->io, RAFT_IO_APPEND_ENTRIES, &request);
 
@@ -248,8 +248,8 @@ static MunitResult test_send_heartbeat_io_err(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static MunitTest send_heartbeat_tests[] = {
-    {"/io-err", test_send_heartbeat_io_err, setup, tear_down, 0, NULL},
+static MunitTest trigger_tests[] = {
+    {"/io-err", test_trigger_io_err, setup, tear_down, 0, NULL},
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 
@@ -258,6 +258,6 @@ static MunitTest send_heartbeat_tests[] = {
  */
 MunitSuite raft_replication_suites[] = {
     {"/send-append-entries", send_append_entries_tests, NULL, 1, 0},
-    {"/send-heartbeat", send_heartbeat_tests, NULL, 1, 0},
+    {"/trigger", trigger_tests, NULL, 1, 0},
     {NULL, NULL, NULL, 0, 0},
 };

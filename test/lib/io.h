@@ -47,22 +47,26 @@ struct test_io_request
         } write_log;
         struct
         {
-            struct raft_server server;
+            unsigned id;
+            const char *address;
             struct raft_request_vote_args args;
         } request_vote;
         struct
         {
-            struct raft_server server;
+            unsigned id;
+            const char *address;
             struct raft_request_vote_result result;
         } request_vote_response;
         struct
         {
-            struct raft_server server;
+            unsigned id;
+            const char *address;
             struct raft_append_entries_args args;
         } append_entries;
         struct
         {
-            struct raft_server server;
+            unsigned id;
+            const char *address;
             struct raft_append_entries_result result;
         } append_entries_response;
     };
@@ -119,6 +123,11 @@ void test_io_get_requests(struct raft_io *io,
                           int type,
                           struct test_io_request **requests,
                           size_t *n);
+
+/**
+ * Get the number of pending requests of the given type.
+ */
+size_t test_io_n_requests(struct raft_io *io, int type);
 
 /**
  * Get a pending event of the given type, and assert that it's the only one with

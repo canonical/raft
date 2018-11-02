@@ -1,13 +1,16 @@
 /**
- *
  * In-memory cache of the persistent raft log stored on disk.
- *
  */
 
 #ifndef RAFT_LOG_H
 #define RAFT_LOG_H
 
 #include "../include/raft.h"
+
+/**
+ * Initial size of the entry reference count hash table.
+ */
+#define RAFT_LOG__REFS_INITIAL_SIZE 256
 
 void raft_log__init(struct raft_log *l);
 
@@ -21,6 +24,22 @@ int raft_log__append(struct raft_log *l,
                      const int type,
                      const struct raft_buffer *buf,
                      void *batch);
+
+/**
+ * Convenience to append a series of RAFT_LOG_COMMAND entries.
+ */
+int raft_log__append_commands(struct raft_log *l,
+                              const raft_term term,
+                              const struct raft_buffer bufs[],
+                              const unsigned n);
+
+/**
+ * Convenience to encode and append a single RAFT_LOG_CONFIGURATION entry.
+ */
+int raft_log__append_configuration(
+    struct raft_log *l,
+    const raft_term term,
+    const struct raft_configuration *configuration);
 
 /**
  * Get the current number of entries in the log.
@@ -49,6 +68,9 @@ raft_term raft_log__last_term(struct raft_log *l);
 
 /**
  * Get the entry with the given index.
+ *
+ * The returned pointer remains valid only as long as no API that might delete
+ * the entry with the given index is invoked.
  */
 const struct raft_entry *raft_log__get(struct raft_log *l,
                                        const raft_index index);
@@ -56,7 +78,7 @@ const struct raft_entry *raft_log__get(struct raft_log *l,
 /**
  * Acquire an array of entries from the given index onwards.
  *
- * The the payload memory referenced by *buf attribute of the returned entries
+ * The payload memory referenced by the #buf attribute of the returned entries
  * is guaranteed to be valid until raft_log__release() is called.
  */
 int raft_log__acquire(struct raft_log *l,

@@ -7,6 +7,11 @@
 
 #define RAFT_ENCODING__VERSION 1
 
+/* We rely on the size of char to be 8 bits. */
+#ifdef static_assert
+static_assert(sizeof(char) == sizeof(uint8_t), "Size of 'char' is not 8 bits");
+#endif
+
 static void raft_encode__uint8(void **cursor, uint8_t value)
 {
     *(uint8_t *)(*cursor) = value;
@@ -123,65 +128,10 @@ int raft_encode_configuration(const struct raft_configuration *c,
     return 0;
 }
 
-static size_t raft_decode__configuration_size(const struct raft_buffer *buf)
-{
-    void *cursor = buf->base;
-    size_t size = 0;
-    size_t n_servers;
-    size_t i;
-
-    assert(buf->base != NULL);
-    assert(buf->len > 0);
-
-    /* Check the encoding format version */
-    if (raft_decode__uint8(&cursor) != RAFT_ENCODING__VERSION) {
-        return 0;
-    }
-
-    assert(cursor < buf->base + buf->len);
-
-    /* Read the number of servers. */
-    n_servers = raft_decode__uint64(&cursor);
-
-    /* Space needed for the raft_server array */
-    size += n_servers * sizeof(struct raft_server);
-
-    assert(cursor < buf->base + buf->len);
-
-    /* Figure the space needed for the addresses. */
-    for (i = 0; i < n_servers; i++) {
-        size_t address_len = 0;
-
-        /* Skip server ID. */
-	raft_decode__uint64(&cursor);
-
-        /* Server Address. */
-        while (cursor < buf->base + buf->len) {
-            address_len++;
-            if (*(char*)cursor == 0) {
-                break;
-            }
-            cursor++;
-        }
-        if (cursor == buf->base + buf->len) {
-            return 0;
-        }
-        cursor++;
-
-        size += address_len;
-
-        /* Skip voting flag. */
-	raft_decode__uint8(&cursor);
-    };
-
-    return size;
-}
-
 int raft_decode_configuration(const struct raft_buffer *buf,
                               struct raft_configuration *c)
 {
     void *cursor;
-    uint8_t *addresses;
     size_t i;
     size_t n;
 
@@ -197,51 +147,48 @@ int raft_decode_configuration(const struct raft_buffer *buf,
     }
     assert(c->servers == NULL);
 
-    n = raft_decode__configuration_size(buf);
-    if (n == 0) {
+    cursor = buf->base;
+
+    /* Check the encoding format version */
+    if (raft_decode__uint8(&cursor) != RAFT_ENCODING__VERSION) {
         return RAFT_ERR_MALFORMED;
     }
 
-    /* Allocate enough space for the raft_server objects and the addresses
-       strings. */
-    c->servers = raft_malloc(n);
-    if (c->servers == NULL) {
-        return RAFT_ERR_NOMEM;
-    }
-
-    cursor = buf->base;
-
-    /* Skip the version byte */
-    raft_decode__uint8(&cursor);
-
-    assert(cursor < buf->base + n);
-
     /* Read the number of servers. */
-    c->n = raft_decode__uint64(&cursor);
+    n = raft_decode__uint64(&cursor);
 
-    assert(cursor < buf->base + n);
-
-    /* Set addresses buffer, just after the servers array. */
-    addresses = (uint8_t *)(c->servers) + c->n * sizeof(struct raft_server);
-
-    /* Decode the individual server objects. */
-    for (i = 0; i < c->n; i++) {
-        size_t address_len;
+    /* Decode the individual servers. */
+    for (i = 0; i < n; i++) {
+        unsigned id;
+        size_t address_len = 0;
+        const char *address;
+        bool voting;
+        int rv;
 
         /* Server ID. */
-        c->servers[i].id = raft_decode__uint64(&cursor);
+        id = raft_decode__uint64(&cursor);
 
         /* Server Address. */
-        c->servers[i].address = (char *)addresses;
-        strcpy((char *)addresses, (const char *)cursor);
-
-        address_len = strlen((const char *)cursor) + 1;
-        cursor += address_len;
-        addresses += address_len;
+        while (cursor + address_len < buf->base + buf->len) {
+            if (*(char *)(cursor + address_len) == 0) {
+                break;
+            }
+            address_len++;
+        }
+        if (cursor + address_len == buf->base + buf->len) {
+            return RAFT_ERR_MALFORMED;
+        }
+        address = (const char *)cursor;
+        cursor += address_len + 1;
 
         /* Voting flag. */
-        c->servers[i].voting = raft_decode__uint8(&cursor);
-    };
+        voting = raft_decode__uint8(&cursor);
+
+        rv = raft_configuration_add(c, id, address, voting);
+        if (rv != 0) {
+            return rv;
+        }
+    }
 
     return 0;
 }

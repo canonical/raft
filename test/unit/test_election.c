@@ -56,10 +56,13 @@ static void tear_down(void *data)
     free(f);
 }
 
+/**
+ * raft_election__vote
+ */
+
 /* The server requesting the vote has a new term than us. */
-static MunitResult test_maybe_grant_vote_newer_term(
-    const MunitParameter params[],
-    void *data)
+static MunitResult test_vote_newer_term(const MunitParameter params[],
+                                        void *data)
 {
     struct fixture *f = data;
     struct raft_request_vote_args args;
@@ -75,7 +78,7 @@ static MunitResult test_maybe_grant_vote_newer_term(
     args.last_log_index = 1;
     args.last_log_term = 1;
 
-    rv = raft_election__maybe_grant_vote(&f->raft, &args, &granted);
+    rv = raft_election__vote(&f->raft, &args, &granted);
     munit_assert_int(rv, ==, 0);
 
     munit_assert_true(granted);
@@ -83,8 +86,8 @@ static MunitResult test_maybe_grant_vote_newer_term(
     return MUNIT_OK;
 }
 
-static MunitTest maybe_grant_vote_tests[] = {
-    {"/", test_maybe_grant_vote_newer_term, setup, tear_down, 0, NULL},
+static MunitTest vote_tests[] = {
+    {"/newer-term", test_vote_newer_term, setup, tear_down, 0, NULL},
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 
@@ -92,6 +95,6 @@ static MunitTest maybe_grant_vote_tests[] = {
  * Suite
  */
 MunitSuite raft_election_suites[] = {
-    {"/maybe-grant-vote", maybe_grant_vote_tests, NULL, 1, 0},
+    {"/vote", vote_tests, NULL, 1, 0},
     {NULL, NULL, NULL, 0, 0},
 };

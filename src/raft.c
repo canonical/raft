@@ -6,7 +6,7 @@
 
 #include "configuration.h"
 #include "election.h"
-#include "io.h"
+#include "queue.h"
 #include "log.h"
 #include "state.h"
 
@@ -31,6 +31,8 @@ void raft_init(struct raft *r,
     raft_log__init(&r->log);
 
     raft_configuration_init(&r->configuration);
+    r->configuration_index = 0;
+    r->configuration_uncommitted_index = 0;
 
     r->election_timeout = 1000;
     r->heartbeat_timeout = 100;
@@ -45,7 +47,7 @@ void raft_init(struct raft *r,
      *   When servers start up, they begin as followers.
      */
     r->state = RAFT_STATE_FOLLOWER;
-    r->follower_state.current_leader = NULL;
+    r->follower_state.current_leader_id = 0;
     r->leader_state.next_index = NULL;
     r->leader_state.match_index = NULL;
     r->candidate_state.votes = NULL;
@@ -70,7 +72,7 @@ void raft_close(struct raft *r)
 {
     assert(r != NULL);
 
-    raft_io__queue_close(r);
+    raft_queue__close(r);
 
     raft_state__clear(r);
     raft_log__close(&r->log);
@@ -100,4 +102,12 @@ void raft_set_election_timeout_(struct raft *r, const unsigned election_timeout)
 const char *raft_state_name(struct raft *r)
 {
     return raft_state_names[r->state];
+}
+
+const struct raft_entry *raft_get_entry(struct raft *r, const raft_index index)
+{
+    assert(r != NULL);
+    assert(index > 0);
+
+    return raft_log__get(&r->log, index);
 }
