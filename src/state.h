@@ -14,10 +14,22 @@
  */
 void raft_state__clear(struct raft *r);
 
-int raft_state__update_current_term(struct raft *r, raft_term term);
+/**
+ * Bump the current term to the given value and reset our vote, persiting the
+ * change to disk.
+ */
+int raft_state__bump_current_term(struct raft *r, raft_term term);
 
 /**
  * Convert from candidate or leader to follower.
+ *
+ * From Figure 3.1:
+ *
+ *   If election timeout elapses without receiving AppendEntries RPC from
+ *   current leader or granting vote to candidate: convert to candidate.
+ *
+ * The above implies that we need to reset the election timer when converting to
+ * follower.
  */
 int raft_state__convert_to_follower(struct raft *r, raft_term term);
 
@@ -52,5 +64,14 @@ int raft_state__convert_to_candidate(struct raft *r);
  *   index just after the last one in its log.
  */
 int raft_state__convert_to_leader(struct raft *r);
+
+/**
+ * Re-build the next/match indexes against the given new configuration.
+ *
+ * It must be called only by leaders.
+ */
+int raft_state__rebuild_next_and_match_indexes(
+    struct raft *r,
+    const struct raft_configuration *configuration);
 
 #endif /* RAFT_STATE_H */

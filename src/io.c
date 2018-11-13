@@ -4,129 +4,24 @@
 #include "../include/raft.h"
 
 #include "configuration.h"
-#include "io.h"
+#include "error.h"
 #include "log.h"
 #include "logger.h"
+#include "membership.h"
+#include "queue.h"
 #include "replication.h"
 
 #ifndef min
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
-void raft_io__queue_close(struct raft *r)
-{
-    size_t i;
-
-    for (i = 0; i < r->io_queue.size; i++) {
-        struct raft_io_request *request = &r->io_queue.requests[i];
-        if (request->type != RAFT_IO_NULL) {
-            if (request->leader_id == r->id) {
-                /* This request was submitted while we were in leader state. The
-                 * relevant entries were acquired from the log and need to be
-                 * released. */
-                assert(request->type == RAFT_IO_WRITE_LOG ||
-                       request->type == RAFT_IO_APPEND_ENTRIES);
-                raft_log__release(&r->log, request->index, request->entries,
-                                  request->n);
-            } else {
-                /* This request was submitted while we were in follower
-                 * state. The relevant entries were not acquired from the log
-                 * (they were received from the network), so we just need to
-                 * free the relevant memory. */
-                assert(request->type == RAFT_IO_WRITE_LOG);
-                if (request->entries != NULL) {
-                    assert(request->entries[0].batch != NULL);
-                    raft_free(request->entries[0].batch);
-                    raft_free(request->entries);
-                }
-            }
-            raft_io__queue_pop(r, i);
-        }
-    }
-
-    if (r->io_queue.requests != NULL) {
-        raft_free(r->io_queue.requests);
-    }
-}
-
-/**
- * Grow the queue so it has room for at least one more entry.
- */
-static int raft_io__queue_grow(struct raft *r)
-{
-    struct raft_io_request *requests;
-    size_t size;
-    size_t i;
-
-    size = 2 * (r->io_queue.size + 1); /* New queue size */
-
-    requests = raft_realloc(r->io_queue.requests, size * sizeof *requests);
-    if (requests == NULL) {
-        return RAFT_ERR_NOMEM;
-    }
-
-    for (i = r->io_queue.size; i < size; i++) {
-        struct raft_io_request *request = &requests[i];
-        request->type = RAFT_IO_NULL;
-    }
-
-    r->io_queue.requests = requests;
-    r->io_queue.size = size;
-
-    return 0;
-}
-
-int raft_io__queue_push(struct raft *r, size_t *id)
-{
-    size_t i;
-    int rv;
-
-    /* First try to see if we have free slot. */
-    for (i = 0; i < r->io_queue.size; i++) {
-        struct raft_io_request *request = &r->io_queue.requests[i];
-        if (request->type == RAFT_IO_NULL) {
-            *id = i;
-            return 0;
-        }
-    }
-
-    assert(i == r->io_queue.size);
-
-    /* We need to grow the queue. */
-    rv = raft_io__queue_grow(r);
-    if (rv != 0) {
-        return rv;
-    }
-
-    *id = i;
-
-    return 0;
-}
-
-struct raft_io_request *raft_io__queue_get(struct raft *r, size_t id)
-{
-    assert(r != NULL);
-    assert(id < r->io_queue.size);
-
-    return &r->io_queue.requests[id];
-}
-
-void raft_io__queue_pop(struct raft *r, size_t id)
-{
-    assert(r != NULL);
-    assert(id < r->io_queue.size);
-    assert(r->io_queue.requests[id].type != RAFT_IO_NULL);
-
-    r->io_queue.requests[id].type = RAFT_IO_NULL;
-}
-
 /**
  * An I/O request on the leader (such as sending an append entries request or
  * writing to the log) has been completed.
  */
-static void raft_handle_io__leader(struct raft *r,
-                                   struct raft_io_request *request,
-                                   int status)
+static int raft_handle_io__leader(struct raft *r,
+                                  struct raft_io_request *request,
+                                  int status)
 {
     assert(request->type == RAFT_IO_WRITE_LOG ||
            request->type == RAFT_IO_APPEND_ENTRIES);
@@ -136,45 +31,73 @@ static void raft_handle_io__leader(struct raft *r,
     /* Tell the log that we're done referencing these entries. */
     raft_log__release(&r->log, request->index, request->entries, request->n);
 
+    /* If we are not leader anymore, just discard the result. */
+    if (r->state != RAFT_STATE_LEADER) {
+        raft__debugf(r, "local server is not leader -> ignore I/O result");
+        return 0;
+    }
+
     /* TODO: in case this is a failed disk write and we were the leader creating
      * these entries in the first place, should we truncate our log too? since
      * we have appended these entries to it. */
     if (status != 0) {
-        return;
+        return 0;
     }
 
     /* If this was a disk write, check if we have reached a quorum.
-     *
-     * TODO: handle the case where we lost leadership in the meantime and
-     * perhaps last_index changed.
      *
      * TODO2: think about the fact that last_index might be not be matching
      * this request (e.g. other entries were accpeted and pre-emptively
      * appended to the log) so essentialy we need the same min() logic as
      * above or something similar */
     if (request->type == RAFT_IO_WRITE_LOG) {
-        uint64_t index;
+        raft_index index;
         size_t server_index;
+        int rv;
 
         index = raft_log__last_index(&r->log);
         server_index = raft_configuration__index(&r->configuration, r->id);
 
-        r->leader_state.match_index[server_index] = index;
+        /* Only update the next index if we are part of the current
+         * configuration. The only case where this is not true is when we were
+         * asked to remove ourselves from the cluster.
+         *
+         * From Section 4.2.2:
+         *
+         *   there will be a period of time (while it is committing Cnew) when a
+         *   leader can manage a cluster that does not include itself; it
+         *   replicates log entries but does not count itself in majorities.
+         */
+        if (server_index < r->configuration.n) {
+            r->leader_state.match_index[server_index] = index;
+        } else {
+            const struct raft_entry *entry = raft_log__get(&r->log, index);
+            assert(entry->type == RAFT_LOG_CONFIGURATION);
+        }
 
-        raft_replication__maybe_commit(r, index);
+        /* Check if we can commit some new entries. */
+        raft_replication__quorum(r, index);
+
+        rv = raft_replication__apply(r);
+        if (rv != 0) {
+            return rv;
+        }
     }
+
+    return 0;
 }
 
 /**
  * An I/O request on the follower (such as writing to the log new entries
  * received via AppendEntries RPC) has been completed.
  */
-static void raft_handle_io__follower(struct raft *r,
-                                     struct raft_io_request *request,
-                                     const struct raft_server *leader,
-                                     int status)
+static int raft_handle_io__follower(struct raft *r,
+                                    struct raft_io_request *request,
+                                    int status)
 {
     struct raft_append_entries_result result;
+    const struct raft_server *leader;
+    const char *leader_address;
     size_t i;
     int rv;
 
@@ -183,13 +106,27 @@ static void raft_handle_io__follower(struct raft *r,
 
     raft__debugf(r, "I/O completed on follower: status %d", status);
 
+    /* If we are not followers anymore, just discard the result. */
+    if (r->state != RAFT_STATE_FOLLOWER) {
+        raft__debugf(r, "local server is not follower -> ignore I/O result");
+        return 0;
+    }
+
     if (status != 0) {
         result.success = false;
         goto out;
     }
 
-    /* TODO: handle the case where the server has gone from the config? */
+    /* Try getting the leader address from the current configuration. If no
+     * server with a matching ID exists, it probably means that this is the very
+     * first entry being appended and the configuration is empty. We'll retry
+     * later, after we have applied configuraiton entry. Similarly, it might be
+     * that we're going to apply a new configuration where the leader is
+     * removing itself, so we need to save its address here. */
     leader = raft_configuration__get(&r->configuration, request->leader_id);
+    if (leader != NULL) {
+        leader_address = leader->address;
+    }
 
     result.term = r->current_term;
 
@@ -198,12 +135,25 @@ static void raft_handle_io__follower(struct raft *r,
      * TODO: handle the case where we're not followers anymore? */
     for (i = 0; i < request->n; i++) {
         struct raft_entry *entry = &request->entries[i];
+        raft_index index;
         rv = raft_log__append(&r->log, entry->term, entry->type, &entry->buf,
                               entry->batch);
         if (rv != 0) {
             /* TODO: what should we do? */
-            // raft_io__queue_pop(r, request->id);
-            return;
+            // raft_queue__pop(r, request->id);
+            return rv;
+        }
+
+        index = raft_log__last_index(&r->log);
+
+        /* If this is a configuration change entry, check the change is about
+         * promoting a non-voting server to voting, and in that case update
+         * our configuration cache. */
+        if (entry->type == RAFT_LOG_CONFIGURATION) {
+            rv = raft_membership__apply(r, index, entry);
+            if (rv != 0) {
+                return rv;
+            }
         }
     }
 
@@ -214,8 +164,12 @@ static void raft_handle_io__follower(struct raft *r,
      *   entry).
      */
     if (request->leader_commit > r->commit_index) {
-        uint64_t last_index = raft_log__last_index(&r->log);
+        raft_index last_index = raft_log__last_index(&r->log);
         r->commit_index = min(request->leader_commit, last_index);
+        rv = raft_replication__apply(r);
+        if (rv != 0) {
+            return rv;
+        }
     }
 
     result.success = true;
@@ -225,35 +179,54 @@ out:
         raft_free(request->entries);
     }
 
-    result.last_log_index = raft_log__last_index(&r->log);
-    rv = r->io->send_append_entries_response(r->io, leader, &result);
-    if (rv != 0) {
-        /* Just log the error. */
-        raft__errorf(
-            r, "write log: failed to send append entries response (%d)", rv);
+    /* Refresh the leader address, in case it has changed or it was added in a
+     * new configuration. */
+    leader = raft_configuration__get(&r->configuration, request->leader_id);
+    if (leader != NULL) {
+        leader_address = leader->address;
     }
+
+    /* TODO: are there cases were this assertion is unsafe? */
+    assert(leader_address != NULL);
+
+    result.last_log_index = raft_log__last_index(&r->log);
+    rv = r->io->send_append_entries_response(r->io, request->leader_id,
+                                             leader_address, &result);
+    if (rv != 0) {
+        raft_error__printf(r, rv, "send append entries response");
+        return rv;
+    }
+
+    return 0;
 }
 
-void raft_handle_io(struct raft *r, const unsigned request_id, const int status)
+int raft_handle_io(struct raft *r, const unsigned request_id, const int status)
 {
     struct raft_io_request *request;
-    const struct raft_server *server;
+    int rv;
 
     assert(r != NULL);
 
-    request = raft_io__queue_get(r, request_id);
-    server = raft_configuration__get(&r->configuration, request->leader_id);
+    request = raft_queue__get(r, request_id);
 
-    if (server->id == r->id) {
+    if (request->leader_id == r->id) {
         /* This I/O request was pushed at a time this server was a leader,
          * either to write entries to its own on-disk log or to replicate them
          * to a follower. */
-        raft_handle_io__leader(r, request, status);
+        rv = raft_handle_io__leader(r, request, status);
     } else {
         /* This I/O request was pushed at a time this server was a follower, to
          * replicate entries to its own log. */
-        raft_handle_io__follower(r, request, server, status);
+        rv = raft_handle_io__follower(r, request, status);
     }
 
-    raft_io__queue_pop(r, request_id);
+    raft_queue__pop(r, request_id);
+
+    if (rv != 0) {
+        /* TODO: should we propagate the error? */
+        raft_error__wrapf(r, "handle completed I/O request");
+        return rv;
+    }
+
+    return 0;
 }

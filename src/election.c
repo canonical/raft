@@ -21,7 +21,7 @@ void raft_election__reset_timer(struct raft *r)
  * Send a RequestVote RPC to the given server.
  */
 static int raft_election__send_request_vote(struct raft *r,
-                                            struct raft_server *server)
+                                            const struct raft_server *server)
 {
     struct raft_request_vote_args args;
     int rv;
@@ -40,7 +40,8 @@ static int raft_election__send_request_vote(struct raft *r,
     args.last_log_index = raft_log__last_index(&r->log);
     args.last_log_term = raft_log__last_term(&r->log);
 
-    rv = r->io->send_request_vote_request(r->io, server, &args);
+    rv = r->io->send_request_vote_request(r->io, server->id, server->address,
+                                          &args);
     if (rv != 0) {
         return rv;
     }
@@ -77,14 +78,14 @@ int raft_election__start(struct raft *r)
     term = r->current_term + 1;
     rv = r->io->write_term(r->io, term);
     if (rv != 0) {
-        raft_error__printf(r, rv, "write term");
+        raft_error__printf(r, rv, "persist term");
         goto err;
     }
 
     /* Vote for self */
     rv = r->io->write_vote(r->io, r->id);
     if (rv != 0) {
-        raft_error__printf(r, rv, "write vote");
+        raft_error__printf(r, rv, "persist vote");
         goto err;
     }
 
@@ -106,7 +107,7 @@ int raft_election__start(struct raft *r)
         }
     }
     for (i = 0; i < r->configuration.n; i++) {
-        struct raft_server *server = &r->configuration.servers[i];
+        const struct raft_server *server = &r->configuration.servers[i];
         int rv;
 
         if (server->id == r->id || !server->voting) {
@@ -123,19 +124,23 @@ int raft_election__start(struct raft *r)
 
     return 0;
 
- err:
+err:
     assert(rv != 0);
     return rv;
 }
 
-int raft_election__maybe_grant_vote(struct raft *r,
-                                    const struct raft_request_vote_args *args,
-                                    bool *granted)
+int raft_election__vote(struct raft *r,
+                        const struct raft_request_vote_args *args,
+                        bool *granted)
 {
     const struct raft_server *local_server;
-    uint64_t local_last_log_index;
-    uint64_t local_last_log_term;
+    raft_index local_last_log_index;
+    raft_term local_last_log_term;
     int rv;
+
+    assert(r != NULL);
+    assert(args != NULL);
+    assert(granted != NULL);
 
     local_server = raft_configuration__get(&r->configuration, r->id);
 
@@ -200,13 +205,13 @@ grant_vote:
     *granted = true;
     r->voted_for = args->candidate_id;
 
-    /* Reset the timer. */
+    /* Reset the election timer. */
     r->timer = 0;
 
     return 0;
 }
 
-bool raft_election__maybe_win(struct raft *r, size_t votes_index)
+bool raft_election__tally(struct raft *r, size_t votes_index)
 {
     size_t n_voting = raft_configuration__n_voting(&r->configuration);
     size_t votes = 0;

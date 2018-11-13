@@ -65,6 +65,11 @@ void test_network_setup(const MunitParameter params[],
 void test_network_tear_down(struct test_network *n);
 
 /**
+ * Add a new host to the network.
+ */
+void test_network_add_host(struct test_network *n);
+
+/**
  * Return the host object associated with the given server ID.
  */
 struct test_host *test_network_host(struct test_network *n, unsigned id);

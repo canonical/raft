@@ -20,6 +20,9 @@ void test_load(struct raft *r)
 
     test_io_get_entries(r->io, &entries, &n);
 
+    munit_assert_int(n, >, 0);
+    munit_assert_int(entries[0].type, ==, RAFT_LOG_CONFIGURATION);
+
     for (i = 0; i < n; i++) {
         struct raft_buffer buf;
 
@@ -34,6 +37,10 @@ void test_load(struct raft *r)
 
     rv = raft_decode_configuration(&entries[0].buf, &r->configuration);
     munit_assert_int(rv, ==, 0);
+
+    munit_assert_int(r->configuration.n, >, 0);
+
+    r->configuration_index = 1;
 }
 
 void test_bootstrap_and_load(struct raft *r,
@@ -53,11 +60,8 @@ void test_bootstrap_and_load(struct raft *r,
     r->last_applied = 1;
 }
 
-void test_become_leader(struct raft *r)
+void test_become_candidate(struct raft *r)
 {
-    size_t votes = raft_configuration__n_voting(&r->configuration) / 2;
-    size_t i;
-    struct raft_request_vote_result result;
     int rv;
 
     /* Become candidate */
@@ -65,6 +69,16 @@ void test_become_leader(struct raft *r)
     munit_assert_int(rv, ==, 0);
 
     munit_assert_int(r->state, ==, RAFT_STATE_CANDIDATE);
+}
+
+void test_become_leader(struct raft *r)
+{
+    size_t votes = raft_configuration__n_voting(&r->configuration) / 2;
+    size_t i;
+    struct raft_request_vote_result result;
+    int rv;
+
+    test_become_candidate(r);
 
     for (i = 0; i < r->configuration.n; i++) {
         const struct raft_server *server = &r->configuration.servers[i];
@@ -76,7 +90,8 @@ void test_become_leader(struct raft *r)
         result.term = r->current_term;
         result.vote_granted = 1;
 
-        rv = raft_handle_request_vote_response(r, server, &result);
+        rv = raft_handle_request_vote_response(r, server->id, server->address,
+                                               &result);
         munit_assert_int(rv, ==, 0);
 
         votes--;
@@ -94,16 +109,14 @@ void test_become_leader(struct raft *r)
     test_io_flush(r->io);
 }
 
-void test_receive_heartbeat(struct raft *r, uint64_t leader_id)
+void test_receive_heartbeat(struct raft *r, unsigned leader_id)
 {
     struct raft_append_entries_args args;
-    const struct raft_server *server;
+    char address[4];
     int rv;
 
     munit_assert_int(leader_id, !=, r->id);
-
-    server = raft_configuration__get(&r->configuration, leader_id);
-    munit_assert_ptr_not_null(server);
+    sprintf(address, "%d", leader_id);
 
     args.term = r->current_term;
     args.leader_id = leader_id;
@@ -115,6 +128,6 @@ void test_receive_heartbeat(struct raft *r, uint64_t leader_id)
     args.n = 0;
     args.leader_commit = r->commit_index;
 
-    rv = raft_handle_append_entries(r, server, &args);
+    rv = raft_handle_append_entries(r, leader_id, address, &args);
     munit_assert_int(rv, ==, 0);
 }

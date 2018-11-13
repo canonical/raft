@@ -27,8 +27,15 @@ void test_bootstrap_and_load(struct raft *r,
                              int voting_b);
 
 /**
- * Make a pristine raft instance transition to the leader state, by getting
- * votes from a majority of the servers in the configuration.
+ * Make a pristine raft instance transition to the candidate state, by letting
+ * the election time expire.
+ */
+void test_become_candidate(struct raft *r);
+
+/**
+ * Make a pristine raft instance transition to the leader state, by
+ * transitioning to candidate state first and then getting votes from a majority
+ * of the servers in the configuration.
  */
 void test_become_leader(struct raft *r);
 
@@ -37,6 +44,6 @@ void test_become_leader(struct raft *r);
  * term of the request will match @r's current term, and the previous index/term
  * will match @r's last log entry.
  */
-void test_receive_heartbeat(struct raft *r, uint64_t leader_id);
+void test_receive_heartbeat(struct raft *r, unsigned leader_id);
 
 #endif /* TEST_CONFIGURATION_H */

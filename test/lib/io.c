@@ -159,9 +159,9 @@ void test_io__request_vote_cb(struct raft_io *io,
         return;
     }
 
-    munit_assert_int(request->request_vote.server.id, !=, 0);
+    munit_assert_int(request->request_vote.id, !=, 0);
 
-    host = test_network_host(t->network, request->request_vote.server.id);
+    host = test_network_host(t->network, request->request_vote.id);
     munit_assert_ptr_not_null(host);
 
     rv = raft_encode_request_vote(&request->request_vote.args, &message.header);
@@ -187,10 +187,9 @@ void test_io__request_vote_response_cb(struct raft_io *io,
         return;
     }
 
-    munit_assert_int(request->request_vote_response.server.id, !=, 0);
+    munit_assert_int(request->request_vote_response.id, !=, 0);
 
-    host =
-        test_network_host(t->network, request->request_vote_response.server.id);
+    host = test_network_host(t->network, request->request_vote_response.id);
     munit_assert_ptr_not_null(host);
 
     rv = raft_encode_request_vote_result(&request->request_vote_response.result,
@@ -218,9 +217,9 @@ void test_io__append_entries_cb(struct raft_io *io,
         return;
     }
 
-    munit_assert_int(request->append_entries.server.id, !=, 0);
+    munit_assert_int(request->append_entries.id, !=, 0);
 
-    host = test_network_host(t->network, request->append_entries.server.id);
+    host = test_network_host(t->network, request->append_entries.id);
     munit_assert_ptr_not_null(host);
 
     rv = raft_encode_append_entries(&request->append_entries.args,
@@ -245,7 +244,7 @@ void test_io__append_entries_cb(struct raft_io *io,
 
         void *cursor = message.payload.base;
 
-        for (i = 0; i < request->append_entries.args.n - 1; i++) {
+        for (i = 0; i < request->append_entries.args.n; i++) {
             struct raft_entry *entry = &request->append_entries.args.entries[i];
 
             if (entry->buf.base == NULL) {
@@ -281,10 +280,9 @@ void test_io__append_entries_response_cb(struct raft_io *io,
         return;
     }
 
-    munit_assert_int(request->append_entries_response.server.id, !=, 0);
+    munit_assert_int(request->append_entries_response.id, !=, 0);
 
-    host = test_network_host(t->network,
-                             request->append_entries_response.server.id);
+    host = test_network_host(t->network, request->append_entries_response.id);
     munit_assert_ptr_not_null(host);
 
     rv = raft_encode_append_entries_result(
@@ -447,14 +445,16 @@ static int test_io__truncate_log(struct raft_io *io, const raft_index index)
 
 int test_io__send_request_vote_request(
     struct raft_io *io,
-    const struct raft_server *server,
+    const unsigned id,
+    const char *address,
     const struct raft_request_vote_args *args)
 {
     struct test_io *t = io->data;
     struct test_io_request *request;
 
     munit_assert_ptr_not_null(t);
-    munit_assert_ptr_not_null(server);
+    munit_assert_int(id, >, 0);
+    munit_assert_ptr_not_null(address);
     munit_assert_ptr_not_null(args);
 
     if (test_fault_tick(&t->fault)) {
@@ -465,7 +465,8 @@ int test_io__send_request_vote_request(
     __logf("io: send request vote to %ld", server->id);
 
     request = test_io__queue_push(io, 0, RAFT_IO_REQUEST_VOTE);
-    request->request_vote.server = *server;
+    request->request_vote.id = id;
+    request->request_vote.address = address;
     request->request_vote.args = *args;
 
     return 0;
@@ -473,14 +474,16 @@ int test_io__send_request_vote_request(
 
 int test_io__send_request_vote_response(
     struct raft_io *io,
-    const struct raft_server *server,
+    const unsigned id,
+    const char *address,
     const struct raft_request_vote_result *result)
 {
     struct test_io *t = io->data;
     struct test_io_request *request;
 
     munit_assert_ptr_not_null(t);
-    munit_assert_ptr_not_null(server);
+    munit_assert_int(id, >, 0);
+    munit_assert_ptr_not_null(address);
     munit_assert_ptr_not_null(result);
 
     if (test_fault_tick(&t->fault)) {
@@ -489,7 +492,8 @@ int test_io__send_request_vote_response(
     }
 
     request = test_io__queue_push(io, 0, RAFT_IO_REQUEST_VOTE_RESULT);
-    request->request_vote_response.server = *server;
+    request->request_vote_response.id = id;
+    request->request_vote_response.address = address;
     request->request_vote_response.result = *result;
 
     return 0;
@@ -498,16 +502,17 @@ int test_io__send_request_vote_response(
 int test_io__send_append_entries_request(
     struct raft_io *io,
     const unsigned request_id,
-    const struct raft_server *server,
+    const unsigned id,
+    const char *address,
     const struct raft_append_entries_args *args)
 {
     struct test_io *t = io->data;
     struct test_io_request *request;
 
     munit_assert_ptr_not_null(t);
-    munit_assert_ptr_not_null(server);
+    munit_assert_int(id, >, 0);
+    munit_assert_ptr_not_null(address);
     munit_assert_ptr_not_null(args);
-    munit_assert_int(server->id, !=, 0);
 
     if (test_fault_tick(&t->fault)) {
         __logf("io: fail to send append entries to %ld", server->id);
@@ -515,7 +520,8 @@ int test_io__send_append_entries_request(
     }
 
     request = test_io__queue_push(io, request_id, RAFT_IO_APPEND_ENTRIES);
-    request->append_entries.server = *server;
+    request->append_entries.id = id;
+    request->append_entries.address = address;
     request->append_entries.args = *args;
 
     return 0;
@@ -523,14 +529,17 @@ int test_io__send_append_entries_request(
 
 int test_io__send_append_entries_response(
     struct raft_io *io,
-    const struct raft_server *server,
+    const unsigned id,
+    const char *address,
     const struct raft_append_entries_result *result)
 {
     struct test_io *t = io->data;
     struct test_io_request *request;
 
     munit_assert_ptr_not_null(t);
-    munit_assert_ptr_not_null(server);
+    munit_assert_int(id, >, 0);
+
+    munit_assert_ptr_not_null(address);
     munit_assert_ptr_not_null(result);
 
     if (test_fault_tick(&t->fault)) {
@@ -538,10 +547,9 @@ int test_io__send_append_entries_response(
         return RAFT_ERR_SHUTDOWN;
     }
 
-    munit_assert_int(server->id, !=, 0);
-
     request = test_io__queue_push(io, 0, RAFT_IO_APPEND_ENTRIES_RESULT);
-    request->append_entries_response.server = *server;
+    request->append_entries_response.id = id;
+    request->append_entries_response.address = address;
     request->append_entries_response.result = *result;
 
     return 0;
@@ -617,11 +625,11 @@ void test_io_bootstrap(struct raft_io *io,
     raft_configuration_init(&configuration);
 
     for (i = 0; i < n_servers; i++) {
-        uint64_t id = i + 1;
-        char *address = munit_malloc(4);
+        unsigned id = i + 1;
+        char address[4];
         bool voting = (int)id >= voting_a && (int)id <= voting_b;
 
-        sprintf(address, "%ld", id);
+        sprintf(address, "%d", id);
         rv = raft_configuration_add(&configuration, id, address, voting);
         munit_assert_int(rv, ==, 0);
     }
@@ -637,11 +645,6 @@ void test_io_bootstrap(struct raft_io *io,
     test_io_write_entry(io, &entry);
 
     raft_free(entry.buf.base);
-
-    for (i = 0; i < n_servers; i++) {
-        struct raft_server *server = &configuration.servers[i];
-        free((void *)server->address);
-    }
 
     raft_configuration_close(&configuration);
 }
@@ -723,6 +726,21 @@ void test_io_get_requests(struct raft_io *io,
             j++;
         }
     }
+}
+
+size_t test_io_n_requests(struct raft_io *io, int type)
+{
+    struct test_io *t = io->data;
+    size_t i;
+    size_t n = 0;
+
+    for (i = 0; i < t->n_requests; i++) {
+        if (t->requests[i].type == type) {
+            n++;
+        }
+    }
+
+    return n;
 }
 
 void test_io_get_one_request(struct raft_io *io,

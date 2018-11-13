@@ -93,7 +93,7 @@ static MunitResult test_encode_configuration_oom(const MunitParameter params[],
 
     raft_configuration_init(&configuration);
 
-    test_heap_fault_config(&f->heap, 1, 1);
+    test_heap_fault_config(&f->heap, 2, 1);
     test_heap_fault_enable(&f->heap);
 
     rv = raft_configuration_add(&configuration, 1, "127.0.0.1:666", true);
@@ -213,7 +213,7 @@ static MunitTest encode_configuration_tests[] = {
  */
 
 /* If the destination configuration is not empty, an error is returned. */
-static MunitResult test_decode_configuration(const MunitParameter params[],
+static MunitResult test_decode_configuration_empty(const MunitParameter params[],
                                              void *data)
 {
     struct raft_configuration configuration;
@@ -409,7 +409,7 @@ static MunitResult test_decode_configuration_two_servers(
 }
 
 static MunitTest decode_configuration_tests[] = {
-    {"/", test_decode_configuration, setup, tear_down, 0, NULL},
+    {"/empty", test_decode_configuration_empty, setup, tear_down, 0, NULL},
     {"/oom", test_decode_configuration_oom, setup, tear_down, 0, NULL},
     {"/bad-version", test_decode_configuration_bad_version, setup, tear_down, 0,
      NULL},

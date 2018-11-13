@@ -1,7 +1,5 @@
 /**
- *
  * Election-related logic and helpers.
- *
  */
 
 #ifndef RAFT_ELECTION_H
@@ -67,16 +65,18 @@ int raft_election__start(struct raft *r);
  *
  *   - If votedFor is null or candidateId, and candidate's log is at least as
  *     up-to-date as receiver's log, grant vote.
+ *
+ * The outcome of the decision is stored through the *granted pointer.
  */
-int raft_election__maybe_grant_vote(struct raft *r,
-                                    const struct raft_request_vote_args *args,
-                                    bool *granted);
+int raft_election__vote(struct raft *r,
+                        const struct raft_request_vote_args *args,
+                        bool *granted);
 
 /**
  * Update the votes array by adding the vote from the server at the given
  * index. Return true if with this vote the server has reached the majority of
  * votes and won elections.
  */
-bool raft_election__maybe_win(struct raft *r, size_t votes_index);
+bool raft_election__tally(struct raft *r, size_t votes_index);
 
 #endif /* RAFT_ELECTION_H */

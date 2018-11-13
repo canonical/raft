@@ -1,7 +1,5 @@
 /**
- *
  * Log replication logic and helpers.
- *
  */
 
 #ifndef RAFT_REPLICATION_H
@@ -14,34 +12,64 @@
  * configuration.
  *
  * The RPC will contain all entries in our log from next_index[<server>] onward.
+ *
+ * It must be called only by leaders.
  */
 int raft_replication__send_append_entries(struct raft *r, size_t i);
 
 /**
- * Send an AppendEntries RPC to all other servers
+ * Helper triggering I/O requests for newly appended log entries or heartbeat.
  *
- * If a remote server next_index is has up-to-date as ours, the RPC will carry
- * no entries.
+ * This function will start writing to disk all entries in the log from the
+ * given index onwards, and trigger AppendEntries RPCs requests to all follower
+ * servers.
+ *
+ * If the index is 0, no entry are written to disk, and a heartbeat
+ * AppendEntries RPC with no entries (or missing entries for followers whose log
+ * is behind) is sent.
+ *
+ * It must be called only by leaders.
  */
-void raft_replication__send_heartbeat(struct raft *r);
+int raft_replication__trigger(struct raft *r, const raft_index index);
+
+/**
+ * Update the replication state (match and next indexes) for the given server
+ * using the given AppendEntries RPC result.
+ *
+ * Possibly send to the server a new set of entries to replicate if the result
+ * was unsuccessful because of missing entries.
+ *
+ * It must be called only by leaders.
+ */
+int raft_replication__update(struct raft *r,
+                             const struct raft_server *server,
+                             const struct raft_append_entries_result *result);
 
 /**
  * Append the log entries in the given request if the Log Matching Property is
  * satisfied.
+ *
+ * The #success output parameter will be set to true if the Log Matching
+ * Property was satisfied.
+ *
+ * The #async output parameter will be set to true if some of the entries in the
+ * request were not present in our log, and a disk write was started to persist
+ * them to disk. The entries will be appended to our log only once the disk
+ * write completes and the @raft_handle_io callback is invoked.
+ *
+ * It must be called only by followers.
  */
-int raft_replication__maybe_append(struct raft *r,
-                                   const struct raft_append_entries_args *args,
-                                   bool *success,
-                                   bool *async);
+int raft_replication__append(struct raft *r,
+                             const struct raft_append_entries_args *args,
+                             bool *success,
+                             bool *async);
 
 /**
- * Update the match and next indexes for the server in the given AppendEntries
- * RPC result and possibly send it a new set of entries to replicate.
+ * Apply any committed entry that was not applied yet.
+ *
+ * It must be called by leaders or followers.
  */
-void raft_replication__update_server(
-    struct raft *r,
-    size_t server_index,
-    const struct raft_append_entries_result *result);
+int raft_replication__apply(struct raft *r);
 
 /**
  * Check if a quorum has been reached for the given log index, and update commit
@@ -54,6 +82,6 @@ void raft_replication__update_server(
  *   If there exists an N such that N > commitIndex, a majority of
  *   matchIndex[i] >= N, and log[N].term == currentTerm: set commitIndex = N
  */
-void raft_replication__maybe_commit(struct raft *r, raft_index index);
+void raft_replication__quorum(struct raft *r, const raft_index index);
 
 #endif /* RAFT_REPLICATION_H */

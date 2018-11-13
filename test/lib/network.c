@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 #include "../../src/binary.h"
 
 #include "network.h"
@@ -37,6 +39,42 @@ void test_network_setup(const MunitParameter params[],
             n->connectivity[i * n->n + j] = true;
         }
     }
+}
+
+void test_network_add_host(struct test_network *n)
+{
+    bool *connectivity; /* New connectivity matrix */
+    size_t i, j;
+
+    n->n++;
+
+    n->hosts = realloc(n->hosts, n->n * sizeof *n->hosts);
+    munit_assert_ptr_not_null(n->hosts);
+
+    connectivity = munit_malloc(n->n * n->n * sizeof(bool));
+    munit_assert_ptr_not_null(connectivity);
+
+    for (i = 0; i < n->n; i++) {
+        struct test_host *host = &n->hosts[i];
+
+        host->network = n;
+
+        for (j = 0; j < n->n; j++) {
+            /* The new host is connected, the other ones maintain their
+             * connectivity state. */
+            bool connected;
+
+            if (i == n->n - 1 || j == n->n - 1) {
+                connected = true;
+            } else {
+                connected = n->connectivity[i * (n->n - 1) + j];
+            }
+            connectivity[i * n->n + j] = connected;
+        }
+    }
+
+    free(n->connectivity);
+    n->connectivity = connectivity;
 }
 
 int test_message_type(const struct test_message *m)
@@ -119,7 +157,7 @@ void test_host_enqueue(struct test_host *h, struct test_message *message)
             continue;
         }
 
-	/* We found a free slot in the incoming queue. */
+        /* We found a free slot in the incoming queue. */
         *incoming = *message;
 
         /* Assign a random message latency in the configured range. */
@@ -164,7 +202,8 @@ struct test_message *test_host_peek(struct test_host *h)
 }
 
 static void test_host__request_vote(struct test_host *h,
-                                    struct raft_server *server,
+                                    const unsigned id,
+                                    const char *address,
                                     const struct raft_buffer *buf)
 {
     struct raft_request_vote_args args;
@@ -173,11 +212,12 @@ static void test_host__request_vote(struct test_host *h,
     rv = raft_decode_request_vote(buf, &args);
     munit_assert_int(rv, ==, 0);
 
-    raft_handle_request_vote(h->raft, server, &args);
+    raft_handle_request_vote(h->raft, id, address, &args);
 }
 
 static void test_host__request_vote_response(struct test_host *h,
-                                             struct raft_server *server,
+                                             const unsigned id,
+                                             const char *address,
                                              const struct raft_buffer *buf)
 {
     struct raft_request_vote_result result;
@@ -186,11 +226,12 @@ static void test_host__request_vote_response(struct test_host *h,
     rv = raft_decode_request_vote_result(buf, &result);
     munit_assert_int(rv, ==, 0);
 
-    raft_handle_request_vote_response(h->raft, server, &result);
+    raft_handle_request_vote_response(h->raft, id, address, &result);
 }
 
 static void test_host__append_entries(struct test_host *h,
-                                      struct raft_server *server,
+                                      const unsigned id,
+                                      const char *address,
                                       const struct raft_buffer *buf,
                                       const struct raft_buffer *payload)
 {
@@ -203,11 +244,12 @@ static void test_host__append_entries(struct test_host *h,
     rv = raft_decode_entries_batch(payload, args.entries, args.n);
     munit_assert_int(rv, ==, 0);
 
-    raft_handle_append_entries(h->raft, server, &args);
+    raft_handle_append_entries(h->raft, id, address, &args);
 }
 
 static void test_host__append_entries_response(struct test_host *h,
-                                               struct raft_server *server,
+                                               const unsigned id,
+                                               const char *address,
                                                const struct raft_buffer *buf)
 {
     struct raft_append_entries_result result;
@@ -216,21 +258,22 @@ static void test_host__append_entries_response(struct test_host *h,
     rv = raft_decode_append_entries_result(buf, &result);
     munit_assert_int(rv, ==, 0);
 
-    raft_handle_append_entries_response(h->raft, server, &result);
+    raft_handle_append_entries_response(h->raft, id, address, &result);
 }
 
 void test_host_receive(struct test_host *h, struct test_message *message)
 {
-    struct raft_server *server;
     struct raft_buffer buf;
     int type = test_message_type(message);
+    unsigned id;
+    char address[4];
 
     munit_assert_int(type, !=, RAFT_IO_NULL);
     munit_assert_int(message->sender_id, !=, 0);
-    munit_assert_int(message->sender_id, <=, h->raft->configuration.n);
+    munit_assert_int(message->sender_id, <=, h->network->n);
 
-    server = &h->raft->configuration.servers[message->sender_id - 1];
-    munit_assert_int(server->id, !=, 0);
+    id = message->sender_id;
+    sprintf(address, "%d", id);
 
     /* Skip message header. */
     buf.base = message->header.base + 16;
@@ -238,16 +281,16 @@ void test_host_receive(struct test_host *h, struct test_message *message)
 
     switch (type) {
         case RAFT_IO_REQUEST_VOTE:
-            test_host__request_vote(h, server, &buf);
+            test_host__request_vote(h, id, address, &buf);
             break;
         case RAFT_IO_REQUEST_VOTE_RESULT:
-            test_host__request_vote_response(h, server, &buf);
+            test_host__request_vote_response(h, id, address, &buf);
             break;
         case RAFT_IO_APPEND_ENTRIES:
-            test_host__append_entries(h, server, &buf, &message->payload);
+            test_host__append_entries(h, id, address, &buf, &message->payload);
             break;
         case RAFT_IO_APPEND_ENTRIES_RESULT:
-            test_host__append_entries_response(h, server, &buf);
+            test_host__append_entries_response(h, id, address, &buf);
             break;
     }
 

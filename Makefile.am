@@ -40,11 +40,16 @@ libraft_la_SOURCES = \
   src/io.c \
   src/log.c \
   src/logger.c \
+  src/membership.c \
+  src/queue.c \
   src/raft.c \
   src/replication.c \
   src/rpc.c \
+  src/rpc_request_vote.c \
+  src/rpc_append_entries.c \
   src/state.c \
-  src/tick.c
+  src/tick.c \
+  src/watch.c
 include_HEADERS += \
   include/raft.h
 
@@ -74,11 +79,14 @@ unit_test_SOURCES += \
   test/unit/test_logger.c \
   test/unit/test_context.c \
   test/unit/test_io.c \
+  test/unit/test_queue.c \
   test/unit/test_raft.c \
   test/unit/test_replication.c \
-  test/unit/test_rpc.c \
+  test/unit/test_rpc_request_vote.c \
+  test/unit/test_rpc_append_entries.c \
   test/unit/test_tick.c
-unit_test_CFLAGS = $(AM_CFLAGS) -DMUNIT_TEST_NAME_LEN=47 -DMUNIT_NO_FORK
+unit_test_CFLAGS = $(AM_CFLAGS) -DMUNIT_TEST_NAME_LEN=47
+#-DMUNIT_NO_FORK
 unit_test_CFLAGS += -I$(top_srcdir)/tests/unit
 unit_test_LDADD = libraft.la
 unit_test_LDFLAGS =
@@ -88,8 +96,10 @@ integration_test_SOURCES += \
   test/integration/main.c \
   test/integration/test_election.c \
   test/integration/test_liveness.c \
+  test/integration/test_membership.c \
   test/integration/test_replication.c
-integration_test_CFLAGS = $(AM_CFLAGS) -DMUNIT_NO_FORK
+integration_test_CFLAGS = $(AM_CFLAGS)
+#-DMUNIT_NO_FORK
 integration_test_CFLAGS += -I$(top_srcdir)/tests/integration
 integration_test_LDADD = libraft.la
 integration_test_LDFLAGS =

@@ -9,8 +9,10 @@ extern MunitSuite raft_error_suites[];
 extern MunitSuite raft_io_suites[];
 extern MunitSuite raft_log_suites[];
 extern MunitSuite raft_logger_suites[];
+extern MunitSuite raft_queue_suites[];
 extern MunitSuite raft_replication_suites[];
-extern MunitSuite raft_rpc_suites[];
+extern MunitSuite raft_rpc_request_vote_suites[];
+extern MunitSuite raft_rpc_append_entries_suites[];
 extern MunitSuite raft_tick_suites[];
 extern MunitSuite raft_suites[];
 
@@ -24,8 +26,10 @@ static MunitSuite suites[] = {
     {"io", NULL, raft_io_suites, 1, 0},
     {"log", NULL, raft_log_suites, 1, 0},
     {"logger", NULL, raft_logger_suites, 1, 0},
+    {"queue", NULL, raft_queue_suites, 1, 0},
     {"replication", NULL, raft_replication_suites, 1, 0},
-    {"rpc", NULL, raft_rpc_suites, 1, 0},
+    {"rpc-request-vote", NULL, raft_rpc_request_vote_suites, 1, 0},
+    {"rpc-append_entries", NULL, raft_rpc_append_entries_suites, 1, 0},
     {"tick", NULL, raft_tick_suites, 1, 0},
     {"raft", NULL, raft_suites, 1, 0},
     {NULL, NULL, NULL, 0, 0},

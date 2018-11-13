@@ -42,6 +42,10 @@ void raft_error__printf(struct raft *r, const int rv, const char *fmt, ...)
 
     strncpy(r->errmsg, msg, strlen(msg));
 
+    if (fmt == NULL) {
+        return;
+    }
+
     va_start(args, fmt);
     raft_error__vwrapf(r, fmt, args);
     va_end(args);

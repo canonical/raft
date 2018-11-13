@@ -2,22 +2,20 @@
 
 #include "../include/raft.h"
 
+#include "configuration.h"
+
 #include "error.h"
-#include "io.h"
 #include "log.h"
 #include "logger.h"
+#include "membership.h"
 #include "replication.h"
+#include "state.h"
 
 int raft_accept(struct raft *r,
                 const struct raft_buffer bufs[],
                 const unsigned n)
 {
-    struct raft_io_request *request;
     raft_index index;
-    struct raft_entry *entries;
-    unsigned m;
-    size_t request_id;
-    unsigned i;
     int rv;
 
     assert(r != NULL);
@@ -30,74 +28,236 @@ int raft_accept(struct raft *r,
         goto err;
     }
 
-    raft__debugf(r, "client request");
+    raft__debugf(r, "client request: %d entries", n);
 
     /* Index of the first entry being appended. */
     index = raft_log__last_index(&r->log) + 1;
 
     /* Append the new entries to the log. */
-    for (i = 0; i < n; i++) {
-        const struct raft_buffer *buf = &bufs[i];
-        const raft_term term = r->current_term;
-        rv = raft_log__append(&r->log, term, RAFT_LOG_COMMAND, buf, NULL);
-        if (rv != 0) {
-            return rv;
-        }
-    }
-
-    /* Acquire all the entries we just appended. */
-    rv = raft_log__acquire(&r->log, index, &entries, &m);
+    rv = raft_log__append_commands(&r->log, r->current_term, bufs, n);
     if (rv != 0) {
-        goto err_after_log_append;
+        return rv;
     }
-    assert(m == n);
 
-    /* Allocate a new raft_io_request slot in the queue of inflight I/O
-     * operations and fill the request fields. */
-    rv = raft_io__queue_push(r, &request_id);
+    rv = raft_replication__trigger(r, index);
     if (rv != 0) {
-        goto err_after_entries_acquired;
+        goto err;
     }
-
-    request = raft_io__queue_get(r, request_id);
-    request->index = index;
-    request->type = RAFT_IO_WRITE_LOG;
-    request->entries = entries;
-    request->n = n;
-    request->leader_id = r->id;
-
-    rv = r->io->write_log(r->io, request_id, entries, n);
-    if (rv != 0) {
-        goto err_after_io_queue_push;
-    }
-
-    /* Reset the heartbeat timer: for a full request_timeout period we'll be
-     * good and we won't need to contact followers again, since this was not an
-     * idle period.
-     *
-     * From Figure 3.1:
-     *
-     *   [Rules for Servers] Leaders: Upon election: send initial empty
-     *   AppendEntries RPCs (heartbeat) to each server; repeat during idle
-     *   periods to prevent election timeouts
-     */
-    r->timer = 0;
-
-    raft_replication__send_heartbeat(r);
 
     return 0;
 
-err_after_io_queue_push:
-    raft_io__queue_pop(r, request_id);
+err:
+    assert(rv != 0);
 
-err_after_entries_acquired:
-    raft_log__release(&r->log, index, entries, m);
+    return rv;
+}
+
+static int raft_client__change_configuration(
+    struct raft *r,
+    const struct raft_configuration *configuration)
+{
+    raft_index index;
+    raft_term term = r->current_term;
+    int rv;
+
+    /* Index of the entry being appended. */
+    index = raft_log__last_index(&r->log) + 1;
+
+    /* Encode the new configuration and append it to the log. */
+    rv = raft_log__append_configuration(&r->log, term, configuration);
+    if (rv != 0) {
+        goto err;
+    }
+
+    if (configuration->n != r->configuration.n) {
+        rv = raft_state__rebuild_next_and_match_indexes(r, configuration);
+        if (rv != 0) {
+            goto err;
+        }
+    }
+
+    /* Update the current configuration if we've created a new object. */
+    if (configuration != &r->configuration) {
+        raft_configuration_close(&r->configuration);
+        r->configuration = *configuration;
+    }
+
+    /* Start writing the new log entry to disk and send it to the followers. */
+    rv = raft_replication__trigger(r, index);
+    if (rv != 0) {
+        /* TODO: restore the old next/match indexes and configuration. */
+        goto err_after_log_append;
+    }
+
+    r->configuration_uncommitted_index = index;
+
+    return 0;
 
 err_after_log_append:
     raft_log__truncate(&r->log, index);
 
 err:
     assert(rv != 0);
+    return rv;
+}
 
+int raft_add_server(struct raft *r, const unsigned id, const char *address)
+{
+    struct raft_configuration configuration;
+    int rv;
+
+    rv = raft_membership__can_change_configuration(r);
+    if (rv != 0) {
+        return rv;
+    }
+
+    raft__debugf(r, "add server: id %d, address %s", id, address);
+
+    /* Make a copy of the current configuration, and add the new server to
+     * it. */
+    raft_configuration_init(&configuration);
+
+    rv = raft_configuration__copy(&r->configuration, &configuration);
+    if (rv != 0) {
+        raft_error__printf(r, rv, "copy current configuration");
+        goto err;
+    }
+
+    rv = raft_configuration_add(&configuration, id, address, false);
+    if (rv != 0) {
+        raft_error__printf(r, rv, "add server to new configuration");
+        goto err_after_configuration_copy;
+    }
+
+    rv = raft_client__change_configuration(r, &configuration);
+    if (rv != 0) {
+        goto err_after_configuration_copy;
+    }
+
+    return 0;
+
+err_after_configuration_copy:
+    raft_configuration_close(&configuration);
+
+err:
+    assert(rv != 0);
+    return rv;
+}
+
+int raft_promote(struct raft *r, const unsigned id)
+{
+    const struct raft_server *server;
+    size_t server_index;
+    raft_index last_index;
+    int rv;
+
+    rv = raft_membership__can_change_configuration(r);
+    if (rv != 0) {
+        return rv;
+    }
+
+    server = raft_configuration__get(&r->configuration, id);
+    if (server == NULL) {
+        rv = RAFT_ERR_BAD_SERVER_ID;
+        raft_error__printf(r, rv, NULL);
+        goto err;
+    }
+
+    if (server->voting) {
+        rv = RAFT_ERR_SERVER_ALREADY_VOTING;
+        raft_error__printf(r, rv, NULL);
+        goto err;
+    }
+
+    server_index = raft_configuration__index(&r->configuration, id);
+    assert(server_index < r->configuration.n);
+
+    last_index = raft_log__last_index(&r->log);
+
+    if (r->leader_state.match_index[server_index] == last_index) {
+        /* The log of this non-voting server is already up-to-date, so we can
+         * ask its promotion immediately. */
+        r->configuration.servers[server_index].voting = true;
+
+        rv = raft_client__change_configuration(r, &r->configuration);
+        if (rv != 0) {
+            r->configuration.servers[server_index].voting = false;
+            return rv;
+        }
+
+        return 0;
+    }
+
+    r->leader_state.promotee_id = server->id;
+
+    /* Initialize the first catch-up round. */
+    r->leader_state.round_number = 1;
+    r->leader_state.round_index = last_index;
+    r->leader_state.round_duration = 0;
+
+    /* Immediately initiate an AppendEntries request. */
+    rv = raft_replication__send_append_entries(r, server_index);
+    if (rv != 0) {
+        /* This error is not fatal. */
+        raft__warnf(r, "failed to send append entries to server %ld: %s (%d)",
+                    server->id, raft_strerror(rv), rv);
+    }
+
+    return 0;
+
+err:
+    assert(rv != 0);
+
+    return rv;
+}
+
+int raft_remove_server(struct raft *r, const unsigned id)
+{
+    const struct raft_server *server;
+    struct raft_configuration configuration;
+    int rv;
+
+    rv = raft_membership__can_change_configuration(r);
+    if (rv != 0) {
+        return rv;
+    }
+
+    server = raft_configuration__get(&r->configuration, id);
+    if (server == NULL) {
+        rv = RAFT_ERR_BAD_SERVER_ID;
+        raft_error__printf(r, rv, NULL);
+        goto err;
+    }
+
+    raft__debugf(r, "remove server: id %d", id);
+
+    /* Make a copy of the current configuration, and remove the given server
+     * from it. */
+    raft_configuration_init(&configuration);
+
+    rv = raft_configuration__copy(&r->configuration, &configuration);
+    if (rv != 0) {
+        raft_error__printf(r, rv, "copy current configuration");
+        goto err;
+    }
+
+    rv = raft_configuration_remove(&configuration, id);
+    if (rv != 0) {
+        raft_error__printf(r, rv, "remove server from new configuration");
+        goto err_after_configuration_copy;
+    }
+
+    rv = raft_client__change_configuration(r, &configuration);
+    if (rv != 0) {
+        goto err_after_configuration_copy;
+    }
+
+    return 0;
+
+err_after_configuration_copy:
+    raft_configuration_close(&configuration);
+
+err:
+    assert(rv != 0);
     return rv;
 }
