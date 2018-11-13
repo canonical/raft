@@ -3,6 +3,7 @@
 #include "../../src/configuration.h"
 #include "../../src/log.h"
 
+#include "../lib/fsm.h"
 #include "../lib/heap.h"
 #include "../lib/io.h"
 #include "../lib/logger.h"
@@ -18,6 +19,7 @@ struct fixture
     struct raft_heap heap;
     struct raft_logger logger;
     struct raft_io io;
+    struct raft_fsm fsm;
     struct raft raft;
 };
 
@@ -37,8 +39,9 @@ static void *setup(const MunitParameter params[], void *user_data)
     test_logger_setup(params, &f->logger, id);
 
     test_io_setup(params, &f->io);
+    test_fsm_setup(params, &f->fsm);
 
-    raft_init(&f->raft, &f->io, f, id);
+    raft_init(&f->raft, &f->io, &f->fsm, f, id);
 
     raft_set_logger(&f->raft, &f->logger);
 
@@ -51,6 +54,7 @@ static void tear_down(void *data)
 
     raft_close(&f->raft);
 
+    test_fsm_tear_down(&f->fsm);
     test_io_tear_down(&f->io);
 
     test_logger_tear_down(&f->logger);
@@ -82,8 +86,8 @@ static MunitResult test_handle_update_commit(const MunitParameter params[],
     /* Include a log entry in the request */
     entry->type = RAFT_LOG_COMMAND;
     entry->term = 1;
-    entry->buf.base = NULL;
-    entry->buf.len = 0;
+
+    test_fsm_encode_set_x(123, &entry->buf);
 
     args.term = 1;
     args.leader_id = 2;
@@ -118,7 +122,7 @@ static MunitTest handle_tests[] = {
  * Test suite
  */
 
-MunitSuite raft_queue_suites[] = {
+MunitSuite raft_io_suites[] = {
     {"/handle", handle_tests, NULL, 1, 0},
     {NULL, NULL, NULL, 0, 0},
 };

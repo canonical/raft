@@ -12,6 +12,7 @@
 
 void raft_init(struct raft *r,
                struct raft_io *io,
+               struct raft_fsm *fsm,
                void *data,
                const unsigned id)
 {
@@ -22,6 +23,7 @@ void raft_init(struct raft *r,
 
     /* User-defined */
     r->io = io;
+    r->fsm = fsm;
     r->id = id;
     r->data = data;
 

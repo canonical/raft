@@ -100,6 +100,12 @@ void raft_log__release(struct raft_log *l,
 void raft_log__truncate(struct raft_log *l, const raft_index index);
 
 /**
+ * Discard all entries from the given index (included) onwards. This is exactly
+ * the same as truncate, but the memory of the entries does not gets released.
+ */
+void raft_log__discard(struct raft_log *l, const raft_index index);
+
+/**
  * Delete all entries up to the given index (included).
  */
 void raft_log__shift(struct raft_log *l, const raft_index index);

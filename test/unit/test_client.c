@@ -5,6 +5,7 @@
 #include "../../src/configuration.h"
 #include "../../src/log.h"
 
+#include "../lib/fsm.h"
 #include "../lib/heap.h"
 #include "../lib/io.h"
 #include "../lib/logger.h"
@@ -20,6 +21,7 @@ struct fixture
     struct raft_heap heap;
     struct raft_logger logger;
     struct raft_io io;
+    struct raft_fsm fsm;
     struct raft raft;
 };
 
@@ -36,8 +38,7 @@ static int __rand()
         struct raft_buffer buf;              \
         int rv;                              \
                                              \
-        buf.base = NULL;                     \
-        buf.len = 0;                         \
+        test_fsm_encode_set_x(123, &buf);    \
                                              \
         rv = raft_accept(&F->raft, &buf, 1); \
         munit_assert_int(rv, ==, 0);         \
@@ -212,8 +213,9 @@ static void *setup(const MunitParameter params[], void *user_data)
     test_heap_setup(params, &f->heap);
     test_logger_setup(params, &f->logger, id);
     test_io_setup(params, &f->io);
+    test_fsm_setup(params, &f->fsm);
 
-    raft_init(&f->raft, &f->io, f, id);
+    raft_init(&f->raft, &f->io, &f->fsm, f, id);
 
     raft_set_logger(&f->raft, &f->logger);
     raft_set_rand(&f->raft, __rand);
@@ -227,6 +229,7 @@ static void tear_down(void *data)
 
     raft_close(&f->raft);
 
+    test_fsm_tear_down(&f->fsm);
     test_io_tear_down(&f->io);
     test_logger_tear_down(&f->logger);
     test_heap_tear_down(&f->heap);
@@ -250,13 +253,14 @@ static MunitResult test_accept_not_leader(const MunitParameter params[],
 
     test_bootstrap_and_load(&f->raft, 2, 1, 2);
 
-    buf.base = NULL;
-    buf.len = 0;
+    test_fsm_encode_set_x(123, &buf);
 
     rv = raft_accept(&f->raft, &buf, 1);
     munit_assert_int(rv, ==, RAFT_ERR_NOT_LEADER);
     munit_assert_string_equal(raft_errmsg(&f->raft),
                               "can't accept entries: server is not the leader");
+
+    raft_free(buf.base);
 
     return MUNIT_OK;
 }
@@ -282,8 +286,7 @@ static MunitResult test_accept_oom(const MunitParameter params[], void *data)
     test_bootstrap_and_load(&f->raft, 2, 1, 2);
     test_become_leader(&f->raft);
 
-    buf.base = NULL;
-    buf.len = 0;
+    test_fsm_encode_set_x(123, &buf);
 
     test_heap_fault_enable(&f->heap);
 
@@ -295,6 +298,8 @@ static MunitResult test_accept_oom(const MunitParameter params[], void *data)
 
     rv = raft_accept(&f->raft, &buf, 1);
     munit_assert_int(rv, ==, RAFT_ERR_NOMEM);
+
+    raft_free(buf.base);
 
     return MUNIT_OK;
 }
@@ -311,13 +316,14 @@ static MunitResult test_accept_io_err(const MunitParameter params[], void *data)
     test_bootstrap_and_load(&f->raft, 2, 1, 2);
     test_become_leader(&f->raft);
 
-    buf.base = NULL;
-    buf.len = 0;
+    test_fsm_encode_set_x(123, &buf);
 
     test_io_fault(&f->io, 0, 1);
 
     rv = raft_accept(&f->raft, &buf, 1);
     munit_assert_int(rv, ==, RAFT_ERR_SHUTDOWN);
+
+    raft_free(buf.base);
 
     return MUNIT_OK;
 }
@@ -821,7 +827,6 @@ static MunitResult test_promote_follower(const MunitParameter params[],
     struct raft_configuration configuration;
     struct raft_buffer buf;
     struct raft_entry *entries;
-    struct raft_server server;
     int rv;
 
     (void)params;
@@ -840,9 +845,6 @@ static MunitResult test_promote_follower(const MunitParameter params[],
     munit_assert_int(rv, ==, 0);
 
     raft_configuration_close(&configuration);
-
-    /* Receive an AppendEntries RPC containing the new configuration. */
-    server = *raft_configuration__get(&f->raft.configuration, 2);
 
     entries = raft_calloc(1, sizeof *entries);
     munit_assert_ptr_not_null(entries);
@@ -977,7 +979,7 @@ static MunitResult test_remove_server_submit(const MunitParameter params[],
 /* After a request to remove server is committed, the new configuration is not
  * marked as uncommitted anymore */
 static MunitResult test_remove_server_committed(const MunitParameter params[],
-                                             void *data)
+                                                void *data)
 {
     struct fixture *f = data;
     const struct raft_server *server;
@@ -1011,7 +1013,7 @@ static MunitResult test_remove_server_committed(const MunitParameter params[],
 
 /* A leader gets a request to remove itself. */
 static MunitResult test_remove_server_self(const MunitParameter params[],
-                                             void *data)
+                                           void *data)
 {
     struct fixture *f = data;
     const struct raft_server *server;

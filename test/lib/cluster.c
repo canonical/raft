@@ -50,6 +50,7 @@ void test_cluster_setup(const MunitParameter params[], struct test_cluster *c)
 
     c->loggers = raft_calloc(TEST_CLUSTER__N, sizeof *c->loggers);
     c->ios = raft_calloc(TEST_CLUSTER__N, sizeof *c->ios);
+    c->fsms = raft_calloc(TEST_CLUSTER__N, sizeof *c->fsms);
     c->rafts = raft_calloc(TEST_CLUSTER__N, sizeof *c->rafts);
     c->alive = raft_calloc(TEST_CLUSTER__N, sizeof *c->alive);
 
@@ -62,6 +63,7 @@ void test_cluster_setup(const MunitParameter params[], struct test_cluster *c)
         unsigned id = i + 1;
         struct raft_logger *logger = &c->loggers[i];
         struct raft_io *io = &c->ios[i];
+        struct raft_fsm *fsm = &c->fsms[i];
         struct raft *raft = &c->rafts[i];
         struct test_host *host = test_network_host(&c->network, id);
 
@@ -73,7 +75,9 @@ void test_cluster_setup(const MunitParameter params[], struct test_cluster *c)
         test_io_setup(params, io);
         test_io_set_network(io, &c->network, id);
 
-        raft_init(raft, io, c, id);
+        test_fsm_setup(params, fsm);
+
+        raft_init(raft, io, fsm, c, id);
 
         raft_set_logger(raft, logger);
         raft_set_rand(raft, test_cluster__rand);
@@ -98,9 +102,11 @@ void test_cluster_tear_down(struct test_cluster *c)
     for (i = 0; i < c->n; i++) {
         struct raft_logger *logger = &c->loggers[i];
         struct raft_io *io = &c->ios[i];
+        struct raft_fsm *fsm = &c->fsms[i];
         struct raft *raft = &c->rafts[i];
 
         raft_close(raft);
+        test_fsm_tear_down(fsm);
         test_io_tear_down(io);
 
         test_logger_tear_down(logger);
@@ -109,6 +115,7 @@ void test_cluster_tear_down(struct test_cluster *c)
     test_network_tear_down(&c->network);
 
     raft_free(c->loggers);
+    raft_free(c->fsms);
     raft_free(c->ios);
     raft_free(c->rafts);
     raft_free(c->alive);
@@ -594,6 +601,7 @@ void test_cluster_add_server(struct test_cluster *c)
     char *address = munit_malloc(4);
     struct raft_logger *logger;
     struct raft_io *io;
+    struct raft_fsm *fsm;
     struct raft *raft;
     struct test_host *host;
     struct raft *leader;
@@ -607,6 +615,7 @@ void test_cluster_add_server(struct test_cluster *c)
 
     logger = &c->loggers[c->n - 1];
     io = &c->ios[c->n - 1];
+    fsm = &c->fsms[c->n - 1];
     raft = &c->rafts[c->n - 1];
 
     test_network_add_host(&c->network);
@@ -620,7 +629,9 @@ void test_cluster_add_server(struct test_cluster *c)
     test_io_setup(params, io);
     test_io_set_network(io, &c->network, id);
 
-    raft_init(raft, io, c, id);
+    test_fsm_setup(params, fsm);
+
+    raft_init(raft, io, fsm, c, id);
 
     raft_set_logger(raft, logger);
     raft_set_rand(raft, test_cluster__rand);

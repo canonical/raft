@@ -59,6 +59,7 @@
 
 #include "../../include/raft.h"
 
+#include "fsm.h"
 #include "io.h"
 #include "logger.h"
 #include "munit.h"
@@ -85,6 +86,7 @@ struct test_cluster
     struct test_network network; /* Test network. */
     struct raft_logger *loggers; /* Loggers. */
     struct raft_io *ios;         /* Test I/O implementations. */
+    struct raft_fsm *fsms;       /* Test FSM implementations. */
     struct raft *rafts;          /* Raft instances */
     raft_index commit_index;     /* Index of last committed entry. */
     struct raft_log log;         /* Copy of leader's log at last iteration. */
