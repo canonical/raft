@@ -36,8 +36,10 @@ int raft_accept(struct raft *r,
     /* Append the new entries to the log. */
     rv = raft_log__append_commands(&r->log, r->current_term, bufs, n);
     if (rv != 0) {
-        return rv;
+        goto err;
     }
+
+    raft__debugf(r, "DONE");
 
     rv = raft_replication__trigger(r, index);
     if (rv != 0) {

@@ -213,7 +213,7 @@ err_after_entries_acquired:
     raft_log__release(&r->log, index, entries, n);
 
 err_after_log_append:
-    raft_log__truncate(&r->log, index);
+    raft_log__discard(&r->log, index);
 
     assert(rv != 0);
 
@@ -611,11 +611,30 @@ static void raft_replication__apply_configuration(struct raft *r,
     if (r->state == RAFT_STATE_LEADER &&
         raft_configuration__get(&r->configuration, r->id) == NULL) {
         /* Ignore the return value, since we can't fail in this case (no actual
-	 * write for the new term will be done) */
+         * write for the new term will be done) */
         raft_state__convert_to_follower(r, r->current_term);
     }
 
     raft_watch__configuration_applied(r);
+}
+
+/**
+ * Apply a RAFT_LOG_COMMAND entry that has been committed.
+ */
+static int raft_replication__apply_command(struct raft *r,
+                                           const raft_index index,
+                                           const struct raft_buffer *buf)
+{
+    int rv;
+
+    rv = r->fsm->apply(r->fsm, buf);
+    if (rv != 0) {
+        return rv;
+    }
+
+    raft_watch__command_applied(r, index);
+
+    return 0;
 }
 
 int raft_replication__apply(struct raft *r)
@@ -639,9 +658,7 @@ int raft_replication__apply(struct raft *r)
 
         switch (entry->type) {
             case RAFT_LOG_COMMAND:
-                /* TODO: Apply to user defined FSM. */
-                // raft_watch__command_applied(r, index);
-                rv = 0;
+                rv = raft_replication__apply_command(r, index, &entry->buf);
                 break;
             case RAFT_LOG_CONFIGURATION:
                 raft_replication__apply_configuration(r, index);

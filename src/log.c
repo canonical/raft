@@ -773,9 +773,9 @@ static void raft_log__clear_if_empty(struct raft_log *l)
 }
 
 /**
- * Discard an entry, possibly releasing the memory of its buffer.
+ * Destroy an entry, possibly releasing the memory of its buffer.
  */
-static void raft_log__discard_entry(struct raft_log *l,
+static void raft_log__destroy_entry(struct raft_log *l,
                                     struct raft_entry *entry)
 {
     if (entry->batch == NULL) {
@@ -789,7 +789,13 @@ static void raft_log__discard_entry(struct raft_log *l,
     }
 }
 
-void raft_log__truncate(struct raft_log *l, const raft_index index)
+/**
+ * Core logic of @raft_log__truncate and @raft_log__discard, removing all
+ * entries starting from @index.
+ */
+static void raft_log__remove_suffix(struct raft_log *l,
+                                    const raft_index index,
+                                    bool destroy)
 {
     size_t i;
     size_t n;
@@ -823,12 +829,22 @@ void raft_log__truncate(struct raft_log *l, const raft_index index)
 
         unref = raft_log__refs_decr(l, entry->term, start + n - i - 1);
 
-        if (unref) {
-            raft_log__discard_entry(l, entry);
+        if (unref && destroy) {
+            raft_log__destroy_entry(l, entry);
         }
     }
 
     raft_log__clear_if_empty(l);
+}
+
+void raft_log__truncate(struct raft_log *l, const raft_index index)
+{
+    return raft_log__remove_suffix(l, index, true);
+}
+
+void raft_log__discard(struct raft_log *l, const raft_index index)
+{
+    return raft_log__remove_suffix(l, index, false);
 }
 
 void raft_log__shift(struct raft_log *l, const raft_index index)
@@ -859,7 +875,7 @@ void raft_log__shift(struct raft_log *l, const raft_index index)
         unref = raft_log__refs_decr(l, entry->term, l->offset);
 
         if (unref) {
-            raft_log__discard_entry(l, entry);
+            raft_log__destroy_entry(l, entry);
         }
     }
 

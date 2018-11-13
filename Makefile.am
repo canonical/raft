@@ -62,6 +62,7 @@ test_lib_SOURCES = \
   test/lib/fault.c \
   test/lib/heap.c \
   test/lib/io.c \
+  test/lib/fsm.c \
   test/lib/logger.c \
   test/lib/network.c \
   test/lib/munit.c \

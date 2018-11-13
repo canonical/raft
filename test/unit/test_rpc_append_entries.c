@@ -5,6 +5,7 @@
 #include "../../src/configuration.h"
 #include "../../src/log.h"
 
+#include "../lib/fsm.h"
 #include "../lib/heap.h"
 #include "../lib/io.h"
 #include "../lib/logger.h"
@@ -20,6 +21,7 @@ struct fixture
     struct raft_heap heap;
     struct raft_logger logger;
     struct raft_io io;
+    struct raft_fsm fsm;
     struct raft raft;
 };
 
@@ -135,8 +137,9 @@ static void *setup(const MunitParameter params[], void *user_data)
     test_logger_setup(params, &f->logger, id);
 
     test_io_setup(params, &f->io);
+    test_fsm_setup(params, &f->fsm);
 
-    raft_init(&f->raft, &f->io, f, id);
+    raft_init(&f->raft, &f->io, &f->fsm, f, id);
 
     raft_set_logger(&f->raft, &f->logger);
 
@@ -148,6 +151,8 @@ static void tear_down(void *data)
     struct fixture *f = data;
 
     raft_close(&f->raft);
+
+    test_fsm_tear_down(&f->fsm);
 
     test_io_tear_down(&f->io);
 
@@ -639,8 +644,7 @@ static MunitResult test_res_commit(const MunitParameter params[], void *data)
     test_become_leader(&f->raft);
 
     /* Append an entry to our log and handle the associated successful write. */
-    buf.base = NULL;
-    buf.len = 0;
+    test_fsm_encode_set_x(123, &buf);
 
     rv = raft_accept(&f->raft, &buf, 1);
     munit_assert_int(rv, ==, 0);

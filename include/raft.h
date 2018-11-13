@@ -311,11 +311,26 @@ struct raft_append_entries_result
 };
 
 /**
+ * Interface for the user-implemented finate state machine replicated through
+ * Raft.
+ */
+struct raft_fsm
+{
+    int version; /* API version implemented by this instance. Currently 1. */
+    void *data;  /* Custom user data. */
+
+    /**
+     * Apply a committed RAFT_LOG_COMMAND entry to the state machine.
+     */
+    int (*apply)(struct raft_fsm *fsm, const struct raft_buffer *buf);
+};
+
+/**
  * Interface providing raft-related disk and network I/O primitives.
  */
 struct raft_io
 {
-    int version; /* API version implemented by this instance. Currently %1. */
+    int version; /* API version implemented by this instance. Currently 1. */
     void *data;  /* Custom user data. */
 
     /**
@@ -498,6 +513,11 @@ struct raft
      * User-defined disk and network I/O interface implementation.
      */
     struct raft_io *io;
+
+    /**
+     * User-defined FSM to apply command to.
+     */
+    struct raft_fsm *fsm;
 
     /**
      * Server ID of this raft instance.
@@ -696,6 +716,7 @@ struct raft
  */
 void raft_init(struct raft *r,
                struct raft_io *io,
+               struct raft_fsm *fsm,
                void *data,
                const unsigned id);
 

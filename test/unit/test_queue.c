@@ -4,6 +4,7 @@
 #include "../../src/log.h"
 #include "../../src/queue.h"
 
+#include "../lib/fsm.h"
 #include "../lib/heap.h"
 #include "../lib/io.h"
 #include "../lib/logger.h"
@@ -19,6 +20,7 @@ struct fixture
     struct raft_heap heap;
     struct raft_logger logger;
     struct raft_io io;
+    struct raft_fsm fsm;
     struct raft raft;
 };
 
@@ -67,8 +69,9 @@ static void *setup(const MunitParameter params[], void *user_data)
     test_logger_setup(params, &f->logger, id);
 
     test_io_setup(params, &f->io);
+    test_fsm_setup(params, &f->fsm);
 
-    raft_init(&f->raft, &f->io, f, id);
+    raft_init(&f->raft, &f->io, &f->fsm, f, id);
 
     raft_set_logger(&f->raft, &f->logger);
 
@@ -81,6 +84,7 @@ static void tear_down(void *data)
 
     raft_close(&f->raft);
 
+    test_fsm_tear_down(&f->fsm);
     test_io_tear_down(&f->io);
 
     test_logger_tear_down(&f->logger);
@@ -255,7 +259,7 @@ static MunitTest pop_tests[] = {
  * Test suite
  */
 
-MunitSuite raft_io_suites[] = {
+MunitSuite raft_queue_suites[] = {
     {"/push", push_tests, NULL, 1, 0},
     {"/pop", pop_tests, NULL, 1, 0},
     {NULL, NULL, NULL, 0, 0},
