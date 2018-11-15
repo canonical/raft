@@ -5,12 +5,14 @@
 #include "../include/raft.h"
 
 #include "error.h"
+#include "logger.h"
 
-struct raft_uv__data
+struct raft_uv__backend
 {
     struct raft *raft;
     struct uv_loop_s *loop;
     struct uv_timer_s ticker;
+    uint64_t last_tick;
 };
 
 static void raft_error__uv(struct raft *r, const int rv, const char *fmt, ...)
@@ -29,9 +31,62 @@ static void raft_error__uv(struct raft *r, const int rv, const char *fmt, ...)
     va_end(args);
 }
 
-static int raft_uv__tick(struct raft *r, unsigned msecs) {}
+static void raft_uv__ticker_cb(uv_timer_t *ticker)
+{
+    struct raft_uv__backend *backend;
+    uint64_t now;
 
-static int raft_uv__stop(struct raft *r) {}
+    backend = ticker->data;
+
+    now = uv_now(backend->loop);
+
+    raft_tick(backend->raft, now - backend->last_tick);
+
+    backend->last_tick = now;
+
+}
+
+static int raft_uv__start(struct raft *r, unsigned tick)
+{
+    struct raft_uv__backend *backend;
+    int rv;
+
+    backend = r->backend.data;
+    backend->last_tick = uv_now(backend->loop);
+
+    rv = uv_timer_init(backend->loop, &backend->ticker);
+    if (rv != 0) {
+        raft_error__uv(r, rv, "init tick timer");
+        return RAFT_ERR_INTERNAL;
+    }
+    backend->ticker.data = backend;
+
+    rv = uv_timer_start(&backend->ticker, raft_uv__ticker_cb, 0, tick);
+    if (rv != 0) {
+        raft_error__uv(r, rv, "start tick timer");
+        return RAFT_ERR_INTERNAL;
+    }
+
+    return 0;
+}
+
+static int raft_uv__stop(struct raft *r)
+{
+    struct raft_uv__backend *backend;
+    int rv;
+
+    backend = r->backend.data;
+
+    rv = uv_timer_stop(&backend->ticker);
+    if (rv != 0) {
+        raft_error__uv(r, rv, "stop tick timer");
+        return RAFT_ERR_INTERNAL;
+    }
+
+    uv_close((uv_handle_t *)&backend->ticker, NULL);
+
+    return 0;
+}
 
 static void raft_uv__close(struct raft *r)
 {
@@ -40,21 +95,21 @@ static void raft_uv__close(struct raft *r)
 
 int raft_uv(struct raft *r, struct uv_loop_s *loop)
 {
-    struct raft_uv__data *data;
+    struct raft_uv__backend *backend;
 
     assert(r != NULL);
     assert(loop != NULL);
 
-    data = raft_malloc(sizeof *data);
-    if (data == NULL) {
+    backend = raft_malloc(sizeof *backend);
+    if (backend == NULL) {
         return RAFT_ERR_NOMEM;
     }
 
-    data->raft = r;
-    data->loop = loop;
+    backend->raft = r;
+    backend->loop = loop;
 
-    r->backend.data = data;
-    r->backend.tick = raft_uv__tick;
+    r->backend.data = backend;
+    r->backend.start = raft_uv__start;
     r->backend.stop = raft_uv__stop;
     r->backend.close = raft_uv__close;
 

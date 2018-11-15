@@ -2,6 +2,7 @@ ACLOCAL_AMFLAGS = -I m4
 AUTOMAKE_OPTIONS = foreign subdir-objects
 
 lib_LTLIBRARIES =
+bin_PROGRAMS =
 check_PROGRAMS =
 EXTRA_DIST =
 noinst_HEADERS =
@@ -156,4 +157,16 @@ if LLVM_COV
 endif
 if COVERAGE
 	@make cov-report
+endif
+
+if ENABLE_EXAMPLE
+
+bin_PROGRAMS += example-server
+example_server_SOURCES = \
+  example/server.c
+example_server_CFLAGS = $(AM_CFLAGS)
+example_server_CFLAGS += -I$(top_srcdir)/example
+example_server_LDADD = libraft.la
+example_server_LDFLAGS =
+
 endif

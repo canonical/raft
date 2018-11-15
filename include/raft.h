@@ -448,11 +448,7 @@ struct raft_io_request
 /**
  * State codes.
  */
-enum {
-    RAFT_STATE_FOLLOWER,
-    RAFT_STATE_CANDIDATE,
-    RAFT_STATE_LEADER
-};
+enum { RAFT_STATE_FOLLOWER, RAFT_STATE_CANDIDATE, RAFT_STATE_LEADER };
 
 /**
  * Server state names ('follower', 'candidate', 'leader'), indexed
@@ -523,10 +519,27 @@ struct raft
      */
     struct
     {
+        /**
+         * Custom user data.
+         */
         void *data;
-        int (*tick)(struct raft *r, unsigned msecs);
+
+        /**
+         * Start the backend, invoking @raft_tick every @tick milliseconds and
+         * accepting RPC requests.
+         */
+        int (*start)(struct raft *r, unsigned tick);
+
+        /**
+         * Immediately cancel any in-progress I/O and stop invoking @raft_tick.
+         */
         int (*stop)(struct raft *r);
+
+        /**
+         * Release any resource allocated by the backend.
+         */
         void (*close)(struct raft *r);
+
     } backend;
 
     /**
@@ -609,7 +622,7 @@ struct raft
     unsigned election_timeout;
 
     /**
-     * Heartbeat timeout in milliseconds (default 500). This is relevant only
+     * Heartbeat timeout in milliseconds (default 100). This is relevant only
      * for when the raft instance is in leader state: empty AppendEntries RPCs
      * will be sent if this amount of milliseconds elapses without any
      * user-triggered AppendEntries RCPs being sent.
@@ -778,8 +791,7 @@ void raft_set_rand(struct raft *r, int (*rand)());
  *   keeps split votes rates under 40% in all cases for reasonably sized
  *   clusters, and typically results in much lower rates.
  */
-void raft_set_election_timeout_(struct raft *r,
-                                const unsigned election_timeout);
+void raft_set_election_timeout(struct raft *r, const unsigned election_timeout);
 
 /**
  * If the most recent raft_* API call associated with the given raft instance

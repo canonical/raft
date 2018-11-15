@@ -7,6 +7,7 @@
 #include "configuration.h"
 #include "election.h"
 #include "log.h"
+#include "logger.h"
 #include "queue.h"
 #include "state.h"
 
@@ -19,8 +20,10 @@ void raft_init(struct raft *r,
     int i;
 
     assert(r != NULL);
-    assert(io != NULL);
 
+    r->backend.data = NULL;
+    r->backend.start = NULL;
+    r->backend.stop = NULL;
     r->backend.close = NULL;
 
     /* User-defined */
@@ -101,10 +104,49 @@ void raft_set_rand(struct raft *r, int (*rand)())
     raft_election__reset_timer(r);
 }
 
-void raft_set_election_timeout_(struct raft *r, const unsigned election_timeout)
+void raft_set_election_timeout(struct raft *r, const unsigned election_timeout)
 {
     r->election_timeout = election_timeout;
     raft_election__reset_timer(r);
+}
+
+int raft_start(struct raft *r)
+{
+    int rv;
+
+    assert(r != NULL);
+
+    raft__debugf(r, "start");
+
+    if (r->backend.start != NULL) {
+        assert(r->heartbeat_timeout != 0);
+        assert(r->heartbeat_timeout < r->election_timeout);
+
+        rv = r->backend.start(r, r->heartbeat_timeout);
+        if (rv != 0) {
+            return rv;
+        }
+    }
+
+    return 0;
+}
+
+int raft_stop(struct raft *r)
+{
+    int rv;
+
+    assert(r != NULL);
+
+    raft__debugf(r, "stop");
+
+    if (r->backend.stop != NULL) {
+        rv = r->backend.stop(r);
+        if (rv != 0) {
+            return rv;
+        }
+    }
+
+    return 0;
 }
 
 const char *raft_state_name(struct raft *r)

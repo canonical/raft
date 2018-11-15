@@ -81,7 +81,7 @@ void test_cluster_setup(const MunitParameter params[], struct test_cluster *c)
 
         raft_set_logger(raft, logger);
         raft_set_rand(raft, test_cluster__rand);
-        raft_set_election_timeout_(raft, 250);
+        raft_set_election_timeout(raft, 250);
 
         test_bootstrap_and_load(raft, c->n, 1, c->n_voting);
 
@@ -635,7 +635,7 @@ void test_cluster_add_server(struct test_cluster *c)
 
     raft_set_logger(raft, logger);
     raft_set_rand(raft, test_cluster__rand);
-    raft_set_election_timeout_(raft, 250);
+    raft_set_election_timeout(raft, 250);
 
     host->raft = raft;
 

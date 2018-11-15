@@ -46,6 +46,18 @@ AM_COND_IF(ENABLE_UV,
   AC_DEFINE(ENABLE_UV, 0, [Define to 1 to include libuv integration])
   ])
 
+AC_ARG_ENABLE(example,
+  AS_HELP_STRING(
+    [--enable-example],
+    [enable building example server, default: no]),
+  [case "${enableval}" in
+     yes) example=true ;;
+     no)  example=false ;;
+     *)   AC_MSG_ERROR([bad value ${enableval} for --enable-example]) ;;
+   esac],
+  [example=false])
+AM_CONDITIONAL(ENABLE_EXAMPLE, test x"$example" = x"true")
+
 AC_ARG_ENABLE(debug,
   AS_HELP_STRING(
     [--enable-debug],
