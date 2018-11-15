@@ -131,6 +131,8 @@ static MunitResult test_updates_timers(const MunitParameter params[],
 
     (void)params;
 
+    f->raft.state = RAFT_STATE_FOLLOWER;
+
     __tick(f, 100);
     __assert_timer(f, 100);
 

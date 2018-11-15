@@ -448,7 +448,13 @@ struct raft_io_request
 /**
  * State codes.
  */
-enum { RAFT_STATE_FOLLOWER, RAFT_STATE_CANDIDATE, RAFT_STATE_LEADER };
+enum {
+    RAFT_STATE_NONE,
+    RAFT_STATE_STARTING,
+    RAFT_STATE_FOLLOWER,
+    RAFT_STATE_CANDIDATE,
+    RAFT_STATE_LEADER
+};
 
 /**
  * Server state names ('follower', 'candidate', 'leader'), indexed
@@ -514,6 +520,16 @@ enum {
 struct raft
 {
     /**
+     * Server ID of this raft instance.
+     */
+    unsigned id;
+
+    /**
+     * User-defined FSM to apply command to.
+     */
+    struct raft_fsm *fsm;
+
+    /**
      * User-defined I/O backend implementing periodic ticks, log store
      * read/writes and network RPCs.
      */
@@ -540,22 +556,19 @@ struct raft
          */
         void (*close)(struct raft *r);
 
+        /**
+         * Synchronously read the current term and vote. The implementation
+         * MUST ensure that the change is durable before returning (e.g. using
+         * fdatasync() or #O_DIRECT).
+         */
+        int (*read_term)(struct raft *r, raft_term *term);
+
     } backend;
 
     /**
      * User-defined disk and network I/O interface implementation.
      */
     struct raft_io *io;
-
-    /**
-     * User-defined FSM to apply command to.
-     */
-    struct raft_fsm *fsm;
-
-    /**
-     * Server ID of this raft instance.
-     */
-    unsigned id;
 
     /**
      * Custom user data. It will be passed back to callbacks registered with

@@ -49,15 +49,7 @@ void raft_init(struct raft *r,
     r->commit_index = 0;
     r->last_applied = 0;
 
-    /* From Section §3.4:
-     *
-     *   When servers start up, they begin as followers.
-     */
-    r->state = RAFT_STATE_FOLLOWER;
-    r->follower_state.current_leader_id = 0;
-    r->leader_state.next_index = NULL;
-    r->leader_state.match_index = NULL;
-    r->candidate_state.votes = NULL;
+    r->state = RAFT_STATE_NONE;
 
     r->rand = rand;
     raft_election__reset_timer(r);

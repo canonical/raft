@@ -308,7 +308,9 @@ static MunitResult test_req_empty_log(const MunitParameter params[], void *data)
     __configuration_add(f, 1, "1", true);
     __configuration_add(f, 2, "2", true);
 
-    __handle_request_vote(f, f->raft.current_term + 1, 2, 1, 1);
+     f->raft.state = RAFT_STATE_FOLLOWER;
+
+     __handle_request_vote(f, f->raft.current_term + 1, 2, 1, 1);
 
     /* The request is successful */
     __assert_request_vote_result(f, 1, true);

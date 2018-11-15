@@ -83,8 +83,7 @@ static MunitResult test_init_state(const MunitParameter params[], void *data)
 
     munit_assert_int(f->raft.id, ==, 1);
 
-    munit_assert_int(f->raft.state, ==, RAFT_STATE_FOLLOWER);
-    munit_assert_int(f->raft.follower_state.current_leader_id, ==, 0);
+    munit_assert_int(f->raft.state, ==, RAFT_STATE_NONE);
 
     munit_assert_int(f->raft.current_term, ==, 0);
     munit_assert_int(f->raft.voted_for, ==, 0);
@@ -93,11 +92,6 @@ static MunitResult test_init_state(const MunitParameter params[], void *data)
 
     munit_assert_int(f->raft.commit_index, ==, 0);
     munit_assert_int(f->raft.last_applied, ==, 0);
-
-    munit_assert_ptr_null(f->raft.leader_state.next_index);
-    munit_assert_ptr_null(f->raft.leader_state.match_index);
-
-    munit_assert_ptr_null(f->raft.candidate_state.votes);
 
     munit_assert_ptr_null(f->raft.configuration.servers);
     munit_assert_int(f->raft.configuration.n, ==, 0);

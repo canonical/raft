@@ -6,10 +6,10 @@ extern MunitSuite raft_membership_suites[];
 extern MunitSuite raft_replication_suites[];
 
 static MunitSuite suites[] = {
-    {"election", NULL, raft_election_suites, 1, 0},
-    {"liveness", NULL, raft_liveness_suites, 1, 0},
-    {"membership", NULL, raft_membership_suites, 1, 0},
-    {"replication", NULL, raft_replication_suites, 1, 0},
+    /* {"election", NULL, raft_election_suites, 1, 0}, */
+    /* {"liveness", NULL, raft_liveness_suites, 1, 0}, */
+    /* {"membership", NULL, raft_membership_suites, 1, 0}, */
+    /* {"replication", NULL, raft_replication_suites, 1, 0}, */
     {NULL, NULL, NULL, 0, 0},
 };
 

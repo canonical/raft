@@ -7,6 +7,9 @@
 #include "error.h"
 #include "logger.h"
 
+/**
+ * Raft I/O backend implementation based on libuv.
+ */
 struct raft_uv__backend
 {
     struct raft *raft;
@@ -15,6 +18,9 @@ struct raft_uv__backend
     uint64_t last_tick;
 };
 
+/**
+ * Convenience for wrapping an error message from libuv.
+ */
 static void raft_error__uv(struct raft *r, const int rv, const char *fmt, ...)
 {
     const char *msg = uv_strerror(rv);
@@ -31,6 +37,9 @@ static void raft_error__uv(struct raft *r, const int rv, const char *fmt, ...)
     va_end(args);
 }
 
+/**
+ * Periodic tick timer callback.
+ */
 static void raft_uv__ticker_cb(uv_timer_t *ticker)
 {
     struct raft_uv__backend *backend;
@@ -46,6 +55,9 @@ static void raft_uv__ticker_cb(uv_timer_t *ticker)
 
 }
 
+/**
+ * Start the backend.
+ */
 static int raft_uv__start(struct raft *r, unsigned tick)
 {
     struct raft_uv__backend *backend;
