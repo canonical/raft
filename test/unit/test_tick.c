@@ -123,6 +123,21 @@ static void tear_down(void *data)
  * raft_tick
  */
 
+/* If we're in the unavailable state, raft_tick is a no-op. */
+static MunitResult test_unavailable(const MunitParameter params[], void *data)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    f->raft.state = RAFT_STATE_UNAVAILABLE;
+
+    __tick(f, 100);
+    __tick(f, 100);
+
+    return MUNIT_OK;
+}
+
 /* Internal timers are updated according to the given time delta. */
 static MunitResult test_updates_timers(const MunitParameter params[],
                                        void *data)
@@ -446,6 +461,7 @@ static MunitResult test_request_vote_only_to_voters(
 }
 
 static MunitTest tick_tests[] = {
+    {"/unavailable", test_unavailable, setup, tear_down, 0, NULL},
     {"/updates-timers", test_updates_timers, setup, tear_down, 0, NULL},
     {"/self-elect", test_self_elect, setup, tear_down, 0, NULL},
     {"/one-voter-not-us", test_one_voter_not_us, setup, tear_down, 0, NULL},

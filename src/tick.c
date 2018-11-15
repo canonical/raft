@@ -179,8 +179,13 @@ int raft_tick(struct raft *r, const unsigned msec_since_last_tick)
 
     assert(r != NULL);
 
-    assert(r->state == RAFT_STATE_FOLLOWER ||
+    assert(r->state == RAFT_STATE_UNAVAILABLE || r->state == RAFT_STATE_FOLLOWER ||
            r->state == RAFT_STATE_CANDIDATE || r->state == RAFT_STATE_LEADER);
+
+    /* If we are not available, let's do nothing. */
+    if (r->state == RAFT_STATE_UNAVAILABLE) {
+        return 0;
+    }
 
     r->timer += msec_since_last_tick;
 

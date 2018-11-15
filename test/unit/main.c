@@ -7,6 +7,13 @@ extern MunitSuite raft_election_suites[];
 extern MunitSuite raft_encoding_suites[];
 extern MunitSuite raft_error_suites[];
 extern MunitSuite raft_io_suites[];
+extern MunitSuite raft_io_queue_suites[];
+#if RAFT_IO_SIM
+extern MunitSuite raft_io_sim_suites[];
+#endif
+#if RAFT_IO_UV
+extern MunitSuite raft_io_uv_suites[];
+#endif
 extern MunitSuite raft_log_suites[];
 extern MunitSuite raft_logger_suites[];
 extern MunitSuite raft_queue_suites[];
@@ -14,9 +21,6 @@ extern MunitSuite raft_replication_suites[];
 extern MunitSuite raft_rpc_request_vote_suites[];
 extern MunitSuite raft_rpc_append_entries_suites[];
 extern MunitSuite raft_tick_suites[];
-#ifdef RAFT_UV
-extern MunitSuite raft_uv_suites[];
-#endif
 extern MunitSuite raft_suites[];
 
 static MunitSuite suites[] = {
@@ -27,8 +31,12 @@ static MunitSuite suites[] = {
     {"encoding", NULL, raft_encoding_suites, 1, 0},
     {"error", NULL, raft_error_suites, 1, 0},
     {"io", NULL, raft_io_suites, 1, 0},
-#ifdef RAFT_UV
-    {"uv", NULL, raft_uv_suites, 1, 0},
+    {"io-queue", NULL, raft_io_queue_suites, 1, 0},
+#if RAFT_IO_SIM
+    {"io-sim", NULL, raft_io_sim_suites, 1, 0},
+#endif
+#if RAFT_IO_UV
+    {"io-uv", NULL, raft_io_uv_suites, 1, 0},
 #endif
     {"log", NULL, raft_log_suites, 1, 0},
     {"logger", NULL, raft_logger_suites, 1, 0},

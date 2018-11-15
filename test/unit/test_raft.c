@@ -2,7 +2,6 @@
 
 #include "../lib/fsm.h"
 #include "../lib/heap.h"
-#include "../lib/io.h"
 #include "../lib/logger.h"
 #include "../lib/munit.h"
 #include "../lib/raft.h"
@@ -26,6 +25,11 @@ static int __rand()
 }
 
 /**
+ * Assert the current state of the raft instance of the given fixture.
+ */
+#define __assert_state(F, STATE) munit_assert_int(F->raft.state, ==, STATE);
+
+/**
  * Setup and tear down
  */
 
@@ -33,6 +37,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     uint64_t id = 1;
+    int rv;
 
     (void)user_data;
 
@@ -40,10 +45,11 @@ static void *setup(const MunitParameter params[], void *user_data)
 
     test_logger_setup(params, &f->logger, id);
 
-    test_io_setup(params, &f->io);
     test_fsm_setup(params, &f->fsm);
 
     raft_init(&f->raft, &f->io, &f->fsm, f, id);
+    rv = raft_io_sim_init(&f->raft);
+    munit_assert_int(rv, ==, 0);
 
     raft_set_logger(&f->raft, &f->logger);
     raft_set_rand(&f->raft, __rand);
@@ -57,7 +63,6 @@ static void tear_down(void *data)
 
     raft_close(&f->raft);
 
-    test_io_tear_down(&f->io);
     test_fsm_tear_down(&f->fsm);
 
     test_logger_tear_down(&f->logger);
@@ -68,9 +73,7 @@ static void tear_down(void *data)
 }
 
 /**
- *
  * raft_init
- *
  */
 
 /* The raft state is properly initialized. */
@@ -83,7 +86,7 @@ static MunitResult test_init_state(const MunitParameter params[], void *data)
 
     munit_assert_int(f->raft.id, ==, 1);
 
-    munit_assert_int(f->raft.state, ==, RAFT_STATE_NONE);
+    munit_assert_int(f->raft.state, ==, RAFT_STATE_UNAVAILABLE);
 
     munit_assert_int(f->raft.current_term, ==, 0);
     munit_assert_int(f->raft.voted_for, ==, 0);
@@ -124,6 +127,31 @@ static MunitTest init_tests[] = {
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 
+/**
+ * raft_start
+ */
+
+/* The initial state is RAFT_STATE_UNAVAILABLE. */
+static MunitResult test_start_state(const MunitParameter params[], void *data)
+{
+    struct fixture *f = data;
+    int rv;
+
+    (void)params;
+
+    rv = raft_start(&f->raft);
+    munit_assert_int(rv, ==, 0);
+
+    __assert_state(f, RAFT_STATE_UNAVAILABLE);
+
+    return MUNIT_OK;
+}
+
+static MunitTest start_tests[] = {
+    {"/state", test_start_state, setup, tear_down, 0, NULL},
+    {NULL, NULL, NULL, NULL, 0, NULL},
+};
+
 
 /**
  * Test suite
@@ -131,5 +159,6 @@ static MunitTest init_tests[] = {
 
 MunitSuite raft_suites[] = {
     {"/init", init_tests, NULL, 1, 0},
+    {"/start", start_tests, NULL, 1, 0},
     {NULL, NULL, NULL, 0, 0},
 };

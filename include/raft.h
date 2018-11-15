@@ -6,8 +6,12 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#ifdef RAFT_UV
-#include "raft_uv.h"
+#if RAFT_IO_SIM
+#include "raft/io_sim.h"
+#endif
+
+#if RAFT_IO_UV
+#include "raft/io_uv.h"
 #endif
 
 /**
@@ -27,10 +31,12 @@ enum {
     RAFT_ERR_MALFORMED,
     RAFT_ERR_NO_SPACE,
     RAFT_ERR_BUSY,
+    RAFT_ERR_IO,
     RAFT_ERR_IO_BUSY,
     RAFT_ERR_NOT_LEADER,
     RAFT_ERR_SHUTDOWN,
-    RAFT_ERR_CONFIGURATION_BUSY
+    RAFT_ERR_CONFIGURATION_BUSY,
+    RAFT_ERR_PATH_TOO_LONG
 };
 
 /**
@@ -51,9 +57,11 @@ enum {
     X(RAFT_ERR_NO_SPACE, "no space left on device")                      \
     X(RAFT_ERR_BUSY, "an append entries request is already in progress") \
     X(RAFT_ERR_NOT_LEADER, "server is not the leader")                   \
+    X(RAFT_ERR_IO, "I/O error")                                          \
     X(RAFT_ERR_IO_BUSY, "a log write request is already in progress")    \
     X(RAFT_ERR_CONFIGURATION_BUSY,                                       \
-      "a configuration change is already in progress")
+      "a configuration change is already in progress") \
+    X(RAFT_ERR_PATH_TOO_LONG, "file system path is too long")
 
 /**
  * Return the error message describing the given error code.
@@ -424,6 +432,9 @@ struct raft_io
  */
 enum {
     RAFT_IO_NULL = 0,
+    RAFT_IO_READ_STATE,
+    RAFT_IO_WRITE_TERM,
+    RAFT_IO_WRITE_VOTE,
     RAFT_IO_WRITE_LOG,
     RAFT_IO_APPEND_ENTRIES,
     RAFT_IO_APPEND_ENTRIES_RESULT,
@@ -443,22 +454,87 @@ struct raft_io_request
     unsigned n;                 /* Length of the entries array. */
     unsigned leader_id;         /* Leader that generated this entry. */
     raft_index leader_commit;   /* Last known leader commit index. */
+
+    union {
+        /**
+         * Arguments of a RAFT_IO_WRITE_TERM request.
+         *
+         * The I/O implementation must synchronously persist the given term (and
+         * nil vote). The I/O implementation MUST ensure that the change is
+         * durable before returning (e.g. using fdatasync() or #O_DIRECT).
+         */
+        struct
+        {
+            raft_term term;
+        } write_term;
+
+        /**
+         * Arguments of a RAFT_IO_WRITE_VOTE request.
+         *
+         * The I/O implementation must synchronously persist who we voted
+         * for. The I/O implementation MUST ensure that the change is durable
+         * before returning (e.g. using fdatasync() or #O_DIRECT).
+         */
+        struct
+        {
+            unsigned server_id;
+        } write_vote;
+
+        /**
+         * Arguments of a RAFT_IO_WRITE_LOG request.
+         *
+         * The implementation must asynchronously append the given entries to
+         * the log.
+         *
+         * At most one write log request can be in flight at any given time. The
+         * implementation must return @RAFT_ERR_IO_BUSY if a new request is
+         * submitted before the previous one is completed.
+         *
+         * The implementation is guaranteed that the memory holding the given
+         * entries will not be released until a notification is fired by
+         * invoking the raft_io_handle() callback with the given request ID.
+         */
+        struct
+        {
+            struct raft_entry *entries;
+            unsigned n;
+        } write_log;
+
+    } args;
+
+    union {
+        /**
+         * Result of a RAFT_IO_READ_STATE request.
+         */
+        struct
+        {
+            raft_term term;         /* Current server term */
+            unsigned voted_for;     /* ID of server we voted for, or 0 */
+            raft_index first_index; /* Index of the first entry in the log */
+            size_t n_entries;       /* Number of entries in the log */
+        } read_state;
+    } result;
+
+    /**
+     * Optional callback that I/O implementations must invoke when asynchronous
+     * requests get completed.
+     */
+    void (*cb)(struct raft *r, const unsigned request_id, const int status);
 };
 
 /**
  * State codes.
  */
 enum {
-    RAFT_STATE_NONE,
-    RAFT_STATE_STARTING,
+    RAFT_STATE_UNAVAILABLE,
     RAFT_STATE_FOLLOWER,
     RAFT_STATE_CANDIDATE,
     RAFT_STATE_LEADER
 };
 
 /**
- * Server state names ('follower', 'candidate', 'leader'), indexed
- * by state code.
+ * Server state names ('unavailable', 'follower', 'candidate', 'leader'),
+ * indexed by state code.
  */
 extern const char *raft_state_names[];
 
@@ -530,7 +606,7 @@ struct raft
     struct raft_fsm *fsm;
 
     /**
-     * User-defined I/O backend implementing periodic ticks, log store
+     * User-defined I/O backend implementing periodic wakeups, log store
      * read/writes and network RPCs.
      */
     struct
@@ -557,13 +633,21 @@ struct raft
         void (*close)(struct raft *r);
 
         /**
-         * Synchronously read the current term and vote. The implementation
-         * MUST ensure that the change is durable before returning (e.g. using
-         * fdatasync() or #O_DIRECT).
+         * Submit a request to perform a certain I/O operation either
+         * synchronous or asynchronously.
          */
-        int (*read_term)(struct raft *r, raft_term *term);
+        int (*submit)(struct raft *r, const unsigned request_id);
 
-    } backend;
+        /**
+         * Hold information about in-flight asynchronous I/O requests.
+         */
+        struct
+        {
+            struct raft_io_request *requests;
+            unsigned size;
+        } queue;
+
+    } io_;
 
     /**
      * User-defined disk and network I/O interface implementation.
@@ -878,6 +962,13 @@ int raft_remove_server(struct raft *r, const unsigned id);
  * callback disable notifications for that event.
  */
 void raft_watch(struct raft *r, int event, void (*cb)(void *, int, void *));
+
+/**
+ * Fetch the I/O request with the given ID.
+ *
+ * This API is meant to be used by implementations of the Raft I/O interface.
+ */
+struct raft_io_request *raft_io_queue_get(struct raft *r, unsigned id);
 
 /**
  * Process the result of an asynchronous I/O request that involves raft entries

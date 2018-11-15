@@ -8,7 +8,7 @@ compiler:
   - gcc
 script:
   - autoreconf -i
-  - ./configure --enable-debug --enable-coverage --enable-uv --enable-example
+  - ./configure --enable-debug --enable-coverage --enable-io-sim --enable-io-uv --enable-example
   - make
   - make ./unit-test
   - make ./integration-test

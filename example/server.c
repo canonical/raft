@@ -49,7 +49,7 @@ int main()
     /* Initialize and start the Raft engine, using libuv integration. */
     raft_init(&raft, NULL, NULL, NULL, 1);
 
-    rv = raft_uv(&raft, &loop);
+    rv = raft_io_uv_init(&raft, &loop, NULL);
     if (rv != 0) {
         printf("error: enable uv integration: %s\n", raft_errmsg(&raft));
         return rv;

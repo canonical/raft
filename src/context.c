@@ -23,7 +23,8 @@ void raft_context_format(char *str, size_t size, struct raft_context *ctx)
     if (ctx->state != NULL) {
         const char *state;
 
-        assert(*ctx->state == RAFT_STATE_FOLLOWER ||
+        assert(*ctx->state == RAFT_STATE_UNAVAILABLE ||
+	       *ctx->state == RAFT_STATE_FOLLOWER ||
                *ctx->state == RAFT_STATE_CANDIDATE ||
                *ctx->state == RAFT_STATE_LEADER);
 

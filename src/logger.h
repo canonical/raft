@@ -1,7 +1,5 @@
 /**
- *
  * Logging helpers.
- *
  */
 
 #ifndef RAFT_LOGGER_H
@@ -15,7 +13,7 @@
 #endif
 
 /* For performance, debug level is a no-op on debug builds */
-#ifdef RAFT_ENABLE_DEBUG_LOGGING
+#if RAFT_ENABLE_DEBUG_LOGGING
 #define raft__debugf(P, FORMAT, ...) \
     P->logger.emit(P->logger.data, &(P)->ctx, RAFT_DEBUG, FORMAT, ##__VA_ARGS__)
 #else

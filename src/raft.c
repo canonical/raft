@@ -6,8 +6,10 @@
 
 #include "configuration.h"
 #include "election.h"
+#include "error.h"
 #include "log.h"
 #include "logger.h"
+#include "io_queue.h"
 #include "queue.h"
 #include "state.h"
 
@@ -21,10 +23,12 @@ void raft_init(struct raft *r,
 
     assert(r != NULL);
 
-    r->backend.data = NULL;
-    r->backend.start = NULL;
-    r->backend.stop = NULL;
-    r->backend.close = NULL;
+    r->io_.data = NULL;
+    r->io_.start = NULL;
+    r->io_.stop = NULL;
+    r->io_.close = NULL;
+    r->io_.queue.requests = NULL;
+    r->io_.queue.size = 0;
 
     /* User-defined */
     r->io = io;
@@ -49,7 +53,7 @@ void raft_init(struct raft *r,
     r->commit_index = 0;
     r->last_applied = 0;
 
-    r->state = RAFT_STATE_NONE;
+    r->state = RAFT_STATE_UNAVAILABLE;
 
     r->rand = rand;
     raft_election__reset_timer(r);
@@ -71,11 +75,12 @@ void raft_close(struct raft *r)
 {
     assert(r != NULL);
 
-    if (r->backend.close != NULL) {
-        r->backend.close(r);
+    if (r->io_.close != NULL) {
+        r->io_.close(r);
     }
 
     raft_queue__close(r);
+    raft_io_queue__close(r);
 
     raft_state__clear(r);
     raft_log__close(&r->log);
@@ -107,17 +112,18 @@ int raft_start(struct raft *r)
     int rv;
 
     assert(r != NULL);
+    assert(r->state == RAFT_STATE_UNAVAILABLE);
 
     raft__debugf(r, "start");
 
-    if (r->backend.start != NULL) {
-        assert(r->heartbeat_timeout != 0);
-        assert(r->heartbeat_timeout < r->election_timeout);
+    assert(r->io_.start != NULL);
 
-        rv = r->backend.start(r, r->heartbeat_timeout);
-        if (rv != 0) {
-            return rv;
-        }
+    assert(r->heartbeat_timeout != 0);
+    assert(r->heartbeat_timeout < r->election_timeout);
+
+    rv = r->io_.start(r, r->heartbeat_timeout);
+    if (rv != 0) {
+        return rv;
     }
 
     return 0;
@@ -131,11 +137,10 @@ int raft_stop(struct raft *r)
 
     raft__debugf(r, "stop");
 
-    if (r->backend.stop != NULL) {
-        rv = r->backend.stop(r);
-        if (rv != 0) {
-            return rv;
-        }
+    assert(r->io_.stop != NULL);
+    rv = r->io_.stop(r);
+    if (rv != 0) {
+        return rv;
     }
 
     return 0;

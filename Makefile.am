@@ -13,28 +13,24 @@ pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = raft.pc
 
 AM_CFLAGS += -I$(top_srcdir)/include -Wall
-if ENABLE_UV
+if IO_UV
   AM_CFLAGS += $(UV_CFLAGS)
-  AM_CFLAGS += -DRAFT_UV
 endif
 if DEBUG
-  AM_CFLAGS += -DRAFT_ENABLE_DEBUG_LOGGING
+  AM_CFLAGS +=
 else
   AM_CFLAGS += -Werror
 endif
 if COVERAGE
-  AM_CFLAGS += -fprofile-arcs -ftest-coverage -DRAFT_COVERAGE
+  AM_CFLAGS += -fprofile-arcs -ftest-coverage
 endif
 if SANITIZE
   AM_CFLAGS += -fsanitize=address
 endif
-if EXPERIMENTAL
-  AM_CFLAGS += -DRAFT_EXPERIMENTAL
-endif
 
 lib_LTLIBRARIES += libraft.la
 libraft_la_LDFLAGS = -version-info 0:7:0
-if ENABLE_UV
+if IO_UV
   libraft_la_LDFLAGS += $(UV_LIBS)
 endif
 libraft_la_SOURCES = \
@@ -46,6 +42,7 @@ libraft_la_SOURCES = \
   src/error.c \
   src/heap.c \
   src/io.c \
+  src/io_queue.c \
   src/log.c \
   src/logger.c \
   src/membership.c \
@@ -58,9 +55,13 @@ libraft_la_SOURCES = \
   src/state.c \
   src/tick.c \
   src/watch.c
-if ENABLE_UV
+if IO_UV
   libraft_la_SOURCES += \
-  src/uv.c
+  src/io_uv.c
+endif
+if IO_SIM
+  libraft_la_SOURCES += \
+  src/io_sim.c
 endif
 include_HEADERS += \
   include/raft.h
@@ -72,6 +73,7 @@ check_PROGRAMS += \
 test_lib_SOURCES = \
   test/lib/cluster.c \
   test/lib/fault.c \
+  test/lib/fs.c \
   test/lib/heap.c \
   test/lib/io.c \
   test/lib/fsm.c \
@@ -93,20 +95,28 @@ unit_test_SOURCES += \
   test/unit/test_context.c \
   test/unit/test_io.c \
   test/unit/test_queue.c \
+  test/unit/test_io_queue.c \
   test/unit/test_raft.c \
   test/unit/test_replication.c \
   test/unit/test_rpc_request_vote.c \
   test/unit/test_rpc_append_entries.c \
   test/unit/test_tick.c
-if ENABLE_UV
+if IO_UV
   unit_test_SOURCES += \
-  test/unit/test_uv.c
+  test/unit/test_io_uv.c
+endif
+if IO_SIM
+  unit_test_SOURCES += \
+  test/unit/test_io_sim.c
 endif
 unit_test_CFLAGS = $(AM_CFLAGS) -DMUNIT_TEST_NAME_LEN=47
 #-DMUNIT_NO_FORK
 unit_test_CFLAGS += -I$(top_srcdir)/tests/unit
 unit_test_LDADD = libraft.la
 unit_test_LDFLAGS =
+if IO_UV
+  unit_test_LDFLAGS += $(UV_LIBS)
+endif
 
 integration_test_SOURCES = $(test_lib_SOURCES)
 integration_test_SOURCES += \
@@ -159,7 +169,7 @@ if COVERAGE
 	@make cov-report
 endif
 
-if ENABLE_EXAMPLE
+if EXAMPLE
 
 bin_PROGRAMS += example-server
 example_server_SOURCES = \
@@ -167,6 +177,6 @@ example_server_SOURCES = \
 example_server_CFLAGS = $(AM_CFLAGS)
 example_server_CFLAGS += -I$(top_srcdir)/example
 example_server_LDADD = libraft.la
-example_server_LDFLAGS =
+example_server_LDFLAGS = $(UV_LIBS)
 
 endif

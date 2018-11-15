@@ -1,5 +1,6 @@
 #include "../../include/raft.h"
 
+#include "../lib/fs.h"
 #include "../lib/fsm.h"
 #include "../lib/heap.h"
 #include "../lib/logger.h"
@@ -11,6 +12,7 @@
 
 struct fixture
 {
+    char *dir;
     struct uv_loop_s loop;
     struct raft_heap heap;
     struct raft_logger logger;
@@ -27,6 +29,8 @@ static void *setup(const MunitParameter params[], void *user_data)
 
     (void)user_data;
 
+    f->dir = test_dir_setup(params);
+
     rv = uv_loop_init(&f->loop);
     munit_assert_int(rv, ==, 0);
 
@@ -36,7 +40,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 
     raft_init(&f->raft, &f->io, &f->fsm, f, id);
 
-    rv = raft_uv(&f->raft, &f->loop);
+    rv = raft_io_uv_init(&f->raft, &f->loop, f->dir);
     munit_assert_int(rv, ==, 0);
 
     return f;
@@ -56,23 +60,39 @@ static void tear_down(void *data)
     rv = uv_loop_close(&f->loop);
     munit_assert_int(rv, ==, 0);
 
+    test_dir_tear_down(f->dir);
+
     free(f);
 }
 
 /**
- * raft_uv
+ * raft_uv_init
  */
 
-static MunitResult test_start_and_stop(const MunitParameter params[], void *data)
+static MunitResult test_init_dir_too_long(const MunitParameter params[],
+                                          void *data)
 {
+    struct fixture *f = data;
+    int rv;
+
     (void)params;
-    (void)data;
+
+    char dir[1024];
+
+    memset(dir, 'a', sizeof dir - 1);
+    dir[sizeof dir - 1] = 0;
+
+    rv = raft_io_uv_init(&f->raft, &f->loop, dir);
+    munit_assert_int(rv, ==, RAFT_ERR_PATH_TOO_LONG);
+
+    munit_assert_string_equal(raft_errmsg(&f->raft),
+                              "file system path is too long");
 
     return MUNIT_OK;
 }
 
-static MunitTest lifecycle_tests[] = {
-    {"/start-and-stop", test_start_and_stop, setup, tear_down, 0, NULL},
+static MunitTest init_tests[] = {
+    {"/dir-too-long", test_init_dir_too_long, setup, tear_down, 0, NULL},
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 
@@ -80,7 +100,7 @@ static MunitTest lifecycle_tests[] = {
  * Test suite
  */
 
-MunitSuite raft_uv_suites[] = {
-    {"/lifecycle", lifecycle_tests, NULL, 1, 0},
+MunitSuite raft_io_uv_suites[] = {
+    {"/init", init_tests, NULL, 1, 0},
     {NULL, NULL, NULL, 0, 0},
 };
