@@ -14,6 +14,9 @@ extern MunitSuite raft_replication_suites[];
 extern MunitSuite raft_rpc_request_vote_suites[];
 extern MunitSuite raft_rpc_append_entries_suites[];
 extern MunitSuite raft_tick_suites[];
+#ifdef RAFT_UV
+extern MunitSuite raft_uv_suites[];
+#endif
 extern MunitSuite raft_suites[];
 
 static MunitSuite suites[] = {
@@ -24,6 +27,9 @@ static MunitSuite suites[] = {
     {"encoding", NULL, raft_encoding_suites, 1, 0},
     {"error", NULL, raft_error_suites, 1, 0},
     {"io", NULL, raft_io_suites, 1, 0},
+#ifdef RAFT_UV
+    {"uv", NULL, raft_uv_suites, 1, 0},
+#endif
     {"log", NULL, raft_log_suites, 1, 0},
     {"logger", NULL, raft_logger_suites, 1, 0},
     {"queue", NULL, raft_queue_suites, 1, 0},

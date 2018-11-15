@@ -24,17 +24,6 @@ const char *raft_errmsg(struct raft *r)
     return r->errmsg;
 }
 
-static void raft_error__vwrapf(struct raft *r, const char *fmt, va_list args)
-{
-    char msg[sizeof r->errmsg];
-
-    strncpy(msg, r->errmsg, sizeof msg);
-    vsnprintf(r->errmsg, sizeof r->errmsg, fmt, args);
-
-    snprintf(r->errmsg + strlen(r->errmsg),
-             sizeof r->errmsg - strlen(r->errmsg), ": %s", msg);
-}
-
 void raft_error__printf(struct raft *r, const int rv, const char *fmt, ...)
 {
     const char *msg = raft_strerror(rv);
@@ -49,6 +38,17 @@ void raft_error__printf(struct raft *r, const int rv, const char *fmt, ...)
     va_start(args, fmt);
     raft_error__vwrapf(r, fmt, args);
     va_end(args);
+}
+
+void raft_error__vwrapf(struct raft *r, const char *fmt, va_list args)
+{
+    char msg[sizeof r->errmsg];
+
+    strncpy(msg, r->errmsg, sizeof msg);
+    vsnprintf(r->errmsg, sizeof r->errmsg, fmt, args);
+
+    snprintf(r->errmsg + strlen(r->errmsg),
+             sizeof r->errmsg - strlen(r->errmsg), ": %s", msg);
 }
 
 void raft_error__wrapf(struct raft *r, const char *fmt, ...)

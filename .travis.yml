@@ -1,10 +1,14 @@
 language: c
+before_install:
+  - sudo add-apt-repository ppa:dqlite-maintainers/master -y
+  - sudo apt-get update -q
+  - sudo apt-get install libuv1-dev -y
 compiler:
   - clang
   - gcc
 script:
   - autoreconf -i
-  - ./configure --enable-debug --enable-coverage
+  - ./configure --enable-debug --enable-coverage --enable-uv
   - make
   - make ./unit-test
   - make ./integration-test

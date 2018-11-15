@@ -1,7 +1,5 @@
 /**
- *
  * Convert between big-endian and little-endian representations.
- *
  */
 
 #ifndef RAFT_BINARY_H

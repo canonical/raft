@@ -6,8 +6,8 @@
 
 #include "configuration.h"
 #include "election.h"
-#include "queue.h"
 #include "log.h"
+#include "queue.h"
 #include "state.h"
 
 void raft_init(struct raft *r,
@@ -20,6 +20,8 @@ void raft_init(struct raft *r,
 
     assert(r != NULL);
     assert(io != NULL);
+
+    r->backend.close = NULL;
 
     /* User-defined */
     r->io = io;
@@ -73,6 +75,10 @@ void raft_init(struct raft *r,
 void raft_close(struct raft *r)
 {
     assert(r != NULL);
+
+    if (r->backend.close != NULL) {
+        r->backend.close(r);
+    }
 
     raft_queue__close(r);
 

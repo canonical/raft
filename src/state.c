@@ -12,7 +12,7 @@
 const char *raft_state_names[] = {
     "follower",
     "candidate",
-    "leader",
+    "leader"
 };
 
 /**

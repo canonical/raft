@@ -1,10 +1,14 @@
-#ifndef RAFT_H_
-#define RAFT_H_
+#ifndef RAFT_H
+#define RAFT_H
 
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+
+#ifdef RAFT_UV
+#include "raft_uv.h"
+#endif
 
 /**
  * Error codes.
@@ -442,13 +446,17 @@ struct raft_io_request
 };
 
 /**
- * Server state codes.
+ * State codes.
  */
-enum { RAFT_STATE_FOLLOWER, RAFT_STATE_CANDIDATE, RAFT_STATE_LEADER };
+enum {
+    RAFT_STATE_FOLLOWER,
+    RAFT_STATE_CANDIDATE,
+    RAFT_STATE_LEADER
+};
 
 /**
- * Server state names ('follower', 'candidate', 'leader'), indexed by state
- * code.
+ * Server state names ('follower', 'candidate', 'leader'), indexed
+ * by state code.
  */
 extern const char *raft_state_names[];
 
@@ -509,6 +517,18 @@ enum {
  */
 struct raft
 {
+    /**
+     * User-defined I/O backend implementing periodic ticks, log store
+     * read/writes and network RPCs.
+     */
+    struct
+    {
+        void *data;
+        int (*tick)(struct raft *r, unsigned msecs);
+        int (*stop)(struct raft *r);
+        void (*close)(struct raft *r);
+    } backend;
+
     /**
      * User-defined disk and network I/O interface implementation.
      */
@@ -719,6 +739,16 @@ void raft_init(struct raft *r,
                struct raft_fsm *fsm,
                void *data,
                const unsigned id);
+
+/**
+ * Start this raft instance.
+ */
+int raft_start(struct raft *r);
+
+/**
+ * Stop this raft instance.
+ */
+int raft_stop(struct raft *r);
 
 /**
  * Close a raft instance, deallocating all used resources.
@@ -949,4 +979,4 @@ int raft_encode_request_vote_result(
 int raft_decode_request_vote_result(const struct raft_buffer *buf,
                                     struct raft_request_vote_result *result);
 
-#endif /* RAFT_H_ */
+#endif /* RAFT_H */

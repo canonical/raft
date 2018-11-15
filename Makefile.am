@@ -12,6 +12,10 @@ pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = raft.pc
 
 AM_CFLAGS += -I$(top_srcdir)/include -Wall
+if ENABLE_UV
+  AM_CFLAGS += $(UV_CFLAGS)
+  AM_CFLAGS += -DRAFT_UV
+endif
 if DEBUG
   AM_CFLAGS += -DRAFT_ENABLE_DEBUG_LOGGING
 else
@@ -29,6 +33,9 @@ endif
 
 lib_LTLIBRARIES += libraft.la
 libraft_la_LDFLAGS = -version-info 0:7:0
+if ENABLE_UV
+  libraft_la_LDFLAGS += $(UV_LIBS)
+endif
 libraft_la_SOURCES = \
   src/client.c \
   src/configuration.c \
@@ -50,6 +57,10 @@ libraft_la_SOURCES = \
   src/state.c \
   src/tick.c \
   src/watch.c
+if ENABLE_UV
+  libraft_la_SOURCES += \
+  src/uv.c
+endif
 include_HEADERS += \
   include/raft.h
 
@@ -86,6 +97,10 @@ unit_test_SOURCES += \
   test/unit/test_rpc_request_vote.c \
   test/unit/test_rpc_append_entries.c \
   test/unit/test_tick.c
+if ENABLE_UV
+  unit_test_SOURCES += \
+  test/unit/test_uv.c
+endif
 unit_test_CFLAGS = $(AM_CFLAGS) -DMUNIT_TEST_NAME_LEN=47
 #-DMUNIT_NO_FORK
 unit_test_CFLAGS += -I$(top_srcdir)/tests/unit

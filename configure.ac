@@ -27,6 +27,25 @@ AC_PROG_LN_S
 # TODO: eventually enable this
 # AX_CHECK_COMPILE_FLAG([-Weverything], AM_CFLAGS+=" -Weverything")
 
+AC_ARG_ENABLE(uv,
+  AS_HELP_STRING(
+    [--enable-uv],
+    [enable integration with libuv, default: no]),
+  [case "${enableval}" in
+     yes) uv=true ;;
+     no)  uv=false ;;
+     *)   AC_MSG_ERROR([bad value ${enableval} for --enable-uv]) ;;
+   esac],
+  [uv=false])
+AM_CONDITIONAL(ENABLE_UV, test x"$uv" = x"true")
+AM_COND_IF(ENABLE_UV,
+  [
+  PKG_CHECK_MODULES(UV, [libuv >= 1.8.0], [], [])
+  AC_DEFINE(ENABLE_UV, 1, [Define to 0 to exclude libuv integration])
+  ], [
+  AC_DEFINE(ENABLE_UV, 0, [Define to 1 to include libuv integration])
+  ])
+
 AC_ARG_ENABLE(debug,
   AS_HELP_STRING(
     [--enable-debug],
