@@ -7,6 +7,7 @@
 
 #include "../include/raft.h"
 
+#include "binary.h"
 #include "error.h"
 #include "logger.h"
 
@@ -166,6 +167,7 @@ static int raft_io_uv__read_metadata(struct raft_io_uv *io,
     char path[RAFT_IO_UV__MAX_PATH_LEN];
     char filename[strlen("metadataN") + 1];
     uint8_t buffer[16];
+    void *cursor;
     int fd;
     int rv;
 
@@ -196,17 +198,27 @@ static int raft_io_uv__read_metadata(struct raft_io_uv *io,
 
     close(fd);
 
+    cursor = buffer;
+
+    metadata->term = raft__get64(&cursor);
+    metadata->voted_for = raft__get64(&cursor);
+
     return 0;
 }
 
 static int raft_io_uv__read_state(struct raft_io_uv *io,
                                   struct raft_io_request *request)
 {
-    char path1[RAFT_IO_UV__MAX_PATH_LEN];
-    char path2[RAFT_IO_UV__MAX_PATH_LEN];
+    struct raft_io_uv__metadata metadata;
+    int rv;
 
-    raft_io_uv__path(io, "metadata1", path1);
-    raft_io_uv__path(io, "metadata2", path2);
+    rv = raft_io_uv__read_metadata(io, 1, &metadata);
+    if (rv != 0) {
+        return rv;
+    }
+
+    request->result.read_state.term = metadata.term;
+    request->result.read_state.voted_for = metadata.voted_for;
 
     return 0;
 }
@@ -305,6 +317,7 @@ int raft_io_uv_init(struct raft *r, struct uv_loop_s *loop, const char *dir)
     }
 
     io->raft = r;
+    io->dir = dir;
     io->loop = loop;
 
     r->io_.data = io;

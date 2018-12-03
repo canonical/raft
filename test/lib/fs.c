@@ -1,5 +1,9 @@
-#include <dirent.h>
+#include <fcntl.h>
+#include <ftw.h>
+#include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include "fs.h"
@@ -18,30 +22,44 @@ char *test_dir_setup(const MunitParameter params[])
     return dir;
 }
 
-static int test_dir__remove_entry(const struct dirent *entry)
+static int test_dir__remove(const char *path,
+                            const struct stat *sbuf,
+                            int type,
+                            struct FTW *ftwb)
 {
-    int rv;
+    (void)sbuf;
+    (void)type;
+    (void)ftwb;
 
-    if (strcmp(entry->d_name, ".") || strcmp(entry->d_name, "..")) {
-        return 0;
-    }
-
-    rv = unlink(entry->d_name);
-    munit_assert_int(rv, ==, 0);
-
-    return 0;
+    return remove(path);
 }
 
 void test_dir_tear_down(char *dir)
 {
-    struct dirent **namelist;
     int rv;
 
-    rv = scandir(dir, &namelist, test_dir__remove_entry, alphasort);
-    munit_assert_int(rv, ==, 0);
-
-    rv = rmdir(dir);
+    rv = nftw(dir, test_dir__remove, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS);
     munit_assert_int(rv, ==, 0);
 
     free(dir);
+}
+
+void test_dir_write_file(char *dir, const char *filename, void *buf, size_t n)
+{
+    char path[256];
+    int fd;
+    int rv;
+
+    strcpy(path, dir);
+    strcat(path, "/");
+    strcat(path, filename);
+
+    fd = open(path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+
+    munit_assert_int(fd, !=, -1);
+
+    rv = write(fd, buf, n);
+    munit_assert_int(rv, ==, n);
+
+    close(fd);
 }

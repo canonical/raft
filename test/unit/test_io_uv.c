@@ -1,5 +1,7 @@
 #include "../../include/raft.h"
 
+#include "../../src/io_queue.h"
+
 #include "../lib/fs.h"
 #include "../lib/fsm.h"
 #include "../lib/heap.h"
@@ -20,6 +22,31 @@ struct fixture
     struct raft_fsm fsm;
     struct raft raft;
 };
+
+/**
+ * Push a new request to the I/O queue.
+ */
+#define __push_io_request(F, ID, REQUEST)            \
+    {                                                \
+        int rv;                                      \
+                                                     \
+        rv = raft_io_queue__push(&F->raft, ID);      \
+        munit_assert_int(rv, ==, 0);                 \
+                                                     \
+        *REQUEST = raft_io_queue_get(&F->raft, *ID); \
+        munit_assert_ptr_not_null(*REQUEST);         \
+    }
+
+/**
+ * Submit an I/O request and check that no error occurred.x
+ */
+#define __submit(F, ID)                        \
+    {                                          \
+        int rv;                                \
+                                               \
+        rv = F->raft.io_.submit(&F->raft, ID); \
+        munit_assert_int(rv, ==, 0);           \
+    }
 
 static void *setup(const MunitParameter params[], void *user_data)
 {
@@ -97,10 +124,43 @@ static MunitTest init_tests[] = {
 };
 
 /**
+ * raft_uv_submit
+ */
+
+static MunitResult test_submit_read_state(const MunitParameter params[],
+                                          void *data)
+{
+    struct fixture *f = data;
+    unsigned request_id;
+    struct raft_io_request *request;
+    uint8_t buf[16];
+
+    (void)params;
+
+    test_dir_write_file(f->dir, "metadata1", buf, sizeof buf);
+
+    __push_io_request(f, &request_id, &request);
+
+    request->type = RAFT_IO_READ_STATE;
+
+    __submit(f, request_id);
+
+    raft_io_queue__pop(&f->raft, request_id);
+
+    return MUNIT_OK;
+}
+
+static MunitTest submit_tests[] = {
+    {"/read-state", test_submit_read_state, setup, tear_down, 0, NULL},
+    {NULL, NULL, NULL, NULL, 0, NULL},
+};
+
+/**
  * Test suite
  */
 
 MunitSuite raft_io_uv_suites[] = {
     {"/init", init_tests, NULL, 1, 0},
+    {"/submit", submit_tests, NULL, 1, 0},
     {NULL, NULL, NULL, 0, 0},
 };
