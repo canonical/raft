@@ -15,6 +15,7 @@ void raft_configuration_close(struct raft_configuration *c)
     size_t i;
 
     assert(c != NULL);
+    assert(c->n == 0 || c->servers != NULL);
 
     for (i = 0; i < c->n; i++) {
         raft_free(c->servers[i].address);
@@ -25,6 +26,45 @@ void raft_configuration_close(struct raft_configuration *c)
     }
 }
 
+size_t raft_configuration__index(const struct raft_configuration *c,
+                                 const unsigned id)
+{
+    size_t i;
+
+    assert(c != NULL);
+
+    for (i = 0; i < c->n; i++) {
+        if (c->servers[i].id == id) {
+            return i;
+        }
+    }
+
+    return c->n;
+}
+
+size_t raft_configuration__voting_index(const struct raft_configuration *c,
+                                        const unsigned id)
+{
+    size_t i;
+    size_t j = 0;
+
+    assert(c != NULL);
+
+    for (i = 0; i < c->n; i++) {
+        if (c->servers[i].id == id) {
+            if (c->servers[i].voting) {
+                return j;
+            }
+            return c->n;
+        }
+        if (c->servers[i].voting) {
+            j++;
+        }
+    }
+
+    return c->n;
+}
+
 const struct raft_server *raft_configuration__get(
     const struct raft_configuration *c,
     const unsigned id)
@@ -32,15 +72,56 @@ const struct raft_server *raft_configuration__get(
     size_t i;
 
     assert(c != NULL);
+    assert(id > 0);
+
+    /* Grab the index of the server with the given ID */
+    i = raft_configuration__index(c, id);
+
+    if (i == c->n) {
+      /* No server with matching ID. */
+      return NULL;
+    }
+
+    assert(i < c->n);
+
+    return &c->servers[i];
+}
+
+size_t raft_configuration__n_voting(const struct raft_configuration *c)
+{
+    size_t i;
+    size_t n = 0;
+
+    assert(c != NULL);
 
     for (i = 0; i < c->n; i++) {
-        const struct raft_server *server = &c->servers[i];
-        if (server->id == id) {
-            return server;
+        if (c->servers[i].voting) {
+            n++;
         }
     }
 
-    return NULL;
+    return n;
+}
+
+int raft_configuration__copy(const struct raft_configuration *c1,
+                             struct raft_configuration *c2)
+{
+    size_t i;
+    int rv;
+
+    assert(c1 != NULL);
+    assert(c2 != NULL);
+
+    for (i = 0; i < c1->n; i++) {
+        struct raft_server *server = &c1->servers[i];
+        rv = raft_configuration_add(c2, server->id, server->address,
+                                    server->voting);
+        if (rv != 0) {
+            return rv;
+        }
+    }
+
+    return 0;
 }
 
 int raft_configuration_add(struct raft_configuration *c,
@@ -53,15 +134,9 @@ int raft_configuration_add(struct raft_configuration *c,
     size_t i;
 
     assert(c != NULL);
+    assert(id != 0);
 
-    if (id == 0) {
-        return RAFT_ERR_BAD_SERVER_ID;
-    }
-
-    if (address == NULL) {
-        return RAFT_ERR_NO_SERVER_ADDRESS;
-    }
-
+    /* Check that neither the given id or address is already in use */
     for (i = 0; i < c->n; i++) {
         server = &c->servers[i];
         if (server->id == id) {
@@ -72,12 +147,14 @@ int raft_configuration_add(struct raft_configuration *c,
         }
     }
 
+    /* Grow the servers array */
     servers = raft_calloc(c->n + 1, sizeof *server);
     if (servers == NULL) {
         return RAFT_ERR_NOMEM;
     }
     memcpy(servers, c->servers, c->n * sizeof *server);
 
+    /* Fill the newly allocated slot (the last one) with the given details. */
     server = &servers[c->n];
 
     server->id = id;
@@ -125,99 +202,31 @@ int raft_configuration_remove(struct raft_configuration *c, const unsigned id)
         return 0;
     }
 
-    /* Copy the first part of the servers array into a new array, excluding the
-     * i'th server. */
+    /* Shrink the servers array. */
     servers = raft_calloc(c->n - 1, sizeof *servers);
     if (servers == NULL) {
         return RAFT_ERR_NOMEM;
     }
-    memcpy(servers, c->servers, i * sizeof *servers);
 
-    raft_free(c->servers[i].address);
+    /* Copy the first part of the servers array into a new array, excluding the
+     * i'th server. */
+    for (j = 0; j < i; j++) {
+        servers[j] = c->servers[j];
+    }
 
+    /* Copy the second part of the servers array into a new array. */
     for (j = i + 1; j < c->n; j++) {
         servers[j - 1] = c->servers[j];
     }
 
+    /* Release the address of the server that was deleted. */
+    raft_free(c->servers[i].address);
+
+    /* Release the old servers array */
     raft_free(c->servers);
 
     c->servers = servers;
     c->n--;
-
-    return 0;
-}
-
-size_t raft_configuration__n_voting(const struct raft_configuration *c)
-{
-    size_t i;
-    size_t n = 0;
-
-    assert(c != NULL);
-
-    for (i = 0; i < c->n; i++) {
-        if (c->servers[i].voting) {
-            n++;
-        }
-    }
-
-    return n;
-}
-
-size_t raft_configuration__index(const struct raft_configuration *c,
-                                 const unsigned id)
-{
-    size_t i;
-
-    assert(c != NULL);
-
-    for (i = 0; i < c->n; i++) {
-        if (c->servers[i].id == id) {
-            return i;
-        }
-    }
-
-    return c->n;
-}
-
-size_t raft_configuration__voting_index(const struct raft_configuration *c,
-                                        const unsigned id)
-{
-    size_t i;
-    size_t j = 0;
-
-    assert(c != NULL);
-
-    for (i = 0; i < c->n; i++) {
-        if (c->servers[i].id == id) {
-            if (c->servers[i].voting) {
-                return j;
-            }
-            return c->n;
-        }
-        if (c->servers[i].voting) {
-            j++;
-        }
-    }
-    return c->n;
-}
-
-int raft_configuration__copy(const struct raft_configuration *c1,
-                             struct raft_configuration *c2)
-{
-    size_t i;
-    int rv;
-
-    assert(c1 != NULL);
-    assert(c2 != NULL);
-
-    for (i = 0; i < c1->n; i++) {
-        struct raft_server *server = &c1->servers[i];
-        rv = raft_configuration_add(c2, server->id, server->address,
-                                    server->voting);
-        if (rv != 0) {
-            return rv;
-        }
-    }
 
     return 0;
 }

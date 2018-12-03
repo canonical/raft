@@ -24,7 +24,6 @@ enum {
     RAFT_ERR_UNKNOWN_SERVER_ID,
     RAFT_ERR_DUP_SERVER_ID,
     RAFT_ERR_DUP_SERVER_ADDRESS,
-    RAFT_ERR_NO_SERVER_ADDRESS,
     RAFT_ERR_SERVER_ALREADY_VOTING,
     RAFT_ERR_EMPTY_CONFIGURATION,
     RAFT_ERR_CONFIGURATION_NOT_EMPTY,
@@ -49,7 +48,6 @@ enum {
     X(RAFT_ERR_UNKNOWN_SERVER_ID, "server ID is unknown")                \
     X(RAFT_ERR_DUP_SERVER_ID, "server ID already in use")                \
     X(RAFT_ERR_DUP_SERVER_ADDRESS, "server address already in use")      \
-    X(RAFT_ERR_NO_SERVER_ADDRESS, "server has no address")               \
     X(RAFT_ERR_SERVER_ALREADY_VOTING, "server is already voting")        \
     X(RAFT_ERR_EMPTY_CONFIGURATION, "configuration has no servers")      \
     X(RAFT_ERR_CONFIGURATION_NOT_EMPTY, "configuration has servers")     \
@@ -69,7 +67,9 @@ enum {
 const char *raft_strerror(int errnum);
 
 /**
- * User-definable dynamic memory allocation routines.
+ * User-definable dynamic memory allocation functions.
+ *
+ * The @data field will be passed as first argument to all functions.
  */
 struct raft_heap
 {
@@ -137,11 +137,17 @@ enum { RAFT_DEBUG, RAFT_INFO, RAFT_WARN, RAFT_ERROR };
 
 /**
  * Handle log messages at different levels.
+ *
+ * The @data field will be passed as first argument to the @emit function.
  */
 struct raft_logger
 {
     void *data;
-    void (*emit)(void *, struct raft_context *, int, const char *, ...);
+    void (*emit)(void *data,
+                 struct raft_context *ctx,
+                 int level,
+                 const char *fmt,
+                 ...);
 };
 
 /**
@@ -182,9 +188,15 @@ void raft_configuration_init(struct raft_configuration *c);
 void raft_configuration_close(struct raft_configuration *c);
 
 /**
- * Add a server to a raft configuration. The given ID must not be already in use
- * by another server in the configuration. The memory holding the address string
- * will be copied and can be released after this function returns.
+ * Add a server to a raft configuration.
+ *
+ * The @id must be greater than zero and @address point to a valid string.
+ *
+ * If @id or @address are already in use by another server in the configuration,
+ * an error is returned.
+ *
+ * The @address string will be copied and can be released after this function
+ * returns.
  */
 int raft_configuration_add(struct raft_configuration *c,
                            const unsigned id,
