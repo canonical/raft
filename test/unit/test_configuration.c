@@ -214,7 +214,6 @@ static MunitParameterEnum add_oom_params[] = {
     {NULL, NULL},
 };
 
-
 /* Out of memory. */
 static MunitResult test_add_oom(const MunitParameter params[], void *data)
 {

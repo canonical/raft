@@ -60,7 +60,7 @@ enum {
     X(RAFT_ERR_IO, "I/O error")                                          \
     X(RAFT_ERR_IO_BUSY, "a log write request is already in progress")    \
     X(RAFT_ERR_CONFIGURATION_BUSY,                                       \
-      "a configuration change is already in progress") \
+      "a configuration change is already in progress")                   \
     X(RAFT_ERR_PATH_TOO_LONG, "file system path is too long")
 
 /**
@@ -126,7 +126,9 @@ struct raft_context
  *
  * Null fields will be omitted.
  */
-void raft_context_format(char *str, size_t size, struct raft_context *ctx);
+void raft_context_format(char *buf,
+                         const size_t size,
+                         struct raft_context *ctx);
 
 /**
  * Logging levels.
