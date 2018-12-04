@@ -2,9 +2,7 @@
 
 #include "../../src/io_queue.h"
 
-#include "../lib/fsm.h"
 #include "../lib/heap.h"
-#include "../lib/logger.h"
 #include "../lib/munit.h"
 
 /**
@@ -14,28 +12,43 @@
 struct fixture
 {
     struct raft_heap heap;
-    struct raft_logger logger;
+    struct raft_io_queue queue;
     struct raft_io io;
-    struct raft_fsm fsm;
-    struct raft raft;
+    unsigned elapsed; /* Milliseconds since last call to __tick */
 };
+
+static void __tick(void *p, const unsigned elapsed)
+{
+    struct fixture *f = p;
+
+    munit_assert_ptr_not_null(f);
+
+    f->elapsed = elapsed;
+}
+
+static void __notify(void *p, const unsigned id, const int status)
+{
+    (void)p;
+    (void)id;
+    (void)status;
+}
 
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    const uint64_t id = 1;
     int rv;
 
     (void)user_data;
 
     test_heap_setup(params, &f->heap);
-    test_logger_setup(params, &f->logger, id);
-    test_fsm_setup(params, &f->fsm);
 
-    raft_init(&f->raft, &f->io, &f->fsm, f, id);
+    raft_io_queue__init(&f->queue);
 
-    rv = raft_io_stub_init(&f->raft);
+    rv = raft_io_stub_init(&f->io);
     munit_assert_int(rv, ==, 0);
+
+    f->io.init(&f->io, &f->queue, f, __tick, __notify);
+    f->elapsed = 0;
 
     return f;
 }
@@ -44,35 +57,32 @@ static void tear_down(void *data)
 {
     struct fixture *f = data;
 
-    raft_close(&f->raft);
+    f->io.close(&f->io);
 
-    test_fsm_tear_down(&f->fsm);
-    test_logger_tear_down(&f->logger);
+    raft_io_queue__close(&f->queue);
+
     test_heap_tear_down(&f->heap);
 
     free(f);
 }
 
 /**
- * Start the raft instance.
+ * Start the backend.
  */
-#define __start(F)                   \
-    {                                \
-        int rv;                      \
-                                     \
-        rv = raft_start(&F->raft);   \
-        munit_assert_int(rv, ==, 0); \
+#define __start(F, MSECS)                \
+    {                                    \
+        int rv;                          \
+                                         \
+        rv = F->io.start(&F->io, MSECS); \
+        munit_assert_int(rv, ==, 0);     \
     }
 
 /**
  * Advance time.
  */
-#define __advance(F, MSECS)                        \
-    {                                              \
-        int rv;                                    \
-                                                   \
-        rv = raft_io_stub_advance(&F->raft, MSECS); \
-        munit_assert_int(rv, ==, 0);               \
+#define __advance(F, MSECS)                  \
+    {                                        \
+        raft_io_stub_advance(&F->io, MSECS); \
     }
 
 /**
@@ -82,22 +92,22 @@ static void tear_down(void *data)
     {                                                 \
         int rv;                                       \
                                                       \
-        rv = raft_io_queue__push_(&F->raft, ID);      \
+        rv = raft_io_queue__push(&F->queue, ID);      \
         munit_assert_int(rv, ==, 0);                  \
                                                       \
-        *REQUEST = raft_io_queue_get_(&F->raft, *ID); \
+        *REQUEST = raft_io_queue_get(&F->queue, *ID); \
         munit_assert_ptr_not_null(*REQUEST);          \
     }
 
 /**
  * Submit an I/O request and check that no error occurred.x
  */
-#define __submit(F, ID)                        \
-    {                                          \
-        int rv;                                \
-                                               \
-        rv = F->raft.io_.submit(&F->raft, ID); \
-        munit_assert_int(rv, ==, 0);           \
+#define __submit(F, ID)                \
+    {                                  \
+        int rv;                        \
+                                       \
+        rv = F->io.submit(&F->io, ID); \
+        munit_assert_int(rv, ==, 0);   \
     }
 
 /**
@@ -109,17 +119,17 @@ static void tear_down(void *data)
  * raft_io_sim__start
  */
 
-/* When raft_io_sim_advance is called, the tick callback is invoked. */
+/* When raft_io_stub_advance is called, the tick callback is invoked. */
 static MunitResult test_start_advance(const MunitParameter params[], void *data)
 {
     struct fixture *f = data;
 
     (void)params;
 
-    __start(f);
-    __advance(f, 1100);
+    __start(f, 500);
+    __advance(f, 100);
 
-    //__assert_state(f, RAFT_STATE_CANDIDATE);
+    munit_assert_int(f->elapsed, ==, 100);
 
     return MUNIT_OK;
 }
@@ -174,7 +184,7 @@ static MunitResult test_bootstrap(const MunitParameter params[], void *data)
     raft_free(request->result.read_log.entries[0].batch);
     raft_free(request->result.read_log.entries);
 
-    raft_io_queue__pop_(&f->raft, request_id);
+    raft_io_queue__pop(&f->queue, request_id);
 
     return MUNIT_OK;
 }
@@ -201,7 +211,7 @@ static MunitResult test_write_term(const MunitParameter params[], void *data)
     munit_assert_int(request->result.read_state.term, ==, 1);
     munit_assert_int(request->result.read_state.voted_for, ==, 0);
 
-    raft_io_queue__pop_(&f->raft, request_id);
+    raft_io_queue__pop(&f->queue, request_id);
 
     return MUNIT_OK;
 }
@@ -230,7 +240,7 @@ static MunitResult test_write_vote(const MunitParameter params[], void *data)
     munit_assert_int(request->result.read_state.first_index, ==, 0);
     munit_assert_int(request->result.read_state.n_entries, ==, 0);
 
-    raft_io_queue__pop_(&f->raft, request_id);
+    raft_io_queue__pop(&f->queue, request_id);
 
     return MUNIT_OK;
 }
@@ -273,7 +283,7 @@ static MunitResult test_write_log(const MunitParameter params[], void *data)
     munit_assert_int(request2->result.read_state.first_index, ==, 0);
     munit_assert_int(request2->result.read_state.n_entries, ==, 0);
 
-    raft_io_stub_flush(&f->raft);
+    raft_io_stub_flush(&f->io);
 
     /* The log has now one entry, witch matches the one we wrote. */
     request2->type = RAFT_IO_READ_LOG;
@@ -289,8 +299,8 @@ static MunitResult test_write_log(const MunitParameter params[], void *data)
     raft_free(request2->result.read_log.entries[0].batch);
     raft_free(request2->result.read_log.entries);
 
-    raft_io_queue__pop_(&f->raft, request_id1);
-    raft_io_queue__pop_(&f->raft, request_id2);
+    raft_io_queue__pop(&f->queue, request_id1);
+    raft_io_queue__pop(&f->queue, request_id2);
 
     free(entry.buf.base);
 
@@ -309,7 +319,7 @@ static MunitTest submit_tests[] = {
  * Test suite
  */
 
-MunitSuite raft_io_sim_suites[] = {
+MunitSuite raft_io_stub_suites[] = {
     {"/start", start_tests, NULL, 1, 0},
     {"/submit", submit_tests, NULL, 1, 0},
     {NULL, NULL, NULL, 0, 0},

@@ -8,9 +8,7 @@
 #include "../include/raft.h"
 
 void raft_io_queue__init(struct raft_io_queue *q);
-void raft_io_queue__close(struct raft_io_queue *q,
-                          const unsigned server_id,
-                          struct raft_log *log);
+void raft_io_queue__close(struct raft_io_queue *q);
 
 /**
  * Add a request to the list of pending I/O requests. Return the ID of the newly

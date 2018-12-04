@@ -12,42 +12,40 @@ void raft_io_queue__init(struct raft_io_queue *q)
     q->size = 0;
 }
 
-void raft_io_queue__close(struct raft_io_queue *q,
-                          const unsigned server_id,
-                          struct raft_log *log)
+void raft_io_queue__close(struct raft_io_queue *q)
 {
-    size_t i;
+    // size_t i;
 
-    for (i = 0; i < q->size; i++) {
-        struct raft_io_request *request = &q->requests[i];
+    /* for (i = 0; i < q->size; i++) { */
+    /*     struct raft_io_request *request = &q->requests[i]; */
 
-        /* If this request slot is not in use, skip it. */
-        if (request->type == RAFT_IO_NULL) {
-            continue;
-        }
+    /*     /\* If this request slot is not in use, skip it. *\/ */
+    /*     if (request->type == RAFT_IO_NULL) { */
+    /*         continue; */
+    /*     } */
 
-        if (request->leader_id == server_id) {
-            /* This request was submitted while we were in leader state. The
-             * relevant entries were acquired from the log and need to be
-             * released. */
-            assert(request->type == RAFT_IO_WRITE_LOG ||
-                   request->type == RAFT_IO_APPEND_ENTRIES);
-            raft_log__release(log, request->index, request->entries,
-                              request->n);
-        } else {
-            /* This request was submitted while we were in follower
-             * state. The relevant entries were not acquired from the log
-             * (they were received from the network), so we just need to
-             * free the relevant memory. */
-            assert(request->type == RAFT_IO_WRITE_LOG);
-            if (request->entries != NULL) {
-                assert(request->entries[0].batch != NULL);
-                raft_free(request->entries[0].batch);
-                raft_free(request->entries);
-            }
-        }
-        raft_io_queue__pop(q, i);
-    }
+    /*     if (request->leader_id == server_id) { */
+    /*         /\* This request was submitted while we were in leader state. The */
+    /*          * relevant entries were acquired from the log and need to be */
+    /*          * released. *\/ */
+    /*         assert(request->type == RAFT_IO_WRITE_LOG || */
+    /*                request->type == RAFT_IO_APPEND_ENTRIES); */
+    /*         raft_log__release(log, request->index, request->entries, */
+    /*                           request->n); */
+    /*     } else { */
+    /*         /\* This request was submitted while we were in follower */
+    /*          * state. The relevant entries were not acquired from the log */
+    /*          * (they were received from the network), so we just need to */
+    /*          * free the relevant memory. *\/ */
+    /*         assert(request->type == RAFT_IO_WRITE_LOG); */
+    /*         if (request->entries != NULL) { */
+    /*             assert(request->entries[0].batch != NULL); */
+    /*             raft_free(request->entries[0].batch); */
+    /*             raft_free(request->entries); */
+    /*         } */
+    /*     } */
+    /*     raft_io_queue__pop(q, i); */
+    /* } */
 
     if (q->requests != NULL) {
         raft_free(q->requests);

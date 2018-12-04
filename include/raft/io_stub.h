@@ -1,22 +1,22 @@
 #ifndef RAFT_IO_SIM_H
 #define RAFT_IO_SIM_H
 
-struct raft;
+struct raft_io;
 
 /**
- * Use the stub in-memory I/O implementation.
+ * Configure the given @raft_io to use a stub in-memory I/O implementation.
  */
-int raft_io_stub_init(struct raft *r);
+int raft_io_stub_init(struct raft_io *io);
 
 /**
- * Advance the simulated time by the given number of milliseconds, and invoke
- * @raft_tick instance accordingly. Return the value returned by @raft_tick.
+ * Advance the stub time by the given number of milliseconds, and invoke the
+ * tick function accordingly.
  */
-int raft_io_stub_advance(struct raft *r, unsigned msecs);
+void raft_io_stub_advance(struct raft_io *io, unsigned msecs);
 
 /**
  * Flush all pending I/O requests, invoking the @raft_handle_io as appropriate.
  */
-void raft_io_stub_flush(struct raft *r);
+void raft_io_stub_flush(struct raft_io *io);
 
 #endif /* RAFT_IO_SIM_H */

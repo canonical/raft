@@ -8,8 +8,8 @@ extern MunitSuite raft_encoding_suites[];
 extern MunitSuite raft_error_suites[];
 extern MunitSuite raft_io_suites[];
 extern MunitSuite raft_io_queue_suites[];
-#if RAFT_IO_SIM
-extern MunitSuite raft_io_sim_suites[];
+#if RAFT_IO_STUB
+extern MunitSuite raft_io_stub_suites[];
 #endif
 #if RAFT_IO_UV
 extern MunitSuite raft_io_uv_suites[];
@@ -32,8 +32,8 @@ static MunitSuite suites[] = {
     {"error", NULL, raft_error_suites, 1, 0},
     {"io", NULL, raft_io_suites, 1, 0},
     {"io-queue", NULL, raft_io_queue_suites, 1, 0},
-#if RAFT_IO_SIM
-    {"io-sim", NULL, raft_io_sim_suites, 1, 0},
+#if RAFT_IO_STUB
+    {"io-stub", NULL, raft_io_stub_suites, 1, 0},
 #endif
 #if RAFT_IO_UV
     {"io-uv", NULL, raft_io_uv_suites, 1, 0},

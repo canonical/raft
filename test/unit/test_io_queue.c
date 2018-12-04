@@ -1,15 +1,9 @@
 #include "../../include/raft.h"
 
-#include "../../src/configuration.h"
 #include "../../src/io_queue.h"
-#include "../../src/log.h"
 
-#include "../lib/fsm.h"
 #include "../lib/heap.h"
-#include "../lib/io.h"
-#include "../lib/logger.h"
 #include "../lib/munit.h"
-#include "../lib/raft.h"
 
 /**
  * Helpers
@@ -18,7 +12,6 @@
 struct fixture
 {
     struct raft_heap heap;
-    struct raft_log log;
     struct raft_io_queue queue;
 };
 
@@ -62,7 +55,6 @@ static void *setup(const MunitParameter params[], void *user_data)
 
     test_heap_setup(params, &f->heap);
 
-    raft_log__init(&f->log);
     raft_io_queue__init(&f->queue);
 
     return f;
@@ -72,8 +64,7 @@ static void tear_down(void *data)
 {
     struct fixture *f = data;
 
-    raft_io_queue__close(&f->queue, 0, NULL);
-    raft_log__close(&f->log);
+    raft_io_queue__close(&f->queue);
 
     test_heap_tear_down(&f->heap);
 

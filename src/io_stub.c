@@ -14,8 +14,11 @@
  */
 struct raft_io_stub
 {
-    struct raft *raft;
-    int (*tick)(struct raft *, const unsigned);
+    /* Parameters passed at init time */
+    struct raft_io_queue *queue;
+    void *p;
+    void (*tick)(void *, const unsigned);
+    void (*notify)(void *, const unsigned, const int);
 
     /* Elapsed time since the backend was started. */
     unsigned time;
@@ -33,67 +36,76 @@ struct raft_io_stub
     unsigned request_ids[RAFT_IO_STUB_MAX_REQUESTS];
 };
 
-static int raft_io_stub__start(struct raft *r,
-                               const unsigned msecs,
-                               int (*tick)(struct raft *, const unsigned))
+static void raft_io_stub__init(struct raft_io *io,
+                               struct raft_io_queue *queue,
+                               void *p,
+                               void (*tick)(void *, const unsigned),
+                               void (*notify)(void *,
+                                              const unsigned,
+                                              const int))
 {
-    struct raft_io_stub *io;
+    struct raft_io_stub *s;
 
+    s = io->data;
+
+    s->queue = queue;
+    s->p = p;
+    s->tick = tick;
+    s->notify = notify;
+}
+
+static int raft_io_stub__start(struct raft_io *io, const unsigned msecs)
+{
     (void)msecs;
 
-    assert(r != NULL);
-    assert(r->state == RAFT_STATE_UNAVAILABLE);
-    assert(tick != NULL);
-
-    io = r->io_.data;
-    io->tick = tick;
+    assert(io != NULL);
 
     return 0;
 }
 
-static int raft_io_stub__stop(struct raft *r)
+static int raft_io_stub__stop(struct raft_io *io)
 {
-    assert(r != NULL);
+    assert(io != NULL);
 
     return 0;
 }
 
-static void raft_io_stub__close(struct raft *r)
+static void raft_io_stub__close(struct raft_io *io)
 {
-    struct raft_io_stub *io;
+    struct raft_io_stub *s;
     size_t i;
 
-    assert(r != NULL);
+    assert(io != NULL);
 
-    io = r->io_.data;
+    s = io->data;
 
-    for (i = 0; i < io->n; i++) {
-        struct raft_entry *entry = &io->entries[i];
+    for (i = 0; i < s->n; i++) {
+        struct raft_entry *entry = &s->entries[i];
         raft_free(entry->buf.base);
     }
 
-    if (io->entries != NULL) {
-        raft_free(io->entries);
+    if (s->entries != NULL) {
+        raft_free(s->entries);
     }
 
-    raft_free(io);
+    raft_free(s);
 }
 
-static int raft_io_stub__bootstrap(struct raft_io_stub *io,
+static int raft_io_stub__bootstrap(struct raft_io_stub *s,
                                    struct raft_io_request *request)
 {
     struct raft_entry *entries;
 
-    if (io->term != 0) {
+    if (s->term != 0) {
         return RAFT_ERR_BUSY;
     }
 
-    assert(io->voted_for == 0);
-    assert(io->first_index == 0);
-    assert(io->entries == NULL);
-    assert(io->n == 0);
+    assert(s->voted_for == 0);
+    assert(s->first_index == 0);
+    assert(s->entries == NULL);
+    assert(s->n == 0);
 
-    entries = raft_calloc(1, sizeof *io->entries);
+    entries = raft_calloc(1, sizeof *s->entries);
     if (entries == NULL) {
         return RAFT_ERR_NOMEM;
     }
@@ -108,27 +120,27 @@ static int raft_io_stub__bootstrap(struct raft_io_stub *io,
         return RAFT_ERR_NOMEM;
     }
 
-    io->term = 1;
-    io->voted_for = 0;
-    io->first_index = 1;
-    io->entries = entries;
-    io->n = 1;
+    s->term = 1;
+    s->voted_for = 0;
+    s->first_index = 1;
+    s->entries = entries;
+    s->n = 1;
 
     return 0;
 }
 
-static int raft_io_stub__read_state(struct raft_io_stub *io,
+static int raft_io_stub__read_state(struct raft_io_stub *s,
                                     struct raft_io_request *request)
 {
-    request->result.read_state.term = io->term;
-    request->result.read_state.voted_for = io->voted_for;
-    request->result.read_state.first_index = io->first_index;
-    request->result.read_state.n_entries = io->n;
+    request->result.read_state.term = s->term;
+    request->result.read_state.voted_for = s->voted_for;
+    request->result.read_state.first_index = s->first_index;
+    request->result.read_state.n_entries = s->n;
 
     return 0;
 }
 
-static int raft_io_stub__read_log(struct raft_io_stub *io,
+static int raft_io_stub__read_log(struct raft_io_stub *s,
                                   struct raft_io_request *request)
 {
     struct raft_entry *entries;
@@ -138,7 +150,7 @@ static int raft_io_stub__read_log(struct raft_io_stub *io,
     void *cursor;
     size_t size = 0; /* Size of the batch */
 
-    if (io->n == 0) {
+    if (s->n == 0) {
         request->result.read_log.entries = NULL;
         request->result.read_log.n = 0;
         return 0;
@@ -146,14 +158,14 @@ static int raft_io_stub__read_log(struct raft_io_stub *io,
 
     /* Make a copy of the persisted entries, storing their data into a single
      * batch. */
-    n = io->n;
+    n = s->n;
     entries = raft_calloc(n, sizeof *entries);
     if (entries == NULL) {
         return RAFT_ERR_NOMEM;
     }
 
     for (i = 0; i < n; i++) {
-        size += io->entries[i].buf.len;
+        size += s->entries[i].buf.len;
     }
 
     batch = raft_malloc(size);
@@ -165,12 +177,12 @@ static int raft_io_stub__read_log(struct raft_io_stub *io,
     cursor = batch;
 
     for (i = 0; i < n; i++) {
-        memcpy(cursor, io->entries[i].buf.base, io->entries[i].buf.len);
+        memcpy(cursor, s->entries[i].buf.base, s->entries[i].buf.len);
 
-        entries[i].term = io->entries[i].term;
-        entries[i].type = io->entries[i].type;
+        entries[i].term = s->entries[i].term;
+        entries[i].type = s->entries[i].type;
         entries[i].buf.base = cursor;
-        entries[i].buf.len = io->entries[i].buf.len;
+        entries[i].buf.len = s->entries[i].buf.len;
         entries[i].batch = batch;
 
         cursor += entries[i].buf.len;
@@ -182,32 +194,32 @@ static int raft_io_stub__read_log(struct raft_io_stub *io,
     return 0;
 }
 
-static int raft_io_stub__write_term(struct raft_io_stub *io,
+static int raft_io_stub__write_term(struct raft_io_stub *s,
                                     struct raft_io_request *request)
 {
-    io->term = request->args.write_term.term;
-    io->voted_for = 0;
+    s->term = request->args.write_term.term;
+    s->voted_for = 0;
 
     return 0;
 }
 
-static int raft_io_stub__write_vote(struct raft_io_stub *io,
+static int raft_io_stub__write_vote(struct raft_io_stub *s,
                                     struct raft_io_request *request)
 {
-    io->voted_for = request->args.write_vote.server_id;
+    s->voted_for = request->args.write_vote.server_id;
 
     return 0;
 }
 
-static int raft_io_stub__write_log(struct raft_io_stub *io,
+static int raft_io_stub__write_log(struct raft_io_stub *s,
                                    const unsigned request_id)
 {
     size_t i;
 
     /* Search for an available slot in our internal queue */
     for (i = 0; i < RAFT_IO_STUB_MAX_REQUESTS; i++) {
-        if (io->request_ids[i] == 0) {
-            io->request_ids[i] = request_id;
+        if (s->request_ids[i] == 0) {
+            s->request_ids[i] = request_id;
             return 0;
         }
     }
@@ -215,38 +227,38 @@ static int raft_io_stub__write_log(struct raft_io_stub *io,
     return RAFT_ERR_IO_BUSY;
 }
 
-static int raft_io_stub__submit(struct raft *r, const unsigned request_id)
+static int raft_io_stub__submit(struct raft_io *io, const unsigned request_id)
 {
     struct raft_io_request *request;
-    struct raft_io_stub *io;
+    struct raft_io_stub *s;
     int rv;
 
-    assert(r != NULL);
+    assert(io != NULL);
 
-    io = r->io_.data;
+    s = io->data;
 
-    request = raft_io_queue_get_(r, request_id);
+    request = raft_io_queue_get(s->queue, request_id);
 
     assert(request != NULL);
 
     switch (request->type) {
         case RAFT_IO_BOOTSTRAP:
-            rv = raft_io_stub__bootstrap(io, request);
+            rv = raft_io_stub__bootstrap(s, request);
             break;
         case RAFT_IO_READ_STATE:
-            rv = raft_io_stub__read_state(io, request);
+            rv = raft_io_stub__read_state(s, request);
             break;
         case RAFT_IO_READ_LOG:
-            rv = raft_io_stub__read_log(io, request);
+            rv = raft_io_stub__read_log(s, request);
             break;
         case RAFT_IO_WRITE_TERM:
-            rv = raft_io_stub__write_term(io, request);
+            rv = raft_io_stub__write_term(s, request);
             break;
         case RAFT_IO_WRITE_VOTE:
-            rv = raft_io_stub__write_vote(io, request);
+            rv = raft_io_stub__write_vote(s, request);
             break;
         case RAFT_IO_WRITE_LOG:
-            rv = raft_io_stub__write_log(io, request_id);
+            rv = raft_io_stub__write_log(s, request_id);
             break;
         default:
             assert(0);
@@ -255,32 +267,32 @@ static int raft_io_stub__submit(struct raft *r, const unsigned request_id)
     return rv;
 }
 
-int raft_io_stub_init(struct raft *r)
+int raft_io_stub_init(struct raft_io *io)
 {
-    struct raft_io_stub *io;
+    struct raft_io_stub *stub;
 
-    assert(r != NULL);
+    assert(io != NULL);
 
-    io = raft_malloc(sizeof *io);
-    if (io == NULL) {
+    stub = raft_malloc(sizeof *stub);
+    if (stub == NULL) {
         return RAFT_ERR_NOMEM;
     }
 
-    io->time = 0;
-    io->raft = r;
-    io->term = 0;
-    io->voted_for = 0;
-    io->entries = NULL;
-    io->first_index = 0;
-    io->n = 0;
+    stub->time = 0;
+    stub->term = 0;
+    stub->voted_for = 0;
+    stub->entries = NULL;
+    stub->first_index = 0;
+    stub->n = 0;
 
-    memset(&io->request_ids, 0, sizeof io->request_ids);
+    memset(&stub->request_ids, 0, sizeof stub->request_ids);
 
-    r->io_.data = io;
-    r->io_.start = raft_io_stub__start;
-    r->io_.stop = raft_io_stub__stop;
-    r->io_.close = raft_io_stub__close;
-    r->io_.submit = raft_io_stub__submit;
+    io->data = stub;
+    io->init = raft_io_stub__init;
+    io->start = raft_io_stub__start;
+    io->stop = raft_io_stub__stop;
+    io->close = raft_io_stub__close;
+    io->submit = raft_io_stub__submit;
 
     return 0;
 }
@@ -331,52 +343,47 @@ static void raft_io_stub__write_log_cb(struct raft_io_stub *io,
     io->n += n;
 }
 
-int raft_io_stub_advance(struct raft *r, unsigned msecs)
+void raft_io_stub_advance(struct raft_io *io, unsigned msecs)
 {
-    struct raft_io_stub *io;
-    int rv;
+    struct raft_io_stub *s;
 
-    assert(r != NULL);
+    assert(io != NULL);
 
-    io = r->io_.data;
+    s = io->data;
 
-    io->time += msecs;
+    s->time += msecs;
 
-    rv = io->tick(io->raft, msecs);
-
-    return rv;
+    s->tick(s->p, msecs);
 }
 
-void raft_io_stub_flush(struct raft *r)
+void raft_io_stub_flush(struct raft_io *io)
 {
-    struct raft_io_stub *io;
+    struct raft_io_stub *s;
     size_t i;
 
-    assert(r != NULL);
+    assert(io != NULL);
 
-    io = r->io_.data;
+    s = io->data;
 
     for (i = 0; i < RAFT_IO_STUB_MAX_REQUESTS; i++) {
-        unsigned request_id = io->request_ids[i];
+        unsigned request_id = s->request_ids[i];
         struct raft_io_request *request;
 
         if (request_id == 0) {
             continue;
         }
 
-        request = raft_io_queue_get_(r, request_id);
+        request = raft_io_queue_get(s->queue, request_id);
 
         switch (request->type) {
             case RAFT_IO_WRITE_LOG:
-                raft_io_stub__write_log_cb(io, request);
+                raft_io_stub__write_log_cb(s, request);
                 break;
             default:
                 assert(0);
                 break;
         }
 
-        if (request->cb != NULL) {
-            request->cb(r, request_id, 0);
-        }
+        s->notify(s->p, request_id, 0);
     }
 }
