@@ -78,15 +78,15 @@ static void tear_down(void *data)
 /**
  * Push a new request to the I/O queue.
  */
-#define __push_io_request(F, ID, REQUEST)            \
-    {                                                \
-        int rv;                                      \
-                                                     \
-        rv = raft_io_queue__push(&F->raft, ID);      \
-        munit_assert_int(rv, ==, 0);                 \
-                                                     \
+#define __push_io_request(F, ID, REQUEST)             \
+    {                                                 \
+        int rv;                                       \
+                                                      \
+        rv = raft_io_queue__push_(&F->raft, ID);      \
+        munit_assert_int(rv, ==, 0);                  \
+                                                      \
         *REQUEST = raft_io_queue_get_(&F->raft, *ID); \
-        munit_assert_ptr_not_null(*REQUEST);         \
+        munit_assert_ptr_not_null(*REQUEST);          \
     }
 
 /**
@@ -153,7 +153,8 @@ static MunitResult test_bootstrap(const MunitParameter params[], void *data)
     rv = raft_configuration_add(&configuration, 1, "1", true);
     munit_assert_int(rv, ==, 0);
 
-    rv = raft_encode_configuration(&configuration, &request->args.bootstrap.conf);
+    rv = raft_encode_configuration(&configuration,
+                                   &request->args.bootstrap.conf);
     munit_assert_int(rv, ==, 0);
 
     raft_configuration_close(&configuration);
@@ -173,7 +174,7 @@ static MunitResult test_bootstrap(const MunitParameter params[], void *data)
     raft_free(request->result.read_log.entries[0].batch);
     raft_free(request->result.read_log.entries);
 
-    raft_io_queue__pop(&f->raft, request_id);
+    raft_io_queue__pop_(&f->raft, request_id);
 
     return MUNIT_OK;
 }
@@ -200,7 +201,7 @@ static MunitResult test_write_term(const MunitParameter params[], void *data)
     munit_assert_int(request->result.read_state.term, ==, 1);
     munit_assert_int(request->result.read_state.voted_for, ==, 0);
 
-    raft_io_queue__pop(&f->raft, request_id);
+    raft_io_queue__pop_(&f->raft, request_id);
 
     return MUNIT_OK;
 }
@@ -229,7 +230,7 @@ static MunitResult test_write_vote(const MunitParameter params[], void *data)
     munit_assert_int(request->result.read_state.first_index, ==, 0);
     munit_assert_int(request->result.read_state.n_entries, ==, 0);
 
-    raft_io_queue__pop(&f->raft, request_id);
+    raft_io_queue__pop_(&f->raft, request_id);
 
     return MUNIT_OK;
 }
@@ -288,8 +289,8 @@ static MunitResult test_write_log(const MunitParameter params[], void *data)
     raft_free(request2->result.read_log.entries[0].batch);
     raft_free(request2->result.read_log.entries);
 
-    raft_io_queue__pop(&f->raft, request_id1);
-    raft_io_queue__pop(&f->raft, request_id2);
+    raft_io_queue__pop_(&f->raft, request_id1);
+    raft_io_queue__pop_(&f->raft, request_id2);
 
     free(entry.buf.base);
 

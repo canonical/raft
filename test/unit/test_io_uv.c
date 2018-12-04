@@ -30,7 +30,7 @@ struct fixture
     {                                                 \
         int rv;                                       \
                                                       \
-        rv = raft_io_queue__push(&F->raft, ID);       \
+        rv = raft_io_queue__push_(&F->raft, ID);      \
         munit_assert_int(rv, ==, 0);                  \
                                                       \
         *REQUEST = raft_io_queue_get_(&F->raft, *ID); \
@@ -145,7 +145,7 @@ static MunitResult test_submit_read_state(const MunitParameter params[],
 
     __submit(f, request_id);
 
-    raft_io_queue__pop(&f->raft, request_id);
+    raft_io_queue__pop_(&f->raft, request_id);
 
     return MUNIT_OK;
 }

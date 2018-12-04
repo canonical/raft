@@ -18,39 +18,36 @@
 struct fixture
 {
     struct raft_heap heap;
-    struct raft_logger logger;
-    struct raft_io io;
-    struct raft_fsm fsm;
-    struct raft raft;
+    struct raft_log log;
+    struct raft_io_queue queue;
 };
 
 /**
- * Push a new request the the queue of the raft instance of the given fixture,
- * and assert that the operation succeeded.
+ * Push a new request to the queue of the given fixture, and assert that the
+ * operation succeeded.
  */
-#define __push(F, ID)                           \
-    {                                           \
-        int rv;                                 \
-                                                \
-        rv = raft_io_queue__push(&F->raft, ID); \
-        munit_assert_int(rv, ==, 0);            \
+#define __push(F, ID)                            \
+    {                                            \
+        int rv;                                  \
+                                                 \
+        rv = raft_io_queue__push(&F->queue, ID); \
+        munit_assert_int(rv, ==, 0);             \
     }
 
 /**
- * Assert the size of the queue of the raft instance of the given fixture.
+ * Assert the size of the queue of the given fixture.
  */
-#define __assert_size(F, SIZE)                              \
-    {                                                       \
-        munit_assert_int(F->raft.io_.queue.size, ==, SIZE); \
+#define __assert_size(F, SIZE)                     \
+    {                                              \
+        munit_assert_int(F->queue.size, ==, SIZE); \
     }
 
 /**
- * Assert the type of the I'th request in the queue of the raft instance of the
- * given fixture.
+ * Assert the type of the I'th request in the queue of the given fixture.
  */
 #define __assert_type(F, I, TYPE)                                       \
     {                                                                   \
-        munit_assert_int(F->raft.io_.queue.requests[I].type, ==, TYPE); \
+        munit_assert_int(F->queue.requests[I].type, ==, TYPE); \
     }
 
 /**
@@ -60,20 +57,13 @@ struct fixture
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    uint64_t id = 1;
 
     (void)user_data;
 
     test_heap_setup(params, &f->heap);
 
-    test_logger_setup(params, &f->logger, id);
-
-    test_io_setup(params, &f->io);
-    test_fsm_setup(params, &f->fsm);
-
-    raft_init(&f->raft, &f->io, &f->fsm, f, id);
-
-    raft_set_logger(&f->raft, &f->logger);
+    raft_log__init(&f->log);
+    raft_io_queue__init(&f->queue);
 
     return f;
 }
@@ -82,12 +72,8 @@ static void tear_down(void *data)
 {
     struct fixture *f = data;
 
-    raft_close(&f->raft);
-
-    test_fsm_tear_down(&f->fsm);
-    test_io_tear_down(&f->io);
-
-    test_logger_tear_down(&f->logger);
+    raft_io_queue__close(&f->queue, 0, NULL);
+    raft_log__close(&f->log);
 
     test_heap_tear_down(&f->heap);
 
@@ -105,8 +91,6 @@ static MunitResult test_push_first(const MunitParameter params[], void *data)
     unsigned id;
 
     (void)params;
-
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
 
     __push(f, &id);
 
@@ -128,12 +112,10 @@ static MunitResult test_push_second(const MunitParameter params[], void *data)
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
-
     __push(f, &id1);
 
     /* Mark the request as in use. */
-    request = raft_io_queue_get_(&f->raft, id1);
+    request = raft_io_queue_get(&f->queue, id1);
     request->type = RAFT_IO_WRITE_LOG;
 
     /* Now the queue has 2 slots, one is in use an the other not. */
@@ -152,7 +134,7 @@ static MunitResult test_push_second(const MunitParameter params[], void *data)
 
     __assert_size(f, 2);
 
-    raft_io_queue__pop(&f->raft, id1);
+    raft_io_queue__pop(&f->queue, id1);
 
     return MUNIT_OK;
 }
@@ -168,17 +150,15 @@ static MunitResult test_push_third(const MunitParameter params[], void *data)
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
-
     /* Push two requests and mark them as in use. */
     __push(f, &id1);
 
-    request = raft_io_queue_get_(&f->raft, id1);
+    request = raft_io_queue_get(&f->queue, id1);
     request->type = RAFT_IO_WRITE_LOG;
 
     __push(f, &id2);
 
-    request = raft_io_queue_get_(&f->raft, id2);
+    request = raft_io_queue_get(&f->queue, id2);
     request->type = RAFT_IO_WRITE_LOG;
 
     /* Push a third request. */
@@ -188,8 +168,8 @@ static MunitResult test_push_third(const MunitParameter params[], void *data)
 
     __assert_size(f, 6);
 
-    raft_io_queue__pop(&f->raft, id1);
-    raft_io_queue__pop(&f->raft, id2);
+    raft_io_queue__pop(&f->queue, id1);
+    raft_io_queue__pop(&f->queue, id2);
 
     return MUNIT_OK;
 }
@@ -203,12 +183,10 @@ static MunitResult test_push_oom(const MunitParameter params[], void *data)
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
-
     test_heap_fault_config(&f->heap, 0, 1);
     test_heap_fault_enable(&f->heap);
 
-    rv = raft_io_queue__push(&f->raft, &id);
+    rv = raft_io_queue__push(&f->queue, &id);
     munit_assert_int(rv, ==, RAFT_ERR_NOMEM);
 
     return MUNIT_OK;
@@ -235,14 +213,12 @@ static MunitResult test_pop(const MunitParameter params[], void *data)
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
-
     __push(f, &id);
 
-    request = raft_io_queue_get_(&f->raft, id);
+    request = raft_io_queue_get(&f->queue, id);
     request->type = RAFT_IO_WRITE_LOG;
 
-    raft_io_queue__pop(&f->raft, id);
+    raft_io_queue__pop(&f->queue, id);
 
     /* The size of the queue is still 2, but both requests types are null. */
     __assert_size(f, 2);
