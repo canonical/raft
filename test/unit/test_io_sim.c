@@ -133,6 +133,51 @@ static MunitTest start_tests[] = {
  * raft_io_sim__submit
  */
 
+static MunitResult test_bootstrap(const MunitParameter params[], void *data)
+{
+    struct fixture *f = data;
+    struct raft_configuration configuration;
+    unsigned request_id;
+    struct raft_io_request *request;
+    int rv;
+
+    (void)params;
+
+    __push_io_request(f, &request_id, &request);
+
+    request->type = RAFT_IO_BOOTSTRAP;
+
+    /* Create a configuration and encode it in the request */
+    raft_configuration_init(&configuration);
+
+    rv = raft_configuration_add(&configuration, 1, "1", true);
+    munit_assert_int(rv, ==, 0);
+
+    rv = raft_encode_configuration(&configuration, &request->args.bootstrap.conf);
+    munit_assert_int(rv, ==, 0);
+
+    raft_configuration_close(&configuration);
+
+    /* Submit the bootstrap request */
+    __submit(f, request_id);
+
+    raft_free(request->args.bootstrap.conf.base);
+
+    /* The log has now one entry. */
+    request->type = RAFT_IO_READ_LOG;
+
+    __submit(f, request_id);
+
+    munit_assert_int(request->result.read_log.n, ==, 1);
+
+    raft_free(request->result.read_log.entries[0].batch);
+    raft_free(request->result.read_log.entries);
+
+    raft_io_queue__pop(&f->raft, request_id);
+
+    return MUNIT_OK;
+}
+
 static MunitResult test_write_term(const MunitParameter params[], void *data)
 {
     struct fixture *f = data;
@@ -252,6 +297,7 @@ static MunitResult test_write_log(const MunitParameter params[], void *data)
 }
 
 static MunitTest submit_tests[] = {
+    {"/bootstrap", test_bootstrap, setup, tear_down, 0, NULL},
     {"/write-term", test_write_term, setup, tear_down, 0, NULL},
     {"/write-vote", test_write_vote, setup, tear_down, 0, NULL},
     {"/write-log", test_write_log, setup, tear_down, 0, NULL},

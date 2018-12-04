@@ -447,6 +447,7 @@ struct raft_io
  */
 enum {
     RAFT_IO_NULL = 0,
+    RAFT_IO_BOOTSTRAP,
     RAFT_IO_READ_STATE,
     RAFT_IO_READ_LOG,
     RAFT_IO_WRITE_TERM,
@@ -472,6 +473,18 @@ struct raft_io_request
     raft_index leader_commit;   /* Last known leader commit index. */
 
     union {
+        /**
+         * Arguments of a RAFT_IO_BOOTSTRAP request.
+         *
+         * The I/O implementation must synchronously persist the given encoded
+         * configuration as the first entry of the log. The current persisted
+         * term must be set to 1 and the vote to nil.
+         */
+        struct
+        {
+            struct raft_buffer conf;
+        } bootstrap;
+
         /**
          * Arguments of a RAFT_IO_WRITE_TERM request.
          *

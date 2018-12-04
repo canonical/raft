@@ -70,6 +70,44 @@ static void raft_io_sim__close(struct raft *r)
     raft_free(io);
 }
 
+static int raft_io_sim__bootstrap(struct raft_io_sim *io,
+                                  struct raft_io_request *request)
+{
+    struct raft_entry *entries;
+
+    if (io->term != 0) {
+        return RAFT_ERR_BUSY;
+    }
+
+    assert(io->voted_for == 0);
+    assert(io->first_index == 0);
+    assert(io->entries == NULL);
+    assert(io->n == 0);
+
+    entries = raft_calloc(1, sizeof *io->entries);
+    if (entries == NULL) {
+        return RAFT_ERR_NOMEM;
+    }
+
+    entries[0].term = 1;
+    entries[0].type = RAFT_LOG_CONFIGURATION;
+    entries[0].buf.len = request->args.bootstrap.conf.len;
+    entries[0].buf.base = raft_malloc(entries[0].buf.len);
+
+    if (entries[0].buf.base == NULL) {
+        raft_free(entries);
+        return RAFT_ERR_NOMEM;
+    }
+
+    io->term = 1;
+    io->voted_for = 0;
+    io->first_index = 1;
+    io->entries = entries;
+    io->n = 1;
+
+    return 0;
+}
+
 static int raft_io_sim__read_state(struct raft_io_sim *io,
                                    struct raft_io_request *request)
 {
@@ -183,6 +221,9 @@ static int raft_io_sim__submit(struct raft *r, const unsigned request_id)
     assert(request != NULL);
 
     switch (request->type) {
+        case RAFT_IO_BOOTSTRAP:
+            rv = raft_io_sim__bootstrap(io, request);
+            break;
         case RAFT_IO_READ_STATE:
             rv = raft_io_sim__read_state(io, request);
             break;
