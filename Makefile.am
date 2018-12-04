@@ -59,9 +59,9 @@ if IO_UV
   libraft_la_SOURCES += \
   src/io_uv.c
 endif
-if IO_SIM
+if IO_STUB
   libraft_la_SOURCES += \
-  src/io_sim.c
+  src/io_stub.c
 endif
 include_HEADERS += \
   include/raft.h
@@ -105,9 +105,9 @@ if IO_UV
   unit_test_SOURCES += \
   test/unit/test_io_uv.c
 endif
-if IO_SIM
+if IO_STUB
   unit_test_SOURCES += \
-  test/unit/test_io_sim.c
+  test/unit/test_io_stub.c
 endif
 unit_test_CFLAGS = $(AM_CFLAGS) -DMUNIT_TEST_NAME_LEN=47
 #-DMUNIT_NO_FORK

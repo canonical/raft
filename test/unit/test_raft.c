@@ -48,7 +48,7 @@ static void *setup(const MunitParameter params[], void *user_data)
     test_fsm_setup(params, &f->fsm);
 
     raft_init(&f->raft, &f->io, &f->fsm, f, id);
-    rv = raft_io_sim_init(&f->raft);
+    rv = raft_io_stub_init(&f->raft);
     munit_assert_int(rv, ==, 0);
 
     raft_set_logger(&f->raft, &f->logger);

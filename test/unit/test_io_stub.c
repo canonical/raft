@@ -34,7 +34,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 
     raft_init(&f->raft, &f->io, &f->fsm, f, id);
 
-    rv = raft_io_sim_init(&f->raft);
+    rv = raft_io_stub_init(&f->raft);
     munit_assert_int(rv, ==, 0);
 
     return f;
@@ -71,7 +71,7 @@ static void tear_down(void *data)
     {                                              \
         int rv;                                    \
                                                    \
-        rv = raft_io_sim_advance(&F->raft, MSECS); \
+        rv = raft_io_stub_advance(&F->raft, MSECS); \
         munit_assert_int(rv, ==, 0);               \
     }
 
@@ -273,7 +273,7 @@ static MunitResult test_write_log(const MunitParameter params[], void *data)
     munit_assert_int(request2->result.read_state.first_index, ==, 0);
     munit_assert_int(request2->result.read_state.n_entries, ==, 0);
 
-    raft_io_sim_flush(&f->raft);
+    raft_io_stub_flush(&f->raft);
 
     /* The log has now one entry, witch matches the one we wrote. */
     request2->type = RAFT_IO_READ_LOG;

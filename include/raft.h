@@ -6,8 +6,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#if RAFT_IO_SIM
-#include "raft/io_sim.h"
+#if RAFT_IO_STUB
+#include "raft/io_stub.h"
 #endif
 
 #if RAFT_IO_UV

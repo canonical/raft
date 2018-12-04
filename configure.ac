@@ -36,19 +36,19 @@ AM_COND_IF(IO_UV,
   [PKG_CHECK_MODULES(UV, [libuv >= 1.8.0], [], [])
    AC_DEFINE(RAFT_IO_UV)])
 
-# Enable building the simulated I/O implementation, for testing.
-AC_ARG_ENABLE(io-sim,
+# Enable building the stub I/O implementation, for testing.
+AC_ARG_ENABLE(io-stub,
   AS_HELP_STRING(
-    [--enable-io-sim],
-    [enable simulated I/O implementation for testing, default: no]),
+    [--enable-io-stub],
+    [enable the stub I/O implementation, default: no]),
   [case "${enableval}" in
-     yes) io_sim=true ;;
-     no)  io_sim=false ;;
-     *)   AC_MSG_ERROR([bad value ${enableval} for --enable-io-sim]) ;;
+     yes) io_stub=true ;;
+     no)  io_stub=false ;;
+     *)   AC_MSG_ERROR([bad value ${enableval} for --enable-io-stub]) ;;
    esac],
-  [io_sim=false])
-AM_CONDITIONAL(IO_SIM, test x"$io_sim" = x"true")
-AM_COND_IF(IO_SIM, AC_DEFINE(RAFT_IO_SIM))
+  [io_stub=false])
+AM_CONDITIONAL(IO_STUB, test x"$io_stub" = x"true")
+AM_COND_IF(IO_STUB, AC_DEFINE(RAFT_IO_STUB))
 
 # Enable building the example server.
 AC_ARG_ENABLE(example,

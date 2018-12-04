@@ -7,12 +7,12 @@
  * Maximum number of pending I/O requests. This should be enough for testing
  * purposes.
  */
-#define RAFT_IO_SIM_MAX_REQUESTS 64
+#define RAFT_IO_STUB_MAX_REQUESTS 64
 
 /**
- * Raft I/O implementation simulating all operations in-memory.
+ * Stub I/O implementation implementing all operations in-memory.
  */
-struct raft_io_sim
+struct raft_io_stub
 {
     struct raft *raft;
     int (*tick)(struct raft *, const unsigned);
@@ -30,14 +30,14 @@ struct raft_io_sim
     size_t n;                   /* Size of the persisted entries array */
 
     /* Queue of in-flight asynchronous I/O requests. */
-    unsigned request_ids[RAFT_IO_SIM_MAX_REQUESTS];
+    unsigned request_ids[RAFT_IO_STUB_MAX_REQUESTS];
 };
 
-static int raft_io_sim__start(struct raft *r,
-                              const unsigned msecs,
-                              int (*tick)(struct raft *, const unsigned))
+static int raft_io_stub__start(struct raft *r,
+                               const unsigned msecs,
+                               int (*tick)(struct raft *, const unsigned))
 {
-    struct raft_io_sim *io;
+    struct raft_io_stub *io;
 
     (void)msecs;
 
@@ -51,16 +51,16 @@ static int raft_io_sim__start(struct raft *r,
     return 0;
 }
 
-static int raft_io_sim__stop(struct raft *r)
+static int raft_io_stub__stop(struct raft *r)
 {
     assert(r != NULL);
 
     return 0;
 }
 
-static void raft_io_sim__close(struct raft *r)
+static void raft_io_stub__close(struct raft *r)
 {
-    struct raft_io_sim *io;
+    struct raft_io_stub *io;
     size_t i;
 
     assert(r != NULL);
@@ -79,8 +79,8 @@ static void raft_io_sim__close(struct raft *r)
     raft_free(io);
 }
 
-static int raft_io_sim__bootstrap(struct raft_io_sim *io,
-                                  struct raft_io_request *request)
+static int raft_io_stub__bootstrap(struct raft_io_stub *io,
+                                   struct raft_io_request *request)
 {
     struct raft_entry *entries;
 
@@ -117,8 +117,8 @@ static int raft_io_sim__bootstrap(struct raft_io_sim *io,
     return 0;
 }
 
-static int raft_io_sim__read_state(struct raft_io_sim *io,
-                                   struct raft_io_request *request)
+static int raft_io_stub__read_state(struct raft_io_stub *io,
+                                    struct raft_io_request *request)
 {
     request->result.read_state.term = io->term;
     request->result.read_state.voted_for = io->voted_for;
@@ -128,8 +128,8 @@ static int raft_io_sim__read_state(struct raft_io_sim *io,
     return 0;
 }
 
-static int raft_io_sim__read_log(struct raft_io_sim *io,
-                                 struct raft_io_request *request)
+static int raft_io_stub__read_log(struct raft_io_stub *io,
+                                  struct raft_io_request *request)
 {
     struct raft_entry *entries;
     size_t n;
@@ -182,8 +182,8 @@ static int raft_io_sim__read_log(struct raft_io_sim *io,
     return 0;
 }
 
-static int raft_io_sim__write_term(struct raft_io_sim *io,
-                                   struct raft_io_request *request)
+static int raft_io_stub__write_term(struct raft_io_stub *io,
+                                    struct raft_io_request *request)
 {
     io->term = request->args.write_term.term;
     io->voted_for = 0;
@@ -191,21 +191,21 @@ static int raft_io_sim__write_term(struct raft_io_sim *io,
     return 0;
 }
 
-static int raft_io_sim__write_vote(struct raft_io_sim *io,
-                                   struct raft_io_request *request)
+static int raft_io_stub__write_vote(struct raft_io_stub *io,
+                                    struct raft_io_request *request)
 {
     io->voted_for = request->args.write_vote.server_id;
 
     return 0;
 }
 
-static int raft_io_sim__write_log(struct raft_io_sim *io,
-                                  const unsigned request_id)
+static int raft_io_stub__write_log(struct raft_io_stub *io,
+                                   const unsigned request_id)
 {
     size_t i;
 
     /* Search for an available slot in our internal queue */
-    for (i = 0; i < RAFT_IO_SIM_MAX_REQUESTS; i++) {
+    for (i = 0; i < RAFT_IO_STUB_MAX_REQUESTS; i++) {
         if (io->request_ids[i] == 0) {
             io->request_ids[i] = request_id;
             return 0;
@@ -215,10 +215,10 @@ static int raft_io_sim__write_log(struct raft_io_sim *io,
     return RAFT_ERR_IO_BUSY;
 }
 
-static int raft_io_sim__submit(struct raft *r, const unsigned request_id)
+static int raft_io_stub__submit(struct raft *r, const unsigned request_id)
 {
     struct raft_io_request *request;
-    struct raft_io_sim *io;
+    struct raft_io_stub *io;
     int rv;
 
     assert(r != NULL);
@@ -231,22 +231,22 @@ static int raft_io_sim__submit(struct raft *r, const unsigned request_id)
 
     switch (request->type) {
         case RAFT_IO_BOOTSTRAP:
-            rv = raft_io_sim__bootstrap(io, request);
+            rv = raft_io_stub__bootstrap(io, request);
             break;
         case RAFT_IO_READ_STATE:
-            rv = raft_io_sim__read_state(io, request);
+            rv = raft_io_stub__read_state(io, request);
             break;
         case RAFT_IO_READ_LOG:
-            rv = raft_io_sim__read_log(io, request);
+            rv = raft_io_stub__read_log(io, request);
             break;
         case RAFT_IO_WRITE_TERM:
-            rv = raft_io_sim__write_term(io, request);
+            rv = raft_io_stub__write_term(io, request);
             break;
         case RAFT_IO_WRITE_VOTE:
-            rv = raft_io_sim__write_vote(io, request);
+            rv = raft_io_stub__write_vote(io, request);
             break;
         case RAFT_IO_WRITE_LOG:
-            rv = raft_io_sim__write_log(io, request_id);
+            rv = raft_io_stub__write_log(io, request_id);
             break;
         default:
             assert(0);
@@ -255,9 +255,9 @@ static int raft_io_sim__submit(struct raft *r, const unsigned request_id)
     return rv;
 }
 
-int raft_io_sim_init(struct raft *r)
+int raft_io_stub_init(struct raft *r)
 {
-    struct raft_io_sim *io;
+    struct raft_io_stub *io;
 
     assert(r != NULL);
 
@@ -277,16 +277,16 @@ int raft_io_sim_init(struct raft *r)
     memset(&io->request_ids, 0, sizeof io->request_ids);
 
     r->io_.data = io;
-    r->io_.start = raft_io_sim__start;
-    r->io_.stop = raft_io_sim__stop;
-    r->io_.close = raft_io_sim__close;
-    r->io_.submit = raft_io_sim__submit;
+    r->io_.start = raft_io_stub__start;
+    r->io_.stop = raft_io_stub__stop;
+    r->io_.close = raft_io_stub__close;
+    r->io_.submit = raft_io_stub__submit;
 
     return 0;
 }
 
-static void raft_io_sim__write_log_cb(struct raft_io_sim *io,
-                                      struct raft_io_request *request)
+static void raft_io_stub__write_log_cb(struct raft_io_stub *io,
+                                       struct raft_io_request *request)
 {
     size_t n = request->args.write_log.n;
     struct raft_entry *all_entries;
@@ -331,9 +331,9 @@ static void raft_io_sim__write_log_cb(struct raft_io_sim *io,
     io->n += n;
 }
 
-int raft_io_sim_advance(struct raft *r, unsigned msecs)
+int raft_io_stub_advance(struct raft *r, unsigned msecs)
 {
-    struct raft_io_sim *io;
+    struct raft_io_stub *io;
     int rv;
 
     assert(r != NULL);
@@ -347,16 +347,16 @@ int raft_io_sim_advance(struct raft *r, unsigned msecs)
     return rv;
 }
 
-void raft_io_sim_flush(struct raft *r)
+void raft_io_stub_flush(struct raft *r)
 {
-    struct raft_io_sim *io;
+    struct raft_io_stub *io;
     size_t i;
 
     assert(r != NULL);
 
     io = r->io_.data;
 
-    for (i = 0; i < RAFT_IO_SIM_MAX_REQUESTS; i++) {
+    for (i = 0; i < RAFT_IO_STUB_MAX_REQUESTS; i++) {
         unsigned request_id = io->request_ids[i];
         struct raft_io_request *request;
 
@@ -368,7 +368,7 @@ void raft_io_sim_flush(struct raft *r)
 
         switch (request->type) {
             case RAFT_IO_WRITE_LOG:
-                raft_io_sim__write_log_cb(io, request);
+                raft_io_stub__write_log_cb(io, request);
                 break;
             default:
                 assert(0);
