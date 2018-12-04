@@ -5,6 +5,9 @@
 
 #include "../include/raft.h"
 
+/**
+ * Handler triggered by SIGINT. It will stop the raft engine.
+ */
 static void __sigint_cb(uv_signal_t *handle, int signum)
 {
     struct raft *raft = handle->data;
@@ -17,12 +20,20 @@ static void __sigint_cb(uv_signal_t *handle, int signum)
     raft_stop(raft);
 }
 
-int main()
+int main(int argc, char *argv[])
 {
     struct uv_loop_s loop;
     struct uv_signal_s sigint;
     struct raft raft;
+    const char *dir;
     int rv;
+
+    if (argc != 2) {
+        printf("usage: example-server <dir>\n");
+	return 1;
+    }
+
+    dir = argv[1];
 
     /* Initialize the libuv loop. */
     rv = uv_loop_init(&loop);
@@ -47,9 +58,9 @@ int main()
     }
 
     /* Initialize and start the Raft engine, using libuv integration. */
-    raft_init(&raft, NULL, NULL, NULL, 1);
+    raft_init(&raft, NULL, NULL /* TODO: fsm implementation */, NULL, 1);
 
-    rv = raft_io_uv_init(&raft, &loop, NULL);
+    rv = raft_io_uv_init(&raft, &loop, dir);
     if (rv != 0) {
         printf("error: enable uv integration: %s\n", raft_errmsg(&raft));
         return rv;

@@ -13,6 +13,9 @@
 #include "queue.h"
 #include "state.h"
 
+#define RAFT__DEFAULT_ELECTION_TIMEOUT 1000
+#define RAFT__DEFAULT_HEARTBEAT_TIMEOUT 100
+
 void raft_init(struct raft *r,
                struct raft_io *io,
                struct raft_fsm *fsm,
@@ -23,17 +26,21 @@ void raft_init(struct raft *r,
 
     assert(r != NULL);
 
+    r->id = id;
+    r->fsm = fsm;
+
     r->io_.data = NULL;
     r->io_.start = NULL;
     r->io_.stop = NULL;
     r->io_.close = NULL;
+
+    r->tick = raft_tick;
+
+    /* TODO: move out of io_ */
     r->io_.queue.requests = NULL;
     r->io_.queue.size = 0;
 
     /* User-defined */
-    r->io = io;
-    r->fsm = fsm;
-    r->id = id;
     r->data = data;
 
     /* Initial persistent server state. */
@@ -45,8 +52,8 @@ void raft_init(struct raft *r,
     r->configuration_index = 0;
     r->configuration_uncommitted_index = 0;
 
-    r->election_timeout = 1000;
-    r->heartbeat_timeout = 100;
+    r->election_timeout = RAFT__DEFAULT_ELECTION_TIMEOUT;
+    r->heartbeat_timeout = RAFT__DEFAULT_HEARTBEAT_TIMEOUT;
 
     raft_set_logger(r, &raft_default_logger);
 
@@ -65,10 +72,14 @@ void raft_init(struct raft *r,
     /* Context. */
     r->ctx.state = &r->state;
     r->ctx.current_term = &r->current_term;
+
+    /* Last error */
     strcpy(r->errmsg, "");
 
     r->io_queue.requests = NULL;
     r->io_queue.size = 0;
+
+    r->io = io;
 }
 
 void raft_close(struct raft *r)
@@ -85,26 +96,6 @@ void raft_close(struct raft *r)
     raft_state__clear(r);
     raft_log__close(&r->log);
     raft_configuration_close(&r->configuration);
-}
-
-void raft_set_logger(struct raft *r, const struct raft_logger *logger)
-{
-    assert(r != NULL);
-    assert(logger != NULL);
-
-    r->logger = *logger;
-}
-
-void raft_set_rand(struct raft *r, int (*rand)())
-{
-    r->rand = rand;
-    raft_election__reset_timer(r);
-}
-
-void raft_set_election_timeout(struct raft *r, const unsigned election_timeout)
-{
-    r->election_timeout = election_timeout;
-    raft_election__reset_timer(r);
 }
 
 int raft_start(struct raft *r)
@@ -144,6 +135,26 @@ int raft_stop(struct raft *r)
     }
 
     return 0;
+}
+
+void raft_set_logger(struct raft *r, const struct raft_logger *logger)
+{
+    assert(r != NULL);
+    assert(logger != NULL);
+
+    r->logger = *logger;
+}
+
+void raft_set_rand(struct raft *r, int (*rand)())
+{
+    r->rand = rand;
+    raft_election__reset_timer(r);
+}
+
+void raft_set_election_timeout(struct raft *r, const unsigned election_timeout)
+{
+    r->election_timeout = election_timeout;
+    raft_election__reset_timer(r);
 }
 
 const char *raft_state_name(struct raft *r)

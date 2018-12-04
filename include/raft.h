@@ -224,8 +224,9 @@ enum { RAFT_LOG_COMMAND, RAFT_LOG_CONFIGURATION };
  *
  * An entry that originated from this raft instance while it was the leader
  * (typically via client calls to raft_accept()) should normaly have a @buf
- * attribute that points directly to the memory that was originally allocated to
- * contain then entry data, and the @batch attribute is set to #NULL.
+ * attribute that points directly to the memory that was originally allocated by
+ * the client itself to contain the entry data, and the @batch attribute is set
+ * to #NULL.
  *
  * An entry that was received from the network upon an AppendEntries RPC or that
  * was loaded from disk at startup should normally have a @batch attribute that
@@ -260,7 +261,7 @@ struct raft_entry
  * the memory pointed to by its @buf attribute gets released, or if the @batch
  * attribute is non-NULL a check is made to see if there's any other entry of
  * the same batch with a non-zero refcount, and the memory pointed at by @batch
- * itself is releaed if there's no such other entry.
+ * itself is released if there's no such other entry.
  */
 struct raft_entry_ref
 {
@@ -457,8 +458,8 @@ enum {
 };
 
 /**
- * Hold information about an in-flight I/O request submitted to a @raft_io
- * instance that references either log entries or snapshots.
+ * Hold information about an in-flight I/O request submitted to the I/O
+ * implementation defined on a @raft instance.
  */
 struct raft_io_request
 {
@@ -615,13 +616,13 @@ struct raft
     unsigned id;
 
     /**
-     * User-defined FSM to apply command to.
+     * User-defined finite state machine to apply command to.
      */
     struct raft_fsm *fsm;
 
     /**
      * User-defined I/O backend implementing periodic wakeups, log store
-     * read/writes and network RPCs.
+     * read/writes and send/receive of network RPCs.
      */
     struct
     {
@@ -631,8 +632,9 @@ struct raft
         void *data;
 
         /**
-         * Start the backend, invoking @raft_tick every @tick milliseconds and
-         * accepting RPC requests.
+         * Start the backend. The implementation must invoke the #tick callback
+         * defined on the given raft instance every @tick milliseconds and it
+         * must start accepting RPC requests.
          */
         int (*start)(struct raft *r, unsigned tick);
 
@@ -642,18 +644,32 @@ struct raft
         int (*stop)(struct raft *r);
 
         /**
-         * Release any resource allocated by the backend.
+         * Release any resource allocated by this I/O backend implementation.
          */
         void (*close)(struct raft *r);
 
         /**
          * Submit a request to perform a certain I/O operation either
          * synchronous or asynchronously.
+         *
+         * The implementation can call @raft_io_queue_get to look at the details
+         * of the request.
+         *
+         * If the I/O request is a synchronous one, the implementation must
+         * return 0 in case of success or an error code otherwise.
+         *
+         * If the I/O request is an asynchronous one, the implementation must
+         * return 0 in case the request was successfully submitted or an error
+         * code otherwise. Once the request is completed (either successfully or
+         * not), the implementation must call the #handle_io callback defined on
+         * the given raft instance.
          */
         int (*submit)(struct raft *r, const unsigned request_id);
 
         /**
          * Hold information about in-flight asynchronous I/O requests.
+         *
+         * TODO: move this out of this structure.
          */
         struct
         {
@@ -664,9 +680,21 @@ struct raft
     } io_;
 
     /**
-     * User-defined disk and network I/O interface implementation.
+     * Function that the #io_ implementation must call periodically after the
+     * instance has started. By default this is set to @raft_tick, but it can be
+     * swapped (for example in unit tests).
      */
-    struct raft_io *io;
+    int (*tick)(struct raft *r, const unsigned msec_since_last_tick);
+
+    /**
+     * Function that the #io_ implementation must call after an asynchronous I/O
+     * request has been completed (either successfully or not). By default this
+     * is set to @raft_handle_io, but it can be swapped (for example in unit
+     * tests).
+     */
+    int (*handle_io)(struct raft *r,
+                     const unsigned request_id,
+                     const int status);
 
     /**
      * Custom user data. It will be passed back to callbacks registered with
@@ -746,7 +774,7 @@ struct raft
     unsigned heartbeat_timeout;
 
     /**
-     * Logger to use to emit messages (default stdout);
+     * Logger to use to emit messages (the default logger prints to stdout).
      */
     struct raft_logger logger;
 
@@ -835,16 +863,6 @@ struct raft
     void (*watchers[RAFT_EVENT_N])(void *, int, void *);
 
     /**
-     * Hold information about in-flight I/O requests that involve memory shared
-     * between this raft instance an its I/O implementation.
-     */
-    struct
-    {
-        struct raft_io_request *requests;
-        unsigned size;
-    } io_queue;
-
-    /**
      * Context information, mainly for logging.
      */
     struct raft_context ctx;
@@ -853,6 +871,25 @@ struct raft
      * Human-readable description of the last error occurred.
      */
     char errmsg[RAFT_ERRMSG_SIZE];
+
+    /**
+     * User-defined disk and network I/O interface implementation.
+     *
+     * TODO: drop.
+     */
+    struct raft_io *io;
+
+    /**
+     * Hold information about in-flight I/O requests that involve memory shared
+     * between this raft instance an its I/O implementation.
+     *
+     * TODO: drop.
+     */
+    struct
+    {
+        struct raft_io_request *requests;
+        unsigned size;
+    } io_queue;
 };
 
 /**
