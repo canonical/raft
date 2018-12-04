@@ -448,6 +448,7 @@ struct raft_io
 enum {
     RAFT_IO_NULL = 0,
     RAFT_IO_READ_STATE,
+    RAFT_IO_READ_LOG,
     RAFT_IO_WRITE_TERM,
     RAFT_IO_WRITE_VOTE,
     RAFT_IO_WRITE_LOG,
@@ -520,6 +521,9 @@ struct raft_io_request
     union {
         /**
          * Result of a RAFT_IO_READ_STATE request.
+         *
+         * The implementation must synchronously read the current state from
+         * disk.
          */
         struct
         {
@@ -528,6 +532,20 @@ struct raft_io_request
             raft_index first_index; /* Index of the first entry in the log */
             size_t n_entries;       /* Number of entries in the log */
         } read_state;
+
+        /**
+         * Result of a RAFT_IO_READ_LOG request.
+         *
+         * The implementation must synchronously read the current log from
+         * disk. The entries array must be allocated with raft_malloc. Once the
+         * request is completed ownership of such memory is transfered to the
+         * raft instance.
+         */
+        struct
+        {
+            struct raft_entry *entries; /* Array of log entries. */
+            size_t n;                   /* Number entries in the array. */
+        } read_log;
     } result;
 
     /**
@@ -632,9 +650,8 @@ struct raft
         void *data;
 
         /**
-         * Start the backend. The implementation must invoke the #tick callback
-         * defined on the given raft instance every @tick milliseconds and it
-         * must start accepting RPC requests.
+         * Start the backend. The implementation must invoke the @raft_tick
+         * every @tick milliseconds and it must start accepting RPC requests.
          */
         int (*start)(struct raft *r, unsigned tick);
 
@@ -661,8 +678,8 @@ struct raft
          * If the I/O request is an asynchronous one, the implementation must
          * return 0 in case the request was successfully submitted or an error
          * code otherwise. Once the request is completed (either successfully or
-         * not), the implementation must call the #handle_io callback defined on
-         * the given raft instance.
+         * not), the implementation must call the #cb function set in the
+         * request struct.
          */
         int (*submit)(struct raft *r, const unsigned request_id);
 
@@ -678,23 +695,6 @@ struct raft
         } queue;
 
     } io_;
-
-    /**
-     * Function that the #io_ implementation must call periodically after the
-     * instance has started. By default this is set to @raft_tick, but it can be
-     * swapped (for example in unit tests).
-     */
-    int (*tick)(struct raft *r, const unsigned msec_since_last_tick);
-
-    /**
-     * Function that the #io_ implementation must call after an asynchronous I/O
-     * request has been completed (either successfully or not). By default this
-     * is set to @raft_handle_io, but it can be swapped (for example in unit
-     * tests).
-     */
-    int (*handle_io)(struct raft *r,
-                     const unsigned request_id,
-                     const int status);
 
     /**
      * Custom user data. It will be passed back to callbacks registered with

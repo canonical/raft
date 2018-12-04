@@ -16,14 +16,17 @@ struct raft_io_sim
 {
     struct raft *raft;
 
+    /* Elapsed time since the backend was started. */
+    unsigned time;
+
     /* Term and vote */
     raft_term term;
     unsigned voted_for;
 
     /* Log */
-    raft_index first_index;     /* Index of the first entry */
-    struct raft_entry *entries; /* Entries array */
-    size_t n;                   /* Size of the entries array */
+    raft_index first_index;     /* Index of the first persisted entry */
+    struct raft_entry *entries; /* Array or persisted entries */
+    size_t n;                   /* Size of the persisted entries array */
 
     /* Queue of in-flight asynchronous I/O requests. */
     unsigned request_ids[RAFT_IO_SIM_MAX_REQUESTS];
@@ -78,6 +81,60 @@ static int raft_io_sim__read_state(struct raft_io_sim *io,
     return 0;
 }
 
+static int raft_io_sim__read_log(struct raft_io_sim *io,
+                                 struct raft_io_request *request)
+{
+    struct raft_entry *entries;
+    size_t n;
+    size_t i;
+    void *batch;
+    void *cursor;
+    size_t size = 0; /* Size of the batch */
+
+    if (io->n == 0) {
+        request->result.read_log.entries = NULL;
+        request->result.read_log.n = 0;
+        return 0;
+    }
+
+    /* Make a copy of the persisted entries, storing their data into a single
+     * batch. */
+    n = io->n;
+    entries = raft_calloc(n, sizeof *entries);
+    if (entries == NULL) {
+        return RAFT_ERR_NOMEM;
+    }
+
+    for (i = 0; i < n; i++) {
+        size += io->entries[i].buf.len;
+    }
+
+    batch = raft_malloc(size);
+    if (batch == NULL) {
+        raft_free(entries);
+        return RAFT_ERR_NOMEM;
+    }
+
+    cursor = batch;
+
+    for (i = 0; i < n; i++) {
+        memcpy(cursor, io->entries[i].buf.base, io->entries[i].buf.len);
+
+        entries[i].term = io->entries[i].term;
+        entries[i].type = io->entries[i].type;
+        entries[i].buf.base = cursor;
+        entries[i].buf.len = io->entries[i].buf.len;
+        entries[i].batch = batch;
+
+        cursor += entries[i].buf.len;
+    }
+
+    request->result.read_log.entries = entries;
+    request->result.read_log.n = n;
+
+    return 0;
+}
+
 static int raft_io_sim__write_term(struct raft_io_sim *io,
                                    struct raft_io_request *request)
 {
@@ -100,6 +157,7 @@ static int raft_io_sim__write_log(struct raft_io_sim *io,
 {
     size_t i;
 
+    /* Search for an available slot in our internal queue */
     for (i = 0; i < RAFT_IO_SIM_MAX_REQUESTS; i++) {
         if (io->request_ids[i] == 0) {
             io->request_ids[i] = request_id;
@@ -128,6 +186,9 @@ static int raft_io_sim__submit(struct raft *r, const unsigned request_id)
         case RAFT_IO_READ_STATE:
             rv = raft_io_sim__read_state(io, request);
             break;
+        case RAFT_IO_READ_LOG:
+            rv = raft_io_sim__read_log(io, request);
+            break;
         case RAFT_IO_WRITE_TERM:
             rv = raft_io_sim__write_term(io, request);
             break;
@@ -155,6 +216,7 @@ int raft_io_sim_init(struct raft *r)
         return RAFT_ERR_NOMEM;
     }
 
+    io->time = 0;
     io->raft = r;
     io->term = 0;
     io->voted_for = 0;
@@ -219,6 +281,22 @@ static void raft_io_sim__write_log_cb(struct raft_io_sim *io,
     io->n += n;
 }
 
+int raft_io_sim_advance(struct raft *r, unsigned msecs)
+{
+    struct raft_io_sim *io;
+    int rv;
+
+    assert(r != NULL);
+
+    io = r->io_.data;
+
+    io->time += msecs;
+
+    rv = raft_tick(io->raft, msecs);
+
+    return rv;
+}
+
 void raft_io_sim_flush(struct raft *r)
 {
     struct raft_io_sim *io;
@@ -244,7 +322,7 @@ void raft_io_sim_flush(struct raft *r)
                 break;
             default:
                 assert(0);
-		break;
+                break;
         }
 
         if (request->cb != NULL) {

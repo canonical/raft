@@ -34,8 +34,6 @@ void raft_init(struct raft *r,
     r->io_.stop = NULL;
     r->io_.close = NULL;
 
-    r->tick = raft_tick;
-
     /* TODO: move out of io_ */
     r->io_.queue.requests = NULL;
     r->io_.queue.size = 0;

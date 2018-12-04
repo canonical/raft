@@ -54,6 +54,28 @@ static void tear_down(void *data)
 }
 
 /**
+ * Start the raft instance.
+ */
+#define __start(F)                   \
+    {                                \
+        int rv;                      \
+                                     \
+        rv = raft_start(&F->raft);   \
+        munit_assert_int(rv, ==, 0); \
+    }
+
+/**
+ * Advance time.
+ */
+#define __advance(F, MSECS)                        \
+    {                                              \
+        int rv;                                    \
+                                                   \
+        rv = raft_io_sim_advance(&F->raft, MSECS); \
+        munit_assert_int(rv, ==, 0);               \
+    }
+
+/**
  * Push a new request to the I/O queue.
  */
 #define __push_io_request(F, ID, REQUEST)            \
@@ -77,6 +99,35 @@ static void tear_down(void *data)
         rv = F->raft.io_.submit(&F->raft, ID); \
         munit_assert_int(rv, ==, 0);           \
     }
+
+/**
+ * Assert the current state of the raft instance of the given fixture.
+ */
+#define __assert_state(F, STATE) munit_assert_int(F->raft.state, ==, STATE);
+
+/**
+ * raft_io_sim__start
+ */
+
+/* When raft_io_sim_advance is called, the tick callback is invoked. */
+static MunitResult test_start_advance(const MunitParameter params[], void *data)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    __start(f);
+    __advance(f, 1100);
+
+    //__assert_state(f, RAFT_STATE_CANDIDATE);
+
+    return MUNIT_OK;
+}
+
+static MunitTest start_tests[] = {
+    {"/advance", test_start_advance, setup, tear_down, 0, NULL},
+    {NULL, NULL, NULL, NULL, 0, NULL},
+};
 
 /**
  * raft_io_sim__submit
@@ -156,6 +207,8 @@ static MunitResult test_write_log(const MunitParameter params[], void *data)
     entry.buf.base = munit_malloc(1);
     entry.buf.len = 1;
 
+    ((char *)entry.buf.base)[0] = 'x';
+
     request1->type = RAFT_IO_WRITE_LOG;
     request1->args.write_log.entries = &entry;
     request1->args.write_log.n = 1;
@@ -169,17 +222,26 @@ static MunitResult test_write_log(const MunitParameter params[], void *data)
 
     __submit(f, request_id2);
 
-    /* This the WRITE_LOG request is asynchronous, the entries have not been
+    /* This WRITE_LOG request is asynchronous, the entries have not been
      * persited yet. */
     munit_assert_int(request2->result.read_state.first_index, ==, 0);
     munit_assert_int(request2->result.read_state.n_entries, ==, 0);
 
     raft_io_sim_flush(&f->raft);
 
-    /* The log has now one entry. */
+    /* The log has now one entry, witch matches the one we wrote. */
+    request2->type = RAFT_IO_READ_LOG;
+
     __submit(f, request_id2);
-    munit_assert_int(request2->result.read_state.first_index, ==, 1);
-    munit_assert_int(request2->result.read_state.n_entries, ==, 1);
+
+    munit_assert_int(request2->result.read_log.n, ==, 1);
+    munit_assert_int(request2->result.read_log.entries[0].buf.len, ==, 1);
+    munit_assert_int(((char *)request2->result.read_log.entries[0].buf.base)[0],
+                     ==, 'x');
+    munit_assert_ptr_not_null(request2->result.read_log.entries[0].batch);
+
+    raft_free(request2->result.read_log.entries[0].batch);
+    raft_free(request2->result.read_log.entries);
 
     raft_io_queue__pop(&f->raft, request_id1);
     raft_io_queue__pop(&f->raft, request_id2);
@@ -201,6 +263,7 @@ static MunitTest submit_tests[] = {
  */
 
 MunitSuite raft_io_sim_suites[] = {
+    {"/start", start_tests, NULL, 1, 0},
     {"/submit", submit_tests, NULL, 1, 0},
     {NULL, NULL, NULL, 0, 0},
 };
