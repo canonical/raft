@@ -110,7 +110,7 @@ int raft_start(struct raft *r)
     assert(r->heartbeat_timeout != 0);
     assert(r->heartbeat_timeout < r->election_timeout);
 
-    rv = r->io_.start(r, r->heartbeat_timeout);
+    rv = r->io_.start(r, r->heartbeat_timeout, raft_tick);
     if (rv != 0) {
         return rv;
     }

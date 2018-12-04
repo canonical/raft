@@ -15,6 +15,7 @@
 struct raft_io_sim
 {
     struct raft *raft;
+    int (*tick)(struct raft *, const unsigned);
 
     /* Elapsed time since the backend was started. */
     unsigned time;
@@ -32,12 +33,20 @@ struct raft_io_sim
     unsigned request_ids[RAFT_IO_SIM_MAX_REQUESTS];
 };
 
-static int raft_io_sim__start(struct raft *r, unsigned tick)
+static int raft_io_sim__start(struct raft *r,
+                              const unsigned msecs,
+                              int (*tick)(struct raft *, const unsigned))
 {
+    struct raft_io_sim *io;
+
+    (void)msecs;
+
     assert(r != NULL);
     assert(r->state == RAFT_STATE_UNAVAILABLE);
+    assert(tick != NULL);
 
-    assert(tick > 0);
+    io = r->io_.data;
+    io->tick = tick;
 
     return 0;
 }
@@ -333,7 +342,7 @@ int raft_io_sim_advance(struct raft *r, unsigned msecs)
 
     io->time += msecs;
 
-    rv = raft_tick(io->raft, msecs);
+    rv = io->tick(io->raft, msecs);
 
     return rv;
 }

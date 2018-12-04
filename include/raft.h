@@ -663,10 +663,14 @@ struct raft
         void *data;
 
         /**
-         * Start the backend. The implementation must invoke the @raft_tick
-         * every @tick milliseconds and it must start accepting RPC requests.
+         * Start the backend. From now on the implementation must invoke the
+         * given @tick function every @msecs milliseconds (passing it the number
+         * of milliseconds elapsed since the last call) and it must start
+         * accepting RPC requests.
          */
-        int (*start)(struct raft *r, unsigned tick);
+        int (*start)(struct raft *r,
+                     const unsigned msecs,
+                     int (*tick)(struct raft *r, const unsigned elapsed));
 
         /**
          * Immediately cancel any in-progress I/O and stop invoking @raft_tick.

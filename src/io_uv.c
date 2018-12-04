@@ -27,6 +27,7 @@
 struct raft_io_uv
 {
     struct raft *raft;
+    int (*tick)(struct raft *, const unsigned);
     const char *dir;
     struct uv_loop_s *loop;
     struct uv_timer_s ticker;
@@ -89,7 +90,7 @@ static void raft_io_uv__ticker_cb(uv_timer_t *ticker)
 
     now = uv_now(io->loop);
 
-    raft_tick(io->raft, now - io->last_tick);
+    io->tick(io->raft, now - io->last_tick);
 
     io->last_tick = now;
 }
@@ -97,7 +98,9 @@ static void raft_io_uv__ticker_cb(uv_timer_t *ticker)
 /**
  * Start the backend.
  */
-static int raft_io_uv__start(struct raft *r, unsigned tick)
+static int raft_io_uv__start(struct raft *r,
+                             const unsigned msecs,
+                             int (*tick)(struct raft *, const unsigned))
 {
     struct raft_io_uv *io;
     int rv;
@@ -105,6 +108,7 @@ static int raft_io_uv__start(struct raft *r, unsigned tick)
     assert(r->state == RAFT_STATE_UNAVAILABLE);
 
     io = r->io_.data;
+    io->tick = tick;
 
     io->last_tick = uv_now(io->loop);
 
@@ -115,7 +119,7 @@ static int raft_io_uv__start(struct raft *r, unsigned tick)
     }
     io->ticker.data = io;
 
-    rv = uv_timer_start(&io->ticker, raft_io_uv__ticker_cb, 0, tick);
+    rv = uv_timer_start(&io->ticker, raft_io_uv__ticker_cb, 0, msecs);
     if (rv != 0) {
         raft_error__uv(r, rv, "start tick timer");
         return RAFT_ERR_INTERNAL;
