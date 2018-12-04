@@ -26,15 +26,15 @@ struct fixture
 /**
  * Push a new request to the I/O queue.
  */
-#define __push_io_request(F, ID, REQUEST)            \
-    {                                                \
-        int rv;                                      \
-                                                     \
-        rv = raft_io_queue__push(&F->raft, ID);      \
-        munit_assert_int(rv, ==, 0);                 \
-                                                     \
-        *REQUEST = raft_io_queue_get(&F->raft, *ID); \
-        munit_assert_ptr_not_null(*REQUEST);         \
+#define __push_io_request(F, ID, REQUEST)             \
+    {                                                 \
+        int rv;                                       \
+                                                      \
+        rv = raft_io_queue__push(&F->raft, ID);       \
+        munit_assert_int(rv, ==, 0);                  \
+                                                      \
+        *REQUEST = raft_io_queue_get_(&F->raft, *ID); \
+        munit_assert_ptr_not_null(*REQUEST);          \
     }
 
 /**

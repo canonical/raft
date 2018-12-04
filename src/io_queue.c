@@ -4,7 +4,15 @@
 #include "io_queue.h"
 #include "log.h"
 
-void raft_io_queue__close(struct raft *r)
+void raft_io_queue__init(struct raft_io_queue *q)
+{
+    assert(q != NULL);
+
+    q->requests = NULL;
+    q->size = 0;
+}
+
+void raft_io_queue__close_(struct raft *r)
 {
     size_t i;
 
@@ -98,7 +106,7 @@ int raft_io_queue__push(struct raft *r, unsigned *id)
     return 0;
 }
 
-struct raft_io_request *raft_io_queue_get(struct raft *r, unsigned id)
+struct raft_io_request *raft_io_queue_get_(struct raft *r, unsigned id)
 {
     size_t i;
 

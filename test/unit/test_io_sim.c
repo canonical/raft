@@ -85,7 +85,7 @@ static void tear_down(void *data)
         rv = raft_io_queue__push(&F->raft, ID);      \
         munit_assert_int(rv, ==, 0);                 \
                                                      \
-        *REQUEST = raft_io_queue_get(&F->raft, *ID); \
+        *REQUEST = raft_io_queue_get_(&F->raft, *ID); \
         munit_assert_ptr_not_null(*REQUEST);         \
     }
 

@@ -255,7 +255,7 @@ static int raft_io_uv__submit(struct raft *r, const unsigned request_id)
 
     io = r->io_.data;
 
-    request = raft_io_queue_get(r, request_id);
+    request = raft_io_queue_get_(r, request_id);
 
     assert(request != NULL);
 

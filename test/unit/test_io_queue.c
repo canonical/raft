@@ -133,7 +133,7 @@ static MunitResult test_push_second(const MunitParameter params[], void *data)
     __push(f, &id1);
 
     /* Mark the request as in use. */
-    request = raft_io_queue_get(&f->raft, id1);
+    request = raft_io_queue_get_(&f->raft, id1);
     request->type = RAFT_IO_WRITE_LOG;
 
     /* Now the queue has 2 slots, one is in use an the other not. */
@@ -173,12 +173,12 @@ static MunitResult test_push_third(const MunitParameter params[], void *data)
     /* Push two requests and mark them as in use. */
     __push(f, &id1);
 
-    request = raft_io_queue_get(&f->raft, id1);
+    request = raft_io_queue_get_(&f->raft, id1);
     request->type = RAFT_IO_WRITE_LOG;
 
     __push(f, &id2);
 
-    request = raft_io_queue_get(&f->raft, id2);
+    request = raft_io_queue_get_(&f->raft, id2);
     request->type = RAFT_IO_WRITE_LOG;
 
     /* Push a third request. */
@@ -239,7 +239,7 @@ static MunitResult test_pop(const MunitParameter params[], void *data)
 
     __push(f, &id);
 
-    request = raft_io_queue_get(&f->raft, id);
+    request = raft_io_queue_get_(&f->raft, id);
     request->type = RAFT_IO_WRITE_LOG;
 
     raft_io_queue__pop(&f->raft, id);

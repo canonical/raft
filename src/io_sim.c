@@ -225,7 +225,7 @@ static int raft_io_sim__submit(struct raft *r, const unsigned request_id)
 
     io = r->io_.data;
 
-    request = raft_io_queue_get(r, request_id);
+    request = raft_io_queue_get_(r, request_id);
 
     assert(request != NULL);
 
@@ -364,7 +364,7 @@ void raft_io_sim_flush(struct raft *r)
             continue;
         }
 
-        request = raft_io_queue_get(r, request_id);
+        request = raft_io_queue_get_(r, request_id);
 
         switch (request->type) {
             case RAFT_IO_WRITE_LOG:

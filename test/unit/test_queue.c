@@ -3,6 +3,7 @@
 #include "../../src/configuration.h"
 #include "../../src/log.h"
 #include "../../src/queue.h"
+#include "../../src/io_queue.h"
 
 #include "../lib/fsm.h"
 #include "../lib/heap.h"
@@ -18,6 +19,7 @@
 struct fixture
 {
     struct raft_heap heap;
+    struct raft_io_queue queue;
     struct raft_logger logger;
     struct raft_io io;
     struct raft_fsm fsm;
@@ -65,6 +67,8 @@ static void *setup(const MunitParameter params[], void *user_data)
     (void)user_data;
 
     test_heap_setup(params, &f->heap);
+
+    raft_io_queue__init(&f->queue);
 
     test_logger_setup(params, &f->logger, id);
 
