@@ -30,12 +30,12 @@ enum {
     RAFT_ERR_MALFORMED,
     RAFT_ERR_NO_SPACE,
     RAFT_ERR_BUSY,
-    RAFT_ERR_IO,
-    RAFT_ERR_IO_BUSY,
     RAFT_ERR_NOT_LEADER,
     RAFT_ERR_SHUTDOWN,
     RAFT_ERR_CONFIGURATION_BUSY,
-    RAFT_ERR_PATH_TOO_LONG
+    RAFT_ERR_IO,
+    RAFT_ERR_IO_BUSY,
+    RAFT_ERR_IO_PATH_TOO_LONG
 };
 
 /**
@@ -55,16 +55,27 @@ enum {
     X(RAFT_ERR_NO_SPACE, "no space left on device")                      \
     X(RAFT_ERR_BUSY, "an append entries request is already in progress") \
     X(RAFT_ERR_NOT_LEADER, "server is not the leader")                   \
-    X(RAFT_ERR_IO, "I/O error")                                          \
-    X(RAFT_ERR_IO_BUSY, "a log write request is already in progress")    \
     X(RAFT_ERR_CONFIGURATION_BUSY,                                       \
       "a configuration change is already in progress")                   \
-    X(RAFT_ERR_PATH_TOO_LONG, "file system path is too long")
+    X(RAFT_ERR_IO, "I/O error")                                          \
+    X(RAFT_ERR_IO_BUSY, "a log write request is already in progress")    \
+    X(RAFT_ERR_IO_PATH_TOO_LONG, "file system path is too long")
 
 /**
  * Return the error message describing the given error code.
  */
 const char *raft_strerror(int errnum);
+
+/**
+ * Maximum size of error messages.
+ */
+#define RAFT_ERRMSG_SIZE 1024
+
+/**
+ * Convenience to populate an errmsg buffer, printing at most #RAFT_ERRMSG_SIZE
+ * characters.
+ */
+void raft_errorf(char *errmsg, const char *fmt, ...);
 
 /**
  * User-definable dynamic memory allocation functions.
@@ -470,12 +481,6 @@ struct raft_io_request
             size_t n;                   /* Number entries in the array. */
         } read_log;
     } result;
-
-    /**
-     * Optional callback that I/O implementations must invoke when asynchronous
-     * requests get completed.
-     */
-    void (*cb)(struct raft *r, const unsigned request_id, const int status);
 };
 
 /**
@@ -505,6 +510,12 @@ struct raft_io
      * Custom user data.
      */
     void *data;
+
+    /**
+     * Human-readable description of the reason for the last returned
+     * error. Implementations must set this before returning an error.
+     */
+    char errmsg[RAFT_ERRMSG_SIZE];
 
     /**
      * Initialize the backend.
@@ -706,12 +717,6 @@ enum {
  * Number of available event types.
  */
 #define RAFT_EVENT_N (RAFT_EVENT_PROMOTION_ABORTED + 1)
-
-/**
- * Size of the errmsg buffer of a raft_instance, holding a human-readable text
- * describing the last error occurred.
- */
-#define RAFT_ERRMSG_SIZE 1024
 
 /**
  * Hold and drive the state of a single raft server in a cluster.

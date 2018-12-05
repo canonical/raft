@@ -268,7 +268,6 @@ static MunitResult test_write_log(const MunitParameter params[], void *data)
     request1->type = RAFT_IO_WRITE_LOG;
     request1->args.write_log.entries = &entry;
     request1->args.write_log.n = 1;
-    request1->cb = NULL;
 
     __submit(f, request_id1);
 

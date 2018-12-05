@@ -4,6 +4,15 @@
 
 #include "error.h"
 
+void raft_errorf(char *errmsg, const char *fmt, ...)
+{
+    va_list args;
+
+    va_start(args, fmt);
+    vsnprintf(errmsg, RAFT_ERRMSG_SIZE, fmt, args);
+    va_end(args);
+}
+
 #define RAFT_ERRNO__STRERROR(CODE, MSG) \
     case CODE:                          \
         return MSG;

@@ -4,7 +4,8 @@
 struct raft_io;
 
 /**
- * Configure the given @raft_io to use a stub in-memory I/O implementation.
+ * Configure the given @raft_io instance to use a stub in-memory I/O
+ * implementation.
  */
 int raft_io_stub_init(struct raft_io *io);
 

@@ -22,16 +22,29 @@
 #define RAFT_IO_UV__MAX_FILENAME_LEN 128
 
 /**
+ * Maximum length of the data directory path.
+ */
+#define RAFT_IO_UV__MAX_DIR_LEN \
+    (RAFT_IO_UV__MAX_PATH_LEN - RAFT_IO_UV__MAX_FILENAME_LEN - 1)
+
+/**
  * Raft I/O implementation based on libuv.
  */
 struct raft_io_uv
 {
-    struct raft *raft;
-    int (*tick)(struct raft *, const unsigned);
     const char *dir;
     struct uv_loop_s *loop;
     struct uv_timer_s ticker;
     uint64_t last_tick;
+
+    /* Parameters passed via raft_io->init */
+    struct raft_io_queue *queue;
+    void *p;
+    void (*tick)(void *, const unsigned);
+    void (*notify)(void *, const unsigned, const int);
+
+    /* Error message buffer */
+    char *errmsg;
 };
 
 struct raft_io_uv__metadata
@@ -78,77 +91,88 @@ static void raft_error__os(struct raft *r, const char *fmt, ...)
     va_end(args);
 }
 
+static void raft_io_uv__init(struct raft_io *io,
+                             struct raft_io_queue *queue,
+                             void *p,
+                             void (*tick)(void *, const unsigned),
+                             void (*notify)(void *, const unsigned, const int))
+{
+    struct raft_io_uv *uv;
+
+    uv = io->data;
+
+    uv->queue = queue;
+    uv->p = p;
+    uv->tick = tick;
+    uv->notify = notify;
+}
+
 /**
  * Periodic tick timer callback.
  */
 static void raft_io_uv__ticker_cb(uv_timer_t *ticker)
 {
-    struct raft_io_uv *io;
+    struct raft_io_uv *uv;
     uint64_t now;
 
-    io = ticker->data;
+    uv = ticker->data;
 
-    now = uv_now(io->loop);
+    now = uv_now(uv->loop);
 
-    io->tick(io->raft, now - io->last_tick);
+    uv->tick(uv->p, now - uv->last_tick);
 
-    io->last_tick = now;
+    uv->last_tick = now;
 }
 
 /**
  * Start the backend.
  */
-static int raft_io_uv__start(struct raft *r,
-                             const unsigned msecs,
-                             int (*tick)(struct raft *, const unsigned))
+static int raft_io_uv__start(struct raft_io *io, const unsigned msecs)
 {
-    struct raft_io_uv *io;
+    struct raft_io_uv *uv;
     int rv;
 
-    assert(r->state == RAFT_STATE_UNAVAILABLE);
+    uv = io->data;
 
-    io = r->io_.data;
-    io->tick = tick;
+    uv->last_tick = uv_now(uv->loop);
 
-    io->last_tick = uv_now(io->loop);
-
-    rv = uv_timer_init(io->loop, &io->ticker);
+    rv = uv_timer_init(uv->loop, &uv->ticker);
     if (rv != 0) {
-        raft_error__uv(r, rv, "init tick timer");
+        // raft_error__uv(r, rv, "init tick timer");
         return RAFT_ERR_INTERNAL;
     }
-    io->ticker.data = io;
+    uv->ticker.data = io;
 
-    rv = uv_timer_start(&io->ticker, raft_io_uv__ticker_cb, 0, msecs);
+    rv = uv_timer_start(&uv->ticker, raft_io_uv__ticker_cb, 0, msecs);
     if (rv != 0) {
-        raft_error__uv(r, rv, "start tick timer");
+        // raft_error__uv(r, rv, "start tick timer");
         return RAFT_ERR_INTERNAL;
     }
 
     return 0;
 }
 
-static int raft_io_uv__stop(struct raft *r)
+static int raft_io_uv__stop(struct raft_io *io)
 {
-    struct raft_io_uv *io;
+    struct raft_io_uv *uv;
     int rv;
 
-    io = r->io_.data;
+    uv = io->data;
 
-    rv = uv_timer_stop(&io->ticker);
+    rv = uv_timer_stop(&uv->ticker);
     if (rv != 0) {
-        raft_error__uv(r, rv, "stop tick timer");
+        // raft_error__uv(r, rv, "stop tick timer");
         return RAFT_ERR_INTERNAL;
     }
 
-    uv_close((uv_handle_t *)&io->ticker, NULL);
+    uv_close((uv_handle_t *)&uv->ticker, NULL);
 
     return 0;
 }
 
-static void raft_io_uv__close(struct raft *r)
+static void raft_io_uv__close(struct raft_io *io)
 {
-    raft_free(r->io_.data);
+    raft_free(io->data);
 }
 
 /**
@@ -164,7 +188,7 @@ void raft_io_uv__path(struct raft_io_uv *io, const char *filename, char *path)
     strcat(path, filename);
 }
 
-static int raft_io_uv__read_metadata(struct raft_io_uv *io,
+static int raft_io_uv__read_metadata(struct raft_io_uv *uv,
                                      unsigned short n,
                                      struct raft_io_uv__metadata *metadata)
 {
@@ -179,7 +203,7 @@ static int raft_io_uv__read_metadata(struct raft_io_uv *io,
 
     sprintf(filename, "metadata%d", n);
 
-    raft_io_uv__path(io, filename, path);
+    raft_io_uv__path(uv, filename, path);
 
     fd = open(path, O_RDONLY);
     if (fd == -1) {
@@ -210,13 +234,13 @@ static int raft_io_uv__read_metadata(struct raft_io_uv *io,
     return 0;
 }
 
-static int raft_io_uv__read_state(struct raft_io_uv *io,
+static int raft_io_uv__read_state(struct raft_io_uv *uv,
                                   struct raft_io_request *request)
 {
     struct raft_io_uv__metadata metadata;
     int rv;
 
-    rv = raft_io_uv__read_metadata(io, 1, &metadata);
+    rv = raft_io_uv__read_metadata(uv, 1, &metadata);
     if (rv != 0) {
         return rv;
     }
@@ -227,50 +251,50 @@ static int raft_io_uv__read_state(struct raft_io_uv *io,
     return 0;
 }
 
-static int raft_io_uv__write_term(struct raft_io_uv *io,
+static int raft_io_uv__write_term(struct raft_io_uv *uv,
                                   struct raft_io_request *request)
 {
     return 0;
 }
 
-static int raft_io_uv__write_vote(struct raft_io_uv *io,
+static int raft_io_uv__write_vote(struct raft_io_uv *uv,
                                   struct raft_io_request *request)
 {
     return 0;
 }
 
-static int raft_io_uv__write_log(struct raft_io_uv *io,
+static int raft_io_uv__write_log(struct raft_io_uv *uv,
                                  const unsigned request_id)
 {
     return 0;
 }
 
-static int raft_io_uv__submit(struct raft *r, const unsigned request_id)
+static int raft_io_uv__submit(struct raft_io *io, const unsigned request_id)
 {
     struct raft_io_request *request;
-    struct raft_io_uv *io;
+    struct raft_io_uv *uv;
     int rv;
 
-    assert(r != NULL);
+    assert(io != NULL);
 
-    io = r->io_.data;
+    uv = io->data;
 
-    request = raft_io_queue_get_(r, request_id);
+    request = raft_io_queue_get(uv->queue, request_id);
 
     assert(request != NULL);
 
     switch (request->type) {
         case RAFT_IO_READ_STATE:
-            rv = raft_io_uv__read_state(io, request);
+            rv = raft_io_uv__read_state(uv, request);
             break;
         case RAFT_IO_WRITE_TERM:
-            rv = raft_io_uv__write_term(io, request);
+            rv = raft_io_uv__write_term(uv, request);
             break;
         case RAFT_IO_WRITE_VOTE:
-            rv = raft_io_uv__write_vote(io, request);
+            rv = raft_io_uv__write_vote(uv, request);
             break;
         case RAFT_IO_WRITE_LOG:
-            rv = raft_io_uv__write_log(io, request_id);
+            rv = raft_io_uv__write_log(uv, request_id);
             break;
         default:
             assert(0);
@@ -279,22 +303,21 @@ static int raft_io_uv__submit(struct raft *r, const unsigned request_id)
     return rv;
 }
 
-int raft_io_uv_init(struct raft *r, struct uv_loop_s *loop, const char *dir)
+int raft_io_uv_init(struct raft_io *io, struct uv_loop_s *loop, const char *dir)
 {
-    struct raft_io_uv *io;
+    struct raft_io_uv *uv;
     struct stat sb;
     int rv;
 
-    assert(r != NULL);
+    assert(io != NULL);
     assert(loop != NULL);
     assert(dir != NULL);
 
     /* Ensure that the given path doesn't exceed our static buffer limit */
-    if (strlen(dir) >=
-        RAFT_IO_UV__MAX_PATH_LEN - RAFT_IO_UV__MAX_FILENAME_LEN) {
-        rv = RAFT_ERR_PATH_TOO_LONG;
-        raft_error__printf(r, rv, NULL);
-        return rv;
+    if (strlen(dir) > RAFT_IO_UV__MAX_DIR_LEN) {
+        raft_errorf(io->errmsg, "dir exceeds %d characters",
+                    RAFT_IO_UV__MAX_DIR_LEN);
+        return RAFT_ERR_IO_PATH_TOO_LONG;
     }
 
     /* Make sure we have a directory we can write into. */
@@ -303,11 +326,11 @@ int raft_io_uv_init(struct raft *r, struct uv_loop_s *loop, const char *dir)
         if (errno == ENOENT) {
             rv = mkdir(dir, 0700);
             if (rv != 0) {
-                raft_error__os(r, "create data directory");
+                // raft_error__os(r, "create data directory");
                 return RAFT_ERR_IO;
             }
         } else {
-            raft_error__os(r, "check data directory");
+            // raft_error__os(r, "check data directory");
             return RAFT_ERR_IO;
         }
     }
@@ -315,20 +338,21 @@ int raft_io_uv_init(struct raft *r, struct uv_loop_s *loop, const char *dir)
         return RAFT_ERR_IO;
     }
 
-    io = raft_malloc(sizeof *io);
-    if (io == NULL) {
+    uv = raft_malloc(sizeof *uv);
+    if (uv == NULL) {
         return RAFT_ERR_NOMEM;
     }
 
-    io->raft = r;
-    io->dir = dir;
-    io->loop = loop;
+    uv->dir = dir;
+    uv->loop = loop;
+    uv->errmsg = io->errmsg;
 
-    r->io_.data = io;
-    r->io_.start = raft_io_uv__start;
-    r->io_.stop = raft_io_uv__stop;
-    r->io_.close = raft_io_uv__close;
-    r->io_.submit = raft_io_uv__submit;
+    io->data = uv;
+    io->init = raft_io_uv__init;
+    io->start = raft_io_uv__start;
+    io->stop = raft_io_uv__stop;
+    io->close = raft_io_uv__close;
+    io->submit = raft_io_uv__submit;
 
     return 0;
 }

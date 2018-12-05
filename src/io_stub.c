@@ -14,12 +14,6 @@
  */
 struct raft_io_stub
 {
-    /* Parameters passed at init time */
-    struct raft_io_queue *queue;
-    void *p;
-    void (*tick)(void *, const unsigned);
-    void (*notify)(void *, const unsigned, const int);
-
     /* Elapsed time since the backend was started. */
     unsigned time;
 
@@ -34,6 +28,13 @@ struct raft_io_stub
 
     /* Queue of in-flight asynchronous I/O requests. */
     unsigned request_ids[RAFT_IO_STUB_MAX_REQUESTS];
+
+    /* Parameters passed via raft_io->init */
+    struct raft_io_queue *queue;
+    void *p;
+    void (*tick)(void *, const unsigned);
+    void (*notify)(void *, const unsigned, const int);
+
 };
 
 static void raft_io_stub__init(struct raft_io *io,
