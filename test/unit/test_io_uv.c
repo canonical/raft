@@ -107,6 +107,17 @@ static void tear_down(void *data)
     }
 
 /**
+ * Assert that the metadata in the given RAFT_IO_READ_STATE result equals the
+ * given values.
+ */
+#define __assert_read_state_metadata(R, TERM, VOTED_FOR, FIRST_INDEX)        \
+    {                                                                        \
+        munit_assert_int(R->result.read_state.term, ==, TERM);               \
+        munit_assert_int(R->result.read_state.voted_for, ==, VOTED_FOR);     \
+        munit_assert_int(R->result.read_state.first_index, ==, FIRST_INDEX); \
+    }
+
+/**
  * raft_uv_init
  */
 
@@ -149,10 +160,9 @@ static MunitResult test_init_cant_create_dir(const MunitParameter params[],
     rv = raft_io_uv_init(&io, &f->loop, dir);
     munit_assert_int(rv, ==, RAFT_ERR_IO);
 
-    munit_assert_string_equal(
-        io.errmsg,
-        "can't create data directory '/non/existing/path': "
-        "No such file or directory");
+    munit_assert_string_equal(io.errmsg,
+                              "create data directory '/non/existing/path': "
+                              "No such file or directory");
 
     return MUNIT_OK;
 }
@@ -192,8 +202,7 @@ static MunitResult test_init_access_error(const MunitParameter params[],
     munit_assert_int(rv, ==, RAFT_ERR_IO);
 
     munit_assert_string_equal(
-        io.errmsg,
-        "can't access data directory '/root/foo': Permission denied");
+        io.errmsg, "access data directory '/root/foo': Permission denied");
     return MUNIT_OK;
 }
 
@@ -266,8 +275,8 @@ static MunitTest init_tests[] = {
  */
 
 /* The data directory is empty */
-static MunitResult test_submit_read_state_empty(const MunitParameter params[],
-                                                void *data)
+static MunitResult test_read_state_empty(const MunitParameter params[],
+                                         void *data)
 {
     struct fixture *f = data;
     unsigned request_id;
@@ -281,18 +290,129 @@ static MunitResult test_submit_read_state_empty(const MunitParameter params[],
 
     __submit(f, request_id);
 
-    munit_assert_int(request->result.read_state.term, ==, 0);
-    munit_assert_int(request->result.read_state.voted_for, ==, 0);
+    __assert_read_state_metadata(request, 0, 0, 0);
 
     raft_io_queue__pop(&f->queue, request_id);
 
     return MUNIT_OK;
 }
 
-/* The data directory has a single metadata1 file */
-static MunitResult test_submit_read_state_metadata1(
+/* The data directory has a single metadata1 file. */
+static MunitResult test_read_state_metadata_only_1(
     const MunitParameter params[],
     void *data)
+{
+    struct fixture *f = data;
+    unsigned request_id;
+    struct raft_io_request *request;
+    uint8_t buf[RAFT_IO_UV_METADATA_SIZE] = {
+        1, 0, 0, 0, 0, 0, 0, 0, /* Format */
+        1, 0, 0, 0, 0, 0, 0, 0, /* Version */
+        1, 0, 0, 0, 0, 0, 0, 0, /* Term */
+        0, 0, 0, 0, 0, 0, 0, 0, /* Vote */
+        0, 0, 0, 0, 0, 0, 0, 0, /* First index */
+    };
+
+    (void)params;
+
+    test_dir_write_file(f->dir, "metadata1", buf, sizeof buf);
+
+    __push_io_request(f, &request_id, &request);
+
+    request->type = RAFT_IO_READ_STATE;
+
+    __submit(f, request_id);
+
+    __assert_read_state_metadata(request, 1, 0, 0);
+
+    raft_io_queue__pop(&f->queue, request_id);
+
+    return MUNIT_OK;
+}
+
+/* The data directory has both metadata files, but metadata1 is greater. */
+static MunitResult test_read_state_metadata_1(const MunitParameter params[],
+                                              void *data)
+{
+    struct fixture *f = data;
+    unsigned request_id;
+    struct raft_io_request *request;
+    uint8_t buf1[RAFT_IO_UV_METADATA_SIZE] = {
+        1, 0, 0, 0, 0, 0, 0, 0, /* Format */
+        3, 0, 0, 0, 0, 0, 0, 0, /* Version */
+        3, 0, 0, 0, 0, 0, 0, 0, /* Term */
+        0, 0, 0, 0, 0, 0, 0, 0, /* Vote */
+        0, 0, 0, 0, 0, 0, 0, 0, /* First index */
+    };
+    uint8_t buf2[RAFT_IO_UV_METADATA_SIZE] = {
+        1, 0, 0, 0, 0, 0, 0, 0, /* Format */
+        2, 0, 0, 0, 0, 0, 0, 0, /* Version */
+        2, 0, 0, 0, 0, 0, 0, 0, /* Term */
+        0, 0, 0, 0, 0, 0, 0, 0, /* Vote */
+        0, 0, 0, 0, 0, 0, 0, 0, /* First index */
+    };
+
+    (void)params;
+
+    test_dir_write_file(f->dir, "metadata1", buf1, sizeof buf1);
+    test_dir_write_file(f->dir, "metadata2", buf2, sizeof buf2);
+
+    __push_io_request(f, &request_id, &request);
+
+    request->type = RAFT_IO_READ_STATE;
+
+    __submit(f, request_id);
+
+    __assert_read_state_metadata(request, 3, 0, 0);
+
+    raft_io_queue__pop(&f->queue, request_id);
+
+    return MUNIT_OK;
+}
+
+/* The data directory has both metadata files, but metadata2 is greater. */
+static MunitResult test_read_state_metadata_2(const MunitParameter params[],
+                                              void *data)
+{
+    struct fixture *f = data;
+    unsigned request_id;
+    struct raft_io_request *request;
+    uint8_t buf1[RAFT_IO_UV_METADATA_SIZE] = {
+        1, 0, 0, 0, 0, 0, 0, 0, /* Format */
+        1, 0, 0, 0, 0, 0, 0, 0, /* Version */
+        1, 0, 0, 0, 0, 0, 0, 0, /* Term */
+        0, 0, 0, 0, 0, 0, 0, 0, /* Vote */
+        0, 0, 0, 0, 0, 0, 0, 0, /* First index */
+    };
+    uint8_t buf2[RAFT_IO_UV_METADATA_SIZE] = {
+        1, 0, 0, 0, 0, 0, 0, 0, /* Format */
+        2, 0, 0, 0, 0, 0, 0, 0, /* Version */
+        2, 0, 0, 0, 0, 0, 0, 0, /* Term */
+        0, 0, 0, 0, 0, 0, 0, 0, /* Vote */
+        0, 0, 0, 0, 0, 0, 0, 0, /* First index */
+    };
+
+    (void)params;
+
+    test_dir_write_file(f->dir, "metadata1", buf1, sizeof buf1);
+    test_dir_write_file(f->dir, "metadata2", buf2, sizeof buf2);
+
+    __push_io_request(f, &request_id, &request);
+
+    request->type = RAFT_IO_READ_STATE;
+
+    __submit(f, request_id);
+
+    __assert_read_state_metadata(request, 2, 0, 0);
+
+    raft_io_queue__pop(&f->queue, request_id);
+
+    return MUNIT_OK;
+}
+
+/* The metadata1 file has not the expected number of bytes. */
+static MunitResult test_read_state_metadata_short(const MunitParameter params[],
+                                                  void *data)
 {
     struct fixture *f = data;
     unsigned request_id;
@@ -314,11 +434,176 @@ static MunitResult test_submit_read_state_metadata1(
     return MUNIT_OK;
 }
 
+/* The metadata1 file has not the expected format. */
+static MunitResult test_read_state_metadata_wrong_format(
+    const MunitParameter params[],
+    void *data)
+{
+    struct fixture *f = data;
+    unsigned request_id;
+    struct raft_io_request *request;
+    uint8_t buf[RAFT_IO_UV_METADATA_SIZE] = {
+        2, 0, 0, 0, 0, 0, 0, 0, /* Format */
+        1, 0, 0, 0, 0, 0, 0, 0, /* Version */
+        1, 0, 0, 0, 0, 0, 0, 0, /* Term */
+        0, 0, 0, 0, 0, 0, 0, 0, /* Vote */
+        0, 0, 0, 0, 0, 0, 0, 0, /* First index */
+    };
+    int rv;
+
+    (void)params;
+
+    test_dir_write_file(f->dir, "metadata1", buf, sizeof buf);
+
+    __push_io_request(f, &request_id, &request);
+
+    request->type = RAFT_IO_READ_STATE;
+
+    rv = f->io.submit(&f->io, request_id);
+    munit_assert_int(rv, ==, RAFT_ERR_IO);
+
+    munit_assert_string_equal(f->io.errmsg,
+                              "parse metadata1: unknown format 2");
+
+    raft_io_queue__pop(&f->queue, request_id);
+
+    return MUNIT_OK;
+}
+
+/* The metadata1 file has not a valid version. */
+static MunitResult test_read_state_metadata_wrong_version(
+    const MunitParameter params[],
+    void *data)
+{
+    struct fixture *f = data;
+    unsigned request_id;
+    struct raft_io_request *request;
+    uint8_t buf[RAFT_IO_UV_METADATA_SIZE] = {
+        1, 0, 0, 0, 0, 0, 0, 0, /* Format */
+        0, 0, 0, 0, 0, 0, 0, 0, /* Version */
+        1, 0, 0, 0, 0, 0, 0, 0, /* Term */
+        0, 0, 0, 0, 0, 0, 0, 0, /* Vote */
+        0, 0, 0, 0, 0, 0, 0, 0, /* First index */
+    };
+    int rv;
+
+    (void)params;
+
+    test_dir_write_file(f->dir, "metadata1", buf, sizeof buf);
+
+    __push_io_request(f, &request_id, &request);
+
+    request->type = RAFT_IO_READ_STATE;
+
+    rv = f->io.submit(&f->io, request_id);
+    munit_assert_int(rv, ==, RAFT_ERR_IO);
+
+    munit_assert_string_equal(f->io.errmsg,
+                              "parse metadata1: version is set to zero");
+
+    raft_io_queue__pop(&f->queue, request_id);
+
+    return MUNIT_OK;
+}
+
+/* The metadata1 file has not a valid term. */
+static MunitResult test_read_state_metadata_wrong_term(
+    const MunitParameter params[],
+    void *data)
+{
+    struct fixture *f = data;
+    unsigned request_id;
+    struct raft_io_request *request;
+    uint8_t buf[RAFT_IO_UV_METADATA_SIZE] = {
+        1, 0, 0, 0, 0, 0, 0, 0, /* Format */
+        1, 0, 0, 0, 0, 0, 0, 0, /* Version */
+        0, 0, 0, 0, 0, 0, 0, 0, /* Term */
+        0, 0, 0, 0, 0, 0, 0, 0, /* Vote */
+        0, 0, 0, 0, 0, 0, 0, 0, /* First index */
+    };
+    int rv;
+
+    (void)params;
+
+    test_dir_write_file(f->dir, "metadata1", buf, sizeof buf);
+
+    __push_io_request(f, &request_id, &request);
+
+    request->type = RAFT_IO_READ_STATE;
+
+    rv = f->io.submit(&f->io, request_id);
+    munit_assert_int(rv, ==, RAFT_ERR_IO);
+
+    munit_assert_string_equal(f->io.errmsg,
+                              "parse metadata1: term is set to zero");
+
+    raft_io_queue__pop(&f->queue, request_id);
+
+    return MUNIT_OK;
+}
+
+/* The data directory has both metadata files, but they have the same
+ * version. */
+static MunitResult test_read_state_metadata_same_version(const MunitParameter params[],
+                                              void *data)
+{
+    struct fixture *f = data;
+    unsigned request_id;
+    struct raft_io_request *request;
+    uint8_t buf1[RAFT_IO_UV_METADATA_SIZE] = {
+        1, 0, 0, 0, 0, 0, 0, 0, /* Format */
+        2, 0, 0, 0, 0, 0, 0, 0, /* Version */
+        3, 0, 0, 0, 0, 0, 0, 0, /* Term */
+        0, 0, 0, 0, 0, 0, 0, 0, /* Vote */
+        0, 0, 0, 0, 0, 0, 0, 0, /* First index */
+    };
+    uint8_t buf2[RAFT_IO_UV_METADATA_SIZE] = {
+        1, 0, 0, 0, 0, 0, 0, 0, /* Format */
+        2, 0, 0, 0, 0, 0, 0, 0, /* Version */
+        2, 0, 0, 0, 0, 0, 0, 0, /* Term */
+        0, 0, 0, 0, 0, 0, 0, 0, /* Vote */
+        0, 0, 0, 0, 0, 0, 0, 0, /* First index */
+    };
+    int rv;
+
+    (void)params;
+
+    test_dir_write_file(f->dir, "metadata1", buf1, sizeof buf1);
+    test_dir_write_file(f->dir, "metadata2", buf2, sizeof buf2);
+
+    __push_io_request(f, &request_id, &request);
+
+    request->type = RAFT_IO_READ_STATE;
+
+    rv = f->io.submit(&f->io, request_id);
+    munit_assert_int(rv, ==, RAFT_ERR_IO);
+
+    munit_assert_string_equal(f->io.errmsg,
+                              "metadata1 and metadata2 are both at version 2");
+
+    raft_io_queue__pop(&f->queue, request_id);
+
+    return MUNIT_OK;
+}
+
 static MunitTest submit_tests[] = {
-    {"/read-state-empty", test_submit_read_state_empty, setup, tear_down, 0,
-     NULL},
-    {"/read-state-metadata1", test_submit_read_state_metadata1, setup,
+    {"/read-state-empty", test_read_state_empty, setup, tear_down, 0, NULL},
+    {"/read-state-metadata-only-1", test_read_state_metadata_only_1, setup,
      tear_down, 0, NULL},
+    {"/read-state-metadata-1", test_read_state_metadata_1, setup,
+     tear_down, 0, NULL},
+    {"/read-state-metadata-2", test_read_state_metadata_2, setup, tear_down, 0,
+     NULL},
+    {"/read-state-metadata-short", test_read_state_metadata_short, setup,
+     tear_down, 0, NULL},
+    {"/read-state-metadata-wrong-format", test_read_state_metadata_wrong_format,
+     setup, tear_down, 0, NULL},
+    {"/read-state-metadata-wrong-version",
+     test_read_state_metadata_wrong_version, setup, tear_down, 0, NULL},
+    {"/read-state-metadata-wrong-term", test_read_state_metadata_wrong_term,
+     setup, tear_down, 0, NULL},
+    {"/read-state-metadata-same-version",
+     test_read_state_metadata_same_version, setup, tear_down, 0, NULL},
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 

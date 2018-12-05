@@ -462,11 +462,11 @@ struct raft_io_request
          */
         struct
         {
-            raft_term term;         /* Current server term */
-            unsigned voted_for;     /* ID of server we voted for, or 0 */
-            raft_index first_index; /* Index of the first entry in the log */
+            raft_term term;             /* Current server term */
+            unsigned voted_for;         /* ID of server we voted for, or 0 */
+            raft_index first_index;     /* Index of the first entry */
             struct raft_entry *entries; /* Array of log entries. */
-            size_t n_entries;           /* Length of the entries array */
+            size_t n;                   /* Length of the entries array */
         } read_state;
 
     } result;

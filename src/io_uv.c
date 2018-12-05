@@ -22,6 +22,11 @@
 #define RAFT_IO_UV__MAX_FILENAME_LEN 128
 
 /**
+ * Current on-disk format.
+ */
+#define RAFT_IO_UV__FORMAT 1
+
+/**
  * Maximum length of the data directory path.
  */
 #define RAFT_IO_UV__MAX_DIR_LEN \
@@ -37,6 +42,9 @@ struct raft_io_uv
     struct uv_timer_s ticker;
     uint64_t last_tick;
 
+    unsigned short next_metadata_n;       /* Next metadata file to write */
+    unsigned short next_metadata_version; /* Next metadata version */
+
     /* Parameters passed via raft_io->init */
     struct raft_io_queue *queue;
     void *p;
@@ -49,47 +57,12 @@ struct raft_io_uv
 
 struct raft_io_uv__metadata
 {
+    unsigned format;
+    unsigned long long version;
     raft_term term;
     unsigned voted_for;
+    raft_index first_index;
 };
-
-/**
- * Convenience for wrapping an error message from libuv.
- */
-static void raft_error__uv(struct raft *r, const int rv, const char *fmt, ...)
-{
-    const char *msg = uv_strerror(rv);
-    va_list args;
-
-    strncpy(r->errmsg, msg, strlen(msg));
-
-    if (fmt == NULL) {
-        return;
-    }
-
-    va_start(args, fmt);
-    raft_error__vwrapf(r, fmt, args);
-    va_end(args);
-}
-
-/**
- * Convenience for wrapping an error message from the OS.
- */
-static void raft_error__os(struct raft *r, const char *fmt, ...)
-{
-    const char *msg = strerror(errno);
-    va_list args;
-
-    strncpy(r->errmsg, msg, strlen(msg));
-
-    if (fmt == NULL) {
-        return;
-    }
-
-    va_start(args, fmt);
-    raft_error__vwrapf(r, fmt, args);
-    va_end(args);
-}
 
 static void raft_io_uv__init(struct raft_io *io,
                              struct raft_io_queue *queue,
@@ -203,7 +176,7 @@ static int raft_io_uv__read_metadata(struct raft_io_uv *uv,
 {
     char path[RAFT_IO_UV__MAX_PATH_LEN];    /* Full path of metadata file */
     char filename[strlen("metadataN") + 1]; /* Pattern of metadata filename */
-    uint8_t buffer[16];                     /* Hold content of metadata file */
+    uint8_t buf[RAFT_IO_UV_METADATA_SIZE];  /* Content of metadata file */
     void *cursor;
     int fd;
     int rv;
@@ -217,34 +190,57 @@ static int raft_io_uv__read_metadata(struct raft_io_uv *uv,
     fd = open(path, O_RDONLY);
     if (fd == -1) {
         if (errno != ENOENT) {
-            raft_errorf(uv->errmsg, "can't open '%s': %s", path,
-                        strerror(errno));
+            raft_errorf(uv->errmsg, "open %s: %s", filename, strerror(errno));
             return RAFT_ERR_IO;
         }
 
-	/* The file does not exist, just return. */
-        metadata->term = 0;
-        metadata->voted_for = 0;
+        /* The file does not exist, just return. */
+        metadata->version = 0;
 
-	return 0;
+        return 0;
     }
 
-    rv = read(fd, buffer, sizeof buffer);
+    rv = read(fd, buf, sizeof buf);
     if (rv == -1) {
+        raft_errorf(uv->errmsg, "read %s: %s", filename, strerror(errno));
         close(fd);
         return RAFT_ERR_IO;
     }
-    if (rv != sizeof buffer) {
+    if (rv != sizeof buf) {
+        /* Assume that the server crashed while writing this metadata file, and
+         * pretend it has not been written at all. */
+        metadata->version = 0;
         close(fd);
-        return RAFT_ERR_IO;
+        return 0;
     };
 
     close(fd);
 
-    cursor = buffer;
+    cursor = buf;
 
+    metadata->format = raft__get64(&cursor);
+
+    if (metadata->format != RAFT_IO_UV__FORMAT) {
+        raft_errorf(uv->errmsg, "parse %s: unknown format %d", filename,
+                    metadata->format);
+        return RAFT_ERR_IO;
+    }
+
+    metadata->version = raft__get64(&cursor);
     metadata->term = raft__get64(&cursor);
     metadata->voted_for = raft__get64(&cursor);
+    metadata->first_index = raft__get64(&cursor);
+
+    /* Sanity checks that values make sense */
+    if (metadata->version == 0) {
+        raft_errorf(uv->errmsg, "parse %s: version is set to zero", filename);
+        return RAFT_ERR_IO;
+    }
+
+    if (metadata->term == 0) {
+        raft_errorf(uv->errmsg, "parse %s: term is set to zero", filename);
+        return RAFT_ERR_IO;
+    }
 
     return 0;
 }
@@ -252,16 +248,63 @@ static int raft_io_uv__read_metadata(struct raft_io_uv *uv,
 static int raft_io_uv__read_state(struct raft_io_uv *uv,
                                   struct raft_io_request *request)
 {
-    struct raft_io_uv__metadata metadata;
+    struct raft_io_uv__metadata metadata1;
+    struct raft_io_uv__metadata metadata2;
+    struct raft_io_uv__metadata *metadata;
     int rv;
 
-    rv = raft_io_uv__read_metadata(uv, 1, &metadata);
+    rv = raft_io_uv__read_metadata(uv, 1, &metadata1);
     if (rv != 0) {
         return rv;
     }
 
-    request->result.read_state.term = metadata.term;
-    request->result.read_state.voted_for = metadata.voted_for;
+    rv = raft_io_uv__read_metadata(uv, 2, &metadata2);
+    if (rv != 0) {
+        return rv;
+    }
+
+    /* If neither metadata file exists, set everything to null and return. */
+    if (metadata1.version == 0 && metadata2.version == 0) {
+        request->result.read_state.term = 0;
+        request->result.read_state.voted_for = 0;
+        request->result.read_state.first_index = 0;
+        request->result.read_state.entries = NULL;
+        request->result.read_state.n = 0;
+
+        /* Next metadata file to write will be metadata1 at version 1. */
+        uv->next_metadata_n = 1;
+        uv->next_metadata_version = 1;
+
+        return 0;
+    }
+
+    /* It should never happen that the two metadata files have the same
+     * version. */
+    if (metadata1.version == metadata2.version) {
+        raft_errorf(uv->errmsg,
+                    "metadata1 and metadata2 are both at version %d",
+                    metadata1.version);
+        return RAFT_ERR_IO;
+    }
+
+    /* Pick the metadata with the grater version. */
+    if (metadata1.version > metadata2.version) {
+        metadata = &metadata1;
+
+        uv->next_metadata_n = 2;
+        uv->next_metadata_version = metadata1.version + 1;
+    } else {
+        metadata = &metadata2;
+
+        uv->next_metadata_n = 1;
+        uv->next_metadata_version = metadata2.version + 1;
+    }
+
+    request->result.read_state.term = metadata->term;
+    request->result.read_state.voted_for = metadata->voted_for;
+    request->result.read_state.first_index = metadata->first_index;
+    request->result.read_state.entries = NULL;
+    request->result.read_state.n = 0;
 
     return 0;
 }
@@ -343,12 +386,12 @@ int raft_io_uv_init(struct raft_io *io, struct uv_loop_s *loop, const char *dir)
         if (errno == ENOENT) {
             rv = mkdir(dir, 0700);
             if (rv != 0) {
-                raft_errorf(io->errmsg, "can't create data directory '%s': %s",
-                            dir, strerror(errno));
+                raft_errorf(io->errmsg, "create data directory '%s': %s", dir,
+                            strerror(errno));
                 return RAFT_ERR_IO;
             }
         } else {
-            raft_errorf(io->errmsg, "can't access data directory '%s': %s", dir,
+            raft_errorf(io->errmsg, "access data directory '%s': %s", dir,
                         strerror(errno));
             return RAFT_ERR_IO;
         }
@@ -377,6 +420,8 @@ int raft_io_uv_init(struct raft_io *io, struct uv_loop_s *loop, const char *dir)
     }
 
     uv->loop = loop;
+    uv->next_metadata_n = 0;
+    uv->next_metadata_version = 0;
     uv->errmsg = io->errmsg;
 
     io->data = uv;

@@ -146,7 +146,7 @@ static int raft_io_stub__read_state(struct raft_io_stub *s,
 
     if (s->n == 0) {
         request->result.read_state.entries = NULL;
-        request->result.read_state.n_entries = 0;
+        request->result.read_state.n = 0;
         return 0;
     }
 
@@ -183,7 +183,7 @@ static int raft_io_stub__read_state(struct raft_io_stub *s,
     }
 
     request->result.read_state.entries = entries;
-    request->result.read_state.n_entries = n;
+    request->result.read_state.n = n;
 
     return 0;
 }

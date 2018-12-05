@@ -179,7 +179,7 @@ static MunitResult test_bootstrap(const MunitParameter params[], void *data)
 
     __submit(f, request_id);
 
-    munit_assert_int(request->result.read_state.n_entries, ==, 1);
+    munit_assert_int(request->result.read_state.n, ==, 1);
 
     raft_free(request->result.read_state.entries[0].batch);
     raft_free(request->result.read_state.entries);
@@ -238,7 +238,7 @@ static MunitResult test_write_vote(const MunitParameter params[], void *data)
     munit_assert_int(request->result.read_state.term, ==, 0);
     munit_assert_int(request->result.read_state.voted_for, ==, 1);
     munit_assert_int(request->result.read_state.first_index, ==, 0);
-    munit_assert_int(request->result.read_state.n_entries, ==, 0);
+    munit_assert_int(request->result.read_state.n, ==, 0);
 
     raft_io_queue__pop(&f->queue, request_id);
 
@@ -281,7 +281,7 @@ static MunitResult test_write_log(const MunitParameter params[], void *data)
     /* This WRITE_LOG request is asynchronous, the entries have not been
      * persited yet. */
     munit_assert_int(request2->result.read_state.first_index, ==, 0);
-    munit_assert_int(request2->result.read_state.n_entries, ==, 0);
+    munit_assert_int(request2->result.read_state.n, ==, 0);
 
     raft_io_stub_flush(&f->io);
 
@@ -290,7 +290,7 @@ static MunitResult test_write_log(const MunitParameter params[], void *data)
 
     __submit(f, request_id2);
 
-    munit_assert_int(request2->result.read_state.n_entries, ==, 1);
+    munit_assert_int(request2->result.read_state.n, ==, 1);
 
     entries = request2->result.read_state.entries;
     munit_assert_int(entries[0].buf.len, ==, 1);
