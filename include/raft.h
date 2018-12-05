@@ -34,8 +34,7 @@ enum {
     RAFT_ERR_SHUTDOWN,
     RAFT_ERR_CONFIGURATION_BUSY,
     RAFT_ERR_IO,
-    RAFT_ERR_IO_BUSY,
-    RAFT_ERR_IO_PATH_TOO_LONG
+    RAFT_ERR_IO_BUSY
 };
 
 /**
@@ -58,8 +57,7 @@ enum {
     X(RAFT_ERR_CONFIGURATION_BUSY,                                       \
       "a configuration change is already in progress")                   \
     X(RAFT_ERR_IO, "I/O error")                                          \
-    X(RAFT_ERR_IO_BUSY, "a log write request is already in progress")    \
-    X(RAFT_ERR_IO_PATH_TOO_LONG, "file system path is too long")
+    X(RAFT_ERR_IO_BUSY, "a log write request is already in progress")
 
 /**
  * Return the error message describing the given error code.

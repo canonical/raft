@@ -108,10 +108,12 @@ static void tear_down(void *data)
  * raft_uv_init
  */
 
+/* Data directory path is too long */
 static MunitResult test_init_dir_too_long(const MunitParameter params[],
                                           void *data)
 {
     struct fixture *f = data;
+    struct raft_io io;
     int rv;
 
     (void)params;
@@ -121,16 +123,135 @@ static MunitResult test_init_dir_too_long(const MunitParameter params[],
     memset(dir, 'a', sizeof dir - 1);
     dir[sizeof dir - 1] = 0;
 
-    rv = raft_io_uv_init(&f->io, &f->loop, dir);
-    munit_assert_int(rv, ==, RAFT_ERR_IO_PATH_TOO_LONG);
+    rv = raft_io_uv_init(&io, &f->loop, dir);
+    munit_assert_int(rv, ==, RAFT_ERR_IO);
 
-    munit_assert_string_equal(f->io.errmsg, "dir exceeds 895 characters");
+    munit_assert_string_equal(io.errmsg,
+                              "data directory exceeds 895 characters");
+
+    return MUNIT_OK;
+}
+
+/* Can't create data directory */
+static MunitResult test_init_cant_create_dir(const MunitParameter params[],
+                                             void *data)
+{
+    struct fixture *f = data;
+    struct raft_io io;
+    int rv;
+
+    (void)params;
+
+    const char *dir = "/non/existing/path";
+
+    rv = raft_io_uv_init(&io, &f->loop, dir);
+    munit_assert_int(rv, ==, RAFT_ERR_IO);
+
+    munit_assert_string_equal(
+        io.errmsg,
+        "can't create data directory '/non/existing/path': "
+        "No such file or directory");
+
+    return MUNIT_OK;
+}
+
+/* Data directory not a directory */
+static MunitResult test_init_not_a_dir(const MunitParameter params[],
+                                       void *data)
+{
+    struct fixture *f = data;
+    struct raft_io io;
+    int rv;
+
+    (void)params;
+
+    const char *dir = "/dev/null";
+
+    rv = raft_io_uv_init(&io, &f->loop, dir);
+    munit_assert_int(rv, ==, RAFT_ERR_IO);
+
+    munit_assert_string_equal(io.errmsg,
+                              "path '/dev/null' is not a directory");
+    return MUNIT_OK;
+}
+
+/* Data directory not accessible */
+static MunitResult test_init_access_error(const MunitParameter params[],
+                                          void *data)
+{
+    struct fixture *f = data;
+    struct raft_io io;
+    int rv;
+
+    (void)params;
+
+    const char *dir = "/root/foo";
+
+    rv = raft_io_uv_init(&io, &f->loop, dir);
+    munit_assert_int(rv, ==, RAFT_ERR_IO);
+
+    munit_assert_string_equal(
+        io.errmsg,
+        "can't access data directory '/root/foo': Permission denied");
+    return MUNIT_OK;
+}
+
+/* Out of memory */
+static MunitResult test_init_oom(const MunitParameter params[], void *data)
+{
+    struct fixture *f = data;
+    struct raft_io io;
+    int rv;
+
+    (void)params;
+
+    test_heap_fault_config(&f->heap, 0, 1);
+    test_heap_fault_enable(&f->heap);
+
+    rv = raft_io_uv_init(&io, &f->loop, f->dir);
+    munit_assert_int(rv, ==, RAFT_ERR_NOMEM);
+
+    munit_assert_string_equal(io.errmsg,
+                              "can't allocate I/O implementation instance");
+
+    return MUNIT_OK;
+}
+
+/* Create data directory if it does not exist */
+static MunitResult test_init_create_dir(const MunitParameter params[],
+                                             void *data)
+{
+    struct fixture *f = data;
+    struct raft_io io;
+    int rv;
+    struct stat sb;
+
+    (void)params;
+
+    char dir[1024];
+
+    sprintf(dir, "%s/sub", f->dir);
+
+    rv = raft_io_uv_init(&io, &f->loop, dir);
+    munit_assert_int(rv, ==, 0);
+
+    rv = stat(dir, &sb);
+    munit_assert_int(rv, ==, 0);
+
+    munit_assert_true((sb.st_mode & S_IFMT) == S_IFDIR);
+
+    io.close(&io);
 
     return MUNIT_OK;
 }
 
 static MunitTest init_tests[] = {
     {"/dir-too-long", test_init_dir_too_long, setup, tear_down, 0, NULL},
+    {"/cant-create-dir", test_init_cant_create_dir, setup, tear_down, 0, NULL},
+    {"/not-a-dir", test_init_not_a_dir, setup, tear_down, 0, NULL},
+    {"/access-error", test_init_access_error, setup, tear_down, 0, NULL},
+    {"/oom", test_init_oom, setup, tear_down, 0, NULL},
+    {"/create-dir", test_init_create_dir, setup, tear_down, 0, NULL},
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 
@@ -145,7 +266,6 @@ static MunitResult test_submit_read_state(const MunitParameter params[],
     unsigned request_id;
     struct raft_io_request *request;
     uint8_t buf[16];
-    return 0;
 
     (void)params;
 

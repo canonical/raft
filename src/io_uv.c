@@ -315,9 +315,9 @@ int raft_io_uv_init(struct raft_io *io, struct uv_loop_s *loop, const char *dir)
 
     /* Ensure that the given path doesn't exceed our static buffer limit */
     if (strlen(dir) > RAFT_IO_UV__MAX_DIR_LEN) {
-        raft_errorf(io->errmsg, "dir exceeds %d characters",
+        raft_errorf(io->errmsg, "data directory exceeds %d characters",
                     RAFT_IO_UV__MAX_DIR_LEN);
-        return RAFT_ERR_IO_PATH_TOO_LONG;
+        return RAFT_ERR_IO;
     }
 
     /* Make sure we have a directory we can write into. */
@@ -326,20 +326,23 @@ int raft_io_uv_init(struct raft_io *io, struct uv_loop_s *loop, const char *dir)
         if (errno == ENOENT) {
             rv = mkdir(dir, 0700);
             if (rv != 0) {
-                // raft_error__os(r, "create data directory");
+                raft_errorf(io->errmsg, "can't create data directory '%s': %s",
+                            dir, strerror(errno));
                 return RAFT_ERR_IO;
             }
         } else {
-            // raft_error__os(r, "check data directory");
+            raft_errorf(io->errmsg, "can't access data directory '%s': %s", dir,
+                        strerror(errno));
             return RAFT_ERR_IO;
         }
-    }
-    if ((sb.st_mode & S_IFMT) != S_IFDIR) {
+    } else if ((sb.st_mode & S_IFMT) != S_IFDIR) {
+        raft_errorf(io->errmsg, "path '%s' is not a directory", dir);
         return RAFT_ERR_IO;
     }
 
     uv = raft_malloc(sizeof *uv);
     if (uv == NULL) {
+        raft_errorf(io->errmsg, "can't allocate I/O implementation instance");
         return RAFT_ERR_NOMEM;
     }
 
