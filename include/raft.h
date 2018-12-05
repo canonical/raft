@@ -368,7 +368,6 @@ enum {
     RAFT_IO_NULL = 0,
     RAFT_IO_BOOTSTRAP,
     RAFT_IO_READ_STATE,
-    RAFT_IO_READ_LOG,
     RAFT_IO_WRITE_TERM,
     RAFT_IO_WRITE_VOTE,
     RAFT_IO_WRITE_LOG,
@@ -456,28 +455,20 @@ struct raft_io_request
          *
          * The implementation must synchronously read the current state from
          * disk.
+         *
+         * The entries array must be allocated with raft_malloc. Once the
+         * request is completed ownership of such memory is transfered to the
+         * raft instance.
          */
         struct
         {
             raft_term term;         /* Current server term */
             unsigned voted_for;     /* ID of server we voted for, or 0 */
             raft_index first_index; /* Index of the first entry in the log */
-            size_t n_entries;       /* Number of entries in the log */
+            struct raft_entry *entries; /* Array of log entries. */
+            size_t n_entries;           /* Length of the entries array */
         } read_state;
 
-        /**
-         * Result of a RAFT_IO_READ_LOG request.
-         *
-         * The implementation must synchronously read the current log from
-         * disk. The entries array must be allocated with raft_malloc. Once the
-         * request is completed ownership of such memory is transfered to the
-         * raft instance.
-         */
-        struct
-        {
-            struct raft_entry *entries; /* Array of log entries. */
-            size_t n;                   /* Number entries in the array. */
-        } read_log;
     } result;
 };
 

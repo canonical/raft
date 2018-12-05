@@ -175,14 +175,14 @@ static MunitResult test_bootstrap(const MunitParameter params[], void *data)
     raft_free(request->args.bootstrap.conf.base);
 
     /* The log has now one entry. */
-    request->type = RAFT_IO_READ_LOG;
+    request->type = RAFT_IO_READ_STATE;
 
     __submit(f, request_id);
 
-    munit_assert_int(request->result.read_log.n, ==, 1);
+    munit_assert_int(request->result.read_state.n_entries, ==, 1);
 
-    raft_free(request->result.read_log.entries[0].batch);
-    raft_free(request->result.read_log.entries);
+    raft_free(request->result.read_state.entries[0].batch);
+    raft_free(request->result.read_state.entries);
 
     raft_io_queue__pop(&f->queue, request_id);
 
@@ -253,6 +253,7 @@ static MunitResult test_write_log(const MunitParameter params[], void *data)
     struct raft_io_request *request1;
     struct raft_io_request *request2;
     struct raft_entry entry;
+    struct raft_entry *entries;
 
     (void)params;
 
@@ -285,18 +286,19 @@ static MunitResult test_write_log(const MunitParameter params[], void *data)
     raft_io_stub_flush(&f->io);
 
     /* The log has now one entry, witch matches the one we wrote. */
-    request2->type = RAFT_IO_READ_LOG;
+    request2->type = RAFT_IO_READ_STATE;
 
     __submit(f, request_id2);
 
-    munit_assert_int(request2->result.read_log.n, ==, 1);
-    munit_assert_int(request2->result.read_log.entries[0].buf.len, ==, 1);
-    munit_assert_int(((char *)request2->result.read_log.entries[0].buf.base)[0],
-                     ==, 'x');
-    munit_assert_ptr_not_null(request2->result.read_log.entries[0].batch);
+    munit_assert_int(request2->result.read_state.n_entries, ==, 1);
 
-    raft_free(request2->result.read_log.entries[0].batch);
-    raft_free(request2->result.read_log.entries);
+    entries = request2->result.read_state.entries;
+    munit_assert_int(entries[0].buf.len, ==, 1);
+    munit_assert_int(((char *)entries[0].buf.base)[0], ==, 'x');
+    munit_assert_ptr_not_null(entries[0].batch);
+
+    raft_free(entries[0].batch);
+    raft_free(entries);
 
     raft_io_queue__pop(&f->queue, request_id1);
     raft_io_queue__pop(&f->queue, request_id2);

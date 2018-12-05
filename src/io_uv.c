@@ -279,10 +279,12 @@ static int raft_io_uv__submit(struct raft_io *io, const unsigned request_id)
 
     uv = io->data;
 
+    /* Get the request object */
     request = raft_io_queue_get(uv->queue, request_id);
 
     assert(request != NULL);
 
+    /* Dispatch the request */
     switch (request->type) {
         case RAFT_IO_READ_STATE:
             rv = raft_io_uv__read_state(uv, request);

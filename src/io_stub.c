@@ -133,17 +133,6 @@ static int raft_io_stub__bootstrap(struct raft_io_stub *s,
 static int raft_io_stub__read_state(struct raft_io_stub *s,
                                     struct raft_io_request *request)
 {
-    request->result.read_state.term = s->term;
-    request->result.read_state.voted_for = s->voted_for;
-    request->result.read_state.first_index = s->first_index;
-    request->result.read_state.n_entries = s->n;
-
-    return 0;
-}
-
-static int raft_io_stub__read_log(struct raft_io_stub *s,
-                                  struct raft_io_request *request)
-{
     struct raft_entry *entries;
     size_t n;
     size_t i;
@@ -151,9 +140,13 @@ static int raft_io_stub__read_log(struct raft_io_stub *s,
     void *cursor;
     size_t size = 0; /* Size of the batch */
 
+    request->result.read_state.term = s->term;
+    request->result.read_state.voted_for = s->voted_for;
+    request->result.read_state.first_index = s->first_index;
+
     if (s->n == 0) {
-        request->result.read_log.entries = NULL;
-        request->result.read_log.n = 0;
+        request->result.read_state.entries = NULL;
+        request->result.read_state.n_entries = 0;
         return 0;
     }
 
@@ -189,8 +182,8 @@ static int raft_io_stub__read_log(struct raft_io_stub *s,
         cursor += entries[i].buf.len;
     }
 
-    request->result.read_log.entries = entries;
-    request->result.read_log.n = n;
+    request->result.read_state.entries = entries;
+    request->result.read_state.n_entries = n;
 
     return 0;
 }
@@ -248,9 +241,6 @@ static int raft_io_stub__submit(struct raft_io *io, const unsigned request_id)
             break;
         case RAFT_IO_READ_STATE:
             rv = raft_io_stub__read_state(s, request);
-            break;
-        case RAFT_IO_READ_LOG:
-            rv = raft_io_stub__read_log(s, request);
             break;
         case RAFT_IO_WRITE_TERM:
             rv = raft_io_stub__write_term(s, request);
