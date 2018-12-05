@@ -32,7 +32,7 @@
  */
 struct raft_io_uv
 {
-    const char *dir;
+    char *dir;
     struct uv_loop_s *loop;
     struct uv_timer_s ticker;
     uint64_t last_tick;
@@ -172,7 +172,12 @@ static int raft_io_uv__stop(struct raft_io *io)
 
 static void raft_io_uv__close(struct raft_io *io)
 {
-    raft_free(io->data);
+    struct raft_io_uv *uv;
+
+    uv = io->data;
+
+    raft_free(uv->dir);
+    raft_free(uv);
 }
 
 /**
@@ -188,13 +193,17 @@ void raft_io_uv__path(struct raft_io_uv *io, const char *filename, char *path)
     strcat(path, filename);
 }
 
+/**
+ * Read the @n'th metadata file (with @n equal to 1 or 2) and populate the given
+ * metadata buffer accordingly.
+ */
 static int raft_io_uv__read_metadata(struct raft_io_uv *uv,
                                      unsigned short n,
                                      struct raft_io_uv__metadata *metadata)
 {
-    char path[RAFT_IO_UV__MAX_PATH_LEN];
-    char filename[strlen("metadataN") + 1];
-    uint8_t buffer[16];
+    char path[RAFT_IO_UV__MAX_PATH_LEN];    /* Full path of metadata file */
+    char filename[strlen("metadataN") + 1]; /* Pattern of metadata filename */
+    uint8_t buffer[16];                     /* Hold content of metadata file */
     void *cursor;
     int fd;
     int rv;
@@ -208,10 +217,16 @@ static int raft_io_uv__read_metadata(struct raft_io_uv *uv,
     fd = open(path, O_RDONLY);
     if (fd == -1) {
         if (errno != ENOENT) {
+            raft_errorf(uv->errmsg, "can't open '%s': %s", path,
+                        strerror(errno));
             return RAFT_ERR_IO;
         }
+
+	/* The file does not exist, just return. */
         metadata->term = 0;
         metadata->voted_for = 0;
+
+	return 0;
     }
 
     rv = read(fd, buffer, sizeof buffer);
@@ -348,7 +363,19 @@ int raft_io_uv_init(struct raft_io *io, struct uv_loop_s *loop, const char *dir)
         return RAFT_ERR_NOMEM;
     }
 
-    uv->dir = dir;
+    uv->dir = raft_malloc(strlen(dir) + 1);
+    if (uv->dir == NULL) {
+        raft_free(uv);
+        raft_errorf(io->errmsg, "can't copy data directory path");
+        return RAFT_ERR_NOMEM;
+    }
+    strcpy(uv->dir, dir);
+
+    /* Strip any trailing slash */
+    if (uv->dir[strlen(uv->dir) - 1] == '/') {
+        uv->dir[strlen(uv->dir) - 1] = 0;
+    }
+
     uv->loop = loop;
     uv->errmsg = io->errmsg;
 

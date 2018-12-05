@@ -96,12 +96,14 @@ static void tear_down(void *data)
 /**
  * Submit an I/O request and check that no error occurred.x
  */
-#define __submit(F, ID)                \
-    {                                  \
-        int rv;                        \
-                                       \
-        rv = F->io.submit(&F->io, ID); \
-        munit_assert_int(rv, ==, 0);   \
+#define __submit(F, ID)                                              \
+    {                                                                \
+        int rv;                                                      \
+                                                                     \
+        rv = F->io.submit(&F->io, ID);                               \
+        if (rv != 0) {                                               \
+            munit_logf(MUNIT_LOG_ERROR, "submit: %s", F->io.errmsg); \
+        }                                                            \
     }
 
 /**
@@ -170,8 +172,7 @@ static MunitResult test_init_not_a_dir(const MunitParameter params[],
     rv = raft_io_uv_init(&io, &f->loop, dir);
     munit_assert_int(rv, ==, RAFT_ERR_IO);
 
-    munit_assert_string_equal(io.errmsg,
-                              "path '/dev/null' is not a directory");
+    munit_assert_string_equal(io.errmsg, "path '/dev/null' is not a directory");
     return MUNIT_OK;
 }
 
@@ -196,7 +197,16 @@ static MunitResult test_init_access_error(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-/* Out of memory */
+static char *init_oom_heap_fault_delay[] = {"0", "1,", NULL};
+static char *init_oom_heap_fault_repeat[] = {"1", NULL};
+
+static MunitParameterEnum init_oom_params[] = {
+    {TEST_HEAP_FAULT_DELAY, init_oom_heap_fault_delay},
+    {TEST_HEAP_FAULT_REPEAT, init_oom_heap_fault_repeat},
+    {NULL, NULL},
+};
+
+/* Out of memory conditions */
 static MunitResult test_init_oom(const MunitParameter params[], void *data)
 {
     struct fixture *f = data;
@@ -205,21 +215,17 @@ static MunitResult test_init_oom(const MunitParameter params[], void *data)
 
     (void)params;
 
-    test_heap_fault_config(&f->heap, 0, 1);
     test_heap_fault_enable(&f->heap);
 
     rv = raft_io_uv_init(&io, &f->loop, f->dir);
     munit_assert_int(rv, ==, RAFT_ERR_NOMEM);
-
-    munit_assert_string_equal(io.errmsg,
-                              "can't allocate I/O implementation instance");
 
     return MUNIT_OK;
 }
 
 /* Create data directory if it does not exist */
 static MunitResult test_init_create_dir(const MunitParameter params[],
-                                             void *data)
+                                        void *data)
 {
     struct fixture *f = data;
     struct raft_io io;
@@ -230,7 +236,7 @@ static MunitResult test_init_create_dir(const MunitParameter params[],
 
     char dir[1024];
 
-    sprintf(dir, "%s/sub", f->dir);
+    sprintf(dir, "%s/sub/", f->dir);
 
     rv = raft_io_uv_init(&io, &f->loop, dir);
     munit_assert_int(rv, ==, 0);
@@ -250,7 +256,7 @@ static MunitTest init_tests[] = {
     {"/cant-create-dir", test_init_cant_create_dir, setup, tear_down, 0, NULL},
     {"/not-a-dir", test_init_not_a_dir, setup, tear_down, 0, NULL},
     {"/access-error", test_init_access_error, setup, tear_down, 0, NULL},
-    {"/oom", test_init_oom, setup, tear_down, 0, NULL},
+    {"/oom", test_init_oom, setup, tear_down, 0, init_oom_params},
     {"/create-dir", test_init_create_dir, setup, tear_down, 0, NULL},
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
@@ -259,8 +265,34 @@ static MunitTest init_tests[] = {
  * raft_uv_submit
  */
 
-static MunitResult test_submit_read_state(const MunitParameter params[],
-                                          void *data)
+/* The data directory is empty */
+static MunitResult test_submit_read_state_empty(const MunitParameter params[],
+                                                void *data)
+{
+    struct fixture *f = data;
+    unsigned request_id;
+    struct raft_io_request *request;
+
+    (void)params;
+
+    __push_io_request(f, &request_id, &request);
+
+    request->type = RAFT_IO_READ_STATE;
+
+    __submit(f, request_id);
+
+    munit_assert_int(request->result.read_state.term, ==, 0);
+    munit_assert_int(request->result.read_state.voted_for, ==, 0);
+
+    raft_io_queue__pop(&f->queue, request_id);
+
+    return MUNIT_OK;
+}
+
+/* The data directory has a single metadata1 file */
+static MunitResult test_submit_read_state_metadata1(
+    const MunitParameter params[],
+    void *data)
 {
     struct fixture *f = data;
     unsigned request_id;
@@ -283,7 +315,10 @@ static MunitResult test_submit_read_state(const MunitParameter params[],
 }
 
 static MunitTest submit_tests[] = {
-    {"/read-state", test_submit_read_state, setup, tear_down, 0, NULL},
+    {"/read-state-empty", test_submit_read_state_empty, setup, tear_down, 0,
+     NULL},
+    {"/read-state-metadata1", test_submit_read_state_metadata1, setup,
+     tear_down, 0, NULL},
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 
