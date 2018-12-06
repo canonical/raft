@@ -363,19 +363,17 @@ static int raft_io_uv__submit(struct raft_io *io, const unsigned request_id)
     return rv;
 }
 
-int raft_io_uv_init(struct raft_io *io, struct uv_loop_s *loop, const char *dir)
+/**
+ * Check that the given directory exists, and try to create it if it doesn't.
+ */
+static int raft_io_uv__ensure_dir(const char *dir, char *errmsg)
 {
-    struct raft_io_uv *uv;
     struct stat sb;
     int rv;
 
-    assert(io != NULL);
-    assert(loop != NULL);
-    assert(dir != NULL);
-
     /* Ensure that the given path doesn't exceed our static buffer limit */
     if (strlen(dir) > RAFT_IO_UV__MAX_DIR_LEN) {
-        raft_errorf(io->errmsg, "data directory exceeds %d characters",
+        raft_errorf(errmsg, "data directory exceeds %d characters",
                     RAFT_IO_UV__MAX_DIR_LEN);
         return RAFT_ERR_IO;
     }
@@ -386,18 +384,35 @@ int raft_io_uv_init(struct raft_io *io, struct uv_loop_s *loop, const char *dir)
         if (errno == ENOENT) {
             rv = mkdir(dir, 0700);
             if (rv != 0) {
-                raft_errorf(io->errmsg, "create data directory '%s': %s", dir,
+                raft_errorf(errmsg, "create data directory '%s': %s", dir,
                             strerror(errno));
                 return RAFT_ERR_IO;
             }
         } else {
-            raft_errorf(io->errmsg, "access data directory '%s': %s", dir,
+            raft_errorf(errmsg, "access data directory '%s': %s", dir,
                         strerror(errno));
             return RAFT_ERR_IO;
         }
     } else if ((sb.st_mode & S_IFMT) != S_IFDIR) {
-        raft_errorf(io->errmsg, "path '%s' is not a directory", dir);
+        raft_errorf(errmsg, "path '%s' is not a directory", dir);
         return RAFT_ERR_IO;
+    }
+
+    return 0;
+}
+
+int raft_io_uv_init(struct raft_io *io, struct uv_loop_s *loop, const char *dir)
+{
+    struct raft_io_uv *uv;
+    int rv;
+
+    assert(io != NULL);
+    assert(loop != NULL);
+    assert(dir != NULL);
+
+    rv = raft_io_uv__ensure_dir(dir, io->errmsg);
+    if (rv != 0) {
+        return rv;
     }
 
     uv = raft_malloc(sizeof *uv);
