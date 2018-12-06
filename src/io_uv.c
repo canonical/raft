@@ -396,6 +396,28 @@ static int raft_io_uv__write_term(struct raft_io_uv *uv,
 static int raft_io_uv__write_vote(struct raft_io_uv *uv,
                                   struct raft_io_request *request)
 {
+    struct raft_io_uv__metadata metadata;
+    unsigned short n;
+    int rv;
+
+    assert(uv->next_metadata_n == 1 || uv->next_metadata_n == 2);
+    assert(uv->next_metadata_version > 0);
+
+    n = uv->next_metadata_n;
+    metadata.version = uv->next_metadata_version;
+    metadata.term = uv->term;
+    metadata.voted_for = request->args.write_vote.server_id;
+    metadata.first_index = uv->first_index;
+
+    rv = raft_io_uv__write_metadata(uv, n, &metadata);
+    if (rv != 0) {
+        return rv;
+    }
+
+    uv->next_metadata_n = n == 1 ? 2 : 1;
+    uv->next_metadata_version = metadata.version + 1;
+    uv->term = metadata.term;
+
     return 0;
 }
 

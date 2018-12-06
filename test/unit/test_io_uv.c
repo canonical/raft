@@ -702,9 +702,155 @@ static MunitResult test_write_term_metadata_2(const MunitParameter params[],
     return MUNIT_OK;
 }
 
+/* Write term after a read state request, which updates which is the next
+ * metadata file to write. */
+static MunitResult test_write_term_after_read_state(
+    const MunitParameter params[],
+    void *data)
+{
+    struct fixture *f = data;
+    unsigned request_id;
+    struct raft_io_request *request;
+
+    (void)params;
+
+    __write_metadata(f, /*                                      */
+                     1, /* Metadata file index                  */
+                     1, /* Format                               */
+                     2, /* Version                              */
+                     3, /* Term                                 */
+                     1, /* Voted for                            */
+                     0 /* First index                          */);
+
+    __push_io_request(f, &request_id, &request);
+
+    request->type = RAFT_IO_READ_STATE;
+
+    __submit(f, request_id);
+
+    request->type = RAFT_IO_WRITE_TERM;
+    request->args.write_term.term = 2;
+
+    __submit(f, request_id);
+
+    __assert_metadata(f, 2, 1, 3, 2, 0, 0);
+
+    raft_io_queue__pop(&f->queue, request_id);
+
+    return MUNIT_OK;
+}
+
 static MunitTest write_term_tests[] = {
     {"/empty", test_write_term_empty, setup, tear_down, 0, NULL},
     {"/metadata-2", test_write_term_metadata_2, setup, tear_down, 0, NULL},
+    {"/after-read-state", test_write_term_after_read_state, setup, tear_down, 0,
+     NULL},
+    {NULL, NULL, NULL, NULL, 0, NULL},
+};
+
+/**
+ * raft_io_uv__write_vote
+ */
+
+/* The data directory is empty */
+static MunitResult test_write_vote_empty(const MunitParameter params[],
+                                         void *data)
+{
+    struct fixture *f = data;
+    unsigned request_id;
+    struct raft_io_request *request;
+
+    (void)params;
+
+    __push_io_request(f, &request_id, &request);
+
+    request->type = RAFT_IO_WRITE_VOTE;
+    request->args.write_vote.server_id = 1;
+
+    __submit(f, request_id);
+
+    __assert_metadata(f, 1, 1, 1, 0, 1, 0);
+
+    raft_io_queue__pop(&f->queue, request_id);
+
+    return MUNIT_OK;
+}
+
+/* After the very first write (which writes into metadata1), metadata2 is
+ * written. */
+static MunitResult test_write_vote_metadata_2(const MunitParameter params[],
+                                              void *data)
+{
+    struct fixture *f = data;
+    unsigned request_id;
+    struct raft_io_request *request;
+
+    (void)params;
+
+    __push_io_request(f, &request_id, &request);
+
+    request->type = RAFT_IO_WRITE_VOTE;
+    request->args.write_vote.server_id = 1;
+
+    __submit(f, request_id);
+
+    __push_io_request(f, &request_id, &request);
+
+    request->type = RAFT_IO_WRITE_VOTE;
+    request->args.write_vote.server_id = 2;
+
+    __submit(f, request_id);
+
+    __assert_metadata(f, 2, 1, 2, 0, 2, 0);
+
+    raft_io_queue__pop(&f->queue, request_id);
+
+    return MUNIT_OK;
+}
+
+/* Write vote after a read state request, which updates which is the next
+ * metadata file to write. */
+static MunitResult test_write_vote_after_read_state(
+    const MunitParameter params[],
+    void *data)
+{
+    struct fixture *f = data;
+    unsigned request_id;
+    struct raft_io_request *request;
+
+    (void)params;
+
+    __write_metadata(f, /*                                      */
+                     1, /* Metadata file index                  */
+                     1, /* Format                               */
+                     2, /* Version                              */
+                     3, /* Term                                 */
+                     0, /* Voted for                            */
+                     0 /* First index                          */);
+
+    __push_io_request(f, &request_id, &request);
+
+    request->type = RAFT_IO_READ_STATE;
+
+    __submit(f, request_id);
+
+    request->type = RAFT_IO_WRITE_VOTE;
+    request->args.write_vote.server_id = 2;
+
+    __submit(f, request_id);
+
+    __assert_metadata(f, 2, 1, 3, 3, 2, 0);
+
+    raft_io_queue__pop(&f->queue, request_id);
+
+    return MUNIT_OK;
+}
+
+static MunitTest write_vote_tests[] = {
+    {"/empty", test_write_vote_empty, setup, tear_down, 0, NULL},
+    {"/metadata-2", test_write_vote_metadata_2, setup, tear_down, 0, NULL},
+    {"/after-read-state", test_write_vote_after_read_state, setup, tear_down, 0,
+     NULL},
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 
@@ -716,5 +862,6 @@ MunitSuite raft_io_uv_suites[] = {
     {"/init", init_tests, NULL, 1, 0},
     {"/read-state", read_state_tests, NULL, 1, 0},
     {"/write-term", write_term_tests, NULL, 1, 0},
+    {"/write-vote", write_vote_tests, NULL, 1, 0},
     {NULL, NULL, NULL, 0, 0},
 };
