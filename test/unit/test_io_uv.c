@@ -1,5 +1,6 @@
 #include "../../include/raft.h"
 
+#include "../../src/binary.h"
 #include "../../src/io_queue.h"
 
 #include "../lib/fs.h"
@@ -104,6 +105,27 @@ static void tear_down(void *data)
         if (rv != 0) {                                               \
             munit_logf(MUNIT_LOG_ERROR, "submit: %s", F->io.errmsg); \
         }                                                            \
+    }
+
+/**
+ * Write either the metadata1 or metadata2 file, filling it with the given
+ * values.
+ */
+#define __write_metadata(F, N, FORMAT, VERSION, TERM, VOTED_FOR, FIRST_INDEX) \
+    {                                                                         \
+        uint8_t buf[RAFT_IO_UV_METADATA_SIZE];                                \
+        void *cursor = buf;                                                   \
+        char filename[strlen("metadataN") + 1];                               \
+                                                                              \
+        sprintf(filename, "metadata%d", N);                                   \
+                                                                              \
+        raft__put64(&cursor, FORMAT);                                         \
+        raft__put64(&cursor, VERSION);                                        \
+        raft__put64(&cursor, TERM);                                           \
+        raft__put64(&cursor, VOTED_FOR);                                      \
+        raft__put64(&cursor, FIRST_INDEX);                                    \
+                                                                              \
+        test_dir_write_file(F->dir, filename, buf, sizeof buf);               \
     }
 
 /**
@@ -305,17 +327,16 @@ static MunitResult test_read_state_metadata_only_1(
     struct fixture *f = data;
     unsigned request_id;
     struct raft_io_request *request;
-    uint8_t buf[RAFT_IO_UV_METADATA_SIZE] = {
-        1, 0, 0, 0, 0, 0, 0, 0, /* Format */
-        1, 0, 0, 0, 0, 0, 0, 0, /* Version */
-        1, 0, 0, 0, 0, 0, 0, 0, /* Term */
-        0, 0, 0, 0, 0, 0, 0, 0, /* Vote */
-        0, 0, 0, 0, 0, 0, 0, 0, /* First index */
-    };
 
     (void)params;
 
-    test_dir_write_file(f->dir, "metadata1", buf, sizeof buf);
+    __write_metadata(f, /*                                      */
+                     1, /* Metadata file index                  */
+                     1, /* Format                               */
+                     1, /* Version                              */
+                     1, /* Term                                 */
+                     0, /* Voted for                            */
+                     0 /* First index                          */);
 
     __push_io_request(f, &request_id, &request);
 
@@ -337,25 +358,24 @@ static MunitResult test_read_state_metadata_1(const MunitParameter params[],
     struct fixture *f = data;
     unsigned request_id;
     struct raft_io_request *request;
-    uint8_t buf1[RAFT_IO_UV_METADATA_SIZE] = {
-        1, 0, 0, 0, 0, 0, 0, 0, /* Format */
-        3, 0, 0, 0, 0, 0, 0, 0, /* Version */
-        3, 0, 0, 0, 0, 0, 0, 0, /* Term */
-        0, 0, 0, 0, 0, 0, 0, 0, /* Vote */
-        0, 0, 0, 0, 0, 0, 0, 0, /* First index */
-    };
-    uint8_t buf2[RAFT_IO_UV_METADATA_SIZE] = {
-        1, 0, 0, 0, 0, 0, 0, 0, /* Format */
-        2, 0, 0, 0, 0, 0, 0, 0, /* Version */
-        2, 0, 0, 0, 0, 0, 0, 0, /* Term */
-        0, 0, 0, 0, 0, 0, 0, 0, /* Vote */
-        0, 0, 0, 0, 0, 0, 0, 0, /* First index */
-    };
 
     (void)params;
 
-    test_dir_write_file(f->dir, "metadata1", buf1, sizeof buf1);
-    test_dir_write_file(f->dir, "metadata2", buf2, sizeof buf2);
+    __write_metadata(f, /*                                      */
+                     1, /* Metadata file index                  */
+                     1, /* Format                               */
+                     3, /* Version                              */
+                     3, /* Term                                 */
+                     0, /* Voted for                            */
+                     0 /* First index                          */);
+
+    __write_metadata(f, /*                                      */
+                     2, /* Metadata file index                  */
+                     1, /* Format                               */
+                     2, /* Version                              */
+                     2, /* Term                                 */
+                     0, /* Voted for                            */
+                     0 /* First index                          */);
 
     __push_io_request(f, &request_id, &request);
 
@@ -377,25 +397,24 @@ static MunitResult test_read_state_metadata_2(const MunitParameter params[],
     struct fixture *f = data;
     unsigned request_id;
     struct raft_io_request *request;
-    uint8_t buf1[RAFT_IO_UV_METADATA_SIZE] = {
-        1, 0, 0, 0, 0, 0, 0, 0, /* Format */
-        1, 0, 0, 0, 0, 0, 0, 0, /* Version */
-        1, 0, 0, 0, 0, 0, 0, 0, /* Term */
-        0, 0, 0, 0, 0, 0, 0, 0, /* Vote */
-        0, 0, 0, 0, 0, 0, 0, 0, /* First index */
-    };
-    uint8_t buf2[RAFT_IO_UV_METADATA_SIZE] = {
-        1, 0, 0, 0, 0, 0, 0, 0, /* Format */
-        2, 0, 0, 0, 0, 0, 0, 0, /* Version */
-        2, 0, 0, 0, 0, 0, 0, 0, /* Term */
-        0, 0, 0, 0, 0, 0, 0, 0, /* Vote */
-        0, 0, 0, 0, 0, 0, 0, 0, /* First index */
-    };
 
     (void)params;
 
-    test_dir_write_file(f->dir, "metadata1", buf1, sizeof buf1);
-    test_dir_write_file(f->dir, "metadata2", buf2, sizeof buf2);
+    __write_metadata(f, /*                                      */
+                     1, /* Metadata file index                  */
+                     1, /* Format                               */
+                     1, /* Version                              */
+                     1, /* Term                                 */
+                     0, /* Voted for                            */
+                     0 /* First index                          */);
+
+    __write_metadata(f, /*                                      */
+                     2, /* Metadata file index                  */
+                     1, /* Format                               */
+                     2, /* Version                              */
+                     2, /* Term                                 */
+                     0, /* Voted for                            */
+                     0 /* First index                          */);
 
     __push_io_request(f, &request_id, &request);
 
@@ -442,18 +461,17 @@ static MunitResult test_read_state_metadata_wrong_format(
     struct fixture *f = data;
     unsigned request_id;
     struct raft_io_request *request;
-    uint8_t buf[RAFT_IO_UV_METADATA_SIZE] = {
-        2, 0, 0, 0, 0, 0, 0, 0, /* Format */
-        1, 0, 0, 0, 0, 0, 0, 0, /* Version */
-        1, 0, 0, 0, 0, 0, 0, 0, /* Term */
-        0, 0, 0, 0, 0, 0, 0, 0, /* Vote */
-        0, 0, 0, 0, 0, 0, 0, 0, /* First index */
-    };
     int rv;
 
     (void)params;
 
-    test_dir_write_file(f->dir, "metadata1", buf, sizeof buf);
+    __write_metadata(f, /*                                      */
+                     1, /* Metadata file index                  */
+                     2, /* Format                               */
+                     1, /* Version                              */
+                     1, /* Term                                 */
+                     0, /* Voted for                            */
+                     0 /* First index                          */);
 
     __push_io_request(f, &request_id, &request);
 
@@ -478,18 +496,17 @@ static MunitResult test_read_state_metadata_wrong_version(
     struct fixture *f = data;
     unsigned request_id;
     struct raft_io_request *request;
-    uint8_t buf[RAFT_IO_UV_METADATA_SIZE] = {
-        1, 0, 0, 0, 0, 0, 0, 0, /* Format */
-        0, 0, 0, 0, 0, 0, 0, 0, /* Version */
-        1, 0, 0, 0, 0, 0, 0, 0, /* Term */
-        0, 0, 0, 0, 0, 0, 0, 0, /* Vote */
-        0, 0, 0, 0, 0, 0, 0, 0, /* First index */
-    };
     int rv;
 
     (void)params;
 
-    test_dir_write_file(f->dir, "metadata1", buf, sizeof buf);
+    __write_metadata(f, /*                                      */
+                     1, /* Metadata file index                  */
+                     1, /* Format                               */
+                     0, /* Version                              */
+                     1, /* Term                                 */
+                     0, /* Voted for                            */
+                     0 /* First index                          */);
 
     __push_io_request(f, &request_id, &request);
 
@@ -514,18 +531,17 @@ static MunitResult test_read_state_metadata_wrong_term(
     struct fixture *f = data;
     unsigned request_id;
     struct raft_io_request *request;
-    uint8_t buf[RAFT_IO_UV_METADATA_SIZE] = {
-        1, 0, 0, 0, 0, 0, 0, 0, /* Format */
-        1, 0, 0, 0, 0, 0, 0, 0, /* Version */
-        0, 0, 0, 0, 0, 0, 0, 0, /* Term */
-        0, 0, 0, 0, 0, 0, 0, 0, /* Vote */
-        0, 0, 0, 0, 0, 0, 0, 0, /* First index */
-    };
     int rv;
 
     (void)params;
 
-    test_dir_write_file(f->dir, "metadata1", buf, sizeof buf);
+    __write_metadata(f, /*                                      */
+                     1, /* Metadata file index                  */
+                     1, /* Format                               */
+                     1, /* Version                              */
+                     0, /* Term                                 */
+                     0, /* Voted for                            */
+                     0 /* First index                          */);
 
     __push_io_request(f, &request_id, &request);
 
@@ -544,32 +560,32 @@ static MunitResult test_read_state_metadata_wrong_term(
 
 /* The data directory has both metadata files, but they have the same
  * version. */
-static MunitResult test_read_state_metadata_same_version(const MunitParameter params[],
-                                              void *data)
+static MunitResult test_read_state_metadata_same_version(
+    const MunitParameter params[],
+    void *data)
 {
     struct fixture *f = data;
     unsigned request_id;
     struct raft_io_request *request;
-    uint8_t buf1[RAFT_IO_UV_METADATA_SIZE] = {
-        1, 0, 0, 0, 0, 0, 0, 0, /* Format */
-        2, 0, 0, 0, 0, 0, 0, 0, /* Version */
-        3, 0, 0, 0, 0, 0, 0, 0, /* Term */
-        0, 0, 0, 0, 0, 0, 0, 0, /* Vote */
-        0, 0, 0, 0, 0, 0, 0, 0, /* First index */
-    };
-    uint8_t buf2[RAFT_IO_UV_METADATA_SIZE] = {
-        1, 0, 0, 0, 0, 0, 0, 0, /* Format */
-        2, 0, 0, 0, 0, 0, 0, 0, /* Version */
-        2, 0, 0, 0, 0, 0, 0, 0, /* Term */
-        0, 0, 0, 0, 0, 0, 0, 0, /* Vote */
-        0, 0, 0, 0, 0, 0, 0, 0, /* First index */
-    };
     int rv;
 
     (void)params;
 
-    test_dir_write_file(f->dir, "metadata1", buf1, sizeof buf1);
-    test_dir_write_file(f->dir, "metadata2", buf2, sizeof buf2);
+    __write_metadata(f, /*                                      */
+                     1, /* Metadata file index                  */
+                     1, /* Format                               */
+                     2, /* Version                              */
+                     3, /* Term                                 */
+                     0, /* Voted for                            */
+                     0 /* First index                          */);
+
+    __write_metadata(f, /*                                      */
+                     2, /* Metadata file index                  */
+                     1, /* Format                               */
+                     2, /* Version                              */
+                     2, /* Term                                 */
+                     0, /* Voted for                            */
+                     0 /* First index                          */);
 
     __push_io_request(f, &request_id, &request);
 
@@ -586,24 +602,22 @@ static MunitResult test_read_state_metadata_same_version(const MunitParameter pa
     return MUNIT_OK;
 }
 
-static MunitTest submit_tests[] = {
-    {"/read-state-empty", test_read_state_empty, setup, tear_down, 0, NULL},
-    {"/read-state-metadata-only-1", test_read_state_metadata_only_1, setup,
-     tear_down, 0, NULL},
-    {"/read-state-metadata-1", test_read_state_metadata_1, setup,
-     tear_down, 0, NULL},
-    {"/read-state-metadata-2", test_read_state_metadata_2, setup, tear_down, 0,
+static MunitTest read_state_tests[] = {
+    {"/empty", test_read_state_empty, setup, tear_down, 0, NULL},
+    {"/metadata-only-1", test_read_state_metadata_only_1, setup, tear_down, 0,
      NULL},
-    {"/read-state-metadata-short", test_read_state_metadata_short, setup,
+    {"/metadata-1", test_read_state_metadata_1, setup, tear_down, 0, NULL},
+    {"/metadata-2", test_read_state_metadata_2, setup, tear_down, 0, NULL},
+    {"/metadata-short", test_read_state_metadata_short, setup, tear_down, 0,
+     NULL},
+    {"/metadata-wrong-format", test_read_state_metadata_wrong_format, setup,
      tear_down, 0, NULL},
-    {"/read-state-metadata-wrong-format", test_read_state_metadata_wrong_format,
-     setup, tear_down, 0, NULL},
-    {"/read-state-metadata-wrong-version",
-     test_read_state_metadata_wrong_version, setup, tear_down, 0, NULL},
-    {"/read-state-metadata-wrong-term", test_read_state_metadata_wrong_term,
-     setup, tear_down, 0, NULL},
-    {"/read-state-metadata-same-version",
-     test_read_state_metadata_same_version, setup, tear_down, 0, NULL},
+    {"/metadata-wrong-version", test_read_state_metadata_wrong_version, setup,
+     tear_down, 0, NULL},
+    {"/metadata-wrong-term", test_read_state_metadata_wrong_term, setup,
+     tear_down, 0, NULL},
+    {"/metadata-same-version", test_read_state_metadata_same_version, setup,
+     tear_down, 0, NULL},
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 
@@ -613,6 +627,6 @@ static MunitTest submit_tests[] = {
 
 MunitSuite raft_io_uv_suites[] = {
     {"/init", init_tests, NULL, 1, 0},
-    {"/submit", submit_tests, NULL, 1, 0},
+    {"/read-state", read_state_tests, NULL, 1, 0},
     {NULL, NULL, NULL, 0, 0},
 };
