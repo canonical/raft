@@ -22,8 +22,4 @@ int raft_io_queue__push(struct raft_io_queue *q, unsigned *id);
  */
 void raft_io_queue__pop(struct raft_io_queue *q, unsigned id);
 
-int raft_io_queue__push_(struct raft *r, unsigned *id);
-void raft_io_queue__pop_(struct raft *r, unsigned id);
-void raft_io_queue__close_(struct raft *r);
-
 #endif /* RAFT_IO_QUEUE_H */

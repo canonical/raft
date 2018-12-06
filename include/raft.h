@@ -1103,13 +1103,6 @@ int raft_remove_server(struct raft *r, const unsigned id);
 void raft_watch(struct raft *r, int event, void (*cb)(void *, int, void *));
 
 /**
- * Fetch the I/O request with the given ID.
- *
- * This API is meant to be used by implementations of the Raft I/O interface.
- */
-struct raft_io_request *raft_io_queue_get_(struct raft *r, unsigned id);
-
-/**
  * Process the result of an asynchronous I/O request that involves raft entries
  * or snapshots (i.e. memory shared between a raft instance and its I/O
  * implementation).

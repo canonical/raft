@@ -89,7 +89,6 @@ void raft_close(struct raft *r)
     }
 
     raft_queue__close(r);
-    raft_io_queue__close_(r);
 
     raft_state__clear(r);
     raft_log__close(&r->log);
