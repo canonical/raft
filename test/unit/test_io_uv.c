@@ -129,6 +129,27 @@ static void tear_down(void *data)
     }
 
 /**
+ * Assert that the content of either the metadata1 or metadata2 file match the
+ * given values.
+ */
+#define __assert_metadata(F, N, FORMAT, VERSION, TERM, VOTED_FOR, FIRST_INDEX) \
+    {                                                                          \
+        uint8_t buf[RAFT_IO_UV_METADATA_SIZE];                                 \
+        void *cursor = buf;                                                    \
+        char filename[strlen("metadataN") + 1];                                \
+                                                                               \
+        sprintf(filename, "metadata%d", N);                                    \
+                                                                               \
+        test_dir_read_file(F->dir, filename, buf, sizeof buf);                 \
+                                                                               \
+        munit_assert_int(raft__get64(&cursor), ==, FORMAT);                    \
+        munit_assert_int(raft__get64(&cursor), ==, VERSION);                   \
+        munit_assert_int(raft__get64(&cursor), ==, TERM);                      \
+        munit_assert_int(raft__get64(&cursor), ==, VOTED_FOR);                 \
+        munit_assert_int(raft__get64(&cursor), ==, FIRST_INDEX);               \
+    }
+
+/**
  * Assert that the metadata in the given RAFT_IO_READ_STATE result equals the
  * given values.
  */
@@ -293,7 +314,7 @@ static MunitTest init_tests[] = {
 };
 
 /**
- * raft_uv_submit
+ * raft_io_uv__read_state
  */
 
 /* The data directory is empty */
@@ -622,11 +643,78 @@ static MunitTest read_state_tests[] = {
 };
 
 /**
+ * raft_io_uv__write_term
+ */
+
+/* The data directory is empty */
+static MunitResult test_write_term_empty(const MunitParameter params[],
+                                         void *data)
+{
+    struct fixture *f = data;
+    unsigned request_id;
+    struct raft_io_request *request;
+
+    (void)params;
+
+    __push_io_request(f, &request_id, &request);
+
+    request->type = RAFT_IO_WRITE_TERM;
+    request->args.write_term.term = 1;
+
+    __submit(f, request_id);
+
+    __assert_metadata(f, 1, 1, 1, 1, 0, 0);
+
+    raft_io_queue__pop(&f->queue, request_id);
+
+    return MUNIT_OK;
+}
+
+/* After the very first write (which writes into metadata1), metadata2 is
+ * written. */
+static MunitResult test_write_term_metadata_2(const MunitParameter params[],
+                                              void *data)
+{
+    struct fixture *f = data;
+    unsigned request_id;
+    struct raft_io_request *request;
+
+    (void)params;
+
+    __push_io_request(f, &request_id, &request);
+
+    request->type = RAFT_IO_WRITE_TERM;
+    request->args.write_term.term = 1;
+
+    __submit(f, request_id);
+
+    __push_io_request(f, &request_id, &request);
+
+    request->type = RAFT_IO_WRITE_TERM;
+    request->args.write_term.term = 2;
+
+    __submit(f, request_id);
+
+    __assert_metadata(f, 2, 1, 2, 2, 0, 0);
+
+    raft_io_queue__pop(&f->queue, request_id);
+
+    return MUNIT_OK;
+}
+
+static MunitTest write_term_tests[] = {
+    {"/empty", test_write_term_empty, setup, tear_down, 0, NULL},
+    {"/metadata-2", test_write_term_metadata_2, setup, tear_down, 0, NULL},
+    {NULL, NULL, NULL, NULL, 0, NULL},
+};
+
+/**
  * Test suite
  */
 
 MunitSuite raft_io_uv_suites[] = {
     {"/init", init_tests, NULL, 1, 0},
     {"/read-state", read_state_tests, NULL, 1, 0},
+    {"/write-term", write_term_tests, NULL, 1, 0},
     {NULL, NULL, NULL, 0, 0},
 };

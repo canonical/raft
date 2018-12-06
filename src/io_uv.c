@@ -45,6 +45,9 @@ struct raft_io_uv
     unsigned short next_metadata_n;       /* Next metadata file to write */
     unsigned short next_metadata_version; /* Next metadata version */
 
+    raft_index first_index; /* Cache of persisted log first index */
+    raft_term term;         /* Cache of persisted term */
+
     /* Parameters passed via raft_io->init */
     struct raft_io_queue *queue;
     void *p;
@@ -57,7 +60,6 @@ struct raft_io_uv
 
 struct raft_io_uv__metadata
 {
-    unsigned format;
     unsigned long long version;
     raft_term term;
     unsigned voted_for;
@@ -167,8 +169,8 @@ void raft_io_uv__path(struct raft_io_uv *io, const char *filename, char *path)
 }
 
 /**
- * Read the @n'th metadata file (with @n equal to 1 or 2) and populate the given
- * metadata buffer accordingly.
+ * Read the @n'th metadata file (with @n equal to 1 or 2) and decode the content
+ * of the file, populating the given metadata buffer accordingly.
  */
 static int raft_io_uv__read_metadata(struct raft_io_uv *uv,
                                      unsigned short n,
@@ -177,7 +179,8 @@ static int raft_io_uv__read_metadata(struct raft_io_uv *uv,
     char path[RAFT_IO_UV__MAX_PATH_LEN];    /* Full path of metadata file */
     char filename[strlen("metadataN") + 1]; /* Pattern of metadata filename */
     uint8_t buf[RAFT_IO_UV_METADATA_SIZE];  /* Content of metadata file */
-    void *cursor;
+    void *cursor = buf;
+    unsigned format;
     int fd;
     int rv;
 
@@ -218,11 +221,11 @@ static int raft_io_uv__read_metadata(struct raft_io_uv *uv,
 
     cursor = buf;
 
-    metadata->format = raft__get64(&cursor);
+    format = raft__get64(&cursor);
 
-    if (metadata->format != RAFT_IO_UV__FORMAT) {
+    if (format != RAFT_IO_UV__FORMAT) {
         raft_errorf(uv->errmsg, "parse %s: unknown format %d", filename,
-                    metadata->format);
+                    format);
         return RAFT_ERR_IO;
     }
 
@@ -271,10 +274,6 @@ static int raft_io_uv__read_state(struct raft_io_uv *uv,
         request->result.read_state.entries = NULL;
         request->result.read_state.n = 0;
 
-        /* Next metadata file to write will be metadata1 at version 1. */
-        uv->next_metadata_n = 1;
-        uv->next_metadata_version = 1;
-
         return 0;
     }
 
@@ -306,12 +305,91 @@ static int raft_io_uv__read_state(struct raft_io_uv *uv,
     request->result.read_state.entries = NULL;
     request->result.read_state.n = 0;
 
+    /* Update our cache as well */
+    uv->first_index = metadata->first_index;
+    uv->term = metadata->term;
+
+    return 0;
+}
+
+/**
+ * Write the @n'th metadata file (with @n equal to 1 or 2), encoding the given
+ * @metadata.
+ */
+static int raft_io_uv__write_metadata(struct raft_io_uv *uv,
+                                      unsigned short n,
+                                      struct raft_io_uv__metadata *metadata)
+{
+    char path[RAFT_IO_UV__MAX_PATH_LEN];    /* Full path of metadata file */
+    char filename[strlen("metadataN") + 1]; /* Pattern of metadata filename */
+    uint8_t buf[RAFT_IO_UV_METADATA_SIZE];  /* Content of metadata file */
+    void *cursor = buf;
+    int fd;
+    int rv;
+
+    assert(n == 1 || n == 2);
+
+    sprintf(filename, "metadata%d", n);
+
+    raft__put64(&cursor, RAFT_IO_UV__FORMAT);
+    raft__put64(&cursor, metadata->version);
+    raft__put64(&cursor, metadata->term);
+    raft__put64(&cursor, metadata->voted_for);
+    raft__put64(&cursor, metadata->first_index);
+
+    raft_io_uv__path(uv, filename, path);
+
+    fd = open(path, O_WRONLY | O_CREAT | O_SYNC | O_TRUNC, S_IRUSR | S_IWUSR);
+    if (fd == -1) {
+        raft_errorf(uv->errmsg, "open %s: %s", filename, strerror(errno));
+        return RAFT_ERR_IO;
+    }
+
+    rv = write(fd, buf, sizeof buf);
+
+    close(fd);
+
+    if (rv == -1) {
+        /* TODO: handle EINTR? */
+        raft_errorf(uv->errmsg, "write %s: %s", filename, strerror(errno));
+        return RAFT_ERR_IO;
+    }
+
+    if (rv != sizeof buf) {
+        /* TODO: when can this happen? */
+        raft_errorf(uv->errmsg, "write %s: only %d bytes written", filename,
+                    rv);
+        return RAFT_ERR_IO;
+    };
+
     return 0;
 }
 
 static int raft_io_uv__write_term(struct raft_io_uv *uv,
                                   struct raft_io_request *request)
 {
+    struct raft_io_uv__metadata metadata;
+    unsigned short n;
+    int rv;
+
+    assert(uv->next_metadata_n == 1 || uv->next_metadata_n == 2);
+    assert(uv->next_metadata_version > 0);
+
+    n = uv->next_metadata_n;
+    metadata.version = uv->next_metadata_version;
+    metadata.term = request->args.write_term.term;
+    metadata.voted_for = 0;
+    metadata.first_index = uv->first_index;
+
+    rv = raft_io_uv__write_metadata(uv, n, &metadata);
+    if (rv != 0) {
+        return rv;
+    }
+
+    uv->next_metadata_n = n == 1 ? 2 : 1;
+    uv->next_metadata_version = metadata.version + 1;
+    uv->term = metadata.term;
+
     return 0;
 }
 
@@ -435,8 +513,10 @@ int raft_io_uv_init(struct raft_io *io, struct uv_loop_s *loop, const char *dir)
     }
 
     uv->loop = loop;
-    uv->next_metadata_n = 0;
-    uv->next_metadata_version = 0;
+    uv->next_metadata_n = 1;
+    uv->next_metadata_version = 1;
+    uv->first_index = 0;
+    uv->term = 0;
     uv->errmsg = io->errmsg;
 
     io->data = uv;

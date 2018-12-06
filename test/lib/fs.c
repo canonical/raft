@@ -63,3 +63,23 @@ void test_dir_write_file(char *dir, const char *filename, void *buf, size_t n)
 
     close(fd);
 }
+
+void test_dir_read_file(char *dir, const char *filename, void *buf, size_t n)
+{
+    char path[256];
+    int fd;
+    int rv;
+
+    strcpy(path, dir);
+    strcat(path, "/");
+    strcat(path, filename);
+
+    fd = open(path, O_RDONLY);
+
+    munit_assert_int(fd, !=, -1);
+
+    rv = read(fd, buf, n);
+    munit_assert_int(rv, ==, n);
+
+    close(fd);
+}
