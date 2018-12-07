@@ -8,6 +8,15 @@
 #include "munit.h"
 
 /**
+ * Munit parameter defining the file system type the temporary directory should
+ * be created in.
+ *
+ * The various file systems must have been previously setup with the fs.sh
+ * script.
+ */
+#define TEST_DIR_FS_TYPE "dir-fs-type"
+
+/**
  * Create a temporary test directory.
  */
 char *test_dir_setup(const MunitParameter params[]);

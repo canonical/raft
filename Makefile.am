@@ -57,7 +57,8 @@ libraft_la_SOURCES = \
   src/watch.c
 if IO_UV
   libraft_la_SOURCES += \
-  src/io_uv.c
+  src/io_uv.c \
+  src/io_uv_fs.c
 endif
 if IO_STUB
   libraft_la_SOURCES += \
@@ -103,7 +104,8 @@ unit_test_SOURCES += \
   test/unit/test_tick.c
 if IO_UV
   unit_test_SOURCES += \
-  test/unit/test_io_uv.c
+  test/unit/test_io_uv.c \
+  test/unit/test_io_uv_fs.c
 endif
 if IO_STUB
   unit_test_SOURCES += \

@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <fcntl.h>
 #include <ftw.h>
 #include <stdio.h>
@@ -8,16 +9,24 @@
 
 #include "fs.h"
 
-#define TEST_DIR_TEMPLATE "/tmp/raft-test-XXXXXX"
+#define TEST_DIR_TEMPLATE "./tmp/%s/raft-test-XXXXXX"
 
 char *test_dir_setup(const MunitParameter params[])
 {
-    char *dir = munit_malloc(strlen(TEST_DIR_TEMPLATE) + 1);
+    const char *fs_type = munit_parameters_get(params, TEST_DIR_FS_TYPE);
+    char *dir;
 
-    (void)params;
+    if (fs_type == NULL) {
+        fs_type = "tmpfs";
+    }
 
-    strcpy(dir, TEST_DIR_TEMPLATE);
-    munit_assert_ptr_not_null(mkdtemp(dir));
+    dir = munit_malloc(strlen(TEST_DIR_TEMPLATE) + strlen(fs_type) + 1);
+
+    sprintf(dir, TEST_DIR_TEMPLATE, fs_type);
+
+    if (mkdtemp(dir) == NULL) {
+        munit_error(strerror(errno));
+    }
 
     return dir;
 }
@@ -75,8 +84,10 @@ void test_dir_read_file(char *dir, const char *filename, void *buf, size_t n)
     strcat(path, filename);
 
     fd = open(path, O_RDONLY);
-
-    munit_assert_int(fd, !=, -1);
+    if (fd == -1) {
+        munit_logf(MUNIT_LOG_ERROR, "read file '%s': %s", path,
+                   strerror(errno));
+    }
 
     rv = read(fd, buf, n);
     munit_assert_int(rv, ==, n);

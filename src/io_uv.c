@@ -9,17 +9,8 @@
 
 #include "binary.h"
 #include "error.h"
+#include "io_uv_fs.h"
 #include "logger.h"
-
-/**
- * Maximum length of a file system path.
- */
-#define RAFT_IO_UV__MAX_PATH_LEN 1024
-
-/**
- * Maximum length of a file name.
- */
-#define RAFT_IO_UV__MAX_FILENAME_LEN 128
 
 /**
  * Current on-disk format.
@@ -27,10 +18,19 @@
 #define RAFT_IO_UV__FORMAT 1
 
 /**
- * Maximum length of the data directory path.
+ * Format string for open segment filenames.
+ *
+ * First param: incrementing counter.
  */
-#define RAFT_IO_UV__MAX_DIR_LEN \
-    (RAFT_IO_UV__MAX_PATH_LEN - RAFT_IO_UV__MAX_FILENAME_LEN - 1)
+#define RAFT_IO_UV__OPEN_SEGMENT_FORMAT "open-%lu"
+
+/**
+ * Format string for closed segment filenames.
+ *
+ * First param: start index, inclusive.
+ * Second param: end index, inclusive.
+ */
+#define RAFT_IO_UV__CLOSED_SEGMENT_FORMAT "%020lu-%020lu"
 
 /**
  * Raft I/O implementation based on libuv.
@@ -161,7 +161,7 @@ static void raft_io_uv__close(struct raft_io *io)
 void raft_io_uv__path(struct raft_io_uv *io, const char *filename, char *path)
 {
     assert(filename != NULL);
-    assert(strlen(filename) < RAFT_IO_UV__MAX_FILENAME_LEN);
+    assert(strlen(filename) < RAFT_IO_UV_FS_MAX_FILENAME_LEN);
 
     strcpy(path, io->dir);
     strcat(path, "/");
@@ -176,7 +176,7 @@ static int raft_io_uv__read_metadata(struct raft_io_uv *uv,
                                      unsigned short n,
                                      struct raft_io_uv__metadata *metadata)
 {
-    char path[RAFT_IO_UV__MAX_PATH_LEN];    /* Full path of metadata file */
+    char path[RAFT_IO_UV_FS_MAX_PATH_LEN];  /* Full path of metadata file */
     char filename[strlen("metadataN") + 1]; /* Pattern of metadata filename */
     uint8_t buf[RAFT_IO_UV_METADATA_SIZE];  /* Content of metadata file */
     void *cursor = buf;
@@ -320,7 +320,7 @@ static int raft_io_uv__write_metadata(struct raft_io_uv *uv,
                                       unsigned short n,
                                       struct raft_io_uv__metadata *metadata)
 {
-    char path[RAFT_IO_UV__MAX_PATH_LEN];    /* Full path of metadata file */
+    char path[RAFT_IO_UV_FS_MAX_PATH_LEN];  /* Full path of metadata file */
     char filename[strlen("metadataN") + 1]; /* Pattern of metadata filename */
     uint8_t buf[RAFT_IO_UV_METADATA_SIZE];  /* Content of metadata file */
     void *cursor = buf;
@@ -472,9 +472,9 @@ static int raft_io_uv__ensure_dir(const char *dir, char *errmsg)
     int rv;
 
     /* Ensure that the given path doesn't exceed our static buffer limit */
-    if (strlen(dir) > RAFT_IO_UV__MAX_DIR_LEN) {
+    if (strlen(dir) > RAFT_IO_UV_FS_MAX_DIR_LEN) {
         raft_errorf(errmsg, "data directory exceeds %d characters",
-                    RAFT_IO_UV__MAX_DIR_LEN);
+                    RAFT_IO_UV_FS_MAX_DIR_LEN);
         return RAFT_ERR_IO;
     }
 

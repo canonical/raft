@@ -39,6 +39,34 @@ struct raft_io;
  * [8 bytes] ID of server we voted for.
  * [8 bytes] First index of the log.
  *
+ * Closed segments are named by the format string "%020lu-%020lu" with their
+ * start and end indexes, both inclusive. Closed segments always contain at
+ * least one entry; the end index is always at least as large as the start
+ * index. Closed segment files may occasionally include data past their
+ * filename's end index (these are ignored but a warning is logged). This can
+ * happen if the suffix of the segment is truncated and a crash occurs at an
+ * inopportune time (the segment file is first renamed, then truncated, and a
+ * crash occurs in between).
+ *
+ * Open segments are named by the format string "open-%lu" with a unique
+ * number. These should not exist when the server shuts down cleanly, but they
+ * exist while the server is running and may be left around during a crash.
+ * Open segments either contain entries which come after the last closed
+ * segment or are full of zeros. When the server crashes while appending to an
+ * open segment, the end of that file may be corrupt. We can't distinguish
+ * between a corrupt file and a partially written entry. The code assumes it's
+ * a partially written entry, logs a warning, and ignores it.
+ *
+ * Truncating a suffix of the log will remove all entries that are no longer
+ * part of the log. Truncating a prefix of the log will only remove complete
+ * segments that are before the new log start index. For example, if a
+ * segment has entries 10 through 20 and the prefix of the log is truncated to
+ * start at entry 15, that entire segment will be retained.
+ *
+ * Each segment file starts with a segment header, which currently contains
+ * just an 8-byte version number for the format of that segment. The current
+ * format (version 1) is just a concatenation of serialized entries.
+ *
  * [0] https://github.com/logcabin/logcabin/blob/master/Storage/SegmentedLog.h
  */
 int raft_io_uv_init(struct raft_io *io,
