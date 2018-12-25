@@ -87,12 +87,14 @@ struct raft_heap
     void (*free)(void *data, void *ptr);
     void *(*calloc)(void *data, size_t nmemb, size_t size);
     void *(*realloc)(void *data, void *ptr, size_t size);
+    void *(*aligned_alloc)(void *data, size_t alignment, size_t size);
 };
 
 void *raft_malloc(size_t size);
 void raft_free(void *ptr);
 void *raft_calloc(size_t nmemb, size_t size);
 void *raft_realloc(void *ptr, size_t size);
+void *raft_aligned_alloc(size_t alignment, size_t size);
 
 /**
  * Use a custom dynamic memory allocator.

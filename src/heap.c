@@ -26,8 +26,19 @@ static void *raft__realloc(void *data, void *ptr, size_t size)
     return realloc(ptr, size);
 }
 
+static void *raft__aligned_alloc(void *data, size_t alignment, size_t size)
+{
+    (void)data;
+    return aligned_alloc(alignment, size);
+}
+
 struct raft_heap raft_heap__default = {
-    NULL, raft__heap_malloc, raft__free, raft__calloc, raft__realloc,
+    NULL,               /* data */
+    raft__heap_malloc,  /* malloc */
+    raft__free,         /* free */
+    raft__calloc,       /* calloc */
+    raft__realloc,      /* realloc */
+    raft__aligned_alloc /* aligned_alloc */
 };
 
 struct raft_heap *raft_heap__current = &raft_heap__default;
