@@ -56,8 +56,8 @@ static int raft_io_uv_fs__block_size_probe(int fd, size_t size, bool *ok)
     aio_context_t ctx = 0;
     struct io_event event;
 
-    rv = posix_memalign(&data, size, size);
-    if (rv != 0) {
+    data = aligned_alloc(size, size);
+    if (data == NULL) {
         return UV_ENOMEM;
     }
 

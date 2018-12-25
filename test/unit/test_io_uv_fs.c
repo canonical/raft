@@ -16,8 +16,8 @@ struct fixture
     struct uv_loop_s loop;
     struct raft_io_uv_file file;
     struct raft_io_uv_fs req;
-    bool completed;    /* Whether the last write was completed */
-    int status;        /* Result of the last write */
+    bool completed; /* Whether the last write was completed */
+    int status;     /* Result of the last write */
 };
 
 static void *setup(const MunitParameter params[], void *user_data)
@@ -37,7 +37,7 @@ static void *setup(const MunitParameter params[], void *user_data)
     rv = uv_loop_init(&f->loop);
     munit_assert_int(rv, ==, 0);
 
-    f->req.data = &f;
+    f->req.data = f;
 
     f->completed = false;
     f->status = -1;
@@ -284,18 +284,15 @@ static MunitResult test_write_one(const MunitParameter params[], void *data)
     struct fixture *f = data;
     char *text;
     uv_buf_t buf;
-    int rv;
 
     (void)params;
 
     __create(f);
 
-    rv = posix_memalign((void **)&text, f->block_size, f->block_size);
-    munit_assert_int(rv, ==, 0);
+    text = aligned_alloc(f->block_size, f->block_size);
+    munit_assert_ptr_not_null(text);
 
     sprintf(text, "hello");
-
-    f->req.data = f;
 
     buf.base = (void *)text;
     buf.len = f->block_size;
@@ -315,8 +312,6 @@ static MunitResult test_write_one(const MunitParameter params[], void *data)
 }
 
 /* Test against all file system types */
-/*static char *test_write_two_dir_fs_type[] = {"btrfs", "ext4", "tmpfs",
-  "xfs",   "zfs",  NULL};*/
 static char *test_write_two_dir_fs_type[] = {"btrfs", "ext4", "tmpfs",
                                              "xfs",   "zfs",  NULL};
 
@@ -331,18 +326,15 @@ static MunitResult test_write_two(const MunitParameter params[], void *data)
     struct fixture *f = data;
     char *text;
     uv_buf_t buf;
-    int rv;
 
     (void)params;
 
     __create(f);
 
-    rv = posix_memalign((void **)&text, f->block_size, f->block_size);
-    munit_assert_int(rv, ==, 0);
+    text = aligned_alloc(f->block_size, f->block_size);
+    munit_assert_ptr_not_null(text);
 
     sprintf(text, "hello");
-
-    f->req.data = f;
 
     buf.base = (void *)text;
     buf.len = f->block_size;
@@ -367,9 +359,49 @@ static MunitResult test_write_two(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
+/* Test against all file system types */
+static char *test_write_vec_dir_fs_type[] = {"btrfs", "ext4", "tmpfs",
+                                             "xfs",   "zfs",  NULL};
+
+static MunitParameterEnum test_write_vec_params[] = {
+    {TEST_DIR_FS_TYPE, test_write_vec_dir_fs_type},
+    {NULL, NULL},
+};
+
+/* Write a vector of buffers. */
+static MunitResult test_write_vec(const MunitParameter params[], void *data)
+{
+    struct fixture *f = data;
+    uv_buf_t bufs[2];
+
+    (void)params;
+
+    __create(f);
+
+    bufs[0].base = aligned_alloc(f->block_size, f->block_size);
+    munit_assert_ptr_not_null(bufs[0].base);
+    bufs[0].len = f->block_size;
+
+    bufs[1].base = aligned_alloc(f->block_size, f->block_size);
+    munit_assert_ptr_not_null(bufs[1].base);
+    bufs[1].len = f->block_size;
+
+    __write(f, bufs, 2, 0);
+
+    munit_assert_int(f->status, ==, f->block_size * 2);
+
+    __close(f);
+
+    free(bufs[0].base);
+    free(bufs[1].base);
+
+    return MUNIT_OK;
+}
+
 static MunitTest write_tests[] = {
     {"/one", test_write_one, setup, tear_down, 0, test_write_one_params},
     {"/two", test_write_two, setup, tear_down, 0, test_write_two_params},
+    {"/vec", test_write_vec, setup, tear_down, 0, test_write_vec_params},
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 
