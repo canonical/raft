@@ -37,28 +37,30 @@
  */
 struct raft_io_uv
 {
-    char *dir;         /* Data directory */
-    size_t block_size; /* File system block size */
-    struct uv_loop_s *loop;
-    struct uv_timer_s ticker;
-    uint64_t last_tick;
+    char *dir;                /* Data directory */
+    size_t block_size;        /* File system block size */
+    struct uv_loop_s *loop;   /* UV event loop */
+    struct uv_timer_s ticker; /* Timer for periodic calls to raft_tick */
+    uint64_t last_tick;       /* Timestamp of the last raft_tick call */
 
     unsigned short next_metadata_n;       /* Next metadata file to write */
-    unsigned short next_metadata_version; /* Next metadata version */
+    unsigned short next_metadata_version; /* Next metadata sequential version */
 
     raft_index first_index; /* Cache of persisted log first index */
     raft_term term;         /* Cache of persisted term */
 
     /* Parameters passed via raft_io->init */
-    struct raft_io_queue *queue;
-    void *p;
-    void (*tick)(void *, const unsigned);
-    void (*notify)(void *, const unsigned, const int);
+    struct raft_io_queue *queue;                       /* Request queue */
+    void *p;                                           /* Custom data pointer */
+    void (*tick)(void *, const unsigned);              /* Tick function */
+    void (*notify)(void *, const unsigned, const int); /* Notify function */
 
-    /* Error message buffer */
-    char *errmsg;
+    char *errmsg; /* Error message buffer */
 };
 
+/**
+ * Deserialized content of a single metadata file.
+ */
 struct raft_io_uv__metadata
 {
     unsigned long long version;
@@ -67,6 +69,9 @@ struct raft_io_uv__metadata
     raft_index first_index;
 };
 
+/**
+ * Initializer.
+ */
 static void raft_io_uv__init(struct raft_io *io,
                              struct raft_io_queue *queue,
                              void *p,
@@ -93,10 +98,13 @@ static void raft_io_uv__ticker_cb(uv_timer_t *ticker)
 
     uv = ticker->data;
 
+    /* Get current time */
     now = uv_now(uv->loop);
 
+    /* Invoke the ticker */
     uv->tick(uv->p, now - uv->last_tick);
 
+    /* Update the last tick timestamp */
     uv->last_tick = now;
 }
 
@@ -110,30 +118,27 @@ static int raft_io_uv__start(struct raft_io *io, const unsigned msecs)
 
     uv = io->data;
 
-    /* Detect the file system block size */
-    rv = raft_io_uv_fs__block_size(uv->dir, &uv->block_size);
-    if (rv != 0) {
-        return RAFT_ERR_INTERNAL;
-    }
-
-    uv->last_tick = uv_now(uv->loop);
-
+    /* Initialize the tick timer handle. */
     rv = uv_timer_init(uv->loop, &uv->ticker);
     if (rv != 0) {
-        // raft_error__uv(r, rv, "init tick timer");
-        return RAFT_ERR_INTERNAL;
+        raft_errorf(uv->errmsg, "init tick timer: %s", uv_strerror(rv));
+        return RAFT_ERR_IO;
     }
-    uv->ticker.data = io;
+    uv->ticker.data = uv;
 
+    /* Start the tick timer handle.. */
     rv = uv_timer_start(&uv->ticker, raft_io_uv__ticker_cb, 0, msecs);
     if (rv != 0) {
-        // raft_error__uv(r, rv, "start tick timer");
-        return RAFT_ERR_INTERNAL;
+        raft_errorf(uv->errmsg, "start tick timer: %s", uv_strerror(rv));
+        return RAFT_ERR_IO;
     }
 
     return 0;
 }
 
+/**
+ * Stop the backend.
+ */
 static int raft_io_uv__stop(struct raft_io *io)
 {
     struct raft_io_uv *uv;
@@ -141,17 +146,22 @@ static int raft_io_uv__stop(struct raft_io *io)
 
     uv = io->data;
 
+    /* Stop the tick timer handle. */
     rv = uv_timer_stop(&uv->ticker);
     if (rv != 0) {
-        // raft_error__uv(r, rv, "stop tick timer");
+        raft_errorf(uv->errmsg, "stop tick timer: %s", uv_strerror(rv));
         return RAFT_ERR_INTERNAL;
     }
 
+    /* Close the ticker timer handle. */
     uv_close((uv_handle_t *)&uv->ticker, NULL);
 
     return 0;
 }
 
+/**
+ * Close the backend, releasing all resources it allocated.
+ */
 static void raft_io_uv__close(struct raft_io *io)
 {
     struct raft_io_uv *uv;
@@ -193,10 +203,11 @@ static int raft_io_uv__read_metadata(struct raft_io_uv *uv,
 
     assert(n == 1 || n == 2);
 
+    /* Render the metadata path */
     sprintf(filename, "metadata%d", n);
-
     raft_io_uv__path(uv, filename, path);
 
+    /* Open the metadata file, if it exists. */
     fd = open(path, O_RDONLY);
     if (fd == -1) {
         if (errno != ENOENT) {
@@ -210,6 +221,7 @@ static int raft_io_uv__read_metadata(struct raft_io_uv *uv,
         return 0;
     }
 
+    /* Read the content of the metadata file. */
     rv = read(fd, buf, sizeof buf);
     if (rv == -1) {
         raft_errorf(uv->errmsg, "read %s: %s", filename, strerror(errno));
@@ -226,6 +238,7 @@ static int raft_io_uv__read_metadata(struct raft_io_uv *uv,
 
     close(fd);
 
+    /* Decode the content of the metadata file. */
     cursor = buf;
 
     format = raft__get64(&cursor);
@@ -263,6 +276,7 @@ static int raft_io_uv__read_state(struct raft_io_uv *uv,
     struct raft_io_uv__metadata *metadata;
     int rv;
 
+    /* Read the two metadata file (if available). */
     rv = raft_io_uv__read_metadata(uv, 1, &metadata1);
     if (rv != 0) {
         return rv;
@@ -306,6 +320,7 @@ static int raft_io_uv__read_state(struct raft_io_uv *uv,
         uv->next_metadata_version = metadata2.version + 1;
     }
 
+    /* Fill the result. */
     request->result.read_state.term = metadata->term;
     request->result.read_state.voted_for = metadata->voted_for;
     request->result.read_state.first_index = metadata->first_index;
@@ -336,16 +351,18 @@ static int raft_io_uv__write_metadata(struct raft_io_uv *uv,
 
     assert(n == 1 || n == 2);
 
-    sprintf(filename, "metadata%d", n);
-
+    /* Encode the given metadata. */
     raft__put64(&cursor, RAFT_IO_UV__FORMAT);
     raft__put64(&cursor, metadata->version);
     raft__put64(&cursor, metadata->term);
     raft__put64(&cursor, metadata->voted_for);
     raft__put64(&cursor, metadata->first_index);
 
+    /* Render the metadata file name. */
+    sprintf(filename, "metadata%d", n);
     raft_io_uv__path(uv, filename, path);
 
+    /* Write the metadata file, creating it if it does not exist. */
     fd = open(path, O_WRONLY | O_CREAT | O_SYNC | O_TRUNC, S_IRUSR | S_IWUSR);
     if (fd == -1) {
         raft_errorf(uv->errmsg, "open %s: %s", filename, strerror(errno));
@@ -541,7 +558,15 @@ int raft_io_uv_init(struct raft_io *io, struct uv_loop_s *loop, const char *dir)
         uv->dir[strlen(uv->dir) - 1] = 0;
     }
 
+    /* Detect the file system block size */
+    rv = raft_io_uv_fs__block_size(uv->dir, &uv->block_size);
+    if (rv != 0) {
+        raft_errorf(uv->errmsg, "detect block size: %s", uv_strerror(rv));
+        return RAFT_ERR_IO;
+    }
+
     uv->loop = loop;
+    uv->last_tick = 0;
     uv->next_metadata_n = 1;
     uv->next_metadata_version = 1;
     uv->first_index = 0;

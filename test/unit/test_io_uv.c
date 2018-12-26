@@ -44,12 +44,16 @@ static void *setup(const MunitParameter params[], void *user_data)
 
     (void)user_data;
 
+    test_heap_setup(params, &f->heap);
+
     f->dir = test_dir_setup(params);
+
+    rv =
+        uv_replace_allocator(raft_malloc, raft_realloc, raft_calloc, raft_free);
+    munit_assert_int(rv, ==, 0);
 
     rv = uv_loop_init(&f->loop);
     munit_assert_int(rv, ==, 0);
-
-    test_heap_setup(params, &f->heap);
 
     raft_io_queue__init(&f->queue);
 
@@ -57,6 +61,8 @@ static void *setup(const MunitParameter params[], void *user_data)
     munit_assert_int(rv, ==, 0);
 
     f->io.init(&f->io, &f->queue, f, __tick, __notify);
+
+    f->elapsed = 0;
 
     return f;
 }
@@ -70,12 +76,15 @@ static void tear_down(void *data)
 
     raft_io_queue__close(&f->queue);
 
-    test_heap_tear_down(&f->heap);
-
     rv = uv_loop_close(&f->loop);
     munit_assert_int(rv, ==, 0);
 
+    rv = uv_replace_allocator(malloc, realloc, calloc, free);
+    munit_assert_int(rv, ==, 0);
+
     test_dir_tear_down(f->dir);
+
+    test_heap_tear_down(&f->heap);
 
     free(f);
 }
@@ -310,6 +319,44 @@ static MunitTest init_tests[] = {
     {"/access-error", test_init_access_error, setup, tear_down, 0, NULL},
     {"/oom", test_init_oom, setup, tear_down, 0, init_oom_params},
     {"/create-dir", test_init_create_dir, setup, tear_down, 0, NULL},
+    {NULL, NULL, NULL, NULL, 0, NULL},
+};
+
+/**
+ * raft_io_uv__start
+ */
+
+/* Once the raft_io_uv instance is started, the tick function gets called
+ * periodically. */
+static MunitResult test_start_tick(const MunitParameter params[], void *data)
+{
+    struct fixture *f = data;
+    int rv;
+
+    (void)params;
+
+    rv = f->io.start(&f->io, 50);
+    munit_assert_int(rv, ==, 0);
+
+    /* Run the loop and check that the tick callback was called. */
+    rv = uv_run(&f->loop, UV_RUN_ONCE);
+    munit_assert_int(rv, ==, 1);
+
+    munit_assert_int(f->elapsed, >=, 25);
+
+    rv = f->io.stop(&f->io);
+    munit_assert_int(rv, ==, 0);
+
+    /* Let the loop run a cycle, so we trigger the close callback of the timer
+     * handle. */
+    rv = uv_run(&f->loop, UV_RUN_ONCE);
+    munit_assert_int(rv, ==, 0);
+
+    return MUNIT_OK;
+}
+
+static MunitTest start_tests[] = {
+    {"/tick", test_start_tick, setup, tear_down, 0, NULL},
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 
@@ -860,6 +907,7 @@ static MunitTest write_vote_tests[] = {
 
 MunitSuite raft_io_uv_suites[] = {
     {"/init", init_tests, NULL, 1, 0},
+    {"/start", start_tests, NULL, 1, 0},
     {"/read-state", read_state_tests, NULL, 1, 0},
     {"/write-term", write_term_tests, NULL, 1, 0},
     {"/write-vote", write_vote_tests, NULL, 1, 0},

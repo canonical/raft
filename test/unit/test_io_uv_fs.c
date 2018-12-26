@@ -1,7 +1,6 @@
 #include "../../src/io_uv_fs.h"
 
 #include "../lib/fs.h"
-#include "../lib/heap.h"
 #include "../lib/munit.h"
 
 /**
@@ -10,7 +9,6 @@
 
 struct fixture
 {
-    struct raft_heap heap;
     char *dir;
     size_t block_size; /* File system block size */
     struct uv_loop_s loop;
@@ -26,8 +24,6 @@ static void *setup(const MunitParameter params[], void *user_data)
     int rv;
 
     (void)user_data;
-
-    test_heap_setup(params, &f->heap);
 
     f->dir = test_dir_setup(params);
 
@@ -54,8 +50,6 @@ static void tear_down(void *data)
     munit_assert_int(rv, ==, 0);
 
     test_dir_tear_down(f->dir);
-
-    test_heap_tear_down(&f->heap);
 
     free(f);
 }
