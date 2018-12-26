@@ -37,7 +37,8 @@
  */
 struct raft_io_uv
 {
-    char *dir;
+    char *dir;         /* Data directory */
+    size_t block_size; /* File system block size */
     struct uv_loop_s *loop;
     struct uv_timer_s ticker;
     uint64_t last_tick;
@@ -108,6 +109,12 @@ static int raft_io_uv__start(struct raft_io *io, const unsigned msecs)
     int rv;
 
     uv = io->data;
+
+    /* Detect the file system block size */
+    rv = raft_io_uv_fs__block_size(uv->dir, &uv->block_size);
+    if (rv != 0) {
+        return RAFT_ERR_INTERNAL;
+    }
 
     uv->last_tick = uv_now(uv->loop);
 
