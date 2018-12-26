@@ -461,6 +461,9 @@ struct raft_io_request
          * The entries array must be allocated with raft_malloc. Once the
          * request is completed ownership of such memory is transfered to the
          * raft instance.
+	 *
+	 * This request is guaranteed to be the very first request issued agaist
+	 * the backend. No further RAFT_IO_READ_STATE requests will be issued.
          */
         struct
         {
