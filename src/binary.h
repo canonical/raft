@@ -84,21 +84,21 @@ RAFT_INLINE void raft__put64(void **cursor, uint64_t value)
     *cursor += sizeof(uint64_t);
 }
 
-RAFT_INLINE uint8_t raft__get8(void **cursor)
+RAFT_INLINE uint8_t raft__get8(const void **cursor)
 {
     uint8_t value = *(uint8_t *)(*cursor);
     *cursor += sizeof(uint8_t);
     return value;
 }
 
-RAFT_INLINE uint32_t raft__get32(void **cursor)
+RAFT_INLINE uint32_t raft__get32(const void **cursor)
 {
     uint32_t value = raft__flip32(*(uint32_t *)(*cursor));
     *cursor += sizeof(uint32_t);
     return value;
 }
 
-RAFT_INLINE uint64_t raft__get64(void **cursor)
+RAFT_INLINE uint64_t raft__get64(const void **cursor)
 {
     uint64_t value = raft__flip64(*(uint64_t *)(*cursor));
     *cursor += sizeof(uint64_t);

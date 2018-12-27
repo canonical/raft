@@ -34,6 +34,7 @@ enum {
     RAFT_ERR_SHUTDOWN,
     RAFT_ERR_CONFIGURATION_BUSY,
     RAFT_ERR_IO,
+    RAFT_ERR_IO_CORRUPT,
     RAFT_ERR_IO_BUSY
 };
 
@@ -57,6 +58,7 @@ enum {
     X(RAFT_ERR_CONFIGURATION_BUSY,                                       \
       "a configuration change is already in progress")                   \
     X(RAFT_ERR_IO, "I/O error")                                          \
+    X(RAFT_ERR_IO_CORRUPT, "persisted data is corrupted")                \
     X(RAFT_ERR_IO_BUSY, "a log write request is already in progress")
 
 /**
@@ -74,6 +76,12 @@ const char *raft_strerror(int errnum);
  * characters.
  */
 void raft_errorf(char *errmsg, const char *fmt, ...);
+
+/**
+ * Convenience to prepend an additional message to the content of an errmsg
+ * buffer, printing at most #RAFT_ERRMSG_SIZE characters.
+ */
+void raft_wrapf(char *errmsg, const char *fmt, ...);
 
 /**
  * User-definable dynamic memory allocation functions.
@@ -461,9 +469,9 @@ struct raft_io_request
          * The entries array must be allocated with raft_malloc. Once the
          * request is completed ownership of such memory is transfered to the
          * raft instance.
-	 *
-	 * This request is guaranteed to be the very first request issued agaist
-	 * the backend. No further RAFT_IO_READ_STATE requests will be issued.
+         *
+         * This request is guaranteed to be the very first request issued agaist
+         * the backend. No further RAFT_IO_READ_STATE requests will be issued.
          */
         struct
         {
@@ -492,7 +500,8 @@ struct raft_io_queue
  *
  * This API is meant to be used by implementations of the @raft_io interface.
  */
-struct raft_io_request *raft_io_queue_get(struct raft_io_queue *q, unsigned id);
+struct raft_io_request *raft_io_queue_get(const struct raft_io_queue *q,
+                                          const unsigned id);
 
 /**
  * I/O backend interface implementing periodic ticks, log store read/writes
@@ -523,9 +532,9 @@ struct raft_io
      * successfully or not), passing it the pointer @p, the ID of the request
      * and a status code.
      */
-    void (*init)(struct raft_io *io,
-                 struct raft_io_queue *queue,
-		 struct raft_logger *logger,
+    void (*init)(const struct raft_io *io,
+                 const struct raft_io_queue *queue,
+                 struct raft_logger *logger,
                  void *p,
                  void (*tick)(void *p, const unsigned elapsed),
                  void (*notify)(void *p, const unsigned id, const int status));
@@ -536,18 +545,18 @@ struct raft_io
      * From now on the implementation must start accepting RPC requests and must
      * invoke the tick function every @msecs milliseconds.
      */
-    int (*start)(struct raft_io *io, const unsigned msecs);
+    int (*start)(const struct raft_io *io, const unsigned msecs);
 
     /**
      * Immediately cancel any in-progress I/O and stop invoking the tick
      * function.
      */
-    int (*stop)(struct raft_io *io);
+    int (*stop)(const struct raft_io *io);
 
     /**
      * Release any resource allocated by this I/O backend implementation.
      */
-    void (*close)(struct raft_io *io);
+    void (*close)(const struct raft_io *io);
 
     /**
      * Submit a request to perform a certain I/O operation either
@@ -565,7 +574,7 @@ struct raft_io
      * the implementation must call the notify function passed in the @init
      * method.
      */
-    int (*submit)(struct raft_io *io, const unsigned id);
+    int (*submit)(const struct raft_io *io, const unsigned id);
 
     int version; /* API version implemented by this instance. Currently 1. */
 
@@ -1166,10 +1175,11 @@ int raft_handle_append_entries_response(
     const struct raft_append_entries_result *result);
 
 /**
- * Encode a raft configuration object. The memory of the returned buffer is
- * allocated using raft_malloc(), and client code is responsible for releasing
- * it when no longer needed. The raft library makes no use of that memory after
- * this function returns.
+ * Encode a raft configuration object.
+ *
+ * The memory of the returned buffer is allocated using raft_malloc(), and
+ * client code is responsible for releasing it when no longer needed. The raft
+ * library makes no use of that memory after this function returns.
  */
 int raft_encode_configuration(const struct raft_configuration *c,
                               struct raft_buffer *buf);
@@ -1179,12 +1189,6 @@ int raft_encode_configuration(const struct raft_configuration *c,
  */
 int raft_decode_configuration(const struct raft_buffer *buf,
                               struct raft_configuration *c);
-
-int raft_encode_append_entries(const struct raft_append_entries_args *args,
-                               struct raft_buffer *buf);
-
-int raft_decode_append_entries(const struct raft_buffer *buf,
-                               struct raft_append_entries_args *args);
 
 /**
  * The layout of the memory pointed at by a @batch pointer is the following:
@@ -1208,9 +1212,21 @@ int raft_decode_append_entries(const struct raft_buffer *buf,
  * arbitrary lengths, possibly padded with extra bytes to reach 8-byte boundary
  * (which means that all entry data pointers are 8-byte aligned).
  */
+size_t raft_batch_header_size(size_t n);
+
+int raft_decode_batch_header(const void *batch,
+                             struct raft_entry **entries,
+                             unsigned *n);
+
 int raft_decode_entries_batch(const struct raft_buffer *buf,
                               struct raft_entry *entries,
                               unsigned n);
+
+int raft_encode_append_entries(const struct raft_append_entries_args *args,
+                               struct raft_buffer *buf);
+
+int raft_decode_append_entries(const struct raft_buffer *buf,
+                               struct raft_append_entries_args *args);
 
 int raft_encode_append_entries_result(
     const struct raft_append_entries_result *result,

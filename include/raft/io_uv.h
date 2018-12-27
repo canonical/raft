@@ -65,7 +65,13 @@ struct raft_io;
  *
  * Each segment file starts with a segment header, which currently contains
  * just an 8-byte version number for the format of that segment. The current
- * format (version 1) is just a concatenation of serialized entries.
+ * format (version 1) is just a concatenation of serialized entry batches.
+ *
+ * Each batch has the following format:
+ *
+ * [4 bytes] CRC32 checksum of the batch header, little endian.
+ * [4 bytes] CRC32 checksum of the batch data, little endian.
+ * [  ...  ] Batch (as described in @raft_decode_entries_batch).
  *
  * [0] https://github.com/logcabin/logcabin/blob/master/Storage/SegmentedLog.h
  */

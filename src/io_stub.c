@@ -30,14 +30,14 @@ struct raft_io_stub
     unsigned request_ids[RAFT_IO_STUB_MAX_REQUESTS];
 
     /* Parameters passed via raft_io->init */
-    struct raft_io_queue *queue;
+    const struct raft_io_queue *queue;
     void *p;
     void (*tick)(void *, const unsigned);
     void (*notify)(void *, const unsigned, const int);
 };
 
-static void raft_io_stub__init(struct raft_io *io,
-                               struct raft_io_queue *queue,
+static void raft_io_stub__init(const struct raft_io *io,
+                               const struct raft_io_queue *queue,
                                struct raft_logger *logger,
                                void *p,
                                void (*tick)(void *, const unsigned),
@@ -57,7 +57,7 @@ static void raft_io_stub__init(struct raft_io *io,
     s->notify = notify;
 }
 
-static int raft_io_stub__start(struct raft_io *io, const unsigned msecs)
+static int raft_io_stub__start(const struct raft_io *io, const unsigned msecs)
 {
     (void)msecs;
 
@@ -66,14 +66,14 @@ static int raft_io_stub__start(struct raft_io *io, const unsigned msecs)
     return 0;
 }
 
-static int raft_io_stub__stop(struct raft_io *io)
+static int raft_io_stub__stop(const struct raft_io *io)
 {
     assert(io != NULL);
 
     return 0;
 }
 
-static void raft_io_stub__close(struct raft_io *io)
+static void raft_io_stub__close(const struct raft_io *io)
 {
     struct raft_io_stub *s;
     size_t i;
@@ -223,7 +223,8 @@ static int raft_io_stub__write_log(struct raft_io_stub *s,
     return RAFT_ERR_IO_BUSY;
 }
 
-static int raft_io_stub__submit(struct raft_io *io, const unsigned request_id)
+static int raft_io_stub__submit(const struct raft_io *io,
+                                const unsigned request_id)
 {
     struct raft_io_request *request;
     struct raft_io_stub *s;

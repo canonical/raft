@@ -59,7 +59,8 @@ libraft_la_SOURCES = \
 if IO_UV
   libraft_la_SOURCES += \
   src/io_uv.c \
-  src/io_uv_fs.c
+  src/io_uv_store.c \
+  src/uv_fs.c
 endif
 if IO_STUB
   libraft_la_SOURCES += \
@@ -107,7 +108,8 @@ unit_test_SOURCES += \
 if IO_UV
   unit_test_SOURCES += \
   test/unit/test_io_uv.c \
-  test/unit/test_io_uv_fs.c
+  test/unit/test_io_uv_store.c \
+  test/unit/test_uv_fs.c
 endif
 if IO_STUB
   unit_test_SOURCES += \

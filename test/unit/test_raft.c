@@ -37,7 +37,6 @@ static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     uint64_t id = 1;
-    int rv;
 
     (void)user_data;
 

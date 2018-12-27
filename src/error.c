@@ -13,6 +13,31 @@ void raft_errorf(char *errmsg, const char *fmt, ...)
     va_end(args);
 }
 
+void raft_wrapf(char *errmsg, const char *fmt, ...)
+{
+    char tmp[RAFT_ERRMSG_SIZE];
+    va_list args;
+    size_t m;
+    size_t n;
+
+    /* Copy the current error message into a temporary buffer. */
+    strcpy(tmp, errmsg);
+
+    /* Render the given message. */
+    va_start(args, fmt);
+    vsnprintf(errmsg, RAFT_ERRMSG_SIZE, fmt, args);
+    va_end(args);
+
+    /* If there's enough space left, append the original message too. */
+    m = strlen(errmsg);
+    n = strlen(": ") + strlen(tmp);
+
+    if (RAFT_ERRMSG_SIZE - m >= n + 1) {
+        strcat(errmsg, ": ");
+        strcat(errmsg, tmp);
+    }
+}
+
 #define RAFT_ERRNO__STRERROR(CODE, MSG) \
     case CODE:                          \
         return MSG;

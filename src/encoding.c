@@ -12,7 +12,7 @@
 static_assert(sizeof(char) == sizeof(uint8_t), "Size of 'char' is not 8 bits");
 #endif
 
-static size_t raft_encode__batch_header_size(size_t n)
+size_t raft_batch_header_size(size_t n)
 {
     return 8 + /* Number of entries in the batch, little endian */
            16 * n /* One header per entry */;
@@ -92,7 +92,7 @@ int raft_encode_configuration(const struct raft_configuration *c,
 int raft_decode_configuration(const struct raft_buffer *buf,
                               struct raft_configuration *c)
 {
-    void *cursor;
+    const void *cursor;
     size_t i;
     size_t n;
 
@@ -185,56 +185,13 @@ static void raft_encode__batch_header(const struct raft_entry *entries,
     }
 }
 
-int raft_encode_append_entries(const struct raft_append_entries_args *args,
-                               struct raft_buffer *buf)
+int raft_decode_batch_header(const void *batch,
+                             struct raft_entry **entries,
+                             unsigned *n)
 {
-    void *cursor;
-
-    assert(args != NULL);
-    assert(buf != NULL);
-
-    buf->len = 0;
-
-    buf->len += 8; /* Slot for protocol version and message type. */
-    buf->len += 8; /* Slot for the message size. */
-    buf->len += 8; /* Leader's term. */
-    buf->len += 8; /* Leader ID. */
-    buf->len += 8; /* Previous log entry index. */
-    buf->len += 8; /* Previous log entry term. */
-    buf->len += 8; /* Leader's commit index. */
-    buf->len += raft_encode__batch_header_size(args->n);
-
-    buf->base = raft_malloc(buf->len);
-
-    if (buf->base == NULL) {
-        return RAFT_ERR_NOMEM;
-    }
-
-    cursor = buf->base;
-
-    raft__put32(&cursor, RAFT_ENCODING__VERSION); /* Encode version */
-    raft__put32(&cursor, RAFT_IO_APPEND_ENTRIES); /* Message type */
-
-    raft__put64(&cursor,
-                        buf->len - 16); /* Exclude the message header */
-
-    raft__put64(&cursor, args->term);           /* Leader's term. */
-    raft__put64(&cursor, args->leader_id);      /* Leader ID. */
-    raft__put64(&cursor, args->prev_log_index); /* Previous index. */
-    raft__put64(&cursor, args->prev_log_term);  /* Previous term. */
-    raft__put64(&cursor, args->leader_commit);  /* Commit index. */
-
-    raft_encode__batch_header(args->entries, args->n, cursor);
-
-    return 0;
-}
-
-static int raft_decode__batch_header(void *batch,
-                                     struct raft_entry **entries,
-                                     unsigned *n)
-{
-    void *cursor = batch;
+    const void *cursor = batch;
     size_t i;
+    int rv;
 
     *n = raft__get64(&cursor);
 
@@ -243,10 +200,11 @@ static int raft_decode__batch_header(void *batch,
         return 0;
     }
 
-    *entries = raft_malloc((*n) * sizeof **entries);
+    *entries = raft_malloc(*n * sizeof **entries);
 
     if (*entries == NULL) {
-        return RAFT_ERR_NOMEM;
+        rv = RAFT_ERR_NOMEM;
+        goto err;
     }
 
     for (i = 0; i < *n; i++) {
@@ -257,46 +215,25 @@ static int raft_decode__batch_header(void *batch,
 
         if (entry->type != RAFT_LOG_COMMAND &&
             entry->type != RAFT_LOG_CONFIGURATION) {
-            goto err;
+            rv = RAFT_ERR_MALFORMED;
+            goto err_after_alloc;
         }
 
         cursor += 3; /* Unused */
 
         /* Size of the log entry data, little endian. */
         entry->buf.len = raft__get32(&cursor);
-        entry->batch = batch;
     }
 
     return 0;
+
+err_after_alloc:
+    raft_free(entries);
 
 err:
-    raft_free(*entries);
-    return RAFT_ERR_MALFORMED;
-}
+    assert(rv != 0);
 
-int raft_decode_append_entries(const struct raft_buffer *buf,
-                               struct raft_append_entries_args *args)
-{
-    void *cursor;
-    int rv;
-
-    assert(buf != NULL);
-    assert(args != NULL);
-
-    cursor = buf->base;
-
-    args->term = raft__get64(&cursor);
-    args->leader_id = raft__get64(&cursor);
-    args->prev_log_index = raft__get64(&cursor);
-    args->prev_log_term = raft__get64(&cursor);
-    args->leader_commit = raft__get64(&cursor);
-
-    rv = raft_decode__batch_header(cursor, &args->entries, &args->n);
-    if (rv != 0) {
-        return rv;
-    }
-
-    return 0;
+    return rv;
 }
 
 int raft_decode_entries_batch(const struct raft_buffer *buf,
@@ -331,6 +268,74 @@ int raft_decode_entries_batch(const struct raft_buffer *buf,
     return 0;
 }
 
+int raft_encode_append_entries(const struct raft_append_entries_args *args,
+                               struct raft_buffer *buf)
+{
+    void *cursor;
+
+    assert(args != NULL);
+    assert(buf != NULL);
+
+    buf->len = 0;
+
+    buf->len += 8; /* Slot for protocol version and message type. */
+    buf->len += 8; /* Slot for the message size. */
+    buf->len += 8; /* Leader's term. */
+    buf->len += 8; /* Leader ID. */
+    buf->len += 8; /* Previous log entry index. */
+    buf->len += 8; /* Previous log entry term. */
+    buf->len += 8; /* Leader's commit index. */
+    buf->len += raft_batch_header_size(args->n);
+
+    buf->base = raft_malloc(buf->len);
+
+    if (buf->base == NULL) {
+        return RAFT_ERR_NOMEM;
+    }
+
+    cursor = buf->base;
+
+    raft__put32(&cursor, RAFT_ENCODING__VERSION); /* Encode version */
+    raft__put32(&cursor, RAFT_IO_APPEND_ENTRIES); /* Message type */
+
+    raft__put64(&cursor, buf->len - 16); /* Exclude the message header */
+
+    raft__put64(&cursor, args->term);           /* Leader's term. */
+    raft__put64(&cursor, args->leader_id);      /* Leader ID. */
+    raft__put64(&cursor, args->prev_log_index); /* Previous index. */
+    raft__put64(&cursor, args->prev_log_term);  /* Previous term. */
+    raft__put64(&cursor, args->leader_commit);  /* Commit index. */
+
+    raft_encode__batch_header(args->entries, args->n, cursor);
+
+    return 0;
+}
+
+int raft_decode_append_entries(const struct raft_buffer *buf,
+                               struct raft_append_entries_args *args)
+{
+    const void *cursor;
+    int rv;
+
+    assert(buf != NULL);
+    assert(args != NULL);
+
+    cursor = buf->base;
+
+    args->term = raft__get64(&cursor);
+    args->leader_id = raft__get64(&cursor);
+    args->prev_log_index = raft__get64(&cursor);
+    args->prev_log_term = raft__get64(&cursor);
+    args->leader_commit = raft__get64(&cursor);
+
+    rv = raft_decode_batch_header(cursor, &args->entries, &args->n);
+    if (rv != 0) {
+        return rv;
+    }
+
+    return 0;
+}
+
 int raft_encode_append_entries_result(
     const struct raft_append_entries_result *result,
     struct raft_buffer *buf)
@@ -356,11 +361,9 @@ int raft_encode_append_entries_result(
 
     cursor = buf->base;
 
-    raft__put32(&cursor, RAFT_ENCODING__VERSION); /* Encode version */
-    raft__put32(&cursor,
-                        RAFT_IO_APPEND_ENTRIES_RESULT); /* Message type */
-    raft__put64(&cursor,
-                        buf->len - 16); /* Exclude the message header */
+    raft__put32(&cursor, RAFT_ENCODING__VERSION);        /* Encode version */
+    raft__put32(&cursor, RAFT_IO_APPEND_ENTRIES_RESULT); /* Message type */
+    raft__put64(&cursor, buf->len - 16); /* Exclude the message header */
 
     raft__put64(&cursor, result->term);
     raft__put64(&cursor, result->success);
@@ -372,7 +375,7 @@ int raft_encode_append_entries_result(
 int raft_decode_append_entries_result(const struct raft_buffer *buf,
                                       struct raft_append_entries_result *result)
 {
-    void *cursor;
+    const void *cursor;
 
     assert(buf != NULL);
     assert(result != NULL);
@@ -413,8 +416,7 @@ int raft_encode_request_vote(const struct raft_request_vote_args *args,
 
     raft__put32(&cursor, RAFT_ENCODING__VERSION); /* Encode version */
     raft__put32(&cursor, RAFT_IO_REQUEST_VOTE);   /* Message type */
-    raft__put64(&cursor,
-                        buf->len - 16); /* Exclude the message header */
+    raft__put64(&cursor, buf->len - 16); /* Exclude the message header */
 
     raft__put64(&cursor, args->term);
     raft__put64(&cursor, args->candidate_id);
@@ -427,7 +429,7 @@ int raft_encode_request_vote(const struct raft_request_vote_args *args,
 int raft_decode_request_vote(const struct raft_buffer *buf,
                              struct raft_request_vote_args *args)
 {
-    void *cursor;
+    const void *cursor;
 
     assert(buf != NULL);
     assert(args != NULL);
@@ -479,7 +481,7 @@ int raft_encode_request_vote_result(
 int raft_decode_request_vote_result(const struct raft_buffer *buf,
                                     struct raft_request_vote_result *result)
 {
-    void *cursor;
+    const void *cursor;
 
     assert(buf != NULL);
     assert(result != NULL);

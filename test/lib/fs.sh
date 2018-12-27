@@ -15,6 +15,8 @@ if [ "$1" = "setup" ]; then
 
     i=0
     for type in $types; do
+	echo -n "Creating $type loop device mount..."
+
 	# Create the fs mount point
 	mkdir "./tmp/${type}"
 
@@ -23,7 +25,7 @@ if [ "$1" = "setup" ]; then
 	    sudo mount -t tmpfs -o size=32m tmpfs ./tmp/tmpfs
 	else
 	    # Create a loopback disk device
-	    dd if=/dev/zero of="./tmp/.${type}" bs=4096 count=30720
+	    dd if=/dev/zero of="./tmp/.${type}" bs=4096 count=28672 > /dev/null 2>&1
 	    sudo losetup "/dev/loop${i}" "./tmp/.${type}"
 
 	    # Initialize the file system
@@ -31,12 +33,14 @@ if [ "$1" = "setup" ]; then
 		sudo zpool create raft "/dev/loop${i}"
 		sudo zfs create -o mountpoint=$(pwd)/tmp/zfs raft/zfs
 	    else
-		sudo mkfs.${type} "/dev/loop${i}"
+		sudo mkfs.${type} "/dev/loop${i}" > /dev/null 2>&1
 		sudo mount "/dev/loop${i}" "./tmp/${type}"
 	    fi
 	fi
 
 	sudo chown $USER "./tmp/${type}"
+
+	echo " done"
 
 	i=$(expr $i + 1)
     done
@@ -48,6 +52,8 @@ if [ "$1" = "teardown" ]; then
 
     i=0
     for type in $types; do
+	echo -n "Deleting $type loop device mount..."
+
 	sudo umount "./tmp/${type}"
 	rm -rf "./tmp/${type}"
 
@@ -63,6 +69,8 @@ if [ "$1" = "teardown" ]; then
 	fi
 
 	i=$(expr $i + 1)
+
+	echo " done"
     done
 
     rmdir ./tmp

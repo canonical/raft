@@ -25,7 +25,8 @@ void raft_io_queue__close(struct raft_io_queue *q)
     /*     } */
 
     /*     if (request->leader_id == server_id) { */
-    /*         /\* This request was submitted while we were in leader state. The */
+    /*         /\* This request was submitted while we were in leader state. The
+     */
     /*          * relevant entries were acquired from the log and need to be */
     /*          * released. *\/ */
     /*         assert(request->type == RAFT_IO_WRITE_LOG || */
@@ -106,7 +107,8 @@ int raft_io_queue__push(struct raft_io_queue *q, unsigned *id)
     return 0;
 }
 
-struct raft_io_request *raft_io_queue_get(struct raft_io_queue *q, unsigned id)
+struct raft_io_request *raft_io_queue_get(const struct raft_io_queue *q,
+                                          const unsigned id)
 {
     size_t i;
 

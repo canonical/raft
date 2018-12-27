@@ -47,13 +47,13 @@ static const unsigned raft__crc32_table[] = {
     0x933eb0bb, 0x97ffad0c, 0xafb010b1, 0xab710d06, 0xa6322bdf, 0xa2f33668,
     0xbcb4666d, 0xb8757bda, 0xb5365d03, 0xb1f740b4};
 
-unsigned raft__crc32(const struct raft_buffer *buf)
+unsigned raft__crc32(const void *buf, const size_t size)
 {
     unsigned int crc = 0;
-    unsigned char *cursor = (unsigned char *)buf->base;
-    size_t len = buf->len;
+    unsigned char *cursor = (unsigned char *)buf;
+    size_t count = size;
 
-    while (len--) {
+    while (count--) {
         crc = (crc << 8) ^ raft__crc32_table[((crc >> 24) ^ *cursor) & 255];
         cursor++;
     }

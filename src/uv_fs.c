@@ -1,6 +1,5 @@
 #include <assert.h>
 #include <libgen.h>
-#include <linux/aio_abi.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/eventfd.h>
@@ -11,7 +10,7 @@
 
 #include <uv.h>
 
-#include "io_uv_fs.h"
+#include "uv_fs.h"
 
 /**
  * Declaration of the AIO APIs that we use. This avoids having to depend on
@@ -46,7 +45,7 @@ static int io_getevents(aio_context_t ctx,
  * Check if @size is the correct block size for @fd.
  */
 #if defined(RWF_NOWAIT)
-static int raft_io_uv_fs__block_size_probe(int fd, size_t size, bool *ok)
+static int raft_uv_fs__block_size_probe(int fd, size_t size, bool *ok)
 {
     void *data;
     uv_buf_t buf;
@@ -114,11 +113,11 @@ static int raft_io_uv_fs__block_size_probe(int fd, size_t size, bool *ok)
 }
 #endif /* RWF_NOWAIT */
 
-int raft_io_uv_fs__block_size(const char *dir, size_t *size)
+int raft_uv_fs__block_size(const char *dir, size_t *size)
 {
     struct statfs fs_info;
     struct stat info;
-    char path[RAFT_IO_UV_FS_MAX_PATH_LEN];
+    char path[RAFT_UV_FS_MAX_PATH_LEN];
     int fd;
     int flags;
     int rv;
@@ -132,7 +131,7 @@ int raft_io_uv_fs__block_size(const char *dir, size_t *size)
     *size = 4096;
     return 0;
 #else
-    assert(strlen(dir) < RAFT_IO_UV_FS_MAX_DIR_LEN);
+    assert(strlen(dir) < RAFT_UV_FS_MAX_DIR_LEN);
 
     /* Create a temporary probe file. */
     strcpy(path, dir);
@@ -207,7 +206,7 @@ int raft_io_uv_fs__block_size(const char *dir, size_t *size)
     while (*size >= 512) {
         bool ok;
 
-        rv = raft_io_uv_fs__block_size_probe(fd, *size, &ok);
+        rv = raft_uv_fs__block_size_probe(fd, *size, &ok);
         if (rv != 0) {
             close(fd);
             return rv;
@@ -228,7 +227,7 @@ int raft_io_uv_fs__block_size(const char *dir, size_t *size)
 /**
  * If set, invoke the request's callback.
  */
-static void raft_io_uv_fs__invoke_cb(struct raft_io_uv_fs *req)
+static void raft_uv_fs__invoke_cb(struct raft_uv_fs *req)
 {
     if (req->cb != NULL) {
         req->cb(req);
@@ -241,7 +240,7 @@ static void raft_io_uv_fs__invoke_cb(struct raft_io_uv_fs *req)
  *
  * This is called in UV's threadpool.
  */
-static int raft_io_uv_fs__create_set_direct_io(struct raft_io_uv_file *f)
+static int raft_uv_fs__create_set_direct_io(struct raft_uv_file *f)
 {
     int flags;
     struct statfs fs_info;
@@ -281,16 +280,16 @@ static int raft_io_uv_fs__create_set_direct_io(struct raft_io_uv_file *f)
  *
  * This is called in UV's threadpool.
  */
-static int raft_io_uv_fs__create_sync_dir(const char *path)
+static int raft_uv_fs__create_sync_dir(const char *path)
 {
-    char dir[RAFT_IO_UV_FS_MAX_PATH_LEN];
+    char dir[RAFT_UV_FS_MAX_PATH_LEN];
     int fd;
     int rv;
 
     /* Any path passed to us should honor the defined limits. */
-    assert(strlen(path) < RAFT_IO_UV_FS_MAX_PATH_LEN);
+    assert(strlen(path) < RAFT_UV_FS_MAX_PATH_LEN);
 
-    strncpy(dir, path, RAFT_IO_UV_FS_MAX_PATH_LEN);
+    strncpy(dir, path, RAFT_UV_FS_MAX_PATH_LEN);
     dirname(dir);
 
     fd = open(dir, O_RDONLY | O_DIRECTORY);
@@ -310,10 +309,10 @@ static int raft_io_uv_fs__create_sync_dir(const char *path)
  *
  * This is called in UV's threadpool.
  */
-static void raft_io_uv_fs__create_work_cb(uv_work_t *work)
+static void raft_uv_fs__create_work_cb(uv_work_t *work)
 {
-    struct raft_io_uv_fs *req;
-    struct raft_io_uv_file *f;
+    struct raft_uv_fs *req;
+    struct raft_uv_file *f;
     int flags = O_WRONLY | O_CREAT | O_EXCL;
     int rv;
 
@@ -352,14 +351,14 @@ static void raft_io_uv_fs__create_work_cb(uv_work_t *work)
         rv = errno;
         goto err_after_open;
     }
-    rv = raft_io_uv_fs__create_sync_dir(req->path);
+    rv = raft_uv_fs__create_sync_dir(req->path);
     if (rv == -1) {
         rv = errno;
         goto err_after_open;
     }
 
     /* Set direct I/O if possible. */
-    rv = raft_io_uv_fs__create_set_direct_io(f);
+    rv = raft_uv_fs__create_set_direct_io(f);
     if (rv == -1) {
         rv = errno;
         goto err_after_open;
@@ -399,10 +398,10 @@ err:
  * Callback fired when the event fd that we're polling should be ready for
  * reading.
  */
-static void raft_io_uv_fs__poll_cb(uv_poll_t *poller, int status, int events)
+static void raft_uv_fs__poll_cb(uv_poll_t *poller, int status, int events)
 {
-    struct raft_io_uv_fs *req = poller->data;
-    struct raft_io_uv_file *f = req->file;
+    struct raft_uv_fs *req = poller->data;
+    struct raft_uv_file *f = req->file;
     uint64_t completed;
     struct io_event event;
     int rv;
@@ -442,14 +441,14 @@ static void raft_io_uv_fs__poll_cb(uv_poll_t *poller, int status, int events)
 invoke_cb:
     poller->data = NULL; /* The write request has been completed */
 
-    raft_io_uv_fs__invoke_cb(req);
+    raft_uv_fs__invoke_cb(req);
 }
 
 /**
  * Start polling the event file descriptor to get notified when a write
  * completes.
  */
-static int raft_io_uv_fs__create_start_polling(struct raft_io_uv_file *f)
+static int raft_uv_fs__create_start_polling(struct raft_uv_file *f)
 {
     int rv;
 
@@ -458,7 +457,7 @@ static int raft_io_uv_fs__create_start_polling(struct raft_io_uv_file *f)
         goto err;
     }
 
-    rv = uv_poll_start(&f->event_poller, UV_READABLE, raft_io_uv_fs__poll_cb);
+    rv = uv_poll_start(&f->event_poller, UV_READABLE, raft_uv_fs__poll_cb);
     if (rv != 0) {
         goto err_after_init;
     }
@@ -475,13 +474,13 @@ err:
 }
 
 /**
- * Callback run after @raft_io_uv_fs__create_work_cb has returned. It's run in
+ * Callback run after @raft_uv_fs__create_work_cb has returned. It's run in
  * the main loop thread.
  */
-static void raft_io_uv_fs__create_after_work_cb(uv_work_t *work, int status)
+static void raft_uv_fs__create_after_work_cb(uv_work_t *work, int status)
 {
-    struct raft_io_uv_fs *req;
-    struct raft_io_uv_file *f;
+    struct raft_uv_fs *req;
+    struct raft_uv_file *f;
     int rv;
 
     assert(work != NULL);
@@ -493,7 +492,7 @@ static void raft_io_uv_fs__create_after_work_cb(uv_work_t *work, int status)
 
     /* If no error occurred, start polling the event file descriptor. */
     if (req->status == 0) {
-        rv = raft_io_uv_fs__create_start_polling(f);
+        rv = raft_uv_fs__create_start_polling(f);
         if (rv != 0) {
             req->status = rv;
 
@@ -504,15 +503,15 @@ static void raft_io_uv_fs__create_after_work_cb(uv_work_t *work, int status)
         }
     }
 
-    raft_io_uv_fs__invoke_cb(req);
+    raft_uv_fs__invoke_cb(req);
 }
 
-int raft_io_uv_fs__create(struct raft_io_uv_file *f,
-                          struct raft_io_uv_fs *req,
-                          struct uv_loop_s *loop,
-                          const char *path,
-                          size_t size,
-                          raft_io_uv_fs_cb cb)
+int raft_uv_fs__create(struct raft_uv_file *f,
+                       struct raft_uv_fs *req,
+                       struct uv_loop_s *loop,
+                       const char *path,
+                       size_t size,
+                       raft_uv_fs_cb cb)
 {
     int rv;
 
@@ -536,8 +535,8 @@ int raft_io_uv_fs__create(struct raft_io_uv_file *f,
     req->status = 0;
     req->work.data = req;
 
-    rv = uv_queue_work(f->loop, &req->work, raft_io_uv_fs__create_work_cb,
-                       raft_io_uv_fs__create_after_work_cb);
+    rv = uv_queue_work(f->loop, &req->work, raft_uv_fs__create_work_cb,
+                       raft_uv_fs__create_after_work_cb);
     if (rv != 0) {
         return rv;
     }
@@ -545,7 +544,7 @@ int raft_io_uv_fs__create(struct raft_io_uv_file *f,
     return 0;
 }
 
-int raft_io_uv_fs__close(struct raft_io_uv_file *f)
+int raft_uv_fs__close(struct raft_uv_file *f)
 {
     int rv;
 
@@ -581,11 +580,11 @@ int raft_io_uv_fs__close(struct raft_io_uv_file *f)
  *
  * This is called in UV's threadpool.
  */
-static void raft_io_uv_fs__write_work_cb(uv_work_t *work)
+static void raft_uv_fs__write_work_cb(uv_work_t *work)
 {
     int rv;
-    struct raft_io_uv_fs *req;
-    struct raft_io_uv_file *f;
+    struct raft_uv_fs *req;
+    struct raft_uv_file *f;
     struct iocb *iocbs;
     struct io_event event;
 
@@ -614,13 +613,13 @@ static void raft_io_uv_fs__write_work_cb(uv_work_t *work)
 }
 
 /**
- * Callback run after @raft_io_uv_fs__write_work_cb has returned. It's run in
+ * Callback run after @raft_uv_fs__write_work_cb has returned. It's run in
  * the main loop thread.
  */
-static void raft_io_uv_fs__write_after_work_cb(uv_work_t *work, int status)
+static void raft_uv_fs__write_after_work_cb(uv_work_t *work, int status)
 {
-    struct raft_io_uv_fs *req;
-    struct raft_io_uv_file *f;
+    struct raft_uv_fs *req;
+    struct raft_uv_file *f;
 
     assert(work != NULL);
 
@@ -631,15 +630,15 @@ static void raft_io_uv_fs__write_after_work_cb(uv_work_t *work, int status)
 
     /* Invoke the callback. */
     f->event_poller.data = NULL;
-    raft_io_uv_fs__invoke_cb(req);
+    raft_uv_fs__invoke_cb(req);
 }
 
-int raft_io_uv_fs__write(struct raft_io_uv_file *f,
-                         struct raft_io_uv_fs *req,
-                         const uv_buf_t bufs[],
-                         unsigned n,
-                         size_t offset,
-                         raft_io_uv_fs_cb cb)
+int raft_uv_fs__write(struct raft_uv_file *f,
+                      struct raft_uv_fs *req,
+                      const uv_buf_t bufs[],
+                      unsigned n,
+                      size_t offset,
+                      raft_uv_fs_cb cb)
 {
     int rv;
     struct iocb *iocbs = &req->iocb;
@@ -716,7 +715,7 @@ int raft_io_uv_fs__write(struct raft_io_uv_file *f,
                  * supported at all, let's run this request in the
                  * threadpool. */
                 req->iocb.aio_flags &= ~IOCB_FLAG_RESFD;
-		req->iocb.aio_resfd = 0;
+                req->iocb.aio_resfd = 0;
                 req->iocb.aio_rw_flags &= ~RWF_NOWAIT;
                 break;
             default:
@@ -730,8 +729,8 @@ int raft_io_uv_fs__write(struct raft_io_uv_file *f,
     /* If we got here it means we need to run io_submit in the threadpool. */
     req->work.data = req;
 
-    rv = uv_queue_work(f->loop, &req->work, raft_io_uv_fs__write_work_cb,
-                       raft_io_uv_fs__write_after_work_cb);
+    rv = uv_queue_work(f->loop, &req->work, raft_uv_fs__write_work_cb,
+                       raft_uv_fs__write_after_work_cb);
     if (rv != 0) {
         goto err;
     }
