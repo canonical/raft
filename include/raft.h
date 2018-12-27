@@ -525,6 +525,7 @@ struct raft_io
      */
     void (*init)(struct raft_io *io,
                  struct raft_io_queue *queue,
+		 struct raft_logger *logger,
                  void *p,
                  void (*tick)(void *p, const unsigned elapsed),
                  void (*notify)(void *p, const unsigned id, const int status));

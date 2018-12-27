@@ -3,6 +3,7 @@
 #include "../../src/io_queue.h"
 
 #include "../lib/heap.h"
+#include "../lib/logger.h"
 #include "../lib/munit.h"
 
 /**
@@ -13,6 +14,7 @@ struct fixture
 {
     struct raft_heap heap;
     struct raft_io_queue queue;
+    struct raft_logger logger;
     struct raft_io io;
     unsigned elapsed; /* Milliseconds since last call to __tick */
 };
@@ -36,6 +38,7 @@ static void __notify(void *p, const unsigned id, const int status)
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
+    const uint64_t id = 1;
     int rv;
 
     (void)user_data;
@@ -44,10 +47,12 @@ static void *setup(const MunitParameter params[], void *user_data)
 
     raft_io_queue__init(&f->queue);
 
+    test_logger_setup(params, &f->logger, id);
+
     rv = raft_io_stub_init(&f->io);
     munit_assert_int(rv, ==, 0);
 
-    f->io.init(&f->io, &f->queue, f, __tick, __notify);
+    f->io.init(&f->io, &f->queue, &f->logger, f, __tick, __notify);
     f->elapsed = 0;
 
     return f;
@@ -60,6 +65,7 @@ static void tear_down(void *data)
     f->io.close(&f->io);
 
     raft_io_queue__close(&f->queue);
+    test_logger_tear_down(&f->logger);
 
     test_heap_tear_down(&f->heap);
 

@@ -34,11 +34,11 @@ struct raft_io_stub
     void *p;
     void (*tick)(void *, const unsigned);
     void (*notify)(void *, const unsigned, const int);
-
 };
 
 static void raft_io_stub__init(struct raft_io *io,
                                struct raft_io_queue *queue,
+                               struct raft_logger *logger,
                                void *p,
                                void (*tick)(void *, const unsigned),
                                void (*notify)(void *,
@@ -46,6 +46,8 @@ static void raft_io_stub__init(struct raft_io *io,
                                               const int))
 {
     struct raft_io_stub *s;
+
+    (void)logger;
 
     s = io->data;
 

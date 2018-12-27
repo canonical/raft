@@ -5,6 +5,7 @@
 
 #include "../lib/fs.h"
 #include "../lib/heap.h"
+#include "../lib/logger.h"
 #include "../lib/munit.h"
 
 /**
@@ -15,8 +16,9 @@ struct fixture
 {
     char *dir;
     struct uv_loop_s loop;
-    struct raft_io_queue queue;
     struct raft_heap heap;
+    struct raft_io_queue queue;
+    struct raft_logger logger;
     struct raft_io io;
     unsigned elapsed; /* Milliseconds since last call to __tick */
 };
@@ -40,6 +42,7 @@ static void __notify(void *p, const unsigned id, const int status)
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
+    const uint64_t id = 1;
     int rv;
 
     (void)user_data;
@@ -57,10 +60,12 @@ static void *setup(const MunitParameter params[], void *user_data)
 
     raft_io_queue__init(&f->queue);
 
+    test_logger_setup(params, &f->logger, id);
+
     rv = raft_io_uv_init(&f->io, &f->loop, f->dir);
     munit_assert_int(rv, ==, 0);
 
-    f->io.init(&f->io, &f->queue, f, __tick, __notify);
+    f->io.init(&f->io, &f->queue, &f->logger, f, __tick, __notify);
 
     f->elapsed = 0;
 
@@ -75,6 +80,7 @@ static void tear_down(void *data)
     f->io.close(&f->io);
 
     raft_io_queue__close(&f->queue);
+    test_logger_tear_down(&f->logger);
 
     rv = uv_loop_close(&f->loop);
     munit_assert_int(rv, ==, 0);
@@ -754,7 +760,7 @@ static MunitResult test_write_term_first(const MunitParameter params[],
 /* At second write after the very first one (which writes into metadata1),
  * metadata2 is written. */
 static MunitResult test_write_term_second(const MunitParameter params[],
-                                              void *data)
+                                          void *data)
 {
     struct fixture *f = data;
     unsigned request_id;
@@ -835,7 +841,7 @@ static MunitResult test_write_vote_first(const MunitParameter params[],
 /* At second write after the very first one (which writes into metadata1),
  * metadata2 is written. */
 static MunitResult test_write_vote_second(const MunitParameter params[],
-                                              void *data)
+                                          void *data)
 {
     struct fixture *f = data;
     unsigned request_id;

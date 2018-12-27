@@ -63,6 +63,7 @@ struct raft_io_uv
 
     /* Parameters passed via raft_io->init */
     struct raft_io_queue *queue;                       /* Request queue */
+    struct raft_logger *logger;                        /* Logger */
     void *p;                                           /* Custom data pointer */
     void (*tick)(void *, const unsigned);              /* Tick function */
     void (*notify)(void *, const unsigned, const int); /* Notify function */
@@ -75,6 +76,7 @@ struct raft_io_uv
  */
 static void raft_io_uv__init(struct raft_io *io,
                              struct raft_io_queue *queue,
+                             struct raft_logger *logger,
                              void *p,
                              void (*tick)(void *, const unsigned),
                              void (*notify)(void *, const unsigned, const int))
@@ -84,6 +86,7 @@ static void raft_io_uv__init(struct raft_io *io,
     uv = io->data;
 
     uv->queue = queue;
+    uv->logger = logger;
     uv->p = p;
     uv->tick = tick;
     uv->notify = notify;
