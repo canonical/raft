@@ -34,6 +34,7 @@ if IO_UV
   libraft_la_LDFLAGS += $(UV_LIBS)
 endif
 libraft_la_SOURCES = \
+  src/checksum.c \
   src/client.c \
   src/configuration.c \
   src/context.c \
@@ -86,6 +87,7 @@ test_lib_SOURCES = \
 unit_test_SOURCES = $(test_lib_SOURCES)
 unit_test_SOURCES += \
   test/unit/main.c \
+  test/unit/test_checksum.c \
   test/unit/test_client.c \
   test/unit/test_configuration.c \
   test/unit/test_election.c \

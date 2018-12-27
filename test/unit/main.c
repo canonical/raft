@@ -1,5 +1,6 @@
 #include "../lib/munit.h"
 
+extern MunitSuite raft_checksum_suites[];
 extern MunitSuite raft_client_suites[];
 extern MunitSuite raft_configuration_suites[];
 extern MunitSuite raft_context_suites[];
@@ -25,6 +26,7 @@ extern MunitSuite raft_tick_suites[];
 extern MunitSuite raft_suites[];
 
 static MunitSuite suites[] = {
+    {"checksum", NULL, raft_checksum_suites, 1, 0},
     {"client", NULL, raft_client_suites, 1, 0},
     {"configuration", NULL, raft_configuration_suites, 1, 0},
     {"context", NULL, raft_context_suites, 1, 0},
