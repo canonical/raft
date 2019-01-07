@@ -376,8 +376,8 @@ struct raft_fsm
  */
 enum {
     RAFT_IO_NULL = 0,
-    RAFT_IO_BOOTSTRAP,
     RAFT_IO_READ_STATE,
+    RAFT_IO_BOOTSTRAP,
     RAFT_IO_WRITE_TERM,
     RAFT_IO_WRITE_VOTE,
     RAFT_IO_WRITE_LOG,
@@ -477,7 +477,7 @@ struct raft_io_request
         {
             raft_term term;             /* Current server term */
             unsigned voted_for;         /* ID of server we voted for, or 0 */
-            raft_index first_index;     /* Index of the first entry */
+            raft_index start_index;     /* Index of the first loaded entry */
             struct raft_entry *entries; /* Array of log entries. */
             size_t n;                   /* Length of the entries array */
         } read_state;
@@ -551,7 +551,7 @@ struct raft_io
      * Immediately cancel any in-progress I/O and stop invoking the tick
      * function.
      */
-    int (*stop)(const struct raft_io *io);
+    int (*stop)(const struct raft_io *io, void (*cb)(void *p));
 
     /**
      * Release any resource allocated by this I/O backend implementation.
@@ -1213,6 +1213,10 @@ int raft_decode_configuration(const struct raft_buffer *buf,
  * (which means that all entry data pointers are 8-byte aligned).
  */
 size_t raft_batch_header_size(size_t n);
+
+void raft_encode_batch_header(const struct raft_entry *entries,
+                              size_t n,
+                              void *batch);
 
 int raft_decode_batch_header(const void *batch,
                              struct raft_entry **entries,

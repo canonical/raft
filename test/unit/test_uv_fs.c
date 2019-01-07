@@ -107,6 +107,7 @@ static void __write_cb(struct raft_uv_fs *req)
             }                                                                  \
         }                                                                      \
         munit_assert_true(F->completed);                                       \
+        F->completed = false;                                                  \
     }
 
 /**
@@ -149,9 +150,38 @@ static MunitResult test_block_size_unexecutable(const MunitParameter params[],
     return MUNIT_OK;
 }
 
+/* Test against file systems that require a probe write. */
+static char *test_block_size_no_space_dir_fs_type[] = {"btrfs", NULL};
+
+static MunitParameterEnum test_block_size_no_space_params[] = {
+    {TEST_DIR_FS_TYPE, test_block_size_no_space_dir_fs_type},
+    {NULL, NULL},
+};
+
+/* No space is left on the target device.. */
+static MunitResult test_block_size_no_space(const MunitParameter params[],
+                                            void *data)
+{
+    struct fixture *f = data;
+    size_t size;
+    int rv;
+
+    (void)params;
+
+    test_dir_fill(f->dir, 0);
+
+    rv = raft_uv_fs__block_size(f->dir, &size);
+
+    munit_assert_int(rv, ==, UV_ENOSPC);
+
+    return MUNIT_OK;
+}
+
 static MunitTest block_size_tests[] = {
 #if defined(RWF_NOWAIT)
     {"/unexecutable", test_block_size_unexecutable, setup, tear_down, 0, NULL},
+    {"/no-space", test_block_size_no_space, setup, tear_down, 0,
+     test_block_size_no_space_params},
 #endif /* RWF_NOWAIT */
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
@@ -161,11 +191,8 @@ static MunitTest block_size_tests[] = {
  */
 
 /* Test against all file system types */
-static char *test_create_valid_path_dir_fs_type[] = {"btrfs", "ext4", "tmpfs",
-                                                     "xfs",   "zfs",  NULL};
-
 static MunitParameterEnum test_create_valid_path_params[] = {
-    {TEST_DIR_FS_TYPE, test_create_valid_path_dir_fs_type},
+    {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
     {NULL, NULL},
 };
 
@@ -246,7 +273,7 @@ static MunitResult test_create_already_exists(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-/* Test against all file system types exect tmpfs and zfs. */
+/* Test against all file system types except tmpfs and zfs. */
 static char *test_create_no_space_dir_fs_type[] = {"btrfs", "ext4", "xfs",
                                                    NULL};
 
@@ -295,11 +322,8 @@ static MunitTest create_tests[] = {
  */
 
 /* Test against all file system types */
-static char *test_write_one_dir_fs_type[] = {"btrfs", "ext4", "tmpfs",
-                                             "xfs",   "zfs",  NULL};
-
 static MunitParameterEnum test_write_one_params[] = {
-    {TEST_DIR_FS_TYPE, test_write_one_dir_fs_type},
+    {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
     {NULL, NULL},
 };
 
@@ -337,11 +361,8 @@ static MunitResult test_write_one(const MunitParameter params[], void *data)
 }
 
 /* Test against all file system types */
-static char *test_write_two_dir_fs_type[] = {"btrfs", "ext4", "tmpfs",
-                                             "xfs",   "zfs",  NULL};
-
 static MunitParameterEnum test_write_two_params[] = {
-    {TEST_DIR_FS_TYPE, test_write_two_dir_fs_type},
+    {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
     {NULL, NULL},
 };
 
@@ -385,11 +406,53 @@ static MunitResult test_write_two(const MunitParameter params[], void *data)
 }
 
 /* Test against all file system types */
-static char *test_write_vec_dir_fs_type[] = {"btrfs", "ext4", "tmpfs",
-                                             "xfs",   "zfs",  NULL};
+static MunitParameterEnum test_write_twice_params[] = {
+    {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
+    {NULL, NULL},
+};
 
+/* Write the same block twice. */
+static MunitResult test_write_twice(const MunitParameter params[], void *data)
+{
+    struct fixture *f = data;
+    char *text;
+    uv_buf_t buf;
+
+    (void)params;
+
+    __create(f);
+
+    text = aligned_alloc(f->block_size, f->block_size);
+    munit_assert_ptr_not_null(text);
+
+    sprintf(text, "hello");
+
+    buf.base = (void *)text;
+    buf.len = f->block_size;
+
+    __write(f, &buf, 1, 0);
+
+    munit_assert_int(f->status, ==, f->block_size);
+
+    sprintf(text, "hello world");
+
+    __write(f, &buf, 1, 0);
+
+    munit_assert_int(f->status, ==, f->block_size);
+
+    test_dir_read_file(f->dir, "foo", text, f->block_size);
+    munit_assert_string_equal(text, "hello world");
+
+    __close(f);
+
+    free(text);
+
+    return MUNIT_OK;
+}
+
+/* Test against all file system types */
 static MunitParameterEnum test_write_vec_params[] = {
-    {TEST_DIR_FS_TYPE, test_write_vec_dir_fs_type},
+    {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
     {NULL, NULL},
 };
 
@@ -423,10 +486,54 @@ static MunitResult test_write_vec(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
+/* Test against all file system types */
+static MunitParameterEnum test_write_vec_twice_params[] = {
+    {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
+    {NULL, NULL},
+};
+
+/* Write a vector of buffers twice. */
+static MunitResult test_write_vec_twice(const MunitParameter params[],
+                                        void *data)
+{
+    struct fixture *f = data;
+    uv_buf_t bufs[2];
+
+    (void)params;
+
+    __create(f);
+
+    bufs[0].base = aligned_alloc(f->block_size, f->block_size);
+    munit_assert_ptr_not_null(bufs[0].base);
+    bufs[0].len = f->block_size;
+
+    bufs[1].base = aligned_alloc(f->block_size, f->block_size);
+    munit_assert_ptr_not_null(bufs[1].base);
+    bufs[1].len = f->block_size;
+
+    __write(f, bufs, 1, 0);
+
+    munit_assert_int(f->status, ==, f->block_size);
+
+    __write(f, bufs, 2, 0);
+
+    munit_assert_int(f->status, ==, f->block_size * 2);
+
+    __close(f);
+
+    free(bufs[0].base);
+    free(bufs[1].base);
+
+    return MUNIT_OK;
+}
+
 static MunitTest write_tests[] = {
     {"/one", test_write_one, setup, tear_down, 0, test_write_one_params},
     {"/two", test_write_two, setup, tear_down, 0, test_write_two_params},
+    {"/twice", test_write_twice, setup, tear_down, 0, test_write_twice_params},
     {"/vec", test_write_vec, setup, tear_down, 0, test_write_vec_params},
+    {"/vec-twice", test_write_vec_twice, setup, tear_down, 0,
+     test_write_vec_twice_params},
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 

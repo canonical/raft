@@ -12,12 +12,6 @@
 static_assert(sizeof(char) == sizeof(uint8_t), "Size of 'char' is not 8 bits");
 #endif
 
-size_t raft_batch_header_size(size_t n)
-{
-    return 8 + /* Number of entries in the batch, little endian */
-           16 * n /* One header per entry */;
-}
-
 static size_t raft_encode__configuration_size(
     const struct raft_configuration *c)
 {
@@ -154,9 +148,15 @@ int raft_decode_configuration(const struct raft_buffer *buf,
     return 0;
 }
 
-static void raft_encode__batch_header(const struct raft_entry *entries,
-                                      size_t n,
-                                      void *batch)
+size_t raft_batch_header_size(size_t n)
+{
+    return 8 + /* Number of entries in the batch, little endian */
+           16 * n /* One header per entry */;
+}
+
+void raft_encode_batch_header(const struct raft_entry *entries,
+                              size_t n,
+                              void *batch)
 {
     size_t i;
     void *cursor;
@@ -306,7 +306,7 @@ int raft_encode_append_entries(const struct raft_append_entries_args *args,
     raft__put64(&cursor, args->prev_log_term);  /* Previous term. */
     raft__put64(&cursor, args->leader_commit);  /* Commit index. */
 
-    raft_encode__batch_header(args->entries, args->n, cursor);
+    raft_encode_batch_header(args->entries, args->n, cursor);
 
     return 0;
 }

@@ -4,12 +4,16 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <sys/types.h>
 #include <unistd.h>
 
 #include "fs.h"
 
 #define TEST_DIR_TEMPLATE "./tmp/%s/raft-test-XXXXXX"
+
+char *test_dir_fs_type_supported[] = {"btrfs", "ext4", "tmpfs",
+                                      "xfs",   "zfs",  NULL};
 
 char *test_dir_setup(const MunitParameter params[])
 {
@@ -78,7 +82,6 @@ void test_dir_write_file(const char *dir,
     test_dir__join(dir, filename, path);
 
     fd = open(path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
-
     munit_assert_int(fd, !=, -1);
 
     rv = write(fd, buf, n);
@@ -251,4 +254,48 @@ bool test_dir_has_file(const char *dir, const char *filename)
     close(fd);
 
     return true;
+}
+
+void test_dir_fill(const char *dir, const size_t n)
+{
+    const char *filename = ".fill";
+    struct statvfs fs;
+    size_t size;
+    int rv;
+
+    rv = statvfs(dir, &fs);
+    munit_assert_int(rv, ==, 0);
+
+    size = fs.f_bsize * fs.f_bavail;
+
+    if (n > 0) {
+        munit_assert_int(size, >=, n);
+    }
+
+    test_dir_write_file_with_zeros(dir, filename, size - n);
+
+    /* If n is zero, make sure any further write fails with ENOSPC */
+    if (n == 0) {
+        char path[256];
+        char buf[4096];
+        int fd;
+        int rv;
+        int i;
+
+        test_dir__join(dir, filename, path);
+
+        fd = open(path, O_RDWR | O_APPEND, S_IRUSR | S_IWUSR);
+        munit_assert_int(fd, !=, -1);
+
+        for (i = 0; i < 40; i++) {
+            rv = write(fd, buf, sizeof buf);
+	    if (rv == 0) {
+	      continue;
+	    }
+        }
+
+	munit_assert_int(rv, ==, -1);
+	munit_assert_int(errno, ==, ENOSPC);
+	close(fd);
+    }
 }

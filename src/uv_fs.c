@@ -13,7 +13,7 @@
 #include "uv_fs.h"
 
 /**
- * Declaration of the AIO APIs that we use. This avoids having to depend on
+ * Declaration of the KAIO APIs that we use. This avoids having to depend on
  * libaio.
  */
 
@@ -41,58 +41,75 @@ static int io_getevents(aio_context_t ctx,
     return syscall(__NR_io_getevents, ctx, min_nr, max_nr, events, timeout);
 }
 
-/**
- * Check if @size is the correct block size for @fd.
- */
+void raft_uv_fs__join(const char *dir, const char *filename, char *path)
+{
+    assert(strlen(dir) < RAFT_UV_FS_MAX_DIR_LEN);
+    assert(strlen(filename) < RAFT_UV_FS_MAX_FILENAME_LEN);
+
+    strcpy(path, dir);
+    strcat(path, "/");
+    strcat(path, filename);
+}
+
 #if defined(RWF_NOWAIT)
+/**
+ * Check if @size is the correct block size for @fd. If it is, @ok will be set
+ * to #true.
+ */
 static int raft_uv_fs__block_size_probe(int fd, size_t size, bool *ok)
 {
-    void *data;
-    uv_buf_t buf;
+    void *buf;                  /* Buffer to use for the probe write */
+    aio_context_t ctx = 0;      /* KAIO context handle */
+    struct iocb iocb;           /* KAIO request object */
+    struct iocb *iocbs = &iocb; /* Because the io_submit() API sucks */
+    struct io_event event;      /* KAIO response object */
     int rv;
-    struct iocb iocb;
-    struct iocb *iocbs = &iocb;
-    aio_context_t ctx = 0;
-    struct io_event event;
 
-    data = aligned_alloc(size, size);
-    if (data == NULL) {
-        return UV_ENOMEM;
-    }
-
+    /* Setup the KAIO context handle */
     rv = io_setup(1, &ctx);
     if (rv == -1) {
+        /* UNTESTED: in practice this should fail only with ENOMEM */
         return uv_translate_sys_error(errno);
     }
 
-    memset(data, 0, size);
+    /* Allocate the write buffer */
+    buf = aligned_alloc(size, size);
+    if (buf == NULL) {
+        /* UNTESTED: define a configurable allocator that can fail? */
+        return UV_ENOMEM;
+    }
+    memset(buf, 0, size);
 
-    buf.base = (void *)data;
-    buf.len = size;
-
+    /* Prepare the KAIO request object */
     memset(&iocb, 0, sizeof iocb);
-
-    iocb.aio_lio_opcode = IOCB_CMD_PWRITEV;
-    iocb.aio_buf = (uint64_t)&buf;
-    iocb.aio_nbytes = 1;
+    iocb.aio_lio_opcode = IOCB_CMD_PWRITE;
+    iocb.aio_buf = (uint64_t)buf;
+    iocb.aio_nbytes = size;
     iocb.aio_offset = 0;
     iocb.aio_fildes = fd;
     iocb.aio_reqprio = 0;
     iocb.aio_rw_flags |= RWF_NOWAIT | RWF_DSYNC;
 
+    /* Submit the KAIO request */
     rv = io_submit(ctx, 1, &iocbs);
     if (rv == -1) {
-        free(data);
+        /* UNTESTED: in practice this should fail only with ENOMEM */
+        free(buf);
         io_destroy(ctx);
         return uv_translate_sys_error(errno);
     }
 
+    /* Fetch the response: will block until done. */
     do {
         rv = io_getevents(ctx, 1, 1, &event, NULL);
     } while (rv == -1 && errno == EINTR);
 
     assert(rv == 1);
 
+    /* Release the write buffer. */
+    free(buf);
+
+    /* Release the KAIO context handle. */
     io_destroy(ctx);
 
     /* We expect the write to either succeed or fail with EAGAIN (which means
@@ -101,13 +118,12 @@ static int raft_uv_fs__block_size_probe(int fd, size_t size, bool *ok)
         *ok = true;
     } else {
         if (event.res != -EAGAIN) {
-            free(data);
+            /* UNTESTED: this should basically fail only because of disk errors,
+             * since we allocated the file with posix_fallocate. */
             return uv_translate_sys_error(-event.res);
         }
         *ok = false;
     }
-
-    free(data);
 
     return 0;
 }
@@ -115,18 +131,18 @@ static int raft_uv_fs__block_size_probe(int fd, size_t size, bool *ok)
 
 int raft_uv_fs__block_size(const char *dir, size_t *size)
 {
-    struct statfs fs_info;
-    struct stat info;
-    char path[RAFT_UV_FS_MAX_PATH_LEN];
-    int fd;
-    int flags;
+    struct statfs fs_info; /* To get the type code of the underlying fs */
+    struct stat info;      /* To get the block size reported by the fs */
+    raft_uv_path path;     /* To hold the path of probe file */
+    int fd;                /* File descriptor of the probe file */
+    int flags;             /* To hold the current fcntl flags */
     int rv;
 
     assert(dir != NULL);
     assert(size != NULL);
 
 #if !defined(RWF_NOWAIT)
-    /* If NOWAIT is not supported, just return 4096 since in practice it should
+    /* If NOWAIT is not supported, just return 4096. In practice it should
      * always work fine. */
     *size = 4096;
     return 0;
@@ -134,14 +150,13 @@ int raft_uv_fs__block_size(const char *dir, size_t *size)
     assert(strlen(dir) < RAFT_UV_FS_MAX_DIR_LEN);
 
     /* Create a temporary probe file. */
-    strcpy(path, dir);
-    strcat(path, "/");
-    strcat(path, ".probe-XXXXXX");
+    raft_uv_fs__join(dir, ".probe-XXXXXX", path);
 
     fd = mkstemp(path);
     if (fd == -1) {
         return uv_translate_sys_error(errno);
     }
+
     unlink(path);
 
     /* For XFS, we can use the dedicated API to figure out the optimal block
@@ -154,6 +169,7 @@ int raft_uv_fs__block_size(const char *dir, size_t *size)
         close(fd);
 
         if (rv != 0) {
+            /* UNTEST: since the path and fd are valid, can this ever fail? */
             return rv;
         }
 
@@ -165,10 +181,12 @@ int raft_uv_fs__block_size(const char *dir, size_t *size)
     /* Get the file system type */
     rv = fstatfs(fd, &fs_info);
     if (rv == -1) {
+        /* UNTESTED: in practice ENOMEM should be the only failure mode */
         close(fd);
         return uv_translate_sys_error(errno);
     }
 
+    /* Special-case the file systems that do not support O_DIRECT/NOWAIT */
     switch (fs_info.f_type) {
         case 0x01021994: /* tmpfs */
             /* 4096 is ok. */
@@ -181,9 +199,14 @@ int raft_uv_fs__block_size(const char *dir, size_t *size)
             rv = fstat(fd, &info);
             close(fd);
             if (rv != 0) {
+                /* UNTESTED: ENOMEM should be the only failure mode */
                 return uv_translate_sys_error(errno);
             }
-            *size = info.st_blksize;
+            /* TODO: The block size indicated in the ZFS case seems way to
+             * high. Reducing it to 4096 seems safe since at the moment ZFS does
+             * not support async writes. We might want to change this once ZFS
+             * async support is released. */
+            *size = info.st_blksize > 4096 ? 4096 : info.st_blksize;
             return 0;
     }
 
@@ -198,6 +221,8 @@ int raft_uv_fs__block_size(const char *dir, size_t *size)
     flags = fcntl(fd, F_GETFL);
     rv = fcntl(fd, F_SETFL, flags | O_DIRECT);
     if (rv == -1) {
+        /* UNTESTED: this should actually never fail, for the file systems we
+         * currently support. */
         close(fd);
         return uv_translate_sys_error(errno);
     }
@@ -208,8 +233,9 @@ int raft_uv_fs__block_size(const char *dir, size_t *size)
 
         rv = raft_uv_fs__block_size_probe(fd, *size, &ok);
         if (rv != 0) {
-            close(fd);
-            return rv;
+            /* UNTESTED: all syscalls performed by underlying code should fail
+             * at most with ENOMEM. */
+            goto err;
         }
 
         if (ok) {
@@ -220,18 +246,169 @@ int raft_uv_fs__block_size(const char *dir, size_t *size)
         *size = *size / 2;
     }
 
-    return UV_EINVAL;
+    /* UNTEST: at least one of the probed block sizes should work for the file
+     * systems we currently support. */
+    rv = UV_EINVAL;
+
+err:
+    assert(rv != 0);
+
+    close(fd);
+
+    return rv;
 #endif /* RWF_NOWAIT */
 }
 
 /**
  * If set, invoke the request's callback.
  */
-static void raft_uv_fs__invoke_cb(struct raft_uv_fs *req)
+static void raft_uv_fs__done(struct raft_uv_fs *req)
 {
+    assert(req->file->busy);
+
+    req->file->busy = false;
+
     if (req->cb != NULL) {
         req->cb(req);
     }
+}
+
+/**
+ * Run blocking syscalls involved in a file write.
+ *
+ * Perform a KAIO write request and synchronously wait for it to complete.
+ *
+ * This is called in UV's threadpool.
+ */
+static void raft_uv_fs__write_work_cb(uv_work_t *work)
+{
+    struct raft_uv_fs *req; /* Create file request object */
+    struct raft_uv_file *f; /* File handle */
+    struct iocb *iocbs;     /* Pointer to KAIO request object */
+    struct io_event event;  /* KAIO response object */
+    int rv;
+
+    assert(work != NULL);
+    assert(work->data != NULL);
+
+    req = work->data;
+    f = req->file;
+
+    iocbs = &req->iocb;
+
+    /* Submit the request */
+    rv = io_submit(f->ctx, 1, &iocbs);
+    if (rv == -1) {
+        /* UNTESTED: since we're not using NOWAIT and the parameters are valid,
+         * this shouldn't fail. */
+        req->status = uv_translate_sys_error(errno);
+        return;
+    }
+
+    /* Wait for the request to complete */
+    do {
+        rv = io_getevents(f->ctx, 1, 1, &event, NULL);
+    } while (rv == -1 && errno == EINTR);
+
+    assert(rv == 1);
+
+    req->status = event.res;
+}
+
+/**
+ * Callback run after @raft_uv_fs__write_work_cb has returned. It's run in
+ * the main loop thread.
+ */
+static void raft_uv_fs__write_after_work_cb(uv_work_t *work, int status)
+{
+    struct raft_uv_fs *req; /* Create file request object */
+    struct raft_uv_file *f; /* File handle */
+
+    assert(work != NULL);
+
+    assert(status == 0); /* We don't cancel worker requests */
+
+    req = work->data;
+    f = req->file;
+
+    /* Possibly invoke the request's callback. */
+    raft_uv_fs__done(req);
+}
+
+/**
+ * Callback fired when the event fd that we're polling should be ready for
+ * reading.
+ */
+static void raft_uv_fs__write_poll_cb(uv_poll_t *poller, int status, int events)
+{
+    struct raft_uv_fs *req = poller->data; /* Create file request object */
+    struct raft_uv_file *f = req->file;    /* File handle */
+    uint64_t completed;                    /* True if the write is complete */
+    struct io_event event;                 /* KAIO write response object */
+    int rv;
+
+    assert(req != NULL);
+    assert(req->data != NULL);
+    assert(f->event_fd >= 0);
+
+    if (status != 0) {
+        /* UNTESTED: it's not clear when polling could fail. */
+        req->status = status;
+        goto invoke_cb;
+    }
+
+    assert(events & UV_READABLE);
+
+    /* Read the event file descriptor */
+    rv = read(f->event_fd, &completed, sizeof completed);
+    if (rv != sizeof completed) {
+        /* UNTESTED: According to eventfd(2) this is the only possible failure
+         * mode, meaning that epoll has indicated that the event FD is not yet
+         * ready. */
+        assert(errno == EAGAIN);
+        return;
+    }
+
+    assert(completed == 1);
+
+    /* Try to fetch the write response.
+     *
+     * TODO: set a timeout? in theory if we got here the write was completed and
+     * io_events should return immediately without blocking */
+    do {
+        rv = io_getevents(f->ctx, 1, 1, &event, NULL);
+    } while (rv == -1 && errno == EINTR);
+
+    assert(rv == 1);
+
+#if defined(RWF_NOWAIT)
+    /* If we got EAGAIN, it means it was not possible to perform the write
+     * asynchronously, so let's fall back to the threadpool. */
+    if (event.res == -EAGAIN) {
+        req->iocb.aio_flags &= ~IOCB_FLAG_RESFD;
+        req->iocb.aio_resfd = 0;
+        req->iocb.aio_rw_flags &= ~RWF_NOWAIT;
+
+        req->work.data = req;
+        rv = uv_queue_work(f->loop, &req->work, raft_uv_fs__write_work_cb,
+                           raft_uv_fs__write_after_work_cb);
+        if (rv != 0) {
+            /* UNTESTED: with the current libuv implementation this should never
+             * fail. */
+            req->status = rv;
+            goto invoke_cb;
+        }
+
+        return;
+    }
+#endif /* RWF_NOWAIT */
+
+    req->status = event.res;
+
+invoke_cb:
+    poller->data = NULL; /* Clean up the poller state */
+
+    raft_uv_fs__done(req);
 }
 
 /**
@@ -242,8 +419,8 @@ static void raft_uv_fs__invoke_cb(struct raft_uv_fs *req)
  */
 static int raft_uv_fs__create_set_direct_io(struct raft_uv_file *f)
 {
-    int flags;
-    struct statfs fs_info;
+    int flags;             /* Current fcntl flags */
+    struct statfs fs_info; /* To check the file system type */
     int rv;
 
     flags = fcntl(f->fd, F_GETFL);
@@ -251,11 +428,13 @@ static int raft_uv_fs__create_set_direct_io(struct raft_uv_file *f)
 
     if (rv == -1) {
         if (errno != EINVAL) {
+            /* UNTESTED: the parameters are ok, so this should never happen. */
             return -1;
         }
 
         rv = fstatfs(f->fd, &fs_info);
         if (rv == -1) {
+            /* UNTESTED: in practice ENOMEM should be the only failure mode */
             return -1;
         }
 
@@ -267,6 +446,8 @@ static int raft_uv_fs__create_set_direct_io(struct raft_uv_file *f)
                 f->async = false;
                 break;
             default:
+                /* UNTESTED: this is an unsupported file system. */
+                errno = EINVAL;
                 return -1;
         }
     }
@@ -282,8 +463,8 @@ static int raft_uv_fs__create_set_direct_io(struct raft_uv_file *f)
  */
 static int raft_uv_fs__create_sync_dir(const char *path)
 {
-    char dir[RAFT_UV_FS_MAX_PATH_LEN];
-    int fd;
+    raft_uv_path dir; /* The directory portion of path */
+    int fd;           /* Directory file descriptor */
     int rv;
 
     /* Any path passed to us should honor the defined limits. */
@@ -294,6 +475,8 @@ static int raft_uv_fs__create_sync_dir(const char *path)
 
     fd = open(dir, O_RDONLY | O_DIRECTORY);
     if (fd == -1) {
+        /* UNTESTED: since the directory has been already accessed, this
+         * shouldn't fail */
         return -1;
     }
 
@@ -311,15 +494,17 @@ static int raft_uv_fs__create_sync_dir(const char *path)
  */
 static void raft_uv_fs__create_work_cb(uv_work_t *work)
 {
-    struct raft_uv_fs *req;
-    struct raft_uv_file *f;
-    int flags = O_WRONLY | O_CREAT | O_EXCL;
+    struct raft_uv_fs *req;                  /* Create file request object */
+    struct raft_uv_file *f;                  /* File handle */
+    int flags = O_WRONLY | O_CREAT | O_EXCL; /* Common open flags */
     int rv;
 
     assert(work != NULL);
 
     req = work->data;
     f = req->file;
+
+    assert(f->busy);
 
 #if !defined(RWF_DSYNC)
     /* If per-request synchronous I/O is not supported, open the file with the
@@ -348,11 +533,13 @@ static void raft_uv_fs__create_work_cb(uv_work_t *work)
     /* Sync the file and its directory */
     rv = fsync(f->fd);
     if (rv == -1) {
+        /* UNTESTED: should fail only in case of disk errors */
         rv = errno;
         goto err_after_open;
     }
     rv = raft_uv_fs__create_sync_dir(req->path);
     if (rv == -1) {
+        /* UNTESTED: should fail only in case of disk errors */
         rv = errno;
         goto err_after_open;
     }
@@ -368,6 +555,7 @@ static void raft_uv_fs__create_work_cb(uv_work_t *work)
      * completed. */
     f->event_fd = eventfd(0, EFD_NONBLOCK);
     if (f->event_fd < 0) {
+        /* UNTESTED: should fail only with ENOMEM */
         rv = errno;
         goto err_after_open;
     }
@@ -375,9 +563,12 @@ static void raft_uv_fs__create_work_cb(uv_work_t *work)
     /* Setup the AIO context. */
     rv = io_setup(1 /* Maximum concurrent requests */, &f->ctx);
     if (rv == -1) {
+        /* UNTESTED: should fail only with ENOMEM */
         rv = errno;
         goto err_after_eventfd;
     }
+
+    req->status = 0;
 
     return;
 
@@ -395,56 +586,6 @@ err:
 }
 
 /**
- * Callback fired when the event fd that we're polling should be ready for
- * reading.
- */
-static void raft_uv_fs__poll_cb(uv_poll_t *poller, int status, int events)
-{
-    struct raft_uv_fs *req = poller->data;
-    struct raft_uv_file *f = req->file;
-    uint64_t completed;
-    struct io_event event;
-    int rv;
-
-    assert(req != NULL);
-    assert(req->data != NULL);
-    assert(f->event_fd >= 0);
-
-    if (status != 0) {
-        req->status = status;
-        goto invoke_cb;
-    }
-
-    assert(events & UV_READABLE);
-
-    rv = read(f->event_fd, &completed, sizeof completed);
-    if (rv != sizeof completed) {
-        /* According to eventfd(2) this is the only possible failure mode,
-         * meaning that epoll has indicated that the event FD is not yet
-         * ready. */
-        assert(errno == EAGAIN);
-        return;
-    }
-
-    assert(completed == 1);
-
-    /* TODO: set a timeout? in theory if we got here the write was completed and
-     * io_events should return immediately without blocking */
-    do {
-        rv = io_getevents(f->ctx, 1, 1, &event, NULL);
-    } while (rv == -1 && errno == EINTR);
-
-    assert(rv == 1);
-
-    req->status = event.res;
-
-invoke_cb:
-    poller->data = NULL; /* The write request has been completed */
-
-    raft_uv_fs__invoke_cb(req);
-}
-
-/**
  * Start polling the event file descriptor to get notified when a write
  * completes.
  */
@@ -454,11 +595,16 @@ static int raft_uv_fs__create_start_polling(struct raft_uv_file *f)
 
     rv = uv_poll_init(f->loop, &f->event_poller, f->event_fd);
     if (rv != 0) {
+        /* UNTESTED: with the current libuv implementation this should never
+         * fail. */
         goto err;
     }
 
-    rv = uv_poll_start(&f->event_poller, UV_READABLE, raft_uv_fs__poll_cb);
+    rv =
+        uv_poll_start(&f->event_poller, UV_READABLE, raft_uv_fs__write_poll_cb);
     if (rv != 0) {
+        /* UNTESTED: with the current libuv implementation this should never
+         * fail. */
         goto err_after_init;
     }
 
@@ -494,6 +640,7 @@ static void raft_uv_fs__create_after_work_cb(uv_work_t *work, int status)
     if (req->status == 0) {
         rv = raft_uv_fs__create_start_polling(f);
         if (rv != 0) {
+            /* UNTESTED: the underlying libuv calls should never fail. */
             req->status = rv;
 
             io_destroy(f->ctx);
@@ -503,7 +650,7 @@ static void raft_uv_fs__create_after_work_cb(uv_work_t *work, int status)
         }
     }
 
-    raft_uv_fs__invoke_cb(req);
+    raft_uv_fs__done(req);
 }
 
 int raft_uv_fs__create(struct raft_uv_file *f,
@@ -525,7 +672,7 @@ int raft_uv_fs__create(struct raft_uv_file *f,
     f->fd = -1;
     f->async = true;
     f->event_fd = -1;
-    f->event_poller.data = NULL;
+    f->busy = true;
     f->ctx = 0;
 
     req->file = f;
@@ -538,6 +685,7 @@ int raft_uv_fs__create(struct raft_uv_file *f,
     rv = uv_queue_work(f->loop, &req->work, raft_uv_fs__create_work_cb,
                        raft_uv_fs__create_after_work_cb);
     if (rv != 0) {
+        /* UNTESTED: with the current libuv implementation this can't fail. */
         return rv;
     }
 
@@ -549,9 +697,11 @@ int raft_uv_fs__close(struct raft_uv_file *f)
     int rv;
 
     assert(f != NULL);
+    assert(!f->busy); /* No request is in progress */
 
     rv = uv_poll_stop(&f->event_poller);
     if (rv != 0) {
+        /* UNTESTED: with the current libuv implementation this can't fail. */
         return rv;
     }
 
@@ -559,78 +709,23 @@ int raft_uv_fs__close(struct raft_uv_file *f)
 
     rv = close(f->event_fd);
     if (rv == -1) {
+        /* UNTESTED: not clear how this could fail. */
         return uv_translate_sys_error(errno);
     }
 
     rv = io_destroy(f->ctx);
     if (rv == -1) {
+        /* UNTESTED: not clear how this could fail. */
         return uv_translate_sys_error(errno);
     }
 
     rv = close(f->fd);
     if (rv == -1) {
+        /* UNTESTED: not clear how this could fail. */
         return uv_translate_sys_error(errno);
     }
 
     return 0;
-}
-
-/**
- * Run blocking syscalls involved in a file write.
- *
- * This is called in UV's threadpool.
- */
-static void raft_uv_fs__write_work_cb(uv_work_t *work)
-{
-    int rv;
-    struct raft_uv_fs *req;
-    struct raft_uv_file *f;
-    struct iocb *iocbs;
-    struct io_event event;
-
-    assert(work != NULL);
-    assert(work->data != NULL);
-
-    req = work->data;
-    f = req->file;
-
-    iocbs = &req->iocb;
-
-    /* Submit the request */
-    rv = io_submit(f->ctx, 1, &iocbs);
-    if (rv == -1) {
-        req->status = uv_translate_sys_error(errno);
-    }
-
-    /* Wait for the request to complete */
-    do {
-        rv = io_getevents(f->ctx, 1, 1, &event, NULL);
-    } while (rv == -1 && errno == EINTR);
-
-    assert(rv == 1);
-
-    req->status = event.res;
-}
-
-/**
- * Callback run after @raft_uv_fs__write_work_cb has returned. It's run in
- * the main loop thread.
- */
-static void raft_uv_fs__write_after_work_cb(uv_work_t *work, int status)
-{
-    struct raft_uv_fs *req;
-    struct raft_uv_file *f;
-
-    assert(work != NULL);
-
-    assert(status == 0); /* We don't cancel worker requests */
-
-    req = work->data;
-    f = req->file;
-
-    /* Invoke the callback. */
-    f->event_poller.data = NULL;
-    raft_uv_fs__invoke_cb(req);
 }
 
 int raft_uv_fs__write(struct raft_uv_file *f,
@@ -646,7 +741,7 @@ int raft_uv_fs__write(struct raft_uv_file *f,
     assert(f != NULL);
     assert(f->fd >= 0);
     assert(f->event_fd >= 0);
-    assert(f->event_poller.data == NULL); /* No other request in progress */
+    assert(!f->busy); /* No other request in progress */
     assert(f->ctx != 0);
 
     assert(req != NULL);
@@ -680,8 +775,8 @@ int raft_uv_fs__write(struct raft_uv_file *f,
 
 #if defined(RWF_NOWAIT)
     /* If io_submit can be run in a 100% non-blocking way, we'll try to write
-     * without using the threadpool, unless we had previously detected that it
-     * is not possible. */
+     * without using the threadpool, unless we had previously detected that this
+     * mode is not supported. */
     if (f->async) {
         req->iocb.aio_flags |= IOCB_FLAG_RESFD;
         req->iocb.aio_resfd = f->event_fd;
@@ -698,11 +793,11 @@ int raft_uv_fs__write(struct raft_uv_file *f,
     if (f->async) {
         rv = io_submit(f->ctx, 1, &iocbs);
 
+        /* If no error occurred, we're done, the write request was
+         * submitted. */
         if (rv != -1) {
-            /* If no error occurred, we're done, the write request was
-             * submitted. */
             assert(rv == 1); /* TODO: can 0 be returned? */
-            return 0;
+            goto done;
         }
 
         /* Check the reason of the error. */
@@ -712,8 +807,7 @@ int raft_uv_fs__write(struct raft_uv_file *f,
                 f->async = false;
             case EAGAIN:
                 /* Submitting the write would block, or NOWAIT is not
-                 * supported at all, let's run this request in the
-                 * threadpool. */
+                 * supported. Let's run this request in the threadpool. */
                 req->iocb.aio_flags &= ~IOCB_FLAG_RESFD;
                 req->iocb.aio_resfd = 0;
                 req->iocb.aio_rw_flags &= ~RWF_NOWAIT;
@@ -732,15 +826,16 @@ int raft_uv_fs__write(struct raft_uv_file *f,
     rv = uv_queue_work(f->loop, &req->work, raft_uv_fs__write_work_cb,
                        raft_uv_fs__write_after_work_cb);
     if (rv != 0) {
+        /* UNTESTED: with the current libuv implementation this can't fail. */
         goto err;
     }
 
+done:
+    f->busy = true;
     return 0;
 
 err:
     assert(rv != 0);
-
-    f->event_poller.data = NULL;
 
     return rv;
 }

@@ -16,7 +16,7 @@ int raft_io_stub_init(struct raft_io *io);
 void raft_io_stub_advance(struct raft_io *io, unsigned msecs);
 
 /**
- * Flush all pending I/O requests, invoking the @raft_handle_io as appropriate.
+ * Flush all pending I/O requests, invoking the @notify callback as appropriate.
  */
 void raft_io_stub_flush(struct raft_io *io);
 

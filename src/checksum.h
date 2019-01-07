@@ -10,6 +10,6 @@
 /**
  * Calculate the CRC32 checksum of the given data buffer.
  */
-unsigned raft__crc32(const void *buf, const size_t size);
+unsigned raft__crc32(const void *buf, const size_t size, const unsigned init);
 
 #endif /* RAFT_CHECKSUM_H */

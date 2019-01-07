@@ -21,8 +21,8 @@ static MunitResult test_crc32_valid(const MunitParameter params[], void *data)
     (void)data;
     (void)params;
 
-    crc1 = raft__crc32(buf1, size1);
-    crc2 = raft__crc32(buf2, size2);
+    crc1 = raft__crc32(buf1, size1, 0);
+    crc2 = raft__crc32(buf2, size2, 0);
 
     munit_assert_int(crc1, ==, crc2);
 
@@ -44,8 +44,8 @@ static MunitResult test_crc32_invalid(const MunitParameter params[], void *data)
     (void)data;
     (void)params;
 
-    crc1 = raft__crc32(buf1, size1);
-    crc2 = raft__crc32(buf2, size2);
+    crc1 = raft__crc32(buf1, size1, 0);
+    crc2 = raft__crc32(buf2, size2, 0);
 
     munit_assert_int(crc1, !=, crc2);
 

@@ -24,6 +24,7 @@ int main(int argc, char *argv[])
 {
     struct uv_loop_s loop;
     struct uv_signal_s sigint;
+    struct raft_io io;
     struct raft raft;
     const char *dir;
     int rv;
@@ -57,14 +58,14 @@ int main(int argc, char *argv[])
         return rv;
     }
 
-    /* Initialize and start the Raft engine, using libuv integration. */
-    raft_init(&raft, NULL, NULL /* TODO: fsm implementation */, NULL, 1);
-
-    rv = raft_io_uv_init(&raft, &loop, dir);
+    rv = raft_io_uv_init(&io, &loop, dir);
     if (rv != 0) {
         printf("error: enable uv integration: %s\n", raft_errmsg(&raft));
         return rv;
     }
+
+    /* Initialize and start the Raft engine, using libuv integration. */
+    raft_init(&raft, &io, NULL /* TODO: fsm implementation */, NULL, 1);
 
     rv = raft_start(&raft);
     if (rv != 0) {

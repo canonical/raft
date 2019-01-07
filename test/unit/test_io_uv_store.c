@@ -1,6 +1,7 @@
 /**
  * Helpers
  */
+#include <unistd.h>
 
 #include "../../src/binary.h"
 #include "../../src/checksum.h"
@@ -14,14 +15,29 @@
  * Helpers
  */
 
+#define __MAX_LOOP_RUN 10        /* Max n. of loop iterations upon teardown */
+#define __MAX_SEGMENT_SIZE 12288 /* Max segment size */
+
 struct fixture
 {
     struct raft_heap heap;          /* Testable allocator */
     char *dir;                      /* Data directory */
+    struct uv_loop_s loop;          /* libuv loop */
     char errmsg[RAFT_ERRMSG_SIZE];  /* Error message buffer */
-    struct raft_io_request request; /* I/O request buffer */
+    struct raft_io_request request; /* Request buffer for I/O operations */
     int count;                      /* To generate deterministic entry data */
-    struct raft_io_uv_store store;  /* Store under test */
+    bool completed;                 /* Last store entries request is done */
+    int status;                     /* Result of a store entries request */
+    bool stopped;                   /* The store has been completely stopped */
+    struct
+    {
+        raft_term term;
+        unsigned voted_for;
+        raft_index start_index;
+        struct raft_entry *entries;
+        size_t n;
+    } loaded;                      /* Result of raft_io_uv_store__load. */
+    struct raft_io_uv_store store; /* Store under test */
 };
 
 static void *setup(const MunitParameter params[], void *user_data)
@@ -35,31 +51,64 @@ static void *setup(const MunitParameter params[], void *user_data)
 
     f->dir = test_dir_setup(params);
 
+    rv =
+        uv_replace_allocator(raft_malloc, raft_realloc, raft_calloc, raft_free);
+    munit_assert_int(rv, ==, 0);
+
+    rv = uv_loop_init(&f->loop);
+    munit_assert_int(rv, ==, 0);
+
     memset(&f->request, 0, sizeof f->request);
+    memset(&f->loaded, 0, sizeof f->loaded);
     memset(f->errmsg, 0, sizeof f->errmsg);
 
     f->count = 0;
+    f->completed = false;
+    f->status = -1;
 
-    rv = raft_io_uv_store__init(&f->store, f->dir, f->errmsg);
+    rv = raft_io_uv_store__init(&f->store, f->dir, &f->loop, f->errmsg);
     munit_assert_int(rv, ==, 0);
 
+    f->store.max_segment_size = __MAX_SEGMENT_SIZE;
+
     return f;
+}
+
+static void __stop_cb(void *p)
+{
+    struct fixture *f = p;
+
+    f->stopped = true;
 }
 
 static void tear_down(void *data)
 {
     struct fixture *f = data;
-    struct raft_entry *entries;
     void *batch = NULL;
-    unsigned n;
     unsigned i;
+    int rv;
+
+    /* Stop the store if it hasn't been stopped already. */
+    if (!f->stopped) {
+        raft_io_uv_store__stop(&f->store, f, __stop_cb);
+    }
+
+    /* Spin a few times to trigger pending callbacks. */
+    for (i = 0; i < __MAX_LOOP_RUN; i++) {
+        rv = uv_run(&f->loop, UV_RUN_ONCE);
+        if (rv == 0) {
+            break;
+        }
+    }
+    if (i == __MAX_LOOP_RUN) {
+        munit_error("unclean loop");
+    }
+
+    munit_assert_true(f->stopped);
 
     /* Free any loaded entry */
-    entries = f->request.result.read_state.entries;
-    n = f->request.result.read_state.n;
-
-    for (i = 0; i < n; i++) {
-        struct raft_entry *entry = &entries[i];
+    for (i = 0; i < f->loaded.n; i++) {
+        struct raft_entry *entry = &f->loaded.entries[i];
 
         if (entry->batch != batch) {
             batch = entry->batch;
@@ -67,11 +116,17 @@ static void tear_down(void *data)
         }
     }
 
-    if (entries != NULL) {
-        raft_free(entries);
+    if (f->loaded.entries != NULL) {
+        raft_free(f->loaded.entries);
     }
 
     raft_io_uv_store__close(&f->store);
+
+    rv = uv_loop_close(&f->loop);
+    munit_assert_int(rv, ==, 0);
+
+    rv = uv_replace_allocator(malloc, realloc, calloc, free);
+    munit_assert_int(rv, ==, 0);
 
     test_dir_tear_down(f->dir);
 
@@ -81,10 +136,25 @@ static void tear_down(void *data)
 }
 
 /**
+ * Callback to pass to asynchronous store entries requests.
+ */
+static void __entries_cb(void *p, const int status, const char *errmsg)
+{
+    struct fixture *f = p;
+
+    f->completed = true;
+    f->status = status;
+
+    if (status != 0) {
+        strcpy(f->errmsg, errmsg);
+    }
+}
+
+/**
  * Write either the metadata1 or metadata2 file, filling it with the given
  * values.
  */
-#define __write_metadata(F, N, FORMAT, VERSION, TERM, VOTED_FOR, FIRST_INDEX) \
+#define __write_metadata(F, N, FORMAT, VERSION, TERM, VOTED_FOR, START_INDEX) \
     {                                                                         \
         uint8_t buf[RAFT_IO_UV_METADATA_SIZE];                                \
         void *cursor = buf;                                                   \
@@ -96,7 +166,7 @@ static void tear_down(void *data)
         raft__put64(&cursor, VERSION);                                        \
         raft__put64(&cursor, TERM);                                           \
         raft__put64(&cursor, VOTED_FOR);                                      \
-        raft__put64(&cursor, FIRST_INDEX);                                    \
+        raft__put64(&cursor, START_INDEX);                                    \
                                                                               \
         test_dir_write_file(F->dir, filename, buf, sizeof buf);               \
     }
@@ -131,15 +201,15 @@ static void tear_down(void *data)
             raft__put64(&cursor, 1);               /* Number of entries */    \
             raft__put64(&cursor, 1);               /* Entry term */           \
             raft__put8(&cursor, RAFT_LOG_COMMAND); /* Entry type */           \
-            raft__put8(&cursor, 0);                /* Entry type */           \
+            raft__put8(&cursor, 0);                /* Unused */               \
             raft__put8(&cursor, 0);                /* Unused */               \
             raft__put8(&cursor, 0);                /* Unused */               \
             raft__put32(&cursor, 8);               /* Size of entry data */   \
             raft__put64(&cursor, F->count);        /* Entry data */           \
                                                                               \
             cursor = batch + __WORD_SIZE;                                     \
-            crc1 = raft__crc32(cursor, header_size);                          \
-            crc2 = raft__crc32(cursor + header_size, data_size);              \
+            crc1 = raft__crc32(cursor, header_size, 0);                       \
+            crc2 = raft__crc32(cursor + header_size, data_size, 0);           \
             cursor = batch;                                                   \
             raft__put32(&cursor, crc1); /* Header checksum */                 \
             raft__put32(&cursor, crc2); /* Data checksum */                   \
@@ -171,10 +241,11 @@ static void tear_down(void *data)
     }
 
 /**
- * Filename of the first and second open segments.
+ * Filename of the first, second and third open segments.
  */
 #define __OPEN_FILENAME_1 "open-1"
 #define __OPEN_FILENAME_2 "open-2"
+#define __OPEN_FILENAME_3 "open-3"
 
 /**
  * Write a open segment with index #N and #M batches.
@@ -191,107 +262,222 @@ static void tear_down(void *data)
 /**
  * Submit a load I/O request and check that no error occurred.
  */
-#define __load(F)                                                       \
-    {                                                                   \
-        int rv;                                                         \
-                                                                        \
-        rv = raft_io_uv_store__load(&F->store, &F->request, F->errmsg); \
-        if (rv != 0) {                                                  \
-            munit_logf(MUNIT_LOG_ERROR, "load: %s", F->errmsg);         \
-        }                                                               \
+#define __load(F)                                                     \
+    {                                                                 \
+        int rv;                                                       \
+                                                                      \
+        rv = raft_io_uv_store__load(                                  \
+            &F->store, &F->loaded.term, &F->loaded.voted_for,         \
+            &F->loaded.start_index, &F->loaded.entries, &F->loaded.n, \
+            F->errmsg);                                               \
+        if (rv != 0) {                                                \
+            munit_logf(MUNIT_LOG_ERROR, "load: %s", F->errmsg);       \
+        }                                                             \
     }
 
 /**
  * Submit a store term I/O request and check that no error occurred.
  */
-#define __term(F)                                                       \
-    {                                                                   \
-        int rv;                                                         \
-                                                                        \
-        rv = raft_io_uv_store__term(&F->store, &F->request, F->errmsg); \
-        if (rv != 0) {                                                  \
-            munit_logf(MUNIT_LOG_ERROR, "term: %s", F->errmsg);         \
-        }                                                               \
+#define __term(F, TERM)                                          \
+    {                                                            \
+        int rv;                                                  \
+                                                                 \
+        rv = raft_io_uv_store__term(&F->store, TERM, F->errmsg); \
+        if (rv != 0) {                                           \
+            munit_logf(MUNIT_LOG_ERROR, "term: %s", F->errmsg);  \
+        }                                                        \
     }
 
 /**
  * Submit a store vote I/O request and check that no error occurred.
  */
-#define __vote(F)                                                       \
-    {                                                                   \
-        int rv;                                                         \
-                                                                        \
-        rv = raft_io_uv_store__vote(&F->store, &F->request, F->errmsg); \
-        if (rv != 0) {                                                  \
-            munit_logf(MUNIT_LOG_ERROR, "term: %s", F->errmsg);         \
-        }                                                               \
+#define __vote(F, SERVER_ID)                                          \
+    {                                                                 \
+        int rv;                                                       \
+                                                                      \
+        rv = raft_io_uv_store__vote(&F->store, SERVER_ID, F->errmsg); \
+        if (rv != 0) {                                                \
+            munit_logf(MUNIT_LOG_ERROR, "term: %s", F->errmsg);       \
+        }                                                             \
+    }
+
+/**
+ * Populate the test request with N entries each of size S.
+ */
+#define __make_request_entries(F, ENTRIES, N, S)        \
+    {                                                   \
+        int i;                                          \
+                                                        \
+        ENTRIES = munit_malloc(N * sizeof *entries);    \
+                                                        \
+        for (i = 0; i < N; i++) {                       \
+            struct raft_entry *entry = &entries[i];     \
+            void *cursor;                               \
+                                                        \
+            entry->term = 1;                            \
+            entry->type = RAFT_LOG_COMMAND;             \
+            entry->buf.base = munit_malloc(S);          \
+            entry->buf.len = S;                         \
+            entry->batch = NULL;                        \
+                                                        \
+            memset(entry->buf.base, 0, entry->buf.len); \
+            cursor = entry->buf.base;                   \
+            raft__put64(&cursor, F->count);             \
+            F->count++;                                 \
+        }                                               \
+                                                        \
+        F->request.args.write_log.entries = entries;    \
+        F->request.args.write_log.n = N;                \
+    }
+
+#define __drop_request_entries(F, ENTRIES, N)       \
+    {                                               \
+        unsigned i;                                 \
+                                                    \
+        for (i = 0; i < N; i++) {                   \
+            struct raft_entry *entry = &ENTRIES[i]; \
+                                                    \
+            free(entry->buf.base);                  \
+        }                                           \
+                                                    \
+        free(entries);                              \
+    }
+
+/**
+ * Submit a request to store N entries each of size S and check that no error
+ * occurred.
+ */
+#define __entries(F, N, S)                                                     \
+    {                                                                          \
+        int i;                                                                 \
+        int rv;                                                                \
+        struct raft_entry *entries;                                            \
+                                                                               \
+        __make_request_entries(F, entries, N, S);                              \
+                                                                               \
+        rv = raft_io_uv_store__entries(&F->store, entries, N, F, __entries_cb, \
+                                       F->errmsg);                             \
+        if (rv != 0) {                                                         \
+            munit_logf(MUNIT_LOG_ERROR, "entries: %s", F->errmsg);             \
+        }                                                                      \
+                                                                               \
+        /* Run the loop until the write request is completed */                \
+        for (i = 0; i < 5; i++) {                                              \
+            rv = uv_run(&F->loop, UV_RUN_ONCE);                                \
+            munit_assert_int(rv, ==, 1);                                       \
+                                                                               \
+            if (F->completed) {                                                \
+                break;                                                         \
+            }                                                                  \
+        }                                                                      \
+        munit_assert_true(F->completed);                                       \
+        munit_assert_int(F->status, ==, 0);                                    \
+                                                                               \
+        F->completed = false;                                                  \
+                                                                               \
+        __drop_request_entries(F, entries, N);                                 \
     }
 
 /**
  * Initialize a pristine store and check that the given error occurs.
  */
-#define __assert_init_error(F, DIR, RV, ERRMSG)              \
-    {                                                        \
-        int rv;                                              \
-        struct raft_io_uv_store store;                       \
-                                                             \
-        rv = raft_io_uv_store__init(&store, DIR, f->errmsg); \
-        munit_assert_int(rv, ==, RV);                        \
-                                                             \
-        munit_assert_string_equal(f->errmsg, ERRMSG);        \
+#define __assert_init_error(F, DIR, RV, ERRMSG)                        \
+    {                                                                  \
+        int rv;                                                        \
+        struct raft_io_uv_store store;                                 \
+                                                                       \
+        rv = raft_io_uv_store__init(&store, DIR, &f->loop, f->errmsg); \
+        munit_assert_int(rv, ==, RV);                                  \
+                                                                       \
+        munit_assert_string_equal(f->errmsg, ERRMSG);                  \
     }
 
 /**
  * Submit a load state request and check that the given error occurs.
  */
-#define __assert_load_error(F, RV, ERRMSG)                              \
-    {                                                                   \
-        int rv;                                                         \
-                                                                        \
-        rv = raft_io_uv_store__load(&f->store, &f->request, f->errmsg); \
-        munit_assert_int(rv, ==, RV);                                   \
-                                                                        \
-        munit_assert_string_equal(f->errmsg, ERRMSG);                   \
+#define __assert_load_error(F, RV, ERRMSG)                            \
+    {                                                                 \
+        int rv;                                                       \
+                                                                      \
+        rv = raft_io_uv_store__load(                                  \
+            &F->store, &F->loaded.term, &F->loaded.voted_for,         \
+            &F->loaded.start_index, &F->loaded.entries, &F->loaded.n, \
+            F->errmsg);                                               \
+        munit_assert_int(rv, ==, RV);                                 \
+                                                                      \
+        munit_assert_string_equal(F->errmsg, ERRMSG);                 \
     }
 
 /**
- * Assert that the metadata in the given RAFT_IO_READ_STATE result equals the
- * given values.
+ * Submit a store entries request and check that the given error occurs.
  */
-#define __assert_result_metadata(F, TERM, VOTED_FOR, FIRST_INDEX)      \
-    {                                                                  \
-        munit_assert_int(F->request.result.read_state.term, ==, TERM); \
-        munit_assert_int(F->request.result.read_state.voted_for, ==,   \
-                         VOTED_FOR);                                   \
-        munit_assert_int(F->request.result.read_state.first_index, ==, \
-                         FIRST_INDEX);                                 \
+#define __assert_entries_error(F, N, S, RV, ERRMSG)                            \
+    {                                                                          \
+        int i;                                                                 \
+        int rv;                                                                \
+        struct raft_entry *entries;                                            \
+                                                                               \
+        __make_request_entries(F, entries, N, S);                              \
+                                                                               \
+        rv = raft_io_uv_store__entries(&F->store, entries, N, F, __entries_cb, \
+                                       F->errmsg);                             \
+        if (rv != 0) {                                                         \
+            munit_logf(MUNIT_LOG_ERROR, "entries: %s", F->errmsg);             \
+        }                                                                      \
+                                                                               \
+        /* Run the loop until the write request is completed */                \
+        for (i = 0; i < 5; i++) {                                              \
+            rv = uv_run(&F->loop, UV_RUN_ONCE);                                \
+            if (rv == 0) {                                                     \
+                break;                                                         \
+            }                                                                  \
+                                                                               \
+            if (F->completed) {                                                \
+                break;                                                         \
+            }                                                                  \
+        }                                                                      \
+        munit_assert_true(F->completed);                                       \
+        munit_assert_int(F->status, ==, RV);                                   \
+        if (ERRMSG != NULL) {                                                  \
+            munit_assert_string_equal(f->errmsg, ERRMSG);                      \
+        }                                                                      \
+                                                                               \
+        __drop_request_entries(F, entries, N);                                 \
+    }
+
+/**
+ * Assert that the metadata of the last load request equals the given values.
+ */
+#define __assert_result_metadata(F, TERM, VOTED_FOR, START_INDEX) \
+    {                                                             \
+        munit_assert_int(F->loaded.term, ==, TERM);               \
+        munit_assert_int(F->loaded.voted_for, ==, VOTED_FOR);     \
+        munit_assert_int(F->loaded.start_index, ==, START_INDEX); \
     }
 
 /**
  * Assert that there are N entries in the given RAFT_IO_READ_STATE result, each
  * one with the expected payload.
  */
-#define __assert_result_entries(F, N)                                      \
-    {                                                                      \
-        int i;                                                             \
-        unsigned n = F->request.result.read_state.n;                       \
-        struct raft_entry *entries = F->request.result.read_state.entries; \
-                                                                           \
-        munit_assert_int(n, ==, N);                                        \
-                                                                           \
-        for (i = 0; i < N; i++) {                                          \
-            struct raft_entry *entry = &entries[i];                        \
-            uint64_t value = *(uint64_t *)entry->buf.base;                 \
-                                                                           \
-            munit_assert_int(value, ==, i + 1);                            \
-        }                                                                  \
+#define __assert_result_entries(F, N)                         \
+    {                                                         \
+        int i;                                                \
+                                                              \
+        munit_assert_int(F->loaded.n, ==, N);                 \
+                                                              \
+        for (i = 0; i < N; i++) {                             \
+            struct raft_entry *entry = &F->loaded.entries[i]; \
+            uint64_t value = *(uint64_t *)entry->buf.base;    \
+                                                              \
+            munit_assert_int(value, ==, i + 1);               \
+        }                                                     \
     }
 
 /**
  * Assert that the content of either the metadata1 or metadata2 file match the
  * given values.
  */
-#define __assert_metadata(F, N, FORMAT, VERSION, TERM, VOTED_FOR, FIRST_INDEX) \
+#define __assert_metadata(F, N, FORMAT, VERSION, TERM, VOTED_FOR, START_INDEX) \
     {                                                                          \
         uint8_t buf[RAFT_IO_UV_METADATA_SIZE];                                 \
         const void *cursor = buf;                                              \
@@ -305,7 +491,80 @@ static void tear_down(void *data)
         munit_assert_int(raft__get64(&cursor), ==, VERSION);                   \
         munit_assert_int(raft__get64(&cursor), ==, TERM);                      \
         munit_assert_int(raft__get64(&cursor), ==, VOTED_FOR);                 \
-        munit_assert_int(raft__get64(&cursor), ==, FIRST_INDEX);               \
+        munit_assert_int(raft__get64(&cursor), ==, START_INDEX);               \
+    }
+
+/**
+ * Assert the given open segment has the given format version and N entries with
+ * a total data size of S bhtes.
+ */
+#define __assert_open_segment(F, COUNTER, FORMAT, N, S)                     \
+    {                                                                       \
+        uint8_t buf[__MAX_SEGMENT_SIZE];                                    \
+        const void *cursor = buf;                                           \
+        char filename[strlen("open-N") + 1];                                \
+        unsigned i = 0;                                                     \
+        size_t total_data_size = 0;                                         \
+                                                                            \
+        sprintf(filename, "open-%d", COUNTER);                              \
+                                                                            \
+        test_dir_read_file(F->dir, filename, buf, sizeof buf);              \
+                                                                            \
+        munit_assert_int(raft__get64(&cursor), ==, FORMAT);                 \
+                                                                            \
+        while (i < N) {                                                     \
+            unsigned crc1 = raft__get32(&cursor);                           \
+            unsigned crc2 = raft__get32(&cursor);                           \
+            const void *header = cursor;                                    \
+            const void *data;                                               \
+            unsigned n = raft__get64(&cursor);                              \
+            struct raft_entry *entries = munit_malloc(n * sizeof *entries); \
+            unsigned j;                                                     \
+            unsigned crc;                                                   \
+            size_t data_size = 0;                                           \
+                                                                            \
+            for (j = 0; j < n; j++) {                                       \
+                struct raft_entry *entry = &entries[j];                     \
+                                                                            \
+                entry->term = raft__get64(&cursor);                         \
+                entry->type = raft__get8(&cursor);                          \
+                raft__get8(&cursor);                                        \
+                raft__get8(&cursor);                                        \
+                raft__get8(&cursor);                                        \
+                entry->buf.len = raft__get32(&cursor);                      \
+                                                                            \
+                munit_assert_int(entry->term, ==, 1);                       \
+                munit_assert_int(entry->type, ==, RAFT_LOG_COMMAND);        \
+                                                                            \
+                data_size += entry->buf.len;                                \
+            }                                                               \
+                                                                            \
+            crc = raft__crc32(header, raft_batch_header_size(n), 0);        \
+            munit_assert_int(crc, ==, crc1);                                \
+                                                                            \
+            data = cursor;                                                  \
+                                                                            \
+            for (j = 0; j < n; j++) {                                       \
+                struct raft_entry *entry = &entries[j];                     \
+                uint64_t value;                                             \
+                                                                            \
+                value = raft__flip64(*(uint64_t *)cursor);                  \
+                munit_assert_int(value, ==, i);                             \
+                                                                            \
+                cursor += entry->buf.len;                                   \
+                                                                            \
+                i++;                                                        \
+            }                                                               \
+                                                                            \
+            crc = raft__crc32(data, data_size, 0);                          \
+            munit_assert_int(crc, ==, crc2);                                \
+                                                                            \
+            free(entries);                                                  \
+                                                                            \
+            total_data_size += data_size;                                   \
+        }                                                                   \
+                                                                            \
+        munit_assert_int(total_data_size, ==, S);                           \
     }
 
 /**
@@ -419,7 +678,7 @@ static MunitResult test_init_create_dir(const MunitParameter params[],
 
     sprintf(dir, "%s/sub/", f->dir);
 
-    rv = raft_io_uv_store__init(&store, dir, f->errmsg);
+    rv = raft_io_uv_store__init(&store, dir, &f->loop, f->errmsg);
     munit_assert_int(rv, ==, 0);
 
     rv = stat(dir, &sb);
@@ -443,7 +702,7 @@ static MunitTest init_tests[] = {
 };
 
 /**
- * raft_io_uv_store___load
+ * raft_io_uv_store__load
  */
 
 /* The data directory is empty. */
@@ -495,7 +754,7 @@ static MunitResult test_load_md_only_1(const MunitParameter params[],
                      1, /* Version                              */
                      1, /* Term                                 */
                      0, /* Voted for                            */
-                     1 /* First index                          */);
+                     1 /* Start index                          */);
 
     __load(f);
 
@@ -521,7 +780,7 @@ static MunitResult test_load_md_1(const MunitParameter params[], void *data)
                      3, /* Version                              */
                      3, /* Term                                 */
                      0, /* Voted for                            */
-                     1 /* First index                          */);
+                     1 /* Start index                          */);
 
     __write_metadata(f, /*                                      */
                      2, /* Metadata file index                  */
@@ -529,7 +788,7 @@ static MunitResult test_load_md_1(const MunitParameter params[], void *data)
                      2, /* Version                              */
                      2, /* Term                                 */
                      0, /* Voted for                            */
-                     1 /* First index                          */);
+                     1 /* Start index                          */);
 
     __load(f);
 
@@ -555,7 +814,7 @@ static MunitResult test_load_md_2(const MunitParameter params[], void *data)
                      1, /* Version                              */
                      1, /* Term                                 */
                      0, /* Voted for                            */
-                     1 /* First index                          */);
+                     1 /* Start index                          */);
 
     __write_metadata(f, /*                                      */
                      2, /* Metadata file index                  */
@@ -563,7 +822,7 @@ static MunitResult test_load_md_2(const MunitParameter params[], void *data)
                      2, /* Version                              */
                      2, /* Term                                 */
                      0, /* Voted for                            */
-                     1 /* First index                          */);
+                     1 /* Start index                          */);
 
     __load(f);
 
@@ -590,7 +849,7 @@ static MunitResult test_load_md_short(const MunitParameter params[], void *data)
 
     __load(f);
 
-    /* Term is 0, voted for is 0 and first index is 1. */
+    /* Term is 0, voted for is 0 and start index is 1. */
     __assert_result_metadata(f, 0, 0, 1);
 
     /* Both metadata files got created. */
@@ -614,7 +873,7 @@ static MunitResult test_load_md_bad_format(const MunitParameter params[],
                      1, /* Version                              */
                      1, /* Term                                 */
                      0, /* Voted for                            */
-                     0 /* First index                          */);
+                     0 /* Start index                          */);
 
     __assert_load_error(f, RAFT_ERR_IO, "load metadata1: unknown format 2");
 
@@ -635,7 +894,7 @@ static MunitResult test_load_md_bad_version(const MunitParameter params[],
                      0, /* Version                              */
                      1, /* Term                                 */
                      0, /* Voted for                            */
-                     0 /* First index                          */);
+                     0 /* Start index                          */);
 
     __assert_load_error(f, RAFT_ERR_IO,
                         "load metadata1: version is set to zero");
@@ -657,9 +916,25 @@ static MunitResult test_load_md_bad_term(const MunitParameter params[],
                      1, /* Version                              */
                      0, /* Term                                 */
                      0, /* Voted for                            */
-                     0 /* First index                          */);
+                     0 /* Start index                          */);
 
     __assert_load_error(f, RAFT_ERR_IO, "load metadata1: term is set to zero");
+
+    return MUNIT_OK;
+}
+
+/* No space is left for writing the initial metadata file. */
+static MunitResult test_load_md_no_space(const MunitParameter params[],
+                                         void *data)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    test_dir_fill(f->dir, 4);
+    __assert_load_error(
+        f, RAFT_ERR_IO,
+        "store metadata file 0: write: no space left on device");
 
     return MUNIT_OK;
 }
@@ -679,7 +954,7 @@ static MunitResult test_load_md_same_version(const MunitParameter params[],
                      2, /* Version                              */
                      3, /* Term                                 */
                      0, /* Voted for                            */
-                     0 /* First index                          */);
+                     0 /* Start index                          */);
 
     __write_metadata(f, /*                                      */
                      2, /* Metadata file index                  */
@@ -687,7 +962,7 @@ static MunitResult test_load_md_same_version(const MunitParameter params[],
                      2, /* Version                              */
                      2, /* Term                                 */
                      0, /* Voted for                            */
-                     0 /* First index                          */);
+                     0 /* Start index                          */);
 
     __assert_load_error(f, RAFT_ERR_IO,
                         "metadata1 and metadata2 are both at version 2");
@@ -925,7 +1200,7 @@ static MunitResult test_load_closed_not_needed(const MunitParameter params[],
                      2, /* Version                              */
                      3, /* Term                                 */
                      0, /* Voted for                            */
-                     2 /* First index                          */);
+                     2 /* Start index                          */);
     __write_closed_segment(f, 1, 1);
 
     __load(f);
@@ -1087,7 +1362,7 @@ static MunitResult test_load_open_not_all_zeros(const MunitParameter params[],
     munit_assert_true(test_dir_has_file(f->dir, __CLOSED_FILENAME_1));
 
     /* The first batch has been loaded */
-    munit_assert_int(f->request.result.read_state.n, ==, 1);
+    munit_assert_int(f->loaded.n, ==, 1);
 
     return MUNIT_OK;
 }
@@ -1263,8 +1538,9 @@ static MunitResult test_load_open(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
-static char *load_oom_heap_fault_delay[] = {"0", "1", "2", "3",
-                                            "4", "5", "6", NULL};
+static char *load_oom_heap_fault_delay[] = {"0",  "1",  "2",  "3", "4",  "5",
+                                            "6",  "7",  "8",  "9", "10", "11",
+                                            "12", "13", "14", NULL};
 static char *load_oom_heap_fault_repeat[] = {"1", NULL};
 
 static MunitParameterEnum load_oom_params[] = {
@@ -1278,15 +1554,22 @@ static MunitResult test_load_oom(const MunitParameter params[], void *data)
 {
     struct fixture *f = data;
     int rv;
+    raft_term term;
+    unsigned voted_for;
+    raft_index start_index;
+    struct raft_entry *entries;
+    size_t n;
 
     (void)params;
 
+    __write_closed_segment(f, 1, 1);
     __write_open_segment(f, 1, 1);
     __write_open_segment(f, 2, 1);
 
     test_heap_fault_enable(&f->heap);
 
-    rv = raft_io_uv_store__load(&f->store, &f->request, f->errmsg);
+    rv = raft_io_uv_store__load(&f->store, &term, &voted_for, &start_index,
+                                &entries, &n, f->errmsg);
     munit_assert_int(rv, ==, RAFT_ERR_NOMEM);
 
     return MUNIT_OK;
@@ -1302,6 +1585,7 @@ static MunitTest load_tests[] = {
     {"/md-bad-format", test_load_md_bad_format, setup, tear_down, 0, NULL},
     {"/md-bad-version", test_load_md_bad_version, setup, tear_down, 0, NULL},
     {"/md-bad-term", test_load_md_bad_term, setup, tear_down, 0, NULL},
+    {"/md-no-space", test_load_md_no_space, setup, tear_down, 0, NULL},
     {"/md-same-version", test_load_md_same_version, setup, tear_down, 0, NULL},
     {"/ignore", test_load_ignore, setup, tear_down, 0, NULL},
     {"/short-format", test_load_short_format, setup, tear_down, 0, NULL},
@@ -1342,7 +1626,39 @@ static MunitTest load_tests[] = {
 };
 
 /**
- * raft_io_uv_store___term
+ * raft_io_uv_store__bootstrap
+ */
+
+/* If the data directory is completely empty, the bootstrap succeeds. */
+static MunitResult test_bootstrap_pristine(const MunitParameter params[],
+                                           void *data)
+{
+    struct fixture *f = data;
+    struct raft_buffer conf;
+    int rv;
+
+    (void)params;
+
+    __load(f);
+
+    conf.base = munit_malloc(8);
+    conf.len = 8;
+
+    rv = raft_io_uv_store__bootstrap(&f->store, &conf, f->errmsg);
+    munit_assert_int(rv, ==, 0);
+
+    free(conf.base);
+
+    return MUNIT_OK;
+}
+
+static MunitTest bootstrap_tests[] = {
+    {"/pristine", test_bootstrap_pristine, setup, tear_down, 0, NULL},
+    {NULL, NULL, NULL, NULL, 0, NULL},
+};
+
+/**
+ * raft_io_uv_store__term
  */
 
 /* The data directory is not executable and the metadata file can't be open. */
@@ -1359,7 +1675,7 @@ static MunitResult test_term_open_error(const MunitParameter params[],
     /* Make the data directory not readable and try to write the term. */
     test_dir_unexecutable(f->dir);
 
-    rv = raft_io_uv_store__term(&f->store, &f->request, f->errmsg);
+    rv = raft_io_uv_store__term(&f->store, 1, f->errmsg);
     munit_assert_int(rv, ==, RAFT_ERR_IO);
 
     munit_assert_string_equal(f->errmsg,
@@ -1378,9 +1694,7 @@ static MunitResult test_term_first(const MunitParameter params[], void *data)
     __load(f);
 
     /* Write the term. */
-    f->request.args.write_term.term = 1;
-
-    __term(f);
+    __term(f, 1);
 
     /* The metadata1 file got updated, while metadata2 remains behind. */
     __assert_metadata(f, 1, 1, 3, 1, 0, 1);
@@ -1400,14 +1714,10 @@ static MunitResult test_term_second(const MunitParameter params[], void *data)
     __load(f);
 
     /* First write term request. */
-    f->request.args.write_term.term = 1;
-
-    __term(f);
+    __term(f, 1);
 
     /* Second write term request. */
-    f->request.args.write_term.term = 2;
-
-    __term(f);
+    __term(f, 2);
 
     /* The metadata2 file got updated, while metadata1 remains behind. */
     __assert_metadata(f, 1, 1, 3, 1, 0, 1);
@@ -1442,9 +1752,7 @@ static MunitResult test_vote_open_error(const MunitParameter params[],
     /* Make the data directory not readable and try to write the vote. */
     test_dir_unexecutable(f->dir);
 
-    f->request.args.write_vote.server_id = 1;
-
-    rv = raft_io_uv_store__term(&f->store, &f->request, f->errmsg);
+    rv = raft_io_uv_store__vote(&f->store, 1, f->errmsg);
     munit_assert_int(rv, ==, RAFT_ERR_IO);
 
     munit_assert_string_equal(f->errmsg,
@@ -1464,9 +1772,7 @@ static MunitResult test_vote_first(const MunitParameter params[], void *data)
     __load(f);
 
     /* Write vote request. */
-    f->request.args.write_vote.server_id = 1;
-
-    __vote(f);
+    __vote(f, 1);
 
     /* The metadata1 file got updated, while metadata2 remains behind. */
     __assert_metadata(f, 1, 1, 3, 0, 1, 1);
@@ -1487,14 +1793,10 @@ static MunitResult test_vote_second(const MunitParameter params[], void *data)
     __load(f);
 
     /* First vote term request. */
-    f->request.args.write_vote.server_id = 1;
-
-    __vote(f);
+    __vote(f, 1);
 
     /* Second write vote term request. */
-    f->request.args.write_vote.server_id = 2;
-
-    __vote(f);
+    __vote(f, 2);
 
     /* The metadata2 file got updated, while metadata1 remains behind. */
     __assert_metadata(f, 1, 1, 3, 0, 1, 1);
@@ -1511,11 +1813,374 @@ static MunitTest vote_tests[] = {
 };
 
 /**
+ * raft_io_uv_store__entries
+ */
+
+/* Test against all file system types */
+static MunitParameterEnum test_entries_initial_params[] = {
+    {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
+    {NULL, NULL},
+};
+
+/* Write the very first entry. */
+static MunitResult test_entries_initial(const MunitParameter params[],
+                                        void *data)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    __load(f);
+
+    __entries(f, 1, 64);
+
+    __assert_open_segment(f, 1, 1, 1, 64);
+
+    return MUNIT_OK;
+}
+
+/* Test against all file system types */
+static MunitParameterEnum test_entries_two_same_block_params[] = {
+    {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
+    {NULL, NULL},
+};
+
+/* Write the very first entry and then another one, both fitting in the same
+ * block. */
+static MunitResult test_entries_two_same_block(const MunitParameter params[],
+                                               void *data)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    __load(f);
+
+    __entries(f, 1, 64);
+    __entries(f, 1, 64);
+
+    __assert_open_segment(f, 1, 1, 2, 64 * 2);
+
+    return MUNIT_OK;
+}
+
+/* Test against all file system types */
+static MunitParameterEnum test_entries_fill_block_exactly_params[] = {
+    {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
+    {NULL, NULL},
+};
+
+/* Write an entry that fills the first block exactly and then another one. */
+static MunitResult test_entries_fill_block_exactly(
+    const MunitParameter params[],
+    void *data)
+{
+    struct fixture *f = data;
+    size_t size;
+
+    (void)params;
+
+    __load(f);
+
+    size = f->store.block_size - (sizeof(uint64_t) + /* Format */
+                                  sizeof(uint64_t) + /* Checksums */
+                                  raft_batch_header_size(1)) /* Header */;
+
+    __entries(f, 1, size);
+    __entries(f, 1, 64);
+
+    __assert_open_segment(f, 1, 1, 2, size + 64);
+
+    return MUNIT_OK;
+}
+
+static MunitParameterEnum test_entries_exceed_block_params[] = {
+    {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
+    {NULL, NULL},
+};
+
+/* Write an entry that exceeds the first block, then another one. */
+static MunitResult test_entries_exceed_block(const MunitParameter params[],
+                                             void *data)
+{
+    struct fixture *f = data;
+    size_t size1;
+    size_t size2;
+
+    (void)params;
+
+    __load(f);
+
+    size1 = f->store.block_size;
+
+    __entries(f, 1, size1);
+    __entries(f, 1, 64);
+
+    /* Write a third entry that fills the second block exactly */
+    size2 = f->store.block_size - f->store.writer.segment->offset;
+    size2 -= (sizeof(uint64_t) + raft_batch_header_size(1));
+
+    __entries(f, 1, size2);
+
+    /* Write a fourth entry */
+    __entries(f, 1, 64);
+
+    __assert_open_segment(f, 1, 1, 4, size1 + 64 + size2 + 64);
+
+    return MUNIT_OK;
+}
+
+/* Test against all file system types */
+static MunitParameterEnum test_entries_match_block_params[] = {
+    {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
+    {NULL, NULL},
+};
+
+/* Write an entry that exceeds the first block and uses the second block
+ * completely. */
+static MunitResult test_entries_match_block(const MunitParameter params[],
+                                            void *data)
+{
+    struct fixture *f = data;
+    size_t size;
+
+    (void)params;
+
+    __load(f);
+
+    size = f->store.block_size * 2 - (sizeof(uint64_t) + /* Format */
+                                      sizeof(uint64_t) + /* Checksums */
+                                      raft_batch_header_size(1)) /* Header */;
+
+    __entries(f, 1, size);
+    __entries(f, 1, 64);
+
+    __assert_open_segment(f, 1, 1, 2, size + 64);
+
+    return MUNIT_OK;
+}
+
+/* Test against all file system types */
+static MunitParameterEnum test_entries_prepare_params[] = {
+    {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
+    {NULL, NULL},
+};
+
+/* When the very first entry is written a preparation round is triggered and
+ * eventually all open segments supposed to be prepared get ready. */
+static MunitResult test_entries_prepare(const MunitParameter params[],
+                                        void *data)
+{
+    struct fixture *f = data;
+    int i;
+    int rv;
+
+    (void)params;
+
+    __load(f);
+
+    __entries(f, 1, 64);
+
+    /* Run the loop until the last prepared open segment is ready. */
+    for (i = 0; i < 5; i++) {
+        int state;
+        rv = uv_run(&f->loop, UV_RUN_ONCE);
+        munit_assert_int(rv, ==, 1);
+
+        state = f->store.pool[RAFT_IO_UV_STORE__N_PREPARED - 1].state;
+
+        if (state == RAFT_IO_UV_STORE__PREPARED_READY) {
+            break;
+        }
+    }
+
+    __assert_open_segment(f, 1, 1, 1, 64);
+    __assert_open_segment(f, 2, 1, 0, 0);
+    __assert_open_segment(f, 3, 1, 0, 0);
+
+    return MUNIT_OK;
+}
+
+/* No space is left and the write request fails. */
+static MunitResult test_entries_no_space(const MunitParameter params[],
+                                         void *data)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    __load(f);
+
+    test_dir_fill(f->dir, 0);
+
+    __assert_entries_error(f, 1, 64, RAFT_ERR_IO,
+                           "create open segment 1: no space left on device");
+
+    return MUNIT_OK;
+}
+
+/* Test against all file system types */
+static MunitParameterEnum test_entries_stop_params[] = {
+    {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
+    {NULL, NULL},
+};
+
+/* Stop the store while a store entries request is in flight. */
+static MunitResult test_entries_stop(const MunitParameter params[], void *data)
+{
+    struct fixture *f = data;
+    struct raft_entry *entries;
+    int i;
+    int rv;
+
+    (void)params;
+
+    __load(f);
+
+    /* Submit a store entries request. */
+    __make_request_entries(f, entries, 1, 64);
+
+    rv = raft_io_uv_store__entries(&f->store, entries, 1, f, __entries_cb,
+                                   f->errmsg);
+    munit_assert_int(rv, ==, 0);
+
+    /* Request to stop the store. */
+    raft_io_uv_store__stop(&f->store, f, __stop_cb);
+
+    /* Run the loop until the the store is stopped. */
+    for (i = 0; i < 5; i++) {
+        if (f->stopped) {
+            break;
+        }
+
+        rv = uv_run(&f->loop, UV_RUN_ONCE);
+        if (rv == 0) {
+            break;
+        }
+    }
+
+    munit_assert_true(f->stopped);
+
+    __drop_request_entries(f, entries, 1);
+
+    return MUNIT_OK;
+}
+
+/* Test against all file system types */
+static MunitParameterEnum test_entries_exceed_segment_params[] = {
+    {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
+    {NULL, NULL},
+};
+
+/* Perform a write which exceeds the capacity of the current segment. */
+static MunitResult test_entries_exceed_segment(const MunitParameter params[],
+                                               void *data)
+{
+    struct fixture *f = data;
+    size_t size = f->store.block_size;
+
+    (void)params;
+
+    __load(f);
+
+    __entries(f, 1, size);
+    __entries(f, 1, size);
+    __entries(f, 1, size);
+
+    return MUNIT_OK;
+}
+
+/* Test against all file system types */
+static MunitParameterEnum test_entries_open_counter_params[] = {
+    {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
+    {NULL, NULL},
+};
+
+/* The counters of the open segments get increased as they are closed. */
+static MunitResult test_entries_open_counter(const MunitParameter params[],
+                                             void *data)
+{
+    struct fixture *f = data;
+    size_t size = f->store.block_size;
+    int i;
+
+    (void)params;
+
+    f->store.max_segment_size = size * 3;
+    __load(f);
+
+    for (i = 0; i < 10; i++) {
+        __entries(f, 1, size);
+    }
+
+    munit_assert_true(
+        test_dir_has_file(f->dir, "00000000000000000003-00000000000000000004"));
+    munit_assert_true(test_dir_has_file(f->dir, "open-5"));
+
+    return MUNIT_OK;
+}
+
+static char *entries_oom_heap_fault_delay[] = {"0", "1", NULL};
+static char *entries_oom_heap_fault_repeat[] = {"1", NULL};
+
+static MunitParameterEnum entries_oom_params[] = {
+    {TEST_HEAP_FAULT_DELAY, entries_oom_heap_fault_delay},
+    {TEST_HEAP_FAULT_REPEAT, entries_oom_heap_fault_repeat},
+    {NULL, NULL},
+};
+
+/* Out of memory conditions. */
+static MunitResult test_entries_oom(const MunitParameter params[], void *data)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    __load(f);
+
+    test_heap_fault_enable(&f->heap);
+
+    __assert_entries_error(f, 1, f->store.block_size, RAFT_ERR_NOMEM, NULL);
+
+    return MUNIT_OK;
+}
+
+static MunitTest entries_tests[] = {
+    {"/initial", test_entries_initial, setup, tear_down, 0,
+     test_entries_initial_params},
+    {"/two-same-block", test_entries_two_same_block, setup, tear_down, 0,
+     test_entries_two_same_block_params},
+    {"/fill-block-exactly", test_entries_fill_block_exactly, setup, tear_down,
+     0, test_entries_fill_block_exactly_params},
+    {"/exceed-block", test_entries_exceed_block, setup, tear_down, 0,
+     test_entries_exceed_block_params},
+    {"/match-block", test_entries_match_block, setup, tear_down, 0,
+     test_entries_match_block_params},
+    {"/prepare", test_entries_prepare, setup, tear_down, 0,
+     test_entries_prepare_params},
+    {"/no-space", test_entries_no_space, setup, tear_down, 0, NULL},
+    {"/stop", test_entries_stop, setup, tear_down, 0, test_entries_stop_params},
+    {"/exceed-segment", test_entries_exceed_segment, setup, tear_down, 0,
+     test_entries_exceed_segment_params},
+    {"/open-counter", test_entries_open_counter, setup, tear_down, 0,
+     test_entries_open_counter_params},
+#if defined(RWF_NOWAIT)
+    /* TODO: this fails on Travis. */
+    {"/oom", test_entries_oom, setup, tear_down, 0, entries_oom_params},
+#endif /* RWF_NOWAIT */
+    {NULL, NULL, NULL, NULL, 0, NULL},
+};
+
+/**
  * Test suite
  */
 
 MunitSuite raft_io_uv_store_suites[] = {
-    {"/init", init_tests, NULL, 1, 0}, {"/load", load_tests, NULL, 1, 0},
-    {"/term", term_tests, NULL, 1, 0}, {"/vote", vote_tests, NULL, 1, 0},
+    {"/init", init_tests, NULL, 1, 0},
+    {"/load", load_tests, NULL, 1, 0},
+    {"/bootstrap", bootstrap_tests, NULL, 1, 0},
+    {"/term", term_tests, NULL, 1, 0},
+    {"/vote", vote_tests, NULL, 1, 0},
+    {"/entries", entries_tests, NULL, 1, 0},
     {NULL, NULL, NULL, 0, 0},
 };

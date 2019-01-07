@@ -146,7 +146,7 @@ static MunitTest start_tests[] = {
 };
 
 /**
- * raft_io_sim__submit
+ * raft_io_stub__submit
  */
 
 static MunitResult test_bootstrap(const MunitParameter params[], void *data)
@@ -243,7 +243,7 @@ static MunitResult test_write_vote(const MunitParameter params[], void *data)
 
     munit_assert_int(request->result.read_state.term, ==, 0);
     munit_assert_int(request->result.read_state.voted_for, ==, 1);
-    munit_assert_int(request->result.read_state.first_index, ==, 0);
+    munit_assert_int(request->result.read_state.start_index, ==, 0);
     munit_assert_int(request->result.read_state.n, ==, 0);
 
     raft_io_queue__pop(&f->queue, request_id);
@@ -286,12 +286,12 @@ static MunitResult test_write_log(const MunitParameter params[], void *data)
 
     /* This WRITE_LOG request is asynchronous, the entries have not been
      * persited yet. */
-    munit_assert_int(request2->result.read_state.first_index, ==, 0);
+    munit_assert_int(request2->result.read_state.start_index, ==, 0);
     munit_assert_int(request2->result.read_state.n, ==, 0);
 
     raft_io_stub_flush(&f->io);
 
-    /* The log has now one entry, witch matches the one we wrote. */
+    /* The log has now one entry, which matches the one we wrote. */
     request2->type = RAFT_IO_READ_STATE;
 
     __submit(f, request_id2);

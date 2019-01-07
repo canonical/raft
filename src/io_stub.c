@@ -66,8 +66,10 @@ static int raft_io_stub__start(const struct raft_io *io, const unsigned msecs)
     return 0;
 }
 
-static int raft_io_stub__stop(const struct raft_io *io)
+static int raft_io_stub__stop(const struct raft_io *io, void (*cb)(void *p))
 {
+    (void)cb;
+
     assert(io != NULL);
 
     return 0;
@@ -144,7 +146,7 @@ static int raft_io_stub__read_state(struct raft_io_stub *s,
 
     request->result.read_state.term = s->term;
     request->result.read_state.voted_for = s->voted_for;
-    request->result.read_state.first_index = s->first_index;
+    request->result.read_state.start_index = s->first_index;
 
     if (s->n == 0) {
         request->result.read_state.entries = NULL;
