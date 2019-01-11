@@ -59,6 +59,8 @@ libraft_la_SOURCES = \
 if IO_UV
   libraft_la_SOURCES += \
   src/io_uv.c \
+  src/io_uv_encoding.c \
+  src/io_uv_rpc.c \
   src/io_uv_store.c \
   src/uv_fs.c
 endif
@@ -81,12 +83,18 @@ test_lib_SOURCES = \
   test/lib/io.c \
   test/lib/fsm.c \
   test/lib/logger.c \
-  test/lib/network.c \
   test/lib/munit.c \
-  test/lib/raft.c
+  test/lib/network.c \
+  test/lib/raft.c \
+  test/lib/tcp.c
+if IO_UV
+test_lib_SOURCES += \
+  test/lib/uv.c
+endif
 
 unit_test_SOURCES = $(libraft_la_SOURCES)
-unit_test_SOURCES += $(test_lib_SOURCES)
+unit_test_SOURCES += \
+  $(test_lib_SOURCES)
 unit_test_SOURCES += \
   test/unit/main.c \
   test/unit/test_checksum.c \
@@ -109,6 +117,8 @@ unit_test_SOURCES += \
 if IO_UV
   unit_test_SOURCES += \
   test/unit/test_io_uv.c \
+  test/unit/test_io_uv_encoding.c \
+  test/unit/test_io_uv_rpc.c \
   test/unit/test_io_uv_store.c \
   test/unit/test_uv_fs.c
 endif
@@ -116,7 +126,7 @@ if IO_STUB
   unit_test_SOURCES += \
   test/unit/test_io_stub.c
 endif
-unit_test_CFLAGS = $(AM_CFLAGS) -DRAFT_TEST -DMUNIT_TEST_NAME_LEN=47 -DMUNIT_NO_FORK -DMUNIT_ALWAYS_TEAR_DOWN
+unit_test_CFLAGS = $(AM_CFLAGS) -DRAFT_TEST -DMUNIT_TEST_NAME_LEN=47
 unit_test_CFLAGS += -I$(top_srcdir)/tests/unit
 unit_test_LDFLAGS =
 if IO_UV
@@ -135,6 +145,9 @@ integration_test_CFLAGS = $(AM_CFLAGS)
 integration_test_CFLAGS += -I$(top_srcdir)/tests/integration
 integration_test_LDADD = libraft.la
 integration_test_LDFLAGS =
+if IO_UV
+  integration_test_LDFLAGS += $(UV_LIBS)
+endif
 
 TESTS = unit-test integration-test
 

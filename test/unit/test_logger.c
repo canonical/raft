@@ -23,17 +23,13 @@ struct fixture
     } last; /* Last message emitted. */
 };
 
-static void fixture__emit(void *data,
-                          struct raft_context *ctx,
-                          int level,
-                          const char *format,
-                          ...)
+static void fixture__emit(void *data, int level, const char *format, ...)
 {
     struct fixture *f = data;
     va_list args;
     int rv;
 
-    munit_assert_ptr_equal(ctx, &f->ctx);
+    // munit_assert_ptr_equal(ctx, &f->ctx);
 
     f->last.level = level;
 
@@ -181,11 +177,10 @@ static MunitResult test_errorf(const MunitParameter params[], void *data)
 /* Emit a message at unknown level. */
 static MunitResult test_unknown_level(const MunitParameter params[], void *data)
 {
-    struct fixture *f = data;
-
+    (void)data;
     (void)params;
 
-    raft_default_logger.emit(NULL, &f->ctx, 666, "hello");
+    raft_default_logger.emit(NULL, 666, "hello");
 
     return MUNIT_OK;
 }

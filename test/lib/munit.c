@@ -1205,7 +1205,6 @@ munit_test_runner_exec(MunitTestRunner* runner, const MunitTest* test, const Mun
 #if defined(MUNIT_THREAD_LOCAL) && defined(MUNIT_ALWAYS_TEAR_DOWN)
   if (test->tear_down != NULL) {
     if (MUNIT_UNLIKELY(setjmp(munit_tear_down_jmp_buf) != 0)) {
-      munit_tear_down_jmp_buf_valid = false;
       test->tear_down(data);
       longjmp(munit_error_jmp_buf, 1);
     } else {

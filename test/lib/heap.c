@@ -128,7 +128,7 @@ void test_heap_tear_down(struct raft_heap *h)
     struct test__heap *t = h->data;
 
     if (t->n != 0) {
-      //munit_errorf("memory leak: %d outstanding allocations", t->n);
+        munit_errorf("memory leak: %d outstanding allocations", t->n);
     }
 
     free(t);

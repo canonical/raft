@@ -6,6 +6,7 @@
 #define RAFT_BINARY_H
 
 #include <stdint.h>
+#include <unistd.h>
 
 #if RAFT_COVERAGE
 #define RAFT_INLINE static inline
@@ -103,6 +104,20 @@ RAFT_INLINE uint64_t raft__get64(const void **cursor)
     uint64_t value = raft__flip64(*(uint64_t *)(*cursor));
     *cursor += sizeof(uint64_t);
     return value;
+}
+
+/**
+ * Add padding to size if it's not a multiple of 8.
+ */
+RAFT_INLINE size_t raft__pad64(size_t size)
+{
+    size_t rest = size % sizeof(uint64_t);
+
+    if (rest != 0) {
+        size += sizeof(uint64_t) - rest;
+    }
+
+    return size;
 }
 
 #endif /* RAFT_BINARY_H */

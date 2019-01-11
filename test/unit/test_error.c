@@ -28,6 +28,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     unsigned id = 1;
+    const char *address = "1";
 
     (void)user_data;
 
@@ -39,7 +40,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 
     test_fsm_setup(params, &f->fsm);
 
-    raft_init(&f->raft, &f->io, &f->fsm, f, id);
+    raft_init(&f->raft, &f->io, &f->fsm, f, id, address);
 
     raft_set_logger(&f->raft, &f->logger);
 

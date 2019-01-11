@@ -35,7 +35,13 @@ enum {
     RAFT_ERR_CONFIGURATION_BUSY,
     RAFT_ERR_IO,
     RAFT_ERR_IO_CORRUPT,
-    RAFT_ERR_IO_BUSY
+    RAFT_ERR_IO_BUSY,
+    RAFT_ERR_IO_ABORTED,
+    RAFT_ERR_IO_NAMETOOLONG,
+    RAFT_ERR_IO_MALFORMED,
+    RAFT_ERR_IO_NOTEMPTY,
+    RAFT_ERR_IO_TOOBIG,
+    RAFT_ERR_IO_CONNECT
 };
 
 /**
@@ -59,7 +65,13 @@ enum {
       "a configuration change is already in progress")                   \
     X(RAFT_ERR_IO, "I/O error")                                          \
     X(RAFT_ERR_IO_CORRUPT, "persisted data is corrupted")                \
-    X(RAFT_ERR_IO_BUSY, "a log write request is already in progress")
+    X(RAFT_ERR_IO_BUSY, "a log write request is already in progress")    \
+    X(RAFT_ERR_IO_ABORTED, "backend was stopped or has errored")         \
+    X(RAFT_ERR_IO_NAMETOOLONG, "data directory path is too long")        \
+    X(RAFT_ERR_IO_MALFORMED, "encoded data is malformed")                \
+    X(RAFT_ERR_IO_NOTEMPTY, "persisted log is not empty")                \
+    X(RAFT_ERR_IO_TOOBIG, "encoded configuration is too big")            \
+    X(RAFT_ERR_IO_CONNECT, "no connection to remote server available")
 
 /**
  * Return the error message describing the given error code.
@@ -162,11 +174,7 @@ enum { RAFT_DEBUG, RAFT_INFO, RAFT_WARN, RAFT_ERROR };
 struct raft_logger
 {
     void *data;
-    void (*emit)(void *data,
-                 struct raft_context *ctx,
-                 int level,
-                 const char *fmt,
-                 ...);
+    void (*emit)(void *data, int level, const char *fmt, ...);
 };
 
 /**
@@ -320,6 +328,14 @@ struct raft_request_vote_args
     raft_index last_log_term;  /* Term of log entry at last_log_index. */
 };
 
+struct raft_request_vote
+{
+    raft_term term;            /* Candidate's term. */
+    unsigned candidate_id;     /* ID of the server requesting the vote. */
+    raft_index last_log_index; /* Index of candidate's last log entry. */
+    raft_index last_log_term;  /* Term of log entry at last_log_index. */
+};
+
 /**
  * Hold the result of a RequestVote RPC (figure 3.1).
  */
@@ -344,6 +360,17 @@ struct raft_append_entries_args
     raft_index leader_commit;   /* Leader's commit_index. */
     struct raft_entry *entries; /* Log entries to append. */
     unsigned n;                 /* Size of the log entries array. */
+};
+
+struct raft_append_entries
+{
+    raft_term term;             /* Leader's term. */
+    unsigned leader_id;         /* So follower can redirect clients. */
+    raft_index prev_log_index;  /* Index of log entry preceeding new ones. */
+    raft_term prev_log_term;    /* Term of entry at prev_log_index. */
+    raft_index leader_commit;   /* Leader's commit_index. */
+    struct raft_entry *entries; /* Log entries to append. */
+    unsigned n_entries;         /* Size of the log entries array. */
 };
 
 /**
@@ -385,6 +412,19 @@ enum {
     RAFT_IO_APPEND_ENTRIES_RESULT,
     RAFT_IO_REQUEST_VOTE,
     RAFT_IO_REQUEST_VOTE_RESULT
+};
+
+struct raft_message
+{
+    unsigned short type;
+    unsigned server_id;
+    const char *server_address;
+    union {
+        struct raft_request_vote request_vote;
+        struct raft_request_vote_result request_vote_result;
+        struct raft_append_entries append_entries;
+        struct raft_append_entries_result append_entries_result;
+    };
 };
 
 /**
@@ -449,13 +489,36 @@ struct raft_io_request
          *
          * The implementation is guaranteed that the memory holding the given
          * entries will not be released until a notification is fired by
-         * invoking the raft_io_handle() callback with the given request ID.
+         * invoking the notify() callback with the given request ID.
          */
         struct
         {
             struct raft_entry *entries;
             unsigned n;
         } write_log;
+
+        /**
+         * Arguments of a RAFT_IO_APPEND_ENTRIES request.
+         *
+         * The implementation must asynchronously send an AppendEntries RPC to
+         * the given server.
+         *
+         * The implementation is guaranteed that the memory holding the given
+         * entries will not be released until a notification is fired by
+         * invoking the notify() callback with the given request ID.
+         */
+        struct
+        {
+            unsigned id;                /* ID of the server */
+            const char *address;        /* Address of the server */
+            raft_term term;             /* Leader's term */
+            unsigned leader_id;         /* So follower can redirect clients */
+            raft_index prev_log_index;  /* Index of entry preceeding new ones */
+            raft_term prev_log_term;    /* Term of entry at prev_log_index */
+            raft_index leader_commit;   /* Leader's commit_index */
+            struct raft_entry *entries; /* Log entries to append */
+            unsigned n;                 /* Size of the log entries array */
+        } append_entries;
 
     } args;
 
@@ -503,6 +566,13 @@ struct raft_io_queue
 struct raft_io_request *raft_io_queue_get(const struct raft_io_queue *q,
                                           const unsigned id);
 
+struct raft_io_callbacks
+{
+    void *data;
+    void (*tick)(void *data, unsigned elapsed);
+    void (*recv)(void *data, struct raft_message *msg);
+};
+
 /**
  * I/O backend interface implementing periodic ticks, log store read/writes
  * and send/receive of network RPCs.
@@ -526,37 +596,112 @@ struct raft_io
      * The implementation must call the @tick function periodically after the
      * @start method has been called, passing it the ponter @p and the number of
      * milliseconds elapsed since the last call.
-     *
-     * When asynchronous I/O requests are submitted, the implementation must
-     * call the @notify function once the request has been completed (either
-     * successfully or not), passing it the pointer @p, the ID of the request
-     * and a status code.
      */
-    void (*init)(const struct raft_io *io,
-                 const struct raft_io_queue *queue,
-                 struct raft_logger *logger,
-                 void *p,
-                 void (*tick)(void *p, const unsigned elapsed),
-                 void (*notify)(void *p, const unsigned id, const int status));
-
-    /**
-     * Start the backend.
-     *
-     * From now on the implementation must start accepting RPC requests and must
-     * invoke the tick function every @msecs milliseconds.
-     */
-    int (*start)(const struct raft_io *io, const unsigned msecs);
-
-    /**
-     * Immediately cancel any in-progress I/O and stop invoking the tick
-     * function.
-     */
-    int (*stop)(const struct raft_io *io, void (*cb)(void *p));
+    int (*init)(const struct raft_io *io,
+                struct raft_logger *logger,
+                unsigned id,
+                const char *address);
 
     /**
      * Release any resource allocated by this I/O backend implementation.
      */
     void (*close)(const struct raft_io *io);
+
+    /**
+     * Start the backend.
+     *
+     * From now on the implementation must start accepting RPC requests and must
+     * invoke the @tick callback every @msecs milliseconds. The @recv callback
+     * must be invoked when receiving a message.
+     */
+    int (*start)(const struct raft_io *io,
+                 unsigned msecs,
+                 void *data,
+                 void (*tick)(void *data, unsigned elapsed),
+                 void (*recv)(void *data, struct raft_message *message));
+
+    /**
+     * Immediately cancel any in-progress I/O and stop invoking the tick
+     * function.
+     */
+    int (*stop)(const struct raft_io *io, void *data, void (*cb)(void *data));
+
+    /**
+     * Read persisted state from storage.
+     *
+     * The implementation must synchronously read the current state from
+     * disk.
+     *
+     * The entries array must be allocated with raft_malloc. Once the
+     * request is completed ownership of such memory is transfered to the
+     * raft instance.
+     *
+     * This request is guaranteed to be the very first request issued agaist the
+     * backend. No further load request will be issued.
+     */
+    int (*load)(const struct raft_io *io,
+                raft_term *term,
+                unsigned *voted_for,
+                raft_index *start_index,
+                struct raft_entry **entries,
+                size_t *n_entries);
+
+    /**
+     * Bootstrap a server belonging to a new cluster.
+     *
+     * The I/O implementation must synchronously persist the given configuration
+     * as the first entry of the log. The current persisted term must be set to
+     * 1 and the vote to nil.
+     *
+     * If an attempt is made to bootstrap a server that has already some sate,
+     * then #RAFT_IO_CANTBOOTSTRAP must be returned.
+     */
+    int (*bootstrap)(const struct raft_io *io,
+                     const struct raft_configuration *conf);
+
+    /**
+     * Synchronously persist current term (and nil vote). The implementation
+     * MUST ensure that the change is durable before returning (e.g. using
+     * fdatasync() or #O_DSYNC).
+     */
+    int (*set_term)(struct raft_io *io, const raft_term term);
+
+    /**
+     * Synchronously persist who we voted for. The implementation MUST ensure
+     * that the change is durable before returning (e.g. using fdatasync() or
+     * #O_DIRECT).
+     */
+    int (*set_vote)(struct raft_io *io, const unsigned server_id);
+
+    /**
+     * Asynchronously append the given entries to the log.
+     *
+     * At most one write log request can be in flight at any given time. The
+     * implementation must return @RAFT_ERR_IO_BUSY if a new request is
+     * submitted before the previous one is completed.
+     *
+     * The implementation is guaranteed that the memory holding the given
+     * entries will not be released until a notification is fired by invoking
+     * the raft_handle_io() callback with the given request ID.
+     */
+    int (*append)(const struct raft_io *io,
+                  const struct raft_entry entries[],
+                  unsigned n,
+                  void *data,
+                  void (*cb)(void *data, int status));
+
+    /**
+     * Synchronously delete all log entries from the given index onwards.
+     */
+    int (*truncate)(const struct raft_io *io, raft_index index);
+
+    /**
+     * Asynchronously send a message.
+     */
+    int (*send)(const struct raft_io *io,
+                const struct raft_message *message,
+                void *data,
+                void (*cb)(void *data, int status));
 
     /**
      * Submit a request to perform a certain I/O operation either
@@ -581,7 +726,7 @@ struct raft_io
     /**
      * Synchronously persist current term (and nil vote). The implementation
      * MUST ensure that the change is durable before returning (e.g. using
-     * fdatasync() or #O_DIRECT).
+     * fdatasync() or #O_DSYNC).
      */
     int (*write_term)(struct raft_io *io, const raft_term term);
 
@@ -731,6 +876,11 @@ struct raft
      * Server ID of this raft instance.
      */
     unsigned id;
+
+    /**
+     * Server address of this raft instance.
+     */
+    const char *address;
 
     /**
      * User-defined finite state machine to apply command to.
@@ -1002,7 +1152,8 @@ void raft_init(struct raft *r,
                struct raft_io *io,
                struct raft_fsm *fsm,
                void *data,
-               const unsigned id);
+               unsigned id,
+               const char *address);
 
 /**
  * Start this raft instance.

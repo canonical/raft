@@ -322,14 +322,12 @@ static void raft_uv_fs__write_work_cb(uv_work_t *work)
 static void raft_uv_fs__write_after_work_cb(uv_work_t *work, int status)
 {
     struct raft_uv_fs *req; /* Create file request object */
-    struct raft_uv_file *f; /* File handle */
 
     assert(work != NULL);
 
     assert(status == 0); /* We don't cancel worker requests */
 
     req = work->data;
-    f = req->file;
 
     /* Possibly invoke the request's callback. */
     raft_uv_fs__done(req);

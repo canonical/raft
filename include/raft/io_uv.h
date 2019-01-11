@@ -6,7 +6,83 @@
 #define RAFT_IO_UV_METADATA_SIZE (8 * 5)              /* Five 64-bit words */
 #define RAFT_IO_UV_MAX_SEGMENT_SIZE (8 * 1024 * 1024) /* 8 Megabytes */
 
+struct raft_logger;
 struct raft_io;
+
+/**
+ * Interface to establish outgoing connections to other Raft servers and to
+ * accept incoming connections from them.
+ */
+struct raft_io_uv_transport
+{
+    /**
+     * User defined data.
+     */
+    void *data;
+
+    /**
+     * Initialize the transport implementation.
+     */
+    int (*init)(struct raft_io_uv_transport *t,
+                unsigned id,
+                const char *address,
+                void *data,
+                void (*cb)(void *data,
+                           unsigned id,
+                           const char *address,
+                           uv_stream_t *stream));
+
+    /**
+     * Release all resources allocated by the implementation.
+     */
+    void (*close)(struct raft_io_uv_transport *t);
+
+    /**
+     * Start accepting incoming connections.
+     *
+     * Once a new connection is accepted, the @cb callback passed in the
+     * initializer must be invoked with the relevant details of the connecting
+     * Raft server.
+     */
+    int (*start)(struct raft_io_uv_transport *t);
+
+    /**
+     * Stop accepting incoming connections.
+     *
+     * The @cb callback must be invoked once done.
+     */
+    void (*stop)(struct raft_io_uv_transport *t,
+                 void *data,
+                 void (*cb)(void *data));
+
+    /**
+     * Establish a connection with the server with the given ID and address.
+     *
+     * If this function returns with no error, then the @stream pointer must be
+     * initialized with a stream handle that calling code can start writing to:
+     * the connection probably hasn't been established yet, but the OS will
+     * buffer writes and flush them when ready. The handle pointed to by the
+     * @stream pointer must have been allocated with @raft_malloc, and once this
+     * function returns ownership of the memory is transferred to the caller,
+     * which is in charge of releasing it.
+     *
+     * The @cb callback must be invoked when the connection has been established
+     * or the connection attempt has failed.
+     */
+    int (*connect)(struct raft_io_uv_transport *t,
+                   unsigned id,
+                   const char *address,
+                   struct uv_stream_s **stream,
+                   void *data,
+                   void (*cb)(void *data, int status));
+};
+
+/**
+ * Init a transport interface that uses TCP sockets.
+ */
+int raft_io_uv_tcp_init(struct raft_io_uv_transport *t,
+                        struct raft_logger *logger,
+                        struct uv_loop_s *loop);
 
 /**
  * Configure the given @raft_io instance to use a libuv-based I/O
@@ -76,7 +152,9 @@ struct raft_io;
  * [0] https://github.com/logcabin/logcabin/blob/master/Storage/SegmentedLog.h
  */
 int raft_io_uv_init(struct raft_io *io,
+		    struct raft_logger *logger,
                     struct uv_loop_s *loop,
-                    const char *dir);
+                    const char *dir,
+                    struct raft_io_uv_transport *transport);
 
 #endif /* RAFT_IO_UV_H */

@@ -4,7 +4,9 @@
 
 #include "binary.h"
 #include "checksum.h"
+#include "io_uv_encoding.h"
 #include "io_uv_store.h"
+#include "logger.h"
 #include "uv_fs.h"
 
 /**
@@ -64,21 +66,24 @@ struct raft_io_uv_segment
 /**
  * Read exactly @n bytes from the given file descriptor.
  */
-static int raft_io_uv__read_n(const int fd, void *buf, size_t n, char *errmsg)
+static int raft_io_uv__read_n(struct raft_logger *logger,
+                              const int fd,
+                              void *buf,
+                              size_t n)
 {
     int rv;
 
     rv = read(fd, buf, n);
 
     if (rv == -1) {
-        raft_errorf(errmsg, uv_strerror(-errno));
+        raft_errorf_(logger, "read: %s", uv_strerror(-errno));
         return RAFT_ERR_IO;
     }
 
     assert(rv >= 0);
 
     if ((size_t)rv < n) {
-        raft_errorf(errmsg, "got %d bytes instead of %ld", rv, n);
+        raft_errorf_(logger, "read: got %d bytes instead of %ld", rv, n);
         return RAFT_ERR_IO;
     }
 
@@ -88,14 +93,14 @@ static int raft_io_uv__read_n(const int fd, void *buf, size_t n, char *errmsg)
 /**
  * Sync the given directory.
  */
-static int raft_io_uv__sync_dir(const char *dir, char *errmsg)
+static int raft_io_uv__sync_dir(struct raft_logger *logger, const char *dir)
 {
     int fd;
     int rv;
 
     fd = open(dir, O_RDONLY | O_DIRECTORY);
     if (fd == -1) {
-        raft_errorf(errmsg, "open data directory: %s", uv_strerror(-errno));
+        raft_errorf_(logger, "open '%s': %s", dir, uv_strerror(-errno));
         return RAFT_ERR_IO;
     }
 
@@ -104,7 +109,7 @@ static int raft_io_uv__sync_dir(const char *dir, char *errmsg)
     close(fd);
 
     if (rv == -1) {
-        raft_errorf(errmsg, "sync data directory: %s", uv_strerror(-errno));
+        raft_errorf_(logger, "sync '%s': %s", dir, uv_strerror(-errno));
         return RAFT_ERR_IO;
     }
 
@@ -115,8 +120,7 @@ static int raft_io_uv__sync_dir(const char *dir, char *errmsg)
  * Decode the content of a metadata file.
  */
 static int raft_io_uv_metadata__decode(const void *buf,
-                                       struct raft_io_uv_metadata *metadata,
-                                       char *errmsg)
+                                       struct raft_io_uv_metadata *metadata)
 {
     const void *cursor = buf;
     unsigned format;
@@ -124,8 +128,7 @@ static int raft_io_uv_metadata__decode(const void *buf,
     format = raft__get64(&cursor);
 
     if (format != RAFT_IO_UV_STORE__FORMAT) {
-        raft_errorf(errmsg, "unknown format %d", format);
-        return RAFT_ERR_IO;
+        return RAFT_ERR_IO_CORRUPT;
     }
 
     metadata->version = raft__get64(&cursor);
@@ -153,10 +156,10 @@ static void raft_io_uv_metadata__path(const char *dir,
  * Read the @n'th metadata file (with @n equal to 1 or 2) and decode the content
  * of the file, populating the given metadata buffer accordingly.
  */
-static int raft_io_uv_metadata__load(const char *dir,
+static int raft_io_uv_metadata__load(struct raft_logger *logger,
+                                     const char *dir,
                                      const unsigned short n,
-                                     struct raft_io_uv_metadata *metadata,
-                                     char *errmsg)
+                                     struct raft_io_uv_metadata *metadata)
 {
     raft_uv_path path;                     /* Full path of metadata file */
     uint8_t buf[RAFT_IO_UV_METADATA_SIZE]; /* Content of metadata file */
@@ -172,7 +175,7 @@ static int raft_io_uv_metadata__load(const char *dir,
     fd = open(path, O_RDONLY);
     if (fd == -1) {
         if (errno != ENOENT) {
-            raft_errorf(errmsg, "open: %s", uv_strerror(-errno));
+            raft_errorf_(logger, "open '%s': %s", path, uv_strerror(-errno));
             return RAFT_ERR_IO;
         }
 
@@ -185,7 +188,7 @@ static int raft_io_uv_metadata__load(const char *dir,
     /* Read the content of the metadata file. */
     rv = read(fd, buf, sizeof buf);
     if (rv == -1) {
-        raft_errorf(errmsg, "read: %s", uv_strerror(-errno));
+        raft_errorf_(logger, "read '%s': %s", path, uv_strerror(-errno));
         close(fd);
         return RAFT_ERR_IO;
     }
@@ -200,19 +203,20 @@ static int raft_io_uv_metadata__load(const char *dir,
     close(fd);
 
     /* Decode the content of the metadata file. */
-    rv = raft_io_uv_metadata__decode(buf, metadata, errmsg);
+    rv = raft_io_uv_metadata__decode(buf, metadata);
     if (rv != 0) {
+        raft_errorf_(logger, "decode '%s': %s", path, raft_strerror(rv));
         return RAFT_ERR_IO;
     }
 
     /* Sanity checks that values make sense */
     if (metadata->version == 0) {
-        raft_errorf(errmsg, "version is set to zero");
+        raft_errorf_(logger, "metadata '%s': version is set to zero", path);
         return RAFT_ERR_IO;
     }
 
     if (metadata->term == 0) {
-        raft_errorf(errmsg, "term is set to zero");
+        raft_errorf_(logger, "metadata '%s': term is set to zero", path);
         return RAFT_ERR_IO;
     }
 
@@ -249,9 +253,9 @@ static int raft_io_uv_metadata__n(int version)
  * otherwise write metadata2).
  */
 static int raft_io_uv_metadata__store(
+    struct raft_logger *logger,
     const char *dir,
-    const struct raft_io_uv_metadata *metadata,
-    char *errmsg)
+    const struct raft_io_uv_metadata *metadata)
 {
     raft_uv_path path;                     /* Full path of metadata file */
     uint8_t buf[RAFT_IO_UV_METADATA_SIZE]; /* Content of metadata file */
@@ -272,7 +276,7 @@ static int raft_io_uv_metadata__store(
     /* Write the metadata file, creating it if it does not exist. */
     fd = open(path, O_WRONLY | O_CREAT | O_SYNC | O_TRUNC, S_IRUSR | S_IWUSR);
     if (fd == -1) {
-        raft_errorf(errmsg, "open: %s", uv_strerror(-errno));
+        raft_errorf_(logger, "open '%s': %s", path, uv_strerror(-errno));
         return RAFT_ERR_IO;
     }
 
@@ -283,14 +287,14 @@ static int raft_io_uv_metadata__store(
     close(fd);
 
     if (rv == -1) {
-        raft_errorf(errmsg, "write: %s", uv_strerror(-errno));
+        raft_errorf_(logger, "write '%s': %s", path, uv_strerror(-errno));
         return RAFT_ERR_IO;
     }
 
     assert(rv >= 0);
 
     if ((size_t)rv < sizeof buf) {
-        raft_errorf(errmsg, "only %d bytes written", rv);
+        raft_errorf_(logger, "write '%s': only %d bytes written", path, rv);
         return RAFT_ERR_IO;
     };
 
@@ -376,10 +380,10 @@ static void raft_io_uv_segment__make_open_filename(unsigned long long counter,
 /**
  * Rename a segment and sync the data dir.
  */
-static int raft_io_uv_segment__rename(const char *dir,
+static int raft_io_uv_segment__rename(struct raft_logger *logger,
+                                      const char *dir,
                                       const char *filename1,
-                                      const char *filename2,
-                                      char *errmsg)
+                                      const char *filename2)
 {
     char path1[RAFT_UV_FS_MAX_PATH_LEN];
     char path2[RAFT_UV_FS_MAX_PATH_LEN];
@@ -391,13 +395,14 @@ static int raft_io_uv_segment__rename(const char *dir,
     /* TODO: double check that filename2 does not exist. */
     rv = rename(path1, path2);
     if (rv == -1) {
-        raft_errorf(errmsg, uv_strerror(-errno));
+        raft_errorf_(logger, "rename '%s' to '%s': %s", path1, path2,
+                     uv_strerror(-errno));
         return RAFT_ERR_IO;
     }
 
-    rv = raft_io_uv__sync_dir(dir, errmsg);
+    rv = raft_io_uv__sync_dir(logger, dir);
     if (rv == -1) {
-        return RAFT_ERR_IO;
+        return rv;
     }
 
     return 0;
@@ -407,10 +412,10 @@ static int raft_io_uv_segment__rename(const char *dir,
  * List all files in the data directory and collect metadata about segment
  * files. The segments are ordered by filename.
  */
-static int raft_io_uv_segment__list(const char *dir,
+static int raft_io_uv_segment__list(struct raft_logger *logger,
+                                    const char *dir,
                                     struct raft_io_uv_segment *segments[],
-                                    size_t *n,
-                                    char *errmsg)
+                                    size_t *n)
 {
     struct dirent **entries;
     struct raft_io_uv_segment *tmp_segments;
@@ -420,7 +425,7 @@ static int raft_io_uv_segment__list(const char *dir,
 
     n_entries = scandir(dir, &entries, NULL, alphasort);
     if (n_entries < 0) {
-        raft_errorf(errmsg, "list data directory: %s", uv_strerror(-errno));
+        raft_errorf_(logger, "scan '%s': %s", dir, uv_strerror(-errno));
         return RAFT_ERR_IO;
     }
 
@@ -466,7 +471,6 @@ static int raft_io_uv_segment__list(const char *dir,
         tmp_segments = raft_realloc(*segments, (*n) * sizeof **segments);
 
         if (tmp_segments == NULL) {
-            raft_errorf(errmsg, "can't allocate segments info array");
             rv = RAFT_ERR_NOMEM;
             goto next;
         }
@@ -492,16 +496,16 @@ static int raft_io_uv_segment__list(const char *dir,
 /**
  * Check whether the given segment file is empty.
  */
-static int raft_io_uv_segment__is_empty(const char *path,
-                                        bool *empty,
-                                        char *errmsg)
+static int raft_io_uv_segment__is_empty(struct raft_logger *logger,
+                                        const char *path,
+                                        bool *empty)
 {
     struct stat st;
     int rv;
 
     rv = stat(path, &st);
     if (rv == -1) {
-        raft_errorf(errmsg, "stat: %s", uv_strerror(-errno));
+        raft_errorf_(logger, "stat '%s': %s", path, uv_strerror(-errno));
         return RAFT_ERR_IO;
     }
 
@@ -513,24 +517,23 @@ static int raft_io_uv_segment__is_empty(const char *path,
 /**
  * Open a segment file and read its format version.
  */
-static int raft_io_uv_segment__open(const char *path,
+static int raft_io_uv_segment__open(struct raft_logger *logger,
+                                    const char *path,
                                     const int flags,
                                     int *fd,
-                                    uint64_t *format,
-                                    char *errmsg)
+                                    uint64_t *format)
 {
     int rv;
 
     *fd = open(path, flags);
     if (*fd == -1) {
-        raft_errorf(errmsg, uv_strerror(-errno));
+        raft_errorf_(logger, "open '%s': %s", path, uv_strerror(-errno));
         return RAFT_ERR_IO;
     }
 
-    rv = raft_io_uv__read_n(*fd, format, sizeof *format, errmsg);
+    rv = raft_io_uv__read_n(logger, *fd, format, sizeof *format);
     if (rv != 0) {
         close(*fd);
-        raft_wrapf(errmsg, "read format");
         return rv;
     }
     *format = raft__flip64(*format);
@@ -542,9 +545,9 @@ static int raft_io_uv_segment__open(const char *path,
  * Check if the content of the segment file associated with the given file
  * descriptor contains all zeros from the current offset onward.
  */
-static int raft_io_uv_segment__is_all_zeros(const int fd,
-                                            bool *flag,
-                                            char *errmsg)
+static int raft_io_uv_segment__is_all_zeros(struct raft_logger *logger,
+                                            const int fd,
+                                            bool *flag)
 {
     off_t size;
     off_t offset;
@@ -558,7 +561,7 @@ static int raft_io_uv_segment__is_all_zeros(const int fd,
     /* Figure the size of the rest of the file. */
     size = lseek(fd, 0, SEEK_END);
     if (size == -1) {
-        raft_errorf(errmsg, "lseek: %s", uv_strerror(-errno));
+        raft_errorf_(logger, "lseek: %s", uv_strerror(-errno));
         return RAFT_ERR_IO;
     }
     size -= offset;
@@ -566,19 +569,17 @@ static int raft_io_uv_segment__is_all_zeros(const int fd,
     /* Reposition the file descriptor offset to the original offset. */
     offset = lseek(fd, offset, SEEK_SET);
     if (offset == -1) {
-        raft_errorf(errmsg, "lseek: %s", uv_strerror(-errno));
+        raft_errorf_(logger, "lseek: %s", uv_strerror(-errno));
         return RAFT_ERR_IO;
     }
 
     data = raft_malloc(size);
     if (data == NULL) {
-        raft_errorf(errmsg, "can't allocate read buffer");
         return RAFT_ERR_NOMEM;
     }
 
-    rv = raft_io_uv__read_n(fd, data, size, errmsg);
+    rv = raft_io_uv__read_n(logger, fd, data, size);
     if (rv != 0) {
-        raft_wrapf(errmsg, "read file content");
         return rv;
     }
 
@@ -618,11 +619,11 @@ static bool raft_io_uv_segment__is_eof(const int fd)
  *
  * Set @last to #true if the loaded batch is the last one.
  */
-static int raft_io_uv_segment__load_batch(const int fd,
+static int raft_io_uv_segment__load_batch(struct raft_logger *logger,
+                                          const int fd,
                                           struct raft_entry **entries,
                                           unsigned *n_entries,
-                                          bool *last,
-                                          char *errmsg)
+                                          bool *last)
 {
     uint64_t preamble[2];      /* CRC32 checksums and number of raft entries */
     unsigned n;                /* Number of entries in the batch */
@@ -636,16 +637,15 @@ static int raft_io_uv_segment__load_batch(const int fd,
     /* Read the preamble, consisting of the checksums for the batch header and
      * data buffers and the first 8 bytes of the header buffer, which contains
      * the number of entries in the batch. */
-    rv = raft_io_uv__read_n(fd, preamble, sizeof preamble, errmsg);
+    rv = raft_io_uv__read_n(logger, fd, preamble, sizeof preamble);
     if (rv != 0) {
-        raft_wrapf(errmsg, "read preamble");
         return rv;
     }
 
     n = raft__flip64(preamble[1]);
 
     if (n == 0) {
-        raft_errorf(errmsg, "zero entries");
+        raft_errorf_(logger, "batch has zero entries");
         rv = RAFT_ERR_IO_CORRUPT;
         goto err;
     }
@@ -655,16 +655,14 @@ static int raft_io_uv_segment__load_batch(const int fd,
     header.len = raft_batch_header_size(n);
     header.base = raft_malloc(header.len);
     if (header.base == NULL) {
-        raft_errorf(errmsg, "can't allocate header buffer");
         rv = RAFT_ERR_NOMEM;
         goto err;
     }
     *(uint64_t *)header.base = preamble[1];
 
-    rv = raft_io_uv__read_n(fd, header.base + sizeof(uint64_t),
-                            header.len - sizeof(uint64_t), errmsg);
+    rv = raft_io_uv__read_n(logger, fd, header.base + sizeof(uint64_t),
+                            header.len - sizeof(uint64_t));
     if (rv != 0) {
-        raft_wrapf(errmsg, "read header");
         goto err_after_header_alloc;
     }
 
@@ -672,7 +670,7 @@ static int raft_io_uv_segment__load_batch(const int fd,
     crc1 = raft__flip32(*(uint32_t *)preamble);
     crc2 = raft__crc32(header.base, header.len, 0);
     if (crc1 != crc2) {
-        raft_errorf(errmsg, "corrupted header");
+        raft_errorf_(logger, "corrupted batch header");
         rv = RAFT_ERR_IO_CORRUPT;
         goto err_after_header_alloc;
     }
@@ -680,7 +678,6 @@ static int raft_io_uv_segment__load_batch(const int fd,
     /* Decode the batch header, allocating the entries array. */
     rv = raft_decode_batch_header(header.base, entries, n_entries);
     if (rv != 0) {
-        raft_errorf(errmsg, "decode header");
         goto err_after_header_alloc;
     }
 
@@ -693,13 +690,11 @@ static int raft_io_uv_segment__load_batch(const int fd,
     /* Read the batch data */
     data.base = raft_malloc(data.len);
     if (data.base == NULL) {
-        raft_errorf(errmsg, "can't allocate data buffer");
         rv = RAFT_ERR_NOMEM;
         goto err_after_header_decode;
     }
-    rv = raft_io_uv__read_n(fd, data.base, data.len, errmsg);
+    rv = raft_io_uv__read_n(logger, fd, data.base, data.len);
     if (rv != 0) {
-        raft_wrapf(errmsg, "read data");
         goto err_after_data_alloc;
     }
 
@@ -707,7 +702,7 @@ static int raft_io_uv_segment__load_batch(const int fd,
     crc1 = raft__flip32(*((uint32_t *)preamble + 1));
     crc2 = raft__crc32(data.base, data.len, 0);
     if (crc1 != crc2) {
-        raft_errorf(errmsg, "corrupted data");
+        raft_errorf_(logger, "corrupted batch data");
         rv = RAFT_ERR_IO_CORRUPT;
         goto err_after_data_alloc;
     }
@@ -739,19 +734,19 @@ err:
 /**
  * Truncate the given segment to the given @offset and sync it to disk.
  */
-static int raft_io_uv_segment__truncate(const int fd,
-                                        const off_t offset,
-                                        char *errmsg)
+static int raft_io_uv_segment__truncate(struct raft_logger *logger,
+                                        const int fd,
+                                        const off_t offset)
 {
     int rv;
     rv = ftruncate(fd, offset);
     if (rv == -1) {
-        raft_errorf(errmsg, "truncate: %s", uv_strerror(-errno));
+        raft_errorf_(logger, "ftruncate: %s", uv_strerror(-errno));
         return RAFT_ERR_IO;
     }
     rv = fsync(fd);
     if (rv == -1) {
-        raft_errorf(errmsg, "sync: %s", uv_strerror(-errno));
+        raft_errorf_(logger, "fsync: %s", uv_strerror(-errno));
         return RAFT_ERR_IO;
     }
 
@@ -761,9 +756,9 @@ static int raft_io_uv_segment__truncate(const int fd,
 /**
  * Remove the segment at the given path.
  */
-static int raft_io_uv_segment__remove(const char *dir,
-                                      const char *filename,
-                                      char *errmsg)
+static int raft_io_uv_segment__remove(struct raft_logger *logger,
+                                      const char *dir,
+                                      const char *filename)
 {
     char path[RAFT_UV_FS_MAX_PATH_LEN]; /* Full path of segment file */
     int rv;
@@ -772,13 +767,13 @@ static int raft_io_uv_segment__remove(const char *dir,
 
     rv = unlink(path);
     if (rv != 0) {
-        raft_wrapf(errmsg, "remove");
+        raft_errorf_(logger, "unlink '%s': %s", path, uv_strerror(rv));
         return RAFT_ERR_IO;
     }
 
-    rv = raft_io_uv__sync_dir(dir, errmsg);
+    rv = raft_io_uv__sync_dir(logger, dir);
     if (rv != 0) {
-        return RAFT_ERR_IO;
+        return rv;
     }
 
     return 0;
@@ -791,8 +786,7 @@ static int raft_io_uv_segment__append_entries(
     const struct raft_entry *tmp_entries,
     const size_t tmp_n_entries,
     struct raft_entry **entries,
-    size_t *n_entries,
-    char *errmsg)
+    size_t *n_entries)
 {
     struct raft_entry *all_entries; /* To re-allocate the given entries */
     size_t i;
@@ -800,7 +794,6 @@ static int raft_io_uv_segment__append_entries(
     all_entries =
         raft_realloc(*entries, (*n_entries + tmp_n_entries) * sizeof **entries);
     if (all_entries == NULL) {
-        raft_errorf(errmsg, "can't reallocate entries");
         return RAFT_ERR_NOMEM;
     }
 
@@ -818,13 +811,13 @@ static int raft_io_uv_segment__append_entries(
  * Load the entries stored in a closed segment.
  */
 static int raft_io_uv_segment__load_closed(
+    struct raft_logger *logger,
     const char *dir,
     const raft_index start_index,
     const struct raft_io_uv_segment *segment,
     struct raft_entry **entries,
     size_t *n_entries,
-    raft_index *next_index,
-    char *errmsg)
+    raft_index *next_index)
 {
     raft_uv_path path;              /* Full path of segment file */
     bool empty;                     /* Whether the file is empty */
@@ -839,26 +832,25 @@ static int raft_io_uv_segment__load_closed(
     raft_uv_fs__join(dir, segment->filename, path);
 
     /* If the segment is completely empty, just bail out. */
-    rv = raft_io_uv_segment__is_empty(path, &empty, errmsg);
+    rv = raft_io_uv_segment__is_empty(logger, path, &empty);
     if (rv != 0) {
-        raft_wrapf(errmsg, "check if file is empty");
         goto err;
     }
     if (empty) {
-        raft_errorf(errmsg, "file is empty");
+        raft_errorf_(logger, "segment '%s': file is empty", path);
         rv = RAFT_ERR_IO_CORRUPT;
         goto err;
     }
 
     /* Open the segment file. */
-    rv = raft_io_uv_segment__open(path, O_RDONLY, &fd, &format, errmsg);
+    rv = raft_io_uv_segment__open(logger, path, O_RDONLY, &fd, &format);
     if (rv != 0) {
         goto err;
     }
 
     /* If the entries in the segment are no longer needed, just remove it. */
     if (segment->end_index < start_index) {
-        rv = raft_io_uv_segment__remove(dir, segment->filename, errmsg);
+        rv = raft_io_uv_segment__remove(logger, dir, segment->filename);
         if (rv != 0) {
             goto err_after_open;
         }
@@ -868,30 +860,30 @@ static int raft_io_uv_segment__load_closed(
     /* Check that start index encoded in the name of the segment match what we
      * expect. */
     if (segment->first_index != *next_index) {
-        raft_errorf(errmsg, "expected first index to be %lld", *next_index);
+        raft_errorf_(logger, "segment '%s': expected first index to be %lld",
+                     path, *next_index);
         rv = RAFT_ERR_IO_CORRUPT;
         goto err_after_open;
     }
 
     if (format != RAFT_IO_UV_STORE__FORMAT) {
-        raft_errorf(errmsg, "unexpected format version: %lu", format);
+        raft_errorf_(logger, "segment '%s': unexpected format version: %lu",
+                     path, format);
         rv = RAFT_ERR_IO;
         goto err_after_open;
     }
 
     /* Load all batches in the segment. */
     for (i = 1; !last; i++) {
-        rv = raft_io_uv_segment__load_batch(fd, &tmp_entries, &tmp_n_entries,
-                                            &last, errmsg);
+        rv = raft_io_uv_segment__load_batch(logger, fd, &tmp_entries,
+                                            &tmp_n_entries, &last);
         if (rv != 0) {
-            raft_wrapf(errmsg, "batch %d", i);
             goto err_after_open;
         }
 
         rv = raft_io_uv_segment__append_entries(tmp_entries, tmp_n_entries,
-                                                entries, n_entries, errmsg);
+                                                entries, n_entries);
         if (rv != 0) {
-            raft_wrapf(errmsg, "append entries");
             goto err_after_batch_load;
         }
 
@@ -924,12 +916,12 @@ err:
  * Load the entries stored in an open segment. If there are no entries at all,
  * remove the open segment, mark it as closed (by renaming it).
  */
-static int raft_io_uv_segment__load_open(const char *dir,
+static int raft_io_uv_segment__load_open(struct raft_logger *logger,
+                                         const char *dir,
                                          struct raft_io_uv_segment *segment,
                                          struct raft_entry **entries,
                                          size_t *n_entries,
-                                         raft_index *next_index,
-                                         char *errmsg)
+                                         raft_index *next_index)
 {
     raft_uv_path path;              /* Full path of segment file */
     raft_index first_index;         /* Index of first entry in segment */
@@ -949,9 +941,8 @@ static int raft_io_uv_segment__load_open(const char *dir,
 
     raft_uv_fs__join(dir, segment->filename, path);
 
-    rv = raft_io_uv_segment__is_empty(path, &empty, errmsg);
+    rv = raft_io_uv_segment__is_empty(logger, path, &empty);
     if (rv != 0) {
-        raft_wrapf(errmsg, "check if file is empty");
         goto err;
     }
 
@@ -961,7 +952,7 @@ static int raft_io_uv_segment__load_open(const char *dir,
         goto done;
     }
 
-    rv = raft_io_uv_segment__open(path, O_RDWR, &fd, &format, errmsg);
+    rv = raft_io_uv_segment__open(logger, path, O_RDWR, &fd, &format);
     if (rv != 0) {
         goto err;
     }
@@ -970,9 +961,8 @@ static int raft_io_uv_segment__load_open(const char *dir,
      * the segment was allocated but never written. */
     if (format != RAFT_IO_UV_STORE__FORMAT) {
         if (format == 0) {
-            rv = raft_io_uv_segment__is_all_zeros(fd, &all_zeros, errmsg);
+            rv = raft_io_uv_segment__is_all_zeros(logger, fd, &all_zeros);
             if (rv != 0) {
-                raft_wrapf(errmsg, "check if segment is all zeros");
                 goto err_after_open;
             }
 
@@ -984,7 +974,8 @@ static int raft_io_uv_segment__load_open(const char *dir,
             }
         }
 
-        raft_errorf(errmsg, "unexpected format version: %lu", format);
+        raft_errorf_(logger, "segment '%s': unexpected format version: %lu",
+                     path, format);
         rv = RAFT_ERR_IO;
         goto err_after_open;
     }
@@ -996,19 +987,18 @@ static int raft_io_uv_segment__load_open(const char *dir,
         off_t offset = lseek(fd, 0, SEEK_CUR);
 
         if (offset == -1) {
-            raft_errorf(errmsg, "batch %d: save offset: %s", i,
-                        uv_strerror(-errno));
+            raft_errorf_(logger, "segment '%s': batch %d: save offset: %s",
+                         path, i, uv_strerror(-errno));
             return RAFT_ERR_IO;
         }
 
-        rv = raft_io_uv_segment__load_batch(fd, &tmp_entries, &tmp_n_entries,
-                                            &last, errmsg);
+        rv = raft_io_uv_segment__load_batch(logger, fd, &tmp_entries,
+                                            &tmp_n_entries, &last);
         if (rv != 0) {
             int rv2;
 
             /* If this isn't a decoding error, just bail out. */
             if (rv != RAFT_ERR_IO_CORRUPT) {
-                raft_wrapf(errmsg, "batch %d", i);
                 goto err_after_open;
             }
 
@@ -1018,10 +1008,9 @@ static int raft_io_uv_segment__load_open(const char *dir,
              * incomplete data. */
             lseek(fd, offset, SEEK_SET);
 
-            rv2 = raft_io_uv_segment__is_all_zeros(fd, &all_zeros, errmsg);
+            rv2 = raft_io_uv_segment__is_all_zeros(logger, fd, &all_zeros);
             if (rv2 != 0) {
                 rv = rv2;
-                raft_wrapf(errmsg, "check if segment is all zeros");
                 goto err_after_open;
             }
 
@@ -1030,7 +1019,7 @@ static int raft_io_uv_segment__load_open(const char *dir,
                  * non-zero partial batch, and reporting the decoding error. */
             }
 
-            rv = raft_io_uv_segment__truncate(fd, offset, errmsg);
+            rv = raft_io_uv_segment__truncate(logger, fd, offset);
             if (rv != 0) {
                 goto err_after_open;
             }
@@ -1039,9 +1028,8 @@ static int raft_io_uv_segment__load_open(const char *dir,
         }
 
         rv = raft_io_uv_segment__append_entries(tmp_entries, tmp_n_entries,
-                                                entries, n_entries, errmsg);
+                                                entries, n_entries);
         if (rv != 0) {
-            raft_wrapf(errmsg, "append entries");
             goto err_after_batch_load;
         }
 
@@ -1062,7 +1050,7 @@ done:
     /* If the segment has no valid entries in it, we remove it. Otherwise we
      * rename it and keep it. */
     if (remove) {
-        rv = raft_io_uv_segment__remove(dir, segment->filename, errmsg);
+        rv = raft_io_uv_segment__remove(logger, dir, segment->filename);
         if (rv != 0) {
             goto err_after_open;
         }
@@ -1075,10 +1063,9 @@ done:
 
         raft_io_uv_segment__make_closed_filename(first_index, end_index,
                                                  filename);
-        rv = raft_io_uv_segment__rename(dir, segment->filename, filename,
-                                        errmsg);
+        rv = raft_io_uv_segment__rename(logger, dir, segment->filename,
+                                        filename);
         if (rv != 0) {
-            raft_wrapf(errmsg, "rename");
             goto err_after_open;
         }
 
@@ -1106,13 +1093,13 @@ err:
 /**
  * Load raft entries from the given segments.
  */
-static int raft_io_uv_segment__load_all(const char *dir,
+static int raft_io_uv_segment__load_all(struct raft_logger *logger,
+                                        const char *dir,
                                         const raft_index start_index,
                                         struct raft_io_uv_segment *segments,
                                         size_t n_segments,
                                         struct raft_entry **entries,
-                                        size_t *n_entries,
-                                        char *errmsg)
+                                        size_t *n_entries)
 {
     raft_index next_index; /* Index of the next entry to load from disk */
     size_t i;
@@ -1129,19 +1116,16 @@ static int raft_io_uv_segment__load_all(const char *dir,
         struct raft_io_uv_segment *segment = &segments[i];
 
         if (segment->is_open) {
-            rv = raft_io_uv_segment__load_open(dir, segment, entries, n_entries,
-                                               &next_index, errmsg);
+            rv = raft_io_uv_segment__load_open(logger, dir, segment, entries,
+                                               n_entries, &next_index);
             if (rv != 0) {
-                raft_wrapf(errmsg, "open segment %d", segment->counter);
                 goto err;
             }
         } else {
-            rv = raft_io_uv_segment__load_closed(dir, start_index, segment,
-                                                 entries, n_entries,
-                                                 &next_index, errmsg);
+            rv = raft_io_uv_segment__load_closed(logger, dir, start_index,
+                                                 segment, entries, n_entries,
+                                                 &next_index);
             if (rv != 0) {
-                raft_wrapf(errmsg, "closed segment %llu-%llu",
-                           segment->first_index, segment->end_index);
                 goto err;
             }
         }
@@ -1199,20 +1183,20 @@ static void raft_io_uv_prepared__reset(struct raft_io_uv_prepared *p,
 /**
  * Perform a write against the given prepared open segment.
  */
-static int raft_io_uv_prepared__write(struct raft_io_uv_prepared *p,
+static int raft_io_uv_prepared__write(struct raft_logger *logger,
+                                      struct raft_io_uv_prepared *p,
                                       const uv_buf_t bufs[],
                                       unsigned n,
                                       const size_t block_size,
-                                      raft_uv_fs_cb cb,
-                                      char *errmsg)
+                                      raft_uv_fs_cb cb)
 {
     int rv;
     size_t offset = p->block * block_size;
 
     rv = raft_uv_fs__write(&p->file, &p->req, bufs, n, offset, cb);
     if (rv != 0) {
-        raft_errorf(errmsg, "write segment %lld: %s", p->counter,
-                    uv_strerror(rv));
+        raft_errorf_(logger, "write segment %lld: %s", p->counter,
+                     uv_strerror(rv));
         return RAFT_ERR_IO;
     }
 
@@ -1222,16 +1206,15 @@ static int raft_io_uv_prepared__write(struct raft_io_uv_prepared *p,
 /**
  * Check that the given directory exists, and try to create it if it doesn't.
  */
-static int raft_io_uv_store__ensure_dir(const char *dir, char *errmsg)
+static int raft_io_uv_store__ensure_dir(struct raft_logger *logger,
+                                        const char *dir)
 {
     struct stat sb;
     int rv;
 
     /* Ensure that the given path doesn't exceed our static buffer limit */
     if (strlen(dir) > RAFT_UV_FS_MAX_DIR_LEN) {
-        raft_errorf(errmsg, "data directory exceeds %d characters",
-                    RAFT_UV_FS_MAX_DIR_LEN);
-        return RAFT_ERR_IO;
+        return RAFT_ERR_IO_NAMETOOLONG;
     }
 
     /* Make sure we have a directory we can write into. */
@@ -1240,17 +1223,17 @@ static int raft_io_uv_store__ensure_dir(const char *dir, char *errmsg)
         if (errno == ENOENT) {
             rv = mkdir(dir, 0700);
             if (rv != 0) {
-                raft_errorf(errmsg, "create data directory '%s': %s", dir,
-                            uv_strerror(-errno));
+                raft_errorf_(logger, "create data directory '%s': %s", dir,
+                             uv_strerror(-errno));
                 return RAFT_ERR_IO;
             }
         } else {
-            raft_errorf(errmsg, "access data directory '%s': %s", dir,
-                        uv_strerror(-errno));
+            raft_errorf_(logger, "access data directory '%s': %s", dir,
+                         uv_strerror(-errno));
             return RAFT_ERR_IO;
         }
     } else if ((sb.st_mode & S_IFMT) != S_IFDIR) {
-        raft_errorf(errmsg, "path '%s' is not a directory", dir);
+        raft_errorf_(logger, "path '%s' is not a directory", dir);
         return RAFT_ERR_IO;
     }
 
@@ -1271,36 +1254,27 @@ static void raft_io_uv_store__first_block(uv_buf_t *buf)
 }
 
 int raft_io_uv_store__init(struct raft_io_uv_store *s,
-                           const char *dir,
+                           struct raft_logger *logger,
                            struct uv_loop_s *loop,
-                           char *errmsg)
+                           const char *dir)
 {
     int i;
     int rv;
 
+    s->logger = logger;
+
     /* Ensure that we have a valid data directory */
-    rv = raft_io_uv_store__ensure_dir(dir, errmsg);
+    rv = raft_io_uv_store__ensure_dir(logger, dir);
     if (rv != 0) {
         return rv;
     }
 
-    /* Make a copy of the directory string, stripping any trailing slash */
-    s->dir = raft_malloc(strlen(dir) + 1);
-    if (s->dir == NULL) {
-        raft_errorf(errmsg, "can't copy data directory path");
-        return RAFT_ERR_NOMEM;
-    }
-    strcpy(s->dir, dir);
-
-    if (s->dir[strlen(s->dir) - 1] == '/') {
-        s->dir[strlen(s->dir) - 1] = 0;
-    }
+    s->dir = dir;
 
     /* Detect the file system block size */
     rv = raft_uv_fs__block_size(s->dir, &s->block_size);
     if (rv != 0) {
-        raft_free(s->dir);
-        raft_errorf(errmsg, "detect block size: %s", uv_strerror(rv));
+        raft_errorf_(logger, "detect block size: %s", uv_strerror(rv));
         return RAFT_ERR_IO;
     }
 
@@ -1343,8 +1317,7 @@ int raft_io_uv_store__init(struct raft_io_uv_store *s,
 /**
  * Update both metadata files, so they are created if they didn't exist.
  */
-static int raft_io_uv_store__ensure_metadata(struct raft_io_uv_store *s,
-                                             char *errmsg)
+static int raft_io_uv_store__ensure_metadata(struct raft_io_uv_store *s)
 {
     int i;
     int rv;
@@ -1353,15 +1326,14 @@ static int raft_io_uv_store__ensure_metadata(struct raft_io_uv_store *s,
      * exist. Also sync the data directory so the entries get created. */
     for (i = 0; i < 2; i++) {
         s->metadata.version++;
-        rv = raft_io_uv_metadata__store(s->dir, &s->metadata, errmsg);
+        rv = raft_io_uv_metadata__store(s->logger, s->dir, &s->metadata);
         if (rv != 0) {
-            raft_wrapf(errmsg, "store metadata file %d", i);
             return rv;
         }
     }
 
     /* Also sync the data directory so the entries get created. */
-    rv = raft_io_uv__sync_dir(s->dir, errmsg);
+    rv = raft_io_uv__sync_dir(s->logger, s->dir);
     if (rv != 0) {
         return rv;
     }
@@ -1382,8 +1354,7 @@ int raft_io_uv_store__load(struct raft_io_uv_store *s,
                            unsigned *voted_for,
                            raft_index *start_index,
                            struct raft_entry **entries,
-                           size_t *n,
-                           char *errmsg)
+                           size_t *n)
 {
     struct raft_io_uv_metadata metadata1;
     struct raft_io_uv_metadata metadata2;
@@ -1394,8 +1365,7 @@ int raft_io_uv_store__load(struct raft_io_uv_store *s,
     assert(!raft_io_uv_store__writer_is_active(s));
 
     if (s->aborted) {
-        raft_wrapf(errmsg, "backend was stopped or has errored");
-        return RAFT_ERR_IO;
+        return RAFT_ERR_IO_ABORTED;
     }
 
     /* The RAFT_IO_READ_STATE request is supposed to be invoked just once, right
@@ -1403,15 +1373,13 @@ int raft_io_uv_store__load(struct raft_io_uv_store *s,
     assert(s->metadata.version == 0);
 
     /* Read the two metadata files (if available). */
-    rv = raft_io_uv_metadata__load(s->dir, 1, &metadata1, errmsg);
+    rv = raft_io_uv_metadata__load(s->logger, s->dir, 1, &metadata1);
     if (rv != 0) {
-        raft_wrapf(errmsg, "load metadata1");
         return rv;
     }
 
-    rv = raft_io_uv_metadata__load(s->dir, 2, &metadata2, errmsg);
+    rv = raft_io_uv_metadata__load(s->logger, s->dir, 2, &metadata2);
     if (rv != 0) {
-        raft_wrapf(errmsg, "load metadata2");
         goto err;
     }
 
@@ -1421,9 +1389,10 @@ int raft_io_uv_store__load(struct raft_io_uv_store *s,
         s->metadata.start_index = 1;
     } else if (metadata1.version == metadata2.version) {
         /* The two metadata files can't have the same version. */
-        raft_errorf(errmsg, "metadata1 and metadata2 are both at version %d",
-                    metadata1.version);
-        rv = RAFT_ERR_IO;
+        raft_errorf_(s->logger,
+                     "metadata1 and metadata2 are both at version %d",
+                     metadata1.version);
+        rv = RAFT_ERR_IO_CORRUPT;
         goto err;
     } else {
         /* Pick the metadata with the grater version. */
@@ -1439,15 +1408,14 @@ int raft_io_uv_store__load(struct raft_io_uv_store *s,
     *start_index = s->metadata.start_index;
 
     /* Update the metadata files, so they are created if they did not exist. */
-    rv = raft_io_uv_store__ensure_metadata(s, errmsg);
+    rv = raft_io_uv_store__ensure_metadata(s);
     if (rv != 0) {
         goto err;
     }
 
     /* List available segments. */
-    rv = raft_io_uv_segment__list(s->dir, &segments, &n_segments, errmsg);
+    rv = raft_io_uv_segment__list(s->logger, s->dir, &segments, &n_segments);
     if (rv != 0) {
-        raft_wrapf(errmsg, "list segment files");
         goto err;
     }
 
@@ -1456,9 +1424,9 @@ int raft_io_uv_store__load(struct raft_io_uv_store *s,
 
     /* Read data from segments, closing any open segments. */
     if (segments != NULL) {
-        rv = raft_io_uv_segment__load_all(s->dir, s->metadata.start_index,
-                                          segments, n_segments, entries, n,
-                                          errmsg);
+        rv = raft_io_uv_segment__load_all(s->logger, s->dir,
+                                          s->metadata.start_index, segments,
+                                          n_segments, entries, n);
         raft_free(segments);
 
         if (rv != 0) {
@@ -1488,9 +1456,7 @@ err:
 /**
  * Open and allocate the open-1 segment, and return its file descriptor.
  */
-static int raft_io_uv_store__create_open_1(struct raft_io_uv_store *s,
-                                           int *fd,
-                                           char *errmsg)
+static int raft_io_uv_store__create_open_1(struct raft_io_uv_store *s, int *fd)
 {
     raft_uv_path path;
     int rv;
@@ -1499,13 +1465,13 @@ static int raft_io_uv_store__create_open_1(struct raft_io_uv_store *s,
 
     *fd = open(path, O_WRONLY | O_CREAT | O_EXCL);
     if (*fd == -1) {
-        raft_errorf(errmsg, "open segment 1: %s", strerror(errno));
+        raft_errorf_(s->logger, "open '%s': %s", path, strerror(errno));
         return RAFT_ERR_IO;
     }
 
     rv = posix_fallocate(*fd, 0, s->max_segment_size);
     if (rv != 0) {
-        raft_errorf(errmsg, "allocate segment 1: %s", strerror(errno));
+        raft_errorf_(s->logger, "fallocate '%s': %s", path, strerror(errno));
         return RAFT_ERR_IO;
     }
 
@@ -1517,8 +1483,7 @@ static int raft_io_uv_store__create_open_1(struct raft_io_uv_store *s,
  */
 static int raft_io_uv_store__write_open_1(struct raft_io_uv_store *s,
                                           const int fd,
-                                          const struct raft_buffer *conf,
-                                          char *errmsg)
+                                          const struct raft_buffer *conf)
 {
     void *buf;
     void *cursor;
@@ -1528,13 +1493,11 @@ static int raft_io_uv_store__write_open_1(struct raft_io_uv_store *s,
     if (conf->len >
         s->block_size - (8 /* Format version */ + 8 /* Checksums */ +
                          raft_batch_header_size(1) /* Batch header */)) {
-        raft_errorf(errmsg, "encoded configuration is too large");
-        return RAFT_ERR_IO;
+        return RAFT_ERR_IO_TOOBIG;
     }
 
     buf = aligned_alloc(s->block_size, s->block_size);
     if (buf == NULL) {
-        raft_errorf(errmsg, "can't allocate write buffer");
         return RAFT_ERR_NOMEM;
     }
     memset(buf, 0, s->block_size);
@@ -1556,12 +1519,12 @@ static int raft_io_uv_store__write_open_1(struct raft_io_uv_store *s,
     rv = write(fd, buf, s->block_size);
     if (rv == -1) {
         free(buf);
-        raft_errorf(errmsg, "write segment 1: %s", strerror(errno));
+        raft_errorf_(s->logger, "write segment 1: %s", strerror(errno));
         return RAFT_ERR_IO;
     }
     if (rv != (int)s->block_size) {
         free(buf);
-        raft_errorf(errmsg, "write segment 1: only %d bytes written", rv);
+        raft_errorf_(s->logger, "write segment 1: only %d bytes written", rv);
         return RAFT_ERR_IO;
     }
 
@@ -1569,7 +1532,7 @@ static int raft_io_uv_store__write_open_1(struct raft_io_uv_store *s,
 
     rv = fsync(fd);
     if (rv == -1) {
-        raft_errorf(errmsg, "sync segment 1: %s", strerror(errno));
+        raft_errorf_(s->logger, "fsync segment 1: %s", strerror(errno));
         return RAFT_ERR_IO;
     }
 
@@ -1577,9 +1540,9 @@ static int raft_io_uv_store__write_open_1(struct raft_io_uv_store *s,
 }
 
 int raft_io_uv_store__bootstrap(struct raft_io_uv_store *s,
-                                const struct raft_buffer *conf,
-                                char *errmsg)
+                                const struct raft_configuration *configuration)
 {
+    struct raft_buffer buf;
     int fd;
     int rv;
 
@@ -1587,48 +1550,61 @@ int raft_io_uv_store__bootstrap(struct raft_io_uv_store *s,
 
     /* We shouldn't have written anything else yet. */
     if (s->writer.next_index != 1) {
-        raft_errorf(errmsg, "persisted log is not empty");
-        return RAFT_ERR_IO;
+        rv = RAFT_ERR_IO_NOTEMPTY;
+	goto err;
+    }
+
+    /* Encode the given configuration. */
+    rv = raft_io_uv_encode__configuration(configuration, &buf);
+    if (rv != 0) {
+        goto err;
     }
 
     /* Write the term */
-    rv = raft_io_uv_store__term(s, 1, errmsg);
+    rv = raft_io_uv_store__term(s, 1);
     if (rv != 0) {
-        return rv;
+        goto err_after_configuration_encode;
+    }
+
+    /* Create the first open segment file. */
+    rv = raft_io_uv_store__create_open_1(s, &fd);
+    if (rv != 0) {
+        goto err_after_configuration_encode;
     }
 
     /* Write the first entry */
-    rv = raft_io_uv_store__create_open_1(s, &fd, errmsg);
+    rv = raft_io_uv_store__write_open_1(s, fd, &buf);
     if (rv != 0) {
-        return rv;
-    }
-
-    rv = raft_io_uv_store__write_open_1(s, fd, conf, errmsg);
-    if (rv != 0) {
-        return rv;
+        goto err_after_configuration_encode;
     }
 
     close(fd);
 
-    rv = raft_io_uv__sync_dir(s->dir, errmsg);
+    rv = raft_io_uv__sync_dir(s->logger, s->dir);
     if (rv != 0) {
-        return rv;
+        goto err_after_configuration_encode;
     }
 
+    raft_free(buf.base);
+
+    return 0;
+
+err_after_configuration_encode:
+    raft_free(buf.base);
+
+ err:
+    assert(rv != 0);
     return 0;
 }
 
-int raft_io_uv_store__term(struct raft_io_uv_store *s,
-                           const raft_term term,
-                           char *errmsg)
+int raft_io_uv_store__term(struct raft_io_uv_store *s, const raft_term term)
 {
     int rv;
 
     assert(!raft_io_uv_store__writer_is_active(s));
 
     if (s->aborted) {
-        raft_wrapf(errmsg, "backend was stopped or has errored");
-        return RAFT_ERR_IO;
+        return RAFT_ERR_IO_ABORTED;
     }
 
     assert(s->metadata.version > 0);
@@ -1637,10 +1613,8 @@ int raft_io_uv_store__term(struct raft_io_uv_store *s,
     s->metadata.term = term;
     s->metadata.voted_for = 0;
 
-    rv = raft_io_uv_metadata__store(s->dir, &s->metadata, errmsg);
+    rv = raft_io_uv_metadata__store(s->logger, s->dir, &s->metadata);
     if (rv != 0) {
-        int n = raft_io_uv_metadata__n(s->metadata.version);
-        raft_wrapf(errmsg, "store metadata file %d", n);
         goto err;
     }
 
@@ -1654,17 +1628,14 @@ err:
     return rv;
 }
 
-int raft_io_uv_store__vote(struct raft_io_uv_store *s,
-                           const unsigned server_id,
-                           char *errmsg)
+int raft_io_uv_store__vote(struct raft_io_uv_store *s, const unsigned server_id)
 {
     int rv;
 
     assert(!raft_io_uv_store__writer_is_active(s));
 
     if (s->aborted) {
-        raft_wrapf(errmsg, "backend was stopped or has errored");
-        return RAFT_ERR_IO;
+        return RAFT_ERR_IO_ABORTED;
     }
 
     assert(s->metadata.version > 0);
@@ -1672,10 +1643,8 @@ int raft_io_uv_store__vote(struct raft_io_uv_store *s,
     s->metadata.version++;
     s->metadata.voted_for = server_id;
 
-    rv = raft_io_uv_metadata__store(s->dir, &s->metadata, errmsg);
+    rv = raft_io_uv_metadata__store(s->logger, s->dir, &s->metadata);
     if (rv != 0) {
-        int n = raft_io_uv_metadata__n(s->metadata.version);
-        raft_wrapf(errmsg, "store metadata file %d", n);
         goto err;
     }
 
@@ -1887,19 +1856,17 @@ static void raft_io_uv_store__closer_work_cb(uv_work_t *work)
 
     fd = open(path, O_RDWR);
     if (fd == -1) {
-        raft_errorf(s->closer.errmsg, uv_strerror(-errno));
+        raft_errorf_(s->logger, "open '%s': %s", path, uv_strerror(-errno));
         rv = RAFT_ERR_IO;
         goto abort;
     }
 
-    rv = raft_io_uv_segment__truncate(fd, s->closer.segment->used,
-                                      s->closer.errmsg);
+    rv = raft_io_uv_segment__truncate(s->logger, fd, s->closer.segment->used);
     if (rv != 0) {
         goto abort;
     }
 
-    rv = raft_io_uv_segment__rename(s->dir, filename1, filename2,
-                                    s->closer.errmsg);
+    rv = raft_io_uv_segment__rename(s->logger, s->dir, filename1, filename2);
     if (rv != 0) {
         goto abort;
     }
@@ -1916,8 +1883,7 @@ abort:
 static void raft_io_uv_store__writer_finish(struct raft_io_uv_store *s);
 
 /* Forward declaration */
-static int raft_io_uv_store__preparer_start(struct raft_io_uv_store *s,
-                                            char *errmsg);
+static int raft_io_uv_store__preparer_start(struct raft_io_uv_store *s);
 
 /**
  * Invoked after the work performed in threadpool has completed. This is run in
@@ -1936,8 +1902,7 @@ static void raft_io_uv_store__closer_after_work_cb(uv_work_t *work, int status)
 
     /* If in the meantime we have been aborted, let's bail out. */
     if (s->aborted) {
-        raft_errorf(s->closer.errmsg, RAFT_IO_UV_STORE__ABORTED);
-        rv = RAFT_ERR_IO;
+        rv = RAFT_ERR_IO_ABORTED;
         goto abort;
     }
 
@@ -1954,7 +1919,7 @@ static void raft_io_uv_store__closer_after_work_cb(uv_work_t *work, int status)
 
     /* Wakeup the preparer if needed. */
     if (!raft_io_uv_store__preparer_is_active(s)) {
-        rv = raft_io_uv_store__preparer_start(s, s->closer.errmsg);
+        rv = raft_io_uv_store__preparer_start(s);
         if (rv != 0) {
             goto abort;
         }
@@ -1975,7 +1940,6 @@ abort:
     if (raft_io_uv_store__writer_is_blocked(s) &&
         !raft_io_uv_store__preparer_is_active(s)) {
         s->writer.status = rv;
-        memcpy(s->writer.errmsg, s->closer.errmsg, RAFT_UV_FS_MAX_PATH_LEN);
         raft_io_uv_store__writer_finish(s);
     }
 
@@ -1987,8 +1951,7 @@ abort:
  * Trigger the closer logic in a work thread which will close all closing
  * segment.
  */
-static int raft_io_uv_store__closer_start(struct raft_io_uv_store *s,
-                                          char *errmsg)
+static int raft_io_uv_store__closer_start(struct raft_io_uv_store *s)
 {
     int rv;
 
@@ -2006,7 +1969,7 @@ static int raft_io_uv_store__closer_start(struct raft_io_uv_store *s,
                        raft_io_uv_store__closer_work_cb,
                        raft_io_uv_store__closer_after_work_cb);
     if (rv != 0) {
-        raft_errorf(errmsg, "schedule closer logic: %s", uv_strerror(rv));
+        raft_errorf_(s->logger, "uv_queue_work: %s", uv_strerror(rv));
         return RAFT_ERR_IO;
     }
 
@@ -2081,16 +2044,14 @@ static size_t raft_io_uv_store__writer_calculate_size(
 static void raft_io_uv_store__writer_finish(struct raft_io_uv_store *s)
 {
     void *p;
-    void (*cb)(void *p, const int status, const char *errmsg);
+    void (*cb)(void *p, const int status);
     int status;
-    char errmsg[RAFT_ERRMSG_SIZE];
 
     assert(raft_io_uv_store__writer_is_active(s));
 
     p = s->writer.p;
     cb = s->writer.cb;
     status = s->writer.status;
-    memcpy(errmsg, s->writer.errmsg, sizeof errmsg);
 
     s->writer.entries = NULL;
     s->writer.n = 0;
@@ -2098,7 +2059,7 @@ static void raft_io_uv_store__writer_finish(struct raft_io_uv_store *s)
     s->writer.cb = NULL;
     s->writer.status = 0;
 
-    cb(p, status, errmsg);
+    cb(p, status);
 
     if (s->stop.p != NULL) {
         raft_io_uv_store__aborted(s);
@@ -2307,10 +2268,9 @@ static void raft_io_uv_store__writer_start_cb(struct raft_uv_fs *req)
     if (req->status != (int)(blocks * s->block_size)) {
         s->writer.status = RAFT_ERR_IO;
         if (req->status < 0) {
-            raft_errorf(s->writer.errmsg, "write: %s",
-                        uv_strerror(req->status));
+            raft_errorf_(s->logger, "write: %s", uv_strerror(req->status));
         } else {
-            raft_errorf(s->writer.errmsg, "only %d bytes written", req->status);
+            raft_errorf_(s->logger, "only %d bytes written", req->status);
         }
         goto done;
     }
@@ -2373,8 +2333,7 @@ done:
  * Submit an I/O write request to persist the entries that were passed to
  * @raft_io_uv_store__entries.
  */
-static int raft_io_uv_store__writer_start(struct raft_io_uv_store *s,
-                                          char *errmsg)
+static int raft_io_uv_store__writer_start(struct raft_io_uv_store *s)
 {
     size_t size;
     size_t offset = 0;
@@ -2409,14 +2368,14 @@ static int raft_io_uv_store__writer_start(struct raft_io_uv_store *s,
         raft_io_uv_store__writer_segment_full(s);
 
         if (!raft_io_uv_store__closer_is_active(s)) {
-            rv = raft_io_uv_store__closer_start(s, errmsg);
+            rv = raft_io_uv_store__closer_start(s);
             if (rv != 0) {
                 return rv;
             }
         }
 
         if (!raft_io_uv_store__preparer_is_active(s)) {
-            rv = raft_io_uv_store__preparer_start(s, errmsg);
+            rv = raft_io_uv_store__preparer_start(s);
             if (rv != 0) {
                 return rv;
             }
@@ -2435,7 +2394,6 @@ static int raft_io_uv_store__writer_start(struct raft_io_uv_store *s,
 
     rv = raft_io_uv_store__writer_ensure_bufs_size(s, size);
     if (rv != 0) {
-        raft_errorf(errmsg, "can't allocate write buffers");
         goto fail;
     }
 
@@ -2453,9 +2411,9 @@ static int raft_io_uv_store__writer_start(struct raft_io_uv_store *s,
 
     blocks = size / s->block_size + 1;
 
-    rv = raft_io_uv_prepared__write(s->writer.segment, s->writer.bufs, blocks,
-                                    s->block_size,
-                                    raft_io_uv_store__writer_start_cb, errmsg);
+    rv = raft_io_uv_prepared__write(s->logger, s->writer.segment,
+                                    s->writer.bufs, blocks, s->block_size,
+                                    raft_io_uv_store__writer_start_cb);
     if (rv != 0) {
         goto fail;
     }
@@ -2475,15 +2433,13 @@ fail:
  * wake up the writer, which can now proceed writing to the newly prepared
  * segment.
  */
-static int raft_io_uv_store__writer_unblock(struct raft_io_uv_store *s,
-                                            char *errmsg)
+static int raft_io_uv_store__writer_unblock(struct raft_io_uv_store *s)
 {
     int rv;
 
     /* Make sure we have at least one write buffer available. */
     rv = raft_io_uv_store__writer_ensure_bufs_n(s, 1);
     if (rv != 0) {
-        raft_errorf(errmsg, "can't allocate write buffer");
         return rv;
     }
 
@@ -2497,7 +2453,7 @@ static int raft_io_uv_store__writer_unblock(struct raft_io_uv_store *s,
     s->writer.segment->first_index = s->writer.next_index;
 
     /* Start writing. */
-    rv = raft_io_uv_store__writer_start(s, errmsg);
+    rv = raft_io_uv_store__writer_start(s);
     if (rv != 0) {
         return rv;
     }
@@ -2523,7 +2479,6 @@ static bool raft_io_uv_store__preparer_has_work(struct raft_io_uv_store *s)
 static void raft_io_uv_store__preparer_format_cb(struct raft_uv_fs *req)
 {
     struct raft_io_uv_store *s = req->data;
-    char errmsg[RAFT_ERRMSG_SIZE];
     bool succeeded = req->status == (int)s->block_size;
     int rv;
     int rv2;
@@ -2532,15 +2487,14 @@ static void raft_io_uv_store__preparer_format_cb(struct raft_uv_fs *req)
 
     /* If in the meantime we have been aborted, let's bail out. */
     if (s->aborted) {
-        raft_errorf(errmsg, RAFT_IO_UV_STORE__ABORTED);
-        rv = RAFT_ERR_IO;
+        rv = RAFT_ERR_IO_ABORTED;
         goto abort;
     }
 
     /* If the write failed, let's bail out. */
     if (!succeeded) {
-        raft_errorf(errmsg, "format open segment %lld: %s",
-                    s->preparer.segment->counter, uv_strerror(req->status));
+        raft_errorf_(s->logger, "format segment '%s': %s",
+                     s->preparer.segment->path, uv_strerror(req->status));
         rv = RAFT_ERR_IO;
         goto abort;
     }
@@ -2555,7 +2509,7 @@ static void raft_io_uv_store__preparer_format_cb(struct raft_uv_fs *req)
     /* If there's a pending write request which is waiting for a segment to be
      * ready, let's resume it. */
     if (raft_io_uv_store__writer_is_blocked(s)) {
-        rv = raft_io_uv_store__writer_unblock(s, errmsg);
+        rv = raft_io_uv_store__writer_unblock(s);
         if (rv != 0) {
             goto abort;
         }
@@ -2567,7 +2521,7 @@ static void raft_io_uv_store__preparer_format_cb(struct raft_uv_fs *req)
     /* If the preparation was successful and there are more segments that need
      * to be prepared, let's start the preparer again. */
     if (raft_io_uv_store__preparer_has_work(s)) {
-        rv = raft_io_uv_store__preparer_start(s, errmsg);
+        rv = raft_io_uv_store__preparer_start(s);
         if (rv != 0) {
             goto abort;
         }
@@ -2590,7 +2544,6 @@ abort:
      * let's fail it. */
     if (raft_io_uv_store__writer_is_blocked(s)) {
         s->writer.status = rv;
-        memcpy(s->writer.errmsg, errmsg, RAFT_UV_FS_MAX_PATH_LEN);
         raft_io_uv_store__writer_finish(s);
     }
 
@@ -2602,8 +2555,7 @@ abort:
  * Submit a write request for the format version of a newly created prepared
  * segment.
  */
-static int raft_io_uv_store__preparer_format(struct raft_io_uv_store *s,
-                                             char *errmsg)
+static int raft_io_uv_store__preparer_format(struct raft_io_uv_store *s)
 {
     int rv;
 
@@ -2613,7 +2565,6 @@ static int raft_io_uv_store__preparer_format(struct raft_io_uv_store *s,
         s->preparer.buf.base = aligned_alloc(s->block_size, s->block_size);
 
         if (s->preparer.buf.base == NULL) {
-            raft_errorf(errmsg, "can't allocate segment format version buffer");
             return RAFT_ERR_NOMEM;
         }
 
@@ -2625,8 +2576,8 @@ static int raft_io_uv_store__preparer_format(struct raft_io_uv_store *s,
                            &s->preparer.segment->req, &s->preparer.buf, 1, 0,
                            raft_io_uv_store__preparer_format_cb);
     if (rv != 0) {
-        raft_errorf(errmsg, "request formatting of open segment %lld: %s",
-                    s->preparer.segment->counter, uv_strerror(rv));
+        raft_errorf_(s->logger, "request formatting of open segment '%s': %s",
+                     s->preparer.segment->path, uv_strerror(rv));
         return RAFT_ERR_IO;
     }
 
@@ -2641,7 +2592,6 @@ static void raft_io_uv_store__preparer_create_cb(struct raft_uv_fs *req)
 {
     struct raft_io_uv_store *s = req->data;
     bool succeeded = req->status == 0;
-    char errmsg[RAFT_ERRMSG_SIZE];
     int rv;
     int rv2;
 
@@ -2649,21 +2599,20 @@ static void raft_io_uv_store__preparer_create_cb(struct raft_uv_fs *req)
 
     /* If in the meantime we have been aborted, let's bail out. */
     if (s->aborted) {
-        rv = RAFT_ERR_IO;
-        raft_errorf(errmsg, RAFT_IO_UV_STORE__ABORTED);
+        rv = RAFT_ERR_IO_ABORTED;
         goto abort;
     }
 
     /* If the file creation failed, let's bail out. */
     if (!succeeded) {
         rv = RAFT_ERR_IO;
-        raft_errorf(errmsg, "create open segment %lld: %s",
-                    s->preparer.segment->counter, uv_strerror(req->status));
+        raft_errorf_(s->logger, "create open segment '%s': %s",
+                     s->preparer.segment->path, uv_strerror(req->status));
         goto abort;
     }
 
     /* Submit a request to write the format version of the prepared segment. */
-    rv = raft_io_uv_store__preparer_format(s, errmsg);
+    rv = raft_io_uv_store__preparer_format(s);
     if (rv != 0) {
         goto abort;
     }
@@ -2687,7 +2636,6 @@ abort:
      * let's fail it. */
     if (raft_io_uv_store__writer_is_blocked(s)) {
         s->writer.status = rv;
-        memcpy(s->writer.errmsg, errmsg, RAFT_UV_FS_MAX_PATH_LEN);
         raft_io_uv_store__writer_finish(s);
     }
 
@@ -2698,8 +2646,7 @@ abort:
 /**
  * Start preparing the pending segment with the lowest counter.
  */
-static int raft_io_uv_store__preparer_start(struct raft_io_uv_store *s,
-                                            char *errmsg)
+static int raft_io_uv_store__preparer_start(struct raft_io_uv_store *s)
 {
     int rv;
 
@@ -2727,8 +2674,8 @@ static int raft_io_uv_store__preparer_start(struct raft_io_uv_store *s,
                             s->preparer.segment->path, s->max_segment_size,
                             raft_io_uv_store__preparer_create_cb);
     if (rv != 0) {
-        raft_errorf(errmsg, "create open segment %lld: %s",
-                    s->preparer.segment->counter, uv_strerror(rv));
+        raft_errorf_(s->logger, "create '%s': %s", s->preparer.segment->path,
+                     uv_strerror(rv));
         goto err;
     }
 
@@ -2746,10 +2693,7 @@ int raft_io_uv_store__entries(struct raft_io_uv_store *s,
                               const struct raft_entry *entries,
                               const unsigned n,
                               void *p,
-                              void (*cb)(void *p,
-                                         const int status,
-                                         const char *errmsg),
-                              char *errmsg)
+                              void (*cb)(void *p, const int status))
 {
     int rv = 0;
 
@@ -2760,8 +2704,7 @@ int raft_io_uv_store__entries(struct raft_io_uv_store *s,
     assert(!raft_io_uv_store__writer_is_active(s));
 
     if (s->aborted) {
-        raft_wrapf(errmsg, RAFT_IO_UV_STORE__ABORTED);
-        return RAFT_ERR_IO;
+        return RAFT_ERR_IO_ABORTED;
     }
 
     s->writer.entries = entries;
@@ -2773,7 +2716,7 @@ int raft_io_uv_store__entries(struct raft_io_uv_store *s,
      * for one, and possibly trigger the preparer. */
     if (s->writer.segment == NULL) {
         if (!raft_io_uv_store__preparer_is_active(s)) {
-            rv = raft_io_uv_store__preparer_start(s, errmsg);
+            rv = raft_io_uv_store__preparer_start(s);
             if (rv != 0) {
                 goto err;
             }
@@ -2781,7 +2724,7 @@ int raft_io_uv_store__entries(struct raft_io_uv_store *s,
         return 0;
     }
 
-    rv = raft_io_uv_store__writer_start(s, errmsg);
+    rv = raft_io_uv_store__writer_start(s);
     if (rv != 0) {
         goto err;
     }
@@ -2843,6 +2786,4 @@ void raft_io_uv_store__close(struct raft_io_uv_store *s)
     if (s->preparer.buf.base != NULL) {
         free(s->preparer.buf.base);
     }
-
-    raft_free(s->dir);
 }

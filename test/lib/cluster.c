@@ -77,7 +77,7 @@ void test_cluster_setup(const MunitParameter params[], struct test_cluster *c)
 
         test_fsm_setup(params, fsm);
 
-        raft_init(raft, io, fsm, c, id);
+        raft_init(raft, io, fsm, c, id, "1");
 
         raft_set_logger(raft, logger);
         raft_set_rand(raft, test_cluster__rand);
@@ -631,7 +631,7 @@ void test_cluster_add_server(struct test_cluster *c)
 
     test_fsm_setup(params, fsm);
 
-    raft_init(raft, io, fsm, c, id);
+    raft_init(raft, io, fsm, c, id, "1");
 
     raft_set_logger(raft, logger);
     raft_set_rand(raft, test_cluster__rand);

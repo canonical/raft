@@ -1,7 +1,5 @@
 #include "../../include/raft.h"
 
-#include "../../src/io_queue.h"
-
 #include "../lib/heap.h"
 #include "../lib/logger.h"
 #include "../lib/munit.h"
@@ -13,26 +11,71 @@
 struct fixture
 {
     struct raft_heap heap;
-    struct raft_io_queue queue;
     struct raft_logger logger;
     struct raft_io io;
-    unsigned elapsed; /* Milliseconds since last call to __tick */
+    struct
+    {
+        bool invoked;
+        unsigned elapsed; /* Milliseconds since last call to __tick */
+    } tick_cb;
+    struct
+    {
+        bool invoked;
+        int status;
+    } append_cb;
+    struct
+    {
+        bool invoked;
+        int status;
+    } send_cb;
+    struct
+    {
+        bool invoked;
+        struct raft_message *message;
+    } recv_cb;
+    struct
+    {
+        bool invoked;
+    } stop_cb;
 };
 
-static void __tick(void *p, const unsigned elapsed)
+static void __tick_cb(void *data, const unsigned elapsed)
 {
-    struct fixture *f = p;
+    struct fixture *f = data;
 
-    munit_assert_ptr_not_null(f);
-
-    f->elapsed = elapsed;
+    f->tick_cb.invoked = true;
+    f->tick_cb.elapsed = elapsed;
 }
 
-static void __notify(void *p, const unsigned id, const int status)
+static void __append_cb(void *data, const int status)
 {
-    (void)p;
-    (void)id;
-    (void)status;
+    struct fixture *f = data;
+
+    f->append_cb.invoked = true;
+    f->append_cb.status = status;
+}
+
+static void __send_cb(void *data, const int status)
+{
+    struct fixture *f = data;
+
+    f->send_cb.invoked = true;
+    f->send_cb.status = status;
+}
+
+static void __recv_cb(void *data, struct raft_message *message)
+{
+    struct fixture *f = data;
+
+    f->recv_cb.invoked = true;
+    f->recv_cb.message = message;
+}
+
+static void __stop_cb(void *data)
+{
+    struct fixture *f = data;
+
+    f->stop_cb.invoked = true;
 }
 
 static void *setup(const MunitParameter params[], void *user_data)
@@ -44,16 +87,27 @@ static void *setup(const MunitParameter params[], void *user_data)
     (void)user_data;
 
     test_heap_setup(params, &f->heap);
-
-    raft_io_queue__init(&f->queue);
-
     test_logger_setup(params, &f->logger, id);
 
     rv = raft_io_stub_init(&f->io);
     munit_assert_int(rv, ==, 0);
 
-    f->io.init(&f->io, &f->queue, &f->logger, f, __tick, __notify);
-    f->elapsed = 0;
+    rv = f->io.init(&f->io, &f->logger, 1, "1");
+    munit_assert_int(rv, ==, 0);
+
+    rv = f->io.start(&f->io, 50, f, __tick_cb, __recv_cb);
+    munit_assert_int(rv, ==, 0);
+
+    f->tick_cb.invoked = false;
+    f->tick_cb.elapsed = 0;
+
+    f->append_cb.invoked = false;
+    f->append_cb.status = -1;
+
+    f->send_cb.invoked = false;
+    f->send_cb.status = -1;
+
+    f->stop_cb.invoked = false;
 
     return f;
 }
@@ -62,26 +116,17 @@ static void tear_down(void *data)
 {
     struct fixture *f = data;
 
+    f->io.stop(&f->io, f, __stop_cb);
+
+    munit_assert_true(f->stop_cb.invoked);
+
     f->io.close(&f->io);
 
-    raft_io_queue__close(&f->queue);
     test_logger_tear_down(&f->logger);
-
     test_heap_tear_down(&f->heap);
 
     free(f);
 }
-
-/**
- * Start the backend.
- */
-#define __start(F, MSECS)                \
-    {                                    \
-        int rv;                          \
-                                         \
-        rv = F->io.start(&F->io, MSECS); \
-        munit_assert_int(rv, ==, 0);     \
-    }
 
 /**
  * Advance time.
@@ -92,178 +137,222 @@ static void tear_down(void *data)
     }
 
 /**
- * Push a new request to the I/O queue.
+ * Load the initial state from the store and check that no error occurs.
  */
-#define __push_io_request(F, ID, REQUEST)             \
-    {                                                 \
-        int rv;                                       \
-                                                      \
-        rv = raft_io_queue__push(&F->queue, ID);      \
-        munit_assert_int(rv, ==, 0);                  \
-                                                      \
-        *REQUEST = raft_io_queue_get(&F->queue, *ID); \
-        munit_assert_ptr_not_null(*REQUEST);          \
+#define __load(F)                                                          \
+    {                                                                      \
+        raft_term term;                                                    \
+        unsigned voted_for;                                                \
+        raft_index start_index;                                            \
+        struct raft_entry *entries;                                        \
+        size_t n_entries;                                                  \
+        int rv;                                                            \
+                                                                           \
+        rv = F->io.load(&F->io, &term, &voted_for, &start_index, &entries, \
+                        &n_entries);                                       \
+        munit_assert_int(rv, ==, 0);                                       \
     }
 
 /**
- * Submit an I/O request and check that no error occurred.x
- */
-#define __submit(F, ID)                \
-    {                                  \
-        int rv;                        \
-                                       \
-        rv = F->io.submit(&F->io, ID); \
-        munit_assert_int(rv, ==, 0);   \
-    }
-
-/**
- * Assert the current state of the raft instance of the given fixture.
- */
-#define __assert_state(F, STATE) munit_assert_int(F->raft.state, ==, STATE);
-
-/**
- * raft_io_sim__start
+ * raft_io_stub__start
  */
 
 /* When raft_io_stub_advance is called, the tick callback is invoked. */
-static MunitResult test_start_advance(const MunitParameter params[], void *data)
+static MunitResult test_start_tick(const MunitParameter params[], void *data)
 {
     struct fixture *f = data;
 
     (void)params;
 
-    __start(f, 500);
     __advance(f, 100);
 
-    munit_assert_int(f->elapsed, ==, 100);
+    munit_assert_true(f->tick_cb.invoked);
+    munit_assert_int(f->tick_cb.elapsed, ==, 100);
+
+    return MUNIT_OK;
+}
+
+/* Once the raft_io_uv instance is started, the recv callback is invoked when a
+ * message is received.. */
+static MunitResult test_start_recv(const MunitParameter params[], void *data)
+{
+    struct fixture *f = data;
+    struct raft_message message;
+
+    (void)params;
+
+    message.type = RAFT_IO_REQUEST_VOTE;
+    message.server_id = 2;
+    message.server_address = "2";
+
+    raft_io_stub_dispatch(&f->io, &message);
+
+    munit_assert_true(f->recv_cb.invoked);
+    munit_assert_int(f->recv_cb.message->type, ==, RAFT_IO_REQUEST_VOTE);
+    munit_assert_int(f->recv_cb.message->server_id, ==, 2);
+    munit_assert_string_equal(f->recv_cb.message->server_address, "2");
 
     return MUNIT_OK;
 }
 
 static MunitTest start_tests[] = {
-    {"/advance", test_start_advance, setup, tear_down, 0, NULL},
+    {"/tick", test_start_tick, setup, tear_down, 0, NULL},
+    {"/recv", test_start_recv, setup, tear_down, 0, NULL},
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 
 /**
- * raft_io_stub__submit
+ * raft_io_stub__load
  */
 
-static MunitResult test_bootstrap(const MunitParameter params[], void *data)
+/**
+ * Load the initial state of a pristine server.
+ */
+static MunitResult test_load_pristine(const MunitParameter params[], void *data)
 {
     struct fixture *f = data;
-    struct raft_configuration configuration;
-    unsigned request_id;
-    struct raft_io_request *request;
+    raft_term term;
+    unsigned voted_for;
+    raft_index start_index;
+    struct raft_entry *entries;
+    size_t n_entries;
     int rv;
 
     (void)params;
 
-    __push_io_request(f, &request_id, &request);
+    rv = f->io.load(&f->io, &term, &voted_for, &start_index, &entries,
+                    &n_entries);
+    munit_assert_int(rv, ==, 0);
 
-    request->type = RAFT_IO_BOOTSTRAP;
+    munit_assert_int(term, ==, 0);
+    munit_assert_int(voted_for, ==, 0);
+    munit_assert_int(start_index, ==, 1);
+    munit_assert_ptr_null(entries);
+    munit_assert_int(n_entries, ==, 0);
 
-    /* Create a configuration and encode it in the request */
+    return MUNIT_OK;
+}
+
+static MunitTest load_tests[] = {
+    {"/pristine", test_load_pristine, setup, tear_down, 0, NULL},
+    {NULL, NULL, NULL, NULL, 0, NULL},
+};
+
+/**
+ * raft_io_stub__bootstrap
+ */
+
+/**
+ * Bootstrap a pristine server.
+ */
+static MunitResult test_bootstrap_pristine(const MunitParameter params[],
+                                           void *data)
+{
+    struct fixture *f = data;
+    struct raft_configuration configuration;
+    int rv;
+
+    (void)params;
+
+    __load(f);
+
+    /* Create a configuration */
     raft_configuration_init(&configuration);
 
     rv = raft_configuration_add(&configuration, 1, "1", true);
     munit_assert_int(rv, ==, 0);
 
-    rv = raft_encode_configuration(&configuration,
-                                   &request->args.bootstrap.conf);
+    rv = f->io.bootstrap(&f->io, &configuration);
     munit_assert_int(rv, ==, 0);
 
     raft_configuration_close(&configuration);
 
-    /* Submit the bootstrap request */
-    __submit(f, request_id);
-
-    raft_free(request->args.bootstrap.conf.base);
-
-    /* The log has now one entry. */
-    request->type = RAFT_IO_READ_STATE;
-
-    __submit(f, request_id);
-
-    munit_assert_int(request->result.read_state.n, ==, 1);
-
-    raft_free(request->result.read_state.entries[0].batch);
-    raft_free(request->result.read_state.entries);
-
-    raft_io_queue__pop(&f->queue, request_id);
-
     return MUNIT_OK;
 }
 
-static MunitResult test_write_term(const MunitParameter params[], void *data)
+static MunitTest bootstrap_tests[] = {
+    {"/pristine", test_bootstrap_pristine, setup, tear_down, 0, NULL},
+    {NULL, NULL, NULL, NULL, 0, NULL},
+};
+
+/**
+ * raft_io_stub__set_term
+ */
+
+/**
+ * Set the term on a pristine store.
+ */
+static MunitResult test_set_term_pristine(const MunitParameter params[],
+                                          void *data)
 {
     struct fixture *f = data;
-    unsigned request_id;
-    struct raft_io_request *request;
+    int rv;
 
     (void)params;
 
-    __push_io_request(f, &request_id, &request);
+    __load(f);
 
-    request->type = RAFT_IO_WRITE_TERM;
-    request->args.write_term.term = 1;
-
-    __submit(f, request_id);
-
-    request->type = RAFT_IO_READ_STATE;
-
-    __submit(f, request_id);
-
-    munit_assert_int(request->result.read_state.term, ==, 1);
-    munit_assert_int(request->result.read_state.voted_for, ==, 0);
-
-    raft_io_queue__pop(&f->queue, request_id);
+    rv = f->io.set_term(&f->io, 1);
+    munit_assert_int(rv, ==, 0);
 
     return MUNIT_OK;
 }
 
-static MunitResult test_write_vote(const MunitParameter params[], void *data)
+static MunitTest set_term_tests[] = {
+    {"/pristine", test_set_term_pristine, setup, tear_down, 0, NULL},
+    {NULL, NULL, NULL, NULL, 0, NULL},
+};
+
+/**
+ * raft_io_stub__set_vote
+ */
+
+/**
+ * Set the vote on a pristine store.
+ */
+
+static MunitResult test_set_vote_pristine(const MunitParameter params[],
+                                          void *data)
 {
     struct fixture *f = data;
-    unsigned request_id;
-    struct raft_io_request *request;
+    int rv;
 
     (void)params;
 
-    __push_io_request(f, &request_id, &request);
+    __load(f);
 
-    request->type = RAFT_IO_WRITE_VOTE;
-    request->args.write_vote.server_id = 1;
+    rv = f->io.set_term(&f->io, 1);
+    munit_assert_int(rv, ==, 0);
 
-    __submit(f, request_id);
-
-    request->type = RAFT_IO_READ_STATE;
-
-    __submit(f, request_id);
-
-    munit_assert_int(request->result.read_state.term, ==, 0);
-    munit_assert_int(request->result.read_state.voted_for, ==, 1);
-    munit_assert_int(request->result.read_state.start_index, ==, 0);
-    munit_assert_int(request->result.read_state.n, ==, 0);
-
-    raft_io_queue__pop(&f->queue, request_id);
+    rv = f->io.set_vote(&f->io, 2);
+    munit_assert_int(rv, ==, 0);
 
     return MUNIT_OK;
 }
 
-static MunitResult test_write_log(const MunitParameter params[], void *data)
+static MunitTest set_vote_tests[] = {
+    {"/pristine", test_set_vote_pristine, setup, tear_down, 0, NULL},
+    {NULL, NULL, NULL, NULL, 0, NULL},
+};
+
+/**
+ * raft_io_stub__append
+ */
+
+/**
+ * Append entries on a pristine store.
+ */
+
+static MunitResult test_append_pristine(const MunitParameter params[],
+                                        void *data)
 {
     struct fixture *f = data;
-    unsigned request_id1;
-    unsigned request_id2;
-    struct raft_io_request *request1;
-    struct raft_io_request *request2;
     struct raft_entry entry;
-    struct raft_entry *entries;
+    int rv;
 
     (void)params;
 
-    __push_io_request(f, &request_id1, &request1);
+    __load(f);
 
     entry.term = 1;
     entry.type = RAFT_LOG_COMMAND;
@@ -272,53 +361,57 @@ static MunitResult test_write_log(const MunitParameter params[], void *data)
 
     ((char *)entry.buf.base)[0] = 'x';
 
-    request1->type = RAFT_IO_WRITE_LOG;
-    request1->args.write_log.entries = &entry;
-    request1->args.write_log.n = 1;
-
-    __submit(f, request_id1);
-
-    __push_io_request(f, &request_id2, &request2);
-
-    request2->type = RAFT_IO_READ_STATE;
-
-    __submit(f, request_id2);
-
-    /* This WRITE_LOG request is asynchronous, the entries have not been
-     * persited yet. */
-    munit_assert_int(request2->result.read_state.start_index, ==, 0);
-    munit_assert_int(request2->result.read_state.n, ==, 0);
+    rv = f->io.append(&f->io, &entry, 1, f, __append_cb);
+    munit_assert_int(rv, ==, 0);
 
     raft_io_stub_flush(&f->io);
 
-    /* The log has now one entry, which matches the one we wrote. */
-    request2->type = RAFT_IO_READ_STATE;
-
-    __submit(f, request_id2);
-
-    munit_assert_int(request2->result.read_state.n, ==, 1);
-
-    entries = request2->result.read_state.entries;
-    munit_assert_int(entries[0].buf.len, ==, 1);
-    munit_assert_int(((char *)entries[0].buf.base)[0], ==, 'x');
-    munit_assert_ptr_not_null(entries[0].batch);
-
-    raft_free(entries[0].batch);
-    raft_free(entries);
-
-    raft_io_queue__pop(&f->queue, request_id1);
-    raft_io_queue__pop(&f->queue, request_id2);
+    munit_assert_true(f->append_cb.invoked);
 
     free(entry.buf.base);
 
     return MUNIT_OK;
 }
 
-static MunitTest submit_tests[] = {
-    {"/bootstrap", test_bootstrap, setup, tear_down, 0, NULL},
-    {"/write-term", test_write_term, setup, tear_down, 0, NULL},
-    {"/write-vote", test_write_vote, setup, tear_down, 0, NULL},
-    {"/write-log", test_write_log, setup, tear_down, 0, NULL},
+/**
+ * raft_io_stub__send
+ */
+
+/**
+ * Send the very first message.
+ */
+
+static MunitResult test_send_first(const MunitParameter params[], void *data)
+{
+    struct fixture *f = data;
+    struct raft_message message;
+    int rv;
+
+    (void)params;
+
+    __load(f);
+
+    message.type = RAFT_IO_REQUEST_VOTE;
+    message.server_id = 2;
+    message.server_address = "2";
+
+    rv = f->io.send(&f->io, &message, f, __send_cb);
+    munit_assert_int(rv, ==, 0);
+
+    raft_io_stub_flush(&f->io);
+
+    munit_assert_true(f->send_cb.invoked);
+
+    return MUNIT_OK;
+}
+
+static MunitTest send_tests[] = {
+    {"/first", test_send_first, setup, tear_down, 0, NULL},
+    {NULL, NULL, NULL, NULL, 0, NULL},
+};
+
+static MunitTest append_tests[] = {
+    {"/pristine", test_append_pristine, setup, tear_down, 0, NULL},
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 
@@ -328,6 +421,11 @@ static MunitTest submit_tests[] = {
 
 MunitSuite raft_io_stub_suites[] = {
     {"/start", start_tests, NULL, 1, 0},
-    {"/submit", submit_tests, NULL, 1, 0},
+    {"/load", load_tests, NULL, 1, 0},
+    {"/bootstrap", bootstrap_tests, NULL, 1, 0},
+    {"/set-term", set_term_tests, NULL, 1, 0},
+    {"/set-vote", set_vote_tests, NULL, 1, 0},
+    {"/append", append_tests, NULL, 1, 0},
+    {"/send", send_tests, NULL, 1, 0},
     {NULL, NULL, NULL, 0, 0},
 };

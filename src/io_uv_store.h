@@ -59,10 +59,11 @@ struct raft_io_uv_prepared
 
 struct raft_io_uv_store
 {
-    char *dir;               /* Data directory */
-    size_t block_size;       /* File system block size */
-    size_t max_segment_size; /* Maximum segment size */
-    struct uv_loop_s *loop;  /* libuv loop to hook into */
+    struct raft_logger *logger; /* Logger to use */
+    const char *dir;            /* Data directory */
+    size_t block_size;          /* File system block size */
+    size_t max_segment_size;    /* Maximum segment size */
+    struct uv_loop_s *loop;     /* libuv loop to hook into */
 
     /* Cache of the last metadata file that was written (either metadata1 or
      * metadata2). */
@@ -81,7 +82,7 @@ struct raft_io_uv_store
         const struct raft_entry *entries; /* Entries being written */
         unsigned n;                       /* Number of entries */
         void *p;                          /* Callback context */
-        void (*cb)(void *p, const int status, const char *errmsg);
+        void (*cb)(void *p, const int status);
 
         /* Array of re-usable write buffers, each of block_size bytes. */
         uv_buf_t *bufs;
@@ -91,7 +92,6 @@ struct raft_io_uv_store
         struct raft_io_uv_prepared *segment;
 
         bool submitted;
-        char errmsg[RAFT_ERRMSG_SIZE];
         int status; /* Current result code */
 
         /* Index of the next entry to append. */
@@ -104,7 +104,6 @@ struct raft_io_uv_store
         struct uv_work_s work;               /* To run blocking syscalls. */
         struct raft_io_uv_prepared *segment; /* Segment being closed */
         int status;                          /* Current result code */
-        char errmsg[RAFT_ERRMSG_SIZE];       /* Current error message */
     } closer;
 
     /* Pool of prepared open segments */
@@ -122,9 +121,9 @@ struct raft_io_uv_store
 };
 
 int raft_io_uv_store__init(struct raft_io_uv_store *s,
-                           const char *dir,
+                           struct raft_logger *logger,
                            struct uv_loop_s *loop,
-                           char *errmsg);
+                           const char *dir);
 
 /**
  * Synchronously load all state from disk.
@@ -134,30 +133,25 @@ int raft_io_uv_store__load(struct raft_io_uv_store *s,
                            unsigned *voted_for,
                            raft_index *first_index,
                            struct raft_entry **entries,
-                           size_t *n,
-                           char *errmsg);
+                           size_t *n);
 
 /**
  * Synchronously write the given encoded configuration as first entry and set
  * the term to 1.
  */
 int raft_io_uv_store__bootstrap(struct raft_io_uv_store *s,
-                                const struct raft_buffer *conf,
-                                char *errmsg);
+                                const struct raft_configuration *configuration);
 
 /**
  * Synchronously persist the term in the given request.
  */
-int raft_io_uv_store__term(struct raft_io_uv_store *s,
-                           const raft_term term,
-                           char *errmsg);
+int raft_io_uv_store__term(struct raft_io_uv_store *s, const raft_term term);
 
 /**
  * Synchronously persist the vote in the given request.
  */
 int raft_io_uv_store__vote(struct raft_io_uv_store *s,
-                           const unsigned server_id,
-                           char *errmsg);
+                           const unsigned server_id);
 
 /**
  * Asynchronously persist the entries in the given request.
@@ -166,10 +160,7 @@ int raft_io_uv_store__entries(struct raft_io_uv_store *s,
                               const struct raft_entry *entries,
                               const unsigned n,
                               void *p,
-                              void (*cb)(void *p,
-                                         const int status,
-                                         const char *errmsg),
-                              char *errmsg);
+                              void (*cb)(void *p, const int status));
 
 /**
  * Stop any on-going write as soon as possible. Invoke @cb when the dust is

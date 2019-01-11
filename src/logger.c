@@ -9,7 +9,6 @@
 #define RAFT__DEFAULT_LOGGER_MSG_LEN 32
 
 static void raft__default_logger_emit(void *data,
-                                      struct raft_context *ctx,
                                       int level,
                                       const char *format,
                                       ...)
@@ -22,7 +21,6 @@ static void raft__default_logger_emit(void *data,
     int i;
 
     (void)data;
-    (void)ctx;
 
     memset(buf, 0, sizeof buf);
 
@@ -63,11 +61,11 @@ static void raft__default_logger_emit(void *data,
     cursor = buf + offset;
 
     /* Then render the context, possibly truncating it. */
-    n = sizeof buf - offset;
-    sprintf(cursor, " ");
-    cursor++;
-    n--;
-    raft_context_format(cursor, n, ctx);
+    /* n = sizeof buf - offset; */
+    /* sprintf(cursor, " "); */
+    /* cursor++; */
+    /* n--; */
+    /* raft_context_format(cursor, n, ctx); */
 
     fprintf(stderr, "%s\n", buf);
 }

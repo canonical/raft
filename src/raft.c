@@ -20,13 +20,15 @@ void raft_init(struct raft *r,
                struct raft_io *io,
                struct raft_fsm *fsm,
                void *data,
-               const unsigned id)
+               const unsigned id,
+	       const char *address)
 {
     int i;
 
     assert(r != NULL);
 
     r->id = id;
+    r->address = address;
     r->fsm = fsm;
 
     r->io_.data = NULL;

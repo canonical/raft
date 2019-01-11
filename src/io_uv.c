@@ -9,6 +9,7 @@
 
 #include "binary.h"
 #include "error.h"
+#include "io_uv_rpc.h"
 #include "io_uv_store.h"
 #include "logger.h"
 #include "uv_fs.h"
@@ -18,49 +19,75 @@
  */
 struct raft_io_uv
 {
-    struct raft_io_uv_store store; /* Implement on-disk persistance */
-    struct uv_loop_s *loop;        /* UV event loop */
-    struct uv_timer_s ticker;      /* Timer for periodic calls to raft_tick */
-    uint64_t last_tick;            /* Timestamp of the last raft_tick call */
+    struct raft_logger *logger;             /* Logger */
+    struct uv_loop_s *loop;                 /* UV event loop */
+    struct raft_io_uv_transport *transport; /* Network transport */
+    struct raft_io_uv_store store;          /* Implement on-disk persistance */
+    struct raft_io_uv_rpc rpc;              /* Implement network RPC */
+    struct uv_timer_s ticker;               /* Timer for periodic ticks */
+    uint64_t last_tick;                     /* Timestamp of the last tick */
+    char *dir;                              /* Data directory */
 
-    /* The file containing the entries for the current open segment. This must
-     * always be a valid file. */
-    struct raft_uv_file open_segment;
+    /* Track the number of active asynchronous operations that need to be
+     * completed before this backend can be considered fully stopped. */
+    unsigned n_active;
 
-    /* Parameters passed via raft_io->init */
-    const struct raft_io_queue *queue;                 /* Request queue */
-    struct raft_logger *logger;                        /* Logger */
-    void *p;                                           /* Custom data pointer */
-    void (*tick)(void *, const unsigned);              /* Tick function */
-    void (*notify)(void *, const unsigned, const int); /* Notify function */
+    struct
+    {
+        void *data;
+        void (*cb)(void *data, const unsigned msecs);
+    } tick;
 
-    unsigned write_log_request_id; /* ID of in-flight write-log request */
-
-    char *errmsg; /* Error message buffer */
-
-    void (*stop)(void *p);
+    struct
+    {
+        void *data;
+        void (*cb)(void *data);
+    } stop;
 };
 
 /**
  * Initializer.
  */
-static void raft_io_uv__init(const struct raft_io *io,
-                             const struct raft_io_queue *queue,
-                             struct raft_logger *logger,
-                             void *p,
-                             void (*tick)(void *, const unsigned),
-                             void (*notify)(void *, const unsigned, const int))
+static int raft_io_uv__init(const struct raft_io *io,
+                            struct raft_logger *logger,
+                            unsigned id,
+                            const char *address)
 {
     struct raft_io_uv *uv;
+    int rv;
 
     uv = io->data;
 
-    uv->queue = queue;
     uv->logger = logger;
-    uv->p = p;
-    uv->tick = tick;
-    uv->notify = notify;
-    uv->stop = NULL;
+    uv->n_active = 0;
+    uv->tick.data = NULL;
+    uv->tick.cb = NULL;
+    uv->stop.data = NULL;
+    uv->stop.cb = NULL;
+
+    rv = raft_io_uv_store__init(&uv->store, logger, uv->loop, uv->dir);
+    if (rv != 0) {
+        goto err;
+    }
+
+    rv = raft_io_uv_rpc__init(&uv->rpc, logger, uv->loop, uv->transport, id,
+                              address);
+    if (rv != 0) {
+        goto err_after_store_init;
+    }
+
+    return 0;
+
+err_after_store_init:
+    raft_io_uv_store__close(&uv->store);
+
+err:
+    assert(rv != 0);
+
+    raft_free(uv->dir);
+    raft_free(uv);
+
+    return rv;
 }
 
 /**
@@ -77,7 +104,7 @@ static void raft_io_uv__ticker_cb(uv_timer_t *ticker)
     now = uv_now(uv->loop);
 
     /* Invoke the ticker */
-    uv->tick(uv->p, now - uv->last_tick);
+    uv->tick.cb(uv->tick.data, now - uv->last_tick);
 
     /* Update the last tick timestamp */
     uv->last_tick = now;
@@ -86,17 +113,27 @@ static void raft_io_uv__ticker_cb(uv_timer_t *ticker)
 /**
  * Start the backend.
  */
-static int raft_io_uv__start(const struct raft_io *io, const unsigned msecs)
+static int raft_io_uv__start(const struct raft_io *io,
+                             unsigned msecs,
+                             void *data,
+                             void (*tick)(void *data, unsigned elapsed),
+                             void (*recv)(void *data, struct raft_message *msg))
 {
     struct raft_io_uv *uv;
     int rv;
 
     uv = io->data;
 
+    assert(uv->tick.data == NULL);
+    assert(uv->tick.cb == NULL);
+
+    uv->tick.data = data;
+    uv->tick.cb = tick;
+
     /* Initialize the tick timer handle. */
     rv = uv_timer_init(uv->loop, &uv->ticker);
     if (rv != 0) {
-        raft_errorf(uv->errmsg, "init tick timer: %s", uv_strerror(rv));
+        raft_errorf_(uv->logger, "uv_timer_init: %s", uv_strerror(rv));
         return RAFT_ERR_IO;
     }
     uv->ticker.data = uv;
@@ -104,43 +141,97 @@ static int raft_io_uv__start(const struct raft_io *io, const unsigned msecs)
     /* Start the tick timer handle. */
     rv = uv_timer_start(&uv->ticker, raft_io_uv__ticker_cb, 0, msecs);
     if (rv != 0) {
-        raft_errorf(uv->errmsg, "start tick timer: %s", uv_strerror(rv));
+        raft_errorf_(uv->logger, "uv_timer_start: %s", uv_strerror(rv));
         return RAFT_ERR_IO;
     }
+    uv->n_active++;
+
+    /* The log store doesn't need to be started, but it needs to be stop, so we
+     * consider it as "active. */
+    uv->n_active++;
+
+    rv = raft_io_uv_rpc__start(&uv->rpc, data, recv);
+    if (rv != 0) {
+        uv_close((struct uv_handle_s *)&uv->ticker, NULL);
+        return rv;
+    }
+    uv->n_active++;
 
     return 0;
+}
+
+/**
+ * Invoke the stop callback if we were asked to be stopped and there are no more
+ * pending asynchronous activities.
+ */
+static void raft_io_uv__maybe_stopped(struct raft_io_uv *uv)
+{
+    if (uv->stop.cb != NULL && uv->n_active == 0) {
+        uv->stop.cb(uv->stop.data);
+
+        uv->stop.data = NULL;
+        uv->stop.cb = NULL;
+    }
+}
+
+static void raft_io_uv__ticker_close_cb(uv_handle_t *handle)
+{
+    struct raft_io_uv *uv = handle->data;
+
+    uv->n_active--;
+
+    raft_io_uv__maybe_stopped(uv);
 }
 
 static void raft_io_uv__store_stop_cb(void *p)
 {
     struct raft_io_uv *uv = p;
 
-    uv->stop(uv->p);
+    uv->n_active--;
+
+    raft_io_uv__maybe_stopped(uv);
+}
+
+static void raft_io_uv__rpc_stop_cb(void *p)
+{
+    struct raft_io_uv *uv = p;
+
+    uv->n_active--;
+
+    raft_io_uv__maybe_stopped(uv);
 }
 
 /**
  * Stop the backend.
  */
-static int raft_io_uv__stop(const struct raft_io *io, void (*cb)(void *p))
+static int raft_io_uv__stop(const struct raft_io *io,
+                            void *data,
+                            void (*cb)(void *p))
 {
     struct raft_io_uv *uv;
     int rv;
 
     uv = io->data;
 
+    assert(uv->stop.data == NULL);
+    assert(uv->stop.cb == NULL);
+
+    uv->stop.data = data;
+    uv->stop.cb = cb;
+
     /* Stop the tick timer handle. */
     rv = uv_timer_stop(&uv->ticker);
     if (rv != 0) {
-        raft_errorf(uv->errmsg, "stop tick timer: %s", uv_strerror(rv));
+        raft_errorf_(uv->logger, "uv_stop_timer: %s", uv_strerror(rv));
         return RAFT_ERR_INTERNAL;
     }
 
     /* Close the ticker timer handle. */
-    uv_close((uv_handle_t *)&uv->ticker, NULL);
-
-    uv->stop = cb;
+    uv_close((uv_handle_t *)&uv->ticker, raft_io_uv__ticker_close_cb);
 
     raft_io_uv_store__stop(&uv->store, uv, raft_io_uv__store_stop_cb);
+
+    raft_io_uv_rpc__stop(&uv->rpc, uv, raft_io_uv__rpc_stop_cb);
 
     return 0;
 }
@@ -155,112 +246,85 @@ static void raft_io_uv__close(const struct raft_io *io)
     uv = io->data;
 
     raft_io_uv_store__close(&uv->store);
+    raft_io_uv_rpc__close(&uv->rpc);
+
+    raft_free(uv->dir);
     raft_free(uv);
 }
 
-static int raft_io_uv__read_state(struct raft_io_uv *uv,
-                                  struct raft_io_request *request)
+static int raft_io_uv__load(const struct raft_io *io,
+                            raft_term *term,
+                            unsigned *voted_for,
+                            raft_index *start_index,
+                            struct raft_entry **entries,
+                            size_t *n_entries)
 {
-    return raft_io_uv_store__load(&uv->store, &request->result.read_state.term,
-                                  &request->result.read_state.voted_for,
-                                  &request->result.read_state.start_index,
-                                  &request->result.read_state.entries,
-                                  &request->result.read_state.n, uv->errmsg);
-}
-
-static int raft_io_uv__bootstrap(struct raft_io_uv *uv,
-                                 struct raft_io_request *request)
-{
-    return raft_io_uv_store__bootstrap(
-        &uv->store, &request->args.bootstrap.conf, uv->errmsg);
-}
-
-static int raft_io_uv__write_term(struct raft_io_uv *uv,
-                                  struct raft_io_request *request)
-{
-    return raft_io_uv_store__term(&uv->store, request->args.write_term.term,
-                                  uv->errmsg);
-}
-
-static int raft_io_uv__write_vote(struct raft_io_uv *uv,
-                                  struct raft_io_request *request)
-{
-    return raft_io_uv_store__vote(
-        &uv->store, request->args.write_vote.server_id, uv->errmsg);
-}
-
-static void raft_io_uv__write_log_cb(void *p,
-                                     const int status,
-                                     const char *errmsg)
-{
-    struct raft_io_uv *uv = p;
-    unsigned request_id = uv->write_log_request_id;
-
-    (void)errmsg;
-
-    assert(request_id > 0);
-
-    uv->write_log_request_id = 0; /* The request has been completed */
-
-    uv->notify(uv->p, request_id, status);
-}
-
-static int raft_io_uv__write_log(struct raft_io_uv *uv,
-                                 struct raft_io_request *request,
-                                 const unsigned request_id)
-{
-    if (uv->write_log_request_id != 0) {
-        return RAFT_ERR_IO_BUSY;
-    }
-
-    uv->write_log_request_id = request_id;
-
-    return raft_io_uv_store__entries(
-        &uv->store, request->args.write_log.entries, request->args.write_log.n,
-        uv, raft_io_uv__write_log_cb, uv->errmsg);
-}
-
-static int raft_io_uv__submit(const struct raft_io *io,
-                              const unsigned request_id)
-{
-    struct raft_io_request *request;
     struct raft_io_uv *uv;
-    int rv;
-
-    assert(io != NULL);
 
     uv = io->data;
 
-    /* Get the request object */
-    request = raft_io_queue_get(uv->queue, request_id);
-
-    assert(request != NULL);
-
-    /* Dispatch the request */
-    switch (request->type) {
-        case RAFT_IO_READ_STATE:
-            rv = raft_io_uv__read_state(uv, request);
-            break;
-        case RAFT_IO_BOOTSTRAP:
-            rv = raft_io_uv__bootstrap(uv, request);
-            break;
-        case RAFT_IO_WRITE_TERM:
-            rv = raft_io_uv__write_term(uv, request);
-            break;
-        case RAFT_IO_WRITE_VOTE:
-            rv = raft_io_uv__write_vote(uv, request);
-            break;
-        case RAFT_IO_WRITE_LOG:
-            rv = raft_io_uv__write_log(uv, request, request_id);
-            break;
-        default:
-            assert(0);
-    }
-
-    return rv;
+    return raft_io_uv_store__load(&uv->store, term, voted_for, start_index,
+                                  entries, n_entries);
 }
 
-int raft_io_uv_init(struct raft_io *io, struct uv_loop_s *loop, const char *dir)
+static int raft_io_uv__bootstrap(const struct raft_io *io,
+                                 const struct raft_configuration *conf)
+{
+    struct raft_io_uv *uv;
+
+    uv = io->data;
+
+    return raft_io_uv_store__bootstrap(&uv->store, conf);
+}
+
+static int raft_io_uv__set_term(struct raft_io *io, const raft_term term)
+{
+    struct raft_io_uv *uv;
+
+    uv = io->data;
+
+    return raft_io_uv_store__term(&uv->store, term);
+}
+
+static int raft_io_uv__set_vote(struct raft_io *io, const unsigned server_id)
+{
+    struct raft_io_uv *uv;
+
+    uv = io->data;
+
+    return raft_io_uv_store__vote(&uv->store, server_id);
+}
+
+static int raft_io_uv__append(const struct raft_io *io,
+                              const struct raft_entry entries[],
+                              unsigned n,
+                              void *data,
+                              void (*cb)(void *data, int status))
+{
+    struct raft_io_uv *uv;
+
+    uv = io->data;
+
+    return raft_io_uv_store__entries(&uv->store, entries, n, data, cb);
+}
+
+static int raft_io_uv__send(const struct raft_io *io,
+                            const struct raft_message *message,
+                            void *data,
+                            void (*cb)(void *data, int status))
+{
+    struct raft_io_uv *uv;
+
+    uv = io->data;
+
+    return raft_io_uv_rpc__send(&uv->rpc, message, data, cb);
+}
+
+int raft_io_uv_init(struct raft_io *io,
+                    struct raft_logger *logger,
+                    struct uv_loop_s *loop,
+                    const char *dir,
+                    struct raft_io_uv_transport *transport)
 {
     struct raft_io_uv *uv;
     int rv;
@@ -272,26 +336,46 @@ int raft_io_uv_init(struct raft_io *io, struct uv_loop_s *loop, const char *dir)
     /* Allocate the raft_io_uv object */
     uv = raft_malloc(sizeof *uv);
     if (uv == NULL) {
-        raft_errorf(io->errmsg, "can't allocate I/O implementation instance");
-        return RAFT_ERR_NOMEM;
+        rv = RAFT_ERR_NOMEM;
+        goto err;
     }
 
+    uv->logger = logger;
     uv->loop = loop;
-    uv->last_tick = 0;
-    uv->errmsg = io->errmsg;
+    uv->transport = transport;
 
-    rv = raft_io_uv_store__init(&uv->store, dir, loop, uv->errmsg);
-    if (rv != 0) {
-        raft_free(uv);
-        return RAFT_ERR_NOMEM;
+    /* Make a copy of the directory string, stripping any trailing slash */
+    uv->dir = raft_malloc(strlen(dir) + 1);
+    if (uv->dir == NULL) {
+        rv = RAFT_ERR_NOMEM;
+        goto err_after_uv_alloc;
     }
+    strcpy(uv->dir, dir);
+
+    if (uv->dir[strlen(uv->dir) - 1] == '/') {
+        uv->dir[strlen(uv->dir) - 1] = 0;
+    }
+
+    uv->last_tick = 0;
 
     io->data = uv;
     io->init = raft_io_uv__init;
+    io->close = raft_io_uv__close;
     io->start = raft_io_uv__start;
     io->stop = raft_io_uv__stop;
-    io->close = raft_io_uv__close;
-    io->submit = raft_io_uv__submit;
+    io->load = raft_io_uv__load;
+    io->bootstrap = raft_io_uv__bootstrap;
+    io->set_term = raft_io_uv__set_term;
+    io->set_vote = raft_io_uv__set_vote;
+    io->append = raft_io_uv__append;
+    io->send = raft_io_uv__send;
 
     return 0;
+
+err_after_uv_alloc:
+    raft_free(uv);
+
+err:
+    assert(rv != 0);
+    return rv;
 }
