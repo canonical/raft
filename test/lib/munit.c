@@ -153,6 +153,11 @@ static MUNIT_THREAD_LOCAL bool munit_error_jmp_buf_valid = false;
 static MUNIT_THREAD_LOCAL jmp_buf munit_error_jmp_buf;
 #endif
 
+#if defined(MUNIT_THREAD_LOCAL) && defined(MUNIT_ALWAYS_TEAR_DOWN)
+static MUNIT_THREAD_LOCAL bool munit_tear_down_jmp_buf_valid = false;
+static MUNIT_THREAD_LOCAL jmp_buf munit_tear_down_jmp_buf;
+#endif
+
 /* At certain warning levels, mingw will trigger warnings about
  * suggesting the format attribute, which we've explicity *not* set
  * because it will then choke on our attempts to use the MS-specific
@@ -234,6 +239,11 @@ munit_errorf_ex(const char* filename, int line, const char* format, ...) {
   va_start(ap, format);
   munit_logf_exv(MUNIT_LOG_ERROR, stderr, filename, line, format, ap);
   va_end(ap);
+
+#if defined(MUNIT_THREAD_LOCAL) && defined(MUNIT_ALWAYS_TEAR_DOWN)
+  if (munit_tear_down_jmp_buf_valid)
+    longjmp(munit_tear_down_jmp_buf, 1);
+#endif
 
 #if defined(MUNIT_THREAD_LOCAL)
   if (munit_error_jmp_buf_valid)
@@ -1192,6 +1202,18 @@ munit_test_runner_exec(MunitTestRunner* runner, const MunitTest* test, const Mun
     psnip_clock_get_time(PSNIP_CLOCK_TYPE_CPU, &cpu_clock_begin);
 #endif
 
+#if defined(MUNIT_THREAD_LOCAL) && defined(MUNIT_ALWAYS_TEAR_DOWN)
+  if (test->tear_down != NULL) {
+    if (MUNIT_UNLIKELY(setjmp(munit_tear_down_jmp_buf) != 0)) {
+      munit_tear_down_jmp_buf_valid = false;
+      test->tear_down(data);
+      longjmp(munit_error_jmp_buf, 1);
+    } else {
+      munit_tear_down_jmp_buf_valid = true;
+    }
+  }
+#endif
+
     result = test->test(params, data);
 
 #if defined(MUNIT_ENABLE_TIMING)
@@ -1199,8 +1221,12 @@ munit_test_runner_exec(MunitTestRunner* runner, const MunitTest* test, const Mun
     psnip_clock_get_time(PSNIP_CLOCK_TYPE_CPU, &cpu_clock_end);
 #endif
 
-    if (test->tear_down != NULL)
+    if (test->tear_down != NULL) {
+#if defined(MUNIT_THREAD_LOCAL) && defined(MUNIT_ALWAYS_TEAR_DOWN)
+      munit_tear_down_jmp_buf_valid = false;
+#endif
       test->tear_down(data);
+    }
 
     if (MUNIT_LIKELY(result == MUNIT_OK)) {
       report->successful++;
