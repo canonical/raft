@@ -115,8 +115,7 @@ if IO_STUB
   unit_test_SOURCES += \
   test/unit/test_io_stub.c
 endif
-unit_test_CFLAGS = $(AM_CFLAGS) -DMUNIT_TEST_NAME_LEN=47
-#-DMUNIT_NO_FORK
+unit_test_CFLAGS = $(AM_CFLAGS) -DMUNIT_TEST_NAME_LEN=47 -DMUNIT_NO_FORK -DMUNIT_ALWAYS_TEAR_DOWN
 unit_test_CFLAGS += -I$(top_srcdir)/tests/unit
 unit_test_LDADD = libraft.la
 unit_test_LDFLAGS =
