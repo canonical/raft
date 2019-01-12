@@ -85,7 +85,8 @@ test_lib_SOURCES = \
   test/lib/munit.c \
   test/lib/raft.c
 
-unit_test_SOURCES = $(test_lib_SOURCES)
+unit_test_SOURCES = $(libraft_la_SOURCES)
+unit_test_SOURCES += $(test_lib_SOURCES)
 unit_test_SOURCES += \
   test/unit/main.c \
   test/unit/test_checksum.c \
@@ -115,9 +116,8 @@ if IO_STUB
   unit_test_SOURCES += \
   test/unit/test_io_stub.c
 endif
-unit_test_CFLAGS = $(AM_CFLAGS) -DMUNIT_TEST_NAME_LEN=47 -DMUNIT_NO_FORK -DMUNIT_ALWAYS_TEAR_DOWN
+unit_test_CFLAGS = $(AM_CFLAGS) -DRAFT_TEST -DMUNIT_TEST_NAME_LEN=47 -DMUNIT_NO_FORK -DMUNIT_ALWAYS_TEAR_DOWN
 unit_test_CFLAGS += -I$(top_srcdir)/tests/unit
-unit_test_LDADD = libraft.la
 unit_test_LDFLAGS =
 if IO_UV
   unit_test_LDFLAGS += $(UV_LIBS)
