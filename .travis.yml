@@ -1,14 +1,27 @@
+dist: trusty
+sudo: required
 language: c
+before_install:
+  - sudo add-apt-repository ppa:dqlite-maintainers/master -y
+  - sudo apt-add-repository ppa:zfs-native/stable -y
+  - sudo apt-get update -q
+  - sudo apt-get install xfslibs-dev -y
+  - sudo apt-get install libuv1-dev -y
+  - sudo apt-get install linux-headers-$(uname -r) -y
+  - sudo apt-get install ubuntu-zfs -y
+  - sudo modprobe zfs
 compiler:
   - clang
   - gcc
 script:
   - autoreconf -i
-  - ./configure --enable-debug --enable-coverage
+  - ./configure --enable-debug --enable-coverage --enable-io-stub --enable-io-uv --enable-example
   - make
   - make ./unit-test
   - make ./integration-test
+  - ./test/lib/fs.sh setup
   - ./unit-test
   - ./integration-test
+  - ./test/lib/fs.sh teardown
 after_success:
   - bash <(curl -s https://codecov.io/bash) -G "./src*"

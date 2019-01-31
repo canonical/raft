@@ -25,3 +25,5 @@ test-suite.log
 tests/main_test.c
 coverage/
 TAGS
+example-server
+tmp

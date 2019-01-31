@@ -76,6 +76,24 @@ static void *test__realloc(void *data, void *ptr, size_t size)
     return ptr;
 }
 
+static void *test__aligned_alloc(void *data, size_t alignment, size_t size)
+{
+    struct test__heap *t = data;
+    void *p;
+
+    if (test_fault_tick(&t->fault)) {
+        return NULL;
+    }
+
+    t->n++;
+
+    p = aligned_alloc(alignment, size);
+
+    munit_assert_ptr_not_null(p);
+
+    return p;
+}
+
 void test_heap_setup(const MunitParameter params[], struct raft_heap *h)
 {
     struct test__heap *t = munit_malloc(sizeof *t);
@@ -98,6 +116,7 @@ void test_heap_setup(const MunitParameter params[], struct raft_heap *h)
     h->free = test__free;
     h->calloc = test__calloc;
     h->realloc = test__realloc;
+    h->aligned_alloc = test__aligned_alloc;
 
     raft_heap_set(h);
 

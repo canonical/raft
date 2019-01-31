@@ -2,6 +2,7 @@ ACLOCAL_AMFLAGS = -I m4
 AUTOMAKE_OPTIONS = foreign subdir-objects
 
 lib_LTLIBRARIES =
+bin_PROGRAMS =
 check_PROGRAMS =
 EXTRA_DIST =
 noinst_HEADERS =
@@ -12,24 +13,28 @@ pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = raft.pc
 
 AM_CFLAGS += -I$(top_srcdir)/include -Wall
+if IO_UV
+  AM_CFLAGS += $(UV_CFLAGS)
+endif
 if DEBUG
-  AM_CFLAGS += -DRAFT_ENABLE_DEBUG_LOGGING
+  AM_CFLAGS +=
 else
   AM_CFLAGS += -Werror
 endif
 if COVERAGE
-  AM_CFLAGS += -fprofile-arcs -ftest-coverage -DRAFT_COVERAGE
+  AM_CFLAGS += -fprofile-arcs -ftest-coverage
 endif
 if SANITIZE
   AM_CFLAGS += -fsanitize=address
 endif
-if EXPERIMENTAL
-  AM_CFLAGS += -DRAFT_EXPERIMENTAL
-endif
 
 lib_LTLIBRARIES += libraft.la
 libraft_la_LDFLAGS = -version-info 0:7:0
+if IO_UV
+  libraft_la_LDFLAGS += $(UV_LIBS)
+endif
 libraft_la_SOURCES = \
+  src/checksum.c \
   src/client.c \
   src/configuration.c \
   src/context.c \
@@ -38,6 +43,7 @@ libraft_la_SOURCES = \
   src/error.c \
   src/heap.c \
   src/io.c \
+  src/io_queue.c \
   src/log.c \
   src/logger.c \
   src/membership.c \
@@ -50,6 +56,18 @@ libraft_la_SOURCES = \
   src/state.c \
   src/tick.c \
   src/watch.c
+if IO_UV
+  libraft_la_SOURCES += \
+  src/io_uv.c \
+  src/io_uv_encoding.c \
+  src/io_uv_rpc.c \
+  src/io_uv_store.c \
+  src/uv_fs.c
+endif
+if IO_STUB
+  libraft_la_SOURCES += \
+  src/io_stub.c
+endif
 include_HEADERS += \
   include/raft.h
 
@@ -60,17 +78,26 @@ check_PROGRAMS += \
 test_lib_SOURCES = \
   test/lib/cluster.c \
   test/lib/fault.c \
+  test/lib/fs.c \
   test/lib/heap.c \
   test/lib/io.c \
   test/lib/fsm.c \
   test/lib/logger.c \
-  test/lib/network.c \
   test/lib/munit.c \
-  test/lib/raft.c
+  test/lib/network.c \
+  test/lib/raft.c \
+  test/lib/tcp.c
+if IO_UV
+test_lib_SOURCES += \
+  test/lib/uv.c
+endif
 
-unit_test_SOURCES = $(test_lib_SOURCES)
+unit_test_SOURCES = $(libraft_la_SOURCES)
+unit_test_SOURCES += \
+  $(test_lib_SOURCES)
 unit_test_SOURCES += \
   test/unit/main.c \
+  test/unit/test_checksum.c \
   test/unit/test_client.c \
   test/unit/test_configuration.c \
   test/unit/test_election.c \
@@ -81,16 +108,30 @@ unit_test_SOURCES += \
   test/unit/test_context.c \
   test/unit/test_io.c \
   test/unit/test_queue.c \
+  test/unit/test_io_queue.c \
   test/unit/test_raft.c \
   test/unit/test_replication.c \
   test/unit/test_rpc_request_vote.c \
   test/unit/test_rpc_append_entries.c \
   test/unit/test_tick.c
-unit_test_CFLAGS = $(AM_CFLAGS) -DMUNIT_TEST_NAME_LEN=47
-#-DMUNIT_NO_FORK
+if IO_UV
+  unit_test_SOURCES += \
+  test/unit/test_io_uv.c \
+  test/unit/test_io_uv_encoding.c \
+  test/unit/test_io_uv_rpc.c \
+  test/unit/test_io_uv_store.c \
+  test/unit/test_uv_fs.c
+endif
+if IO_STUB
+  unit_test_SOURCES += \
+  test/unit/test_io_stub.c
+endif
+unit_test_CFLAGS = $(AM_CFLAGS) -DRAFT_TEST -DMUNIT_TEST_NAME_LEN=47
 unit_test_CFLAGS += -I$(top_srcdir)/tests/unit
-unit_test_LDADD = libraft.la
 unit_test_LDFLAGS =
+if IO_UV
+  unit_test_LDFLAGS += $(UV_LIBS)
+endif
 
 integration_test_SOURCES = $(test_lib_SOURCES)
 integration_test_SOURCES += \
@@ -104,6 +145,9 @@ integration_test_CFLAGS = $(AM_CFLAGS)
 integration_test_CFLAGS += -I$(top_srcdir)/tests/integration
 integration_test_LDADD = libraft.la
 integration_test_LDFLAGS =
+if IO_UV
+  integration_test_LDFLAGS += $(UV_LIBS)
+endif
 
 TESTS = unit-test integration-test
 
@@ -141,4 +185,16 @@ if LLVM_COV
 endif
 if COVERAGE
 	@make cov-report
+endif
+
+if EXAMPLE
+
+bin_PROGRAMS += example-server
+example_server_SOURCES = \
+  example/server.c
+example_server_CFLAGS = $(AM_CFLAGS)
+example_server_CFLAGS += -I$(top_srcdir)/example
+example_server_LDADD = libraft.la
+example_server_LDFLAGS = $(UV_LIBS)
+
 endif

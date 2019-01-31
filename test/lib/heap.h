@@ -1,7 +1,5 @@
 /**
- *
  * Add support for fault injection and leak detection to stdlib's malloc() family.
- *
  */
 
 #ifndef TEST_HEAP_H

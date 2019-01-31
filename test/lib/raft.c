@@ -41,6 +41,8 @@ void test_load(struct raft *r)
     munit_assert_int(r->configuration.n, >, 0);
 
     r->configuration_index = 1;
+
+    r->state = RAFT_STATE_FOLLOWER;
 }
 
 void test_bootstrap_and_load(struct raft *r,

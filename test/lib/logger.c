@@ -12,7 +12,6 @@ struct test_logger
 };
 
 static void test_logger__emit(void *data,
-                              struct raft_context *ctx,
                               int level,
                               const char *format,
                               ...)
@@ -58,7 +57,7 @@ static void test_logger__emit(void *data,
         buf[i] = ' ';
     }
 
-    raft_context_format(buf + 85, 1024 - strlen(buf), ctx);
+    //raft_context_format(buf + 85, 1024 - strlen(buf), ctx);
 
     munit_log(MUNIT_LOG_INFO, buf);
 }

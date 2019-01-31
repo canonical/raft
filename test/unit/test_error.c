@@ -28,6 +28,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     unsigned id = 1;
+    const char *address = "1";
 
     (void)user_data;
 
@@ -39,7 +40,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 
     test_fsm_setup(params, &f->fsm);
 
-    raft_init(&f->raft, &f->io, &f->fsm, f, id);
+    raft_init(&f->raft, &f->io, &f->fsm, f, id, address);
 
     raft_set_logger(&f->raft, &f->logger);
 
@@ -64,11 +65,94 @@ static void tear_down(void *data)
 }
 
 /**
- * raft_context__wrapf
+ * raft_errorf
+ */
+
+/* Render an error message without parameters. */
+static MunitResult test_errorf_plain(const MunitParameter params[], void *data)
+{
+    char errmsg[RAFT_ERRMSG_SIZE];
+
+    (void)data;
+    (void)params;
+
+    raft_errorf(errmsg, "boom");
+    munit_assert_string_equal("boom", errmsg);
+
+    return MUNIT_OK;
+}
+
+/* Render an error message with parameters. */
+static MunitResult test_errorf_params(const MunitParameter params[], void *data)
+{
+    char errmsg[RAFT_ERRMSG_SIZE];
+
+    (void)data;
+    (void)params;
+
+    raft_errorf(errmsg, "boom %d", 123);
+    munit_assert_string_equal("boom 123", errmsg);
+
+    return MUNIT_OK;
+}
+
+static MunitTest errorf_tests[] = {
+    {"plain", test_errorf_plain, NULL, NULL, 0, NULL},
+    {"params", test_errorf_params, NULL, NULL, 0, NULL},
+    {NULL, NULL, NULL, NULL, 0, NULL},
+};
+
+
+/**
+ * raft_errorf
+ */
+
+/* Wrap an error message without parameters. */
+static MunitResult test_wrapf_plain(const MunitParameter params[], void *data)
+{
+    char errmsg[RAFT_ERRMSG_SIZE];
+
+    (void)data;
+    (void)params;
+
+    raft_errorf(errmsg, "boom");
+
+    raft_wrapf(errmsg, "do stuff");
+
+    munit_assert_string_equal("do stuff: boom", errmsg);
+
+    return MUNIT_OK;
+}
+
+/* Wrap an error message with parameters. */
+static MunitResult test_wrapf_params(const MunitParameter params[], void *data)
+{
+    char errmsg[RAFT_ERRMSG_SIZE];
+
+    (void)data;
+    (void)params;
+
+    raft_errorf(errmsg, "boom");
+
+    raft_wrapf(errmsg, "do stuff %d", 123);
+
+    munit_assert_string_equal("do stuff 123: boom", errmsg);
+
+    return MUNIT_OK;
+}
+
+static MunitTest wrapf_tests[] = {
+    {"plain", test_wrapf_plain, NULL, NULL, 0, NULL},
+    {"params", test_wrapf_params, NULL, NULL, 0, NULL},
+    {NULL, NULL, NULL, NULL, 0, NULL},
+};
+
+/**
+ * raft_error__printf
  */
 
 /* Wrap an error message. */
-static MunitResult test_wrapf(const MunitParameter params[], void *data)
+static MunitResult test_printf(const MunitParameter params[], void *data)
 {
     struct fixture *f = data;
 
@@ -83,8 +167,8 @@ static MunitResult test_wrapf(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
-static MunitTest wrapf_tests[] = {
-    {"", test_wrapf, setup, tear_down, 0, NULL},
+static MunitTest printf_tests[] = {
+    {"", test_printf, setup, tear_down, 0, NULL},
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 
@@ -93,6 +177,8 @@ static MunitTest wrapf_tests[] = {
  */
 
 MunitSuite raft_error_suites[] = {
+    {"/errorf", errorf_tests, NULL, 1, 0},
     {"/wrapf", wrapf_tests, NULL, 1, 0},
+    {"/printf", printf_tests, NULL, 1, 0},
     {NULL, NULL, NULL, 0, 0},
 };

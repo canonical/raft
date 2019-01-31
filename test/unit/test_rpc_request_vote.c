@@ -128,6 +128,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     uint64_t id = 1;
+    const char *address = "1";
 
     (void)user_data;
 
@@ -139,7 +140,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 
     test_fsm_setup(params, &f->fsm);
 
-    raft_init(&f->raft, &f->io, &f->fsm, f, id);
+    raft_init(&f->raft, &f->io, &f->fsm, f, id, address);
 
     raft_set_logger(&f->raft, &f->logger);
 
@@ -308,7 +309,9 @@ static MunitResult test_req_empty_log(const MunitParameter params[], void *data)
     __configuration_add(f, 1, "1", true);
     __configuration_add(f, 2, "2", true);
 
-    __handle_request_vote(f, f->raft.current_term + 1, 2, 1, 1);
+     f->raft.state = RAFT_STATE_FOLLOWER;
+
+     __handle_request_vote(f, f->raft.current_term + 1, 2, 1, 1);
 
     /* The request is successful */
     __assert_request_vote_result(f, 1, true);

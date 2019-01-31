@@ -9,11 +9,8 @@
 #include "state.h"
 #include "watch.h"
 
-const char *raft_state_names[] = {
-    "follower",
-    "candidate",
-    "leader",
-};
+const char *raft_state_names[] = {"unavailable", "follower", "candidate",
+                                  "leader"};
 
 /**
  * Clear follower state.
@@ -68,7 +65,8 @@ static void raft_state__clear_leader(struct raft *r)
 void raft_state__clear(struct raft *r)
 {
     assert(r != NULL);
-    assert(r->state == RAFT_STATE_FOLLOWER ||
+    assert(r->state == RAFT_STATE_UNAVAILABLE ||
+           r->state == RAFT_STATE_FOLLOWER ||
            r->state == RAFT_STATE_CANDIDATE || r->state == RAFT_STATE_LEADER);
 
     switch (r->state) {

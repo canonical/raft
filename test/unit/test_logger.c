@@ -1,5 +1,3 @@
-#define _GNU_SOURCE
-
 #include <stdio.h>
 
 #include "../../include/raft.h"
@@ -9,15 +7,15 @@
 #include "../lib/munit.h"
 
 /**
- *
  * Helpers
- *
  */
 
 struct fixture
 {
-    struct raft_logger logger;
+    unsigned short state;
+    raft_term current_term;
     struct raft_context ctx;
+    struct raft_logger logger;
     struct
     {
         int level;
@@ -25,17 +23,13 @@ struct fixture
     } last; /* Last message emitted. */
 };
 
-static void fixture__emit(void *data,
-                   struct raft_context *ctx,
-                   int level,
-                   const char *format,
-                   ...)
+static void fixture__emit(void *data, int level, const char *format, ...)
 {
     struct fixture *f = data;
     va_list args;
     int rv;
 
-    munit_assert_ptr_equal(ctx, &f->ctx);
+    // munit_assert_ptr_equal(ctx, &f->ctx);
 
     f->last.level = level;
 
@@ -47,9 +41,7 @@ static void fixture__emit(void *data,
 }
 
 /**
- *
  * Setup and tear down
- *
  */
 
 static void *setup(const MunitParameter params[], void *user_data)
@@ -58,6 +50,12 @@ static void *setup(const MunitParameter params[], void *user_data)
 
     (void)user_data;
     (void)params;
+
+    f->state = RAFT_STATE_LEADER;
+    f->current_term = 1;
+
+    f->ctx.state = &f->state;
+    f->ctx.current_term = &f->current_term;
 
     f->logger.data = f;
     f->logger.emit = fixture__emit;
@@ -73,9 +71,7 @@ static void tear_down(void *data)
 }
 
 /**
- *
  * raft__debugf
- *
  */
 
 /* Emit a message at debug level. */
@@ -99,6 +95,10 @@ static MunitResult test_debugf(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
+/**
+ * raft__infof
+ */
+
 /* Emit a message at info level, with arguments. */
 static MunitResult test_infof(const MunitParameter params[], void *data)
 {
@@ -119,6 +119,10 @@ static MunitResult test_infof(const MunitParameter params[], void *data)
 
     return MUNIT_OK;
 }
+
+/**
+ * raft__warnf
+ */
 
 /* Emit a message at warn level, with arguments. */
 static MunitResult test_warnf(const MunitParameter params[], void *data)
@@ -141,6 +145,10 @@ static MunitResult test_warnf(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
+/**
+ * raft__errorf
+ */
+
 /* Emit a message at error level, with arguments. */
 static MunitResult test_errorf(const MunitParameter params[], void *data)
 {
@@ -162,14 +170,36 @@ static MunitResult test_errorf(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
+/**
+ * Default logger
+ */
+
 /* Emit a message at unknown level. */
 static MunitResult test_unknown_level(const MunitParameter params[], void *data)
 {
+    (void)data;
+    (void)params;
+
+    raft_default_logger.emit(NULL, 666, "hello");
+
+    return MUNIT_OK;
+}
+
+/* The message is too long and gets truncated. */
+static MunitResult test_too_long(const MunitParameter params[], void *data)
+{
     struct fixture *f = data;
+    char buf[2048];
 
     (void)params;
 
-    raft_default_logger.emit(NULL, &f->ctx, 666, "hello");
+    memset(buf, 'a', sizeof buf - 1);
+    buf[sizeof buf - 1] = 0;
+
+    /* Use the default logger */
+    f->logger = raft_default_logger;
+
+    raft__errorf(f, buf);
 
     return MUNIT_OK;
 }
@@ -180,13 +210,12 @@ static MunitTest macros_tests[] = {
     {"/warnf", test_warnf, setup, tear_down, 0, NULL},
     {"/errorf", test_errorf, setup, tear_down, 0, NULL},
     {"/unknown-level", test_unknown_level, setup, tear_down, 0, NULL},
+    {"/too-long", test_too_long, setup, tear_down, 0, NULL},
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 
 /**
- *
  * Test suite
- *
  */
 
 MunitSuite raft_logger_suites[] = {

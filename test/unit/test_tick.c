@@ -31,6 +31,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     uint64_t id = 1;
+    const char *address = "1";
 
     (void)user_data;
 
@@ -39,7 +40,7 @@ static void *setup(const MunitParameter params[], void *user_data)
     test_io_setup(params, &f->io);
     test_fsm_setup(params, &f->fsm);
 
-    raft_init(&f->raft, &f->io, &f->fsm, f, id);
+    raft_init(&f->raft, &f->io, &f->fsm, f, id, address);
 
     raft_set_logger(&f->raft, &f->logger);
 
@@ -123,6 +124,21 @@ static void tear_down(void *data)
  * raft_tick
  */
 
+/* If we're in the unavailable state, raft_tick is a no-op. */
+static MunitResult test_unavailable(const MunitParameter params[], void *data)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    f->raft.state = RAFT_STATE_UNAVAILABLE;
+
+    __tick(f, 100);
+    __tick(f, 100);
+
+    return MUNIT_OK;
+}
+
 /* Internal timers are updated according to the given time delta. */
 static MunitResult test_updates_timers(const MunitParameter params[],
                                        void *data)
@@ -130,6 +146,8 @@ static MunitResult test_updates_timers(const MunitParameter params[],
     struct fixture *f = data;
 
     (void)params;
+
+    f->raft.state = RAFT_STATE_FOLLOWER;
 
     __tick(f, 100);
     __assert_timer(f, 100);
@@ -444,6 +462,7 @@ static MunitResult test_request_vote_only_to_voters(
 }
 
 static MunitTest tick_tests[] = {
+    {"/unavailable", test_unavailable, setup, tear_down, 0, NULL},
     {"/updates-timers", test_updates_timers, setup, tear_down, 0, NULL},
     {"/self-elect", test_self_elect, setup, tear_down, 0, NULL},
     {"/one-voter-not-us", test_one_voter_not_us, setup, tear_down, 0, NULL},
