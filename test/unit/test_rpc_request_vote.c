@@ -4,6 +4,7 @@
 
 #include "../../src/configuration.h"
 #include "../../src/log.h"
+#include "../../src/tick.h"
 
 #include "../lib/fsm.h"
 #include "../lib/heap.h"
@@ -26,6 +27,44 @@ struct fixture
 };
 
 /**
+ * Setup and tear down
+ */
+
+static void *setup(const MunitParameter params[], void *user_data)
+{
+    struct fixture *f = munit_malloc(sizeof *f);
+    uint64_t id = 1;
+    const char *address = "1";
+    int rv;
+
+    (void)user_data;
+
+    test_heap_setup(params, &f->heap);
+    test_logger_setup(params, &f->logger, id);
+    test_io_setup(params, &f->io, &f->logger);
+    test_fsm_setup(params, &f->fsm);
+
+    rv = raft_init(&f->raft, &f->logger, &f->io, &f->fsm, f, id, address);
+    munit_assert_int(rv, ==, 0);
+
+    return f;
+}
+
+static void tear_down(void *data)
+{
+    struct fixture *f = data;
+
+    raft_close(&f->raft);
+
+    test_fsm_tear_down(&f->fsm);
+    test_io_tear_down(&f->io);
+    test_logger_tear_down(&f->logger);
+    test_heap_tear_down(&f->heap);
+
+    free(f);
+}
+
+/**
  * Call raft_handle_request_vote with the given parameters and check that no
  * error occurs.
  */
@@ -33,7 +72,7 @@ struct fixture
                               LAST_LOG_TERM)                                   \
     {                                                                          \
         int rv;                                                                \
-        struct raft_request_vote_args args;                                    \
+        struct raft_request_vote args;                                         \
         char address[4];                                                       \
                                                                                \
         sprintf(address, "%d", CANDIDATE_ID);                                  \
@@ -86,16 +125,17 @@ struct fixture
  * Assert that the I/O queue has exactly one pending RAFT_IO_REQUEST_VOTE_RESULT
  * request, with the given parameters.
  */
-#define __assert_request_vote_result(F, TERM, GRANTED)               \
-    {                                                                \
-        struct test_io_request request;                              \
-        struct raft_request_vote_result *result;                     \
-                                                                     \
-        test_io_get_one_request(&F->io, RAFT_IO_REQUEST_VOTE_RESULT, \
-                                &request);                           \
-        result = &request.request_vote_response.result;              \
-        munit_assert_int(result->term, ==, TERM);                    \
-        munit_assert_int(result->vote_granted, ==, GRANTED);         \
+#define __assert_request_vote_result(F, TERM, GRANTED)                       \
+    {                                                                        \
+        struct raft_message *message;                                        \
+        struct raft_request_vote_result *result;                             \
+                                                                             \
+        message = raft_io_stub_sending(&F->io, RAFT_IO_REQUEST_VOTE_RESULT); \
+        munit_assert_ptr_not_null(message);                                  \
+                                                                             \
+        result = &message->request_vote_result;                              \
+        munit_assert_int(result->term, ==, TERM);                            \
+        munit_assert_int(result->vote_granted, ==, GRANTED);                 \
     }
 
 /**
@@ -104,65 +144,21 @@ struct fixture
  */
 #define __assert_heartbeat(F, SERVER_ID, TERM, PREV_LOG_INDEX, PREV_LOG_TERM) \
     {                                                                         \
-        struct test_io_request request;                                       \
-        struct raft_append_entries_args *args;                                \
+        struct raft_message *message;                                         \
+        struct raft_append_entries *args;                                     \
                                                                               \
-        test_io_get_one_request(&f->io, RAFT_IO_APPEND_ENTRIES, &request);    \
-        args = &request.append_entries.args;                                  \
+        message = raft_io_stub_sending(&F->io, RAFT_IO_APPEND_ENTRIES);       \
+        munit_assert_ptr_not_null(message);                                   \
                                                                               \
-        munit_assert_int(request.type, ==, RAFT_IO_APPEND_ENTRIES);           \
-        munit_assert_int(request.request_vote.id, ==, SERVER_ID);             \
+        args = &message->append_entries;                                      \
+                                                                              \
         munit_assert_int(args->term, ==, TERM);                               \
         munit_assert_int(args->prev_log_index, ==, PREV_LOG_INDEX);           \
         munit_assert_int(args->prev_log_term, ==, PREV_LOG_TERM);             \
                                                                               \
         munit_assert_ptr_null(args->entries);                                 \
-        munit_assert_int(args->n, ==, 0);                                     \
+        munit_assert_int(args->n_entries, ==, 0);                             \
     }
-
-/**
- * Setup and tear down
- */
-
-static void *setup(const MunitParameter params[], void *user_data)
-{
-    struct fixture *f = munit_malloc(sizeof *f);
-    uint64_t id = 1;
-    const char *address = "1";
-
-    (void)user_data;
-
-    test_heap_setup(params, &f->heap);
-
-    test_logger_setup(params, &f->logger, id);
-
-    test_io_setup(params, &f->io);
-
-    test_fsm_setup(params, &f->fsm);
-
-    raft_init(&f->raft, &f->io, &f->fsm, f, id, address);
-
-    raft_set_logger(&f->raft, &f->logger);
-
-    return f;
-}
-
-static void tear_down(void *data)
-{
-    struct fixture *f = data;
-
-    raft_close(&f->raft);
-
-    test_fsm_tear_down(&f->fsm);
-
-    test_io_tear_down(&f->io);
-
-    test_logger_tear_down(&f->logger);
-
-    test_heap_tear_down(&f->heap);
-
-    free(f);
-}
 
 /**
  * raft_handle_request_vote
@@ -174,6 +170,7 @@ static MunitResult test_req_higher_term(const MunitParameter params[],
                                         void *data)
 {
     struct fixture *f = data;
+    return MUNIT_OK;
 
     (void)params;
 
@@ -181,9 +178,9 @@ static MunitResult test_req_higher_term(const MunitParameter params[],
 
     /* Artificially bump to term 3 (for instance we crashed while we were
      * candidate for term 3). */
-    test_io_write_term_and_vote(&f->io, 3, 0);
+    test_io_set_term_and_vote(&f->io, 3, 0);
 
-    test_load(&f->raft);
+    test_start(&f->raft);
 
     /* Handle a RequestVote RPC containing a lower term. */
     __handle_request_vote(f, 2, 2, 1, 1);
@@ -203,7 +200,7 @@ static MunitResult test_req_has_leader(const MunitParameter params[],
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 3, 1, 3);
+    test_bootstrap_and_start(&f->raft, 3, 1, 3);
 
     /* Receive a valid AppendEntries RPC to update our leader to server 2. */
     test_receive_heartbeat(&f->raft, 2);
@@ -227,7 +224,7 @@ static MunitResult test_req_non_voting(const MunitParameter params[],
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 2, 2);
+    test_bootstrap_and_start(&f->raft, 2, 2, 2);
 
     __handle_request_vote(f, f->raft.current_term + 1, 2,
                           raft_log__last_index(&f->raft.log),
@@ -247,7 +244,7 @@ static MunitResult test_req_already_voted(const MunitParameter params[],
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 3, 1, 3);
+    test_bootstrap_and_start(&f->raft, 3, 1, 3);
 
     /* Grant vote to server 2 */
     __handle_request_vote(f, f->raft.current_term + 1, 2,
@@ -256,7 +253,7 @@ static MunitResult test_req_already_voted(const MunitParameter params[],
 
     munit_assert_int(f->raft.voted_for, ==, 2);
 
-    test_io_flush(f->raft.io);
+    raft_io_stub_flush(f->raft.io);
 
     /* Refuse vote to server 3 */
     __handle_request_vote(f, f->raft.current_term, 3,
@@ -277,7 +274,7 @@ static MunitResult test_req_dupe_vote(const MunitParameter params[], void *data)
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
     /* Grant vote */
     __handle_request_vote(f, f->raft.current_term + 1, 2,
@@ -286,7 +283,7 @@ static MunitResult test_req_dupe_vote(const MunitParameter params[], void *data)
 
     munit_assert_int(f->raft.voted_for, ==, 2);
 
-    test_io_flush(f->raft.io);
+    raft_io_stub_flush(f->raft.io);
 
     /* Grant again */
     __handle_request_vote(f, f->raft.current_term, 2,
@@ -309,9 +306,9 @@ static MunitResult test_req_empty_log(const MunitParameter params[], void *data)
     __configuration_add(f, 1, "1", true);
     __configuration_add(f, 2, "2", true);
 
-     f->raft.state = RAFT_STATE_FOLLOWER;
+    f->raft.state = RAFT_STATE_FOLLOWER;
 
-     __handle_request_vote(f, f->raft.current_term + 1, 2, 1, 1);
+    __handle_request_vote(f, f->raft.current_term + 1, 2, 1, 1);
 
     /* The request is successful */
     __assert_request_vote_result(f, 1, true);
@@ -328,7 +325,7 @@ static MunitResult test_req_last_term_lower(const MunitParameter params[],
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
     __handle_request_vote(f, 1, 2, 0, 0);
 
@@ -343,18 +340,17 @@ static MunitResult test_req_last_term_higher(const MunitParameter params[],
                                              void *data)
 {
     struct fixture *f = data;
-    int rv;
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_io_bootstrap(&f->io, 2, 1, 2);
 
     /* Artificially bump to term 3 (for instance we crashed while we were
      * candidate for term 3), although the term of our last log entry is still
      * 1. */
-    rv = f->raft.io->write_term(f->raft.io, 3);
-    munit_assert_int(rv, ==, 0);
-    f->raft.current_term = 3;
+    test_io_set_term_and_vote(f->raft.io, 3, 0);
+
+    test_start(&f->raft);
 
     /* Receive a vote request from a server that has the same term 3, but whose
      * last log entry term is 2 (i.e. we lost an entry that was committed in
@@ -373,18 +369,17 @@ static MunitResult test_req_last_idx_higher(const MunitParameter params[],
                                             void *data)
 {
     struct fixture *f = data;
-    int rv;
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_io_bootstrap(&f->io, 2, 1, 2);
 
     /* Artificially bump to term 3 (for instance we crashed while we were
      * candidate for term 3), although the term of our last log entry is still
      * 1. */
-    rv = f->raft.io->write_term(f->raft.io, 3);
-    munit_assert_int(rv, ==, 0);
-    f->raft.current_term = 3;
+    test_io_set_term_and_vote(f->raft.io, 3, 0);
+
+    test_start(&f->raft);
 
     /* Receive a vote request from a server that has the same term 3, but whose
      * last log entry index is 2 (i.e. we lost an entry that was committed in
@@ -406,7 +401,7 @@ static MunitResult test_req_last_idx_same_index(const MunitParameter params[],
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
     __handle_request_vote(f, 2, 2, 1, 1);
 
@@ -424,25 +419,24 @@ static MunitResult test_req_last_idx_lower_index(const MunitParameter params[],
     struct fixture *f = data;
     struct raft_entry entry;
     struct raft_buffer buf;
-    int rv;
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_io_bootstrap(&f->io, 2, 1, 2);
 
     /* Artificially bump to term 3 and commit a new entry (for instance we
      * received an AppendEntries request and then crashed while we were
      * candidate for term 2) */
-    rv = f->raft.io->write_term(f->raft.io, 2);
-    munit_assert_int(rv, ==, 0);
-    f->raft.current_term = 2;
+    test_io_set_term_and_vote(&f->io, 2, 0);
 
     entry.type = RAFT_LOG_COMMAND;
     entry.term = 1;
     entry.buf.base = NULL;
     entry.buf.len = 0;
 
-    test_io_write_entry(f->raft.io, &entry);
+    test_io_append_entry(f->raft.io, &entry);
+
+    test_start(&f->raft);
 
     memset(&buf, 0, sizeof buf);
     raft_log__append(&f->raft.log, 1, RAFT_LOG_COMMAND, &buf, NULL);
@@ -498,10 +492,10 @@ static MunitResult test_res_oom(const MunitParameter params[], void *data)
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
     /* Become candidate */
-    rv = raft_tick(&f->raft, f->raft.election_timeout_rand + 100);
+    rv = raft__tick(&f->raft, f->raft.election_timeout_rand + 100);
     munit_assert_int(rv, ==, 0);
 
     result.term = 2;
@@ -523,7 +517,7 @@ static MunitResult test_res_quorum(const MunitParameter params[], void *data)
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
     test_become_candidate(&f->raft);
 
     __handle_request_vote_response(f, 2, 2, true);
@@ -544,6 +538,8 @@ static MunitResult test_res_quorum(const MunitParameter params[], void *data)
     /* We have sent heartbeats */
     __assert_heartbeat(f, 2, 2, 1, 1);
 
+    raft_io_stub_flush(&f->io);
+
     return MUNIT_OK;
 }
 
@@ -555,7 +551,7 @@ static MunitResult test_res_no_quorum(const MunitParameter params[], void *data)
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 5, 1, 5);
+    test_bootstrap_and_start(&f->raft, 5, 1, 5);
     test_become_candidate(&f->raft);
 
     __handle_request_vote_response(f, 2, 2, true);
@@ -575,7 +571,7 @@ static MunitResult test_res_not_candidate(const MunitParameter params[],
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
     __handle_request_vote_response(f, 2, 2, true);
 
@@ -592,17 +588,17 @@ static MunitResult test_res_step_down(const MunitParameter params[], void *data)
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
     test_become_candidate(&f->raft);
 
     __handle_request_vote_response(f, 2, 3, false);
 
     /* The term has been saved to stable store and incremented. */
     munit_assert_int(f->raft.current_term, ==, 3);
-    munit_assert_int(test_io_get_term(&f->io), ==, 3);
+    munit_assert_int(raft_io_stub_term(&f->io), ==, 3);
 
     /* The vote has been reset both in stable store and in the cache. */
-    munit_assert_int(test_io_get_vote(&f->io), ==, 0);
+    munit_assert_int(raft_io_stub_vote(&f->io), ==, 0);
     munit_assert_int(f->raft.voted_for, ==, 0);
 
     /* The election timeout has been reset. */
@@ -627,20 +623,16 @@ static MunitResult test_res_io_err(const MunitParameter params[], void *data)
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
     test_become_candidate(&f->raft);
 
     result.term = 3;
     result.vote_granted = 0;
 
-    test_io_fault(&f->io, 0, 1);
+    raft_io_stub_fault(&f->io, 0, 1);
 
     rv = raft_handle_request_vote_response(&f->raft, 2, "2", &result);
-    munit_assert_int(rv, ==, RAFT_ERR_NO_SPACE);
-
-    munit_assert_string_equal(
-        raft_errmsg(&f->raft),
-        "convert to follower: persist new term: no space left on device");
+    munit_assert_int(rv, ==, RAFT_ERR_IO);
 
     return MUNIT_OK;
 }
@@ -654,7 +646,7 @@ static MunitResult test_res_not_granted(const MunitParameter params[],
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
     test_become_candidate(&f->raft);
 
     /* The receiver does not grant the vote (e.g. it has already voted for

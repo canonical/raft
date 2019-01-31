@@ -49,7 +49,7 @@ struct test_io_request
         {
             unsigned id;
             const char *address;
-            struct raft_request_vote_args args;
+            struct raft_request_vote args;
         } request_vote;
         struct
         {
@@ -61,7 +61,7 @@ struct test_io_request
         {
             unsigned id;
             const char *address;
-            struct raft_append_entries_args args;
+            struct raft_append_entries args;
         } append_entries;
         struct
         {
@@ -72,7 +72,9 @@ struct test_io_request
     };
 };
 
-void test_io_setup(const MunitParameter params[], struct raft_io *io);
+void test_io_setup(const MunitParameter params[],
+                   struct raft_io *io,
+                   struct raft_logger *logger);
 
 void test_io_tear_down(struct raft_io *io);
 
@@ -90,9 +92,14 @@ void test_io_bootstrap(struct raft_io *io,
 /**
  * Convenience for writing term and vote together and checking for errors.
  */
-void test_io_write_term_and_vote(struct raft_io *io,
-                                 const uint64_t term,
-                                 const uint64_t vote);
+void test_io_set_term_and_vote(struct raft_io *io,
+                               const uint64_t term,
+                               const uint64_t vote);
+
+/**
+ * Synchronously append a new entry.
+ */
+void test_io_append_entry(struct raft_io *io, const struct raft_entry *entry);
 
 /**
  * Synchronously write a new entry.

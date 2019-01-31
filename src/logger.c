@@ -3,19 +3,18 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "logger.h"
+#include "../include/raft.h"
 
 #define RAFT__DEFAULT_LOGGER_BUF_LEN 1024
-#define RAFT__DEFAULT_LOGGER_MSG_LEN 32
+#define RAFT__DEFAULT_LOGGER_MSG_LEN 256
 
 static void raft__default_logger_emit(void *data,
                                       int level,
                                       const char *format,
-                                      ...)
+                                      va_list args)
 {
     char buf[RAFT__DEFAULT_LOGGER_BUF_LEN];
     char *cursor = buf;
-    va_list args;
     int offset;
     int n = sizeof buf;
     int i;
@@ -48,9 +47,10 @@ static void raft__default_logger_emit(void *data,
     n = RAFT__DEFAULT_LOGGER_MSG_LEN;
 
     /* Then render the message, possibly truncating it. */
-    va_start(args, format);
     vsnprintf(cursor, n, format, args);
-    va_end(args);
+
+    fprintf(stderr, "%s\n", buf);
+    return;
 
     /* Fill the message section with blanks. */
     for (i = strlen(buf); i < offset + RAFT__DEFAULT_LOGGER_MSG_LEN; i++) {
@@ -74,3 +74,35 @@ struct raft_logger raft_default_logger = {
     NULL,
     raft__default_logger_emit,
 };
+
+void raft_debugf(struct raft_logger *logger, const char *format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    logger->emit(logger->data, RAFT_DEBUG, format, args);
+    va_end(args);
+}
+
+void raft_infof(struct raft_logger *logger, const char *format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    logger->emit(logger->data, RAFT_INFO, format, args);
+    va_end(args);
+}
+
+void raft_warnf(struct raft_logger *logger, const char *format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    logger->emit(logger->data, RAFT_WARN, format, args);
+    va_end(args);
+}
+
+void raft_errorf(struct raft_logger *logger, const char *format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    logger->emit(logger->data, RAFT_ERROR, format, args);
+    va_end(args);
+}

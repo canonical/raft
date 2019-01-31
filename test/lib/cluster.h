@@ -28,7 +28,7 @@
  *    message being delivered to the receiver or in a server tick. The global
  *    cluster time is advanced by the latency expiration time or by the raft
  *    timer expiration time, respectively. The latency timer of each RPC message
- *    is updated accordingly and the @raft_tick function of each server is
+ *    is updated accordingly and the @raft__tick function of each server is
  *    invoked with the elapsed time.
  *
  * 3. The current cluster leader is detected (if any). When detecting the leader

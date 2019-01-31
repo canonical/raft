@@ -11,7 +11,6 @@
 #include "error.h"
 #include "io_uv_rpc.h"
 #include "io_uv_store.h"
-#include "logger.h"
 #include "uv_fs.h"
 
 /**
@@ -26,7 +25,6 @@ struct raft_io_uv
     struct raft_io_uv_rpc rpc;              /* Implement network RPC */
     struct uv_timer_s ticker;               /* Timer for periodic ticks */
     uint64_t last_tick;                     /* Timestamp of the last tick */
-    char *dir;                              /* Data directory */
 
     /* Track the number of active asynchronous operations that need to be
      * completed before this backend can be considered fully stopped. */
@@ -44,51 +42,6 @@ struct raft_io_uv
         void (*cb)(void *data);
     } stop;
 };
-
-/**
- * Initializer.
- */
-static int raft_io_uv__init(const struct raft_io *io,
-                            struct raft_logger *logger,
-                            unsigned id,
-                            const char *address)
-{
-    struct raft_io_uv *uv;
-    int rv;
-
-    uv = io->data;
-
-    uv->logger = logger;
-    uv->n_active = 0;
-    uv->tick.data = NULL;
-    uv->tick.cb = NULL;
-    uv->stop.data = NULL;
-    uv->stop.cb = NULL;
-
-    rv = raft_io_uv_store__init(&uv->store, logger, uv->loop, uv->dir);
-    if (rv != 0) {
-        goto err;
-    }
-
-    rv = raft_io_uv_rpc__init(&uv->rpc, logger, uv->loop, uv->transport, id,
-                              address);
-    if (rv != 0) {
-        goto err_after_store_init;
-    }
-
-    return 0;
-
-err_after_store_init:
-    raft_io_uv_store__close(&uv->store);
-
-err:
-    assert(rv != 0);
-
-    raft_free(uv->dir);
-    raft_free(uv);
-
-    return rv;
-}
 
 /**
  * Periodic tick timer callback, for invoking the ticker function.
@@ -114,6 +67,8 @@ static void raft_io_uv__ticker_cb(uv_timer_t *ticker)
  * Start the backend.
  */
 static int raft_io_uv__start(const struct raft_io *io,
+                             unsigned id,
+                             const char *address,
                              unsigned msecs,
                              void *data,
                              void (*tick)(void *data, unsigned elapsed),
@@ -133,7 +88,7 @@ static int raft_io_uv__start(const struct raft_io *io,
     /* Initialize the tick timer handle. */
     rv = uv_timer_init(uv->loop, &uv->ticker);
     if (rv != 0) {
-        raft_errorf_(uv->logger, "uv_timer_init: %s", uv_strerror(rv));
+        raft_errorf(uv->logger, "uv_timer_init: %s", uv_strerror(rv));
         return RAFT_ERR_IO;
     }
     uv->ticker.data = uv;
@@ -141,7 +96,7 @@ static int raft_io_uv__start(const struct raft_io *io,
     /* Start the tick timer handle. */
     rv = uv_timer_start(&uv->ticker, raft_io_uv__ticker_cb, 0, msecs);
     if (rv != 0) {
-        raft_errorf_(uv->logger, "uv_timer_start: %s", uv_strerror(rv));
+        raft_errorf(uv->logger, "uv_timer_start: %s", uv_strerror(rv));
         return RAFT_ERR_IO;
     }
     uv->n_active++;
@@ -150,7 +105,7 @@ static int raft_io_uv__start(const struct raft_io *io,
      * consider it as "active. */
     uv->n_active++;
 
-    rv = raft_io_uv_rpc__start(&uv->rpc, data, recv);
+    rv = raft_io_uv_rpc__start(&uv->rpc, id, address, data, recv);
     if (rv != 0) {
         uv_close((struct uv_handle_s *)&uv->ticker, NULL);
         return rv;
@@ -222,7 +177,7 @@ static int raft_io_uv__stop(const struct raft_io *io,
     /* Stop the tick timer handle. */
     rv = uv_timer_stop(&uv->ticker);
     if (rv != 0) {
-        raft_errorf_(uv->logger, "uv_stop_timer: %s", uv_strerror(rv));
+        raft_errorf(uv->logger, "uv_stop_timer: %s", uv_strerror(rv));
         return RAFT_ERR_INTERNAL;
     }
 
@@ -234,22 +189,6 @@ static int raft_io_uv__stop(const struct raft_io *io,
     raft_io_uv_rpc__stop(&uv->rpc, uv, raft_io_uv__rpc_stop_cb);
 
     return 0;
-}
-
-/**
- * Close the backend, releasing all resources it allocated.
- */
-static void raft_io_uv__close(const struct raft_io *io)
-{
-    struct raft_io_uv *uv;
-
-    uv = io->data;
-
-    raft_io_uv_store__close(&uv->store);
-    raft_io_uv_rpc__close(&uv->rpc);
-
-    raft_free(uv->dir);
-    raft_free(uv);
 }
 
 static int raft_io_uv__load(const struct raft_io *io,
@@ -340,27 +279,23 @@ int raft_io_uv_init(struct raft_io *io,
         goto err;
     }
 
+    rv = raft_io_uv_store__init(&uv->store, logger, loop, dir);
+    if (rv != 0) {
+        goto err_after_uv_alloc;
+    }
+
+    rv = raft_io_uv_rpc__init(&uv->rpc, logger, loop, transport);
+    if (rv != 0) {
+        goto err_after_store_init;
+    }
+
     uv->logger = logger;
     uv->loop = loop;
     uv->transport = transport;
 
-    /* Make a copy of the directory string, stripping any trailing slash */
-    uv->dir = raft_malloc(strlen(dir) + 1);
-    if (uv->dir == NULL) {
-        rv = RAFT_ERR_NOMEM;
-        goto err_after_uv_alloc;
-    }
-    strcpy(uv->dir, dir);
-
-    if (uv->dir[strlen(uv->dir) - 1] == '/') {
-        uv->dir[strlen(uv->dir) - 1] = 0;
-    }
-
     uv->last_tick = 0;
 
     io->data = uv;
-    io->init = raft_io_uv__init;
-    io->close = raft_io_uv__close;
     io->start = raft_io_uv__start;
     io->stop = raft_io_uv__stop;
     io->load = raft_io_uv__load;
@@ -372,10 +307,25 @@ int raft_io_uv_init(struct raft_io *io,
 
     return 0;
 
+err_after_store_init:
+    raft_io_uv_store__close(&uv->store);
+
 err_after_uv_alloc:
     raft_free(uv);
 
 err:
     assert(rv != 0);
     return rv;
+}
+
+void raft_io_uv_close(struct raft_io *io)
+{
+    struct raft_io_uv *uv;
+
+    uv = io->data;
+
+    raft_io_uv_store__close(&uv->store);
+    raft_io_uv_rpc__close(&uv->rpc);
+
+    raft_free(uv);
 }

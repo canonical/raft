@@ -5,7 +5,6 @@
 #include "configuration.h"
 #include "election.h"
 #include "error.h"
-#include "logger.h"
 #include "replication.h"
 #include "state.h"
 #include "watch.h"
@@ -40,7 +39,7 @@ static int raft_tick__follower(struct raft *r)
      * simply configured as non-voter, do nothing and wait for RPCs. */
     if (raft_configuration__n_voting(&r->configuration) == 1) {
         if (server->voting) {
-            raft__debugf(r, "tick: self elect and convert to leader");
+            raft_debugf(r->logger, "tick: self elect and convert to leader");
             rv = raft_state__convert_to_candidate(r);
             if (rv != 0) {
                 raft_error__wrapf(r, "convert to candidate");
@@ -71,7 +70,8 @@ static int raft_tick__follower(struct raft *r)
      *   current leader or granting vote to candidate, convert to candidate.
      */
     if (r->timer > r->election_timeout_rand && server->voting) {
-        raft__infof(r, "tick: convert to candidate and start new election");
+        raft_infof(r->logger,
+                   "tick: convert to candidate and start new election");
         return raft_state__convert_to_candidate(r);
     }
 
@@ -97,7 +97,7 @@ static int raft_tick__candidate(struct raft *r)
      *   incrementing its term and initiating another round of RequestVote RPCs
      */
     if (r->timer > r->election_timeout_rand) {
-        raft__infof(r, "tick: start new election");
+        raft_infof(r->logger, "tick: start new election");
         return raft_election__start(r);
     }
 
@@ -173,13 +173,14 @@ static int raft_tick__leader(struct raft *r,
     return 0;
 }
 
-int raft_tick(struct raft *r, const unsigned msec_since_last_tick)
+int raft__tick(struct raft *r, const unsigned msec_since_last_tick)
 {
     int rv;
 
     assert(r != NULL);
 
-    assert(r->state == RAFT_STATE_UNAVAILABLE || r->state == RAFT_STATE_FOLLOWER ||
+    assert(r->state == RAFT_STATE_UNAVAILABLE ||
+           r->state == RAFT_STATE_FOLLOWER ||
            r->state == RAFT_STATE_CANDIDATE || r->state == RAFT_STATE_LEADER);
 
     /* If we are not available, let's do nothing. */
@@ -205,4 +206,13 @@ int raft_tick(struct raft *r, const unsigned msec_since_last_tick)
     }
 
     return rv;
+}
+
+void raft__tick_cb(void *data, unsigned msecs)
+{
+    struct raft *r;
+
+    r = data;
+
+    raft__tick(r, msecs);
 }

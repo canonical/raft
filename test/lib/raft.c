@@ -3,10 +3,65 @@
 
 #include "../../src/configuration.h"
 #include "../../src/log.h"
+#include "../../src/tick.h"
 
 #include "io.h"
 #include "munit.h"
 #include "raft.h"
+
+void test_start(struct raft *r)
+{
+    int rv;
+
+    rv = raft_start(r);
+    munit_assert_int(rv, ==, 0);
+}
+
+void test_stop(struct raft *r)
+{
+    int rv;
+
+    rv = raft_stop(r, NULL, NULL);
+    munit_assert_int(rv, ==, 0);
+}
+
+void test_bootstrap_and_start(struct raft *r,
+                              int n_servers,
+                              int voting_a,
+                              int voting_b)
+{
+    struct raft_configuration configuration;
+    int i;
+    int rv;
+
+    munit_assert_int(n_servers, >=, 1);
+    munit_assert_int(voting_a, >=, 1);
+    munit_assert_int(voting_a, <=, voting_b);
+    munit_assert_int(voting_b, >=, 1);
+    munit_assert_int(voting_b, <=, n_servers);
+
+    /* Populate the configuration. */
+    raft_configuration_init(&configuration);
+
+    for (i = 0; i < n_servers; i++) {
+        unsigned id = i + 1;
+        char address[4];
+        bool voting = (int)id >= voting_a && (int)id <= voting_b;
+
+        sprintf(address, "%d", id);
+        rv = raft_configuration_add(&configuration, id, address, voting);
+        munit_assert_int(rv, ==, 0);
+    }
+
+    /* Bootstrap the instance */
+    rv = raft_bootstrap(r, &configuration);
+    munit_assert_int(rv, ==, 0);
+
+    /* Cleanup */
+    raft_configuration_close(&configuration);
+
+    test_start(r);
+}
 
 void test_load(struct raft *r)
 {
@@ -35,7 +90,7 @@ void test_load(struct raft *r)
         munit_assert_int(rv, ==, 0);
     }
 
-    rv = raft_decode_configuration(&entries[0].buf, &r->configuration);
+    rv = raft_configuration_decode(&entries[0].buf, &r->configuration);
     munit_assert_int(rv, ==, 0);
 
     munit_assert_int(r->configuration.n, >, 0);
@@ -67,7 +122,7 @@ void test_become_candidate(struct raft *r)
     int rv;
 
     /* Become candidate */
-    rv = raft_tick(r, r->election_timeout_rand + 100);
+    rv = raft__tick(r, r->election_timeout_rand + 100);
     munit_assert_int(rv, ==, 0);
 
     munit_assert_int(r->state, ==, RAFT_STATE_CANDIDATE);
@@ -108,28 +163,32 @@ void test_become_leader(struct raft *r)
 
     munit_assert_int(r->state, ==, RAFT_STATE_LEADER);
 
-    test_io_flush(r->io);
+    raft_io_stub_flush(r->io);
 }
 
 void test_receive_heartbeat(struct raft *r, unsigned leader_id)
 {
-    struct raft_append_entries_args args;
+    struct raft_message message;
+    struct raft_append_entries *args = &message.append_entries;
     char address[4];
-    int rv;
 
     munit_assert_int(leader_id, !=, r->id);
     sprintf(address, "%d", leader_id);
 
-    args.term = r->current_term;
-    args.leader_id = leader_id;
+    message.type = RAFT_IO_APPEND_ENTRIES;
+    message.server_id = leader_id;
+    message.server_address = address;
 
-    args.prev_log_index = raft_log__last_index(&r->log);
-    args.prev_log_term = raft_log__last_term(&r->log);
+    args->term = r->current_term;
+    args->leader_id = leader_id;
 
-    args.entries = NULL;
-    args.n = 0;
-    args.leader_commit = r->commit_index;
+    args->prev_log_index = raft_log__last_index(&r->log);
+    args->prev_log_term = raft_log__last_term(&r->log);
 
-    rv = raft_handle_append_entries(r, leader_id, address, &args);
-    munit_assert_int(rv, ==, 0);
+    args->entries = NULL;
+    args->n_entries = 0;
+    args->leader_commit = r->commit_index;
+
+
+    raft_io_stub_dispatch(r->io, &message);
 }

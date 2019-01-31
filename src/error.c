@@ -4,15 +4,6 @@
 
 #include "error.h"
 
-void raft_errorf(char *errmsg, const char *fmt, ...)
-{
-    va_list args;
-
-    va_start(args, fmt);
-    vsnprintf(errmsg, RAFT_ERRMSG_SIZE, fmt, args);
-    va_end(args);
-}
-
 void raft_wrapf(char *errmsg, const char *fmt, ...)
 {
     char tmp[RAFT_ERRMSG_SIZE];

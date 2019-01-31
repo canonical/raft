@@ -164,7 +164,7 @@ void test_io__request_vote_cb(struct raft_io *io,
     host = test_network_host(t->network, request->request_vote.id);
     munit_assert_ptr_not_null(host);
 
-    rv = raft_encode_request_vote(&request->request_vote.args, &message.header);
+    //rv = raft_encode_request_vote(&request->request_vote.args, &message.header);
     munit_assert_int(rv, ==, 0);
 
     message.payload.base = NULL;
@@ -192,8 +192,8 @@ void test_io__request_vote_response_cb(struct raft_io *io,
     host = test_network_host(t->network, request->request_vote_response.id);
     munit_assert_ptr_not_null(host);
 
-    rv = raft_encode_request_vote_result(&request->request_vote_response.result,
-                                         &message.header);
+    //rv = raft_encode_request_vote_result(&request->request_vote_response.result,
+    //                                     &message.header);
     munit_assert_int(rv, ==, 0);
 
     message.payload.base = NULL;
@@ -222,13 +222,13 @@ void test_io__append_entries_cb(struct raft_io *io,
     host = test_network_host(t->network, request->append_entries.id);
     munit_assert_ptr_not_null(host);
 
-    rv = raft_encode_append_entries(&request->append_entries.args,
-                                    &message.header);
+    //rv = raft_encode_append_entries(&request->append_entries.args,
+    //                                &message.header);
     munit_assert_int(rv, ==, 0);
 
     /* Calculate the size of the entry data payload. */
     message.payload.len = 0;
-    for (i = 0; i < request->append_entries.args.n; i++) {
+    for (i = 0; i < request->append_entries.args.n_entries; i++) {
         struct raft_entry *entry = &request->append_entries.args.entries[i];
         message.payload.len += entry->buf.len;
         if (entry->buf.len % 8 != 0) {
@@ -244,7 +244,7 @@ void test_io__append_entries_cb(struct raft_io *io,
 
         void *cursor = message.payload.base;
 
-        for (i = 0; i < request->append_entries.args.n; i++) {
+        for (i = 0; i < request->append_entries.args.n_entries; i++) {
             struct raft_entry *entry = &request->append_entries.args.entries[i];
 
             if (entry->buf.base == NULL) {
@@ -285,8 +285,8 @@ void test_io__append_entries_response_cb(struct raft_io *io,
     host = test_network_host(t->network, request->append_entries_response.id);
     munit_assert_ptr_not_null(host);
 
-    rv = raft_encode_append_entries_result(
-        &request->append_entries_response.result, &message.header);
+    //rv = raft_encode_append_entries_result(
+    //&request->append_entries_response.result, &message.header);
     munit_assert_int(rv, ==, 0);
 
     message.payload.base = NULL;
@@ -447,7 +447,7 @@ int test_io__send_request_vote_request(
     struct raft_io *io,
     const unsigned id,
     const char *address,
-    const struct raft_request_vote_args *args)
+    const struct raft_request_vote *args)
 {
     struct test_io *t = io->data;
     struct test_io_request *request;
@@ -504,7 +504,7 @@ int test_io__send_append_entries_request(
     const unsigned request_id,
     const unsigned id,
     const char *address,
-    const struct raft_append_entries_args *args)
+    const struct raft_append_entries *args)
 {
     struct test_io *t = io->data;
     struct test_io_request *request;
@@ -555,50 +555,21 @@ int test_io__send_append_entries_response(
     return 0;
 }
 
-void test_io_setup(const MunitParameter params[], struct raft_io *io)
+void test_io_setup(const MunitParameter params[],
+                   struct raft_io *io,
+                   struct raft_logger *logger)
 {
-    struct test_io *t = munit_malloc(sizeof *t);
+    int rv;
 
-    /* Fault injection. */
-    const char *delay = munit_parameters_get(params, TEST_IO_FAULT_DELAY);
-    const char *repeat = munit_parameters_get(params, TEST_IO_FAULT_REPEAT);
+    (void)params;
 
-    munit_assert_ptr_not_null(io);
-
-    test_io__init(t);
-
-    if (delay != NULL) {
-        t->fault.countdown = atoi(delay);
-    }
-    if (repeat != NULL) {
-        t->fault.n = atoi(repeat);
-    }
-
-    io->version = 1;
-    io->data = t;
-    io->write_term = test_io__write_term;
-    io->write_vote = test_io__write_vote;
-    io->write_log = test_io__write_log;
-    io->truncate_log = test_io__truncate_log;
-    io->send_request_vote_request = test_io__send_request_vote_request;
-    io->send_request_vote_response = test_io__send_request_vote_response;
-    io->send_append_entries_request = test_io__send_append_entries_request;
-    io->send_append_entries_response = test_io__send_append_entries_response;
+    rv = raft_io_stub_init(io, logger);
+    munit_assert_int(rv, ==, 0);
 }
 
 void test_io_tear_down(struct raft_io *io)
 {
-    struct test_io *t = io->data;
-    size_t i;
-
-    for (i = 0; i < t->n; i++) {
-        struct raft_entry *entry = &t->entries[i];
-        free(entry->buf.base);
-    }
-
-    free(t->entries);
-
-    free(t);
+    raft_io_stub_close(io);
 }
 
 void test_io_bootstrap(struct raft_io *io,
@@ -607,19 +578,14 @@ void test_io_bootstrap(struct raft_io *io,
                        const int voting_b)
 {
     struct raft_configuration configuration;
-    struct raft_entry entry;
     int i;
     int rv;
 
-    munit_assert_ptr_not_null(io);
     munit_assert_int(n_servers, >=, 1);
     munit_assert_int(voting_a, >=, 1);
     munit_assert_int(voting_a, <=, voting_b);
     munit_assert_int(voting_b, >=, 1);
     munit_assert_int(voting_b, <=, n_servers);
-
-    /* Set initial term to 1 and vote to nil. */
-    test_io_write_term_and_vote(io, 1, 0);
 
     /* Populate the configuration. */
     raft_configuration_init(&configuration);
@@ -634,31 +600,32 @@ void test_io_bootstrap(struct raft_io *io,
         munit_assert_int(rv, ==, 0);
     }
 
-    /* Encode the configuration into a log entry */
-    entry.term = 1;
-    entry.type = RAFT_LOG_CONFIGURATION;
-
-    rv = raft_encode_configuration(&configuration, &entry.buf);
+    /* Bootstrap the instance */
+    rv = io->bootstrap(io, &configuration);
     munit_assert_int(rv, ==, 0);
 
-    /* Write the log entry. */
-    test_io_write_entry(io, &entry);
-
-    raft_free(entry.buf.base);
-
+    /* Cleanup */
     raft_configuration_close(&configuration);
 }
 
-void test_io_write_term_and_vote(struct raft_io *io,
-                                 const uint64_t term,
-                                 const uint64_t vote)
+void test_io_set_term_and_vote(struct raft_io *io,
+                               const uint64_t term,
+                               const uint64_t vote)
 {
     int rv;
 
-    rv = io->write_term(io, term);
+    rv = io->set_term(io, term);
     munit_assert_int(rv, ==, 0);
 
-    rv = io->write_vote(io, vote);
+    rv = io->set_vote(io, vote);
+    munit_assert_int(rv, ==, 0);
+}
+
+void test_io_append_entry(struct raft_io *io, const struct raft_entry *entry)
+{
+    int rv;
+
+    rv = io->append(io, entry, 1, NULL, NULL);
     munit_assert_int(rv, ==, 0);
 }
 

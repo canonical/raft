@@ -4,7 +4,6 @@
 #include "election.h"
 #include "error.h"
 #include "log.h"
-#include "logger.h"
 #include "replication.h"
 #include "state.h"
 #include "watch.h"
@@ -107,7 +106,7 @@ int raft_state__bump_current_term(struct raft *r, raft_term term)
     assert(term >= r->current_term);
 
     /* Save the new term to persistent store, resetting the vote. */
-    rv = r->io->write_term(r->io, term);
+    rv = r->io->set_term(r->io, term);
     if (rv != 0) {
         raft_error__printf(r, rv, "persist new term");
         return rv;

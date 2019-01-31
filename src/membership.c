@@ -107,7 +107,7 @@ int raft_membership__apply(struct raft *r,
 
     raft_configuration_init(&configuration);
 
-    rv = raft_decode_configuration(&entry->buf, &configuration);
+    rv = raft_configuration_decode(&entry->buf, &configuration);
     if (rv != 0) {
         raft_error__printf(r, rv, "decode new configuration");
         goto err;
@@ -150,7 +150,7 @@ int raft_membership__rollback(struct raft *r)
     raft_configuration_close(&r->configuration);
     raft_configuration_init(&r->configuration);
 
-    rv = raft_decode_configuration(&entry->buf, &r->configuration);
+    rv = raft_configuration_decode(&entry->buf, &r->configuration);
     if (rv != 0) {
         raft_error__printf(r, rv, "restore last committed configuration");
         return rv;

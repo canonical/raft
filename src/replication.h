@@ -60,7 +60,7 @@ int raft_replication__update(struct raft *r,
  * It must be called only by followers.
  */
 int raft_replication__append(struct raft *r,
-                             const struct raft_append_entries_args *args,
+                             const struct raft_append_entries *args,
                              bool *success,
                              bool *async);
 

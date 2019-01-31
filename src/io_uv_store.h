@@ -60,7 +60,7 @@ struct raft_io_uv_prepared
 struct raft_io_uv_store
 {
     struct raft_logger *logger; /* Logger to use */
-    const char *dir;            /* Data directory */
+    char *dir;                  /* Data directory */
     size_t block_size;          /* File system block size */
     size_t max_segment_size;    /* Maximum segment size */
     struct uv_loop_s *loop;     /* libuv loop to hook into */

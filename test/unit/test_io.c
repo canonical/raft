@@ -39,12 +39,10 @@ static void *setup(const MunitParameter params[], void *user_data)
 
     test_logger_setup(params, &f->logger, id);
 
-    test_io_setup(params, &f->io);
+    test_io_setup(params, &f->io, &f->logger);
     test_fsm_setup(params, &f->fsm);
 
-    raft_init(&f->raft, &f->io, &f->fsm, f, id, address);
-
-    raft_set_logger(&f->raft, &f->logger);
+    raft_init(&f->raft, &f->logger, &f->io, &f->fsm, f, id, address);
 
     return f;
 }
@@ -77,7 +75,7 @@ static MunitResult test_handle_update_commit(const MunitParameter params[],
     struct fixture *f = data;
     struct test_io_request event;
     struct raft_entry *entry = raft_malloc(sizeof *entry);
-    struct raft_append_entries_args args;
+    struct raft_append_entries args;
     int rv;
 
     (void)params;
@@ -95,7 +93,7 @@ static MunitResult test_handle_update_commit(const MunitParameter params[],
     args.prev_log_index = 1;
     args.prev_log_term = 1;
     args.entries = entry;
-    args.n = 1;
+    args.n_entries = 1;
     args.leader_commit = 2;
 
     rv = raft_handle_append_entries(&f->raft, 2, "2", &args);

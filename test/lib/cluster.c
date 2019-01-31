@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 #include "../../src/log.h"
+#include "../../src/tick.h"
 
 #include "cluster.h"
 #include "munit.h"
@@ -72,14 +73,13 @@ void test_cluster_setup(const MunitParameter params[], struct test_cluster *c)
         test_logger_setup(params, logger, id);
         test_logger_time(logger, c, test_cluster__time);
 
-        test_io_setup(params, io);
+        test_io_setup(params, io, logger);
         test_io_set_network(io, &c->network, id);
 
         test_fsm_setup(params, fsm);
 
-        raft_init(raft, io, fsm, c, id, "1");
+        raft_init(raft, logger, io, fsm, c, id, "1");
 
-        raft_set_logger(raft, logger);
         raft_set_rand(raft, test_cluster__rand);
         raft_set_election_timeout(raft, 250);
 
@@ -311,7 +311,7 @@ static void test_cluster__deliver_or_tick(struct test_cluster *c,
             incoming->timer -= elapse;
         }
 
-        raft_tick(raft, elapse);
+        raft__tick(raft, elapse);
     }
 
     c->time += elapse;
@@ -626,14 +626,13 @@ void test_cluster_add_server(struct test_cluster *c)
     test_logger_setup(params, logger, id);
     test_logger_time(logger, c, test_cluster__time);
 
-    test_io_setup(params, io);
+    test_io_setup(params, io, logger);
     test_io_set_network(io, &c->network, id);
 
     test_fsm_setup(params, fsm);
 
-    raft_init(raft, io, fsm, c, id, "1");
+    raft_init(raft, logger, io, fsm, c, id, "1");
 
-    raft_set_logger(raft, logger);
     raft_set_rand(raft, test_cluster__rand);
     raft_set_election_timeout(raft, 250);
 

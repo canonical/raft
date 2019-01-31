@@ -536,7 +536,7 @@ int raft_log__append_configuration(
     assert(configuration != NULL);
 
     /* Encode the configuration into a buffer. */
-    rv = raft_encode_configuration(configuration, &buf);
+    rv = raft_configuration_encode(configuration, &buf);
     if (rv != 0) {
         goto err;
     }

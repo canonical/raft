@@ -31,18 +31,17 @@ static void *setup(const MunitParameter params[], void *user_data)
     struct fixture *f = munit_malloc(sizeof *f);
     uint64_t id = 1;
     const char *address = "1";
+    int rv;
 
     (void)user_data;
 
     test_heap_setup(params, &f->heap);
-
     test_logger_setup(params, &f->logger, id);
-    test_io_setup(params, &f->io);
+    test_io_setup(params, &f->io, &f->logger);
     test_fsm_setup(params, &f->fsm);
 
-    raft_init(&f->raft, &f->io, &f->fsm, f, id, address);
-
-    raft_set_logger(&f->raft, &f->logger);
+    rv = raft_init(&f->raft, &f->logger, &f->io, &f->fsm, f, id, address);
+    munit_assert_int(rv, ==, 0);
 
     return f;
 }
@@ -70,13 +69,13 @@ static MunitResult test_vote_newer_term(const MunitParameter params[],
                                         void *data)
 {
     struct fixture *f = data;
-    struct raft_request_vote_args args;
+    struct raft_request_vote args;
     bool granted;
     int rv;
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
     args.term = 2;
     args.candidate_id = 2;

@@ -4,7 +4,6 @@
 #include "election.h"
 #include "error.h"
 #include "log.h"
-#include "logger.h"
 
 void raft_election__reset_timer(struct raft *r)
 {
@@ -23,7 +22,7 @@ void raft_election__reset_timer(struct raft *r)
 static int raft_election__send_request_vote(struct raft *r,
                                             const struct raft_server *server)
 {
-    struct raft_request_vote_args args;
+    struct raft_message message;
     int rv;
 
     assert(r != NULL);
@@ -35,13 +34,15 @@ static int raft_election__send_request_vote(struct raft *r,
 
     /* TODO: account for snapshots */
 
-    args.term = r->current_term;
-    args.candidate_id = r->id;
-    args.last_log_index = raft_log__last_index(&r->log);
-    args.last_log_term = raft_log__last_term(&r->log);
+    message.type = RAFT_IO_REQUEST_VOTE;
+    message.request_vote.term = r->current_term;
+    message.request_vote.candidate_id = r->id;
+    message.request_vote.last_log_index = raft_log__last_index(&r->log);
+    message.request_vote.last_log_term = raft_log__last_term(&r->log);
+    message.server_id = server->id;
+    message.server_address = server->address;
 
-    rv = r->io->send_request_vote_request(r->io, server->id, server->address,
-                                          &args);
+    rv = r->io->send(r->io, &message, NULL, NULL);
     if (rv != 0) {
         return rv;
     }
@@ -76,14 +77,14 @@ int raft_election__start(struct raft *r)
 
     /* Increment current term */
     term = r->current_term + 1;
-    rv = r->io->write_term(r->io, term);
+    rv = r->io->set_term(r->io, term);
     if (rv != 0) {
         raft_error__printf(r, rv, "persist term");
         goto err;
     }
 
     /* Vote for self */
-    rv = r->io->write_vote(r->io, r->id);
+    rv = r->io->set_vote(r->io, r->id);
     if (rv != 0) {
         raft_error__printf(r, rv, "persist vote");
         goto err;
@@ -117,8 +118,9 @@ int raft_election__start(struct raft *r)
         rv = raft_election__send_request_vote(r, server);
         if (rv != 0) {
             /* This is not a critical failure, let's just log it. */
-            raft__warnf(r, "failed to send vote request to server %ld: %s (%d)",
-                        server->id, raft_strerror(rv), rv);
+            raft_warnf(r->logger,
+                       "failed to send vote request to server %ld: %s (%d)",
+                       server->id, raft_strerror(rv), rv);
         }
     }
 
@@ -130,7 +132,7 @@ err:
 }
 
 int raft_election__vote(struct raft *r,
-                        const struct raft_request_vote_args *args,
+                        const struct raft_request_vote *args,
                         bool *granted)
 {
     const struct raft_server *local_server;
@@ -147,12 +149,14 @@ int raft_election__vote(struct raft *r,
     *granted = false;
 
     if (local_server == NULL || !local_server->voting) {
-        raft__debugf(r, "local server is not voting -> not granting vote");
+        raft_debugf(r->logger,
+                    "local server is not voting -> not granting vote");
         return 0;
     }
 
     if (r->voted_for != 0 && r->voted_for != args->candidate_id) {
-        raft__debugf(r, "local server already voted -> not granting vote");
+        raft_debugf(r->logger,
+                    "local server already voted -> not granting vote");
         return 0;
     }
 
@@ -160,7 +164,7 @@ int raft_election__vote(struct raft *r,
 
     /* Our log is definitely not more up-to-date if it's empty! */
     if (local_last_log_index == 0) {
-        raft__debugf(r, "local log is empty -> granting vote");
+        raft_debugf(r->logger, "local log is empty -> granting vote");
         goto grant_vote;
     }
 
@@ -169,15 +173,16 @@ int raft_election__vote(struct raft *r,
 
     if (args->last_log_term < local_last_log_term) {
         /* The requesting server has last entry's log term lower than ours. */
-        raft__debugf(
-            r, "local log last entry has higher last term -> not granting");
+        raft_debugf(
+            r->logger,
+            "local log last entry has higher last term -> not granting");
         return 0;
     }
 
     if (args->last_log_term > local_last_log_term) {
         /* The requesting server has a more up-to-date log. */
-        raft__debugf(r,
-                     "remote log last entry has higher term -> granting vote");
+        raft_debugf(r->logger,
+                    "remote log last entry has higher term -> granting vote");
         goto grant_vote;
     }
 
@@ -187,17 +192,18 @@ int raft_election__vote(struct raft *r,
 
     if (local_last_log_index <= args->last_log_index) {
         /* Our log is shorter or equal to the one of the requester. */
-        raft__debugf(r,
-                     "remote log equal or longer than local -> granting vote");
+        raft_debugf(r->logger,
+                    "remote log equal or longer than local -> granting vote");
         goto grant_vote;
     }
 
-    raft__debugf(r, "remote log shorter than local -> not granting vote");
+    raft_debugf(r->logger,
+                "remote log shorter than local -> not granting vote");
 
     return 0;
 
 grant_vote:
-    rv = r->io->write_vote(r->io, args->candidate_id);
+    rv = r->io->set_vote(r->io, args->candidate_id);
     if (rv != 0) {
         return rv;
     }

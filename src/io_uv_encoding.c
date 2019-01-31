@@ -10,81 +10,6 @@
     (sizeof(uint64_t) /* Message type. */ + \
      sizeof(uint64_t) /* Message size. */)
 
-/**
- * Current encoding format version.
- */
-#define RAFT_IO_UV_ENCODING__FORMAT 1
-
-static size_t raft_io_uv_sizeof__configuration(
-    const struct raft_configuration *c)
-{
-    size_t n = 0;
-    size_t i;
-
-    /* We need one byte for the encoding format version */
-    n++;
-
-    /* Then 8 bytes for number of servers. */
-    n += sizeof(uint64_t);
-
-    /* Then some space for each server. */
-    for (i = 0; i < c->n; i++) {
-        struct raft_server *server = &c->servers[i];
-
-        assert(server->address != NULL);
-
-        n += sizeof(uint64_t) /* Server ID */;
-        n += strlen(server->address) + 1;
-        n++; /* Voting flag */
-    };
-
-    return n;
-}
-
-int raft_io_uv_encode__configuration(const struct raft_configuration *c,
-                                     struct raft_buffer *buf) {
-    void *cursor;
-    size_t i;
-
-    assert(c != NULL);
-    assert(buf != NULL);
-
-    /* The configuration can't be empty. */
-    if (c->n == 0) {
-        return RAFT_ERR_EMPTY_CONFIGURATION;
-    }
-
-    buf->len = raft_io_uv_sizeof__configuration(c);
-    buf->base = raft_malloc(buf->len);
-
-    if (buf->base == NULL) {
-        return RAFT_ERR_NOMEM;
-    }
-
-    cursor = buf->base;
-
-    /* Encoding version */
-    raft__put8(&cursor, RAFT_IO_UV_ENCODING__FORMAT);
-
-    /* Number of servers */
-    raft__put64(&cursor, c->n);
-
-    for (i = 0; i < c->n; i++) {
-        struct raft_server *server = &c->servers[i];
-
-        assert(server->address != NULL);
-
-        raft__put64(&cursor, server->id);
-
-        strcpy((char *)cursor, server->address);
-        cursor += strlen(server->address) + 1;
-
-        raft__put8(&cursor, server->voting);
-    };
-
-    return 0;
-}
-
 size_t raft_io_uv_sizeof__request_vote()
 {
     return sizeof(uint64_t) + /* Term. */
@@ -116,6 +41,12 @@ static size_t raft_io_uv_sizeof__append_entries_result()
     return sizeof(uint64_t) + /* Term. */
            sizeof(uint64_t) + /* Success. */
            sizeof(uint64_t) /* Last log index. */;
+}
+
+size_t raft_io_uv_sizeof__batch_header(size_t n)
+{
+    return 8 + /* Number of entries in the batch, little endian */
+           16 * n /* One header per entry */;
 }
 
 static void raft_io_uv_encode__request_vote(const struct raft_request_vote *p,
@@ -299,9 +230,9 @@ static void raft_io_uv_decode__request_vote_result(
     p->vote_granted = raft__get64(&cursor);
 }
 
-static int raft_io_uv_decode__batch_header(const void *batch,
-                                           struct raft_entry **entries,
-                                           unsigned *n)
+int raft_io_uv_decode__batch_header(const void *batch,
+                                    struct raft_entry **entries,
+                                    unsigned *n)
 {
     const void *cursor = batch;
     size_t i;
@@ -429,7 +360,7 @@ int raft_io_uv_decode__message(unsigned type,
     return rv;
 }
 
-void raft_io_uv_decode__entries_batch(const uv_buf_t *buf,
+void raft_io_uv_decode__entries_batch(const struct raft_buffer *buf,
                                       struct raft_entry *entries,
                                       unsigned n)
 {

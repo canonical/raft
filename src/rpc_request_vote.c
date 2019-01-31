@@ -4,16 +4,16 @@
 
 #include "configuration.h"
 #include "election.h"
-#include "logger.h"
 #include "rpc.h"
 #include "state.h"
 
 int raft_handle_request_vote(struct raft *r,
                              const unsigned id,
                              const char *address,
-                             const struct raft_request_vote_args *args)
+                             const struct raft_request_vote *args)
 {
-    struct raft_request_vote_result result;
+    struct raft_message message;
+    struct raft_request_vote_result *result = &message.request_vote_result;
     int match;
     int rv;
 
@@ -21,9 +21,9 @@ int raft_handle_request_vote(struct raft *r,
     assert(id > 0);
     assert(args != NULL);
 
-    result.vote_granted = false;
+    result->vote_granted = false;
 
-    raft__debugf(r, "received vote request from server %ld", id);
+    raft_debugf(r->logger, "received vote request from server %ld", id);
 
     /* Reject the request if we have a leader.
      *
@@ -36,7 +36,7 @@ int raft_handle_request_vote(struct raft *r,
      */
     if (r->state == RAFT_STATE_FOLLOWER &&
         r->follower_state.current_leader_id != 0) {
-        raft__debugf(r, "local server has a leader -> reject ");
+        raft_debugf(r->logger, "local server has a leader -> reject ");
         goto reply;
     }
 
@@ -52,7 +52,7 @@ int raft_handle_request_vote(struct raft *r,
      *
      */
     if (match < 0) {
-        raft__debugf(r, "local term is higher -> reject ");
+        raft_debugf(r->logger, "local term is higher -> reject ");
         goto reply;
     }
 
@@ -60,15 +60,19 @@ int raft_handle_request_vote(struct raft *r,
      * (otherwise we would have reject the request */
     assert(r->current_term <= args->term);
 
-    rv = raft_election__vote(r, args, &result.vote_granted);
+    rv = raft_election__vote(r, args, &result->vote_granted);
     if (rv != 0) {
         return rv;
     }
 
 reply:
-    result.term = r->current_term;
+    result->term = r->current_term;
 
-    rv = r->io->send_request_vote_response(r->io, id, address, &result);
+    message.type = RAFT_IO_REQUEST_VOTE_RESULT;
+    message.server_id = id;
+    message.server_address = address;
+
+    rv = r->io->send(r->io, &message, NULL, NULL);
     if (rv != 0) {
         return rv;
     }
@@ -92,18 +96,17 @@ int raft_handle_request_vote_response(
     assert(id > 0);
     assert(result != NULL);
 
-    raft__debugf(r, "received vote request result from server %ld", id);
+    raft_debugf(r->logger, "received vote request result from server %ld", id);
 
-    votes_index =
-        raft_configuration__voting_index(&r->configuration, id);
+    votes_index = raft_configuration__voting_index(&r->configuration, id);
     if (votes_index == r->configuration.n) {
-        raft__infof(r, "non-voting or unknown server -> reject");
+        raft_infof(r->logger, "non-voting or unknown server -> reject");
         return 0;
     }
 
     /* Ignore responses if we are not candidate anymore */
     if (r->state != RAFT_STATE_CANDIDATE) {
-        raft__debugf(r, "local server is not candidate -> ignore");
+        raft_debugf(r->logger, "local server is not candidate -> ignore");
         return 0;
     }
 
@@ -116,7 +119,7 @@ int raft_handle_request_vote_response(
         /* If the term in the result is older than ours, this is an old message
          * we should ignore, because the node who voted for us would have
          * obtained our term.  This happens if the network is pretty choppy. */
-        raft__debugf(r, "local term is higher -> ignore");
+        raft_debugf(r->logger, "local term is higher -> ignore");
         return 0;
     }
 
@@ -142,7 +145,7 @@ int raft_handle_request_vote_response(
      */
     if (result->vote_granted) {
         if (raft_election__tally(r, votes_index)) {
-            raft__debugf(r, "votes quorum reached -> convert to leader");
+            raft_debugf(r->logger, "votes quorum reached -> convert to leader");
             rv = raft_state__convert_to_leader(r);
             if (rv != 0) {
                 return rv;

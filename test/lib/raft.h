@@ -8,6 +8,26 @@
 #include "../../include/raft.h"
 
 /**
+ * Start an instance and check that no error occurs.
+ */
+void test_start(struct raft *r);
+
+/**
+ * Stop an instance and check that no error occurs.
+ */
+void test_stop(struct raft *r);
+
+/**
+ * Bootstrap and start raft instance.
+ *
+ * The initial configuration will have the given amount of servers and will be
+ * saved as first entry in the log. The server IDs are assigned sequentially
+ * starting from 1 up to @n_servers. Only servers with IDs in the range
+ * [@voting_a, @voting_b] will be voting servers.
+ */
+void test_bootstrap_and_start(struct raft *r, int n_servers, int voting_a, int voting_b);
+
+/**
  * Load the persistent state of the given raft instance (term, vote and log)
  * from its test I/O implementation.
  */
