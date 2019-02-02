@@ -32,6 +32,16 @@ struct raft_io__write_log
 };
 
 /**
+ * Process the result of an asynchronous I/O request that involves raft entries
+ * or snapshots (i.e. memory shared between a raft instance and its I/O
+ * implementation).
+ *
+ * The @request parameter holds information about the entries or snapshosts
+ * referenced in request that has been completed. The @status parameter must be
+ * set to zero if the write was successful, or non-zero otherwise.
+ */
+
+/**
  * Handle and incoming message.
  */
 void raft_io__recv(struct raft *r, struct raft_message *message);

@@ -15,32 +15,6 @@
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
-int raft_handle_io(struct raft *r, const unsigned request_id, const int status)
-{
-    // request = raft_queue__get(r, request_id);
-
-    // if (request->leader_id == r->id) {
-    /* This I/O request was pushed at a time this server was a leader,
-     * either to write entries to its own on-disk log or to replicate them
-     * to a follower. */
-    //    rv = raft_handle_io__leader(r, request, status);
-    //} else {
-    /* This I/O request was pushed at a time this server was a follower, to
-     * replicate entries to its own log. */
-    //    rv = raft_handle_io__follower(r, request, status);
-    //}
-
-    // raft_queue__pop(r, request_id);
-
-    // if (rv != 0) {
-    /* TODO: should we propagate the error? */
-    //  raft_error__wrapf(r, "handle completed I/O request");
-    //    return rv;
-    //}
-
-    return 0;
-}
-
 void raft_io__send_cb(void *data, int status)
 {
     struct raft_io__send_append_entries *ctx = data;

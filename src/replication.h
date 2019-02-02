@@ -55,7 +55,7 @@ int raft_replication__update(struct raft *r,
  * The #async output parameter will be set to true if some of the entries in the
  * request were not present in our log, and a disk write was started to persist
  * them to disk. The entries will be appended to our log only once the disk
- * write completes and the @raft_handle_io callback is invoked.
+ * write completes and the I/O callback is invoked.
  *
  * It must be called only by followers.
  */

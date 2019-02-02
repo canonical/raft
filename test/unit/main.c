@@ -39,7 +39,7 @@ static MunitSuite suites[] = {
 #if RAFT_IO_UV
     {"io-uv", NULL, raft_io_uv_suites, 1, 0},
     {"io-uv-rpc", NULL, raft_io_uv_rpc_suites, 1, 0},
-    {"io-uv-store", NULL, raft_io_uv_store_suites, 1, 0},
+    //{"io-uv-store", NULL, raft_io_uv_store_suites, 1, 0},
 #endif
     {"log", NULL, raft_log_suites, 1, 0},
     /*     {"logger", NULL, raft_logger_suites, 1, 0}, */
@@ -49,7 +49,7 @@ static MunitSuite suites[] = {
     {"tick", NULL, raft_tick_suites, 1, 0},
     {"raft", NULL, raft_suites, 1, 0},
 #if RAFT_IO_UV
-    {"uv-fs", NULL, raft_uv_fs_suites, 1, 0},
+    //    {"uv-fs", NULL, raft_uv_fs_suites, 1, 0},
 #endif
     {NULL, NULL, NULL, 0, 0},
 };

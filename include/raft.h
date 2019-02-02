@@ -517,8 +517,7 @@ struct raft_io
      * submitted before the previous one is completed.
      *
      * The implementation is guaranteed that the memory holding the given
-     * entries will not be released until a notification is fired by invoking
-     * the raft_handle_io() callback with the given request ID.
+     * entries will not be released until the @cb callback is invoked.
      */
     int (*append)(const struct raft_io *io,
                   const struct raft_entry entries[],
@@ -950,17 +949,6 @@ int raft_remove_server(struct raft *r, const unsigned id);
  * callback disable notifications for that event.
  */
 void raft_watch(struct raft *r, int event, void (*cb)(void *, int, void *));
-
-/**
- * Process the result of an asynchronous I/O request that involves raft entries
- * or snapshots (i.e. memory shared between a raft instance and its I/O
- * implementation).
- *
- * The @request parameter holds information about the entries or snapshosts
- * referenced in request that has been completed. The @status parameter must be
- * set to zero if the write was successful, or non-zero otherwise.
- */
-int raft_handle_io(struct raft *r, const unsigned request_id, const int status);
 
 /**
  * Process a RequestVote RPC from the given server.

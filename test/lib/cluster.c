@@ -151,7 +151,7 @@ static void test_cluster__flush_io(struct test_cluster *c)
             int rv;
             munit_assert_int(write_log_n, ==, 1); /* At most one write. */
 
-            rv = raft_handle_io(raft, write_log_requests[0].id, 0);
+            //rv = raft_handle_io(raft, write_log_requests[0].id, 0);
             munit_assert_int(rv, ==, 0);
         }
 
@@ -159,7 +159,7 @@ static void test_cluster__flush_io(struct test_cluster *c)
             size_t i;
             for (i = 0; i < append_entries_n; i++) {
                 int rv;
-                rv = raft_handle_io(raft, append_entries_requests[i].id, 0);
+                //rv = raft_handle_io(raft, append_entries_requests[i].id, 0);
                 munit_assert_int(rv, ==, 0);
             }
         }
