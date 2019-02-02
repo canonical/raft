@@ -166,18 +166,18 @@ static void tear_down(void *data)
  * requests, asserting that they match the given numbers, then flush the test
  * I/O queue and notify the raft instance about the I/O having completed.
  */
-#define __assert_io(F, N_WRITE_LOG, N_APPEND_ENTRIES)                  \
-    {                                                                  \
-        if (N_WRITE_LOG == 1) {                                        \
-            munit_assert_true(raft_io_stub_writing(&F->io));           \
-        }                                                              \
-                                                                       \
-        if (N_APPEND_ENTRIES >= 1) {                                   \
-            munit_assert_ptr_not_null(                                 \
-                raft_io_stub_sending(&F->io, RAFT_IO_APPEND_ENTRIES)); \
-        }                                                              \
-                                                                       \
-        raft_io_stub_flush(&F->io);                                    \
+#define __assert_io(F, N_WRITE_LOG, N_APPEND_ENTRIES)                     \
+    {                                                                     \
+        if (N_WRITE_LOG == 1) {                                           \
+            munit_assert_true(raft_io_stub_writing(&F->io));              \
+        }                                                                 \
+                                                                          \
+        if (N_APPEND_ENTRIES >= 1) {                                      \
+            munit_assert_ptr_not_null(                                    \
+                raft_io_stub_sending(&F->io, RAFT_IO_APPEND_ENTRIES, 0)); \
+        }                                                                 \
+                                                                          \
+        raft_io_stub_flush(&F->io);                                       \
     }
 
 /**

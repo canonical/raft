@@ -8,30 +8,6 @@
 #include "../include/raft.h"
 
 /**
- * Hold context for a #RAFT_IO_APPEND_ENTRIES send request that was submitted.
- */
-struct raft_io__send_append_entries
-{
-    struct raft *raft;          /* Instance that has submitted the request */
-    raft_index index;           /* Index of the first entry in the request. */
-    struct raft_entry *entries; /* Entries referenced in the request. */
-    unsigned n;                 /* Length of the entries array. */
-};
-
-/**
- * Hold context for a write log request that was submitted.
- */
-struct raft_io__write_log
-{
-    struct raft *raft;          /* Instance that has submitted the request */
-    raft_index index;           /* Index of the first entry in the request. */
-    struct raft_entry *entries; /* Entries referenced in the request. */
-    unsigned n;                 /* Length of the entries array. */
-    unsigned leader_id;         /* Leader issuing the request */
-    raft_index leader_commit;   /* For followers, commit index on the leader */
-};
-
-/**
  * Process the result of an asynchronous I/O request that involves raft entries
  * or snapshots (i.e. memory shared between a raft instance and its I/O
  * implementation).
@@ -42,24 +18,32 @@ struct raft_io__write_log
  */
 
 /**
- * Handle and incoming message.
- */
-void raft_io__recv(struct raft *r, struct raft_message *message);
-
-/**
- * Callback to pass to raft_io.send.
- */
-void raft_io__send_cb(void *data, int status);
-
-/**
- * Callback to pass to raft_io.append.
- */
-void raft_io__append_cb(void *data, int status);
-
-/**
- * Callback to be passed to the @raft_io implementation. This is just a
- * trampiline to invoke @raft_io__recv.
+ * Callback to be passed to the @raft_io implementation. It will be invoked upon
+ * receiving an RPC message.
  */
 void raft__recv_cb(void *data, struct raft_message *message);
+
+/**
+ * Persist all entries that have been added to the in-memory log, from the given
+ * index onwards. This must be called by leaders when replicating new entries.
+ */
+int raft_io__leader_append(struct raft *r, unsigned index);
+
+/**
+ * Persist all entries that have been sent to as by a leader using the
+ * AppendEntries RPC.
+ */
+int raft_io__follower_append(struct raft *r,
+                             struct raft_entry *entries,
+                             size_t n,
+                             unsigned leader_id,
+                             raft_index leader_commit);
+
+/**
+ * Send an AppendEntries RPC to the given server.
+ */
+int raft_io__send_append_entries(struct raft *r,
+                                 const struct raft_server *server,
+                                 const struct raft_append_entries *args);
 
 #endif /* RAFT_IO_H */

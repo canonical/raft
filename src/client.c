@@ -39,10 +39,13 @@ int raft_accept(struct raft *r,
 
     rv = raft_replication__trigger(r, index);
     if (rv != 0) {
-        goto err;
+        goto err_after_log_append;
     }
 
     return 0;
+
+err_after_log_append:
+    raft_log__discard(&r->log, index);
 
 err:
     assert(rv != 0);

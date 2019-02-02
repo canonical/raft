@@ -2,7 +2,6 @@
 
 #include "configuration.h"
 #include "election.h"
-#include "error.h"
 #include "log.h"
 
 void raft_election__reset_timer(struct raft *r)
@@ -59,7 +58,7 @@ int raft_election__start(struct raft *r)
     int rv;
 
     assert(r != NULL);
-    assert(r->state == RAFT_STATE_FOLLOWER || r->state == RAFT_STATE_CANDIDATE);
+    assert(r->state == RAFT_STATE_CANDIDATE);
 
     n_voting = raft_configuration__n_voting(&r->configuration);
     voting_index = raft_configuration__voting_index(&r->configuration, r->id);
@@ -79,14 +78,12 @@ int raft_election__start(struct raft *r)
     term = r->current_term + 1;
     rv = r->io->set_term(r->io, term);
     if (rv != 0) {
-        raft_error__printf(r, rv, "persist term");
         goto err;
     }
 
     /* Vote for self */
     rv = r->io->set_vote(r->io, r->id);
     if (rv != 0) {
-        raft_error__printf(r, rv, "persist vote");
         goto err;
     }
 

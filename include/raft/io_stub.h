@@ -43,10 +43,17 @@ void raft_io_stub_fault(struct raft_io *io, int delay, int repeat);
 bool raft_io_stub_writing(struct raft_io *io);
 
 /**
- * Get the first message of the given @type that is currently being sent, if
+ * Return the number of pending messages of the given type that are being sent.
+ */
+unsigned raft_io_stub_sending_n(struct raft_io *io, int type);
+
+/**
+ * Get the @i'th message of the given @type that is currently being sent, if
  * any.
  */
-struct raft_message *raft_io_stub_sending(struct raft_io *io, int type);
+struct raft_message *raft_io_stub_sending(struct raft_io *io,
+                                          int type,
+                                          unsigned i);
 
 /**
  * Convenience for getting the current term stored in the stub.

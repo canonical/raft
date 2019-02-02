@@ -66,7 +66,7 @@ int raft_election__start(struct raft *r);
  *   - If votedFor is null or candidateId, and candidate's log is at least as
  *     up-to-date as receiver's log, grant vote.
  *
- * The outcome of the decision is stored through the *granted pointer.
+ * The outcome of the decision is stored through the @granted pointer.
  */
 int raft_election__vote(struct raft *r,
                         const struct raft_request_vote *args,

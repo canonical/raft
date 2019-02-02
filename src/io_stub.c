@@ -544,9 +544,10 @@ bool raft_io_stub_writing(struct raft_io *io)
     return (s->append.cb != NULL);
 }
 
-struct raft_message *raft_io_stub_sending(struct raft_io *io, int type)
+unsigned raft_io_stub_sending_n(struct raft_io *io, int type)
 {
     struct raft_io_stub *s;
+    unsigned n = 0;
     size_t i;
 
     assert(io != NULL);
@@ -561,7 +562,37 @@ struct raft_message *raft_io_stub_sending(struct raft_io *io, int type)
         }
 
         if (request->message.type == type) {
-            return &request->message;
+            n++;
+        }
+    }
+
+    return n;
+}
+
+struct raft_message *raft_io_stub_sending(struct raft_io *io,
+                                          int type,
+                                          unsigned i)
+{
+    struct raft_io_stub *s;
+    unsigned n = 0;
+    size_t j;
+
+    assert(io != NULL);
+
+    s = io->data;
+
+    for (j = 0; j < RAFT_IO_STUB_MAX_REQUESTS; j++) {
+        struct raft_io_stub_request *request = &s->send.requests[i];
+
+        if (!request->pending) {
+            continue;
+        }
+
+        if (request->message.type == type) {
+            if (n == i) {
+                return &request->message;
+            }
+	    n++;
         }
     }
 
