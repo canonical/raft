@@ -37,11 +37,6 @@ static void __stop_cb(void *data)
 }
 
 /**
- * Assert the current state of the raft instance of the given fixture.
- */
-#define __assert_state(F, STATE) munit_assert_int(F->raft.state, ==, STATE);
-
-/**
  * Setup and tear down
  */
 
@@ -82,6 +77,33 @@ static void tear_down(void *data)
 
     free(f);
 }
+
+/**
+ * Start the fixture's instance and check that no error occurs.
+ */
+#define __start(F)                   \
+    {                                \
+        int rv;                      \
+                                     \
+        rv = raft_start(&F->raft);   \
+        munit_assert_int(rv, ==, 0); \
+    }
+
+/**
+ * Start the fixture's instance and that the given error occurs.
+ */
+#define __assert_start_error(F, RV)   \
+    {                                 \
+        int rv;                       \
+                                      \
+        rv = raft_start(&F->raft);    \
+        munit_assert_int(rv, ==, RV); \
+    }
+
+/**
+ * Assert the current state of the raft instance of the given fixture.
+ */
+#define __assert_state(F, STATE) munit_assert_int(F->raft.state, ==, STATE);
 
 /**
  * raft_init
@@ -170,14 +192,12 @@ static MunitTest init_tests[] = {
 static MunitResult test_start_io_err(const MunitParameter params[], void *data)
 {
     struct fixture *f = data;
-    int rv;
 
     (void)params;
 
     raft_io_stub_fault(&f->io, 0, 1);
 
-    rv = raft_start(&f->raft);
-    munit_assert_int(rv, ==, RAFT_ERR_IO);
+    __assert_start_error(f, RAFT_ERR_IO);
 
     return MUNIT_OK;
 }
@@ -192,8 +212,7 @@ static MunitResult test_start_pristine(const MunitParameter params[],
 
     (void)params;
 
-    rv = raft_start(&f->raft);
-    munit_assert_int(rv, ==, 0);
+    __start(f);
 
     __assert_state(f, RAFT_STATE_FOLLOWER);
 
@@ -216,8 +235,7 @@ static MunitResult test_start_bootstrapped(const MunitParameter params[],
 
     test_io_bootstrap(&f->io, 2, 1, 2);
 
-    rv = raft_start(&f->raft);
-    munit_assert_int(rv, ==, 0);
+    __start(f);
 
     __assert_state(f, RAFT_STATE_FOLLOWER);
 
@@ -241,7 +259,6 @@ static MunitParameterEnum start_oom_params[] = {
 static MunitResult test_start_oom(const MunitParameter params[], void *data)
 {
     struct fixture *f = data;
-    int rv;
 
     (void)params;
 
@@ -249,8 +266,7 @@ static MunitResult test_start_oom(const MunitParameter params[], void *data)
 
     test_heap_fault_enable(&f->heap);
 
-    rv = raft_start(&f->raft);
-    munit_assert_int(rv, ==, RAFT_ERR_NOMEM);
+    __assert_start_error(f, RAFT_ERR_NOMEM);
 
     return MUNIT_OK;
 }
@@ -264,11 +280,74 @@ static MunitTest start_tests[] = {
 };
 
 /**
+ * raft_bootstrap
+ */
+
+/* An error occurs when bootstrapping the state on disk. */
+static MunitResult test_bootstrap_io_err(const MunitParameter params[],
+                                         void *data)
+{
+    struct fixture *f = data;
+    struct raft_configuration configuration;
+    int rv;
+
+    (void)params;
+
+    raft_configuration_init(&configuration);
+
+    raft_io_stub_fault(&f->io, 0, 1);
+
+    rv = raft_bootstrap(&f->raft, &configuration);
+    munit_assert_int(rv, ==, RAFT_ERR_IO);
+
+    raft_configuration_close(&configuration);
+
+    return MUNIT_OK;
+}
+
+/* Starting an instance after it's bootstrapped initializes the
+ * configuration. */
+static MunitResult test_bootstrap_state(const MunitParameter params[],
+                                        void *data)
+{
+    struct fixture *f = data;
+    struct raft_configuration configuration;
+    int rv;
+
+    (void)params;
+
+    raft_configuration_init(&configuration);
+
+    rv = raft_configuration_add(&configuration, 1, "1", true);
+    munit_assert_int(rv, ==, 0);
+
+    rv = raft_bootstrap(&f->raft, &configuration);
+    munit_assert_int(rv, ==, 0);
+
+    __start(f);
+
+    munit_assert_int(f->raft.configuration.n, ==, 1);
+    munit_assert_int(f->raft.configuration.servers[0].id, ==, 1);
+    munit_assert_string_equal(f->raft.configuration.servers[0].address, "1");
+
+    raft_configuration_close(&configuration);
+
+    return MUNIT_OK;
+}
+
+static MunitTest bootstrap_tests[] = {
+    {"/io-err", test_bootstrap_io_err, setup, tear_down, 0, NULL},
+    {"/state", test_bootstrap_state, setup, tear_down, 0, NULL},
+    {NULL, NULL, NULL, NULL, 0, NULL},
+};
+
+/**
  * Test suite
  */
 
 MunitSuite raft_suites[] = {
     {"/init", init_tests, NULL, 1, 0},
     {"/start", start_tests, NULL, 1, 0},
+    {"/bootstrap", bootstrap_tests, NULL, 1, 0},
     {NULL, NULL, NULL, 0, 0},
 };
