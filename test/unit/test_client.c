@@ -4,6 +4,7 @@
 
 #include "../../src/configuration.h"
 #include "../../src/log.h"
+#include "../../src/rpc_append_entries.h"
 #include "../../src/tick.h"
 
 #include "../lib/fsm.h"
@@ -118,66 +119,76 @@ static void tear_down(void *data)
  * Call raft_handle_append_entries with the given parameters and check that no
  * error occurs.
  */
-#define __handle_append_entries(F, TERM, LEADER_ID, PREV_LOG_INDEX,           \
-                                PREV_LOG_TERM, ENTRIES, N, COMMIT)            \
-    {                                                                         \
-        struct raft_append_entries args;                                      \
-        char address[4];                                                      \
-        int rv;                                                               \
-                                                                              \
-        sprintf(address, "%d", LEADER_ID);                                    \
-                                                                              \
-        args.term = TERM;                                                     \
-        args.leader_id = LEADER_ID;                                           \
-        args.prev_log_index = PREV_LOG_INDEX;                                 \
-        args.prev_log_term = PREV_LOG_TERM;                                   \
-        args.entries = ENTRIES;                                               \
-        args.n_entries = N;                                                   \
-        args.leader_commit = COMMIT;                                          \
-                                                                              \
-        rv = raft_handle_append_entries(&F->raft, LEADER_ID, address, &args); \
-        munit_assert_int(rv, ==, 0);                                          \
+#define __handle_append_entries(F, TERM, LEADER_ID, PREV_LOG_INDEX,      \
+                                PREV_LOG_TERM, ENTRIES, N, COMMIT)       \
+    {                                                                    \
+        struct raft_append_entries args;                                 \
+        char address[4];                                                 \
+        int rv;                                                          \
+                                                                         \
+        sprintf(address, "%d", LEADER_ID);                               \
+                                                                         \
+        args.term = TERM;                                                \
+        args.leader_id = LEADER_ID;                                      \
+        args.prev_log_index = PREV_LOG_INDEX;                            \
+        args.prev_log_term = PREV_LOG_TERM;                              \
+        args.entries = ENTRIES;                                          \
+        args.n_entries = N;                                              \
+        args.leader_commit = COMMIT;                                     \
+                                                                         \
+        rv = raft_rpc__recv_append_entries(&F->raft, LEADER_ID, address, \
+                                           &args);                       \
+        munit_assert_int(rv, ==, 0);                                     \
     }
 
 /**
- * Call raft_handle_append_entries_response with the given parameters and check
+ * Call raft_rpc__recv_append_entries_result with the given parameters and check
  * that no error occurs.
  */
-#define __handle_append_entries_response(F, SERVER_ID, TERM, SUCCESS,          \
-                                         LAST_LOG_INDEX)                       \
-    {                                                                          \
-        char address[4];                                                       \
-        struct raft_append_entries_result result;                              \
-        int rv;                                                                \
-                                                                               \
-        sprintf(address, "%d", SERVER_ID);                                     \
-                                                                               \
-        result.term = TERM;                                                    \
-        result.success = SUCCESS;                                              \
-        result.last_log_index = LAST_LOG_INDEX;                                \
-                                                                               \
-        rv = raft_handle_append_entries_response(&F->raft, SERVER_ID, address, \
-                                                 &result);                     \
-        munit_assert_int(rv, ==, 0);                                           \
+#define __handle_append_entries_response(F, SERVER_ID, TERM, SUCCESS,  \
+                                         LAST_LOG_INDEX)               \
+    {                                                                  \
+        char address[4];                                               \
+        struct raft_append_entries_result result;                      \
+        int rv;                                                        \
+                                                                       \
+        sprintf(address, "%d", SERVER_ID);                             \
+                                                                       \
+        result.term = TERM;                                            \
+        result.success = SUCCESS;                                      \
+        result.last_log_index = LAST_LOG_INDEX;                        \
+                                                                       \
+        rv = raft_rpc__recv_append_entries_result(&F->raft, SERVER_ID, \
+                                                  address, &result);   \
+        munit_assert_int(rv, ==, 0);                                   \
     }
 
 /**
- * Complete any outstanding RAFT_IO_WRITE_LOG or RAFT_IO_APPEND_ENTRIES
- * requests, asserting that they match the given numbers, then flush the test
- * I/O queue and notify the raft instance about the I/O having completed.
+ * Complete any outstanding I/O operation requests, asserting that they match
+ * the given numbers.
  */
-#define __assert_io(F, N_WRITE_LOG, N_APPEND_ENTRIES)                     \
-    {                                                                     \
-        if (N_WRITE_LOG == 1) {                                           \
-            munit_assert_true(raft_io_stub_writing(&F->io));              \
-        }                                                                 \
-                                                                          \
-        if (N_APPEND_ENTRIES >= 1) {                                      \
-            munit_assert_ptr_not_null(                                    \
-                raft_io_stub_sending(&F->io, RAFT_IO_APPEND_ENTRIES, 0)); \
-        }                                                                 \
-                                                                          \
-        raft_io_stub_flush(&F->io);                                       \
+#define __assert_io(F, N_WRITE_LOG, N_APPEND_ENTRIES)             \
+    {                                                             \
+        struct raft_entry *entries;                               \
+        struct raft_message *messages;                            \
+        unsigned n;                                               \
+        unsigned n_append_entries = 0;                            \
+        unsigned i;                                               \
+                                                                  \
+        raft_io_stub_flush(&F->io);                               \
+                                                                  \
+        if (N_WRITE_LOG == 1) {                                   \
+            raft_io_stub_appended(&F->io, &entries, &n);          \
+            munit_assert_ptr_not_null(entries);                   \
+        }                                                         \
+                                                                  \
+        raft_io_stub_sent(&F->io, &messages, &n);                 \
+        for (i = 0; i < n; i++) {                                 \
+            if (messages[i].type == RAFT_IO_APPEND_ENTRIES) {     \
+                n_append_entries++;                               \
+            }                                                     \
+        }                                                         \
+        munit_assert_int(n_append_entries, ==, N_APPEND_ENTRIES); \
     }
 
 /**
@@ -236,8 +247,6 @@ static MunitResult test_accept_not_leader(const MunitParameter params[],
 
     rv = raft_accept(&f->raft, &buf, 1);
     munit_assert_int(rv, ==, RAFT_ERR_NOT_LEADER);
-    munit_assert_string_equal(raft_errmsg(&f->raft),
-                              "can't accept entries: server is not the leader");
 
     raft_free(buf.base);
 
@@ -353,9 +362,6 @@ static MunitResult test_add_server_not_leader(const MunitParameter params[],
     rv = raft_add_server(&f->raft, 3, "3");
     munit_assert_int(rv, ==, RAFT_ERR_NOT_LEADER);
 
-    munit_assert_string_equal(raft_errmsg(&f->raft),
-                              "server is not the leader");
-
     return MUNIT_OK;
 }
 
@@ -377,9 +383,6 @@ static MunitResult test_add_server_busy(const MunitParameter params[],
     rv = raft_add_server(&f->raft, 4, "4");
     munit_assert_int(rv, ==, RAFT_ERR_CONFIGURATION_BUSY);
 
-    munit_assert_string_equal(raft_errmsg(&f->raft),
-                              "a configuration change is already in progress");
-
     raft_io_stub_flush(&f->io);
 
     return MUNIT_OK;
@@ -400,10 +403,6 @@ static MunitResult test_add_server_dup_id(const MunitParameter params[],
 
     rv = raft_add_server(&f->raft, 1, "3");
     munit_assert_int(rv, ==, RAFT_ERR_DUP_SERVER_ID);
-
-    munit_assert_string_equal(
-        raft_errmsg(&f->raft),
-        "add server to new configuration: server ID already in use");
 
     return MUNIT_OK;
 }
@@ -497,9 +496,6 @@ static MunitResult test_promote_not_leader(const MunitParameter params[],
     rv = raft_promote(&f->raft, 3);
     munit_assert_int(rv, ==, RAFT_ERR_NOT_LEADER);
 
-    munit_assert_string_equal(raft_errmsg(&f->raft),
-                              "server is not the leader");
-
     return MUNIT_OK;
 }
 
@@ -519,8 +515,6 @@ static MunitResult test_promote_bad_id(const MunitParameter params[],
     rv = raft_promote(&f->raft, 4);
     munit_assert_int(rv, ==, RAFT_ERR_BAD_SERVER_ID);
 
-    munit_assert_string_equal(raft_errmsg(&f->raft), "server ID is not valid");
-
     return MUNIT_OK;
 }
 
@@ -538,9 +532,6 @@ static MunitResult test_promote_already_voting(const MunitParameter params[],
 
     rv = raft_promote(&f->raft, 2);
     munit_assert_int(rv, ==, RAFT_ERR_SERVER_ALREADY_VOTING);
-
-    munit_assert_string_equal(raft_errmsg(&f->raft),
-                              "server is already voting");
 
     return MUNIT_OK;
 }
@@ -562,10 +553,6 @@ static MunitResult test_promote_in_progress(const MunitParameter params[],
 
     rv = raft_promote(&f->raft, 4);
     munit_assert_int(rv, ==, RAFT_ERR_CONFIGURATION_BUSY);
-
-    munit_assert_string_equal(raft_errmsg(&f->raft),
-                              "a configuration change "
-                              "is already in progress");
 
     raft_io_stub_flush(&f->io);
 
@@ -796,6 +783,8 @@ static MunitResult test_promote_step_down(const MunitParameter params[],
     server = raft_configuration__get(&f->raft.configuration, 3);
     munit_assert_false(server->voting);
 
+    raft_io_stub_flush(&f->io);
+
     return MUNIT_OK;
 }
 
@@ -865,8 +854,8 @@ static MunitTest promote_tests[] = {
     {"/catch-up", test_promote_catch_up, setup, tear_down, 0, NULL},
     {"/new-round", test_promote_new_round, setup, tear_down, 0, NULL},
     {"/committed", test_promote_committed, setup, tear_down, 0, NULL},
-    /* {"/step-down", test_promote_step_down, setup, tear_down, 0, NULL}, */
-    /* {"/follower", test_promote_follower, setup, tear_down, 0, NULL}, */
+    {"/step-down", test_promote_step_down, setup, tear_down, 0, NULL},
+    {"/follower", test_promote_follower, setup, tear_down, 0, NULL},
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 
@@ -889,9 +878,6 @@ static MunitResult test_remove_server_not_leader(const MunitParameter params[],
     rv = raft_remove_server(&f->raft, 3);
     munit_assert_int(rv, ==, RAFT_ERR_NOT_LEADER);
 
-    munit_assert_string_equal(raft_errmsg(&f->raft),
-                              "server is not the leader");
-
     return MUNIT_OK;
 }
 
@@ -913,9 +899,6 @@ static MunitResult test_remove_server_busy(const MunitParameter params[],
     rv = raft_remove_server(&f->raft, 2);
     munit_assert_int(rv, ==, RAFT_ERR_CONFIGURATION_BUSY);
 
-    munit_assert_string_equal(raft_errmsg(&f->raft),
-                              "a configuration change is already in progress");
-
     raft_io_stub_flush(&f->io);
 
     return MUNIT_OK;
@@ -935,8 +918,6 @@ static MunitResult test_remove_server_bad_id(const MunitParameter params[],
 
     rv = raft_remove_server(&f->raft, 3);
     munit_assert_int(rv, ==, RAFT_ERR_BAD_SERVER_ID);
-
-    munit_assert_string_equal(raft_errmsg(&f->raft), "server ID is not valid");
 
     return MUNIT_OK;
 }

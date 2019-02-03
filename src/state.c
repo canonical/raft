@@ -1,11 +1,8 @@
-#include <assert.h>
-
+#include "state.h"
+#include "assert.h"
 #include "configuration.h"
 #include "election.h"
-#include "error.h"
 #include "log.h"
-#include "replication.h"
-#include "state.h"
 #include "watch.h"
 
 const char *raft_state_names[] = {"unavailable", "follower", "candidate",
@@ -108,7 +105,6 @@ int raft_state__bump_current_term(struct raft *r, raft_term term)
     /* Save the new term to persistent store, resetting the vote. */
     rv = r->io->set_term(r->io, term);
     if (rv != 0) {
-        raft_error__printf(r, rv, "persist new term");
         return rv;
     }
 
@@ -176,7 +172,6 @@ int raft_state__convert_to_candidate(struct raft *r)
     r->candidate_state.votes = raft_malloc(n_voting * sizeof(bool));
     if (r->candidate_state.votes == NULL) {
         rv = RAFT_ERR_NOMEM;
-        raft_error__printf(r, rv, "alloc votes array");
         goto err;
     }
 
@@ -215,14 +210,12 @@ static int raft_state__alloc_next_and_match_indexes(struct raft *r,
     *next_index = raft_calloc(n_servers, sizeof **next_index);
     if (*next_index == NULL) {
         rv = RAFT_ERR_NOMEM;
-        raft_error__printf(r, rv, "alloc next_index array");
         goto err;
     }
 
     *match_index = raft_calloc(n_servers, sizeof **match_index);
     if (*match_index == NULL) {
         rv = RAFT_ERR_NOMEM;
-        raft_error__printf(r, rv, "alloc match_index array");
         goto err;
     }
 
@@ -259,13 +252,6 @@ int raft_state__convert_to_leader(struct raft *r)
         r->leader_state.next_index[i] = raft_log__last_index(&r->log) + 1;
         r->leader_state.match_index[i] = 0;
     }
-
-    /* Send heartbeat messages.
-     *
-     * Note that since we have just set the next_index to the latest index in
-     * our log, the AppendEntries RPC that we send here will carry 0 entries,
-     * and indeed act as initial heartbeat. */
-    raft_replication__trigger(r, 0);
 
     /* Notify watchers */
     raft_watch__state_change(r, RAFT_STATE_CANDIDATE);

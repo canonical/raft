@@ -1,6 +1,6 @@
-#include <assert.h>
 #include <string.h>
 
+#include "assert.h"
 #include "binary.h"
 #include "configuration.h"
 
@@ -83,8 +83,8 @@ const struct raft_server *raft_configuration__get(
     i = raft_configuration__index(c, id);
 
     if (i == c->n) {
-      /* No server with matching ID. */
-      return NULL;
+        /* No server with matching ID. */
+        return NULL;
     }
 
     assert(i < c->n);
@@ -371,4 +371,3 @@ int raft_configuration_decode(const struct raft_buffer *buf,
 
     return 0;
 }
-

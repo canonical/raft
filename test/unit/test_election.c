@@ -1,5 +1,6 @@
 #include "../../include/raft.h"
 
+#include "../../src/configuration.h"
 #include "../../src/election.h"
 
 #include "../lib/fsm.h"
@@ -37,6 +38,18 @@ static void tear_down(void *data)
 
     free(f);
 }
+
+/**
+ * Set the state of the fixture's raft instance to #RAFT_STATE_CANDIDATE, and
+ * initialize the votes array.
+ */
+#define __set_state_to_candidate(F)                                           \
+    {                                                                         \
+        int n_voting = raft_configuration__n_voting(&F->raft.configuration);  \
+                                                                              \
+        F->raft.state = RAFT_STATE_CANDIDATE;                                 \
+        F->raft.candidate_state.votes = raft_malloc(n_voting * sizeof(bool)); \
+    }
 
 /**
  * raft_election__reset_timer
@@ -84,8 +97,7 @@ static MunitResult test_start_term_io_err(const MunitParameter params[],
 
     test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
-    f->raft.state = RAFT_STATE_CANDIDATE;
-    f->raft.candidate_state.votes = raft_malloc(2 * sizeof(bool));
+    __set_state_to_candidate(f);
 
     raft_io_stub_fault(&f->io, 0, 1);
 
@@ -106,8 +118,7 @@ static MunitResult test_start_vote_io_err(const MunitParameter params[],
 
     test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
-    f->raft.state = RAFT_STATE_CANDIDATE;
-    f->raft.candidate_state.votes = raft_malloc(2 * sizeof(bool));
+    __set_state_to_candidate(f);
 
     raft_io_stub_fault(&f->io, 1, 1);
 
@@ -128,8 +139,7 @@ static MunitResult test_start_send_io_err(const MunitParameter params[],
 
     test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
-    f->raft.state = RAFT_STATE_CANDIDATE;
-    f->raft.candidate_state.votes = raft_malloc(2 * sizeof(bool));
+    __set_state_to_candidate(f);
 
     raft_io_stub_fault(&f->io, 2, 1);
 
@@ -144,29 +154,30 @@ static MunitResult test_start_send_messages(const MunitParameter params[],
                                             void *data)
 {
     struct fixture *f = data;
+    struct raft_message *messages;
     unsigned n;
-    struct raft_message *message;
     int rv;
 
     (void)params;
 
     test_bootstrap_and_start(&f->raft, 3, 1, 2);
 
-    f->raft.state = RAFT_STATE_CANDIDATE;
-    f->raft.candidate_state.votes = raft_malloc(2 * sizeof(bool));
+    __set_state_to_candidate(f);
 
     rv = raft_election__start(&f->raft);
     munit_assert_int(rv, ==, 0);
 
+    raft_io_stub_flush(&f->io);
+
     /* Since there's only one other voting server, we sent only one message. */
-    n = raft_io_stub_sending_n(&f->io, RAFT_IO_REQUEST_VOTE);
+    raft_io_stub_sent(&f->io, &messages, &n);
+
     munit_assert_int(n, ==, 1);
 
-    message = raft_io_stub_sending(&f->io, RAFT_IO_REQUEST_VOTE, 0);
-    munit_assert_int(message->server_id, ==, 2);
-    munit_assert_string_equal(message->server_address, "2");
-    munit_assert_int(message->request_vote.term, ==, 2);
-    munit_assert_int(message->request_vote.candidate_id, ==, 1);
+    munit_assert_int(messages[0].server_id, ==, 2);
+    munit_assert_string_equal(messages[0].server_address, "2");
+    munit_assert_int(messages[0].request_vote.term, ==, 2);
+    munit_assert_int(messages[0].request_vote.candidate_id, ==, 1);
 
     return MUNIT_OK;
 }
@@ -210,8 +221,7 @@ static MunitResult test_vote_newer_term(const MunitParameter params[],
 }
 
 /* An error occurs when persisting the vote. */
-static MunitResult test_vote_io_err(const MunitParameter params[],
-                                        void *data)
+static MunitResult test_vote_io_err(const MunitParameter params[], void *data)
 {
     struct fixture *f = data;
     struct raft_request_vote args;

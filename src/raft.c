@@ -6,9 +6,10 @@
 #include "assert.h"
 #include "configuration.h"
 #include "election.h"
-#include "error.h"
-#include "io.h"
 #include "log.h"
+#include "rpc.h"
+#include "rpc_append_entries.h"
+#include "rpc_request_vote.h"
 #include "state.h"
 #include "tick.h"
 
@@ -98,6 +99,54 @@ static void raft__stop_cb(void *data)
 
     if (r->stop.cb != NULL) {
         r->stop.cb(r->stop.data);
+    }
+}
+
+static void raft__tick_cb(void *data, unsigned msecs)
+{
+    struct raft *r;
+
+    r = data;
+
+    raft__tick(r, msecs);
+}
+
+static void raft__recv_cb(void *data, struct raft_message *message)
+{
+    struct raft *r;
+    int rv;
+
+    r = data;
+
+    switch (message->type) {
+        case RAFT_IO_APPEND_ENTRIES:
+            rv = raft_rpc__recv_append_entries(r, message->server_id,
+                                               message->server_address,
+                                               &message->append_entries);
+            break;
+        case RAFT_IO_APPEND_ENTRIES_RESULT:
+            rv = raft_rpc__recv_append_entries_result(
+                r, message->server_id, message->server_address,
+                &message->append_entries_result);
+            break;
+        case RAFT_IO_REQUEST_VOTE:
+            rv = raft_rpc__recv_request_vote(r, message->server_id,
+                                             message->server_address,
+                                             &message->request_vote);
+	    break;
+        case RAFT_IO_REQUEST_VOTE_RESULT:
+            rv = raft_rpc__recv_request_vote_result(
+                r, message->server_id, message->server_address,
+                &message->request_vote_result);
+            break;
+        default:
+            rv = RAFT_ERR_MALFORMED;
+            break;
+    };
+
+    if (rv != 0) {
+        raft_warnf(r->logger, "handle message with type %d: %s", message->type,
+                   raft_strerror(rv));
     }
 }
 

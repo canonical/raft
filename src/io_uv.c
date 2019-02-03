@@ -1,4 +1,3 @@
-#include <assert.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -7,8 +6,8 @@
 
 #include "../include/raft.h"
 
+#include "assert.h"
 #include "binary.h"
-#include "error.h"
 #include "io_uv_rpc.h"
 #include "io_uv_store.h"
 #include "uv_fs.h"

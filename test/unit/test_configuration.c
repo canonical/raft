@@ -14,6 +14,31 @@ struct fixture
     struct raft_configuration configuration;
 };
 
+static void *setup(const MunitParameter params[], void *user_data)
+{
+    struct fixture *f = munit_malloc(sizeof *f);
+
+    (void)user_data;
+    (void)params;
+
+    test_heap_setup(params, &f->heap);
+
+    raft_configuration_init(&f->configuration);
+
+    return f;
+}
+
+static void tear_down(void *data)
+{
+    struct fixture *f = data;
+
+    raft_configuration_close(&f->configuration);
+
+    test_heap_tear_down(&f->heap);
+
+    free(f);
+}
+
 /**
  * Add a server to the fixture's configuration and check that no error occurs.
  */
@@ -67,35 +92,6 @@ struct fixture
         munit_assert_string_equal(server->address, ADDRESS); \
         munit_assert_int(server->voting, ==, VOTING);        \
     }
-
-/**
- * Setup and tear down
- */
-
-static void *setup(const MunitParameter params[], void *user_data)
-{
-    struct fixture *f = munit_malloc(sizeof *f);
-
-    (void)user_data;
-    (void)params;
-
-    test_heap_setup(params, &f->heap);
-
-    raft_configuration_init(&f->configuration);
-
-    return f;
-}
-
-static void tear_down(void *data)
-{
-    struct fixture *f = data;
-
-    raft_configuration_close(&f->configuration);
-
-    test_heap_tear_down(&f->heap);
-
-    free(f);
-}
 
 /**
  * raft_configuration__index
@@ -501,7 +497,6 @@ static MunitResult test_remove_first(const MunitParameter params[], void *data)
 
     __assert_n_servers(f, 1);
     __assert_server_equal(f, 0, 2, "192.168.1.1:666", false);
-    ;
 
     return MUNIT_OK;
 }
@@ -521,9 +516,7 @@ static MunitResult test_remove_middle(const MunitParameter params[], void *data)
 
     __assert_n_servers(f, 2);
     __assert_server_equal(f, 0, 1, "127.0.0.1:666", true);
-    ;
     __assert_server_equal(f, 1, 3, "10.0.1.1:666", true);
-    ;
 
     return MUNIT_OK;
 }
@@ -592,8 +585,7 @@ static MunitResult test_encode_oom(const MunitParameter params[], void *data)
     test_heap_fault_config(&f->heap, 2, 1);
     test_heap_fault_enable(&f->heap);
 
-    rv = raft_configuration_add(&f->configuration, 1, "127.0.0.1:666", true);
-    munit_assert_int(rv, ==, 0);
+    __add(f, 1, "127.0.0.1:666", true);
 
     rv = raft_configuration_encode(&f->configuration, &buf);
     munit_assert_int(rv, ==, RAFT_ERR_NOMEM);
@@ -613,8 +605,7 @@ static MunitResult test_encode_one_server(const MunitParameter params[],
     (void)data;
     (void)params;
 
-    rv = raft_configuration_add(&f->configuration, 1, "127.0.0.1:666", true);
-    munit_assert_int(rv, ==, 0);
+    __add(f, 1, "127.0.0.1:666", true);
 
     rv = raft_configuration_encode(&f->configuration, &buf);
     munit_assert_int(rv, ==, 0);
@@ -649,11 +640,8 @@ static MunitResult test_encode_two_servers(const MunitParameter params[],
     (void)data;
     (void)params;
 
-    rv = raft_configuration_add(&f->configuration, 1, "127.0.0.1:666", false);
-    munit_assert_int(rv, ==, 0);
-
-    rv = raft_configuration_add(&f->configuration, 2, "192.168.1.1:666", true);
-    munit_assert_int(rv, ==, 0);
+    __add(f, 1, "127.0.0.1:666", false);
+    __add(f, 2, "192.168.1.1:666", true);
 
     rv = raft_configuration_encode(&f->configuration, &buf);
     munit_assert_int(rv, ==, 0);
@@ -710,8 +698,7 @@ static MunitResult test_decode_empty(const MunitParameter params[], void *data)
     buf.base = &bytes;
     buf.len = 1;
 
-    rv = raft_configuration_add(&f->configuration, 1, "127.0.0.1:666", true);
-    munit_assert_int(rv, ==, 0);
+    __add(f, 1, "127.0.0.1:666", true);
 
     rv = raft_configuration_decode(&buf, &f->configuration);
     munit_assert_int(rv, ==, RAFT_ERR_CONFIGURATION_NOT_EMPTY);
@@ -813,11 +800,8 @@ static MunitResult test_decode_one_server(const MunitParameter params[],
     rv = raft_configuration_decode(&buf, &f->configuration);
     munit_assert_int(rv, ==, 0);
 
-    munit_assert_int(f->configuration.n, ==, 1);
-
-    munit_assert_int(f->configuration.servers[0].id, ==, 5);
-    munit_assert_string_equal(f->configuration.servers[0].address, "x.y");
-    munit_assert_int(f->configuration.servers[0].voting, ==, 1);
+    __assert_n_servers(f, 1);
+    __assert_server_equal(f, 0, 5, "x.y", true);
 
     return MUNIT_OK;
 }
@@ -848,15 +832,10 @@ static MunitResult test_decode_two_servers(const MunitParameter params[],
     rv = raft_configuration_decode(&buf, &f->configuration);
     munit_assert_int(rv, ==, 0);
 
-    munit_assert_int(f->configuration.n, ==, 2);
+    __assert_n_servers(f, 2);
 
-    munit_assert_int(f->configuration.servers[0].id, ==, 5);
-    munit_assert_string_equal(f->configuration.servers[0].address, "x.y");
-    munit_assert_int(f->configuration.servers[0].voting, ==, 1);
-
-    munit_assert_int(f->configuration.servers[1].id, ==, 3);
-    munit_assert_string_equal(f->configuration.servers[1].address, "192.2");
-    munit_assert_int(f->configuration.servers[1].voting, ==, 0);
+    __assert_server_equal(f, 0, 5, "x.y", true);
+    __assert_server_equal(f, 1, 3, "192.2", false);
 
     return MUNIT_OK;
 }

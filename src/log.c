@@ -1,8 +1,8 @@
-#include <assert.h>
 #include <string.h>
 
 #include "../include/raft.h"
 
+#include "assert.h"
 #include "log.h"
 
 /**

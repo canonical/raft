@@ -1,17 +1,16 @@
-#include <assert.h>
-
 #include "../include/raft.h"
 
+#include "assert.h"
 #include "configuration.h"
 #include "log.h"
 #include "replication.h"
 #include "rpc.h"
 #include "state.h"
 
-int raft_handle_append_entries(struct raft *r,
-                               const unsigned id,
-                               const char *address,
-                               const struct raft_append_entries *args)
+int raft_rpc__recv_append_entries(struct raft *r,
+                                  const unsigned id,
+                                  const char *address,
+                                  const struct raft_append_entries *args)
 {
     struct raft_message message;
     struct raft_append_entries_result *result = &message.append_entries_result;
@@ -126,7 +125,7 @@ reply:
     return 0;
 }
 
-int raft_handle_append_entries_response(
+int raft_rpc__recv_append_entries_result(
     struct raft *r,
     const unsigned id,
     const char *address,

@@ -1,10 +1,8 @@
-#include <assert.h>
-
 #include "../include/raft.h"
 
+#include "assert.h"
 #include "configuration.h"
 #include "election.h"
-#include "error.h"
 #include "replication.h"
 #include "state.h"
 #include "watch.h"
@@ -42,12 +40,10 @@ static int raft_tick__follower(struct raft *r)
             raft_debugf(r->logger, "tick: self elect and convert to leader");
             rv = raft_state__convert_to_candidate(r);
             if (rv != 0) {
-                raft_error__wrapf(r, "convert to candidate");
                 return rv;
             }
             rv = raft_state__convert_to_leader(r);
             if (rv != 0) {
-                raft_error__wrapf(r, "convert to leader");
                 return rv;
             }
             return 0;
@@ -206,13 +202,4 @@ int raft__tick(struct raft *r, const unsigned msec_since_last_tick)
     }
 
     return rv;
-}
-
-void raft__tick_cb(void *data, unsigned msecs)
-{
-    struct raft *r;
-
-    r = data;
-
-    raft__tick(r, msecs);
 }

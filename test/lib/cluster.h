@@ -10,7 +10,7 @@
  * Once the cluster loop starts running, at each iteration the following steps
  * are taken:
  *
- * 1. All pending I/O requests across all servers is flushed. This simulates
+ * 1. All pending I/O requests across all servers are flushed. This simulates
  *    either a successful disk write of log entries, or a successful network
  *    write of an RPC message (e.g. writev() returns successfully). A successful
  *    network write does not mean that the receiver immediately receives the

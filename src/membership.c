@@ -1,9 +1,7 @@
-#include <assert.h>
-
 #include "../include/raft.h"
 
+#include "assert.h"
 #include "configuration.h"
-#include "error.h"
 #include "log.h"
 #include "membership.h"
 
@@ -13,19 +11,16 @@ int raft_membership__can_change_configuration(struct raft *r)
 
     if (r->state != RAFT_STATE_LEADER) {
         rv = RAFT_ERR_NOT_LEADER;
-        raft_error__printf(r, rv, NULL);
         return rv;
     }
 
     if (r->configuration_uncommitted_index != 0) {
         rv = RAFT_ERR_CONFIGURATION_BUSY;
-        raft_error__printf(r, rv, NULL);
         return rv;
     }
 
     if (r->leader_state.promotee_id != 0) {
         rv = RAFT_ERR_CONFIGURATION_BUSY;
-        raft_error__printf(r, rv, NULL);
         return rv;
     }
 
@@ -109,7 +104,6 @@ int raft_membership__apply(struct raft *r,
 
     rv = raft_configuration_decode(&entry->buf, &configuration);
     if (rv != 0) {
-        raft_error__printf(r, rv, "decode new configuration");
         goto err;
     }
 
@@ -152,7 +146,6 @@ int raft_membership__rollback(struct raft *r)
 
     rv = raft_configuration_decode(&entry->buf, &r->configuration);
     if (rv != 0) {
-        raft_error__printf(r, rv, "restore last committed configuration");
         return rv;
     }
 

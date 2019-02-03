@@ -41,7 +41,6 @@ libraft_la_SOURCES = \
   src/election.c \
   src/error.c \
   src/heap.c \
-  src/io.c \
   src/log.c \
   src/logger.c \
   src/membership.c \
@@ -98,11 +97,9 @@ unit_test_SOURCES += \
   test/unit/test_client.c \
   test/unit/test_configuration.c \
   test/unit/test_election.c \
-  test/unit/test_error.c \
   test/unit/test_log.c \
   test/unit/test_logger.c \
   test/unit/test_context.c \
-  test/unit/test_io.c \
   test/unit/test_raft.c \
   test/unit/test_replication.c \
   test/unit/test_rpc_request_vote.c \
@@ -111,7 +108,6 @@ unit_test_SOURCES += \
 if IO_UV
   unit_test_SOURCES += \
   test/unit/test_io_uv.c \
-  test/unit/test_io_uv_encoding.c \
   test/unit/test_io_uv_rpc.c \
   test/unit/test_io_uv_store.c \
   test/unit/test_uv_fs.c

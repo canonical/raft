@@ -1,9 +1,7 @@
 #include "../include/raft.h"
 
-#include "configuration.h"
-
 #include "assert.h"
-#include "error.h"
+#include "configuration.h"
 #include "log.h"
 #include "membership.h"
 #include "replication.h"
@@ -22,7 +20,6 @@ int raft_accept(struct raft *r,
 
     if (r->state != RAFT_STATE_LEADER) {
         rv = RAFT_ERR_NOT_LEADER;
-        raft_error__printf(r, rv, "can't accept entries");
         goto err;
     }
 
@@ -120,13 +117,11 @@ int raft_add_server(struct raft *r, const unsigned id, const char *address)
 
     rv = raft_configuration__copy(&r->configuration, &configuration);
     if (rv != 0) {
-        raft_error__printf(r, rv, "copy current configuration");
         goto err;
     }
 
     rv = raft_configuration_add(&configuration, id, address, false);
     if (rv != 0) {
-        raft_error__printf(r, rv, "add server to new configuration");
         goto err_after_configuration_copy;
     }
 
@@ -160,13 +155,11 @@ int raft_promote(struct raft *r, const unsigned id)
     server = raft_configuration__get(&r->configuration, id);
     if (server == NULL) {
         rv = RAFT_ERR_BAD_SERVER_ID;
-        raft_error__printf(r, rv, NULL);
         goto err;
     }
 
     if (server->voting) {
         rv = RAFT_ERR_SERVER_ALREADY_VOTING;
-        raft_error__printf(r, rv, NULL);
         goto err;
     }
 
@@ -227,7 +220,6 @@ int raft_remove_server(struct raft *r, const unsigned id)
     server = raft_configuration__get(&r->configuration, id);
     if (server == NULL) {
         rv = RAFT_ERR_BAD_SERVER_ID;
-        raft_error__printf(r, rv, NULL);
         goto err;
     }
 
@@ -239,13 +231,11 @@ int raft_remove_server(struct raft *r, const unsigned id)
 
     rv = raft_configuration__copy(&r->configuration, &configuration);
     if (rv != 0) {
-        raft_error__printf(r, rv, "copy current configuration");
         goto err;
     }
 
     rv = raft_configuration_remove(&configuration, id);
     if (rv != 0) {
-        raft_error__printf(r, rv, "remove server from new configuration");
         goto err_after_configuration_copy;
     }
 

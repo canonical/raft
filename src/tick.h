@@ -15,10 +15,4 @@
  */
 int raft__tick(struct raft *r, const unsigned msec_since_last_tick);
 
-/**
- * Callback to be passed to the @raft_io implementation and that will be invoked
- * periodically. This is just a trampoline for calling @raft__tick.
- */
-void raft__tick_cb(void *data, unsigned msecs);
-
 #endif /* RAFT_TICK_H */

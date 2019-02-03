@@ -67,6 +67,9 @@ void test_cluster_setup(const MunitParameter params[], struct test_cluster *c)
         struct raft_fsm *fsm = &c->fsms[i];
         struct raft *raft = &c->rafts[i];
         struct test_host *host = test_network_host(&c->network, id);
+        char address[4];
+
+        sprintf(address, "%d", id);
 
         c->alive[i] = true;
 
@@ -74,16 +77,15 @@ void test_cluster_setup(const MunitParameter params[], struct test_cluster *c)
         test_logger_time(logger, c, test_cluster__time);
 
         test_io_setup(params, io, logger);
-        test_io_set_network(io, &c->network, id);
 
         test_fsm_setup(params, fsm);
 
-        raft_init(raft, logger, io, fsm, c, id, "1");
+        raft_init(raft, logger, io, fsm, c, id, address);
 
         raft_set_rand(raft, test_cluster__rand);
         raft_set_election_timeout(raft, 250);
 
-        test_bootstrap_and_load(raft, c->n, 1, c->n_voting);
+        test_bootstrap_and_start(raft, c->n, 1, c->n_voting);
 
         host->raft = raft;
     }
@@ -105,6 +107,8 @@ void test_cluster_tear_down(struct test_cluster *c)
         struct raft_fsm *fsm = &c->fsms[i];
         struct raft *raft = &c->rafts[i];
 
+        raft_io_stub_flush(io);
+
         raft_close(raft);
         test_fsm_tear_down(fsm);
         test_io_tear_down(io);
@@ -122,6 +126,82 @@ void test_cluster_tear_down(struct test_cluster *c)
 }
 
 /**
+ * Copy all entries in @src into @dst.
+ */
+static void test_cluster__copy_entries(const struct raft_entry *src,
+                                       struct raft_entry **dst,
+                                       unsigned n)
+{
+    size_t size = 0;
+    void *batch;
+    void *cursor;
+    unsigned i;
+
+    if (n == 0) {
+        *dst = NULL;
+        return;
+    }
+
+    /* Calculate the total size of the entries content and allocate the
+     * batch. */
+    for (i = 0; i < n; i++) {
+        size += src[i].buf.len;
+    }
+
+    batch = raft_malloc(size);
+    munit_assert_ptr_not_null(batch);
+
+    /* Copy the entries. */
+    *dst = raft_malloc(n * sizeof **dst);
+    munit_assert_ptr_not_null(*dst);
+
+    cursor = batch;
+
+    for (i = 0; i < n; i++) {
+        (*dst)[i] = src[i];
+
+        (*dst)[i].buf.base = cursor;
+        memcpy((*dst)[i].buf.base, src[i].buf.base, src[i].buf.len);
+
+        (*dst)[i].batch = batch;
+
+        cursor += src[i].buf.len;
+    }
+}
+
+/**
+ * Make a copy of the content of the given message and push it to the incoming
+ * queue of the receiver.
+ */
+static void test_cluster__enqueue_message(struct test_cluster *c,
+                                          struct raft *sender,
+                                          struct raft_message *src)
+{
+    struct test_host *host = test_network_host(&c->network, src->server_id);
+    struct raft_message dst;
+    struct test_message msg;
+
+    dst = *src;
+    dst.server_id = sender->id;
+    dst.server_address = sender->address;
+
+    switch (src->type) {
+        case RAFT_IO_APPEND_ENTRIES:
+            /* Make a copy of the entries being sent */
+            test_cluster__copy_entries(src->append_entries.entries,
+                                       &dst.append_entries.entries,
+                                       src->append_entries.n_entries);
+            dst.append_entries.n_entries = src->append_entries.n_entries;
+            break;
+    }
+
+    msg.sender_id = sender->id;
+    msg.message = dst;
+
+    test_host_enqueue(host, &msg);
+}
+
+/**
  * Flush any pending write to the disk and any pending message into the network
  * buffers (this will assign them a latency timer).
  */
@@ -131,41 +211,18 @@ static void test_cluster__flush_io(struct test_cluster *c)
     for (i = 0; i < c->n; i++) {
         struct raft *raft = &c->rafts[i];
         struct raft_io *io = &c->ios[i];
-        struct test_io_request *write_log_requests;
-        struct test_io_request *append_entries_requests;
-        size_t write_log_n;
-        size_t append_entries_n;
+        struct raft_message *messages;
+        unsigned n;
+        unsigned i;
 
-        /* Check if there are write log or append entries events, if so, we'll
-         * want to notify the raft instance. */
-        test_io_get_requests(io, RAFT_IO_WRITE_LOG, &write_log_requests,
-                             &write_log_n);
-        test_io_get_requests(io, RAFT_IO_APPEND_ENTRIES,
-                             &append_entries_requests, &append_entries_n);
+        raft_io_stub_flush(io);
 
-        test_io_flush(io);
+        raft_io_stub_sent(io, &messages, &n);
 
-        /* TODO: simulate unsuccessful I/O ? */
-
-        if (write_log_n > 0) {
-            int rv;
-            munit_assert_int(write_log_n, ==, 1); /* At most one write. */
-
-            //rv = raft_handle_io(raft, write_log_requests[0].id, 0);
-            munit_assert_int(rv, ==, 0);
+        for (i = 0; i < n; i++) {
+            struct raft_message *message = &messages[i];
+            test_cluster__enqueue_message(c, raft, message);
         }
-
-        if (append_entries_n > 0) {
-            size_t i;
-            for (i = 0; i < append_entries_n; i++) {
-                int rv;
-                //rv = raft_handle_io(raft, append_entries_requests[i].id, 0);
-                munit_assert_int(rv, ==, 0);
-            }
-        }
-
-        free(write_log_requests);
-        free(append_entries_requests);
     }
 }
 
@@ -192,17 +249,7 @@ static void test_cluster__message_with_lowest_timer(
 
         if (!c->alive[h->raft->id - 1]) {
             /* Drop the message */
-            int type = test_message_type(m);
-
-            if (type != RAFT_IO_NULL) {
-                raft_free(m->header.base);
-                m->header.base = NULL;
-                if (m->payload.base != NULL) {
-                    raft_free(m->payload.base);
-                    m->payload.base = NULL;
-                }
-            }
-
+            test_network_close_message(m);
             continue;
         }
 
@@ -284,7 +331,8 @@ static void test_cluster__deliver_or_tick(struct test_cluster *c,
 
     if (next_message != NULL && next_message->timer < remaining) {
         elapse = next_message->timer + 1;
-        test_host_receive(next_host, next_message);
+        raft_io_stub_dispatch(next_host->raft->io, &next_message->message);
+        next_message->sender_id = 0;
     } else {
         elapse = remaining + 1;
     }
@@ -303,9 +351,8 @@ static void test_cluster__deliver_or_tick(struct test_cluster *c,
 
         for (j = 0; j < TEST_NETWORK_INCOMING_QUEUE_SIZE; j++) {
             struct test_message *incoming = &host->incoming[j];
-            int type = test_message_type(incoming);
 
-            if (type == RAFT_IO_NULL) {
+            if (incoming->sender_id == 0) {
                 continue;
             }
             incoming->timer -= elapse;
@@ -351,8 +398,13 @@ static bool test_cluster__update_leader(struct test_cluster *c)
                     continue;
                 }
 
-                munit_assert_true(other->state != RAFT_STATE_LEADER ||
-                                  other->current_term != raft->current_term);
+                if (other->state == RAFT_STATE_LEADER) {
+                    if (other->current_term == raft->current_term) {
+                        munit_errorf(
+                            "server %u and %u are both leaders in term %llu",
+                            raft->id, other->id, raft->current_term);
+                    }
+                }
             }
 
             if (raft->current_term > leader_term) {
@@ -611,6 +663,8 @@ void test_cluster_add_server(struct test_cluster *c)
     /* Create a new raft instance for the new server. */
     c->n++;
 
+    sprintf(address, "%d", id);
+
     munit_assert_int(c->n, <=, TEST_CLUSTER__N);
 
     logger = &c->loggers[c->n - 1];
@@ -627,18 +681,18 @@ void test_cluster_add_server(struct test_cluster *c)
     test_logger_time(logger, c, test_cluster__time);
 
     test_io_setup(params, io, logger);
-    test_io_set_network(io, &c->network, id);
 
     test_fsm_setup(params, fsm);
 
-    raft_init(raft, logger, io, fsm, c, id, "1");
+    raft_init(raft, logger, io, fsm, c, id, address);
+
+    rv = raft_start(raft);
+    munit_assert_int(rv, ==, 0);
 
     raft_set_rand(raft, test_cluster__rand);
     raft_set_election_timeout(raft, 250);
 
     host->raft = raft;
-
-    sprintf(address, "%d", id);
 
     leader = &c->rafts[leader_id - 1];
 
@@ -648,7 +702,8 @@ void test_cluster_add_server(struct test_cluster *c)
     free(address);
 }
 
-void test_cluster_promote(struct test_cluster *c) {
+void test_cluster_promote(struct test_cluster *c)
+{
     unsigned leader_id = test_cluster_leader(c);
     unsigned id;
     struct raft *leader;

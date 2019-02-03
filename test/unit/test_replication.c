@@ -18,11 +18,7 @@
 
 struct fixture
 {
-    struct raft_heap heap;
-    struct raft_logger logger;
-    struct raft_io io;
-    struct raft_fsm fsm;
-    struct raft raft;
+    TEST_RAFT_FIXTURE_FIELDS;
 };
 
 /**
@@ -32,19 +28,10 @@ struct fixture
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    uint64_t id = 1;
-    const char *address = "1";
-    int rv;
 
     (void)user_data;
 
-    test_heap_setup(params, &f->heap);
-    test_logger_setup(params, &f->logger, id);
-    test_io_setup(params, &f->io, &f->logger);
-    test_fsm_setup(params, &f->fsm);
-
-    rv = raft_init(&f->raft, &f->logger, &f->io, &f->fsm, f, id, address);
-    munit_assert_int(rv, ==, 0);
+    TEST_RAFT_FIXTURE_SETUP(f);
 
     return f;
 }
@@ -53,12 +40,7 @@ static void tear_down(void *data)
 {
     struct fixture *f = data;
 
-    raft_close(&f->raft);
-
-    test_fsm_tear_down(&f->fsm);
-    test_io_tear_down(&f->io);
-    test_logger_tear_down(&f->logger);
-    test_heap_tear_down(&f->heap);
+    TEST_RAFT_FIXTURE_TEAR_DOWN(f);
 
     free(f);
 }
@@ -89,8 +71,9 @@ static void tear_down(void *data)
         struct raft_buffer buf;                                               \
         int rv;                                                               \
                                                                               \
-        buf.base = NULL;                                                      \
-        buf.len = 0;                                                          \
+        buf.len = 8;                                                          \
+        buf.base = raft_malloc(buf.len);                                      \
+        munit_assert_ptr_not_null(buf.base);                                  \
                                                                               \
         rv = raft_log__append(&F->raft.log, 1, RAFT_LOG_COMMAND, &buf, NULL); \
         munit_assert_int(rv, ==, 0);                                          \

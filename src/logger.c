@@ -1,9 +1,10 @@
-#include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "../include/raft.h"
+
+#include "assert.h"
 
 #define RAFT__DEFAULT_LOGGER_BUF_LEN 1024
 #define RAFT__DEFAULT_LOGGER_MSG_LEN 256

@@ -1,7 +1,7 @@
-#include <assert.h>
 #include <string.h>
 #include <unistd.h>
 
+#include "assert.h"
 #include "binary.h"
 #include "checksum.h"
 #include "io_uv_encoding.h"

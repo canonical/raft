@@ -1,7 +1,6 @@
-#include <assert.h>
-
-#include "configuration.h"
 #include "election.h"
+#include "assert.h"
+#include "configuration.h"
 #include "log.h"
 
 void raft_election__reset_timer(struct raft *r)

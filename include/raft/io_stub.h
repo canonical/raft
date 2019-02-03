@@ -1,11 +1,15 @@
-#ifndef RAFT_IO_SIM_H
-#define RAFT_IO_SIM_H
+/**
+ * Stub implementation of the @raft_io interface, meant for unit tests.
+ */
+#ifndef RAFT_IO_STUB_H
+#define RAFT_IO_STUB_H
 
 #include <stdbool.h>
 
 struct raft_io;
 struct raft_logger;
 struct raft_message;
+struct raft_entry;
 
 /**
  * Configure the given @raft_io instance to use a stub in-memory I/O
@@ -32,28 +36,27 @@ void raft_io_stub_dispatch(struct raft_io *io, struct raft_message *message);
 void raft_io_stub_flush(struct raft_io *io);
 
 /**
+ * Return a copy of the pending messages that where flushed upon the last call
+ * to
+ * @raft_io_stub_flush.
+ */
+void raft_io_stub_sent(struct raft_io *io,
+                       struct raft_message **messages,
+                       unsigned *n);
+
+/**
+ * Return a copy of the pending log entries that where flushed upon the last
+ * call to @raft_io_stub_flush.
+ */
+void raft_io_stub_appended(struct raft_io *io,
+                           struct raft_entry **entries,
+                           unsigned *n);
+
+/**
  * Inject a failure that will be triggered after @delay I/O requests and occur
  * @repeat times.
  */
 void raft_io_stub_fault(struct raft_io *io, int delay, int repeat);
-
-/**
- * Return true if a write request is pending.
- */
-bool raft_io_stub_writing(struct raft_io *io);
-
-/**
- * Return the number of pending messages of the given type that are being sent.
- */
-unsigned raft_io_stub_sending_n(struct raft_io *io, int type);
-
-/**
- * Get the @i'th message of the given @type that is currently being sent, if
- * any.
- */
-struct raft_message *raft_io_stub_sending(struct raft_io *io,
-                                          int type,
-                                          unsigned i);
 
 /**
  * Convenience for getting the current term stored in the stub.
@@ -65,4 +68,4 @@ unsigned raft_io_stub_term(struct raft_io *io);
  */
 unsigned raft_io_stub_vote(struct raft_io *io);
 
-#endif /* RAFT_IO_SIM_H */
+#endif /* RAFT_IO_STUB_H */

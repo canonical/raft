@@ -262,6 +262,105 @@ static MunitTest start_tests[] = {
 };
 
 /**
+ * raft__recv_cb
+ */
+
+/* Receive an AppendEntries message. */
+static MunitResult test_recv_cb_append_entries(const MunitParameter params[],
+                                               void *data)
+{
+    struct fixture *f = data;
+    struct raft_message message;
+    struct raft_append_entries *args = &message.append_entries;
+    struct raft_entry *entry = raft_malloc(sizeof *entry);
+
+    (void)params;
+
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
+
+    message.type = RAFT_IO_APPEND_ENTRIES;
+    message.server_id = 2;
+    message.server_address = "2";
+
+    /* Include a log entry in the message */
+    entry->type = RAFT_LOG_COMMAND;
+    entry->term = 1;
+
+    test_fsm_encode_set_x(123, &entry->buf);
+
+    args->term = 1;
+    args->leader_id = 2;
+    args->prev_log_index = 1;
+    args->prev_log_term = 1;
+    args->entries = entry;
+    args->n_entries = 1;
+    args->leader_commit = 2;
+
+    raft_io_stub_dispatch(&f->io, &message);
+
+    /* Notify the raft instance about the completed write. */
+    raft_io_stub_flush(f->raft.io);
+
+    /* The commit index has been bumped. */
+    munit_assert_int(f->raft.commit_index, ==, 2);
+
+    return MUNIT_OK;
+}
+
+/* Receive an RequestVote message. */
+static MunitResult test_recv_cb_request_vote(const MunitParameter params[],
+                                             void *data)
+{
+    struct fixture *f = data;
+    struct raft_message message;
+    struct raft_request_vote *args = &message.request_vote;
+
+    (void)params;
+
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
+
+    message.type = RAFT_IO_REQUEST_VOTE;
+    message.server_id = 2;
+    message.server_address = "2";
+
+    args->term = 1;
+    args->candidate_id = 2;
+    args->last_log_index = 2;
+
+    raft_io_stub_dispatch(&f->io, &message);
+
+    /* The voted for field has been updated. */
+    munit_assert_int(f->raft.voted_for, ==, 2);
+
+    return MUNIT_OK;
+}
+
+/* Receive a message with an unknown type. */
+static MunitResult test_recv_cb_unknown_type(const MunitParameter params[],
+                                             void *data)
+{
+    struct fixture *f = data;
+    struct raft_message message;
+
+    (void)params;
+
+    message.type = 666;
+
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
+
+    raft_io_stub_dispatch(&f->io, &message);
+
+    return MUNIT_OK;
+}
+static MunitTest recv_tests[] = {
+    {"/append-entries", test_recv_cb_append_entries, setup, tear_down, 0, NULL},
+    {"/request-vote", test_recv_cb_request_vote, setup, tear_down, 0, NULL},
+    {"/unknown-type", test_recv_cb_unknown_type, setup, tear_down, 0, NULL},
+    {NULL, NULL, NULL, NULL, 0, NULL},
+};
+
+
+/**
  * raft_bootstrap
  */
 
@@ -330,6 +429,7 @@ static MunitTest bootstrap_tests[] = {
 MunitSuite raft_suites[] = {
     {"/init", init_tests, NULL, 1, 0},
     {"/start", start_tests, NULL, 1, 0},
+    {"/recv", recv_tests, NULL, 1, 0},
     {"/bootstrap", bootstrap_tests, NULL, 1, 0},
     {NULL, NULL, NULL, 0, 0},
 };

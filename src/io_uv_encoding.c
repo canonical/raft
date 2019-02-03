@@ -1,7 +1,8 @@
-#include "io_uv_encoding.h"
-#include <assert.h>
 #include <string.h>
+
+#include "assert.h"
 #include "binary.h"
+#include "io_uv_encoding.h"
 
 /**
  * Size of the request preable.

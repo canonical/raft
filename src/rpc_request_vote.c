@@ -1,16 +1,16 @@
-#include <assert.h>
-
 #include "../include/raft.h"
 
+#include "assert.h"
 #include "configuration.h"
+#include "replication.h"
 #include "election.h"
 #include "rpc.h"
 #include "state.h"
 
-int raft_handle_request_vote(struct raft *r,
-                             const unsigned id,
-                             const char *address,
-                             const struct raft_request_vote *args)
+int raft_rpc__recv_request_vote(struct raft *r,
+                                const unsigned id,
+                                const char *address,
+                                const struct raft_request_vote *args)
 {
     struct raft_message message;
     struct raft_request_vote_result *result = &message.request_vote_result;
@@ -80,7 +80,7 @@ reply:
     return 0;
 }
 
-int raft_handle_request_vote_response(
+int raft_rpc__recv_request_vote_result(
     struct raft *r,
     const unsigned id,
     const char *address,
@@ -150,6 +150,12 @@ int raft_handle_request_vote_response(
             if (rv != 0) {
                 return rv;
             }
+            /* Send heartbeat messages.
+             *
+             * Note that since we have just set the next_index to the latest
+             * index in our log, the AppendEntries RPC that we send here will
+             * carry 0 entries, and indeed act as initial heartbeat. */
+            raft_replication__trigger(r, 0);
         }
     }
 
