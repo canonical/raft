@@ -72,9 +72,6 @@ int raft_init(struct raft *r,
     r->ctx.state = &r->state;
     r->ctx.current_term = &r->current_term;
 
-    /* Last error */
-    strcpy(r->errmsg, "");
-
     r->stop.data = NULL;
     r->stop.cb = NULL;
 

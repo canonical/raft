@@ -79,17 +79,6 @@ enum {
 const char *raft_strerror(int errnum);
 
 /**
- * Maximum size of error messages.
- */
-#define RAFT_ERRMSG_SIZE 1024
-
-/**
- * Convenience to prepend an additional message to the content of an errmsg
- * buffer, printing at most #RAFT_ERRMSG_SIZE characters.
- */
-void raft_wrapf(char *errmsg, const char *fmt, ...);
-
-/**
  * User-definable dynamic memory allocation functions.
  *
  * The @data field will be passed as first argument to all functions.
@@ -269,7 +258,7 @@ int raft_configuration_decode(const struct raft_buffer *buf,
 /**
  * Log entry types.
  */
-enum { RAFT_LOG_COMMAND, RAFT_LOG_CONFIGURATION };
+enum { RAFT_LOG_COMMAND = 1, RAFT_LOG_CONFIGURATION };
 
 /**
  * A single entry in the raft log.
@@ -398,9 +387,7 @@ struct raft_append_entries_result
  * Type codes for raft I/O requests.
  */
 enum {
-    RAFT_IO_NULL = 0,
-    RAFT_IO_WRITE_LOG,
-    RAFT_IO_APPEND_ENTRIES,
+    RAFT_IO_APPEND_ENTRIES = 1,
     RAFT_IO_APPEND_ENTRIES_RESULT,
     RAFT_IO_REQUEST_VOTE,
     RAFT_IO_REQUEST_VOTE_RESULT
@@ -434,12 +421,6 @@ struct raft_io
      * Custom user data.
      */
     void *data;
-
-    /**
-     * Human-readable description of the reason for the last returned
-     * error. Implementations must set this before returning an error.
-     */
-    char errmsg[RAFT_ERRMSG_SIZE];
 
     /**
      * Start the backend.
@@ -537,11 +518,6 @@ struct raft_io
                 const struct raft_message *message,
                 void *data,
                 void (*cb)(void *data, int status));
-
-    /**
-     * Synchronously delete all log entries from the given index onwards.
-     */
-    int (*truncate_log)(struct raft_io *io, const raft_index index);
 };
 
 /**
@@ -787,8 +763,8 @@ struct raft
      * Random generator. Defaults to stdlib rand().
      */
     int (*rand)();
-    /**
 
+    /**
      * Current election timeout. Randomized from election_timeout.
      *
      * From §9.3:
@@ -816,11 +792,6 @@ struct raft
      * Context information, mainly for logging.
      */
     struct raft_context ctx;
-
-    /**
-     * Human-readable description of the last error occurred.
-     */
-    char errmsg[RAFT_ERRMSG_SIZE];
 
     /**
      * Callback to invoke once a stop request has completed.
@@ -884,12 +855,6 @@ void raft_set_rand(struct raft *r, int (*rand)());
  *   clusters, and typically results in much lower rates.
  */
 void raft_set_election_timeout(struct raft *r, const unsigned election_timeout);
-
-/**
- * If the most recent raft_* API call associated with the given raft instance
- * failed, return a human-readable description of the reason of the failure.
- */
-const char *raft_errmsg(struct raft *r);
 
 /**
  * Human readable version of the current state.

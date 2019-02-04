@@ -521,13 +521,16 @@ static void raft_io_uv_rpc_server__read_cb(uv_stream_t *stream,
         } else {
             /* If we get here it means that we've just completed reading the
              * payload. */
+            struct raft_buffer buf; /* TODO: avoid converting from uv_buf_t */
             assert(s->payload.base != NULL);
             assert(s->payload.len > 0);
 
             switch (s->message.type) {
                 case RAFT_IO_APPEND_ENTRIES:
+                    buf.base = s->payload.base;
+                    buf.len = s->payload.len;
                     raft_io_uv_decode__entries_batch(
-                        &s->payload, s->message.append_entries.entries,
+                        &buf, s->message.append_entries.entries,
                         s->message.append_entries.n_entries);
                     break;
                 default:
