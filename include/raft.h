@@ -897,14 +897,6 @@ const char *raft_errmsg(struct raft *r);
 const char *raft_state_name(struct raft *r);
 
 /**
- * Get the log entry with the given index, or NULL.
- *
- * The entry data buffer should be considered volatile and can be safely used
- * only until the next raft_* API call.
- */
-const struct raft_entry *raft_get_entry(struct raft *r, const raft_index index);
-
-/**
  * Accept a client request to append new FSM commands to the log.
  *
  * If this server is the leader, it will create @n new log entries of type

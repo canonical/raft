@@ -279,14 +279,6 @@ const char *raft_state_name(struct raft *r)
     return raft_state_names[r->state];
 }
 
-const struct raft_entry *raft_get_entry(struct raft *r, const raft_index index)
-{
-    assert(r != NULL);
-    assert(index > 0);
-
-    return raft_log__get(&r->log, index);
-}
-
 int raft_bootstrap(struct raft *r, const struct raft_configuration *conf)
 {
     int rv;
