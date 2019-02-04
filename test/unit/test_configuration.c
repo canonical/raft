@@ -14,6 +14,31 @@ struct fixture
     struct raft_configuration configuration;
 };
 
+static void *setup(const MunitParameter params[], void *user_data)
+{
+    struct fixture *f = munit_malloc(sizeof *f);
+
+    (void)user_data;
+    (void)params;
+
+    test_heap_setup(params, &f->heap);
+
+    raft_configuration_init(&f->configuration);
+
+    return f;
+}
+
+static void tear_down(void *data)
+{
+    struct fixture *f = data;
+
+    raft_configuration_close(&f->configuration);
+
+    test_heap_tear_down(&f->heap);
+
+    free(f);
+}
+
 /**
  * Add a server to the fixture's configuration and check that no error occurs.
  */
@@ -67,35 +92,6 @@ struct fixture
         munit_assert_string_equal(server->address, ADDRESS); \
         munit_assert_int(server->voting, ==, VOTING);        \
     }
-
-/**
- * Setup and tear down
- */
-
-static void *setup(const MunitParameter params[], void *user_data)
-{
-    struct fixture *f = munit_malloc(sizeof *f);
-
-    (void)user_data;
-    (void)params;
-
-    test_heap_setup(params, &f->heap);
-
-    raft_configuration_init(&f->configuration);
-
-    return f;
-}
-
-static void tear_down(void *data)
-{
-    struct fixture *f = data;
-
-    raft_configuration_close(&f->configuration);
-
-    test_heap_tear_down(&f->heap);
-
-    free(f);
-}
 
 /**
  * raft_configuration__index
@@ -260,7 +256,8 @@ static MunitTest get_tests[] = {
  */
 
 /* Return only voting nodes. */
-static MunitResult test_n_voting_filter(const MunitParameter params[], void *data)
+static MunitResult test_n_voting_filter(const MunitParameter params[],
+                                        void *data)
 {
     struct fixture *f = data;
     size_t n;
@@ -286,7 +283,8 @@ static MunitTest n_voting_tests[] = {
  */
 
 /* Copy a configuration containing two servers */
-static MunitResult test_copy_two(const MunitParameter params[], void *data) {
+static MunitResult test_copy_two(const MunitParameter params[], void *data)
+{
     struct fixture *f = data;
     struct raft_configuration configuration;
     int rv;
@@ -499,7 +497,6 @@ static MunitResult test_remove_first(const MunitParameter params[], void *data)
 
     __assert_n_servers(f, 1);
     __assert_server_equal(f, 0, 2, "192.168.1.1:666", false);
-    ;
 
     return MUNIT_OK;
 }
@@ -519,9 +516,7 @@ static MunitResult test_remove_middle(const MunitParameter params[], void *data)
 
     __assert_n_servers(f, 2);
     __assert_server_equal(f, 0, 1, "127.0.0.1:666", true);
-    ;
     __assert_server_equal(f, 1, 3, "10.0.1.1:666", true);
-    ;
 
     return MUNIT_OK;
 }
@@ -556,6 +551,306 @@ static MunitTest remove_tests[] = {
 };
 
 /**
+ * raft_configuration_encode
+ */
+
+/* Trying to encode an empty configuration results in an error. */
+static MunitResult test_encode_empty(const MunitParameter params[], void *data)
+{
+    struct fixture *f = data;
+    struct raft_buffer buf;
+    int rv;
+
+    (void)data;
+    (void)params;
+
+    rv = raft_configuration_encode(&f->configuration, &buf);
+    munit_assert_int(rv, ==, RAFT_ERR_EMPTY_CONFIGURATION);
+
+    munit_assert_string_equal(raft_strerror(rv),
+                              "configuration has no servers");
+
+    return MUNIT_OK;
+}
+
+/* Out of memory. */
+static MunitResult test_encode_oom(const MunitParameter params[], void *data)
+{
+    struct fixture *f = data;
+    struct raft_buffer buf;
+    int rv;
+
+    (void)params;
+
+    test_heap_fault_config(&f->heap, 2, 1);
+    test_heap_fault_enable(&f->heap);
+
+    __add(f, 1, "127.0.0.1:666", true);
+
+    rv = raft_configuration_encode(&f->configuration, &buf);
+    munit_assert_int(rv, ==, RAFT_ERR_NOMEM);
+
+    return MUNIT_OK;
+}
+
+/* Encode a configuration with one server. */
+static MunitResult test_encode_one_server(const MunitParameter params[],
+                                          void *data)
+{
+    struct fixture *f = data;
+    struct raft_buffer buf;
+    uint8_t *bytes;
+    int rv;
+
+    (void)data;
+    (void)params;
+
+    __add(f, 1, "127.0.0.1:666", true);
+
+    rv = raft_configuration_encode(&f->configuration, &buf);
+    munit_assert_int(rv, ==, 0);
+
+    bytes = buf.base;
+
+    munit_assert_int(buf.len, ==,
+                     1 + 8 + /* Version and n of servers */
+                         8 + strlen("127.0.0.1:666") + 1 + 1); /* Server */
+
+    munit_assert_int(bytes[0], ==, 1);
+    munit_assert_int(raft__flip64(*(uint64_t *)(bytes + 1)), ==, 1);
+
+    munit_assert_int(raft__flip64(*(uint64_t *)(bytes + 9)), ==, 1);
+    munit_assert_string_equal((char *)(bytes + 17), "127.0.0.1:666");
+    munit_assert_true(bytes[17 + strlen("127.0.0.1:666") + 1]);
+
+    raft_free(buf.base);
+
+    return MUNIT_OK;
+}
+
+/* Encode a configuration with two servers. */
+static MunitResult test_encode_two_servers(const MunitParameter params[],
+                                           void *data)
+{
+    struct fixture *f = data;
+    struct raft_buffer buf;
+    uint8_t *bytes;
+    int rv;
+
+    (void)data;
+    (void)params;
+
+    __add(f, 1, "127.0.0.1:666", false);
+    __add(f, 2, "192.168.1.1:666", true);
+
+    rv = raft_configuration_encode(&f->configuration, &buf);
+    munit_assert_int(rv, ==, 0);
+
+    munit_assert_int(buf.len, ==,
+                     1 + 8 + /* Version and n of servers */
+                         8 + strlen("127.0.0.1:666") + 1 + 1 +   /* Server 1 */
+                         8 + strlen("192.168.1.1:666") + 1 + 1); /* Server 2 */
+
+    bytes = buf.base;
+
+    munit_assert_int(bytes[0], ==, 1);
+    munit_assert_int(raft__flip64(*(uint64_t *)(bytes + 1)), ==, 2);
+
+    bytes = buf.base + 9;
+    munit_assert_int(raft__flip64(*(uint64_t *)bytes), ==, 1);
+    munit_assert_string_equal((char *)(bytes + 8), "127.0.0.1:666");
+    munit_assert_false(bytes[8 + strlen("127.0.0.1:666") + 1]);
+
+    bytes = buf.base + 9 + 8 + strlen("127.0.0.1:666") + 1 + 1;
+
+    munit_assert_int(raft__flip64(*(uint64_t *)bytes), ==, 2);
+    munit_assert_string_equal((char *)(bytes + 8), "192.168.1.1:666");
+    munit_assert_true(bytes[8 + strlen("192.168.1.1:666") + 1]);
+
+    raft_free(buf.base);
+
+    return MUNIT_OK;
+}
+
+static MunitTest encode_tests[] = {
+    {"/oom", test_encode_oom, setup, tear_down, 0, NULL},
+    {"/empty", test_encode_empty, setup, tear_down, 0, NULL},
+    {"/one", test_encode_one_server, setup, tear_down, 0, NULL},
+    {"/two", test_encode_two_servers, setup, tear_down, 0, NULL},
+    {NULL, NULL, NULL, NULL, 0, NULL},
+};
+
+/**
+ * raft_configuration_decode
+ */
+
+/* If the destination configuration is not empty, an error is returned. */
+static MunitResult test_decode_empty(const MunitParameter params[], void *data)
+{
+    struct fixture *f = data;
+    uint8_t bytes = 127;
+    struct raft_buffer buf;
+    int rv;
+
+    (void)data;
+    (void)params;
+
+    buf.base = &bytes;
+    buf.len = 1;
+
+    __add(f, 1, "127.0.0.1:666", true);
+
+    rv = raft_configuration_decode(&buf, &f->configuration);
+    munit_assert_int(rv, ==, RAFT_ERR_CONFIGURATION_NOT_EMPTY);
+
+    return MUNIT_OK;
+}
+
+/* Not enough memory of the servers array. */
+static MunitResult test_decode_oom(const MunitParameter params[], void *data)
+{
+    struct fixture *f = data;
+    uint8_t bytes[] = {1,                            /* Version */
+                       1,   0,   0,   0, 0, 0, 0, 0, /* Number of servers */
+                       5,   0,   0,   0, 0, 0, 0, 0, /* Server ID */
+                       'x', '.', 'y', 0,             /* Server address */
+                       1 /* Voting flag */};
+    struct raft_buffer buf;
+    int rv;
+
+    (void)params;
+
+    test_heap_fault_config(&f->heap, 0, 1);
+    test_heap_fault_enable(&f->heap);
+
+    buf.base = bytes;
+    buf.len = sizeof bytes;
+
+    rv = raft_configuration_decode(&buf, &f->configuration);
+    munit_assert_int(rv, ==, RAFT_ERR_NOMEM);
+
+    return MUNIT_OK;
+}
+
+/* If the encoding version is wrong, an error is returned. */
+static MunitResult test_decode_bad_version(const MunitParameter params[],
+                                           void *data)
+{
+    struct fixture *f = data;
+    uint8_t bytes = 127;
+    struct raft_buffer buf;
+    int rv;
+
+    (void)data;
+    (void)params;
+
+    buf.base = &bytes;
+    buf.len = 1;
+
+    rv = raft_configuration_decode(&buf, &f->configuration);
+    munit_assert_int(rv, ==, RAFT_ERR_MALFORMED);
+
+    return MUNIT_OK;
+}
+
+/* The address of a server is not a nul-terminated string. */
+static MunitResult test_decode_bad_address(const MunitParameter params[],
+                                           void *data)
+{
+    struct fixture *f = data;
+    uint8_t bytes[] = {1,                            /* Version */
+                       1,   0,   0,   0, 0, 0, 0, 0, /* Number of servers */
+                       5,   0,   0,   0, 0, 0, 0, 0, /* Server ID */
+                       'x', '.', 'y',                /* Server address */
+                       1 /* Voting flag */};
+    struct raft_buffer buf;
+    int rv;
+
+    (void)data;
+    (void)params;
+
+    buf.base = bytes;
+    buf.len = sizeof bytes;
+
+    rv = raft_configuration_decode(&buf, &f->configuration);
+    munit_assert_int(rv, ==, RAFT_ERR_MALFORMED);
+
+    return MUNIT_OK;
+}
+
+/* The decode a payload encoding a configuration with one server */
+static MunitResult test_decode_one_server(const MunitParameter params[],
+                                          void *data)
+{
+    struct fixture *f = data;
+    uint8_t bytes[] = {1,                            /* Version */
+                       1,   0,   0,   0, 0, 0, 0, 0, /* Number of servers */
+                       5,   0,   0,   0, 0, 0, 0, 0, /* Server ID */
+                       'x', '.', 'y', 0,             /* Server address */
+                       1 /* Voting flag */};
+    struct raft_buffer buf;
+    int rv;
+
+    (void)data;
+    (void)params;
+
+    buf.base = bytes;
+    buf.len = sizeof bytes;
+
+    rv = raft_configuration_decode(&buf, &f->configuration);
+    munit_assert_int(rv, ==, 0);
+
+    __assert_n_servers(f, 1);
+    __assert_server_equal(f, 0, 5, "x.y", true);
+
+    return MUNIT_OK;
+}
+
+/* The decode size is the size of a raft_server array plus the length of the
+ * addresses. */
+static MunitResult test_decode_two_servers(const MunitParameter params[],
+                                           void *data)
+{
+    struct fixture *f = data;
+    uint8_t bytes[] = {1,                                /* Version */
+                       2,   0,   0,   0,   0,   0, 0, 0, /* Number of servers */
+                       5,   0,   0,   0,   0,   0, 0, 0, /* Server ID */
+                       'x', '.', 'y', 0,                 /* Server address */
+                       1,                                /* Voting flag */
+                       3,   0,   0,   0,   0,   0, 0, 0, /* Server ID */
+                       '1', '9', '2', '.', '2', 0,       /* Server address */
+                       0 /* Voting flag */};
+    struct raft_buffer buf;
+    int rv;
+
+    buf.base = bytes;
+    buf.len = sizeof bytes;
+
+    (void)data;
+    (void)params;
+
+    rv = raft_configuration_decode(&buf, &f->configuration);
+    munit_assert_int(rv, ==, 0);
+
+    __assert_n_servers(f, 2);
+
+    __assert_server_equal(f, 0, 5, "x.y", true);
+    __assert_server_equal(f, 1, 3, "192.2", false);
+
+    return MUNIT_OK;
+}
+
+static MunitTest decode_tests[] = {
+    {"/empty", test_decode_empty, setup, tear_down, 0, NULL},
+    {"/oom", test_decode_oom, setup, tear_down, 0, NULL},
+    {"/bad-version", test_decode_bad_version, setup, tear_down, 0, NULL},
+    {"/bad-address", test_decode_bad_address, setup, tear_down, 0, NULL},
+    {"/one", test_decode_one_server, setup, tear_down, 0, NULL},
+    {"/two", test_decode_two_servers, setup, tear_down, 0, NULL},
+    {NULL, NULL, NULL, NULL, 0, NULL},
+};
+
+/**
  * Test suite
  */
 
@@ -567,5 +862,7 @@ MunitSuite raft_configuration_suites[] = {
     {"/copy", copy_tests, NULL, 1, 0},
     {"/add", add_tests, NULL, 1, 0},
     {"/remove", remove_tests, NULL, 1, 0},
+    {"/encode", encode_tests, NULL, 1, 0},
+    {"/decode", decode_tests, NULL, 1, 0},
     {NULL, NULL, NULL, 0, 0},
 };

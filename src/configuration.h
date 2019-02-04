@@ -1,5 +1,5 @@
 /**
- * Hold information about all servers in a raft configuration.
+ * Helpers around @raft_configuration objects.
  */
 
 #ifndef RAFT_CONFIGURATION_H

@@ -1,12 +1,8 @@
-#include <assert.h>
-
 #include "../include/raft.h"
 
+#include "assert.h"
 #include "configuration.h"
-
-#include "error.h"
 #include "log.h"
-#include "logger.h"
 #include "membership.h"
 #include "replication.h"
 #include "state.h"
@@ -24,11 +20,10 @@ int raft_accept(struct raft *r,
 
     if (r->state != RAFT_STATE_LEADER) {
         rv = RAFT_ERR_NOT_LEADER;
-        raft_error__printf(r, rv, "can't accept entries");
         goto err;
     }
 
-    raft__debugf(r, "client request: %d entries", n);
+    raft_debugf(r->logger, "client request: %d entries", n);
 
     /* Index of the first entry being appended. */
     index = raft_log__last_index(&r->log) + 1;
@@ -39,14 +34,15 @@ int raft_accept(struct raft *r,
         goto err;
     }
 
-    raft__debugf(r, "DONE");
-
     rv = raft_replication__trigger(r, index);
     if (rv != 0) {
-        goto err;
+        goto err_after_log_append;
     }
 
     return 0;
+
+err_after_log_append:
+    raft_log__discard(&r->log, index);
 
 err:
     assert(rv != 0);
@@ -113,7 +109,7 @@ int raft_add_server(struct raft *r, const unsigned id, const char *address)
         return rv;
     }
 
-    raft__debugf(r, "add server: id %d, address %s", id, address);
+    raft_debugf(r->logger, "add server: id %d, address %s", id, address);
 
     /* Make a copy of the current configuration, and add the new server to
      * it. */
@@ -121,13 +117,11 @@ int raft_add_server(struct raft *r, const unsigned id, const char *address)
 
     rv = raft_configuration__copy(&r->configuration, &configuration);
     if (rv != 0) {
-        raft_error__printf(r, rv, "copy current configuration");
         goto err;
     }
 
     rv = raft_configuration_add(&configuration, id, address, false);
     if (rv != 0) {
-        raft_error__printf(r, rv, "add server to new configuration");
         goto err_after_configuration_copy;
     }
 
@@ -161,13 +155,11 @@ int raft_promote(struct raft *r, const unsigned id)
     server = raft_configuration__get(&r->configuration, id);
     if (server == NULL) {
         rv = RAFT_ERR_BAD_SERVER_ID;
-        raft_error__printf(r, rv, NULL);
         goto err;
     }
 
     if (server->voting) {
         rv = RAFT_ERR_SERVER_ALREADY_VOTING;
-        raft_error__printf(r, rv, NULL);
         goto err;
     }
 
@@ -201,8 +193,9 @@ int raft_promote(struct raft *r, const unsigned id)
     rv = raft_replication__send_append_entries(r, server_index);
     if (rv != 0) {
         /* This error is not fatal. */
-        raft__warnf(r, "failed to send append entries to server %ld: %s (%d)",
-                    server->id, raft_strerror(rv), rv);
+        raft_warnf(r->logger,
+                   "failed to send append entries to server %ld: %s (%d)",
+                   server->id, raft_strerror(rv), rv);
     }
 
     return 0;
@@ -227,11 +220,10 @@ int raft_remove_server(struct raft *r, const unsigned id)
     server = raft_configuration__get(&r->configuration, id);
     if (server == NULL) {
         rv = RAFT_ERR_BAD_SERVER_ID;
-        raft_error__printf(r, rv, NULL);
         goto err;
     }
 
-    raft__debugf(r, "remove server: id %d", id);
+    raft_debugf(r->logger, "remove server: id %d", id);
 
     /* Make a copy of the current configuration, and remove the given server
      * from it. */
@@ -239,13 +231,11 @@ int raft_remove_server(struct raft *r, const unsigned id)
 
     rv = raft_configuration__copy(&r->configuration, &configuration);
     if (rv != 0) {
-        raft_error__printf(r, rv, "copy current configuration");
         goto err;
     }
 
     rv = raft_configuration_remove(&configuration, id);
     if (rv != 0) {
-        raft_error__printf(r, rv, "remove server from new configuration");
         goto err_after_configuration_copy;
     }
 

@@ -73,11 +73,10 @@ static void *setup(const MunitParameter params[], void *user_data)
     rv = raft_io_uv_tcp_init(&f->transport, &f->logger, &f->loop);
     munit_assert_int(rv, ==, 0);
 
-    rv = raft_io_uv_rpc__init(&f->rpc, &f->logger, &f->loop, &f->transport, 1,
-                              "127.0.0.1:9000");
+    rv = raft_io_uv_rpc__init(&f->rpc, &f->logger, &f->loop, &f->transport);
     munit_assert_int(rv, ==, 0);
 
-    rv = raft_io_uv_rpc__start(&f->rpc, f, __recv_cb);
+    rv = raft_io_uv_rpc__start(&f->rpc, 1, "127.0.0.1:9000", f, __recv_cb);
     munit_assert_int(rv, ==, 0);
 
     f->send_cb.invoked = true;
@@ -113,6 +112,7 @@ static void tear_down(void *data)
     }
 
     raft_io_uv_rpc__close(&f->rpc);
+    raft_io_uv_tcp_close(&f->transport);
 
     test_uv_tear_down(&f->loop);
     test_tcp_tear_down(&f->tcp);

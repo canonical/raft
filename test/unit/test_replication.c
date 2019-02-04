@@ -2,7 +2,6 @@
 
 #include "../../src/configuration.h"
 #include "../../src/log.h"
-#include "../../src/queue.h"
 #include "../../src/replication.h"
 #include "../../src/state.h"
 
@@ -19,63 +18,8 @@
 
 struct fixture
 {
-    struct raft_heap heap;
-    struct raft_logger logger;
-    struct raft_io io;
-    struct raft_fsm fsm;
-    struct raft raft;
+    TEST_RAFT_FIXTURE_FIELDS;
 };
-
-/**
- * Transition the state of the raft instance to RAFT_LEADER.
- */
-static void __convert_to_leader(struct fixture *f)
-{
-    int rv;
-
-    rv = raft_state__convert_to_candidate(&f->raft);
-    munit_assert_int(rv, ==, 0);
-
-    rv = raft_state__convert_to_leader(&f->raft);
-    munit_assert_int(rv, ==, 0);
-
-    munit_assert_int(f->raft.state, ==, RAFT_STATE_LEADER);
-
-    test_io_flush(&f->io);
-}
-
-/**
- * Append an entry to the log.
- */
-static void __append_entry(struct fixture *f)
-{
-    struct raft_buffer buf;
-    int rv;
-
-    buf.base = NULL;
-    buf.len = 0;
-
-    rv = raft_log__append(&f->raft.log, 1, RAFT_LOG_COMMAND, &buf, NULL);
-    munit_assert_int(rv, ==, 0);
-}
-
-/**
- * Complete an I/O request by popping it from the queue and releasing the
- * associated log entries.
- */
-static void __io_completed(struct fixture *f, size_t request_id)
-{
-    struct raft_io_request *request;
-
-    request = raft_queue__get(&f->raft, request_id);
-
-    raft_log__release(&f->raft.log, request->index, request->entries,
-                      request->n);
-
-    raft_queue__pop(&f->raft, request_id);
-
-    test_io_flush(&f->io);
-}
 
 /**
  * Setup and tear down
@@ -84,20 +28,10 @@ static void __io_completed(struct fixture *f, size_t request_id)
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    uint64_t id = 1;
-    const char *address = "1";
 
     (void)user_data;
 
-    test_heap_setup(params, &f->heap);
-
-    test_logger_setup(params, &f->logger, id);
-    test_io_setup(params, &f->io);
-    test_fsm_setup(params, &f->fsm);
-
-    raft_init(&f->raft, &f->io, &f->fsm, f, id, address);
-
-    raft_set_logger(&f->raft, &f->logger);
+    TEST_RAFT_FIXTURE_SETUP(f);
 
     return f;
 }
@@ -106,21 +40,50 @@ static void tear_down(void *data)
 {
     struct fixture *f = data;
 
-    raft_close(&f->raft);
-
-    test_fsm_tear_down(&f->fsm);
-    test_io_tear_down(&f->io);
-    test_logger_tear_down(&f->logger);
-    test_heap_tear_down(&f->heap);
+    TEST_RAFT_FIXTURE_TEAR_DOWN(f);
 
     free(f);
 }
 
 /**
+ * Transition the state of the raft instance to RAFT_LEADER.
+ */
+#define __convert_to_leader(F)                                  \
+    {                                                           \
+        int rv;                                                 \
+                                                                \
+        rv = raft_state__convert_to_candidate(&F->raft);        \
+        munit_assert_int(rv, ==, 0);                            \
+                                                                \
+        rv = raft_state__convert_to_leader(&F->raft);           \
+        munit_assert_int(rv, ==, 0);                            \
+                                                                \
+        munit_assert_int(F->raft.state, ==, RAFT_STATE_LEADER); \
+                                                                \
+        raft_io_stub_flush(&F->io);                             \
+    }
+
+/**
+ * Append an entry to the log.
+ */
+#define __append_entry(F)                                                     \
+    {                                                                         \
+        struct raft_buffer buf;                                               \
+        int rv;                                                               \
+                                                                              \
+        buf.len = 8;                                                          \
+        buf.base = raft_malloc(buf.len);                                      \
+        munit_assert_ptr_not_null(buf.base);                                  \
+                                                                              \
+        rv = raft_log__append(&F->raft.log, 1, RAFT_LOG_COMMAND, &buf, NULL); \
+        munit_assert_int(rv, ==, 0);                                          \
+    }
+
+/**
  * raft_replication__send_append_entries
  */
 
-static char *send_ae_oom_heap_fault_delay[] = {"0", "1", NULL};
+static char *send_ae_oom_heap_fault_delay[] = {"0", NULL};
 static char *send_ae_oom_heap_fault_repeat[] = {"1", NULL};
 
 static MunitParameterEnum send_ae_oom_params[] = {
@@ -138,16 +101,10 @@ static MunitResult test_send_ae_oom(const MunitParameter params[], void *data)
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
     __convert_to_leader(f);
     __append_entry(f);
-
-    /* Reset the request queue, to trigger a failure when attempting to grow
-     * it. */
-    raft_free(f->raft.io_queue.requests);
-    f->raft.io_queue.requests = NULL;
-    f->raft.io_queue.size = 0;
 
     test_heap_fault_enable(&f->heap);
 
@@ -169,33 +126,32 @@ static MunitResult test_send_ae_io_err(const MunitParameter params[],
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
     __convert_to_leader(f);
     __append_entry(f);
 
-    test_io_fault(&f->io, 0, 1);
+    raft_io_stub_fault(&f->io, 0, 1);
 
     i = raft_configuration__index(&f->raft.configuration, 2);
 
     rv = raft_replication__send_append_entries(&f->raft, i);
-    munit_assert_int(rv, ==, RAFT_ERR_NO_SPACE);
+    munit_assert_int(rv, ==, RAFT_ERR_IO);
 
     return MUNIT_OK;
 }
 
-/* Send the second loog entry. */
+/* Send the second log entry. */
 static MunitResult test_send_ae_second_entry(const MunitParameter params[],
                                              void *data)
 {
     struct fixture *f = data;
     size_t i;
-    struct test_io_request request;
     int rv;
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
     __convert_to_leader(f);
     __append_entry(f);
@@ -205,13 +161,7 @@ static MunitResult test_send_ae_second_entry(const MunitParameter params[],
     rv = raft_replication__send_append_entries(&f->raft, i);
     munit_assert_int(rv, ==, 0);
 
-    test_io_get_one_request(&f->io, RAFT_IO_APPEND_ENTRIES, &request);
-
-    munit_assert_int(request.append_entries.args.n, ==, 1);
-    munit_assert_int(request.append_entries.args.prev_log_index, ==, 1);
-    munit_assert_int(request.append_entries.args.prev_log_term, ==, 1);
-
-    __io_completed(f, request.id);
+    raft_io_stub_flush(&f->io);
 
     return MUNIT_OK;
 }
@@ -233,22 +183,19 @@ static MunitResult test_trigger_io_err(const MunitParameter params[],
                                        void *data)
 {
     struct fixture *f = data;
-    struct test_io_request request;
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 3, 1, 3);
+    test_bootstrap_and_start(&f->raft, 3, 1, 3);
 
     __convert_to_leader(f);
     __append_entry(f);
 
-    test_io_fault(&f->io, 0, 1);
+    raft_io_stub_fault(&f->io, 0, 1);
 
     raft_replication__trigger(&f->raft, 0);
 
-    test_io_get_one_request(&f->io, RAFT_IO_APPEND_ENTRIES, &request);
-
-    __io_completed(f, request.id);
+    raft_io_stub_flush(&f->io);
 
     return MUNIT_OK;
 }

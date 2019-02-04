@@ -110,10 +110,7 @@ static void *setup(const MunitParameter params[], void *user_data)
     rv = raft_io_uv_init(&f->io, &f->logger, &f->loop, f->dir, &f->transport);
     munit_assert_int(rv, ==, 0);
 
-    rv = f->io.init(&f->io, &f->logger, 1, "127.0.0.1:9000");
-    munit_assert_int(rv, ==, 0);
-
-    rv = f->io.start(&f->io, 50, f, __tick_cb, __recv_cb);
+    rv = f->io.start(&f->io, 1, "127.0.0.1:9000", 50, f, __tick_cb, __recv_cb);
     munit_assert_int(rv, ==, 0);
 
     f->tick_cb.invoked = false;
@@ -142,7 +139,8 @@ static void tear_down(void *data)
 
     munit_assert_true(f->stop_cb.invoked);
 
-    f->io.close(&f->io);
+    raft_io_uv_close(&f->io);
+    raft_io_uv_tcp_close(&f->transport);
 
     test_dir_tear_down(f->dir);
 
@@ -212,9 +210,6 @@ static MunitResult test_init_not_a_dir(const MunitParameter params[],
     (void)params;
 
     rv = raft_io_uv_init(&io, &f->logger, &f->loop, "/dev/null", &f->transport);
-    munit_assert_int(rv, ==, 0);
-
-    rv = f->io.init(&io, &f->logger, 1, "127.0.0.1:9000");
     munit_assert_int(rv, ==, RAFT_ERR_IO);
 
     return MUNIT_OK;

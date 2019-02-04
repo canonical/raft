@@ -4,9 +4,7 @@
 #include "../lib/heap.h"
 
 /**
- *
  * Helpers
- *
  */
 
 struct fixture
@@ -22,12 +20,6 @@ static MunitParameterEnum params[] = {
     {NULL, NULL},
 };
 
-/**
- *
- * Setup and tear down
- *
- */
-
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
@@ -35,7 +27,6 @@ static void *setup(const MunitParameter params[], void *user_data)
     (void)user_data;
 
     test_heap_setup(params, &f->heap);
-
     test_cluster_setup(params, &f->cluster);
 
     return f;
@@ -46,16 +37,13 @@ static void tear_down(void *data)
     struct fixture *f = data;
 
     test_cluster_tear_down(&f->cluster);
-
     test_heap_tear_down(&f->heap);
 
     free(f);
 }
 
 /**
- *
  * Election tests
- *
  */
 
 /* A leader is eventually elected */
@@ -119,9 +107,7 @@ static MunitTest election_tests[] = {
 };
 
 /**
- *
  * Test suite
- *
  */
 
 MunitSuite raft_election_suites[] = {

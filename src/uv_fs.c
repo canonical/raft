@@ -1,4 +1,3 @@
-#include <assert.h>
 #include <libgen.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,6 +9,7 @@
 
 #include <uv.h>
 
+#include "assert.h"
 #include "uv_fs.h"
 
 /**

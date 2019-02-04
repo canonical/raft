@@ -13,8 +13,7 @@ struct fixture
     struct test_cluster cluster;
 };
 
-// static char *servers[] = {"3", "4", "5", NULL};
-static char *servers[] = {"3", NULL};
+static char *servers[] = {"3", "4", "5", NULL};
 
 static MunitParameterEnum params[] = {
     {TEST_CLUSTER_SERVERS, servers},

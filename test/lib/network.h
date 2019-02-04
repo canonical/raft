@@ -30,16 +30,10 @@
 
 struct test_message
 {
-    uint64_t sender_id;         /* Origin server. */
-    struct raft_buffer header;  /* Message header */
-    struct raft_buffer payload; /* Message payload */
-    int timer; /* After how many msecs the message should be delivered. */
+    unsigned sender_id;          /* Origin server. */
+    struct raft_message message; /* Message to deliver */
+    int timer;                   /* Deliver after this n of msecs. */
 };
-
-/**
- * Return the RPC type of the given message.
- */
-int test_message_type(const struct test_message *m);
 
 struct test_network;
 
@@ -54,9 +48,9 @@ struct test_network
 {
     size_t n;
     struct test_host *hosts;
-    uint64_t min_latency; /* One-way, in milliseconds */
-    uint64_t max_latency; /* One-way, in milliseconds */
-    bool *connectivity;   /* Connectivity matrix. */
+    unsigned min_latency; /* One-way, in milliseconds */
+    unsigned max_latency; /* One-way, in milliseconds */
+    bool *connectivity;   /* Connectivity matrix (n by n). */
 };
 
 void test_network_setup(const MunitParameter params[],
@@ -74,14 +68,17 @@ void test_network_add_host(struct test_network *n);
  */
 struct test_host *test_network_host(struct test_network *n, unsigned id);
 
-void test_host_enqueue(struct test_host *h, struct test_message *message);
+/**
+ * Add a message to the incoming queue of the given host.
+ */
+void test_host_enqueue(struct test_host *h, struct test_message *m);
+
+void test_network_close_message(struct test_message *m);
 
 /**
  * Return the next enqueued message that should be delivered to the host,
  * according to its latency timer.
  */
 struct test_message *test_host_peek(struct test_host *h);
-
-void test_host_receive(struct test_host *h, struct test_message *message);
 
 #endif /* TEST_NETWORK_H */

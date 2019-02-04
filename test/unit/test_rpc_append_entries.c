@@ -4,6 +4,7 @@
 
 #include "../../src/configuration.h"
 #include "../../src/log.h"
+#include "../../src/rpc_append_entries.h"
 
 #include "../lib/fsm.h"
 #include "../lib/heap.h"
@@ -18,12 +19,28 @@
 
 struct fixture
 {
-    struct raft_heap heap;
-    struct raft_logger logger;
-    struct raft_io io;
-    struct raft_fsm fsm;
-    struct raft raft;
+    TEST_RAFT_FIXTURE_FIELDS;
 };
+
+static void *setup(const MunitParameter params[], void *user_data)
+{
+    struct fixture *f = munit_malloc(sizeof *f);
+
+    (void)user_data;
+
+    TEST_RAFT_FIXTURE_SETUP(f);
+
+    return f;
+}
+
+static void tear_down(void *data)
+{
+    struct fixture *f = data;
+
+    TEST_RAFT_FIXTURE_TEAR_DOWN(f);
+
+    free(f);
+}
 
 static struct raft_entry *__create_entries_batch()
 {
@@ -46,50 +63,51 @@ static struct raft_entry *__create_entries_batch()
 }
 
 /**
- * Call raft_handle_append_entries with the given parameters and check that no
- * error occurs.
+ * Call raft_rpc__recv_append_entries with the given parameters and check that
+ * no error occurs.
  */
-#define __handle_append_entries(F, TERM, LEADER_ID, PREV_LOG_INDEX,           \
-                                PREV_LOG_TERM, ENTRIES, N, COMMIT)            \
-    {                                                                         \
-        struct raft_append_entries_args args;                                 \
-        char address[4];                                                      \
-        int rv;                                                               \
-                                                                              \
-        sprintf(address, "%d", LEADER_ID);                                    \
-                                                                              \
-        args.term = TERM;                                                     \
-        args.leader_id = LEADER_ID;                                           \
-        args.prev_log_index = PREV_LOG_INDEX;                                 \
-        args.prev_log_term = PREV_LOG_TERM;                                   \
-        args.entries = ENTRIES;                                               \
-        args.n = N;                                                           \
-        args.leader_commit = COMMIT;                                          \
-                                                                              \
-        rv = raft_handle_append_entries(&F->raft, LEADER_ID, address, &args); \
-        munit_assert_int(rv, ==, 0);                                          \
+#define __recv_append_entries(F, TERM, LEADER_ID, PREV_LOG_INDEX,        \
+                              PREV_LOG_TERM, ENTRIES, N, COMMIT)         \
+    {                                                                    \
+        struct raft_append_entries args;                                 \
+        char address[4];                                                 \
+        int rv;                                                          \
+                                                                         \
+        sprintf(address, "%d", LEADER_ID);                               \
+                                                                         \
+        args.term = TERM;                                                \
+        args.leader_id = LEADER_ID;                                      \
+        args.prev_log_index = PREV_LOG_INDEX;                            \
+        args.prev_log_term = PREV_LOG_TERM;                              \
+        args.entries = ENTRIES;                                          \
+        args.n_entries = N;                                              \
+        args.leader_commit = COMMIT;                                     \
+                                                                         \
+        rv = raft_rpc__recv_append_entries(&F->raft, LEADER_ID, address, \
+                                           &args);                       \
+        munit_assert_int(rv, ==, 0);                                     \
     }
 
 /**
- * Call raft_handle_append_entries_response with the given parameters and check
+ * Call raft_rpc__recv_append_entries_result with the given parameters and check
  * that no error occurs.
  */
-#define __handle_append_entries_response(F, SERVER_ID, TERM, SUCCESS,          \
-                                         LAST_LOG_INDEX)                       \
-    {                                                                          \
-        char address[4];                                                       \
-        struct raft_append_entries_result result;                              \
-        int rv;                                                                \
-                                                                               \
-        sprintf(address, "%d", SERVER_ID);                                     \
-                                                                               \
-        result.term = TERM;                                                    \
-        result.success = SUCCESS;                                              \
-        result.last_log_index = LAST_LOG_INDEX;                                \
-                                                                               \
-        rv = raft_handle_append_entries_response(&F->raft, SERVER_ID, address, \
-                                                 &result);                     \
-        munit_assert_int(rv, ==, 0);                                           \
+#define __recv_append_entries_result(F, SERVER_ID, TERM, SUCCESS,      \
+                                     LAST_LOG_INDEX)                   \
+    {                                                                  \
+        char address[4];                                               \
+        struct raft_append_entries_result result;                      \
+        int rv;                                                        \
+                                                                       \
+        sprintf(address, "%d", SERVER_ID);                             \
+                                                                       \
+        result.term = TERM;                                            \
+        result.success = SUCCESS;                                      \
+        result.last_log_index = LAST_LOG_INDEX;                        \
+                                                                       \
+        rv = raft_rpc__recv_append_entries_result(&F->raft, SERVER_ID, \
+                                                  address, &result);   \
+        munit_assert_int(rv, ==, 0);                                   \
     }
 
 /**
@@ -107,62 +125,23 @@ static struct raft_entry *__create_entries_batch()
  * Assert that the test I/O implementation has received exactly one
  * AppendEntries response RPC with the given parameters.
  */
-#define __assert_append_entries_response(F, TERM, SUCCESS, LAST_LOG_INDEX) \
-    {                                                                      \
-        struct test_io_request request;                                    \
-        struct raft_append_entries_result *result;                         \
-                                                                           \
-        test_io_get_one_request(&F->io, RAFT_IO_APPEND_ENTRIES_RESULT,     \
-                                &request);                                 \
-                                                                           \
-        result = &request.append_entries_response.result;                  \
-        munit_assert_int(result->term, ==, TERM);                          \
-        munit_assert_int(result->success, ==, SUCCESS);                    \
-        munit_assert_int(result->last_log_index, ==, LAST_LOG_INDEX);      \
+#define __assert_append_entries_response(F, TERM, SUCCESS, LAST_LOG_INDEX)     \
+    {                                                                          \
+        struct raft_message *messages;                                         \
+        unsigned n;                                                            \
+        struct raft_append_entries_result *result;                             \
+                                                                               \
+        raft_io_stub_flush(&F->io);                                            \
+        raft_io_stub_sent(&F->io, &messages, &n);                              \
+                                                                               \
+        munit_assert_int(n, ==, 1);                                            \
+        munit_assert_int(messages[0].type, ==, RAFT_IO_APPEND_ENTRIES_RESULT); \
+                                                                               \
+        result = &messages[0].append_entries_result;                           \
+        munit_assert_int(result->term, ==, TERM);                              \
+        munit_assert_int(result->success, ==, SUCCESS);                        \
+        munit_assert_int(result->last_log_index, ==, LAST_LOG_INDEX);          \
     }
-
-/**
- * Setup and tear down
- */
-
-static void *setup(const MunitParameter params[], void *user_data)
-{
-    struct fixture *f = munit_malloc(sizeof *f);
-    uint64_t id = 1;
-    const char *address = "1";
-
-    (void)user_data;
-
-    test_heap_setup(params, &f->heap);
-
-    test_logger_setup(params, &f->logger, id);
-
-    test_io_setup(params, &f->io);
-    test_fsm_setup(params, &f->fsm);
-
-    raft_init(&f->raft, &f->io, &f->fsm, f, id, address);
-
-    raft_set_logger(&f->raft, &f->logger);
-
-    return f;
-}
-
-static void tear_down(void *data)
-{
-    struct fixture *f = data;
-
-    raft_close(&f->raft);
-
-    test_fsm_tear_down(&f->fsm);
-
-    test_io_tear_down(&f->io);
-
-    test_logger_tear_down(&f->logger);
-
-    test_heap_tear_down(&f->heap);
-
-    free(f);
-}
 
 /**
  * raft_handle_append_entries
@@ -176,12 +155,12 @@ static MunitResult test_req_stale_term(const MunitParameter params[],
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
     /* Become candidate, this will bump our term. */
     test_become_candidate(&f->raft);
 
-    __handle_append_entries(f, 1, 2, 0, 0, NULL, 0, 1);
+    __recv_append_entries(f, 1, 2, 0, 0, NULL, 0, 1);
 
     /* The request is unsuccessful */
     __assert_append_entries_response(f, 2, false, 1);
@@ -198,10 +177,10 @@ static MunitResult test_req_higher_term(const MunitParameter params[],
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
     test_become_candidate(&f->raft);
 
-    __handle_append_entries(f, 3, 2, 1, 1, NULL, 0, 1);
+    __recv_append_entries(f, 3, 2, 1, 1, NULL, 0, 1);
 
     /* We have stepped down to follower. */
     __assert_state(f, RAFT_STATE_FOLLOWER);
@@ -220,10 +199,10 @@ static MunitResult test_req_same_term(const MunitParameter params[], void *data)
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
     test_become_candidate(&f->raft);
 
-    __handle_append_entries(f, 2, 2, 1, 1, NULL, 0, 1);
+    __recv_append_entries(f, 2, 2, 1, 1, NULL, 0, 1);
 
     /* We have stepped down to follower. */
     __assert_state(f, RAFT_STATE_FOLLOWER);
@@ -242,9 +221,9 @@ static MunitResult test_req_missing_entries(const MunitParameter params[],
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
-    __handle_append_entries(f, 1, 2, 2, 1, NULL, 0, 1);
+    __recv_append_entries(f, 1, 2, 2, 1, NULL, 0, 1);
 
     /* The request is unsuccessful */
     __assert_append_entries_response(f, 1, false, 1);
@@ -252,29 +231,29 @@ static MunitResult test_req_missing_entries(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-/* If the term of the last log entry on the server is different from the one
+/* If the term of the last log entry on the server is different from
  * prevLogTerm, and value of prevLogIndex is lower or equal than server's commit
  * index, then an error is returned . */
 static MunitResult test_req_prev_index_conflict(const MunitParameter params[],
                                                 void *data)
 {
     struct fixture *f = data;
-    struct raft_append_entries_args args;
+    struct raft_append_entries args;
     int rv;
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
     args.term = 1;
     args.leader_id = 2;
     args.prev_log_index = 1;
     args.prev_log_term = 2;
     args.entries = NULL;
-    args.n = 0;
+    args.n_entries = 0;
     args.leader_commit = 1;
 
-    rv = raft_handle_append_entries(&f->raft, 2, "2", &args);
+    rv = raft_rpc__recv_append_entries(&f->raft, 2, "2", &args);
     munit_assert_int(rv, ==, RAFT_ERR_SHUTDOWN);
 
     return MUNIT_OK;
@@ -293,7 +272,7 @@ static MunitResult test_req_prev_log_term_mismatch(
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
     /* Append two uncommitted entries. */
     entries[0].type = RAFT_LOG_COMMAND;
@@ -306,15 +285,15 @@ static MunitResult test_req_prev_log_term_mismatch(
     entries[1].buf.base = NULL;
     entries[1].buf.len = 0;
 
-    test_io_write_entry(f->raft.io, &entries[0]);
-    test_io_write_entry(f->raft.io, &entries[1]);
+    test_io_append_entry(f->raft.io, &entries[0]);
+    test_io_append_entry(f->raft.io, &entries[1]);
 
     memset(&buf, 0, sizeof buf);
 
     raft_log__append(&f->raft.log, 1, RAFT_LOG_COMMAND, &buf, NULL);
     raft_log__append(&f->raft.log, 1, RAFT_LOG_COMMAND, &buf, NULL);
 
-    __handle_append_entries(f, 1, 2, 2, 2, NULL, 0, 1);
+    __recv_append_entries(f, 1, 2, 2, 2, NULL, 0, 1);
 
     /* The request gets rejected. */
     __assert_append_entries_response(f, 1, false, 3);
@@ -327,28 +306,19 @@ static MunitResult test_req_write_log(const MunitParameter params[], void *data)
 {
     struct fixture *f = data;
     struct raft_entry *entries = __create_entries_batch();
-    struct test_io_request request;
-    int rv;
+    unsigned n;
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
-    __handle_append_entries(f, 1, 2, 1, 1, entries, 1, 1);
+    __recv_append_entries(f, 1, 2, 1, 1, entries, 1, 1);
 
-    /* A write request has been submitted. */
-    test_io_get_one_request(&f->io, RAFT_IO_WRITE_LOG, &request);
+    raft_io_stub_flush(f->raft.io);
 
-    munit_assert_int(request.write_log.n, ==, 1);
-    munit_assert_int(request.write_log.entries[0].type, ==, RAFT_LOG_COMMAND);
-
-    /* We saved the details about the pending write request. */
-    munit_assert_int(f->raft.io_queue.requests[0].leader_id, ==, 2);
-
-    test_io_flush(f->raft.io);
-
-    rv = raft_handle_io(&f->raft, 0, 0);
-    munit_assert_int(rv, ==, 0);
+    /* A write request has been flushed. */
+    raft_io_stub_appended(&f->io, &entries, &n);
+    munit_assert_int(n, ==, 1);
 
     return MUNIT_OK;
 }
@@ -359,9 +329,9 @@ static MunitResult test_req_skip(const MunitParameter params[], void *data)
 {
     struct fixture *f = data;
     struct raft_entry *entries = raft_malloc(2 * sizeof *entries);
-    struct test_io_request request;
     uint8_t *buf1 = raft_malloc(1);
     uint8_t *buf2 = raft_malloc(1);
+    unsigned n;
     int rv;
 
     (void)params;
@@ -372,7 +342,7 @@ static MunitResult test_req_skip(const MunitParameter params[], void *data)
     *buf1 = 1;
     *buf2 = 2;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
     entries[0].type = RAFT_LOG_COMMAND;
     entries[0].term = 1;
@@ -385,27 +355,21 @@ static MunitResult test_req_skip(const MunitParameter params[], void *data)
     entries[1].buf.len = 1;
 
     /* Append the first entry to our log. */
-    test_io_write_entry(f->raft.io, &entries[0]);
+    test_io_append_entry(f->raft.io, &entries[0]);
     rv = raft_log__append(&f->raft.log, 1, RAFT_LOG_COMMAND, &entries[0].buf,
                           NULL);
     munit_assert_int(rv, ==, 0);
 
-    __handle_append_entries(f, 1, 2, 1, 1, entries, 2, 1);
+    __recv_append_entries(f, 1, 2, 1, 1, entries, 2, 1);
+
+    raft_io_stub_flush(f->raft.io);
 
     /* A write request has been submitted, only for the second entry. */
-    test_io_get_one_request(&f->io, RAFT_IO_WRITE_LOG, &request);
+    raft_io_stub_appended(&f->io, &entries, &n);
 
-    munit_assert_int(request.write_log.n, ==, 1);
-    munit_assert_int(request.write_log.entries[0].type, ==, RAFT_LOG_COMMAND);
-    munit_assert_int(*(uint8_t *)request.write_log.entries[0].buf.base, ==, 2);
-
-    /* We saved the details about the pending write request. */
-    munit_assert_int(f->raft.io_queue.requests[0].leader_id, ==, 2);
-
-    test_io_flush(f->raft.io);
-
-    rv = raft_handle_io(&f->raft, 0, 0);
-    munit_assert_int(rv, ==, 0);
+    munit_assert_int(n, ==, 1);
+    munit_assert_int(entries[0].type, ==, RAFT_LOG_COMMAND);
+    munit_assert_int(*(uint8_t *)entries[0].buf.base, ==, 2);
 
     return MUNIT_OK;
 }
@@ -418,7 +382,7 @@ static MunitResult test_req_truncate(const MunitParameter params[], void *data)
     struct fixture *f = data;
     struct raft_entry entry;
     struct raft_entry *entries = raft_malloc(2 * sizeof *entries);
-    struct test_io_request request;
+    unsigned n;
     uint8_t *buf1 = raft_malloc(1);
     uint8_t *buf2 = raft_malloc(1);
     uint8_t *buf3 = raft_malloc(1);
@@ -430,7 +394,7 @@ static MunitResult test_req_truncate(const MunitParameter params[], void *data)
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
     /* Append an additional entry to our log. */
     entry.type = RAFT_LOG_COMMAND;
@@ -438,7 +402,7 @@ static MunitResult test_req_truncate(const MunitParameter params[], void *data)
     entry.buf.base = buf1;
     entry.buf.len = 1;
 
-    test_io_write_entry(f->raft.io, &entry);
+    test_io_append_entry(&f->io, &entry);
     rv = raft_log__append(&f->raft.log, 1, RAFT_LOG_COMMAND, &entry.buf, NULL);
     munit_assert_int(rv, ==, 0);
 
@@ -452,22 +416,16 @@ static MunitResult test_req_truncate(const MunitParameter params[], void *data)
     entries[1].buf.base = buf3;
     entries[1].buf.len = 1;
 
-    __handle_append_entries(f, 2, 2, 1, 1, entries, 2, 1);
+    __recv_append_entries(f, 2, 2, 1, 1, entries, 2, 1);
 
-    /* A write request has been submitted, only for both the two new entries. */
-    test_io_get_one_request(&f->io, RAFT_IO_WRITE_LOG, &request);
+    raft_io_stub_flush(&f->io);
 
-    munit_assert_int(request.write_log.n, ==, 2);
-    munit_assert_int(*(uint8_t *)request.write_log.entries[0].buf.base, ==, 2);
-    munit_assert_int(*(uint8_t *)request.write_log.entries[1].buf.base, ==, 3);
+    /* A write request has been submitted, for both the two new entries. */
+    raft_io_stub_appended(&f->io, &entries, &n);
 
-    /* We saved the details about the pending write request. */
-    munit_assert_int(f->raft.io_queue.requests[0].leader_id, ==, 2);
-
-    test_io_flush(f->raft.io);
-
-    rv = raft_handle_io(&f->raft, 0, 0);
-    munit_assert_int(rv, ==, 0);
+    munit_assert_int(n, ==, 2);
+    munit_assert_int(*(uint8_t *)entries[0].buf.base, ==, 2);
+    munit_assert_int(*(uint8_t *)entries[1].buf.base, ==, 3);
 
     return MUNIT_OK;
 }
@@ -480,7 +438,7 @@ static MunitResult test_req_conflict(const MunitParameter params[], void *data)
     struct fixture *f = data;
     struct raft_entry entry;
     struct raft_entry *entries = raft_malloc(2 * sizeof *entries);
-    struct raft_append_entries_args args;
+    struct raft_append_entries args;
     uint8_t *buf1 = raft_malloc(1);
     uint8_t *buf2 = raft_malloc(1);
     uint8_t *buf3 = raft_malloc(1);
@@ -492,7 +450,7 @@ static MunitResult test_req_conflict(const MunitParameter params[], void *data)
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
     /* Append an additional entry to our log, with index 2 and term 1. */
     entry.type = RAFT_LOG_COMMAND;
@@ -500,7 +458,7 @@ static MunitResult test_req_conflict(const MunitParameter params[], void *data)
     entry.buf.base = buf1;
     entry.buf.len = 1;
 
-    test_io_write_entry(f->raft.io, &entry);
+    test_io_append_entry(f->raft.io, &entry);
     rv = raft_log__append(&f->raft.log, 1, RAFT_LOG_COMMAND, &entry.buf, NULL);
     munit_assert_int(rv, ==, 0);
 
@@ -522,11 +480,11 @@ static MunitResult test_req_conflict(const MunitParameter params[], void *data)
     args.prev_log_index = 1;
     args.prev_log_term = 1;
     args.entries = entries;
-    args.n = 2;
+    args.n_entries = 2;
     args.leader_commit = 1;
 
     /* We return a shutdown error. */
-    rv = raft_handle_append_entries(&f->raft, 2, "2", &args);
+    rv = raft_rpc__recv_append_entries(&f->raft, 2, "2", &args);
     munit_assert_int(rv, ==, RAFT_ERR_SHUTDOWN);
 
     /* TODO: should the code itself perform this cleanup? */
@@ -537,7 +495,7 @@ static MunitResult test_req_conflict(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
-static MunitTest req_tests[] = {
+static MunitTest request_tests[] = {
     {"/stale-term", test_req_stale_term, setup, tear_down, 0, NULL},
     {"/higher-term", test_req_higher_term, setup, tear_down, 0, NULL},
     {"/same-term", test_req_same_term, setup, tear_down, 0, NULL},
@@ -564,9 +522,9 @@ static MunitResult test_res_not_leader(const MunitParameter params[],
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
-    __handle_append_entries_response(f, 2, 1, true, 1);
+    __recv_append_entries_result(f, 2, 1, true, 1);
 
     return MUNIT_OK;
 }
@@ -579,11 +537,11 @@ static MunitResult test_res_ignore(const MunitParameter params[], void *data)
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
     test_become_leader(&f->raft);
 
     /* Receive an append entries response with a stale term. */
-    __handle_append_entries_response(f, 2, 1, true, 2);
+    __recv_append_entries_result(f, 2, 1, true, 2);
 
     return MUNIT_OK;
 }
@@ -596,11 +554,11 @@ static MunitResult test_res_step_down(const MunitParameter params[], void *data)
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
     test_become_leader(&f->raft);
 
     /* Receive an append entries response with a newer term. */
-    __handle_append_entries_response(f, 2, 3, false, 2);
+    __recv_append_entries_result(f, 2, 3, false, 2);
 
     __assert_state(f, RAFT_STATE_FOLLOWER);
 
@@ -612,21 +570,25 @@ static MunitResult test_res_step_down(const MunitParameter params[], void *data)
 static MunitResult test_res_retry(const MunitParameter params[], void *data)
 {
     struct fixture *f = data;
-    struct test_io_request event;
+    struct raft_message *messages;
+    unsigned n;
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 2, 1, 2);
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
     test_become_leader(&f->raft);
 
     /* Receive an unsuccessful append entries response reporting that the peer's
      * last log entry has index 0 (peer's log is empty. */
-    __handle_append_entries_response(f, 2, 2, false, 0);
+    __recv_append_entries_result(f, 2, 2, false, 0);
 
     /* We have resent entry 1. */
-    test_io_get_one_request(&f->io, RAFT_IO_APPEND_ENTRIES, &event);
+    raft_io_stub_flush(&f->io);
 
-    munit_assert_int(event.append_entries.args.n, ==, 1);
+    raft_io_stub_sent(&f->io, &messages, &n);
+
+    munit_assert_int(n, ==, 1);
+    munit_assert_int(messages[0].append_entries.n_entries, ==, 1);
 
     return MUNIT_OK;
 }
@@ -635,13 +597,12 @@ static MunitResult test_res_retry(const MunitParameter params[], void *data)
 static MunitResult test_res_commit(const MunitParameter params[], void *data)
 {
     struct fixture *f = data;
-    struct test_io_request request;
     struct raft_buffer buf;
     int rv;
 
     (void)params;
 
-    test_bootstrap_and_load(&f->raft, 3, 1, 3);
+    test_bootstrap_and_start(&f->raft, 3, 1, 3);
     test_become_leader(&f->raft);
 
     /* Append an entry to our log and handle the associated successful write. */
@@ -650,21 +611,11 @@ static MunitResult test_res_commit(const MunitParameter params[], void *data)
     rv = raft_accept(&f->raft, &buf, 1);
     munit_assert_int(rv, ==, 0);
 
-    test_io_get_one_request(f->raft.io, RAFT_IO_WRITE_LOG, &request);
-    test_io_flush(f->raft.io);
-
-    rv = raft_handle_io(&f->raft, 0, 0);
-    munit_assert_int(rv, ==, 0);
-
-    rv = raft_handle_io(&f->raft, 1, 0);
-    munit_assert_int(rv, ==, 0);
-
-    rv = raft_handle_io(&f->raft, 2, 0);
-    munit_assert_int(rv, ==, 0);
+    raft_io_stub_flush(f->raft.io);
 
     /* Receive a successful append entries response reporting that the peer
      * has replicated that entry. */
-    __handle_append_entries_response(f, 2, 2, true, 2);
+    __recv_append_entries_result(f, 2, 2, true, 2);
 
     /* The commit index has been bumped. */
     munit_assert_int(f->raft.commit_index, ==, 2);
@@ -672,7 +623,7 @@ static MunitResult test_res_commit(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
-static MunitTest append_entries_response_tests[] = {
+static MunitTest result_tests[] = {
     {"/not-leader", test_res_not_leader, setup, tear_down, 0, NULL},
     {"/ignore", test_res_ignore, setup, tear_down, 0, NULL},
     {"/step-down", test_res_step_down, setup, tear_down, 0, NULL},
@@ -685,7 +636,7 @@ static MunitTest append_entries_response_tests[] = {
  * Suite
  */
 MunitSuite raft_rpc_append_entries_suites[] = {
-    {"/req", req_tests, NULL, 1, 0},
-    {"/res", append_entries_response_tests, NULL, 1, 0},
+    {"/req", request_tests, NULL, 1, 0},
+    {"/res", result_tests, NULL, 1, 0},
     {NULL, NULL, NULL, 0, 0},
 };

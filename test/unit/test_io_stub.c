@@ -89,13 +89,10 @@ static void *setup(const MunitParameter params[], void *user_data)
     test_heap_setup(params, &f->heap);
     test_logger_setup(params, &f->logger, id);
 
-    rv = raft_io_stub_init(&f->io);
+    rv = raft_io_stub_init(&f->io, &f->logger);
     munit_assert_int(rv, ==, 0);
 
-    rv = f->io.init(&f->io, &f->logger, 1, "1");
-    munit_assert_int(rv, ==, 0);
-
-    rv = f->io.start(&f->io, 50, f, __tick_cb, __recv_cb);
+    rv = f->io.start(&f->io, 1, "1", 50, f, __tick_cb, __recv_cb);
     munit_assert_int(rv, ==, 0);
 
     f->tick_cb.invoked = false;
@@ -120,7 +117,7 @@ static void tear_down(void *data)
 
     munit_assert_true(f->stop_cb.invoked);
 
-    f->io.close(&f->io);
+    raft_io_stub_close(&f->io);
 
     test_logger_tear_down(&f->logger);
     test_heap_tear_down(&f->heap);

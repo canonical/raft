@@ -8,6 +8,12 @@
 #include "../include/raft.h"
 
 /**
+ * Callback to be passed to the @raft_io implementation. It will be invoked upon
+ * receiving an RPC message.
+ */
+void raft_rpc__recv_cb(void *data, struct raft_message *message);
+
+/**
  * Common logic for RPC handlers, comparing the request's term with the server's
  * current term and possibly deciding to reject the request or step down from
  * candidate or leader.

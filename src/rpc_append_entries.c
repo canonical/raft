@@ -1,20 +1,19 @@
-#include <assert.h>
-
 #include "../include/raft.h"
 
+#include "assert.h"
 #include "configuration.h"
 #include "log.h"
-#include "logger.h"
 #include "replication.h"
 #include "rpc.h"
 #include "state.h"
 
-int raft_handle_append_entries(struct raft *r,
-                               const unsigned id,
-                               const char *address,
-                               const struct raft_append_entries_args *args)
+int raft_rpc__recv_append_entries(struct raft *r,
+                                  const unsigned id,
+                                  const char *address,
+                                  const struct raft_append_entries *args)
 {
-    struct raft_append_entries_result result;
+    struct raft_message message;
+    struct raft_append_entries_result *result = &message.append_entries_result;
     int match;
     bool async;
     int rv;
@@ -24,10 +23,11 @@ int raft_handle_append_entries(struct raft *r,
     assert(args != NULL);
     assert(address != NULL);
 
-    raft__debugf(r, "received %d entries from server %ld", args->n, id);
+    raft_debugf(r->logger, "received %d entries from server %ld",
+                args->n_entries, id);
 
-    result.success = false;
-    result.last_log_index = raft_log__last_index(&r->log);
+    result->success = false;
+    result->last_log_index = raft_log__last_index(&r->log);
 
     rv = raft_rpc__ensure_matching_terms(r, args->term, &match);
     if (rv != 0) {
@@ -40,7 +40,7 @@ int raft_handle_append_entries(struct raft *r,
      *   currentTerm.
      */
     if (match < 0) {
-        raft__debugf(r, "local term is higher -> reject ");
+        raft_debugf(r->logger, "local term is higher -> reject ");
         goto reply;
     }
 
@@ -71,7 +71,7 @@ int raft_handle_append_entries(struct raft *r,
     assert(r->current_term == args->term);
 
     if (r->state == RAFT_STATE_CANDIDATE) {
-        raft__debugf(r, "discovered leader -> step down ");
+        raft_debugf(r->logger, "discovered leader -> step down ");
         rv = raft_state__convert_to_follower(r, args->term);
         if (rv != 0) {
             return rv;
@@ -87,7 +87,7 @@ int raft_handle_append_entries(struct raft *r,
     /* Reset the election timer. */
     r->timer = 0;
 
-    rv = raft_replication__append(r, args, &result.success, &async);
+    rv = raft_replication__append(r, args, &result->success, &async);
     if (rv != 0) {
         return rv;
     }
@@ -96,16 +96,16 @@ int raft_handle_append_entries(struct raft *r,
         return 0;
     }
 
-    if (result.success) {
+    if (result->success) {
         /* Echo back to the leader the point that we reached. */
-        result.last_log_index = args->prev_log_index + args->n;
+        result->last_log_index = args->prev_log_index + args->n_entries;
     }
 
 reply:
-    result.term = r->current_term;
+    result->term = r->current_term;
 
     /* Free the entries batch, if any. */
-    if (args->n > 0 && args->entries[0].batch != NULL) {
+    if (args->n_entries > 0 && args->entries[0].batch != NULL) {
         raft_free(args->entries[0].batch);
     }
 
@@ -113,7 +113,11 @@ reply:
         raft_free(args->entries);
     }
 
-    rv = r->io->send_append_entries_response(r->io, id, address, &result);
+    message.type = RAFT_IO_APPEND_ENTRIES_RESULT;
+    message.server_id = id;
+    message.server_address = address;
+
+    rv = r->io->send(r->io, &message, NULL, NULL);
     if (rv != 0) {
         return rv;
     }
@@ -121,7 +125,7 @@ reply:
     return 0;
 }
 
-int raft_handle_append_entries_response(
+int raft_rpc__recv_append_entries_result(
     struct raft *r,
     const unsigned id,
     const char *address,
@@ -136,7 +140,8 @@ int raft_handle_append_entries_response(
     assert(address != NULL);
     assert(result != NULL);
 
-    raft__debugf(r, "received append entries result from server %ld", id);
+    raft_debugf(r->logger, "received append entries result from server %ld",
+                id);
 
     if (result->success != 1) {
         /* TODO: handle failures? */
@@ -144,7 +149,7 @@ int raft_handle_append_entries_response(
     }
 
     if (r->state != RAFT_STATE_LEADER) {
-        raft__debugf(r, "local server is not leader -> ignore");
+        raft_debugf(r->logger, "local server is not leader -> ignore");
         return 0;
     }
 
@@ -154,7 +159,7 @@ int raft_handle_append_entries_response(
     }
 
     if (match < 0) {
-        raft__debugf(r, "local term is higher -> ignore ");
+        raft_debugf(r->logger, "local term is higher -> ignore ");
         return 0;
     }
 
@@ -175,7 +180,7 @@ int raft_handle_append_entries_response(
     /* Ignore responses from servers that have been removed */
     server = raft_configuration__get(&r->configuration, id);
     if (server == NULL) {
-        raft__errorf(r, "unknown server -> ignore");
+        raft_errorf(r->logger, "unknown server -> ignore");
         return 0;
     }
 

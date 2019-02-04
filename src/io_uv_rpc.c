@@ -4,7 +4,6 @@
 #include "binary.h"
 #include "io_uv_encoding.h"
 #include "io_uv_rpc.h"
-#include "logger.h"
 
 /**
  * Protocol version.
@@ -691,21 +690,11 @@ static void raft_io_uv_rpc__connection_cb(void *data,
 int raft_io_uv_rpc__init(struct raft_io_uv_rpc *r,
                          struct raft_logger *logger,
                          struct uv_loop_s *loop,
-                         struct raft_io_uv_transport *transport,
-                         unsigned id,
-                         const char *address)
+                         struct raft_io_uv_transport *transport)
 {
-    int rv;
-
     r->logger = logger;
     r->loop = loop;
     r->transport = transport;
-
-    rv = r->transport->init(r->transport, id, address, r,
-                            raft_io_uv_rpc__connection_cb);
-    if (rv != 0) {
-        return rv;
-    }
 
     r->clients = NULL;
     r->servers = NULL;
@@ -727,8 +716,6 @@ void raft_io_uv_rpc__close(struct raft_io_uv_rpc *r)
 {
     unsigned i;
 
-    r->transport->close(r->transport);
-
     for (i = 0; i < r->n_clients; i++) {
         raft_io_uv_rpc_client__close(&r->clients[i]);
     }
@@ -747,18 +734,22 @@ void raft_io_uv_rpc__close(struct raft_io_uv_rpc *r)
 }
 
 int raft_io_uv_rpc__start(struct raft_io_uv_rpc *r,
-                         void *data,
-                         void (*recv)(void *data, struct raft_message *msg))
+                          unsigned id,
+                          const char *address,
+                          void *data,
+                          void (*recv)(void *data, struct raft_message *msg))
 {
     int rv;
 
     r->recv.data = data;
     r->recv.cb = recv;
 
-    rv = r->transport->start(r->transport);
+    rv = r->transport->start(r->transport, id, address, r,
+                             raft_io_uv_rpc__connection_cb);
     if (rv != 0) {
         return rv;
     }
+
     return 0;
 }
 
@@ -858,7 +849,9 @@ static void raft_io_uv_rpc__send_write_cb(struct uv_write_s *req, int status)
 {
     struct raft_io_uv_rpc_request *r = req->data;
 
-    r->cb(r->data, status);
+    if (r->cb != NULL) {
+        r->cb(r->data, status);
+    }
 
     raft_io_uv_rpc_request__close(r);
     raft_free(r);
@@ -1004,47 +997,6 @@ static void raft_io_uv_tcp__encode_handshake(unsigned id,
     raft__put64(&cursor, len);
 
     strcpy(cursor, address);
-}
-
-/**
- * Initialize the transport implementation.
- */
-static int raft_io_uv_tcp__init(struct raft_io_uv_transport *t,
-                                unsigned id,
-                                const char *address,
-                                void *data,
-                                void (*cb)(void *data,
-                                           unsigned id,
-                                           const char *address,
-                                           uv_stream_t *stream))
-{
-    struct raft_io_uv_tcp *tcp;
-
-    tcp = t->data;
-
-    /* Allocate the handshake buffer. This is the same for every new connection
-     * and will be shared and reused. */
-    tcp->handshake.buf.len = raft_io_uv_tcp__sizeof_handshake(address);
-    tcp->handshake.buf.base = raft_malloc(tcp->handshake.buf.len);
-    if (tcp->handshake.buf.base == NULL) {
-        return RAFT_ERR_NOMEM;
-    }
-    raft_io_uv_tcp__encode_handshake(id, address, tcp->handshake.buf.base);
-
-    tcp->listener.id = id;
-    tcp->listener.address = address;
-    tcp->listener.data = data;
-    tcp->listener.cb = cb;
-
-    return 0;
-}
-
-static void raft_io_uv_tcp__close(struct raft_io_uv_transport *t)
-{
-    struct raft_io_uv_tcp *tcp = t->data;
-
-    raft_free(tcp->handshake.buf.base);
-    raft_free(tcp);
 }
 
 static void raft_io_uv_tcp__close_cb(struct uv_handle_s *handle)
@@ -1277,7 +1229,14 @@ static int raft_io_uv_tcp__parse_address(const char *address,
 /**
  * Start accepting incoming TCP connections from other servers.
  */
-static int raft_io_uv_tcp__start(struct raft_io_uv_transport *t)
+static int raft_io_uv_tcp__start(struct raft_io_uv_transport *t,
+                                 unsigned id,
+                                 const char *address,
+                                 void *data,
+                                 void (*cb)(void *data,
+                                            unsigned id,
+                                            const char *address,
+                                            uv_stream_t *stream))
 {
     struct raft_io_uv_tcp *tcp;
     struct sockaddr_in addr;
@@ -1285,10 +1244,24 @@ static int raft_io_uv_tcp__start(struct raft_io_uv_transport *t)
 
     tcp = t->data;
 
+    /* Allocate the handshake buffer. This is the same for every new connection
+     * and will be shared and reused. */
+    tcp->handshake.buf.len = raft_io_uv_tcp__sizeof_handshake(address);
+    tcp->handshake.buf.base = raft_malloc(tcp->handshake.buf.len);
+    if (tcp->handshake.buf.base == NULL) {
+        return RAFT_ERR_NOMEM;
+    }
+    raft_io_uv_tcp__encode_handshake(id, address, tcp->handshake.buf.base);
+
+    tcp->listener.id = id;
+    tcp->listener.address = address;
+    tcp->listener.data = data;
+    tcp->listener.cb = cb;
+
     rv = uv_tcp_init(tcp->loop, &tcp->listener.tcp);
     if (rv != 0) {
         raft_warnf(tcp->logger, "uv_tcp_init: %s", uv_strerror(rv));
-	return RAFT_ERR_IO;
+        return RAFT_ERR_IO;
     }
 
     rv = raft_io_uv_tcp__parse_address(tcp->listener.address, &addr);
@@ -1317,6 +1290,8 @@ static int raft_io_uv_tcp__start(struct raft_io_uv_transport *t)
 static void raft_io_uv_tcp__listener_close_cb(uv_handle_t *handle)
 {
     struct raft_io_uv_tcp *tcp = handle->data;
+
+    raft_free(tcp->handshake.buf.base);
 
     tcp->stop.cb(tcp->stop.data);
 }
@@ -1446,11 +1421,16 @@ int raft_io_uv_tcp_init(struct raft_io_uv_transport *t,
     tcp->listener.tcp.data = tcp;
 
     t->data = tcp;
-    t->init = raft_io_uv_tcp__init;
-    t->close = raft_io_uv_tcp__close;
     t->start = raft_io_uv_tcp__start;
     t->stop = raft_io_uv_tcp__stop;
     t->connect = raft_io_uv_tcp__connect;
 
     return 0;
+}
+
+void raft_io_uv_tcp_close(struct raft_io_uv_transport *t)
+{
+    struct raft_io_uv_tcp *tcp = t->data;
+
+    raft_free(tcp);
 }

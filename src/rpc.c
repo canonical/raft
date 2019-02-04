@@ -1,10 +1,7 @@
-#include <assert.h>
-
 #include "../include/raft.h"
 
-#include "error.h"
+#include "assert.h"
 #include "log.h"
-#include "logger.h"
 #include "state.h"
 
 int raft_rpc__ensure_matching_terms(struct raft *r, raft_term term, int *match)
@@ -34,22 +31,17 @@ int raft_rpc__ensure_matching_terms(struct raft *r, raft_term term, int *match)
      *   immediately reverts to follower state.
      */
     if (term > r->current_term) {
-        const char *errmsg;
-
         if (r->state == RAFT_STATE_FOLLOWER) {
             /* Just bump the current term */
-            raft__infof(r, "remote server term is higher -> bump local term");
+            raft_infof(r->logger, "remote server term is higher -> bump local term");
             rv = raft_state__bump_current_term(r, term);
-            errmsg = "bump local term";
         } else {
             /* Bump current state and also convert to follower. */
-            raft__infof(r, "remote server term is higher -> step down");
+            raft_infof(r->logger, "remote server term is higher -> step down");
             rv = raft_state__convert_to_follower(r, term);
-            errmsg = "convert to follower";
         }
 
         if (rv != 0) {
-            raft_error__wrapf(r, errmsg);
             return rv;
         }
 

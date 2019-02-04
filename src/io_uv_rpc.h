@@ -90,14 +90,19 @@ struct raft_io_uv_rpc
 int raft_io_uv_rpc__init(struct raft_io_uv_rpc *r,
                          struct raft_logger *logger,
                          struct uv_loop_s *loop,
-                         struct raft_io_uv_transport *transport,
-                         unsigned id,
-                         const char *address);
+                         struct raft_io_uv_transport *transport);
+
+/**
+ * Release all resources used by the given RPC system.
+ */
+void raft_io_uv_rpc__close(struct raft_io_uv_rpc *r);
 
 /**
  * Start accepting incoming requests.
  */
 int raft_io_uv_rpc__start(struct raft_io_uv_rpc *r,
+                          unsigned id,
+                          const char *address,
                           void *data,
                           void (*recv)(void *data, struct raft_message *msg));
 
@@ -107,11 +112,6 @@ int raft_io_uv_rpc__start(struct raft_io_uv_rpc *r,
 void raft_io_uv_rpc__stop(struct raft_io_uv_rpc *r,
                           void *data,
                           void (*cb)(void *data));
-
-/**
- * Release all resources used by the given RPC system.
- */
-void raft_io_uv_rpc__close(struct raft_io_uv_rpc *r);
 
 /**
  * Request a message to be delivered to its recipient.

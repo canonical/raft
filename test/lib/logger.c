@@ -14,12 +14,11 @@ struct test_logger
 static void test_logger__emit(void *data,
                               int level,
                               const char *format,
-                              ...)
+                              va_list args)
 {
     struct test_logger *t = data;
     char buf[1024];
     const char *level_name;
-    va_list args;
     int i;
 
     (void)data;
@@ -47,9 +46,9 @@ static void test_logger__emit(void *data,
 
     sprintf(buf + strlen(buf), "%2d -> [%s] ", t->id, level_name);
 
-    va_start(args, format);
     vsnprintf(buf + strlen(buf), 1024 - strlen(buf), format, args);
-    va_end(args);
+    munit_log(MUNIT_LOG_INFO, buf);
+    return;
 
     snprintf(buf + strlen(buf), 1024 - strlen(buf), " ");
 
