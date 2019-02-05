@@ -1,6 +1,8 @@
 #include "../../src/uv_fs.h"
 
 #include "../lib/fs.h"
+#include "../lib/uv.h"
+#include "../lib/munit.h"
 #include "../lib/munit.h"
 
 /**
@@ -14,8 +16,11 @@ struct fixture
     struct uv_loop_s loop;
     struct raft_uv_file file;
     struct raft_uv_fs req;
-    bool completed; /* Whether the last write was completed */
-    int status;     /* Result of the last write */
+    struct
+    {
+        int invoked; /* Number of times the write callback was invoked */
+        int status;  /* Result passed to the last callback invokation */
+    } write_cb;
 };
 
 static void *setup(const MunitParameter params[], void *user_data)
@@ -30,13 +35,12 @@ static void *setup(const MunitParameter params[], void *user_data)
     rv = raft_uv_fs__block_size(f->dir, &f->block_size);
     munit_assert_int(rv, ==, 0);
 
-    rv = uv_loop_init(&f->loop);
-    munit_assert_int(rv, ==, 0);
+    test_uv_setup(params, &f->loop);
 
     f->req.data = f;
 
-    f->completed = false;
-    f->status = -1;
+    f->write_cb.invoked = 0;
+    f->write_cb.status = -1;
 
     return f;
 }
@@ -44,10 +48,8 @@ static void *setup(const MunitParameter params[], void *user_data)
 static void tear_down(void *data)
 {
     struct fixture *f = data;
-    int rv;
 
-    rv = uv_loop_close(&f->loop);
-    munit_assert_int(rv, ==, 0);
+    test_uv_tear_down(&f->loop);
 
     test_dir_tear_down(f->dir);
 
@@ -55,34 +57,35 @@ static void tear_down(void *data)
 }
 
 /**
- * Save the result of the request on the @status attribute of the fixture.
+ * Save the result of the request on the write_cb.status attribute of the
+ * fixture and set write_cb.invoked to true.
  */
 static void __write_cb(struct raft_uv_fs *req)
 {
     struct fixture *f = req->data;
 
-    f->completed = true;
-    f->status = req->status;
+    f->write_cb.invoked++;
+    f->write_cb.status = req->status;
 }
 
 /**
  * Create a file and assert that no error occurs.
  */
-#define __create(F)                                                            \
-    {                                                                          \
-        int rv;                                                                \
-        char path[64];                                                         \
-                                                                               \
-        sprintf(path, "%s/foo", F->dir);                                       \
-                                                                               \
-        rv =                                                                   \
-            raft_uv_fs__create(&f->file, &f->req, &f->loop, path, 8192, NULL); \
-        munit_assert_int(rv, ==, 0);                                           \
-                                                                               \
-        rv = uv_run(&f->loop, UV_RUN_ONCE);                                    \
-        munit_assert_int(rv, ==, 1);                                           \
-                                                                               \
-        munit_assert_int(f->req.status, ==, 0);                                \
+#define __create(F)                                                         \
+    {                                                                       \
+        int rv;                                                             \
+        char path[64];                                                      \
+                                                                            \
+        sprintf(path, "%s/foo", F->dir);                                    \
+                                                                            \
+        rv = raft_uv_fs__create(&f->file, &f->req, &f->loop, path, 8192, 3, \
+                                NULL);                                      \
+        munit_assert_int(rv, ==, 0);                                        \
+                                                                            \
+        rv = uv_run(&f->loop, UV_RUN_ONCE);                                 \
+        munit_assert_int(rv, ==, 1);                                        \
+                                                                            \
+        munit_assert_int(f->req.status, ==, 0);                             \
     }
 
 /**
@@ -102,12 +105,12 @@ static void __write_cb(struct raft_uv_fs *req)
             rv = uv_run(&F->loop, UV_RUN_ONCE);                                \
             munit_assert_int(rv, ==, 1);                                       \
                                                                                \
-            if (F->completed) {                                                \
+            if (F->write_cb.invoked > 0) {                                     \
                 break;                                                         \
             }                                                                  \
         }                                                                      \
-        munit_assert_true(F->completed);                                       \
-        F->completed = false;                                                  \
+        munit_assert_int(F->write_cb.invoked, ==, 1);                          \
+        F->write_cb.invoked = 0;                                               \
     }
 
 /**
@@ -124,6 +127,50 @@ static void __write_cb(struct raft_uv_fs *req)
          * to fire and for the poller handle to be inactive. */         \
         rv = uv_run(&f->loop, UV_RUN_ONCE);                             \
         munit_assert_int(rv, ==, 0);                                    \
+    }
+
+/**
+ * Allocate an aligned buffer of the size of one block and all its bytes with
+ * the given character.
+ */
+#define __fill_buf(F, BUF, CHAR)                                \
+    {                                                           \
+        BUF.len = F->block_size;                                \
+        BUF.base = aligned_alloc(F->block_size, F->block_size); \
+        munit_assert_ptr_not_null(BUF.base);                    \
+        memset(BUF.base, CHAR, BUF.len);                        \
+    }
+
+/**
+ * Assert that the write callback was passed the given value as status
+ * parameter.
+ */
+#define __assert_status(F, STATUS)                        \
+    {                                                     \
+        munit_assert_int(F->write_cb.status, ==, STATUS); \
+    }
+
+/**
+ * Assert that the content of the file created with the __create() macro has the
+ * given number of blocks, each filled with progressive numbers.
+ */
+#define __assert_content(F, N)                              \
+    {                                                       \
+        size_t size = N * F->block_size;                    \
+        void *buf = munit_malloc(size);                     \
+        unsigned i;                                         \
+        unsigned j;                                         \
+                                                            \
+        test_dir_read_file(F->dir, "foo", buf, size);       \
+                                                            \
+        for (i = 0; i < N; i++) {                           \
+            char *cursor = (char *)buf + i * F->block_size; \
+            for (j = 0; j < F->block_size; j++) {           \
+                munit_assert_int(cursor[j], ==, i + 1);     \
+            }                                               \
+        }                                                   \
+                                                            \
+        free(buf);                                          \
     }
 
 /**
@@ -208,7 +255,7 @@ static MunitResult test_create_valid_path(const MunitParameter params[],
 
     sprintf(path, "%s/foo", f->dir);
 
-    rv = raft_uv_fs__create(&f->file, &f->req, &f->loop, path, 4096, NULL);
+    rv = raft_uv_fs__create(&f->file, &f->req, &f->loop, path, 4096, 1, NULL);
     munit_assert_int(rv, ==, 0);
 
     rv = uv_run(&f->loop, UV_RUN_ONCE);
@@ -234,7 +281,7 @@ static MunitResult test_create_no_entry(const MunitParameter params[],
 
     (void)params;
 
-    rv = raft_uv_fs__create(&f->file, &f->req, &f->loop, path, 4096, NULL);
+    rv = raft_uv_fs__create(&f->file, &f->req, &f->loop, path, 4096, 1, NULL);
     munit_assert_int(rv, ==, 0);
 
     rv = uv_run(&f->loop, UV_RUN_ONCE);
@@ -261,7 +308,7 @@ static MunitResult test_create_already_exists(const MunitParameter params[],
 
     sprintf(path, "%s/foo", f->dir);
 
-    rv = raft_uv_fs__create(&f->file, &f->req, &f->loop, path, 4096, NULL);
+    rv = raft_uv_fs__create(&f->file, &f->req, &f->loop, path, 4096, 1, NULL);
     munit_assert_int(rv, ==, 0);
 
     rv = uv_run(&f->loop, UV_RUN_ONCE);
@@ -295,7 +342,7 @@ static MunitResult test_create_no_space(const MunitParameter params[],
 
     sprintf(path, "%s/foo", f->dir);
 
-    rv = raft_uv_fs__create(&f->file, &f->req, &f->loop, path, size, NULL);
+    rv = raft_uv_fs__create(&f->file, &f->req, &f->loop, path, size, 1, NULL);
     munit_assert_int(rv, ==, 0);
 
     rv = uv_run(&f->loop, UV_RUN_ONCE);
@@ -331,31 +378,22 @@ static MunitParameterEnum test_write_one_params[] = {
 static MunitResult test_write_one(const MunitParameter params[], void *data)
 {
     struct fixture *f = data;
-    char *text;
     uv_buf_t buf;
 
     (void)params;
 
     __create(f);
 
-    text = aligned_alloc(f->block_size, f->block_size);
-    munit_assert_ptr_not_null(text);
-
-    sprintf(text, "hello");
-
-    buf.base = (void *)text;
-    buf.len = f->block_size;
+    __fill_buf(f, buf, 1);
 
     __write(f, &buf, 1, 0);
 
-    munit_assert_int(f->status, ==, f->block_size);
-
-    test_dir_read_file(f->dir, "foo", text, f->block_size);
-    munit_assert_string_equal(text, "hello");
+    __assert_status(f, f->block_size);
+    __assert_content(f, 1);
 
     __close(f);
 
-    free(text);
+    free(buf.base);
 
     return MUNIT_OK;
 }
@@ -370,37 +408,30 @@ static MunitParameterEnum test_write_two_params[] = {
 static MunitResult test_write_two(const MunitParameter params[], void *data)
 {
     struct fixture *f = data;
-    char *text;
-    uv_buf_t buf;
+    uv_buf_t buf1;
+    uv_buf_t buf2;
 
     (void)params;
 
     __create(f);
 
-    text = aligned_alloc(f->block_size, f->block_size);
-    munit_assert_ptr_not_null(text);
+    __fill_buf(f, buf1, 1);
+    __fill_buf(f, buf2, 2);
 
-    sprintf(text, "hello");
+    __write(f, &buf1, 1, 0);
 
-    buf.base = (void *)text;
-    buf.len = f->block_size;
+    __assert_status(f, f->block_size);
 
-    __write(f, &buf, 1, 0);
+    __write(f, &buf2, 1, f->block_size);
 
-    munit_assert_int(f->status, ==, f->block_size);
+    __assert_status(f, f->block_size);
 
-    sprintf(text, "world");
-
-    __write(f, &buf, 1, f->block_size);
-
-    munit_assert_int(f->status, ==, f->block_size);
-
-    test_dir_read_file(f->dir, "foo", text, f->block_size);
-    munit_assert_string_equal(text, "hello");
+    __assert_content(f, 2);
 
     __close(f);
 
-    free(text);
+    free(buf1.base);
+    free(buf2.base);
 
     return MUNIT_OK;
 }
@@ -415,37 +446,26 @@ static MunitParameterEnum test_write_twice_params[] = {
 static MunitResult test_write_twice(const MunitParameter params[], void *data)
 {
     struct fixture *f = data;
-    char *text;
-    uv_buf_t buf;
+    uv_buf_t buf1;
+    uv_buf_t buf2;
 
     (void)params;
 
     __create(f);
 
-    text = aligned_alloc(f->block_size, f->block_size);
-    munit_assert_ptr_not_null(text);
+    __fill_buf(f, buf1, 0);
+    __fill_buf(f, buf2, 1);
 
-    sprintf(text, "hello");
+    __write(f, &buf1, 1, 0);
+    __write(f, &buf2, 1, 0);
 
-    buf.base = (void *)text;
-    buf.len = f->block_size;
-
-    __write(f, &buf, 1, 0);
-
-    munit_assert_int(f->status, ==, f->block_size);
-
-    sprintf(text, "hello world");
-
-    __write(f, &buf, 1, 0);
-
-    munit_assert_int(f->status, ==, f->block_size);
-
-    test_dir_read_file(f->dir, "foo", text, f->block_size);
-    munit_assert_string_equal(text, "hello world");
+    __assert_status(f, f->block_size);
+    __assert_content(f, 1);
 
     __close(f);
 
-    free(text);
+    free(buf1.base);
+    free(buf2.base);
 
     return MUNIT_OK;
 }
@@ -466,17 +486,12 @@ static MunitResult test_write_vec(const MunitParameter params[], void *data)
 
     __create(f);
 
-    bufs[0].base = aligned_alloc(f->block_size, f->block_size);
-    munit_assert_ptr_not_null(bufs[0].base);
-    bufs[0].len = f->block_size;
-
-    bufs[1].base = aligned_alloc(f->block_size, f->block_size);
-    munit_assert_ptr_not_null(bufs[1].base);
-    bufs[1].len = f->block_size;
+    __fill_buf(f, bufs[0], 1);
+    __fill_buf(f, bufs[1], 2);
 
     __write(f, bufs, 2, 0);
 
-    munit_assert_int(f->status, ==, f->block_size * 2);
+    __assert_status(f, f->block_size * 2);
 
     __close(f);
 
@@ -503,26 +518,129 @@ static MunitResult test_write_vec_twice(const MunitParameter params[],
 
     __create(f);
 
-    bufs[0].base = aligned_alloc(f->block_size, f->block_size);
-    munit_assert_ptr_not_null(bufs[0].base);
-    bufs[0].len = f->block_size;
-
-    bufs[1].base = aligned_alloc(f->block_size, f->block_size);
-    munit_assert_ptr_not_null(bufs[1].base);
-    bufs[1].len = f->block_size;
+    __fill_buf(f, bufs[0], 1);
+    __fill_buf(f, bufs[1], 2);
 
     __write(f, bufs, 1, 0);
 
-    munit_assert_int(f->status, ==, f->block_size);
+    __assert_status(f, f->block_size);
 
     __write(f, bufs, 2, 0);
 
-    munit_assert_int(f->status, ==, f->block_size * 2);
+    __assert_status(f, f->block_size * 2);
 
     __close(f);
 
     free(bufs[0].base);
     free(bufs[1].base);
+
+    return MUNIT_OK;
+}
+
+/* Test against all file system types */
+static MunitParameterEnum test_write_concurrent_params[] = {
+    {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
+    {NULL, NULL},
+};
+
+/* Write two different blocks concurrently. */
+static MunitResult test_write_concurrent(const MunitParameter params[],
+                                         void *data)
+{
+    struct fixture *f = data;
+    struct raft_uv_fs req;
+    uv_buf_t buf1;
+    uv_buf_t buf2;
+    int rv;
+    unsigned i;
+
+    (void)params;
+
+    __create(f);
+
+    req.data = f;
+
+    __fill_buf(f, buf1, 1);
+    __fill_buf(f, buf2, 2);
+
+    rv = raft_uv_fs__write(&f->file, &f->req, &buf1, 1, 0, __write_cb);
+    munit_assert_int(rv, ==, 0);
+
+    rv = raft_uv_fs__write(&f->file, &req, &buf2, 1, f->block_size, __write_cb);
+    munit_assert_int(rv, ==, 0);
+
+    /* Run the loop until the write request is completed */
+    for (i = 0; i < 10; i++) {
+        rv = uv_run(&f->loop, UV_RUN_ONCE);
+        munit_assert_int(rv, ==, 1);
+
+        if (f->write_cb.invoked == 2) {
+            break;
+        }
+    }
+
+    munit_assert_int(f->write_cb.invoked, ==, 2);
+
+    __assert_content(f, 2);
+
+    __close(f);
+
+    free(buf1.base);
+    free(buf2.base);
+
+    return MUNIT_OK;
+}
+
+/* Test against all file system types */
+static MunitParameterEnum test_write_concurrent_twice_params[] = {
+    {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
+    {NULL, NULL},
+};
+
+/* Write the same block concurrently. */
+static MunitResult test_write_concurrent_twice(const MunitParameter params[],
+                                         void *data)
+{
+    struct fixture *f = data;
+    struct raft_uv_fs req;
+    uv_buf_t buf1;
+    uv_buf_t buf2;
+    int rv;
+    unsigned i;
+
+    (void)params;
+
+    __create(f);
+
+    req.data = f;
+
+    __fill_buf(f, buf1, 1);
+    __fill_buf(f, buf2, 1);
+
+    rv = raft_uv_fs__write(&f->file, &f->req, &buf1, 1, 0, __write_cb);
+    munit_assert_int(rv, ==, 0);
+
+    rv = raft_uv_fs__write(&f->file, &req, &buf2, 1, 0, __write_cb);
+    munit_assert_int(rv, ==, 0);
+
+    /* Run the loop until the write request is completed */
+    for (i = 0; i < 10; i++) {
+        rv = uv_run(&f->loop, UV_RUN_ONCE);
+        munit_assert_int(rv, ==, 1);
+
+        if (f->write_cb.invoked == 2) {
+            break;
+        }
+    }
+
+    munit_assert_int(f->write_cb.invoked, ==, 2);
+
+    __assert_content(f, 1);
+
+    __close(f);
+
+    free(buf1.base);
+    free(buf2.base);
 
     return MUNIT_OK;
 }
@@ -534,6 +652,10 @@ static MunitTest write_tests[] = {
     {"/vec", test_write_vec, setup, tear_down, 0, test_write_vec_params},
     {"/vec-twice", test_write_vec_twice, setup, tear_down, 0,
      test_write_vec_twice_params},
+    {"/concurrent", test_write_concurrent, setup, tear_down, 0,
+     test_write_concurrent_params},
+    {"/concurrent-twice", test_write_concurrent_twice, setup, tear_down, 0,
+     test_write_concurrent_twice_params},
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 

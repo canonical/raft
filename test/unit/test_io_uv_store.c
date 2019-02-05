@@ -332,7 +332,7 @@ static void __entries_cb(void *p, const int status)
         }                                                                      \
                                                                                \
         /* Run the loop until the write request is completed */                \
-        for (i = 0; i < 5; i++) {                                              \
+        for (i = 0; i < 10; i++) {                                              \
             rv = uv_run(&F->loop, UV_RUN_ONCE);                                \
             munit_assert_int(rv, ==, 1);                                       \
                                                                                \

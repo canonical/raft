@@ -52,7 +52,8 @@ struct raft_uv_file
     int event_fd;                  /* Poll'ed to check if write has completed */
     struct uv_poll_s event_poller; /* To make the loop poll for event_fd */
     aio_context_t ctx;             /* KAIO handle */
-    bool busy;                     /* Whether a request is in progress */
+    struct io_event *events;       /* Array of KAIO response objects */
+    unsigned n_events;             /* Length of the events array */
 };
 
 struct raft_uv_fs; /* Forward declaration */
@@ -87,6 +88,7 @@ int raft_uv_fs__create(struct raft_uv_file *f,
                        struct uv_loop_s *loop,
                        const char *path,
                        size_t size,
+                       unsigned max_n_writes,
                        raft_uv_fs_cb cb);
 
 /**

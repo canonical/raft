@@ -2684,7 +2684,7 @@ static int raft_io_uv_store__preparer_start(struct raft_io_uv_store *s)
 
     rv = raft_uv_fs__create(&s->preparer.segment->file,
                             &s->preparer.segment->req, s->loop,
-                            s->preparer.segment->path, s->max_segment_size,
+                            s->preparer.segment->path, s->max_segment_size, 1,
                             raft_io_uv_store__preparer_create_cb);
     if (rv != 0) {
         raft_errorf(s->logger, "create '%s': %s", s->preparer.segment->path,

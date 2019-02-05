@@ -28,7 +28,7 @@ static MunitSuite suites[] = {
     {"checksum", NULL, raft_checksum_suites, 1, 0},
     {"client", NULL, raft_client_suites, 1, 0},
     {"configuration", NULL, raft_configuration_suites, 1, 0},
-    /*     {"context", NULL, raft_context_suites, 1, 0}, */
+    /* {"context", NULL, raft_context_suites, 1, 0}, */
     {"election", NULL, raft_election_suites, 1, 0},
 #if RAFT_IO_STUB
     {"io-stub", NULL, raft_io_stub_suites, 1, 0},
@@ -39,7 +39,7 @@ static MunitSuite suites[] = {
     {"io-uv-store", NULL, raft_io_uv_store_suites, 1, 0},
 #endif
     {"log", NULL, raft_log_suites, 1, 0},
-    /*     {"logger", NULL, raft_logger_suites, 1, 0}, */
+    /* {"logger", NULL, raft_logger_suites, 1, 0}, */
     {"replication", NULL, raft_replication_suites, 1, 0},
     {"rpc-request-vote", NULL, raft_rpc_request_vote_suites, 1, 0},
     {"rpc-append-entries", NULL, raft_rpc_append_entries_suites, 1, 0},
