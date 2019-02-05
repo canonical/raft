@@ -269,7 +269,7 @@ enum { RAFT_LOG_COMMAND = 1, RAFT_LOG_CONFIGURATION };
  *   change], and term when entry was received by the leader.
  *
  * An entry that originated from this raft instance while it was the leader
- * (typically via client calls to raft_accept()) should normaly have a @buf
+ * (typically via client calls to raft_propose()) should normaly have a @buf
  * attribute that points directly to the memory that was originally allocated by
  * the client itself to contain the entry data, and the @batch attribute is set
  * to #NULL.
@@ -862,7 +862,7 @@ void raft_set_election_timeout(struct raft *r, const unsigned election_timeout);
 const char *raft_state_name(struct raft *r);
 
 /**
- * Accept a client request to append new FSM commands to the log.
+ * Propose to append new FSM commands to the log.
  *
  * If this server is the leader, it will create @n new log entries of type
  * #RAFT_LOG_COMMAND using the given buffers as their payloads, append them to
@@ -876,9 +876,9 @@ const char *raft_state_name(struct raft *r);
  * releasing it when appropriate. Any further client access to such memory leads
  * to undefined behavior.
  */
-int raft_accept(struct raft *r,
-                const struct raft_buffer bufs[],
-                const unsigned n);
+int raft_propose(struct raft *r,
+                 const struct raft_buffer bufs[],
+                 const unsigned n);
 
 /**
  * Add a new non-voting server to the cluster configuration.

@@ -624,7 +624,7 @@ bool test_cluster_has_no_leader(struct test_cluster *c)
     return test_cluster_leader(c) == 0;
 }
 
-void test_cluster_accept(struct test_cluster *c)
+void test_cluster_propose(struct test_cluster *c)
 {
     unsigned leader_id = test_cluster_leader(c);
     uint32_t *entry_id = raft_malloc(sizeof *entry_id);
@@ -642,7 +642,7 @@ void test_cluster_accept(struct test_cluster *c)
     buf.base = entry_id;
     buf.len = sizeof *entry_id;
 
-    rv = raft_accept(raft, &buf, 1);
+    rv = raft_propose(raft, &buf, 1);
     munit_assert_int(rv, ==, 0);
 }
 

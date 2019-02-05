@@ -608,7 +608,7 @@ static MunitResult test_res_commit(const MunitParameter params[], void *data)
     /* Append an entry to our log and handle the associated successful write. */
     test_fsm_encode_set_x(123, &buf);
 
-    rv = raft_accept(&f->raft, &buf, 1);
+    rv = raft_propose(&f->raft, &buf, 1);
     munit_assert_int(rv, ==, 0);
 
     raft_io_stub_flush(f->raft.io);

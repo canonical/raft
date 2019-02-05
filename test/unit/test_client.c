@@ -71,15 +71,15 @@ static void tear_down(void *data)
 /**
  * Submit a request to append a new RAFT_LOG_COMMAND entry.
  */
-#define __accept_entry(F)                    \
-    {                                        \
-        struct raft_buffer buf;              \
-        int rv;                              \
-                                             \
-        test_fsm_encode_set_x(123, &buf);    \
-                                             \
-        rv = raft_accept(&F->raft, &buf, 1); \
-        munit_assert_int(rv, ==, 0);         \
+#define __propose_entry(F)                    \
+    {                                         \
+        struct raft_buffer buf;               \
+        int rv;                               \
+                                              \
+        test_fsm_encode_set_x(123, &buf);     \
+                                              \
+        rv = raft_propose(&F->raft, &buf, 1); \
+        munit_assert_int(rv, ==, 0);          \
     }
 
 /**
@@ -228,12 +228,12 @@ static void tear_down(void *data)
     }
 
 /**
- * raft_accept
+ * raft_propose
  */
 
 /* If the raft instance is not in leader state, an error is returned. */
-static MunitResult test_accept_not_leader(const MunitParameter params[],
-                                          void *data)
+static MunitResult test_propose_not_leader(const MunitParameter params[],
+                                           void *data)
 {
     struct fixture *f = data;
     struct raft_buffer buf;
@@ -245,7 +245,7 @@ static MunitResult test_accept_not_leader(const MunitParameter params[],
 
     test_fsm_encode_set_x(123, &buf);
 
-    rv = raft_accept(&f->raft, &buf, 1);
+    rv = raft_propose(&f->raft, &buf, 1);
     munit_assert_int(rv, ==, RAFT_ERR_NOT_LEADER);
 
     raft_free(buf.base);
@@ -253,17 +253,17 @@ static MunitResult test_accept_not_leader(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static char *accept_oom_heap_fault_delay[] = {"0", "1", "2", NULL};
-static char *accept_oom_heap_fault_repeat[] = {"1", NULL};
+static char *propose_oom_heap_fault_delay[] = {"0", "1", "2", NULL};
+static char *propose_oom_heap_fault_repeat[] = {"1", NULL};
 
-static MunitParameterEnum accept_oom_params[] = {
-    {TEST_HEAP_FAULT_DELAY, accept_oom_heap_fault_delay},
-    {TEST_HEAP_FAULT_REPEAT, accept_oom_heap_fault_repeat},
+static MunitParameterEnum propose_oom_params[] = {
+    {TEST_HEAP_FAULT_DELAY, propose_oom_heap_fault_delay},
+    {TEST_HEAP_FAULT_REPEAT, propose_oom_heap_fault_repeat},
     {NULL, NULL},
 };
 
 /* Out of memory conditions. */
-static MunitResult test_accept_oom(const MunitParameter params[], void *data)
+static MunitResult test_propose_oom(const MunitParameter params[], void *data)
 {
     struct fixture *f = data;
     struct raft_buffer buf;
@@ -284,7 +284,7 @@ static MunitResult test_accept_oom(const MunitParameter params[], void *data)
     f->raft.io_queue.requests = NULL;
     f->raft.io_queue.size = 0;*/
 
-    rv = raft_accept(&f->raft, &buf, 1);
+    rv = raft_propose(&f->raft, &buf, 1);
     munit_assert_int(rv, ==, RAFT_ERR_NOMEM);
 
     raft_free(buf.base);
@@ -293,7 +293,8 @@ static MunitResult test_accept_oom(const MunitParameter params[], void *data)
 }
 
 /* I/O error. */
-static MunitResult test_accept_io_err(const MunitParameter params[], void *data)
+static MunitResult test_propose_io_err(const MunitParameter params[],
+                                       void *data)
 {
     struct fixture *f = data;
     struct raft_buffer buf;
@@ -308,7 +309,7 @@ static MunitResult test_accept_io_err(const MunitParameter params[], void *data)
 
     raft_io_stub_fault(&f->io, 0, 1);
 
-    rv = raft_accept(&f->raft, &buf, 1);
+    rv = raft_propose(&f->raft, &buf, 1);
     munit_assert_int(rv, ==, RAFT_ERR_IO);
 
     raft_free(buf.base);
@@ -317,8 +318,8 @@ static MunitResult test_accept_io_err(const MunitParameter params[], void *data)
 }
 
 /* The new entries are sent to all other servers. */
-static MunitResult test_accept_send_entries(const MunitParameter params[],
-                                            void *data)
+static MunitResult test_propose_send_entries(const MunitParameter params[],
+                                             void *data)
 {
     struct fixture *f = data;
 
@@ -327,7 +328,7 @@ static MunitResult test_accept_send_entries(const MunitParameter params[],
     test_bootstrap_and_start(&f->raft, 2, 1, 2);
     test_become_leader(&f->raft);
 
-    __accept_entry(f);
+    __propose_entry(f);
 
     /* A write log and an append entries requests has been submitted. */
     __assert_io(f, 1, 1);
@@ -335,11 +336,11 @@ static MunitResult test_accept_send_entries(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static MunitTest accept_tests[] = {
-    {"/not-leader", test_accept_not_leader, setup, tear_down, 0, NULL},
-    {"/oom", test_accept_oom, setup, tear_down, 0, accept_oom_params},
-    {"/io-err", test_accept_io_err, setup, tear_down, 0, NULL},
-    {"/send-entries", test_accept_send_entries, setup, tear_down, 0, NULL},
+static MunitTest propose_tests[] = {
+    {"/not-leader", test_propose_not_leader, setup, tear_down, 0, NULL},
+    {"/oom", test_propose_oom, setup, tear_down, 0, propose_oom_params},
+    {"/io-err", test_propose_io_err, setup, tear_down, 0, NULL},
+    {"/send-entries", test_propose_send_entries, setup, tear_down, 0, NULL},
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 
@@ -649,7 +650,7 @@ static MunitResult test_promote_new_round(const MunitParameter params[],
     __promote(f, 3);
 
     /* Now that the catch-up round started, submit a new entry. */
-    __accept_entry(f);
+    __propose_entry(f);
 
     /* Let more than election_timeout milliseconds elapse. */
     __tick(f, f->raft.election_timeout + 100);
@@ -686,7 +687,7 @@ static MunitResult test_promote_committed(const MunitParameter params[],
     __assert_io(f, 0, 1);
 
     /* Now that the catch-up round started, submit a new entry. */
-    __accept_entry(f);
+    __propose_entry(f);
     __assert_io(f, 1, 2);
 
     /* Let more than election_timeout milliseconds elapse. */
@@ -703,7 +704,7 @@ static MunitResult test_promote_committed(const MunitParameter params[],
     /* Make a new client request, so even when this second round that just
      * started completes, the server being promoted will still be missing
      * entries. */
-    __accept_entry(f);
+    __propose_entry(f);
     __assert_io(f, 1, 2);
 
     /* Simulate the server being promoted completing the second round within the
@@ -1037,7 +1038,7 @@ static MunitTest remove_server_tests[] = {
  */
 
 MunitSuite raft_client_suites[] = {
-    {"/accept", accept_tests, NULL, 1, 0},
+    {"/propose", propose_tests, NULL, 1, 0},
     {"/add-server", add_server_tests, NULL, 1, 0},
     {"/promote", promote_tests, NULL, 1, 0},
     {"/remove-server", remove_server_tests, NULL, 1, 0},
