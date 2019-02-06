@@ -20,14 +20,12 @@
 
 struct fixture
 {
-    struct raft_heap heap;          /* Testable allocator */
-    struct raft_logger logger;      /* Test logger */
-    struct uv_loop_s loop;          /* libuv loop */
-    char *dir;                      /* Data directory */
-    int count;                      /* To generate deterministic entry data */
-    bool completed;                 /* Last store entries request is done */
-    int status;                     /* Result of a store entries request */
-    bool stopped;                   /* The store has been completely stopped */
+    struct raft_heap heap;     /* Testable allocator */
+    struct raft_logger logger; /* Test logger */
+    struct uv_loop_s loop;     /* libuv loop */
+    char *dir;                 /* Data directory */
+    int count;                 /* To generate deterministic entry data */
+    bool stopped;              /* The store has been completely stopped */
     struct
     {
         raft_term term;
@@ -35,9 +33,29 @@ struct fixture
         raft_index start_index;
         struct raft_entry *entries;
         size_t n;
-    } loaded;                      /* Result of raft_io_uv_store__load. */
+    } loaded; /* Result of raft_io_uv_store__load. */
+    struct
+    {
+        int invoked;
+        int status;
+    } append_cb;
     struct raft_io_uv_store store; /* Store under test */
 };
+
+static void __append_cb(void *data, const int status)
+{
+    struct fixture *f = data;
+
+    f->append_cb.invoked++;
+    f->append_cb.status = status;
+}
+
+static void __stop_cb(void *p)
+{
+    struct fixture *f = p;
+
+    f->stopped = true;
+}
 
 static void *setup(const MunitParameter params[], void *user_data)
 {
@@ -55,22 +73,19 @@ static void *setup(const MunitParameter params[], void *user_data)
     memset(&f->loaded, 0, sizeof f->loaded);
 
     f->count = 0;
-    f->completed = false;
-    f->status = -1;
+
+    f->append_cb.invoked = false;
+    f->append_cb.status = -1;
 
     rv = raft_io_uv_store__init(&f->store, &f->logger, &f->loop, f->dir);
+    munit_assert_int(rv, ==, 0);
+
+    rv = raft_io_uv_store__start(&f->store);
     munit_assert_int(rv, ==, 0);
 
     f->store.max_segment_size = __MAX_SEGMENT_SIZE;
 
     return f;
-}
-
-static void __stop_cb(void *p)
-{
-    struct fixture *f = p;
-
-    f->stopped = true;
 }
 
 static void tear_down(void *data)
@@ -111,17 +126,6 @@ static void tear_down(void *data)
     test_heap_tear_down(&f->heap);
 
     free(f);
-}
-
-/**
- * Callback to pass to asynchronous store entries requests.
- */
-static void __entries_cb(void *p, const int status)
-{
-    struct fixture *f = p;
-
-    f->completed = true;
-    f->status = status;
 }
 
 /**
@@ -281,10 +285,10 @@ static void __entries_cb(void *p, const int status)
     {                                                   \
         int i;                                          \
                                                         \
-        ENTRIES = munit_malloc(N * sizeof *entries);    \
+        ENTRIES = munit_malloc(N * sizeof *ENTRIES);    \
                                                         \
         for (i = 0; i < N; i++) {                       \
-            struct raft_entry *entry = &entries[i];     \
+            struct raft_entry *entry = &ENTRIES[i];     \
             void *cursor;                               \
                                                         \
             entry->term = 1;                            \
@@ -310,42 +314,41 @@ static void __entries_cb(void *p, const int status)
             free(entry->buf.base);                  \
         }                                           \
                                                     \
-        free(entries);                              \
+        free(ENTRIES);                              \
     }
 
 /**
- * Submit a request to store N entries each of size S and check that no error
+ * Submit a request to append N entries each of size S and check that no error
  * occurred.
  */
-#define __entries(F, N, S)                                                     \
-    {                                                                          \
-        int i;                                                                 \
-        int rv;                                                                \
-        struct raft_entry *entries;                                            \
-                                                                               \
-        __make_request_entries(F, entries, N, S);                              \
-                                                                               \
-        rv =                                                                   \
-            raft_io_uv_store__entries(&F->store, entries, N, F, __entries_cb); \
-        if (rv != 0) {                                                         \
-            munit_logf(MUNIT_LOG_ERROR, "entries: %s", raft_strerror(rv));     \
-        }                                                                      \
-                                                                               \
-        /* Run the loop until the write request is completed */                \
-        for (i = 0; i < 10; i++) {                                              \
-            rv = uv_run(&F->loop, UV_RUN_ONCE);                                \
-            munit_assert_int(rv, ==, 1);                                       \
-                                                                               \
-            if (F->completed) {                                                \
-                break;                                                         \
-            }                                                                  \
-        }                                                                      \
-        munit_assert_true(F->completed);                                       \
-        munit_assert_int(F->status, ==, 0);                                    \
-                                                                               \
-        F->completed = false;                                                  \
-                                                                               \
-        __drop_request_entries(F, entries, N);                                 \
+#define __append(F, N, S)                                                     \
+    {                                                                         \
+        int i;                                                                \
+        int rv;                                                               \
+        struct raft_entry *entries;                                           \
+                                                                              \
+        __make_request_entries(F, entries, N, S);                             \
+                                                                              \
+        rv = raft_io_uv_store__append(&F->store, entries, N, f, __append_cb); \
+        if (rv != 0) {                                                        \
+            munit_logf(MUNIT_LOG_ERROR, "entries: %s", raft_strerror(rv));    \
+        }                                                                     \
+                                                                              \
+        /* Run the loop until the write request is completed */               \
+        for (i = 0; i < 10; i++) {                                            \
+            rv = uv_run(&F->loop, UV_RUN_ONCE);                               \
+            munit_assert_int(rv, ==, 1);                                      \
+                                                                              \
+            if (F->append_cb.invoked) {                                       \
+                break;                                                        \
+            }                                                                 \
+        }                                                                     \
+        munit_assert_true(F->append_cb.invoked);                              \
+        munit_assert_int(F->append_cb.status, ==, 0);                         \
+                                                                              \
+        F->append_cb.invoked = false;                                         \
+                                                                              \
+        __drop_request_entries(F, entries, N);                                \
     }
 
 /**
@@ -376,35 +379,34 @@ static void __entries_cb(void *p, const int status)
 /**
  * Submit a store entries request and check that the given error occurs.
  */
-#define __assert_entries_error(F, N, S, RV)                                    \
-    {                                                                          \
-        int i;                                                                 \
-        int rv;                                                                \
-        struct raft_entry *entries;                                            \
-                                                                               \
-        __make_request_entries(F, entries, N, S);                              \
-                                                                               \
-        rv =                                                                   \
-            raft_io_uv_store__entries(&F->store, entries, N, F, __entries_cb); \
-        if (rv != 0) {                                                         \
-            munit_logf(MUNIT_LOG_ERROR, "entries: %s", raft_strerror(rv));     \
-        }                                                                      \
-                                                                               \
-        /* Run the loop until the write request is completed */                \
-        for (i = 0; i < 5; i++) {                                              \
-            rv = uv_run(&F->loop, UV_RUN_ONCE);                                \
-            if (rv == 0) {                                                     \
-                break;                                                         \
-            }                                                                  \
-                                                                               \
-            if (F->completed) {                                                \
-                break;                                                         \
-            }                                                                  \
-        }                                                                      \
-        munit_assert_true(F->completed);                                       \
-        munit_assert_int(F->status, ==, RV);                                   \
-                                                                               \
-        __drop_request_entries(F, entries, N);                                 \
+#define __assert_append_error(F, N, S, RV)                                    \
+    {                                                                         \
+        int i;                                                                \
+        int rv;                                                               \
+        struct raft_entry *entries;                                           \
+                                                                              \
+        __make_request_entries(F, entries, N, S);                             \
+                                                                              \
+        rv = raft_io_uv_store__append(&F->store, entries, N, f, __append_cb); \
+        if (rv != 0) {                                                        \
+            munit_logf(MUNIT_LOG_ERROR, "entries: %s", raft_strerror(rv));    \
+        }                                                                     \
+                                                                              \
+        /* Run the loop until the write request is completed */               \
+        for (i = 0; i < 5; i++) {                                             \
+            rv = uv_run(&F->loop, UV_RUN_ONCE);                               \
+            if (rv == 0) {                                                    \
+                break;                                                        \
+            }                                                                 \
+                                                                              \
+            if (F->append_cb.invoked) {                                       \
+                break;                                                        \
+            }                                                                 \
+        }                                                                     \
+        munit_assert_true(F->append_cb.invoked);                              \
+        munit_assert_int(F->append_cb.status, ==, RV);                        \
+                                                                              \
+        __drop_request_entries(F, entries, N);                                \
     }
 
 /**
@@ -1695,18 +1697,17 @@ static MunitTest vote_tests[] = {
 };
 
 /**
- * raft_io_uv_store__entries
+ * raft_io_uv_store__append
  */
 
 /* Test against all file system types */
-static MunitParameterEnum test_entries_initial_params[] = {
+static MunitParameterEnum append_first_params[] = {
     {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
     {NULL, NULL},
 };
 
 /* Write the very first entry. */
-static MunitResult test_entries_initial(const MunitParameter params[],
-                                        void *data)
+static MunitResult test_append_first(const MunitParameter params[], void *data)
 {
     struct fixture *f = data;
 
@@ -1714,7 +1715,7 @@ static MunitResult test_entries_initial(const MunitParameter params[],
 
     __load(f);
 
-    __entries(f, 1, 64);
+    __append(f, 1, 64);
 
     __assert_open_segment(f, 1, 1, 1, 64);
 
@@ -1722,15 +1723,15 @@ static MunitResult test_entries_initial(const MunitParameter params[],
 }
 
 /* Test against all file system types */
-static MunitParameterEnum test_entries_two_same_block_params[] = {
+static MunitParameterEnum append_two_same_block_params[] = {
     {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
     {NULL, NULL},
 };
 
 /* Write the very first entry and then another one, both fitting in the same
  * block. */
-static MunitResult test_entries_two_same_block(const MunitParameter params[],
-                                               void *data)
+static MunitResult test_append_two_same_block(const MunitParameter params[],
+                                              void *data)
 {
     struct fixture *f = data;
 
@@ -1738,8 +1739,8 @@ static MunitResult test_entries_two_same_block(const MunitParameter params[],
 
     __load(f);
 
-    __entries(f, 1, 64);
-    __entries(f, 1, 64);
+    __append(f, 1, 64);
+    __append(f, 1, 64);
 
     __assert_open_segment(f, 1, 1, 2, 64 * 2);
 
@@ -1747,15 +1748,14 @@ static MunitResult test_entries_two_same_block(const MunitParameter params[],
 }
 
 /* Test against all file system types */
-static MunitParameterEnum test_entries_fill_block_exactly_params[] = {
+static MunitParameterEnum append_fill_block_exactly_params[] = {
     {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
     {NULL, NULL},
 };
 
 /* Write an entry that fills the first block exactly and then another one. */
-static MunitResult test_entries_fill_block_exactly(
-    const MunitParameter params[],
-    void *data)
+static MunitResult test_append_fill_block_exactly(const MunitParameter params[],
+                                                  void *data)
 {
     struct fixture *f = data;
     size_t size;
@@ -1769,22 +1769,22 @@ static MunitResult test_entries_fill_block_exactly(
                                sizeof(uint64_t) + /* Checksums */
                                raft_io_uv_sizeof__batch_header(1)) /* Header */;
 
-    __entries(f, 1, size);
-    __entries(f, 1, 64);
+    __append(f, 1, size);
+    __append(f, 1, 64);
 
     __assert_open_segment(f, 1, 1, 2, size + 64);
 
     return MUNIT_OK;
 }
 
-static MunitParameterEnum test_entries_exceed_block_params[] = {
+static MunitParameterEnum append_exceed_block_params[] = {
     {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
     {NULL, NULL},
 };
 
 /* Write an entry that exceeds the first block, then another one. */
-static MunitResult test_entries_exceed_block(const MunitParameter params[],
-                                             void *data)
+static MunitResult test_append_exceed_block(const MunitParameter params[],
+                                            void *data)
 {
     struct fixture *f = data;
     size_t size1;
@@ -1796,17 +1796,17 @@ static MunitResult test_entries_exceed_block(const MunitParameter params[],
 
     size1 = f->store.block_size;
 
-    __entries(f, 1, size1);
-    __entries(f, 1, 64);
+    __append(f, 1, size1);
+    __append(f, 1, 64);
 
     /* Write a third entry that fills the second block exactly */
-    size2 = f->store.block_size - f->store.writer.segment->offset;
+    size2 = f->store.block_size - f->store.writer.blocks.offset;
     size2 -= (sizeof(uint64_t) + raft_io_uv_sizeof__batch_header(1));
 
-    __entries(f, 1, size2);
+    __append(f, 1, size2);
 
     /* Write a fourth entry */
-    __entries(f, 1, 64);
+    __append(f, 1, 64);
 
     __assert_open_segment(f, 1, 1, 4, size1 + 64 + size2 + 64);
 
@@ -1814,15 +1814,15 @@ static MunitResult test_entries_exceed_block(const MunitParameter params[],
 }
 
 /* Test against all file system types */
-static MunitParameterEnum test_entries_match_block_params[] = {
+static MunitParameterEnum append_match_block_params[] = {
     {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
     {NULL, NULL},
 };
 
 /* Write an entry that exceeds the first block and uses the second block
  * completely. */
-static MunitResult test_entries_match_block(const MunitParameter params[],
-                                            void *data)
+static MunitResult test_append_match_block(const MunitParameter params[],
+                                           void *data)
 {
     struct fixture *f = data;
     size_t size;
@@ -1836,8 +1836,8 @@ static MunitResult test_entries_match_block(const MunitParameter params[],
             sizeof(uint64_t) + /* Checksums */
             raft_io_uv_sizeof__batch_header(1)) /* Header */;
 
-    __entries(f, 1, size);
-    __entries(f, 1, 64);
+    __append(f, 1, size);
+    __append(f, 1, 64);
 
     __assert_open_segment(f, 1, 1, 2, size + 64);
 
@@ -1845,15 +1845,15 @@ static MunitResult test_entries_match_block(const MunitParameter params[],
 }
 
 /* Test against all file system types */
-static MunitParameterEnum test_entries_prepare_params[] = {
+static MunitParameterEnum append_prepare_params[] = {
     {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
     {NULL, NULL},
 };
 
 /* When the very first entry is written a preparation round is triggered and
  * eventually all open segments supposed to be prepared get ready. */
-static MunitResult test_entries_prepare(const MunitParameter params[],
-                                        void *data)
+static MunitResult test_append_prepare(const MunitParameter params[],
+                                       void *data)
 {
     struct fixture *f = data;
     int i;
@@ -1863,7 +1863,7 @@ static MunitResult test_entries_prepare(const MunitParameter params[],
 
     __load(f);
 
-    __entries(f, 1, 64);
+    __append(f, 1, 64);
 
     /* Run the loop until the last prepared open segment is ready. */
     for (i = 0; i < 5; i++) {
@@ -1886,8 +1886,8 @@ static MunitResult test_entries_prepare(const MunitParameter params[],
 }
 
 /* No space is left and the write request fails. */
-static MunitResult test_entries_no_space(const MunitParameter params[],
-                                         void *data)
+static MunitResult test_append_no_space(const MunitParameter params[],
+                                        void *data)
 {
     struct fixture *f = data;
 
@@ -1897,19 +1897,19 @@ static MunitResult test_entries_no_space(const MunitParameter params[],
 
     test_dir_fill(f->dir, 0);
 
-    __assert_entries_error(f, 1, 64, RAFT_ERR_IO);
+    __assert_append_error(f, 1, 64, RAFT_ERR_IO);
 
     return MUNIT_OK;
 }
 
 /* Test against all file system types */
-static MunitParameterEnum test_entries_stop_params[] = {
+static MunitParameterEnum append_stop_params[] = {
     {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
     {NULL, NULL},
 };
 
 /* Stop the store while a store entries request is in flight. */
-static MunitResult test_entries_stop(const MunitParameter params[], void *data)
+static MunitResult test_append_stop(const MunitParameter params[], void *data)
 {
     struct fixture *f = data;
     struct raft_entry *entries;
@@ -1923,7 +1923,7 @@ static MunitResult test_entries_stop(const MunitParameter params[], void *data)
     /* Submit a store entries request. */
     __make_request_entries(f, entries, 1, 64);
 
-    rv = raft_io_uv_store__entries(&f->store, entries, 1, f, __entries_cb);
+    rv = raft_io_uv_store__append(&f->store, entries, 1, f, __append_cb);
     munit_assert_int(rv, ==, 0);
 
     /* Request to stop the store. */
@@ -1949,14 +1949,14 @@ static MunitResult test_entries_stop(const MunitParameter params[], void *data)
 }
 
 /* Test against all file system types */
-static MunitParameterEnum test_entries_exceed_segment_params[] = {
+static MunitParameterEnum append_exceed_segment_params[] = {
     {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
     {NULL, NULL},
 };
 
 /* Perform a write which exceeds the capacity of the current segment. */
-static MunitResult test_entries_exceed_segment(const MunitParameter params[],
-                                               void *data)
+static MunitResult test_append_exceed_segment(const MunitParameter params[],
+                                              void *data)
 {
     struct fixture *f = data;
     size_t size = f->store.block_size;
@@ -1965,22 +1965,22 @@ static MunitResult test_entries_exceed_segment(const MunitParameter params[],
 
     __load(f);
 
-    __entries(f, 1, size);
-    __entries(f, 1, size);
-    __entries(f, 1, size);
+    __append(f, 1, size);
+    __append(f, 1, size);
+    __append(f, 1, size);
 
     return MUNIT_OK;
 }
 
 /* Test against all file system types */
-static MunitParameterEnum test_entries_open_counter_params[] = {
+static MunitParameterEnum append_open_counter_params[] = {
     {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
     {NULL, NULL},
 };
 
 /* The counters of the open segments get increased as they are closed. */
-static MunitResult test_entries_open_counter(const MunitParameter params[],
-                                             void *data)
+static MunitResult test_append_open_counter(const MunitParameter params[],
+                                            void *data)
 {
     struct fixture *f = data;
     size_t size = f->store.block_size;
@@ -1989,10 +1989,11 @@ static MunitResult test_entries_open_counter(const MunitParameter params[],
     (void)params;
 
     f->store.max_segment_size = size * 3;
+
     __load(f);
 
     for (i = 0; i < 10; i++) {
-        __entries(f, 1, size);
+        __append(f, 1, size);
     }
 
     munit_assert_true(
@@ -2002,7 +2003,114 @@ static MunitResult test_entries_open_counter(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static char *entries_oom_heap_fault_delay[] = {"0", "1", NULL};
+/* The batch of entries to append is too big. */
+static MunitResult test_append_too_big(const MunitParameter params[],
+                                       void *data)
+{
+    struct fixture *f = data;
+    struct raft_entry *entries;
+    int rv;
+
+    (void)params;
+
+    __load(f);
+    return 0;
+
+    __make_request_entries(f, entries, 1, f->store.max_segment_size);
+
+    rv = raft_io_uv_store__append(&f->store, entries, 1, f, __append_cb);
+    munit_assert_int(rv, ==, RAFT_ERR_IO_TOOBIG);
+
+    __drop_request_entries(f, entries, 1);
+
+    return MUNIT_OK;
+}
+
+/* Test against all file system types */
+static MunitParameterEnum append_queue_params[] = {
+    {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
+    {NULL, NULL},
+};
+
+/* If a new request comes in when the writer is blocked, and there would be not
+ * enough space in the next segment, the request gets queued and eventually
+ * executed when the first one completes. */
+static MunitResult test_append_queue(const MunitParameter params[], void *data)
+{
+    struct fixture *f = data;
+    struct raft_entry *entries1;
+    struct raft_entry *entries2;
+    unsigned i;
+    int rv;
+
+    (void)params;
+
+    __load(f);
+
+    __make_request_entries(f, entries1, 1, 64);
+    __make_request_entries(f, entries2, 1, f->store.max_segment_size - 64);
+
+    rv = raft_io_uv_store__append(&f->store, entries1, 1, f, __append_cb);
+    munit_assert_int(rv, ==, 0);
+
+    rv = raft_io_uv_store__append(&f->store, entries2, 1, f, __append_cb);
+    munit_assert_int(rv, ==, 0);
+
+    /* Run the loop until both writes have completed. */
+    for (i = 0; i < 10; i++) {
+        rv = uv_run(&f->loop, UV_RUN_ONCE);
+        if (rv == 0) {
+            break;
+        }
+
+        if (f->append_cb.invoked == 2) {
+            break;
+        }
+    }
+
+    munit_assert_int(f->append_cb.invoked, ==, 2);
+
+    __drop_request_entries(f, entries1, 1);
+    __drop_request_entries(f, entries2, 1);
+
+    return MUNIT_OK;
+}
+
+/* The batch of entries to append would make the queue too big. */
+static MunitResult test_append_queue_too_big(const MunitParameter params[],
+                                             void *data)
+{
+    struct fixture *f = data;
+    struct raft_entry *entries1;
+    struct raft_entry *entries2;
+    struct raft_entry *entries3;
+    int rv;
+
+    (void)params;
+
+    __load(f);
+
+    __make_request_entries(f, entries1, 1, 64);
+    __make_request_entries(f, entries2, 1, f->store.max_segment_size - 64);
+    __make_request_entries(f, entries3, 1, 128);
+
+    rv = raft_io_uv_store__append(&f->store, entries1, 1, f, __append_cb);
+    munit_assert_int(rv, ==, 0);
+
+    rv = raft_io_uv_store__append(&f->store, entries2, 1, f, __append_cb);
+    munit_assert_int(rv, ==, 0);
+
+    rv = raft_io_uv_store__append(&f->store, entries3, 1, f, __append_cb);
+    munit_assert_int(rv, ==, RAFT_ERR_IO_TOOBIG);
+
+    __drop_request_entries(f, entries1, 1);
+    __drop_request_entries(f, entries2, 1);
+    __drop_request_entries(f, entries3, 1);
+
+    return MUNIT_OK;
+}
+
+static char *entries_oom_heap_fault_delay[] = {"0", "1", "2", NULL};
 static char *entries_oom_heap_fault_repeat[] = {"1", NULL};
 
 static MunitParameterEnum entries_oom_params[] = {
@@ -2012,43 +2120,53 @@ static MunitParameterEnum entries_oom_params[] = {
 };
 
 /* Out of memory conditions. */
-static MunitResult test_entries_oom(const MunitParameter params[], void *data)
+static MunitResult test_append_oom(const MunitParameter params[], void *data)
 {
     struct fixture *f = data;
+    struct raft_entry *entries;
+    int rv;
 
     (void)params;
 
     __load(f);
 
+    /* Submit a store entries request. */
+    __make_request_entries(f, entries, 1, f->store.block_size);
+
     test_heap_fault_enable(&f->heap);
 
-    __assert_entries_error(f, 1, f->store.block_size, RAFT_ERR_NOMEM);
+    rv = raft_io_uv_store__append(&f->store, entries, 1, f, __append_cb);
+    munit_assert_int(rv, ==, RAFT_ERR_NOMEM);
+
+    __drop_request_entries(f, entries, 1);
 
     return MUNIT_OK;
 }
 
-static MunitTest entries_tests[] = {
-    {"/initial", test_entries_initial, setup, tear_down, 0,
-     test_entries_initial_params},
-    {"/two-same-block", test_entries_two_same_block, setup, tear_down, 0,
-     test_entries_two_same_block_params},
-    {"/fill-block-exactly", test_entries_fill_block_exactly, setup, tear_down,
-     0, test_entries_fill_block_exactly_params},
-    {"/exceed-block", test_entries_exceed_block, setup, tear_down, 0,
-     test_entries_exceed_block_params},
-    {"/match-block", test_entries_match_block, setup, tear_down, 0,
-     test_entries_match_block_params},
-    {"/prepare", test_entries_prepare, setup, tear_down, 0,
-     test_entries_prepare_params},
-    {"/no-space", test_entries_no_space, setup, tear_down, 0, NULL},
-    {"/stop", test_entries_stop, setup, tear_down, 0, test_entries_stop_params},
-    {"/exceed-segment", test_entries_exceed_segment, setup, tear_down, 0,
-     test_entries_exceed_segment_params},
-    {"/open-counter", test_entries_open_counter, setup, tear_down, 0,
-     test_entries_open_counter_params},
+static MunitTest append_tests[] = {
+    {"/first", test_append_first, setup, tear_down, 0, append_first_params},
+    {"/two-same-block", test_append_two_same_block, setup, tear_down, 0,
+     append_two_same_block_params},
+    {"/fill-block-exactly", test_append_fill_block_exactly, setup, tear_down, 0,
+     append_fill_block_exactly_params},
+    {"/exceed-block", test_append_exceed_block, setup, tear_down, 0,
+     append_exceed_block_params},
+    {"/match-block", test_append_match_block, setup, tear_down, 0,
+     append_match_block_params},
+    {"/prepare", test_append_prepare, setup, tear_down, 0,
+     append_prepare_params},
+    {"/no-space", test_append_no_space, setup, tear_down, 0, NULL},
+    {"/stop", test_append_stop, setup, tear_down, 0, append_stop_params},
+    {"/exceed-segment", test_append_exceed_segment, setup, tear_down, 0,
+     append_exceed_segment_params},
+    {"/open-counter", test_append_open_counter, setup, tear_down, 0,
+     append_open_counter_params},
+    {"/too-big", test_append_too_big, setup, tear_down, 0, NULL},
+    {"/queue", test_append_queue, setup, tear_down, 0, append_queue_params},
+    {"/queue-too-big", test_append_queue_too_big, setup, tear_down, 0, NULL},
 #if defined(RWF_NOWAIT)
     /* TODO: this fails on Travis. */
-    {"/oom", test_entries_oom, setup, tear_down, 0, entries_oom_params},
+    {"/oom", test_append_oom, setup, tear_down, 0, entries_oom_params},
 #endif /* RWF_NOWAIT */
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
@@ -2063,6 +2181,6 @@ MunitSuite raft_io_uv_store_suites[] = {
     {"/bootstrap", bootstrap_tests, NULL, 1, 0},
     {"/term", term_tests, NULL, 1, 0},
     {"/vote", vote_tests, NULL, 1, 0},
-    {"/entries", entries_tests, NULL, 1, 0},
+    {"/append", append_tests, NULL, 1, 0},
     {NULL, NULL, NULL, 0, 0},
 };

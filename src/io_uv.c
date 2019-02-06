@@ -88,7 +88,8 @@ static int raft_io_uv__start(const struct raft_io *io,
     rv = uv_timer_init(uv->loop, &uv->ticker);
     if (rv != 0) {
         raft_errorf(uv->logger, "uv_timer_init: %s", uv_strerror(rv));
-        return RAFT_ERR_IO;
+        rv = RAFT_ERR_IO;
+        goto err;
     }
     uv->ticker.data = uv;
 
@@ -96,22 +97,37 @@ static int raft_io_uv__start(const struct raft_io *io,
     rv = uv_timer_start(&uv->ticker, raft_io_uv__ticker_cb, 0, msecs);
     if (rv != 0) {
         raft_errorf(uv->logger, "uv_timer_start: %s", uv_strerror(rv));
-        return RAFT_ERR_IO;
+        rv = RAFT_ERR_IO;
+        goto err_after_ticker_init;
     }
     uv->n_active++;
 
-    /* The log store doesn't need to be started, but it needs to be stop, so we
-     * consider it as "active. */
+    rv = raft_io_uv_store__start(&uv->store);
+    if (rv != 0) {
+        goto err_after_ticker_start;
+    }
     uv->n_active++;
 
     rv = raft_io_uv_rpc__start(&uv->rpc, id, address, data, recv);
     if (rv != 0) {
-        uv_close((struct uv_handle_s *)&uv->ticker, NULL);
-        return rv;
+        goto err_after_store_start;
     }
     uv->n_active++;
 
     return 0;
+
+err_after_store_start:
+    raft_io_uv_store__stop(&uv->store, NULL, NULL);
+
+err_after_ticker_start:
+    uv_timer_stop(&uv->ticker);
+
+err_after_ticker_init:
+    uv_close((struct uv_handle_s *)&uv->ticker, NULL);
+err:
+    assert(rv != 0);
+
+    return rv;
 }
 
 /**
@@ -243,7 +259,7 @@ static int raft_io_uv__append(const struct raft_io *io,
 
     uv = io->data;
 
-    return raft_io_uv_store__entries(&uv->store, entries, n, data, cb);
+    return raft_io_uv_store__append(&uv->store, entries, n, data, cb);
 }
 
 static int raft_io_uv__send(const struct raft_io *io,

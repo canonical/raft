@@ -36,9 +36,13 @@
 #define RAFT_IO_UV_SEGMENT__MAX_FILENAME_LEN 42
 
 /**
- * Error message to return in case of explicit stop or errors.
+ * Codes for the writer state.
  */
-#define RAFT_IO_UV_STORE__ABORTED "backend was stopped or has errored"
+enum {
+    RAFT_IO_UV_STORE__WRITER_IDLE,    /* Not doing anything */
+    RAFT_IO_UV_STORE__WRITER_BLOCKED, /* Waiting for a segment to be ready */
+    RAFT_IO_UV_STORE__WRITER_WRITING  /* Writing to disk */
+};
 
 /**
  * Hold information about a single segment file.
@@ -90,6 +94,100 @@ static int raft_io_uv__read_n(struct raft_logger *logger,
 }
 
 /**
+ * Check if the content of the segment file associated with the given file
+ * descriptor contains all zeros from the current offset onward.
+ */
+static int raft_io_uv__is_all_zeros(struct raft_logger *logger,
+                                    const int fd,
+                                    bool *flag)
+{
+    off_t size;
+    off_t offset;
+    uint8_t *data;
+    size_t i;
+    int rv;
+
+    /* Save the current offset. */
+    offset = lseek(fd, 0, SEEK_CUR);
+
+    /* Figure the size of the rest of the file. */
+    size = lseek(fd, 0, SEEK_END);
+    if (size == -1) {
+        raft_errorf(logger, "lseek: %s", uv_strerror(-errno));
+        return RAFT_ERR_IO;
+    }
+    size -= offset;
+
+    /* Reposition the file descriptor offset to the original offset. */
+    offset = lseek(fd, offset, SEEK_SET);
+    if (offset == -1) {
+        raft_errorf(logger, "lseek: %s", uv_strerror(-errno));
+        return RAFT_ERR_IO;
+    }
+
+    data = raft_malloc(size);
+    if (data == NULL) {
+        return RAFT_ERR_NOMEM;
+    }
+
+    rv = raft_io_uv__read_n(logger, fd, data, size);
+    if (rv != 0) {
+        return rv;
+    }
+
+    for (i = 0; i < (size_t)size; i++) {
+        if (data[i] != 0) {
+            *flag = false;
+            goto done;
+        }
+    }
+
+    *flag = true;
+
+done:
+    raft_free(data);
+
+    return 0;
+}
+
+/**
+ * Check whether the given file is empty.
+ */
+static int raft_io_uv__is_empty(struct raft_logger *logger,
+                                const char *path,
+                                bool *empty)
+{
+    struct stat st;
+    int rv;
+
+    rv = stat(path, &st);
+    if (rv == -1) {
+        raft_errorf(logger, "stat '%s': %s", path, uv_strerror(-errno));
+        return RAFT_ERR_IO;
+    }
+
+    *empty = st.st_size == 0 ? true : false;
+
+    return 0;
+}
+
+/**
+ * Check if the given file descriptor has reached the end of the file.
+ */
+static bool raft_io_uv__is_at_eof(const int fd)
+{
+    off_t offset; /* Current position */
+    off_t size;   /* File size */
+
+    offset = lseek(fd, 0, SEEK_CUR);
+    size = lseek(fd, 0, SEEK_END);
+
+    lseek(fd, offset, SEEK_SET);
+
+    return offset == size;
+}
+
+/**
  * Sync the given directory.
  */
 static int raft_io_uv__sync_dir(struct raft_logger *logger, const char *dir)
@@ -113,6 +211,154 @@ static int raft_io_uv__sync_dir(struct raft_logger *logger, const char *dir)
     }
 
     return 0;
+}
+
+/**
+ * Truncate the given file to the given @offset and sync it to disk.
+ */
+static int raft_io_uv__truncate(struct raft_logger *logger,
+                                const int fd,
+                                const off_t offset)
+{
+    int rv;
+    rv = ftruncate(fd, offset);
+    if (rv == -1) {
+        raft_errorf(logger, "ftruncate: %s", uv_strerror(-errno));
+        return RAFT_ERR_IO;
+    }
+    rv = fsync(fd);
+    if (rv == -1) {
+        raft_errorf(logger, "fsync: %s", uv_strerror(-errno));
+        return RAFT_ERR_IO;
+    }
+
+    return 0;
+}
+
+/**
+ * Rename a file and sync its dir.
+ */
+static int raft_io_uv__rename(struct raft_logger *logger,
+                              const char *dir,
+                              const char *filename1,
+                              const char *filename2)
+{
+    char path1[RAFT_UV_FS_MAX_PATH_LEN];
+    char path2[RAFT_UV_FS_MAX_PATH_LEN];
+    int rv;
+
+    raft_uv_fs__join(dir, filename1, path1);
+    raft_uv_fs__join(dir, filename2, path2);
+
+    /* TODO: double check that filename2 does not exist. */
+    rv = rename(path1, path2);
+    if (rv == -1) {
+        raft_errorf(logger, "rename '%s' to '%s': %s", path1, path2,
+                    uv_strerror(-errno));
+        return RAFT_ERR_IO;
+    }
+
+    rv = raft_io_uv__sync_dir(logger, dir);
+    if (rv == -1) {
+        return rv;
+    }
+
+    return 0;
+}
+
+/**
+ * Remove the file at the given path.
+ */
+static int raft_io_uv__remove(struct raft_logger *logger,
+                              const char *dir,
+                              const char *filename)
+{
+    char path[RAFT_UV_FS_MAX_PATH_LEN]; /* Full path of segment file */
+    int rv;
+
+    raft_uv_fs__join(dir, filename, path);
+
+    rv = unlink(path);
+    if (rv != 0) {
+        raft_errorf(logger, "unlink '%s': %s", path, uv_strerror(rv));
+        return RAFT_ERR_IO;
+    }
+
+    rv = raft_io_uv__sync_dir(logger, dir);
+    if (rv != 0) {
+        return rv;
+    }
+
+    return 0;
+}
+
+/**
+ * Calculate how many bytes are needed to store the given batch of entries.
+ */
+static size_t raft_io_uv__sizeof_entries(const struct raft_entry *entries,
+                                         const unsigned n)
+{
+    size_t size = 0;
+    unsigned i;
+
+    assert(entries != NULL);
+    assert(n > 0);
+
+    size += sizeof(uint64_t);                   /* Checksums */
+    size += raft_io_uv_sizeof__batch_header(n); /* Batch header */
+    for (i = 0; i < n; i++) {                   /* Entry data */
+        size_t len = entries[i].buf.len;
+        size += len;
+        if (len % 8 != 0) {
+            /* Add padding */
+            size += 8 - (len % 8);
+        }
+    }
+
+    return size;
+}
+
+/**
+ * Append to @entries2 all entries in @entries1.
+ */
+static int raft_io_uv__extend_entries(const struct raft_entry *entries1,
+                                      const size_t n_entries1,
+                                      struct raft_entry **entries2,
+                                      size_t *n_entries2)
+{
+    struct raft_entry *entries; /* To re-allocate the given entries */
+    size_t i;
+
+    entries =
+        raft_realloc(*entries2, (*n_entries2 + n_entries1) * sizeof *entries);
+    if (entries == NULL) {
+        return RAFT_ERR_NOMEM;
+    }
+
+    for (i = 0; i < n_entries1; i++) {
+        entries[*n_entries2 + i] = entries1[i];
+    }
+
+    *entries2 = entries;
+    *n_entries2 += n_entries1;
+
+    return 0;
+}
+
+/**
+ * Encode the content of a metadata file.
+ */
+static void raft_io_uv_metadata__encode(
+    const struct raft_io_uv_metadata *metadata,
+    void *buf)
+{
+    void *cursor = buf;
+
+    raft__put64(&cursor, RAFT_IO_UV_STORE__FORMAT);
+    raft__put64(&cursor, metadata->version);
+    raft__put64(&cursor, metadata->term);
+    raft__put64(&cursor, metadata->voted_for);
+    raft__put64(&cursor, metadata->start_index);
 }
 
 /**
@@ -218,22 +464,6 @@ static int raft_io_uv_metadata__load(struct raft_logger *logger,
 }
 
 /**
- * Encode the content of a metadata file.
- */
-static void raft_io_uv_metadata__encode(
-    const struct raft_io_uv_metadata *metadata,
-    void *buf)
-{
-    void *cursor = buf;
-
-    raft__put64(&cursor, RAFT_IO_UV_STORE__FORMAT);
-    raft__put64(&cursor, metadata->version);
-    raft__put64(&cursor, metadata->term);
-    raft__put64(&cursor, metadata->voted_for);
-    raft__put64(&cursor, metadata->start_index);
-}
-
-/**
  * Return the metadata file index associated with the given version.
  */
 static int raft_io_uv_metadata__n(int version)
@@ -321,7 +551,8 @@ static bool raft_io_uv_segment__is_valid_filename(const char *filename)
 }
 
 /**
- * Try to match the filename of a closed segment (xxx-yyy).
+ * Try to match the filename of a closed segment (xxx-yyy), and return its first
+ * and end index in case of a match.
  */
 static bool raft_io_uv_segment__match_closed_filename(const char *filename,
                                                       raft_index *first_index,
@@ -337,7 +568,8 @@ static bool raft_io_uv_segment__match_closed_filename(const char *filename,
 }
 
 /**
- * Try to match the filename of an open segment (open-xxx).
+ * Try to match the filename of an open segment (open-xxx), and return its
+ * counter in case of a match.
  */
 static bool raft_io_uv_segment__match_open_filename(const char *filename,
                                                     unsigned long long *counter)
@@ -365,41 +597,11 @@ static void raft_io_uv_segment__make_closed_filename(
 /**
  * Render the filename of an open segment.
  */
-static void raft_io_uv_segment__make_open_filename(unsigned long long counter,
-                                                   char *filename)
+static void raft_io_uv_segment__make_open_filename(
+    const unsigned long long counter,
+    char *filename)
 {
     sprintf(filename, RAFT_IO_UV_SEGMENT__OPEN_TEMPLATE, counter);
-}
-
-/**
- * Rename a segment and sync the data dir.
- */
-static int raft_io_uv_segment__rename(struct raft_logger *logger,
-                                      const char *dir,
-                                      const char *filename1,
-                                      const char *filename2)
-{
-    char path1[RAFT_UV_FS_MAX_PATH_LEN];
-    char path2[RAFT_UV_FS_MAX_PATH_LEN];
-    int rv;
-
-    raft_uv_fs__join(dir, filename1, path1);
-    raft_uv_fs__join(dir, filename2, path2);
-
-    /* TODO: double check that filename2 does not exist. */
-    rv = rename(path1, path2);
-    if (rv == -1) {
-        raft_errorf(logger, "rename '%s' to '%s': %s", path1, path2,
-                    uv_strerror(-errno));
-        return RAFT_ERR_IO;
-    }
-
-    rv = raft_io_uv__sync_dir(logger, dir);
-    if (rv == -1) {
-        return rv;
-    }
-
-    return 0;
 }
 
 /**
@@ -488,27 +690,6 @@ static int raft_io_uv_segment__list(struct raft_logger *logger,
 }
 
 /**
- * Check whether the given segment file is empty.
- */
-static int raft_io_uv_segment__is_empty(struct raft_logger *logger,
-                                        const char *path,
-                                        bool *empty)
-{
-    struct stat st;
-    int rv;
-
-    rv = stat(path, &st);
-    if (rv == -1) {
-        raft_errorf(logger, "stat '%s': %s", path, uv_strerror(-errno));
-        return RAFT_ERR_IO;
-    }
-
-    *empty = st.st_size == 0 ? true : false;
-
-    return 0;
-}
-
-/**
  * Open a segment file and read its format version.
  */
 static int raft_io_uv_segment__open(struct raft_logger *logger,
@@ -533,79 +714,6 @@ static int raft_io_uv_segment__open(struct raft_logger *logger,
     *format = raft__flip64(*format);
 
     return 0;
-}
-
-/**
- * Check if the content of the segment file associated with the given file
- * descriptor contains all zeros from the current offset onward.
- */
-static int raft_io_uv_segment__is_all_zeros(struct raft_logger *logger,
-                                            const int fd,
-                                            bool *flag)
-{
-    off_t size;
-    off_t offset;
-    uint8_t *data;
-    size_t i;
-    int rv;
-
-    /* Save the current offset. */
-    offset = lseek(fd, 0, SEEK_CUR);
-
-    /* Figure the size of the rest of the file. */
-    size = lseek(fd, 0, SEEK_END);
-    if (size == -1) {
-        raft_errorf(logger, "lseek: %s", uv_strerror(-errno));
-        return RAFT_ERR_IO;
-    }
-    size -= offset;
-
-    /* Reposition the file descriptor offset to the original offset. */
-    offset = lseek(fd, offset, SEEK_SET);
-    if (offset == -1) {
-        raft_errorf(logger, "lseek: %s", uv_strerror(-errno));
-        return RAFT_ERR_IO;
-    }
-
-    data = raft_malloc(size);
-    if (data == NULL) {
-        return RAFT_ERR_NOMEM;
-    }
-
-    rv = raft_io_uv__read_n(logger, fd, data, size);
-    if (rv != 0) {
-        return rv;
-    }
-
-    for (i = 0; i < (size_t)size; i++) {
-        if (data[i] != 0) {
-            *flag = false;
-            goto done;
-        }
-    }
-
-    *flag = true;
-
-done:
-    raft_free(data);
-
-    return 0;
-}
-
-/**
- * Check if the given file descriptor has reached the end of the file.
- */
-static bool raft_io_uv_segment__is_eof(const int fd)
-{
-    off_t offset; /* Current position */
-    off_t size;   /* File size */
-
-    offset = lseek(fd, 0, SEEK_CUR);
-    size = lseek(fd, 0, SEEK_END);
-
-    lseek(fd, offset, SEEK_SET);
-
-    return offset == size;
 }
 
 /**
@@ -705,7 +813,7 @@ static int raft_io_uv_segment__load_batch(struct raft_logger *logger,
 
     raft_free(header.base);
 
-    *last = raft_io_uv_segment__is_eof(fd);
+    *last = raft_io_uv__is_at_eof(fd);
 
     return 0;
 
@@ -722,82 +830,6 @@ err:
     assert(rv != 0);
 
     return rv;
-}
-
-/**
- * Truncate the given segment to the given @offset and sync it to disk.
- */
-static int raft_io_uv_segment__truncate(struct raft_logger *logger,
-                                        const int fd,
-                                        const off_t offset)
-{
-    int rv;
-    rv = ftruncate(fd, offset);
-    if (rv == -1) {
-        raft_errorf(logger, "ftruncate: %s", uv_strerror(-errno));
-        return RAFT_ERR_IO;
-    }
-    rv = fsync(fd);
-    if (rv == -1) {
-        raft_errorf(logger, "fsync: %s", uv_strerror(-errno));
-        return RAFT_ERR_IO;
-    }
-
-    return 0;
-}
-
-/**
- * Remove the segment at the given path.
- */
-static int raft_io_uv_segment__remove(struct raft_logger *logger,
-                                      const char *dir,
-                                      const char *filename)
-{
-    char path[RAFT_UV_FS_MAX_PATH_LEN]; /* Full path of segment file */
-    int rv;
-
-    raft_uv_fs__join(dir, filename, path);
-
-    rv = unlink(path);
-    if (rv != 0) {
-        raft_errorf(logger, "unlink '%s': %s", path, uv_strerror(rv));
-        return RAFT_ERR_IO;
-    }
-
-    rv = raft_io_uv__sync_dir(logger, dir);
-    if (rv != 0) {
-        return rv;
-    }
-
-    return 0;
-}
-
-/**
- * Append the given entries to the given list.
- */
-static int raft_io_uv_segment__append_entries(
-    const struct raft_entry *tmp_entries,
-    const size_t tmp_n_entries,
-    struct raft_entry **entries,
-    size_t *n_entries)
-{
-    struct raft_entry *all_entries; /* To re-allocate the given entries */
-    size_t i;
-
-    all_entries =
-        raft_realloc(*entries, (*n_entries + tmp_n_entries) * sizeof **entries);
-    if (all_entries == NULL) {
-        return RAFT_ERR_NOMEM;
-    }
-
-    for (i = 0; i < tmp_n_entries; i++) {
-        all_entries[*n_entries + i] = tmp_entries[i];
-    }
-
-    *entries = all_entries;
-    *n_entries += tmp_n_entries;
-
-    return 0;
 }
 
 /**
@@ -825,7 +857,7 @@ static int raft_io_uv_segment__load_closed(
     raft_uv_fs__join(dir, segment->filename, path);
 
     /* If the segment is completely empty, just bail out. */
-    rv = raft_io_uv_segment__is_empty(logger, path, &empty);
+    rv = raft_io_uv__is_empty(logger, path, &empty);
     if (rv != 0) {
         goto err;
     }
@@ -843,7 +875,7 @@ static int raft_io_uv_segment__load_closed(
 
     /* If the entries in the segment are no longer needed, just remove it. */
     if (segment->end_index < start_index) {
-        rv = raft_io_uv_segment__remove(logger, dir, segment->filename);
+        rv = raft_io_uv__remove(logger, dir, segment->filename);
         if (rv != 0) {
             goto err_after_open;
         }
@@ -874,8 +906,8 @@ static int raft_io_uv_segment__load_closed(
             goto err_after_open;
         }
 
-        rv = raft_io_uv_segment__append_entries(tmp_entries, tmp_n_entries,
-                                                entries, n_entries);
+        rv = raft_io_uv__extend_entries(tmp_entries, tmp_n_entries, entries,
+                                        n_entries);
         if (rv != 0) {
             goto err_after_batch_load;
         }
@@ -934,7 +966,7 @@ static int raft_io_uv_segment__load_open(struct raft_logger *logger,
 
     raft_uv_fs__join(dir, segment->filename, path);
 
-    rv = raft_io_uv_segment__is_empty(logger, path, &empty);
+    rv = raft_io_uv__is_empty(logger, path, &empty);
     if (rv != 0) {
         goto err;
     }
@@ -954,7 +986,7 @@ static int raft_io_uv_segment__load_open(struct raft_logger *logger,
      * the segment was allocated but never written. */
     if (format != RAFT_IO_UV_STORE__FORMAT) {
         if (format == 0) {
-            rv = raft_io_uv_segment__is_all_zeros(logger, fd, &all_zeros);
+            rv = raft_io_uv__is_all_zeros(logger, fd, &all_zeros);
             if (rv != 0) {
                 goto err_after_open;
             }
@@ -1001,7 +1033,7 @@ static int raft_io_uv_segment__load_open(struct raft_logger *logger,
              * incomplete data. */
             lseek(fd, offset, SEEK_SET);
 
-            rv2 = raft_io_uv_segment__is_all_zeros(logger, fd, &all_zeros);
+            rv2 = raft_io_uv__is_all_zeros(logger, fd, &all_zeros);
             if (rv2 != 0) {
                 rv = rv2;
                 goto err_after_open;
@@ -1012,7 +1044,7 @@ static int raft_io_uv_segment__load_open(struct raft_logger *logger,
                  * non-zero partial batch, and reporting the decoding error. */
             }
 
-            rv = raft_io_uv_segment__truncate(logger, fd, offset);
+            rv = raft_io_uv__truncate(logger, fd, offset);
             if (rv != 0) {
                 goto err_after_open;
             }
@@ -1020,8 +1052,8 @@ static int raft_io_uv_segment__load_open(struct raft_logger *logger,
             break;
         }
 
-        rv = raft_io_uv_segment__append_entries(tmp_entries, tmp_n_entries,
-                                                entries, n_entries);
+        rv = raft_io_uv__extend_entries(tmp_entries, tmp_n_entries, entries,
+                                        n_entries);
         if (rv != 0) {
             goto err_after_batch_load;
         }
@@ -1043,7 +1075,7 @@ done:
     /* If the segment has no valid entries in it, we remove it. Otherwise we
      * rename it and keep it. */
     if (remove) {
-        rv = raft_io_uv_segment__remove(logger, dir, segment->filename);
+        rv = raft_io_uv__remove(logger, dir, segment->filename);
         if (rv != 0) {
             goto err_after_open;
         }
@@ -1056,8 +1088,7 @@ done:
 
         raft_io_uv_segment__make_closed_filename(first_index, end_index,
                                                  filename);
-        rv = raft_io_uv_segment__rename(logger, dir, segment->filename,
-                                        filename);
+        rv = raft_io_uv__rename(logger, dir, segment->filename, filename);
         if (rv != 0) {
             goto err_after_open;
         }
@@ -1156,15 +1187,15 @@ err:
 static void raft_io_uv_prepared__reset(struct raft_io_uv_prepared *p,
                                        const char *dir,
                                        const unsigned long long counter,
-                                       void *data)
+                                       struct raft_io_uv_store *store)
 {
     char filename[RAFT_IO_UV_SEGMENT__MAX_FILENAME_LEN];
 
     p->state = RAFT_IO_UV_STORE__PREPARED_PENDING;
     p->counter = counter;
-    p->req.data = data;
-    p->block = 0;
-    p->offset = 0;
+    p->req.data = store;
+    p->next_block = 0;
+    p->block_size = store->block_size;
     p->used = 0;
     p->first_index = 0;
     p->end_index = 0;
@@ -1174,17 +1205,16 @@ static void raft_io_uv_prepared__reset(struct raft_io_uv_prepared *p,
 }
 
 /**
- * Perform a write against the given prepared open segment.
+ * Perform an asynchronous write against the given prepared open segment.
  */
-static int raft_io_uv_prepared__write(struct raft_logger *logger,
-                                      struct raft_io_uv_prepared *p,
+static int raft_io_uv_prepared__write(struct raft_io_uv_prepared *p,
+                                      struct raft_logger *logger,
                                       const uv_buf_t bufs[],
                                       unsigned n,
-                                      const size_t block_size,
                                       raft_uv_fs_cb cb)
 {
     int rv;
-    size_t offset = p->block * block_size;
+    size_t offset = p->next_block * p->block_size;
 
     rv = raft_uv_fs__write(&p->file, &p->req, bufs, n, offset, cb);
     if (rv != 0) {
@@ -1194,6 +1224,350 @@ static int raft_io_uv_prepared__write(struct raft_logger *logger,
     }
 
     return 0;
+}
+
+/**
+ * Initialize the given block buffers.
+ */
+static void raft_io_uv_blocks__init(struct raft_io_uv_blocks *b,
+                                    const size_t block_size)
+{
+    b->block_size = block_size;
+    b->bufs = NULL;
+    b->n_bufs = 0;
+    b->offset = 0;
+}
+
+/**
+ * Release all memory associated with the given block buffers.
+ */
+static void raft_io_uv_blocks__close(struct raft_io_uv_blocks *b)
+{
+    unsigned i;
+
+    for (i = 0; i < b->n_bufs; i++) {
+        if (b->bufs[i].base != NULL) {
+            free(b->bufs[i].base);
+        }
+    }
+
+    if (b->bufs != NULL) {
+        free(b->bufs);
+    }
+}
+
+/**
+ * Make sure there that there are least @n block buffers.
+ */
+static int raft_io_uv_blocks__ensure_n(struct raft_io_uv_blocks *b,
+                                       const unsigned n)
+{
+    uv_buf_t *bufs;
+    unsigned i;
+    int rv = 0;
+
+    if (b->n_bufs >= n) {
+        return 0;
+    }
+
+    bufs = raft_realloc(b->bufs, n * sizeof *b->bufs);
+    if (bufs == NULL) {
+        return RAFT_ERR_NOMEM;
+    }
+
+    for (i = b->n_bufs; i < n; i++) {
+        uv_buf_t *buf = &bufs[i];
+
+        buf->base = aligned_alloc(b->block_size, b->block_size);
+
+        /* Don't break the loop, so we initialize all buffers (possibly to
+         * NULL) */
+        if (buf->base == NULL) {
+            rv = RAFT_ERR_NOMEM;
+        }
+        buf->len = b->block_size;
+    }
+
+    b->bufs = bufs;
+    b->n_bufs = n;
+
+    return rv;
+}
+
+/**
+ * Make sure that at least @size bytes are available in the block buffers,
+ * considering that b->offset bytes are used.
+ */
+static int raft_io_uv_blocks__ensure_size(struct raft_io_uv_blocks *b,
+                                          const size_t size)
+{
+    size_t needed = size; /* Number of bytes needed */
+    unsigned n;
+
+    /* If the offset parameter is non-zero, it means that there is at least one
+     * block buffer and that it has some spare capacity. Let's account for
+     * that. */
+    if (b->offset > 0) {
+        assert(b->n_bufs >= 1);
+        needed += b->offset;
+    }
+
+    /* Calculate how many blocks we need. */
+    n = (needed / b->block_size) + 1;
+
+    /* Possibly allocate what we need */
+    return raft_io_uv_blocks__ensure_n(b, n);
+}
+
+/**
+ * Initialize the buffer of the first block of a new open segment, writing the
+ * format version.
+ */
+static void raft_io_uv_blocks__put_format(uv_buf_t *buf)
+{
+    void *cursor = buf->base;
+
+    memset(buf->base, 0, buf->len);
+
+    raft__put64(&cursor, RAFT_IO_UV_STORE__FORMAT);
+}
+
+/**
+ * Reset the block buffers so they can start to be used for writing a new
+ * segment.
+ *
+ * The first block will be filled with the format version.
+ */
+static int raft_io_uv_blocks__reset(struct raft_io_uv_blocks *b)
+{
+    int rv;
+
+    rv = raft_io_uv_blocks__ensure_n(b, 1);
+    if (rv != 0) {
+        return rv;
+    }
+
+    raft_io_uv_blocks__put_format(&b->bufs[0]);
+
+    b->offset = sizeof(uint64_t); /* Format version. */
+
+    return 0;
+}
+
+/**
+ * Return a pointer to the next byte to be written.
+ */
+static void *raft_io_uv_blocks__cursor(struct raft_io_uv_blocks *b)
+{
+    unsigned block = b->offset / b->block_size; /* Block number to write */
+    size_t k = b->offset % b->block_size;       /* Relative position */
+    void *cursor = b->bufs[block].base + k;
+
+    return cursor;
+}
+
+/**
+ * Write a byte into the blocks.
+ */
+static void *raft_io_uv_blocks__put8(struct raft_io_uv_blocks *b, uint8_t value)
+{
+    void *cursor = raft_io_uv_blocks__cursor(b);
+
+    *(uint8_t *)cursor = value;
+
+    b->offset += sizeof value;
+
+    return cursor;
+}
+
+/**
+ * Write a 32-bit integer into the blocks.
+ */
+static void *raft_io_uv_blocks__put32(struct raft_io_uv_blocks *b,
+                                      uint32_t value)
+{
+    void *cursor = raft_io_uv_blocks__cursor(b);
+
+    *(uint32_t *)cursor = raft__flip32(value);
+
+    b->offset += sizeof value;
+
+    return cursor;
+}
+
+/**
+ * Write a 64-bit integer into the blocks.
+ */
+static void *raft_io_uv_blocks__put64(struct raft_io_uv_blocks *b,
+                                      uint64_t value)
+{
+    void *cursor = raft_io_uv_blocks__cursor(b);
+
+    *(uint64_t *)cursor = raft__flip64(value);
+
+    b->offset += sizeof value;
+
+    return cursor;
+}
+
+/**
+ * Write the entries batch header into the blocks.
+ */
+static void raft_io_uv_blocks__put_header(struct raft_io_uv_blocks *b,
+                                          const struct raft_entry *entries,
+                                          const unsigned n,
+                                          unsigned *crc)
+{
+    unsigned i;
+    void *data;
+
+    *crc = 0;
+
+    data = raft_io_uv_blocks__put64(b, n);
+    *crc = raft__crc32(data, sizeof(uint64_t), *crc);
+
+    for (i = 0; i < n; i++) {
+        const struct raft_entry *entry = &entries[i];
+
+        data = raft_io_uv_blocks__put64(b, entry->term);
+        *crc = raft__crc32(data, sizeof(uint64_t), *crc);
+
+        data = raft_io_uv_blocks__put8(b, entry->type);
+        *crc = raft__crc32(data, sizeof(uint8_t), *crc);
+
+        data = raft_io_uv_blocks__put8(b, 0);
+        *crc = raft__crc32(data, sizeof(uint8_t), *crc);
+
+        data = raft_io_uv_blocks__put8(b, 0);
+        *crc = raft__crc32(data, sizeof(uint8_t), *crc);
+
+        data = raft_io_uv_blocks__put8(b, 0);
+        *crc = raft__crc32(data, sizeof(uint8_t), *crc);
+
+        data = raft_io_uv_blocks__put32(b, entry->buf.len);
+        *crc = raft__crc32(data, sizeof(uint32_t), *crc);
+    }
+}
+
+/**
+ * Write the entries data into the blocks.
+ */
+static void raft_io_uv_blocks__put_data(struct raft_io_uv_blocks *b,
+                                        const struct raft_entry *entries,
+                                        const unsigned n,
+                                        unsigned *crc)
+{
+    unsigned i;
+
+    *crc = 0;
+
+    for (i = 0; i < n; i++) {
+        const struct raft_entry *entry = &entries[i];
+        uint8_t *bytes = entry->buf.base;
+        unsigned j;
+        void *data;
+
+        /* TODO: we shouldn't copy the data byte by byte */
+        for (j = 0; j < entry->buf.len; j++) {
+            data = raft_io_uv_blocks__put8(b, bytes[j]);
+            *crc = raft__crc32(data, sizeof(uint8_t), *crc);
+        }
+
+        if (entry->buf.len % 8 != 0) {
+            /* Add padding */
+            for (j = 0; j < 8 - (entry->buf.len % 8); j++) {
+                data = raft_io_uv_blocks__put8(b, 0);
+                *crc = raft__crc32(data, sizeof(uint8_t), *crc);
+            }
+        }
+    }
+}
+
+/**
+ * Write the given batch of entries into the blocks.
+ *
+ * The function will start writing from the current offset, and will encode the
+ * batch according to the current format version.
+ */
+static int raft_io_uv_blocks__append_entries(struct raft_io_uv_blocks *b,
+                                             const struct raft_entry *entries,
+                                             const unsigned n)
+{
+    size_t size = raft_io_uv__sizeof_entries(entries, n);
+    unsigned crc1; /* Header checksum */
+    unsigned crc2; /* Data checksum */
+    void *crc1_p;  /* Pointer to header checksum slot */
+    void *crc2_p;  /* Pointer to data checksum slot */
+    int rv;
+
+    rv = raft_io_uv_blocks__ensure_size(b, size);
+    if (rv != 0) {
+        return rv;
+    }
+
+    /* Placeholder of the checksums */
+    crc1_p = raft_io_uv_blocks__put32(b, 0);
+    crc2_p = raft_io_uv_blocks__put32(b, 0);
+
+    /* Batch header and data */
+    raft_io_uv_blocks__put_header(b, entries, n, &crc1);
+    raft_io_uv_blocks__put_data(b, entries, n, &crc2);
+
+    /* Fill the checksums placehoders */
+    *(uint32_t *)crc1_p = raft__flip32(crc1);
+    *(uint32_t *)crc2_p = raft__flip32(crc2);
+
+    return 0;
+}
+
+/**
+ * Return the number of block buffers that have been written.
+ */
+static unsigned raft_io_uv_blocks__n_written(struct raft_io_uv_blocks *b)
+{
+    unsigned blocks = b->offset / b->block_size;
+
+    if (b->offset % b->block_size != 0) {
+        blocks++;
+    }
+
+    return blocks;
+}
+
+/**
+ * Push the append callback to the given list.
+ */
+static int raft_io_uv_append_cb__push(const struct raft_io_uv_append_cb *cb,
+                                      struct raft_io_uv_append_cb **cbs,
+                                      size_t *n)
+{
+    struct raft_io_uv_append_cb *cbs_tmp;
+
+    cbs_tmp = raft_realloc(*cbs, (*n + 1) * sizeof **cbs);
+    if (cbs_tmp == NULL) {
+        return RAFT_ERR_NOMEM;
+    }
+
+    *cbs = cbs_tmp;
+    *n += 1;
+
+    (*cbs)[(*n) - 1] = *cb;
+
+    return 0;
+}
+
+/**
+ * Invoke all the given append callbacks, passing them the given status.
+ */
+static void raft_io_uv_append_cb__invoke(const struct raft_io_uv_append_cb *cbs,
+                                         const size_t n,
+                                         int status)
+{
+    size_t i;
+
+    for (i = 0; i < n; i++) {
+        cbs[i].f(cbs[i].data, status);
+    }
 }
 
 /**
@@ -1231,19 +1605,6 @@ static int raft_io_uv_store__ensure_dir(struct raft_logger *logger,
     }
 
     return 0;
-}
-
-/**
- * Initialize the buffer of the first block of a new open segment, writing the
- * format version.
- */
-static void raft_io_uv_store__first_block(uv_buf_t *buf)
-{
-    void *cursor = buf->base;
-
-    memset(buf->base, 0, buf->len);
-
-    raft__put64(&cursor, RAFT_IO_UV_STORE__FORMAT);
 }
 
 int raft_io_uv_store__init(struct raft_io_uv_store *s,
@@ -1293,20 +1654,25 @@ int raft_io_uv_store__init(struct raft_io_uv_store *s,
     s->preparer.buf.base = NULL;
     s->preparer.buf.len = 0;
 
-    s->writer.entries = NULL;
-    s->writer.n = 0;
-    s->writer.p = NULL;
-    s->writer.cb = NULL;
+    s->writer.state = RAFT_IO_UV_STORE__WRITER_IDLE;
 
-    s->writer.bufs = NULL;
-    s->writer.n_bufs = 0;
+    raft_io_uv_blocks__init(&s->writer.blocks, s->block_size);
+
     s->writer.segment = NULL;
     s->writer.next_index = 0;
     s->writer.submitted = false;
 
+    s->writer.cbs = NULL;
+    s->writer.n_cbs = 0;
+
     for (i = 0; i < RAFT_IO_UV_STORE__N_PREPARED; i++) {
         raft_io_uv_prepared__reset(&s->pool[i], s->dir, i + 1, s);
     }
+
+    s->queue.entries = NULL;
+    s->queue.n_entries = 0;
+    s->queue.cbs = NULL;
+    s->queue.n_cbs = 0;
 
     s->closer.segment = NULL;
     s->closer.work.data = s;
@@ -1325,6 +1691,14 @@ err_after_dir_alloc:
 err:
     assert(rv != 0);
     return rv;
+}
+
+int raft_io_uv_store__start(struct raft_io_uv_store *s)
+{
+    /* A the moment this is a no-op. */
+    (void)s;
+
+    return 0;
 }
 
 /**
@@ -1354,14 +1728,6 @@ static int raft_io_uv_store__ensure_metadata(struct raft_io_uv_store *s)
     return 0;
 }
 
-/**
- * Return true if there's currently a write request being processed.
- */
-static bool raft_io_uv_store__writer_is_active(struct raft_io_uv_store *s)
-{
-    return s->writer.entries != NULL;
-}
-
 int raft_io_uv_store__load(struct raft_io_uv_store *s,
                            raft_term *term,
                            unsigned *voted_for,
@@ -1374,8 +1740,6 @@ int raft_io_uv_store__load(struct raft_io_uv_store *s,
     struct raft_io_uv_segment *segments;
     size_t n_segments;
     int rv;
-
-    assert(!raft_io_uv_store__writer_is_active(s));
 
     if (s->aborted) {
         return RAFT_ERR_IO_ABORTED;
@@ -1447,7 +1811,8 @@ int raft_io_uv_store__load(struct raft_io_uv_store *s,
     }
 
     /* Save the index of the next entry that will be appended. */
-    s->writer.next_index = s->metadata.start_index + *n;
+    s->writer.last_index = s->metadata.start_index + *n - 1;
+    s->writer.next_index = s->writer.last_index + 1;
 
     return 0;
 
@@ -1552,6 +1917,8 @@ static int raft_io_uv_store__write_open_1(struct raft_io_uv_store *s,
     return 0;
 }
 
+static bool raft_io_uv_store__writer_is_idle(struct raft_io_uv_store *s);
+
 int raft_io_uv_store__bootstrap(struct raft_io_uv_store *s,
                                 const struct raft_configuration *configuration)
 {
@@ -1559,7 +1926,7 @@ int raft_io_uv_store__bootstrap(struct raft_io_uv_store *s,
     int fd;
     int rv;
 
-    assert(!raft_io_uv_store__writer_is_active(s));
+    assert(raft_io_uv_store__writer_is_idle(s));
 
     /* We shouldn't have written anything else yet. */
     if (s->writer.next_index != 1) {
@@ -1614,7 +1981,7 @@ int raft_io_uv_store__term(struct raft_io_uv_store *s, const raft_term term)
 {
     int rv;
 
-    assert(!raft_io_uv_store__writer_is_active(s));
+    assert(raft_io_uv_store__writer_is_idle(s));
 
     if (s->aborted) {
         return RAFT_ERR_IO_ABORTED;
@@ -1645,7 +2012,7 @@ int raft_io_uv_store__vote(struct raft_io_uv_store *s, const unsigned server_id)
 {
     int rv;
 
-    assert(!raft_io_uv_store__writer_is_active(s));
+    assert(raft_io_uv_store__writer_is_idle(s));
 
     if (s->aborted) {
         return RAFT_ERR_IO_ABORTED;
@@ -1723,7 +2090,7 @@ static unsigned raft_io_uv_store__pool_index(struct raft_io_uv_store *s,
 
 /**
  * Return the open segment in pool which is in the given state and has the
- * lowest counter, or #NULL if pool segment is in the given state.
+ * lowest counter, or #NULL if no pool segment is in the given state.
  */
 static struct raft_io_uv_prepared *raft_io_uv_store__pool_get(
     struct raft_io_uv_store *s,
@@ -1759,6 +2126,17 @@ static struct raft_io_uv_prepared *raft_io_uv_store__pool_get_pending(
 }
 
 /**
+ * Return the ready open segment with the lowest counter, or #NULL.
+ */
+static struct raft_io_uv_prepared *raft_io_uv_store__pool_get_ready(
+    struct raft_io_uv_store *s)
+{
+    int state = RAFT_IO_UV_STORE__PREPARED_READY;
+
+    return raft_io_uv_store__pool_get(s, state);
+}
+
+/**
  * Return the closing open segment with the lowest counter, or #NULL.
  */
 static struct raft_io_uv_prepared *raft_io_uv_store__pool_get_closing(
@@ -1767,6 +2145,38 @@ static struct raft_io_uv_prepared *raft_io_uv_store__pool_get_closing(
     int state = RAFT_IO_UV_STORE__PREPARED_CLOSING;
 
     return raft_io_uv_store__pool_get(s, state);
+}
+
+/**
+ * Return true if there's currently no write request being processed.
+ */
+static bool raft_io_uv_store__writer_is_idle(struct raft_io_uv_store *s)
+{
+    return s->writer.state == RAFT_IO_UV_STORE__WRITER_IDLE;
+}
+
+/**
+ * Return true if the writer is not idle.
+ */
+static bool raft_io_uv_store__writer_is_active(struct raft_io_uv_store *s)
+{
+    return s->writer.state != RAFT_IO_UV_STORE__WRITER_IDLE;
+}
+
+/**
+ * Return true if the writer is waiting for a prepared segment to become ready.
+ */
+static bool raft_io_uv_store__writer_is_blocked(struct raft_io_uv_store *s)
+{
+    return s->writer.state == RAFT_IO_UV_STORE__WRITER_BLOCKED;
+}
+
+/**
+ * Return true if the writer is actively writing a request.
+ */
+static bool raft_io_uv_store__writer_is_writing(struct raft_io_uv_store *s)
+{
+    return s->writer.state == RAFT_IO_UV_STORE__WRITER_WRITING;
 }
 
 /**
@@ -1783,15 +2193,6 @@ static bool raft_io_uv_store__closer_is_active(struct raft_io_uv_store *s)
 static bool raft_io_uv_store__preparer_is_active(struct raft_io_uv_store *s)
 {
     return s->preparer.segment != NULL;
-}
-
-/**
- * Return true if the writer is active and waiting for a prepared segment to
- * become ready.
- */
-static bool raft_io_uv_store__writer_is_blocked(struct raft_io_uv_store *s)
-{
-    return raft_io_uv_store__writer_is_active(s) && !s->writer.submitted;
 }
 
 /**
@@ -1812,12 +2213,13 @@ static bool raft_io_uv_store__is_stopping(struct raft_io_uv_store *s)
 static void raft_io_uv_store__aborted(struct raft_io_uv_store *s)
 {
     unsigned i;
-    void *p = s->stop.p;
-    void (*cb)(void *p) = s->stop.cb;
+    void *data = s->stop.p;
+    void (*cb)(void *data) = s->stop.cb;
     int rv;
 
     assert(s->aborted);
 
+    /* Check if any activity is still in progress */
     if (!raft_io_uv_store__is_stopping(s) ||
         raft_io_uv_store__preparer_is_active(s) ||
         raft_io_uv_store__closer_is_active(s) ||
@@ -1840,12 +2242,15 @@ static void raft_io_uv_store__aborted(struct raft_io_uv_store *s)
     /* For idempotency: further calls to this function will no-op. */
     memset(&s->stop, 0, sizeof s->stop);
 
-    cb(p);
+    cb(data);
 }
 
 /**
  * Run all blocking syscalls involved in closing a segment. This is run a worker
  * thread.
+ *
+ * An open segment is closed by truncating its length to the number of bytes
+ * that were actually written into it and then renaming it.
  */
 static void raft_io_uv_store__closer_work_cb(uv_work_t *work)
 {
@@ -1864,7 +2269,7 @@ static void raft_io_uv_store__closer_work_cb(uv_work_t *work)
                                              s->closer.segment->end_index,
                                              filename2);
 
-    /* Truncate the segment */
+    /* Truncate and rename the segment */
     raft_uv_fs__join(s->dir, filename1, path);
 
     fd = open(path, O_RDWR);
@@ -1874,12 +2279,12 @@ static void raft_io_uv_store__closer_work_cb(uv_work_t *work)
         goto abort;
     }
 
-    rv = raft_io_uv_segment__truncate(s->logger, fd, s->closer.segment->used);
+    rv = raft_io_uv__truncate(s->logger, fd, s->closer.segment->used);
     if (rv != 0) {
         goto abort;
     }
 
-    rv = raft_io_uv_segment__rename(s->logger, s->dir, filename1, filename2);
+    rv = raft_io_uv__rename(s->logger, s->dir, filename1, filename2);
     if (rv != 0) {
         goto abort;
     }
@@ -1928,9 +2333,11 @@ static void raft_io_uv_store__closer_after_work_cb(uv_work_t *work, int status)
     /* Assign to the segment a new counter and mark it as pending. */
     raft_io_uv_prepared__reset(s->closer.segment, s->dir, counter, s);
 
+    /* We don't have anything else to do for now, */
     s->closer.segment = NULL;
 
-    /* Wakeup the preparer if needed. */
+    /* Wakeup the preparer if needed, since we are short of one prepared open
+     * segment now. */
     if (!raft_io_uv_store__preparer_is_active(s)) {
         rv = raft_io_uv_store__preparer_start(s);
         if (rv != 0) {
@@ -1976,6 +2383,9 @@ static int raft_io_uv_store__closer_start(struct raft_io_uv_store *s)
 
     /* Pick the closing segment with the lowest counter. */
     s->closer.segment = raft_io_uv_store__pool_get_closing(s);
+
+    /* Check that we've been invoked for a reason and there's actually something
+     * to do. */
     assert(s->closer.segment != NULL);
 
     rv = uv_queue_work(s->loop, &s->closer.work,
@@ -1989,265 +2399,55 @@ static int raft_io_uv_store__closer_start(struct raft_io_uv_store *s)
     return 0;
 }
 
-/**
- * Make sure there are at least @n write buffers available.
- */
-static int raft_io_uv_store__writer_ensure_bufs_n(struct raft_io_uv_store *s,
-                                                  const unsigned n)
-{
-    uv_buf_t *bufs;
-    unsigned i;
-    int rv = 0;
+static size_t raft_io_uv_store__queue_size(struct raft_io_uv_store *s);
 
-    if (s->writer.n_bufs >= n) {
-        return 0;
-    }
-
-    bufs = raft_realloc(s->writer.bufs, n * sizeof *bufs);
-    if (bufs == NULL) {
-        return RAFT_ERR_NOMEM;
-    }
-
-    for (i = s->writer.n_bufs; i < n; i++) {
-        uv_buf_t *buf = &bufs[i];
-
-        buf->base = aligned_alloc(s->block_size, s->block_size);
-
-        /* Don't break the loop, so we initialize all buffers (possibly to
-         * NULL) */
-        if (buf->base == NULL) {
-            rv = RAFT_ERR_NOMEM;
-        }
-        buf->len = s->block_size;
-    }
-
-    s->writer.bufs = bufs;
-    s->writer.n_bufs = n;
-
-    return rv;
-}
+static int raft_io_uv_store__writer_start(
+    struct raft_io_uv_store *s,
+    const struct raft_entry *entries,
+    const unsigned n,
+    const struct raft_io_uv_append_cb *cbs,
+    size_t n_cbs);
 
 /**
- * Return the total number of bytes needed to store the entries in the given
- * request.
- */
-static size_t raft_io_uv_store__writer_calculate_size(
-    struct raft_io_uv_store *s)
-{
-    size_t size = 0;
-    unsigned i;
-
-    size += sizeof(uint64_t);                             /* Checksums */
-    size += raft_io_uv_sizeof__batch_header(s->writer.n); /* Batch header */
-    for (i = 0; i < s->writer.n; i++) {                   /* Entry data */
-        size_t len = s->writer.entries[i].buf.len;
-        size += len;
-        if (len % 8 != 0) {
-            /* Add padding */
-            size += 8 - (len % 8);
-        }
-    }
-
-    return size;
-}
-
-/**
- * Reset our internal state and invoke the callback of a store entries request.
+ * Reset our internal state and invoke the appended entries callback.
  */
 static void raft_io_uv_store__writer_finish(struct raft_io_uv_store *s)
 {
-    void *p;
-    void (*cb)(void *p, const int status);
     int status;
 
     assert(raft_io_uv_store__writer_is_active(s));
 
-    p = s->writer.p;
-    cb = s->writer.cb;
     status = s->writer.status;
 
-    s->writer.entries = NULL;
-    s->writer.n = 0;
-    s->writer.p = NULL;
-    s->writer.cb = NULL;
+    s->writer.state = RAFT_IO_UV_STORE__WRITER_IDLE;
     s->writer.status = 0;
 
-    cb(p, status);
+    raft_io_uv_append_cb__invoke(s->writer.cbs, s->writer.n_cbs, status);
+
+    s->writer.n_cbs = 0;
 
     if (s->stop.p != NULL) {
         raft_io_uv_store__aborted(s);
-    }
-}
-
-/**
- * Make sure there are at least @size bytes available in the write buffers.
- */
-static int raft_io_uv_store__writer_ensure_bufs_size(struct raft_io_uv_store *s,
-                                                     const size_t size)
-{
-    size_t remaining = size;
-    unsigned n;
-
-    /* First check how much we can fit in the first buffer (which is always the
-     * last one we wrote, or a brand new one). */
-    if (s->block_size - s->writer.segment->offset >= remaining) {
-        /* Everything fits in the first buffer */
-        return 0;
+	return;
     }
 
-    remaining -= s->block_size - s->writer.segment->offset;
+    /* If we have queued some more write requests, let's trigger them. */
+    if (s->queue.n_entries > 0) {
+        int rv;
 
-    /* Calculate how many additional blocks we need. */
-    n = remaining / s->block_size + 1;
+        assert(s->queue.entries != NULL);
+        assert(s->queue.n_cbs > 0);
 
-    /* Possibly allocate what we need */
-    return raft_io_uv_store__writer_ensure_bufs_n(s, 1 + n);
-}
-
-/**
- * Store a 8-bit value in the write buffers.
- *
- * The @offset pointer is the number of bytes stored so far.
- */
-static void *raft_io_uv_store__writer_put8(struct raft_io_uv_store *s,
-                                           uint8_t value,
-                                           size_t *offset)
-{
-    size_t n =
-        s->writer.segment->offset + *offset; /* Absolute position (wrt buf 0) */
-    unsigned block = n / s->block_size;      /* Block number to write */
-    size_t k = n % s->block_size;            /* Relative position */
-    void *data = s->writer.bufs[block].base + k;
-
-    *(uint8_t *)data = value;
-
-    *offset += sizeof value;
-
-    return data;
-}
-
-/**
- * Store a 32-bit value in the write buffers.
- *
- * The @offset pointer is the number of bytes stored so far.
- */
-static void *raft_io_uv_store__writer_put32(struct raft_io_uv_store *s,
-                                            uint32_t value,
-                                            size_t *offset)
-{
-    size_t n =
-        s->writer.segment->offset + *offset; /* Absolute position (wrt buf 0) */
-    unsigned block = n / s->block_size;      /* Block number to write */
-    size_t k = n % s->block_size;            /* Relative position */
-    void *data = s->writer.bufs[block].base + k;
-
-    assert(k % 4 == 0);
-
-    *(uint32_t *)data = value;
-
-    *offset += sizeof value;
-
-    return data;
-}
-
-/**
- * Store a 64-bit value in the write buffers.
- *
- * The @offset pointer is the number of bytes stored so far.
- */
-static void *raft_io_uv_store__writer_put64(struct raft_io_uv_store *s,
-                                            uint64_t value,
-                                            size_t *offset)
-{
-    size_t n =
-        s->writer.segment->offset + *offset; /* Absolute position (wrt buf 0) */
-    unsigned block = n / s->block_size;      /* Block number to write */
-    size_t k = n % s->block_size;            /* Relative position */
-    void *data = s->writer.bufs[block].base + k;
-
-    assert(k % 8 == 0);
-
-    *(uint64_t *)data = raft__flip64(value);
-
-    *offset += sizeof value;
-
-    return data;
-}
-
-/**
- * Store the batch header in the write buffers.
- *
- * The @offset pointer is the number of bytes stored so far.
- */
-static void raft_io_uv_store__writer_put_header(struct raft_io_uv_store *s,
-                                                size_t *offset,
-                                                unsigned *crc)
-{
-    unsigned i;
-    void *data;
-
-    *crc = 0;
-
-    data = raft_io_uv_store__writer_put64(s, s->writer.n, offset);
-    *crc = raft__crc32(data, sizeof(uint64_t), *crc);
-
-    for (i = 0; i < s->writer.n; i++) {
-        const struct raft_entry *entry = &s->writer.entries[i];
-
-        data = raft_io_uv_store__writer_put64(s, entry->term, offset);
-        *crc = raft__crc32(data, sizeof(uint64_t), *crc);
-
-        data = raft_io_uv_store__writer_put8(s, entry->type, offset);
-        *crc = raft__crc32(data, sizeof(uint8_t), *crc);
-
-        data = raft_io_uv_store__writer_put8(s, 0, offset);
-        *crc = raft__crc32(data, sizeof(uint8_t), *crc);
-
-        data = raft_io_uv_store__writer_put8(s, 0, offset);
-        *crc = raft__crc32(data, sizeof(uint8_t), *crc);
-
-        data = raft_io_uv_store__writer_put8(s, 0, offset);
-        *crc = raft__crc32(data, sizeof(uint8_t), *crc);
-
-        data = raft_io_uv_store__writer_put32(s, entry->buf.len, offset);
-        *crc = raft__crc32(data, sizeof(uint32_t), *crc);
-    }
-}
-
-/**
- * Store the batch data in the write buffers.
- *
- * The @offset pointer is the number of bytes stored so far.
- */
-static void raft_io_uv_store__writer_put_data(struct raft_io_uv_store *s,
-                                              size_t *offset,
-                                              unsigned *crc)
-{
-    unsigned i;
-
-    *crc = 0;
-
-    for (i = 0; i < s->writer.n; i++) {
-        const struct raft_entry *entry = &s->writer.entries[i];
-        uint8_t *bytes = entry->buf.base;
-        unsigned j;
-        void *data;
-
-        /* TODO: we shouldn't copy the data byte by byte */
-        for (j = 0; j < entry->buf.len; j++) {
-            data = raft_io_uv_store__writer_put8(s, bytes[j], offset);
-            *crc = raft__crc32(data, sizeof(uint8_t), *crc);
+        rv = raft_io_uv_store__writer_start(s, s->queue.entries,
+                                            s->queue.n_entries, s->queue.cbs,
+                                            s->queue.n_cbs);
+        if (rv != 0) {
+            s->aborted = true;
+            raft_io_uv_append_cb__invoke(s->queue.cbs, s->queue.n_cbs, status);
         }
 
-        if (entry->buf.len % 8 != 0) {
-            /* Add padding */
-            for (j = 0; j < 8 - (entry->buf.len % 8); j++) {
-                data = raft_io_uv_store__writer_put8(s, 0, offset);
-                *crc = raft__crc32(data, sizeof(uint8_t), *crc);
-            }
-        }
-
-        assert(*offset % 8 == 0);
+        s->queue.n_entries = 0;
+        s->queue.n_cbs = 0;
     }
 }
 
@@ -2261,21 +2461,18 @@ static void raft_io_uv_store__writer_segment_full(struct raft_io_uv_store *s)
     rv = raft_uv_fs__close(&s->writer.segment->file);
     assert(rv == 0); /* TODO: can this fail? */
 
-    s->writer.segment->end_index = s->writer.next_index - 1;
+    s->writer.segment->end_index = s->writer.last_index;
     s->writer.segment->state = RAFT_IO_UV_STORE__PREPARED_CLOSING;
 }
 
 /**
  * Called after a segment disk write has been completed.
  */
-static void raft_io_uv_store__writer_start_cb(struct raft_uv_fs *req)
+static void raft_io_uv_store__writer_submit_cb(struct raft_uv_fs *req)
 {
     struct raft_io_uv_store *s = req->data;
-    size_t size = raft_io_uv_store__writer_calculate_size(s);
-    unsigned blocks = size / s->block_size + 1; /* N of blocks to write */
-    size_t leftover = s->block_size - s->writer.segment->offset;
-
-    s->writer.submitted = false;
+    size_t offset = s->writer.blocks.offset;
+    unsigned blocks = raft_io_uv_blocks__n_written(&s->writer.blocks);
 
     /* Check that we have written the expected number of bytes */
     if (req->status != (int)(blocks * s->block_size)) {
@@ -2289,16 +2486,16 @@ static void raft_io_uv_store__writer_start_cb(struct raft_uv_fs *req)
     }
 
     s->writer.status = 0;
-    s->writer.next_index += s->writer.n;
-    s->writer.segment->used += size;
+    s->writer.last_index = s->writer.next_index - 1;
+    s->writer.segment->used += offset;
 
     /* Update the state of the write buffers.
      *
      * We have four cases:
      *
-     * - The data fit completely in the leftover space of the first block and
-     *   there is more space left. In this case we just advance the first block
-     *   offset.
+     * - The data fit completely in the leftover space of the first block
+     * and there is more space left. In this case we just advance the first
+     * block offset.
      *
      * - The data fit completely in the leftover space of the first block and
      *   there is no space left. In this case we advance the current block
@@ -2315,26 +2512,27 @@ static void raft_io_uv_store__writer_start_cb(struct raft_uv_fs *req)
      *   filled exactly and has no leftover space. In this case we advance the
      *   current block counter, reset the first buffer and set its offset to 0.
      */
-    if (leftover > size) {
-        s->writer.segment->offset += size;
-    } else if (leftover == size) {
-        s->writer.segment->block++;
-        s->writer.segment->offset = 0;
-        memset(s->writer.bufs[0].base, 0, s->writer.bufs[0].len);
+    if (offset < s->block_size) {
+        /* Nothing to do */
+        assert(blocks == 1);
+    } else if (offset == s->block_size) {
+        assert(blocks == 1);
+        s->writer.segment->next_block++;
+        s->writer.blocks.offset = 0;
+        memset(s->writer.blocks.bufs[0].base, 0, s->block_size);
     } else {
-        size_t offset = (size - leftover) % s->block_size;
-
+        assert(offset > s->block_size);
         assert(blocks > 1);
 
-        if (offset > 0) {
-            s->writer.segment->block += blocks - 1;
-            s->writer.segment->offset = offset;
-            memcpy(s->writer.bufs[0].base, s->writer.bufs[blocks - 1].base,
-                   s->writer.bufs[0].len);
+        if (offset % s->block_size > 0) {
+            s->writer.segment->next_block += blocks - 1;
+            s->writer.blocks.offset = offset % s->block_size;
+            memcpy(s->writer.blocks.bufs[0].base,
+                   s->writer.blocks.bufs[blocks - 1].base, s->block_size);
         } else {
-            s->writer.segment->block += blocks;
-            s->writer.segment->offset = 0;
-            memset(s->writer.bufs[0].base, 0, s->writer.bufs[0].len);
+            s->writer.segment->next_block += blocks;
+            s->writer.blocks.offset = 0;
+            memset(s->writer.blocks.bufs[0].base, 0, s->block_size);
         }
     }
 
@@ -2343,41 +2541,126 @@ done:
 }
 
 /**
+ * Push the given entries to the writer by encoding the given entries into the
+ * block buffers and making a copy of the given callbacks.
+ */
+static int raft_io_uv_store__writer_push(struct raft_io_uv_store *s,
+                                         const struct raft_entry *entries,
+                                         const unsigned n,
+                                         const struct raft_io_uv_append_cb *cbs,
+                                         const unsigned n_cbs)
+{
+    int rv;
+    unsigned i;
+
+    assert(!raft_io_uv_store__writer_is_writing(s));
+
+    /* Encode the given entries into the block buffers. */
+    rv = raft_io_uv_blocks__append_entries(&s->writer.blocks, entries, n);
+    if (rv != 0) {
+        return rv;
+    }
+
+    for (i = 0; i < n_cbs; i++) {
+        const struct raft_io_uv_append_cb *cb = &cbs[i];
+
+        rv = raft_io_uv_append_cb__push(cb, &s->writer.cbs, &s->writer.n_cbs);
+        if (rv != 0) {
+            return rv;
+        }
+    }
+
+    s->writer.next_index += n;
+
+    return 0;
+}
+
+/**
  * Submit an I/O write request to persist the entries that were passed to
  * @raft_io_uv_store__entries.
  */
-static int raft_io_uv_store__writer_start(struct raft_io_uv_store *s)
+static int raft_io_uv_store__writer_submit(struct raft_io_uv_store *s)
 {
-    size_t size;
-    size_t offset = 0;
-    unsigned crc1;   /* Header checksum */
-    unsigned crc2;   /* Data checksum */
-    void *crc1_p;    /* Pointer to header checksum slot */
-    void *crc2_p;    /* Pointer to data checksum slot */
     unsigned blocks; /* Number of blocks to write */
     int rv;
 
-    assert(s->writer.entries != NULL);
+    assert(!raft_io_uv_store__writer_is_writing(s));
+
+    s->writer.state = RAFT_IO_UV_STORE__WRITER_WRITING;
 
     /* We must have a ready prepared segment at this point. */
     assert(s->writer.segment != NULL);
     assert(s->writer.segment->state == RAFT_IO_UV_STORE__PREPARED_READY);
-    assert(s->writer.segment->offset % 8 == 0);
 
-    /* We should have allocated at least one write buffer. */
-    assert(s->writer.bufs != NULL);
-    assert(s->writer.n_bufs >= 1);
+    /* The write request can't be empty and must be aligned */
+    assert(s->writer.blocks.offset > 0);
+    assert(s->writer.blocks.offset % 8 == 0);
 
-    /* The request can't be empty */
-    assert(s->writer.n > 0);
+    /* The size can't exceed the remaining capacity of the segment. */
+    assert(s->writer.blocks.offset <=
+           s->max_segment_size - s->writer.segment->used);
 
-    /* Calculate the total number of bytes that we need */
-    size = raft_io_uv_store__writer_calculate_size(s);
+    blocks = raft_io_uv_blocks__n_written(&s->writer.blocks);
 
-    /* If the size exceeds the remaining capacity of the segment, we need mark
-     * this segment as closing and possibly wake up the closer and/or the
+    rv = raft_io_uv_prepared__write(s->writer.segment, s->logger,
+                                    s->writer.blocks.bufs, blocks,
+                                    raft_io_uv_store__writer_submit_cb);
+    if (rv != 0) {
+        return RAFT_ERR_IO;
+        goto fail;
+    }
+
+    s->writer.submitted = true;
+
+    return 0;
+
+fail:
+    assert(rv != 0);
+
+    return rv;
+}
+
+/**
+ * Try to start the writer right away, submitting the given entries.
+ *
+ * If the size of the given entries exceed the available size in the current
+ * segment, close the segment and possibly wait for a newly prepared one.
+ */
+static int raft_io_uv_store__writer_start(
+    struct raft_io_uv_store *s,
+    const struct raft_entry *entries,
+    const unsigned n,
+    const struct raft_io_uv_append_cb *cbs,
+    size_t n_cbs)
+{
+    bool overflow;
+    size_t size;
+    int rv;
+
+    assert(raft_io_uv_store__writer_is_idle(s));
+    assert(s->writer.segment != NULL);
+
+    size = raft_io_uv__sizeof_entries(entries, n);
+    overflow = size > s->max_segment_size - s->writer.segment->used;
+
+    /* If there's not enough room available in the segment, let's reset the
+     * block buffers since we need to start a new segment. */
+    if (overflow) {
+        rv = raft_io_uv_blocks__reset(&s->writer.blocks);
+        if (rv != 0) {
+            return rv;
+        }
+    }
+
+    rv = raft_io_uv_store__writer_push(s, entries, n, cbs, n_cbs);
+    if (rv != 0) {
+        return rv;
+    }
+
+    /* If there's not enough room available in the segment, we need to mark
+     * this segment as closing, possibly wake up the closer and/or the
      * preparer. */
-    if (size > s->max_segment_size - s->writer.segment->used) {
+    if (overflow) {
         raft_io_uv_store__writer_segment_full(s);
 
         if (!raft_io_uv_store__closer_is_active(s)) {
@@ -2394,79 +2677,45 @@ static int raft_io_uv_store__writer_start(struct raft_io_uv_store *s)
             }
         }
 
-        s->writer.segment =
-            raft_io_uv_store__pool_get(s, RAFT_IO_UV_STORE__PREPARED_READY);
+        s->writer.segment = raft_io_uv_store__pool_get_ready(s);
 
+        /* If there's no ready prepared segment available, we need to
+         * wait. */
         if (s->writer.segment == NULL) {
-            /* The segment should be in preparation, we'll wait for it. */
+            s->writer.state = RAFT_IO_UV_STORE__WRITER_BLOCKED;
             return 0;
         }
 
-        s->writer.segment->first_index = s->writer.next_index;
+        s->writer.segment->first_index = s->writer.last_index + 1;
     }
 
-    rv = raft_io_uv_store__writer_ensure_bufs_size(s, size);
+    rv = raft_io_uv_store__writer_submit(s);
     if (rv != 0) {
-        goto fail;
+        return rv;
     }
-
-    /* Placeholder of the checksums */
-    crc1_p = raft_io_uv_store__writer_put32(s, 0, &offset);
-    crc2_p = raft_io_uv_store__writer_put32(s, 0, &offset);
-
-    /* Batch header and data */
-    raft_io_uv_store__writer_put_header(s, &offset, &crc1);
-    raft_io_uv_store__writer_put_data(s, &offset, &crc2);
-
-    /* Fill the checksums placehoders */
-    *(uint32_t *)crc1_p = raft__flip32(crc1);
-    *(uint32_t *)crc2_p = raft__flip32(crc2);
-
-    blocks = size / s->block_size + 1;
-
-    rv = raft_io_uv_prepared__write(s->logger, s->writer.segment,
-                                    s->writer.bufs, blocks, s->block_size,
-                                    raft_io_uv_store__writer_start_cb);
-    if (rv != 0) {
-        goto fail;
-    }
-
-    s->writer.submitted = true;
 
     return 0;
-
-fail:
-    assert(rv != 0);
-
-    return rv;
 }
 
 /**
- * Called when the preparer finishes to prepare a new open segment and wants to
- * wake up the writer, which can now proceed writing to the newly prepared
- * segment.
+ * Called when the preparer finishes to prepare a new open segment and wants
+ * to wake up the writer, which can now proceed writing to the newly
+ * prepared segment.
  */
 static int raft_io_uv_store__writer_unblock(struct raft_io_uv_store *s)
 {
     int rv;
 
-    /* Make sure we have at least one write buffer available. */
-    rv = raft_io_uv_store__writer_ensure_bufs_n(s, 1);
-    if (rv != 0) {
-        return rv;
-    }
-
-    /* Initialize the first write buffer, which will be all zeros except the
-     * format version. */
-    raft_io_uv_store__first_block(&s->writer.bufs[0]);
+    assert(raft_io_uv_store__preparer_is_active(s));
+    assert(s->preparer.segment->state == RAFT_IO_UV_STORE__PREPARED_READY);
+    assert(s->writer.segment == NULL);
 
     /* Use the newly prepared segment from now on. */
     s->writer.segment = s->preparer.segment;
-    s->writer.segment->offset += sizeof(uint64_t); /* Format version. */
-    s->writer.segment->first_index = s->writer.next_index;
+    s->writer.segment->first_index = s->writer.last_index + 1;
 
     /* Start writing. */
-    rv = raft_io_uv_store__writer_start(s);
+    rv = raft_io_uv_store__writer_submit(s);
     if (rv != 0) {
         return rv;
     }
@@ -2475,7 +2724,50 @@ static int raft_io_uv_store__writer_unblock(struct raft_io_uv_store *s)
 }
 
 /**
- * Return true if there are currently pending segments waiting to be prepared.
+ * Return the size of the entries currently in the queue.
+ */
+static size_t raft_io_uv_store__queue_size(struct raft_io_uv_store *s)
+{
+    size_t size = 0;
+
+    if (s->queue.n_entries > 0) {
+        size +=
+            raft_io_uv__sizeof_entries(s->queue.entries, s->queue.n_entries);
+    }
+
+    return size;
+}
+
+/**
+ * Push the given append request to the queue of pending ones that are waiting
+ * for the current write to complete.
+ */
+static int raft_io_uv_store__queue_push(struct raft_io_uv_store *s,
+                                        const struct raft_entry *entries,
+                                        const unsigned n,
+                                        const struct raft_io_uv_append_cb *cb)
+{
+    int rv;
+
+    assert(!raft_io_uv_store__writer_is_idle(s));
+
+    rv = raft_io_uv__extend_entries(entries, n, &s->queue.entries,
+                                    &s->queue.n_entries);
+    if (rv != 0) {
+        return rv;
+    }
+
+    rv = raft_io_uv_append_cb__push(cb, &s->queue.cbs, &s->queue.n_cbs);
+    if (rv != 0) {
+        return rv;
+    }
+
+    return 0;
+}
+
+/**
+ * Return true if there are currently pending segments waiting to be
+ * prepared.
  */
 static bool raft_io_uv_store__preparer_has_work(struct raft_io_uv_store *s)
 {
@@ -2512,15 +2804,16 @@ static void raft_io_uv_store__preparer_format_cb(struct raft_uv_fs *req)
         goto abort;
     }
 
-    /* Double check that we're pointing at the beginning of the segment */
-    assert(s->preparer.segment->block == 0);
-    assert(s->preparer.segment->offset == 0);
+    /* Double check that we're pointing at the beginning of the segment and that
+     * the segment is marked as pending. */
+    assert(s->preparer.segment->next_block == 0);
+    assert(s->preparer.segment->state == RAFT_IO_UV_STORE__PREPARED_PENDING);
 
     /* Mark the prepared segment as ready */
     s->preparer.segment->state = RAFT_IO_UV_STORE__PREPARED_READY;
 
-    /* If there's a pending write request which is waiting for a segment to be
-     * ready, let's resume it. */
+    /* If there's a pending write request which is waiting for a segment to
+     * be ready, let's resume it. */
     if (raft_io_uv_store__writer_is_blocked(s)) {
         rv = raft_io_uv_store__writer_unblock(s);
         if (rv != 0) {
@@ -2531,8 +2824,8 @@ static void raft_io_uv_store__preparer_format_cb(struct raft_uv_fs *req)
     /* We're done with this particular segment. */
     s->preparer.segment = NULL;
 
-    /* If the preparation was successful and there are more segments that need
-     * to be prepared, let's start the preparer again. */
+    /* If the preparation was successful and there are more segments that
+     * need to be prepared, let's start the preparer again. */
     if (raft_io_uv_store__preparer_has_work(s)) {
         rv = raft_io_uv_store__preparer_start(s);
         if (rv != 0) {
@@ -2572,8 +2865,8 @@ static int raft_io_uv_store__preparer_format(struct raft_io_uv_store *s)
 {
     int rv;
 
-    /* If not done already, allocate the buffer to use for writing the format
-     * version */
+    /* If not done already, allocate the buffer to use for writing the
+     * format version */
     if (s->preparer.buf.base == NULL) {
         s->preparer.buf.base = aligned_alloc(s->block_size, s->block_size);
 
@@ -2582,7 +2875,7 @@ static int raft_io_uv_store__preparer_format(struct raft_io_uv_store *s)
         }
 
         s->preparer.buf.len = s->block_size;
-        raft_io_uv_store__first_block(&s->preparer.buf);
+        raft_io_uv_blocks__put_format(&s->preparer.buf);
     }
 
     rv = raft_uv_fs__write(&s->preparer.segment->file,
@@ -2598,8 +2891,9 @@ static int raft_io_uv_store__preparer_format(struct raft_io_uv_store *s)
 }
 
 /**
- * Callback invoked when the open segment file being prepared has been created
- * and its space allocated on disk. We now need to write its format version.
+ * Callback invoked when the open segment file being prepared has been
+ * created and its space allocated on disk. We now need to write its format
+ * version.
  */
 static void raft_io_uv_store__preparer_create_cb(struct raft_uv_fs *req)
 {
@@ -2609,6 +2903,8 @@ static void raft_io_uv_store__preparer_create_cb(struct raft_uv_fs *req)
     int rv2;
 
     assert(raft_io_uv_store__preparer_is_active(s));
+
+    assert(s->preparer.segment->state == RAFT_IO_UV_STORE__PREPARED_PENDING);
 
     /* If in the meantime we have been aborted, let's bail out. */
     if (s->aborted) {
@@ -2624,7 +2920,7 @@ static void raft_io_uv_store__preparer_create_cb(struct raft_uv_fs *req)
         goto abort;
     }
 
-    /* Submit a request to write the format version of the prepared segment. */
+    /* Request to write the format version of the prepared segment. */
     rv = raft_io_uv_store__preparer_format(s);
     if (rv != 0) {
         goto abort;
@@ -2673,8 +2969,10 @@ static int raft_io_uv_store__preparer_start(struct raft_io_uv_store *s)
     s->preparer.segment = raft_io_uv_store__pool_get_pending(s);
 
     /* If no open segment is pending it means that the closer is still busy
-     * closing them, and we have to wait for it to be done. */
+     * closing them, and we have to wait for it to be done with at least one of
+     * them. */
     if (s->preparer.segment == NULL) {
+        assert(raft_io_uv_store__closer_is_active(s));
         return 0;
     }
 
@@ -2702,55 +3000,144 @@ err:
     return rv;
 }
 
-int raft_io_uv_store__entries(struct raft_io_uv_store *s,
-                              const struct raft_entry *entries,
-                              const unsigned n,
-                              void *p,
-                              void (*cb)(void *p, const int status))
+/**
+ * Return an error if a batch with the given size would not fit in a segment.
+ */
+static int raft_io_uv_store__check_batch_size(struct raft_io_uv_store *s,
+                                              size_t size)
 {
-    int rv = 0;
+    if (size > (s->max_segment_size - sizeof(uint64_t) /* Format version */)) {
+        return RAFT_ERR_IO_TOOBIG;
+    }
+
+    return 0;
+}
+
+int raft_io_uv_store__append(struct raft_io_uv_store *s,
+                             const struct raft_entry *entries,
+                             const unsigned n,
+                             void *data,
+                             void (*f)(void *data, int status))
+{
+    struct raft_io_uv_append_cb cb;
+    size_t size;
+    int rv;
+
+    cb.data = data;
+    cb.f = f;
 
     /* We aren't stopping. */
     assert(!raft_io_uv_store__is_stopping(s));
-
-    /* No other write is in progress */
-    assert(!raft_io_uv_store__writer_is_active(s));
 
     if (s->aborted) {
         return RAFT_ERR_IO_ABORTED;
     }
 
-    s->writer.entries = entries;
-    s->writer.n = n;
-    s->writer.p = p;
-    s->writer.cb = cb;
+    /* TODO: at the moment we don't allow a single batch to exceed the size of a
+     * segment. */
+    size = raft_io_uv__sizeof_entries(entries, n);
 
-    /* If there's currently no open segment ready to be written, we need to wait
-     * for one, and possibly trigger the preparer. */
+    rv = raft_io_uv_store__check_batch_size(s, size);
+    if (rv != 0) {
+        return rv;
+    }
+
+    /* If the queue already not empty, let's keep pushing to it. */
+    if (s->queue.n_entries > 0) {
+        goto queue;
+    }
+
+    /* If there's currently no open segment ready to be written, we need to
+     * wait. */
     if (s->writer.segment == NULL) {
-        if (!raft_io_uv_store__preparer_is_active(s)) {
-            rv = raft_io_uv_store__preparer_start(s);
+        assert(raft_io_uv_store__writer_is_idle(s) ||
+               raft_io_uv_store__writer_is_blocked(s));
+
+        /* We have two cases:
+         *
+         * 1. If we are idle, we need to initialize the block buffers (since
+         *    we'll be writing from block 1) and possibly kick the preparer.
+         *
+         * 2. If we are blocked, case 1. has already happened, so we need to add
+         *    these entries to the block buffers and save the given callback
+         *    too.
+         */
+        if (raft_io_uv_store__writer_is_idle(s)) {
+            rv = raft_io_uv_blocks__reset(&s->writer.blocks);
             if (rv != 0) {
                 goto err;
             }
+
+            if (!raft_io_uv_store__preparer_is_active(s)) {
+                rv = raft_io_uv_store__preparer_start(s);
+                if (rv != 0) {
+                    goto err;
+                }
+            }
+
+            s->writer.state = RAFT_IO_UV_STORE__WRITER_BLOCKED;
+        } else {
+            assert(raft_io_uv_store__writer_is_blocked(s));
+            assert(raft_io_uv_store__preparer_is_active(s));
+
+            /* If there wouldn't be enough room left in the segment, we need to
+             * queue this request. */
+            if (size > s->max_segment_size - s->writer.blocks.offset) {
+                goto queue;
+            }
         }
+
+        rv = raft_io_uv_store__writer_push(s, entries, n, &cb, 1);
+        if (rv != 0) {
+            goto err;
+        }
+
         return 0;
     }
 
-    rv = raft_io_uv_store__writer_start(s);
+    assert(raft_io_uv_store__writer_is_idle(s) ||
+           raft_io_uv_store__writer_is_writing(s));
+
+    assert(s->writer.segment != NULL);
+
+    /* If no other write is in progress we might be able to proceed
+     * immediately. */
+    if (raft_io_uv_store__writer_is_idle(s)) {
+        rv = raft_io_uv_store__writer_start(s, entries, n, &cb, 1);
+        if (rv != 0) {
+            goto err;
+        }
+
+        return 0;
+    }
+
+queue:
+    /* If we get here it means that we're either writing, or blocked and without
+     * enough spare space in the segment to push these entries. Let's queue them
+     * up. */
+    assert(raft_io_uv_store__preparer_is_active(s));
+
+    /* Check that pushing this batch to the queue would not make the queue too
+     * big.
+     *
+     * TODO: allow any batch size.
+     */
+    size += raft_io_uv_store__queue_size(s);
+
+    rv = raft_io_uv_store__check_batch_size(s, size);
     if (rv != 0) {
-        goto err;
+        return rv;
+    }
+
+    rv = raft_io_uv_store__queue_push(s, entries, n, &cb);
+    if (rv != 0) {
+        return rv;
     }
 
     return 0;
 
 err:
     assert(rv != 0);
-
-    s->writer.entries = NULL;
-    s->writer.n = 0;
-    s->writer.p = NULL;
-    s->writer.cb = NULL;
 
     s->aborted = true;
 
@@ -2770,29 +3157,29 @@ void raft_io_uv_store__stop(struct raft_io_uv_store *s,
     /* We don't accept further requests from now on. */
     s->aborted = true;
 
-    /* If we're not preparing or closing segments and we have no pending write,
-     * this will invoke the stop callback immediately. Otherwise it will be
-     * invoked when the dust settles. */
+    /* If we're not preparing or closing segments and we have no pending
+     * write, this will invoke the stop callback immediately. Otherwise it
+     * will be invoked when the dust settles. */
     raft_io_uv_store__aborted(s);
 }
 
 void raft_io_uv_store__close(struct raft_io_uv_store *s)
 {
-    unsigned i;
-
     /* We shall not be called if there are pending operations */
     assert(!raft_io_uv_store__preparer_is_active(s));
     assert(!raft_io_uv_store__writer_is_active(s));
     assert(!raft_io_uv_store__closer_is_active(s));
 
-    /* Free any write buffer we've allocated. */
-    for (i = 0; i < s->writer.n_bufs; i++) {
-        if (s->writer.bufs[i].base != NULL) {
-            free(s->writer.bufs[i].base);
-        }
+    /* Free all block buffers we've allocated. */
+    raft_io_uv_blocks__close(&s->writer.blocks);
+
+    /* Free the callbacks buffers .*/
+    if (s->writer.cbs != NULL) {
+        raft_free(s->writer.cbs);
     }
-    if (s->writer.bufs != NULL) {
-        raft_free(s->writer.bufs);
+    if (s->queue.cbs != NULL) {
+        raft_free(s->queue.cbs);
+        raft_free(s->queue.entries);
     }
 
     /* Free the format version buffer */

@@ -49,12 +49,33 @@ struct raft_io_uv_prepared
     unsigned long long counter; /* Segment counter, encoded in the filename */
     struct raft_uv_file file;   /* Open segment file */
     struct raft_uv_fs req;      /* File system request */
-    unsigned block;             /* Next segment block to write */
-    size_t offset;              /* Next free byte in the next segment block */
+    unsigned next_block;        /* Next segment block to write (starting at 0)*/
+    size_t block_size;          /* Block size */
     size_t used;                /* How many bytes have been used in total */
     raft_index first_index;     /* Index of the first entry of the segment */
     raft_index end_index;       /* Index of the last entry of the segment */
     raft_uv_path path;          /* Full file system path */
+};
+
+/**
+ * Hold data buffers for N contiguous blocks of a segment.
+ */
+struct raft_io_uv_blocks
+{
+    size_t block_size; /* Block size */
+    uv_buf_t *bufs;    /* Block buffers, each of block_size bytes */
+    unsigned n_bufs;   /* Number of buffers in the array */
+    size_t offset;     /* Offset of next byte to write */
+};
+
+/**
+ * Hold details about a callback to invoke once a request to append entries has
+ * completed.
+ */
+struct raft_io_uv_append_cb
+{
+    void *data;
+    void (*f)(void *data, int status);
 };
 
 struct raft_io_uv_store
@@ -79,14 +100,10 @@ struct raft_io_uv_store
     /* State for the logic involved in writing log entries. */
     struct
     {
-        const struct raft_entry *entries; /* Entries being written */
-        unsigned n;                       /* Number of entries */
-        void *p;                          /* Callback context */
-        void (*cb)(void *p, const int status);
+        int state; /* Either idle, blocked, or writing */
 
-        /* Array of re-usable write buffers, each of block_size bytes. */
-        uv_buf_t *bufs;
-        unsigned n_bufs;
+        /* Buffers holding data for the blocks to write via direct I/O */
+        struct raft_io_uv_blocks blocks;
 
         /* The prepared open segment in the pool currently being written. */
         struct raft_io_uv_prepared *segment;
@@ -94,9 +111,30 @@ struct raft_io_uv_store
         bool submitted;
         int status; /* Current result code */
 
-        /* Index of the next entry to append. */
+        /* Index of the next entry to write to the block buffers */
         raft_index next_index;
+
+        /* Index of the last entry that was actually written to disk. */
+        raft_index last_index;
+
+        /* Callbacks to invoke when a write operation has completed. */
+        struct raft_io_uv_append_cb *cbs;
+        size_t n_cbs;
+
     } writer;
+
+    /* Queue of append entries request */
+    struct
+    {
+        /* Enqueued entries */
+        struct raft_entry *entries;
+        size_t n_entries;
+
+        /* Callbacks to invoke when the write operation for the enqueued entries
+         * will complete. */
+        struct raft_io_uv_append_cb *cbs;
+        size_t n_cbs;
+    } queue;
 
     /* State for the logic involved in closing open segments. */
     struct
@@ -124,6 +162,21 @@ int raft_io_uv_store__init(struct raft_io_uv_store *s,
                            struct raft_logger *logger,
                            struct uv_loop_s *loop,
                            const char *dir);
+
+void raft_io_uv_store__close(struct raft_io_uv_store *s);
+
+/**
+ * Start accepting disk I/O requests.
+ */
+int raft_io_uv_store__start(struct raft_io_uv_store *s);
+
+/**
+ * Stop any on-going write as soon as possible. Invoke @cb when the dust is
+ * settled.
+ */
+void raft_io_uv_store__stop(struct raft_io_uv_store *s,
+                            void *p,
+                            void (*cb)(void *p));
 
 /**
  * Synchronously load all state from disk.
@@ -154,22 +207,12 @@ int raft_io_uv_store__vote(struct raft_io_uv_store *s,
                            const unsigned server_id);
 
 /**
- * Asynchronously persist the entries in the given request.
+ * Asynchronously append the entries in the given request.
  */
-int raft_io_uv_store__entries(struct raft_io_uv_store *s,
-                              const struct raft_entry *entries,
-                              const unsigned n,
-                              void *p,
-                              void (*cb)(void *p, const int status));
-
-/**
- * Stop any on-going write as soon as possible. Invoke @cb when the dust is
- * settled.
- */
-void raft_io_uv_store__stop(struct raft_io_uv_store *s,
-                            void *p,
-                            void (*cb)(void *p));
-
-void raft_io_uv_store__close(struct raft_io_uv_store *s);
+int raft_io_uv_store__append(struct raft_io_uv_store *s,
+                             const struct raft_entry *entries,
+                             const unsigned n,
+                             void *data,
+                             void (*cb)(void *data, int status));
 
 #endif /* RAFT_IO_UV_STORE_H */

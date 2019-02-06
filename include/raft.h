@@ -70,7 +70,7 @@ enum {
     X(RAFT_ERR_IO_NAMETOOLONG, "data directory path is too long")        \
     X(RAFT_ERR_IO_MALFORMED, "encoded data is malformed")                \
     X(RAFT_ERR_IO_NOTEMPTY, "persisted log is not empty")                \
-    X(RAFT_ERR_IO_TOOBIG, "encoded configuration is too big")            \
+    X(RAFT_ERR_IO_TOOBIG, "data is too big")                             \
     X(RAFT_ERR_IO_CONNECT, "no connection to remote server available")
 
 /**

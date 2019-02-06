@@ -459,7 +459,7 @@ static MunitResult test_append_pristine(const MunitParameter params[],
     rv = f->io.append(&f->io, &entry, 1, f, __append_cb);
     munit_assert_int(rv, ==, 0);
 
-    test_uv_run(&f->loop, 5);
+    test_uv_run(&f->loop, 10);
 
     munit_assert_true(f->append_cb.invoked);
 
