@@ -66,10 +66,14 @@ struct raft_io_stub
         /* Pending */
         struct
         {
-            const struct raft_entry *entries;
-            unsigned n_entries;
-            void *data;
-            void (*cb)(void *data, int status);
+            struct raft_entry *entries;
+            size_t n_entries;
+            struct
+            {
+                void *data;
+                void (*f)(void *data, int status);
+            } cbs[64];
+            size_t n_cbs;
         } pending;
         /* Copy of the last entries that where appended upon flush. */
         struct
@@ -335,6 +339,33 @@ static int raft_io_stub__set_vote(struct raft_io *io, const unsigned server_id)
     return 0;
 }
 
+/**
+ * Append to @entries2 all entries in @entries1.
+ */
+static int raft_io_stub__extend_entries(const struct raft_entry *entries1,
+                                        const size_t n_entries1,
+                                        struct raft_entry **entries2,
+                                        size_t *n_entries2)
+{
+    struct raft_entry *entries; /* To re-allocate the given entries */
+    size_t i;
+
+    entries =
+        raft_realloc(*entries2, (*n_entries2 + n_entries1) * sizeof *entries);
+    if (entries == NULL) {
+        return RAFT_ERR_NOMEM;
+    }
+
+    for (i = 0; i < n_entries1; i++) {
+        entries[*n_entries2 + i] = entries1[i];
+    }
+
+    *entries2 = entries;
+    *n_entries2 += n_entries1;
+
+    return 0;
+}
+
 static int raft_io_stub__append(const struct raft_io *io,
                                 const struct raft_entry entries[],
                                 unsigned n,
@@ -342,6 +373,7 @@ static int raft_io_stub__append(const struct raft_io *io,
                                 void (*cb)(void *data, int status))
 {
     struct raft_io_stub *s;
+    int rv;
 
     s = io->data;
 
@@ -349,14 +381,16 @@ static int raft_io_stub__append(const struct raft_io *io,
         return RAFT_ERR_IO;
     }
 
-    if (s->append.pending.data != NULL) {
-        return RAFT_ERR_IO_BUSY;
+    rv = raft_io_stub__extend_entries(entries, n, &s->append.pending.entries,
+                                      &s->append.pending.n_entries);
+    if (rv != 0) {
+        return rv;
     }
 
-    s->append.pending.entries = entries;
-    s->append.pending.n_entries = n;
-    s->append.pending.cb = cb;
-    s->append.pending.data = data;
+    s->append.pending.cbs[s->append.pending.n_cbs].f = cb;
+    s->append.pending.cbs[s->append.pending.n_cbs].data = data;
+
+    s->append.pending.n_cbs++;
 
     return 0;
 }
@@ -417,11 +451,6 @@ static int raft_io_stub__send(const struct raft_io *io,
 
     if (raft_io_stub__fault_tick(s)) {
         return RAFT_ERR_IO;
-    }
-
-    /* Check if we have still room available. */
-    if (s->send.pending.n_messages == RAFT_IO_STUB_MAX_PENDING) {
-        return RAFT_ERR_IO_BUSY;
     }
 
     i = s->send.pending.n_messages;
@@ -520,6 +549,10 @@ void raft_io_stub_close(struct raft_io *io)
 
     if (s->entries != NULL) {
         raft_free(s->entries);
+    }
+
+    if (s->append.pending.entries != NULL) {
+        raft_free(s->append.pending.entries);
     }
 
     raft_io_stub__reset_flushed(s);
@@ -629,12 +662,17 @@ static void raft_io_stub__append_cb(struct raft_io_stub *s)
                                s->append.pending.n_entries);
     s->append.flushed.n_entries = s->append.pending.n_entries;
 
-    if (s->append.pending.cb != NULL) {
-        s->append.pending.cb(s->append.pending.data, status);
+    for (i = 0; i < s->append.pending.n_cbs; i++) {
+        void *data = s->append.pending.cbs[i].data;
+        void (*f)(void *data, int status) = s->append.pending.cbs[i].f;
+
+        if (f != NULL) {
+            f(data, status);
+        }
     }
 
-    s->append.pending.data = NULL;
-    s->append.pending.cb = NULL;
+    s->append.pending.n_entries = 0;
+    s->append.pending.n_cbs = 0;
 }
 
 void raft_io_stub_flush(struct raft_io *io)
@@ -648,7 +686,7 @@ void raft_io_stub_flush(struct raft_io *io)
 
     raft_io_stub__reset_flushed(s);
 
-    if (s->append.pending.cb != NULL) {
+    if (s->append.pending.n_cbs > 0) {
         raft_io_stub__append_cb(s);
     }
 

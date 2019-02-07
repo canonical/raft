@@ -35,7 +35,6 @@ enum {
     RAFT_ERR_CONFIGURATION_BUSY,
     RAFT_ERR_IO,
     RAFT_ERR_IO_CORRUPT,
-    RAFT_ERR_IO_BUSY,
     RAFT_ERR_IO_ABORTED,
     RAFT_ERR_IO_NAMETOOLONG,
     RAFT_ERR_IO_MALFORMED,
@@ -65,7 +64,6 @@ enum {
       "a configuration change is already in progress")                   \
     X(RAFT_ERR_IO, "I/O error")                                          \
     X(RAFT_ERR_IO_CORRUPT, "persisted data is corrupted")                \
-    X(RAFT_ERR_IO_BUSY, "a log write request is already in progress")    \
     X(RAFT_ERR_IO_ABORTED, "backend was stopped or has errored")         \
     X(RAFT_ERR_IO_NAMETOOLONG, "data directory path is too long")        \
     X(RAFT_ERR_IO_MALFORMED, "encoded data is malformed")                \
@@ -492,10 +490,6 @@ struct raft_io
 
     /**
      * Asynchronously append the given entries to the log.
-     *
-     * At most one write log request can be in flight at any given time. The
-     * implementation must return @RAFT_ERR_IO_BUSY if a new request is
-     * submitted before the previous one is completed.
      *
      * The implementation is guaranteed that the memory holding the given
      * entries will not be released until the @cb callback is invoked.

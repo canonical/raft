@@ -72,4 +72,5 @@ void test_io_append_entry(struct raft_io *io, const struct raft_entry *entry)
 
     rv = io->append(io, entry, 1, NULL, NULL);
     munit_assert_int(rv, ==, 0);
+    raft_io_stub_flush(io);
 }

@@ -277,13 +277,13 @@ static MunitResult test_req_prev_log_term_mismatch(
     /* Append two uncommitted entries. */
     entries[0].type = RAFT_LOG_COMMAND;
     entries[0].term = 1;
-    entries[0].buf.base = NULL;
-    entries[0].buf.len = 0;
+    entries[0].buf.base = raft_malloc(8);
+    entries[0].buf.len = 8;
 
     entries[1].type = RAFT_LOG_COMMAND;
     entries[1].term = 1;
-    entries[1].buf.base = NULL;
-    entries[1].buf.len = 0;
+    entries[1].buf.base = raft_malloc(8);
+    entries[1].buf.len = 8;
 
     test_io_append_entry(f->raft.io, &entries[0]);
     test_io_append_entry(f->raft.io, &entries[1]);
@@ -297,6 +297,9 @@ static MunitResult test_req_prev_log_term_mismatch(
 
     /* The request gets rejected. */
     __assert_append_entries_response(f, 1, false, 3);
+
+    raft_free(entries[0].buf.base);
+    raft_free(entries[1].buf.base);
 
     return MUNIT_OK;
 }

@@ -20,7 +20,7 @@ struct fixture
     } tick_cb;
     struct
     {
-        bool invoked;
+        int invoked;
         int status;
     } append_cb;
     struct
@@ -51,7 +51,7 @@ static void __append_cb(void *data, const int status)
 {
     struct fixture *f = data;
 
-    f->append_cb.invoked = true;
+    f->append_cb.invoked++;
     f->append_cb.status = status;
 }
 
@@ -98,7 +98,7 @@ static void *setup(const MunitParameter params[], void *user_data)
     f->tick_cb.invoked = false;
     f->tick_cb.elapsed = 0;
 
-    f->append_cb.invoked = false;
+    f->append_cb.invoked = 0;
     f->append_cb.status = -1;
 
     f->send_cb.invoked = false;
@@ -336,10 +336,7 @@ static MunitTest set_vote_tests[] = {
  * raft_io_stub__append
  */
 
-/**
- * Append entries on a pristine store.
- */
-
+/* Append entries on a pristine store. */
 static MunitResult test_append_pristine(const MunitParameter params[],
                                         void *data)
 {
@@ -363,21 +360,63 @@ static MunitResult test_append_pristine(const MunitParameter params[],
 
     raft_io_stub_flush(&f->io);
 
-    munit_assert_true(f->append_cb.invoked);
+    munit_assert_int(f->append_cb.invoked, ==, 1);
 
     free(entry.buf.base);
 
     return MUNIT_OK;
 }
 
+/* Make two request append entries requests concurrently. */
+static MunitResult test_append_concurrent(const MunitParameter params[],
+                                        void *data)
+{
+    struct fixture *f = data;
+    struct raft_entry entry1;
+    struct raft_entry entry2;
+    int rv;
+
+    (void)params;
+
+    __load(f);
+
+    entry1.term = 1;
+    entry1.type = RAFT_LOG_COMMAND;
+    entry1.buf.base = munit_malloc(1);
+    entry1.buf.len = 1;
+
+    entry2.term = 1;
+    entry2.type = RAFT_LOG_COMMAND;
+    entry2.buf.base = munit_malloc(1);
+    entry2.buf.len = 1;
+
+    rv = f->io.append(&f->io, &entry1, 1, f, __append_cb);
+    munit_assert_int(rv, ==, 0);
+
+    rv = f->io.append(&f->io, &entry1, 1, f, __append_cb);
+    munit_assert_int(rv, ==, 0);
+
+    raft_io_stub_flush(&f->io);
+
+    munit_assert_int(f->append_cb.invoked, ==, 2);
+
+    free(entry1.buf.base);
+    free(entry2.buf.base);
+
+    return MUNIT_OK;
+}
+
+static MunitTest append_tests[] = {
+    {"/pristine", test_append_pristine, setup, tear_down, 0, NULL},
+    {"/concurrent", test_append_concurrent, setup, tear_down, 0, NULL},
+    {NULL, NULL, NULL, NULL, 0, NULL},
+};
+
 /**
  * raft_io_stub__send
  */
 
-/**
- * Send the very first message.
- */
-
+/* Send the very first message. */
 static MunitResult test_send_first(const MunitParameter params[], void *data)
 {
     struct fixture *f = data;
@@ -404,11 +443,6 @@ static MunitResult test_send_first(const MunitParameter params[], void *data)
 
 static MunitTest send_tests[] = {
     {"/first", test_send_first, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
-static MunitTest append_tests[] = {
-    {"/pristine", test_append_pristine, setup, tear_down, 0, NULL},
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 

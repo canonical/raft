@@ -406,7 +406,6 @@ static MunitResult test_req_last_idx_lower_index(const MunitParameter params[],
 {
     struct fixture *f = data;
     struct raft_entry entry;
-    struct raft_buffer buf;
 
     (void)params;
 
@@ -419,15 +418,12 @@ static MunitResult test_req_last_idx_lower_index(const MunitParameter params[],
 
     entry.type = RAFT_LOG_COMMAND;
     entry.term = 1;
-    entry.buf.base = NULL;
-    entry.buf.len = 0;
+    entry.buf.base = raft_malloc(8);
+    entry.buf.len = 8;
 
     test_io_append_entry(f->raft.io, &entry);
 
     test_start(&f->raft);
-
-    memset(&buf, 0, sizeof buf);
-    raft_log__append(&f->raft.log, 1, RAFT_LOG_COMMAND, &buf, NULL);
 
     munit_assert_int(raft_log__last_index(&f->raft.log), ==, 2);
 
@@ -437,6 +433,8 @@ static MunitResult test_req_last_idx_lower_index(const MunitParameter params[],
 
     /* The request is unsuccessful */
     __assert_request_vote_result(f, 2, false);
+
+    raft_free(entry.buf.base);
 
     return MUNIT_OK;
 }
