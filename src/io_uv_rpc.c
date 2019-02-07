@@ -136,7 +136,8 @@ static void raft_io_uv_rpc_client__connect_cb(void *data, int status)
         return;
     }
 
-    raft_warnf(c->rpc->logger, "connect: %s", uv_strerror(status));
+    raft_warnf(c->rpc->logger, "connect to %d (%s): %s", c->id, c->address,
+               uv_strerror(status));
 
     /* Let's close this stream handle and schedule another connection
      * attempt.  */
@@ -343,6 +344,7 @@ static void raft_io_uv_rpc_server__stream_close_cb(uv_handle_t *handle)
     if (s->aborted) {
         raft_io_uv_rpc__remove_server(s->rpc, s);
         raft_io_uv_rpc_server__close(s);
+        raft_free(s);
     } else {
         raft_io_uv_rpc__maybe_stopped(s->rpc);
     }
@@ -597,7 +599,7 @@ static int raft_io_uv_rpc__add_server(struct raft_io_uv_rpc *r,
                                       const char *address,
                                       struct uv_stream_s *stream)
 {
-    struct raft_io_uv_rpc_server *servers;
+    struct raft_io_uv_rpc_server **servers;
     struct raft_io_uv_rpc_server *server;
     unsigned n_servers;
     int rv;
@@ -614,11 +616,16 @@ static int raft_io_uv_rpc__add_server(struct raft_io_uv_rpc *r,
     r->n_servers = n_servers;
 
     /* Initialize the new connection */
-    server = &servers[n_servers - 1];
+    server = raft_malloc(sizeof *server);
+    if (server == NULL) {
+        rv = RAFT_ERR_NOMEM;
+        goto err_after_servers_realloc;
+    }
+    servers[n_servers - 1] = server;
 
     rv = raft_io_uv_rpc_server__init(server, r, id, address, stream);
     if (rv != 0) {
-        goto err_after_servers_realloc;
+        goto err_after_server_alloc;
     }
 
     /* This will start reading requests. */
@@ -631,6 +638,9 @@ static int raft_io_uv_rpc__add_server(struct raft_io_uv_rpc *r,
 
 err_after_server_init:
     raft_io_uv_rpc_server__close(server);
+
+err_after_server_alloc:
+    raft_free(server);
 
 err_after_servers_realloc:
     /* Simply pretend that the connection was not inserted at all */
@@ -652,7 +662,7 @@ static void raft_io_uv_rpc__remove_server(struct raft_io_uv_rpc *r,
     unsigned j;
 
     for (i = 0; i < r->n_servers; i++) {
-        if (&r->servers[i] == server) {
+        if (r->servers[i] == server) {
             break;
         }
     }
@@ -720,7 +730,8 @@ void raft_io_uv_rpc__close(struct raft_io_uv_rpc *r)
     unsigned i;
 
     for (i = 0; i < r->n_clients; i++) {
-        raft_io_uv_rpc_client__close(&r->clients[i]);
+        raft_io_uv_rpc_client__close(r->clients[i]);
+        raft_free(r->clients[i]);
     }
 
     if (r->clients != NULL) {
@@ -728,7 +739,8 @@ void raft_io_uv_rpc__close(struct raft_io_uv_rpc *r)
     }
 
     for (i = 0; i < r->n_servers; i++) {
-        raft_io_uv_rpc_server__close(&r->servers[i]);
+        raft_io_uv_rpc_server__close(r->servers[i]);
+        raft_free(r->servers[i]);
     }
 
     if (r->servers != NULL) {
@@ -778,11 +790,11 @@ void raft_io_uv_rpc__stop(struct raft_io_uv_rpc *r,
     r->stop.cb = cb;
 
     for (i = 0; i < r->n_clients; i++) {
-        raft_io_uv_rpc_client__stop(&r->clients[i]);
+        raft_io_uv_rpc_client__stop(r->clients[i]);
     }
 
     for (i = 0; i < r->n_servers; i++) {
-        raft_io_uv_rpc_server__stop(&r->servers[i]);
+        raft_io_uv_rpc_server__stop(r->servers[i]);
     }
 
     r->transport->stop(r->transport, r, raft_io_uv_rpc__transport_stop_cb);
@@ -799,13 +811,13 @@ static int raft_io_uv_rpc__get_client(struct raft_io_uv_rpc *r,
                                       const char *address,
                                       struct raft_io_uv_rpc_client **client)
 {
-    struct raft_io_uv_rpc_client *clients;
+    struct raft_io_uv_rpc_client **clients;
     unsigned n_clients;
     unsigned i;
     int rv;
 
     for (i = 0; i < r->n_clients; i++) {
-        *client = &r->clients[i];
+        *client = r->clients[i];
 
         if ((*client)->id == id) {
             /* TODO: handle a change in the address */
@@ -826,17 +838,26 @@ static int raft_io_uv_rpc__get_client(struct raft_io_uv_rpc *r,
     r->n_clients = n_clients;
 
     /* Initialize the new connection */
-    *client = &clients[n_clients - 1];
+    *client = raft_malloc(sizeof **client);
+    if (*client == NULL) {
+        rv = RAFT_ERR_NOMEM;
+        goto err_after_clients_realloc;
+    }
+
+    clients[n_clients - 1] = *client;
 
     rv = raft_io_uv_rpc_client__init(*client, r, id, address);
     if (rv != 0) {
-        goto err_after_clients_realloc;
+        goto err_after_client_alloc;
     }
 
     /* This will trigger the first connection attempt. */
     raft_io_uv_rpc_client__start(*client);
 
     return 0;
+
+err_after_client_alloc:
+    raft_free(*client);
 
 err_after_clients_realloc:
     /* Simply pretend that the connection was not inserted at all */
@@ -938,13 +959,6 @@ struct raft_io_uv_tcp
     } listener;
     struct
     {
-        /* Initial handshake buffer to send right away after a connection.
-         * It contains the protocol version, our ID and our address. */
-        struct uv_write_s req;
-        uv_buf_t buf;
-    } handshake;
-    struct
-    {
         void *data;
         void (*cb)(void *data);
     } stop;
@@ -972,6 +986,19 @@ struct raft_io_uv_tcp_connect
     struct uv_connect_s req;
     void *data;
     void (*cb)(void *data, int status);
+
+    /* Counter of pending connect-related callbacks. Since we call
+     * uv_tcp_connect() and uv_write() concurrently we need to know if the dust
+     * has settle before releasing any memory in the associated callbacks. */
+    unsigned pending_cbs;
+
+    /* Initial handshake write request to send right away after connection. It
+     * contains the protocol version, our ID and our address. */
+    struct
+    {
+        struct uv_write_s req;
+        uv_buf_t buf;
+    } handshake;
 };
 
 static size_t raft_io_uv_tcp__sizeof_handshake(const char *address)
@@ -1247,15 +1274,6 @@ static int raft_io_uv_tcp__start(struct raft_io_uv_transport *t,
 
     tcp = t->data;
 
-    /* Allocate the handshake buffer. This is the same for every new connection
-     * and will be shared and reused. */
-    tcp->handshake.buf.len = raft_io_uv_tcp__sizeof_handshake(address);
-    tcp->handshake.buf.base = raft_malloc(tcp->handshake.buf.len);
-    if (tcp->handshake.buf.base == NULL) {
-        return RAFT_ERR_NOMEM;
-    }
-    raft_io_uv_tcp__encode_handshake(id, address, tcp->handshake.buf.base);
-
     tcp->listener.id = id;
     tcp->listener.address = address;
     tcp->listener.data = data;
@@ -1294,8 +1312,6 @@ static void raft_io_uv_tcp__listener_close_cb(uv_handle_t *handle)
 {
     struct raft_io_uv_tcp *tcp = handle->data;
 
-    raft_free(tcp->handshake.buf.base);
-
     tcp->stop.cb(tcp->stop.data);
 }
 
@@ -1312,13 +1328,30 @@ static void raft_io_uv_tcp__stop(struct raft_io_uv_transport *t,
              raft_io_uv_tcp__listener_close_cb);
 }
 
+static void raft_io_uv_tcp__connect_write_cb(struct uv_write_s *req, int status)
+{
+    struct raft_io_uv_tcp_connect *connect = req->data;
+
+    (void)status;
+
+    connect->pending_cbs--;
+    if (connect->pending_cbs == 0) {
+        raft_free(connect->handshake.buf.base);
+        raft_free(connect);
+    }
+}
+
 static void raft_io_uv_tcp__connect_cb(struct uv_connect_s *req, int status)
 {
     struct raft_io_uv_tcp_connect *connect = req->data;
 
     connect->cb(connect->data, status);
 
-    raft_free(connect);
+    connect->pending_cbs--;
+    if (connect->pending_cbs == 0) {
+        raft_free(connect->handshake.buf.base);
+        raft_free(connect);
+    }
 }
 
 static int raft_io_uv_tcp__connect(struct raft_io_uv_transport *t,
@@ -1347,12 +1380,23 @@ static int raft_io_uv_tcp__connect(struct raft_io_uv_transport *t,
     connect->req.data = connect;
     connect->data = data;
     connect->cb = cb;
+    connect->pending_cbs = 0;
+
+    /* Initialize the handshake buffer. */
+    connect->handshake.req.data = connect;
+    connect->handshake.buf.len = raft_io_uv_tcp__sizeof_handshake(address);
+    connect->handshake.buf.base = raft_malloc(connect->handshake.buf.len);
+    if (connect->handshake.buf.base == NULL) {
+        rv = RAFT_ERR_NOMEM;
+        goto err_after_connect_alloc;
+    }
+    raft_io_uv_tcp__encode_handshake(id, address, connect->handshake.buf.base);
 
     client = raft_malloc(sizeof *client);
     if (client == NULL) {
         /* UNTESTED: should be investigated */
         rv = RAFT_ERR_NOMEM;
-        goto err_after_connect_alloc;
+        goto err_after_handshake_alloc;
     }
 
     rv = uv_tcp_init(tcp->loop, client);
@@ -1376,15 +1420,17 @@ static int raft_io_uv_tcp__connect(struct raft_io_uv_transport *t,
         rv = RAFT_ERR_IO_CONNECT;
         goto err_after_tcp_init;
     }
+    connect->pending_cbs++;
 
-    rv = uv_write(&tcp->handshake.req, (struct uv_stream_s *)client,
-                  &tcp->handshake.buf, 1, NULL);
+    rv = uv_write(&connect->handshake.req, (struct uv_stream_s *)client,
+                  &connect->handshake.buf, 1, raft_io_uv_tcp__connect_write_cb);
     if (rv != 0) {
         /* UNTESTED: what are the error conditions? perhaps ENOMEM */
         raft_warnf(tcp->logger, "write: %s", uv_strerror(rv));
         rv = RAFT_ERR_IO;
         goto err_after_tcp_init;
     }
+    connect->pending_cbs++;
 
     *stream = (struct uv_stream_s *)client;
 
@@ -1395,6 +1441,9 @@ err_after_tcp_init:
 
 err_after_tcp_alloc:
     raft_free(client);
+
+err_after_handshake_alloc:
+    raft_free(connect->handshake.buf.base);
 
 err_after_connect_alloc:
     raft_free(connect);

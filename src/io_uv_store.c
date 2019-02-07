@@ -1728,25 +1728,13 @@ static int raft_io_uv_store__ensure_metadata(struct raft_io_uv_store *s)
     return 0;
 }
 
-int raft_io_uv_store__load(struct raft_io_uv_store *s,
-                           raft_term *term,
-                           unsigned *voted_for,
-                           raft_index *start_index,
-                           struct raft_entry **entries,
-                           size_t *n)
+static int raft_io_uv_store__load_metadata(struct raft_io_uv_store *s)
 {
     struct raft_io_uv_metadata metadata1;
     struct raft_io_uv_metadata metadata2;
-    struct raft_io_uv_segment *segments;
-    size_t n_segments;
     int rv;
 
-    if (s->aborted) {
-        return RAFT_ERR_IO_ABORTED;
-    }
-
-    /* This API is supposed to be invoked just once, right after backend
-     * initialization */
+    /* This API is supposed to be invoked just once. */
     assert(s->metadata.version == 0);
 
     /* Read the two metadata files (if available). */
@@ -1757,7 +1745,7 @@ int raft_io_uv_store__load(struct raft_io_uv_store *s,
 
     rv = raft_io_uv_metadata__load(s->logger, s->dir, 2, &metadata2);
     if (rv != 0) {
-        goto err;
+        return rv;
     }
 
     /* Check the versions. */
@@ -1768,8 +1756,7 @@ int raft_io_uv_store__load(struct raft_io_uv_store *s,
         /* The two metadata files can't have the same version. */
         raft_errorf(s->logger, "metadata1 and metadata2 are both at version %d",
                     metadata1.version);
-        rv = RAFT_ERR_IO_CORRUPT;
-        goto err;
+        return RAFT_ERR_IO_CORRUPT;
     } else {
         /* Pick the metadata with the grater version. */
         if (metadata1.version > metadata2.version) {
@@ -1779,15 +1766,41 @@ int raft_io_uv_store__load(struct raft_io_uv_store *s,
         }
     }
 
-    *term = s->metadata.term;
-    *voted_for = s->metadata.voted_for;
-    *start_index = s->metadata.start_index;
-
     /* Update the metadata files, so they are created if they did not exist. */
     rv = raft_io_uv_store__ensure_metadata(s);
     if (rv != 0) {
-        goto err;
+        return rv;
     }
+
+    return 0;
+}
+
+int raft_io_uv_store__load(struct raft_io_uv_store *s,
+                           raft_term *term,
+                           unsigned *voted_for,
+                           raft_index *start_index,
+                           struct raft_entry **entries,
+                           size_t *n)
+{
+    struct raft_io_uv_segment *segments;
+    size_t n_segments;
+    int rv;
+
+    if (s->aborted) {
+        return RAFT_ERR_IO_ABORTED;
+    }
+
+    /* If haven't loaded the metadata yet, do it now. */
+    if (s->metadata.version == 0) {
+        rv = raft_io_uv_store__load_metadata(s);
+        if (rv != 0) {
+            goto err;
+        }
+    }
+
+    *term = s->metadata.term;
+    *voted_for = s->metadata.voted_for;
+    *start_index = s->metadata.start_index;
 
     /* List available segments. */
     rv = raft_io_uv_segment__list(s->logger, s->dir, &segments, &n_segments);
@@ -1840,7 +1853,7 @@ static int raft_io_uv_store__create_open_1(struct raft_io_uv_store *s, int *fd)
 
     raft_uv_fs__join(s->dir, "open-1", path);
 
-    *fd = open(path, O_WRONLY | O_CREAT | O_EXCL);
+    *fd = open(path, O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
     if (*fd == -1) {
         raft_errorf(s->logger, "open '%s': %s", path, strerror(errno));
         return RAFT_ERR_IO;
@@ -1865,12 +1878,18 @@ static int raft_io_uv_store__write_open_1(struct raft_io_uv_store *s,
     void *buf;
     void *cursor;
     int rv;
+    size_t cap;
+    unsigned crc1; /* Header checksum */
+    unsigned crc2; /* Data checksum */
+    void *crc1_p;  /* Pointer to header checksum slot */
+    void *crc2_p;  /* Pointer to data checksum slot */
+    void *header;
 
     /* Make sure that the given encoded configuration fits in the first block */
-    if (conf->len >
-        s->block_size -
-            (8 /* Format version */ + 8 /* Checksums */ +
-             raft_io_uv_sizeof__batch_header(1) /* Batch header */)) {
+    cap = s->block_size - (sizeof(uint64_t) /* Format version */ +
+                           sizeof(uint64_t) /* Checksums */ +
+                           raft_io_uv_sizeof__batch_header(1));
+    if (conf->len > cap) {
         return RAFT_ERR_IO_TOOBIG;
     }
 
@@ -1883,7 +1902,14 @@ static int raft_io_uv_store__write_open_1(struct raft_io_uv_store *s,
     cursor = buf;
 
     raft__put64(&cursor, RAFT_IO_UV_STORE__FORMAT); /* Format version */
-    raft__put64(&cursor, 0);                        /* CRC sums placeholder */
+
+    crc1_p = cursor;
+    raft__put32(&cursor, 0);
+
+    crc2_p = cursor;
+    raft__put32(&cursor, 0);
+
+    header = cursor;
     raft__put64(&cursor, 1);                        /* Number of entries */
     raft__put64(&cursor, 1);                        /* Entry term */
     raft__put8(&cursor, RAFT_LOG_CONFIGURATION);    /* Entry type */
@@ -1893,6 +1919,12 @@ static int raft_io_uv_store__write_open_1(struct raft_io_uv_store *s,
     raft__put32(&cursor, conf->len);                /* Size of entry data */
 
     memcpy(cursor, conf->base, conf->len);
+
+    crc1 = raft__crc32(header, raft_io_uv_sizeof__batch_header(1), 0);
+    raft__put32(&crc1_p, crc1);
+
+    crc2 = raft__crc32(conf->base, conf->len, 0);
+    raft__put32(&crc2_p, crc2);
 
     rv = write(fd, buf, s->block_size);
     if (rv == -1) {
@@ -1928,8 +1960,16 @@ int raft_io_uv_store__bootstrap(struct raft_io_uv_store *s,
 
     assert(raft_io_uv_store__writer_is_idle(s));
 
+    /* If haven't loaded the metadata yet, do it now. */
+    if (s->metadata.version == 0) {
+        rv = raft_io_uv_store__load_metadata(s);
+        if (rv != 0) {
+            goto err;
+        }
+    }
+
     /* We shouldn't have written anything else yet. */
-    if (s->writer.next_index != 1) {
+    if (s->metadata.term != 0) {
         rv = RAFT_ERR_IO_NOTEMPTY;
         goto err;
     }
@@ -1974,7 +2014,7 @@ err_after_configuration_encode:
 
 err:
     assert(rv != 0);
-    return 0;
+    return rv;
 }
 
 int raft_io_uv_store__term(struct raft_io_uv_store *s, const raft_term term)
@@ -2428,7 +2468,7 @@ static void raft_io_uv_store__writer_finish(struct raft_io_uv_store *s)
 
     if (s->stop.p != NULL) {
         raft_io_uv_store__aborted(s);
-	return;
+        return;
     }
 
     /* If we have queued some more write requests, let's trigger them. */

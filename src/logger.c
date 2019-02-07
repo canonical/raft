@@ -20,8 +20,6 @@ static void raft__default_logger_emit(void *data,
     int n = sizeof buf;
     int i;
 
-    (void)data;
-
     memset(buf, 0, sizeof buf);
 
     /* First, render the logging level. */
@@ -45,9 +43,18 @@ static void raft__default_logger_emit(void *data,
 
     offset = strlen(buf);
     cursor = buf + offset;
-    n = RAFT__DEFAULT_LOGGER_MSG_LEN;
+
+    /* If data is set, it should be a pointer the raft instance ID */
+    if (data != NULL) {
+      unsigned id = *(unsigned*)data;
+
+      sprintf(cursor, "%d -> ", id);
+      offset = strlen(buf);
+      cursor = buf + offset;
+    }
 
     /* Then render the message, possibly truncating it. */
+    n = RAFT__DEFAULT_LOGGER_MSG_LEN;
     vsnprintf(cursor, n, format, args);
 
     fprintf(stderr, "%s\n", buf);

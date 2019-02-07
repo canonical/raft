@@ -59,8 +59,8 @@ struct raft_io_uv_rpc
     struct raft_logger *logger;             /* Logger to use */
     struct uv_loop_s *loop;                 /* Event loop to use */
     struct raft_io_uv_transport *transport; /* Outbound and inbound streams */
-    struct raft_io_uv_rpc_client *clients;  /* Outgoing connections */
-    struct raft_io_uv_rpc_server *servers;  /* Incoming connections */
+    struct raft_io_uv_rpc_client **clients; /* Outgoing connections */
+    struct raft_io_uv_rpc_server **servers;  /* Incoming connections */
     unsigned n_clients;                     /* Length of the clients array */
     unsigned n_servers;                     /* Length of the servers array */
     unsigned connect_retry_delay;           /* Connection retry delay */

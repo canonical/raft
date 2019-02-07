@@ -464,7 +464,7 @@ static MunitResult test_send_bad_message(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static char *send_oom_heap_fault_delay[] = {"0", "1", "2", "3", "4", NULL};
+static char *send_oom_heap_fault_delay[] = {"0", "1", "2", "3", "4", "5", NULL};
 static char *send_oom_heap_fault_repeat[] = {"1", NULL};
 
 static MunitParameterEnum send_oom_params[] = {
@@ -492,7 +492,7 @@ static MunitResult test_send_oom(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
-static char *send_oom_async_heap_fault_delay[] = {"0", NULL};
+static char *send_oom_async_heap_fault_delay[] = {"0", "1", NULL};
 static char *send_oom_async_heap_fault_repeat[] = {"1", NULL};
 
 static MunitParameterEnum send_oom_async_params[] = {
