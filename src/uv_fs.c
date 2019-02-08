@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/eventfd.h>
-#include <sys/syscall.h>
 #include <sys/vfs.h>
 #include <unistd.h>
 #include <xfs/xfs.h>
@@ -11,35 +10,7 @@
 
 #include "assert.h"
 #include "uv_fs.h"
-
-/**
- * Declaration of the KAIO APIs that we use. This avoids having to depend on
- * libaio.
- */
-
-static int io_setup(unsigned nr, aio_context_t *ctxp)
-{
-    return syscall(__NR_io_setup, nr, ctxp);
-}
-
-static int io_destroy(aio_context_t ctx)
-{
-    return syscall(__NR_io_destroy, ctx);
-}
-
-static int io_submit(aio_context_t ctx, long nr, struct iocb **iocbpp)
-{
-    return syscall(__NR_io_submit, ctx, nr, iocbpp);
-}
-
-static int io_getevents(aio_context_t ctx,
-                        long min_nr,
-                        long max_nr,
-                        struct io_event *events,
-                        struct timespec *timeout)
-{
-    return syscall(__NR_io_getevents, ctx, min_nr, max_nr, events, timeout);
-}
+#include "aio.h"
 
 void raft_uv_fs__join(const char *dir, const char *filename, char *path)
 {

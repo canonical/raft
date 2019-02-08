@@ -34,6 +34,7 @@ if IO_UV
   libraft_la_LDFLAGS += $(UV_LIBS)
 endif
 libraft_la_SOURCES = \
+  src/aio.c \
   src/checksum.c \
   src/client.c \
   src/configuration.c \
