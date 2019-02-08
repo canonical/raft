@@ -94,6 +94,8 @@ static void raft__stop_cb(void *data)
 
     r = data;
 
+    raft_infof(r->logger, "stopped");
+
     if (r->stop.cb != NULL) {
         r->stop.cb(r->stop.data);
     }
@@ -107,6 +109,13 @@ static void raft__tick_cb(void *data, unsigned msecs)
 
     raft__tick(r, msecs);
 }
+
+static const char *raft__message_names[] = {
+    "append entries",
+    "append entries result",
+    "request vote",
+    "request vote result",
+};
 
 static void raft__recv_cb(void *data, struct raft_message *message)
 {
@@ -130,20 +139,21 @@ static void raft__recv_cb(void *data, struct raft_message *message)
             rv = raft_rpc__recv_request_vote(r, message->server_id,
                                              message->server_address,
                                              &message->request_vote);
-	    break;
+            break;
         case RAFT_IO_REQUEST_VOTE_RESULT:
             rv = raft_rpc__recv_request_vote_result(
                 r, message->server_id, message->server_address,
                 &message->request_vote_result);
             break;
         default:
-            rv = RAFT_ERR_MALFORMED;
-            break;
+            raft_warnf(r->logger, "rpc: unknown message type type: %d",
+                       message->type);
+            return;
     };
 
-    if (rv != 0) {
-        raft_warnf(r->logger, "handle message with type %d: %s", message->type,
-                   raft_strerror(rv));
+    if (rv != 0 && rv != RAFT_ERR_IO_CONNECT) {
+        raft_errorf(r->logger, "rpc %s: %s", raft__message_names[message->type],
+                    raft_strerror(rv));
     }
 }
 
@@ -158,7 +168,7 @@ int raft_start(struct raft *r)
     assert(r != NULL);
     assert(r->state == RAFT_STATE_UNAVAILABLE);
 
-    raft_debugf(r->logger, "start");
+    raft_infof(r->logger, "starting");
 
     assert(r->heartbeat_timeout != 0);
     assert(r->heartbeat_timeout < r->election_timeout);
@@ -248,8 +258,6 @@ int raft_stop(struct raft *r, void *data, void (*cb)(void *data))
 
     r->stop.data = data;
     r->stop.cb = cb;
-
-    raft_debugf(r->logger, "stop");
 
     rv = r->io->stop(r->io, r, raft__stop_cb);
     if (rv != 0) {

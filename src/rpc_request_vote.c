@@ -145,7 +145,7 @@ int raft_rpc__recv_request_vote_result(
      */
     if (result->vote_granted) {
         if (raft_election__tally(r, votes_index)) {
-            raft_debugf(r->logger, "votes quorum reached -> convert to leader");
+            raft_infof(r->logger, "votes quorum reached -> convert to leader");
             rv = raft_state__convert_to_leader(r);
             if (rv != 0) {
                 return rv;
