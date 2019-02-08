@@ -140,7 +140,7 @@ endif
 
 TESTS = unit-test integration-test
 
-COV_FLAGS = --rc lcov_branch_coverage=1 --rc lcov_excl_br_line="assert\("
+COV_FLAGS = --rc genhtml_branch_coverage=1 --rc lcov_branch_coverage=1 --rc lcov_excl_br_line="assert\("
 COV_FLAGS += --compat-libtool --directory src --capture --output-file coverage/raft.info
 if LLVM_COV
 COV_FLAGS += --gcov-tool ./.gcov.sh
