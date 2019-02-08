@@ -184,6 +184,17 @@ void raft_errorf(struct raft_logger *logger, const char *format, ...);
 extern struct raft_logger raft_default_logger;
 
 /**
+ * Optionally set the server ID that the default logger will include in emitted
+ * messages. The default is to not include any server ID in emitted messages.
+ */
+void raft_default_logger_set_server_id(unsigned id);
+
+/**
+ * Emit only messages of this level or above. The default is #RAFT_WARN.
+ */
+void raft_default_logger_set_level(int level);
+
+/**
  * A data buffer.
  */
 struct raft_buffer

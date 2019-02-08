@@ -2057,7 +2057,7 @@ static MunitResult test_append_queue(const MunitParameter params[], void *data)
     munit_assert_int(rv, ==, 0);
 
     /* Run the loop until both writes have completed. */
-    for (i = 0; i < 10; i++) {
+    for (i = 0; i < 20; i++) {
         rv = uv_run(&f->loop, UV_RUN_ONCE);
         if (rv == 0) {
             break;

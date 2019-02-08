@@ -79,8 +79,10 @@ int main(int argc, char *argv[])
         goto err_after_sigint_init;
     }
 
+    raft_default_logger_set_server_id(id);
+    raft_default_logger_set_level(RAFT_INFO);
+
     logger = raft_default_logger;
-    logger.data = &id;
 
     /* Initialize the TCP-based RPC transport */
     rv = raft_io_uv_tcp_init(&transport, &logger, &loop);

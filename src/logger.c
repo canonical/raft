@@ -9,16 +9,36 @@
 #define RAFT__DEFAULT_LOGGER_BUF_LEN 1024
 #define RAFT__DEFAULT_LOGGER_MSG_LEN 256
 
+struct raft_default_logger_options
+{
+    unsigned server_id; /* Server ID to include in emitted messages */
+    int level;          /* Minum logging level */
+};
+
+struct raft_default_logger_options raft_default_logger_options = {
+    0,
+    RAFT_WARN,
+};
+
 static void raft__default_logger_emit(void *data,
                                       int level,
                                       const char *format,
                                       va_list args)
 {
+    struct raft_default_logger_options *options;
     char buf[RAFT__DEFAULT_LOGGER_BUF_LEN];
     char *cursor = buf;
     int offset;
     int n = sizeof buf;
     int i;
+
+    assert(data != NULL);
+
+    options = data;
+
+    if (level < options->level) {
+        return;
+    }
 
     memset(buf, 0, sizeof buf);
 
@@ -44,13 +64,10 @@ static void raft__default_logger_emit(void *data,
     offset = strlen(buf);
     cursor = buf + offset;
 
-    /* If data is set, it should be a pointer the raft instance ID */
-    if (data != NULL) {
-      unsigned id = *(unsigned*)data;
-
-      sprintf(cursor, "%d -> ", id);
-      offset = strlen(buf);
-      cursor = buf + offset;
+    if (options->server_id != 0) {
+        sprintf(cursor, "%d -> ", options->server_id);
+        offset = strlen(buf);
+        cursor = buf + offset;
     }
 
     /* Then render the message, possibly truncating it. */
@@ -79,9 +96,19 @@ static void raft__default_logger_emit(void *data,
 }
 
 struct raft_logger raft_default_logger = {
-    NULL,
+    &raft_default_logger_options,
     raft__default_logger_emit,
 };
+
+void raft_default_logger_set_server_id(unsigned server_id)
+{
+    raft_default_logger_options.server_id = server_id;
+}
+
+void raft_default_logger_set_level(int level)
+{
+    raft_default_logger_options.level = level;
+}
 
 void raft_debugf(struct raft_logger *logger, const char *format, ...)
 {
