@@ -946,10 +946,10 @@ struct raft_io_uv_tcp
 {
     struct raft_logger *logger;
     struct uv_loop_s *loop;
+    unsigned id;
+    const char *address;
     struct
     {
-        unsigned id;
-        const char *address;
         struct uv_tcp_s tcp;
         void *data;
         void (*cb)(void *data,
@@ -1274,8 +1274,9 @@ static int raft_io_uv_tcp__start(struct raft_io_uv_transport *t,
 
     tcp = t->data;
 
-    tcp->listener.id = id;
-    tcp->listener.address = address;
+    tcp->id = id;
+    tcp->address = address;
+
     tcp->listener.data = data;
     tcp->listener.cb = cb;
 
@@ -1285,7 +1286,7 @@ static int raft_io_uv_tcp__start(struct raft_io_uv_transport *t,
         return RAFT_ERR_IO;
     }
 
-    rv = raft_io_uv_tcp__parse_address(tcp->listener.address, &addr);
+    rv = raft_io_uv_tcp__parse_address(tcp->address, &addr);
     if (rv != 0) {
         return rv;
     }
@@ -1384,13 +1385,14 @@ static int raft_io_uv_tcp__connect(struct raft_io_uv_transport *t,
 
     /* Initialize the handshake buffer. */
     connect->handshake.req.data = connect;
-    connect->handshake.buf.len = raft_io_uv_tcp__sizeof_handshake(address);
+    connect->handshake.buf.len = raft_io_uv_tcp__sizeof_handshake(tcp->address);
     connect->handshake.buf.base = raft_malloc(connect->handshake.buf.len);
     if (connect->handshake.buf.base == NULL) {
         rv = RAFT_ERR_NOMEM;
         goto err_after_connect_alloc;
     }
-    raft_io_uv_tcp__encode_handshake(id, address, connect->handshake.buf.base);
+    raft_io_uv_tcp__encode_handshake(tcp->id, tcp->address,
+                                     connect->handshake.buf.base);
 
     client = raft_malloc(sizeof *client);
     if (client == NULL) {

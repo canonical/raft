@@ -5,6 +5,8 @@
 
 #include "../include/raft.h"
 
+#define N_SERVERS 3 /* Number of servers in the example cluster */
+
 static void __stop_cb(void *data)
 {
     struct uv_loop_s *loop = data;
@@ -96,7 +98,7 @@ int main(int argc, char *argv[])
 
     /* Bootstrap */
     raft_configuration_init(&configuration);
-    for (i = 0; i < 3; i++) {
+    for (i = 0; i < N_SERVERS; i++) {
         char address[64];
         unsigned id = i + 1;
 
