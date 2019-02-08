@@ -10,8 +10,6 @@
 
 struct fixture
 {
-    unsigned short state;
-    raft_term current_term;
     struct raft_logger logger;
     struct
     {
@@ -27,8 +25,6 @@ static void fixture__emit(void *data,
 {
     struct fixture *f = data;
     int rv;
-
-    // munit_assert_ptr_equal(ctx, &f->ctx);
 
     f->last.level = level;
 
@@ -47,9 +43,6 @@ static void *setup(const MunitParameter params[], void *user_data)
 
     (void)user_data;
     (void)params;
-
-    f->state = RAFT_STATE_LEADER;
-    f->current_term = 1;
 
     f->logger.data = f;
     f->logger.emit = fixture__emit;
@@ -176,7 +169,7 @@ static MunitResult test_unknown_level(const MunitParameter params[], void *data)
     (void)data;
     (void)params;
 
-    raft_default_logger.emit(NULL, 666, "hello", args);
+    raft_default_logger.emit(raft_default_logger.data, 666, "hello", args);
 
     return MUNIT_OK;
 }

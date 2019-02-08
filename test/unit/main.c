@@ -38,7 +38,7 @@ static MunitSuite suites[] = {
     {"io-uv-store", NULL, raft_io_uv_store_suites, 1, 0},
 #endif
     {"log", NULL, raft_log_suites, 1, 0},
-    /* {"logger", NULL, raft_logger_suites, 1, 0}, */
+    {"logger", NULL, raft_logger_suites, 1, 0},
     {"replication", NULL, raft_replication_suites, 1, 0},
     {"rpc-request-vote", NULL, raft_rpc_request_vote_suites, 1, 0},
     {"rpc-append-entries", NULL, raft_rpc_append_entries_suites, 1, 0},
