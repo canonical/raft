@@ -154,9 +154,6 @@ static MunitResult test_init_state(const MunitParameter params[], void *data)
 
     munit_assert(f->raft.watchers[RAFT_EVENT_STATE_CHANGE] == NULL);
 
-    munit_assert_ptr_equal(f->raft.ctx.state, &f->raft.state);
-    munit_assert_ptr_equal(f->raft.ctx.current_term, &f->raft.current_term);
-
     return MUNIT_OK;
 }
 

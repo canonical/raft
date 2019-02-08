@@ -12,7 +12,6 @@ struct fixture
 {
     unsigned short state;
     raft_term current_term;
-    struct raft_context ctx;
     struct raft_logger logger;
     struct
     {
@@ -51,9 +50,6 @@ static void *setup(const MunitParameter params[], void *user_data)
 
     f->state = RAFT_STATE_LEADER;
     f->current_term = 1;
-
-    f->ctx.state = &f->state;
-    f->ctx.current_term = &f->current_term;
 
     f->logger.data = f;
     f->logger.emit = fixture__emit;

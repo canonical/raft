@@ -7,7 +7,6 @@
 #include "assert.h"
 
 #define RAFT__DEFAULT_LOGGER_BUF_LEN 1024
-#define RAFT__DEFAULT_LOGGER_MSG_LEN 256
 
 struct raft_default_logger_options
 {
@@ -28,9 +27,8 @@ static void raft__default_logger_emit(void *data,
     struct raft_default_logger_options *options;
     char buf[RAFT__DEFAULT_LOGGER_BUF_LEN];
     char *cursor = buf;
-    int offset;
+    int offset = 0;
     int n = sizeof buf;
-    int i;
 
     assert(data != NULL);
 
@@ -61,36 +59,18 @@ static void raft__default_logger_emit(void *data,
             break;
     };
 
-    offset = strlen(buf);
+    offset += strlen(cursor);
     cursor = buf + offset;
 
     if (options->server_id != 0) {
         sprintf(cursor, "%d -> ", options->server_id);
-        offset = strlen(buf);
+        offset += strlen(cursor);
         cursor = buf + offset;
     }
 
     /* Then render the message, possibly truncating it. */
-    n = RAFT__DEFAULT_LOGGER_MSG_LEN;
+    n = RAFT__DEFAULT_LOGGER_BUF_LEN - offset - 1;
     vsnprintf(cursor, n, format, args);
-
-    fprintf(stderr, "%s\n", buf);
-    return;
-
-    /* Fill the message section with blanks. */
-    for (i = strlen(buf); i < offset + RAFT__DEFAULT_LOGGER_MSG_LEN; i++) {
-        buf[i] = ' ';
-    }
-
-    offset = strlen(buf);
-    cursor = buf + offset;
-
-    /* Then render the context, possibly truncating it. */
-    /* n = sizeof buf - offset; */
-    /* sprintf(cursor, " "); */
-    /* cursor++; */
-    /* n--; */
-    /* raft_context_format(cursor, n, ctx); */
 
     fprintf(stderr, "%s\n", buf);
 }

@@ -37,7 +37,6 @@ libraft_la_SOURCES = \
   src/checksum.c \
   src/client.c \
   src/configuration.c \
-  src/context.c \
   src/election.c \
   src/error.c \
   src/heap.c \
@@ -99,7 +98,6 @@ unit_test_SOURCES += \
   test/unit/test_election.c \
   test/unit/test_log.c \
   test/unit/test_logger.c \
-  test/unit/test_context.c \
   test/unit/test_raft.c \
   test/unit/test_replication.c \
   test/unit/test_rpc_request_vote.c \

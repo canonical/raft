@@ -68,10 +68,6 @@ int raft_init(struct raft *r,
         r->watchers[i] = NULL;
     }
 
-    /* Context. */
-    r->ctx.state = &r->state;
-    r->ctx.current_term = &r->current_term;
-
     r->stop.data = NULL;
     r->stop.cb = NULL;
 

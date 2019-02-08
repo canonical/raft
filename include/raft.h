@@ -119,30 +119,6 @@ typedef unsigned long long raft_term;
 typedef unsigned long long raft_index;
 
 /**
- * Hold contextual information about current raft's state. This information is
- * meant to be included in log messages.
- *
- * Pointers will be set to NULL when the information is not available.
- */
-struct raft_context
-{
-    unsigned short *state;   /* Raft state of the server */
-    raft_term *current_term; /* Current term */
-};
-
-/**
- * Format context information as a simple string, storing it into the given
- * buffer, e.g.:
- *
- *   "(state=follower term=2)"
- *
- * Null fields will be omitted.
- */
-void raft_context_format(char *buf,
-                         const size_t size,
-                         struct raft_context *ctx);
-
-/**
  * Logging levels.
  */
 enum { RAFT_DEBUG, RAFT_INFO, RAFT_WARN, RAFT_ERROR };
@@ -792,11 +768,6 @@ struct raft
      * Registered watchers.
      */
     void (*watchers[RAFT_EVENT_N])(void *, int, void *);
-
-    /**
-     * Context information, mainly for logging.
-     */
-    struct raft_context ctx;
 
     /**
      * Callback to invoke once a stop request has completed.
