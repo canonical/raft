@@ -304,6 +304,8 @@ int raft_configuration_encode(const struct raft_configuration *c,
         raft__put8(&cursor, server->voting);
     };
 
+    /* TODO: include padding */
+
     return 0;
 }
 

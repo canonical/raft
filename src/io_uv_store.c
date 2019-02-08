@@ -1844,46 +1844,22 @@ err:
 }
 
 /**
- * Open and allocate the open-1 segment, and return its file descriptor.
+ * Write the first block of the first closed segment.
  */
-static int raft_io_uv_store__create_open_1(struct raft_io_uv_store *s, int *fd)
-{
-    raft_uv_path path;
-    int rv;
-
-    raft_uv_fs__join(s->dir, "open-1", path);
-
-    *fd = open(path, O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
-    if (*fd == -1) {
-        raft_errorf(s->logger, "open '%s': %s", path, strerror(errno));
-        return RAFT_ERR_IO;
-    }
-
-    rv = posix_fallocate(*fd, 0, s->max_segment_size);
-    if (rv != 0) {
-        raft_errorf(s->logger, "fallocate '%s': %s", path, strerror(errno));
-        return RAFT_ERR_IO;
-    }
-
-    return 0;
-}
-
-/**
- * Write the first block of the open-1 segment.
- */
-static int raft_io_uv_store__write_open_1(struct raft_io_uv_store *s,
-                                          const int fd,
-                                          const struct raft_buffer *conf)
+static int raft_io_uv_store__write_closed_1_1(struct raft_io_uv_store *s,
+                                              const int fd,
+                                              const struct raft_buffer *conf)
 {
     void *buf;
-    void *cursor;
-    int rv;
+    size_t len;
     size_t cap;
+    void *cursor;
+    void *header;
     unsigned crc1; /* Header checksum */
     unsigned crc2; /* Data checksum */
     void *crc1_p;  /* Pointer to header checksum slot */
     void *crc2_p;  /* Pointer to data checksum slot */
-    void *header;
+    int rv;
 
     /* Make sure that the given encoded configuration fits in the first block */
     cap = s->block_size - (sizeof(uint64_t) /* Format version */ +
@@ -1893,11 +1869,12 @@ static int raft_io_uv_store__write_open_1(struct raft_io_uv_store *s,
         return RAFT_ERR_IO_TOOBIG;
     }
 
-    buf = aligned_alloc(s->block_size, s->block_size);
+    len = sizeof(uint64_t) * 2 + raft_io_uv_sizeof__batch_header(1) + conf->len;
+    buf = malloc(len);
     if (buf == NULL) {
         return RAFT_ERR_NOMEM;
     }
-    memset(buf, 0, s->block_size);
+    memset(buf, 0, len);
 
     cursor = buf;
 
@@ -1910,13 +1887,13 @@ static int raft_io_uv_store__write_open_1(struct raft_io_uv_store *s,
     raft__put32(&cursor, 0);
 
     header = cursor;
-    raft__put64(&cursor, 1);                        /* Number of entries */
-    raft__put64(&cursor, 1);                        /* Entry term */
-    raft__put8(&cursor, RAFT_LOG_CONFIGURATION);    /* Entry type */
-    raft__put8(&cursor, 0);                         /* Unused */
-    raft__put8(&cursor, 0);                         /* Unused */
-    raft__put8(&cursor, 0);                         /* Unused */
-    raft__put32(&cursor, conf->len);                /* Size of entry data */
+    raft__put64(&cursor, 1);                     /* Number of entries */
+    raft__put64(&cursor, 1);                     /* Entry term */
+    raft__put8(&cursor, RAFT_LOG_CONFIGURATION); /* Entry type */
+    raft__put8(&cursor, 0);                      /* Unused */
+    raft__put8(&cursor, 0);                      /* Unused */
+    raft__put8(&cursor, 0);                      /* Unused */
+    raft__put32(&cursor, conf->len);             /* Size of entry data */
 
     memcpy(cursor, conf->base, conf->len);
 
@@ -1926,13 +1903,13 @@ static int raft_io_uv_store__write_open_1(struct raft_io_uv_store *s,
     crc2 = raft__crc32(conf->base, conf->len, 0);
     raft__put32(&crc2_p, crc2);
 
-    rv = write(fd, buf, s->block_size);
+    rv = write(fd, buf, len);
     if (rv == -1) {
         free(buf);
         raft_errorf(s->logger, "write segment 1: %s", strerror(errno));
         return RAFT_ERR_IO;
     }
-    if (rv != (int)s->block_size) {
+    if (rv != (int)len) {
         free(buf);
         raft_errorf(s->logger, "write segment 1: only %d bytes written", rv);
         return RAFT_ERR_IO;
@@ -1949,13 +1926,51 @@ static int raft_io_uv_store__write_open_1(struct raft_io_uv_store *s,
     return 0;
 }
 
+/**
+ * Open and allocate the first closed segment, containing just one entry, and
+ * return its file descriptor.
+ */
+static int raft_io_uv_store__create_closed_1_1(struct raft_io_uv_store *s,
+                                               const struct raft_buffer *conf)
+{
+    raft_uv_path path;
+    char filename[RAFT_IO_UV_SEGMENT__MAX_FILENAME_LEN];
+    int fd;
+    int rv;
+
+    /* Render the path */
+    raft_io_uv_segment__make_closed_filename(1, 1, filename);
+    raft_uv_fs__join(s->dir, filename, path);
+
+    /* Open the file. */
+    fd = open(path, O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
+    if (fd == -1) {
+        raft_errorf(s->logger, "open '%s': %s", path, strerror(errno));
+        return RAFT_ERR_IO;
+    }
+
+    /* Write the content */
+    rv = raft_io_uv_store__write_closed_1_1(s, fd, conf);
+    if (rv != 0) {
+        return rv;
+    }
+
+    close(fd);
+
+    rv = raft_io_uv__sync_dir(s->logger, s->dir);
+    if (rv != 0) {
+        return rv;
+    }
+
+    return 0;
+}
+
 static bool raft_io_uv_store__writer_is_idle(struct raft_io_uv_store *s);
 
 int raft_io_uv_store__bootstrap(struct raft_io_uv_store *s,
                                 const struct raft_configuration *configuration)
 {
     struct raft_buffer buf;
-    int fd;
     int rv;
 
     assert(raft_io_uv_store__writer_is_idle(s));
@@ -1986,21 +2001,8 @@ int raft_io_uv_store__bootstrap(struct raft_io_uv_store *s,
         goto err_after_configuration_encode;
     }
 
-    /* Create the first open segment file. */
-    rv = raft_io_uv_store__create_open_1(s, &fd);
-    if (rv != 0) {
-        goto err_after_configuration_encode;
-    }
-
-    /* Write the first entry */
-    rv = raft_io_uv_store__write_open_1(s, fd, &buf);
-    if (rv != 0) {
-        goto err_after_configuration_encode;
-    }
-
-    close(fd);
-
-    rv = raft_io_uv__sync_dir(s->logger, s->dir);
+    /* Create the first closed segment file, containing just one entry. */
+    rv = raft_io_uv_store__create_closed_1_1(s, &buf);
     if (rv != 0) {
         goto err_after_configuration_encode;
     }

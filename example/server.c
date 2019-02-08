@@ -149,6 +149,13 @@ err_after_raft_start:
     raft_stop(&raft, NULL, NULL);
 
 err_after_raft_init:
+    /* Spin a few time to trigger close callbacks. */
+    for (i = 0; i < 5; i++) {
+        if (uv_run(&loop, UV_RUN_NOWAIT) == 0) {
+            break;
+        }
+    }
+
     raft_close(&raft);
 
 err_after_configuration_init:
@@ -165,14 +172,9 @@ err_after_sigint_start:
 
 err_after_sigint_init:
     uv_close((struct uv_handle_s *)&sigint, NULL);
+    uv_run(&loop, UV_RUN_NOWAIT);
 
 err_after_loop_init:
-    /* Spin a few time to trigger close callbacks. */
-    for (i = 0; i < 5; i++) {
-        if (uv_run(&loop, UV_RUN_NOWAIT) == 0) {
-            break;
-        }
-    }
     uv_loop_close(&loop);
 
 err:
