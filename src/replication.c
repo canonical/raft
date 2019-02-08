@@ -335,7 +335,7 @@ int raft_replication__trigger(struct raft *r, const raft_index index)
         }
 
         rv = raft_replication__send_append_entries(r, i);
-        if (rv != 0) {
+        if (rv != 0 && rv != RAFT_ERR_IO_CONNECT) {
             /* This is not a critical failure, let's just log it. */
             raft_warnf(r->logger,
                        "failed to send append entries to server %ld: %s (%d)",
@@ -557,9 +557,7 @@ static void raft_replication__follower_append_cb(void *data, int status)
 
     result->term = r->current_term;
 
-    /* Update the log and commit index to match the one from the leader.
-     *
-     * TODO: handle the case where we're not followers anymore? */
+    /* Update the log and commit index to match the one from the leader. */
     for (i = 0; i < request->n; i++) {
         struct raft_entry *entry = &request->entries[i];
         raft_index index;
@@ -737,7 +735,7 @@ int raft_replication__append(struct raft *r,
 
     n = args->n_entries - i;
     if (n == 0) {
-        /* This is an empty AppendEntries, there's nothing write. However we
+        /* This is an empty AppendEntries, there's nothing to write. However we
          * still want to check if we can commit some entry.
          *
          * From Figure 3.1:

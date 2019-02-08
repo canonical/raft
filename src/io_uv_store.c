@@ -3157,7 +3157,7 @@ queue:
     /* If we get here it means that we're either writing, or blocked and without
      * enough spare space in the segment to push these entries. Let's queue them
      * up. */
-    assert(raft_io_uv_store__preparer_is_active(s));
+    assert(raft_io_uv_store__writer_is_active(s));
 
     /* Check that pushing this batch to the queue would not make the queue too
      * big.
