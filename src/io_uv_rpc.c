@@ -74,6 +74,7 @@ static int raft_io_uv_rpc_client__init(struct raft_io_uv_rpc_client *c,
     c->timer.data = c;
     c->req.data = c;
     c->stream = NULL;
+    c->n_connect_errors = 0;
     c->id = id;
 
     /* Make a copy of the address string */
@@ -123,6 +124,7 @@ static void raft_io_uv_rpc_client__timer_cb(uv_timer_t *timer);
 static void raft_io_uv_rpc_client__connect_cb(void *data, int status)
 {
     struct raft_io_uv_rpc_client *c = data;
+    void (*log)(struct raft_logger * logger, const char *format, ...);
     int rv;
 
     /* If there's no stream handle set, it means we were stopped before the
@@ -133,11 +135,22 @@ static void raft_io_uv_rpc_client__connect_cb(void *data, int status)
 
     /* The connection attempt was successful. We're good. */
     if (status == 0) {
+        c->n_connect_errors = 0;
         return;
     }
 
-    raft_warnf(c->rpc->logger, "connect to %d (%s): %s", c->id, c->address,
-               uv_strerror(status));
+    c->n_connect_errors++;
+
+    /* Use debug level for logging the first few attempts, then switch to
+     * warn. */
+    if (c->n_connect_errors < 10) {
+        log = raft_debugf;
+    } else {
+        log = raft_warnf;
+    }
+
+    log(c->rpc->logger, "connect to %d (%s): %s", c->id, c->address,
+        uv_strerror(status));
 
     /* Let's close this stream handle and schedule another connection
      * attempt.  */

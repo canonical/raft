@@ -33,6 +33,50 @@ static void __sigint_cb(uv_signal_t *handle, int signum)
     }
 }
 
+/**
+ * Simple finite state machine that just increases a counter.
+ */
+struct __fsm
+{
+    int count;
+};
+
+static int __fsm__apply(struct raft_fsm *f, const struct raft_buffer *buf)
+{
+    struct __fsm *fsm = f->data;
+
+    if (buf->len != 8) {
+        return -1;
+    }
+
+    fsm->count += *(uint64_t *)buf->base;
+
+    return 0;
+}
+
+static int __fsm_init(struct raft_fsm *f)
+{
+    struct __fsm *fsm = raft_malloc(sizeof *fsm);
+
+    if (fsm == NULL) {
+        printf("error: can't allocate finite state machine\n");
+        return 1;
+    }
+
+    fsm->count = 0;
+
+    f->version = 1;
+    f->data = fsm;
+    f->apply = __fsm__apply;
+
+    return 0;
+}
+
+static void __fsm_close(struct raft_fsm *f)
+{
+    raft_free(f->data);
+}
+
 int main(int argc, char *argv[])
 {
     struct uv_loop_s loop;
@@ -41,6 +85,7 @@ int main(int argc, char *argv[])
     struct raft_io_uv_transport transport;
     struct raft_io io;
     struct raft_configuration configuration;
+    struct raft_fsm fsm;
     struct raft raft;
     const char *dir;
     unsigned id;
@@ -118,11 +163,17 @@ int main(int argc, char *argv[])
         goto err_after_configuration_init;
     }
 
+    /* Initialize the finite state machine. */
+    rv = __fsm_init(&fsm);
+    if (rv != 0) {
+        goto err_after_configuration_init;
+    }
+
     /* Initialize and start the Raft engine, using libuv-based I/O backend. */
-    rv = raft_init(&raft, &logger, &io, NULL, NULL, id, address);
+    rv = raft_init(&raft, &logger, &io, &fsm, NULL, id, address);
     if (rv != 0) {
         printf("error: init engine: %s\n", raft_strerror(rv));
-        goto err_after_configuration_init;
+        goto err_after_fsm_init;
     }
 
     rv = raft_start(&raft);
@@ -139,8 +190,9 @@ int main(int argc, char *argv[])
     }
 
     /* Clean up */
-    raft_configuration_close(&configuration);
     raft_close(&raft);
+    __fsm_close(&fsm);
+    raft_configuration_close(&configuration);
     raft_io_uv_close(&io);
     raft_io_uv_tcp_close(&transport);
     uv_loop_close(&loop);
@@ -159,6 +211,9 @@ err_after_raft_init:
     }
 
     raft_close(&raft);
+
+err_after_fsm_init:
+    __fsm_close(&fsm);
 
 err_after_configuration_init:
     raft_configuration_close(&configuration);
