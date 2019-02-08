@@ -258,9 +258,11 @@ bool test_dir_has_file(const char *dir, const char *filename)
 
 void test_dir_fill(const char *dir, const size_t n)
 {
+    char path[256];
     const char *filename = ".fill";
     struct statvfs fs;
     size_t size;
+    int fd;
     int rv;
 
     rv = statvfs(dir, &fs);
@@ -272,30 +274,32 @@ void test_dir_fill(const char *dir, const size_t n)
         munit_assert_int(size, >=, n);
     }
 
-    test_dir_write_file_with_zeros(dir, filename, size - n);
+    test_dir__join(dir, filename, path);
+
+    fd = open(path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+    munit_assert_int(fd, !=, -1);
+
+    rv = posix_fallocate(fd, 0, size);
+    munit_assert_int(rv, ==, 0);
 
     /* If n is zero, make sure any further write fails with ENOSPC */
     if (n == 0) {
-        char path[256];
         char buf[4096];
-        int fd;
-        int rv;
         int i;
 
-        test_dir__join(dir, filename, path);
-
-        fd = open(path, O_RDWR | O_APPEND, S_IRUSR | S_IWUSR);
-        munit_assert_int(fd, !=, -1);
+	rv = lseek(fd, 0, SEEK_END);
+	munit_assert_int(rv, !=, -1);
 
         for (i = 0; i < 40; i++) {
             rv = write(fd, buf, sizeof buf);
-	    if (rv == 0) {
-	      continue;
-	    }
+            if (rv != 0) {
+                break;
+            }
         }
 
-	munit_assert_int(rv, ==, -1);
-	munit_assert_int(errno, ==, ENOSPC);
-	close(fd);
+        munit_assert_int(rv, ==, -1);
+        munit_assert_int(errno, ==, ENOSPC);
     }
+
+    close(fd);
 }
