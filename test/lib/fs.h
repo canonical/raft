@@ -5,6 +5,8 @@
 #ifndef TEST_FS_H
 #define TEST_FS_H
 
+#include <linux/aio_abi.h>
+
 #include "munit.h"
 
 /**
@@ -110,5 +112,12 @@ bool test_dir_has_file(const char *dir, const char *filename);
  * Fill the underlying file system of the given dir, leaving only n bytes free.
  */
 void test_dir_fill(const char *dir, const size_t n);
+
+/**
+ * Fill the AIO subsystem resources by allocating a lot of events to the given
+ * context, and leaving only @n events available for subsequent calls to
+ * @io_setup.
+ */
+void test_aio_fill(aio_context_t *ctx, unsigned n);
 
 #endif /* TEST_IO_H */

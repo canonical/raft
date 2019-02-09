@@ -263,6 +263,7 @@ static void raft_uv_fs__write_work_cb(uv_work_t *work)
     struct io_event event;  /* KAIO response object */
     int rv;
 
+    printf("WORK CB\n");
     assert(work != NULL);
     assert(work->data != NULL);
 
