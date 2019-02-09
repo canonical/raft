@@ -8,9 +8,9 @@
 
 #include <uv.h>
 
+#include "aio.h"
 #include "assert.h"
 #include "uv_fs.h"
-#include "aio.h"
 
 void raft_uv_fs__join(const char *dir, const char *filename, char *path)
 {
@@ -140,18 +140,18 @@ int raft_uv_fs__block_size(const char *dir, size_t *size)
         close(fd);
 
         if (rv != 0) {
-            /* UNTEST: since the path and fd are valid, can this ever fail? */
+            /* UNTESTED: since the path and fd are valid, can this ever fail? */
             return rv;
         }
 
         /* TODO: this was taken from seastar's code which has this comment:
-	 *
-	 *   xfs wants at least the block size for writes
-	 *   FIXME: really read the block size
-	 *
-	 * We should check with the xfs folks what's going on here and possibly
-	 * how to figure the device block size.
-	 */
+         *
+         *   xfs wants at least the block size for writes
+         *   FIXME: really read the block size
+         *
+         * We should check with the xfs folks what's going on here and possibly
+         * how to figure the device block size.
+         */
         *size = attr.d_miniosz > 4096 ? attr.d_miniosz : 4096;
 
         return 0;
@@ -225,7 +225,7 @@ int raft_uv_fs__block_size(const char *dir, size_t *size)
         *size = *size / 2;
     }
 
-    /* UNTEST: at least one of the probed block sizes should work for the file
+    /* UNTESTED: at least one of the probed block sizes should work for the file
      * systems we currently support. */
     rv = UV_EINVAL;
 
@@ -263,7 +263,6 @@ static void raft_uv_fs__write_work_cb(uv_work_t *work)
     struct io_event event;  /* KAIO response object */
     int rv;
 
-    printf("WORK CB\n");
     assert(work != NULL);
     assert(work->data != NULL);
 

@@ -294,7 +294,7 @@ void test_dir_fill(const char *dir, const size_t n)
 
         for (i = 0; i < 40; i++) {
             rv = write(fd, buf, sizeof buf);
-            if (rv != 0) {
+            if (rv < 0) {
                 break;
             }
         }

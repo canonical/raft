@@ -1,9 +1,9 @@
+#include "../../src/aio.h"
 #include "../../src/uv_fs.h"
 
 #include "../lib/fs.h"
+#include "../lib/munit.h"
 #include "../lib/uv.h"
-#include "../lib/munit.h"
-#include "../lib/munit.h"
 
 /**
  * Helpers
@@ -198,14 +198,14 @@ static MunitResult test_block_size_unexecutable(const MunitParameter params[],
 }
 
 /* Test against file systems that require a probe write. */
-static char *test_block_size_no_space_dir_fs_type[] = {"btrfs", NULL};
+static char *block_size_no_space_dir_fs_type[] = {"btrfs", NULL};
 
-static MunitParameterEnum test_block_size_no_space_params[] = {
-    {TEST_DIR_FS_TYPE, test_block_size_no_space_dir_fs_type},
+static MunitParameterEnum block_size_no_space_params[] = {
+    {TEST_DIR_FS_TYPE, block_size_no_space_dir_fs_type},
     {NULL, NULL},
 };
 
-/* No space is left on the target device.. */
+/* No space is left on the target device. */
 static MunitResult test_block_size_no_space(const MunitParameter params[],
                                             void *data)
 {
@@ -224,11 +224,43 @@ static MunitResult test_block_size_no_space(const MunitParameter params[],
     return MUNIT_OK;
 }
 
+/* Test against file systems that require a probe write. */
+static char *block_size_no_resources_dir_fs_type[] = {"btrfs", NULL};
+
+static MunitParameterEnum block_size_no_resources_params[] = {
+    {TEST_DIR_FS_TYPE, block_size_no_resources_dir_fs_type},
+    {NULL, NULL},
+};
+
+/* The io_setup() call fails with EAGAIN. */
+static MunitResult test_block_size_no_resources(const MunitParameter params[],
+                                                void *data)
+{
+    struct fixture *f = data;
+    aio_context_t ctx = 0;
+    size_t size;
+    int rv;
+
+    (void)params;
+
+    test_aio_fill(&ctx, 0);
+
+    rv = raft_uv_fs__block_size(f->dir, &size);
+    munit_assert_int(rv, ==, UV_EAGAIN);
+
+    rv = io_destroy(ctx);
+    munit_assert_int(rv, ==, 0);
+
+    return MUNIT_OK;
+}
+
 static MunitTest block_size_tests[] = {
 #if defined(RWF_NOWAIT)
     {"/unexecutable", test_block_size_unexecutable, setup, tear_down, 0, NULL},
     {"/no-space", test_block_size_no_space, setup, tear_down, 0,
-     test_block_size_no_space_params},
+     block_size_no_space_params},
+    {"/no-resources", test_block_size_no_resources, setup, tear_down, 0,
+     block_size_no_resources_params},
 #endif /* RWF_NOWAIT */
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
@@ -238,7 +270,7 @@ static MunitTest block_size_tests[] = {
  */
 
 /* Test against all file system types */
-static MunitParameterEnum test_create_valid_path_params[] = {
+static MunitParameterEnum create_valid_path_params[] = {
     {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
     {NULL, NULL},
 };
@@ -321,11 +353,10 @@ static MunitResult test_create_already_exists(const MunitParameter params[],
 }
 
 /* Test against all file system types except tmpfs and zfs. */
-static char *test_create_no_space_dir_fs_type[] = {"btrfs", "ext4", "xfs",
-                                                   NULL};
+static char *create_no_space_dir_fs_type[] = {"btrfs", "ext4", "xfs", NULL};
 
-static MunitParameterEnum test_create_no_space_params[] = {
-    {TEST_DIR_FS_TYPE, test_create_no_space_dir_fs_type},
+static MunitParameterEnum create_no_space_params[] = {
+    {TEST_DIR_FS_TYPE, create_no_space_dir_fs_type},
     {NULL, NULL},
 };
 
@@ -354,13 +385,53 @@ static MunitResult test_create_no_space(const MunitParameter params[],
     return MUNIT_OK;
 }
 
+/* Test against all file system types except tmpfs and zfs. */
+static char *create_no_resources_dir_fs_type[] = {"btrfs", "ext4", "xfs", NULL};
+
+static MunitParameterEnum create_no_resources_params[] = {
+    {TEST_DIR_FS_TYPE, create_no_resources_dir_fs_type},
+    {NULL, NULL},
+};
+
+/* The kernel has ran out of available AIO events. */
+static MunitResult test_create_no_resources(const MunitParameter params[],
+                                            void *data)
+{
+    struct fixture *f = data;
+    aio_context_t ctx = 0;
+    char path[64];
+    size_t size = 4096;
+    int rv;
+
+    (void)params;
+
+    test_aio_fill(&ctx, 0);
+    sprintf(path, "%s/foo", f->dir);
+
+    rv = raft_uv_fs__create(&f->file, &f->req, &f->loop, path, size, 1, NULL);
+    munit_assert_int(rv, ==, 0);
+
+    rv = uv_run(&f->loop, UV_RUN_ONCE);
+    munit_assert_int(rv, ==, 0);
+
+    munit_assert_int(f->req.status, ==, UV_EAGAIN);
+    munit_assert_int(f->file.fd, ==, -1);
+
+    rv = io_destroy(ctx);
+    munit_assert_int(rv, ==, 0);
+
+    return MUNIT_OK;
+}
+
 static MunitTest create_tests[] = {
     {"/valid-path", test_create_valid_path, setup, tear_down, 0,
-     test_create_valid_path_params},
+     create_valid_path_params},
     {"/no-entry", test_create_no_entry, setup, tear_down, 0, NULL},
     {"/already-exists", test_create_already_exists, setup, tear_down, 0, NULL},
     {"/no-space", test_create_no_space, setup, tear_down, 0,
-     test_create_no_space_params},
+     create_no_space_params},
+    {"/no-resources", test_create_no_resources, setup, tear_down, 0,
+     create_no_resources_params},
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 
@@ -369,7 +440,7 @@ static MunitTest create_tests[] = {
  */
 
 /* Test against all file system types */
-static MunitParameterEnum test_write_one_params[] = {
+static MunitParameterEnum write_one_params[] = {
     {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
     {NULL, NULL},
 };
@@ -399,7 +470,7 @@ static MunitResult test_write_one(const MunitParameter params[], void *data)
 }
 
 /* Test against all file system types */
-static MunitParameterEnum test_write_two_params[] = {
+static MunitParameterEnum write_two_params[] = {
     {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
     {NULL, NULL},
 };
@@ -437,7 +508,7 @@ static MunitResult test_write_two(const MunitParameter params[], void *data)
 }
 
 /* Test against all file system types */
-static MunitParameterEnum test_write_twice_params[] = {
+static MunitParameterEnum write_twice_params[] = {
     {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
     {NULL, NULL},
 };
@@ -471,7 +542,7 @@ static MunitResult test_write_twice(const MunitParameter params[], void *data)
 }
 
 /* Test against all file system types */
-static MunitParameterEnum test_write_vec_params[] = {
+static MunitParameterEnum write_vec_params[] = {
     {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
     {NULL, NULL},
 };
@@ -502,7 +573,7 @@ static MunitResult test_write_vec(const MunitParameter params[], void *data)
 }
 
 /* Test against all file system types */
-static MunitParameterEnum test_write_vec_twice_params[] = {
+static MunitParameterEnum write_vec_twice_params[] = {
     {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
     {NULL, NULL},
 };
@@ -538,7 +609,7 @@ static MunitResult test_write_vec_twice(const MunitParameter params[],
 }
 
 /* Test against all file system types */
-static MunitParameterEnum test_write_concurrent_params[] = {
+static MunitParameterEnum write_concurrent_params[] = {
     {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
     {NULL, NULL},
 };
@@ -592,14 +663,14 @@ static MunitResult test_write_concurrent(const MunitParameter params[],
 }
 
 /* Test against all file system types */
-static MunitParameterEnum test_write_concurrent_twice_params[] = {
+static MunitParameterEnum write_concurrent_twice_params[] = {
     {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
     {NULL, NULL},
 };
 
 /* Write the same block concurrently. */
 static MunitResult test_write_concurrent_twice(const MunitParameter params[],
-                                         void *data)
+                                               void *data)
 {
     struct fixture *f = data;
     struct raft_uv_fs req;
@@ -645,17 +716,58 @@ static MunitResult test_write_concurrent_twice(const MunitParameter params[],
     return MUNIT_OK;
 }
 
+/* Test against all file system types that do not support fully async AIO. */
+static char *write_no_resources_dir_fs_type[] = {"tmpfs", "zfs", NULL};
+
+static MunitParameterEnum write_no_resources_params[] = {
+    {TEST_DIR_FS_TYPE, write_no_resources_dir_fs_type},
+    {NULL, NULL},
+};
+
+/* Write a single buffer. */
+static MunitResult test_write_no_resources(const MunitParameter params[],
+                                           void *data)
+{
+    struct fixture *f = data;
+    aio_context_t ctx = 0;
+    uv_buf_t buf;
+    int rv;
+
+    (void)params;
+
+    __create(f);
+
+    test_aio_fill(&ctx, 0);
+
+    __fill_buf(f, buf, 0);
+
+    __write(f, &buf, 1, 0);
+
+    __assert_status(f, UV_EAGAIN);
+
+    __close(f);
+
+    free(buf.base);
+
+    rv = io_destroy(ctx);
+    munit_assert_int(rv, ==, 0);
+
+    return MUNIT_OK;
+}
+
 static MunitTest write_tests[] = {
-    {"/one", test_write_one, setup, tear_down, 0, test_write_one_params},
-    {"/two", test_write_two, setup, tear_down, 0, test_write_two_params},
-    {"/twice", test_write_twice, setup, tear_down, 0, test_write_twice_params},
-    {"/vec", test_write_vec, setup, tear_down, 0, test_write_vec_params},
+    {"/one", test_write_one, setup, tear_down, 0, write_one_params},
+    {"/two", test_write_two, setup, tear_down, 0, write_two_params},
+    {"/twice", test_write_twice, setup, tear_down, 0, write_twice_params},
+    {"/vec", test_write_vec, setup, tear_down, 0, write_vec_params},
     {"/vec-twice", test_write_vec_twice, setup, tear_down, 0,
-     test_write_vec_twice_params},
+     write_vec_twice_params},
     {"/concurrent", test_write_concurrent, setup, tear_down, 0,
-     test_write_concurrent_params},
+     write_concurrent_params},
     {"/concurrent-twice", test_write_concurrent_twice, setup, tear_down, 0,
-     test_write_concurrent_twice_params},
+     write_concurrent_twice_params},
+    {"/no-resources", test_write_no_resources, setup, tear_down, 0,
+     write_no_resources_params},
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 
