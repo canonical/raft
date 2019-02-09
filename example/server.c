@@ -115,8 +115,13 @@ static void __server_sigint_cb(struct uv_signal_s *handle, int signum)
 static int __server_init(struct __server *s, const char *dir, unsigned id)
 {
     struct raft_configuration configuration;
+    struct timespec ts;
     unsigned i;
     int rv;
+
+    /* Seed the random generator */
+    timespec_get(&ts, TIME_UTC);
+    srandom(ts.tv_nsec ^ ts.tv_sec);
 
     /* Initialize the libuv loop. */
     rv = uv_loop_init(&s->loop);

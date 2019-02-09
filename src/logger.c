@@ -1,6 +1,8 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/time.h>
+#include <time.h>
 
 #include "../include/raft.h"
 
@@ -27,8 +29,10 @@ static void raft__default_logger_emit(void *data,
     struct raft_default_logger_options *options;
     char buf[RAFT__DEFAULT_LOGGER_BUF_LEN];
     char *cursor = buf;
-    int offset = 0;
     int n = sizeof buf;
+    struct tm *tm_info;
+    struct timeval tv;
+    int msecs;
 
     assert(data != NULL);
 
@@ -39,6 +43,16 @@ static void raft__default_logger_emit(void *data,
     }
 
     memset(buf, 0, sizeof buf);
+
+    gettimeofday(&tv, NULL);
+    msecs = tv.tv_usec / 1000;
+    tm_info = localtime(&tv.tv_sec);
+
+    strftime(cursor, 10, "%H:%M:%S", tm_info);
+    cursor = buf + strlen(buf);
+
+    sprintf(cursor, ".%03d ", msecs);
+    cursor = buf + strlen(buf);
 
     /* First, render the logging level. */
     switch (level) {
@@ -59,17 +73,15 @@ static void raft__default_logger_emit(void *data,
             break;
     };
 
-    offset += strlen(cursor);
-    cursor = buf + offset;
+    cursor = buf + strlen(buf);
 
     if (options->server_id != 0) {
         sprintf(cursor, "%d -> ", options->server_id);
-        offset += strlen(cursor);
-        cursor = buf + offset;
+        cursor = buf + strlen(buf);
     }
 
     /* Then render the message, possibly truncating it. */
-    n = RAFT__DEFAULT_LOGGER_BUF_LEN - offset - 1;
+    n = RAFT__DEFAULT_LOGGER_BUF_LEN - strlen(buf) - 1;
     vsnprintf(cursor, n, format, args);
 
     fprintf(stderr, "%s\n", buf);

@@ -84,6 +84,8 @@ static int raft_io_uv__start(const struct raft_io *io,
     uv->tick.data = data;
     uv->tick.cb = tick;
 
+    uv->last_tick = uv_now(uv->loop);
+
     /* Initialize the tick timer handle. */
     rv = uv_timer_init(uv->loop, &uv->ticker);
     if (rv != 0) {

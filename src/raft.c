@@ -62,7 +62,6 @@ int raft_init(struct raft *r,
     r->state = RAFT_STATE_UNAVAILABLE;
 
     r->rand = rand;
-    raft_election__reset_timer(r);
 
     for (i = 0; i < RAFT_EVENT_N; i++) {
         r->watchers[i] = NULL;

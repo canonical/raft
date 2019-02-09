@@ -144,10 +144,6 @@ static MunitResult test_init_state(const MunitParameter params[], void *data)
     munit_assert_int(f->raft.configuration_uncommitted_index, ==, 0);
 
     munit_assert_int(f->raft.election_timeout, ==, 1000);
-    munit_assert_int(f->raft.election_timeout_rand, >=,
-                     f->raft.election_timeout);
-    munit_assert_int(f->raft.election_timeout_rand, <,
-                     2 * f->raft.election_timeout);
     munit_assert_int(f->raft.heartbeat_timeout, ==, 100);
 
     munit_assert_int(f->raft.timer, ==, 0);
@@ -194,6 +190,11 @@ static MunitResult test_start_pristine(const MunitParameter params[],
     __start(f);
 
     __assert_state(f, RAFT_STATE_FOLLOWER);
+
+    munit_assert_int(f->raft.election_timeout_rand, >=,
+                     f->raft.election_timeout);
+    munit_assert_int(f->raft.election_timeout_rand, <,
+                     2 * f->raft.election_timeout);
 
     rv = raft_stop(&f->raft, f, __stop_cb);
     munit_assert_int(rv, ==, 0);

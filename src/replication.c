@@ -494,7 +494,7 @@ int raft_replication__update(struct raft *r,
      */
     *next_index = result->last_log_index + 1;
     *match_index = result->last_log_index;
-    raft_debugf(r->logger, "match/next idx for server %ld: %ld %ld",
+    raft_debugf(r->logger, "match/next idx for server %ld: %ld/%ld",
                 server_index, *match_index, *next_index);
 
     /* If the server is currently being promoted and is catching with logs,
