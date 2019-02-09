@@ -304,7 +304,12 @@ err_after_sigint_start:
 
 err_after_raft_start:
     raft_stop(&s->raft, NULL, NULL);
+
 err:
+    uv_close((struct uv_handle_s *)&s->timer, NULL);
+    uv_close((struct uv_handle_s *)&s->sigint, NULL);
+    uv_run(&s->loop, UV_RUN_NOWAIT);
+
     return rv;
 }
 

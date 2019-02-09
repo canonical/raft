@@ -289,8 +289,8 @@ void test_dir_fill(const char *dir, const size_t n)
         char buf[4096];
         int i;
 
-	rv = lseek(fd, 0, SEEK_END);
-	munit_assert_int(rv, !=, -1);
+        rv = lseek(fd, 0, SEEK_END);
+        munit_assert_int(rv, !=, -1);
 
         for (i = 0; i < 40; i++) {
             rv = write(fd, buf, sizeof buf);
@@ -306,35 +306,36 @@ void test_dir_fill(const char *dir, const size_t n)
     close(fd);
 }
 
-void test_aio_fill(aio_context_t *ctx, unsigned n) {
-  char buf[256];
-  int fd;
-  int rv;
-  int limit;
-  int used;
+void test_aio_fill(aio_context_t *ctx, unsigned n)
+{
+    char buf[256];
+    int fd;
+    int rv;
+    int limit;
+    int used;
 
-  /* Figure out how many events are available. */
-  fd = open("/proc/sys/fs/aio-max-nr", O_RDONLY);
-  munit_assert_int(fd, !=, -1);
+    /* Figure out how many events are available. */
+    fd = open("/proc/sys/fs/aio-max-nr", O_RDONLY);
+    munit_assert_int(fd, !=, -1);
 
-  rv = read(fd, buf, sizeof buf);
-  munit_assert_int(rv, !=, -1);
+    rv = read(fd, buf, sizeof buf);
+    munit_assert_int(rv, !=, -1);
 
-  close(fd);
+    close(fd);
 
-  limit = atoi(buf);
+    limit = atoi(buf);
 
-  /* Figure out how many events are in use. */
-  fd = open("/proc/sys/fs/aio-nr", O_RDONLY);
-  munit_assert_int(fd, !=, -1);
+    /* Figure out how many events are in use. */
+    fd = open("/proc/sys/fs/aio-nr", O_RDONLY);
+    munit_assert_int(fd, !=, -1);
 
-  rv = read(fd, buf, sizeof buf);
-  munit_assert_int(rv, !=, -1);
+    rv = read(fd, buf, sizeof buf);
+    munit_assert_int(rv, !=, -1);
 
-  close(fd);
+    close(fd);
 
-  used = atoi(buf);
+    used = atoi(buf);
 
-  rv = io_setup(limit - used - n, ctx);
-  munit_assert_int(rv, ==, 0);
+    rv = io_setup(limit - used - n, ctx);
+    munit_assert_int(rv, ==, 0);
 }

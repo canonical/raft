@@ -724,7 +724,8 @@ static MunitParameterEnum write_no_resources_params[] = {
     {NULL, NULL},
 };
 
-/* Write a single buffer. */
+/* There are not enough resources to create an AIO context to perform the
+ * write. */
 static MunitResult test_write_no_resources(const MunitParameter params[],
                                            void *data)
 {

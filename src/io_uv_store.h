@@ -108,7 +108,6 @@ struct raft_io_uv_store
         /* The prepared open segment in the pool currently being written. */
         struct raft_io_uv_prepared *segment;
 
-        bool submitted;
         int status; /* Current result code */
 
         /* Index of the next entry to write to the block buffers */

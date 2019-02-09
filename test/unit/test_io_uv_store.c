@@ -1,5 +1,6 @@
 #include <unistd.h>
 
+#include "../../src/aio.h"
 #include "../../src/binary.h"
 #include "../../src/checksum.h"
 #include "../../src/io_uv_encoding.h"
@@ -370,6 +371,39 @@ static void tear_down(void *data)
         F->append_cb.invoked = false;                                         \
                                                                               \
         __drop_request_entries(F, entries, N);                                \
+    }
+
+/**
+ * Wait until the first 3 open segments are ready.
+ */
+#define __prepared_wait(F)                                                    \
+    {                                                                         \
+        int i;                                                                \
+        int rv;                                                               \
+                                                                              \
+        for (i = 0; i < 20; i++) {                                            \
+            rv = uv_run(&F->loop, UV_RUN_ONCE);                               \
+            munit_assert_int(rv, ==, 1);                                      \
+                                                                              \
+            if (F->store.pool[0].state != RAFT_IO_UV_STORE__PREPARED_READY) { \
+                continue;                                                     \
+            }                                                                 \
+            if (F->store.pool[1].state != RAFT_IO_UV_STORE__PREPARED_READY) { \
+                continue;                                                     \
+            }                                                                 \
+            if (F->store.pool[2].state != RAFT_IO_UV_STORE__PREPARED_READY) { \
+                continue;                                                     \
+            }                                                                 \
+                                                                              \
+            break;                                                            \
+        }                                                                     \
+                                                                              \
+        munit_assert_int(F->store.pool[0].state, ==,                          \
+                         RAFT_IO_UV_STORE__PREPARED_READY);                   \
+        munit_assert_int(F->store.pool[1].state, ==,                          \
+                         RAFT_IO_UV_STORE__PREPARED_READY);                   \
+        munit_assert_int(F->store.pool[2].state, ==,                          \
+                         RAFT_IO_UV_STORE__PREPARED_READY);                   \
     }
 
 /**
@@ -2027,6 +2061,42 @@ static MunitResult test_append_no_space(const MunitParameter params[],
     return MUNIT_OK;
 }
 
+/* Test against all file system types that do not support fully async AIO. */
+static char *append_no_resources_dir_fs_type[] = {"tmpfs", "zfs", NULL};
+
+static MunitParameterEnum append_no_resources_params[] = {
+    {TEST_DIR_FS_TYPE, append_no_resources_dir_fs_type},
+    {NULL, NULL},
+};
+
+/* There are not enough resources to create an AIO context to perform the
+ * write. */
+static MunitResult test_append_no_resources(const MunitParameter params[],
+                                            void *data)
+{
+    struct fixture *f = data;
+    aio_context_t ctx = 0;
+    int rv;
+
+    (void)params;
+
+    __load(f);
+
+    /* Perform a first request, so we trigger the preparer. */
+    __append(f, 1, 64);
+
+    __prepared_wait(f);
+
+    test_aio_fill(&ctx, 0);
+
+    __assert_append_error(f, 1, 64, RAFT_ERR_IO);
+
+    rv = io_destroy(ctx);
+    munit_assert_int(rv, ==, 0);
+
+    return MUNIT_OK;
+}
+
 /* Test against all file system types */
 static MunitParameterEnum append_stop_params[] = {
     {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
@@ -2310,6 +2380,8 @@ static MunitTest append_tests[] = {
      append_prepare_params},
     {"/blocked", test_append_blocked, setup, tear_down, 0, NULL},
     {"/no-space", test_append_no_space, setup, tear_down, 0, NULL},
+    {"/no-resources", test_append_no_resources, setup, tear_down, 0,
+     append_no_resources_params},
     {"/stop", test_append_stop, setup, tear_down, 0, append_stop_params},
     {"/exceed-segment", test_append_exceed_segment, setup, tear_down, 0,
      append_exceed_segment_params},
