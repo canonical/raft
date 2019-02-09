@@ -14,9 +14,9 @@ const char *raft_state_names[] = {"unavailable", "follower", "candidate",
 static void raft_state__clear_follower(struct raft *r)
 {
     r->follower_state.current_leader_id = 0;
-    if ( r->follower_state.pending != NULL) {
-      raft_free(r->follower_state.pending);
-      r->follower_state.pending = NULL;
+    if (r->follower_state.pending != NULL) {
+        raft_free(r->follower_state.pending);
+        r->follower_state.pending = NULL;
     }
     r->follower_state.n_pending = 0;
 }
@@ -121,6 +121,31 @@ int raft_state__bump_current_term(struct raft *r, raft_term term)
     return 0;
 }
 
+/**
+ * Reset follower state.
+ */
+static void raft_state__reset_follower(struct raft *r)
+{
+    /* Reset election timer. */
+    raft_election__reset_timer(r);
+
+    /* The current leader will be set next time that we receive an AppendEntries
+     * RPC. */
+    r->follower_state.current_leader_id = 0;
+
+    r->follower_state.pending = NULL;
+    r->follower_state.n_pending = 0;
+}
+
+void raft_state__start_as_follower(struct raft *r)
+{
+    assert(r->state == RAFT_STATE_UNAVAILABLE);
+
+    r->state = RAFT_STATE_FOLLOWER;
+
+    raft_state__reset_follower(r);
+}
+
 int raft_state__convert_to_follower(struct raft *r, raft_term term)
 {
     int rv;
@@ -149,15 +174,7 @@ int raft_state__convert_to_follower(struct raft *r, raft_term term)
         }
     }
 
-    /* Reset election timer. */
-    raft_election__reset_timer(r);
-
-    /* The current leader will be set next time that we receive an AppendEntries
-     * RPC. */
-    r->follower_state.current_leader_id = 0;
-
-    r->follower_state.pending = NULL;
-    r->follower_state.n_pending = 0;
+    raft_state__reset_follower(r);
 
     /* Notify watchers */
     raft_watch__state_change(r, prev_state);

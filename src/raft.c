@@ -225,7 +225,7 @@ int raft_start(struct raft *r)
         raft_free(entries);
     }
 
-    r->state = RAFT_STATE_FOLLOWER;
+    raft_state__start_as_follower(r);
 
     return 0;
 
