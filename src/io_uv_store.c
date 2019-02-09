@@ -2206,7 +2206,13 @@ static bool raft_io_uv_store__writer_is_active(struct raft_io_uv_store *s)
  */
 static bool raft_io_uv_store__writer_is_blocked(struct raft_io_uv_store *s)
 {
-    return s->writer.state == RAFT_IO_UV_STORE__WRITER_BLOCKED;
+    if (s->writer.state == RAFT_IO_UV_STORE__WRITER_BLOCKED) {
+        /* We must be waiting for a ready segment. */
+        assert(s->writer.segment == NULL);
+        return true;
+    }
+
+    return false;
 }
 
 /**
@@ -3038,16 +3044,13 @@ err:
 }
 
 /**
- * Return an error if a batch with the given size would not fit in a segment.
+ * Return true a batch with the given size would fit in a segment.
  */
-static int raft_io_uv_store__check_batch_size(struct raft_io_uv_store *s,
-                                              size_t size)
+static bool raft_io_uv_store__batch_fits_in_segment(struct raft_io_uv_store *s,
+                                                    size_t size)
 {
-    if (size > (s->max_segment_size - sizeof(uint64_t) /* Format version */)) {
-        return RAFT_ERR_IO_TOOBIG;
-    }
-
-    return 0;
+    size_t cap = s->max_segment_size - sizeof(uint64_t) /* Format version */;
+    return size <= cap;
 }
 
 int raft_io_uv_store__append(struct raft_io_uv_store *s,
@@ -3060,23 +3063,26 @@ int raft_io_uv_store__append(struct raft_io_uv_store *s,
     size_t size;
     int rv;
 
-    cb.data = data;
-    cb.f = f;
-
     /* We aren't stopping. */
     assert(!raft_io_uv_store__is_stopping(s));
+
+    /* We shouldn't be given an empty list */
+    assert(entries != NULL);
+    assert(n > 0);
 
     if (s->aborted) {
         return RAFT_ERR_IO_ABORTED;
     }
 
+    cb.data = data;
+    cb.f = f;
+
     /* TODO: at the moment we don't allow a single batch to exceed the size of a
      * segment. */
     size = raft_io_uv__sizeof_entries(entries, n);
 
-    rv = raft_io_uv_store__check_batch_size(s, size);
-    if (rv != 0) {
-        return rv;
+    if (!raft_io_uv_store__batch_fits_in_segment(s, size)) {
+        return RAFT_ERR_IO_TOOBIG;
     }
 
     /* If the queue already not empty, let's keep pushing to it. */
@@ -3092,12 +3098,14 @@ int raft_io_uv_store__append(struct raft_io_uv_store *s,
 
         /* We have two cases:
          *
-         * 1. If we are idle, we need to initialize the block buffers (since
-         *    we'll be writing from block 1) and possibly kick the preparer.
+         * (1) If we are idle, we need to initialize the block buffers, since
+         *     once a segment is ready we'll be writing to block 1 and
+         *     beyond. We also need to kick the preparer if it's not running
+         *     already.
          *
-         * 2. If we are blocked, case 1. has already happened, so we need to add
-         *    these entries to the block buffers and save the given callback
-         *    too.
+         * (2) If we are blocked, case (1) must have already happened, so we
+         *     need to add these entries to the block buffers and save the given
+         *     callback too.
          */
         if (raft_io_uv_store__writer_is_idle(s)) {
             rv = raft_io_uv_blocks__reset(&s->writer.blocks);
@@ -3114,12 +3122,15 @@ int raft_io_uv_store__append(struct raft_io_uv_store *s,
 
             s->writer.state = RAFT_IO_UV_STORE__WRITER_BLOCKED;
         } else {
+            size_t combined_size;
+
             assert(raft_io_uv_store__writer_is_blocked(s));
             assert(raft_io_uv_store__preparer_is_active(s));
 
-            /* If there wouldn't be enough room left in the segment, we need to
-             * queue this request. */
-            if (size > s->max_segment_size - s->writer.blocks.offset) {
+            /* If after adding these entries there wouldn't be enough room left
+             * in the segment, we need to queue this request. */
+            combined_size = s->writer.blocks.offset + size;
+            if (!raft_io_uv_store__batch_fits_in_segment(s, combined_size)) {
                 goto queue;
             }
         }
@@ -3132,13 +3143,14 @@ int raft_io_uv_store__append(struct raft_io_uv_store *s,
         return 0;
     }
 
+    /* We are either idle or writing, since if we were blocked the segment would
+     * be NULL and we would have taken the if branch above. */
     assert(raft_io_uv_store__writer_is_idle(s) ||
            raft_io_uv_store__writer_is_writing(s));
 
     assert(s->writer.segment != NULL);
 
-    /* If no other write is in progress we might be able to proceed
-     * immediately. */
+    /* If no other write is in progress let's try to proceed immediately. */
     if (raft_io_uv_store__writer_is_idle(s)) {
         rv = raft_io_uv_store__writer_start(s, entries, n, &cb, 1);
         if (rv != 0) {
@@ -3161,9 +3173,8 @@ queue:
      */
     size += raft_io_uv_store__queue_size(s);
 
-    rv = raft_io_uv_store__check_batch_size(s, size);
-    if (rv != 0) {
-        return rv;
+    if (!raft_io_uv_store__batch_fits_in_segment(s, size)) {
+        return RAFT_ERR_IO_TOOBIG;
     }
 
     rv = raft_io_uv_store__queue_push(s, entries, n, &cb);

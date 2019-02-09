@@ -318,6 +318,27 @@ static void tear_down(void *data)
     }
 
 /**
+ * Wait until N writes have completed.
+ */
+#define __append_wait(F, N)                                       \
+    {                                                             \
+        int i;                                                    \
+        int rv;                                                   \
+                                                                  \
+        /* Run the loop until the write requests are completed */ \
+        for (i = 0; i < 20; i++) {                                \
+            rv = uv_run(&F->loop, UV_RUN_ONCE);                   \
+            munit_assert_int(rv, ==, 1);                          \
+                                                                  \
+            if (F->append_cb.invoked == N) {                      \
+                break;                                            \
+            }                                                     \
+        }                                                         \
+                                                                  \
+        munit_assert_int(F->append_cb.invoked, ==, N);            \
+    }
+
+/**
  * Submit a request to append N entries each of size S and check that no error
  * occurred.
  */
@@ -339,11 +360,11 @@ static void tear_down(void *data)
             rv = uv_run(&F->loop, UV_RUN_ONCE);                               \
             munit_assert_int(rv, ==, 1);                                      \
                                                                               \
-            if (F->append_cb.invoked) {                                       \
+            if (F->append_cb.invoked == 1) {                                  \
                 break;                                                        \
             }                                                                 \
         }                                                                     \
-        munit_assert_true(F->append_cb.invoked);                              \
+        munit_assert_int(F->append_cb.invoked, ==, 1);                        \
         munit_assert_int(F->append_cb.status, ==, 0);                         \
                                                                               \
         F->append_cb.invoked = false;                                         \
@@ -1427,7 +1448,6 @@ static MunitResult test_load_open(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
-
 /* The store has previously hit an error. */
 static MunitResult test_load_aborted(const MunitParameter params[], void *data)
 {
@@ -1658,7 +1678,6 @@ static MunitResult test_term_aborted(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
-
 static MunitTest term_tests[] = {
     {"/open-error", test_term_open_error, setup, tear_down, 0, NULL},
     {"/first", test_term_first, setup, tear_down, 0, NULL},
@@ -1737,8 +1756,7 @@ static MunitResult test_vote_second(const MunitParameter params[], void *data)
 }
 
 /* The store has previously hit an error. */
-static MunitResult test_vote_aborted(const MunitParameter params[],
-                                        void *data)
+static MunitResult test_vote_aborted(const MunitParameter params[], void *data)
 {
     struct fixture *f = data;
     int rv;
@@ -1957,6 +1975,41 @@ static MunitResult test_append_prepare(const MunitParameter params[],
     return MUNIT_OK;
 }
 
+/* If the writer is blocked waiting for a segment to be ready, futher write
+ * requests are accumulated in the block buffers. */
+static MunitResult test_append_blocked(const MunitParameter params[],
+                                       void *data)
+{
+    struct fixture *f = data;
+    struct raft_entry *entries1;
+    struct raft_entry *entries2;
+    int rv;
+
+    (void)params;
+
+    __load(f);
+
+    __make_request_entries(f, entries1, 1, 64);
+    __make_request_entries(f, entries2, 1, 64);
+
+    rv = raft_io_uv_store__append(&f->store, entries1, 1, f, __append_cb);
+    munit_assert_int(rv, ==, 0);
+
+    rv = raft_io_uv_store__append(&f->store, entries2, 1, f, __append_cb);
+    munit_assert_int(rv, ==, 0);
+
+    __append_wait(f, 2);
+
+    munit_assert_int(f->append_cb.status, ==, 0);
+
+    __assert_open_segment(f, 1, 1, 2, 128);
+
+    __drop_request_entries(f, entries1, 1);
+    __drop_request_entries(f, entries2, 1);
+
+    return MUNIT_OK;
+}
+
 /* No space is left and the write request fails. */
 static MunitResult test_append_no_space(const MunitParameter params[],
                                         void *data)
@@ -2086,7 +2139,6 @@ static MunitResult test_append_too_big(const MunitParameter params[],
     (void)params;
 
     __load(f);
-    return 0;
 
     __make_request_entries(f, entries, 1, f->store.max_segment_size);
 
@@ -2217,7 +2269,7 @@ static MunitResult test_append_oom(const MunitParameter params[], void *data)
 
 /* The store has previously hit an error. */
 static MunitResult test_append_aborted(const MunitParameter params[],
-                                        void *data)
+                                       void *data)
 {
     struct fixture *f = data;
     struct raft_entry *entries;
@@ -2256,6 +2308,7 @@ static MunitTest append_tests[] = {
      append_match_block_params},
     {"/prepare", test_append_prepare, setup, tear_down, 0,
      append_prepare_params},
+    {"/blocked", test_append_blocked, setup, tear_down, 0, NULL},
     {"/no-space", test_append_no_space, setup, tear_down, 0, NULL},
     {"/stop", test_append_stop, setup, tear_down, 0, append_stop_params},
     {"/exceed-segment", test_append_exceed_segment, setup, tear_down, 0,
