@@ -12,36 +12,40 @@
  */
 struct __fsm
 {
+    struct raft_logger *logger;
     int count;
 };
 
-static int __fsm__apply(struct raft_fsm *f, const struct raft_buffer *buf)
+static int __fsm__apply(struct raft_fsm *fsm, const struct raft_buffer *buf)
 {
-    struct __fsm *fsm = f->data;
+    struct __fsm *f = fsm->data;
 
     if (buf->len != 8) {
         return -1;
     }
 
-    fsm->count += *(uint64_t *)buf->base;
+    f->count += *(uint64_t *)buf->base;
+
+    raft_infof(f->logger, "fsm: count %d", f->count);
 
     return 0;
 }
 
-static int __fsm_init(struct raft_fsm *f)
+static int __fsm_init(struct raft_fsm *fsm, struct raft_logger *logger)
 {
-    struct __fsm *fsm = raft_malloc(sizeof *fsm);
+    struct __fsm *f = raft_malloc(sizeof *fsm);
 
-    if (fsm == NULL) {
+    if (f == NULL) {
         printf("error: can't allocate finite state machine\n");
         return 1;
     }
 
-    fsm->count = 0;
+    f->logger = logger;
+    f->count = 0;
 
-    f->version = 1;
-    f->data = fsm;
-    f->apply = __fsm__apply;
+    fsm->version = 1;
+    fsm->data = f;
+    fsm->apply = __fsm__apply;
 
     return 0;
 }
@@ -159,7 +163,7 @@ static int __server_init(struct __server *s, const char *dir, unsigned id)
     }
 
     /* Initialize the finite state machine. */
-    rv = __fsm_init(&s->fsm);
+    rv = __fsm_init(&s->fsm, &s->logger);
     if (rv != 0) {
         goto err_after_io_init;
     }
@@ -247,7 +251,7 @@ static void __server_timer_cb(uv_timer_t *timer)
     buf.len = sizeof(uint64_t);
     buf.base = raft_malloc(buf.len);
 
-    *(uint64_t*)buf.base = 1;
+    *(uint64_t *)buf.base = 1;
 
     if (buf.base == NULL) {
         printf("error: allocate new entry: out of memory\n");

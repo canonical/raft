@@ -48,12 +48,8 @@ struct raft_replication__leader_append
 
 struct raft_replication__follower_append
 {
-    struct raft *raft;          /* Instance that has submitted the request */
-    raft_index index;           /* Index of the first entry in the request. */
-    struct raft_entry *entries; /* Entries referenced in the request. */
-    unsigned n;                 /* Length of the entries array. */
-    unsigned leader_id;         /* Leader issuing the request */
-    raft_index leader_commit;   /* Commit index on the leader */
+    struct raft *raft; /* Instance that has submitted the request */
+    struct raft_append_entries args;
 };
 
 /**
@@ -519,10 +515,65 @@ int raft_replication__update(struct raft *r,
     return 0;
 }
 
+/**
+ * Push a new AppendEntries request to the queue of pending I/O requests.
+ */
+static int raft_replication__push_pending(
+    struct raft *r,
+    const struct raft_append_entries *args)
+{
+    const struct raft_append_entries **pending;
+    size_t n;
+
+    /* Extend the pending array. */
+    n = r->follower_state.n_pending + 1;
+    pending = raft_realloc(r->follower_state.pending, n * sizeof *pending);
+
+    if (pending == NULL) {
+        return RAFT_ERR_NOMEM;
+    }
+
+    pending[n - 1] = args;
+
+    r->follower_state.pending = pending;
+    r->follower_state.n_pending = n;
+
+    return 0;
+}
+
+/**
+ * Delete an AppendEntries request from the queue of pending I/O requests.
+ */
+static void raft_replication__pop_pending(
+    struct raft *r,
+    const struct raft_append_entries *args)
+{
+    size_t i;
+    size_t j;
+
+    for (i = 0; i < r->follower_state.n_pending; i++) {
+        if (r->follower_state.pending[i] == args) {
+            break;
+        }
+    }
+
+    /* TODO: think about the case where the request might not be in the queue
+     * anymore */
+    assert(i < r->follower_state.n_pending);
+
+    /* Left-shift all subsequent entries in the queue. */
+    for (j = i + 1; j < r->follower_state.n_pending; j++) {
+        r->follower_state.pending[j - 1] = r->follower_state.pending[j];
+    }
+
+    r->follower_state.n_pending--;
+}
+
 static void raft_replication__follower_append_cb(void *data, int status)
 {
     struct raft_replication__follower_append *request = data;
     struct raft *r = request->raft;
+    struct raft_append_entries *args = &request->args;
     struct raft_message message;
     struct raft_append_entries_result *result = &message.append_entries_result;
     const struct raft_server *leader;
@@ -531,6 +582,10 @@ static void raft_replication__follower_append_cb(void *data, int status)
     int rv;
 
     raft_debugf(r->logger, "I/O completed on follower: status %d", status);
+
+    assert(args->leader_id > 0);
+    assert(args->entries != NULL);
+    assert(args->n_entries > 0);
 
     /* If we are not followers anymore, just discard the result. */
     if (r->state != RAFT_STATE_FOLLOWER) {
@@ -550,7 +605,7 @@ static void raft_replication__follower_append_cb(void *data, int status)
      * later, after we have applied the configuraiton entry. Similarly, it might
      * be that we're going to apply a new configuration where the leader is
      * removing itself, so we need to save its address here. */
-    leader = raft_configuration__get(&r->configuration, request->leader_id);
+    leader = raft_configuration__get(&r->configuration, args->leader_id);
     if (leader != NULL) {
         leader_address = leader->address;
     }
@@ -558,8 +613,8 @@ static void raft_replication__follower_append_cb(void *data, int status)
     result->term = r->current_term;
 
     /* Update the log and commit index to match the one from the leader. */
-    for (i = 0; i < request->n; i++) {
-        struct raft_entry *entry = &request->entries[i];
+    for (i = 0; i < args->n_entries; i++) {
+        struct raft_entry *entry = &args->entries[i];
         raft_index index;
         rv = raft_log__append(&r->log, entry->term, entry->type, &entry->buf,
                               entry->batch);
@@ -587,9 +642,9 @@ static void raft_replication__follower_append_cb(void *data, int status)
      *   commitIndex, set commitIndex = min(leaderCommit, index of last new
      *   entry).
      */
-    if (request->leader_commit > r->commit_index) {
+    if (args->leader_commit > r->commit_index) {
         raft_index last_index = raft_log__last_index(&r->log);
-        r->commit_index = min(request->leader_commit, last_index);
+        r->commit_index = min(args->leader_commit, last_index);
         rv = raft_replication__apply(r);
         if (rv != 0) {
             goto out;
@@ -601,7 +656,7 @@ static void raft_replication__follower_append_cb(void *data, int status)
 respond:
     /* Refresh the leader address, in case it has changed or it was added in a
      * new configuration. */
-    leader = raft_configuration__get(&r->configuration, request->leader_id);
+    leader = raft_configuration__get(&r->configuration, args->leader_id);
     if (leader != NULL) {
         leader_address = leader->address;
     }
@@ -612,7 +667,7 @@ respond:
     result->last_log_index = raft_log__last_index(&r->log);
 
     message.type = RAFT_IO_APPEND_ENTRIES_RESULT;
-    message.server_id = request->leader_id;
+    message.server_id = args->leader_id;
     message.server_address = leader_address;
 
     rv = r->io->send(r->io, &message, NULL, NULL);
@@ -621,10 +676,171 @@ respond:
     }
 
 out:
-    if (request->entries != NULL) {
-        raft_free(request->entries);
-    }
+    raft_replication__pop_pending(r, args);
+    raft_free(args->entries);
     raft_free(request);
+}
+
+/**
+ * Check that the log matching property against an incoming AppendEntries
+ * request.
+ *
+ * From Figure 3.1:
+ *
+ *   [AppendEntries RPC] Receiver implementation:
+ *
+ *   2. Reply false if log doesn't contain an entry at prevLogIndex whose
+ *   term matches prevLogTerm.
+ *
+ * Return 0 if the check passed.
+ *
+ * Return 1 if the check did not pass and the request needs to be rejected.
+ *
+ * Return -1 if there's a conflict and we need to shutdown.
+ */
+static int raft_replication__check_prev_log_entry(
+    struct raft *r,
+    const struct raft_append_entries *args)
+{
+    raft_term local_prev_term;
+
+    /* If this is the very first entry, there's nothing to check. */
+    if (args->prev_log_index == 0) {
+        return 0;
+    }
+
+    local_prev_term = raft_log__term_of(&r->log, args->prev_log_index);
+
+    if (local_prev_term == 0) {
+        raft_debugf(r->logger, "no entry at previous index -> reject");
+        return 1;
+    }
+
+    if (local_prev_term != args->prev_log_term) {
+        if (args->prev_log_index <= r->commit_index) {
+            /* Should never happen; something is seriously wrong! */
+            raft_errorf(r->logger,
+                        "previous index conflicts with "
+                        "committed entry -> shutdown");
+            return -1;
+        }
+        raft_debugf(r->logger, "previous term mismatch -> reject");
+        return 1;
+    }
+
+    return 0;
+}
+
+/**
+ * Delete from our log all entries that conflict with the ones in the given
+ * AppendEntries request.
+ *
+ * From Figure 3.1:
+ *
+ *   [AppendEntries RPC] Receiver implementation:
+ *
+ *   3. If an existing entry conflicts with a new one (same index but
+ *   different terms), delete the existing entry and all that follow it.
+ *
+ * The @i parameter will be set to the array index of the first new log entry
+ * that we don't have yet in our log, among the ones included in the given
+ * AppendEntries request.
+ */
+static int raft_replication__delete_conflicting_entries(
+    struct raft *r,
+    const struct raft_append_entries *args,
+    size_t *i)
+{
+    size_t j;
+    int rv;
+
+    for (j = 0; j < args->n_entries; j++) {
+        struct raft_entry *entry = &args->entries[j];
+        raft_index entry_index = args->prev_log_index + 1 + j;
+        raft_term local_term = raft_log__term_of(&r->log, entry_index);
+
+        if (local_term > 0 && local_term != entry->term) {
+            if (entry_index <= r->commit_index) {
+                /* Should never happen; something is seriously wrong! */
+                raft_errorf(r->logger,
+                            "new index conflicts with "
+                            "committed entry -> shutdown");
+
+                return RAFT_ERR_SHUTDOWN;
+            }
+
+            raft_debugf(r->logger, "log mismatch -> truncate (%ld)",
+                        entry_index);
+
+            /* Discard any uncommitted voting change. */
+            rv = raft_membership__rollback(r);
+            if (rv != 0) {
+                return rv;
+            }
+
+            /* Delete all entries from this index on because they don't match */
+            rv = r->io->truncate(r->io, entry_index);
+            if (rv != 0) {
+                return rv;
+            }
+            raft_log__truncate(&r->log, entry_index);
+
+            /* We want to append all entries from here on, replacing anything
+             * that we had before. */
+            break;
+        } else if (local_term == 0) {
+            /* We don't have an entry at this index, so we want to append this
+             * new one and all the subsequent ones. */
+            break;
+        }
+    }
+
+    *i = j;
+
+    return 0;
+}
+
+/**
+ * Filter out from the given AppendEntries request any entry that we're actually
+ * already writing.
+ */
+static size_t raft_replication__filter_pending_entries(
+    struct raft *r,
+    const struct raft_append_entries *args,
+    const size_t i)
+{
+    size_t j;
+    size_t k;
+    size_t l = i; /* Array index of the first entry not already being written */
+
+    for (j = i; j < args->n_entries; j++) {
+        raft_index index = args->prev_log_index + 1 + j;
+
+        for (k = 0; k < r->follower_state.n_pending; k++) {
+            const struct raft_append_entries *pending;
+            raft_index pending_index;
+
+            pending = r->follower_state.pending[k];
+
+            /* If this batch of entries is from a different term, let's ignore
+             * them. */
+            if (pending->term != args->term) {
+                continue;
+            }
+
+            /* Index of the last entry in this pending batch */
+            pending_index = pending->prev_log_index + pending->n_entries + 1;
+
+            /* If this batch includes the index we're looking at, then it means
+             * that this entry is entry is being written already, so we can skip
+             * it. */
+            if (pending_index >= index) {
+                l = j + 1;
+            }
+        }
+    }
+
+    return l;
 }
 
 int raft_replication__append(struct raft *r,
@@ -632,10 +848,10 @@ int raft_replication__append(struct raft *r,
                              bool *success,
                              bool *async)
 {
-    size_t i;
     struct raft_replication__follower_append *request;
-    struct raft_entry *entries;
+    int match;
     size_t n;
+    size_t i;
     int rv;
 
     assert(r != NULL);
@@ -648,93 +864,20 @@ int raft_replication__append(struct raft *r,
     *success = false;
     *async = false;
 
-    /* If this is not the very first entry, we need to compare our last log
-     * entry with the one in the request and check that we have a matching log,
-     * possibly truncating it if not.
-     *
-     * From Figure 3.1:
-     *
-     *   [AppendEntries RPC] Receiver implementation:
-     *
-     *   2. Reply false if log doesn't contain an entry at prevLogIndex whose
-     *   term matches prevLogTerm.
-     */
-    if (args->prev_log_index > 0) {
-        raft_term local_prev_term =
-            raft_log__term_of(&r->log, args->prev_log_index);
-
-        if (local_prev_term == 0) {
-            raft_debugf(r->logger, "no entry at previous index -> reject");
-            return 0;
-        }
-
-        if (local_prev_term != args->prev_log_term) {
-            if (args->prev_log_index <= r->commit_index) {
-                /* Should never happen; something is seriously wrong! */
-                raft_errorf(r->logger,
-                            "previous index conflicts with "
-                            "committed entry -> shutdown");
-                return RAFT_ERR_SHUTDOWN;
-            }
-            raft_debugf(r->logger, "previous term mismatch -> reject");
-            return 0;
-        }
+    /* Check the log matching property. */
+    match = raft_replication__check_prev_log_entry(r, args);
+    if (match != 0) {
+        assert(match == 1 || match == -1);
+        return match == 1 ? 0 : RAFT_ERR_SHUTDOWN;
     }
-
-    /* Submit a write request for all new entries.
-     *
-     * From Figure 3.1:
-     *
-     *   [AppendEntries RPC] Receiver implementation:
-     *
-     *   3. If an existing entry conflicts with a new one (same index but
-     *   different terms), delete the existing entry and all that follow it.
-     */
-    for (i = 0; i < args->n_entries; i++) {
-        struct raft_entry *new_entry = &args->entries[i];
-        raft_index new_entry_index = args->prev_log_index + 1 + i;
-        raft_term local_term = raft_log__term_of(&r->log, new_entry_index);
-
-        if (local_term > 0 && local_term != new_entry->term) {
-            if (new_entry_index <= r->commit_index) {
-                /* Should never happen; something is seriously wrong! */
-                raft_errorf(r->logger,
-                            "new index conflicts with "
-                            "committed entry -> shutdown");
-
-                return RAFT_ERR_SHUTDOWN;
-            }
-
-            raft_debugf(r->logger, "log mismatch -> truncate (%ld)",
-                        new_entry_index);
-
-            /* Discard any uncommitted voting change. */
-            rv = raft_membership__rollback(r);
-            if (rv != 0) {
-                return rv;
-            }
-
-            /* Delete all entries from this index on because they don't match */
-            rv = r->io->truncate(r->io, new_entry_index);
-            if (rv != 0) {
-                return rv;
-            }
-            raft_log__truncate(&r->log, new_entry_index);
-
-            /* We want to append all entries from here on, replacing anything
-             * that we had before. */
-            break;
-        } else if (local_term == 0) {
-            /* We don't have an entry at this index, so we want to append this
-             * new one and all the subsequent ones. */
-            break;
-        }
+    rv = raft_replication__delete_conflicting_entries(r, args, &i);
+    if (rv != 0) {
+        return rv;
     }
 
     *success = true;
 
-    n = args->n_entries - i;
-    if (n == 0) {
+    if (args->n_entries - i == 0) {
         /* This is an empty AppendEntries, there's nothing to write. However we
          * still want to check if we can commit some entry.
          *
@@ -755,20 +898,21 @@ int raft_replication__append(struct raft *r,
         return 0;
     }
 
+    /* Submit an asynchronous log append I/O request */
     *async = true;
 
-    /* If we need to write only a part of the given entries, create a new array
-     * and free the one from the request. */
-    if (i == 0) {
-        entries = args->entries;
-    } else {
-        size_t size = (args->n_entries - i) * sizeof *entries;
-        entries = raft_malloc(size);
-        if (entries == NULL) {
-            return RAFT_ERR_NOMEM;
-        }
-        memcpy(entries, &args->entries[i], size);
+    /* Figure out if some of the entries we just received are duplicate of
+     * entries that we already received and we're currently writing to disk. */
+    i = raft_replication__filter_pending_entries(r, args, i);
+
+    n = args->n_entries - i; /* Number of new entries */
+
+    /* If all the new entries we received are already being written, we just
+     * return here without actually issuing any write request */
+    if (n == 0) {
+        raft_free(args->entries[0].batch);
         raft_free(args->entries);
+        return 0;
     }
 
     request = raft_malloc(sizeof *request);
@@ -778,14 +922,31 @@ int raft_replication__append(struct raft *r,
     }
 
     request->raft = r;
-    request->index = 0;
-    request->entries = entries;
-    request->n = n;
-    request->leader_id = args->leader_id;
-    request->leader_commit = args->leader_commit;
+    request->args = *args;
 
-    rv = r->io->append(r->io, entries, n, request,
-                       raft_replication__follower_append_cb);
+    /* If we need to write only a part of the given entries, create a new array
+     * and free the one from the request. */
+    if (i == 0) {
+        request->args.entries = args->entries;
+    } else {
+        size_t size = n * sizeof *request->args.entries;
+        request->args.entries = raft_malloc(size);
+        if (request->args.entries == NULL) {
+            return RAFT_ERR_NOMEM;
+        }
+        memcpy(request->args.entries, &args->entries[i], size);
+        raft_free(args->entries);
+    }
+
+    request->args.n_entries = n;
+
+    rv = raft_replication__push_pending(r, &request->args);
+    if (rv != 0) {
+        return rv;
+    }
+
+    rv = r->io->append(r->io, request->args.entries, request->args.n_entries,
+                       request, raft_replication__follower_append_cb);
     if (rv != 0) {
         goto err_after_request_alloc;
     }
@@ -888,6 +1049,8 @@ int raft_replication__apply(struct raft *r)
         if (rv != 0) {
             break;
         }
+
+	r->last_applied = index;
     }
 
     return rv;

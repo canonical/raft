@@ -2023,8 +2023,6 @@ int raft_io_uv_store__term(struct raft_io_uv_store *s, const raft_term term)
 {
     int rv;
 
-    assert(raft_io_uv_store__writer_is_idle(s));
-
     if (s->aborted) {
         return RAFT_ERR_IO_ABORTED;
     }
@@ -2053,8 +2051,6 @@ err:
 int raft_io_uv_store__vote(struct raft_io_uv_store *s, const unsigned server_id)
 {
     int rv;
-
-    assert(raft_io_uv_store__writer_is_idle(s));
 
     if (s->aborted) {
         return RAFT_ERR_IO_ABORTED;

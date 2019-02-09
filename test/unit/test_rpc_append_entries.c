@@ -168,6 +168,27 @@ static MunitResult test_req_stale_term(const MunitParameter params[],
     return MUNIT_OK;
 }
 
+/* Receive the same entry a second time, before the first has been persisted. */
+static MunitResult test_req_twice(const MunitParameter params[],
+                                       void *data)
+{
+    struct fixture *f = data;
+    struct raft_entry *entries1 = __create_entries_batch();
+    struct raft_entry *entries2 = __create_entries_batch();
+
+    (void)params;
+
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
+
+    __recv_append_entries(f, 1, 2, 1, 1, entries1, 1, 1);
+    __recv_append_entries(f, 1, 2, 1, 1, entries2, 1, 1);
+
+    /* The request is successful and the duplicate entry has been ignored. */
+    __assert_append_entries_response(f, 1, true, 2);
+
+    return MUNIT_OK;
+}
+
 /* If a candidate server receives a request contaning an higher term as its
  * own, it it steps down to follower and accept the request . */
 static MunitResult test_req_higher_term(const MunitParameter params[],
@@ -500,6 +521,7 @@ static MunitResult test_req_conflict(const MunitParameter params[], void *data)
 
 static MunitTest request_tests[] = {
     {"/stale-term", test_req_stale_term, setup, tear_down, 0, NULL},
+    {"/twice", test_req_twice, setup, tear_down, 0, NULL},
     {"/higher-term", test_req_higher_term, setup, tear_down, 0, NULL},
     {"/same-term", test_req_same_term, setup, tear_down, 0, NULL},
     {"/missing-entries", test_req_missing_entries, setup, tear_down, 0, NULL},

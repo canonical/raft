@@ -14,6 +14,11 @@ const char *raft_state_names[] = {"unavailable", "follower", "candidate",
 static void raft_state__clear_follower(struct raft *r)
 {
     r->follower_state.current_leader_id = 0;
+    if ( r->follower_state.pending != NULL) {
+      raft_free(r->follower_state.pending);
+      r->follower_state.pending = NULL;
+    }
+    r->follower_state.n_pending = 0;
 }
 
 /**
@@ -67,6 +72,7 @@ void raft_state__clear(struct raft *r)
 
     switch (r->state) {
         case RAFT_STATE_FOLLOWER:
+            raft_state__clear_follower(r);
             break;
         case RAFT_STATE_CANDIDATE:
             raft_state__clear_candidate(r);
@@ -149,6 +155,9 @@ int raft_state__convert_to_follower(struct raft *r, raft_term term)
     /* The current leader will be set next time that we receive an AppendEntries
      * RPC. */
     r->follower_state.current_leader_id = 0;
+
+    r->follower_state.pending = NULL;
+    r->follower_state.n_pending = 0;
 
     /* Notify watchers */
     raft_watch__state_change(r, prev_state);

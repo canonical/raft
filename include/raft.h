@@ -707,6 +707,8 @@ struct raft
              * which is specific to followers.
              */
             unsigned current_leader_id;
+            const struct raft_append_entries **pending; /* Being written to disk */
+            size_t n_pending;
         } follower_state;
 
         struct
