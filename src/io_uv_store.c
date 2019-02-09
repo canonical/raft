@@ -2243,8 +2243,7 @@ static bool raft_io_uv_store__is_stopping(struct raft_io_uv_store *s)
 
 /**
  * This function is called whenever the preparer, the closer or the writer hit
- * an error or notice that a stop request was issued with
- * @raft_io_uv_store__stop.
+ * an error, or whenever a stop request was issued with @raft_io_uv_store__stop.
  *
  * If no pending activity is in progress the stop callback will be invoked.
  */

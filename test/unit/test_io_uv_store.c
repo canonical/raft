@@ -1427,6 +1427,28 @@ static MunitResult test_load_open(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
+
+/* The store has previously hit an error. */
+static MunitResult test_load_aborted(const MunitParameter params[], void *data)
+{
+    struct fixture *f = data;
+    uint8_t buf[__WORD_SIZE /* Format version */];
+    void *cursor = buf;
+
+    (void)params;
+
+    raft__put64(&cursor, 2); /* Format version */
+
+    __write_open_segment(f, 1, 1);
+
+    test_dir_overwrite_file(f->dir, __OPEN_FILENAME_1, buf, sizeof buf, 0);
+
+    __assert_load_error(f, RAFT_ERR_IO);
+    __assert_load_error(f, RAFT_ERR_IO_ABORTED);
+
+    return MUNIT_OK;
+}
+
 static char *load_oom_heap_fault_delay[] = {"0",  "1",  "2",  "3", "4",  "5",
                                             "6",  "7",  "8",  "9", "10", "11",
                                             "12", "13", "14", NULL};
@@ -1509,6 +1531,7 @@ static MunitTest load_tests[] = {
     {"/open-second-all-zeros", test_load_open_second_all_zeros, setup,
      tear_down, 0, NULL},
     {"/open", test_load_open, setup, tear_down, 0, NULL},
+    {"/aborted", test_load_aborted, setup, tear_down, 0, NULL},
     {"/oom", test_load_oom, setup, tear_down, 0, load_oom_params},
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
@@ -1613,10 +1636,34 @@ static MunitResult test_term_second(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
+/* The store has previously hit an error. */
+static MunitResult test_term_aborted(const MunitParameter params[], void *data)
+{
+    struct fixture *f = data;
+    int rv;
+
+    (void)params;
+
+    __load(f);
+
+    /* Make the data directory not readable and try to write the term. */
+    test_dir_unexecutable(f->dir);
+
+    rv = raft_io_uv_store__term(&f->store, 1);
+    munit_assert_int(rv, ==, RAFT_ERR_IO);
+
+    rv = raft_io_uv_store__term(&f->store, 1);
+    munit_assert_int(rv, ==, RAFT_ERR_IO_ABORTED);
+
+    return MUNIT_OK;
+}
+
+
 static MunitTest term_tests[] = {
     {"/open-error", test_term_open_error, setup, tear_down, 0, NULL},
     {"/first", test_term_first, setup, tear_down, 0, NULL},
     {"/second", test_term_second, setup, tear_down, 0, NULL},
+    {"/aborted", test_term_aborted, setup, tear_down, 0, NULL},
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 
@@ -1689,10 +1736,35 @@ static MunitResult test_vote_second(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
+/* The store has previously hit an error. */
+static MunitResult test_vote_aborted(const MunitParameter params[],
+                                        void *data)
+{
+    struct fixture *f = data;
+    int rv;
+
+    (void)params;
+
+    /* Issue the initial read state request. */
+    __load(f);
+
+    /* Make the data directory not readable and try to write the vote. */
+    test_dir_unexecutable(f->dir);
+
+    rv = raft_io_uv_store__vote(&f->store, 1);
+    munit_assert_int(rv, ==, RAFT_ERR_IO);
+
+    rv = raft_io_uv_store__vote(&f->store, 1);
+    munit_assert_int(rv, ==, RAFT_ERR_IO_ABORTED);
+
+    return MUNIT_OK;
+}
+
 static MunitTest vote_tests[] = {
     {"/open-error", test_vote_open_error, setup, tear_down, 0, NULL},
     {"/first", test_vote_first, setup, tear_down, 0, NULL},
     {"/second", test_vote_second, setup, tear_down, 0, NULL},
+    {"/aborted", test_vote_aborted, setup, tear_down, 0, NULL},
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 
@@ -2143,6 +2215,35 @@ static MunitResult test_append_oom(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
+/* The store has previously hit an error. */
+static MunitResult test_append_aborted(const MunitParameter params[],
+                                        void *data)
+{
+    struct fixture *f = data;
+    struct raft_entry *entries;
+    int rv;
+
+    (void)params;
+
+    /* Issue the initial read state request. */
+    __load(f);
+
+    /* Make the data directory not readable and try to write the vote. */
+    test_dir_unexecutable(f->dir);
+
+    rv = raft_io_uv_store__vote(&f->store, 1);
+    munit_assert_int(rv, ==, RAFT_ERR_IO);
+
+    __make_request_entries(f, entries, 1, f->store.block_size);
+
+    rv = raft_io_uv_store__append(&f->store, entries, 1, f, __append_cb);
+    munit_assert_int(rv, ==, RAFT_ERR_IO_ABORTED);
+
+    __drop_request_entries(f, entries, 1);
+
+    return MUNIT_OK;
+}
+
 static MunitTest append_tests[] = {
     {"/first", test_append_first, setup, tear_down, 0, append_first_params},
     {"/two-same-block", test_append_two_same_block, setup, tear_down, 0,
@@ -2168,6 +2269,7 @@ static MunitTest append_tests[] = {
     /* TODO: this fails on Travis. */
     {"/oom", test_append_oom, setup, tear_down, 0, entries_oom_params},
 #endif /* RWF_NOWAIT */
+    {"/aborted", test_append_aborted, setup, tear_down, 0, NULL},
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 
