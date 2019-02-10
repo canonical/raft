@@ -24,6 +24,7 @@
  * successfully or not).
  */
 static int raft_io_uv_rpc_request__init(struct raft_io_uv_rpc_request *r,
+                                        struct raft_io_uv_rpc_client *client,
                                         const struct raft_message *message,
                                         void *data,
                                         void (*cb)(void *data,
@@ -31,6 +32,7 @@ static int raft_io_uv_rpc_request__init(struct raft_io_uv_rpc_request *r,
 {
     int rv;
 
+    r->client = client;
     r->req.data = r;
     r->data = data;
     r->cb = cb;
@@ -903,6 +905,20 @@ int raft_io_uv_rpc__send(struct raft_io_uv_rpc *r,
     struct raft_io_uv_rpc_client *client;
     int rv;
 
+    /* Get the connection info for the target server, creating it if it doesn't
+     * exist. */
+    rv = raft_io_uv_rpc__get_client(r, message->server_id,
+                                    message->server_address, &client);
+    if (rv != 0) {
+        goto err;
+    }
+
+    /* If there's no connection available, let's fail immediately. */
+    if (client->stream == NULL) {
+        rv = RAFT_ERR_IO_CONNECT;
+        goto err;
+    }
+
     /* Allocate a new RPC request object. */
     request = raft_malloc(sizeof *request);
     if (request == NULL) {
@@ -911,23 +927,9 @@ int raft_io_uv_rpc__send(struct raft_io_uv_rpc *r,
     }
 
     /* Initialize the request object, encode the message. */
-    rv = raft_io_uv_rpc_request__init(request, message, data, cb);
+    rv = raft_io_uv_rpc_request__init(request, client, message, data, cb);
     if (rv != 0) {
         goto err_after_request_alloc;
-    }
-
-    /* Get the connection info for the target server, creating it if it doesn't
-     * exist. */
-    rv = raft_io_uv_rpc__get_client(r, message->server_id,
-                                    message->server_address, &client);
-    if (rv != 0) {
-        goto err_after_request_encode;
-    }
-
-    /* If there's no connection available, let's fail immediately. */
-    if (client->stream == NULL) {
-        rv = RAFT_ERR_IO_CONNECT;
-        goto err_after_request_encode;
     }
 
     rv = uv_write(&request->req, client->stream, request->bufs, request->n_bufs,

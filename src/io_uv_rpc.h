@@ -7,11 +7,14 @@
 
 #include "../include/raft.h"
 
+struct raft_io_uv_rpc_client;
+
 /**
  * An outgoing RPC request from this server to another server.
  */
 struct raft_io_uv_rpc_request
 {
+    struct raft_io_uv_rpc_client *client;
     uv_write_t req;
     uv_buf_t *bufs;
     unsigned n_bufs;
