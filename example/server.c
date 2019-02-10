@@ -119,6 +119,9 @@ static int __server_init(struct __server *s, const char *dir, unsigned id)
     unsigned i;
     int rv;
 
+    /* Ignore SIGPIPE, see https://github.com/joyent/libuv/issues/1254 */
+    signal(SIGPIPE, SIG_IGN);
+
     /* Seed the random generator */
     timespec_get(&ts, TIME_UTC);
     srandom(ts.tv_nsec ^ ts.tv_sec);

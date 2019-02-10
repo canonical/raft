@@ -79,7 +79,7 @@ static void *setup(const MunitParameter params[], void *user_data)
     rv = raft_io_uv_rpc__start(&f->rpc, 1, "127.0.0.1:9000", f, __recv_cb);
     munit_assert_int(rv, ==, 0);
 
-    f->send_cb.invoked = true;
+    f->send_cb.invoked = false;
     f->send_cb.status = -1;
 
     f->recv_cb.invoked = false;
@@ -435,12 +435,14 @@ static MunitResult test_send_bad_address(const MunitParameter params[],
 
     message.server_address = "1";
 
-    /* The first attempt fails but we trigger a re-connection attempt. */
-    __assert_send_error(f, message, RAFT_ERR_IO_CONNECT);
+    __send(f, message);
 
-    /* The connection still fails and the timer is still active. */
+    /* The only active handle is the timer one, to retry the connection. */
     n_handles = test_uv_run(&f->loop, 1);
     munit_assert_int(n_handles, ==, 1);
+
+    /* The message hasn't been sent */
+    munit_assert_false(f->send_cb.invoked);
 
     return MUNIT_OK;
 }

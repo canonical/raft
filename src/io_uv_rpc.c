@@ -100,6 +100,8 @@ static int raft_io_uv_rpc_client__init(struct raft_io_uv_rpc_client *c,
 
     c->state = RAFT_IO_UV_RPC_CLIENT__CLOSED;
 
+    c->n_queue = 0;
+
     return 0;
 
 err:
@@ -150,10 +152,21 @@ static void raft_io_uv_rpc_client__stop_timer_close_cb(uv_handle_t *handle);
 static void raft_io_uv_rpc_client__stop(struct raft_io_uv_rpc_client *c)
 {
     int rv;
+    size_t i;
 
     assert(!raft_io_uv_rpc_client__is_stopping(c));
 
     c->state = RAFT_IO_UV_RPC_CLIENT__STOPPING;
+
+    for (i = 0; i < c->n_queue; i++) {
+        struct raft_io_uv_rpc_request *request = c->queue[i];
+        if (request->cb != NULL) {
+            request->cb(request->data, RAFT_ERR_IO_CONNECT);
+        }
+	raft_io_uv_rpc_request__close(request);
+        raft_free(request);
+    }
+    c->n_queue = 0;
 
     rv = uv_timer_stop(&c->timer);
     assert(rv == 0);
@@ -216,8 +229,14 @@ static int raft_io_uv_rpc_client__send(struct raft_io_uv_rpc_client *c,
 
     assert(!raft_io_uv_rpc_client__is_stopping(c));
 
-    /* If there's no connection available, let's fail immediately. */
+    /* If there's no connection available, let's either queue the request or
+     * fail immediately. */
     if (c->stream == NULL) {
+        if (c->n_queue < RAFT_IO_UV_RPC_CLIENT__QUEUE_SIZE) {
+            c->queue[c->n_queue] = request;
+            c->n_queue++;
+            return 0;
+        }
         return RAFT_ERR_IO_CONNECT;
     }
 
@@ -232,6 +251,35 @@ static int raft_io_uv_rpc_client__send(struct raft_io_uv_rpc_client *c,
 }
 
 static void raft_io_uv_rpc_client__connect_stream_close_cb(uv_handle_t *handle);
+
+static bool raft_io_uv_rpc_client__is_connected(
+    struct raft_io_uv_rpc_client *c);
+
+/**
+ * Flush the queue of pending requests.
+ */
+static void raft_io_uv_rpc_client__connect_flush_queue(
+    struct raft_io_uv_rpc_client *c)
+{
+    size_t i;
+    int rv;
+
+    assert(raft_io_uv_rpc_client__is_connected(c));
+
+    for (i = 0; i < c->n_queue; i++) {
+        struct raft_io_uv_rpc_request *request = c->queue[i];
+
+        rv = raft_io_uv_rpc_client__send(c, request);
+        if (rv != 0) {
+            if (request->cb != NULL) {
+                request->cb(request->data, rv);
+            }
+            raft_free(request);
+        }
+    }
+
+    c->n_queue = 0;
+}
 
 /**
  * Callback invoked after a connection attempt completed (either successfully or
@@ -258,6 +306,7 @@ static void raft_io_uv_rpc_client__connect_connect_cb(void *data, int status)
     if (status == 0) {
         c->n_connect_attempt = 0;
         c->state = RAFT_IO_UV_RPC_CLIENT__CONNECTED;
+        raft_io_uv_rpc_client__connect_flush_queue(c);
         return;
     }
 
@@ -327,9 +376,6 @@ static void raft_io_uv_rpc_client__connect_timer_cb(uv_timer_t *timer)
     /* Retry to connect. */
     raft_io_uv_rpc_client__connect(c);
 }
-
-static bool raft_io_uv_rpc_client__is_connected(
-    struct raft_io_uv_rpc_client *c);
 
 static void raft_io_uv_rpc__client_send_stream_close_cb(uv_handle_t *handle);
 

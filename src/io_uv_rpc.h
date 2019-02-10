@@ -10,6 +10,11 @@
 struct raft_io_uv_rpc_client;
 
 /**
+ * Maximum number of requests that can be buffered.
+ */
+#define RAFT_IO_UV_RPC_CLIENT__QUEUE_SIZE 16
+
+/**
  * An outgoing RPC request from this server to another server.
  */
 struct raft_io_uv_rpc_request
@@ -37,6 +42,10 @@ struct raft_io_uv_rpc_client
     unsigned id;                /* ID of the other server */
     char *address;              /* Address of the other server */
     int state;                  /* Current state (closed, connecting, ...) */
+
+    /* Buffered queue of pending requests */
+    struct raft_io_uv_rpc_request *queue[RAFT_IO_UV_RPC_CLIENT__QUEUE_SIZE];
+    size_t n_queue;
 };
 
 /**

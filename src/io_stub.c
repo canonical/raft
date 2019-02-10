@@ -408,15 +408,19 @@ static int raft_io_stub__truncate(const struct raft_io *io, raft_index index)
         return RAFT_ERR_IO;
     }
 
-    n = index - 1;
+    n = index - 1; /* Number of entries left after truncation */
 
     if (n > 0) {
-        struct raft_entry *new_entries;
-        new_entries = raft_malloc((index - 1) * sizeof *new_entries);
-        if (new_entries == NULL) {
+        struct raft_entry *entries;
+
+	/* Create a new array of entries holding the non-truncated entries */
+        entries = raft_malloc(n * sizeof *entries);
+        if (entries == NULL) {
             return RAFT_ERR_NOMEM;
         }
-        memcpy(new_entries, s->entries, n * sizeof *s->entries);
+        memcpy(entries, s->entries, n * sizeof *s->entries);
+
+	/* Release any truncated entry */
         if (s->entries != NULL) {
             size_t i;
             for (i = n; i < s->n; i++) {
@@ -424,7 +428,7 @@ static int raft_io_stub__truncate(const struct raft_io *io, raft_index index)
             }
             raft_free(s->entries);
         }
-        s->entries = new_entries;
+        s->entries = entries;
     } else {
         free(s->entries);
         s->entries = NULL;
