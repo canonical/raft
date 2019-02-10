@@ -7,13 +7,12 @@
 
 /**
  * Calculate the reference count hash table key for the given entry index in an
- * hash table with the given size.
+ * table with the given size.
  *
- * The hash is simply the index minus one module the size. This minimizes
- * conflicts in the most frequent use case, where a new log entry is simpy
- * appended to the log and can use the hash table bucket next to the bucket
- * for the entry with the previous index (possibly resizing the table if its
- * cap is reached).
+ * The hash is simply the index minus one modulo the size. This minimizes
+ * conflicts in the most frequent case, where a new log entry is simpy appended
+ * to the log and can use the hash table bucket next to the bucket for the entry
+ * with the previous index (possibly resizing the table if its cap is reached).
  */
 static size_t raft_log__refs_key(const raft_index index, const size_t size)
 {
@@ -27,9 +26,9 @@ static size_t raft_log__refs_key(const raft_index index, const size_t size)
  * Try to insert a new ref count item into the given reference count hash table.
  *
  * A collision happens when the bucket associated with the hash key of the given
- * index is already used for entries with a different index. In that case the
- * collision output parameter will be set to true and no new entry is inserted
- * into the hash table.
+ * index is already used to refcount entries with a different index. In that
+ * case the collision output parameter will be set to true and no new entry is
+ * inserted into the hash table.
  *
  * If two entries have the same index but different terms, the associated bucket
  * will be grown accordingly.
@@ -86,8 +85,8 @@ static int raft_log__refs_try_insert(struct raft_entry_ref *table,
         assert(next_slot->index == index);
 
         /* It should never happen that two entries with the same index and term
-         * get appended. So no existing slot in this bucket must track an
-         * entries with the same term as the given one. */
+         * get appended. So no existing slot in this bucket must track an entry
+         * with the same term as the given one. */
         assert(next_slot->term != term);
 
         last_slot = next_slot;
@@ -159,7 +158,7 @@ static int raft_log__refs_move(struct raft_entry_ref *bucket,
         }
 
         /* The given hash table is assumed to be large enough to hold all ref
-         *counts without any conflict. */
+         * counts without any conflict. */
         assert(!collision);
     };
 

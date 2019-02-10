@@ -289,10 +289,10 @@ struct raft_entry
  * increased by one. Whenever an entry gets deleted from the log its refcount is
  * decreased by one, likewise whenever an I/O request is completed the refcount
  * of the relevant entries is decreased by one. When the refcount drops to zero
- * the memory pointed to by its @buf attribute gets released, or if the @batch
+ * the memory that its @buf attribute points to gets released, or if the @batch
  * attribute is non-NULL a check is made to see if there's any other entry of
- * the same batch with a non-zero refcount, and the memory pointed at by @batch
- * itself is released if there's no such other entry.
+ * the same batch with a non-zero refcount, and the memory pointed that @batch
+ * itself points to gets released if there's no such other entry.
  */
 struct raft_entry_ref
 {
