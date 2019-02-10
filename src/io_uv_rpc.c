@@ -18,6 +18,17 @@
 #define RAFT_IO_UV_RPC_CLIENT__CONNECT_RETRY_DELAY 1000
 
 /**
+ * Code for the various client states.
+ */
+enum {
+    RAFT_IO_UV_RPC_CLIENT__CLOSED,
+    RAFT_IO_UV_RPC_CLIENT__CONNECTING,
+    RAFT_IO_UV_RPC_CLIENT__CONNECTED,
+    RAFT_IO_UV_RPC_CLIENT__CLOSING,
+    RAFT_IO_UV_RPC_CLIENT__STOPPING
+};
+
+/**
  * Initialize the given request object, encoding the given @message.
  *
  * The @cb callback must be invoked once the request completes (either
@@ -76,7 +87,7 @@ static int raft_io_uv_rpc_client__init(struct raft_io_uv_rpc_client *c,
     c->timer.data = c;
     c->req.data = c;
     c->stream = NULL;
-    c->n_connect_errors = 0;
+    c->n_connect_attempt = 0;
     c->id = id;
 
     /* Make a copy of the address string */
@@ -86,6 +97,8 @@ static int raft_io_uv_rpc_client__init(struct raft_io_uv_rpc_client *c,
         goto err;
     }
     strcpy(c->address, address);
+
+    c->state = RAFT_IO_UV_RPC_CLIENT__CLOSED;
 
     return 0;
 
@@ -104,110 +117,8 @@ static void raft_io_uv_rpc_client__close(struct raft_io_uv_rpc_client *c)
     raft_free(c->address);
 }
 
-/**
- * Callback invoked after the stream handle of a connection is closed because
- * the connection attempt failed.
- */
-static void raft_io_uv_rpc_client__connect_stream_close_cb(uv_handle_t *handle)
-{
-    struct raft_io_uv_rpc_client *c = handle->data;
-
-    c->rpc->n_active--;
-    raft_free(handle);
-}
-
-/* Forward declaration */
-static void raft_io_uv_rpc_client__timer_cb(uv_timer_t *timer);
-
-/**
- * Callback invoked after a connection attempt completed (either successfully or
- * not).
- */
-static void raft_io_uv_rpc_client__connect_cb(void *data, int status)
-{
-    struct raft_io_uv_rpc_client *c = data;
-    void (*log)(struct raft_logger * logger, const char *format, ...);
-    int rv;
-
-    /* If there's no stream handle set, it means we were stopped before the
-     * connection was fully setup. Let's just bail out. */
-    if (c->stream == NULL) {
-        return;
-    }
-
-    /* The connection attempt was successful. We're good. */
-    if (status == 0) {
-        c->n_connect_errors = 0;
-        return;
-    }
-
-    c->n_connect_errors++;
-
-    /* Use debug level for logging the first few attempts, then switch to
-     * warn. */
-    if (c->n_connect_errors < 10) {
-        log = raft_debugf;
-    } else {
-        log = raft_warnf;
-    }
-
-    log(c->rpc->logger, "connect to %d (%s): %s", c->id, c->address,
-        uv_strerror(status));
-
-    /* Let's close this stream handle and schedule another connection
-     * attempt.  */
-    uv_close((uv_handle_t *)c->stream,
-             raft_io_uv_rpc_client__connect_stream_close_cb);
-
-    c->stream = NULL;
-
-    rv = uv_timer_start(&c->timer, raft_io_uv_rpc_client__timer_cb,
-                        c->rpc->connect_retry_delay, 0);
-    assert(rv == 0);
-}
-
-/**
- * Perform a single connection attempt, scheduling a retry if it fails.
- */
-static void raft_io_uv_rpc_client__connect(struct raft_io_uv_rpc_client *c)
-{
-    int rv;
-
-    assert(c->stream == NULL);
-
-    /* Trigger a connection attempt. */
-    rv = c->rpc->transport->connect(c->rpc->transport, c->id, c->address,
-                                    &c->stream, c,
-                                    raft_io_uv_rpc_client__connect_cb);
-    if (rv != 0) {
-        assert(c->stream == NULL);
-
-        /* Restart the timer, so we can retry. */
-        rv = uv_timer_start(&c->timer, raft_io_uv_rpc_client__timer_cb,
-                            c->rpc->connect_retry_delay, 0);
-        assert(rv == 0);
-
-        return;
-    }
-
-    assert(c->stream != NULL);
-
-    c->stream->data = c;
-    c->rpc->n_active++;
-}
-
-/**
- * Callback invoked once the connection retry timer expires.
- */
-static void raft_io_uv_rpc_client__timer_cb(uv_timer_t *timer)
-{
-    struct raft_io_uv_rpc_client *c = timer->data;
-
-    assert(c->stream == NULL);
-
-    /* Retry to connect. */
-    raft_io_uv_rpc_client__connect(c);
-}
+static bool raft_io_uv_rpc_client__is_closed(struct raft_io_uv_rpc_client *c);
+static void raft_io_uv_rpc_client__connect(struct raft_io_uv_rpc_client *c);
 
 /**
  * Start the client by making the first connection attempt.
@@ -215,6 +126,8 @@ static void raft_io_uv_rpc_client__timer_cb(uv_timer_t *timer)
 static void raft_io_uv_rpc_client__start(struct raft_io_uv_rpc_client *c)
 {
     int rv;
+
+    assert(raft_io_uv_rpc_client__is_closed(c));
 
     assert(c->stream == NULL);
 
@@ -227,44 +140,8 @@ static void raft_io_uv_rpc_client__start(struct raft_io_uv_rpc_client *c)
     raft_io_uv_rpc_client__connect(c);
 }
 
-/**
- * Invoke the stop callback if we were asked to be stopped and there are no more
- * pending asynchronous activities.
- */
-static void raft_io_uv_rpc__maybe_stopped(struct raft_io_uv_rpc *r)
-{
-    if (r->stop.cb != NULL && r->n_active == 0) {
-        r->stop.cb(r->stop.data);
-
-        r->stop.data = NULL;
-        r->stop.cb = NULL;
-    }
-}
-
-/**
- * Callback invoked when the stream handle of an active outgoing connection has
- * been closed during the stop phase.
- */
-static void raft_io_uv_rpc_client__stream_close_cb(uv_handle_t *handle)
-{
-    struct raft_io_uv_rpc_client *c = handle->data;
-
-    c->rpc->n_active--;
-    raft_free(handle);
-    raft_io_uv_rpc__maybe_stopped(c->rpc);
-}
-
-/**
- * Callback invoked when the timer handle of an active outgoing connection has
- * been closed, during the stop phase of the backend.
- */
-static void raft_io_uv_rpc_client__timer_close_cb(uv_handle_t *handle)
-{
-    struct raft_io_uv_rpc_client *c = handle->data;
-
-    c->rpc->n_active--;
-    raft_io_uv_rpc__maybe_stopped(c->rpc);
-}
+static bool raft_io_uv_rpc_client__is_stopping(struct raft_io_uv_rpc_client *c);
+static void raft_io_uv_rpc_client__stop_timer_close_cb(uv_handle_t *handle);
 
 /**
  * Request to stop this outgoing connection, eventually releasing all associated
@@ -274,17 +151,339 @@ static void raft_io_uv_rpc_client__stop(struct raft_io_uv_rpc_client *c)
 {
     int rv;
 
-    if (c->stream != NULL) {
-        uv_close((uv_handle_t *)c->stream,
-                 raft_io_uv_rpc_client__stream_close_cb);
-        c->stream = NULL;
-    }
+    assert(!raft_io_uv_rpc_client__is_stopping(c));
+
+    c->state = RAFT_IO_UV_RPC_CLIENT__STOPPING;
 
     rv = uv_timer_stop(&c->timer);
     assert(rv == 0);
 
     uv_close((struct uv_handle_s *)&c->timer,
-             raft_io_uv_rpc_client__timer_close_cb);
+             raft_io_uv_rpc_client__stop_timer_close_cb);
+}
+
+static bool raft_io_uv_rpc_client__is_connecting(
+    struct raft_io_uv_rpc_client *c);
+static void raft_io_uv_rpc_client__connect_connect_cb(void *data, int status);
+static void raft_io_uv_rpc_client__connect_timer_cb(uv_timer_t *timer);
+
+/**
+ * Perform a single connection attempt, scheduling a retry if it fails.
+ */
+static void raft_io_uv_rpc_client__connect(struct raft_io_uv_rpc_client *c)
+{
+    int rv;
+
+    assert(raft_io_uv_rpc_client__is_closed(c) ||
+           raft_io_uv_rpc_client__is_connecting(c));
+
+    assert(c->stream == NULL);
+
+    c->state = RAFT_IO_UV_RPC_CLIENT__CONNECTING;
+    c->n_connect_attempt++;
+
+    /* Trigger a connection attempt. */
+    rv = c->rpc->transport->connect(c->rpc->transport, c->id, c->address,
+                                    &c->stream, c,
+                                    raft_io_uv_rpc_client__connect_connect_cb);
+    if (rv != 0) {
+        assert(c->stream == NULL);
+
+        /* Restart the timer, so we can retry. */
+        rv = uv_timer_start(&c->timer, raft_io_uv_rpc_client__connect_timer_cb,
+                            c->rpc->connect_retry_delay, 0);
+        assert(rv == 0);
+
+        return;
+    }
+
+    assert(c->stream != NULL);
+
+    c->stream->data = c;
+    c->rpc->n_active++;
+}
+
+static void raft_io_uv_rpc_client__send_write_cb(struct uv_write_s *req,
+                                                 int status);
+
+/**
+ * Send a request to the remote server.
+ */
+static int raft_io_uv_rpc_client__send(struct raft_io_uv_rpc_client *c,
+                                       struct raft_io_uv_rpc_request *request)
+{
+    int rv;
+
+    assert(!raft_io_uv_rpc_client__is_stopping(c));
+
+    /* If there's no connection available, let's fail immediately. */
+    if (c->stream == NULL) {
+        return RAFT_ERR_IO_CONNECT;
+    }
+
+    rv = uv_write(&request->req, c->stream, request->bufs, request->n_bufs,
+                  raft_io_uv_rpc_client__send_write_cb);
+    if (rv != 0) {
+        /* UNTESTED: what are the error conditions? perhaps ENOMEM */
+        return RAFT_ERR_IO;
+    }
+
+    return 0;
+}
+
+static void raft_io_uv_rpc_client__connect_stream_close_cb(uv_handle_t *handle);
+
+/**
+ * Callback invoked after a connection attempt completed (either successfully or
+ * not).
+ */
+static void raft_io_uv_rpc_client__connect_connect_cb(void *data, int status)
+{
+    struct raft_io_uv_rpc_client *c = data;
+    void (*log)(struct raft_logger * logger, const char *format, ...);
+
+    assert(raft_io_uv_rpc_client__is_connecting(c) ||
+           raft_io_uv_rpc_client__is_stopping(c));
+
+    /* If we were stopped before the connection was fully setup, let's just bail
+     * out. There's no need to close the stream handle because the stop() method
+     * will have already done that. */
+    if (raft_io_uv_rpc_client__is_stopping(c)) {
+        return;
+    }
+
+    assert(c->stream != NULL);
+
+    /* The connection attempt was successful. We're good. */
+    if (status == 0) {
+        c->n_connect_attempt = 0;
+        c->state = RAFT_IO_UV_RPC_CLIENT__CONNECTED;
+        return;
+    }
+
+    /* Use debug level for logging the first few attempts, then switch to
+     * warn. */
+    if (c->n_connect_attempt < 10) {
+        log = raft_debugf;
+    } else {
+        log = raft_warnf;
+    }
+
+    log(c->rpc->logger, "connect to %d (%s): %s", c->id, c->address,
+        uv_strerror(status));
+
+    /* Let's close this stream handle. We'll schedule another connection attempt
+     * in the close callback.  */
+    uv_close((uv_handle_t *)c->stream,
+             raft_io_uv_rpc_client__connect_stream_close_cb);
+
+    c->stream = NULL;
+}
+
+static void raft_io_uv_rpc__maybe_stopped(struct raft_io_uv_rpc *r);
+
+/**
+ * Callback invoked after the stream handle of a connection is closed because of
+ * an unsuccessful connection attempt.
+ */
+static void raft_io_uv_rpc_client__connect_stream_close_cb(uv_handle_t *handle)
+{
+    struct raft_io_uv_rpc_client *c = handle->data;
+    int rv;
+
+    assert(raft_io_uv_rpc_client__is_connecting(c) ||
+           raft_io_uv_rpc_client__is_stopping(c));
+
+    /* We should have reset the stream */
+    assert(c->stream == NULL);
+
+    c->rpc->n_active--;
+    raft_free(handle);
+
+    /* If we were stopped between the connect callback and now, let's just bail
+     * out. */
+    if (raft_io_uv_rpc_client__is_stopping(c)) {
+        raft_io_uv_rpc__maybe_stopped(c->rpc);
+        return;
+    }
+
+    /* Let's schedule another attempt. */
+    rv = uv_timer_start(&c->timer, raft_io_uv_rpc_client__connect_timer_cb,
+                        c->rpc->connect_retry_delay, 0);
+    assert(rv == 0);
+}
+
+/**
+ * Callback invoked once the connection retry timer expires.
+ */
+static void raft_io_uv_rpc_client__connect_timer_cb(uv_timer_t *timer)
+{
+    struct raft_io_uv_rpc_client *c = timer->data;
+
+    assert(raft_io_uv_rpc_client__is_connecting(c));
+
+    assert(c->stream == NULL);
+
+    /* Retry to connect. */
+    raft_io_uv_rpc_client__connect(c);
+}
+
+static bool raft_io_uv_rpc_client__is_connected(
+    struct raft_io_uv_rpc_client *c);
+
+static void raft_io_uv_rpc__client_send_stream_close_cb(uv_handle_t *handle);
+
+static void raft_io_uv_rpc_client__send_write_cb(struct uv_write_s *req,
+                                                 int status)
+{
+    struct raft_io_uv_rpc_request *r = req->data;
+    struct raft_io_uv_rpc_client *c = r->client;
+
+    /* If the write failed and we're not currently connecting or closing or
+     * stopping, let's close the stream handle, so the next call to send() will
+     * trigger a connection attempt. */
+    if (status != 0) {
+        if (raft_io_uv_rpc_client__is_connected(c)) {
+            c->state = RAFT_IO_UV_RPC_CLIENT__CLOSING;
+            uv_close((struct uv_handle_s *)c->stream,
+                     raft_io_uv_rpc__client_send_stream_close_cb);
+            c->stream = NULL;
+        }
+    }
+
+    if (r->cb != NULL) {
+        r->cb(r->data, status);
+    }
+
+    raft_io_uv_rpc_request__close(r);
+    raft_free(r);
+}
+
+static bool raft_io_uv_rpc_client__is_closing(struct raft_io_uv_rpc_client *c);
+
+static void raft_io_uv_rpc__client_send_stream_close_cb(uv_handle_t *handle)
+{
+    struct raft_io_uv_rpc_client *c = handle->data;
+
+    c->rpc->n_active--;
+    raft_free(handle);
+
+    /* If in the meantime we have been stopped, let's bail out. */
+    if (raft_io_uv_rpc_client__is_stopping(c)) {
+        raft_io_uv_rpc__maybe_stopped(c->rpc);
+        return;
+    }
+
+    assert(raft_io_uv_rpc_client__is_closing(c));
+
+    c->state = RAFT_IO_UV_RPC_CLIENT__CLOSED;
+
+    /* Trigger a new connection attempt. */
+    raft_io_uv_rpc_client__connect(c);
+}
+
+static void raft_io_uv_rpc_client__stop_stream_close_cb(uv_handle_t *handle);
+
+/**
+ * Callback invoked when the timer handle of a client has been closed because
+ * the client was stopped.
+ */
+static void raft_io_uv_rpc_client__stop_timer_close_cb(uv_handle_t *handle)
+{
+    struct raft_io_uv_rpc_client *c = handle->data;
+
+    assert(raft_io_uv_rpc_client__is_stopping(c));
+
+    c->rpc->n_active--;
+
+    /* If there's no stream set, there's no other handle to close and we're
+     * done. */
+    if (c->stream == NULL) {
+        raft_io_uv_rpc__maybe_stopped(c->rpc);
+        return;
+    }
+
+    /* Let's close the stream handle. */
+    uv_close((uv_handle_t *)c->stream,
+             raft_io_uv_rpc_client__stop_stream_close_cb);
+    c->stream = NULL;
+}
+
+/**
+ * Callback invoked when the stream handle of an active outgoing connection has
+ * been closed because we were asked to stop.
+ */
+static void raft_io_uv_rpc_client__stop_stream_close_cb(uv_handle_t *handle)
+{
+    struct raft_io_uv_rpc_client *c = handle->data;
+
+    assert(raft_io_uv_rpc_client__is_stopping(c));
+
+    c->rpc->n_active--;
+    raft_free(handle);
+
+    raft_io_uv_rpc__maybe_stopped(c->rpc);
+}
+
+/**
+ * Whether the client connection is closed.
+ */
+static bool raft_io_uv_rpc_client__is_closed(struct raft_io_uv_rpc_client *c)
+{
+    if (c->state == RAFT_IO_UV_RPC_CLIENT__CLOSED) {
+        assert(c->stream == NULL);
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Whether the client is connecting.
+ */
+static bool raft_io_uv_rpc_client__is_connecting(
+    struct raft_io_uv_rpc_client *c)
+{
+    if (c->state == RAFT_IO_UV_RPC_CLIENT__CONNECTING) {
+        assert(c->n_connect_attempt > 0);
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Whether the client connection is established.
+ */
+static bool raft_io_uv_rpc_client__is_connected(struct raft_io_uv_rpc_client *c)
+{
+    if (c->state == RAFT_IO_UV_RPC_CLIENT__CONNECTED) {
+        assert(c->stream != NULL);
+        assert(c->n_connect_attempt == 0);
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Whether the client connection is closing.
+ */
+static bool raft_io_uv_rpc_client__is_closing(struct raft_io_uv_rpc_client *c)
+{
+    if (c->state == RAFT_IO_UV_RPC_CLIENT__CLOSING) {
+        assert(c->stream == NULL);
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Whether the client is stopping.
+ */
+static bool raft_io_uv_rpc_client__is_stopping(struct raft_io_uv_rpc_client *c)
+{
+    if (c->state == RAFT_IO_UV_RPC_CLIENT__STOPPING) {
+        return true;
+    }
+    return false;
 }
 
 /**
@@ -668,6 +867,20 @@ err:
 }
 
 /**
+ * Invoke the stop callback if we were asked to be stopped and there are no more
+ * pending asynchronous activities.
+ */
+static void raft_io_uv_rpc__maybe_stopped(struct raft_io_uv_rpc *r)
+{
+    if (r->stop.cb != NULL && r->n_active == 0) {
+        r->stop.cb(r->stop.data);
+
+        r->stop.data = NULL;
+        r->stop.cb = NULL;
+    }
+}
+
+/**
  * Remove the given server connection
  */
 static void raft_io_uv_rpc__remove_server(struct raft_io_uv_rpc *r,
@@ -837,6 +1050,10 @@ static int raft_io_uv_rpc__get_client(struct raft_io_uv_rpc *r,
         if ((*client)->id == id) {
             /* TODO: handle a change in the address */
             assert(strcmp((*client)->address, address) == 0);
+            if ((*client)->stream == NULL &&
+                (*client)->n_connect_attempt == 0) {
+                goto start;
+            }
             return 0;
         }
     }
@@ -866,7 +1083,8 @@ static int raft_io_uv_rpc__get_client(struct raft_io_uv_rpc *r,
         goto err_after_client_alloc;
     }
 
-    /* This will trigger the first connection attempt. */
+start:
+    /* This will trigger a connection attempt. */
     raft_io_uv_rpc_client__start(*client);
 
     return 0;
@@ -882,18 +1100,6 @@ err:
     assert(rv != 0);
 
     return rv;
-}
-
-static void raft_io_uv_rpc__send_write_cb(struct uv_write_s *req, int status)
-{
-    struct raft_io_uv_rpc_request *r = req->data;
-
-    if (r->cb != NULL) {
-        r->cb(r->data, status);
-    }
-
-    raft_io_uv_rpc_request__close(r);
-    raft_free(r);
 }
 
 int raft_io_uv_rpc__send(struct raft_io_uv_rpc *r,
@@ -913,12 +1119,6 @@ int raft_io_uv_rpc__send(struct raft_io_uv_rpc *r,
         goto err;
     }
 
-    /* If there's no connection available, let's fail immediately. */
-    if (client->stream == NULL) {
-        rv = RAFT_ERR_IO_CONNECT;
-        goto err;
-    }
-
     /* Allocate a new RPC request object. */
     request = raft_malloc(sizeof *request);
     if (request == NULL) {
@@ -932,11 +1132,8 @@ int raft_io_uv_rpc__send(struct raft_io_uv_rpc *r,
         goto err_after_request_alloc;
     }
 
-    rv = uv_write(&request->req, client->stream, request->bufs, request->n_bufs,
-                  raft_io_uv_rpc__send_write_cb);
+    rv = raft_io_uv_rpc_client__send(client, request);
     if (rv != 0) {
-        /* UNTESTED: what are the error conditions? perhaps ENOMEM */
-        rv = RAFT_ERR_IO;
         goto err_after_request_encode;
     }
 

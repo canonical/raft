@@ -464,7 +464,46 @@ static MunitResult test_send_bad_message(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static char *send_oom_heap_fault_delay[] = {"0", "1", "2", "3", "4", "5", NULL};
+
+/**
+ * After the connection is established the peer dies and then comes back a
+ * little bit later.
+ */
+
+static MunitResult test_send_reconnect(const MunitParameter params[],
+                                         void *data)
+{
+    struct fixture *f = data;
+    struct raft_message message;
+    int socket;
+
+    (void)params;
+
+    __message(f, message, RAFT_IO_REQUEST_VOTE);
+
+    __send(f, message);
+
+    test_uv_run(&f->loop, 3);
+    munit_assert_int(f->send_cb.status, ==, 0);
+
+    f->send_cb.status = -1;
+
+    socket = test_tcp_accept(&f->tcp);
+    close(socket);
+
+    __send(f, message);
+
+    test_uv_run(&f->loop, 1);
+    munit_assert_int(f->send_cb.status, ==, UV_ECONNRESET);
+
+    __send(f, message);
+    test_uv_run(&f->loop, 3);
+    munit_assert_int(f->send_cb.status, ==, 0);
+
+    return MUNIT_OK;
+}
+
+static char *send_oom_heap_fault_delay[] = {"0", "1", "2", NULL};
 static char *send_oom_heap_fault_repeat[] = {"1", NULL};
 
 static MunitParameterEnum send_oom_params[] = {
@@ -535,6 +574,7 @@ static MunitTest send_tests[] = {
     {"/connect-error", test_send_connect_error, setup, tear_down, 0, NULL},
     {"/bad-address", test_send_bad_address, setup, tear_down, 0, NULL},
     {"/bad-message", test_send_bad_message, setup, tear_down, 0, NULL},
+    {"/reconnect", test_send_reconnect, setup, tear_down, 0, NULL},
     {"/oom", test_send_oom, setup, tear_down, 0, send_oom_params},
     {"/oom-async", test_send_oom_async, setup, tear_down, 0,
      send_oom_async_params},

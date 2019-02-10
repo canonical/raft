@@ -33,9 +33,10 @@ struct raft_io_uv_rpc_client
     struct uv_timer_s timer;    /* Schedule connection attempts */
     struct uv_connect_s req;    /* Connection request */
     struct uv_stream_s *stream; /* Connection handle */
-    unsigned n_connect_errors;  /* Consecutive failed connection attempts */
+    unsigned n_connect_attempt; /* Consecutive connection attempts */
     unsigned id;                /* ID of the other server */
     char *address;              /* Address of the other server */
+    int state;                  /* Current state (closed, connecting, ...) */
 };
 
 /**

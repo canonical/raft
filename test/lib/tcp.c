@@ -103,3 +103,19 @@ void test_tcp_send(struct test_tcp *t, const void *buf, int len)
         munit_errorf("tcp: write(): only %d bytes written", rv);
     }
 }
+
+int test_tcp_accept(struct test_tcp *t)
+{
+    int socket;
+    struct sockaddr_in address;
+    socklen_t size;
+
+    size = sizeof(address);
+
+    socket = accept(t->server.socket, (struct sockaddr *)&address, &size);
+    if (socket < 0) {
+        munit_errorf("tcp: accept(): %s", strerror(errno));
+    }
+
+    return socket;
+}
