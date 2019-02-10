@@ -488,7 +488,9 @@ struct raft_io
                   void (*cb)(void *data, int status));
 
     /**
-     * Synchronously delete all log entries from the given index onwards.
+     * Asynchronously delete all log entries from the given index onwards. Any
+     * subsequent call to @append must be executed against the truncated log
+     * (iow it has to be deferred until the truncation has completed).
      */
     int (*truncate)(const struct raft_io *io, raft_index index);
 

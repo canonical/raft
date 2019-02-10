@@ -214,4 +214,9 @@ int raft_io_uv_store__append(struct raft_io_uv_store *s,
                              void *data,
                              void (*cb)(void *data, int status));
 
+/**
+ * Asynchronously truncate any entry from @index onward.
+ */
+int raft_io_uv_store__truncate(struct raft_io_uv_store *s, raft_index index);
+
 #endif /* RAFT_IO_UV_STORE_H */
