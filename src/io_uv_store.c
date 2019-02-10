@@ -1190,7 +1190,7 @@ static void raft_io_uv_prepared__reset(struct raft_io_uv_prepared *p,
 {
     char filename[RAFT_IO_UV_SEGMENT__MAX_FILENAME_LEN];
 
-    p->state = RAFT_IO_UV_STORE__PREPARED_PENDING;
+    p->state = RAFT__IO_UV_STORE_PREPARED_PENDING;
     p->counter = counter;
     p->create.data = store;
     p->write.data = store;
@@ -1674,7 +1674,7 @@ int raft_io_uv_store__init(struct raft_io_uv_store *s,
     s->writer.cbs = NULL;
     s->writer.n_cbs = 0;
 
-    for (i = 0; i < RAFT_IO_UV_STORE__N_PREPARED; i++) {
+    for (i = 0; i < RAFT__IO_UV_STORE_N_PREPARED; i++) {
         raft_io_uv_prepared__reset(&s->pool[i], s->dir, i + 1, s);
     }
 
@@ -2094,7 +2094,7 @@ static unsigned long long raft_io_uv_store__pool_counter(
     unsigned i;
     unsigned long long counter = 0;
 
-    for (i = 0; i < RAFT_IO_UV_STORE__N_PREPARED; i++) {
+    for (i = 0; i < RAFT__IO_UV_STORE_N_PREPARED; i++) {
         struct raft_io_uv_prepared *prepared;
 
         prepared = &s->pool[i];
@@ -2111,19 +2111,19 @@ static unsigned long long raft_io_uv_store__pool_counter(
  * Return the index of the next open segment in the pool which is the given
  * state and has the lowest counter.
  *
- * Return #RAFT_IO_UV_STORE__N_PREPARED if no pool segment is in the given
+ * Return #RAFT__IO_UV_STORE_N_PREPARED if no pool segment is in the given
  * state.
  */
 static unsigned raft_io_uv_store__pool_index(struct raft_io_uv_store *s,
                                              int state)
 {
     unsigned i;
-    unsigned j = RAFT_IO_UV_STORE__N_PREPARED;
+    unsigned j = RAFT__IO_UV_STORE_N_PREPARED;
     unsigned long long counter = ~0ULL; /* Max possible value */
     struct raft_io_uv_prepared *prepared;
 
     /* Find the non-ready segment with the lowest counter */
-    for (i = 0; i < RAFT_IO_UV_STORE__N_PREPARED; i++) {
+    for (i = 0; i < RAFT__IO_UV_STORE_N_PREPARED; i++) {
         prepared = &s->pool[i];
 
         if (prepared->state == state && prepared->counter < counter) {
@@ -2148,11 +2148,11 @@ static struct raft_io_uv_prepared *raft_io_uv_store__pool_get(
 
     i = raft_io_uv_store__pool_index(s, state);
 
-    if (i == RAFT_IO_UV_STORE__N_PREPARED) {
+    if (i == RAFT__IO_UV_STORE_N_PREPARED) {
         return NULL;
     }
 
-    assert(i < RAFT_IO_UV_STORE__N_PREPARED);
+    assert(i < RAFT__IO_UV_STORE_N_PREPARED);
 
     prepared = &s->pool[i];
 
@@ -2167,7 +2167,7 @@ static struct raft_io_uv_prepared *raft_io_uv_store__pool_get(
 static struct raft_io_uv_prepared *raft_io_uv_store__pool_get_pending(
     struct raft_io_uv_store *s)
 {
-    int state = RAFT_IO_UV_STORE__PREPARED_PENDING;
+    int state = RAFT__IO_UV_STORE_PREPARED_PENDING;
 
     return raft_io_uv_store__pool_get(s, state);
 }
@@ -2178,7 +2178,7 @@ static struct raft_io_uv_prepared *raft_io_uv_store__pool_get_pending(
 static struct raft_io_uv_prepared *raft_io_uv_store__pool_get_ready(
     struct raft_io_uv_store *s)
 {
-    int state = RAFT_IO_UV_STORE__PREPARED_READY;
+    int state = RAFT__IO_UV_STORE_PREPARED_READY;
 
     return raft_io_uv_store__pool_get(s, state);
 }
@@ -2189,7 +2189,7 @@ static struct raft_io_uv_prepared *raft_io_uv_store__pool_get_ready(
 static struct raft_io_uv_prepared *raft_io_uv_store__pool_get_closing(
     struct raft_io_uv_store *s)
 {
-    int state = RAFT_IO_UV_STORE__PREPARED_CLOSING;
+    int state = RAFT__IO_UV_STORE_PREPARED_CLOSING;
 
     return raft_io_uv_store__pool_get(s, state);
 }
@@ -2239,7 +2239,7 @@ static bool raft_io_uv_store__closer_is_active(struct raft_io_uv_store *s)
 {
     if (s->closer.segment != NULL) {
         /* If we are active, our segment must be in closing state */
-        assert(s->closer.segment->state == RAFT_IO_UV_STORE__PREPARED_CLOSING);
+        assert(s->closer.segment->state == RAFT__IO_UV_STORE_PREPARED_CLOSING);
         return true;
     }
     return false;
@@ -2253,7 +2253,7 @@ static bool raft_io_uv_store__preparer_is_active(struct raft_io_uv_store *s)
     if (s->preparer.segment != NULL) {
         /* If we are active, our segment must be in pending state */
         assert(s->preparer.segment->state ==
-               RAFT_IO_UV_STORE__PREPARED_PENDING);
+               RAFT__IO_UV_STORE_PREPARED_PENDING);
         return true;
     }
     return false;
@@ -2296,10 +2296,10 @@ static void raft_io_uv_store__aborted(struct raft_io_uv_store *s)
 
     /* Close all prepared open segments which are ready, and unlink the empty
      * ones. */
-    for (i = 0; i < RAFT_IO_UV_STORE__N_PREPARED; i++) {
+    for (i = 0; i < RAFT__IO_UV_STORE_N_PREPARED; i++) {
         struct raft_io_uv_prepared *segment = &s->pool[i];
 
-        if (segment->state == RAFT_IO_UV_STORE__PREPARED_READY) {
+        if (segment->state == RAFT__IO_UV_STORE_PREPARED_READY) {
             rv = raft__uv_file_close(&segment->file);
             assert(rv == 0); /* TODO: can this fail? */
 
@@ -2308,7 +2308,7 @@ static void raft_io_uv_store__aborted(struct raft_io_uv_store *s)
                 /* We make the segment as pending to avoid trying to close it
                  * again in case this function gets invoked another time by the
                  * closer, which we might trigger below. */
-                segment->state = RAFT_IO_UV_STORE__PREPARED_PENDING;
+                segment->state = RAFT__IO_UV_STORE_PREPARED_PENDING;
             }
         }
     }
@@ -2317,7 +2317,7 @@ static void raft_io_uv_store__aborted(struct raft_io_uv_store *s)
      * turn it into a closed segment. */
     if (s->writer.segment != NULL && s->writer.segment->used > 0) {
         s->writer.segment->end_index = s->writer.last_index;
-        s->writer.segment->state = RAFT_IO_UV_STORE__PREPARED_CLOSING;
+        s->writer.segment->state = RAFT__IO_UV_STORE_PREPARED_CLOSING;
         s->writer.segment = NULL;
 
         raft_io_uv_store__closer_start(s); /* Ignore errors */
@@ -2492,7 +2492,7 @@ static void raft_io_uv_store__writer_segment_full(struct raft_io_uv_store *s)
     assert(rv == 0); /* TODO: can this fail? */
 
     s->writer.segment->end_index = s->writer.last_index;
-    s->writer.segment->state = RAFT_IO_UV_STORE__PREPARED_CLOSING;
+    s->writer.segment->state = RAFT__IO_UV_STORE_PREPARED_CLOSING;
 }
 
 /**
@@ -2672,7 +2672,7 @@ static int raft_io_uv_store__writer_submit(struct raft_io_uv_store *s)
 
     /* We must have a ready prepared segment at this point. */
     assert(s->writer.segment != NULL);
-    assert(s->writer.segment->state == RAFT_IO_UV_STORE__PREPARED_READY);
+    assert(s->writer.segment->state == RAFT__IO_UV_STORE_PREPARED_READY);
 
     /* The write request can't be empty and must be aligned */
     assert(s->writer.blocks.offset > 0);
@@ -2864,8 +2864,8 @@ static bool raft_io_uv_store__preparer_has_work(struct raft_io_uv_store *s)
 {
     unsigned i;
 
-    i = raft_io_uv_store__pool_index(s, RAFT_IO_UV_STORE__PREPARED_PENDING);
-    return i < RAFT_IO_UV_STORE__N_PREPARED;
+    i = raft_io_uv_store__pool_index(s, RAFT__IO_UV_STORE_PREPARED_PENDING);
+    return i < RAFT__IO_UV_STORE_N_PREPARED;
 }
 
 /**
@@ -2900,10 +2900,10 @@ static void raft_io_uv_store__preparer_format_cb(
     /* Double check that we're pointing at the beginning of the segment and that
      * the segment is marked as pending. */
     assert(s->preparer.segment->next_block == 0);
-    assert(s->preparer.segment->state == RAFT_IO_UV_STORE__PREPARED_PENDING);
+    assert(s->preparer.segment->state == RAFT__IO_UV_STORE_PREPARED_PENDING);
 
     /* Mark the prepared segment as ready */
-    s->preparer.segment->state = RAFT_IO_UV_STORE__PREPARED_READY;
+    s->preparer.segment->state = RAFT__IO_UV_STORE_PREPARED_READY;
 
     /* If there's a pending write request which is waiting for a segment to
      * be ready, let's resume it. */
@@ -2938,7 +2938,7 @@ abort:
 
     unlink(s->preparer.segment->path);
 
-    s->preparer.segment->state = RAFT_IO_UV_STORE__PREPARED_PENDING;
+    s->preparer.segment->state = RAFT__IO_UV_STORE_PREPARED_PENDING;
     s->preparer.segment = NULL;
 
     /* If there's a pending write request waiting for a segment to be ready,

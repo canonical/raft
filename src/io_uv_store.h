@@ -2,8 +2,8 @@
  * Handle on-disk storage logic in the libuv-based @raft_io backend.
  */
 
-#ifndef RAFT_IO_UV_STORE_H
-#define RAFT_IO_UV_STORE_H
+#ifndef RAFT_IO_UV_STORE_H_
+#define RAFT_IO_UV_STORE_H_
 
 #include "uv_file.h"
 
@@ -13,7 +13,7 @@
  * Number of open segments that the store will try to prepare and keep ready for
  * writing.
  */
-#define RAFT_IO_UV_STORE__N_PREPARED 3
+#define RAFT__IO_UV_STORE_N_PREPARED 3
 
 /**
  * Status codes for prepared open segments.
@@ -23,14 +23,42 @@
  * - closing: the segment is being closed
  */
 enum {
-    RAFT_IO_UV_STORE__PREPARED_PENDING = 0,
-    RAFT_IO_UV_STORE__PREPARED_READY,
-    RAFT_IO_UV_STORE__PREPARED_CLOSING
+    RAFT__IO_UV_STORE_PREPARED_PENDING = 0,
+    RAFT__IO_UV_STORE_PREPARED_READY,
+    RAFT__IO_UV_STORE_PREPARED_CLOSING
 };
 
 /**
  * Information persisted in a single metadata file.
  */
+struct raft__io_uv_metadata;
+
+/**
+ * A single prepared open segment that new entries can be written into, when
+ * ready.
+ */
+struct raft__io_uv_segment;
+
+struct raft__io_uv_store;
+
+/**
+ * Append entries request.
+ */
+struct raft__io_uv_store_append;
+
+/**
+ * Callback called after an append entries request has been completed.
+ */
+typedef void (*raft__io_uv_store_append_cb)(
+    struct raft__io_uv_store_append *req,
+    int status);
+
+int raft__io_uv_store_append(struct raft__io_uv_store *s,
+                             struct raft__io_uv_store_append *req,
+                             const struct raft_entry *entries,
+                             const unsigned n,
+                             raft__io_uv_store_append_cb cb);
+
 struct raft_io_uv_metadata
 {
     unsigned long long version; /* Monotonically increasing version */
@@ -39,10 +67,6 @@ struct raft_io_uv_metadata
     raft_index start_index;     /* Raft log start index */
 };
 
-/**
- * A single prepared open segment that new entries can be written into, when
- * ready.
- */
 struct raft_io_uv_prepared
 {
     int state;                  /* Whether we're pending, ready or closing */
@@ -147,7 +171,7 @@ struct raft_io_uv_store
     } closer;
 
     /* Pool of prepared open segments */
-    struct raft_io_uv_prepared pool[RAFT_IO_UV_STORE__N_PREPARED];
+    struct raft_io_uv_prepared pool[RAFT__IO_UV_STORE_N_PREPARED];
 
     /* State for tracking a request to stop the store . */
     struct

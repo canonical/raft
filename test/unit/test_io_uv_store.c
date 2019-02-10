@@ -385,13 +385,13 @@ static void tear_down(void *data)
             rv = uv_run(&F->loop, UV_RUN_ONCE);                               \
             munit_assert_int(rv, ==, 1);                                      \
                                                                               \
-            if (F->store.pool[0].state != RAFT_IO_UV_STORE__PREPARED_READY) { \
+            if (F->store.pool[0].state != RAFT__IO_UV_STORE_PREPARED_READY) { \
                 continue;                                                     \
             }                                                                 \
-            if (F->store.pool[1].state != RAFT_IO_UV_STORE__PREPARED_READY) { \
+            if (F->store.pool[1].state != RAFT__IO_UV_STORE_PREPARED_READY) { \
                 continue;                                                     \
             }                                                                 \
-            if (F->store.pool[2].state != RAFT_IO_UV_STORE__PREPARED_READY) { \
+            if (F->store.pool[2].state != RAFT__IO_UV_STORE_PREPARED_READY) { \
                 continue;                                                     \
             }                                                                 \
                                                                               \
@@ -399,11 +399,11 @@ static void tear_down(void *data)
         }                                                                     \
                                                                               \
         munit_assert_int(F->store.pool[0].state, ==,                          \
-                         RAFT_IO_UV_STORE__PREPARED_READY);                   \
+                         RAFT__IO_UV_STORE_PREPARED_READY);                   \
         munit_assert_int(F->store.pool[1].state, ==,                          \
-                         RAFT_IO_UV_STORE__PREPARED_READY);                   \
+                         RAFT__IO_UV_STORE_PREPARED_READY);                   \
         munit_assert_int(F->store.pool[2].state, ==,                          \
-                         RAFT_IO_UV_STORE__PREPARED_READY);                   \
+                         RAFT__IO_UV_STORE_PREPARED_READY);                   \
     }
 
 /**
@@ -1995,9 +1995,9 @@ static MunitResult test_append_prepare(const MunitParameter params[],
         rv = uv_run(&f->loop, UV_RUN_ONCE);
         munit_assert_int(rv, ==, 1);
 
-        state = f->store.pool[RAFT_IO_UV_STORE__N_PREPARED - 1].state;
+        state = f->store.pool[RAFT__IO_UV_STORE_N_PREPARED - 1].state;
 
-        if (state == RAFT_IO_UV_STORE__PREPARED_READY) {
+        if (state == RAFT__IO_UV_STORE_PREPARED_READY) {
             break;
         }
     }
