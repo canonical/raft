@@ -5,7 +5,7 @@
 #ifndef RAFT_IO_UV_STORE_H
 #define RAFT_IO_UV_STORE_H
 
-#include "uv_fs.h"
+#include "uv_file.h"
 
 #include "../include/raft.h"
 
@@ -47,14 +47,17 @@ struct raft_io_uv_prepared
 {
     int state;                  /* Whether we're pending, ready or closing */
     unsigned long long counter; /* Segment counter, encoded in the filename */
-    struct raft_uv_file file;   /* Open segment file */
-    struct raft_uv_fs req;      /* File system request */
     unsigned next_block;        /* Next segment block to write (starting at 0)*/
     size_t block_size;          /* Block size */
     size_t used;                /* How many bytes have been used in total */
     raft_index first_index;     /* Index of the first entry of the segment */
     raft_index end_index;       /* Index of the last entry of the segment */
-    raft_uv_path path;          /* Full file system path */
+
+    struct raft__uv_file file;          /* Open segment file */
+    struct raft__uv_file_create create; /* Create file request */
+    struct raft__uv_file_write write;   /* Write file system request */
+
+    raft__uv_file_path path; /* Full file system path */
 };
 
 /**

@@ -10,7 +10,6 @@
 #include "binary.h"
 #include "io_uv_rpc.h"
 #include "io_uv_store.h"
-#include "uv_fs.h"
 
 /**
  * Raft I/O implementation based on libuv.

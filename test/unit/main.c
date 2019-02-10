@@ -21,7 +21,7 @@ extern MunitSuite raft_rpc_append_entries_suites[];
 extern MunitSuite raft_tick_suites[];
 extern MunitSuite raft_suites[];
 #if RAFT_IO_UV
-extern MunitSuite raft_uv_fs_suites[];
+extern MunitSuite raft_uv_file_suites[];
 #endif
 
 static MunitSuite suites[] = {
@@ -45,7 +45,7 @@ static MunitSuite suites[] = {
     {"tick", NULL, raft_tick_suites, 1, 0},
     {"raft", NULL, raft_suites, 1, 0},
 #if RAFT_IO_UV
-    {"uv-fs", NULL, raft_uv_fs_suites, 1, 0},
+    {"uv-file", NULL, raft_uv_file_suites, 1, 0},
 #endif
     {NULL, NULL, NULL, 0, 0},
 };
