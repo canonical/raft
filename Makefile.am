@@ -97,6 +97,7 @@ unit_test_SOURCES += \
   test/unit/test_client.c \
   test/unit/test_configuration.c \
   test/unit/test_election.c \
+  test/unit/test_queue.c \
   test/unit/test_log.c \
   test/unit/test_logger.c \
   test/unit/test_raft.c \
