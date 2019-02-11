@@ -61,6 +61,12 @@ typedef void (*raft__uv_file_write_cb)(struct raft__uv_file_write *req,
                                        int status);
 
 /**
+ * Callback called after the memory associated with a file handle can be
+ * released.
+ */
+typedef void (*raft__uv_file_close_cb)(struct raft__uv_file *f);
+
+/**
  * Convenience to concatenate a directory and a file.
  */
 void raft__uv_file_join(const char *dir, const char *filename, char *path);
@@ -71,12 +77,16 @@ void raft__uv_file_join(const char *dir, const char *filename, char *path);
 int raft__uv_file_block_size(const char *dir, size_t *size);
 
 /**
+ * Initialize a file handle.
+ */
+int raft__uv_file_init(struct raft__uv_file *f, struct uv_loop_s *loop);
+
+/**
  * Create the given file for subsequent non-blocking writing. The file must not
  * exist yet.
  */
 int raft__uv_file_create(struct raft__uv_file *f,
                          struct raft__uv_file_create *req,
-                         struct uv_loop_s *loop,
                          const char *path,
                          size_t size,
                          unsigned max_concurrent_writes,
@@ -96,18 +106,19 @@ int raft__uv_file_write(struct raft__uv_file *f,
  * Close the given file and release all associated resources. There must be no
  * request in progress.
  */
-int raft__uv_file_close(struct raft__uv_file *f);
+void raft__uv_file_close(struct raft__uv_file *f, raft__uv_file_close_cb cb);
 
 struct raft__uv_file
 {
-    struct uv_loop_s *loop;        /* For eventd polling and thread work */
-    int fd;                        /* Operating system file descriptor */
-    bool async;                    /* Whether fully async I/O is supported */
-    int event_fd;                  /* Poll'ed to check if write has completed */
-    struct uv_poll_s event_poller; /* To make the loop poll for event_fd */
-    aio_context_t ctx;             /* KAIO handle */
-    struct io_event *events;       /* Array of KAIO response objects */
-    unsigned n_events;             /* Length of the events array */
+    struct uv_loop_s *loop;          /* Event loop */
+    int fd;                          /* Operating system file descriptor */
+    bool async;                      /* Whether fully async I/O is supported */
+    int event_fd;                    /* Poll'ed to check if write is finished */
+    struct uv_poll_s event_poller;   /* To make the loop poll for event_fd */
+    aio_context_t ctx;               /* KAIO handle */
+    struct io_event *events;         /* Array of KAIO response objects */
+    unsigned n_events;               /* Length of the events array */
+    raft__uv_file_close_cb close_cb; /* Close callback */
 };
 
 struct raft__uv_file_create

@@ -242,12 +242,51 @@ static int raft__uv_file_block_size_probe(int fd, size_t size, bool *ok)
 }
 #endif /* RWF_NOWAIT */
 
+int raft__uv_file_init(struct raft__uv_file *f, struct uv_loop_s *loop)
+{
+    int rv;
+
+    f->loop = loop;
+    f->fd = -1;
+    f->async = true;
+    f->event_fd = -1;
+
+    /* Create an event file descriptor to get notified when a write has
+     * completed. */
+    f->event_fd = eventfd(0, EFD_NONBLOCK);
+    if (f->event_fd < 0) {
+        /* UNTESTED: should fail only with ENOMEM */
+        rv = uv_translate_sys_error(errno);
+        goto err;
+    }
+
+    rv = uv_poll_init(f->loop, &f->event_poller, f->event_fd);
+    if (rv != 0) {
+        /* UNTESTED: with the current libuv implementation this should never
+         * fail. */
+        goto err_after_event_fd;
+    }
+    f->event_poller.data = f;
+
+    f->ctx = 0;
+    f->close_cb = NULL;
+
+    return 0;
+
+err_after_event_fd:
+    close(f->event_fd);
+
+err:
+    assert(rv != 0);
+
+    return rv;
+}
+
 static void raft__uv_file_create_work_cb(uv_work_t *work);
 static void raft__uv_file_create_after_work_cb(uv_work_t *work, int status);
 
 int raft__uv_file_create(struct raft__uv_file *f,
                          struct raft__uv_file_create *req,
-                         struct uv_loop_s *loop,
                          const char *path,
                          size_t size,
                          unsigned max_n_writes,
@@ -257,15 +296,8 @@ int raft__uv_file_create(struct raft__uv_file *f,
 
     assert(f != NULL);
     assert(req != NULL);
-    assert(loop != NULL);
     assert(path != NULL);
     assert(size > 0);
-
-    f->loop = loop;
-    f->fd = -1;
-    f->async = true;
-    f->event_fd = -1;
-    f->ctx = 0;
 
     f->events = NULL; /* We'll allocate this in the create callback */
     f->n_events = max_n_writes;
@@ -316,7 +348,6 @@ static void raft__uv_file_create_work_cb(uv_work_t *work)
     /* First of all, try to create a brand new file. */
     f->fd = open(req->path, flags, S_IRUSR | S_IWUSR);
     if (f->fd == -1) {
-        rv = errno;
         goto err;
     }
 
@@ -328,6 +359,7 @@ static void raft__uv_file_create_work_cb(uv_work_t *work)
          *   posix_fallocate() returns zero on success, or an error number on
          *   failure.  Note that errno is not set.
          */
+        errno = rv;
         goto err_after_open;
     }
 
@@ -335,29 +367,17 @@ static void raft__uv_file_create_work_cb(uv_work_t *work)
     rv = fsync(f->fd);
     if (rv == -1) {
         /* UNTESTED: should fail only in case of disk errors */
-        rv = errno;
         goto err_after_open;
     }
     rv = raft__uv_file_create_sync_dir(req->path);
     if (rv == -1) {
         /* UNTESTED: should fail only in case of disk errors */
-        rv = errno;
         goto err_after_open;
     }
 
     /* Set direct I/O if possible. */
     rv = raft__uv_file_create_set_direct_io(f);
     if (rv == -1) {
-        rv = errno;
-        goto err_after_open;
-    }
-
-    /* Create an event file descriptor to get notified when a write has
-     * completed. */
-    f->event_fd = eventfd(0, EFD_NONBLOCK);
-    if (f->event_fd < 0) {
-        /* UNTESTED: should fail only with ENOMEM */
-        rv = errno;
         goto err_after_open;
     }
 
@@ -365,8 +385,7 @@ static void raft__uv_file_create_work_cb(uv_work_t *work)
     rv = io_setup(f->n_events /* Maximum concurrent requests */, &f->ctx);
     if (rv == -1) {
         /* UNTESTED: should fail only with ENOMEM */
-        rv = errno;
-        goto err_after_eventfd;
+        goto err_after_open;
     }
 
     /* Initialize the array of re-usable event objects. */
@@ -382,10 +401,7 @@ static void raft__uv_file_create_work_cb(uv_work_t *work)
 
 err_after_io_setup:
     io_destroy(f->ctx);
-
-err_after_eventfd:
-    close(f->event_fd);
-    f->event_fd = -1;
+    f->ctx = 0;
 
 err_after_open:
     close(f->fd);
@@ -393,7 +409,7 @@ err_after_open:
     f->fd = -1;
 
 err:
-    req->status = uv_translate_sys_error(rv);
+    req->status = uv_translate_sys_error(errno);
 }
 
 /**
@@ -472,7 +488,9 @@ static int raft__uv_file_create_set_direct_io(struct raft__uv_file *f)
     return 0;
 }
 
-static int raft__uv_file_create_start_polling(struct raft__uv_file *f);
+static void raft__uv_file_write_poll_cb(uv_poll_t *poller,
+                                        int status,
+                                        int events);
 
 /**
  * Callback run after @raft__uv_file_create_work_cb has returned. It's run in
@@ -493,7 +511,8 @@ static void raft__uv_file_create_after_work_cb(uv_work_t *work, int status)
 
     /* If no error occurred, start polling the event file descriptor. */
     if (req->status == 0) {
-        rv = raft__uv_file_create_start_polling(f);
+        rv = uv_poll_start(&f->event_poller, UV_READABLE,
+                           raft__uv_file_write_poll_cb);
         if (rv != 0) {
             /* UNTESTED: the underlying libuv calls should never fail. */
             req->status = rv;
@@ -508,46 +527,6 @@ static void raft__uv_file_create_after_work_cb(uv_work_t *work, int status)
     if (req->cb != NULL) {
         req->cb(req, req->status);
     }
-}
-
-static void raft__uv_file_write_poll_cb(uv_poll_t *poller,
-                                        int status,
-                                        int events);
-
-/**
- * Start polling the event file descriptor to get notified when a write
- * completes.
- */
-static int raft__uv_file_create_start_polling(struct raft__uv_file *f)
-{
-    int rv;
-
-    rv = uv_poll_init(f->loop, &f->event_poller, f->event_fd);
-    if (rv != 0) {
-        /* UNTESTED: with the current libuv implementation this should never
-         * fail. */
-        goto err;
-    }
-
-    f->event_poller.data = f;
-
-    rv = uv_poll_start(&f->event_poller, UV_READABLE,
-                       raft__uv_file_write_poll_cb);
-    if (rv != 0) {
-        /* UNTESTED: with the current libuv implementation this should never
-         * fail. */
-        goto err_after_init;
-    }
-
-    return 0;
-
-err_after_init:
-    uv_close((struct uv_handle_s *)&f->event_poller, NULL);
-
-err:
-    assert(rv != 0);
-
-    return rv;
 }
 
 static void raft__uv_file_write_work_cb(uv_work_t *work);
@@ -825,39 +804,44 @@ err:
     return rv;
 }
 
-int raft__uv_file_close(struct raft__uv_file *f)
+static void raft__uv_file_poll_close_cb(struct uv_handle_s *handle);
+
+void raft__uv_file_close(struct raft__uv_file *f, raft__uv_file_close_cb cb)
 {
     int rv;
 
     assert(f != NULL);
+    assert(f->close_cb == NULL);
+
+    f->close_cb = cb;
 
     rv = uv_poll_stop(&f->event_poller);
-    if (rv != 0) {
-        /* UNTESTED: with the current libuv implementation this can't fail. */
-        return rv;
-    }
+    assert(rv == 0);
 
-    uv_close((struct uv_handle_s *)&f->event_poller, NULL);
+    uv_close((struct uv_handle_s *)&f->event_poller,
+             raft__uv_file_poll_close_cb);
 
     rv = close(f->event_fd);
-    if (rv == -1) {
-        /* UNTESTED: not clear how this could fail. */
-        return uv_translate_sys_error(errno);
+    assert(rv == 0);
+
+    if (f->ctx != 0) {
+        rv = io_destroy(f->ctx);
+        assert(rv == 0);
     }
 
-    rv = io_destroy(f->ctx);
-    if (rv == -1) {
-        /* UNTESTED: not clear how this could fail. */
-        return uv_translate_sys_error(errno);
+    if (f->fd != -1) {
+        rv = close(f->fd);
+        assert(rv == 0);
     }
+}
 
-    rv = close(f->fd);
-    if (rv == -1) {
-        /* UNTESTED: not clear how this could fail. */
-        return uv_translate_sys_error(errno);
-    }
+static void raft__uv_file_poll_close_cb(struct uv_handle_s *handle)
+{
+    struct raft__uv_file *f = handle->data;
 
     free(f->events);
 
-    return 0;
+    if (f->close_cb != NULL) {
+        f->close_cb(f);
+    }
 }

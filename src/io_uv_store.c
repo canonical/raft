@@ -2280,7 +2280,6 @@ static void raft_io_uv_store__aborted(struct raft_io_uv_store *s)
     unsigned i;
     void *data = s->stop.p;
     void (*cb)(void *data) = s->stop.cb;
-    int rv;
 
     assert(s->aborted);
 
@@ -2300,8 +2299,7 @@ static void raft_io_uv_store__aborted(struct raft_io_uv_store *s)
         struct raft_io_uv_prepared *segment = &s->pool[i];
 
         if (segment->state == RAFT__IO_UV_STORE_PREPARED_READY) {
-            rv = raft__uv_file_close(&segment->file);
-            assert(rv == 0); /* TODO: can this fail? */
+            raft__uv_file_close(&segment->file, NULL);
 
             if (segment->used == 0) {
                 unlink(segment->path);
@@ -2487,9 +2485,7 @@ static int raft_io_uv_store__closer_start(struct raft_io_uv_store *s)
  */
 static void raft_io_uv_store__writer_segment_full(struct raft_io_uv_store *s)
 {
-    int rv;
-    rv = raft__uv_file_close(&s->writer.segment->file);
-    assert(rv == 0); /* TODO: can this fail? */
+    raft__uv_file_close(&s->writer.segment->file, NULL);
 
     s->writer.segment->end_index = s->writer.last_index;
     s->writer.segment->state = RAFT__IO_UV_STORE_PREPARED_CLOSING;
@@ -2879,7 +2875,6 @@ static void raft_io_uv_store__preparer_format_cb(
     struct raft_io_uv_store *s = req->data;
     bool succeeded = status == (int)s->block_size;
     int rv;
-    int rv2;
 
     assert(raft_io_uv_store__preparer_is_active(s));
 
@@ -2933,8 +2928,7 @@ abort:
 
     assert(rv != 0);
 
-    rv2 = raft__uv_file_close(&s->preparer.segment->file);
-    assert(rv2 == 0); /* TODO: can this fail? */
+    raft__uv_file_close(&s->preparer.segment->file, NULL);
 
     unlink(s->preparer.segment->path);
 
@@ -3025,12 +3019,10 @@ static void raft_io_uv_store__preparer_create_cb(
 abort:
     assert(rv != 0);
 
+    raft__uv_file_close(&s->preparer.segment->file, NULL);
+
     /* If we managed to create the file, let's close it and delete it. */
     if (succeeded) {
-        int rv2;
-        rv2 = raft__uv_file_close(&s->preparer.segment->file);
-        assert(rv2 == 0); /* TODO: can this fail? */
-
         unlink(s->preparer.segment->path); /* Ignore errors */
     }
 
@@ -3071,17 +3063,25 @@ static int raft_io_uv_store__preparer_start(struct raft_io_uv_store *s)
     assert(s->block_size > 0);
     assert(s->max_segment_size % s->block_size == 0);
 
+    rv = raft__uv_file_init(&s->preparer.segment->file, s->loop);
+    if (rv != 0) {
+        goto err;
+    }
+
     rv = raft__uv_file_create(&s->preparer.segment->file,
-                              &s->preparer.segment->create, s->loop,
+                              &s->preparer.segment->create,
                               s->preparer.segment->path, s->max_segment_size, 1,
                               raft_io_uv_store__preparer_create_cb);
     if (rv != 0) {
         raft_errorf(s->logger, "create %s: %s", s->preparer.segment->path,
                     uv_strerror(rv));
-        goto err;
+        goto err_after_file_init;
     }
 
     return 0;
+
+err_after_file_init:
+    raft__uv_file_close(&s->preparer.segment->file, NULL);
 
 err:
     assert(rv != 0);

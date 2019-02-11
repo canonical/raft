@@ -43,6 +43,9 @@ static void *setup(const MunitParameter params[], void *user_data)
 
     test_uv_setup(params, &f->loop);
 
+    rv = raft__uv_file_init(&f->file, &f->loop);
+    munit_assert_int(rv, ==, 0);
+
     f->create.data = f;
     f->write.data = f;
 
@@ -58,6 +61,10 @@ static void *setup(const MunitParameter params[], void *user_data)
 static void tear_down(void *data)
 {
     struct fixture *f = data;
+
+    raft__uv_file_close(&f->file, NULL);
+
+    test_uv_stop(&f->loop);
 
     test_uv_tear_down(&f->loop);
 
@@ -89,21 +96,21 @@ static void __create_cb(struct raft__uv_file_create *req, int status)
 /**
  * Create a file and assert that no error occurs.
  */
-#define __create(F)                                                           \
-    {                                                                         \
-        int rv;                                                               \
-        char path[64];                                                        \
-                                                                              \
-        sprintf(path, "%s/foo", F->dir);                                      \
-                                                                              \
-        rv = raft__uv_file_create(&f->file, &f->create, &f->loop, path, 8192, \
-                                  3, __create_cb);                            \
-        munit_assert_int(rv, ==, 0);                                          \
-                                                                              \
-        rv = uv_run(&f->loop, UV_RUN_ONCE);                                   \
-        munit_assert_int(rv, ==, 1);                                          \
-                                                                              \
-        munit_assert_int(f->create_cb.status, ==, 0);                         \
+#define __create(F)                                                    \
+    {                                                                  \
+        int rv;                                                        \
+        char path[64];                                                 \
+                                                                       \
+        sprintf(path, "%s/foo", F->dir);                               \
+                                                                       \
+        rv = raft__uv_file_create(&f->file, &f->create, path, 8192, 3, \
+                                  __create_cb);                        \
+        munit_assert_int(rv, ==, 0);                                   \
+                                                                       \
+        rv = uv_run(&f->loop, UV_RUN_ONCE);                            \
+        munit_assert_int(rv, ==, 1);                                   \
+                                                                       \
+        munit_assert_int(f->create_cb.status, ==, 0);                  \
     }
 
 /**
@@ -129,22 +136,6 @@ static void __create_cb(struct raft__uv_file_create *req, int status)
         }                                                              \
         munit_assert_int(F->write_cb.invoked, ==, 1);                  \
         F->write_cb.invoked = 0;                                       \
-    }
-
-/**
- * Close the file handle of the given fixture and assert that no error occurs.
- */
-#define __close(F)                                                      \
-    {                                                                   \
-        int rv;                                                         \
-                                                                        \
-        rv = raft__uv_file_close(&f->file);                             \
-        munit_assert_int(rv, ==, 0);                                    \
-                                                                        \
-        /* Run a single loop iteration to allow for the close callbacks \
-         * to fire and for the poller handle to be inactive. */         \
-        rv = uv_run(&f->loop, UV_RUN_ONCE);                             \
-        munit_assert_int(rv, ==, 0);                                    \
     }
 
 /**
@@ -287,11 +278,9 @@ static MunitTest block_size_tests[] = {
  * raft_uv_file__create
  */
 
-char *foo[] = {"tmpfs", NULL};
 /* Test against all file system types */
 static MunitParameterEnum create_valid_path_params[] = {
-    {TEST_DIR_FS_TYPE, foo},
-    //{TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
+    {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
     {NULL, NULL},
 };
 
@@ -307,8 +296,7 @@ static MunitResult test_create_valid_path(const MunitParameter params[],
 
     sprintf(path, "%s/foo", f->dir);
 
-    rv = raft__uv_file_create(&f->file, &f->create, &f->loop, path, 4096, 1,
-                              __create_cb);
+    rv = raft__uv_file_create(&f->file, &f->create, path, 4096, 1, __create_cb);
     munit_assert_int(rv, ==, 0);
 
     rv = uv_run(&f->loop, UV_RUN_ONCE);
@@ -318,8 +306,6 @@ static MunitResult test_create_valid_path(const MunitParameter params[],
     munit_assert_int(f->file.fd, >=, 0);
     munit_assert_int(f->file.event_fd, >=, 0);
     munit_assert_int(f->file.ctx, !=, 0);
-
-    __close(f);
 
     return MUNIT_OK;
 }
@@ -334,8 +320,7 @@ static MunitResult test_create_no_entry(const MunitParameter params[],
 
     (void)params;
 
-    rv = raft__uv_file_create(&f->file, &f->create, &f->loop, path, 4096, 1,
-                              __create_cb);
+    rv = raft__uv_file_create(&f->file, &f->create, path, 4096, 1, __create_cb);
     munit_assert_int(rv, ==, 0);
 
     rv = uv_run(&f->loop, UV_RUN_ONCE);
@@ -362,8 +347,7 @@ static MunitResult test_create_already_exists(const MunitParameter params[],
 
     sprintf(path, "%s/foo", f->dir);
 
-    rv = raft__uv_file_create(&f->file, &f->create, &f->loop, path, 4096, 1,
-                              __create_cb);
+    rv = raft__uv_file_create(&f->file, &f->create, path, 4096, 1, __create_cb);
     munit_assert_int(rv, ==, 0);
 
     rv = uv_run(&f->loop, UV_RUN_ONCE);
@@ -396,8 +380,7 @@ static MunitResult test_create_no_space(const MunitParameter params[],
 
     sprintf(path, "%s/foo", f->dir);
 
-    rv = raft__uv_file_create(&f->file, &f->create, &f->loop, path, size, 1,
-                              __create_cb);
+    rv = raft__uv_file_create(&f->file, &f->create, path, size, 1, __create_cb);
     munit_assert_int(rv, ==, 0);
 
     rv = uv_run(&f->loop, UV_RUN_ONCE);
@@ -432,8 +415,7 @@ static MunitResult test_create_no_resources(const MunitParameter params[],
     test_aio_fill(&ctx, 0);
     sprintf(path, "%s/foo", f->dir);
 
-    rv = raft__uv_file_create(&f->file, &f->create, &f->loop, path, size, 1,
-                              __create_cb);
+    rv = raft__uv_file_create(&f->file, &f->create, path, size, 1, __create_cb);
     munit_assert_int(rv, ==, 0);
 
     rv = uv_run(&f->loop, UV_RUN_ONCE);
@@ -487,8 +469,6 @@ static MunitResult test_write_one(const MunitParameter params[], void *data)
     __assert_status(f, f->block_size);
     __assert_content(f, 1);
 
-    __close(f);
-
     free(buf.base);
 
     return MUNIT_OK;
@@ -524,8 +504,6 @@ static MunitResult test_write_two(const MunitParameter params[], void *data)
 
     __assert_content(f, 2);
 
-    __close(f);
-
     free(buf1.base);
     free(buf2.base);
 
@@ -558,8 +536,6 @@ static MunitResult test_write_twice(const MunitParameter params[], void *data)
     __assert_status(f, f->block_size);
     __assert_content(f, 1);
 
-    __close(f);
-
     free(buf1.base);
     free(buf2.base);
 
@@ -588,8 +564,6 @@ static MunitResult test_write_vec(const MunitParameter params[], void *data)
     __write(f, bufs, 2, 0);
 
     __assert_status(f, f->block_size * 2);
-
-    __close(f);
 
     free(bufs[0].base);
     free(bufs[1].base);
@@ -624,8 +598,6 @@ static MunitResult test_write_vec_twice(const MunitParameter params[],
     __write(f, bufs, 2, 0);
 
     __assert_status(f, f->block_size * 2);
-
-    __close(f);
 
     free(bufs[0].base);
     free(bufs[1].base);
@@ -680,8 +652,6 @@ static MunitResult test_write_concurrent(const MunitParameter params[],
 
     __assert_content(f, 2);
 
-    __close(f);
-
     free(buf1.base);
     free(buf2.base);
 
@@ -734,8 +704,6 @@ static MunitResult test_write_concurrent_twice(const MunitParameter params[],
 
     __assert_content(f, 1);
 
-    __close(f);
-
     free(buf1.base);
     free(buf2.base);
 
@@ -771,8 +739,6 @@ static MunitResult test_write_no_resources(const MunitParameter params[],
     __write(f, &buf, 1, 0);
 
     __assert_status(f, UV_EAGAIN);
-
-    __close(f);
 
     free(buf.base);
 
