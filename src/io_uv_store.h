@@ -246,4 +246,4 @@ int raft_io_uv_store__append(struct raft_io_uv_store *s,
  */
 int raft_io_uv_store__truncate(struct raft_io_uv_store *s, raft_index index);
 
-#endif /* RAFT_IO_UV_STORE_H */
+#endif /* RAFT_IO_UV_STORE_H_ */

@@ -13,6 +13,7 @@ extern MunitSuite raft_io_stub_suites[];
 extern MunitSuite raft_io_uv_suites[];
 extern MunitSuite raft_io_uv_rpc_suites[];
 extern MunitSuite raft_io_uv_store_suites[];
+extern MunitSuite raft_io_uv_store_preparer_suites[];
 #endif
 extern MunitSuite raft_log_suites[];
 extern MunitSuite raft_logger_suites[];
@@ -38,6 +39,7 @@ static MunitSuite suites[] = {
     {"io-uv", NULL, raft_io_uv_suites, 1, 0},
     {"io-uv-rpc", NULL, raft_io_uv_rpc_suites, 1, 0},
     {"io-uv-store", NULL, raft_io_uv_store_suites, 1, 0},
+    {"io-uv-store-preparer", NULL, raft_io_uv_store_preparer_suites, 1, 0},
 #endif
     {"log", NULL, raft_log_suites, 1, 0},
     {"logger", NULL, raft_logger_suites, 1, 0},

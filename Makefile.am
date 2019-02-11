@@ -58,6 +58,7 @@ if IO_UV
   src/io_uv_encoding.c \
   src/io_uv_rpc.c \
   src/io_uv_store.c \
+  src/io_uv_store_preparer.c \
   src/uv_file.c
 endif
 if IO_STUB
@@ -110,6 +111,7 @@ if IO_UV
   test/unit/test_io_uv.c \
   test/unit/test_io_uv_rpc.c \
   test/unit/test_io_uv_store.c \
+  test/unit/test_io_uv_store_preparer.c \
   test/unit/test_uv_file.c
 endif
 if IO_STUB
