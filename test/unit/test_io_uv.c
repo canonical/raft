@@ -50,9 +50,9 @@ struct fixture
     } stop_cb;
 };
 
-static void __tick_cb(void *data, const unsigned elapsed)
+static void __tick_cb(struct raft_io *io, const unsigned elapsed)
 {
-    struct fixture *f = data;
+    struct fixture *f = io->data;
 
     f->tick_cb.invoked = true;
     f->tick_cb.elapsed = elapsed;
@@ -74,9 +74,9 @@ static void __send_cb(void *data, const int status)
     f->send_cb.status = status;
 }
 
-static void __recv_cb(void *data, struct raft_message *message)
+static void __recv_cb(struct raft_io *io, struct raft_message *message)
 {
-    struct fixture *f = data;
+    struct fixture *f = io->data;
 
     f->recv_cb.invoked = true;
     f->recv_cb.message = message;
@@ -110,8 +110,10 @@ static void *setup(const MunitParameter params[], void *user_data)
     rv = raft_io_uv_init(&f->io, &f->logger, &f->loop, f->dir, &f->transport);
     munit_assert_int(rv, ==, 0);
 
-    rv = f->io.start(&f->io, 1, "127.0.0.1:9000", 50, f, __tick_cb, __recv_cb);
+    rv = f->io.start(&f->io, 1, "127.0.0.1:9000", 50,__tick_cb, __recv_cb);
     munit_assert_int(rv, ==, 0);
+
+    f->io.data = f;
 
     f->tick_cb.invoked = false;
     f->tick_cb.elapsed = 0;
@@ -215,10 +217,74 @@ static MunitResult test_init_not_a_dir(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-/* Create data directory if it does not exist */
+/* Data directory path is too long */
+static MunitResult test_init_dir_too_long(const MunitParameter params[],
+                                          void *data)
+{
+    struct fixture *f = data;
+    struct raft_io io;
+    int rv;
+
+    (void)params;
+
+    char dir[1024];
+
+    memset(dir, 'a', sizeof dir - 1);
+    dir[sizeof dir - 1] = 0;
+
+    rv = raft_io_uv_init(&io, &f->logger, &f->loop, dir, &f->transport);
+    munit_assert_int(rv, ==, RAFT_ERR_IO_NAMETOOLONG);
+
+    return MUNIT_OK;
+}
+
+/* Can't create data directory */
+static MunitResult test_init_cant_create_dir(const MunitParameter params[],
+                                             void *data)
+{
+    struct fixture *f = data;
+    struct raft_io io;
+    int rv;
+
+    (void)params;
+
+    const char *dir = "/non/existing/path";
+
+    rv = raft_io_uv_init(&io, &f->logger, &f->loop, dir, &f->transport);
+    munit_assert_int(rv, ==, RAFT_ERR_IO);
+
+    return MUNIT_OK;
+}
+
+/* Data directory not accessible */
+static MunitResult test_init_access_error(const MunitParameter params[],
+                                          void *data)
+{
+    struct fixture *f = data;
+    struct raft_io io;
+    int rv;
+
+    (void)params;
+
+    const char *dir = "/root/foo";
+
+    rv = raft_io_uv_init(&io, &f->logger, &f->loop, dir, &f->transport);
+    munit_assert_int(rv, ==, RAFT_ERR_IO);
+
+    return MUNIT_OK;
+}
+
+#define __test_init(NAME, FUNC, PARAMS)                         \
+    {                                                           \
+        "/" NAME, test_init_##FUNC, setup, tear_down, 0, PARAMS \
+    }
+
 static MunitTest init_tests[] = {
-    {"/oom", test_init_oom, setup, tear_down, 0, init_oom_params},
-    {"/not-a-dir", test_init_not_a_dir, setup, tear_down, 0, NULL},
+    __test_init("oom", oom, init_oom_params),
+    __test_init("not-a-dir", not_a_dir, NULL),
+    __test_init("dir-too-long", dir_too_long, NULL),
+    __test_init("cant-create-dir", cant_create_dir, NULL),
+    __test_init("access-error", access_error, NULL),
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 
@@ -285,7 +351,8 @@ static MunitResult test_start_recv(const MunitParameter params[], void *data)
     munit_assert_true(f->recv_cb.invoked);
     munit_assert_int(f->recv_cb.message->type, ==, RAFT_IO_REQUEST_VOTE);
     munit_assert_int(f->recv_cb.message->server_id, ==, 2);
-    munit_assert_string_equal(f->recv_cb.message->server_address, "127.0.0.1:66");
+    munit_assert_string_equal(f->recv_cb.message->server_address,
+                              "127.0.0.1:66");
 
     return MUNIT_OK;
 }
@@ -451,8 +518,8 @@ static MunitResult test_append_pristine(const MunitParameter params[],
 
     entry.term = 1;
     entry.type = RAFT_LOG_COMMAND;
-    entry.buf.base = munit_malloc(1);
-    entry.buf.len = 1;
+    entry.buf.base = munit_malloc(8);
+    entry.buf.len = 8;
 
     ((char *)entry.buf.base)[0] = 'x';
 

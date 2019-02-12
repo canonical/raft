@@ -48,17 +48,8 @@ struct raft_io_stub
     unsigned id;
     const char *address;
 
-    struct
-    {
-        void *data;
-        void (*cb)(void *data, unsigned msecs);
-    } tick;
-
-    struct
-    {
-        void *data;
-        void (*cb)(void *data, struct raft_message *message);
-    } recv;
+    raft_io_tick_cb tick_cb;
+    raft_io_recv_cb recv_cb;
 
     /* Append requests. */
     struct
@@ -143,14 +134,12 @@ static bool raft_io_stub__fault_tick(struct raft_io_stub *s)
     return false;
 }
 
-static int raft_io_stub__start(const struct raft_io *io,
+static int raft_io_stub__start(struct raft_io *io,
                                unsigned id,
                                const char *address,
                                unsigned msecs,
-                               void *data,
-                               void (*tick)(void *data, unsigned elapsed),
-                               void (*recv)(void *data,
-                                            struct raft_message *msg))
+                               raft_io_tick_cb tick_cb,
+                               raft_io_recv_cb recv_cb)
 {
     struct raft_io_stub *s;
 
@@ -158,7 +147,7 @@ static int raft_io_stub__start(const struct raft_io *io,
 
     assert(io != NULL);
 
-    s = io->data;
+    s = io->impl;
 
     if (raft_io_stub__fault_tick(s)) {
         return RAFT_ERR_IO;
@@ -167,11 +156,8 @@ static int raft_io_stub__start(const struct raft_io *io,
     s->id = id;
     s->address = address;
 
-    s->tick.data = data;
-    s->tick.cb = tick;
-
-    s->recv.data = data;
-    s->recv.cb = recv;
+    s->tick_cb = tick_cb;
+    s->recv_cb = recv_cb;
 
     return 0;
 }
@@ -187,7 +173,7 @@ static int raft_io_stub__stop(const struct raft_io *io,
     return 0;
 }
 
-static int raft_io_stub__load(const struct raft_io *io,
+static int raft_io_stub__load(struct raft_io *io,
                               raft_term *term,
                               unsigned *voted_for,
                               raft_index *start_index,
@@ -201,7 +187,7 @@ static int raft_io_stub__load(const struct raft_io *io,
     size_t size = 0; /* Size of the batch */
     int rv;
 
-    s = io->data;
+    s = io->impl;
 
     if (raft_io_stub__fault_tick(s)) {
         return RAFT_ERR_IO;
@@ -261,7 +247,7 @@ err:
     return rv;
 }
 
-static int raft_io_stub__bootstrap(const struct raft_io *io,
+static int raft_io_stub__bootstrap(struct raft_io *io,
                                    const struct raft_configuration *conf)
 {
     struct raft_io_stub *s;
@@ -269,7 +255,7 @@ static int raft_io_stub__bootstrap(const struct raft_io *io,
     struct raft_entry *entries;
     int rv;
 
-    s = io->data;
+    s = io->impl;
 
     if (raft_io_stub__fault_tick(s)) {
         return RAFT_ERR_IO;
@@ -312,7 +298,7 @@ static int raft_io_stub__set_term(struct raft_io *io, const raft_term term)
 {
     struct raft_io_stub *s;
 
-    s = io->data;
+    s = io->impl;
 
     if (raft_io_stub__fault_tick(s)) {
         return RAFT_ERR_IO;
@@ -328,7 +314,7 @@ static int raft_io_stub__set_vote(struct raft_io *io, const unsigned server_id)
 {
     struct raft_io_stub *s;
 
-    s = io->data;
+    s = io->impl;
 
     if (raft_io_stub__fault_tick(s)) {
         return RAFT_ERR_IO;
@@ -366,7 +352,7 @@ static int raft_io_stub__extend_entries(const struct raft_entry *entries1,
     return 0;
 }
 
-static int raft_io_stub__append(const struct raft_io *io,
+static int raft_io_stub__append(struct raft_io *io,
                                 const struct raft_entry entries[],
                                 unsigned n,
                                 void *data,
@@ -375,7 +361,7 @@ static int raft_io_stub__append(const struct raft_io *io,
     struct raft_io_stub *s;
     int rv;
 
-    s = io->data;
+    s = io->impl;
 
     if (raft_io_stub__fault_tick(s)) {
         return RAFT_ERR_IO;
@@ -395,12 +381,12 @@ static int raft_io_stub__append(const struct raft_io *io,
     return 0;
 }
 
-static int raft_io_stub__truncate(const struct raft_io *io, raft_index index)
+static int raft_io_stub__truncate(struct raft_io *io, raft_index index)
 {
     struct raft_io_stub *s;
     size_t n;
 
-    s = io->data;
+    s = io->impl;
 
     assert(index >= s->start_index);
 
@@ -413,14 +399,14 @@ static int raft_io_stub__truncate(const struct raft_io *io, raft_index index)
     if (n > 0) {
         struct raft_entry *entries;
 
-	/* Create a new array of entries holding the non-truncated entries */
+        /* Create a new array of entries holding the non-truncated entries */
         entries = raft_malloc(n * sizeof *entries);
         if (entries == NULL) {
             return RAFT_ERR_NOMEM;
         }
         memcpy(entries, s->entries, n * sizeof *s->entries);
 
-	/* Release any truncated entry */
+        /* Release any truncated entry */
         if (s->entries != NULL) {
             size_t i;
             for (i = n; i < s->n; i++) {
@@ -443,7 +429,7 @@ static int raft_io_stub__truncate(const struct raft_io *io, raft_index index)
  * Queue up a request which will be processed later, when raft_io_stub_flush()
  * is invoked.
  */
-static int raft_io_stub__send(const struct raft_io *io,
+static int raft_io_stub__send(struct raft_io *io,
                               const struct raft_message *message,
                               void *data,
                               void (*cb)(void *data, int status))
@@ -451,7 +437,7 @@ static int raft_io_stub__send(const struct raft_io *io,
     struct raft_io_stub *s;
     size_t i;
 
-    s = io->data;
+    s = io->impl;
 
     if (raft_io_stub__fault_tick(s)) {
         return RAFT_ERR_IO;
@@ -492,7 +478,7 @@ int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger)
     stub->fault.countdown = -1;
     stub->fault.n = -1;
 
-    io->data = stub;
+    io->impl = stub;
     io->start = raft_io_stub__start;
     io->stop = raft_io_stub__stop;
     io->load = raft_io_stub__load;
@@ -544,7 +530,7 @@ void raft_io_stub_close(struct raft_io *io)
 
     assert(io != NULL);
 
-    s = io->data;
+    s = io->impl;
 
     for (i = 0; i < s->n; i++) {
         struct raft_entry *entry = &s->entries[i];
@@ -570,11 +556,11 @@ void raft_io_stub_advance(struct raft_io *io, unsigned msecs)
 
     assert(io != NULL);
 
-    s = io->data;
+    s = io->impl;
 
     s->time += msecs;
 
-    s->tick.cb(s->tick.data, msecs);
+    s->tick_cb(io, msecs);
 }
 
 /**
@@ -686,7 +672,7 @@ void raft_io_stub_flush(struct raft_io *io)
 
     assert(io != NULL);
 
-    s = io->data;
+    s = io->impl;
 
     raft_io_stub__reset_flushed(s);
 
@@ -740,7 +726,7 @@ void raft_io_stub_sent(struct raft_io *io,
 {
     struct raft_io_stub *s;
 
-    s = io->data;
+    s = io->impl;
 
     *messages = s->send.flushed.messages;
     *n = s->send.flushed.n_messages;
@@ -752,7 +738,7 @@ void raft_io_stub_appended(struct raft_io *io,
 {
     struct raft_io_stub *s;
 
-    s = io->data;
+    s = io->impl;
 
     *entries = s->append.flushed.entries;
     *n = s->append.flushed.n_entries;
@@ -762,16 +748,16 @@ void raft_io_stub_dispatch(struct raft_io *io, struct raft_message *message)
 {
     struct raft_io_stub *s;
 
-    s = io->data;
+    s = io->impl;
 
-    s->recv.cb(s->recv.data, message);
+    s->recv_cb(io, message);
 }
 
 void raft_io_stub_fault(struct raft_io *io, int delay, int repeat)
 {
     struct raft_io_stub *s;
 
-    s = io->data;
+    s = io->impl;
 
     s->fault.countdown = delay;
     s->fault.n = repeat;
@@ -781,7 +767,7 @@ unsigned raft_io_stub_term(struct raft_io *io)
 {
     struct raft_io_stub *s;
 
-    s = io->data;
+    s = io->impl;
 
     return s->term;
 }
@@ -790,7 +776,7 @@ unsigned raft_io_stub_vote(struct raft_io *io)
 {
     struct raft_io_stub *s;
 
-    s = io->data;
+    s = io->impl;
 
     return s->voted_for;
 }

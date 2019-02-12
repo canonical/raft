@@ -76,8 +76,10 @@ static void *setup(const MunitParameter params[], void *user_data)
     rv = raft_io_uv_rpc__init(&f->rpc, &f->logger, &f->loop, &f->transport);
     munit_assert_int(rv, ==, 0);
 
-    rv = raft_io_uv_rpc__start(&f->rpc, 1, "127.0.0.1:9000", f, __recv_cb);
+    rv = raft_io_uv_rpc__start(&f->rpc, 1, "127.0.0.1:9000", __recv_cb);
     munit_assert_int(rv, ==, 0);
+
+    f->rpc.data = f;
 
     f->send_cb.invoked = false;
     f->send_cb.status = -1;

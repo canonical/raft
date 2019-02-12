@@ -70,6 +70,7 @@ struct raft_io_uv_rpc_server
  */
 struct raft_io_uv_rpc
 {
+    void *data;                             /* User data */
     struct raft_logger *logger;             /* Logger to use */
     struct uv_loop_s *loop;                 /* Event loop to use */
     struct raft_io_uv_transport *transport; /* Outbound and inbound streams */
@@ -84,11 +85,7 @@ struct raft_io_uv_rpc
     unsigned n_active;
 
     /* Receive callback */
-    struct
-    {
-        void *data;
-        void (*cb)(void *data, struct raft_message *msg);
-    } recv;
+    void (*recv_cb)(void *data, struct raft_message *msg);
 
     /* Stop callback */
     struct
@@ -117,8 +114,8 @@ void raft_io_uv_rpc__close(struct raft_io_uv_rpc *r);
 int raft_io_uv_rpc__start(struct raft_io_uv_rpc *r,
                           unsigned id,
                           const char *address,
-                          void *data,
-                          void (*recv)(void *data, struct raft_message *msg));
+                          void (*recv_cb)(void *data,
+                                          struct raft_message *msg));
 
 /**
  * Stop accepting incoming requests and shutdown all connections.

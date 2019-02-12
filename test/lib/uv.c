@@ -49,12 +49,20 @@ void test_uv_stop(struct uv_loop_s *l)
     }
 }
 
+static void test_uv__walk_cb(uv_handle_t *handle, void *arg)
+{
+    (void)arg;
+
+    munit_logf(MUNIT_LOG_INFO, "handle %d", handle->type);
+}
+
 void test_uv_tear_down(struct uv_loop_s *l)
 {
     int rv;
 
     rv = uv_loop_close(l);
     if (rv != 0) {
+        uv_walk(l, test_uv__walk_cb, NULL);
         munit_errorf("uv_loop_close: %s (%d)", uv_strerror(rv), rv);
     }
 

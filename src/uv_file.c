@@ -23,8 +23,8 @@ enum {
 
 #if defined(RWF_NOWAIT)
 /**
- * Check if @size is a valid block size to use for writing to @fd. If it is, @ok
- * will be set to #true.
+ * Try to write @fd using a memory-aligned buffer of size @size. If the write is
+ * successful, @ok will be set to #true.
  */
 static int raft__uv_file_block_size_probe(int fd, size_t size, bool *ok);
 #endif
@@ -94,23 +94,14 @@ static void raft__uv_file_maybe_closed(struct raft__uv_file *f);
  */
 static void raft__uv_file_poll_close_cb(struct uv_handle_s *handle);
 
-void raft__uv_file_join(const char *dir, const char *filename, char *path)
-{
-    assert(strlen(dir) < RAFT__UV_FILE_MAX_DIR_LEN);
-    assert(strlen(filename) < RAFT__UV_FILE_MAX_FILENAME_LEN);
-
-    strcpy(path, dir);
-    strcat(path, "/");
-    strcat(path, filename);
-}
-
 int raft__uv_file_block_size(const char *dir, size_t *size)
 {
-    struct statfs fs_info;   /* To get the type code of the underlying fs */
-    struct stat info;        /* To get the block size reported by the fs */
-    raft__uv_file_path path; /* To hold the path of probe file */
-    int fd;                  /* File descriptor of the probe file */
-    int flags;               /* To hold the current fcntl flags */
+    struct statfs fs_info; /* To get the type code of the underlying fs */
+    struct stat info;      /* To get the block size reported by the fs */
+    const char *filename;  /* Filename of the probe file */
+    char *path;            /* Full path of the probe file */
+    int fd;                /* File descriptor of the probe file */
+    int flags;             /* To hold the current fcntl flags */
     int rv;
 
     assert(dir != NULL);
@@ -122,14 +113,21 @@ int raft__uv_file_block_size(const char *dir, size_t *size)
     *size = 4096;
     return 0;
 #else
-    assert(strlen(dir) < RAFT__UV_FILE_MAX_DIR_LEN);
+
+    filename = ".probe-XXXXXX";
+    path = malloc(strlen(dir) + strlen("/") + strlen(filename) + 1);
+    if (path == NULL) {
+        rv = UV_ENOMEM;
+        goto err;
+    }
 
     /* Create a temporary probe file. */
-    raft__uv_file_join(dir, ".probe-XXXXXX", path);
+    sprintf(path, "%s/%s", dir, filename);
 
     fd = mkstemp(path);
     if (fd == -1) {
-        return uv_translate_sys_error(errno);
+        rv = uv_translate_sys_error(errno);
+        goto err_after_path_alloc;
     }
 
     unlink(path);
@@ -141,11 +139,10 @@ int raft__uv_file_block_size(const char *dir, size_t *size)
 
         rv = xfsctl(path, fd, XFS_IOC_DIOINFO, &attr);
 
-        close(fd);
-
         if (rv != 0) {
             /* UNTESTED: since the path and fd are valid, can this ever fail? */
-            return rv;
+            rv = uv_translate_sys_error(errno);
+            goto err_after_file_open;
         }
 
         /* TODO: this was taken from seastar's code which has this comment:
@@ -158,15 +155,15 @@ int raft__uv_file_block_size(const char *dir, size_t *size)
          */
         *size = attr.d_miniosz > 4096 ? attr.d_miniosz : 4096;
 
-        return 0;
+        goto out;
     }
 
     /* Get the file system type */
     rv = fstatfs(fd, &fs_info);
     if (rv == -1) {
         /* UNTESTED: in practice ENOMEM should be the only failure mode */
-        close(fd);
-        return uv_translate_sys_error(errno);
+        rv = uv_translate_sys_error(errno);
+        goto err_after_file_open;
     }
 
     /* Special-case the file systems that do not support O_DIRECT/NOWAIT */
@@ -174,31 +171,30 @@ int raft__uv_file_block_size(const char *dir, size_t *size)
         case 0x01021994: /* tmpfs */
             /* 4096 is ok. */
             *size = 4096;
-            close(fd);
-            return 0;
+            goto out;
 
         case 0x2fc12fc1: /* ZFS */
             /* Let's use whatever stat() returns. */
             rv = fstat(fd, &info);
-            close(fd);
             if (rv != 0) {
                 /* UNTESTED: ENOMEM should be the only failure mode */
-                return uv_translate_sys_error(errno);
+                rv = uv_translate_sys_error(errno);
+                goto err_after_file_open;
             }
             /* TODO: The block size indicated in the ZFS case seems way to
              * high. Reducing it to 4096 seems safe since at the moment ZFS does
              * not support async writes. We might want to change this once ZFS
              * async support is released. */
             *size = info.st_blksize > 4096 ? 4096 : info.st_blksize;
-            return 0;
+            goto out;
     }
 
     /* For all other file systems, we try to probe the correct size by trial and
      * error. */
     rv = posix_fallocate(fd, 0, 4096);
     if (rv != 0) {
-        close(fd);
-        return uv_translate_sys_error(rv);
+        rv = uv_translate_sys_error(rv);
+        goto err_after_file_open;
     }
 
     flags = fcntl(fd, F_GETFL);
@@ -206,8 +202,8 @@ int raft__uv_file_block_size(const char *dir, size_t *size)
     if (rv == -1) {
         /* UNTESTED: this should actually never fail, for the file systems we
          * currently support. */
-        close(fd);
-        return uv_translate_sys_error(errno);
+        rv = uv_translate_sys_error(errno);
+        goto err_after_file_open;
     }
 
     *size = 4096;
@@ -218,12 +214,11 @@ int raft__uv_file_block_size(const char *dir, size_t *size)
         if (rv != 0) {
             /* UNTESTED: all syscalls performed by underlying code should fail
              * at most with ENOMEM. */
-            goto err;
+            goto err_after_file_open;
         }
 
         if (ok) {
-            close(fd);
-            return 0;
+            goto out;
         }
 
         *size = *size / 2;
@@ -232,11 +227,22 @@ int raft__uv_file_block_size(const char *dir, size_t *size)
     /* UNTESTED: at least one of the probed block sizes should work for the file
      * systems we currently support. */
     rv = UV_EINVAL;
+    goto err_after_file_open;
+
+out:
+    close(fd);
+    free(path);
+
+    return 0;
+
+err_after_file_open:
+    close(fd);
+
+err_after_path_alloc:
+    free(path);
 
 err:
     assert(rv != 0);
-
-    close(fd);
 
     return rv;
 #endif /* RWF_NOWAIT */
@@ -381,6 +387,13 @@ int raft__uv_file_write(struct raft__uv_file *f,
 
     assert(!raft__uv_file_is_closing(f));
 
+    /* TODO: at the moment the io-uv-writer isn't actually supposed to leverage
+     *       the support for concurrent writes, so ensure that we're getting
+     *       write requests sequentially. */
+    if (f->n_events == 1) {
+        assert(RAFT__QUEUE_IS_EMPTY(&f->write_queue));
+    }
+
     assert(f->fd >= 0);
     assert(f->event_fd >= 0);
     assert(f->ctx != 0);
@@ -403,7 +416,6 @@ int raft__uv_file_write(struct raft__uv_file *f,
     req->iocb.aio_fildes = f->fd;
     req->iocb.aio_reqprio = 0;
 
-    RAFT__QUEUE_INIT(&req->queue);
     RAFT__QUEUE_PUSH(&f->write_queue, &req->queue);
 
 #if defined(RWF_HIPRI)
@@ -515,70 +527,6 @@ bool raft__uv_file_is_writing(struct raft__uv_file *f)
 bool raft__uv_file_is_closing(struct raft__uv_file *f)
 {
     return (f->flags & (RAFT__UV_FILE_CLOSING | RAFT__UV_FILE_CLOSED)) != 0;
-}
-
-int raft__uv_file_truncate(const char *dir, const char *filename, size_t offset)
-{
-    raft__uv_file_path path;
-    int fd;
-    int rv;
-
-    raft__uv_file_join(dir, filename, path);
-
-    fd = open(path, O_RDWR);
-    if (fd == -1) {
-        return uv_translate_sys_error(errno);
-    }
-
-    rv = ftruncate(fd, offset);
-    if (rv == -1) {
-        close(fd);
-        return uv_translate_sys_error(errno);
-    }
-
-    rv = fsync(fd);
-    if (rv == -1) {
-        close(fd);
-        return uv_translate_sys_error(errno);
-    }
-
-    close(fd);
-
-    return 0;
-}
-
-int raft__uv_file_rename(const char *dir,
-                         const char *filename1,
-                         const char *filename2)
-{
-    raft__uv_file_path path1;
-    raft__uv_file_path path2;
-    int fd;
-    int rv;
-
-    raft__uv_file_join(dir, filename1, path1);
-    raft__uv_file_join(dir, filename2, path2);
-
-    /* TODO: double check that filename2 does not exist. */
-    rv = rename(path1, path2);
-    if (rv == -1) {
-        return uv_translate_sys_error(errno);
-    }
-
-    fd = open(dir, O_RDONLY | O_DIRECTORY);
-    if (fd == -1) {
-        return uv_translate_sys_error(errno);
-    }
-
-    rv = fsync(fd);
-
-    close(fd);
-
-    if (rv == -1) {
-        return uv_translate_sys_error(errno);
-    }
-
-    return 0;
 }
 
 #if defined(RWF_NOWAIT)
@@ -712,17 +660,21 @@ err:
 
 static int raft__uv_file_create_work_sync_dir(const char *path)
 {
-    raft__uv_file_path dir; /* The directory portion of path */
-    int fd;                 /* Directory file descriptor */
+    char *dir; /* The directory portion of path */
+    int fd;    /* Directory file descriptor */
     int rv;
 
-    /* Any path passed to us should honor the defined limits. */
-    assert(strlen(path) < RAFT__UV_FILE_MAX_PATH_LEN);
+    dir = malloc(strlen(path) + 1);
+    if (dir == NULL) {
+        errno = ENOMEM;
+        return -1;
+    }
 
-    strncpy(dir, path, RAFT__UV_FILE_MAX_PATH_LEN);
+    strcpy(dir, path);
     dirname(dir);
 
     fd = open(dir, O_RDONLY | O_DIRECTORY);
+    free(dir);
     if (fd == -1) {
         /* UNTESTED: since the directory has been already accessed, this
          * shouldn't fail */
@@ -900,6 +852,12 @@ static void raft__uv_file_write_poll_cb(uv_poll_t *poller,
 
         raft__uv_file_write_finish(req);
     }
+
+    /* If we've been closed, let's see if we can stop the poller and fire the
+     * close callback. */
+    if (raft__uv_file_is_closing(f)) {
+        raft__uv_file_maybe_closed(f);
+    }
 }
 
 static void raft__uv_file_write_work_cb(uv_work_t *work)
@@ -967,12 +925,14 @@ out:
 static void raft__uv_file_write_after_work_cb(uv_work_t *work, int status)
 {
     struct raft__uv_file_write *req; /* Write file request object */
+    struct raft__uv_file *f;
 
     assert(work != NULL);
 
     assert(status == 0); /* We don't cancel worker requests */
 
     req = work->data;
+    f = req->file;
 
     /* If we were closed, let's mark the request as canceled, regardless of the
      * actual outcome. */
@@ -981,25 +941,23 @@ static void raft__uv_file_write_after_work_cb(uv_work_t *work, int status)
     }
 
     raft__uv_file_write_finish(req);
-}
 
-static void raft__uv_file_write_finish(struct raft__uv_file_write *req)
-{
-    struct raft__uv_file *f = req->file;
-
-    RAFT__QUEUE_REMOVE(&req->queue);
-
-    req->cb(req, req->status);
-
-    /* If we've been closed, let's see if we can stop the poller and fire the
-     * close callback. */
     if (raft__uv_file_is_closing(f)) {
         raft__uv_file_maybe_closed(f);
     }
 }
 
+static void raft__uv_file_write_finish(struct raft__uv_file_write *req)
+{
+    RAFT__QUEUE_REMOVE(&req->queue);
+
+    req->cb(req, req->status);
+}
+
 static void raft__uv_file_maybe_closed(struct raft__uv_file *f)
 {
+    assert((f->flags & RAFT__UV_FILE_CLOSED) == 0);
+
     /* If are creating the file we need to wait for the create to finish. */
     if (raft__uv_file_is_creating(f)) {
         return;
@@ -1010,8 +968,10 @@ static void raft__uv_file_maybe_closed(struct raft__uv_file *f)
         return;
     }
 
-    uv_close((struct uv_handle_s *)&f->event_poller,
-             raft__uv_file_poll_close_cb);
+    if (!uv_is_closing((struct uv_handle_s *)&f->event_poller)) {
+        uv_close((struct uv_handle_s *)&f->event_poller,
+                 raft__uv_file_poll_close_cb);
+    }
 }
 
 static void raft__uv_file_poll_close_cb(struct uv_handle_s *handle)
@@ -1019,6 +979,7 @@ static void raft__uv_file_poll_close_cb(struct uv_handle_s *handle)
     struct raft__uv_file *f = handle->data;
     int rv;
 
+    assert((f->flags & RAFT__UV_FILE_CLOSED) == 0);
     assert(RAFT__QUEUE_IS_EMPTY(&f->write_queue));
 
     rv = close(f->event_fd);
@@ -1030,6 +991,8 @@ static void raft__uv_file_poll_close_cb(struct uv_handle_s *handle)
     }
 
     free(f->events);
+
+    f->flags |= RAFT__UV_FILE_CLOSED;
 
     if (f->close_cb != NULL) {
         f->close_cb(f);

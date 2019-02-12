@@ -48,4 +48,8 @@ void raft_io_uv_decode__entries_batch(const struct raft_buffer *buf,
  */
 size_t raft_io_uv_sizeof__batch_header(size_t n);
 
+void raft_io_uv_encode__batch_header(const struct raft_entry *entries,
+                                     unsigned n,
+                                     void *buf);
+
 #endif /* RAFT_IO_UV_ENCODING_H */

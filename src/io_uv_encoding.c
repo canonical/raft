@@ -75,7 +75,6 @@ static void raft_io_uv_encode__append_entries(
     const struct raft_append_entries *p,
     void *buf)
 {
-    size_t i;
     void *cursor;
 
     cursor = buf;
@@ -86,23 +85,7 @@ static void raft_io_uv_encode__append_entries(
     raft__put64(&cursor, p->prev_log_term);  /* Previous term. */
     raft__put64(&cursor, p->leader_commit);  /* Commit index. */
 
-    /* Number of entries in the batch, little endian */
-    raft__put64(&cursor, p->n_entries);
-
-    for (i = 0; i < p->n_entries; i++) {
-        const struct raft_entry *entry = &p->entries[i];
-
-        /* Term in which the entry was created, little endian. */
-        raft__put64(&cursor, entry->term);
-
-        /* Message type (Either RAFT_LOG_COMMAND or RAFT_LOG_CONFIGURATION) */
-        raft__put8(&cursor, entry->type);
-
-        cursor += 3; /* Unused */
-
-        /* Size of the log entry data, little endian. */
-        raft__put32(&cursor, entry->buf.len);
-    }
+    raft_io_uv_encode__batch_header(p->entries, p->n_entries, cursor);
 }
 
 static void raft_io_uv_encode__append_entries_result(
@@ -204,6 +187,32 @@ oom_after_header_alloc:
 
 oom:
     return RAFT_ERR_NOMEM;
+}
+
+void raft_io_uv_encode__batch_header(const struct raft_entry *entries,
+                                     unsigned n,
+                                     void *buf)
+{
+    unsigned i;
+    void *cursor = buf;
+
+    /* Number of entries in the batch, little endian */
+    raft__put64(&cursor, n);
+
+    for (i = 0; i < n; i++) {
+        const struct raft_entry *entry = &entries[i];
+
+        /* Term in which the entry was created, little endian. */
+        raft__put64(&cursor, entry->term);
+
+        /* Message type (Either RAFT_LOG_COMMAND or RAFT_LOG_CONFIGURATION) */
+        raft__put8(&cursor, entry->type);
+
+        cursor += 3; /* Unused */
+
+        /* Size of the log entry data, little endian. */
+        raft__put32(&cursor, entry->buf.len);
+    }
 }
 
 static void raft_io_uv_decode__request_vote(const uv_buf_t *buf,

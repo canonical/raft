@@ -1,6 +1,6 @@
 /**
  * Create and write files asynchronously, using libuv on top of Linux AIO (aka
- * KAIO)..
+ * KAIO).
  */
 
 #ifndef RAFT_UV_FILE_H_
@@ -12,33 +12,6 @@
 #include <uv.h>
 
 #include "queue.h"
-
-/**
- * Maximum length of a file path.
- */
-#define RAFT__UV_FILE_MAX_PATH_LEN 1024
-
-/**
- * Maximum length of a filename.
- */
-#define RAFT__UV_FILE_MAX_FILENAME_LEN 128
-
-/**
- * Maximum length of a directory path.
- */
-#define RAFT__UV_FILE_MAX_DIR_LEN \
-    (RAFT__UV_FILE_MAX_PATH_LEN - \
-     (strlen("/") + RAFT__UV_FILE_MAX_FILENAME_LEN))
-
-/**
- * Convenience to declare a variable that can hold a file name.
- */
-typedef char raft__uv_file_name[RAFT__UV_FILE_MAX_FILENAME_LEN];
-
-/**
- * Convenience to declare a variable that can hold a file system path.
- */
-typedef char raft__uv_file_path[RAFT__UV_FILE_MAX_PATH_LEN];
 
 /**
  * Handle to an open file.
@@ -72,11 +45,6 @@ typedef void (*raft__uv_file_write_cb)(struct raft__uv_file_write *req,
  * released.
  */
 typedef void (*raft__uv_file_close_cb)(struct raft__uv_file *f);
-
-/**
- * Convenience to concatenate a directory and a file.
- */
-void raft__uv_file_join(const char *dir, const char *filename, char *path);
 
 /**
  * Get the logical block size of the file system rooted at @dir.
@@ -129,20 +97,6 @@ bool raft__uv_file_is_writing(struct raft__uv_file *f);
  * Return true if the file is closing or has been closed.
  */
 bool raft__uv_file_is_closing(struct raft__uv_file *f);
-
-/**
- * Synchronously truncate a file in a directory. To be run in a threadpool.
- */
-int raft__uv_file_truncate(const char *dir,
-                           const char *filename,
-                           size_t offset);
-
-/**
- * Synchronously rename a file in a directory. To be run in a threadpool.
- */
-int raft__uv_file_rename(const char *dir,
-                         const char *filename1,
-                         const char *filename2);
 
 struct raft__uv_file
 {

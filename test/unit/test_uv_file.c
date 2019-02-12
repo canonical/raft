@@ -15,8 +15,6 @@ struct fixture
     size_t block_size; /* File system block size */
     struct uv_loop_s loop;
     struct raft__uv_file file;
-    struct raft__uv_file_create create;
-    struct raft__uv_file_write write;
     struct
     {
         char path[64];         /* Path of the file to create */
@@ -51,6 +49,8 @@ static void __create_cb(struct raft__uv_file_create *req, int status)
 
     f->create_cb.invoked++;
     f->create_cb.status = status;
+
+    free(req);
 }
 
 static void __write_cb(struct raft__uv_file_write *req, int status)
@@ -59,6 +59,8 @@ static void __write_cb(struct raft__uv_file_write *req, int status)
 
     f->write_cb.invoked++;
     f->write_cb.status = status;
+
+    free(req);
 }
 
 static void __close_cb(struct raft__uv_file *file)
@@ -87,10 +89,8 @@ static void *setup(const MunitParameter params[], void *user_data)
     munit_assert_int(rv, ==, 0);
 
     f->file.data = f;
-    f->create.data = f;
-    f->write.data = f;
 
-    raft__uv_file_join(f->dir, "foo", f->create_args.path);
+    sprintf(f->create_args.path, "%s/foo", f->dir);
     f->create_args.size = 4096;
     f->create_args.max_n_writes = 1;
 
@@ -157,12 +157,20 @@ static void tear_down(void *data)
  */
 #define __create_assert_result(F, RV)                                        \
     {                                                                        \
+        struct raft__uv_file_create *req;                                    \
         int rv;                                                              \
                                                                              \
-        rv = raft__uv_file_create(&F->file, &F->create, F->create_args.path, \
+        req = munit_malloc(sizeof *req);                                     \
+        req->data = F;                                                       \
+                                                                             \
+        rv = raft__uv_file_create(&F->file, req, F->create_args.path,        \
                                   F->create_args.size,                       \
                                   F->create_args.max_n_writes, __create_cb); \
         munit_assert_int(rv, ==, RV);                                        \
+                                                                             \
+        if (rv != 0) {                                                       \
+            free(req);                                                       \
+        }                                                                    \
     }
 
 /**
@@ -200,12 +208,20 @@ static void tear_down(void *data)
  */
 #define __write_assert_result(F, RV)                                         \
     {                                                                        \
+        struct raft__uv_file_write *req;                                     \
         int rv;                                                              \
                                                                              \
-        rv = raft__uv_file_write(&F->file, &F->write, F->write_args.bufs,    \
+        req = munit_malloc(sizeof *req);                                     \
+        req->data = F;                                                       \
+                                                                             \
+        rv = raft__uv_file_write(&F->file, req, F->write_args.bufs,          \
                                  F->write_args.n_bufs, F->write_args.offset, \
                                  __write_cb);                                \
         munit_assert_int(rv, ==, RV);                                        \
+                                                                             \
+        if (rv != 0) {                                                       \
+            free(req);                                                       \
+        }                                                                    \
     }
 
 /**
@@ -551,12 +567,13 @@ static MunitResult test_write_concurrent(const MunitParameter params[],
                                          void *data)
 {
     struct fixture *f = data;
-    struct raft__uv_file_write req;
+    struct raft__uv_file_write *req;
     int rv;
 
     (void)params;
 
-    req.data = f;
+    req = munit_malloc(sizeof *req);
+    req->data = f;
 
     f->create_args.max_n_writes = 2;
 
@@ -564,7 +581,7 @@ static MunitResult test_write_concurrent(const MunitParameter params[],
 
     __write_assert_result(f, 0);
 
-    rv = raft__uv_file_write(&f->file, &req, &f->write_args.bufs[1], 1,
+    rv = raft__uv_file_write(&f->file, req, &f->write_args.bufs[1], 1,
                              f->block_size, __write_cb);
     munit_assert_int(rv, ==, 0);
 
@@ -580,12 +597,13 @@ static MunitResult test_write_concurrent_twice(const MunitParameter params[],
                                                void *data)
 {
     struct fixture *f = data;
-    struct raft__uv_file_write req;
+    struct raft__uv_file_write *req;
     int rv;
 
     (void)params;
 
-    req.data = f;
+    req = munit_malloc(sizeof *req);
+    req->data = f;
 
     f->create_args.max_n_writes = 2;
 
@@ -595,7 +613,7 @@ static MunitResult test_write_concurrent_twice(const MunitParameter params[],
 
     __write_assert_result(f, 0);
 
-    rv = raft__uv_file_write(&f->file, &req, &f->write_args.bufs[1], 1, 0,
+    rv = raft__uv_file_write(&f->file, req, &f->write_args.bufs[1], 1, 0,
                              __write_cb);
     munit_assert_int(rv, ==, 0);
 

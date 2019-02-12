@@ -54,6 +54,19 @@ typedef void *raft__queue[2];
 #define RAFT__QUEUE_HEAD(q) (RAFT__QUEUE_NEXT(q))
 
 /**
+ * Return the element at the back of the queue.
+ */
+#define RAFT__QUEUE_TAIL(q) (RAFT__QUEUE_PREV(q))
+
+/**
+ * Iternate over the element of a queue.
+ *
+ * Mutating the queue while iterating results in undefined behavior.
+ */
+#define RAFT__QUEUE_FOREACH(q, e) \
+    for ((q) = RAFT__QUEUE_NEXT(e); (q) != (e); (q) = RAFT__QUEUE_NEXT(q))
+
+/**
  * Return the structure holding the given element.
  */
 #define RAFT__QUEUE_DATA(e, type, field) \

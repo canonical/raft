@@ -700,7 +700,7 @@ out:
 
 static void raft_io_uv_rpc_server__recv(struct raft_io_uv_rpc_server *s)
 {
-    s->rpc->recv.cb(s->rpc->recv.data, &s->message);
+    s->rpc->recv_cb(s->rpc->data, &s->message);
 
     memset(s->preamble, 0, sizeof s->preamble);
 
@@ -990,8 +990,7 @@ int raft_io_uv_rpc__init(struct raft_io_uv_rpc *r,
     r->connect_retry_delay = RAFT_IO_UV_RPC_CLIENT__CONNECT_RETRY_DELAY;
     r->n_active = 1 /* The transport connection listener */;
 
-    r->recv.data = NULL;
-    r->recv.cb = NULL;
+    r->recv_cb = NULL;
 
     r->stop.data = NULL;
     r->stop.cb = NULL;
@@ -1025,13 +1024,12 @@ void raft_io_uv_rpc__close(struct raft_io_uv_rpc *r)
 int raft_io_uv_rpc__start(struct raft_io_uv_rpc *r,
                           unsigned id,
                           const char *address,
-                          void *data,
-                          void (*recv)(void *data, struct raft_message *msg))
+                          void (*recv_cb)(void *data,
+                                          struct raft_message *msg))
 {
     int rv;
 
-    r->recv.data = data;
-    r->recv.cb = recv;
+    r->recv_cb = recv_cb;
 
     rv = r->transport->start(r->transport, id, address, r,
                              raft_io_uv_rpc__connection_cb);
@@ -1097,7 +1095,7 @@ static int raft_io_uv_rpc__get_client(struct raft_io_uv_rpc *r,
             /* TODO: handle a change in the address */
             assert(strcmp((*client)->address, address) == 0);
             if ((*client)->stream == NULL &&
-                (*client)->n_connect_attempt == 0) {
+                (*client)->state == RAFT_IO_UV_RPC_CLIENT__CLOSED) {
                 goto start;
             }
             return 0;

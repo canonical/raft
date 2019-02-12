@@ -393,6 +393,10 @@ struct raft_message
     };
 };
 
+typedef void (*raft_io_tick_cb)(struct raft_io *io, unsigned elapsed);
+typedef void (*raft_io_recv_cb)(struct raft_io *io, struct raft_message *msg);
+typedef void (*raft_io_close_cb)(void *data);
+
 /**
  * I/O backend interface implementing periodic ticks, log store read/writes
  * and send/receive of network RPCs.
@@ -410,25 +414,9 @@ struct raft_io
     void *data;
 
     /**
-     * Start the backend.
-     *
-     * From now on the implementation must start accepting RPC requests and must
-     * invoke the @tick callback every @msecs milliseconds. The @recv callback
-     * must be invoked when receiving a message.
+     * Implementation-defined state object.
      */
-    int (*start)(const struct raft_io *io,
-                 unsigned id,
-                 const char *address,
-                 unsigned msecs,
-                 void *data,
-                 void (*tick)(void *data, unsigned elapsed),
-                 void (*recv)(void *data, struct raft_message *message));
-
-    /**
-     * Immediately cancel any in-progress I/O and stop invoking the tick
-     * function.
-     */
-    int (*stop)(const struct raft_io *io, void *data, void (*cb)(void *data));
+    void *impl;
 
     /**
      * Read persisted state from storage.
@@ -440,15 +428,36 @@ struct raft_io
      * request is completed ownership of such memory is transfered to the
      * raft instance.
      *
-     * This request is guaranteed to be the very first request issued agaist the
-     * backend. No further load request will be issued.
+     * This request is guaranteed to be the very first function call issued
+     * agaist the backend. No further load request will be issued.
      */
-    int (*load)(const struct raft_io *io,
+    int (*load)(struct raft_io *io,
                 raft_term *term,
                 unsigned *voted_for,
                 raft_index *start_index,
                 struct raft_entry **entries,
                 size_t *n_entries);
+
+    /**
+     * Start the backend.
+     *
+     * From now on the implementation must start accepting RPC requests and must
+     * invoke the @tick_cb callback every @msecs milliseconds. The @recv_cb
+     * callback must be invoked when receiving a message.
+     */
+    int (*start)(struct raft_io *io,
+                 unsigned id,
+                 const char *address,
+                 unsigned msecs,
+                 raft_io_tick_cb tick_cb,
+                 raft_io_recv_cb recv_cb);
+
+    /**
+     * Stop accepting new I/O requests and cancel any in-progress I/O as soon as
+     * possible. Invoking the close callback when all I/O has terminated and the
+     * #raft_io instance can be freed.
+     */
+    int (*stop)(const struct raft_io *io, void *data, void (*cb)(void *data));
 
     /**
      * Bootstrap a server belonging to a new cluster.
@@ -460,7 +469,7 @@ struct raft_io
      * If an attempt is made to bootstrap a server that has already some sate,
      * then #RAFT_IO_CANTBOOTSTRAP must be returned.
      */
-    int (*bootstrap)(const struct raft_io *io,
+    int (*bootstrap)(struct raft_io *io,
                      const struct raft_configuration *conf);
 
     /**
@@ -483,23 +492,21 @@ struct raft_io
      * The implementation is guaranteed that the memory holding the given
      * entries will not be released until the @cb callback is invoked.
      */
-    int (*append)(const struct raft_io *io,
+    int (*append)(struct raft_io *io,
                   const struct raft_entry entries[],
                   unsigned n,
                   void *data,
                   void (*cb)(void *data, int status));
 
     /**
-     * Asynchronously delete all log entries from the given index onwards. Any
-     * subsequent call to @append must be executed against the truncated log
-     * (iow it has to be deferred until the truncation has completed).
+     * Asynchronously truncate all log entries from the given index onwards.
      */
-    int (*truncate)(const struct raft_io *io, raft_index index);
+    int (*truncate)(struct raft_io *io, raft_index index);
 
     /**
      * Asynchronously send a message.
      */
-    int (*send)(const struct raft_io *io,
+    int (*send)(struct raft_io *io,
                 const struct raft_message *message,
                 void *data,
                 void (*cb)(void *data, int status));

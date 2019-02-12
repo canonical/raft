@@ -55,10 +55,14 @@ libraft_la_SOURCES = \
 if IO_UV
   libraft_la_SOURCES += \
   src/io_uv.c \
+  src/io_uv_fs.c \
   src/io_uv_encoding.c \
+  src/io_uv_loader.c \
+  src/io_uv_metadata.c \
+  src/io_uv_preparer.c \
+  src/io_uv_writer.c \
+  src/io_uv_closer.c \
   src/io_uv_rpc.c \
-  src/io_uv_store.c \
-  src/io_uv_store_preparer.c \
   src/uv_file.c
 endif
 if IO_STUB
@@ -110,8 +114,11 @@ if IO_UV
   unit_test_SOURCES += \
   test/unit/test_io_uv.c \
   test/unit/test_io_uv_rpc.c \
-  test/unit/test_io_uv_store.c \
-  test/unit/test_io_uv_store_preparer.c \
+  test/unit/test_io_uv_loader.c \
+  test/unit/test_io_uv_metadata.c \
+  test/unit/test_io_uv_preparer.c \
+  test/unit/test_io_uv_closer.c \
+  test/unit/test_io_uv_writer.c \
   test/unit/test_uv_file.c
 endif
 if IO_STUB

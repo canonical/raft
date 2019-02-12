@@ -30,6 +30,7 @@ int raft_init(struct raft *r,
 
     r->logger = logger;
     r->io = io;
+    r->io->data = r;
     r->fsm = fsm;
 
     r->id = id;
@@ -96,11 +97,11 @@ static void raft__stop_cb(void *data)
     }
 }
 
-static void raft__tick_cb(void *data, unsigned msecs)
+static void raft__tick_cb(struct raft_io *io, unsigned msecs)
 {
     struct raft *r;
 
-    r = data;
+    r = io->data;
 
     raft__tick(r, msecs);
 }
@@ -112,12 +113,12 @@ static const char *raft__message_names[] = {
     "request vote result",
 };
 
-static void raft__recv_cb(void *data, struct raft_message *message)
+static void raft__recv_cb(struct raft_io *io, struct raft_message *message)
 {
     struct raft *r;
     int rv;
 
-    r = data;
+    r = io->data;
 
     switch (message->type) {
         case RAFT_IO_APPEND_ENTRIES:
@@ -168,16 +169,10 @@ int raft_start(struct raft *r)
     assert(r->heartbeat_timeout != 0);
     assert(r->heartbeat_timeout < r->election_timeout);
 
-    rv = r->io->start(r->io, r->id, r->address, r->heartbeat_timeout, r,
-                      raft__tick_cb, raft__recv_cb);
-    if (rv != 0) {
-        goto err;
-    }
-
     rv = r->io->load(r->io, &r->current_term, &r->voted_for, &start_index,
                      &entries, &n_entries);
     if (rv != 0) {
-        goto err_after_io_start;
+        goto err;
     }
 
     /* If the start index is 1 and the log is not empty, then the first entry
@@ -220,6 +215,12 @@ int raft_start(struct raft *r)
         }
     }
 
+    rv = r->io->start(r->io, r->id, r->address, r->heartbeat_timeout,
+                      raft__tick_cb, raft__recv_cb);
+    if (rv != 0) {
+        goto err_after_load;
+    }
+
     if (entries != NULL) {
         raft_free(entries);
     }
@@ -233,9 +234,6 @@ err_after_load:
         raft_free(entries[0].batch);
         raft_free(entries);
     }
-
-err_after_io_start:
-    r->io->stop(r->io, r, raft__stop_cb);
 
 err:
     assert(rv != 0);

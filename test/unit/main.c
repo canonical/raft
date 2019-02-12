@@ -12,8 +12,11 @@ extern MunitSuite raft_io_stub_suites[];
 #if RAFT_IO_UV
 extern MunitSuite raft_io_uv_suites[];
 extern MunitSuite raft_io_uv_rpc_suites[];
-extern MunitSuite raft_io_uv_store_suites[];
-extern MunitSuite raft_io_uv_store_preparer_suites[];
+extern MunitSuite raft_io_uv_loader_suites[];
+extern MunitSuite raft_io_uv_metadata_suites[];
+extern MunitSuite raft_io_uv_preparer_suites[];
+extern MunitSuite raft_io_uv_closer_suites[];
+extern MunitSuite raft_io_uv_writer_suites[];
 #endif
 extern MunitSuite raft_log_suites[];
 extern MunitSuite raft_logger_suites[];
@@ -38,8 +41,11 @@ static MunitSuite suites[] = {
 #if RAFT_IO_UV
     {"io-uv", NULL, raft_io_uv_suites, 1, 0},
     {"io-uv-rpc", NULL, raft_io_uv_rpc_suites, 1, 0},
-    {"io-uv-store", NULL, raft_io_uv_store_suites, 1, 0},
-    {"io-uv-store-preparer", NULL, raft_io_uv_store_preparer_suites, 1, 0},
+    {"io-uv-loader", NULL, raft_io_uv_loader_suites, 1, 0},
+    {"io-uv-metadata", NULL, raft_io_uv_metadata_suites, 1, 0},
+    {"io-uv-preparer", NULL, raft_io_uv_preparer_suites, 1, 0},
+    {"io-uv-closer", NULL, raft_io_uv_closer_suites, 1, 0},
+    {"io-uv-writer", NULL, raft_io_uv_writer_suites, 1, 0},
 #endif
     {"log", NULL, raft_log_suites, 1, 0},
     {"logger", NULL, raft_logger_suites, 1, 0},

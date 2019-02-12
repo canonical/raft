@@ -39,9 +39,9 @@ struct fixture
     } stop_cb;
 };
 
-static void __tick_cb(void *data, const unsigned elapsed)
+static void __tick_cb(struct raft_io *io, const unsigned elapsed)
 {
-    struct fixture *f = data;
+    struct fixture *f = io->data;
 
     f->tick_cb.invoked = true;
     f->tick_cb.elapsed = elapsed;
@@ -63,9 +63,9 @@ static void __send_cb(void *data, const int status)
     f->send_cb.status = status;
 }
 
-static void __recv_cb(void *data, struct raft_message *message)
+static void __recv_cb(struct raft_io *io, struct raft_message *message)
 {
-    struct fixture *f = data;
+    struct fixture *f = io->data;
 
     f->recv_cb.invoked = true;
     f->recv_cb.message = message;
@@ -92,8 +92,10 @@ static void *setup(const MunitParameter params[], void *user_data)
     rv = raft_io_stub_init(&f->io, &f->logger);
     munit_assert_int(rv, ==, 0);
 
-    rv = f->io.start(&f->io, 1, "1", 50, f, __tick_cb, __recv_cb);
+    rv = f->io.start(&f->io, 1, "1", 50, __tick_cb, __recv_cb);
     munit_assert_int(rv, ==, 0);
+
+    f->io.data = f;
 
     f->tick_cb.invoked = false;
     f->tick_cb.elapsed = 0;
