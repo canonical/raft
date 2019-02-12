@@ -11,6 +11,8 @@
 
 #include <uv.h>
 
+#include "queue.h"
+
 /**
  * Maximum length of a file path.
  */
@@ -27,6 +29,11 @@
 #define RAFT__UV_FILE_MAX_DIR_LEN \
     (RAFT__UV_FILE_MAX_PATH_LEN - \
      (strlen("/") + RAFT__UV_FILE_MAX_FILENAME_LEN))
+
+/**
+ * Convenience to declare a variable that can hold a file name.
+ */
+typedef char raft__uv_file_name[RAFT__UV_FILE_MAX_FILENAME_LEN];
 
 /**
  * Convenience to declare a variable that can hold a file system path.
@@ -98,7 +105,7 @@ int raft__uv_file_create(struct raft__uv_file *f,
 int raft__uv_file_write(struct raft__uv_file *f,
                         struct raft__uv_file_write *req,
                         const uv_buf_t bufs[],
-                        unsigned n,
+                        unsigned n_bufs,
                         size_t offset,
                         raft__uv_file_write_cb cb);
 
@@ -108,9 +115,26 @@ int raft__uv_file_write(struct raft__uv_file *f,
  */
 void raft__uv_file_close(struct raft__uv_file *f, raft__uv_file_close_cb cb);
 
+/**
+ * Return true if the file is currengly being created.
+ */
+bool raft__uv_file_is_creating(struct raft__uv_file *f);
+
+/**
+ * Return true if there are pending write requests.
+ */
+bool raft__uv_file_is_writing(struct raft__uv_file *f);
+
+/**
+ * Return true if the file is closing or has been closed.
+ */
+bool raft__uv_file_is_closing(struct raft__uv_file *f);
+
 struct raft__uv_file
 {
+    void *data;                      /* User data */
     struct uv_loop_s *loop;          /* Event loop */
+    int flags;                       /* State flags */
     int fd;                          /* Operating system file descriptor */
     bool async;                      /* Whether fully async I/O is supported */
     int event_fd;                    /* Poll'ed to check if write is finished */
@@ -118,6 +142,7 @@ struct raft__uv_file
     aio_context_t ctx;               /* KAIO handle */
     struct io_event *events;         /* Array of KAIO response objects */
     unsigned n_events;               /* Length of the events array */
+    raft__queue write_queue;         /* Queue of inflight write requests */
     raft__uv_file_close_cb close_cb; /* Close callback */
 };
 
@@ -140,6 +165,7 @@ struct raft__uv_file_write
     struct uv_work_s work;      /* To execute logic in the threadpool */
     raft__uv_file_write_cb cb;  /* Callback to invoke upon request completion */
     struct iocb iocb;           /* KAIO request (for writing) */
+    raft__queue queue;          /* Prev/next links in the inflight queue */
 };
 
 #endif /* RAFT_UV_FILE_H_ */

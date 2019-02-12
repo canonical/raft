@@ -35,6 +35,7 @@ enum {
     RAFT_ERR_CONFIGURATION_BUSY,
     RAFT_ERR_IO,
     RAFT_ERR_IO_CORRUPT,
+    RAFT_ERR_IO_CANCELED,
     RAFT_ERR_IO_ABORTED,
     RAFT_ERR_IO_NAMETOOLONG,
     RAFT_ERR_IO_MALFORMED,
@@ -64,6 +65,7 @@ enum {
       "a configuration change is already in progress")                   \
     X(RAFT_ERR_IO, "I/O error")                                          \
     X(RAFT_ERR_IO_CORRUPT, "persisted data is corrupted")                \
+    X(RAFT_ERR_IO_CANCELED, "operation canceled")                        \
     X(RAFT_ERR_IO_ABORTED, "backend was stopped or has errored")         \
     X(RAFT_ERR_IO_NAMETOOLONG, "data directory path is too long")        \
     X(RAFT_ERR_IO_MALFORMED, "encoded data is malformed")                \
@@ -709,7 +711,8 @@ struct raft
              * which is specific to followers.
              */
             unsigned current_leader_id;
-            const struct raft_append_entries **pending; /* Being written to disk */
+            const struct raft_append_entries *
+                *pending; /* Being written to disk */
             size_t n_pending;
         } follower_state;
 

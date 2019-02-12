@@ -24,6 +24,44 @@
 extern char *test_dir_fs_type_supported[];
 
 /**
+ * List containing only the btrfs fs type.
+ */
+extern char *test_dir_fs_type_btrfs[];
+
+/**
+ * List containing all fs types that properly support AIO.
+ */
+extern char *test_dir_fs_type_aio[];
+
+/**
+ * List containing all fs types that do not properly support AIO.
+ */
+extern char *test_dir_fs_type_no_aio[];
+
+/**
+ * Contain a single TEST_DIR_FS_TYPE parameter set to all supported file system
+ * types.
+ */
+extern MunitParameterEnum dir_fs_supported_params[];
+
+/**
+ * Contain a single TEST_DIR_FS_TYPE parameter set to btrfs.
+ */
+extern MunitParameterEnum dir_fs_btrfs_params[];
+
+/**
+ * Contain a single TEST_DIR_FS_TYPE parameter set to all file systems with
+ * proper AIO support (i.e. NOWAIT works).
+ */
+extern MunitParameterEnum dir_fs_aio_params[];
+
+/**
+ * Contain a single TEST_DIR_FS_TYPE parameter set to all file systems without
+ * proper AIO support (i.e. NOWAIT does not work).
+ */
+extern MunitParameterEnum dir_fs_no_aio_params[];
+
+/**
  * Create a temporary test directory.
  */
 char *test_dir_setup(const MunitParameter params[]);
@@ -119,5 +157,10 @@ void test_dir_fill(const char *dir, const size_t n);
  * @io_setup.
  */
 void test_aio_fill(aio_context_t *ctx, unsigned n);
+
+/**
+ * Destroy the given AIO context.
+ */
+void test_aio_destroy(aio_context_t ctx);
 
 #endif /* TEST_IO_H */

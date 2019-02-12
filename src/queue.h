@@ -28,7 +28,7 @@ typedef void *raft__queue[2];
     ((const raft__queue *)(q) == (const raft__queue *)RAFT__QUEUE_NEXT(q))
 
 /**
- * Push an an element at the back of a queue.
+ * Insert an element at the back of a queue.
  */
 #define RAFT__QUEUE_PUSH(q, e)                     \
     {                                              \
@@ -39,9 +39,10 @@ typedef void *raft__queue[2];
     }
 
 /**
- * Remove the given element from the queue.
+ * Remove the given element from the queue. Any element can be removed at any
+ * time.
  */
-#define RAFT__QUEUE_POP(e)                              \
+#define RAFT__QUEUE_REMOVE(e)                           \
     {                                                   \
         RAFT__QUEUE_PREV_NEXT(e) = RAFT__QUEUE_NEXT(e); \
         RAFT__QUEUE_NEXT_PREV(e) = RAFT__QUEUE_PREV(e); \

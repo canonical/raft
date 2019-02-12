@@ -17,6 +17,32 @@
 char *test_dir_fs_type_supported[] = {"btrfs", "ext4", "tmpfs",
                                       "xfs",   "zfs",  NULL};
 
+char *test_dir_fs_type_btrfs[] = {"btrfs", NULL};
+
+char *test_dir_fs_type_aio[] = {"btrfs", "ext4", "xfs", NULL};
+
+char *test_dir_fs_type_no_aio[] = {"tmpfs", "zfs", NULL};
+
+MunitParameterEnum dir_fs_btrfs_params[] = {
+    {TEST_DIR_FS_TYPE, test_dir_fs_type_btrfs},
+    {NULL, NULL},
+};
+
+MunitParameterEnum dir_fs_supported_params[] = {
+    {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
+    {NULL, NULL},
+};
+
+MunitParameterEnum dir_fs_aio_params[] = {
+    {TEST_DIR_FS_TYPE, test_dir_fs_type_aio},
+    {NULL, NULL},
+};
+
+MunitParameterEnum dir_fs_no_aio_params[] = {
+    {TEST_DIR_FS_TYPE, test_dir_fs_type_no_aio},
+    {NULL, NULL},
+};
+
 char *test_dir_setup(const MunitParameter params[])
 {
     const char *fs_type = munit_parameters_get(params, TEST_DIR_FS_TYPE);
@@ -337,5 +363,13 @@ void test_aio_fill(aio_context_t *ctx, unsigned n)
     used = atoi(buf);
 
     rv = io_setup(limit - used - n, ctx);
+    munit_assert_int(rv, ==, 0);
+}
+
+void test_aio_destroy(aio_context_t ctx)
+{
+    int rv;
+
+    rv = io_destroy(ctx);
     munit_assert_int(rv, ==, 0);
 }
