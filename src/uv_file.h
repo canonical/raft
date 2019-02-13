@@ -130,6 +130,20 @@ bool raft__uv_file_is_writing(struct raft__uv_file *f);
  */
 bool raft__uv_file_is_closing(struct raft__uv_file *f);
 
+/**
+ * Synchronously truncate a file in a directory. To be run in a threadpool.
+ */
+int raft__uv_file_truncate(const char *dir,
+                           const char *filename,
+                           size_t offset);
+
+/**
+ * Synchronously rename a file in a directory. To be run in a threadpool.
+ */
+int raft__uv_file_rename(const char *dir,
+                         const char *filename1,
+                         const char *filename2);
+
 struct raft__uv_file
 {
     void *data;                      /* User data */

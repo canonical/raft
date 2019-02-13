@@ -517,6 +517,70 @@ bool raft__uv_file_is_closing(struct raft__uv_file *f)
     return (f->flags & (RAFT__UV_FILE_CLOSING | RAFT__UV_FILE_CLOSED)) != 0;
 }
 
+int raft__uv_file_truncate(const char *dir, const char *filename, size_t offset)
+{
+    raft__uv_file_path path;
+    int fd;
+    int rv;
+
+    raft__uv_file_join(dir, filename, path);
+
+    fd = open(path, O_RDWR);
+    if (fd == -1) {
+        return uv_translate_sys_error(errno);
+    }
+
+    rv = ftruncate(fd, offset);
+    if (rv == -1) {
+        close(fd);
+        return uv_translate_sys_error(errno);
+    }
+
+    rv = fsync(fd);
+    if (rv == -1) {
+        close(fd);
+        return uv_translate_sys_error(errno);
+    }
+
+    close(fd);
+
+    return 0;
+}
+
+int raft__uv_file_rename(const char *dir,
+                         const char *filename1,
+                         const char *filename2)
+{
+    raft__uv_file_path path1;
+    raft__uv_file_path path2;
+    int fd;
+    int rv;
+
+    raft__uv_file_join(dir, filename1, path1);
+    raft__uv_file_join(dir, filename2, path2);
+
+    /* TODO: double check that filename2 does not exist. */
+    rv = rename(path1, path2);
+    if (rv == -1) {
+        return uv_translate_sys_error(errno);
+    }
+
+    fd = open(dir, O_RDONLY | O_DIRECTORY);
+    if (fd == -1) {
+        return uv_translate_sys_error(errno);
+    }
+
+    rv = fsync(fd);
+
+    close(fd);
+
+    if (rv == -1) {
+        return uv_translate_sys_error(errno);
+    }
+
+    return 0;
+}
+
 #if defined(RWF_NOWAIT)
 static int raft__uv_file_block_size_probe(int fd, size_t size, bool *ok)
 {
