@@ -88,6 +88,8 @@ static int raft_io_uv__append(struct raft_io *io,
                               void *data,
                               void (*cb)(void *data, int status));
 
+static int raft_io_uv__truncate(struct raft_io *io, raft_index index);
+
 static int raft_io_uv__send(struct raft_io *io,
                             const struct raft_message *message,
                             void *data,
@@ -183,6 +185,8 @@ int raft_io_uv_init(struct raft_io *io,
     assert(RAFT_IO_UV_MAX_SEGMENT_SIZE % block_size == 0);
     n_blocks = RAFT_IO_UV_MAX_SEGMENT_SIZE / block_size;
 
+    uv->n_active = 0;
+
     /* Initialize the segment loader, preparer, closer and writer */
     raft__io_uv_loader_init(&uv->loader, logger, dir);
 
@@ -235,6 +239,7 @@ int raft_io_uv_init(struct raft_io *io,
     io->set_term = raft_io_uv__set_term;
     io->set_vote = raft_io_uv__set_vote;
     io->append = raft_io_uv__append;
+    io->truncate = raft_io_uv__truncate;
     io->send = raft_io_uv__send;
 
     return 0;
@@ -391,8 +396,6 @@ static int raft_io_uv__stop(const struct raft_io *io,
     uv_close((uv_handle_t *)&uv->ticker, raft_io_uv__ticker_close_cb);
 
     raft__io_uv_writer_close(&uv->writer, raft__io_uv_writer__close_cb);
-    raft__io_uv_preparer_close(&uv->preparer, raft__io_uv_preparer__close_cb);
-    raft__io_uv_closer_close(&uv->closer, raft__io_uv_closer__close_cb);
 
     raft_io_uv_rpc__stop(&uv->rpc, uv, raft_io_uv__rpc_stop_cb);
 
@@ -576,6 +579,15 @@ err:
     return rv;
 }
 
+static int raft_io_uv__truncate(struct raft_io *io, raft_index index)
+{
+    struct raft_io_uv *uv;
+
+    uv = io->impl;
+
+    return raft__io_uv_writer_truncate(&uv->writer, index);
+}
+
 static int raft_io_uv__send(struct raft_io *io,
                             const struct raft_message *message,
                             void *data,
@@ -644,7 +656,8 @@ static void raft__io_uv_writer__close_cb(struct raft__io_uv_writer *w)
 
     uv->n_active--;
 
-    raft_io_uv__maybe_stopped(uv);
+    raft__io_uv_preparer_close(&uv->preparer, raft__io_uv_preparer__close_cb);
+    raft__io_uv_closer_close(&uv->closer, raft__io_uv_closer__close_cb);
 }
 
 static void raft_io_uv__rpc_stop_cb(void *p)

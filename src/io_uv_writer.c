@@ -710,7 +710,7 @@ static int raft__io_uv_writer_segment_prepare(
 
     /* If this is the very first write to the segment, we need to include the
      * format version */
-    if (s->written == 0) {
+    if (s->scheduled == 0 && s->next_block == 0) {
         size += sizeof(uint64_t);
     }
 
@@ -723,7 +723,7 @@ static int raft__io_uv_writer_segment_prepare(
 
     cursor = s->arena.base + s->scheduled;
 
-    if (s->written == 0) {
+    if (s->scheduled == 0 && s->next_block == 0) {
         raft__put64(&cursor, RAFT__IO_UV_WRITER_FORMAT);
     }
 

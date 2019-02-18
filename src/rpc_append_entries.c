@@ -66,6 +66,11 @@ int raft_rpc__recv_append_entries(struct raft *r,
      * From state diagram in Figure 3.3:
      *
      *   [candidate]: discovers current leader -> [follower]
+     *
+     * Note that it should not be possible for us to be in leader state, because
+     * the leader that is sending us the request should have either a lower term
+     * (and in that case we reject the request above), or a higher term (and in
+     * that case we step down).
      */
     assert(r->state == RAFT_STATE_FOLLOWER || r->state == RAFT_STATE_CANDIDATE);
     assert(r->current_term == args->term);

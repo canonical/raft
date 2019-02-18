@@ -14,11 +14,6 @@ const char *raft_state_names[] = {"unavailable", "follower", "candidate",
 static void raft_state__clear_follower(struct raft *r)
 {
     r->follower_state.current_leader_id = 0;
-    if (r->follower_state.pending != NULL) {
-        raft_free(r->follower_state.pending);
-        r->follower_state.pending = NULL;
-    }
-    r->follower_state.n_pending = 0;
 }
 
 /**
@@ -132,9 +127,6 @@ static void raft_state__reset_follower(struct raft *r)
     /* The current leader will be set next time that we receive an AppendEntries
      * RPC. */
     r->follower_state.current_leader_id = 0;
-
-    r->follower_state.pending = NULL;
-    r->follower_state.n_pending = 0;
 }
 
 void raft_state__start_as_follower(struct raft *r)

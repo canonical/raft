@@ -508,6 +508,8 @@ static int raft__io_uv_closer_truncate_segment(
     int fd;
     int rv = 0;
 
+    raft_infof(c->logger, "truncate %u-%u at %u", segment->first_index, segment->end_index, index);
+
     rv = raft__io_uv_loader_load_closed(c->loader, segment, &entries, &n);
     if (rv != 0) {
         goto out;
@@ -534,7 +536,7 @@ static int raft__io_uv_closer_truncate_segment(
 
     buf.len = sizeof(uint64_t) +     /* Format version */
               sizeof(uint32_t) * 2 + /* CRC checksum */
-              raft_io_uv_sizeof__batch_header(1) /* Batch header */;
+              raft_io_uv_sizeof__batch_header(m) /* Batch header */;
     buf.base = raft_malloc(buf.len);
 
     if (buf.base == NULL) {

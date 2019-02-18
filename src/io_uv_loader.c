@@ -425,7 +425,7 @@ static int raft__io_uv_loader_load_from_list(
                 goto err;
             }
 
-	    raft_free(tmp_entries);
+            raft_free(tmp_entries);
 
             next_index += tmp_n;
         }
@@ -533,7 +533,6 @@ static int raft__io_uv_loader_segment_load_open(
             return RAFT_ERR_IO;
         }
 
-        raft_debugf(logger, "segment %s: load batch %d", path, i);
         rv = raft__io_uv_loader_segment_load_batch(logger, fd, &tmp_entries,
                                                    &tmp_n_entries, &last);
         if (rv != 0) {
@@ -651,6 +650,7 @@ static int raft__io_uv_loader_segment_load_batch(struct raft_logger *logger,
     /* Read the preamble, consisting of the checksums for the batch header and
      * data buffers and the first 8 bytes of the header buffer, which contains
      * the number of entries in the batch. */
+    off_t pos = lseek(fd, 0, SEEK_CUR);
     rv = raft__io_uv_fs_read_n(fd, preamble, sizeof preamble);
     if (rv != 0) {
         return RAFT_ERR_IO;
@@ -671,7 +671,7 @@ static int raft__io_uv_loader_segment_load_batch(struct raft_logger *logger,
     max_n = RAFT_IO_UV_MAX_SEGMENT_SIZE / (sizeof(uint64_t) * 4);
 
     if (n > max_n) {
-        raft_errorf(logger, "batch has %d entries", n);
+        raft_errorf(logger, "batch has %u entries (preamble at %d)", n, pos);
         rv = RAFT_ERR_IO_CORRUPT;
         goto err;
     }
