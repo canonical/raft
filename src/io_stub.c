@@ -39,9 +39,9 @@ struct raft_io_stub
     unsigned voted_for;
 
     /* Log */
-    raft_index start_index;     /* Index of the first persisted entry */
-    struct raft_entry *entries; /* Array or persisted entries */
-    size_t n;                   /* Size of the persisted entries array */
+    struct raft_snapshot *snapshot; /* Latest snapshot */
+    struct raft_entry *entries;     /* Array or persisted entries */
+    size_t n;                       /* Size of the persisted entries array */
 
     /* Parameters passed via raft_io->init */
     struct raft_logger *logger;
@@ -162,13 +162,10 @@ static int raft_io_stub__start(struct raft_io *io,
     return 0;
 }
 
-static int raft_io_stub__stop(const struct raft_io *io,
-                              void *data,
-                              void (*cb)(void *data))
+static int raft_io_stub__stop(struct raft_io *io,
+                              void (*cb)(struct raft_io *io))
 {
-    (void)io;
-
-    cb(data);
+    cb(io);
 
     return 0;
 }
@@ -176,7 +173,7 @@ static int raft_io_stub__stop(const struct raft_io *io,
 static int raft_io_stub__load(struct raft_io *io,
                               raft_term *term,
                               unsigned *voted_for,
-                              raft_index *start_index,
+                              struct raft_snapshot **snapshot,
                               struct raft_entry **entries,
                               size_t *n_entries)
 {
@@ -195,7 +192,8 @@ static int raft_io_stub__load(struct raft_io *io,
 
     *term = s->term;
     *voted_for = s->voted_for;
-    *start_index = s->start_index;
+
+    *snapshot = NULL;
 
     if (s->n == 0) {
         *entries = NULL;
@@ -266,7 +264,7 @@ static int raft_io_stub__bootstrap(struct raft_io *io,
     }
 
     assert(s->voted_for == 0);
-    assert(s->start_index == 1);
+    assert(s->snapshot == NULL);
     assert(s->entries == NULL);
     assert(s->n == 0);
 
@@ -287,7 +285,7 @@ static int raft_io_stub__bootstrap(struct raft_io *io,
 
     s->term = 1;
     s->voted_for = 0;
-    s->start_index = 1;
+    s->snapshot = NULL;
     s->entries = entries;
     s->n = 1;
 
@@ -385,10 +383,17 @@ static int raft_io_stub__truncate(struct raft_io *io, raft_index index)
 {
     struct raft_io_stub *s;
     size_t n;
+    raft_index start_index;
 
     s = io->impl;
 
-    assert(index >= s->start_index);
+    if (s->snapshot == NULL) {
+        start_index = 1;
+    } else {
+        start_index = s->snapshot->index;
+    }
+
+    assert(index >= start_index);
 
     if (raft_io_stub__fault_tick(s)) {
         return RAFT_ERR_IO;
@@ -469,7 +474,7 @@ int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger)
     stub->term = 0;
     stub->voted_for = 0;
     stub->entries = NULL;
-    stub->start_index = 1;
+    stub->snapshot = NULL;
     stub->n = 0;
 
     memset(&stub->append, 0, sizeof stub->append);

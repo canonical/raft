@@ -22,6 +22,7 @@
  */
 struct raft_io_uv
 {
+    struct raft_io *io;                     /* Instance we are hooked to */
     struct raft_logger *logger;             /* Logger */
     struct uv_loop_s *loop;                 /* UV event loop */
     char *dir;                              /* Data directory */
@@ -42,11 +43,7 @@ struct raft_io_uv
     raft_io_tick_cb tick_cb;
     raft_io_recv_cb recv_cb;
 
-    struct
-    {
-        void *data;
-        void (*cb)(void *data);
-    } stop;
+    void (*stop_cb)(struct raft_io *io);
 };
 
 /**
@@ -64,14 +61,12 @@ static int raft_io_uv__start(struct raft_io *io,
                              raft_io_tick_cb tick_cb,
                              raft_io_recv_cb recv_cb);
 
-static int raft_io_uv__stop(const struct raft_io *io,
-                            void *data,
-                            void (*cb)(void *p));
+static int raft_io_uv__stop(struct raft_io *io, void (*cb)(struct raft_io *io));
 
 static int raft_io_uv__load(struct raft_io *io,
                             raft_term *term,
                             unsigned *voted_for,
-                            raft_index *start_index,
+                            struct raft_snapshot **snapshot,
                             struct raft_entry **entries,
                             size_t *n_entries);
 
@@ -217,6 +212,8 @@ int raft_io_uv_init(struct raft_io *io,
     }
     uv->rpc.data = io;
 
+    uv->io = io;
+
     uv->logger = logger;
     uv->loop = loop;
     uv->transport = transport;
@@ -227,8 +224,7 @@ int raft_io_uv_init(struct raft_io *io,
 
     uv->last_tick = 0;
 
-    uv->stop.data = NULL;
-    uv->stop.cb = NULL;
+    uv->stop_cb = NULL;
 
     /* Set the raft_io implementation. */
     io->impl = uv;
@@ -370,20 +366,16 @@ err:
     return rv;
 }
 
-static int raft_io_uv__stop(const struct raft_io *io,
-                            void *data,
-                            void (*cb)(void *p))
+static int raft_io_uv__stop(struct raft_io *io, void (*cb)(struct raft_io *io))
 {
     struct raft_io_uv *uv;
     int rv;
 
     uv = io->impl;
 
-    assert(uv->stop.data == NULL);
-    assert(uv->stop.cb == NULL);
+    assert(uv->stop_cb == NULL);
 
-    uv->stop.data = data;
-    uv->stop.cb = cb;
+    uv->stop_cb = cb;
 
     /* Stop the tick timer handle. */
     rv = uv_timer_stop(&uv->ticker);
@@ -405,7 +397,7 @@ static int raft_io_uv__stop(const struct raft_io *io,
 static int raft_io_uv__load(struct raft_io *io,
                             raft_term *term,
                             unsigned *voted_for,
-                            raft_index *start_index,
+                            struct raft_snapshot **snapshot,
                             struct raft_entry **entries,
                             size_t *n_entries)
 {
@@ -420,7 +412,8 @@ static int raft_io_uv__load(struct raft_io *io,
 
     *term = uv->metadata.term;
     *voted_for = uv->metadata.voted_for;
-    *start_index = uv->metadata.start_index;
+
+    *snapshot = NULL;
 
     rv = raft__io_uv_loader_load_all(&uv->loader, uv->metadata.start_index,
                                      entries, n_entries);
@@ -671,11 +664,10 @@ static void raft_io_uv__rpc_stop_cb(void *p)
 
 static void raft_io_uv__maybe_stopped(struct raft_io_uv *uv)
 {
-    if (uv->stop.cb != NULL && uv->n_active == 0) {
-        uv->stop.cb(uv->stop.data);
+    if (uv->stop_cb != NULL && uv->n_active == 0) {
+        uv->stop_cb(uv->io);
 
-        uv->stop.data = NULL;
-        uv->stop.cb = NULL;
+        uv->stop_cb = NULL;
     }
 }
 
@@ -729,7 +721,8 @@ static int raft__io_uv_write_closed_1_1(struct raft_io_uv *uv,
     void *crc2_p;  /* Pointer to data checksum slot */
     int rv;
 
-    /* Make sure that the given encoded configuration fits in the first block */
+    /* Make sure that the given encoded configuration fits in the first
+     * block */
     cap = uv->writer.block_size - (sizeof(uint64_t) /* Format version */ +
                                    sizeof(uint64_t) /* Checksums */ +
                                    raft_io_uv_sizeof__batch_header(1));

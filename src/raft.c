@@ -84,11 +84,9 @@ void raft_close(struct raft *r)
     raft_configuration_close(&r->configuration);
 }
 
-static void raft__stop_cb(void *data)
+static void raft__stop_cb(struct raft_io *io)
 {
-    struct raft *r;
-
-    r = data;
+    struct raft *r = io->data;
 
     raft_infof(r->logger, "stopped");
 
@@ -156,9 +154,10 @@ static void raft__recv_cb(struct raft_io *io, struct raft_message *message)
 int raft_start(struct raft *r)
 {
     int rv;
-    raft_index start_index;
+    struct raft_snapshot *snapshot;
     struct raft_entry *entries;
     size_t n_entries;
+    raft_index start_index;
     size_t i;
 
     assert(r != NULL);
@@ -169,10 +168,16 @@ int raft_start(struct raft *r)
     assert(r->heartbeat_timeout != 0);
     assert(r->heartbeat_timeout < r->election_timeout);
 
-    rv = r->io->load(r->io, &r->current_term, &r->voted_for, &start_index,
+    rv = r->io->load(r->io, &r->current_term, &r->voted_for, &snapshot,
                      &entries, &n_entries);
     if (rv != 0) {
         goto err;
+    }
+
+    if (snapshot == NULL) {
+        start_index = 1;
+    } else {
+        start_index = snapshot->index + 1;
     }
 
     /* If the start index is 1 and the log is not empty, then the first entry
@@ -252,7 +257,7 @@ int raft_stop(struct raft *r, void *data, void (*cb)(void *data))
     r->stop.data = data;
     r->stop.cb = cb;
 
-    rv = r->io->stop(r->io, r, raft__stop_cb);
+    rv = r->io->stop(r->io, raft__stop_cb);
     if (rv != 0) {
         return rv;
     }

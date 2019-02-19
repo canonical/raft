@@ -393,6 +393,43 @@ struct raft_message
     };
 };
 
+struct raft_reader
+{
+    void *data;
+    void *impl;
+
+    int (*read)(struct raft_reader r,
+                struct raft_buffer *buf,
+                void (*cb)(struct raft_reader *r, int status));
+
+    int (*close)(struct raft_reader *s);
+};
+
+struct raft_writer
+{
+    void *data;
+    void *impl;
+
+    int (*write)(struct raft_writer *w,
+                 const struct raft_buffer bufs[],
+                 unsigned n_bufs,
+                 void (*cb)(struct raft_writer *w, int status));
+
+    int (*close)(struct raft_writer *w);
+};
+
+struct raft_snapshot
+{
+    /* Index and term of last entry included in the snapshot. */
+    raft_index index;
+    raft_term term;
+
+    /* Content and index of last committed configuration included in the
+     * snapshot */
+    struct raft_configuration configuration;
+    raft_index configuration_index;
+};
+
 typedef void (*raft_io_tick_cb)(struct raft_io *io, unsigned elapsed);
 typedef void (*raft_io_recv_cb)(struct raft_io *io, struct raft_message *msg);
 typedef void (*raft_io_close_cb)(void *data);
@@ -434,8 +471,8 @@ struct raft_io
     int (*load)(struct raft_io *io,
                 raft_term *term,
                 unsigned *voted_for,
-                raft_index *start_index,
-                struct raft_entry **entries,
+                struct raft_snapshot **snapshot,
+                struct raft_entry *entries[],
                 size_t *n_entries);
 
     /**
@@ -449,15 +486,15 @@ struct raft_io
                  unsigned id,
                  const char *address,
                  unsigned msecs,
-                 raft_io_tick_cb tick_cb,
-                 raft_io_recv_cb recv_cb);
+                 void (*tick)(struct raft_io *io, unsigned elapsed),
+                 void (*recv)(struct raft_io *io, struct raft_message *msg));
 
     /**
      * Stop accepting new I/O requests and cancel any in-progress I/O as soon as
      * possible. Invoking the close callback when all I/O has terminated and the
      * #raft_io instance can be freed.
      */
-    int (*stop)(const struct raft_io *io, void *data, void (*cb)(void *data));
+    int (*stop)(struct raft_io *io, void (*cb)(struct raft_io *io));
 
     /**
      * Bootstrap a server belonging to a new cluster.
@@ -469,22 +506,21 @@ struct raft_io
      * If an attempt is made to bootstrap a server that has already some sate,
      * then #RAFT_IO_CANTBOOTSTRAP must be returned.
      */
-    int (*bootstrap)(struct raft_io *io,
-                     const struct raft_configuration *conf);
+    int (*bootstrap)(struct raft_io *io, const struct raft_configuration *conf);
 
     /**
      * Synchronously persist current term (and nil vote). The implementation
      * MUST ensure that the change is durable before returning (e.g. using
      * fdatasync() or #O_DSYNC).
      */
-    int (*set_term)(struct raft_io *io, const raft_term term);
+    int (*set_term)(struct raft_io *io, raft_term term);
 
     /**
      * Synchronously persist who we voted for. The implementation MUST ensure
      * that the change is durable before returning (e.g. using fdatasync() or
      * #O_DIRECT).
      */
-    int (*set_vote)(struct raft_io *io, const unsigned server_id);
+    int (*set_vote)(struct raft_io *io, unsigned server_id);
 
     /**
      * Asynchronously append the given entries to the log.
@@ -495,8 +531,8 @@ struct raft_io
     int (*append)(struct raft_io *io,
                   const struct raft_entry entries[],
                   unsigned n,
-                  void *data,
-                  void (*cb)(void *data, int status));
+                  void *req,
+                  void (*cb)(void *req, int status));
 
     /**
      * Asynchronously truncate all log entries from the given index onwards.
@@ -510,6 +546,14 @@ struct raft_io
                 const struct raft_message *message,
                 void *data,
                 void (*cb)(void *data, int status));
+
+    int (*create_snapshot)(struct raft_io *io,
+                           const struct raft_snapshot *snapshot,
+                           struct raft_writer *writer);
+
+    int (*get_snapshot)(struct raft_io *io,
+                        struct raft_snapshot *snapshot,
+                        struct raft_reader *reader);
 };
 
 /**
@@ -525,6 +569,16 @@ struct raft_fsm
      * Apply a committed RAFT_LOG_COMMAND entry to the state machine.
      */
     int (*apply)(struct raft_fsm *fsm, const struct raft_buffer *buf);
+
+    /**
+     * Take a snapshot of the state machine.
+     */
+    int (*snapshot)(struct raft_fsm *fsm, struct raft_writer *writer);
+
+    /**
+     * Restore a snapshot of the state machine.
+     */
+    int (*restore)(struct raft_fsm *fsm, struct raft_reader *reader);
 };
 
 /**

@@ -71,9 +71,9 @@ static void __recv_cb(struct raft_io *io, struct raft_message *message)
     f->recv_cb.message = message;
 }
 
-static void __stop_cb(void *data)
+static void __stop_cb(struct raft_io *io)
 {
-    struct fixture *f = data;
+    struct fixture *f = io->data;
 
     f->stop_cb.invoked = true;
 }
@@ -115,7 +115,7 @@ static void tear_down(void *data)
 {
     struct fixture *f = data;
 
-    f->io.stop(&f->io, f, __stop_cb);
+    f->io.stop(&f->io, __stop_cb);
 
     munit_assert_true(f->stop_cb.invoked);
 
@@ -138,18 +138,18 @@ static void tear_down(void *data)
 /**
  * Load the initial state from the store and check that no error occurs.
  */
-#define __load(F)                                                          \
-    {                                                                      \
-        raft_term term;                                                    \
-        unsigned voted_for;                                                \
-        raft_index start_index;                                            \
-        struct raft_entry *entries;                                        \
-        size_t n_entries;                                                  \
-        int rv;                                                            \
-                                                                           \
-        rv = F->io.load(&F->io, &term, &voted_for, &start_index, &entries, \
-                        &n_entries);                                       \
-        munit_assert_int(rv, ==, 0);                                       \
+#define __load(F)                                                       \
+    {                                                                   \
+        raft_term term;                                                 \
+        unsigned voted_for;                                             \
+        struct raft_snapshot *snapshot;                                 \
+        struct raft_entry *entries;                                     \
+        size_t n_entries;                                               \
+        int rv;                                                         \
+                                                                        \
+        rv = F->io.load(&F->io, &term, &voted_for, &snapshot, &entries, \
+                        &n_entries);                                    \
+        munit_assert_int(rv, ==, 0);                                    \
     }
 
 /**
@@ -212,20 +212,19 @@ static MunitResult test_load_pristine(const MunitParameter params[], void *data)
     struct fixture *f = data;
     raft_term term;
     unsigned voted_for;
-    raft_index start_index;
     struct raft_entry *entries;
     size_t n_entries;
+    struct raft_snapshot *snapshot;
     int rv;
 
     (void)params;
 
-    rv = f->io.load(&f->io, &term, &voted_for, &start_index, &entries,
-                    &n_entries);
+    rv = f->io.load(&f->io, &term, &voted_for, &snapshot, &entries, &n_entries);
     munit_assert_int(rv, ==, 0);
 
     munit_assert_int(term, ==, 0);
     munit_assert_int(voted_for, ==, 0);
-    munit_assert_int(start_index, ==, 1);
+    munit_assert_ptr_null(snapshot);
     munit_assert_ptr_null(entries);
     munit_assert_int(n_entries, ==, 0);
 
@@ -371,7 +370,7 @@ static MunitResult test_append_pristine(const MunitParameter params[],
 
 /* Make two request append entries requests concurrently. */
 static MunitResult test_append_concurrent(const MunitParameter params[],
-                                        void *data)
+                                          void *data)
 {
     struct fixture *f = data;
     struct raft_entry entry1;
