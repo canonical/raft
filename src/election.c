@@ -14,6 +14,14 @@ void raft_election__reset_timer(struct raft *r)
     r->timer = 0;
 }
 
+static void raft_election__send_request_vote_cb(struct raft_io_send *req,
+                                                int status)
+{
+    (void)status;
+
+    raft_free(req);
+}
+
 /**
  * Send a RequestVote RPC to the given server.
  */
@@ -21,6 +29,7 @@ static int raft_election__send_request_vote(struct raft *r,
                                             const struct raft_server *server)
 {
     struct raft_message message;
+    struct raft_io_send *req;
     int rv;
 
     assert(r != NULL);
@@ -40,8 +49,14 @@ static int raft_election__send_request_vote(struct raft *r,
     message.server_id = server->id;
     message.server_address = server->address;
 
-    rv = r->io->send(r->io, &message, NULL, NULL);
+    req = raft_malloc(sizeof *req);
+    if (req == NULL) {
+        return RAFT_ERR_NOMEM;
+    }
+
+    rv = r->io->send(r->io, req, &message, raft_election__send_request_vote_cb);
     if (rv != 0) {
+        raft_free(req);
         return rv;
     }
 

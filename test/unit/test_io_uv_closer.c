@@ -507,10 +507,24 @@ static MunitTest truncate_tests[] = {
  * raft__io_uv_closer_close
  */
 
+/* It's possible to close the closer right after initialization. */
+static MunitResult test_close_noop(const MunitParameter params[], void *data)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    __close(f);
+
+    return MUNIT_OK;
+}
+
 /* When the closer is closed, all pending get requests get canceled. */
 static MunitResult test_close_wait(const MunitParameter params[], void *data)
 {
     struct fixture *f = data;
+
+    (void)params;
 
     __make_open_segment(f);
     __put_assert_result(f, 0);
@@ -528,8 +542,6 @@ static MunitResult test_close_wait(const MunitParameter params[], void *data)
     munit_assert_false(
         test_dir_has_file(f->dir, "00000000000000000003-00000000000000000004"));
 
-    (void)params;
-
     return MUNIT_OK;
 }
 
@@ -539,6 +551,7 @@ static MunitResult test_close_wait(const MunitParameter params[], void *data)
     }
 
 static MunitTest close_tests[] = {
+    __test_close("noop", noop, NULL),
     __test_close("wait", wait, NULL),
     {NULL, NULL, NULL, NULL, 0, NULL},
 };

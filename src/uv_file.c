@@ -514,16 +514,6 @@ void raft__uv_file_close(struct raft__uv_file *f, raft__uv_file_close_cb cb)
     raft__uv_file_maybe_closed(f);
 }
 
-bool raft__uv_file_is_creating(struct raft__uv_file *f)
-{
-    return f->flags & RAFT__UV_FILE_CREATING;
-}
-
-bool raft__uv_file_is_writing(struct raft__uv_file *f)
-{
-    return !RAFT__QUEUE_IS_EMPTY(&f->write_queue);
-}
-
 bool raft__uv_file_is_closing(struct raft__uv_file *f)
 {
     return (f->flags & (RAFT__UV_FILE_CLOSING | RAFT__UV_FILE_CLOSED)) != 0;
@@ -612,7 +602,7 @@ static void raft__uv_file_create_work_cb(uv_work_t *work)
     req = work->data;
     f = req->file;
 
-    assert(raft__uv_file_is_creating(f));
+    assert(f->flags & RAFT__UV_FILE_CREATING);
 
     /* If we were closed, abort immediately. */
     if (raft__uv_file_is_closing(f)) {
@@ -959,12 +949,12 @@ static void raft__uv_file_maybe_closed(struct raft__uv_file *f)
     assert((f->flags & RAFT__UV_FILE_CLOSED) == 0);
 
     /* If are creating the file we need to wait for the create to finish. */
-    if (raft__uv_file_is_creating(f)) {
+    if (f->flags & RAFT__UV_FILE_CREATING) {
         return;
     }
 
     /* If are writing we need to wait for the writes to finish. */
-    if (raft__uv_file_is_writing(f)) {
+    if (!RAFT__QUEUE_IS_EMPTY(&f->write_queue)) {
         return;
     }
 

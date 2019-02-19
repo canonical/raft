@@ -33,6 +33,7 @@ struct raft_replication__send_append_entries
     raft_index index;           /* Index of the first entry in the request. */
     struct raft_entry *entries; /* Entries referenced in the request. */
     unsigned n;                 /* Length of the entries array. */
+    struct raft_io_send req;
 };
 
 /**
@@ -56,9 +57,10 @@ struct raft_replication__follower_append
 /**
  * Callback invoked after request to send an AppendEntries RPC has completed.
  */
-static void raft_replication__send_append_entries_cb(void *data, int status)
+static void raft_replication__send_append_entries_cb(struct raft_io_send *req,
+                                                     int status)
 {
-    struct raft_replication__send_append_entries *request = data;
+    struct raft_replication__send_append_entries *request = req->data;
     struct raft *r = request->raft;
 
     raft_debugf(r->logger, "send append entries completed: status %d", status);
@@ -160,7 +162,8 @@ int raft_replication__send_append_entries(struct raft *r, size_t i)
     request->entries = args->entries;
     request->n = args->n_entries;
 
-    rv = r->io->send(r->io, &message, request,
+    request->req.data = request;
+    rv = r->io->send(r->io, &request->req, &message,
                      raft_replication__send_append_entries_cb);
     if (rv != 0) {
         goto err_after_request_alloc;
@@ -516,6 +519,13 @@ int raft_replication__update(struct raft *r,
     return 0;
 }
 
+static void raft_replication__follower_respond_cb(struct raft_io_send *req,
+                                                  int status)
+{
+    (void)status;
+    raft_free(req);
+}
+
 static void raft_replication__follower_append_cb(void *data, int status)
 {
     struct raft_replication__follower_append *request = data;
@@ -524,6 +534,7 @@ static void raft_replication__follower_append_cb(void *data, int status)
     struct raft_message message;
     struct raft_append_entries_result *result = &message.append_entries_result;
     const struct raft_server *leader;
+    struct raft_io_send *req;
     const char *leader_address;
     size_t i;
     raft_index last_index;
@@ -630,8 +641,15 @@ respond:
     message.server_id = args->leader_id;
     message.server_address = leader_address;
 
-    rv = r->io->send(r->io, &message, NULL, NULL);
+    req = raft_malloc(sizeof *req);
+    if (req == NULL) {
+        goto out;
+    }
+
+    rv = r->io->send(r->io, req, &message,
+                     raft_replication__follower_respond_cb);
     if (rv != 0) {
+        raft_free(req);
         goto out;
     }
 

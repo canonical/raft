@@ -58,7 +58,7 @@ static void tear_down(void *data)
 {
     struct fixture *f = data;
 
-    raft_close(&f->raft);
+    raft_close(&f->raft, NULL);
 
     test_fsm_tear_down(&f->fsm);
     test_io_tear_down(&f->io);

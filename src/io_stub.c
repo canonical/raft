@@ -5,7 +5,7 @@
 #include "assert.h"
 
 /* Set to 1 to enable logging. */
-#if 0
+#if 1
 #define __debugf(S, MSG, ...) raft_debugf(S->logger, MSG, __VA_ARGS__)
 #else
 #define __debugf(S, MSG, ...)
@@ -22,6 +22,8 @@
  */
 struct raft_io_stub_send
 {
+    struct raft_io_send *req;
+    raft_io_send_cb cb2;
     void *data;
     void (*cb)(void *data, int status);
 };
@@ -134,9 +136,21 @@ static bool raft_io_stub__fault_tick(struct raft_io_stub *s)
     return false;
 }
 
+static int raft_io_stub__init(struct raft_io *io,
+                              unsigned id,
+                              const char *address)
+{
+    struct raft_io_stub *s;
+
+    s = io->impl;
+
+    s->id = id;
+    s->address = address;
+
+    return 0;
+}
+
 static int raft_io_stub__start(struct raft_io *io,
-                               unsigned id,
-                               const char *address,
                                unsigned msecs,
                                raft_io_tick_cb tick_cb,
                                raft_io_recv_cb recv_cb)
@@ -153,19 +167,40 @@ static int raft_io_stub__start(struct raft_io *io,
         return RAFT_ERR_IO;
     }
 
-    s->id = id;
-    s->address = address;
-
     s->tick_cb = tick_cb;
     s->recv_cb = recv_cb;
 
     return 0;
 }
 
-static int raft_io_stub__stop(struct raft_io *io,
-                              void (*cb)(struct raft_io *io))
+static void raft_io_stub__reset_flushed(struct raft_io_stub *s);
+
+static int raft_io_stub__close(struct raft_io *io,
+                               void (*cb)(struct raft_io *io))
 {
-    cb(io);
+    struct raft_io_stub *s;
+    size_t i;
+
+    s = io->impl;
+
+    for (i = 0; i < s->n; i++) {
+        struct raft_entry *entry = &s->entries[i];
+        raft_free(entry->buf.base);
+    }
+
+    if (s->entries != NULL) {
+        raft_free(s->entries);
+    }
+
+    if (s->append.pending.entries != NULL) {
+        raft_free(s->append.pending.entries);
+    }
+
+    raft_io_stub__reset_flushed(s);
+
+    if (cb != NULL) {
+        cb(io);
+    }
 
     return 0;
 }
@@ -435,9 +470,9 @@ static int raft_io_stub__truncate(struct raft_io *io, raft_index index)
  * is invoked.
  */
 static int raft_io_stub__send(struct raft_io *io,
+                              struct raft_io_send *req,
                               const struct raft_message *message,
-                              void *data,
-                              void (*cb)(void *data, int status))
+                              raft_io_send_cb cb)
 {
     struct raft_io_stub *s;
     size_t i;
@@ -452,8 +487,9 @@ static int raft_io_stub__send(struct raft_io *io,
 
     s->send.pending.n_messages++;
     s->send.pending.messages[i] = *message;
-    s->send.pending.requests[i].cb = cb;
-    s->send.pending.requests[i].data = data;
+    s->send.pending.requests[i].req = req;
+    s->send.pending.requests[i].cb2 = cb;
+    s->send.pending.requests[i].cb = NULL;
 
     return 0;
 }
@@ -484,8 +520,9 @@ int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger)
     stub->fault.n = -1;
 
     io->impl = stub;
+    io->init = raft_io_stub__init;
     io->start = raft_io_stub__start;
-    io->stop = raft_io_stub__stop;
+    io->close = raft_io_stub__close;
     io->load = raft_io_stub__load;
     io->bootstrap = raft_io_stub__bootstrap;
     io->set_term = raft_io_stub__set_term;
@@ -495,6 +532,11 @@ int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger)
     io->send = raft_io_stub__send;
 
     return 0;
+}
+
+void raft_io_stub_close(struct raft_io *io)
+{
+    raft_free(io->impl);
 }
 
 /**
@@ -526,33 +568,6 @@ static void raft_io_stub__reset_flushed(struct raft_io_stub *s)
     }
 
     s->send.flushed.n_messages = 0;
-}
-
-void raft_io_stub_close(struct raft_io *io)
-{
-    struct raft_io_stub *s;
-    size_t i;
-
-    assert(io != NULL);
-
-    s = io->impl;
-
-    for (i = 0; i < s->n; i++) {
-        struct raft_entry *entry = &s->entries[i];
-        raft_free(entry->buf.base);
-    }
-
-    if (s->entries != NULL) {
-        raft_free(s->entries);
-    }
-
-    if (s->append.pending.entries != NULL) {
-        raft_free(s->append.pending.entries);
-    }
-
-    raft_io_stub__reset_flushed(s);
-
-    raft_free(s);
 }
 
 void raft_io_stub_advance(struct raft_io *io, unsigned msecs)
@@ -719,6 +734,9 @@ void raft_io_stub_flush(struct raft_io *io)
 
         if (request->cb != NULL) {
             request->cb(request->data, 0);
+        }
+        if (request->cb2 != NULL) {
+            request->cb2(request->req, 0);
         }
     }
 

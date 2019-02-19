@@ -37,7 +37,7 @@
 
 #define TEST_RAFT_FIXTURE_TEAR_DOWN(F)     \
     {                                      \
-        raft_close(&F->raft);              \
+        raft_close(&F->raft, NULL);        \
                                            \
         test_fsm_tear_down(&F->fsm);       \
         test_io_tear_down(&F->io);         \
@@ -49,11 +49,6 @@
  * Start an instance and check that no error occurs.
  */
 void test_start(struct raft *r);
-
-/**
- * Stop an instance and check that no error occurs.
- */
-void test_stop(struct raft *r);
 
 /**
  * Bootstrap and start raft instance.

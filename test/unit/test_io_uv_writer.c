@@ -638,6 +638,19 @@ static MunitTest truncate_tests[] = {
  * raft__uv_writer_close
  */
 
+/* It's possilble to close the writer right after initialization. */
+static MunitResult test_close_noop(const MunitParameter params[],
+                                           void *data)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    __close(f);
+
+    return MUNIT_OK;
+}
+
 /* The write is closed while a write request is in progress. */
 static MunitResult test_close_during_write(const MunitParameter params[],
                                            void *data)
@@ -686,6 +699,7 @@ static MunitResult test_close_current_segment(const MunitParameter params[],
     }
 
 static MunitTest close_tests[] = {
+    __test_close("noop", noop, NULL),
     __test_close("during-write", during_write, NULL),
     __test_close("current-segment", current_segment, NULL),
     {NULL, NULL, NULL, NULL, 0, NULL},

@@ -13,6 +13,7 @@ struct fixture
     struct raft_heap heap;
     struct raft_logger logger;
     struct raft_io io;
+    struct raft_io_send req;
     struct
     {
         bool invoked;
@@ -55,9 +56,9 @@ static void __append_cb(void *data, const int status)
     f->append_cb.status = status;
 }
 
-static void __send_cb(void *data, const int status)
+static void __send_cb(struct raft_io_send *req, const int status)
 {
-    struct fixture *f = data;
+    struct fixture *f = req->data;
 
     f->send_cb.invoked = true;
     f->send_cb.status = status;
@@ -92,10 +93,14 @@ static void *setup(const MunitParameter params[], void *user_data)
     rv = raft_io_stub_init(&f->io, &f->logger);
     munit_assert_int(rv, ==, 0);
 
-    rv = f->io.start(&f->io, 1, "1", 50, __tick_cb, __recv_cb);
+    rv = f->io.init(&f->io, 1, "1");
+    munit_assert_int(rv, ==, 0);
+
+    rv = f->io.start(&f->io, 50, __tick_cb, __recv_cb);
     munit_assert_int(rv, ==, 0);
 
     f->io.data = f;
+    f->req.data = f;
 
     f->tick_cb.invoked = false;
     f->tick_cb.elapsed = 0;
@@ -115,7 +120,7 @@ static void tear_down(void *data)
 {
     struct fixture *f = data;
 
-    f->io.stop(&f->io, __stop_cb);
+    f->io.close(&f->io, __stop_cb);
 
     munit_assert_true(f->stop_cb.invoked);
 
@@ -432,7 +437,7 @@ static MunitResult test_send_first(const MunitParameter params[], void *data)
     message.server_id = 2;
     message.server_address = "2";
 
-    rv = f->io.send(&f->io, &message, f, __send_cb);
+    rv = f->io.send(&f->io, &f->req, &message, __send_cb);
     munit_assert_int(rv, ==, 0);
 
     raft_io_stub_flush(&f->io);

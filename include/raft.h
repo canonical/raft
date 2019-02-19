@@ -371,7 +371,7 @@ struct raft_append_entries_result
 };
 
 /**
- * Type codes for raft I/O requests.
+ * Type codes for RPC messages.
  */
 enum {
     RAFT_IO_APPEND_ENTRIES = 1,
@@ -432,7 +432,16 @@ struct raft_snapshot
 
 typedef void (*raft_io_tick_cb)(struct raft_io *io, unsigned elapsed);
 typedef void (*raft_io_recv_cb)(struct raft_io *io, struct raft_message *msg);
-typedef void (*raft_io_close_cb)(void *data);
+
+struct raft_io_send;
+typedef void (*raft_io_send_cb)(struct raft_io_send *req, int status);
+
+struct raft_io_send
+{
+    void *data;         /* User data */
+    void *impl;         /* Implementation-specific */
+    raft_io_send_cb cb; /* Request callback */
+};
 
 /**
  * I/O backend interface implementing periodic ticks, log store read/writes
@@ -455,6 +464,7 @@ struct raft_io
      */
     void *impl;
 
+    int (*init)(struct raft_io *io, unsigned id, const char *address);
     /**
      * Read persisted state from storage.
      *
@@ -483,8 +493,6 @@ struct raft_io
      * callback must be invoked when receiving a message.
      */
     int (*start)(struct raft_io *io,
-                 unsigned id,
-                 const char *address,
                  unsigned msecs,
                  void (*tick)(struct raft_io *io, unsigned elapsed),
                  void (*recv)(struct raft_io *io, struct raft_message *msg));
@@ -494,7 +502,7 @@ struct raft_io
      * possible. Invoking the close callback when all I/O has terminated and the
      * #raft_io instance can be freed.
      */
-    int (*stop)(struct raft_io *io, void (*cb)(struct raft_io *io));
+    int (*close)(struct raft_io *io, void (*cb)(struct raft_io *io));
 
     /**
      * Bootstrap a server belonging to a new cluster.
@@ -531,21 +539,18 @@ struct raft_io
     int (*append)(struct raft_io *io,
                   const struct raft_entry entries[],
                   unsigned n,
-                  void *req,
-                  void (*cb)(void *req, int status));
+                  void *data,
+                  void (*cb)(void *data, int status));
 
     /**
      * Asynchronously truncate all log entries from the given index onwards.
      */
     int (*truncate)(struct raft_io *io, raft_index index);
 
-    /**
-     * Asynchronously send a message.
-     */
     int (*send)(struct raft_io *io,
+                struct raft_io_send *req,
                 const struct raft_message *message,
-                void *data,
-                void (*cb)(void *data, int status));
+                raft_io_send_cb cb);
 
     int (*create_snapshot)(struct raft_io *io,
                            const struct raft_snapshot *snapshot,
@@ -835,13 +840,9 @@ struct raft
     void (*watchers[RAFT_EVENT_N])(void *, int, void *);
 
     /**
-     * Callback to invoke once a stop request has completed.
+     * Callback to invoke once a close request has completed.
      */
-    struct
-    {
-        void *data;
-        void (*cb)(void *data);
-    } stop;
+    void (*close_cb)(struct raft *r);
 };
 
 /**
@@ -858,7 +859,7 @@ int raft_init(struct raft *r,
 /**
  * Close a raft instance, deallocating all used resources.
  */
-void raft_close(struct raft *r);
+void raft_close(struct raft *r, void (*cb)(struct raft *r));
 
 /**
  * Bootstrap this raft instance using the given configuration. The instance must
@@ -870,12 +871,6 @@ int raft_bootstrap(struct raft *r, const struct raft_configuration *conf);
  * Start this raft instance.
  */
 int raft_start(struct raft *r);
-
-/**
- * Stop this raft instance. This should be called only after a successful call
- * to @raft_start.
- */
-int raft_stop(struct raft *r, void *data, void (*cb)(void *data));
 
 /**
  * Set a custom rand() function.

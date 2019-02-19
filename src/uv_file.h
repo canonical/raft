@@ -84,16 +84,6 @@ int raft__uv_file_write(struct raft__uv_file *f,
 void raft__uv_file_close(struct raft__uv_file *f, raft__uv_file_close_cb cb);
 
 /**
- * Return true if the file is currengly being created.
- */
-bool raft__uv_file_is_creating(struct raft__uv_file *f);
-
-/**
- * Return true if there are pending write requests.
- */
-bool raft__uv_file_is_writing(struct raft__uv_file *f);
-
-/**
  * Return true if the file is closing or has been closed.
  */
 bool raft__uv_file_is_closing(struct raft__uv_file *f);

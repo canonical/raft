@@ -73,22 +73,18 @@ struct __server
     char address[64];
 };
 
-static void __server_raft_stop_cb(void *data)
+static void __server_raft_stop_cb(struct raft *raft)
 {
-    struct uv_loop_s *loop = data;
+    struct __server *s = raft->data;
 
-    uv_stop(loop);
+    uv_stop(&s->loop);
 }
 
 static void __server_timer_close_cb(struct uv_handle_s *handle)
 {
     struct __server *s = handle->data;
-    int rv;
 
-    rv = raft_stop(&s->raft, handle->loop, __server_raft_stop_cb);
-    if (rv != 0) {
-        printf("error: stop instance: %s\n", raft_strerror(rv));
-    }
+    raft_close(&s->raft, __server_raft_stop_cb);
 }
 
 static void __server_sigint_close_cb(struct uv_handle_s *handle)
@@ -105,7 +101,11 @@ static void __server_sigint_close_cb(struct uv_handle_s *handle)
  */
 static void __server_sigint_cb(struct uv_signal_s *handle, int signum)
 {
+    struct __server *s = handle->data;
+
     assert(signum == SIGINT);
+
+    raft_infof(&s->logger, "server: stopping");
 
     uv_signal_stop(handle);
 
@@ -185,6 +185,7 @@ static int __server_init(struct __server *s, const char *dir, unsigned id)
         printf("error: init engine: %s\n", raft_strerror(rv));
         goto err_after_fsm_init;
     }
+    s->raft.data = s;
 
     /* Bootstrap the initial configuration if needed. */
     raft_configuration_init(&configuration);
@@ -213,7 +214,7 @@ err_after_configuration_init:
     raft_configuration_close(&configuration);
 
 err_after_raft_init:
-    raft_close(&s->raft);
+    raft_close(&s->raft, NULL);
 
 err_after_fsm_init:
     __fsm_close(&s->fsm);
@@ -239,7 +240,6 @@ err:
 
 static void __server_close(struct __server *s)
 {
-    raft_close(&s->raft);
     __fsm_close(&s->fsm);
     raft_io_uv_close(&s->io);
     raft_io_uv_tcp_close(&s->transport);
@@ -311,7 +311,7 @@ err_after_sigint_start:
     uv_signal_stop(&s->sigint);
 
 err_after_raft_start:
-    raft_stop(&s->raft, NULL, NULL);
+    raft_close(&s->raft, NULL);
 
 err:
     uv_close((struct uv_handle_s *)&s->timer, NULL);

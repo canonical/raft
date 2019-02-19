@@ -54,9 +54,11 @@ void test_tcp_tear_down(struct test_tcp *t)
 {
     int rv;
 
-    rv = close(t->server.socket);
-    if (rv == -1) {
-        munit_errorf("tcp: close(): %s", strerror(errno));
+    if (t->server.socket != -1) {
+        rv = close(t->server.socket);
+        if (rv == -1) {
+            munit_errorf("tcp: close(): %s", strerror(errno));
+        }
     }
 
     if (t->client.socket != -1) {
@@ -89,6 +91,28 @@ void test_tcp_connect(struct test_tcp *t, int port)
     if (rv == -1) {
         munit_errorf("tcp: connect(): %s", strerror(errno));
     }
+}
+
+void test_tcp_close(struct test_tcp *t)
+{
+    int rv;
+
+    rv = close(t->client.socket);
+    if (rv == -1) {
+        munit_errorf("tcp: close(): %s", strerror(errno));
+    }
+    t->client.socket = -1;
+}
+
+void test_tcp_stop(struct test_tcp *t)
+{
+    int rv;
+
+    rv = close(t->server.socket);
+    if (rv == -1) {
+        munit_errorf("tcp: close(): %s", strerror(errno));
+    }
+    t->server.socket = -1;
 }
 
 void test_tcp_send(struct test_tcp *t, const void *buf, int len)

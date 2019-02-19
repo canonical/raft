@@ -109,7 +109,7 @@ void test_cluster_tear_down(struct test_cluster *c)
 
         raft_io_stub_flush(io);
 
-        raft_close(raft);
+        raft_close(raft, NULL);
         test_fsm_tear_down(fsm);
         test_io_tear_down(io);
 

@@ -17,9 +17,9 @@ void test_uv_tear_down(struct uv_loop_s *l);
  * Run the loop until there are no pending active handles or the given amount of
  * iterations is reached.
  *
- * Return the number of handles that are still active.
+ * Return non-zero if there are pending handles.
  */
-unsigned test_uv_run(struct uv_loop_s *l, unsigned n);
+int test_uv_run(struct uv_loop_s *l, unsigned n);
 
 /**
  * Run the loop until there are no pending active handles.

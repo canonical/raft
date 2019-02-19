@@ -32,7 +32,7 @@ struct raft_io_uv
     struct raft__io_uv_closer closer;       /* Segment closer */
     struct raft__io_uv_writer writer;       /* Segment writer */
     struct raft_io_uv_transport *transport; /* Network transport */
-    struct raft_io_uv_rpc rpc;              /* Implement network RPC */
+    struct raft__io_uv_rpc rpc;             /* Implement network RPC */
     struct uv_timer_s ticker;               /* Timer for periodic ticks */
     uint64_t last_tick;                     /* Timestamp of the last tick */
 
@@ -54,14 +54,17 @@ static int raft__io_uv_ensure_dir(struct raft_logger *logger, const char *dir);
 /**
  * Implementation of the #raft_io interface.
  */
+static int raft_io_uv__init(struct raft_io *io,
+                            unsigned id,
+                            const char *address);
+
 static int raft_io_uv__start(struct raft_io *io,
-                             unsigned id,
-                             const char *address,
                              unsigned msecs,
                              raft_io_tick_cb tick_cb,
                              raft_io_recv_cb recv_cb);
 
-static int raft_io_uv__stop(struct raft_io *io, void (*cb)(struct raft_io *io));
+static int raft_io_uv__close(struct raft_io *io,
+                             void (*cb)(struct raft_io *io));
 
 static int raft_io_uv__load(struct raft_io *io,
                             raft_term *term,
@@ -86,9 +89,9 @@ static int raft_io_uv__append(struct raft_io *io,
 static int raft_io_uv__truncate(struct raft_io *io, raft_index index);
 
 static int raft_io_uv__send(struct raft_io *io,
+                            struct raft_io_send *req,
                             const struct raft_message *message,
-                            void *data,
-                            void (*cb)(void *data, int status));
+                            raft_io_send_cb cb);
 
 /**
  * Periodic tick timer callback, for invoking the ticker function.
@@ -100,7 +103,7 @@ static void raft__io_uv_preparer__close_cb(struct raft__io_uv_preparer *p);
 static void raft__io_uv_closer__close_cb(struct raft__io_uv_closer *p);
 static void raft__io_uv_writer__close_cb(struct raft__io_uv_writer *w);
 
-static void raft_io_uv__rpc_stop_cb(void *p);
+static void raft_io_uv__rpc_stop_cb(struct raft__io_uv_rpc *rpc);
 
 /**
  * Open and allocate the first closed segment, containing just one entry, and
@@ -206,7 +209,7 @@ int raft_io_uv_init(struct raft_io *io,
     uv->n_active++;
 
     /* Initialize the RPC system */
-    rv = raft_io_uv_rpc__init(&uv->rpc, logger, loop, transport);
+    rv = raft__io_uv_rpc_init(&uv->rpc, logger, loop, transport);
     if (rv != 0) {
         goto err_after_writer_init;
     }
@@ -228,8 +231,9 @@ int raft_io_uv_init(struct raft_io *io,
 
     /* Set the raft_io implementation. */
     io->impl = uv;
+    io->init = raft_io_uv__init;
     io->start = raft_io_uv__start;
-    io->stop = raft_io_uv__stop;
+    io->close = raft_io_uv__close;
     io->load = raft_io_uv__load;
     io->bootstrap = raft_io_uv__bootstrap;
     io->set_term = raft_io_uv__set_term;
@@ -260,8 +264,6 @@ void raft_io_uv_close(struct raft_io *io)
     struct raft_io_uv *uv;
 
     uv = io->impl;
-
-    raft_io_uv_rpc__close(&uv->rpc);
 
     raft_free(uv->dir);
     raft_free(uv);
@@ -300,20 +302,36 @@ static int raft__io_uv_ensure_dir(struct raft_logger *logger, const char *dir)
     return 0;
 }
 
-static void raft__io_uv_recv_cb(void *data, struct raft_message *msg)
+static void raft__io_uv_recv_cb(struct raft__io_uv_rpc *rpc,
+                                struct raft_message *msg)
 {
     struct raft_io *io;
     struct raft_io_uv *uv;
 
-    io = data;
+    io = rpc->data;
     uv = io->impl;
 
     uv->recv_cb(io, msg);
 }
 
+static int raft_io_uv__init(struct raft_io *io,
+                            unsigned id,
+                            const char *address)
+{
+    struct raft_io_uv *uv;
+    int rv;
+
+    uv = io->impl;
+
+    rv = uv->transport->init(uv->transport, id, address);
+    if (rv != 0) {
+        return rv;
+    }
+
+    return 0;
+}
+
 static int raft_io_uv__start(struct raft_io *io,
-                             unsigned id,
-                             const char *address,
                              unsigned msecs,
                              raft_io_tick_cb tick_cb,
                              raft_io_recv_cb recv_cb)
@@ -347,11 +365,13 @@ static int raft_io_uv__start(struct raft_io *io,
     }
     uv->n_active++;
 
-    rv = raft_io_uv_rpc__start(&uv->rpc, id, address, raft__io_uv_recv_cb);
+    rv = raft__io_uv_rpc_start(&uv->rpc, raft__io_uv_recv_cb);
     if (rv != 0) {
         goto err_after_ticker_start;
     }
     uv->n_active++;
+
+    uv->n_active++;  // The transport
 
     return 0;
 
@@ -366,7 +386,18 @@ err:
     return rv;
 }
 
-static int raft_io_uv__stop(struct raft_io *io, void (*cb)(struct raft_io *io))
+static void raft__io_uv_transport_close_cb(struct raft_io_uv_transport *t)
+{
+    struct raft__io_uv_rpc *rpc = t->data;
+    struct raft_io *io = rpc->data;
+    struct raft_io_uv *uv = io->impl;
+
+    uv->n_active--;
+
+    raft_io_uv__maybe_stopped(uv);
+}
+
+static int raft_io_uv__close(struct raft_io *io, void (*cb)(struct raft_io *io))
 {
     struct raft_io_uv *uv;
     int rv;
@@ -389,7 +420,7 @@ static int raft_io_uv__stop(struct raft_io *io, void (*cb)(struct raft_io *io))
 
     raft__io_uv_writer_close(&uv->writer, raft__io_uv_writer__close_cb);
 
-    raft_io_uv_rpc__stop(&uv->rpc, uv, raft_io_uv__rpc_stop_cb);
+    raft__io_uv_rpc_close(&uv->rpc, raft_io_uv__rpc_stop_cb);
 
     return 0;
 }
@@ -582,15 +613,15 @@ static int raft_io_uv__truncate(struct raft_io *io, raft_index index)
 }
 
 static int raft_io_uv__send(struct raft_io *io,
+                            struct raft_io_send *req,
                             const struct raft_message *message,
-                            void *data,
-                            void (*cb)(void *data, int status))
+                            raft_io_send_cb cb)
 {
     struct raft_io_uv *uv;
 
     uv = io->impl;
 
-    return raft_io_uv_rpc__send(&uv->rpc, message, data, cb);
+    return raft__io_uv_rpc_send(&uv->rpc, req, message, cb);
 }
 
 static void raft_io_uv__ticker_cb(uv_timer_t *ticker)
@@ -653,21 +684,20 @@ static void raft__io_uv_writer__close_cb(struct raft__io_uv_writer *w)
     raft__io_uv_closer_close(&uv->closer, raft__io_uv_closer__close_cb);
 }
 
-static void raft_io_uv__rpc_stop_cb(void *p)
+static void raft_io_uv__rpc_stop_cb(struct raft__io_uv_rpc *rpc)
 {
-    struct raft_io_uv *uv = p;
+    struct raft_io *io = rpc->data;
+    struct raft_io_uv *uv = io->impl;
 
     uv->n_active--;
 
-    raft_io_uv__maybe_stopped(uv);
+    uv->transport->close(uv->transport, raft__io_uv_transport_close_cb);
 }
 
 static void raft_io_uv__maybe_stopped(struct raft_io_uv *uv)
 {
     if (uv->stop_cb != NULL && uv->n_active == 0) {
         uv->stop_cb(uv->io);
-
-        uv->stop_cb = NULL;
     }
 }
 

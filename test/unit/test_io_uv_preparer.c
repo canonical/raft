@@ -286,6 +286,19 @@ static MunitTest get_tests[] = {
  * raft__uv_preparer_close
  */
 
+/* It's possible to close the preparer immediately after initialization. */
+static MunitResult test_close_noop(const MunitParameter params[],
+                                         void *data)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    __close(f);
+
+    return MUNIT_OK;
+}
+
 /* When the preparer is closed, all pending get requests get canceled. */
 static MunitResult test_close_cancel_get(const MunitParameter params[],
                                          void *data)
@@ -329,6 +342,7 @@ static MunitResult test_close_remove_ready(const MunitParameter params[],
     }
 
 static MunitTest close_tests[] = {
+    __test_close("noop", noop, NULL),
     __test_close("cancel-get", cancel_get, NULL),
     __test_close("remove-ready", remove_ready, NULL),
     {NULL, NULL, NULL, NULL, 0, NULL},

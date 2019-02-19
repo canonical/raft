@@ -2,16 +2,24 @@
 
 #include "assert.h"
 #include "configuration.h"
-#include "replication.h"
 #include "election.h"
+#include "replication.h"
 #include "rpc.h"
 #include "state.h"
+
+static void raft_rpc__recv_request_vote_send_cb(struct raft_io_send *req,
+                                                int status)
+{
+    (void)status;
+    raft_free(req);
+}
 
 int raft_rpc__recv_request_vote(struct raft *r,
                                 const unsigned id,
                                 const char *address,
                                 const struct raft_request_vote *args)
 {
+    struct raft_io_send *req;
     struct raft_message message;
     struct raft_request_vote_result *result = &message.request_vote_result;
     int match;
@@ -72,8 +80,14 @@ reply:
     message.server_id = id;
     message.server_address = address;
 
-    rv = r->io->send(r->io, &message, NULL, NULL);
+    req = raft_malloc(sizeof *req);
+    if (req == NULL) {
+        return RAFT_ERR_NOMEM;
+    }
+
+    rv = r->io->send(r->io, req, &message, raft_rpc__recv_request_vote_send_cb);
     if (rv != 0) {
+        raft_free(req);
         return rv;
     }
 

@@ -11,12 +11,13 @@ extern MunitSuite raft_io_stub_suites[];
 #endif
 #if RAFT_IO_UV
 extern MunitSuite raft_io_uv_suites[];
-extern MunitSuite raft_io_uv_rpc_suites[];
 extern MunitSuite raft_io_uv_loader_suites[];
 extern MunitSuite raft_io_uv_metadata_suites[];
 extern MunitSuite raft_io_uv_preparer_suites[];
 extern MunitSuite raft_io_uv_closer_suites[];
 extern MunitSuite raft_io_uv_writer_suites[];
+extern MunitSuite raft_io_uv_rpc_suites[];
+extern MunitSuite raft_io_uv_tcp_suites[];
 #endif
 extern MunitSuite raft_log_suites[];
 extern MunitSuite raft_logger_suites[];
@@ -33,29 +34,28 @@ static MunitSuite suites[] = {
     {"checksum", NULL, raft_checksum_suites, 1, 0},
     {"client", NULL, raft_client_suites, 1, 0},
     {"configuration", NULL, raft_configuration_suites, 1, 0},
-    {"queue", NULL, raft_queue_suites, 1, 0},
     {"election", NULL, raft_election_suites, 1, 0},
-#if RAFT_IO_STUB
-    {"io-stub", NULL, raft_io_stub_suites, 1, 0},
-#endif
+    {"log", NULL, raft_log_suites, 1, 0},
+    {"logger", NULL, raft_logger_suites, 1, 0},
+    {"queue", NULL, raft_queue_suites, 1, 0},
+    {"raft", NULL, raft_suites, 1, 0},
+    {"replication", NULL, raft_replication_suites, 1, 0},
+    {"rpc-append-entries", NULL, raft_rpc_append_entries_suites, 1, 0},
+    {"rpc-request-vote", NULL, raft_rpc_request_vote_suites, 1, 0},
+    {"tick", NULL, raft_tick_suites, 1, 0},
 #if RAFT_IO_UV
     {"io-uv", NULL, raft_io_uv_suites, 1, 0},
-    {"io-uv-rpc", NULL, raft_io_uv_rpc_suites, 1, 0},
+    {"io-uv-closer", NULL, raft_io_uv_closer_suites, 1, 0},
     {"io-uv-loader", NULL, raft_io_uv_loader_suites, 1, 0},
     {"io-uv-metadata", NULL, raft_io_uv_metadata_suites, 1, 0},
     {"io-uv-preparer", NULL, raft_io_uv_preparer_suites, 1, 0},
-    {"io-uv-closer", NULL, raft_io_uv_closer_suites, 1, 0},
+    {"io-uv-rpc", NULL, raft_io_uv_rpc_suites, 1, 0},
+    {"io-uv-tcp", NULL, raft_io_uv_tcp_suites, 1, 0},
     {"io-uv-writer", NULL, raft_io_uv_writer_suites, 1, 0},
-#endif
-    {"log", NULL, raft_log_suites, 1, 0},
-    {"logger", NULL, raft_logger_suites, 1, 0},
-    {"replication", NULL, raft_replication_suites, 1, 0},
-    {"rpc-request-vote", NULL, raft_rpc_request_vote_suites, 1, 0},
-    {"rpc-append-entries", NULL, raft_rpc_append_entries_suites, 1, 0},
-    {"tick", NULL, raft_tick_suites, 1, 0},
-    {"raft", NULL, raft_suites, 1, 0},
-#if RAFT_IO_UV
     {"uv-file", NULL, raft_uv_file_suites, 1, 0},
+#endif
+#if RAFT_IO_STUB
+    {"io-stub", NULL, raft_io_stub_suites, 1, 0},
 #endif
     {NULL, NULL, NULL, 0, 0},
 };

@@ -17,14 +17,6 @@ void test_start(struct raft *r)
     munit_assert_int(rv, ==, 0);
 }
 
-void test_stop(struct raft *r)
-{
-    int rv;
-
-    rv = raft_stop(r, NULL, NULL);
-    munit_assert_int(rv, ==, 0);
-}
-
 void test_bootstrap_and_start(struct raft *r,
                               int n_servers,
                               int voting_a,

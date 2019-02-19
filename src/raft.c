@@ -25,6 +25,7 @@ int raft_init(struct raft *r,
               const char *address)
 {
     int i;
+    int rv;
 
     assert(r != NULL);
 
@@ -68,30 +69,29 @@ int raft_init(struct raft *r,
         r->watchers[i] = NULL;
     }
 
-    r->stop.data = NULL;
-    r->stop.cb = NULL;
+    r->close_cb = NULL;
+
+    rv = r->io->init(r->io, r->id, r->address);
+    if (rv != 0) {
+        return rv;
+    }
 
     return 0;
 }
 
-void raft_close(struct raft *r)
-{
-    assert(r != NULL);
-
-    raft_free(r->address);
-    raft_state__clear(r);
-    raft_log__close(&r->log);
-    raft_configuration_close(&r->configuration);
-}
-
-static void raft__stop_cb(struct raft_io *io)
+static void raft__close_cb(struct raft_io *io)
 {
     struct raft *r = io->data;
 
     raft_infof(r->logger, "stopped");
 
-    if (r->stop.cb != NULL) {
-        r->stop.cb(r->stop.data);
+    raft_free(r->address);
+    raft_state__clear(r);
+    raft_log__close(&r->log);
+    raft_configuration_close(&r->configuration);
+
+    if (r->close_cb != NULL) {
+        r->close_cb(r);
     }
 }
 
@@ -220,8 +220,8 @@ int raft_start(struct raft *r)
         }
     }
 
-    rv = r->io->start(r->io, r->id, r->address, r->heartbeat_timeout,
-                      raft__tick_cb, raft__recv_cb);
+    rv =
+        r->io->start(r->io, r->heartbeat_timeout, raft__tick_cb, raft__recv_cb);
     if (rv != 0) {
         goto err_after_load;
     }
@@ -246,23 +246,14 @@ err:
     return rv;
 }
 
-int raft_stop(struct raft *r, void *data, void (*cb)(void *data))
+void raft_close(struct raft *r, void (*cb)(struct raft *r))
 {
-    int rv;
-
     assert(r != NULL);
-    assert(r->stop.data == NULL);
-    assert(r->stop.cb == NULL);
+    assert(r->close_cb == NULL);
 
-    r->stop.data = data;
-    r->stop.cb = cb;
+    r->close_cb = cb;
 
-    rv = r->io->stop(r->io, raft__stop_cb);
-    if (rv != 0) {
-        return rv;
-    }
-
-    return 0;
+    r->io->close(r->io, raft__close_cb);
 }
 
 void raft_set_rand(struct raft *r, int (*rand)())

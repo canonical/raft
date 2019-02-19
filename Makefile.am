@@ -47,22 +47,28 @@ libraft_la_SOURCES = \
   src/raft.c \
   src/replication.c \
   src/rpc.c \
-  src/rpc_request_vote.c \
   src/rpc_append_entries.c \
+  src/rpc_request_vote.c \
   src/state.c \
   src/tick.c \
   src/watch.c
 if IO_UV
   libraft_la_SOURCES += \
   src/io_uv.c \
-  src/io_uv_fs.c \
+  src/io_uv_closer.c \
   src/io_uv_encoding.c \
+  src/io_uv_fs.c \
+  src/io_uv_ip.c \
   src/io_uv_loader.c \
   src/io_uv_metadata.c \
   src/io_uv_preparer.c \
-  src/io_uv_writer.c \
-  src/io_uv_closer.c \
   src/io_uv_rpc.c \
+  src/io_uv_rpc_client.c \
+  src/io_uv_rpc_server.c \
+  src/io_uv_tcp.c \
+  src/io_uv_tcp_connect.c \
+  src/io_uv_tcp_listen.c \
+  src/io_uv_writer.c \
   src/uv_file.c
 endif
 if IO_STUB
@@ -80,9 +86,9 @@ test_lib_SOURCES = \
   test/lib/cluster.c \
   test/lib/fault.c \
   test/lib/fs.c \
+  test/lib/fsm.c \
   test/lib/heap.c \
   test/lib/io.c \
-  test/lib/fsm.c \
   test/lib/logger.c \
   test/lib/munit.c \
   test/lib/network.c \
@@ -102,22 +108,23 @@ unit_test_SOURCES += \
   test/unit/test_client.c \
   test/unit/test_configuration.c \
   test/unit/test_election.c \
-  test/unit/test_queue.c \
   test/unit/test_log.c \
   test/unit/test_logger.c \
+  test/unit/test_queue.c \
   test/unit/test_raft.c \
   test/unit/test_replication.c \
-  test/unit/test_rpc_request_vote.c \
   test/unit/test_rpc_append_entries.c \
+  test/unit/test_rpc_request_vote.c \
   test/unit/test_tick.c
 if IO_UV
   unit_test_SOURCES += \
   test/unit/test_io_uv.c \
-  test/unit/test_io_uv_rpc.c \
+  test/unit/test_io_uv_closer.c \
   test/unit/test_io_uv_loader.c \
   test/unit/test_io_uv_metadata.c \
   test/unit/test_io_uv_preparer.c \
-  test/unit/test_io_uv_closer.c \
+  test/unit/test_io_uv_rpc.c \
+  test/unit/test_io_uv_tcp.c \
   test/unit/test_io_uv_writer.c \
   test/unit/test_uv_file.c
 endif

@@ -18,7 +18,7 @@ void test_uv_setup(const MunitParameter params[], struct uv_loop_s *l)
     munit_assert_int(rv, ==, 0);
 }
 
-unsigned test_uv_run(struct uv_loop_s *l, unsigned n)
+int test_uv_run(struct uv_loop_s *l, unsigned n)
 {
     unsigned i;
     int rv;
