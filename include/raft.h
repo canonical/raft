@@ -393,31 +393,6 @@ struct raft_message
     };
 };
 
-struct raft_reader
-{
-    void *data;
-    void *impl;
-
-    int (*read)(struct raft_reader r,
-                struct raft_buffer *buf,
-                void (*cb)(struct raft_reader *r, int status));
-
-    int (*close)(struct raft_reader *s);
-};
-
-struct raft_writer
-{
-    void *data;
-    void *impl;
-
-    int (*write)(struct raft_writer *w,
-                 const struct raft_buffer bufs[],
-                 unsigned n_bufs,
-                 void (*cb)(struct raft_writer *w, int status));
-
-    int (*close)(struct raft_writer *w);
-};
-
 struct raft_snapshot
 {
     /* Index and term of last entry included in the snapshot. */
@@ -428,6 +403,10 @@ struct raft_snapshot
      * snapshot */
     struct raft_configuration configuration;
     raft_index configuration_index;
+
+    /* Content of the snapshot */
+    struct raft_buffer *bufs;
+    unsigned n_bufs;
 };
 
 typedef void (*raft_io_tick_cb)(struct raft_io *io, unsigned elapsed);
@@ -441,6 +420,29 @@ struct raft_io_send
     void *data;         /* User data */
     void *impl;         /* Implementation-specific */
     raft_io_send_cb cb; /* Request callback */
+};
+
+struct raft_io_write_snapshot;
+typedef void (*raft_io_write_snapshot_cb)(struct raft_io_write_snapshot *req,
+                                          int status);
+
+struct raft_io_write_snapshot
+{
+    void *data;                   /* User data */
+    void *impl;                   /* Implementation-specific */
+    raft_io_write_snapshot_cb cb; /* Request callback */
+};
+
+struct raft_io_read_snapshot;
+typedef void (*raft_io_read_snapshot_cb)(struct raft_io_read_snapshot *req,
+                                         struct raft_snapshot *snapshot,
+                                         int status);
+
+struct raft_io_read_snapshot
+{
+    void *data;                   /* User data */
+    void *impl;                   /* Implementation-specific */
+    raft_io_write_snapshot_cb cb; /* Request callback */
 };
 
 /**
@@ -553,12 +555,13 @@ struct raft_io
                 raft_io_send_cb cb);
 
     int (*create_snapshot)(struct raft_io *io,
+                           struct raft_io_write_snapshot *req,
                            const struct raft_snapshot *snapshot,
-                           struct raft_writer *writer);
+                           raft_io_write_snapshot_cb cb);
 
     int (*get_snapshot)(struct raft_io *io,
-                        struct raft_snapshot *snapshot,
-                        struct raft_reader *reader);
+                        struct raft_io_read_snapshot *req,
+                        raft_io_read_snapshot_cb *cb);
 };
 
 /**
@@ -578,12 +581,14 @@ struct raft_fsm
     /**
      * Take a snapshot of the state machine.
      */
-    int (*snapshot)(struct raft_fsm *fsm, struct raft_writer *writer);
+    int (*snapshot)(struct raft_fsm *fsm,
+                    struct raft_buffer *bufs[],
+                    unsigned n_bufs);
 
     /**
      * Restore a snapshot of the state machine.
      */
-    int (*restore)(struct raft_fsm *fsm, struct raft_reader *reader);
+    int (*restore)(struct raft_fsm *fsm, struct raft_buffer *buf);
 };
 
 /**
