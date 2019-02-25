@@ -347,8 +347,7 @@ static void raft__io_uv_closer_close_work_cb(uv_work_t *work)
         goto abort;
     }
 
-    sprintf(filename2, "%020llu-%020llu", segment->first_index,
-            segment->last_index);
+    sprintf(filename2, "%llu-%llu", segment->first_index, segment->last_index);
 
     rv = raft__io_uv_fs_rename(c->dir, filename1, filename2);
     if (rv != 0) {
@@ -528,7 +527,7 @@ static int raft__io_uv_closer_truncate_segment(
      * TODO: we should use a temporary file name so in case of crash we don't
      *      consider this segment as corrupted.
      */
-    sprintf(filename, "%020llu-%020llu", segment->first_index, index - 1);
+    sprintf(filename, "%llu-%llu", segment->first_index, index - 1);
     raft__io_uv_fs_join(c->dir, filename, path);
 
     /* Open the file. */

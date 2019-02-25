@@ -19,8 +19,8 @@
 /**
  * Filename of the first closed segments.
  */
-#define __CLOSED_FILENAME_1 "00000000000000000001-00000000000000000001"
-#define __CLOSED_FILENAME_2 "00000000000000000002-00000000000000000002"
+#define __CLOSED_FILENAME_1 "1-1"
+#define __CLOSED_FILENAME_2 "2-2"
 
 #define __WORD_SIZE sizeof(uint64_t)
 
@@ -156,13 +156,17 @@ static MunitResult test_list_success_many_snapshots(
     test_io_uv_write_snapshot_meta_file(f->dir, 2, 6, 789, 2, 3);
     test_io_uv_write_snapshot_data_file(f->dir, 2, 6, 789, buf, sizeof buf);
 
+    test_io_uv_write_snapshot_meta_file(f->dir, 2, 9, 999, 2, 3);
+    test_io_uv_write_snapshot_data_file(f->dir, 2, 9, 999, buf, sizeof buf);
+
     __list_trigger(f, 0);
 
     munit_assert_ptr_not_null(f->snapshots);
-    munit_assert_int(f->n_snapshots, ==, 2);
+    munit_assert_int(f->n_snapshots, ==, 3);
 
     __list_assert_snapshot(f, 0, 1, 8, 456);
     __list_assert_snapshot(f, 1, 2, 6, 789);
+    __list_assert_snapshot(f, 2, 2, 9, 999);
 
     return MUNIT_OK;
 }
@@ -201,8 +205,8 @@ static void *load_snapshot_setup(const MunitParameter params[], void *user_data)
     f->meta.term = 1;
     f->meta.index = 5;
     f->meta.timestamp = 123;
-    sprintf(f->meta.filename, "snapshot-%020llu-%020llu-%020llu.meta",
-            f->meta.term, f->meta.index, f->meta.timestamp);
+    sprintf(f->meta.filename, "snapshot-%llu-%llu-%llu.meta", f->meta.term,
+            f->meta.index, f->meta.timestamp);
     raft_configuration_init(&f->snapshot.configuration);
     return f;
 }

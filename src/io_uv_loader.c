@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -12,7 +13,7 @@
 
 /* Template string for snapshot filenames: snapshot term, snapshot index,
  * creation timestamp (milliseconds since epoch). */
-#define RAFT__IO_UV_LOADER_SNAPSHOT_TEMPLATE "snapshot-%020llu-%020llu-%020llu"
+#define RAFT__IO_UV_LOADER_SNAPSHOT_TEMPLATE "snapshot-%llu-%llu-%llu"
 
 /* Template string for snapshot metadata filenames: snapshot term,  snapshot
  * index, creation timestamp (milliseconds since epoch). */
@@ -27,7 +28,7 @@
 
 /* Template string for closed segment filenames: start index (inclusive), end
  * index (inclusive). */
-#define RAFT__IO_UV_LOADER_CLOSED_SEGMENT_TEMPLATE "%020llu-%020llu"
+#define RAFT__IO_UV_LOADER_CLOSED_SEGMENT_TEMPLATE "%llu-%llu"
 
 /* Return true if the given filename should be ignored. */
 static bool raft__io_uv_loader_is_ignore_filename(const char *filename);
@@ -86,6 +87,14 @@ static int raft__io_uv_loader_load_snapshot_data(
 static void raft__io_uv_loader_snapshot_data_filename(
     struct raft__io_uv_loader_snapshot *meta,
     raft__io_uv_fs_filename filename);
+
+/* Compare two snapshots to decide which one is more recent. */
+static int raft__io_uv_loader_compare_snapshots(const void *item1,
+                                                const void *item2);
+
+/* Compare two segments to decide which one is more recent. */
+static int raft__io_uv_loader_compare_segments(const void *item1,
+                                               const void *item2);
 
 /* Load raft entries from the given segments. */
 static int raft__io_uv_loader_load_from_list(
@@ -197,6 +206,16 @@ int raft__io_uv_loader_list(struct raft__io_uv_loader *l,
 
     if (rv != 0 && *segments != NULL) {
         raft_free(*segments);
+    }
+
+    if (*snapshots != NULL) {
+        qsort(*snapshots, *n_snapshots, sizeof **snapshots,
+              raft__io_uv_loader_compare_snapshots);
+    }
+
+    if (*segments != NULL) {
+        qsort(*segments, *n_segments, sizeof **segments,
+              raft__io_uv_loader_compare_segments);
     }
 
     return rv;
@@ -702,6 +721,60 @@ static void raft__io_uv_loader_snapshot_data_filename(
     size_t len = strlen(meta->filename) - strlen(".meta");
     strncpy(filename, meta->filename, len);
     filename[len] = 0;
+}
+
+static int raft__io_uv_loader_compare_snapshots(const void *p1, const void *p2)
+{
+    struct raft__io_uv_loader_snapshot *s1 =
+        (struct raft__io_uv_loader_snapshot *)p1;
+    struct raft__io_uv_loader_snapshot *s2 =
+        (struct raft__io_uv_loader_snapshot *)p2;
+
+    /* If terms are different, the snaphot with the highest term is the most
+     * recent. */
+    if (s1->term != s2->term) {
+        return s1->term < s2->term ? -1 : 1;
+    }
+
+    /* If the term are identical and the index differ, the snapshot with the
+     * highest index is the most recent */
+    if (s1->index != s2->index) {
+        return s1->index < s2->index ? -1 : 1;
+    }
+
+    /* If term and index are identical, compare the timestamp. */
+    return s1->timestamp < s2->timestamp ? -1 : 1;
+}
+
+static int raft__io_uv_loader_compare_segments(const void *p1, const void *p2)
+{
+    struct raft__io_uv_loader_segment *s1 =
+        (struct raft__io_uv_loader_segment *)p1;
+    struct raft__io_uv_loader_segment *s2 =
+        (struct raft__io_uv_loader_segment *)p2;
+
+    /* Closed segments are less recent than open segments. */
+    if (s1->is_open && !s2->is_open) {
+        return 1;
+    }
+    if (!s1->is_open && s2->is_open) {
+        return -1;
+    }
+
+    /* If the segments are open, compare the counter. */
+    if (s1->is_open) {
+        assert(s2->is_open);
+        assert(s1->counter != s2->counter);
+        return s1->counter < s2->counter ? -1 : 1;
+    }
+
+    /* If the segments are closed, compare the first index. The index ranges
+     * must be disjoint. */
+    if (s2->first_index > s1->end_index) {
+        return -1;
+    }
+
+    return 1;
 }
 
 static int raft__io_uv_loader_load_from_list(

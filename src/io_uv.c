@@ -713,7 +713,7 @@ static int raft__io_uv_create_closed_1_1(struct raft_io_uv *uv,
     int rv;
 
     /* Render the path */
-    sprintf(filename, "%020u-%020u", 1, 1);
+    sprintf(filename, "%u-%u", 1, 1);
     raft__io_uv_fs_join(uv->dir, filename, path);
 
     /* Open the file. */

@@ -56,8 +56,7 @@ size_t test_io_uv_write_snapshot_meta_file(const char *dir,
     raft__put64(&cursor, configuration_buf.len); /* Encoded configuration */
     memcpy(cursor, configuration_buf.base, configuration_buf.len);
 
-    sprintf(filename, "snapshot-%020llu-%020llu-%020llu.meta", term, index,
-            timestamp);
+    sprintf(filename, "snapshot-%llu-%llu-%llu.meta", term, index, timestamp);
 
     crc = raft__crc32(buf + (__WORD_SIZE * 2), size - (__WORD_SIZE * 2), 0);
     cursor = buf + __WORD_SIZE;
@@ -80,8 +79,7 @@ size_t test_io_uv_write_snapshot_data_file(const char *dir,
 {
     char filename[strlen("snapshot-N-N-N") + 20 * 3 + 1];
 
-    sprintf(filename, "snapshot-%020llu-%020llu-%020llu", term, index,
-            timestamp);
+    sprintf(filename, "snapshot-%llu-%llu-%llu", term, index, timestamp);
     test_dir_write_file(dir, filename, buf, size);
 
     return size;
@@ -103,7 +101,7 @@ size_t test_io_uv_write_closed_segment_file(const char *dir,
                                             int data)
 {
     char filename[strlen("N-N") + 20 * 2 + 1];
-    sprintf(filename, "%020llu-%020llu", first_index,
+    sprintf(filename, "%llu-%llu", first_index,
             (raft_index)(first_index + n - 1));
     return test__io_uv_create_segment(dir, filename, n, data);
 }

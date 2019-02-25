@@ -494,10 +494,8 @@ static MunitResult test_append_counter(const MunitParameter params[],
         __append(f);
     }
 
-    munit_assert_true(
-        test_dir_has_file(f->dir, "00000000000000000001-00000000000000000003"));
-    munit_assert_true(
-        test_dir_has_file(f->dir, "00000000000000000004-00000000000000000006"));
+    munit_assert_true(test_dir_has_file(f->dir, "1-3"));
+    munit_assert_true(test_dir_has_file(f->dir, "4-6"));
     munit_assert_true(test_dir_has_file(f->dir, "open-4"));
 
     return MUNIT_OK;
@@ -687,8 +685,7 @@ static MunitResult test_close_current_segment(const MunitParameter params[],
 
     test_uv_run(&f->loop, 1);
 
-    munit_assert_true(
-        test_dir_has_file(f->dir, "00000000000000000001-00000000000000000001"));
+    munit_assert_true(test_dir_has_file(f->dir, "1-1"));
 
     return MUNIT_OK;
 }

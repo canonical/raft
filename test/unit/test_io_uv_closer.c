@@ -294,8 +294,7 @@ static MunitResult test_put_first(const MunitParameter params[], void *data)
 
     __put(f);
 
-    munit_assert_true(
-        test_dir_has_file(f->dir, "00000000000000000001-00000000000000000002"));
+    munit_assert_true(test_dir_has_file(f->dir, "1-2"));
 
     return MUNIT_OK;
 }
@@ -313,8 +312,7 @@ static MunitResult test_put_unused(const MunitParameter params[], void *data)
 
     __put(f);
 
-    munit_assert_false(
-        test_dir_has_file(f->dir, "00000000000000000001-00000000000000000002"));
+    munit_assert_false(test_dir_has_file(f->dir, "1-2"));
     munit_assert_false(test_dir_has_file(f->dir, "open-1"));
 
     return MUNIT_OK;
@@ -337,8 +335,7 @@ static MunitResult test_put_abort(const MunitParameter params[], void *data)
     __put_assert_result(f, 0);
 
     munit_assert_true(test_dir_has_file(f->dir, "open-1"));
-    munit_assert_false(
-        test_dir_has_file(f->dir, "00000000000000000001-00000000000000000002"));
+    munit_assert_false(test_dir_has_file(f->dir, "1-2"));
 
     test_aio_destroy(ctx);
 
@@ -410,10 +407,8 @@ static MunitResult test_truncate_whole_segment(const MunitParameter params[],
 
     __truncate(f);
 
-    munit_assert_false(
-        test_dir_has_file(f->dir, "00000000000000000001-00000000000000000003"));
-    munit_assert_false(
-        test_dir_has_file(f->dir, "00000000000000000004-00000000000000000004"));
+    munit_assert_false(test_dir_has_file(f->dir, "1-3"));
+    munit_assert_false(test_dir_has_file(f->dir, "4-4"));
 
     return MUNIT_OK;
 }
@@ -449,13 +444,10 @@ static MunitResult test_truncate_partial_segment(const MunitParameter params[],
 
     __truncate(f);
 
-    munit_assert_false(
-        test_dir_has_file(f->dir, "00000000000000000001-00000000000000000003"));
-    munit_assert_false(
-        test_dir_has_file(f->dir, "00000000000000000004-00000000000000000004"));
+    munit_assert_false(test_dir_has_file(f->dir, "1-3"));
+    munit_assert_false(test_dir_has_file(f->dir, "4-4"));
 
-    munit_assert_true(
-        test_dir_has_file(f->dir, "00000000000000000001-00000000000000000001"));
+    munit_assert_true(test_dir_has_file(f->dir, "1-1"));
 
     rv = raft__io_uv_loader_load_all(&f->loader, &snapshot, &entries, &n);
     munit_assert_int(rv, ==, 0);
@@ -486,8 +478,7 @@ static MunitResult test_truncate_wait_closing(const MunitParameter params[],
 
     __truncate(f);
 
-    munit_assert_false(
-        test_dir_has_file(f->dir, "00000000000000000001-00000000000000000003"));
+    munit_assert_false(test_dir_has_file(f->dir, "1-3"));
 
     return MUNIT_OK;
 }
@@ -538,10 +529,8 @@ static MunitResult test_close_wait(const MunitParameter params[], void *data)
 
     __close(f);
 
-    munit_assert_true(
-        test_dir_has_file(f->dir, "00000000000000000001-00000000000000000002"));
-    munit_assert_false(
-        test_dir_has_file(f->dir, "00000000000000000003-00000000000000000004"));
+    munit_assert_true(test_dir_has_file(f->dir, "1-2"));
+    munit_assert_false(test_dir_has_file(f->dir, "3-4"));
 
     return MUNIT_OK;
 }
