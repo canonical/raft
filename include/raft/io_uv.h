@@ -3,7 +3,7 @@
 
 #include <uv.h>
 
-#define RAFT_IO_UV_METADATA_SIZE (8 * 5)              /* Five 64-bit words */
+#define RAFT_IO_UV_METADATA_SIZE (8 * 4)              /* Four 64-bit words */
 #define RAFT_IO_UV_MAX_SEGMENT_SIZE (8 * 1024 * 1024) /* 8 Megabytes */
 
 struct raft_logger;
@@ -164,7 +164,6 @@ struct raft_io_uv_transport
      */
     void (*close)(struct raft_io_uv_transport *t,
                   raft_io_uv_transport_close_cb cb);
-
 };
 
 /**

@@ -15,7 +15,6 @@ struct raft__io_uv_metadata
     unsigned long long version; /* Monotonically increasing version */
     raft_term term;             /* Current term */
     unsigned voted_for;         /* Server ID of last vote, or 0 */
-    raft_index start_index;     /* Raft log start index */
 };
 
 /**

@@ -2,8 +2,8 @@
 
 #include "assert.h"
 #include "binary.h"
-#include "io_uv_metadata.h"
 #include "io_uv_fs.h"
+#include "io_uv_metadata.h"
 
 /**
  * Current on-disk format version.
@@ -77,7 +77,6 @@ int raft__io_uv_metadata_load(struct raft_logger *logger,
         metadata->version = 0;
         metadata->term = 0;
         metadata->voted_for = 0;
-        metadata->start_index = 1;
     } else if (metadata1.version == metadata2.version) {
         /* The two metadata files can't have the same version. */
         raft_errorf(logger, "metadata1 and metadata2 are both at version %d",
@@ -104,14 +103,13 @@ int raft__io_uv_metadata_store(struct raft_logger *logger,
                                const char *dir,
                                const struct raft__io_uv_metadata *metadata)
 {
-    raft__io_uv_fs_path path;               /* Full path of metadata file */
+    raft__io_uv_fs_path path;              /* Full path of metadata file */
     uint8_t buf[RAFT_IO_UV_METADATA_SIZE]; /* Content of metadata file */
     unsigned short n;
     int fd;
     int rv;
 
     assert(metadata->version > 0);
-    assert(metadata->start_index > 0);
 
     /* Encode the given metadata. */
     raft__io_uv_metadata_encode(metadata, buf);
@@ -158,7 +156,6 @@ static void raft__io_uv_metadata_encode(
     raft__put64(&cursor, metadata->version);
     raft__put64(&cursor, metadata->term);
     raft__put64(&cursor, metadata->voted_for);
-    raft__put64(&cursor, metadata->start_index);
 }
 
 static int raft__io_uv_metadata_decode(const void *buf,
@@ -176,7 +173,6 @@ static int raft__io_uv_metadata_decode(const void *buf,
     metadata->version = raft__get64(&cursor);
     metadata->term = raft__get64(&cursor);
     metadata->voted_for = raft__get64(&cursor);
-    metadata->start_index = raft__get64(&cursor);
 
     return 0;
 }
@@ -186,7 +182,7 @@ static int raft__io_uv_metadata_load_n(struct raft_logger *logger,
                                        const unsigned short n,
                                        struct raft__io_uv_metadata *metadata)
 {
-    raft__io_uv_fs_path path;               /* Full path of metadata file */
+    raft__io_uv_fs_path path;              /* Full path of metadata file */
     uint8_t buf[RAFT_IO_UV_METADATA_SIZE]; /* Content of metadata file */
     int fd;
     int rv;

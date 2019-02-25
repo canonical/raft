@@ -440,7 +440,6 @@ static int raft_io_uv__load(struct raft_io *io,
     uv = io->impl;
 
     assert(uv->metadata.version > 0);
-    assert(uv->metadata.start_index > 0);
 
     *term = uv->metadata.term;
     *voted_for = uv->metadata.voted_for;

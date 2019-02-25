@@ -48,21 +48,20 @@ static void tear_down(void *data)
  * Write either the metadata1 or metadata2 file, filling it with the given
  * values.
  */
-#define __load_prepare(F, N, FORMAT, VERSION, TERM, VOTED_FOR, START_INDEX) \
-    {                                                                       \
-        uint8_t buf[RAFT_IO_UV_METADATA_SIZE];                              \
-        void *cursor = buf;                                                 \
-        char filename[strlen("metadataN") + 1];                             \
-                                                                            \
-        sprintf(filename, "metadata%d", N);                                 \
-                                                                            \
-        raft__put64(&cursor, FORMAT);                                       \
-        raft__put64(&cursor, VERSION);                                      \
-        raft__put64(&cursor, TERM);                                         \
-        raft__put64(&cursor, VOTED_FOR);                                    \
-        raft__put64(&cursor, START_INDEX);                                  \
-                                                                            \
-        test_dir_write_file(F->dir, filename, buf, sizeof buf);             \
+#define __load_prepare(F, N, FORMAT, VERSION, TERM, VOTED_FOR)  \
+    {                                                           \
+        uint8_t buf[RAFT_IO_UV_METADATA_SIZE];                  \
+        void *cursor = buf;                                     \
+        char filename[strlen("metadataN") + 1];                 \
+                                                                \
+        sprintf(filename, "metadata%d", N);                     \
+                                                                \
+        raft__put64(&cursor, FORMAT);                           \
+        raft__put64(&cursor, VERSION);                          \
+        raft__put64(&cursor, TERM);                             \
+        raft__put64(&cursor, VOTED_FOR);                        \
+                                                                \
+        test_dir_write_file(F->dir, filename, buf, sizeof buf); \
     }
 
 /**
@@ -79,32 +78,30 @@ static void tear_down(void *data)
 /**
  * Assert that the metadata of the last load request equals the given values.
  */
-#define __load_assert_metadata(F, TERM, VOTED_FOR, START_INDEX)     \
-    {                                                               \
-        munit_assert_int(F->metadata.term, ==, TERM);               \
-        munit_assert_int(F->metadata.voted_for, ==, VOTED_FOR);     \
-        munit_assert_int(F->metadata.start_index, ==, START_INDEX); \
+#define __load_assert_metadata(F, TERM, VOTED_FOR)              \
+    {                                                           \
+        munit_assert_int(F->metadata.term, ==, TERM);           \
+        munit_assert_int(F->metadata.voted_for, ==, VOTED_FOR); \
     }
 
 /**
  * Assert that the content of either the metadata1 or metadata2 file match the
  * given values.
  */
-#define __file_assert(F, N, VERSION, TERM, VOTED_FOR, START_INDEX) \
-    {                                                              \
-        uint8_t buf[RAFT_IO_UV_METADATA_SIZE];                     \
-        const void *cursor = buf;                                  \
-        char filename[strlen("metadataN") + 1];                    \
-                                                                   \
-        sprintf(filename, "metadata%d", N);                        \
-                                                                   \
-        test_dir_read_file(F->dir, filename, buf, sizeof buf);     \
-                                                                   \
-        munit_assert_int(raft__get64(&cursor), ==, 1);             \
-        munit_assert_int(raft__get64(&cursor), ==, VERSION);       \
-        munit_assert_int(raft__get64(&cursor), ==, TERM);          \
-        munit_assert_int(raft__get64(&cursor), ==, VOTED_FOR);     \
-        munit_assert_int(raft__get64(&cursor), ==, START_INDEX);   \
+#define __file_assert(F, N, VERSION, TERM, VOTED_FOR)          \
+    {                                                          \
+        uint8_t buf[RAFT_IO_UV_METADATA_SIZE];                 \
+        const void *cursor = buf;                              \
+        char filename[strlen("metadataN") + 1];                \
+                                                               \
+        sprintf(filename, "metadata%d", N);                    \
+                                                               \
+        test_dir_read_file(F->dir, filename, buf, sizeof buf); \
+                                                               \
+        munit_assert_int(raft__get64(&cursor), ==, 1);         \
+        munit_assert_int(raft__get64(&cursor), ==, VERSION);   \
+        munit_assert_int(raft__get64(&cursor), ==, TERM);      \
+        munit_assert_int(raft__get64(&cursor), ==, VOTED_FOR); \
     }
 
 /**
@@ -120,11 +117,11 @@ static MunitResult test_load_empty_dir(const MunitParameter params[],
     (void)params;
 
     __load_assert_result(f, 0);
-    __load_assert_metadata(f, 0, 0, 1);
+    __load_assert_metadata(f, 0, 0);
 
     /* The metadata files were initialized. */
-    __file_assert(f, 1, 1, 0, 0, 1);
-    __file_assert(f, 2, 2, 0, 0, 1);
+    __file_assert(f, 1, 1, 0, 0);
+    __file_assert(f, 2, 2, 0, 0);
 
     return MUNIT_OK;
 }
@@ -157,15 +154,14 @@ static MunitResult test_load_only_1(const MunitParameter params[], void *data)
                    1, /* Format                               */
                    1, /* Version                              */
                    1, /* Term                                 */
-                   0, /* Voted for                            */
-                   1 /* Start index                          */);
+                   0 /* Voted for                            */);
 
     __load_assert_result(f, 0);
-    __load_assert_metadata(f, 1, 0, 1);
+    __load_assert_metadata(f, 1, 0);
 
     /* The metadata1 file got updated and the second one got created. */
-    __file_assert(f, 1, 3, 1, 0, 1);
-    __file_assert(f, 2, 2, 1, 0, 1);
+    __file_assert(f, 1, 3, 1, 0);
+    __file_assert(f, 2, 2, 1, 0);
 
     return MUNIT_OK;
 }
@@ -182,24 +178,22 @@ static MunitResult test_load_1(const MunitParameter params[], void *data)
                    1, /* Format                               */
                    3, /* Version                              */
                    3, /* Term                                 */
-                   0, /* Voted for                            */
-                   1 /* Start index                          */);
+                   0 /* Voted for                            */);
 
     __load_prepare(f, /*                                      */
                    2, /* Metadata file index                  */
                    1, /* Format                               */
                    2, /* Version                              */
                    2, /* Term                                 */
-                   0, /* Voted for                            */
-                   1 /* Start index                          */);
+                   0 /* Voted for                            */);
 
     __load_assert_result(f, 0);
 
-    __load_assert_metadata(f, 3, 0, 1);
+    __load_assert_metadata(f, 3, 0);
 
     /* The metadata files got updated. */
-    __file_assert(f, 1, 5, 3, 0, 1);
-    __file_assert(f, 2, 4, 3, 0, 1);
+    __file_assert(f, 1, 5, 3, 0);
+    __file_assert(f, 2, 4, 3, 0);
 
     return MUNIT_OK;
 }
@@ -216,24 +210,22 @@ static MunitResult test_load_2(const MunitParameter params[], void *data)
                    1, /* Format                               */
                    1, /* Version                              */
                    1, /* Term                                 */
-                   0, /* Voted for                            */
-                   1 /* Start index                          */);
+                   0 /* Voted for                            */);
 
     __load_prepare(f, /*                                      */
                    2, /* Metadata file index                  */
                    1, /* Format                               */
                    2, /* Version                              */
                    2, /* Term                                 */
-                   0, /* Voted for                            */
-                   1 /* Start index                          */);
+                   0 /* Voted for                            */);
 
     __load_assert_result(f, 0);
 
-    __load_assert_metadata(f, 2, 0, 1);
+    __load_assert_metadata(f, 2, 0);
 
     /* The metadata files got updated. */
-    __file_assert(f, 1, 3, 2, 0, 1);
-    __file_assert(f, 2, 4, 2, 0, 1);
+    __file_assert(f, 1, 3, 2, 0);
+    __file_assert(f, 2, 4, 2, 0);
 
     return MUNIT_OK;
 }
@@ -253,11 +245,11 @@ static MunitResult test_load_short(const MunitParameter params[], void *data)
     __load_assert_result(f, 0);
 
     /* Term is 0, voted for is 0 and start index is 1. */
-    __load_assert_metadata(f, 0, 0, 1);
+    __load_assert_metadata(f, 0, 0);
 
     /* Both metadata files got created. */
-    __file_assert(f, 1, 1, 0, 0, 1);
-    __file_assert(f, 2, 2, 0, 0, 1);
+    __file_assert(f, 1, 1, 0, 0);
+    __file_assert(f, 2, 2, 0, 0);
 
     return MUNIT_OK;
 }
@@ -275,8 +267,7 @@ static MunitResult test_load_bad_format(const MunitParameter params[],
                    2, /* Format                               */
                    1, /* Version                              */
                    1, /* Term                                 */
-                   0, /* Voted for                            */
-                   0 /* Start index                          */);
+                   0 /* Voted for                            */);
 
     __load_assert_result(f, RAFT_ERR_IO);
 
@@ -296,8 +287,7 @@ static MunitResult test_load_bad_version(const MunitParameter params[],
                    1, /* Format                               */
                    0, /* Version                              */
                    1, /* Term                                 */
-                   0, /* Voted for                            */
-                   0 /* Start index                          */);
+                   0 /* Voted for                            */);
 
     __load_assert_result(f, RAFT_ERR_IO);
 
@@ -332,16 +322,14 @@ static MunitResult test_load_same_version(const MunitParameter params[],
                    1, /* Format                               */
                    2, /* Version                              */
                    3, /* Term                                 */
-                   0, /* Voted for                            */
-                   0 /* Start index                          */);
+                   0 /* Voted for                            */);
 
     __load_prepare(f, /*                                      */
                    2, /* Metadata file index                  */
                    1, /* Format                               */
                    2, /* Version                              */
                    2, /* Term                                 */
-                   0, /* Voted for                            */
-                   0 /* Start index                          */);
+                   0 /* Voted for                            */);
 
     __load_assert_result(f, RAFT_ERR_IO_CORRUPT);
 
