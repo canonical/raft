@@ -424,6 +424,7 @@ static MunitResult test_truncate_partial_segment(const MunitParameter params[],
                                                  void *data)
 {
     struct fixture *f = data;
+    struct raft_snapshot *snapshot;
     struct raft_entry *entries;
     size_t n;
     int rv;
@@ -456,11 +457,11 @@ static MunitResult test_truncate_partial_segment(const MunitParameter params[],
     munit_assert_true(
         test_dir_has_file(f->dir, "00000000000000000001-00000000000000000001"));
 
-    rv = raft__io_uv_loader_load_all(&f->loader, 1, &entries, &n);
+    rv = raft__io_uv_loader_load_all(&f->loader, &snapshot, &entries, &n);
     munit_assert_int(rv, ==, 0);
 
     munit_assert_int(n, ==, 1);
-    munit_assert_int(raft__flip64(*(uint64_t*)entries[0].buf.base), ==, 1);
+    munit_assert_int(raft__flip64(*(uint64_t *)entries[0].buf.base), ==, 1);
 
     raft_free(entries[0].batch);
     raft_free(entries);

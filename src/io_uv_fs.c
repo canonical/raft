@@ -15,6 +15,22 @@ void raft__io_uv_fs_join(const char *dir, const char *filename, char *path)
     strcat(path, filename);
 }
 
+int raft__io_uv_fs_open(const char *dir, const char *filename, int flags) {
+    raft__io_uv_fs_path path;
+
+    raft__io_uv_fs_join(dir, filename, path);
+
+    return open(path, flags);
+}
+
+int raft__io_uv_fs_stat(const char *dir, const char *filename, struct stat *sb) {
+    raft__io_uv_fs_path path;
+
+    raft__io_uv_fs_join(dir, filename, path);
+
+    return stat(path, sb);
+}
+
 int raft__io_uv_fs_unlink(const char *dir, const char *filename)
 {
     raft__io_uv_fs_path path;
@@ -115,10 +131,13 @@ int raft__io_uv_fs_sync_dir(const char *dir)
     return 0;
 }
 
-int raft__io_uv_fs_is_empty(const char *path, bool *empty)
+int raft__io_uv_fs_is_empty(const char *dir, const char *filename, bool *empty)
 {
+    raft__io_uv_fs_path path;
     struct stat st;
     int rv;
+
+    raft__io_uv_fs_join(dir, filename, path);
 
     rv = stat(path, &st);
     if (rv == -1) {

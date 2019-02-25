@@ -177,10 +177,6 @@ static void raft__io_uv_rpc_maybe_stopped(struct raft__io_uv_rpc *r)
 {
     assert(r->state == RAFT__IO_UV_RPC_CLOSING);
 
-    if (r->close_cb == NULL) {
-        return;
-    }
-
     if (r->clients != NULL) {
         raft_free(r->clients);
     }
@@ -190,5 +186,10 @@ static void raft__io_uv_rpc_maybe_stopped(struct raft__io_uv_rpc *r)
     }
 
     r->state = RAFT__IO_UV_RPC_CLOSED;
+
+    if (r->close_cb == NULL) {
+        return;
+    }
+
     r->close_cb(r);
 }

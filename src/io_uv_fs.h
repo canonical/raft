@@ -7,6 +7,7 @@
 
 #include <stdbool.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 
 /**
  * Maximum length of a file path.
@@ -17,7 +18,6 @@
  * Maximum length of a filename.
  */
 #define RAFT__IO_UV_FS_MAX_FILENAME_LEN 128
-
 
 /**
  * Maximum length of a directory path.
@@ -42,6 +42,16 @@ typedef char raft__io_uv_fs_path[RAFT__IO_UV_FS_MAX_PATH_LEN];
 void raft__io_uv_fs_join(const char *dir, const char *filename, char *path);
 
 /**
+ * Open a file in a directory.
+ */
+int raft__io_uv_fs_open(const char *dir, const char *filename, int flags);
+
+/**
+ * Stat a file in a directory.
+ */
+int raft__io_uv_fs_stat(const char *dir, const char *filename, struct stat *sb);
+
+/**
  * Synchronously delete a file in a directory. To be run in a threadpool.
  */
 int raft__io_uv_fs_unlink(const char *dir, const char *filename);
@@ -50,15 +60,15 @@ int raft__io_uv_fs_unlink(const char *dir, const char *filename);
  * Synchronously truncate a file in a directory. To be run in a threadpool.
  */
 int raft__io_uv_fs_truncate(const char *dir,
-                           const char *filename,
-                           size_t offset);
+                            const char *filename,
+                            size_t offset);
 
 /**
  * Synchronously rename a file in a directory. To be run in a threadpool.
  */
 int raft__io_uv_fs_rename(const char *dir,
-                         const char *filename1,
-                         const char *filename2);
+                          const char *filename1,
+                          const char *filename2);
 
 /**
  * Sync the given directory.
@@ -66,9 +76,9 @@ int raft__io_uv_fs_rename(const char *dir,
 int raft__io_uv_fs_sync_dir(const char *dir);
 
 /**
- * Check whether the given file is empty.
+ * Check whether the given file in the given directory is empty.
  */
-int raft__io_uv_fs_is_empty(const char *path, bool *empty);
+int raft__io_uv_fs_is_empty(const char *dir, const char *filename, bool *empty);
 
 /**
  * Check if the content of the segment file associated with the given file

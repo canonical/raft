@@ -134,7 +134,7 @@ if IO_STUB
   unit_test_SOURCES += \
   test/unit/test_io_stub.c
 endif
-unit_test_CFLAGS = $(AM_CFLAGS) -DRAFT_TEST -DMUNIT_TEST_NAME_LEN=47
+unit_test_CFLAGS = $(AM_CFLAGS) -DRAFT_TEST -DMUNIT_TEST_NAME_LEN=60
 unit_test_CFLAGS += -I$(top_srcdir)/tests/unit
 unit_test_LDFLAGS =
 if IO_UV

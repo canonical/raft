@@ -281,7 +281,7 @@ static int raft__io_uv_ensure_dir(struct raft_logger *logger, const char *dir)
 
     /* Make sure we have a directory we can write into. */
     rv = stat(dir, &sb);
-    if (rv != 0) {
+    if (rv == -1) {
         if (errno == ENOENT) {
             rv = mkdir(dir, 0700);
             if (rv != 0) {
@@ -433,6 +433,7 @@ static int raft_io_uv__load(struct raft_io *io,
                             size_t *n_entries)
 {
     struct raft_io_uv *uv;
+    raft_index start_index = 1;
     raft_index last_index;
     int rv;
 
@@ -446,13 +447,16 @@ static int raft_io_uv__load(struct raft_io *io,
 
     *snapshot = NULL;
 
-    rv = raft__io_uv_loader_load_all(&uv->loader, uv->metadata.start_index,
-                                     entries, n_entries);
+    rv = raft__io_uv_loader_load_all(&uv->loader, snapshot, entries, n_entries);
     if (rv != 0) {
         return rv;
     }
 
-    last_index = uv->metadata.start_index + *n_entries - 1;
+    if (*snapshot != NULL) {
+        start_index = (*snapshot)->index + 1;
+    }
+
+    last_index = start_index + *n_entries - 1;
 
     /* Set the index of the last entry that was persisted. */
     raft__io_uv_closer_set_last_index(&uv->closer, last_index);

@@ -10,7 +10,13 @@
 /**
  * Information persisted in a single metadata file.
  */
-struct raft__io_uv_metadata;
+struct raft__io_uv_metadata
+{
+    unsigned long long version; /* Monotonically increasing version */
+    raft_term term;             /* Current term */
+    unsigned voted_for;         /* Server ID of last vote, or 0 */
+    raft_index start_index;     /* Raft log start index */
+};
 
 /**
  * Read Raft metadata from disk, choosing the most recent version (either the
@@ -28,13 +34,5 @@ int raft__io_uv_metadata_load(struct raft_logger *logger,
 int raft__io_uv_metadata_store(struct raft_logger *logger,
                                const char *dir,
                                const struct raft__io_uv_metadata *metadata);
-
-struct raft__io_uv_metadata
-{
-    unsigned long long version; /* Monotonically increasing version */
-    raft_term term;             /* Current term */
-    unsigned voted_for;         /* Server ID of last vote, or 0 */
-    raft_index start_index;     /* Raft log start index */
-};
 
 #endif /* RAFT_IO_UV_METADATA_H */

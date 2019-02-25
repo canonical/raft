@@ -46,15 +46,6 @@
     test_logger_tear_down(&f->logger); \
     test_heap_tear_down(&f->heap);
 
-#define __list_trigger(F, RV)                                       \
-    {                                                               \
-        int rv;                                                     \
-        rv = raft__io_uv_loader_list(&F->loader, &F->snapshots,     \
-                                     &F->n_snapshots, &F->segments, \
-                                     &F->n_segments);               \
-        munit_assert_int(rv, ==, RV);                               \
-    }
-
 #define __test(NAME, FUNC, SETUP, TEAR_DOWN, PARAMS)       \
     {                                                      \
         "/" NAME, test_##FUNC, SETUP, TEAR_DOWN, 0, PARAMS \
@@ -83,8 +74,28 @@ static void *list_setup(const MunitParameter params[], void *user_data)
 static void list_tear_down(void *data)
 {
     struct list_fixture *f = data;
+    if (f->snapshots != NULL) {
+        raft_free(f->snapshots);
+    }
+    if (f->segments != NULL) {
+        raft_free(f->segments);
+    }
     __FIXTURE_TEAR_DOWN;
 }
+
+#define __list_trigger(F, RV)                                       \
+    {                                                               \
+        int rv;                                                     \
+        rv = raft__io_uv_loader_list(&F->loader, &F->snapshots,     \
+                                     &F->n_snapshots, &F->segments, \
+                                     &F->n_segments);               \
+        munit_assert_int(rv, ==, RV);                               \
+    }
+
+#define __list_assert_snapshot(F, I, TERM, INDEX, TIMESTAMP) \
+    munit_assert_int(F->snapshots[I].term, ==, TERM);        \
+    munit_assert_int(F->snapshots[I].index, ==, INDEX);      \
+    munit_assert_int(F->snapshots[I].timestamp, ==, TIMESTAMP);
 
 #define __test_list(NAME, FUNC, PARAMS) \
     __test(NAME, list_##FUNC, list_setup, list_tear_down, PARAMS)
@@ -110,47 +121,48 @@ static MunitResult test_list_success_one_snapshot(const MunitParameter params[],
                                                   void *data)
 {
     struct list_fixture *f = data;
+    uint8_t buf[8];
 
     (void)params;
 
-    test_io_uv_write_snapshot_meta_file(f->dir, 1, 8, 123);
+    test_io_uv_write_snapshot_meta_file(f->dir, 1, 8, 123, 1, 1);
+    test_io_uv_write_snapshot_data_file(f->dir, 1, 8, 123, buf, sizeof buf);
 
     __list_trigger(f, 0);
 
     munit_assert_ptr_not_null(f->snapshots);
     munit_assert_int(f->n_snapshots, ==, 1);
 
-    munit_assert_int(f->snapshots[0].term, ==, 1);
-    munit_assert_int(f->snapshots[0].index, ==, 8);
+    __list_assert_snapshot(f, 0, 1, 8, 123);
 
     return MUNIT_OK;
 }
 
 /* There are many snapshot metadata files */
-static MunitResult test_list_success_many_snapshots(const MunitParameter params[],
-                                                  void *data)
+static MunitResult test_list_success_many_snapshots(
+    const MunitParameter params[],
+    void *data)
 {
     struct list_fixture *f = data;
+    uint8_t buf[8];
 
     (void)params;
 
-    test_io_uv_write_snapshot_meta_file(f->dir, 1, 8, 123);
-    test_io_uv_write_snapshot_meta_file(f->dir, 1, 8, 456);
-    test_io_uv_write_snapshot_meta_file(f->dir, 2, 6, 789);
+    test_io_uv_write_snapshot_meta_file(f->dir, 1, 8, 123, 1, 1);
+
+    test_io_uv_write_snapshot_meta_file(f->dir, 1, 8, 456, 1, 1);
+    test_io_uv_write_snapshot_data_file(f->dir, 1, 8, 456, buf, sizeof buf);
+
+    test_io_uv_write_snapshot_meta_file(f->dir, 2, 6, 789, 2, 3);
+    test_io_uv_write_snapshot_data_file(f->dir, 2, 6, 789, buf, sizeof buf);
 
     __list_trigger(f, 0);
 
     munit_assert_ptr_not_null(f->snapshots);
-    munit_assert_int(f->n_snapshots, ==, 3);
+    munit_assert_int(f->n_snapshots, ==, 2);
 
-    munit_assert_int(f->snapshots[0].term, ==, 1);
-    munit_assert_int(f->snapshots[0].index, ==, 8);
-
-    munit_assert_int(f->snapshots[1].term, ==, 1);
-    munit_assert_int(f->snapshots[1].index, ==, 8);
-
-    munit_assert_int(f->snapshots[2].term, ==, 2);
-    munit_assert_int(f->snapshots[2].index, ==, 6);
+    __list_assert_snapshot(f, 0, 1, 8, 456);
+    __list_assert_snapshot(f, 1, 2, 6, 789);
 
     return MUNIT_OK;
 }
@@ -171,13 +183,259 @@ MunitSuite list_suites[] = {
 };
 
 /**
+ * raft__io_uv_loader_load_snapshot
+ */
+
+struct load_snapshot_fixture
+{
+    __FIXTURE;
+    struct raft__io_uv_loader_snapshot meta;
+    uint8_t data[8];
+    struct raft_snapshot snapshot;
+};
+
+static void *load_snapshot_setup(const MunitParameter params[], void *user_data)
+{
+    struct load_snapshot_fixture *f = munit_malloc(sizeof *f);
+    __SETUP;
+    f->meta.term = 1;
+    f->meta.index = 5;
+    f->meta.timestamp = 123;
+    sprintf(f->meta.filename, "snapshot-%020llu-%020llu-%020llu.meta",
+            f->meta.term, f->meta.index, f->meta.timestamp);
+    raft_configuration_init(&f->snapshot.configuration);
+    return f;
+}
+
+static void load_snapshot_tear_down(void *data)
+{
+    struct load_snapshot_fixture *f = data;
+    raft_configuration_close(&f->snapshot.configuration);
+    if (f->snapshot.bufs != NULL) {
+        raft_free(f->snapshot.bufs[0].base);
+        raft_free(f->snapshot.bufs);
+    }
+    __FIXTURE_TEAR_DOWN;
+}
+
+#define __load_snapshot_trigger(F, RV)                              \
+    {                                                               \
+        int rv;                                                     \
+        rv = raft__io_uv_loader_load_snapshot(&F->loader, &F->meta, \
+                                              &F->snapshot);        \
+        munit_assert_int(rv, ==, RV);                               \
+    }
+
+#define __load_snapshot_write_meta(F)                                        \
+    test_io_uv_write_snapshot_meta_file(F->dir, F->meta.term, F->meta.index, \
+                                        F->meta.timestamp, 1, 1);
+
+#define __load_snapshot_write_data(F)                                        \
+    test_io_uv_write_snapshot_data_file(F->dir, F->meta.term, F->meta.index, \
+                                        F->meta.timestamp, F->data,          \
+                                        sizeof F->data);
+
+#define __test_load_snapshot(NAME, FUNC, PARAMS)            \
+    __test(NAME, load_snapshot_##FUNC, load_snapshot_setup, \
+           load_snapshot_tear_down, PARAMS)
+
+/* There are no snapshot metadata files */
+static MunitResult test_load_snapshot_success(const MunitParameter params[],
+                                              void *data)
+{
+    struct load_snapshot_fixture *f = data;
+
+    (void)params;
+
+    *(uint64_t *)f->data = 123;
+
+    __load_snapshot_write_meta(f);
+    __load_snapshot_write_data(f);
+    __load_snapshot_trigger(f, 0);
+
+    munit_assert_int(f->snapshot.term, ==, 1);
+    munit_assert_int(f->snapshot.index, ==, 5);
+    munit_assert_int(f->snapshot.configuration_index, ==, 1);
+    munit_assert_int(f->snapshot.configuration.n, ==, 1);
+    munit_assert_int(f->snapshot.configuration.servers[0].id, ==, 1);
+
+    munit_assert_string_equal(f->snapshot.configuration.servers[0].address,
+                              "1");
+
+    munit_assert_int(f->snapshot.n_bufs, ==, 1);
+    munit_assert_int(*(uint64_t *)f->snapshot.bufs[0].base, ==, 123);
+
+    return MUNIT_OK;
+}
+
+static MunitTest load_snapshot_success_tests[] = {
+    __test_load_snapshot("", success, NULL),
+    {NULL, NULL, NULL, NULL, 0, NULL},
+};
+
+/* The snapshot metadata file is missing */
+static MunitResult test_load_snapshot_error_no_metadata(
+    const MunitParameter params[],
+    void *data)
+{
+    struct load_snapshot_fixture *f = data;
+
+    (void)params;
+
+    __load_snapshot_trigger(f, RAFT_ERR_IO);
+
+    return MUNIT_OK;
+}
+
+/* The snapshot metadata file is shorter than the mandatory header size. */
+static MunitResult test_load_snapshot_error_no_header(
+    const MunitParameter params[],
+    void *data)
+{
+    struct load_snapshot_fixture *f = data;
+    uint8_t buf[16];
+
+    (void)params;
+
+    test_dir_write_file(f->dir, f->meta.filename, buf, sizeof buf);
+    __load_snapshot_trigger(f, RAFT_ERR_IO);
+
+    return MUNIT_OK;
+}
+
+/* The snapshot metadata file has an unexpected format. */
+static MunitResult test_load_snapshot_error_format(
+    const MunitParameter params[],
+    void *data)
+{
+    struct load_snapshot_fixture *f = data;
+    uint64_t format = 666;
+
+    (void)params;
+
+    __load_snapshot_write_meta(f);
+
+    test_dir_overwrite_file(f->dir, f->meta.filename, &format, sizeof format,
+                            0);
+
+    __load_snapshot_trigger(f, RAFT_ERR_IO_CORRUPT);
+
+    return MUNIT_OK;
+}
+
+/* The snapshot metadata configuration size is too big. */
+static MunitResult test_load_snapshot_error_configuration_too_big(
+    const MunitParameter params[],
+    void *data)
+{
+    struct load_snapshot_fixture *f = data;
+    uint64_t size = raft__flip64(2 * 1024 * 1024);
+
+    (void)params;
+
+    __load_snapshot_write_meta(f);
+
+    test_dir_overwrite_file(f->dir, f->meta.filename, &size, sizeof size,
+                            sizeof(uint64_t) * 3);
+
+    __load_snapshot_trigger(f, RAFT_ERR_IO_CORRUPT);
+
+    return MUNIT_OK;
+}
+
+/* The snapshot metadata configuration size is zero. */
+static MunitResult test_load_snapshot_error_no_configuration(
+    const MunitParameter params[],
+    void *data)
+{
+    struct load_snapshot_fixture *f = data;
+    uint64_t size = 0;
+
+    (void)params;
+
+    __load_snapshot_write_meta(f);
+
+    test_dir_overwrite_file(f->dir, f->meta.filename, &size, sizeof size,
+                            sizeof(uint64_t) * 3);
+
+    __load_snapshot_trigger(f, RAFT_ERR_IO_CORRUPT);
+
+    return MUNIT_OK;
+}
+
+/* The snapshot data file is missing */
+static MunitResult test_load_snapshot_error_no_data(
+    const MunitParameter params[],
+    void *data)
+{
+    struct load_snapshot_fixture *f = data;
+
+    (void)params;
+
+    __load_snapshot_write_meta(f);
+    __load_snapshot_trigger(f, RAFT_ERR_IO);
+
+    return MUNIT_OK;
+}
+
+/* Out of memory conditions. */
+static MunitResult test_load_snapshot_error_oom(const MunitParameter params[],
+                                                void *data)
+{
+    struct load_snapshot_fixture *f = data;
+
+    (void)params;
+
+    __load_snapshot_write_meta(f);
+    __load_snapshot_write_data(f);
+
+    test_heap_fault_enable(&f->heap);
+
+    __load_snapshot_trigger(f, RAFT_ERR_NOMEM);
+
+    return MUNIT_OK;
+}
+
+static char *load_snapshot_error_oom_heap_fault_delay[] = {"0", "1", "2",
+                                                           "3", "4", NULL};
+static char *load_snapshot_error_oom_heap_fault_repeat[] = {"1", NULL};
+
+static MunitParameterEnum load_snapshot_error_oom_params[] = {
+    {TEST_HEAP_FAULT_DELAY, load_snapshot_error_oom_heap_fault_delay},
+    {TEST_HEAP_FAULT_REPEAT, load_snapshot_error_oom_heap_fault_repeat},
+    {NULL, NULL},
+};
+
+#define __test_load_snapshot_error(NAME, FUNC, PARAMS) \
+    __test_load_snapshot(NAME, error_##FUNC, PARAMS)
+
+static MunitTest load_snapshot_error_tests[] = {
+    __test_load_snapshot_error("no-metadata", no_metadata, NULL),
+    __test_load_snapshot_error("no-header", no_header, NULL),
+    __test_load_snapshot_error("format", format, NULL),
+    __test_load_snapshot_error("configuration-too-big",
+                               configuration_too_big,
+                               NULL),
+    __test_load_snapshot_error("no-configuration", no_configuration, NULL),
+    __test_load_snapshot_error("no-data", no_data, NULL),
+    __test_load_snapshot_error("oom", oom, load_snapshot_error_oom_params),
+    {NULL, NULL, NULL, NULL, 0, NULL},
+};
+
+MunitSuite load_snapshot_suites[] = {
+    {"/success", load_snapshot_success_tests, NULL, 1, 0},
+    {"/error", load_snapshot_error_tests, NULL, 1, 0},
+    {NULL, NULL, NULL, 0, 0},
+};
+
+/**
  * raft__io_uv_loader_load_all
  */
 
 struct load_all_fixture
 {
     __FIXTURE;
-    raft_index start_index;
+    struct raft_snapshot *snapshot;
     struct raft_entry *entries;
     size_t n;
     int count;
@@ -187,25 +445,43 @@ static void *load_all_setup(const MunitParameter params[], void *user_data)
 {
     struct load_all_fixture *f = munit_malloc(sizeof *f);
     __SETUP;
-    f->start_index = 1;
-    f->count = 0;
+    f->snapshot = NULL;
     f->entries = NULL;
     f->n = 0;
+    f->count = 0;
     return f;
 }
 
 static void load_all_tear_down(void *data)
 {
     struct load_all_fixture *f = data;
+    if (f->snapshot != NULL) {
+        raft_configuration_close(&f->snapshot->configuration);
+        raft_free(f->snapshot->bufs[0].base);
+        raft_free(f->snapshot->bufs);
+        raft_free(f->snapshot);
+    }
+    if (f->entries != NULL) {
+        unsigned i;
+        void *batch = NULL;
+        munit_assert_int(f->n, >, 0);
+        for (i = 0; i < f->n; i++) {
+            if (f->entries[i].batch != batch) {
+                batch = f->entries[i].batch;
+                raft_free(batch);
+            }
+        }
+        raft_free(f->entries);
+    }
     __FIXTURE_TEAR_DOWN;
 }
 
-#define __load_all_trigger(F, RV)                                    \
-    {                                                                \
-        int rv;                                                      \
-        rv = raft__io_uv_loader_load_all(&F->loader, F->start_index, \
-                                         &F->entries, &F->n);        \
-        munit_assert_int(rv, ==, RV);                                \
+#define __load_all_trigger(F, RV)                                  \
+    {                                                              \
+        int rv;                                                    \
+        rv = raft__io_uv_loader_load_all(&F->loader, &F->snapshot, \
+                                         &F->entries, &F->n);      \
+        munit_assert_int(rv, ==, RV);                              \
     }
 
 #define __test_load_all(NAME, FUNC, PARAMS) \
@@ -240,16 +516,19 @@ static MunitResult test_load_all_success_ignore_unknown(
 }
 
 /* The data directory has a closed segment with entries that are no longer
- * needed. */
+ * needed, since they are included in a snapshot. */
 static MunitResult test_load_all_success_closed_not_needed(
     const MunitParameter params[],
     void *data)
 {
     struct load_all_fixture *f = data;
+    uint8_t buf[8];
 
     (void)params;
 
-    f->start_index = 2;
+    test_io_uv_write_snapshot_meta_file(f->dir, 1, 2, 123, 1, 1);
+    test_io_uv_write_snapshot_data_file(f->dir, 1, 2, 123, buf, sizeof buf);
+    test_io_uv_write_closed_segment_file(f->dir, 1, 1, 1);
 
     __load_all_trigger(f, 0);
 
@@ -777,6 +1056,7 @@ MunitSuite load_all_suites[] = {
 
 MunitSuite raft_io_uv_loader_suites[] = {
     {"/list", NULL, list_suites, 1, 0},
+    {"/load-snapshot", NULL, load_snapshot_suites, 1, 0},
     {"/load-all", NULL, load_all_suites, 1, 0},
     {NULL, NULL, NULL, 0, 0},
 };

@@ -143,6 +143,12 @@ int raft__io_uv_rpc_client_send(struct raft__io_uv_rpc_client *c,
     return 0;
 }
 
+static void raft__io_uv_rpc_client_timer_close_cb(struct uv_handle_s *handle)
+{
+    struct raft__io_uv_rpc_client *c = handle->data;
+    raft_free(c);
+}
+
 void raft__io_uv_rpc_client_put(struct raft__io_uv_rpc_client *c)
 {
     int rv;
@@ -169,8 +175,6 @@ void raft__io_uv_rpc_client_put(struct raft__io_uv_rpc_client *c)
     rv = uv_timer_stop(&c->timer);
     assert(rv == 0);
 
-    uv_close((struct uv_handle_s *)&c->timer, NULL);
-
     /* If we are connecting, let's cancel the connection attempt and then
      * destroy ourselves when the connect callback fails. */
     if (c->state == RAFT__IO_UV_RPC_CLIENT_CONNECTING) {
@@ -182,7 +186,8 @@ void raft__io_uv_rpc_client_put(struct raft__io_uv_rpc_client *c)
 
     if (c->state == RAFT__IO_UV_RPC_CLIENT_DELAY) {
         raft__io_uv_rpc_client_close(c);
-        raft_free(c);
+        uv_close((struct uv_handle_s *)&c->timer,
+                 raft__io_uv_rpc_client_timer_close_cb);
         return;
     }
 
@@ -292,7 +297,8 @@ static void raft__io_uv_rpc_client_connect_cb(struct raft_io_uv_connect *req,
             uv_close((uv_handle_t *)stream, (uv_close_cb)raft_free);
         }
         raft__io_uv_rpc_client_close(c);
-        raft_free(c);
+        uv_close((struct uv_handle_s *)&c->timer,
+                 raft__io_uv_rpc_client_timer_close_cb);
         return;
     }
 
@@ -403,5 +409,6 @@ static void raft__io_uv_rpc_client_stream_close_cb(struct uv_handle_s *handle)
     raft_free(handle);
 
     raft__io_uv_rpc_client_close(c);
-    raft_free(c);
+    uv_close((struct uv_handle_s *)&c->timer,
+             raft__io_uv_rpc_client_timer_close_cb);
 }

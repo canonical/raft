@@ -25,6 +25,7 @@ struct raft__io_uv_loader_snapshot
 {
     raft_term term;
     raft_index index;
+    unsigned long long timestamp;
     raft__io_uv_fs_filename filename;
 };
 
@@ -58,10 +59,17 @@ void raft__io_uv_loader_init(struct raft__io_uv_loader *l,
  * open ones).
  */
 int raft__io_uv_loader_list(struct raft__io_uv_loader *l,
-			    struct raft__io_uv_loader_snapshot *snapshots[],
+                            struct raft__io_uv_loader_snapshot *snapshots[],
                             size_t *n_snapshots,
                             struct raft__io_uv_loader_segment *segments[],
                             size_t *n_segments);
+
+/**
+ * Load the snapshot with the given metadata.
+ */
+int raft__io_uv_loader_load_snapshot(struct raft__io_uv_loader *l,
+                                     struct raft__io_uv_loader_snapshot *meta,
+                                     struct raft_snapshot *snapshot);
 
 /**
  * Load all entries contained in the given closed segment.
@@ -72,10 +80,11 @@ int raft__io_uv_loader_load_closed(struct raft__io_uv_loader *l,
                                    size_t *n);
 
 /**
- * Load all entries contained in all segment files of the data directory.
+ * Load the last snapshot (if any) and all entries contained in all segment
+ * files of the data directory.
  */
 int raft__io_uv_loader_load_all(struct raft__io_uv_loader *l,
-                                raft_index start_index,
+				struct raft_snapshot **snapshot,
                                 struct raft_entry *entries[],
                                 size_t *n);
 

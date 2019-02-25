@@ -159,9 +159,10 @@ static void tear_down(void *data)
                                                                              \
             entry->term = 1;                                                 \
             entry->type = RAFT_LOG_COMMAND;                                  \
-            entry->buf.base = munit_malloc(SIZE);                            \
+            entry->buf.base = raft_malloc(SIZE);                             \
             entry->buf.len = SIZE;                                           \
             entry->batch = NULL;                                             \
+            munit_assert_ptr_not_null(entry->buf.base);                      \
                                                                              \
             memset(entry->buf.base, 0, entry->buf.len);                      \
             cursor = entry->buf.base;                                        \
@@ -639,8 +640,7 @@ static MunitTest truncate_tests[] = {
  */
 
 /* It's possilble to close the writer right after initialization. */
-static MunitResult test_close_noop(const MunitParameter params[],
-                                           void *data)
+static MunitResult test_close_noop(const MunitParameter params[], void *data)
 {
     struct fixture *f = data;
 

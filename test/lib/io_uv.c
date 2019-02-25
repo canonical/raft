@@ -1,3 +1,5 @@
+#include <stdlib.h>
+
 #include "../../src/binary.h"
 #include "../../src/checksum.h"
 #include "../../src/io_uv_encoding.h"
@@ -15,15 +17,70 @@ static size_t test__io_uv_create_segment(const char *dir,
 size_t test_io_uv_write_snapshot_meta_file(const char *dir,
                                            raft_term term,
                                            raft_index index,
-                                           unsigned long long timestamp)
+                                           unsigned long long timestamp,
+                                           unsigned configuration_n,
+                                           raft_index configuration_index)
 {
-    char filename[strlen("snapshot-00000000000000000001-00000000000000000001-"
-                         "00000000000000000001.meta") +
-                  1];
-    uint8_t buf[8];
-    size_t size = 8;
+    char filename[strlen("snapshot-N-N-N.meta") + 20 * 3 + 1];
+    struct raft_configuration configuration;
+    struct raft_buffer configuration_buf;
+    void *buf;
+    void *cursor;
+    size_t size;
+    unsigned crc;
+    unsigned i;
+    int rv;
+
+    raft_configuration_init(&configuration);
+    for (i = 0; i < configuration_n; i++) {
+        unsigned id = i + 1;
+        char address[16];
+        sprintf(address, "%u", id);
+        rv = raft_configuration_add(&configuration, id, address, true);
+        munit_assert_int(rv, ==, 0);
+    }
+    rv = raft_configuration_encode(&configuration, &configuration_buf);
+    munit_assert_int(rv, ==, 0);
+    raft_configuration_close(&configuration);
+
+    size = __WORD_SIZE + /* Format version */ __WORD_SIZE + /* CRC checksum */
+           __WORD_SIZE + /* Configuration index  */
+           __WORD_SIZE + /* Length of encoded configuration */
+           configuration_buf.len /* Encoded configuration */;
+    buf = munit_malloc(size);
+    cursor = buf;
+
+    raft__put64(&cursor, 1);                     /* Format version */
+    raft__put64(&cursor, 0);                     /* CRC sums placeholder */
+    raft__put64(&cursor, configuration_index);   /* Configuration index */
+    raft__put64(&cursor, configuration_buf.len); /* Encoded configuration */
+    memcpy(cursor, configuration_buf.base, configuration_buf.len);
 
     sprintf(filename, "snapshot-%020llu-%020llu-%020llu.meta", term, index,
+            timestamp);
+
+    crc = raft__crc32(buf + (__WORD_SIZE * 2), size - (__WORD_SIZE * 2), 0);
+    cursor = buf + __WORD_SIZE;
+    raft__put64(&cursor, crc);
+
+    test_dir_write_file(dir, filename, buf, size);
+
+    raft_free(configuration_buf.base);
+    free(buf);
+
+    return size;
+}
+
+size_t test_io_uv_write_snapshot_data_file(const char *dir,
+                                           raft_term term,
+                                           raft_index index,
+                                           unsigned long long timestamp,
+                                           void *buf,
+                                           size_t size)
+{
+    char filename[strlen("snapshot-N-N-N") + 20 * 3 + 1];
+
+    sprintf(filename, "snapshot-%020llu-%020llu-%020llu", term, index,
             timestamp);
     test_dir_write_file(dir, filename, buf, size);
 
@@ -45,7 +102,7 @@ size_t test_io_uv_write_closed_segment_file(const char *dir,
                                             int n,
                                             int data)
 {
-    char filename[strlen("00000000000000000001-00000000000000000001") + 1];
+    char filename[strlen("N-N") + 20 * 2 + 1];
     sprintf(filename, "%020llu-%020llu", first_index,
             (raft_index)(first_index + n - 1));
     return test__io_uv_create_segment(dir, filename, n, data);

@@ -23,9 +23,7 @@
 struct raft_io_stub_send
 {
     struct raft_io_send *req;
-    raft_io_send_cb cb2;
-    void *data;
-    void (*cb)(void *data, int status);
+    raft_io_send_cb cb;
 };
 
 /**
@@ -488,8 +486,7 @@ static int raft_io_stub__send(struct raft_io *io,
     s->send.pending.n_messages++;
     s->send.pending.messages[i] = *message;
     s->send.pending.requests[i].req = req;
-    s->send.pending.requests[i].cb2 = cb;
-    s->send.pending.requests[i].cb = NULL;
+    s->send.pending.requests[i].cb = cb;
 
     return 0;
 }
@@ -560,8 +557,8 @@ static void raft_io_stub__reset_flushed(struct raft_io_stub *s)
         switch (message->type) {
             case RAFT_IO_APPEND_ENTRIES:
                 if (message->append_entries.entries != NULL) {
-                    free(message->append_entries.entries[0].batch);
-                    free(message->append_entries.entries);
+                    raft_free(message->append_entries.entries[0].batch);
+                    raft_free(message->append_entries.entries);
                 }
                 break;
         }
@@ -733,10 +730,7 @@ void raft_io_stub_flush(struct raft_io *io)
         __debugf(s, "io: flush to server %u: %s", src->server_id, desc);
 
         if (request->cb != NULL) {
-            request->cb(request->data, 0);
-        }
-        if (request->cb2 != NULL) {
-            request->cb2(request->req, 0);
+            request->cb(request->req, 0);
         }
     }
 

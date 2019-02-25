@@ -165,7 +165,7 @@ static MunitResult test_listen_success(const MunitParameter params[],
     munit_assert_string_equal(f->address, "127.0.0.1:666");
     munit_assert_ptr_not_null(f->stream);
 
-    uv_close((struct uv_handle_s *)f->stream, NULL);
+    uv_close((struct uv_handle_s *)f->stream, (uv_close_cb)raft_free);
 
     return MUNIT_OK;
 }

@@ -11,12 +11,26 @@
 
 /**
  * Create a valid snapshot metadata file with the given @term, @index and
- * @timestamp. Return the size of the created file.
+ * @timestamp. The snapshot configuration will contain @nconfiguration_n
+ * servers. Return the size of the created file.
  */
 size_t test_io_uv_write_snapshot_meta_file(const char *dir,
                                            raft_term term,
                                            raft_index index,
-                                           unsigned long long timestamp);
+                                           unsigned long long timestamp,
+                                           unsigned configuration_n,
+                                           raft_index configuration_index);
+
+/**
+ * Create a valid snapshot file with the given @term, @index and @timestamp. The
+ * content of the snapshot file will be @buf.
+ */
+size_t test_io_uv_write_snapshot_data_file(const char *dir,
+                                           raft_term term,
+                                           raft_index index,
+                                           unsigned long long timestamp,
+                                           void *buf,
+                                           size_t size);
 
 /**
  * Create a valid open segment file with counter @counter with @n batches each
