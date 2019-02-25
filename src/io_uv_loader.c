@@ -19,7 +19,8 @@
  * Second param: snapshot index.
  * Third param: creation timestamp (milliseconds since epoch).
  */
-#define RAFT__IO_UV_LOADER_SNAPSHOT_TEMPLATE "snapshot-%020llu-%020llu-%020llu.meta"
+#define RAFT__IO_UV_LOADER_SNAPSHOT_TEMPLATE \
+    "snapshot-%020llu-%020llu-%020llu.meta"
 
 /**
  * Template string for open segment filenames.
@@ -122,27 +123,31 @@ void raft__io_uv_loader_init(struct raft__io_uv_loader *l,
 }
 
 int raft__io_uv_loader_list(struct raft__io_uv_loader *l,
-			    struct raft__io_uv_loader_snapshot *snapshots[],
+                            struct raft__io_uv_loader_snapshot *snapshots[],
+                            size_t *n_snapshots,
                             struct raft__io_uv_loader_segment *segments[],
-                            size_t *n)
+                            size_t *n_segments)
 {
-    struct dirent **entries;
+    struct dirent **dirents;
+    int n_dirents;
     struct raft__io_uv_loader_segment *tmp_segments;
-    int n_entries;
     int i;
     int rv = 0;
 
-    n_entries = scandir(l->dir, &entries, NULL, alphasort);
-    if (n_entries < 0) {
+    n_dirents = scandir(l->dir, &dirents, NULL, alphasort);
+    if (n_dirents < 0) {
         raft_errorf(l->logger, "scan %s: %s", l->dir, uv_strerror(-errno));
         return RAFT_ERR_IO;
     }
 
-    *segments = NULL;
-    *n = 0;
+    *snapshots = NULL;
+    *n_snapshots = 0;
 
-    for (i = 0; i < n_entries; i++) {
-        struct dirent *entry = entries[i];
+    *segments = NULL;
+    *n_segments = 0;
+
+    for (i = 0; i < n_dirents; i++) {
+        struct dirent *entry = dirents[i];
         bool ignore = raft__io_uv_loader_segment_ignore(entry->d_name);
         bool matched;
         struct raft__io_uv_loader_segment segment;
@@ -176,8 +181,9 @@ int raft__io_uv_loader_list(struct raft__io_uv_loader *l,
         goto next;
 
     append:
-        (*n)++;
-        tmp_segments = raft_realloc(*segments, (*n) * sizeof **segments);
+        (*n_segments)++;
+        tmp_segments =
+            raft_realloc(*segments, (*n_segments) * sizeof **segments);
 
         if (tmp_segments == NULL) {
             rv = RAFT_ERR_NOMEM;
@@ -188,12 +194,12 @@ int raft__io_uv_loader_list(struct raft__io_uv_loader *l,
         strcpy(segment.filename, entry->d_name);
 
         *segments = tmp_segments;
-        (*segments)[(*n) - 1] = segment;
+        (*segments)[(*n_segments) - 1] = segment;
 
     next:
-        free(entries[i]);
+        free(dirents[i]);
     }
-    free(entries);
+    free(dirents);
 
     if (rv != 0 && *segments != NULL) {
         raft_free(*segments);
@@ -296,7 +302,7 @@ int raft__io_uv_loader_load_all(struct raft__io_uv_loader *l,
     int rv;
 
     /* List available segments. */
-    rv = raft__io_uv_loader_list(l, NULL, &segments, &n_segments);
+    rv = raft__io_uv_loader_list(l, NULL, NULL, &segments, &n_segments);
     if (rv != 0) {
         goto err;
     }

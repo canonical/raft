@@ -59,8 +59,9 @@ void raft__io_uv_loader_init(struct raft__io_uv_loader *l,
  */
 int raft__io_uv_loader_list(struct raft__io_uv_loader *l,
 			    struct raft__io_uv_loader_snapshot *snapshots[],
+                            size_t *n_snapshots,
                             struct raft__io_uv_loader_segment *segments[],
-                            size_t *n);
+                            size_t *n_segments);
 
 /**
  * Load all entries contained in the given closed segment.

@@ -422,7 +422,7 @@ static void raft__io_uv_closer_truncate_work_cb(uv_work_t *work)
     int rv;
 
     /* Load all segments on disk. */
-    rv = raft__io_uv_loader_list(c->loader, NULL, &segments, &n_segments);
+    rv = raft__io_uv_loader_list(c->loader, NULL, NULL, &segments, &n_segments);
     if (rv != 0) {
         goto err;
     }

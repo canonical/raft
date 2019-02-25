@@ -45,10 +45,77 @@
     test_logger_tear_down(&f->logger); \
     test_heap_tear_down(&f->heap);
 
+#define __list_trigger(F, RV)                                       \
+    {                                                               \
+        int rv;                                                     \
+        rv = raft__io_uv_loader_list(&F->loader, &F->snapshots,     \
+                                     &F->n_snapshots, &F->segments, \
+                                     &F->n_segments);               \
+        munit_assert_int(rv, ==, RV);                               \
+    }
+
 #define __test(NAME, FUNC, SETUP, TEAR_DOWN, PARAMS)       \
     {                                                      \
         "/" NAME, test_##FUNC, SETUP, TEAR_DOWN, 0, PARAMS \
     }
+
+/**
+ * raft__io_uv_loader_list
+ */
+
+struct list_fixture
+{
+    __FIXTURE;
+    struct raft__io_uv_loader_snapshot *snapshots;
+    size_t n_snapshots;
+    struct raft__io_uv_loader_segment *segments;
+    size_t n_segments;
+};
+
+static void *list_setup(const MunitParameter params[], void *user_data)
+{
+    struct list_fixture *f = munit_malloc(sizeof *f);
+    __SETUP;
+    return f;
+}
+
+static void list_tear_down(void *data)
+{
+    struct list_fixture *f = data;
+    __FIXTURE_TEAR_DOWN;
+}
+
+#define __test_list(NAME, FUNC, PARAMS) \
+    __test(NAME, list_##FUNC, list_setup, list_tear_down, PARAMS)
+
+/* There are no snapshot metadata files */
+static MunitResult test_list_success_no_snapshots(const MunitParameter params[],
+                                                  void *data)
+{
+    struct list_fixture *f = data;
+
+    (void)params;
+
+    __list_trigger(f, 0);
+
+    munit_assert_ptr_null(f->snapshots);
+    munit_assert_int(f->n_snapshots, ==, 0);
+
+    return MUNIT_OK;
+}
+
+#define __test_list_success(NAME, FUNC, PARAMS) \
+    __test_list(NAME, success_##FUNC, PARAMS)
+
+static MunitTest list_success_tests[] = {
+    __test_list_success("no-snapshots", no_snapshots, NULL),
+    {NULL, NULL, NULL, NULL, 0, NULL},
+};
+
+MunitSuite list_suites[] = {
+    {"/success", list_success_tests, NULL, 1, 0},
+    {NULL, NULL, NULL, 0, 0},
+};
 
 /**
  * raft__io_uv_loader_load_all
@@ -713,7 +780,12 @@ MunitSuite load_all_suites[] = {
     {NULL, NULL, NULL, 0, 0},
 };
 
+/**
+ * Test suite
+ */
+
 MunitSuite raft_io_uv_loader_suites[] = {
+    {"/list", NULL, list_suites, 1, 0},
     {"/load-all", NULL, load_all_suites, 1, 0},
     {NULL, NULL, NULL, 0, 0},
 };
