@@ -422,7 +422,7 @@ static void raft__io_uv_closer_truncate_work_cb(uv_work_t *work)
     int rv;
 
     /* Load all segments on disk. */
-    rv = raft__io_uv_loader_list(c->loader, &segments, &n_segments);
+    rv = raft__io_uv_loader_list(c->loader, NULL, &segments, &n_segments);
     if (rv != 0) {
         goto err;
     }
@@ -508,7 +508,8 @@ static int raft__io_uv_closer_truncate_segment(
     int fd;
     int rv = 0;
 
-    raft_infof(c->logger, "truncate %u-%u at %u", segment->first_index, segment->end_index, index);
+    raft_infof(c->logger, "truncate %u-%u at %u", segment->first_index,
+               segment->end_index, index);
 
     rv = raft__io_uv_loader_load_closed(c->loader, segment, &entries, &n);
     if (rv != 0) {

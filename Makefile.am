@@ -62,6 +62,7 @@ if IO_UV
   src/io_uv_loader.c \
   src/io_uv_metadata.c \
   src/io_uv_preparer.c \
+  src/io_uv_snapshot.c \
   src/io_uv_rpc.c \
   src/io_uv_rpc_client.c \
   src/io_uv_rpc_server.c \

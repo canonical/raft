@@ -13,6 +13,15 @@
 #define RAFT_IO_UV_STORE__FORMAT 1
 
 /**
+ * Template string for snapshot metadata filenames.
+ *
+ * First param: snapshot term.
+ * Second param: snapshot index.
+ * Third param: creation timestamp (milliseconds since epoch).
+ */
+#define RAFT__IO_UV_LOADER_SNAPSHOT_TEMPLATE "snapshot-%020llu-%020llu-%020llu.meta"
+
+/**
  * Template string for open segment filenames.
  *
  * First param: incrementing counter.
@@ -113,6 +122,7 @@ void raft__io_uv_loader_init(struct raft__io_uv_loader *l,
 }
 
 int raft__io_uv_loader_list(struct raft__io_uv_loader *l,
+			    struct raft__io_uv_loader_snapshot *snapshots[],
                             struct raft__io_uv_loader_segment *segments[],
                             size_t *n)
 {
@@ -286,7 +296,7 @@ int raft__io_uv_loader_load_all(struct raft__io_uv_loader *l,
     int rv;
 
     /* List available segments. */
-    rv = raft__io_uv_loader_list(l, &segments, &n_segments);
+    rv = raft__io_uv_loader_list(l, NULL, &segments, &n_segments);
     if (rv != 0) {
         goto err;
     }

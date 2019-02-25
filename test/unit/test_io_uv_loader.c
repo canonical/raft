@@ -24,76 +24,71 @@
 #define __WORD_SIZE sizeof(uint64_t)
 
 /**
- * Test suite
+ * Helpers
  */
 
-struct fixture
-{
-    struct raft_heap heap;     /* Testable allocator */
-    struct raft_logger logger; /* Test logger */
-    char *dir;                 /* Data directory */
+#define __FIXTURE              \
+    struct raft_heap heap;     \
+    struct raft_logger logger; \
+    char *dir;                 \
     struct raft__io_uv_loader loader;
+
+#define __SETUP                               \
+    (void)user_data;                          \
+    test_heap_setup(params, &f->heap);        \
+    test_logger_setup(params, &f->logger, 1); \
+    f->dir = test_dir_setup(params);          \
+    raft__io_uv_loader_init(&f->loader, &f->logger, f->dir);
+
+#define __FIXTURE_TEAR_DOWN            \
+    test_dir_tear_down(f->dir);        \
+    test_logger_tear_down(&f->logger); \
+    test_heap_tear_down(&f->heap);
+
+#define __test(NAME, FUNC, SETUP, TEAR_DOWN, PARAMS)       \
+    {                                                      \
+        "/" NAME, test_##FUNC, SETUP, TEAR_DOWN, 0, PARAMS \
+    }
+
+/**
+ * raft__io_uv_loader_load_all
+ */
+
+struct load_all_fixture
+{
+    __FIXTURE;
     raft_index start_index;
     struct raft_entry *entries;
     size_t n;
     int count;
 };
 
-static void *setup(const MunitParameter params[], void *user_data)
+static void *load_all_setup(const MunitParameter params[], void *user_data)
 {
-    struct fixture *f = munit_malloc(sizeof *f);
-
-    (void)user_data;
-
-    test_heap_setup(params, &f->heap);
-    test_logger_setup(params, &f->logger, 1);
-
-    f->dir = test_dir_setup(params);
-
-    raft__io_uv_loader_init(&f->loader, &f->logger, f->dir);
-
+    struct load_all_fixture *f = munit_malloc(sizeof *f);
+    __SETUP;
     f->start_index = 1;
-
     f->count = 0;
-
     f->entries = NULL;
     f->n = 0;
-
     return f;
 }
 
-static void tear_down(void *data)
+static void load_all_tear_down(void *data)
 {
-    struct fixture *f = data;
-    void *batch = NULL;
-    size_t i;
-
-    /* Free any loaded entry */
-    for (i = 0; i < f->n; i++) {
-        struct raft_entry *entry = &f->entries[i];
-
-        if (entry->batch != batch) {
-            batch = entry->batch;
-            raft_free(batch);
-        }
-    }
-
-    if (f->entries != NULL) {
-        raft_free(f->entries);
-    }
-
-    test_dir_tear_down(f->dir);
-
-    test_logger_tear_down(&f->logger);
-    test_heap_tear_down(&f->heap);
-
-    free(f);
+    struct load_all_fixture *f = data;
+    __FIXTURE_TEAR_DOWN;
 }
 
-/**
- * Write a valid segment with #M batches.
- */
-#define __segments_prepare(F, FILENAME, M)                                    \
+#define __load_all_trigger(F, RV)                                    \
+    {                                                                \
+        int rv;                                                      \
+        rv = raft__io_uv_loader_load_all(&F->loader, F->start_index, \
+                                         &F->entries, &F->n);        \
+        munit_assert_int(rv, ==, RV);                                \
+    }
+
+#define __load_all_create_segment_file(F, FILENAME, M)                        \
     {                                                                         \
         size_t size = __WORD_SIZE /* Format version */;                       \
         int i;                                                                \
@@ -138,52 +133,31 @@ static void tear_down(void *data)
         free(buf);                                                            \
     }
 
-/**
- * Write a open segment with index #N and #M batches.
- */
-#define __segments_prepare_open(F, N, M)              \
-    {                                                 \
-        char filename[strlen(__OPEN_FILENAME_1) + 1]; \
-                                                      \
-        sprintf(filename, "open-%d", N);              \
-                                                      \
-        __segments_prepare(F, filename, M);           \
+/* Write a open segment with index #N and #M batches. */
+#define __load_all_create_open_segment_file(F, N, M)    \
+    {                                                   \
+        char filename[strlen(__OPEN_FILENAME_1) + 1];   \
+        sprintf(filename, "open-%d", N);                \
+        __load_all_create_segment_file(F, filename, M); \
     }
 
-/**
- * Write a closed segment with first index #N and #M batches.
- */
-#define __segments_prepare_closed(F, N, M)                  \
+/* Write a closed segment with first index #N and #M batches. */
+#define __load_all_create_closed_segment_file(F, N, M)      \
     {                                                       \
         char filename[strlen(__CLOSED_FILENAME_1) + 1];     \
-                                                            \
         sprintf(filename, "%020llu-%020llu", (raft_index)N, \
                 (raft_index)(N + M - 1));                   \
-                                                            \
-        __segments_prepare(F, filename, M);                 \
+        __load_all_create_segment_file(F, filename, M);     \
     }
 
-/**
- * Assert that @raft__io_uv_loader_load_all returns the given code.
- */
-#define __load_all_assert_result(F, RV)                              \
-    {                                                                \
-        int rv;                                                      \
-                                                                     \
-        rv = raft__io_uv_loader_load_all(&F->loader, F->start_index, \
-                                         &F->entries, &F->n);        \
-        munit_assert_int(rv, ==, RV);                                \
-    }
+#define __test_load_all(NAME, FUNC, PARAMS) \
+    __test(NAME, load_all_##FUNC, load_all_setup, load_all_tear_down, PARAMS)
 
-/**
- * raft__io_uv_loader_segments
- */
-
-/* Unknown files in the data directory are ignored. */
-static MunitResult test_segments_ignore(const MunitParameter params[],
-                                        void *data)
+static MunitResult test_load_all_success_ignore_unknown(
+    const MunitParameter params[],
+    void *data)
 {
-    struct fixture *f = data;
+    struct load_all_fixture *f = data;
     uint8_t buf[8];
     char filename1[128];
     char filename2[128];
@@ -202,200 +176,24 @@ static MunitResult test_segments_ignore(const MunitParameter params[],
     test_dir_write_file(f->dir, filename1, buf, sizeof buf);
     test_dir_write_file(f->dir, filename2, buf, sizeof buf);
 
-    __load_all_assert_result(f, 0);
-
-    return MUNIT_OK;
-}
-
-/* The data directory has an open segment which has incomplete format data. */
-static MunitResult test_segments_short_format(const MunitParameter params[],
-                                              void *data)
-{
-    struct fixture *f = data;
-
-    (void)params;
-
-    test_dir_write_file_with_zeros(f->dir, __OPEN_FILENAME_1, __WORD_SIZE / 2);
-
-    __load_all_assert_result(f, RAFT_ERR_IO);
-
-    return MUNIT_OK;
-}
-
-/* The data directory has an open segment which has an incomplete batch
- * preamble. */
-static MunitResult test_segments_short_preamble(const MunitParameter params[],
-                                                void *data)
-{
-    struct fixture *f = data;
-    size_t offset =
-        __WORD_SIZE /* Format version */ + __WORD_SIZE /* Checksums */;
-
-    (void)params;
-
-    __segments_prepare_open(f, 1, 1);
-
-    test_dir_truncate_file(f->dir, __OPEN_FILENAME_1, offset);
-
-    __load_all_assert_result(f, RAFT_ERR_IO);
-
-    return MUNIT_OK;
-}
-
-/* The data directory has an open segment which has incomplete batch header. */
-static MunitResult test_segments_short_header(const MunitParameter params[],
-                                              void *data)
-{
-    struct fixture *f = data;
-    size_t offset = __WORD_SIZE + /* Format version */
-                    __WORD_SIZE + /* Checksums */
-                    __WORD_SIZE + /* Number of entries */
-                    __WORD_SIZE /* Partial batch header */;
-
-    (void)params;
-
-    __segments_prepare_open(f, 1, 1);
-
-    test_dir_truncate_file(f->dir, __OPEN_FILENAME_1, offset);
-
-    __load_all_assert_result(f, RAFT_ERR_IO);
-
-    return MUNIT_OK;
-}
-
-/* The data directory has an open segment which has incomplete batch data. */
-static MunitResult test_segments_short_data(const MunitParameter params[],
-                                            void *data)
-{
-    struct fixture *f = data;
-    size_t offset = __WORD_SIZE + /* Format version */
-                    __WORD_SIZE + /* Checksums */
-                    __WORD_SIZE + /* Number of entries */
-                    __WORD_SIZE + /* Entry term */
-                    __WORD_SIZE + /* Entry type and data size */
-                    __WORD_SIZE / 2 /* Partial entry data */;
-
-    (void)params;
-
-    __segments_prepare_open(f, 1, 1);
-
-    test_dir_truncate_file(f->dir, __OPEN_FILENAME_1, offset);
-
-    __load_all_assert_result(f, RAFT_ERR_IO);
-
-    return MUNIT_OK;
-}
-
-/* The data directory has an open segment which has corrupted batch header. */
-static MunitResult test_segments_corrupt_header(const MunitParameter params[],
-                                                void *data)
-{
-    struct fixture *f = data;
-    size_t offset = __WORD_SIZE /* Format version */;
-    uint8_t buf[__WORD_SIZE];
-    void *cursor = &buf;
-
-    (void)params;
-
-    /* Render invalid checksums */
-    raft__put64(&cursor, 123);
-
-    __segments_prepare_closed(f, 1, 1);
-
-    test_dir_overwrite_file(f->dir, __CLOSED_FILENAME_1, buf, sizeof buf,
-                            offset);
-
-    __load_all_assert_result(f, RAFT_ERR_IO_CORRUPT);
-
-    return MUNIT_OK;
-}
-
-/* The data directory has an open segment which has corrupted batch data. */
-static MunitResult test_segments_corrupt_data(const MunitParameter params[],
-                                              void *data)
-{
-    struct fixture *f = data;
-    size_t offset = __WORD_SIZE /* Format version */ +
-                    __WORD_SIZE / 2 /* Header checksum */;
-    uint8_t buf[__WORD_SIZE / 2];
-    void *cursor = buf;
-
-    (void)params;
-
-    /* Render an invalid data checksum. */
-    raft__put32(&cursor, 123456789);
-
-    __segments_prepare_closed(f, 1, 1);
-
-    test_dir_overwrite_file(f->dir, __CLOSED_FILENAME_1, buf, sizeof buf,
-                            offset);
-
-    __load_all_assert_result(f, RAFT_ERR_IO_CORRUPT);
-
-    return MUNIT_OK;
-}
-
-/* The data directory has a closed segment whose first index does not match what
- * we expect. */
-static MunitResult test_segments_closed_bad_index(const MunitParameter params[],
-                                                  void *data)
-{
-    struct fixture *f = data;
-
-    (void)params;
-
-    __segments_prepare_closed(f, 2, 1);
-
-    __load_all_assert_result(f, RAFT_ERR_IO_CORRUPT);
-
-    return MUNIT_OK;
-}
-
-/* The data directory has an empty closed segment. */
-static MunitResult test_segments_closed_empty(const MunitParameter params[],
-                                              void *data)
-{
-    struct fixture *f = data;
-
-    (void)params;
-
-    test_dir_write_file(f->dir, __CLOSED_FILENAME_1, NULL, 0);
-
-    __load_all_assert_result(f, RAFT_ERR_IO_CORRUPT);
-
-    return MUNIT_OK;
-}
-
-/* The data directory has a closed segment with an unexpected format. */
-static MunitResult test_segments_closed_bad_format(
-    const MunitParameter params[],
-    void *data)
-{
-    struct fixture *f = data;
-    uint8_t buf[8] = {2, 0, 0, 0, 0, 0, 0, 0};
-
-    (void)params;
-
-    test_dir_write_file(f->dir, __CLOSED_FILENAME_1, buf, sizeof buf);
-
-    __load_all_assert_result(f, RAFT_ERR_IO);
+    __load_all_trigger(f, 0);
 
     return MUNIT_OK;
 }
 
 /* The data directory has a closed segment with entries that are no longer
  * needed. */
-static MunitResult test_segments_closed_not_needed(
+static MunitResult test_load_all_success_closed_not_needed(
     const MunitParameter params[],
     void *data)
 {
-    struct fixture *f = data;
+    struct load_all_fixture *f = data;
 
     (void)params;
 
     f->start_index = 2;
 
-    __load_all_assert_result(f, 0);
+    __load_all_trigger(f, 0);
 
     /* The segment has been removed. */
     munit_assert_false(test_dir_has_file(f->dir, __CLOSED_FILENAME_1));
@@ -404,52 +202,36 @@ static MunitResult test_segments_closed_not_needed(
 }
 
 /* The data directory has a valid closed and open segments. */
-static MunitResult test_segments_closed(const MunitParameter params[],
-                                        void *data)
-{
-    struct fixture *f = data;
-
-    (void)params;
-
-    __segments_prepare_closed(f, 1, 2);
-    __segments_prepare_closed(f, 3, 1);
-    __segments_prepare_open(f, 1, 1);
-
-    __load_all_assert_result(f, 0);
-
-    //__assert_result_entries(f, 4);
-
-    return MUNIT_OK;
-}
-
-/* The data directory has an open segment which is not readable. */
-static MunitResult test_segments_open_no_access(const MunitParameter params[],
+static MunitResult test_load_all_success_closed(const MunitParameter params[],
                                                 void *data)
 {
-    struct fixture *f = data;
+    struct load_all_fixture *f = data;
 
     (void)params;
 
-    __segments_prepare_open(f, 1, 1);
+    __load_all_create_closed_segment_file(f, 1, 2);
+    __load_all_create_closed_segment_file(f, 3, 1);
+    __load_all_create_open_segment_file(f, 1, 1);
 
-    test_dir_unreadable_file(f->dir, __OPEN_FILENAME_1);
+    __load_all_trigger(f, 0);
 
-    __load_all_assert_result(f, RAFT_ERR_IO);
+    munit_assert_int(f->n, ==, 4);
 
     return MUNIT_OK;
 }
 
 /* The data directory has an empty open segment. */
-static MunitResult test_segments_open_empty(const MunitParameter params[],
-                                            void *data)
+static MunitResult test_load_all_success_open_empty(
+    const MunitParameter params[],
+    void *data)
 {
-    struct fixture *f = data;
+    struct load_all_fixture *f = data;
 
     (void)params;
 
     test_dir_write_file(f->dir, __OPEN_FILENAME_1, NULL, 0);
 
-    __load_all_assert_result(f, 0);
+    __load_all_trigger(f, 0);
 
     /* The empty segment has been removed. */
     munit_assert_false(test_dir_has_file(f->dir, __OPEN_FILENAME_1));
@@ -457,60 +239,18 @@ static MunitResult test_segments_open_empty(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-/* The data directory has an open segment with format set to 0 and non-zero
- * content. */
-static MunitResult test_segments_open_zero_format(const MunitParameter params[],
-                                                  void *data)
-{
-    struct fixture *f = data;
-    uint8_t buf[__WORD_SIZE /* Format version */];
-    void *cursor = buf;
-
-    (void)params;
-
-    raft__put64(&cursor, 0); /* Format version */
-
-    __segments_prepare_open(f, 1, 1);
-
-    test_dir_overwrite_file(f->dir, __OPEN_FILENAME_1, buf, sizeof buf, 0);
-
-    __load_all_assert_result(f, RAFT_ERR_IO);
-
-    return MUNIT_OK;
-}
-
-/* The data directory has an open segment with an unexpected format. */
-static MunitResult test_segments_open_bad_format(const MunitParameter params[],
-                                                 void *data)
-{
-    struct fixture *f = data;
-    uint8_t buf[__WORD_SIZE /* Format version */];
-    void *cursor = buf;
-
-    (void)params;
-
-    raft__put64(&cursor, 2); /* Format version */
-
-    __segments_prepare_open(f, 1, 1);
-
-    test_dir_overwrite_file(f->dir, __OPEN_FILENAME_1, buf, sizeof buf, 0);
-
-    __load_all_assert_result(f, RAFT_ERR_IO);
-
-    return MUNIT_OK;
-}
-
 /* The data directory has a freshly allocated open segment filled with zeros. */
-static MunitResult test_segments_open_all_zeros(const MunitParameter params[],
-                                                void *data)
+static MunitResult test_load_all_success_open_all_zeros(
+    const MunitParameter params[],
+    void *data)
 {
-    struct fixture *f = data;
+    struct load_all_fixture *f = data;
 
     (void)params;
 
     test_dir_write_file_with_zeros(f->dir, __OPEN_FILENAME_1, 256);
 
-    __load_all_assert_result(f, 0);
+    __load_all_trigger(f, 0);
 
     /* The empty segment has been removed. */
     munit_assert_false(test_dir_has_file(f->dir, __OPEN_FILENAME_1));
@@ -520,11 +260,11 @@ static MunitResult test_segments_open_all_zeros(const MunitParameter params[],
 
 /* The data directory has an allocated open segment which contains non-zero
  * corrupted data in its second batch. */
-static MunitResult test_segments_open_not_all_zeros(
+static MunitResult test_load_all_success_open_not_all_zeros(
     const MunitParameter params[],
     void *data)
 {
-    struct fixture *f = data;
+    struct load_all_fixture *f = data;
     uint8_t buf[__WORD_SIZE + /* CRC32 checksum */
                 __WORD_SIZE + /* Number of entries */
                 __WORD_SIZE + /* Entry term */
@@ -543,11 +283,11 @@ static MunitResult test_segments_open_not_all_zeros(
     raft__put8(&cursor, 0);                /* Unused */
     raft__put32(&cursor, 8);               /* Size of entry data */
 
-    __segments_prepare_open(f, 1, 1);
+    __load_all_create_open_segment_file(f, 1, 1);
 
     test_dir_append_file(f->dir, __OPEN_FILENAME_1, buf, sizeof buf);
 
-    __load_all_assert_result(f, 0);
+    __load_all_trigger(f, 0);
 
     /* The segment has been renamed. */
     munit_assert_false(test_dir_has_file(f->dir, __OPEN_FILENAME_1));
@@ -561,32 +301,33 @@ static MunitResult test_segments_open_not_all_zeros(
 
 /* The data directory has an open segment with a partially written batch that
  * needs to be truncated. */
-static MunitResult test_segments_open_truncate(const MunitParameter params[],
-                                               void *data)
+static MunitResult test_load_all_success_open_truncate(
+    const MunitParameter params[],
+    void *data)
 {
-    struct fixture *f = data;
+    struct load_all_fixture *f = data;
     uint8_t buf[256];
 
     (void)params;
 
-    __segments_prepare_open(f, 1, 1);
+    __load_all_create_open_segment_file(f, 1, 1);
 
     memset(buf, 0, sizeof buf);
 
     test_dir_append_file(f->dir, __OPEN_FILENAME_1, buf, sizeof buf);
 
-    __load_all_assert_result(f, 0);
+    __load_all_trigger(f, 0);
 
     return MUNIT_OK;
 }
 
 /* The data directory has an open segment whose first batch is only
  * partially written. In that case the segment gets removed. */
-static MunitResult test_segments_open_partial_batch(
+static MunitResult test_load_all_success_open_partial_batch(
     const MunitParameter params[],
     void *data)
 {
-    struct fixture *f = data;
+    struct load_all_fixture *f = data;
     uint8_t buf[__WORD_SIZE + /* Format version */
                 __WORD_SIZE + /* CRC32 checksums */
                 __WORD_SIZE + /* Number of entries */
@@ -600,11 +341,11 @@ static MunitResult test_segments_open_partial_batch(
     raft__put64(&cursor, 0); /* Number of entries */
     raft__put64(&cursor, 0); /* Batch data */
 
-    __segments_prepare_open(f, 1, 1);
+    __load_all_create_open_segment_file(f, 1, 1);
 
     test_dir_overwrite_file(f->dir, __OPEN_FILENAME_1, buf, sizeof buf, 0);
 
-    __load_all_assert_result(f, 0);
+    __load_all_trigger(f, 0);
 
     /* The partially written segment has been removed. */
     munit_assert_false(test_dir_has_file(f->dir, __OPEN_FILENAME_1));
@@ -613,20 +354,21 @@ static MunitResult test_segments_open_partial_batch(
 }
 
 /* The data directory has two segments, with the second having an entry. */
-static MunitResult test_segments_open_second(const MunitParameter params[],
-                                             void *data)
+static MunitResult test_load_all_success_open_second(
+    const MunitParameter params[],
+    void *data)
 {
-    struct fixture *f = data;
+    struct load_all_fixture *f = data;
 
     (void)params;
 
     /* First segment. */
-    __segments_prepare_open(f, 1, 1);
+    __load_all_create_open_segment_file(f, 1, 1);
 
     /* Second segment */
-    __segments_prepare_open(f, 2, 1);
+    __load_all_create_open_segment_file(f, 2, 1);
 
-    __load_all_assert_result(f, 0);
+    __load_all_trigger(f, 0);
 
     /* The first and second segments have been renamed. */
     munit_assert_false(test_dir_has_file(f->dir, __OPEN_FILENAME_1));
@@ -639,21 +381,21 @@ static MunitResult test_segments_open_second(const MunitParameter params[],
 
 /* The data directory has two segments, with the second one filled with
  * zeros. */
-static MunitResult test_segments_open_second_all_zeros(
+static MunitResult test_load_all_success_open_second_all_zeros(
     const MunitParameter params[],
     void *data)
 {
-    struct fixture *f = data;
+    struct load_all_fixture *f = data;
 
     (void)params;
 
     /* First segment. */
-    __segments_prepare_open(f, 1, 1);
+    __load_all_create_open_segment_file(f, 1, 1);
 
     /* Second segment */
     test_dir_write_file_with_zeros(f->dir, __OPEN_FILENAME_2, 256);
 
-    __load_all_assert_result(f, 0);
+    __load_all_trigger(f, 0);
 
     /* The first segment has been renamed. */
     munit_assert_false(test_dir_has_file(f->dir, __OPEN_FILENAME_1));
@@ -666,52 +408,312 @@ static MunitResult test_segments_open_second_all_zeros(
 }
 
 /* The data directory has a valid open segment. */
-static MunitResult test_segments_open(const MunitParameter params[], void *data)
+static MunitResult test_load_all_success_open(const MunitParameter params[],
+                                              void *data)
 {
-    struct fixture *f = data;
+    struct load_all_fixture *f = data;
 
     (void)params;
 
-    __segments_prepare_open(f, 1, 1);
+    __load_all_create_open_segment_file(f, 1, 1);
 
-    __load_all_assert_result(f, 0);
+    __load_all_trigger(f, 0);
 
     return MUNIT_OK;
 }
 
-#define __test_segments(NAME, FUNC, PARAMS)                         \
-    {                                                               \
-        "/" NAME, test_segments_##FUNC, setup, tear_down, 0, PARAMS \
-    }
+#define __test_load_all_success(NAME, FUNC, PARAMS) \
+    __test_load_all(NAME, success_##FUNC, PARAMS)
 
-static MunitTest segments_tests[] = {
-    __test_segments("ignore", ignore, NULL),
-    __test_segments("short-format", short_format, NULL),
-    __test_segments("short-preamble", short_preamble, NULL),
-    __test_segments("short-header", short_header, NULL),
-    __test_segments("short-data", short_data, NULL),
-    __test_segments("corrupt-header", corrupt_header, NULL),
-    __test_segments("corrupt-data", corrupt_data, NULL),
-    __test_segments("closed-bad-index", closed_bad_index, NULL),
-    __test_segments("closed-empty", closed_empty, NULL),
-    __test_segments("closed-bad-format", closed_bad_format, NULL),
-    __test_segments("closed-not-needed", closed_not_needed, NULL),
-    __test_segments("closed", closed, NULL),
-    __test_segments("open-no-access", open_no_access, NULL),
-    __test_segments("open-empty", open_empty, NULL),
-    __test_segments("open-zero-format", open_zero_format, NULL),
-    __test_segments("open-bad-format", open_bad_format, NULL),
-    __test_segments("open-all-zeros", open_all_zeros, NULL),
-    __test_segments("open-not-all-zeros", open_not_all_zeros, NULL),
-    __test_segments("open-truncate", open_truncate, NULL),
-    __test_segments("open-partial-batch", open_partial_batch, NULL),
-    __test_segments("open-second", open_second, NULL),
-    __test_segments("open-second-all-zeros", open_second_all_zeros, NULL),
-    __test_segments("open", open, NULL),
+static MunitTest load_all_success_tests[] = {
+    __test_load_all_success("ignore-unknown", ignore_unknown, NULL),
+    __test_load_all_success("closed-not-needed", closed_not_needed, NULL),
+    __test_load_all_success("closed", closed, NULL),
+    __test_load_all_success("open-empty", open_empty, NULL),
+    __test_load_all_success("open-all-zeros", open_all_zeros, NULL),
+    __test_load_all_success("open-not-all-zeros", open_not_all_zeros, NULL),
+    __test_load_all_success("open-truncate", open_truncate, NULL),
+    __test_load_all_success("open-partial-batch", open_partial_batch, NULL),
+    __test_load_all_success("open-second", open_second, NULL),
+    __test_load_all_success("open-second-all-zeros",
+                            open_second_all_zeros,
+                            NULL),
+    __test_load_all_success("open", open, NULL),
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 
+/* The data directory has an open segment which has incomplete format data. */
+static MunitResult test_load_all_error_short_format(
+    const MunitParameter params[],
+    void *data)
+{
+    struct load_all_fixture *f = data;
+
+    (void)params;
+
+    test_dir_write_file_with_zeros(f->dir, __OPEN_FILENAME_1, __WORD_SIZE / 2);
+
+    __load_all_trigger(f, RAFT_ERR_IO);
+
+    return MUNIT_OK;
+}
+
+/* The data directory has an open segment which has an incomplete batch
+ * preamble. */
+static MunitResult test_load_all_error_short_preamble(
+    const MunitParameter params[],
+    void *data)
+{
+    struct load_all_fixture *f = data;
+    size_t offset =
+        __WORD_SIZE /* Format version */ + __WORD_SIZE /* Checksums */;
+
+    (void)params;
+
+    __load_all_create_open_segment_file(f, 1, 1);
+
+    test_dir_truncate_file(f->dir, __OPEN_FILENAME_1, offset);
+
+    __load_all_trigger(f, RAFT_ERR_IO);
+
+    return MUNIT_OK;
+}
+
+/* The data directory has an open segment which has incomplete batch header. */
+static MunitResult test_load_all_error_short_header(
+    const MunitParameter params[],
+    void *data)
+{
+    struct load_all_fixture *f = data;
+    size_t offset = __WORD_SIZE + /* Format version */
+                    __WORD_SIZE + /* Checksums */
+                    __WORD_SIZE + /* Number of entries */
+                    __WORD_SIZE /* Partial batch header */;
+
+    (void)params;
+
+    __load_all_create_open_segment_file(f, 1, 1);
+
+    test_dir_truncate_file(f->dir, __OPEN_FILENAME_1, offset);
+
+    __load_all_trigger(f, RAFT_ERR_IO);
+
+    return MUNIT_OK;
+}
+
+/* The data directory has an open segment which has incomplete batch data. */
+static MunitResult test_load_all_error_short_data(const MunitParameter params[],
+                                                  void *data)
+{
+    struct load_all_fixture *f = data;
+    size_t offset = __WORD_SIZE + /* Format version */
+                    __WORD_SIZE + /* Checksums */
+                    __WORD_SIZE + /* Number of entries */
+                    __WORD_SIZE + /* Entry term */
+                    __WORD_SIZE + /* Entry type and data size */
+                    __WORD_SIZE / 2 /* Partial entry data */;
+
+    (void)params;
+
+    __load_all_create_open_segment_file(f, 1, 1);
+
+    test_dir_truncate_file(f->dir, __OPEN_FILENAME_1, offset);
+
+    __load_all_trigger(f, RAFT_ERR_IO);
+
+    return MUNIT_OK;
+}
+
+/* The data directory has an open segment which has corrupted batch header. */
+static MunitResult test_load_all_error_corrupt_header(
+    const MunitParameter params[],
+    void *data)
+{
+    struct load_all_fixture *f = data;
+    size_t offset = __WORD_SIZE /* Format version */;
+    uint8_t buf[__WORD_SIZE];
+    void *cursor = &buf;
+
+    (void)params;
+
+    /* Render invalid checksums */
+    raft__put64(&cursor, 123);
+
+    __load_all_create_closed_segment_file(f, 1, 1);
+
+    test_dir_overwrite_file(f->dir, __CLOSED_FILENAME_1, buf, sizeof buf,
+                            offset);
+
+    __load_all_trigger(f, RAFT_ERR_IO_CORRUPT);
+
+    return MUNIT_OK;
+}
+
+/* The data directory has an open segment which has corrupted batch data. */
+static MunitResult test_load_all_error_corrupt_data(
+    const MunitParameter params[],
+    void *data)
+{
+    struct load_all_fixture *f = data;
+    size_t offset = __WORD_SIZE /* Format version */ +
+                    __WORD_SIZE / 2 /* Header checksum */;
+    uint8_t buf[__WORD_SIZE / 2];
+    void *cursor = buf;
+
+    (void)params;
+
+    /* Render an invalid data checksum. */
+    raft__put32(&cursor, 123456789);
+
+    __load_all_create_closed_segment_file(f, 1, 1);
+
+    test_dir_overwrite_file(f->dir, __CLOSED_FILENAME_1, buf, sizeof buf,
+                            offset);
+
+    __load_all_trigger(f, RAFT_ERR_IO_CORRUPT);
+
+    return MUNIT_OK;
+}
+
+/* The data directory has a closed segment whose first index does not match what
+ * we expect. */
+static MunitResult test_load_all_error_closed_bad_index(
+    const MunitParameter params[],
+    void *data)
+{
+    struct load_all_fixture *f = data;
+
+    (void)params;
+
+    __load_all_create_closed_segment_file(f, 2, 1);
+
+    __load_all_trigger(f, RAFT_ERR_IO_CORRUPT);
+
+    return MUNIT_OK;
+}
+
+/* The data directory has an empty closed segment. */
+static MunitResult test_load_all_error_closed_empty(
+    const MunitParameter params[],
+    void *data)
+{
+    struct load_all_fixture *f = data;
+
+    (void)params;
+
+    test_dir_write_file(f->dir, __CLOSED_FILENAME_1, NULL, 0);
+
+    __load_all_trigger(f, RAFT_ERR_IO_CORRUPT);
+
+    return MUNIT_OK;
+}
+
+/* The data directory has a closed segment with an unexpected format. */
+static MunitResult test_load_all_error_closed_bad_format(
+    const MunitParameter params[],
+    void *data)
+{
+    struct load_all_fixture *f = data;
+    uint8_t buf[8] = {2, 0, 0, 0, 0, 0, 0, 0};
+
+    (void)params;
+
+    test_dir_write_file(f->dir, __CLOSED_FILENAME_1, buf, sizeof buf);
+
+    __load_all_trigger(f, RAFT_ERR_IO);
+
+    return MUNIT_OK;
+}
+
+/* The data directory has an open segment which is not readable. */
+static MunitResult test_load_all_error_open_no_access(
+    const MunitParameter params[],
+    void *data)
+{
+    struct load_all_fixture *f = data;
+
+    (void)params;
+
+    __load_all_create_open_segment_file(f, 1, 1);
+
+    test_dir_unreadable_file(f->dir, __OPEN_FILENAME_1);
+
+    __load_all_trigger(f, RAFT_ERR_IO);
+
+    return MUNIT_OK;
+}
+
+/* The data directory has an open segment with format set to 0 and non-zero
+ * content. */
+static MunitResult test_load_all_error_open_zero_format(
+    const MunitParameter params[],
+    void *data)
+{
+    struct load_all_fixture *f = data;
+    uint8_t buf[__WORD_SIZE /* Format version */];
+    void *cursor = buf;
+
+    (void)params;
+
+    raft__put64(&cursor, 0); /* Format version */
+
+    __load_all_create_open_segment_file(f, 1, 1);
+
+    test_dir_overwrite_file(f->dir, __OPEN_FILENAME_1, buf, sizeof buf, 0);
+
+    __load_all_trigger(f, RAFT_ERR_IO);
+
+    return MUNIT_OK;
+}
+
+/* The data directory has an open segment with an unexpected format. */
+static MunitResult test_load_all_error_open_bad_format(
+    const MunitParameter params[],
+    void *data)
+{
+    struct load_all_fixture *f = data;
+    uint8_t buf[__WORD_SIZE /* Format version */];
+    void *cursor = buf;
+
+    (void)params;
+
+    raft__put64(&cursor, 2); /* Format version */
+
+    __load_all_create_open_segment_file(f, 1, 1);
+
+    test_dir_overwrite_file(f->dir, __OPEN_FILENAME_1, buf, sizeof buf, 0);
+
+    __load_all_trigger(f, RAFT_ERR_IO);
+
+    return MUNIT_OK;
+}
+
+#define __test_load_all_error(NAME, FUNC, PARAMS) \
+    __test_load_all(NAME, error_##FUNC, PARAMS)
+
+static MunitTest load_all_error_tests[] = {
+    __test_load_all_error("short-format", short_format, NULL),
+    __test_load_all_error("short-preamble", short_preamble, NULL),
+    __test_load_all_error("short-header", short_header, NULL),
+    __test_load_all_error("short-data", short_data, NULL),
+    __test_load_all_error("corrupt-header", corrupt_header, NULL),
+    __test_load_all_error("corrupt-data", corrupt_data, NULL),
+    __test_load_all_error("closed-bad-index", closed_bad_index, NULL),
+    __test_load_all_error("closed-empty", closed_empty, NULL),
+    __test_load_all_error("closed-bad-format", closed_bad_format, NULL),
+    __test_load_all_error("open-no-access", open_no_access, NULL),
+    __test_load_all_error("open-zero-format", open_zero_format, NULL),
+    __test_load_all_error("open-bad-format", open_bad_format, NULL),
+    {NULL, NULL, NULL, NULL, 0, NULL},
+};
+
+MunitSuite load_all_suites[] = {
+    {"/success", load_all_success_tests, NULL, 1, 0},
+    {"/error", load_all_error_tests, NULL, 1, 0},
+    {NULL, NULL, NULL, 0, 0},
+};
+
 MunitSuite raft_io_uv_loader_suites[] = {
-    {"/segments", segments_tests, NULL, 1, 0},
+    {"/load-all", NULL, load_all_suites, 1, 0},
     {NULL, NULL, NULL, 0, 0},
 };
