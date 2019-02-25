@@ -414,15 +414,18 @@ static void raft__io_uv_closer_truncate_work_cb(uv_work_t *work)
 {
     struct raft__io_uv_closer_truncate *req = work->data;
     struct raft__io_uv_closer *c = req->closer;
+    struct raft__io_uv_loader_snapshot *snapshots;
     struct raft__io_uv_loader_segment *segments;
     struct raft__io_uv_loader_segment *segment;
+    size_t n_snapshots;
     size_t n_segments;
     size_t i;
     size_t j;
     int rv;
 
     /* Load all segments on disk. */
-    rv = raft__io_uv_loader_list(c->loader, NULL, NULL, &segments, &n_segments);
+    rv = raft__io_uv_loader_list(c->loader, &snapshots, &n_snapshots, &segments,
+                                 &n_segments);
     if (rv != 0) {
         goto err;
     }

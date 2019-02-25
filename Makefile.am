@@ -97,6 +97,7 @@ test_lib_SOURCES = \
   test/lib/tcp.c
 if IO_UV
 test_lib_SOURCES += \
+  test/lib/io_uv.c \
   test/lib/uv.c
 endif
 

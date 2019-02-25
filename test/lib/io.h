@@ -1,5 +1,5 @@
 /**
- * Test implementation of the raft_io interface, with fault injection.
+ * Helpers around the stub implementation of the raft_io interface.
  */
 
 #ifndef TEST_IO_H

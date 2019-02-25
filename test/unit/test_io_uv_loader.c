@@ -1,5 +1,6 @@
 #include "../lib/fs.h"
 #include "../lib/heap.h"
+#include "../lib/io_uv.h"
 #include "../lib/logger.h"
 #include "../lib/munit.h"
 
@@ -104,11 +105,63 @@ static MunitResult test_list_success_no_snapshots(const MunitParameter params[],
     return MUNIT_OK;
 }
 
+/* There is a single snapshot metadata file */
+static MunitResult test_list_success_one_snapshot(const MunitParameter params[],
+                                                  void *data)
+{
+    struct list_fixture *f = data;
+
+    (void)params;
+
+    test_io_uv_write_snapshot_meta_file(f->dir, 1, 8, 123);
+
+    __list_trigger(f, 0);
+
+    munit_assert_ptr_not_null(f->snapshots);
+    munit_assert_int(f->n_snapshots, ==, 1);
+
+    munit_assert_int(f->snapshots[0].term, ==, 1);
+    munit_assert_int(f->snapshots[0].index, ==, 8);
+
+    return MUNIT_OK;
+}
+
+/* There are many snapshot metadata files */
+static MunitResult test_list_success_many_snapshots(const MunitParameter params[],
+                                                  void *data)
+{
+    struct list_fixture *f = data;
+
+    (void)params;
+
+    test_io_uv_write_snapshot_meta_file(f->dir, 1, 8, 123);
+    test_io_uv_write_snapshot_meta_file(f->dir, 1, 8, 456);
+    test_io_uv_write_snapshot_meta_file(f->dir, 2, 6, 789);
+
+    __list_trigger(f, 0);
+
+    munit_assert_ptr_not_null(f->snapshots);
+    munit_assert_int(f->n_snapshots, ==, 3);
+
+    munit_assert_int(f->snapshots[0].term, ==, 1);
+    munit_assert_int(f->snapshots[0].index, ==, 8);
+
+    munit_assert_int(f->snapshots[1].term, ==, 1);
+    munit_assert_int(f->snapshots[1].index, ==, 8);
+
+    munit_assert_int(f->snapshots[2].term, ==, 2);
+    munit_assert_int(f->snapshots[2].index, ==, 6);
+
+    return MUNIT_OK;
+}
+
 #define __test_list_success(NAME, FUNC, PARAMS) \
     __test_list(NAME, success_##FUNC, PARAMS)
 
 static MunitTest list_success_tests[] = {
     __test_list_success("no-snapshots", no_snapshots, NULL),
+    __test_list_success("one-snapshot", one_snapshot, NULL),
+    __test_list_success("many-snapshots", many_snapshots, NULL),
     {NULL, NULL, NULL, NULL, 0, NULL},
 };
 
@@ -153,68 +206,6 @@ static void load_all_tear_down(void *data)
         rv = raft__io_uv_loader_load_all(&F->loader, F->start_index, \
                                          &F->entries, &F->n);        \
         munit_assert_int(rv, ==, RV);                                \
-    }
-
-#define __load_all_create_segment_file(F, FILENAME, M)                        \
-    {                                                                         \
-        size_t size = __WORD_SIZE /* Format version */;                       \
-        int i;                                                                \
-        uint8_t *buf;                                                         \
-        void *cursor;                                                         \
-        unsigned crc1;                                                        \
-        unsigned crc2;                                                        \
-        uint8_t *batch; /* Start of the batch */                              \
-        size_t header_size = raft_io_uv_sizeof__batch_header(1);              \
-        size_t data_size = __WORD_SIZE;                                       \
-                                                                              \
-        size += (__WORD_SIZE /* Checksums */ + header_size + data_size) * M;  \
-        buf = munit_malloc(size);                                             \
-        cursor = buf;                                                         \
-        raft__put64(&cursor, 1); /* Format version */                         \
-        batch = cursor;                                                       \
-                                                                              \
-        for (i = 0; i < M; i++) {                                             \
-            F->count++;                                                       \
-                                                                              \
-            raft__put64(&cursor, 0);               /* CRC sums placeholder */ \
-            raft__put64(&cursor, 1);               /* Number of entries */    \
-            raft__put64(&cursor, 1);               /* Entry term */           \
-            raft__put8(&cursor, RAFT_LOG_COMMAND); /* Entry type */           \
-            raft__put8(&cursor, 0);                /* Unused */               \
-            raft__put8(&cursor, 0);                /* Unused */               \
-            raft__put8(&cursor, 0);                /* Unused */               \
-            raft__put32(&cursor, 8);               /* Size of entry data */   \
-            raft__put64(&cursor, F->count);        /* Entry data */           \
-                                                                              \
-            cursor = batch + __WORD_SIZE;                                     \
-            crc1 = raft__crc32(cursor, header_size, 0);                       \
-            crc2 = raft__crc32(cursor + header_size, data_size, 0);           \
-            cursor = batch;                                                   \
-            raft__put32(&cursor, crc1); /* Header checksum */                 \
-            raft__put32(&cursor, crc2); /* Data checksum */                   \
-            batch += __WORD_SIZE + header_size + data_size;                   \
-            cursor = batch;                                                   \
-        }                                                                     \
-                                                                              \
-        test_dir_write_file(F->dir, FILENAME, buf, size);                     \
-        free(buf);                                                            \
-    }
-
-/* Write a open segment with index #N and #M batches. */
-#define __load_all_create_open_segment_file(F, N, M)    \
-    {                                                   \
-        char filename[strlen(__OPEN_FILENAME_1) + 1];   \
-        sprintf(filename, "open-%d", N);                \
-        __load_all_create_segment_file(F, filename, M); \
-    }
-
-/* Write a closed segment with first index #N and #M batches. */
-#define __load_all_create_closed_segment_file(F, N, M)      \
-    {                                                       \
-        char filename[strlen(__CLOSED_FILENAME_1) + 1];     \
-        sprintf(filename, "%020llu-%020llu", (raft_index)N, \
-                (raft_index)(N + M - 1));                   \
-        __load_all_create_segment_file(F, filename, M);     \
     }
 
 #define __test_load_all(NAME, FUNC, PARAMS) \
@@ -276,9 +267,9 @@ static MunitResult test_load_all_success_closed(const MunitParameter params[],
 
     (void)params;
 
-    __load_all_create_closed_segment_file(f, 1, 2);
-    __load_all_create_closed_segment_file(f, 3, 1);
-    __load_all_create_open_segment_file(f, 1, 1);
+    test_io_uv_write_closed_segment_file(f->dir, 1, 2, 1);
+    test_io_uv_write_closed_segment_file(f->dir, 3, 1, 1);
+    test_io_uv_write_open_segment_file(f->dir, 1, 1, 1);
 
     __load_all_trigger(f, 0);
 
@@ -350,7 +341,7 @@ static MunitResult test_load_all_success_open_not_all_zeros(
     raft__put8(&cursor, 0);                /* Unused */
     raft__put32(&cursor, 8);               /* Size of entry data */
 
-    __load_all_create_open_segment_file(f, 1, 1);
+    test_io_uv_write_open_segment_file(f->dir, 1, 1, 1);
 
     test_dir_append_file(f->dir, __OPEN_FILENAME_1, buf, sizeof buf);
 
@@ -377,7 +368,7 @@ static MunitResult test_load_all_success_open_truncate(
 
     (void)params;
 
-    __load_all_create_open_segment_file(f, 1, 1);
+    test_io_uv_write_open_segment_file(f->dir, 1, 1, 1);
 
     memset(buf, 0, sizeof buf);
 
@@ -408,7 +399,7 @@ static MunitResult test_load_all_success_open_partial_batch(
     raft__put64(&cursor, 0); /* Number of entries */
     raft__put64(&cursor, 0); /* Batch data */
 
-    __load_all_create_open_segment_file(f, 1, 1);
+    test_io_uv_write_open_segment_file(f->dir, 1, 1, 1);
 
     test_dir_overwrite_file(f->dir, __OPEN_FILENAME_1, buf, sizeof buf, 0);
 
@@ -430,10 +421,10 @@ static MunitResult test_load_all_success_open_second(
     (void)params;
 
     /* First segment. */
-    __load_all_create_open_segment_file(f, 1, 1);
+    test_io_uv_write_open_segment_file(f->dir, 1, 1, 1);
 
     /* Second segment */
-    __load_all_create_open_segment_file(f, 2, 1);
+    test_io_uv_write_open_segment_file(f->dir, 2, 1, 1);
 
     __load_all_trigger(f, 0);
 
@@ -457,7 +448,7 @@ static MunitResult test_load_all_success_open_second_all_zeros(
     (void)params;
 
     /* First segment. */
-    __load_all_create_open_segment_file(f, 1, 1);
+    test_io_uv_write_open_segment_file(f->dir, 1, 1, 1);
 
     /* Second segment */
     test_dir_write_file_with_zeros(f->dir, __OPEN_FILENAME_2, 256);
@@ -482,7 +473,7 @@ static MunitResult test_load_all_success_open(const MunitParameter params[],
 
     (void)params;
 
-    __load_all_create_open_segment_file(f, 1, 1);
+    test_io_uv_write_open_segment_file(f->dir, 1, 1, 1);
 
     __load_all_trigger(f, 0);
 
@@ -537,7 +528,7 @@ static MunitResult test_load_all_error_short_preamble(
 
     (void)params;
 
-    __load_all_create_open_segment_file(f, 1, 1);
+    test_io_uv_write_open_segment_file(f->dir, 1, 1, 1);
 
     test_dir_truncate_file(f->dir, __OPEN_FILENAME_1, offset);
 
@@ -559,7 +550,7 @@ static MunitResult test_load_all_error_short_header(
 
     (void)params;
 
-    __load_all_create_open_segment_file(f, 1, 1);
+    test_io_uv_write_open_segment_file(f->dir, 1, 1, 1);
 
     test_dir_truncate_file(f->dir, __OPEN_FILENAME_1, offset);
 
@@ -582,7 +573,7 @@ static MunitResult test_load_all_error_short_data(const MunitParameter params[],
 
     (void)params;
 
-    __load_all_create_open_segment_file(f, 1, 1);
+    test_io_uv_write_open_segment_file(f->dir, 1, 1, 1);
 
     test_dir_truncate_file(f->dir, __OPEN_FILENAME_1, offset);
 
@@ -606,7 +597,7 @@ static MunitResult test_load_all_error_corrupt_header(
     /* Render invalid checksums */
     raft__put64(&cursor, 123);
 
-    __load_all_create_closed_segment_file(f, 1, 1);
+    test_io_uv_write_closed_segment_file(f->dir, 1, 1, 1);
 
     test_dir_overwrite_file(f->dir, __CLOSED_FILENAME_1, buf, sizeof buf,
                             offset);
@@ -632,7 +623,7 @@ static MunitResult test_load_all_error_corrupt_data(
     /* Render an invalid data checksum. */
     raft__put32(&cursor, 123456789);
 
-    __load_all_create_closed_segment_file(f, 1, 1);
+    test_io_uv_write_closed_segment_file(f->dir, 1, 1, 1);
 
     test_dir_overwrite_file(f->dir, __CLOSED_FILENAME_1, buf, sizeof buf,
                             offset);
@@ -652,7 +643,7 @@ static MunitResult test_load_all_error_closed_bad_index(
 
     (void)params;
 
-    __load_all_create_closed_segment_file(f, 2, 1);
+    test_io_uv_write_closed_segment_file(f->dir, 2, 1, 1);
 
     __load_all_trigger(f, RAFT_ERR_IO_CORRUPT);
 
@@ -701,7 +692,7 @@ static MunitResult test_load_all_error_open_no_access(
 
     (void)params;
 
-    __load_all_create_open_segment_file(f, 1, 1);
+    test_io_uv_write_open_segment_file(f->dir, 1, 1, 1);
 
     test_dir_unreadable_file(f->dir, __OPEN_FILENAME_1);
 
@@ -724,7 +715,7 @@ static MunitResult test_load_all_error_open_zero_format(
 
     raft__put64(&cursor, 0); /* Format version */
 
-    __load_all_create_open_segment_file(f, 1, 1);
+    test_io_uv_write_open_segment_file(f->dir, 1, 1, 1);
 
     test_dir_overwrite_file(f->dir, __OPEN_FILENAME_1, buf, sizeof buf, 0);
 
@@ -746,7 +737,7 @@ static MunitResult test_load_all_error_open_bad_format(
 
     raft__put64(&cursor, 2); /* Format version */
 
-    __load_all_create_open_segment_file(f, 1, 1);
+    test_io_uv_write_open_segment_file(f->dir, 1, 1, 1);
 
     test_dir_overwrite_file(f->dir, __OPEN_FILENAME_1, buf, sizeof buf, 0);
 
