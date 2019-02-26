@@ -64,6 +64,11 @@ int raft_replication__append(struct raft *r,
                              bool *success,
                              bool *async);
 
+int raft_replication__install_snapshot(struct raft *r,
+                                       const struct raft_install_snapshot *args,
+                                       bool *success,
+                                       bool *async);
+
 /**
  * Apply any committed entry that was not applied yet.
  *

@@ -10,11 +10,13 @@
 #include "rpc.h"
 #include "rpc_append_entries.h"
 #include "rpc_request_vote.h"
+#include "rpc_install_snapshot.h"
 #include "state.h"
 #include "tick.h"
 
 #define RAFT__DEFAULT_ELECTION_TIMEOUT 1000
 #define RAFT__DEFAULT_HEARTBEAT_TIMEOUT 100
+#define RAFT__DEFAULT_SNAPSHOT_THRESHOLD 1024
 
 int raft_init(struct raft *r,
               struct raft_logger *logger,
@@ -39,7 +41,7 @@ int raft_init(struct raft *r,
     /* Make a copy of the address */
     r->address = raft_malloc(strlen(address) + 1);
     if (r->address == NULL) {
-        return RAFT_ERR_NOMEM;
+        return RAFT_ENOMEM;
     }
     strcpy(r->address, address);
 
@@ -70,6 +72,11 @@ int raft_init(struct raft *r,
     }
 
     r->close_cb = NULL;
+
+    r->snapshot.term = 0;
+    r->snapshot.index = 0;
+    r->snapshot.pending.term = 0;
+    r->snapshot.threshold = RAFT__DEFAULT_SNAPSHOT_THRESHOLD;
 
     rv = r->io->init(r->io, r->id, r->address);
     if (rv != 0) {
@@ -139,6 +146,11 @@ static void raft__recv_cb(struct raft_io *io, struct raft_message *message)
                 r, message->server_id, message->server_address,
                 &message->request_vote_result);
             break;
+        case RAFT_IO_INSTALL_SNAPSHOT:
+            rv = raft_rpc__recv_install_snapshot(
+                r, message->server_id, message->server_address,
+                &message->install_snapshot);
+            break;
         default:
             raft_warnf(r->logger, "rpc: unknown message type type: %d",
                        message->type);
@@ -178,11 +190,25 @@ int raft_start(struct raft *r)
         start_index = 1;
     } else {
         start_index = snapshot->index + 1;
+        assert(snapshot->n_bufs == 1);
+        rv = r->fsm->restore(r->fsm, &snapshot->bufs[0]);
+        if (rv != 0) {
+            goto err_after_load;
+        }
+        r->commit_index = snapshot->index;
+        r->last_applied = snapshot->index;
+        r->snapshot.index = snapshot->index;
+        r->snapshot.term = snapshot->term;
+        r->configuration = snapshot->configuration;
+        r->configuration_index = snapshot->configuration_index;
+        raft_free(snapshot->bufs);
+        raft_free(snapshot);
     }
 
     /* If the start index is 1 and the log is not empty, then the first entry
      * must be a configuration*/
     if (start_index == 1 && n_entries > 0) {
+        assert(snapshot == NULL);
         assert(entries[0].type == RAFT_LOG_CONFIGURATION);
 
         /* As a small optimization, bump the commit index to 1 since we require
@@ -199,7 +225,10 @@ int raft_start(struct raft *r)
             continue;
         }
 
-        rv = raft_configuration_decode(&entry->buf, &r->configuration);
+        raft_configuration_close(&r->configuration);
+        raft_configuration_init(&r->configuration);
+
+        rv = configuration__decode(&entry->buf, &r->configuration);
         if (rv != 0) {
             goto err_after_load;
         }
@@ -210,6 +239,7 @@ int raft_start(struct raft *r)
     }
 
     /* Append the entries to the log. */
+    raft_log__set_offset(&r->log, start_index - 1);
     for (i = 0; i < n_entries; i++) {
         struct raft_entry *entry = &entries[i];
 
@@ -253,6 +283,8 @@ void raft_close(struct raft *r, void (*cb)(struct raft *r))
 
     r->close_cb = cb;
 
+    raft_state__clear(r);
+    r->state = RAFT_STATE_UNAVAILABLE;
     r->io->close(r->io, raft__close_cb);
 }
 

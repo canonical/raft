@@ -16,9 +16,9 @@
  Handle flags
  */
 enum {
-    RAFT__UV_FILE_CREATING = 0x0001,
-    RAFT__UV_FILE_CLOSING = 0x0002,
-    RAFT__UV_FILE_CLOSED = 0x0004
+    UV__FILE_CREATING = 0x0001,
+    UV__FILE_CLOSING = 0x0002,
+    UV__FILE_CLOSED = 0x0004
 };
 
 #if defined(RWF_NOWAIT)
@@ -26,7 +26,77 @@ enum {
  * Try to write @fd using a memory-aligned buffer of size @size. If the write is
  * successful, @ok will be set to #true.
  */
-static int raft__uv_file_block_size_probe(int fd, size_t size, bool *ok);
+static int probe_block_size(int fd, size_t size, bool *ok)
+{
+    void *buf;                  /* Buffer to use for the probe write */
+    aio_context_t ctx = 0;      /* KAIO context handle */
+    struct iocb iocb;           /* KAIO request object */
+    struct iocb *iocbs = &iocb; /* Because the io_submit() API sucks */
+    struct io_event event;      /* KAIO response object */
+    int rv;
+
+    /* Setup the KAIO context handle */
+    rv = io_setup(1, &ctx);
+    if (rv == -1) {
+        /* UNTESTED: in practice this should fail only with ENOMEM */
+        return uv_translate_sys_error(errno);
+    }
+
+    /* Allocate the write buffer */
+    buf = aligned_alloc(size, size);
+    if (buf == NULL) {
+        /* UNTESTED: define a configurable allocator that can fail? */
+        return UV_ENOMEM;
+    }
+    memset(buf, 0, size);
+
+    /* Prepare the KAIO request object */
+    memset(&iocb, 0, sizeof iocb);
+    iocb.aio_lio_opcode = IOCB_CMD_PWRITE;
+    iocb.aio_buf = (uint64_t)buf;
+    iocb.aio_nbytes = size;
+    iocb.aio_offset = 0;
+    iocb.aio_fildes = fd;
+    iocb.aio_reqprio = 0;
+    iocb.aio_rw_flags |= RWF_NOWAIT | RWF_DSYNC;
+
+    /* Submit the KAIO request */
+    rv = io_submit(ctx, 1, &iocbs);
+    if (rv == -1) {
+        /* UNTESTED: in practice this should fail only with ENOMEM */
+        free(buf);
+        io_destroy(ctx);
+        return uv_translate_sys_error(errno);
+    }
+
+    /* Fetch the response: will block until done. */
+    do {
+        rv = io_getevents(ctx, 1, 1, &event, NULL);
+    } while (rv == -1 && errno == EINTR);
+
+    assert(rv == 1);
+
+    /* Release the write buffer. */
+    free(buf);
+
+    /* Release the KAIO context handle. */
+    io_destroy(ctx);
+
+    /* We expect the write to either succeed or fail with EAGAIN (which means
+     * this is not the correct block size). */
+    if (event.res > 0) {
+        *ok = true;
+    } else {
+        if (event.res != -EAGAIN) {
+            /* UNTESTED: this should basically fail only because of disk errors,
+             * since we allocated the file with posix_fallocate. */
+            return uv_translate_sys_error(-event.res);
+        }
+        *ok = false;
+    }
+
+    return 0;
+}
 #endif
 
 /**
@@ -34,67 +104,65 @@ static int raft__uv_file_block_size_probe(int fd, size_t size, bool *ok);
  *
  * This is called in UV's threadpool.
  */
-static void raft__uv_file_create_work_cb(uv_work_t *work);
+static void uv__file_create_work_cb(uv_work_t *work);
 
 /**
  * Sync the directory where @path lives in. This is necessary in order to ensure
  * that the new entry is saved in the directory inode. Called in a thread as
  * part of file creation.
  */
-static int raft__uv_file_create_work_sync_dir(const char *path);
+static int uv__file_create_work_sync_dir(const char *path);
 
 /**
  * Attempt to use direct I/O. If we can't, check if the file system does not
  * support direct I/O and ignore the error in that case. Called in a thread as
  * part of file creation.
  */
-static int raft__uv_file_create_work_set_direct_io(struct raft__uv_file *f);
+static int uv__file_create_work_set_direct_io(struct uv__file *f);
 
 /**
- * Main loop callback run after @raft__uv_file_create_work_cb has returned. It
+ * Main loop callback run after @uv__file_create_work_cb has returned. It
  * will normally start the eventfd poller to receive notification about
  * completed writes and invoke the create request callback.
  */
-static void raft__uv_file_create_after_work_cb(uv_work_t *work, int status);
+static void uv__file_create_after_work_cb(uv_work_t *work, int status);
 
 /**
  * Callback fired when the event fd associated with AIO write requests should be
  * ready for reading (i.e. when a write has completed).
  */
-static void raft__uv_file_write_poll_cb(uv_poll_t *poller,
-                                        int status,
-                                        int events);
+static void uv__file_write_poll_cb(uv_poll_t *poller, int status, int events);
 
 /**
  * Run blocking syscalls involved in a file write request.
  *
  * Perform a KAIO write request and synchronously wait for it to complete.
  */
-static void raft__uv_file_write_work_cb(uv_work_t *work);
+static void uv__file_write_work_cb(uv_work_t *work);
 
 /**
- * Callback run after @raft__uv_file_write_work_cb has returned. It normally
+ * Callback run after @uv__file_write_work_cb has returned. It normally
  * invokes the write request callback.
  */
-static void raft__uv_file_write_after_work_cb(uv_work_t *work, int status);
+static void uv__file_write_after_work_cb(uv_work_t *work, int status);
 
 /**
  * Remove the request from the queue of inflight writes and invoke the request
  * callback if set.
  */
-static void raft__uv_file_write_finish(struct raft__uv_file_write *req);
+static void uv__file_write_finish(struct uv__file_write *req);
 
 /**
  * Close the poller if there's no infiglht create or write request.
  */
-static void raft__uv_file_maybe_closed(struct raft__uv_file *f);
+static void uv__file_maybe_closed(struct uv__file *f);
 
 /**
  * Invoked at the end of the close sequence. It invokes the close callback.
  */
-static void raft__uv_file_poll_close_cb(struct uv_handle_s *handle);
+static void uv__file_poll_close_cb(struct uv_handle_s *handle);
 
-int raft__uv_file_block_size(const char *dir, size_t *size)
+int uv__file_block_size(const char *dir, size_t *size)
 {
     struct statfs fs_info; /* To get the type code of the underlying fs */
     struct stat info;      /* To get the block size reported by the fs */
@@ -210,7 +278,7 @@ int raft__uv_file_block_size(const char *dir, size_t *size)
     while (*size >= 512) {
         bool ok;
 
-        rv = raft__uv_file_block_size_probe(fd, *size, &ok);
+        rv = probe_block_size(fd, *size, &ok);
         if (rv != 0) {
             /* UNTESTED: all syscalls performed by underlying code should fail
              * at most with ENOMEM. */
@@ -248,7 +316,7 @@ err:
 #endif /* RWF_NOWAIT */
 }
 
-int raft__uv_file_init(struct raft__uv_file *f, struct uv_loop_s *loop)
+int uv__file_init(struct uv__file *f, struct uv_loop_s *loop)
 {
     int rv;
 
@@ -294,21 +362,21 @@ err:
     return rv;
 }
 
-int raft__uv_file_create(struct raft__uv_file *f,
-                         struct raft__uv_file_create *req,
-                         const char *path,
-                         size_t size,
-                         unsigned max_n_writes,
-                         raft__uv_file_create_cb cb)
+int uv__file_create(struct uv__file *f,
+                    struct uv__file_create *req,
+                    const char *path,
+                    size_t size,
+                    unsigned max_n_writes,
+                    uv__file_create_cb cb)
 {
     int flags = O_WRONLY | O_CREAT | O_EXCL; /* Common open flags */
     int rv;
 
     assert(path != NULL);
     assert(size > 0);
-    assert(!raft__uv_file_is_closing(f));
+    assert(!uv__file_is_closing(f));
 
-    f->flags |= RAFT__UV_FILE_CREATING;
+    f->flags |= UV__FILE_CREATING;
 
 #if !defined(RWF_DSYNC)
     /* If per-request synchronous I/O is not supported, open the file with the
@@ -349,8 +417,8 @@ int raft__uv_file_create(struct raft__uv_file *f,
     req->status = 0;
     req->work.data = req;
 
-    rv = uv_queue_work(f->loop, &req->work, raft__uv_file_create_work_cb,
-                       raft__uv_file_create_after_work_cb);
+    rv = uv_queue_work(f->loop, &req->work, uv__file_create_work_cb,
+                       uv__file_create_after_work_cb);
     if (rv != 0) {
         /* UNTESTED: with the current libuv implementation this can't fail. */
         goto err_after_open;
@@ -370,22 +438,22 @@ err_after_open:
 err:
     assert(rv != 0);
 
-    f->flags &= ~RAFT__UV_FILE_CREATING;
+    f->flags &= ~UV__FILE_CREATING;
 
     return rv;
 }
 
-int raft__uv_file_write(struct raft__uv_file *f,
-                        struct raft__uv_file_write *req,
-                        const uv_buf_t bufs[],
-                        unsigned n,
-                        size_t offset,
-                        raft__uv_file_write_cb cb)
+int uv__file_write(struct uv__file *f,
+                   struct uv__file_write *req,
+                   const uv_buf_t bufs[],
+                   unsigned n,
+                   size_t offset,
+                   uv__file_write_cb cb)
 {
     int rv;
     struct iocb *iocbs = &req->iocb;
 
-    assert(!raft__uv_file_is_closing(f));
+    assert(!uv__file_is_closing(f));
 
     /* TODO: at the moment the io-uv-writer isn't actually supposed to leverage
      *       the support for concurrent writes, so ensure that we're getting
@@ -479,8 +547,8 @@ int raft__uv_file_write(struct raft__uv_file *f,
     /* If we got here it means we need to run io_submit in the threadpool. */
     req->work.data = req;
 
-    rv = uv_queue_work(f->loop, &req->work, raft__uv_file_write_work_cb,
-                       raft__uv_file_write_after_work_cb);
+    rv = uv_queue_work(f->loop, &req->work, uv__file_write_work_cb,
+                       uv__file_write_after_work_cb);
     if (rv != 0) {
         /* UNTESTED: with the current libuv implementation this can't fail. */
         goto err;
@@ -497,13 +565,13 @@ err:
     return rv;
 }
 
-void raft__uv_file_close(struct raft__uv_file *f, raft__uv_file_close_cb cb)
+void uv__file_close(struct uv__file *f, uv__file_close_cb cb)
 {
     int rv;
 
-    assert(!raft__uv_file_is_closing(f));
+    assert(!uv__file_is_closing(f));
 
-    f->flags |= RAFT__UV_FILE_CLOSING;
+    f->flags |= UV__FILE_CLOSING;
     f->close_cb = cb;
 
     if (f->fd != -1) {
@@ -511,104 +579,24 @@ void raft__uv_file_close(struct raft__uv_file *f, raft__uv_file_close_cb cb)
         assert(rv == 0);
     }
 
-    raft__uv_file_maybe_closed(f);
+    uv__file_maybe_closed(f);
 }
 
-bool raft__uv_file_is_closing(struct raft__uv_file *f)
+bool uv__file_is_closing(struct uv__file *f)
 {
-    return (f->flags & (RAFT__UV_FILE_CLOSING | RAFT__UV_FILE_CLOSED)) != 0;
+    return (f->flags & (UV__FILE_CLOSING | UV__FILE_CLOSED)) != 0;
 }
 
-#if defined(RWF_NOWAIT)
-static int raft__uv_file_block_size_probe(int fd, size_t size, bool *ok)
+static void uv__file_create_work_cb(uv_work_t *work)
 {
-    void *buf;                  /* Buffer to use for the probe write */
-    aio_context_t ctx = 0;      /* KAIO context handle */
-    struct iocb iocb;           /* KAIO request object */
-    struct iocb *iocbs = &iocb; /* Because the io_submit() API sucks */
-    struct io_event event;      /* KAIO response object */
-    int rv;
-
-    /* Setup the KAIO context handle */
-    rv = io_setup(1, &ctx);
-    if (rv == -1) {
-        /* UNTESTED: in practice this should fail only with ENOMEM */
-        return uv_translate_sys_error(errno);
-    }
-
-    /* Allocate the write buffer */
-    buf = aligned_alloc(size, size);
-    if (buf == NULL) {
-        /* UNTESTED: define a configurable allocator that can fail? */
-        return UV_ENOMEM;
-    }
-    memset(buf, 0, size);
-
-    /* Prepare the KAIO request object */
-    memset(&iocb, 0, sizeof iocb);
-    iocb.aio_lio_opcode = IOCB_CMD_PWRITE;
-    iocb.aio_buf = (uint64_t)buf;
-    iocb.aio_nbytes = size;
-    iocb.aio_offset = 0;
-    iocb.aio_fildes = fd;
-    iocb.aio_reqprio = 0;
-    iocb.aio_rw_flags |= RWF_NOWAIT | RWF_DSYNC;
-
-    /* Submit the KAIO request */
-    rv = io_submit(ctx, 1, &iocbs);
-    if (rv == -1) {
-        /* UNTESTED: in practice this should fail only with ENOMEM */
-        free(buf);
-        io_destroy(ctx);
-        return uv_translate_sys_error(errno);
-    }
-
-    /* Fetch the response: will block until done. */
-    do {
-        rv = io_getevents(ctx, 1, 1, &event, NULL);
-    } while (rv == -1 && errno == EINTR);
-
-    assert(rv == 1);
-
-    /* Release the write buffer. */
-    free(buf);
-
-    /* Release the KAIO context handle. */
-    io_destroy(ctx);
-
-    /* We expect the write to either succeed or fail with EAGAIN (which means
-     * this is not the correct block size). */
-    if (event.res > 0) {
-        *ok = true;
-    } else {
-        if (event.res != -EAGAIN) {
-            /* UNTESTED: this should basically fail only because of disk errors,
-             * since we allocated the file with posix_fallocate. */
-            return uv_translate_sys_error(-event.res);
-        }
-        *ok = false;
-    }
-
-    return 0;
-}
-#endif /* RWF_NOWAIT */
-
-static void raft__uv_file_create_work_cb(uv_work_t *work)
-{
-    struct raft__uv_file_create *req; /* Create file request object */
-    struct raft__uv_file *f;          /* File handle */
+    struct uv__file_create *req; /* Create file request object */
+    struct uv__file *f;          /* File handle */
     int rv;
 
     req = work->data;
     f = req->file;
 
-    assert(f->flags & RAFT__UV_FILE_CREATING);
-
-    /* If we were closed, abort immediately. */
-    if (raft__uv_file_is_closing(f)) {
-        req->status = UV_ECANCELED;
-        return;
-    }
+    assert(f->flags & UV__FILE_CREATING);
 
     /* Allocate the desired size. */
     rv = posix_fallocate(f->fd, 0, req->size);
@@ -628,14 +616,14 @@ static void raft__uv_file_create_work_cb(uv_work_t *work)
         /* UNTESTED: should fail only in case of disk errors */
         goto err;
     }
-    rv = raft__uv_file_create_work_sync_dir(req->path);
+    rv = uv__file_create_work_sync_dir(req->path);
     if (rv == -1) {
         /* UNTESTED: should fail only in case of disk errors */
         goto err;
     }
 
     /* Set direct I/O if possible. */
-    rv = raft__uv_file_create_work_set_direct_io(f);
+    rv = uv__file_create_work_set_direct_io(f);
     if (rv == -1) {
         goto err;
     }
@@ -648,7 +636,7 @@ err:
     req->status = uv_translate_sys_error(errno);
 }
 
-static int raft__uv_file_create_work_sync_dir(const char *path)
+static int uv__file_create_work_sync_dir(const char *path)
 {
     char *dir; /* The directory portion of path */
     int fd;    /* Directory file descriptor */
@@ -678,7 +666,7 @@ static int raft__uv_file_create_work_sync_dir(const char *path)
     return rv;
 }
 
-static int raft__uv_file_create_work_set_direct_io(struct raft__uv_file *f)
+static int uv__file_create_work_set_direct_io(struct uv__file *f)
 {
     int flags;             /* Current fcntl flags */
     struct statfs fs_info; /* To check the file system type */
@@ -716,10 +704,10 @@ static int raft__uv_file_create_work_set_direct_io(struct raft__uv_file *f)
     return 0;
 }
 
-static void raft__uv_file_create_after_work_cb(uv_work_t *work, int status)
+static void uv__file_create_after_work_cb(uv_work_t *work, int status)
 {
-    struct raft__uv_file_create *req;
-    struct raft__uv_file *f;
+    struct uv__file_create *req;
+    struct uv__file *f;
     int rv;
 
     assert(work != NULL);
@@ -731,7 +719,7 @@ static void raft__uv_file_create_after_work_cb(uv_work_t *work, int status)
     f = req->file;
 
     /* If we were closed, abort here. */
-    if (raft__uv_file_is_closing(f)) {
+    if (uv__file_is_closing(f)) {
         unlink(req->path);
         req->status = UV_ECANCELED;
         goto out;
@@ -740,7 +728,7 @@ static void raft__uv_file_create_after_work_cb(uv_work_t *work, int status)
     /* If no error occurred, start polling the event file descriptor. */
     if (req->status == 0) {
         rv = uv_poll_start(&f->event_poller, UV_READABLE,
-                           raft__uv_file_write_poll_cb);
+                           uv__file_write_poll_cb);
         if (rv != 0) {
             /* UNTESTED: the underlying libuv calls should never fail. */
             req->status = rv;
@@ -753,21 +741,21 @@ static void raft__uv_file_create_after_work_cb(uv_work_t *work, int status)
     }
 
 out:
-    req->cb(req, req->status);
+    if (req->cb != NULL) {
+        req->cb(req, req->status);
+    }
 
-    f->flags &= ~RAFT__UV_FILE_CREATING;
+    f->flags &= ~UV__FILE_CREATING;
 
-    if (raft__uv_file_is_closing(f)) {
-        raft__uv_file_maybe_closed(f);
+    if (uv__file_is_closing(f)) {
+        uv__file_maybe_closed(f);
     }
 }
 
-static void raft__uv_file_write_poll_cb(uv_poll_t *poller,
-                                        int status,
-                                        int events)
+static void uv__file_write_poll_cb(uv_poll_t *poller, int status, int events)
 {
-    struct raft__uv_file *f = poller->data; /* File handle */
-    uint64_t completed;                     /* True if the write is complete */
+    struct uv__file *f = poller->data; /* File handle */
+    uint64_t completed;                /* True if the write is complete */
     int rv;
     unsigned i;
 
@@ -805,11 +793,11 @@ static void raft__uv_file_write_poll_cb(uv_poll_t *poller,
 
     for (i = 0; i < (unsigned)rv; i++) {
         struct io_event *event = &f->events[i];
-        struct raft__uv_file_write *req = (void *)event->data;
+        struct uv__file_write *req = (void *)event->data;
 
         /* If we are closing, we mark the write as canceled, although
          * technically it might have worked. */
-        if (raft__uv_file_is_closing(f)) {
+        if (uv__file_is_closing(f)) {
             req->status = UV_ECANCELED;
             goto finish;
         }
@@ -823,8 +811,8 @@ static void raft__uv_file_write_poll_cb(uv_poll_t *poller,
             req->iocb.aio_rw_flags &= ~RWF_NOWAIT;
 
             req->work.data = req;
-            rv = uv_queue_work(f->loop, &req->work, raft__uv_file_write_work_cb,
-                               raft__uv_file_write_after_work_cb);
+            rv = uv_queue_work(f->loop, &req->work, uv__file_write_work_cb,
+                               uv__file_write_after_work_cb);
             if (rv != 0) {
                 /* UNTESTED: with the current libuv implementation this should
                  * never fail. */
@@ -840,22 +828,22 @@ static void raft__uv_file_write_poll_cb(uv_poll_t *poller,
 
     finish:
 
-        raft__uv_file_write_finish(req);
+        uv__file_write_finish(req);
     }
 
     /* If we've been closed, let's see if we can stop the poller and fire the
      * close callback. */
-    if (raft__uv_file_is_closing(f)) {
-        raft__uv_file_maybe_closed(f);
+    if (uv__file_is_closing(f)) {
+        uv__file_maybe_closed(f);
     }
 }
 
-static void raft__uv_file_write_work_cb(uv_work_t *work)
+static void uv__file_write_work_cb(uv_work_t *work)
 {
-    struct raft__uv_file_write *req; /* Write file request object */
-    aio_context_t ctx = 0;           /* KAIO handle */
-    struct iocb *iocbs;              /* Pointer to KAIO request object */
-    struct io_event event;           /* KAIO response object */
+    struct uv__file_write *req; /* Write file request object */
+    aio_context_t ctx = 0;      /* KAIO handle */
+    struct iocb *iocbs;         /* Pointer to KAIO request object */
+    struct io_event event;      /* KAIO response object */
     int rv;
 
     assert(work != NULL);
@@ -864,7 +852,7 @@ static void raft__uv_file_write_work_cb(uv_work_t *work)
     req = work->data;
 
     /* If we detect that we've been closed, abort immediately. */
-    if (raft__uv_file_is_closing(req->file)) {
+    if (uv__file_is_closing(req->file)) {
         rv = -1;
         errno = ECANCELED;
         goto out;
@@ -912,10 +900,10 @@ out:
     return;
 }
 
-static void raft__uv_file_write_after_work_cb(uv_work_t *work, int status)
+static void uv__file_write_after_work_cb(uv_work_t *work, int status)
 {
-    struct raft__uv_file_write *req; /* Write file request object */
-    struct raft__uv_file *f;
+    struct uv__file_write *req; /* Write file request object */
+    struct uv__file *f;
 
     assert(work != NULL);
 
@@ -926,30 +914,30 @@ static void raft__uv_file_write_after_work_cb(uv_work_t *work, int status)
 
     /* If we were closed, let's mark the request as canceled, regardless of the
      * actual outcome. */
-    if (raft__uv_file_is_closing(req->file)) {
+    if (uv__file_is_closing(req->file)) {
         req->status = UV_ECANCELED;
     }
 
-    raft__uv_file_write_finish(req);
+    uv__file_write_finish(req);
 
-    if (raft__uv_file_is_closing(f)) {
-        raft__uv_file_maybe_closed(f);
+    if (uv__file_is_closing(f)) {
+        uv__file_maybe_closed(f);
     }
 }
 
-static void raft__uv_file_write_finish(struct raft__uv_file_write *req)
+static void uv__file_write_finish(struct uv__file_write *req)
 {
     RAFT__QUEUE_REMOVE(&req->queue);
 
     req->cb(req, req->status);
 }
 
-static void raft__uv_file_maybe_closed(struct raft__uv_file *f)
+static void uv__file_maybe_closed(struct uv__file *f)
 {
-    assert((f->flags & RAFT__UV_FILE_CLOSED) == 0);
+    assert((f->flags & UV__FILE_CLOSED) == 0);
 
     /* If are creating the file we need to wait for the create to finish. */
-    if (f->flags & RAFT__UV_FILE_CREATING) {
+    if (f->flags & UV__FILE_CREATING) {
         return;
     }
 
@@ -960,16 +948,16 @@ static void raft__uv_file_maybe_closed(struct raft__uv_file *f)
 
     if (!uv_is_closing((struct uv_handle_s *)&f->event_poller)) {
         uv_close((struct uv_handle_s *)&f->event_poller,
-                 raft__uv_file_poll_close_cb);
+                 uv__file_poll_close_cb);
     }
 }
 
-static void raft__uv_file_poll_close_cb(struct uv_handle_s *handle)
+static void uv__file_poll_close_cb(struct uv_handle_s *handle)
 {
-    struct raft__uv_file *f = handle->data;
+    struct uv__file *f = handle->data;
     int rv;
 
-    assert((f->flags & RAFT__UV_FILE_CLOSED) == 0);
+    assert((f->flags & UV__FILE_CLOSED) == 0);
     assert(RAFT__QUEUE_IS_EMPTY(&f->write_queue));
 
     rv = close(f->event_fd);
@@ -982,7 +970,7 @@ static void raft__uv_file_poll_close_cb(struct uv_handle_s *handle)
 
     free(f->events);
 
-    f->flags |= RAFT__UV_FILE_CLOSED;
+    f->flags |= UV__FILE_CLOSED;
 
     if (f->close_cb != NULL) {
         f->close_cb(f);

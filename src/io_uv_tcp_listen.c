@@ -1,292 +1,118 @@
 #include <string.h>
 
+#include "../include/raft/io_uv.h"
+
 #include "assert.h"
-#include "binary.h"
+#include "byte.h"
 #include "io_uv_ip.h"
-#include "io_uv_tcp_listen.h"
+#include "io_uv_tcp.h"
+
+/* The happy path of an incoming connection is:
+ *
+ * - The connection callback is fired on the listener TCP handle, and the
+ *   incoming connection is uv_accept()'ed. We call uv_read_start() to get
+ *   notified about received handshake data.
+ *
+ * - Once the preamble is received, we start waiting for the server address.
+ *
+ * - Once the server address is received, we fire the receive callback.
+ *
+ * Possible failure modes are:
+ *
+ * - The accept process gets canceled in the transport->close() implementation,
+ *   by calling tcp_accept_stop(): the incoming TCP connection handle gets
+ *   closed, preventing any further handshake data notification, and all
+ *   allocated memory gets released in the handle close callack.
+ */
 
 /* Hold state for a connection being accepted. */
-struct raft__io_uv_tcp_accept
+struct handshake
 {
-    struct raft__io_uv_tcp *tcp;
-
-    struct
-    {
-        uint64_t preamble[3]; /* Preamble buffer */
-        uv_buf_t address;     /* Address buffer */
-        size_t nread;         /* Number of bytes read */
-    } handshake;
-
-    struct uv_tcp_s *stream; /* Connection */
-    raft__queue queue;
+    uint64_t preamble[3]; /* Preamble buffer */
+    uv_buf_t address;     /* Address buffer */
+    size_t nread;         /* Number of bytes read */
 };
 
-/* Called when there's a new incoming connection. */
-static void raft__io_uv_tcp_listen_cb(uv_stream_t *server, int status);
-
-/* Called when the listener handle has been closed */
-static void raft__io_uv_tcp_listen_close_cb(uv_handle_t *handle);
-
-/* Start accepting a new incoming connection. */
-int raft__io_uv_tcp_accept_start(struct raft__io_uv_tcp_accept *req,
-                                 struct raft__io_uv_tcp *tcp,
-                                 struct uv_stream_s *server);
+/* Hold handshake data for a new connection being established. */
+struct conn
+{
+    struct io_uv__tcp *t;       /* Transport implementation */
+    struct uv_tcp_s *tcp;       /* TCP connection socket handle */
+    struct handshake handshake; /* Handshake data */
+    raft__queue queue;          /* Pending accept queue */
+};
 
 /* Read the preamble of the handshake. */
-static void raft__io_uv_tcp_accept_preamble_alloc_cb(uv_handle_t *handle,
-                                                     size_t suggested_size,
-                                                     uv_buf_t *buf);
-static void raft__io_uv_tcp_accept_preamble_read_cb(uv_stream_t *stream,
-                                                    ssize_t nread,
-                                                    const uv_buf_t *buf);
+static void preamble_alloc_cb(struct uv_handle_s *handle,
+                              size_t suggested_size,
+                              uv_buf_t *buf)
+{
+    struct conn *c = handle->data;
+    (void)suggested_size;
+    buf->base = (void *)c->handshake.preamble + c->handshake.nread;
+    buf->len = sizeof c->handshake.preamble - c->handshake.nread;
+}
+
+/* Decode the handshake preamble, containing the protocol version, the ID of the
+ * connecting server and the length of its address. Also, allocate the buffer to
+ * start reading the server address. */
+static int decode_preamble(struct handshake *h)
+{
+    uint64_t protocol;
+    protocol = byte__flip64(h->preamble[0]);
+    if (protocol != TCP_TRANSPORT__HANDSHAKE_PROTOCOL) {
+        return RAFT_ERR_IO_MALFORMED;
+    }
+    h->address.len = byte__flip64(h->preamble[2]);
+    h->address.base = raft_malloc(h->address.len);
+    if (h->address.base == NULL) {
+        return RAFT_ENOMEM;
+    }
+    h->nread = 0;
+    return 0;
+}
+
+/* The accepted TCP client connection has been closed, release all memory
+ * associated with accept object. We can get here only if an error occurrent
+ * during the handshake or if raft_io_transport->close() has been invoked. */
+static void close_cb(struct uv_handle_s *handle)
+{
+    struct conn *c = handle->data;
+    /* We have to be careful to not use the c->t reference, since that
+     * io_uv__tcp transport object might have been released at this point. */
+    if (c->handshake.address.base != NULL) {
+        raft_free(c->handshake.address.base);
+    }
+    raft_free(c->tcp);
+    raft_free(c);
+}
+
+/* Close an incoming TCP connection. Can be called at any time after starting
+ * the handshake. */
+static void conn_stop(struct conn *c)
+{
+    RAFT__QUEUE_REMOVE(&c->queue);
+    /* After uv_close() returns we are guaranteed that no more alloc_cb or
+     * read_cb will be called. */
+    uv_close((struct uv_handle_s *)c->tcp, close_cb);
+}
 
 /* Read the address part of the handshake. */
-static void raft__io_uv_tcp_accept_address_alloc_cb(uv_handle_t *handle,
-                                                    size_t suggested_size,
-                                                    uv_buf_t *buf);
-static void raft__io_uv_tcp_accept_address_read_cb(uv_stream_t *stream,
-                                                   ssize_t nread,
-                                                   const uv_buf_t *buf);
-
-/* Close the accepted TCP connection. Can be called at any time after start. */
-static void raft__io_uv_tcp_accept_cancel(struct raft__io_uv_tcp_accept *req);
-
-/* The accepted TCP client connection gets closed. Fire the accept callback. */
-static void raft__io_uv_tcp_accept_close_cb(struct uv_handle_s *handle);
-
-int raft__io_uv_tcp_listen(struct raft_io_uv_transport *t,
-                           raft_io_uv_accept_cb cb)
+static void address_alloc_cb(struct uv_handle_s *handle,
+                             size_t suggested_size,
+                             uv_buf_t *buf)
 {
-    struct raft__io_uv_tcp *tcp;
-    struct sockaddr_in addr;
-    int rv;
-
-    tcp = t->impl;
-
-    tcp->accept_cb = cb;
-
-    rv = raft__io_uv_ip_parse(tcp->address, &addr);
-    if (rv != 0) {
-        return rv;
-    }
-
-    rv = uv_tcp_init(tcp->loop, &tcp->listener);
-    assert(rv == 0);
-
-    rv = uv_tcp_bind(&tcp->listener, (const struct sockaddr *)&addr, 0);
-    if (rv != 0) {
-        /* UNTESTED: what are the error conditions? */
-        raft_warnf(tcp->logger, "uv_tcp_bind: %s", uv_strerror(rv));
-        return RAFT_ERR_IO;
-    }
-
-    rv = uv_listen((uv_stream_t *)&tcp->listener, 1, raft__io_uv_tcp_listen_cb);
-    if (rv != 0) {
-        /* UNTESTED: what are the error conditions? */
-        raft_warnf(tcp->logger, "uv_tcp_listen: %s", uv_strerror(rv));
-        return RAFT_ERR_IO;
-    }
-    tcp->listening = true;
-
-    return 0;
-}
-
-void raft__io_uv_tcp_stop(struct raft_io_uv_transport *t)
-{
-    struct raft__io_uv_tcp *tcp;
-
-    tcp = t->impl;
-
-    /* Abort all connections currently being accepted */
-    while (!RAFT__QUEUE_IS_EMPTY(&tcp->accept_queue)) {
-        raft__queue *head;
-        struct raft__io_uv_tcp_accept *req;
-
-        head = RAFT__QUEUE_HEAD(&tcp->accept_queue);
-
-        req = RAFT__QUEUE_DATA(head, struct raft__io_uv_tcp_accept, queue);
-        raft__io_uv_tcp_accept_cancel(req);
-    }
-
-    uv_close((struct uv_handle_s *)&tcp->listener,
-             raft__io_uv_tcp_listen_close_cb);
-}
-
-static void raft__io_uv_tcp_listen_cb(uv_stream_t *server, int status)
-{
-    struct raft__io_uv_tcp *tcp = server->data;
-    struct raft__io_uv_tcp_accept *req;
-    int rv;
-
-    assert(tcp->state == RAFT__IO_UV_TCP_ACTIVE);
-
-    if (status < 0) {
-        raft_warnf(tcp->logger, "uv_connection_cb: %s", uv_strerror(status));
-        rv = RAFT_ERR_IO;
-        goto err;
-    }
-
-    req = raft_malloc(sizeof *req);
-    if (req == NULL) {
-        rv = RAFT_ERR_NOMEM;
-        goto err;
-    }
-
-    rv = raft__io_uv_tcp_accept_start(req, tcp, server);
-    if (rv != 0) {
-        goto err_after_accept_alloc;
-    }
-
-    RAFT__QUEUE_PUSH(&tcp->accept_queue, &req->queue);
-
-    return;
-
-err_after_accept_alloc:
-    raft_free(req);
-
-err:
-    assert(rv != 0);
-}
-
-static void raft__io_uv_tcp_listen_close_cb(uv_handle_t *handle)
-{
-    struct raft__io_uv_tcp *tcp = handle->data;
-
-    tcp->listening = false;
-
-    raft__io_uv_tcp_continue(tcp);
-}
-
-int raft__io_uv_tcp_accept_start(struct raft__io_uv_tcp_accept *req,
-                                 struct raft__io_uv_tcp *tcp,
-                                 struct uv_stream_s *server)
-{
-    int rv;
-
-    req->tcp = tcp;
-
-    memset(&req->handshake, 0, sizeof req->handshake);
-
-    req->stream = raft_malloc(sizeof *req->stream);
-    if (req->stream == NULL) {
-        return RAFT_ERR_NOMEM;
-    }
-
-    req->stream->data = req;
-
-    rv = uv_tcp_init(tcp->loop, req->stream);
-    assert(rv == 0);
-
-    rv = uv_accept(server, (uv_stream_t *)req->stream);
-    if (rv != 0) {
-        raft_warnf(req->tcp->logger, "uv_accept: %s", uv_strerror(rv));
-        rv = RAFT_ERR_IO;
-        goto err_after_client_init;
-    }
-
-    rv = uv_read_start((uv_stream_t *)req->stream,
-                       raft__io_uv_tcp_accept_preamble_alloc_cb,
-                       raft__io_uv_tcp_accept_preamble_read_cb);
-    assert(rv == 0);
-
-    return 0;
-
-err_after_client_init:
-    uv_close((uv_handle_t *)req->stream, (uv_close_cb)raft_free);
-
-    return rv;
-}
-
-static void raft__io_uv_tcp_accept_preamble_alloc_cb(uv_handle_t *handle,
-                                                     size_t suggested_size,
-                                                     uv_buf_t *buf)
-{
-    struct raft__io_uv_tcp_accept *req = handle->data;
-
+    struct conn *c = handle->data;
     (void)suggested_size;
-
-    buf->base = (void *)req->handshake.preamble + req->handshake.nread;
-    buf->len = sizeof req->handshake.preamble - req->handshake.nread;
+    buf->base = c->handshake.address.base + c->handshake.nread;
+    buf->len = c->handshake.address.len - c->handshake.nread;
 }
 
-static void raft__io_uv_tcp_accept_preamble_read_cb(uv_stream_t *stream,
-                                                    ssize_t nread,
-                                                    const uv_buf_t *buf)
+static void address_read_cb(uv_stream_t *stream,
+                            ssize_t nread,
+                            const uv_buf_t *buf)
 {
-    struct raft__io_uv_tcp_accept *req = stream->data;
-    uint64_t protocol;
-    size_t n;
-    int rv;
-
-    (void)buf;
-
-    if (nread == 0) {
-        /* Empty read just ignore it. */
-        return;
-    }
-
-    if (nread < 0) {
-        raft_warnf(req->tcp->logger, "tcp read: %s", uv_strerror(nread));
-        raft__io_uv_tcp_accept_cancel(req);
-        return;
-    }
-
-    n = nread;
-
-    /* We shouldn't have read more data than the pending amount. */
-    assert(n <= sizeof req->handshake.preamble - req->handshake.nread);
-
-    /* Advance the read window */
-    req->handshake.nread += n;
-
-    /* If there's more data to read in order to fill the current
-     * read buffer, just return, we'll be invoked again. */
-    if (req->handshake.nread < sizeof req->handshake.preamble) {
-        return;
-    }
-
-    /* If we have completed reading the preamble, let's parse it. */
-    protocol = raft__flip64(req->handshake.preamble[0]);
-    if (protocol != RAFT__IO_UV_TCP_PROTOCOL) {
-        raft__io_uv_tcp_accept_cancel(req);
-        return;
-    }
-
-    req->handshake.address.len = raft__flip64(req->handshake.preamble[2]);
-    req->handshake.address.base = raft_malloc(req->handshake.address.len);
-
-    if (req->handshake.address.base == NULL) {
-        raft__io_uv_tcp_accept_cancel(req);
-        return;
-    }
-    req->handshake.nread = 0;
-
-    rv = uv_read_stop(stream);
-    assert(rv == 0);
-
-    rv = uv_read_start((uv_stream_t *)req->stream,
-                       raft__io_uv_tcp_accept_address_alloc_cb,
-                       raft__io_uv_tcp_accept_address_read_cb);
-    assert(rv == 0);
-}
-
-static void raft__io_uv_tcp_accept_address_alloc_cb(uv_handle_t *handle,
-                                                    size_t suggested_size,
-                                                    uv_buf_t *buf)
-{
-    struct raft__io_uv_tcp_accept *req = handle->data;
-
-    (void)suggested_size;
-
-    buf->base = req->handshake.address.base + req->handshake.nread;
-    buf->len = req->handshake.address.len - req->handshake.nread;
-}
-
-static void raft__io_uv_tcp_accept_address_read_cb(uv_stream_t *stream,
-                                                   ssize_t nread,
-                                                   const uv_buf_t *buf)
-{
-    struct raft__io_uv_tcp_accept *req = stream->data;
+    struct conn *c = stream->data;
     char *address;
     unsigned id;
     size_t n;
@@ -298,59 +124,194 @@ static void raft__io_uv_tcp_accept_address_read_cb(uv_stream_t *stream,
         /* Empty read just ignore it. */
         return;
     }
-
     if (nread < 0) {
-        raft_warnf(req->tcp->logger, "tcp read: %s", uv_strerror(nread));
-        raft__io_uv_tcp_accept_cancel(req);
+        raft_warnf(c->t->logger, "tcp read: %s", uv_strerror(nread));
+        conn_stop(c);
         return;
     }
 
-    n = nread;
-
     /* We shouldn't have read more data than the pending amount. */
-    assert(n <= req->handshake.address.len - req->handshake.nread);
+    n = nread;
+    assert(n <= c->handshake.address.len - c->handshake.nread);
 
     /* Advance the read window */
-    req->handshake.nread += n;
+    c->handshake.nread += n;
 
     /* If there's more data to read in order to fill the current
      * read buffer, just return, we'll be invoked again. */
-    if (req->handshake.nread < req->handshake.address.len) {
+    if (c->handshake.nread < c->handshake.address.len) {
         return;
     }
 
     /* If we have completed reading the address, let's fire the callback. */
     rv = uv_read_stop(stream);
     assert(rv == 0);
-
-    id = raft__flip64(req->handshake.preamble[1]);
-    address = req->handshake.address.base;
-
-    assert(req->tcp->state == RAFT__IO_UV_TCP_ACTIVE);
-
-    RAFT__QUEUE_REMOVE(&req->queue);
-
-    req->tcp->accept_cb(req->tcp->transport, id, address,
-                        (struct uv_stream_s *)req->stream);
-    raft_free(req->handshake.address.base);
-    raft_free(req);
+    id = byte__flip64(c->handshake.preamble[1]);
+    address = c->handshake.address.base;
+    RAFT__QUEUE_REMOVE(&c->queue);
+    c->t->accept_cb(c->t->transport, id, address, (struct uv_stream_s *)c->tcp);
+    raft_free(c->handshake.address.base);
+    raft_free(c);
 }
 
-static void raft__io_uv_tcp_accept_cancel(struct raft__io_uv_tcp_accept *req)
+static void preamble_read_cb(uv_stream_t *stream,
+                             ssize_t nread,
+                             const uv_buf_t *buf)
 {
-    RAFT__QUEUE_REMOVE(&req->queue);
+    struct conn *c = stream->data;
+    size_t n;
+    int rv;
 
-    uv_close((uv_handle_t *)req->stream, raft__io_uv_tcp_accept_close_cb);
-}
+    (void)buf;
 
-static void raft__io_uv_tcp_accept_close_cb(struct uv_handle_s *handle)
-{
-    struct raft__io_uv_tcp_accept *req = handle->data;
-
-    if (req->handshake.address.base != NULL) {
-        raft_free(req->handshake.address.base);
+    if (nread == 0) {
+        /* Empty read just ignore it. */
+        return;
+    }
+    if (nread < 0) {
+        raft_warnf(c->t->logger, "tcp read: %s", uv_strerror(nread));
+        conn_stop(c);
+        return;
     }
 
-    raft_free(req->stream);
-    raft_free(req);
+    /* We shouldn't have read more data than the pending amount. */
+    n = nread;
+    assert(n <= sizeof c->handshake.preamble - c->handshake.nread);
+
+    /* Advance the read window */
+    c->handshake.nread += n;
+
+    /* If there's more data to read in order to fill the current
+     * read buffer, just return, we'll be invoked again. */
+    if (c->handshake.nread < sizeof c->handshake.preamble) {
+        return;
+    }
+
+    /* If we have completed reading the preamble, let's parse it. */
+    rv = decode_preamble(&c->handshake);
+    if (rv != 0) {
+        conn_stop(c);
+        return;
+    }
+
+    rv = uv_read_stop(stream);
+    assert(rv == 0);
+    rv =
+        uv_read_start((uv_stream_t *)c->tcp, address_alloc_cb, address_read_cb);
+    assert(rv == 0);
+}
+
+/* Start reading handshake data for a new incoming connection. */
+static int conn_start_handshake(struct conn *c)
+{
+    int rv;
+
+    memset(&c->handshake, 0, sizeof c->handshake);
+
+    c->tcp = raft_malloc(sizeof *c->tcp);
+    if (c->tcp == NULL) {
+        return RAFT_ENOMEM;
+    }
+    c->tcp->data = c;
+    rv = uv_tcp_init(c->t->loop, c->tcp);
+    assert(rv == 0);
+
+    rv = uv_accept((struct uv_stream_s *)&c->t->listener,
+                   (struct uv_stream_s *)c->tcp);
+    if (rv != 0) {
+        raft_warnf(c->t->logger, "uv_accept: %s", uv_strerror(rv));
+        rv = RAFT_ERR_IO;
+        goto err_after_client_init;
+    }
+
+    rv = uv_read_start((uv_stream_t *)c->tcp, preamble_alloc_cb,
+                       preamble_read_cb);
+    assert(rv == 0);
+
+    return 0;
+
+err_after_client_init:
+    uv_close((uv_handle_t *)c->tcp, (uv_close_cb)raft_free);
+
+    return rv;
+}
+
+/* Called when there's a new incoming connection: create a new tcp_accept object
+ * and start receiving handshake data. */
+static void listen_cb(struct uv_stream_s *stream, int status)
+{
+    struct io_uv__tcp *t = stream->data;
+    struct conn *c;
+    int rv;
+
+    assert(stream == (struct uv_stream_s *)&t->listener);
+
+    if (status < 0) {
+        raft_warnf(t->logger, "uv_connection_cb: %s", uv_strerror(status));
+        rv = RAFT_ERR_IO;
+        goto err;
+    }
+
+    c = raft_malloc(sizeof *c);
+    if (c == NULL) {
+        rv = RAFT_ENOMEM;
+        goto err;
+    }
+    c->t = t;
+
+    rv = conn_start_handshake(c);
+    if (rv != 0) {
+        goto err_after_accept_alloc;
+    }
+
+    RAFT__QUEUE_PUSH(&t->accept_conns, &c->queue);
+
+    return;
+
+err_after_accept_alloc:
+    raft_free(c);
+
+err:
+    assert(rv != 0);
+}
+
+int io_uv__tcp_listen(struct raft_io_uv_transport *t, raft_io_uv_accept_cb cb)
+{
+    struct io_uv__tcp *tcp;
+    struct sockaddr_in addr;
+    int rv;
+
+    tcp = t->impl;
+    tcp->accept_cb = cb;
+
+    rv = raft__io_uv_ip_parse(tcp->address, &addr);
+    if (rv != 0) {
+        return rv;
+    }
+    rv = uv_tcp_bind(&tcp->listener, (const struct sockaddr *)&addr, 0);
+    if (rv != 0) {
+        /* UNTESTED: what are the error conditions? */
+        raft_warnf(tcp->logger, "uv_tcp_bind: %s", uv_strerror(rv));
+        return RAFT_ERR_IO;
+    }
+    rv = uv_listen((uv_stream_t *)&tcp->listener, 1, listen_cb);
+    if (rv != 0) {
+        /* UNTESTED: what are the error conditions? */
+        raft_warnf(tcp->logger, "uv_tcp_listen: %s", uv_strerror(rv));
+        return RAFT_ERR_IO;
+    }
+
+    return 0;
+}
+
+void io_uv__tcp_listen_stop(struct io_uv__tcp *t)
+{
+    /* Abort all connections currently being accepted */
+    while (!RAFT__QUEUE_IS_EMPTY(&t->accept_conns)) {
+        raft__queue *head;
+        struct conn *r;
+        head = RAFT__QUEUE_HEAD(&t->accept_conns);
+        r = RAFT__QUEUE_DATA(head, struct conn, queue);
+        conn_stop(r);
+    }
 }

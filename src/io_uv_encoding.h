@@ -5,9 +5,11 @@
 #ifndef RAFT_IO_UV_ENCODING_H
 #define RAFT_IO_UV_ENCODING_H
 
+#include <uv.h>
+
 #include "../include/raft.h"
 
-int raft_io_uv_encode__message(const struct raft_message *message,
+int io_uv__encode_message(const struct raft_message *message,
                                uv_buf_t **bufs,
                                unsigned *n_bufs);
 

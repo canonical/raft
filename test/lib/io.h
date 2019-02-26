@@ -6,6 +6,7 @@
 #define TEST_IO_H
 
 #include "../../include/raft.h"
+#include "../../include/raft/io_stub.h"
 
 #include "munit.h"
 
@@ -37,5 +38,7 @@ void test_io_set_term_and_vote(struct raft_io *io,
  * Synchronously append a new entry.
  */
 void test_io_append_entry(struct raft_io *io, const struct raft_entry *entry);
+
+void test_io_set_snapshot(struct raft_io *io, struct raft_snapshot *snapshot);
 
 #endif /* TEST_IO_H */

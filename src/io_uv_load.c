@@ -2,169 +2,150 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "assert.h"
-#include "binary.h"
-#include "checksum.h"
-#include "io_uv_encoding.h"
-#include "io_uv_loader.h"
+#include "../include/raft/io_uv.h"
 
-/* Current on-disk format version. */
-#define RAFT_IO_UV_STORE__FORMAT 1
+#include "assert.h"
+#include "byte.h"
+#include "configuration.h"
+#include "io_uv.h"
+#include "io_uv_encoding.h"
+#include "io_uv_load.h"
 
 /* Template string for snapshot filenames: snapshot term, snapshot index,
  * creation timestamp (milliseconds since epoch). */
-#define RAFT__IO_UV_LOADER_SNAPSHOT_TEMPLATE "snapshot-%llu-%llu-%llu"
+#define SNAPSHOT_TEMPLATE "snapshot-%llu-%llu-%llu"
 
 /* Template string for snapshot metadata filenames: snapshot term,  snapshot
  * index, creation timestamp (milliseconds since epoch). */
-#define RAFT__IO_UV_LOADER_SNAPSHOT_META_TEMPLATE \
-    RAFT__IO_UV_LOADER_SNAPSHOT_TEMPLATE ".meta"
+#define SNAPSHOT_META_TEMPLATE SNAPSHOT_TEMPLATE ".meta"
 
 /* Arbitrary maximum configuration size. Should be practically be enough */
-#define RAFT__IO_UV_LOADER_SNAPSHOT_META_MAX_CONFIGURATION_SIZE 1024 * 1024
+#define SNAPSHOT_META_MAX_CONFIGURATION_SIZE 1024 * 1024
 
 /* Template string for open segment filenames: incrementing counter. */
-#define RAFT__IO_UV_LOADER_OPEN_SEGMENT_TEMPLATE "open-%llu"
+#define OPEN_SEGMENT_TEMPLATE "open-%llu"
 
 /* Template string for closed segment filenames: start index (inclusive), end
  * index (inclusive). */
-#define RAFT__IO_UV_LOADER_CLOSED_SEGMENT_TEMPLATE "%llu-%llu"
+#define CLOSED_SEGMENT_TEMPLATE "%llu-%llu"
 
 /* Return true if the given filename should be ignored. */
-static bool raft__io_uv_loader_is_ignore_filename(const char *filename);
+static bool is_ignore_filename(const char *filename);
 
 /* Try to match the filename of a snapshot metadata file
  * (snapshot-xxx-yyy-zzz.meta), and return its term and index in case of a
  * match. */
-static bool raft__io_uv_loader_match_snapshot_meta(
-    const char *filename,
-    raft_term *term,
-    raft_index *index,
-    unsigned long long *timestamp);
+static bool match_snapshot_meta(const char *filename,
+                                raft_term *term,
+                                raft_index *index,
+                                unsigned long long *timestamp);
 
 /* Try to match the filename of a closed segment (xxx-yyy), and return its first
  * and end index in case of a match. */
-static bool raft__io_uv_loader_match_closed_segment(const char *filename,
-                                                    raft_index *first_index,
-                                                    raft_index *end_index);
+static bool match_closed_segment(const char *filename,
+                                 raft_index *first_index,
+                                 raft_index *end_index);
 
 /* Try to match the filename of an open segment (open-xxx), and return its
  * counter in case of a match. */
-static bool raft__io_uv_loader_match_open_segment(const char *filename,
-                                                  unsigned long long *counter);
+static bool match_open_segment(const char *filename,
+                               unsigned long long *counter);
 
 /* Append a new item to the given snapshot metadata list if the filename
  * matches. */
-static int raft__io_uv_loader_maybe_append_snapshot(
-    const char *dir,
-    const char *filename,
-    struct raft__io_uv_loader_snapshot *snapshots[],
-    size_t *n,
-    bool *appended);
+static int maybe_append_snapshot_meta(const char *dir,
+                                      const char *filename,
+                                      struct io_uv__snapshot_meta *snapshots[],
+                                      size_t *n,
+                                      bool *appended);
 
 /* Append a new item to the given segment list if the filename matches an open
  * or closed filename. */
-static int raft__io_uv_loader_maybe_append_segment(
-    const char *filename,
-    struct raft__io_uv_loader_segment *segments[],
-    size_t *n,
-    bool *appended);
+static int maybe_append_segment_meta(const char *filename,
+                                     struct io_uv__segment_meta *segments[],
+                                     size_t *n,
+                                     bool *appended);
 
 /* Parse the metadata file of a snapshot and populate the given snapshot object
  * accordingly. */
-static int raft__io_uv_loader_load_snapshot_meta(
-    struct raft__io_uv_loader *l,
-    struct raft__io_uv_loader_snapshot *meta,
-    struct raft_snapshot *snapshot);
+static int load_snapshot_meta(struct io_uv *uv,
+                              struct io_uv__snapshot_meta *meta,
+                              struct raft_snapshot *snapshot);
 
 /* Load the snapshot data file. */
-static int raft__io_uv_loader_load_snapshot_data(
-    struct raft__io_uv_loader *l,
-    struct raft__io_uv_loader_snapshot *meta,
-    struct raft_snapshot *snapshot);
+static int load_snapshot_data(struct io_uv *uv,
+                              struct io_uv__snapshot_meta *meta,
+                              struct raft_snapshot *snapshot);
 
 /* Render the filename of the data file of a snapshot */
-static void raft__io_uv_loader_snapshot_data_filename(
-    struct raft__io_uv_loader_snapshot *meta,
-    raft__io_uv_fs_filename filename);
+static void snapshot_data_filename(struct io_uv__snapshot_meta *meta,
+                                   io_uv__filename filename);
 
 /* Compare two snapshots to decide which one is more recent. */
-static int raft__io_uv_loader_compare_snapshots(const void *item1,
-                                                const void *item2);
+static int compare_snapshots(const void *item1, const void *item2);
 
 /* Compare two segments to decide which one is more recent. */
-static int raft__io_uv_loader_compare_segments(const void *item1,
-                                               const void *item2);
+static int compare_segments(const void *item1, const void *item2);
 
 /* Load raft entries from the given segments. */
-static int raft__io_uv_loader_load_from_list(
-    struct raft__io_uv_loader *l,
-    const raft_index start_index,
-    struct raft__io_uv_loader_segment *segments,
-    size_t n_segments,
-    struct raft_entry **entries,
-    size_t *n_entries);
+static int load_entries_from_segments(struct io_uv *uv,
+                                      const raft_index start_index,
+                                      struct io_uv__segment_meta *segments,
+                                      size_t n_segments,
+                                      struct raft_entry **entries,
+                                      size_t *n_entries);
 
 /* Open a segment file and read its format version. */
-static int raft__io_uv_loader_segment_open(struct raft_logger *logger,
-                                           const char *dir,
-                                           const char *filename,
-                                           const int flags,
-                                           int *fd,
-                                           uint64_t *format);
+static int open_segment_meta(struct raft_logger *logger,
+                             const char *dir,
+                             const char *filename,
+                             const int flags,
+                             int *fd,
+                             uint64_t *format);
 
 /* Load the entries stored in an open segment. If there are no entries at all,
  * remove the open segment, mark it as closed (by renaming it). */
-static int raft__io_uv_loader_segment_load_open(
-    struct raft_logger *logger,
-    const char *dir,
-    struct raft__io_uv_loader_segment *segment,
-    struct raft_entry **entries,
-    size_t *n_entries,
-    raft_index *next_index);
+static int load_entries_from_open_segment(struct raft_logger *logger,
+                                          const char *dir,
+                                          struct io_uv__segment_meta *segment,
+                                          struct raft_entry **entries,
+                                          size_t *n_entries,
+                                          raft_index *next_index);
 
 /* Load a single batch of entries from a segment.
  *
  * Set @last to #true if the loaded batch is the last one. */
-static int raft__io_uv_loader_segment_load_batch(struct raft_logger *logger,
-                                                 const int fd,
-                                                 struct raft_entry **entries,
-                                                 unsigned *n_entries,
-                                                 bool *last);
+static int load_entries_batch_from_segment(struct raft_logger *logger,
+                                           const int fd,
+                                           struct raft_entry **entries,
+                                           unsigned *n_entries,
+                                           bool *last);
 
 /* Render the filename of a closed segment. */
-static void raft__io_uv_loader_segment_make_closed(const raft_index first_index,
-                                                   const raft_index end_index,
-                                                   char *filename);
+static void closed_segment_filename(const raft_index first_index,
+                                    const raft_index end_index,
+                                    char *filename);
 
 /* Append to @entries2 all entries in @entries1. */
-static int raft__io_uv_loader_extend_entries(const struct raft_entry *entries1,
-                                             const size_t n_entries1,
-                                             struct raft_entry **entries2,
-                                             size_t *n_entries2);
+static int extend_entries(const struct raft_entry *entries1,
+                          const size_t n_entries1,
+                          struct raft_entry **entries2,
+                          size_t *n_entries2);
 
-void raft__io_uv_loader_init(struct raft__io_uv_loader *l,
-                             struct raft_logger *logger,
-                             const char *dir)
-{
-    l->logger = logger;
-    l->dir = dir;
-}
-
-int raft__io_uv_loader_list(struct raft__io_uv_loader *l,
-                            struct raft__io_uv_loader_snapshot *snapshots[],
-                            size_t *n_snapshots,
-                            struct raft__io_uv_loader_segment *segments[],
-                            size_t *n_segments)
+int io_uv__load_list(struct io_uv *uv,
+                     struct io_uv__snapshot_meta *snapshots[],
+                     size_t *n_snapshots,
+                     struct io_uv__segment_meta *segments[],
+                     size_t *n_segments)
 {
     struct dirent **dirents;
     int n_dirents;
     int i;
     int rv = 0;
 
-    n_dirents = scandir(l->dir, &dirents, NULL, alphasort);
+    n_dirents = scandir(uv->dir, &dirents, NULL, alphasort);
     if (n_dirents < 0) {
-        raft_errorf(l->logger, "scan %s: %s", l->dir, uv_strerror(-errno));
+        raft_errorf(uv->logger, "scan %s: %s", uv->dir, uv_strerror(-errno));
         return RAFT_ERR_IO;
     }
 
@@ -176,7 +157,7 @@ int raft__io_uv_loader_list(struct raft__io_uv_loader *l,
 
     for (i = 0; i < n_dirents; i++) {
         struct dirent *entry = dirents[i];
-        bool ignore = raft__io_uv_loader_is_ignore_filename(entry->d_name);
+        bool ignore = is_ignore_filename(entry->d_name);
         bool appended;
 
         /* If an error occurred while processing a preceeding entry or if we
@@ -187,14 +168,14 @@ int raft__io_uv_loader_list(struct raft__io_uv_loader *l,
         }
 
         /* Append to the snapshot list if it's a snapshot metadata filename */
-        rv = raft__io_uv_loader_maybe_append_snapshot(
-            l->dir, entry->d_name, snapshots, n_snapshots, &appended);
+        rv = maybe_append_snapshot_meta(uv->dir, entry->d_name, snapshots,
+                                        n_snapshots, &appended);
         if (appended || rv != 0) {
             goto next;
         }
 
-        rv = raft__io_uv_loader_maybe_append_segment(entry->d_name, segments,
-                                                     n_segments, &appended);
+        rv = maybe_append_segment_meta(entry->d_name, segments, n_segments,
+                                       &appended);
         if (appended || rv != 0) {
             goto next;
         }
@@ -209,30 +190,28 @@ int raft__io_uv_loader_list(struct raft__io_uv_loader *l,
     }
 
     if (*snapshots != NULL) {
-        qsort(*snapshots, *n_snapshots, sizeof **snapshots,
-              raft__io_uv_loader_compare_snapshots);
+        qsort(*snapshots, *n_snapshots, sizeof **snapshots, compare_snapshots);
     }
 
     if (*segments != NULL) {
-        qsort(*segments, *n_segments, sizeof **segments,
-              raft__io_uv_loader_compare_segments);
+        qsort(*segments, *n_segments, sizeof **segments, compare_segments);
     }
 
     return rv;
 }
 
-int raft__io_uv_loader_load_snapshot(struct raft__io_uv_loader *l,
-                                     struct raft__io_uv_loader_snapshot *meta,
-                                     struct raft_snapshot *snapshot)
+int io_uv__load_snapshot(struct io_uv *uv,
+                         struct io_uv__snapshot_meta *meta,
+                         struct raft_snapshot *snapshot)
 {
     int rv;
 
-    rv = raft__io_uv_loader_load_snapshot_meta(l, meta, snapshot);
+    rv = load_snapshot_meta(uv, meta, snapshot);
     if (rv != 0) {
         return rv;
     }
 
-    rv = raft__io_uv_loader_load_snapshot_data(l, meta, snapshot);
+    rv = load_snapshot_data(uv, meta, snapshot);
     if (rv != 0) {
         return rv;
     }
@@ -240,10 +219,10 @@ int raft__io_uv_loader_load_snapshot(struct raft__io_uv_loader *l,
     return 0;
 }
 
-int raft__io_uv_loader_load_closed(struct raft__io_uv_loader *l,
-                                   struct raft__io_uv_loader_segment *segment,
-                                   struct raft_entry *entries[],
-                                   size_t *n)
+int io_uv__load_closed(struct io_uv *uv,
+                       struct io_uv__segment_meta *segment,
+                       struct raft_entry *entries[],
+                       size_t *n)
 {
     bool empty;                     /* Whether the file is empty */
     int fd;                         /* Segment file descriptor */
@@ -255,25 +234,25 @@ int raft__io_uv_loader_load_closed(struct raft__io_uv_loader *l,
     int rv;
 
     /* If the segment is completely empty, just bail out. */
-    rv = raft__io_uv_fs_is_empty(l->dir, segment->filename, &empty);
+    rv = raft__io_uv_fs_is_empty(uv->dir, segment->filename, &empty);
     if (rv != 0) {
         goto err;
     }
     if (empty) {
-        raft_errorf(l->logger, "segment %s: file is empty", segment->filename);
+        raft_errorf(uv->logger, "segment %s: file is empty", segment->filename);
         rv = RAFT_ERR_IO_CORRUPT;
         goto err;
     }
 
     /* Open the segment file. */
-    rv = raft__io_uv_loader_segment_open(l->logger, l->dir, segment->filename,
-                                         O_RDONLY, &fd, &format);
+    rv = open_segment_meta(uv->logger, uv->dir, segment->filename, O_RDONLY,
+                           &fd, &format);
     if (rv != 0) {
         goto err;
     }
 
-    if (format != RAFT_IO_UV_STORE__FORMAT) {
-        raft_errorf(l->logger, "segment %s: unexpected format version: %lu",
+    if (format != IO_UV__DISK_FORMAT) {
+        raft_errorf(uv->logger, "segment %s: unexpected format version: %lu",
                     segment->filename, format);
         rv = RAFT_ERR_IO;
         goto err_after_open;
@@ -285,13 +264,13 @@ int raft__io_uv_loader_load_closed(struct raft__io_uv_loader *l,
 
     last = false;
     for (i = 1; !last; i++) {
-        rv = raft__io_uv_loader_segment_load_batch(l->logger, fd, &tmp_entries,
-                                                   &tmp_n, &last);
+        rv = load_entries_batch_from_segment(uv->logger, fd, &tmp_entries,
+                                             &tmp_n, &last);
         if (rv != 0) {
             goto err_after_open;
         }
 
-        rv = raft__io_uv_loader_extend_entries(tmp_entries, tmp_n, entries, n);
+        rv = extend_entries(tmp_entries, tmp_n, entries, n);
         if (rv != 0) {
             goto err_after_batch_load;
         }
@@ -318,13 +297,13 @@ err:
     return rv;
 }
 
-int raft__io_uv_loader_load_all(struct raft__io_uv_loader *l,
-                                struct raft_snapshot **snapshot,
-                                struct raft_entry *entries[],
-                                size_t *n)
+int io_uv__load_all(struct io_uv *uv,
+                    struct raft_snapshot **snapshot,
+                    struct raft_entry *entries[],
+                    size_t *n)
 {
-    struct raft__io_uv_loader_snapshot *snapshots;
-    struct raft__io_uv_loader_segment *segments;
+    struct io_uv__snapshot_meta *snapshots;
+    struct io_uv__segment_meta *segments;
     raft_index start_index = 1;
     size_t n_snapshots;
     size_t n_segments;
@@ -335,8 +314,7 @@ int raft__io_uv_loader_load_all(struct raft__io_uv_loader *l,
     *n = 0;
 
     /* List available snapshots and segments. */
-    rv = raft__io_uv_loader_list(l, &snapshots, &n_snapshots, &segments,
-                                 &n_segments);
+    rv = io_uv__load_list(uv, &snapshots, &n_snapshots, &segments, &n_segments);
     if (rv != 0) {
         goto err;
     }
@@ -345,11 +323,10 @@ int raft__io_uv_loader_load_all(struct raft__io_uv_loader *l,
     if (snapshots != NULL) {
         *snapshot = raft_malloc(sizeof **snapshot);
         if (*snapshot == NULL) {
-            rv = RAFT_ERR_NOMEM;
+            rv = RAFT_ENOMEM;
             goto err;
         }
-        rv = raft__io_uv_loader_load_snapshot(l, &snapshots[n_snapshots - 1],
-                                              *snapshot);
+        rv = io_uv__load_snapshot(uv, &snapshots[n_snapshots - 1], *snapshot);
         if (rv != 0) {
             goto err;
         }
@@ -360,8 +337,8 @@ int raft__io_uv_loader_load_all(struct raft__io_uv_loader *l,
 
     /* Read data from segments, closing any open segments. */
     if (segments != NULL) {
-        rv = raft__io_uv_loader_load_from_list(l, start_index, segments,
-                                               n_segments, entries, n);
+        rv = load_entries_from_segments(uv, start_index, segments, n_segments,
+                                        entries, n);
         if (rv != 0) {
             goto err;
         }
@@ -389,15 +366,15 @@ err:
     return rv;
 }
 
-static const char *raft__io_uv_loader_is_ignore_filenamed_filenames[] = {
-    ".", "..", "metadata1", "metadata2", NULL};
+static const char *is_ignore_filenamed_filenames[] = {".", "..", "metadata1",
+                                                      "metadata2", NULL};
 
 /**
  * Return true if this is a segment filename.
  */
-static bool raft__io_uv_loader_is_ignore_filename(const char *filename)
+static bool is_ignore_filename(const char *filename)
 {
-    const char **cursor = raft__io_uv_loader_is_ignore_filenamed_filenames;
+    const char **cursor = is_ignore_filenamed_filenames;
     bool result = false;
 
     while (*cursor != NULL) {
@@ -411,62 +388,59 @@ static bool raft__io_uv_loader_is_ignore_filename(const char *filename)
     return result;
 }
 
-static bool raft__io_uv_loader_match_snapshot_meta(
-    const char *filename,
-    raft_term *term,
-    raft_index *index,
-    unsigned long long *timestamp)
+static bool match_snapshot_meta(const char *filename,
+                                raft_term *term,
+                                raft_index *index,
+                                unsigned long long *timestamp)
 {
     unsigned consumed;
     int matched;
 
-    matched = sscanf(filename, RAFT__IO_UV_LOADER_SNAPSHOT_META_TEMPLATE "%n",
-                     term, index, timestamp, &consumed);
+    matched = sscanf(filename, SNAPSHOT_META_TEMPLATE "%n", term, index,
+                     timestamp, &consumed);
 
     return matched == 3 && consumed == strlen(filename);
 }
 
-static bool raft__io_uv_loader_match_closed_segment(const char *filename,
-                                                    raft_index *first_index,
-                                                    raft_index *end_index)
+static bool match_closed_segment(const char *filename,
+                                 raft_index *first_index,
+                                 raft_index *end_index)
 {
     unsigned consumed;
     int matched;
 
-    matched = sscanf(filename, RAFT__IO_UV_LOADER_CLOSED_SEGMENT_TEMPLATE "%n",
-                     first_index, end_index, &consumed);
+    matched = sscanf(filename, CLOSED_SEGMENT_TEMPLATE "%n", first_index,
+                     end_index, &consumed);
 
     return matched == 2 && consumed == strlen(filename);
 }
 
-static bool raft__io_uv_loader_match_open_segment(const char *filename,
-                                                  unsigned long long *counter)
+static bool match_open_segment(const char *filename,
+                               unsigned long long *counter)
 {
     unsigned consumed;
     int matched;
 
-    matched = sscanf(filename, RAFT__IO_UV_LOADER_OPEN_SEGMENT_TEMPLATE "%n",
-                     counter, &consumed);
+    matched = sscanf(filename, OPEN_SEGMENT_TEMPLATE "%n", counter, &consumed);
     return matched == 1 && consumed == strlen(filename);
 }
 
-static int raft__io_uv_loader_maybe_append_snapshot(
-    const char *dir,
-    const char *filename,
-    struct raft__io_uv_loader_snapshot *snapshots[],
-    size_t *n,
-    bool *appended)
+static int maybe_append_snapshot_meta(const char *dir,
+                                      const char *filename,
+                                      struct io_uv__snapshot_meta *snapshots[],
+                                      size_t *n,
+                                      bool *appended)
 {
-    struct raft__io_uv_loader_snapshot snapshot;
-    struct raft__io_uv_loader_snapshot *tmp_snapshots;
+    struct io_uv__snapshot_meta snapshot;
+    struct io_uv__snapshot_meta *tmp_snapshots;
     bool matched;
     struct stat sb;
-    raft__io_uv_fs_filename snapshot_filename;
+    io_uv__filename snapshot_filename;
     int rv;
 
     /* Check if it's a snapshot metadata filename */
-    matched = raft__io_uv_loader_match_snapshot_meta(
-        filename, &snapshot.term, &snapshot.index, &snapshot.timestamp);
+    matched = match_snapshot_meta(filename, &snapshot.term, &snapshot.index,
+                                  &snapshot.timestamp);
     if (!matched) {
         *appended = false;
         return 0;
@@ -478,7 +452,7 @@ static int raft__io_uv_loader_maybe_append_snapshot(
     /* Check if there's actually a snapshot file for this snapshot metadata. If
      * there's none, it means that we aborted before finishing the snapshot, so
      * let's remove the metadata file. */
-    raft__io_uv_loader_snapshot_data_filename(&snapshot, snapshot_filename);
+    snapshot_data_filename(&snapshot, snapshot_filename);
     rv = raft__io_uv_fs_stat(dir, snapshot_filename, &sb);
     if (rv == -1) {
         if (errno == ENOENT) {
@@ -492,7 +466,7 @@ static int raft__io_uv_loader_maybe_append_snapshot(
     (*n)++;
     tmp_snapshots = raft_realloc(*snapshots, (*n) * sizeof **snapshots);
     if (tmp_snapshots == NULL) {
-        return RAFT_ERR_NOMEM;
+        return RAFT_ENOMEM;
     }
 
     *snapshots = tmp_snapshots;
@@ -505,26 +479,25 @@ static int raft__io_uv_loader_maybe_append_snapshot(
 
 /* Append a new item to the given segment list if the filename matches an open
  * or closed filename. */
-static int raft__io_uv_loader_maybe_append_segment(
-    const char *filename,
-    struct raft__io_uv_loader_segment *segments[],
-    size_t *n,
-    bool *appended)
+static int maybe_append_segment_meta(const char *filename,
+                                     struct io_uv__segment_meta *segments[],
+                                     size_t *n,
+                                     bool *appended)
 {
-    struct raft__io_uv_loader_segment segment;
-    struct raft__io_uv_loader_segment *tmp_segments;
+    struct io_uv__segment_meta segment;
+    struct io_uv__segment_meta *tmp_segments;
     bool matched;
 
     /* Check if it's a closed segment filename */
-    matched = raft__io_uv_loader_match_closed_segment(
-        filename, &segment.first_index, &segment.end_index);
+    matched = match_closed_segment(filename, &segment.first_index,
+                                   &segment.end_index);
     if (matched) {
         segment.is_open = false;
         goto append;
     }
 
     /* Check if it's an open segment filename */
-    matched = raft__io_uv_loader_match_open_segment(filename, &segment.counter);
+    matched = match_open_segment(filename, &segment.counter);
 
     if (matched) {
         segment.is_open = true;
@@ -540,7 +513,7 @@ append:
     tmp_segments = raft_realloc(*segments, (*n) * sizeof **segments);
 
     if (tmp_segments == NULL) {
-        return RAFT_ERR_NOMEM;
+        return RAFT_ENOMEM;
     }
 
     assert(strlen(filename) < sizeof segment.filename);
@@ -552,10 +525,9 @@ append:
     return 0;
 }
 
-static int raft__io_uv_loader_load_snapshot_meta(
-    struct raft__io_uv_loader *l,
-    struct raft__io_uv_loader_snapshot *meta,
-    struct raft_snapshot *snapshot)
+static int load_snapshot_meta(struct io_uv *uv,
+                              struct io_uv__snapshot_meta *meta,
+                              struct raft_snapshot *snapshot)
 {
     uint64_t header[1 + /* Format version */
                     1 + /* CRC checksum */
@@ -571,9 +543,9 @@ static int raft__io_uv_loader_load_snapshot_meta(
     snapshot->term = meta->term;
     snapshot->index = meta->index;
 
-    fd = raft__io_uv_fs_open(l->dir, meta->filename, O_RDONLY);
+    fd = raft__io_uv_fs_open(uv->dir, meta->filename, O_RDONLY);
     if (fd == -1) {
-        raft_errorf(l->logger, "open %s: %s", meta->filename,
+        raft_errorf(uv->logger, "open %s: %s", meta->filename,
                     uv_strerror(-errno));
         rv = RAFT_ERR_IO;
         goto err;
@@ -581,38 +553,38 @@ static int raft__io_uv_loader_load_snapshot_meta(
 
     rv = raft__io_uv_fs_read_n(fd, header, sizeof header);
     if (rv != 0) {
-        raft_errorf(l->logger, "read %s: %s", meta->filename, uv_strerror(rv));
+        raft_errorf(uv->logger, "read %s: %s", meta->filename, uv_strerror(rv));
         rv = RAFT_ERR_IO;
         goto err_after_open;
     }
 
-    format = raft__flip64(header[0]);
-    if (format != RAFT_IO_UV_STORE__FORMAT) {
-        raft_errorf(l->logger, "read %s: unsupported format %lu",
+    format = byte__flip64(header[0]);
+    if (format != IO_UV__DISK_FORMAT) {
+        raft_errorf(uv->logger, "read %s: unsupported format %lu",
                     meta->filename, format);
         rv = RAFT_ERR_IO_CORRUPT;
         goto err_after_open;
     }
 
-    crc1 = raft__flip64(header[1]);
+    crc1 = byte__flip64(header[1]);
 
-    snapshot->configuration_index = raft__flip64(header[2]);
-    buf.len = raft__flip64(header[3]);
-    if (buf.len > RAFT__IO_UV_LOADER_SNAPSHOT_META_MAX_CONFIGURATION_SIZE) {
-        raft_errorf(l->logger, "read %s: configuration data too big (%ld)",
+    snapshot->configuration_index = byte__flip64(header[2]);
+    buf.len = byte__flip64(header[3]);
+    if (buf.len > SNAPSHOT_META_MAX_CONFIGURATION_SIZE) {
+        raft_errorf(uv->logger, "read %s: configuration data too big (%ld)",
                     meta->filename, buf.len);
         rv = RAFT_ERR_IO_CORRUPT;
         goto err_after_open;
     }
     if (buf.len == 0) {
-        raft_errorf(l->logger, "read %s: no configuration data", meta->filename,
-                    buf.len);
+        raft_errorf(uv->logger, "read %s: no configuration data",
+                    meta->filename, buf.len);
         rv = RAFT_ERR_IO_CORRUPT;
         goto err_after_open;
     }
     buf.base = raft_malloc(buf.len);
     if (buf.base == NULL) {
-        rv = RAFT_ERR_NOMEM;
+        rv = RAFT_ENOMEM;
         goto err_after_open;
     }
 
@@ -621,16 +593,17 @@ static int raft__io_uv_loader_load_snapshot_meta(
         goto err_after_buf_malloc;
     }
 
-    crc2 = raft__crc32(header + 2, sizeof header - sizeof(uint64_t) * 2, 0);
-    crc2 = raft__crc32(buf.base, buf.len, crc2);
+    crc2 = byte__crc32(header + 2, sizeof header - sizeof(uint64_t) * 2, 0);
+    crc2 = byte__crc32(buf.base, buf.len, crc2);
 
     if (crc1 != crc2) {
-        raft_errorf(l->logger, "read %s: corrupted data", meta->filename);
+        raft_errorf(uv->logger, "read %s: corrupted data", meta->filename);
         rv = RAFT_ERR_IO_CORRUPT;
         goto err_after_open;
     }
 
-    rv = raft_configuration_decode(&buf, &snapshot->configuration);
+    raft_configuration_init(&snapshot->configuration);
+    rv = configuration__decode(&buf, &snapshot->configuration);
     if (rv != 0) {
         goto err_after_buf_malloc;
     }
@@ -651,29 +624,28 @@ err:
     return rv;
 }
 
-static int raft__io_uv_loader_load_snapshot_data(
-    struct raft__io_uv_loader *l,
-    struct raft__io_uv_loader_snapshot *meta,
-    struct raft_snapshot *snapshot)
+static int load_snapshot_data(struct io_uv *uv,
+                              struct io_uv__snapshot_meta *meta,
+                              struct raft_snapshot *snapshot)
 {
     struct stat sb;
-    raft__io_uv_fs_filename filename;
+    io_uv__filename filename;
     struct raft_buffer buf;
     int fd;
     int rv;
 
-    raft__io_uv_loader_snapshot_data_filename(meta, filename);
+    snapshot_data_filename(meta, filename);
 
-    rv = raft__io_uv_fs_stat(l->dir, filename, &sb);
+    rv = raft__io_uv_fs_stat(uv->dir, filename, &sb);
     if (rv != 0) {
-        raft_errorf(l->logger, "stat %s: %s", filename, uv_strerror(-errno));
+        raft_errorf(uv->logger, "stat %s: %s", filename, uv_strerror(-errno));
         rv = RAFT_ERR_IO;
         goto err;
     }
 
-    fd = raft__io_uv_fs_open(l->dir, filename, O_RDONLY);
+    fd = raft__io_uv_fs_open(uv->dir, filename, O_RDONLY);
     if (fd == -1) {
-        raft_errorf(l->logger, "open %s: %s", filename, uv_strerror(-errno));
+        raft_errorf(uv->logger, "open %s: %s", filename, uv_strerror(-errno));
         rv = RAFT_ERR_IO;
         goto err;
     }
@@ -681,7 +653,7 @@ static int raft__io_uv_loader_load_snapshot_data(
     buf.len = sb.st_size;
     buf.base = raft_malloc(buf.len);
     if (buf.base == NULL) {
-        rv = RAFT_ERR_NOMEM;
+        rv = RAFT_ENOMEM;
         goto err_after_open;
     }
 
@@ -693,7 +665,7 @@ static int raft__io_uv_loader_load_snapshot_data(
     snapshot->bufs = raft_malloc(sizeof *snapshot->bufs);
     snapshot->n_bufs = 1;
     if (snapshot->bufs == NULL) {
-        rv = RAFT_ERR_NOMEM;
+        rv = RAFT_ENOMEM;
         goto err_after_buf_alloc;
     }
 
@@ -714,21 +686,18 @@ err:
     return rv;
 }
 
-static void raft__io_uv_loader_snapshot_data_filename(
-    struct raft__io_uv_loader_snapshot *meta,
-    raft__io_uv_fs_filename filename)
+static void snapshot_data_filename(struct io_uv__snapshot_meta *meta,
+                                   io_uv__filename filename)
 {
     size_t len = strlen(meta->filename) - strlen(".meta");
     strncpy(filename, meta->filename, len);
     filename[len] = 0;
 }
 
-static int raft__io_uv_loader_compare_snapshots(const void *p1, const void *p2)
+static int compare_snapshots(const void *p1, const void *p2)
 {
-    struct raft__io_uv_loader_snapshot *s1 =
-        (struct raft__io_uv_loader_snapshot *)p1;
-    struct raft__io_uv_loader_snapshot *s2 =
-        (struct raft__io_uv_loader_snapshot *)p2;
+    struct io_uv__snapshot_meta *s1 = (struct io_uv__snapshot_meta *)p1;
+    struct io_uv__snapshot_meta *s2 = (struct io_uv__snapshot_meta *)p2;
 
     /* If terms are different, the snaphot with the highest term is the most
      * recent. */
@@ -746,12 +715,10 @@ static int raft__io_uv_loader_compare_snapshots(const void *p1, const void *p2)
     return s1->timestamp < s2->timestamp ? -1 : 1;
 }
 
-static int raft__io_uv_loader_compare_segments(const void *p1, const void *p2)
+static int compare_segments(const void *p1, const void *p2)
 {
-    struct raft__io_uv_loader_segment *s1 =
-        (struct raft__io_uv_loader_segment *)p1;
-    struct raft__io_uv_loader_segment *s2 =
-        (struct raft__io_uv_loader_segment *)p2;
+    struct io_uv__segment_meta *s1 = (struct io_uv__segment_meta *)p1;
+    struct io_uv__segment_meta *s2 = (struct io_uv__segment_meta *)p2;
 
     /* Closed segments are less recent than open segments. */
     if (s1->is_open && !s2->is_open) {
@@ -777,13 +744,12 @@ static int raft__io_uv_loader_compare_segments(const void *p1, const void *p2)
     return 1;
 }
 
-static int raft__io_uv_loader_load_from_list(
-    struct raft__io_uv_loader *l,
-    const raft_index start_index,
-    struct raft__io_uv_loader_segment *segments,
-    size_t n_segments,
-    struct raft_entry **entries,
-    size_t *n_entries)
+static int load_entries_from_segments(struct io_uv *uv,
+                                      const raft_index start_index,
+                                      struct io_uv__segment_meta *segments,
+                                      size_t n_segments,
+                                      struct raft_entry **entries,
+                                      size_t *n_entries)
 {
     raft_index next_index; /* Index of the next entry to load from disk */
     struct raft_entry *tmp_entries; /* Entries in current segment */
@@ -799,19 +765,23 @@ static int raft__io_uv_loader_load_from_list(
     next_index = start_index;
 
     for (i = 0; i < n_segments; i++) {
-        struct raft__io_uv_loader_segment *segment = &segments[i];
+        struct io_uv__segment_meta *segment = &segments[i];
 
         if (segment->is_open) {
-            rv = raft__io_uv_loader_segment_load_open(
-                l->logger, l->dir, segment, entries, n_entries, &next_index);
+            rv = load_entries_from_open_segment(
+                uv->logger, uv->dir, segment, entries, n_entries, &next_index);
             if (rv != 0) {
                 goto err;
             }
         } else {
+            unsigned prefix = 0; /* N of prefix entries ignored */
+            unsigned j;
+            void *batch;
+
             /* If the entries in the segment are no longer needed, just remove
              * it. */
             if (segment->end_index < start_index) {
-                rv = raft__io_uv_fs_unlink(l->dir, segment->filename);
+                rv = raft__io_uv_fs_unlink(uv->dir, segment->filename);
                 if (rv != 0) {
                     goto err;
                 }
@@ -820,30 +790,65 @@ static int raft__io_uv_loader_load_from_list(
 
             /* Check that start index encoded in the name of the segment matches
              * what we expect. */
-            if (segment->first_index != next_index) {
-                raft_errorf(l->logger,
+            if (segment->first_index > next_index) {
+                raft_errorf(uv->logger,
                             "segment %s: expected first index to be %lld",
                             segment->filename, next_index);
                 rv = RAFT_ERR_IO_CORRUPT;
                 goto err;
             }
 
-            rv = raft__io_uv_loader_load_closed(l, segment, &tmp_entries,
-                                                &tmp_n);
+            /* If the first index of the segment is lower than the next
+             * expected, it must mean that it overlaps with the last snapshot we
+             * loaded, and it must be the first segment we're loading. */
+            if (segment->first_index < next_index) {
+                if (*n_entries != 0) {
+                    raft_errorf(
+                        uv->logger,
+                        "segment %s: expected first segment at %lld or lower",
+                        segment->filename, next_index);
+                    rv = RAFT_ERR_IO_CORRUPT;
+                    goto err;
+                }
+                prefix = next_index - segment->first_index;
+            }
+
+            rv = io_uv__load_closed(uv, segment, &tmp_entries, &tmp_n);
             if (rv != 0) {
                 goto err;
             }
 
-            rv = raft__io_uv_loader_extend_entries(tmp_entries, tmp_n, entries,
-                                                   n_entries);
-            if (rv != 0) {
-                /* TODO: release memory of entries in tmp_entries */
-                goto err;
+            if (tmp_n - prefix > 0) {
+                rv = extend_entries(tmp_entries + prefix, tmp_n - prefix,
+                                    entries, n_entries);
+                if (rv != 0) {
+                    /* TODO: release memory of entries in tmp_entries */
+                    goto err;
+                }
+                if (prefix > 0) {
+                    batch = tmp_entries[prefix].batch;
+                    for (j = prefix; j > 0; j--) {
+                        struct raft_entry *entry = &tmp_entries[j-1];
+                        if (entry->batch != batch) {
+                            raft_free(entry->batch);
+                            batch = entry->batch;
+                        }
+                    }
+                }
+            } else {
+                batch = NULL;
+                for (j = 0; j < tmp_n; j++) {
+                    struct raft_entry *entry = &tmp_entries[j];
+                    if (entry->batch != batch) {
+                        raft_free(entry->batch);
+                        batch = entry->batch;
+                    }
+                }
             }
 
             raft_free(tmp_entries);
 
-            next_index += tmp_n;
+            next_index += tmp_n - prefix;
         }
     }
 
@@ -872,13 +877,12 @@ err:
     return rv;
 }
 
-static int raft__io_uv_loader_segment_load_open(
-    struct raft_logger *logger,
-    const char *dir,
-    struct raft__io_uv_loader_segment *segment,
-    struct raft_entry **entries,
-    size_t *n_entries,
-    raft_index *next_index)
+static int load_entries_from_open_segment(struct raft_logger *logger,
+                                          const char *dir,
+                                          struct io_uv__segment_meta *segment,
+                                          struct raft_entry **entries,
+                                          size_t *n_entries,
+                                          raft_index *next_index)
 {
     raft_index first_index;         /* Index of first entry in segment */
     bool all_zeros;                 /* Whether the file is zero'ed */
@@ -906,15 +910,15 @@ static int raft__io_uv_loader_segment_load_open(
         goto done;
     }
 
-    rv = raft__io_uv_loader_segment_open(logger, dir, segment->filename, O_RDWR,
-                                         &fd, &format);
+    rv =
+        open_segment_meta(logger, dir, segment->filename, O_RDWR, &fd, &format);
     if (rv != 0) {
         goto err;
     }
 
     /* Check that the format is the expected one, or perhaps 0, indicating that
      * the segment was allocated but never written. */
-    if (format != RAFT_IO_UV_STORE__FORMAT) {
+    if (format != IO_UV__DISK_FORMAT) {
         if (format == 0) {
             rv = raft__io_uv_fs_is_all_zeros(fd, &all_zeros);
             if (rv != 0) {
@@ -947,8 +951,8 @@ static int raft__io_uv_loader_segment_load_open(
             return RAFT_ERR_IO;
         }
 
-        rv = raft__io_uv_loader_segment_load_batch(logger, fd, &tmp_entries,
-                                                   &tmp_n_entries, &last);
+        rv = load_entries_batch_from_segment(logger, fd, &tmp_entries,
+                                             &tmp_n_entries, &last);
         if (rv != 0) {
             int rv2;
 
@@ -983,8 +987,7 @@ static int raft__io_uv_loader_segment_load_open(
             break;
         }
 
-        rv = raft__io_uv_loader_extend_entries(tmp_entries, tmp_n_entries,
-                                               entries, n_entries);
+        rv = extend_entries(tmp_entries, tmp_n_entries, entries, n_entries);
         if (rv != 0) {
             goto err_after_batch_load;
         }
@@ -1011,14 +1014,13 @@ done:
             goto err_after_open;
         }
     } else {
-        raft__io_uv_fs_filename filename;
+        io_uv__filename filename;
         raft_index end_index = *next_index - 1;
 
         /* At least one entry was loaded */
         assert(end_index >= first_index);
 
-        raft__io_uv_loader_segment_make_closed(first_index, end_index,
-                                               filename);
+        closed_segment_filename(first_index, end_index, filename);
         rv = raft__io_uv_fs_rename(dir, segment->filename, filename);
         if (rv != 0) {
             goto err_after_open;
@@ -1045,11 +1047,11 @@ err:
     return rv;
 }
 
-static int raft__io_uv_loader_segment_load_batch(struct raft_logger *logger,
-                                                 const int fd,
-                                                 struct raft_entry **entries,
-                                                 unsigned *n_entries,
-                                                 bool *last)
+static int load_entries_batch_from_segment(struct raft_logger *logger,
+                                           const int fd,
+                                           struct raft_entry **entries,
+                                           unsigned *n_entries,
+                                           bool *last)
 {
     uint64_t preamble[2];      /* CRC32 checksums and number of raft entries */
     unsigned n;                /* Number of entries in the batch */
@@ -1070,7 +1072,7 @@ static int raft__io_uv_loader_segment_load_batch(struct raft_logger *logger,
         return RAFT_ERR_IO;
     }
 
-    n = raft__flip64(preamble[1]);
+    n = byte__flip64(preamble[1]);
 
     if (n == 0) {
         raft_errorf(logger, "batch has zero entries");
@@ -1095,7 +1097,7 @@ static int raft__io_uv_loader_segment_load_batch(struct raft_logger *logger,
     header.len = raft_io_uv_sizeof__batch_header(n);
     header.base = raft_malloc(header.len);
     if (header.base == NULL) {
-        rv = RAFT_ERR_NOMEM;
+        rv = RAFT_ENOMEM;
         goto err;
     }
     *(uint64_t *)header.base = preamble[1];
@@ -1108,8 +1110,8 @@ static int raft__io_uv_loader_segment_load_batch(struct raft_logger *logger,
     }
 
     /* Check batch header integrity. */
-    crc1 = raft__flip32(*(uint32_t *)preamble);
-    crc2 = raft__crc32(header.base, header.len, 0);
+    crc1 = byte__flip32(*(uint32_t *)preamble);
+    crc2 = byte__crc32(header.base, header.len, 0);
     if (crc1 != crc2) {
         raft_errorf(logger, "corrupted batch header");
         rv = RAFT_ERR_IO_CORRUPT;
@@ -1131,7 +1133,7 @@ static int raft__io_uv_loader_segment_load_batch(struct raft_logger *logger,
     /* Read the batch data */
     data.base = raft_malloc(data.len);
     if (data.base == NULL) {
-        rv = RAFT_ERR_NOMEM;
+        rv = RAFT_ENOMEM;
         goto err_after_header_decode;
     }
     rv = raft__io_uv_fs_read_n(fd, data.base, data.len);
@@ -1141,8 +1143,8 @@ static int raft__io_uv_loader_segment_load_batch(struct raft_logger *logger,
     }
 
     /* Check batch data integrity. */
-    crc1 = raft__flip32(*((uint32_t *)preamble + 1));
-    crc2 = raft__crc32(data.base, data.len, 0);
+    crc1 = byte__flip32(*((uint32_t *)preamble + 1));
+    crc2 = byte__crc32(data.base, data.len, 0);
     if (crc1 != crc2) {
         raft_errorf(logger, "corrupted batch data");
         rv = RAFT_ERR_IO_CORRUPT;
@@ -1172,20 +1174,19 @@ err:
     return rv;
 }
 
-static void raft__io_uv_loader_segment_make_closed(const raft_index first_index,
-                                                   const raft_index end_index,
-                                                   char *filename)
+static void closed_segment_filename(const raft_index first_index,
+                                    const raft_index end_index,
+                                    char *filename)
 {
-    sprintf(filename, RAFT__IO_UV_LOADER_CLOSED_SEGMENT_TEMPLATE, first_index,
-            end_index);
+    sprintf(filename, CLOSED_SEGMENT_TEMPLATE, first_index, end_index);
 }
 
-static int raft__io_uv_loader_segment_open(struct raft_logger *logger,
-                                           const char *dir,
-                                           const char *filename,
-                                           const int flags,
-                                           int *fd,
-                                           uint64_t *format)
+static int open_segment_meta(struct raft_logger *logger,
+                             const char *dir,
+                             const char *filename,
+                             const int flags,
+                             int *fd,
+                             uint64_t *format)
 {
     int rv;
 
@@ -1200,7 +1201,7 @@ static int raft__io_uv_loader_segment_open(struct raft_logger *logger,
         close(*fd);
         return RAFT_ERR_IO;
     }
-    *format = raft__flip64(*format);
+    *format = byte__flip64(*format);
 
     return 0;
 }
@@ -1208,10 +1209,10 @@ static int raft__io_uv_loader_segment_open(struct raft_logger *logger,
 /**
  * Append to @entries2 all entries in @entries1.
  */
-static int raft__io_uv_loader_extend_entries(const struct raft_entry *entries1,
-                                             const size_t n_entries1,
-                                             struct raft_entry **entries2,
-                                             size_t *n_entries2)
+static int extend_entries(const struct raft_entry *entries1,
+                          const size_t n_entries1,
+                          struct raft_entry **entries2,
+                          size_t *n_entries2)
 {
     struct raft_entry *entries; /* To re-allocate the given entries */
     size_t i;
@@ -1219,7 +1220,7 @@ static int raft__io_uv_loader_extend_entries(const struct raft_entry *entries1,
     entries =
         raft_realloc(*entries2, (*n_entries2 + n_entries1) * sizeof *entries);
     if (entries == NULL) {
-        return RAFT_ERR_NOMEM;
+        return RAFT_ENOMEM;
     }
 
     for (i = 0; i < n_entries1; i++) {

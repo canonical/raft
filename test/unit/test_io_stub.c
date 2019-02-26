@@ -1,18 +1,45 @@
 #include "../../include/raft.h"
+#include "../../include/raft/io_stub.h"
 
 #include "../lib/heap.h"
 #include "../lib/logger.h"
-#include "../lib/munit.h"
+#include "../lib/runner.h"
+
+TEST_MODULE(io_stub);
 
 /**
  * Helpers
  */
 
+#define FIXTURE                \
+    struct raft_heap heap;     \
+    struct raft_logger logger; \
+    struct raft_io io;
+
+#define SETUP                                           \
+    const uint64_t id = 1;                              \
+    int rv;                                             \
+    (void)user_data;                                    \
+    test_heap_setup(params, &f->heap);                  \
+    test_logger_setup(params, &f->logger, id);          \
+    rv = raft_io_stub_init(&f->io, &f->logger);         \
+    munit_assert_int(rv, ==, 0);                        \
+    rv = f->io.init(&f->io, 1, "1");                    \
+    munit_assert_int(rv, ==, 0);                        \
+    rv = f->io.start(&f->io, 50, __tick_cb, __recv_cb); \
+    munit_assert_int(rv, ==, 0);                        \
+    f->io.data = f;
+
+#define TEAR_DOWN                      \
+    f->io.close(&f->io, NULL);         \
+    raft_io_stub_close(&f->io);        \
+    test_logger_tear_down(&f->logger); \
+    test_heap_tear_down(&f->heap);     \
+    free(f);
+
 struct fixture
 {
-    struct raft_heap heap;
-    struct raft_logger logger;
-    struct raft_io io;
+    FIXTURE;
     struct raft_io_send req;
     struct
     {
@@ -72,34 +99,10 @@ static void __recv_cb(struct raft_io *io, struct raft_message *message)
     f->recv_cb.message = message;
 }
 
-static void __stop_cb(struct raft_io *io)
-{
-    struct fixture *f = io->data;
-
-    f->stop_cb.invoked = true;
-}
-
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    const uint64_t id = 1;
-    int rv;
-
-    (void)user_data;
-
-    test_heap_setup(params, &f->heap);
-    test_logger_setup(params, &f->logger, id);
-
-    rv = raft_io_stub_init(&f->io, &f->logger);
-    munit_assert_int(rv, ==, 0);
-
-    rv = f->io.init(&f->io, 1, "1");
-    munit_assert_int(rv, ==, 0);
-
-    rv = f->io.start(&f->io, 50, __tick_cb, __recv_cb);
-    munit_assert_int(rv, ==, 0);
-
-    f->io.data = f;
+    SETUP;
     f->req.data = f;
 
     f->tick_cb.invoked = false;
@@ -111,25 +114,13 @@ static void *setup(const MunitParameter params[], void *user_data)
     f->send_cb.invoked = false;
     f->send_cb.status = -1;
 
-    f->stop_cb.invoked = false;
-
     return f;
 }
 
 static void tear_down(void *data)
 {
     struct fixture *f = data;
-
-    f->io.close(&f->io, __stop_cb);
-
-    munit_assert_true(f->stop_cb.invoked);
-
-    raft_io_stub_close(&f->io);
-
-    test_logger_tear_down(&f->logger);
-    test_heap_tear_down(&f->heap);
-
-    free(f);
+    TEAR_DOWN;
 }
 
 /**
@@ -158,11 +149,18 @@ static void tear_down(void *data)
     }
 
 /**
- * raft_io_stub__start
+ * io_stub__start
  */
 
+TEST_SUITE(start);
+
+static MunitTestSetup start__setup = setup;
+static MunitTestTearDown start__tear_down = tear_down;
+
+TEST_GROUP(start, success);
+
 /* When raft_io_stub_advance is called, the tick callback is invoked. */
-static MunitResult test_start_tick(const MunitParameter params[], void *data)
+TEST_CASE(start, success, tick, NULL)
 {
     struct fixture *f = data;
 
@@ -178,7 +176,7 @@ static MunitResult test_start_tick(const MunitParameter params[], void *data)
 
 /* Once the raft_io_uv instance is started, the recv callback is invoked when a
  * message is received.. */
-static MunitResult test_start_recv(const MunitParameter params[], void *data)
+TEST_CASE(start, success, recv, NULL)
 {
     struct fixture *f = data;
     struct raft_message message;
@@ -199,20 +197,19 @@ static MunitResult test_start_recv(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
-static MunitTest start_tests[] = {
-    {"/tick", test_start_tick, setup, tear_down, 0, NULL},
-    {"/recv", test_start_recv, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
- * raft_io_stub__load
+ * io_stub__load
  */
 
-/**
- * Load the initial state of a pristine server.
- */
-static MunitResult test_load_pristine(const MunitParameter params[], void *data)
+TEST_SUITE(load);
+
+static MunitTestSetup load__setup = setup;
+static MunitTestTearDown load__tear_down = tear_down;
+
+TEST_GROUP(load, success);
+
+/* Load the initial state of a pristine server. */
+TEST_CASE(load, success, pristine, NULL)
 {
     struct fixture *f = data;
     raft_term term;
@@ -236,20 +233,19 @@ static MunitResult test_load_pristine(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
-static MunitTest load_tests[] = {
-    {"/pristine", test_load_pristine, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
- * raft_io_stub__bootstrap
+ * io_stub__bootstrap
  */
 
-/**
- * Bootstrap a pristine server.
- */
-static MunitResult test_bootstrap_pristine(const MunitParameter params[],
-                                           void *data)
+TEST_SUITE(bootstrap);
+
+static MunitTestSetup bootstrap__setup = setup;
+static MunitTestTearDown bootstrap__tear_down = tear_down;
+
+TEST_GROUP(bootstrap, success);
+
+/* Bootstrap a pristine server. */
+TEST_CASE(bootstrap, success, pristine, NULL)
 {
     struct fixture *f = data;
     struct raft_configuration configuration;
@@ -273,20 +269,19 @@ static MunitResult test_bootstrap_pristine(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static MunitTest bootstrap_tests[] = {
-    {"/pristine", test_bootstrap_pristine, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
- * raft_io_stub__set_term
+ * io_stub__set_term
  */
 
-/**
- * Set the term on a pristine store.
- */
-static MunitResult test_set_term_pristine(const MunitParameter params[],
-                                          void *data)
+TEST_SUITE(set_term);
+
+static MunitTestSetup set_term__setup = setup;
+static MunitTestTearDown set_term__tear_down = tear_down;
+
+TEST_GROUP(set_term, success);
+
+/* Set the term on a pristine store. */
+TEST_CASE(set_term, success, pristine, NULL)
 {
     struct fixture *f = data;
     int rv;
@@ -301,21 +296,19 @@ static MunitResult test_set_term_pristine(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static MunitTest set_term_tests[] = {
-    {"/pristine", test_set_term_pristine, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
- * raft_io_stub__set_vote
+ * io_stub__set_vote
  */
 
-/**
- * Set the vote on a pristine store.
- */
+TEST_SUITE(set_vote);
 
-static MunitResult test_set_vote_pristine(const MunitParameter params[],
-                                          void *data)
+static MunitTestSetup set_vote__setup = setup;
+static MunitTestTearDown set_vote__tear_down = tear_down;
+
+TEST_GROUP(set_vote, success);
+
+/* Set the vote on a pristine store. */
+TEST_CASE(set_vote, success, pristine, NULL)
 {
     struct fixture *f = data;
     int rv;
@@ -333,18 +326,19 @@ static MunitResult test_set_vote_pristine(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static MunitTest set_vote_tests[] = {
-    {"/pristine", test_set_vote_pristine, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
- * raft_io_stub__append
+ * io_stub__append
  */
 
+TEST_SUITE(append);
+
+static MunitTestSetup append__setup = setup;
+static MunitTestTearDown append__tear_down = tear_down;
+
+TEST_GROUP(append, success);
+
 /* Append entries on a pristine store. */
-static MunitResult test_append_pristine(const MunitParameter params[],
-                                        void *data)
+TEST_CASE(append, success, pristine, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry;
@@ -374,8 +368,7 @@ static MunitResult test_append_pristine(const MunitParameter params[],
 }
 
 /* Make two request append entries requests concurrently. */
-static MunitResult test_append_concurrent(const MunitParameter params[],
-                                          void *data)
+TEST_CASE(append, success, concurrent, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry1;
@@ -412,18 +405,19 @@ static MunitResult test_append_concurrent(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static MunitTest append_tests[] = {
-    {"/pristine", test_append_pristine, setup, tear_down, 0, NULL},
-    {"/concurrent", test_append_concurrent, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
- * raft_io_stub__send
+ * io_stub__send
  */
 
+TEST_SUITE(send);
+
+static MunitTestSetup send__setup = setup;
+static MunitTestTearDown send__tear_down = tear_down;
+
+TEST_GROUP(send, success);
+
 /* Send the very first message. */
-static MunitResult test_send_first(const MunitParameter params[], void *data)
+TEST_CASE(send, success, first, NULL)
 {
     struct fixture *f = data;
     struct raft_message message;
@@ -447,22 +441,82 @@ static MunitResult test_send_first(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
-static MunitTest send_tests[] = {
-    {"/first", test_send_first, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
- * Test suite
+ * io_stub__snapshot_put
  */
 
-MunitSuite raft_io_stub_suites[] = {
-    {"/start", start_tests, NULL, 1, 0},
-    {"/load", load_tests, NULL, 1, 0},
-    {"/bootstrap", bootstrap_tests, NULL, 1, 0},
-    {"/set-term", set_term_tests, NULL, 1, 0},
-    {"/set-vote", set_vote_tests, NULL, 1, 0},
-    {"/append", append_tests, NULL, 1, 0},
-    {"/send", send_tests, NULL, 1, 0},
-    {NULL, NULL, NULL, 0, 0},
+/**
+ * io_uv__snapshot_put
+ */
+
+TEST_SUITE(snapshot_put);
+
+struct put_fixture
+{
+    FIXTURE
+    struct raft_snapshot snapshot;
+    struct raft_io_snapshot_put req;
+    struct raft_buffer bufs[2];
+    bool invoked;
+    int status;
 };
+
+static void put_cb(struct raft_io_snapshot_put *req, int status)
+{
+    struct put_fixture *f = req->data;
+    f->invoked = true;
+    f->status = status;
+}
+
+TEST_SETUP(snapshot_put)
+{
+    struct put_fixture *f = munit_malloc(sizeof *f);
+    SETUP;
+    f->bufs[0].base = raft_malloc(8);
+    f->bufs[1].base = raft_malloc(8);
+    f->bufs[0].len = 8;
+    f->bufs[1].len = 8;
+    f->snapshot.index = 8;
+    f->snapshot.term = 3;
+    f->snapshot.configuration_index = 2;
+    f->snapshot.bufs = f->bufs;
+    f->snapshot.n_bufs = 2;
+    raft_configuration_init(&f->snapshot.configuration);
+    rv = raft_configuration_add(&f->snapshot.configuration, 1, "1", true);
+    munit_assert_int(rv, ==, 0);
+    f->req.data = f;
+    f->invoked = false;
+    f->status = -1;
+    return f;
+}
+
+TEST_TEAR_DOWN(snapshot_put)
+{
+    struct put_fixture *f = data;
+    raft_configuration_close(&f->snapshot.configuration);
+    raft_free(f->bufs[0].base);
+    raft_free(f->bufs[1].base);
+    TEAR_DOWN;
+}
+
+/* Invoke the snapshot_put method and check that it returns the given code. */
+#define put__invoke(RV)                                                 \
+    {                                                                   \
+        int rv;                                                         \
+        rv = f->io.snapshot_put(&f->io, &f->req, &f->snapshot, put_cb); \
+        munit_assert_int(rv, ==, RV);                                   \
+    }
+
+/* Put the first snapshot. */
+TEST_CASE(snapshot_put, first, NULL)
+{
+    struct put_fixture *f = data;
+
+    (void)params;
+
+    put__invoke(0);
+
+    raft_io_stub_flush(&f->io);
+
+    return MUNIT_OK;
+}

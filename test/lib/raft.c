@@ -1,10 +1,14 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+#include "../../include/raft/io_stub.h"
+
 #include "../../src/configuration.h"
 #include "../../src/log.h"
+#include "../../src/snapshot.h"
 #include "../../src/tick.h"
 
+#include "fsm.h"
 #include "io.h"
 #include "munit.h"
 #include "raft.h"
@@ -55,6 +59,43 @@ void test_bootstrap_and_start(struct raft *r,
     test_start(r);
 }
 
+void test_set_initial_snapshot(struct raft *r,
+                               raft_term term,
+                               raft_index index,
+                               int x,
+                               int y)
+{
+    struct raft_snapshot snapshot;
+    struct raft_fsm fsm;
+    struct raft_buffer buf;
+    int rv;
+
+    snapshot.term = term;
+    snapshot.index = index;
+    raft_configuration_init(&snapshot.configuration);
+    rv = raft_configuration_add(&snapshot.configuration, 1, "1", true);
+    munit_assert_int(rv, ==, 0);
+
+    test_fsm_setup(NULL, &fsm);
+
+    test_fsm_encode_set_x(x, &buf);
+    rv = fsm.apply(&fsm, &buf);
+    munit_assert_int(rv, ==, 0);
+    raft_free(buf.base);
+
+    test_fsm_encode_set_y(y, &buf);
+    rv = fsm.apply(&fsm, &buf);
+    munit_assert_int(rv, ==, 0);
+    raft_free(buf.base);
+
+    rv = fsm.snapshot(&fsm, &snapshot.bufs, &snapshot.n_bufs);
+    munit_assert_int(rv, ==, 0);
+    test_fsm_tear_down(&fsm);
+
+    test_io_set_snapshot(r->io, &snapshot);
+    raft_snapshot__close(&snapshot);
+}
+
 void test_become_candidate(struct raft *r)
 {
     int rv;
@@ -70,7 +111,7 @@ void test_become_candidate(struct raft *r)
 
 void test_become_leader(struct raft *r)
 {
-    size_t votes = raft_configuration__n_voting(&r->configuration) / 2;
+    size_t votes = configuration__n_voting(&r->configuration) / 2;
     size_t i;
 
     test_become_candidate(r);

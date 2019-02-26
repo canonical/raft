@@ -10,8 +10,10 @@
 #include "../lib/heap.h"
 #include "../lib/io.h"
 #include "../lib/logger.h"
-#include "../lib/munit.h"
 #include "../lib/raft.h"
+#include "../lib/runner.h"
+
+TEST_MODULE(rpc_append_entries);
 
 /**
  * Helpers
@@ -19,7 +21,7 @@
 
 struct fixture
 {
-    TEST_RAFT_FIXTURE_FIELDS;
+    RAFT_FIXTURE;
 };
 
 static void *setup(const MunitParameter params[], void *user_data)
@@ -28,7 +30,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 
     (void)user_data;
 
-    TEST_RAFT_FIXTURE_SETUP(f);
+    RAFT_SETUP(f);
 
     return f;
 }
@@ -37,7 +39,7 @@ static void tear_down(void *data)
 {
     struct fixture *f = data;
 
-    TEST_RAFT_FIXTURE_TEAR_DOWN(f);
+    RAFT_TEAR_DOWN(f);
 
     free(f);
 }
@@ -147,9 +149,16 @@ static struct raft_entry *__create_entries_batch()
  * raft_handle_append_entries
  */
 
+TEST_SUITE(request);
+
+static MunitTestSetup request__setup = setup;
+static MunitTestTearDown request__tear_down = tear_down;
+
+TEST_GROUP(request, success);
+TEST_GROUP(request, error);
+
 /* If the term in the request is stale, the server rejects it. */
-static MunitResult test_req_stale_term(const MunitParameter params[],
-                                       void *data)
+TEST_CASE(request, success, stale_term, NULL)
 {
     struct fixture *f = data;
 
@@ -169,8 +178,7 @@ static MunitResult test_req_stale_term(const MunitParameter params[],
 }
 
 /* Receive the same entry a second time, before the first has been persisted. */
-static MunitResult test_req_twice(const MunitParameter params[],
-                                       void *data)
+TEST_CASE(request, success, twice, NULL)
 {
     struct fixture *f = data;
     struct raft_entry *entries1 = __create_entries_batch();
@@ -191,8 +199,7 @@ static MunitResult test_req_twice(const MunitParameter params[],
 
 /* If a candidate server receives a request contaning an higher term as its
  * own, it it steps down to follower and accept the request . */
-static MunitResult test_req_higher_term(const MunitParameter params[],
-                                        void *data)
+TEST_CASE(request, success, higher_term, NULL)
 {
     struct fixture *f = data;
 
@@ -214,7 +221,7 @@ static MunitResult test_req_higher_term(const MunitParameter params[],
 
 /* If a candidate server receives a request contaning the same term as its
  * own, it it steps down to follower and accept the request . */
-static MunitResult test_req_same_term(const MunitParameter params[], void *data)
+TEST_CASE(request, success, same_term, NULL)
 {
     struct fixture *f = data;
 
@@ -234,9 +241,30 @@ static MunitResult test_req_same_term(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
+/* If the index and term of the last snapshot on the server match prevLogIndex
+ * and prevLogTerm the request is accepted. */
+TEST_CASE(request, success, snapshot_match, NULL)
+{
+    struct fixture *f = data;
+    struct raft_entry *entries = __create_entries_batch();
+
+    (void)params;
+
+    test_set_initial_snapshot(&f->raft, 2, 4, 1, 1);
+    test_start(&f->raft);
+
+    entries[0].term = 2;
+
+    __recv_append_entries(f, 2, 2, 4, 2, entries, 1, 4);
+
+    /* The request gets rejected. */
+    __assert_append_entries_response(f, 2, true, 5);
+
+    return MUNIT_OK;
+}
+
 /* If server's log is shorter than prevLogIndex, the request is rejected . */
-static MunitResult test_req_missing_entries(const MunitParameter params[],
-                                            void *data)
+TEST_CASE(request, error, missing_entries, NULL)
 {
     struct fixture *f = data;
 
@@ -255,8 +283,7 @@ static MunitResult test_req_missing_entries(const MunitParameter params[],
 /* If the term of the last log entry on the server is different from
  * prevLogTerm, and value of prevLogIndex is lower or equal than server's commit
  * index, then an error is returned . */
-static MunitResult test_req_prev_index_conflict(const MunitParameter params[],
-                                                void *data)
+TEST_CASE(request, error, prev_index_conflict, NULL)
 {
     struct fixture *f = data;
     struct raft_append_entries args;
@@ -283,9 +310,7 @@ static MunitResult test_req_prev_index_conflict(const MunitParameter params[],
 /* If the term of the last log entry on the server is different from the one
  * prevLogTerm, and value of prevLogIndex is greater than server's commit commit
  * index (i.e. this is a normal inconsistency), we reject the request. */
-static MunitResult test_req_prev_log_term_mismatch(
-    const MunitParameter params[],
-    void *data)
+TEST_CASE(request, error, prev_log_term_mismatch, NULL)
 {
     struct fixture *f = data;
     struct raft_buffer buf;
@@ -326,7 +351,7 @@ static MunitResult test_req_prev_log_term_mismatch(
 }
 
 /* A write log request is submitted for outstanding log entries. */
-static MunitResult test_req_write_log(const MunitParameter params[], void *data)
+TEST_CASE(request, success, write_log, NULL)
 {
     struct fixture *f = data;
     struct raft_entry *entries = __create_entries_batch();
@@ -349,7 +374,7 @@ static MunitResult test_req_write_log(const MunitParameter params[], void *data)
 
 /* A write log request is submitted for outstanding log entries. If some entries
  * are already existing in the log, they will be skipped. */
-static MunitResult test_req_skip(const MunitParameter params[], void *data)
+TEST_CASE(request, success, skip, NULL)
 {
     struct fixture *f = data;
     struct raft_entry *entries = raft_malloc(2 * sizeof *entries);
@@ -401,7 +426,7 @@ static MunitResult test_req_skip(const MunitParameter params[], void *data)
 /* A write log request is submitted for outstanding log entries. If some entries
  * are already existing in the log but they have a different term, they will be
  * replaced. */
-static MunitResult test_req_truncate(const MunitParameter params[], void *data)
+TEST_CASE(request, success, truncate, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry;
@@ -457,7 +482,7 @@ static MunitResult test_req_truncate(const MunitParameter params[], void *data)
 /* If any of the new entry has the same index of an existing entry in our log,
  * but different term, and that entry index is already committed, we bail out
  * with an error. */
-static MunitResult test_req_conflict(const MunitParameter params[], void *data)
+TEST_CASE(request, error, conflict, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry;
@@ -519,29 +544,21 @@ static MunitResult test_req_conflict(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
-static MunitTest request_tests[] = {
-    {"/stale-term", test_req_stale_term, setup, tear_down, 0, NULL},
-    {"/twice", test_req_twice, setup, tear_down, 0, NULL},
-    {"/higher-term", test_req_higher_term, setup, tear_down, 0, NULL},
-    {"/same-term", test_req_same_term, setup, tear_down, 0, NULL},
-    {"/missing-entries", test_req_missing_entries, setup, tear_down, 0, NULL},
-    {"/prev-conflict", test_req_prev_index_conflict, setup, tear_down, 0, NULL},
-    {"/mismatch", test_req_prev_log_term_mismatch, setup, tear_down, 0, NULL},
-    {"/write-log", test_req_write_log, setup, tear_down, 0, NULL},
-    {"/skip", test_req_skip, setup, tear_down, 0, NULL},
-    {"/truncate", test_req_truncate, setup, tear_down, 0, NULL},
-    {"/conflict", test_req_conflict, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
  * raft_handle_append_entries_response
  */
 
+TEST_SUITE(response);
+
+static MunitTestSetup response__setup = setup;
+static MunitTestTearDown response__tear_down = tear_down;
+
+TEST_GROUP(response, error);
+TEST_GROUP(response, success);
+
 /* If the server handling the response is not the leader, the result
  * is ignored. */
-static MunitResult test_res_not_leader(const MunitParameter params[],
-                                       void *data)
+TEST_CASE(response, error, not_leader, NULL)
 {
     struct fixture *f = data;
 
@@ -556,7 +573,7 @@ static MunitResult test_res_not_leader(const MunitParameter params[],
 
 /* If the response has a term which is lower than the server's one, it's
  * ignored. */
-static MunitResult test_res_ignore(const MunitParameter params[], void *data)
+TEST_CASE(response, error, ignore, NULL)
 {
     struct fixture *f = data;
 
@@ -573,7 +590,7 @@ static MunitResult test_res_ignore(const MunitParameter params[], void *data)
 
 /* If the response has a term which is higher than the server's one, step down
  * to follower. */
-static MunitResult test_res_step_down(const MunitParameter params[], void *data)
+TEST_CASE(response, error, step_down, NULL)
 {
     struct fixture *f = data;
 
@@ -592,7 +609,7 @@ static MunitResult test_res_step_down(const MunitParameter params[], void *data)
 
 /* If the response fails because a log mismatch, the nextIndex for the server is
  * updated and the relevant older entries are resent. */
-static MunitResult test_res_retry(const MunitParameter params[], void *data)
+TEST_CASE(response, error, retry, NULL)
 {
     struct fixture *f = data;
     struct raft_message *messages;
@@ -619,7 +636,7 @@ static MunitResult test_res_retry(const MunitParameter params[], void *data)
 }
 
 /* If a majority of servers has replicated an entry, commit it. */
-static MunitResult test_res_commit(const MunitParameter params[], void *data)
+TEST_CASE(response, success, commit, NULL)
 {
     struct fixture *f = data;
     struct raft_buffer buf;
@@ -648,20 +665,88 @@ static MunitResult test_res_commit(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
-static MunitTest result_tests[] = {
-    {"/not-leader", test_res_not_leader, setup, tear_down, 0, NULL},
-    {"/ignore", test_res_ignore, setup, tear_down, 0, NULL},
-    {"/step-down", test_res_step_down, setup, tear_down, 0, NULL},
-    {"/retry", test_res_retry, setup, tear_down, 0, NULL},
-    {"/commit", test_res_commit, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
+/* If after committing an entry the snapshot threshold is hit, a new snapshot is
+ * taken. */
+TEST_CASE(response, success, snapshot, NULL)
+{
+    struct fixture *f = data;
+    struct raft_buffer buf;
+    unsigned i;
+    int rv;
 
-/**
- * Suite
- */
-MunitSuite raft_rpc_append_entries_suites[] = {
-    {"/req", request_tests, NULL, 1, 0},
-    {"/res", result_tests, NULL, 1, 0},
-    {NULL, NULL, NULL, 0, 0},
-};
+    (void)params;
+
+    f->raft.snapshot.threshold = 1;
+
+    test_bootstrap_and_start(&f->raft, 3, 1, 3);
+    test_become_leader(&f->raft);
+
+    /* Append a couple of entries to our log and handle the associated
+     * successful write. */
+    for (i = 0; i < 2; i++) {
+        test_fsm_encode_set_x(i, &buf);
+        rv = raft_propose(&f->raft, &buf, 1);
+        munit_assert_int(rv, ==, 0);
+        raft_io_stub_flush(f->raft.io);
+    }
+
+    /* Receive a successful append entries response reporting that the peer
+     * has replicated those entries. */
+    __recv_append_entries_result(f, 2, 2, true, 3);
+
+    /* The commit index has been bumped. */
+    munit_assert_int(f->raft.commit_index, ==, 3);
+
+    /* A snapshot was started */
+    munit_assert_int(f->raft.snapshot.pending.index, ==, 3);
+    munit_assert_int(f->raft.snapshot.pending.term, ==, 2);
+
+    raft_io_stub_flush(f->raft.io);
+
+    munit_assert_int(f->raft.snapshot.index, ==, 3);
+    munit_assert_int(f->raft.snapshot.term, ==, 2);
+
+    return MUNIT_OK;
+}
+
+/* If a follower falls behind the next available log entry, the last snapshot is
+ * sent. */
+TEST_CASE(response, success, send_snapshot, NULL)
+{
+    struct fixture *f = data;
+    struct raft_buffer buf;
+    unsigned i;
+    int rv;
+
+    (void)params;
+
+    f->raft.snapshot.threshold = 1;
+
+    test_bootstrap_and_start(&f->raft, 3, 1, 3);
+    test_become_leader(&f->raft);
+
+    /* Append a couple of entries to our log and handle the associated
+     * successful write. */
+    for (i = 0; i < 2; i++) {
+        test_fsm_encode_set_x(i, &buf);
+        rv = raft_propose(&f->raft, &buf, 1);
+        munit_assert_int(rv, ==, 0);
+        raft_io_stub_flush(f->raft.io);
+    }
+
+    /* Receive a successful append entries response reporting that the peer
+     * has replicated those entries. */
+    __recv_append_entries_result(f, 2, 2, true, 3);
+
+    /* Wait for the resulting snapshot to complete. */
+    raft_io_stub_flush(f->raft.io);
+    munit_assert_int(f->raft.snapshot.index, ==, 3);
+    munit_assert_int(f->raft.snapshot.term, ==, 2);
+
+    raft_io_stub_advance(&f->io, f->raft.heartbeat_timeout + 1);
+
+    raft_io_stub_flush(f->raft.io);
+    raft_io_stub_flush(f->raft.io);
+
+    return MUNIT_OK;
+}

@@ -7,35 +7,41 @@
 
 #include "../../include/raft.h"
 
+#include "fsm.h"
+#include "heap.h"
+#include "io.h"
+#include "logger.h"
+#include "munit.h"
+
 /**
  * Fields common to all fixtures setting up a raft instance.
  */
-#define TEST_RAFT_FIXTURE_FIELDS \
-    struct raft_heap heap;       \
-    struct raft_logger logger;   \
-    struct raft_io io;           \
-    struct raft_fsm fsm;         \
+#define RAFT_FIXTURE           \
+    struct raft_heap heap;     \
+    struct raft_logger logger; \
+    struct raft_io io;         \
+    struct raft_fsm fsm;       \
     struct raft raft
 
 /**
  * Setup the raft instance of a fixture.
  */
-#define TEST_RAFT_FIXTURE_SETUP(F)                                             \
+#define RAFT_SETUP(F)                                                          \
     {                                                                          \
         uint64_t id = 1;                                                       \
         const char *address = "1";                                             \
         int rv;                                                                \
-                                                                               \
+        (void)user_data;                                                       \
         test_heap_setup(params, &F->heap);                                     \
         test_logger_setup(params, &F->logger, id);                             \
         test_io_setup(params, &F->io, &F->logger);                             \
         test_fsm_setup(params, &F->fsm);                                       \
-                                                                               \
         rv = raft_init(&F->raft, &F->logger, &F->io, &F->fsm, F, id, address); \
         munit_assert_int(rv, ==, 0);                                           \
+        raft_set_rand(&f->raft, (int (*)())munit_rand_uint32);                 \
     }
 
-#define TEST_RAFT_FIXTURE_TEAR_DOWN(F)     \
+#define RAFT_TEAR_DOWN(F)                  \
     {                                      \
         raft_close(&F->raft, NULL);        \
                                            \
@@ -49,6 +55,12 @@
  * Start an instance and check that no error occurs.
  */
 void test_start(struct raft *r);
+
+void test_set_initial_snapshot(struct raft *r,
+                               raft_term term,
+                               raft_index index,
+                               int x,
+                               int y);
 
 /**
  * Bootstrap and start raft instance.

@@ -4,6 +4,8 @@
 #include "../../src/log.h"
 #include "../../src/tick.h"
 
+#include "../../include/raft/io_stub.h"
+
 #include "cluster.h"
 #include "munit.h"
 #include "raft.h"

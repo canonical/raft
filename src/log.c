@@ -3,6 +3,7 @@
 #include "../include/raft.h"
 
 #include "assert.h"
+#include "configuration.h"
 #include "log.h"
 
 /**
@@ -97,7 +98,7 @@ static int raft_log__refs_try_insert(struct raft_entry_ref *table,
 
     slot = raft_malloc(sizeof *slot);
     if (slot == NULL) {
-        return RAFT_ERR_NOMEM;
+        return RAFT_ENOMEM;
     }
 
     last_slot->next = slot;
@@ -181,7 +182,7 @@ static int raft_log__refs_grow(struct raft_log *l)
 
     table = raft_calloc(size, sizeof *table);
     if (table == NULL) {
-        return RAFT_ERR_NOMEM;
+        return RAFT_ENOMEM;
     }
 
     /* Populate the new hash table, inserting all entries existing in the
@@ -227,7 +228,7 @@ static int raft_log__refs_init(struct raft_log *l,
 
         l->refs = raft_calloc(l->refs_size, sizeof *l->refs);
         if (l->refs == NULL) {
-            return RAFT_ERR_NOMEM;
+            return RAFT_ENOMEM;
         }
     }
 
@@ -245,7 +246,7 @@ static int raft_log__refs_init(struct raft_log *l,
         rc = raft_log__refs_try_insert(l->refs, l->refs_size, term, index, 1,
                                        &collision);
         if (rc != 0) {
-            return RAFT_ERR_NOMEM;
+            return RAFT_ENOMEM;
         }
 
         if (!collision) {
@@ -363,6 +364,11 @@ void raft_log__init(struct raft_log *l)
     l->refs_size = 0;
 }
 
+void raft_log__set_offset(struct raft_log *l, raft_index offset)
+{
+    l->offset = offset;
+}
+
 /**
  * Return the index of the i'th entry in the log.
  */
@@ -437,7 +443,7 @@ static int raft_log__ensure_capacity(struct raft_log *l)
 
     entries = raft_calloc(size, sizeof *entries);
     if (entries == NULL) {
-        return RAFT_ERR_NOMEM;
+        return RAFT_ENOMEM;
     }
 
     /* Copy all active old entries to the beginning of the newly allocated
@@ -535,7 +541,7 @@ int raft_log__append_configuration(
     assert(configuration != NULL);
 
     /* Encode the configuration into a buffer. */
-    rv = raft_configuration_encode(configuration, &buf);
+    rv = configuration__encode(configuration, &buf);
     if (rv != 0) {
         goto err;
     }
@@ -588,7 +594,7 @@ raft_index raft_log__last_index(struct raft_log *l)
  * If no entry with the given index is in the log return the size of the entries
  * array.
  */
-static size_t raft_log__locate(struct raft_log *l, const uint64_t index)
+static size_t raft_log__locate(struct raft_log *l, const raft_index index)
 {
     if (index < raft_log__first_index(l) || index > raft_log__last_index(l)) {
         return l->size;
@@ -600,7 +606,7 @@ static size_t raft_log__locate(struct raft_log *l, const uint64_t index)
     return (l->front + (index - 1) - l->offset) % l->size;
 }
 
-raft_term raft_log__term_of(struct raft_log *l, const uint64_t index)
+raft_term raft_log__term_of(struct raft_log *l, const raft_index index)
 {
     size_t i;
 
@@ -679,7 +685,7 @@ int raft_log__acquire(struct raft_log *l,
 
     *entries = raft_calloc(*n, sizeof **entries);
     if (*entries == NULL) {
-        return RAFT_ERR_NOMEM;
+        return RAFT_ENOMEM;
     }
 
     for (j = 0; j < *n; j++) {

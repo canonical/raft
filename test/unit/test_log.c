@@ -1,7 +1,9 @@
 #include "../../src/log.h"
 
 #include "../lib/heap.h"
-#include "../lib/munit.h"
+#include "../lib/runner.h"
+
+TEST_MODULE(log);
 
 /**
  * Helpers
@@ -160,6 +162,14 @@ static void tear_down(void *data)
  * raft_log_append
  */
 
+TEST_SUITE(append);
+
+static MunitTestSetup append__setup = setup;
+static MunitTestTearDown append__tear_down = tear_down;
+
+TEST_GROUP(append, error);
+TEST_GROUP(append, success);
+
 static char *append_oom_heap_fault_delay[] = {"0", "1", NULL};
 static char *append_oom_heap_fault_repeat[] = {"1", NULL};
 
@@ -170,7 +180,7 @@ static MunitParameterEnum append_oom_params[] = {
 };
 
 /* Out of memory. */
-static MunitResult test_append_oom(const MunitParameter params[], void *data)
+TEST_CASE(append, error, oom, append_oom_params)
 {
     struct fixture *f = data;
     struct raft_buffer buf;
@@ -184,14 +194,13 @@ static MunitResult test_append_oom(const MunitParameter params[], void *data)
     test_heap_fault_enable(&f->heap);
 
     rv = raft_log__append(&f->log, 1, RAFT_LOG_COMMAND, &buf, NULL);
-    munit_assert_int(rv, ==, RAFT_ERR_NOMEM);
+    munit_assert_int(rv, ==, RAFT_ENOMEM);
 
     return MUNIT_OK;
 }
 
 /* Out of memory when trying to grow the refs count table. */
-static MunitResult test_append_oom_refs(const MunitParameter params[],
-                                        void *data)
+TEST_CASE(append, success, oom_refs, NULL)
 {
     struct fixture *f = data;
     struct raft_buffer buf;
@@ -211,13 +220,13 @@ static MunitResult test_append_oom_refs(const MunitParameter params[],
     buf.len = 0;
 
     rv = raft_log__append(&f->log, 1, RAFT_LOG_COMMAND, &buf, NULL);
-    munit_assert_int(rv, ==, RAFT_ERR_NOMEM);
+    munit_assert_int(rv, ==, RAFT_ENOMEM);
 
     return MUNIT_OK;
 }
 
 /* Append one entry to an empty log. */
-static MunitResult test_append_one(const MunitParameter params[], void *data)
+TEST_CASE(append, success, one, NULL)
 {
     struct fixture *f = data;
 
@@ -233,7 +242,7 @@ static MunitResult test_append_one(const MunitParameter params[], void *data)
 }
 
 /* Append two entries to to an empty log. */
-static MunitResult test_append_two(const MunitParameter params[], void *data)
+TEST_CASE(append, success, two, NULL)
 {
     struct fixture *f = data;
 
@@ -256,7 +265,7 @@ static MunitResult test_append_two(const MunitParameter params[], void *data)
 }
 
 /* Append three entries in sequence. */
-static MunitResult test_append_three(const MunitParameter params[], void *data)
+TEST_CASE(append, success, three, NULL)
 {
     struct fixture *f = data;
 
@@ -290,9 +299,9 @@ static MunitResult test_append_three(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
-/* Append enough entries to force the reference count hash table to be resized
-   . */
-static MunitResult test_append_many(const MunitParameter params[], void *data)
+/* Append enough entries to force the reference count hash table to be
+ * resized. */
+TEST_CASE(append, success, many, NULL)
 {
     struct fixture *f = data;
     int i;
@@ -310,7 +319,7 @@ static MunitResult test_append_many(const MunitParameter params[], void *data)
 }
 
 /* Append to wrapped log that needs to be grown. */
-static MunitResult test_append_wrap(const MunitParameter params[], void *data)
+TEST_CASE(append, success, wrap, NULL)
 {
     struct fixture *f = data;
     int i;
@@ -350,7 +359,7 @@ static MunitResult test_append_wrap(const MunitParameter params[], void *data)
 }
 
 /* Append a batch of entries to an empty log. */
-static MunitResult test_append_batch(const MunitParameter params[], void *data)
+TEST_CASE(append, success, batch, NULL)
 {
     struct fixture *f = data;
 
@@ -363,21 +372,16 @@ static MunitResult test_append_batch(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
-static MunitTest append_tests[] = {
-    {"/oom", test_append_oom, setup, tear_down, 0, append_oom_params},
-    {"/oom-refs", test_append_oom_refs, setup, tear_down, 0, NULL},
-    {"/one", test_append_one, setup, tear_down, 0, NULL},
-    {"/two", test_append_two, setup, tear_down, 0, NULL},
-    {"/three", test_append_three, setup, tear_down, 0, NULL},
-    {"/many", test_append_many, setup, tear_down, 0, NULL},
-    {"/wrap", test_append_wrap, setup, tear_down, 0, NULL},
-    {"/batch", test_append_batch, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
  * raft_log_append_configuration
  */
+
+TEST_SUITE(append_configuration);
+
+static MunitTestSetup append_configuration__setup = setup;
+static MunitTestTearDown append_configuration__tear_down = tear_down;
+
+TEST_GROUP(append_configuration, error);
 
 static char *append_configuration_oom_heap_fault_delay[] = {"0", "1", NULL};
 static char *append_configuration_oom_heap_fault_repeat[] = {"1", NULL};
@@ -389,8 +393,7 @@ static MunitParameterEnum append_configuration_oom_params[] = {
 };
 
 /* Out of memory. */
-static MunitResult test_append_configuration_oom(const MunitParameter params[],
-                                                 void *data)
+TEST_CASE(append_configuration, error, _oom, append_configuration_oom_params)
 {
     struct fixture *f = data;
     struct raft_configuration configuration;
@@ -406,26 +409,26 @@ static MunitResult test_append_configuration_oom(const MunitParameter params[],
     test_heap_fault_enable(&f->heap);
 
     rv = raft_log__append_configuration(&f->log, 1, &configuration);
-    munit_assert_int(rv, ==, RAFT_ERR_NOMEM);
+    munit_assert_int(rv, ==, RAFT_ENOMEM);
 
     raft_configuration_close(&configuration);
 
     return MUNIT_OK;
 }
 
-static MunitTest append_configuration_tests[] = {
-    {"/oom", test_append_configuration_oom, setup, tear_down, 0,
-     append_configuration_oom_params},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
  * raft_log__n_entries
  */
 
+TEST_SUITE(n_entries);
+
+static MunitTestSetup n_entries__setup = setup;
+static MunitTestTearDown n_entries__tear_down = tear_down;
+
+TEST_GROUP(n_entries, success);
+
 /* The log is empty. */
-static MunitResult test_n_entries_empty(const MunitParameter params[],
-                                        void *data)
+TEST_CASE(n_entries, success, empty, NULL)
 {
     struct fixture *f = data;
     size_t n;
@@ -439,8 +442,7 @@ static MunitResult test_n_entries_empty(const MunitParameter params[],
 }
 
 /* The log is not wrapped. */
-static MunitResult test_n_entries_not_wrapped(const MunitParameter params[],
-                                              void *data)
+TEST_CASE(n_entries, success, not_wrapped, NULL)
 {
     struct fixture *f = data;
     size_t n;
@@ -455,19 +457,19 @@ static MunitResult test_n_entries_not_wrapped(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static MunitTest n_entries_tests[] = {
-    {"/empty", test_n_entries_empty, setup, tear_down, 0, NULL},
-    {"/not-wrapped", test_n_entries_not_wrapped, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
  * raft_log__first_index
  */
 
+TEST_SUITE(first_index);
+
+static MunitTestSetup first_index__setup = setup;
+static MunitTestTearDown first_index__tear_down = tear_down;
+
+TEST_GROUP(first_index, success);
+
 /* The log is empty. */
-static MunitResult test_first_index_empty(const MunitParameter params[],
-                                          void *data)
+TEST_CASE(first_index, success, empty, NULL)
 {
     struct fixture *f = data;
 
@@ -479,8 +481,7 @@ static MunitResult test_first_index_empty(const MunitParameter params[],
 }
 
 /* The log has one entry. */
-static MunitResult test_first_index_one_entry(const MunitParameter params[],
-                                              void *data)
+TEST_CASE(first_index, success, one_entry, NULL)
 {
     struct fixture *f = data;
 
@@ -493,21 +494,19 @@ static MunitResult test_first_index_one_entry(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static MunitTest first_index_tests[] = {
-    {"/empty", test_first_index_empty, setup, tear_down, 0, NULL},
-    {"/one-entry", test_first_index_one_entry, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
- *
  * raft_log__last_term
- *
  */
 
+TEST_SUITE(last_term);
+
+static MunitTestSetup last_term__setup = setup;
+static MunitTestTearDown last_term__tear_down = tear_down;
+
+TEST_GROUP(last_term, success);
+
 /* If the log is empty, last term is 0. */
-static MunitResult test_last_term_empty_log(const MunitParameter params[],
-                                            void *data)
+TEST_CASE(last_term, success, empty_log, NULL)
 {
     struct fixture *f = data;
 
@@ -518,20 +517,55 @@ static MunitResult test_last_term_empty_log(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static MunitTest last_term_tests[] = {
-    {"/empty-log", test_last_term_empty_log, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
- *
- * raft_log__acquire
- *
+ * raft_log__last_index
  */
 
+TEST_SUITE(last_index);
+
+TEST_SETUP(last_index, setup);
+TEST_TEAR_DOWN(last_index, tear_down);
+
+/* If the log is empty, last index is 0. */
+TEST_CASE(last_index, empty_log, NULL)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    munit_assert_int(raft_log__last_index(&f->log), ==, 0);
+
+    return MUNIT_OK;
+}
+
+/* If the log starts at a certain offset, the last index is bumped
+ * accordingly. */
+TEST_CASE(last_index, empty_log_with_offset, NULL)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    raft_log__set_offset(&f->log, 3);
+    munit_assert_int(raft_log__last_index(&f->log), ==, 3);
+
+    return MUNIT_OK;
+}
+
+/**
+ * raft_log__acquire
+ */
+
+TEST_SUITE(acquire);
+
+static MunitTestSetup acquire__setup = setup;
+static MunitTestTearDown acquire__tear_down = tear_down;
+
+TEST_GROUP(acquire, error);
+TEST_GROUP(acquire, success);
+
 /* Trying to acquire entries out of range results in a NULL pointer. */
-static MunitResult test_acquire_out_of_range(const MunitParameter params[],
-                                             void *data)
+TEST_CASE(acquire, error, out_of_range, NULL)
 {
     struct fixture *f = data;
     struct raft_entry *entries;
@@ -557,7 +591,7 @@ static MunitResult test_acquire_out_of_range(const MunitParameter params[],
 }
 
 /* Out of memory. */
-static MunitResult test_acquire_oom(const MunitParameter params[], void *data)
+TEST_CASE(acquire, error, oom, NULL)
 {
     struct fixture *f = data;
     struct raft_entry *entries;
@@ -572,13 +606,13 @@ static MunitResult test_acquire_oom(const MunitParameter params[], void *data)
     test_heap_fault_enable(&f->heap);
 
     rv = raft_log__acquire(&f->log, 1, &entries, &n);
-    munit_assert_int(rv, ==, RAFT_ERR_NOMEM);
+    munit_assert_int(rv, ==, RAFT_ENOMEM);
 
     return MUNIT_OK;
 }
 
 /* Acquire a single log entry. */
-static MunitResult test_acquire_one(const MunitParameter params[], void *data)
+TEST_CASE(acquire, success, one, NULL)
 {
     struct fixture *f = data;
     struct raft_entry *entries;
@@ -606,7 +640,7 @@ static MunitResult test_acquire_one(const MunitParameter params[], void *data)
 }
 
 /* Acquire two log entries. */
-static MunitResult test_acquire_two(const MunitParameter params[], void *data)
+TEST_CASE(acquire, success, two, NULL)
 {
     struct fixture *f = data;
     struct raft_entry *entries;
@@ -638,7 +672,7 @@ static MunitResult test_acquire_two(const MunitParameter params[], void *data)
 }
 
 /* Acquire two log entries in a wrapped log. */
-static MunitResult test_acquire_wrap(const MunitParameter params[], void *data)
+TEST_CASE(acquire, success, wrap, NULL)
 {
     struct fixture *f = data;
     int i;
@@ -680,7 +714,7 @@ static MunitResult test_acquire_wrap(const MunitParameter params[], void *data)
 }
 
 /* Acquire several entries some of which belong to batches. */
-static MunitResult test_acquire_batch(const MunitParameter params[], void *data)
+TEST_CASE(acquire, success, batch, NULL)
 {
     struct fixture *f = data;
     struct raft_entry *entries;
@@ -713,23 +747,20 @@ static MunitResult test_acquire_batch(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
-static MunitTest acquire_tests[] = {
-    {"/out-of-range", test_acquire_out_of_range, setup, tear_down, 0, NULL},
-    {"/oom", test_acquire_oom, setup, tear_down, 0, NULL},
-    {"/one", test_acquire_one, setup, tear_down, 0, NULL},
-    {"/two", test_acquire_two, setup, tear_down, 0, NULL},
-    {"/wrap", test_acquire_wrap, setup, tear_down, 0, NULL},
-    {"/batch", test_acquire_batch, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
  * raft_log__truncate
  */
 
+TEST_SUITE(truncate);
+
+static MunitTestSetup truncate__setup = setup;
+static MunitTestTearDown truncate__tear_down = tear_down;
+
+TEST_GROUP(truncate, success);
+TEST_GROUP(truncate, error);
+
 /* Truncate the last entry of a log with a single entry. */
-static MunitResult test_truncate_1_last(const MunitParameter params[],
-                                        void *data)
+TEST_CASE(truncate, success, 1_last, NULL)
 {
     struct fixture *f = data;
 
@@ -745,8 +776,7 @@ static MunitResult test_truncate_1_last(const MunitParameter params[],
 }
 
 /* Truncate the last entry of a log with a two entries. */
-static MunitResult test_truncate_2_last(const MunitParameter params[],
-                                        void *data)
+TEST_CASE(truncate, success, 2_last, NULL)
 {
     struct fixture *f = data;
 
@@ -764,8 +794,7 @@ static MunitResult test_truncate_2_last(const MunitParameter params[],
 }
 
 /* Truncate from an entry which is older than the first one in the log. */
-static MunitResult test_truncate_compacted(const MunitParameter params[],
-                                           void *data)
+TEST_CASE(truncate, success, compacted, NULL)
 {
     struct fixture *f = data;
 
@@ -784,7 +813,7 @@ static MunitResult test_truncate_compacted(const MunitParameter params[],
 }
 
 /* Truncate from an entry which makes the log wrap. */
-static MunitResult test_truncate_wrap(const MunitParameter params[], void *data)
+TEST_CASE(truncate, success, wrap, NULL)
 {
     struct fixture *f = data;
     int i;
@@ -823,8 +852,7 @@ static MunitResult test_truncate_wrap(const MunitParameter params[], void *data)
 
 /* Truncate the last entry of a log with a single entry, which still has an
  * outstanding reference created by a call to raft_log__acquire(). */
-static MunitResult test_truncate_referenced(const MunitParameter params[],
-                                            void *data)
+TEST_CASE(truncate, success, referenced, NULL)
 {
     struct fixture *f = data;
     struct raft_entry *entries;
@@ -855,8 +883,7 @@ static MunitResult test_truncate_referenced(const MunitParameter params[],
 }
 
 /* Truncate all entries belonging to a batch. */
-static MunitResult test_truncate_batch(const MunitParameter params[],
-                                       void *data)
+TEST_CASE(truncate, success, batch, NULL)
 {
     struct fixture *f = data;
 
@@ -874,8 +901,7 @@ static MunitResult test_truncate_batch(const MunitParameter params[],
 /* Acquire entries at a certain index. Truncate the log at that index. The
  * truncated entries are still referenced. Then append a new entry, which will
  * have the same index but different term. */
-static MunitResult test_truncate_acquired(const MunitParameter params[],
-                                          void *data)
+TEST_CASE(truncate, success, acquired, NULL)
 {
     struct fixture *f = data;
     struct raft_entry *entries;
@@ -912,8 +938,7 @@ static MunitParameterEnum truncate_acquired_oom_params[] = {
 /* Acquire entries at a certain index. Truncate the log at that index. The
  * truncated entries are still referenced. Then append a new entry, which fails
  * to be appended due to OOM. */
-static MunitResult test_truncate_acquired_oom(const MunitParameter params[],
-                                              void *data)
+TEST_CASE(truncate, error, acquired_oom, truncate_acquired_oom_params)
 {
     struct fixture *f = data;
     struct raft_entry *entries;
@@ -938,7 +963,7 @@ static MunitResult test_truncate_acquired_oom(const MunitParameter params[],
     test_heap_fault_enable(&f->heap);
 
     rv = raft_log__append(&f->log, 2, RAFT_LOG_COMMAND, &buf, NULL);
-    munit_assert_int(rv, ==, RAFT_ERR_NOMEM);
+    munit_assert_int(rv, ==, RAFT_ENOMEM);
 
     raft_log__release(&f->log, 2, entries, n);
 
@@ -947,8 +972,7 @@ static MunitResult test_truncate_acquired_oom(const MunitParameter params[],
 
 /* Acquire some entries, truncate the log and then append new ones forcing the
    log to be grown and the reference count hash table to be re-built. */
-static MunitResult test_truncate_acquire_append(const MunitParameter params[],
-                                                void *data)
+TEST_CASE(truncate, success, acquire_append, NULL)
 {
     struct fixture *f = data;
     struct raft_entry *entries;
@@ -976,27 +1000,19 @@ static MunitResult test_truncate_acquire_append(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static MunitTest truncate_tests[] = {
-    {"/1-last", test_truncate_1_last, setup, tear_down, 0, NULL},
-    {"/2-last", test_truncate_2_last, setup, tear_down, 0, NULL},
-    {"/compacted", test_truncate_compacted, setup, tear_down, 0, NULL},
-    {"/wrap", test_truncate_wrap, setup, tear_down, 0, NULL},
-    {"/referenced", test_truncate_referenced, setup, tear_down, 0, NULL},
-    {"/batch", test_truncate_batch, setup, tear_down, 0, NULL},
-    {"/acquired", test_truncate_acquired, setup, tear_down, 0, NULL},
-    {"/acquired-oom", test_truncate_acquired_oom, setup, tear_down, 0,
-     truncate_acquired_oom_params},
-    {"/acquire-append", test_truncate_acquire_append, setup, tear_down, 0,
-     NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
  * raft_log__shift
  */
 
+TEST_SUITE(shift);
+
+static MunitTestSetup shift__setup = setup;
+static MunitTestTearDown shift__tear_down = tear_down;
+
+TEST_GROUP(shift, success);
+
 /* Shift up to the first entry of a log with a single entry. */
-static MunitResult test_shift_1_first(const MunitParameter params[], void *data)
+TEST_CASE(shift, success, 1_first, NULL)
 {
     struct fixture *f = data;
 
@@ -1012,7 +1028,7 @@ static MunitResult test_shift_1_first(const MunitParameter params[], void *data)
 }
 
 /* Shift up to the first entry of a log with a two entries. */
-static MunitResult test_shift_2_first(const MunitParameter params[], void *data)
+TEST_CASE(shift, success, 2_first, NULL)
 {
     struct fixture *f = data;
 
@@ -1029,7 +1045,7 @@ static MunitResult test_shift_2_first(const MunitParameter params[], void *data)
 }
 
 /* Shift to an entry which makes the log wrap. */
-static MunitResult test_shift_wrap(const MunitParameter params[], void *data)
+TEST_CASE(shift, success, wrap, NULL)
 {
     struct fixture *f = data;
     int i;
@@ -1065,25 +1081,3 @@ static MunitResult test_shift_wrap(const MunitParameter params[], void *data)
 
     return MUNIT_OK;
 }
-static MunitTest shift_tests[] = {
-    {"/1-first", test_shift_1_first, setup, tear_down, 0, NULL},
-    {"/2-first", test_shift_2_first, setup, tear_down, 0, NULL},
-    {"/wrap", test_shift_wrap, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
-/**
- * Test suite
- */
-
-MunitSuite raft_log_suites[] = {
-    {"/append", append_tests, NULL, 1, 0},
-    {"/append-configuration", append_configuration_tests, NULL, 1, 0},
-    {"/n-entries", n_entries_tests, NULL, 1, 0},
-    {"/first-index", first_index_tests, NULL, 1, 0},
-    {"/last-term", last_term_tests, NULL, 1, 0},
-    {"/acquire", acquire_tests, NULL, 1, 0},
-    {"/truncate", truncate_tests, NULL, 1, 0},
-    {"/shift", shift_tests, NULL, 1, 0},
-    {NULL, NULL, NULL, 0, 0},
-};

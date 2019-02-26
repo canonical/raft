@@ -176,7 +176,7 @@ int raft_state__convert_to_follower(struct raft *r, raft_term term)
 
 int raft_state__convert_to_candidate(struct raft *r)
 {
-    size_t n_voting = raft_configuration__n_voting(&r->configuration);
+    size_t n_voting = configuration__n_voting(&r->configuration);
     int rv;
 
     assert(r->state == RAFT_STATE_FOLLOWER);
@@ -189,7 +189,7 @@ int raft_state__convert_to_candidate(struct raft *r)
     /* Allocate the votes array. */
     r->candidate_state.votes = raft_malloc(n_voting * sizeof(bool));
     if (r->candidate_state.votes == NULL) {
-        rv = RAFT_ERR_NOMEM;
+        rv = RAFT_ENOMEM;
         goto err;
     }
 
@@ -227,13 +227,13 @@ static int raft_state__alloc_next_and_match_indexes(struct raft *r,
 
     *next_index = raft_calloc(n_servers, sizeof **next_index);
     if (*next_index == NULL) {
-        rv = RAFT_ERR_NOMEM;
+        rv = RAFT_ENOMEM;
         goto err;
     }
 
     *match_index = raft_calloc(n_servers, sizeof **match_index);
     if (*match_index == NULL) {
-        rv = RAFT_ERR_NOMEM;
+        rv = RAFT_ENOMEM;
         goto err;
     }
 
@@ -311,7 +311,7 @@ int raft_state__rebuild_next_and_match_indexes(
      * both in the current and in the new configuration. */
     for (i = 0; i < r->configuration.n; i++) {
         unsigned id = r->configuration.servers[i].id;
-        size_t j = raft_configuration__index(configuration, id);
+        size_t j = configuration__index_of(configuration, id);
 
         if (j == configuration->n) {
             /* This server is not present in the new configuration, so we just
@@ -327,7 +327,7 @@ int raft_state__rebuild_next_and_match_indexes(
      * new configuration, but not in the current one. */
     for (i = 0; i < configuration->n; i++) {
         unsigned id = configuration->servers[i].id;
-        size_t j = raft_configuration__index(&r->configuration, id);
+        size_t j = configuration__index_of(&r->configuration, id);
 
         if (j < r->configuration.n) {
             /* This server is present both in the new and in the current

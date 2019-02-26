@@ -1,15 +1,17 @@
 #include "../../include/raft.h"
+#include "../../include/raft/io_uv.h"
 
-#include "../../src/binary.h"
-#include "../../src/checksum.h"
+#include "../../src/byte.h"
 #include "../../src/io_uv_encoding.h"
 
 #include "../lib/fs.h"
 #include "../lib/heap.h"
 #include "../lib/logger.h"
-#include "../lib/munit.h"
+#include "../lib/runner.h"
 #include "../lib/tcp.h"
 #include "../lib/uv.h"
+
+TEST_MODULE(io_uv);
 
 /**
  * Helpers
@@ -180,6 +182,10 @@ static void tear_down(void *data)
  * raft_io_uv_init
  */
 
+TEST_SUITE(init);
+TEST_SETUP(init, setup);
+TEST_TEAR_DOWN(init, tear_down);
+
 static char *init_oom_heap_fault_delay[] = {"0", "1", NULL};
 static char *init_oom_heap_fault_repeat[] = {"1", NULL};
 
@@ -190,7 +196,7 @@ static MunitParameterEnum init_oom_params[] = {
 };
 
 /* Out of memory conditions. */
-static MunitResult test_init_oom(const MunitParameter params[], void *data)
+TEST_CASE(init, oom, init_oom_params)
 {
     struct fixture *f = data;
     struct raft_io io;
@@ -201,14 +207,13 @@ static MunitResult test_init_oom(const MunitParameter params[], void *data)
     test_heap_fault_enable(&f->heap);
 
     rv = raft_io_uv_init(&io, &f->logger, &f->loop, f->dir, &f->transport);
-    munit_assert_int(rv, ==, RAFT_ERR_NOMEM);
+    munit_assert_int(rv, ==, RAFT_ENOMEM);
 
     return MUNIT_OK;
 }
 
 /* The given path is not a directory. */
-static MunitResult test_init_not_a_dir(const MunitParameter params[],
-                                       void *data)
+TEST_CASE(init, not_a_dir, NULL)
 {
     struct fixture *f = data;
     struct raft_io io;
@@ -224,10 +229,10 @@ static MunitResult test_init_not_a_dir(const MunitParameter params[],
 }
 
 /* Data directory path is too long */
-static MunitResult test_init_dir_too_long(const MunitParameter params[],
-                                          void *data)
+TEST_CASE(init, dir_too_long, NULL)
 {
     struct fixture *f = data;
+    struct raft_io_uv_transport transport;
     struct raft_io io;
     int rv;
 
@@ -238,17 +243,17 @@ static MunitResult test_init_dir_too_long(const MunitParameter params[],
     memset(dir, 'a', sizeof dir - 1);
     dir[sizeof dir - 1] = 0;
 
-    rv = raft_io_uv_init(&io, &f->logger, &f->loop, dir, &f->transport);
+    rv = raft_io_uv_init(&io, &f->logger, &f->loop, dir, &transport);
     munit_assert_int(rv, ==, RAFT_ERR_IO_NAMETOOLONG);
 
     return MUNIT_OK;
 }
 
 /* Can't create data directory */
-static MunitResult test_init_cant_create_dir(const MunitParameter params[],
-                                             void *data)
+TEST_CASE(init, cant_create_dir, NULL)
 {
     struct fixture *f = data;
+    struct raft_io_uv_transport transport;
     struct raft_io io;
     int rv;
 
@@ -256,51 +261,41 @@ static MunitResult test_init_cant_create_dir(const MunitParameter params[],
 
     const char *dir = "/non/existing/path";
 
-    rv = raft_io_uv_init(&io, &f->logger, &f->loop, dir, &f->transport);
+    rv = raft_io_uv_init(&io, &f->logger, &f->loop, dir, &transport);
     munit_assert_int(rv, ==, RAFT_ERR_IO);
 
     return MUNIT_OK;
 }
 
 /* Data directory not accessible */
-static MunitResult test_init_access_error(const MunitParameter params[],
-                                          void *data)
+TEST_CASE(init, access_error, NULL)
 {
     struct fixture *f = data;
     struct raft_io io;
+    struct raft_io_uv_transport transport;
     int rv;
 
     (void)params;
 
     const char *dir = "/root/foo";
 
-    rv = raft_io_uv_init(&io, &f->logger, &f->loop, dir, &f->transport);
+    rv = raft_io_uv_init(&io, &f->logger, &f->loop, dir, &transport);
     munit_assert_int(rv, ==, RAFT_ERR_IO);
 
     return MUNIT_OK;
 }
 
-#define __test_init(NAME, FUNC, PARAMS)                         \
-    {                                                           \
-        "/" NAME, test_init_##FUNC, setup, tear_down, 0, PARAMS \
-    }
-
-static MunitTest init_tests[] = {
-    __test_init("oom", oom, init_oom_params),
-    __test_init("not-a-dir", not_a_dir, NULL),
-    __test_init("dir-too-long", dir_too_long, NULL),
-    __test_init("cant-create-dir", cant_create_dir, NULL),
-    __test_init("access-error", access_error, NULL),
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
  * raft_io_uv__start
  */
 
+TEST_SUITE(start);
+TEST_SETUP(start, setup);
+TEST_TEAR_DOWN(start, tear_down);
+
 /* Once the raft_io_uv instance is started, the tick function gets called
  * periodically. */
-static MunitResult test_start_tick(const MunitParameter params[], void *data)
+TEST_CASE(start, tick, NULL)
 {
     struct fixture *f = data;
 
@@ -317,7 +312,7 @@ static MunitResult test_start_tick(const MunitParameter params[], void *data)
 
 /* Once the raft_io_uv instance is started, the recv callback is invoked when a
  * message is received.. */
-static MunitResult test_start_recv(const MunitParameter params[], void *data)
+TEST_CASE(start, recv, NULL)
 {
     struct fixture *f = data;
     struct raft_message message;
@@ -332,9 +327,9 @@ static MunitResult test_start_recv(const MunitParameter params[], void *data)
     /* Connect to our test raft_io instance and send the handshake */
     test_tcp_connect(&f->tcp, 9000);
 
-    raft__put64(&cursor, 1);  /* Protocol */
-    raft__put64(&cursor, 2);  /* Server ID */
-    raft__put64(&cursor, 16); /* Address size */
+    byte__put64(&cursor, 1);  /* Protocol */
+    byte__put64(&cursor, 2);  /* Server ID */
+    byte__put64(&cursor, 16); /* Address size */
     strcpy(cursor, "127.0.0.1:66");
     test_tcp_send(&f->tcp, handshake, sizeof handshake);
 
@@ -343,7 +338,7 @@ static MunitResult test_start_recv(const MunitParameter params[], void *data)
     message.server_id = 1;
     message.server_address = "127.0.0.1:9000";
 
-    rv = raft_io_uv_encode__message(&message, &bufs, &n_bufs);
+    rv = io_uv__encode_message(&message, &bufs, &n_bufs);
     munit_assert_int(rv, ==, 0);
     munit_assert_int(n_bufs, ==, 1);
 
@@ -363,20 +358,16 @@ static MunitResult test_start_recv(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
-static MunitTest start_tests[] = {
-    {"/tick", test_start_tick, setup, tear_down, 0, NULL},
-    {"/recv", test_start_recv, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
  * raft_io_uv__load
  */
 
-/**
- * Load the initial state of a pristine server.
- */
-static MunitResult test_load_pristine(const MunitParameter params[], void *data)
+TEST_SUITE(load);
+TEST_SETUP(load, setup);
+TEST_TEAR_DOWN(load, tear_down);
+
+/* Load the initial state of a pristine server. */
+TEST_CASE(load, pristine, NULL)
 {
     struct fixture *f = data;
     raft_term term;
@@ -400,20 +391,16 @@ static MunitResult test_load_pristine(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
-static MunitTest load_tests[] = {
-    {"/pristine", test_load_pristine, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
  * raft_io_uv__bootstrap
  */
 
-/**
- * Bootstrap a pristine server.
- */
-static MunitResult test_bootstrap_pristine(const MunitParameter params[],
-                                           void *data)
+TEST_SUITE(bootstrap);
+TEST_SETUP(bootstrap, setup);
+TEST_TEAR_DOWN(bootstrap, tear_down);
+
+/* Bootstrap a pristine server. */
+TEST_CASE(bootstrap, pristine, NULL)
 {
     struct fixture *f = data;
     struct raft_configuration configuration;
@@ -437,20 +424,16 @@ static MunitResult test_bootstrap_pristine(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static MunitTest bootstrap_tests[] = {
-    {"/pristine", test_bootstrap_pristine, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
  * raft_io_uv__set_term
  */
 
-/**
- * Set the term on a pristine store.
- */
-static MunitResult test_set_term_pristine(const MunitParameter params[],
-                                          void *data)
+TEST_SUITE(set_term);
+TEST_SETUP(set_term, setup);
+TEST_TEAR_DOWN(set_term, tear_down);
+
+/* Set the term on a pristine store. */
+TEST_CASE(set_term, term, NULL)
 {
     struct fixture *f = data;
     int rv;
@@ -465,21 +448,16 @@ static MunitResult test_set_term_pristine(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static MunitTest set_term_tests[] = {
-    {"/pristine", test_set_term_pristine, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
  * raft_io_uv__set_vote
  */
 
-/**
- * Set the vote on a pristine store.
- */
+TEST_SUITE(set_vote);
+TEST_SETUP(set_vote, setup);
+TEST_TEAR_DOWN(set_vote, tear_down);
 
-static MunitResult test_set_vote_pristine(const MunitParameter params[],
-                                          void *data)
+/* Set the vote on a pristine store. */
+TEST_CASE(set_vote, pristine, NULL)
 {
     struct fixture *f = data;
     int rv;
@@ -497,21 +475,16 @@ static MunitResult test_set_vote_pristine(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static MunitTest set_vote_tests[] = {
-    {"/pristine", test_set_vote_pristine, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
  * raft_io_uv__append
  */
 
-/**
- * Append entries on a pristine store.
- */
+TEST_SUITE(append);
+TEST_SETUP(append, setup);
+TEST_TEAR_DOWN(append, tear_down);
 
-static MunitResult test_append_pristine(const MunitParameter params[],
-                                        void *data)
+/* Append entries on a pristine store. */
+TEST_CASE(append, pristine, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry;
@@ -540,20 +513,16 @@ static MunitResult test_append_pristine(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static MunitTest append_tests[] = {
-    {"/pristine", test_append_pristine, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
  * raft_io_uv__send
  */
 
-/**
- * Send the very first message.
- */
+TEST_SUITE(send);
+TEST_SETUP(send, setup);
+TEST_TEAR_DOWN(send, tear_down);
 
-static MunitResult test_send_first(const MunitParameter params[], void *data)
+/* Send the very first message. */
+TEST_CASE(send, first, NULL)
 {
     struct fixture *f = data;
     struct raft_message message;
@@ -576,24 +545,3 @@ static MunitResult test_send_first(const MunitParameter params[], void *data)
 
     return MUNIT_OK;
 }
-
-static MunitTest send_tests[] = {
-    {"/first", test_send_first, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
-/**
- * Test suite
- */
-
-MunitSuite raft_io_uv_suites[] = {
-    {"/init", init_tests, NULL, 1, 0},
-    {"/start", start_tests, NULL, 1, 0},
-    {"/load", load_tests, NULL, 1, 0},
-    {"/bootstrap", bootstrap_tests, NULL, 1, 0},
-    {"/set-term", set_term_tests, NULL, 1, 0},
-    {"/set-vote", set_vote_tests, NULL, 1, 0},
-    {"/append", append_tests, NULL, 1, 0},
-    {"/send", send_tests, NULL, 1, 0},
-    {NULL, NULL, NULL, 0, 0},
-};

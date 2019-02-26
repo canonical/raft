@@ -1,6 +1,8 @@
 #include "../../src/queue.h"
 
-#include "../lib/munit.h"
+#include "../lib/runner.h"
+
+TEST_MODULE(queue);
 
 /**
  * Helpers
@@ -105,7 +107,14 @@ struct __item
  * RAFT__QUEUE_IS_EMPTY
  */
 
-static MunitResult test_is_empty_true(const MunitParameter params[], void *data)
+TEST_SUITE(is_empty);
+
+static MunitTestSetup is_empty__setup = setup;
+static MunitTestTearDown is_empty__tear_down = tear_down;
+
+TEST_GROUP(is_empty, success);
+
+TEST_CASE(is_empty, success, yes, NULL)
 {
     struct fixture *f = data;
 
@@ -116,8 +125,7 @@ static MunitResult test_is_empty_true(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
-static MunitResult test_is_empty_false(const MunitParameter params[],
-                                       void *data)
+TEST_CASE(is_empty, success, no, NULL)
 {
     struct fixture *f = data;
     struct __item items[1];
@@ -131,17 +139,18 @@ static MunitResult test_is_empty_false(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static MunitTest is_empty_tests[] = {
-    {"/true", test_is_empty_true, setup, tear_down, 0, NULL},
-    {"/false", test_is_empty_false, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
  * RAFT__QUEUE_PUSH
  */
 
-static MunitResult test_push_one(const MunitParameter params[], void *data)
+TEST_SUITE(push);
+
+static MunitTestSetup push__setup = setup;
+static MunitTestTearDown push__tear_down = tear_down;
+
+TEST_GROUP(push, success);
+
+TEST_CASE(push, success, one, NULL)
 {
     struct fixture *f = data;
     struct __item items[1];
@@ -155,7 +164,7 @@ static MunitResult test_push_one(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
-static MunitResult test_push_two(const MunitParameter params[], void *data)
+TEST_CASE(push, success, two, NULL)
 {
     struct fixture *f = data;
     struct __item items[2];
@@ -176,17 +185,18 @@ static MunitResult test_push_two(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
-static MunitTest push_tests[] = {
-    {"/one", test_push_one, setup, tear_down, 0, NULL},
-    {"/two", test_push_two, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
  * RAFT__QUEUE_REMOVE
  */
 
-static MunitResult test_remove_first(const MunitParameter params[], void *data)
+TEST_SUITE(remove);
+
+static MunitTestSetup remove__setup = setup;
+static MunitTestTearDown remove__tear_down = tear_down;
+
+TEST_GROUP(remove, success);
+
+TEST_CASE(remove, success, first, NULL)
 {
     struct fixture *f = data;
     struct __item items[3];
@@ -202,7 +212,7 @@ static MunitResult test_remove_first(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
-static MunitResult test_remove_second(const MunitParameter params[], void *data)
+TEST_CASE(remove, success, second, NULL)
 {
     struct fixture *f = data;
     struct __item items[3];
@@ -218,7 +228,7 @@ static MunitResult test_remove_second(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
-static MunitResult test_remove_third(const MunitParameter params[], void *data)
+TEST_CASE(remove, success, third, NULL)
 {
     struct fixture *f = data;
     struct __item items[3];
@@ -234,18 +244,18 @@ static MunitResult test_remove_third(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
-static MunitTest remove_tests[] = {
-    {"/first", test_remove_first, setup, tear_down, 0, NULL},
-    {"/second", test_remove_second, setup, tear_down, 0, NULL},
-    {"/third", test_remove_third, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
  * RAFT__QUEUE_TAIL
  */
 
-static MunitResult test_tail_one(const MunitParameter params[], void *data)
+TEST_SUITE(tail);
+
+static MunitTestSetup tail__setup = setup;
+static MunitTestTearDown tail__tear_down = tear_down;
+
+TEST_GROUP(tail, success);
+
+TEST_CASE(tail, success, one, NULL)
 {
     struct fixture *f = data;
     struct __item items[1];
@@ -259,7 +269,7 @@ static MunitResult test_tail_one(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
-static MunitResult test_tail_two(const MunitParameter params[], void *data)
+TEST_CASE(tail, success, two, NULL)
 {
     struct fixture *f = data;
     struct __item items[2];
@@ -273,7 +283,7 @@ static MunitResult test_tail_two(const MunitParameter params[], void *data)
     return MUNIT_OK;
 }
 
-static MunitResult test_tail_three(const MunitParameter params[], void *data)
+TEST_CASE(tail, success, three, NULL)
 {
     struct fixture *f = data;
     struct __item items[3];
@@ -286,21 +296,3 @@ static MunitResult test_tail_three(const MunitParameter params[], void *data)
 
     return MUNIT_OK;
 }
-
-static MunitTest tail_tests[] = {
-    {"/one", test_tail_one, setup, tear_down, 0, NULL},
-    {"/two", test_tail_two, setup, tear_down, 0, NULL},
-    {"/three", test_tail_three, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
-/**
- * Suite
- */
-MunitSuite raft_queue_suites[] = {
-    {"/is-empty", is_empty_tests, NULL, 1, 0},
-    {"/push", push_tests, NULL, 1, 0},
-    {"/remove", remove_tests, NULL, 1, 0},
-    {"/tail", tail_tests, NULL, 1, 0},
-    {NULL, NULL, NULL, 0, 0},
-};

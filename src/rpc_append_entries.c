@@ -132,7 +132,7 @@ reply:
 
     req = raft_malloc(sizeof *req);
     if (req == NULL) {
-        return RAFT_ERR_NOMEM;
+        return RAFT_ENOMEM;
     }
 
     rv = r->io->send(r->io, req, &message,

@@ -17,6 +17,11 @@ void raft_log__init(struct raft_log *l);
 void raft_log__close(struct raft_log *l);
 
 /**
+ * Set the offset of the first entry in the log.
+ */
+void raft_log__set_offset(struct raft_log *l, raft_index offset);
+
+/**
  * Append the an entry to the log.
  */
 int raft_log__append(struct raft_log *l,
@@ -59,7 +64,7 @@ raft_index raft_log__last_index(struct raft_log *l);
 /**
  * Get the term of the entry with the given index.
  */
-raft_term raft_log__term_of(struct raft_log *l, const uint64_t index);
+raft_term raft_log__term_of(struct raft_log *l, raft_index index);
 
 /**
  * Get the term of the last entry in the log.

@@ -1,25 +1,29 @@
 #include "../lib/heap.h"
 #include "../lib/logger.h"
-#include "../lib/munit.h"
+#include "../lib/runner.h"
 #include "../lib/tcp.h"
 #include "../lib/uv.h"
 
 #include "../../include/raft.h"
+#include "../../include/raft/io_uv.h"
 
-#include "../../src/binary.h"
+#include "../../src/byte.h"
+
+TEST_MODULE(io_uv_tcp);
 
 /**
  * Helpers
  */
 
-#define __FIXTURE              \
-    struct raft_heap heap;     \
-    struct test_tcp tcp;       \
-    struct raft_logger logger; \
-    struct uv_loop_s loop;     \
-    struct raft_io_uv_transport transport;
+#define FIXTURE                            \
+    struct raft_heap heap;                 \
+    struct test_tcp tcp;                   \
+    struct raft_logger logger;             \
+    struct uv_loop_s loop;                 \
+    struct raft_io_uv_transport transport; \
+    bool closed;
 
-#define __SETUP                                                 \
+#define SETUP                                                   \
     int rv;                                                     \
     (void)user_data;                                            \
     test_heap_setup(params, &f->heap);                          \
@@ -28,29 +32,32 @@
     test_uv_setup(params, &f->loop);                            \
     raft_io_uv_tcp_init(&f->transport, &f->logger, &f->loop);   \
     rv = f->transport.init(&f->transport, 1, "127.0.0.1:9000"); \
-    munit_assert_int(rv, ==, 0);
+    munit_assert_int(rv, ==, 0);                                \
+    f->closed = false;
 
-#define __FIXTURE_TEAR_DOWN                  \
-    f->transport.close(&f->transport, NULL); \
-    test_uv_stop(&f->loop);                  \
-    raft_io_uv_tcp_close(&f->transport);     \
-    test_uv_tear_down(&f->loop);             \
-    test_logger_tear_down(&f->logger);       \
-    test_tcp_tear_down(&f->tcp);             \
+#define TEAR_DOWN                                \
+    if (!f->closed) {                            \
+        f->transport.close(&f->transport, NULL); \
+    }                                            \
+    test_uv_stop(&f->loop);                      \
+    raft_io_uv_tcp_close(&f->transport);         \
+    test_uv_tear_down(&f->loop);                 \
+    test_logger_tear_down(&f->logger);           \
+    test_tcp_tear_down(&f->tcp);                 \
     test_heap_tear_down(&f->heap);
 
-#define __test(NAME, FUNC, SETUP, TEAR_DOWN, PARAMS)       \
-    {                                                      \
-        "/" NAME, test_##FUNC, SETUP, TEAR_DOWN, 0, PARAMS \
-    }
-
 /**
- * raft__io_uv_tcp_listen
+ * transport->listen
  */
+
+TEST_SUITE(listen);
+
+TEST_GROUP(listen, error)
+TEST_GROUP(listen, close)
 
 struct listen_fixture
 {
-    __FIXTURE;
+    FIXTURE;
     int invoked;
     unsigned id;
     char address[64];
@@ -65,10 +72,10 @@ struct listen_fixture
     } handshake;
 };
 
-static void __accept_cb(struct raft_io_uv_transport *t,
-                        unsigned id,
-                        const char *address,
-                        struct uv_stream_s *stream)
+static void listen__accept_cb(struct raft_io_uv_transport *t,
+                              unsigned id,
+                              const char *address,
+                              struct uv_stream_s *stream)
 {
     struct listen_fixture *f = t->data;
     f->invoked++;
@@ -77,89 +84,79 @@ static void __accept_cb(struct raft_io_uv_transport *t,
     f->stream = stream;
 }
 
-static void *listen_setup(const MunitParameter params[], void *user_data)
+static bool listen__accept_cb_invoked(void *data)
+{
+    struct listen_fixture *f = data;
+    return f->invoked > 0;
+}
+
+TEST_SETUP(listen)
 {
     struct listen_fixture *f = munit_malloc(sizeof *f);
     void *cursor;
-    __SETUP;
+    SETUP;
 
     f->invoked = 0;
     f->handshake.offset = 0;
 
     cursor = f->handshake.buf;
-    raft__put64(&cursor, 1);
-    raft__put64(&cursor, 2);
-    raft__put64(&cursor, 16);
+    byte__put64(&cursor, 1);
+    byte__put64(&cursor, 2);
+    byte__put64(&cursor, 16);
     strcpy(cursor, "127.0.0.1:666");
 
     f->transport.data = f;
-    rv = f->transport.listen(&f->transport, __accept_cb);
+    rv = f->transport.listen(&f->transport, listen__accept_cb);
     munit_assert_int(rv, ==, 0);
 
     return f;
 }
 
-static void listen_tear_down(void *data)
+TEST_TEAR_DOWN(listen)
 {
     struct listen_fixture *f = data;
-    f->transport.stop(&f->transport);
-    __FIXTURE_TEAR_DOWN;
+    TEAR_DOWN;
 }
 
 /* Connect to the listening socket of the transport, creating a new connection
  * that is waiting to be accepted. */
-#define __listen_peer_connect(F) test_tcp_connect(&f->tcp, 9000);
+#define listen__peer_connect test_tcp_connect(&f->tcp, 9000);
 
 /* Make the connected client send handshake data. If N is greater than zero,
  * only N bytes will be sent (starting from the offset of the last call). */
-#define __listen_peer_handshake(F, N)                                      \
+#define listen__peer_handshake(N)                                          \
     {                                                                      \
-        size_t n = sizeof F->handshake.buf;                                \
+        size_t n = sizeof f->handshake.buf;                                \
         if (N > 0) {                                                       \
             n = N;                                                         \
         }                                                                  \
-        test_tcp_send(&F->tcp, F->handshake.buf + F->handshake.offset, n); \
+        test_tcp_send(&f->tcp, f->handshake.buf + f->handshake.offset, n); \
     }
 
-/* After a __listen_peer_connect() call, spin the event loop until the connected
- * callback of the listening TCP handle gets called. */
-#define __listen_wait_connected_cb(F) test_uv_run(&F->loop, 1);
+/* After a listen__peer_connect() call, spin the event loop until the connected
+ * callbloathack of the listening TCP handle gets called. */
+#define listen__wait_connected_cb test_uv_run(&f->loop, 1);
 
-/* After a __listen_peer_handshake() call, spin the event loop until the read
+/* After a listen__peer_handshake() call, spin the event loop until the read
  * callback gets called. */
-#define __listen_wait_read_cb(F) test_uv_run(&F->loop, 1);
+#define listen__wait_read_cb test_uv_run(&f->loop, 1);
 
 /* Spin the event loop until the accept callback gets eventually invoked. */
-#define __listen_wait_cb(F)                  \
-    {                                        \
-        int i;                               \
-                                             \
-        for (i = 0; i < 5; i++) {            \
-            if (F->invoked > 0) {            \
-                break;                       \
-            }                                \
-                                             \
-            test_uv_run(&F->loop, 1);        \
-        }                                    \
-                                             \
-        munit_assert_int(F->invoked, ==, 1); \
-    }
-
-#define __test_listen(NAME, FUNC, PARAMS) \
-    __test(NAME, listen_##FUNC, listen_setup, listen_tear_down, PARAMS)
+#define listen__wait_cb                                        \
+    test_uv_run_until(&f->loop, f, listen__accept_cb_invoked); \
+    f->invoked = 0;
 
 /* If the handshake is successful, the accept callback is invoked. */
-static MunitResult test_listen_success(const MunitParameter params[],
-                                       void *data)
+TEST_CASE(listen, success, NULL)
 {
     struct listen_fixture *f = data;
 
     (void)params;
 
-    __listen_peer_connect(f);
-    __listen_peer_handshake(f, 0);
+    listen__peer_connect;
+    listen__peer_handshake(0);
 
-    __listen_wait_cb(f);
+    listen__wait_cb;
 
     munit_assert_int(f->id, ==, 2);
     munit_assert_string_equal(f->address, "127.0.0.1:666");
@@ -170,14 +167,8 @@ static MunitResult test_listen_success(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static MunitTest listen_success_tests[] = {
-    __test_listen("", success, NULL),
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /* The client sends us a bad protocol version */
-static MunitResult test_listen_error_bad_protocol(const MunitParameter params[],
-                                                  void *data)
+TEST_CASE(listen, error, bad_protocol, NULL)
 {
     struct listen_fixture *f = data;
 
@@ -185,31 +176,11 @@ static MunitResult test_listen_error_bad_protocol(const MunitParameter params[],
 
     memset(f->handshake.buf, 999, sizeof(uint64_t));
 
-    __listen_peer_connect(f);
-    __listen_peer_handshake(f, 0);
+    listen__peer_connect;
+    listen__peer_handshake(0);
 
-    __listen_wait_connected_cb(f);
-    __listen_wait_read_cb(f);
-
-    return MUNIT_OK;
-}
-
-/* The peer closes the connection after having sent a partial handshake. */
-static MunitResult test_listen_error_abort(const MunitParameter params[],
-                                           void *data)
-{
-    struct listen_fixture *f = data;
-    const char *n_param = munit_parameters_get(params, "n");
-
-    __listen_peer_connect(f);
-    __listen_peer_handshake(f, atoi(n_param));
-
-    __listen_wait_connected_cb(f);
-    __listen_wait_read_cb(f);
-
-    test_tcp_close(&f->tcp);
-
-    __listen_wait_read_cb(f);
+    listen__wait_connected_cb;
+    listen__wait_read_cb;
 
     return MUNIT_OK;
 }
@@ -222,23 +193,21 @@ static MunitParameterEnum listen_error_abort_params[] = {
     {NULL, NULL},
 };
 
-/* Out of memory conditions */
-static MunitResult test_listen_error_oom(const MunitParameter params[],
-                                         void *data)
+/* The peer closes the connection after having sent a partial handshake. */
+TEST_CASE(listen, error, abort, listen_error_abort_params)
 {
     struct listen_fixture *f = data;
+    const char *n_param = munit_parameters_get(params, "n");
 
-    (void)params;
+    listen__peer_connect;
+    listen__peer_handshake(atoi(n_param));
 
-    __listen_peer_connect(f);
-    __listen_peer_handshake(f, 0);
+    listen__wait_connected_cb;
+    listen__wait_read_cb;
 
-    test_heap_fault_enable(&f->heap);
+    test_tcp_close(&f->tcp);
 
-    /* Run as much as possible. */
-    uv_run(&f->loop, UV_RUN_NOWAIT);
-    uv_run(&f->loop, UV_RUN_NOWAIT);
-    uv_run(&f->loop, UV_RUN_NOWAIT);
+    listen__wait_read_cb;
 
     return MUNIT_OK;
 }
@@ -254,58 +223,49 @@ static MunitParameterEnum listen_error_oom_params[] = {
     {NULL, NULL},
 };
 
-#define __test_listen_error(NAME, FUNC, PARAMS) \
-    __test_listen(NAME, error_##FUNC, PARAMS)
-
-static MunitTest listen_error_tests[] = {
-    __test_listen_error("bad-protocol", bad_protocol, NULL),
-    __test_listen_error("abort", abort, listen_error_abort_params),
-    __test_listen_error("oom", oom, listen_error_oom_params),
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
-/* Close the transport right after an incoming connection becomes pending, but
- * it hasn't been accepted yet. */
-static MunitResult test_listen_close_pending(const MunitParameter params[],
-                                             void *data)
+/* Out of memory conditions */
+TEST_CASE(listen, error, oom, listen_error_oom_params)
 {
     struct listen_fixture *f = data;
 
     (void)params;
 
-    __listen_peer_connect(f);
+    listen__peer_connect;
+    listen__peer_handshake(0);
+
+    test_heap_fault_enable(&f->heap);
+
+    /* Run as much as possible. */
+    uv_run(&f->loop, UV_RUN_NOWAIT);
+    uv_run(&f->loop, UV_RUN_NOWAIT);
+    uv_run(&f->loop, UV_RUN_NOWAIT);
+
+    return MUNIT_OK;
+}
+
+/* Close the transport right after an incoming connection becomes pending, but
+ * it hasn't been accepted yet. */
+TEST_CASE(listen, close, pending, NULL)
+{
+    struct listen_fixture *f = data;
+
+    (void)params;
+
+    listen__peer_connect;
 
     return MUNIT_OK;
 }
 
 /* Close the transport right after an incoming connection gets accepted, and the
  * peer hasn't sent handshake data yet. */
-static MunitResult test_listen_close_connected(const MunitParameter params[],
-                                               void *data)
+TEST_CASE(listen, close, connected, NULL)
 {
     struct listen_fixture *f = data;
 
     (void)params;
 
-    __listen_peer_connect(f);
-    __listen_wait_connected_cb(f);
-
-    return MUNIT_OK;
-}
-
-/* Close the transport right after the peer has started to send handshake data,
- * but isn't done with it yet. */
-static MunitResult test_listen_close_handshake(const MunitParameter params[],
-                                               void *data)
-{
-    struct listen_fixture *f = data;
-    const char *n_param = munit_parameters_get(params, "n");
-
-    __listen_peer_connect(f);
-    __listen_peer_handshake(f, atoi(n_param));
-
-    __listen_wait_connected_cb(f);
-    __listen_wait_read_cb(f);
+    listen__peer_connect;
+    listen__wait_connected_cb;
 
     return MUNIT_OK;
 }
@@ -315,40 +275,44 @@ static MunitParameterEnum listen_close_handshake_params[] = {
     {NULL, NULL},
 };
 
-#define __test_listen_close(NAME, FUNC, PARAMS) \
-    __test_listen(NAME, close_##FUNC, PARAMS)
+/* Close the transport right after the peer has started to send handshake data,
+ * but isn't done with it yet. */
+TEST_CASE(listen, close, handshake, listen_close_handshake_params)
+{
+    struct listen_fixture *f = data;
+    const char *n_param = munit_parameters_get(params, "n");
 
-static MunitTest listen_close_tests[] = {
-    __test_listen_close("pending", pending, NULL),
-    __test_listen_close("connected", connected, NULL),
-    __test_listen_close("handshake", handshake, listen_close_handshake_params),
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
+    listen__peer_connect;
+    listen__peer_handshake(atoi(n_param));
 
-MunitSuite listen_suites[] = {
-    {"/success", listen_success_tests, NULL, 1, 0},
-    {"/error", listen_error_tests, NULL, 1, 0},
-    {"/close", listen_close_tests, NULL, 1, 0},
-    {NULL, NULL, NULL, 0, 0},
-};
+    listen__wait_connected_cb;
+    listen__wait_read_cb;
+
+    return MUNIT_OK;
+}
 
 /**
  * raft__io_uv_tcp_connect
  */
 
+TEST_SUITE(connect);
+
+TEST_GROUP(connect, close)
+TEST_GROUP(connect, error)
+
 struct connect_fixture
 {
-    __FIXTURE;
+    FIXTURE;
     struct raft_io_uv_connect req;
     int invoked;
     int status;
     struct uv_stream_s *stream;
 };
 
-static void *connect_setup(const MunitParameter params[], void *user_data)
+TEST_SETUP(connect)
 {
     struct connect_fixture *f = munit_malloc(sizeof *f);
-    __SETUP;
+    SETUP;
     f->req.data = f;
     f->invoked = 0;
     f->status = -1;
@@ -356,15 +320,15 @@ static void *connect_setup(const MunitParameter params[], void *user_data)
     return f;
 }
 
-static void connect_tear_down(void *data)
+TEST_TEAR_DOWN(connect)
 {
     struct listen_fixture *f = data;
-    __FIXTURE_TEAR_DOWN;
+    TEAR_DOWN;
 }
 
-static void __connect_cb(struct raft_io_uv_connect *req,
-                         struct uv_stream_s *stream,
-                         int status)
+static void connect__connect_cb(struct raft_io_uv_connect *req,
+                                struct uv_stream_s *stream,
+                                int status)
 {
     struct connect_fixture *f = req->data;
     f->invoked++;
@@ -372,100 +336,92 @@ static void __connect_cb(struct raft_io_uv_connect *req,
     f->stream = stream;
 }
 
-#define __connect_trigger(F, RV)                                        \
-    {                                                                   \
-        int rv;                                                         \
-                                                                        \
-        rv = F->transport.connect(&F->transport, &F->req, 2,            \
-                                  F->tcp.server.address, __connect_cb); \
-        munit_assert_int(rv, ==, RV);                                   \
+#define connect__invoke(RV)                                                    \
+    {                                                                          \
+        int rv;                                                                \
+        rv = f->transport.connect(&f->transport, &f->req, 2,                   \
+                                  f->tcp.server.address, connect__connect_cb); \
+        munit_assert_int(rv, ==, RV);                                          \
     }
 
-#define __connect_cancel(F) F->req.cancel(&F->req);
-#define __connect_wait_connect_cb(F) uv_run(&f->loop, UV_RUN_NOWAIT);
-#define __connect_wait_read_cb(F) uv_run(&f->loop, UV_RUN_NOWAIT);
+#define connect__wait_connect_cb uv_run(&f->loop, UV_RUN_NOWAIT);
+#define connect__wait_read_cb uv_run(&f->loop, UV_RUN_NOWAIT);
 
-#define __connect_wait_cb(F, STATUS)             \
+#define connect__wait_cb(STATUS)                 \
     {                                            \
-        __connect_wait_connect_cb(F);            \
-        __connect_wait_read_cb(F);               \
-        munit_assert_int(F->invoked, ==, 1);     \
-        munit_assert_int(F->status, ==, STATUS); \
+        int i;                                   \
+        for (i = 0; i < 2; i++) {                \
+            if (f->invoked == 1)                 \
+                break;                           \
+            uv_run(&f->loop, UV_RUN_NOWAIT);     \
+        }                                        \
+        munit_assert_int(f->invoked, ==, 1);     \
+        munit_assert_int(f->status, ==, STATUS); \
     }
 
-#define __connect_peer_shutdown(F) test_tcp_stop(&f->tcp);
+#define connect__peer_shutdown(F) test_tcp_stop(&f->tcp);
 
-#define __test_connect(NAME, FUNC, PARAMS) \
-    __test(NAME, connect_##FUNC, connect_setup, connect_tear_down, PARAMS)
+#define connect__close                       \
+    f->transport.close(&f->transport, NULL); \
+    f->closed = true;
 
-/* The request is canceled immediately after submission. */
-static MunitResult test_connect_cancel_immediately(
-    const MunitParameter params[],
-    void *data)
+/* Successfully connect to the peer. */
+TEST_CASE(connect, success, NULL)
 {
     struct connect_fixture *f = data;
 
     (void)params;
 
-    __connect_trigger(f, 0);
-    __connect_cancel(f);
-    __connect_wait_cb(f, RAFT_ERR_IO_CANCELED);
+    connect__invoke(0);
+    connect__wait_cb(0);
+
+    munit_assert_ptr_not_null(f->stream);
+    uv_close((struct uv_handle_s *)f->stream, (uv_close_cb)raft_free);
 
     return MUNIT_OK;
 }
 
-/* The request is canceled during the handshake. */
-static MunitResult test_connect_cancel_handshake(const MunitParameter params[],
-                                                 void *data)
+/* The transport is closed immediately after a connect request as been
+ * submitted. The request's callback is invoked with RAFT_ERR_IO_CANCELED. */
+TEST_CASE(connect, close, immediately, NULL)
 {
     struct connect_fixture *f = data;
 
     (void)params;
 
-    __connect_trigger(f, 0);
-    __connect_wait_connect_cb(f);
-    __connect_cancel(f);
-    __connect_wait_cb(f, RAFT_ERR_IO_CANCELED);
+    connect__invoke(0);
+    connect__close;
+    connect__wait_cb(RAFT_ERR_IO_CANCELED);
 
     return MUNIT_OK;
 }
 
-#define __test_connect_cancel(NAME, FUNC, PARAMS) \
-    __test_connect(NAME, cancel_##FUNC, PARAMS)
+/* The transport gets closed during the handshake. */
+TEST_CASE(connect, close, handshake, NULL)
+{
+    struct connect_fixture *f = data;
 
-static MunitTest connect_cancel_tests[] = {
-    __test_connect_cancel("immediately", immediately, NULL),
-    __test_connect_cancel("handshake", handshake, NULL),
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
+    (void)params;
+
+    connect__invoke(0);
+    connect__wait_connect_cb;
+    connect__close;
+    connect__wait_cb(RAFT_ERR_IO_CANCELED);
+
+    return MUNIT_OK;
+}
 
 /* The peer has shutdown */
-static MunitResult test_connect_error_refused(const MunitParameter params[],
-                                              void *data)
+TEST_CASE(connect, error, refused, NULL)
 {
     struct connect_fixture *f = data;
 
     (void)params;
 
-    __connect_peer_shutdown(f);
+    connect__peer_shutdown(f);
 
-    __connect_trigger(f, 0);
-    __connect_wait_cb(f, RAFT_ERR_IO_CONNECT);
-
-    return MUNIT_OK;
-}
-
-/* Out of memory conditions. */
-static MunitResult test_connect_error_oom(const MunitParameter params[],
-                                          void *data)
-{
-    struct connect_fixture *f = data;
-
-    (void)params;
-
-    test_heap_fault_enable(&f->heap);
-
-    __connect_trigger(f, RAFT_ERR_NOMEM);
+    connect__invoke(0);
+    connect__wait_cb(RAFT_ERR_IO_CONNECT);
 
     return MUNIT_OK;
 }
@@ -479,19 +435,16 @@ static MunitParameterEnum connect_error_oom_params[] = {
     {NULL, NULL},
 };
 
-/* Out of memory condition after the attempt has started. */
-static MunitResult test_connect_error_oom_async(const MunitParameter params[],
-                                                void *data)
+/* Out of memory conditions. */
+TEST_CASE(connect, error, oom, connect_error_oom_params)
 {
     struct connect_fixture *f = data;
 
     (void)params;
 
-    __connect_trigger(f, 0);
-
     test_heap_fault_enable(&f->heap);
 
-    __connect_wait_cb(f, RAFT_ERR_NOMEM);
+    connect__invoke(RAFT_ENOMEM);
 
     return MUNIT_OK;
 }
@@ -505,53 +458,18 @@ static MunitParameterEnum connect_error_oom_async_params[] = {
     {NULL, NULL},
 };
 
-#define __test_connect_error(NAME, FUNC, PARAMS) \
-    __test_connect(NAME, error_##FUNC, PARAMS)
-
-static MunitTest connect_error_tests[] = {
-    __test_connect_error("refused", refused, NULL),
-    __test_connect_error("oom", oom, connect_error_oom_params),
-    __test_connect_error("oom-async",
-                         oom_async,
-                         connect_error_oom_async_params),
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
-/* Successfully connect to the peer. */
-static MunitResult test_connect_success(const MunitParameter params[],
-                                        void *data)
+/* Out of memory condition after the attempt has started. */
+TEST_CASE(connect, error, oom_async, connect_error_oom_async_params)
 {
     struct connect_fixture *f = data;
 
     (void)params;
 
-    __connect_trigger(f, 0);
-    __connect_wait_cb(f, 0);
+    connect__invoke(0);
 
-    munit_assert_ptr_not_null(f->stream);
-    uv_close((struct uv_handle_s *)f->stream, (uv_close_cb)raft_free);
+    test_heap_fault_enable(&f->heap);
+
+    connect__wait_cb(RAFT_ENOMEM);
 
     return MUNIT_OK;
 }
-
-static MunitTest connect_success_tests[] = {
-    __test_connect("", success, NULL),
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
-MunitSuite connect_suites[] = {
-    {"/cancel", connect_cancel_tests, NULL, 1, 0},
-    {"/error", connect_error_tests, NULL, 1, 0},
-    {"/success", connect_success_tests, NULL, 1, 0},
-    {NULL, NULL, NULL, 0, 0},
-};
-
-/**
- * Test suite
- */
-
-MunitSuite raft_io_uv_tcp_suites[] = {
-    {"/listen", NULL, listen_suites, 1, 0},
-    {"/connect", NULL, connect_suites, 1, 0},
-    {NULL, NULL, NULL, 0, 0},
-};

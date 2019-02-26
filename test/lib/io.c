@@ -1,3 +1,7 @@
+#include <stdio.h>
+
+#include "../../include/raft/io_stub.h"
+
 #include "io.h"
 
 void test_io_setup(const MunitParameter params[],
@@ -71,6 +75,15 @@ void test_io_append_entry(struct raft_io *io, const struct raft_entry *entry)
     int rv;
 
     rv = io->append(io, entry, 1, NULL, NULL);
+    munit_assert_int(rv, ==, 0);
+    raft_io_stub_flush(io);
+}
+
+void test_io_set_snapshot(struct raft_io *io, struct raft_snapshot *snapshot)
+{
+    struct raft_io_snapshot_put req;
+    int rv;
+    rv = io->snapshot_put(io, &req, snapshot, NULL);
     munit_assert_int(rv, ==, 0);
     raft_io_stub_flush(io);
 }

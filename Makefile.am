@@ -35,7 +35,7 @@ if IO_UV
 endif
 libraft_la_SOURCES = \
   src/aio.c \
-  src/checksum.c \
+  src/byte.c \
   src/client.c \
   src/configuration.c \
   src/election.c \
@@ -49,27 +49,29 @@ libraft_la_SOURCES = \
   src/rpc.c \
   src/rpc_append_entries.c \
   src/rpc_request_vote.c \
+  src/rpc_install_snapshot.c \
+  src/snapshot.c \
   src/state.c \
   src/tick.c \
   src/watch.c
 if IO_UV
   libraft_la_SOURCES += \
   src/io_uv.c \
-  src/io_uv_closer.c \
+  src/io_uv_append.c \
+  src/io_uv_client.c \
   src/io_uv_encoding.c \
+  src/io_uv_finalize.c \
   src/io_uv_fs.c \
   src/io_uv_ip.c \
-  src/io_uv_loader.c \
+  src/io_uv_load.c \
   src/io_uv_metadata.c \
-  src/io_uv_preparer.c \
+  src/io_uv_prepare.c \
+  src/io_uv_server.c \
   src/io_uv_snapshot.c \
-  src/io_uv_rpc.c \
-  src/io_uv_rpc_client.c \
-  src/io_uv_rpc_server.c \
   src/io_uv_tcp.c \
   src/io_uv_tcp_connect.c \
   src/io_uv_tcp_listen.c \
-  src/io_uv_writer.c \
+  src/io_uv_truncate.c \
   src/uv_file.c
 endif
 if IO_STUB
@@ -106,7 +108,7 @@ unit_test_SOURCES += \
   $(test_lib_SOURCES)
 unit_test_SOURCES += \
   test/unit/main.c \
-  test/unit/test_checksum.c \
+  test/unit/test_byte.c \
   test/unit/test_client.c \
   test/unit/test_configuration.c \
   test/unit/test_election.c \
@@ -117,17 +119,21 @@ unit_test_SOURCES += \
   test/unit/test_replication.c \
   test/unit/test_rpc_append_entries.c \
   test/unit/test_rpc_request_vote.c \
+  test/unit/test_rpc_install_snapshot.c \
   test/unit/test_tick.c
 if IO_UV
   unit_test_SOURCES += \
   test/unit/test_io_uv.c \
-  test/unit/test_io_uv_closer.c \
-  test/unit/test_io_uv_loader.c \
+  test/unit/test_io_uv_append.c \
+  test/unit/test_io_uv_client.c \
+  test/unit/test_io_uv_finalize.c \
+  test/unit/test_io_uv_load.c \
   test/unit/test_io_uv_metadata.c \
-  test/unit/test_io_uv_preparer.c \
-  test/unit/test_io_uv_rpc.c \
+  test/unit/test_io_uv_prepare.c \
+  test/unit/test_io_uv_server.c \
+  test/unit/test_io_uv_snapshot.c \
   test/unit/test_io_uv_tcp.c \
-  test/unit/test_io_uv_writer.c \
+  test/unit/test_io_uv_truncate.c \
   test/unit/test_uv_file.c
 endif
 if IO_STUB

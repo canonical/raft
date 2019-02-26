@@ -82,7 +82,7 @@ reply:
 
     req = raft_malloc(sizeof *req);
     if (req == NULL) {
-        return RAFT_ERR_NOMEM;
+        return RAFT_ENOMEM;
     }
 
     rv = r->io->send(r->io, req, &message, raft_rpc__recv_request_vote_send_cb);
@@ -112,7 +112,7 @@ int raft_rpc__recv_request_vote_result(
 
     raft_debugf(r->logger, "received vote request result from server %ld", id);
 
-    votes_index = raft_configuration__voting_index(&r->configuration, id);
+    votes_index = configuration__index_of_voting(&r->configuration, id);
     if (votes_index == r->configuration.n) {
         raft_infof(r->logger, "non-voting or unknown server -> reject");
         return 0;

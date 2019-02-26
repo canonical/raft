@@ -9,6 +9,8 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 
+#include "../include/raft.h"
+
 /**
  * Maximum length of a file path.
  */
@@ -29,17 +31,22 @@
 /**
  * Convenience to declare a variable that can hold a file name.
  */
-typedef char raft__io_uv_fs_filename[RAFT__IO_UV_FS_MAX_FILENAME_LEN];
+typedef char io_uv__filename[RAFT__IO_UV_FS_MAX_FILENAME_LEN];
 
 /**
  * Convenience to declare a variable that can hold a file system path.
  */
-typedef char raft__io_uv_fs_path[RAFT__IO_UV_FS_MAX_PATH_LEN];
+typedef char io_uv__path[RAFT__IO_UV_FS_MAX_PATH_LEN];
 
 /**
  * Convenience to concatenate a directory and a file.
  */
-void raft__io_uv_fs_join(const char *dir, const char *filename, char *path);
+void io_uv__join(const char *dir, const char *filename, char *path);
+
+/**
+ * Check that the given directory exists, and try to create it if it doesn't.
+ */
+int io_uv__ensure_dir(struct raft_logger *logger, const char *dir);
 
 /**
  * Open a file in a directory.

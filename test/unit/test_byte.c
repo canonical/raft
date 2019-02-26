@@ -1,13 +1,17 @@
-#include "../../src/checksum.h"
+#include "../../src/byte.h"
 
-#include "../lib/munit.h"
+#include "../lib/runner.h"
+
+TEST_MODULE(checksum);
 
 /**
- * raft__crc32
+ * byte__crc32
  */
 
+TEST_SUITE(crc32);
+
 /* The same data produces the same sum. */
-static MunitResult test_crc32_valid(const MunitParameter params[], void *data)
+TEST_CASE(crc32, valid, NULL)
 {
     uint64_t value1 = 123456789;
     uint64_t value2 = 123456789;
@@ -21,8 +25,8 @@ static MunitResult test_crc32_valid(const MunitParameter params[], void *data)
     (void)data;
     (void)params;
 
-    crc1 = raft__crc32(buf1, size1, 0);
-    crc2 = raft__crc32(buf2, size2, 0);
+    crc1 = byte__crc32(buf1, size1, 0);
+    crc2 = byte__crc32(buf2, size2, 0);
 
     munit_assert_int(crc1, ==, crc2);
 
@@ -30,7 +34,7 @@ static MunitResult test_crc32_valid(const MunitParameter params[], void *data)
 }
 
 /* Different data produces a different sum. */
-static MunitResult test_crc32_invalid(const MunitParameter params[], void *data)
+TEST_CASE(crc32, invalid, NULL)
 {
     uint64_t value1 = 123456789;
     uint64_t value2 = 123466789;
@@ -44,25 +48,10 @@ static MunitResult test_crc32_invalid(const MunitParameter params[], void *data)
     (void)data;
     (void)params;
 
-    crc1 = raft__crc32(buf1, size1, 0);
-    crc2 = raft__crc32(buf2, size2, 0);
+    crc1 = byte__crc32(buf1, size1, 0);
+    crc2 = byte__crc32(buf2, size2, 0);
 
     munit_assert_int(crc1, !=, crc2);
 
     return MUNIT_OK;
 }
-
-static MunitTest crc32_tests[] = {
-    {"/valid", test_crc32_valid, NULL, NULL, 0, NULL},
-    {"/invalid", test_crc32_invalid, NULL, NULL, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
-/**
- * Test suite
- */
-
-MunitSuite raft_checksum_suites[] = {
-    {"/crc32", crc32_tests, NULL, 1, 0},
-    {NULL, NULL, NULL, 0, 0},
-};

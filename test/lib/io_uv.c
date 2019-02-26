@@ -1,7 +1,7 @@
 #include <stdlib.h>
 
-#include "../../src/binary.h"
-#include "../../src/checksum.h"
+#include "../../src/byte.h"
+#include "../../src/configuration.h"
 #include "../../src/io_uv_encoding.h"
 
 #include "fs.h"
@@ -39,7 +39,7 @@ size_t test_io_uv_write_snapshot_meta_file(const char *dir,
         rv = raft_configuration_add(&configuration, id, address, true);
         munit_assert_int(rv, ==, 0);
     }
-    rv = raft_configuration_encode(&configuration, &configuration_buf);
+    rv = configuration__encode(&configuration, &configuration_buf);
     munit_assert_int(rv, ==, 0);
     raft_configuration_close(&configuration);
 
@@ -50,17 +50,17 @@ size_t test_io_uv_write_snapshot_meta_file(const char *dir,
     buf = munit_malloc(size);
     cursor = buf;
 
-    raft__put64(&cursor, 1);                     /* Format version */
-    raft__put64(&cursor, 0);                     /* CRC sums placeholder */
-    raft__put64(&cursor, configuration_index);   /* Configuration index */
-    raft__put64(&cursor, configuration_buf.len); /* Encoded configuration */
+    byte__put64(&cursor, 1);                     /* Format version */
+    byte__put64(&cursor, 0);                     /* CRC sums placeholder */
+    byte__put64(&cursor, configuration_index);   /* Configuration index */
+    byte__put64(&cursor, configuration_buf.len); /* Encoded configuration */
     memcpy(cursor, configuration_buf.base, configuration_buf.len);
 
     sprintf(filename, "snapshot-%llu-%llu-%llu.meta", term, index, timestamp);
 
-    crc = raft__crc32(buf + (__WORD_SIZE * 2), size - (__WORD_SIZE * 2), 0);
+    crc = byte__crc32(buf + (__WORD_SIZE * 2), size - (__WORD_SIZE * 2), 0);
     cursor = buf + __WORD_SIZE;
-    raft__put64(&cursor, crc);
+    byte__put64(&cursor, crc);
 
     test_dir_write_file(dir, filename, buf, size);
 
@@ -125,26 +125,26 @@ static size_t test__io_uv_create_segment(const char *dir,
     size += (__WORD_SIZE /* Checksums */ + header_size + data_size) * (size_t)n;
     buf = munit_malloc(size);
     cursor = buf;
-    raft__put64(&cursor, 1); /* Format version */
+    byte__put64(&cursor, 1); /* Format version */
     batch = cursor;
 
     for (i = 0; i < (int)n; i++) {
-        raft__put64(&cursor, 0);               /* CRC sums placeholder */
-        raft__put64(&cursor, 1);               /* Number of entries */
-        raft__put64(&cursor, 1);               /* Entry term */
-        raft__put8(&cursor, RAFT_LOG_COMMAND); /* Entry type */
-        raft__put8(&cursor, 0);                /* Unused */
-        raft__put8(&cursor, 0);                /* Unused */
-        raft__put8(&cursor, 0);                /* Unused */
-        raft__put32(&cursor, 8);               /* Size of entry data */
-        raft__put64(&cursor, data);            /* Entry data */
+        byte__put64(&cursor, 0);               /* CRC sums placeholder */
+        byte__put64(&cursor, 1);               /* Number of entries */
+        byte__put64(&cursor, 1);               /* Entry term */
+        byte__put8(&cursor, RAFT_LOG_COMMAND); /* Entry type */
+        byte__put8(&cursor, 0);                /* Unused */
+        byte__put8(&cursor, 0);                /* Unused */
+        byte__put8(&cursor, 0);                /* Unused */
+        byte__put32(&cursor, 8);               /* Size of entry data */
+        byte__put64(&cursor, data);            /* Entry data */
 
         cursor = batch + __WORD_SIZE;
-        crc1 = raft__crc32(cursor, header_size, 0);
-        crc2 = raft__crc32(cursor + header_size, data_size, 0);
+        crc1 = byte__crc32(cursor, header_size, 0);
+        crc2 = byte__crc32(cursor + header_size, data_size, 0);
         cursor = batch;
-        raft__put32(&cursor, crc1); /* Header checksum */
-        raft__put32(&cursor, crc2); /* Data checksum */
+        byte__put32(&cursor, crc1); /* Header checksum */
+        byte__put32(&cursor, crc2); /* Data checksum */
         batch += __WORD_SIZE + header_size + data_size;
         cursor = batch;
         data++;

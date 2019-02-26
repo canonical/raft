@@ -1,72 +1,55 @@
 #include <string.h>
 
+#include "../include/raft/io_uv.h"
+
 #include "assert.h"
-#include "binary.h"
+#include "byte.h"
 #include "io_uv_fs.h"
 #include "io_uv_metadata.h"
 
-/**
- * Current on-disk format version.
- */
+/* Current on-disk format version. */
 #define RAFT__IO_UV_METADATA_FORMAT 1
 
-/**
- * Encode the content of a metadata file.
- */
-static void raft__io_uv_metadata_encode(
-    const struct raft__io_uv_metadata *metadata,
-    void *buf);
+/* Encode the content of a metadata file. */
+static void encode(const struct io_uv__metadata *metadata, void *buf);
 
-/**
- * Decode the content of a metadata file.
- */
-static int raft__io_uv_metadata_decode(const void *buf,
-                                       struct raft__io_uv_metadata *metadata);
+/* Decode the content of a metadata file. */
+static int decode(const void *buf, struct io_uv__metadata *metadata);
 
-/**
- * Read the @n'th metadata file (with @n equal to 1 or 2) and decode the content
- * of the file, populating the given metadata buffer accordingly.
- */
-static int raft__io_uv_metadata_load_n(struct raft_logger *logger,
-                                       const char *dir,
-                                       const unsigned short n,
-                                       struct raft__io_uv_metadata *metadata);
+/* Read the @n'th metadata file (with @n equal to 1 or 2) and decode the content
+ * of the file, populating the given metadata buffer accordingly. */
+static int load_n(struct raft_logger *logger,
+                  const char *dir,
+                  const unsigned short n,
+                  struct io_uv__metadata *metadata);
 
-/**
- * Update both metadata files using the given one as seed, so they are created
- * if they didn't exist.
- */
-static int raft__io_uv_metadata_ensure(struct raft_logger *logger,
-                                       const char *dir,
-                                       struct raft__io_uv_metadata *metadata);
+/* Update both metadata files using the given one as seed, so they are created
+ * if they didn't exist. */
+static int ensure(struct raft_logger *logger,
+                  const char *dir,
+                  struct io_uv__metadata *metadata);
 
-/**
- * Return the metadata file index associated with the given version.
- */
-static int raft__io_uv_metadata_n(int version);
+/* Return the metadata file index associated with the given version. */
+static int index_n(int version);
 
-/**
- * Render the file system path of the metadata file with index @n.
- */
-static void raft__io_uv_metadata_path(const char *dir,
-                                      const unsigned short n,
-                                      char *path);
+/* Render the file system path of the metadata file with index @n. */
+static void render_path(const char *dir, const unsigned short n, char *path);
 
-int raft__io_uv_metadata_load(struct raft_logger *logger,
-                              const char *dir,
-                              struct raft__io_uv_metadata *metadata)
+int io_uv__metadata_load(struct raft_logger *logger,
+                         const char *dir,
+                         struct io_uv__metadata *metadata)
 {
-    struct raft__io_uv_metadata metadata1;
-    struct raft__io_uv_metadata metadata2;
+    struct io_uv__metadata metadata1;
+    struct io_uv__metadata metadata2;
     int rv;
 
     /* Read the two metadata files (if available). */
-    rv = raft__io_uv_metadata_load_n(logger, dir, 1, &metadata1);
+    rv = load_n(logger, dir, 1, &metadata1);
     if (rv != 0) {
         return rv;
     }
 
-    rv = raft__io_uv_metadata_load_n(logger, dir, 2, &metadata2);
+    rv = load_n(logger, dir, 2, &metadata2);
     if (rv != 0) {
         return rv;
     }
@@ -92,18 +75,18 @@ int raft__io_uv_metadata_load(struct raft_logger *logger,
     }
 
     /* Update the metadata files, so they are created if they did not exist. */
-    rv = raft__io_uv_metadata_ensure(logger, dir, metadata);
+    rv = ensure(logger, dir, metadata);
     if (rv != 0) {
         return rv;
     }
 
     return 0;
 }
-int raft__io_uv_metadata_store(struct raft_logger *logger,
-                               const char *dir,
-                               const struct raft__io_uv_metadata *metadata)
+int io_uv__metadata_store(struct raft_logger *logger,
+                          const char *dir,
+                          const struct io_uv__metadata *metadata)
 {
-    raft__io_uv_fs_path path;              /* Full path of metadata file */
+    io_uv__path path;                      /* Full path of metadata file */
     uint8_t buf[RAFT_IO_UV_METADATA_SIZE]; /* Content of metadata file */
     unsigned short n;
     int fd;
@@ -112,11 +95,11 @@ int raft__io_uv_metadata_store(struct raft_logger *logger,
     assert(metadata->version > 0);
 
     /* Encode the given metadata. */
-    raft__io_uv_metadata_encode(metadata, buf);
+    encode(metadata, buf);
 
     /* Render the metadata file name. */
-    n = raft__io_uv_metadata_n(metadata->version);
-    raft__io_uv_metadata_path(dir, n, path);
+    n = index_n(metadata->version);
+    render_path(dir, n, path);
 
     /* Write the metadata file, creating it if it does not exist. */
     fd = open(path, O_WRONLY | O_CREAT | O_SYNC | O_TRUNC, S_IRUSR | S_IWUSR);
@@ -146,43 +129,40 @@ int raft__io_uv_metadata_store(struct raft_logger *logger,
     return 0;
 }
 
-static void raft__io_uv_metadata_encode(
-    const struct raft__io_uv_metadata *metadata,
-    void *buf)
+static void encode(const struct io_uv__metadata *metadata, void *buf)
 {
     void *cursor = buf;
 
-    raft__put64(&cursor, RAFT__IO_UV_METADATA_FORMAT);
-    raft__put64(&cursor, metadata->version);
-    raft__put64(&cursor, metadata->term);
-    raft__put64(&cursor, metadata->voted_for);
+    byte__put64(&cursor, RAFT__IO_UV_METADATA_FORMAT);
+    byte__put64(&cursor, metadata->version);
+    byte__put64(&cursor, metadata->term);
+    byte__put64(&cursor, metadata->voted_for);
 }
 
-static int raft__io_uv_metadata_decode(const void *buf,
-                                       struct raft__io_uv_metadata *metadata)
+static int decode(const void *buf, struct io_uv__metadata *metadata)
 {
     const void *cursor = buf;
     unsigned format;
 
-    format = raft__get64(&cursor);
+    format = byte__get64(&cursor);
 
     if (format != RAFT__IO_UV_METADATA_FORMAT) {
         return RAFT_ERR_IO_CORRUPT;
     }
 
-    metadata->version = raft__get64(&cursor);
-    metadata->term = raft__get64(&cursor);
-    metadata->voted_for = raft__get64(&cursor);
+    metadata->version = byte__get64(&cursor);
+    metadata->term = byte__get64(&cursor);
+    metadata->voted_for = byte__get64(&cursor);
 
     return 0;
 }
 
-static int raft__io_uv_metadata_load_n(struct raft_logger *logger,
-                                       const char *dir,
-                                       const unsigned short n,
-                                       struct raft__io_uv_metadata *metadata)
+static int load_n(struct raft_logger *logger,
+                  const char *dir,
+                  const unsigned short n,
+                  struct io_uv__metadata *metadata)
 {
-    raft__io_uv_fs_path path;              /* Full path of metadata file */
+    io_uv__path path;                      /* Full path of metadata file */
     uint8_t buf[RAFT_IO_UV_METADATA_SIZE]; /* Content of metadata file */
     int fd;
     int rv;
@@ -190,7 +170,7 @@ static int raft__io_uv_metadata_load_n(struct raft_logger *logger,
     assert(n == 1 || n == 2);
 
     /* Render the metadata path */
-    raft__io_uv_metadata_path(dir, n, path);
+    render_path(dir, n, path);
 
     /* Open the metadata file, if it exists. */
     fd = open(path, O_RDONLY);
@@ -224,7 +204,7 @@ static int raft__io_uv_metadata_load_n(struct raft_logger *logger,
     close(fd);
 
     /* Decode the content of the metadata file. */
-    rv = raft__io_uv_metadata_decode(buf, metadata);
+    rv = decode(buf, metadata);
     if (rv != 0) {
         raft_errorf(logger, "decode %s: %s", path, raft_strerror(rv));
         return RAFT_ERR_IO;
@@ -239,9 +219,9 @@ static int raft__io_uv_metadata_load_n(struct raft_logger *logger,
     return 0;
 }
 
-static int raft__io_uv_metadata_ensure(struct raft_logger *logger,
-                                       const char *dir,
-                                       struct raft__io_uv_metadata *metadata)
+static int ensure(struct raft_logger *logger,
+                  const char *dir,
+                  struct io_uv__metadata *metadata)
 {
     int i;
     int rv;
@@ -250,7 +230,7 @@ static int raft__io_uv_metadata_ensure(struct raft_logger *logger,
      * exist. Also sync the data directory so the entries get created. */
     for (i = 0; i < 2; i++) {
         metadata->version++;
-        rv = raft__io_uv_metadata_store(logger, dir, metadata);
+        rv = io_uv__metadata_store(logger, dir, metadata);
         if (rv != 0) {
             return rv;
         }
@@ -265,17 +245,15 @@ static int raft__io_uv_metadata_ensure(struct raft_logger *logger,
     return 0;
 }
 
-static int raft__io_uv_metadata_n(int version)
+static int index_n(int version)
 {
     return version % 2 == 1 ? 1 : 2;
 }
 
-static void raft__io_uv_metadata_path(const char *dir,
-                                      const unsigned short n,
-                                      char *path)
+static void render_path(const char *dir, const unsigned short n, char *path)
 {
     char filename[strlen("metadataN") + 1]; /* Pattern of metadata filename */
 
     sprintf(filename, "metadata%d", n);
-    raft__io_uv_fs_join(dir, filename, path);
+    io_uv__join(dir, filename, path);
 }

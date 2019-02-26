@@ -3,22 +3,13 @@
 
 #include <stdarg.h>
 #include <stdbool.h>
-#include <stdint.h>
-#include <stdlib.h>
-
-#if RAFT_IO_STUB
-#include "raft/io_stub.h"
-#endif
-
-#if RAFT_IO_UV
-#include "raft/io_uv.h"
-#endif
+#include <stddef.h>
 
 /**
  * Error codes.
  */
 enum {
-    RAFT_ERR_NOMEM = 1,
+    RAFT_ENOMEM = 1,
     RAFT_ERR_INTERNAL,
     RAFT_ERR_BAD_SERVER_ID,
     RAFT_ERR_UNKNOWN_SERVER_ID,
@@ -48,7 +39,7 @@ enum {
  * Map error codes to error messages.
  */
 #define RAFT_ERRNO_MAP(X)                                                \
-    X(RAFT_ERR_NOMEM, "out of memory")                                   \
+    X(RAFT_ENOMEM, "out of memory")                                      \
     X(RAFT_ERR_INTERNAL, "internal error")                               \
     X(RAFT_ERR_BAD_SERVER_ID, "server ID is not valid")                  \
     X(RAFT_ERR_UNKNOWN_SERVER_ID, "server ID is unknown")                \
@@ -227,22 +218,6 @@ int raft_configuration_add(struct raft_configuration *c,
 int raft_configuration_remove(struct raft_configuration *c, const unsigned id);
 
 /**
- * Encode a raft configuration object.
- *
- * The memory of the returned buffer is allocated using raft_malloc(), and
- * client code is responsible for releasing it when no longer needed. The raft
- * library makes no use of that memory after this function returns.
- */
-int raft_configuration_encode(const struct raft_configuration *c,
-                              struct raft_buffer *buf);
-
-/**
- * Populate a configuration object by decoding the given serialized payload.
- */
-int raft_configuration_decode(const struct raft_buffer *buf,
-                              struct raft_configuration *c);
-
-/**
  * Log entry types.
  */
 enum { RAFT_LOG_COMMAND = 1, RAFT_LOG_CONFIGURATION };
@@ -371,13 +346,28 @@ struct raft_append_entries_result
 };
 
 /**
+ * Hold the arguments of an InstallSnapshot RPC (figure 5.3).
+ */
+struct raft_install_snapshot
+{
+    raft_term term;        /* Leader's term. */
+    unsigned leader_id;    /* So follower can redirect clients. */
+    raft_index last_index; /* Replace all entries up to this one (included) */
+    raft_term last_term;   /* Term of last_index */
+    struct raft_configuration conf; /* Config as of last_index */
+    raft_index conf_index;          /* Index of configuration */
+    struct raft_buffer data;        /* Raw snapshot data */
+};
+
+/**
  * Type codes for RPC messages.
  */
 enum {
     RAFT_IO_APPEND_ENTRIES = 1,
     RAFT_IO_APPEND_ENTRIES_RESULT,
     RAFT_IO_REQUEST_VOTE,
-    RAFT_IO_REQUEST_VOTE_RESULT
+    RAFT_IO_REQUEST_VOTE_RESULT,
+    RAFT_IO_INSTALL_SNAPSHOT,
 };
 
 struct raft_message
@@ -390,6 +380,7 @@ struct raft_message
         struct raft_request_vote_result request_vote_result;
         struct raft_append_entries append_entries;
         struct raft_append_entries_result append_entries_result;
+        struct raft_install_snapshot install_snapshot;
     };
 };
 
@@ -409,8 +400,11 @@ struct raft_snapshot
     unsigned n_bufs;
 };
 
+struct raft_io;
+
 typedef void (*raft_io_tick_cb)(struct raft_io *io, unsigned elapsed);
 typedef void (*raft_io_recv_cb)(struct raft_io *io, struct raft_message *msg);
+typedef void (*raft_io_close_cb)(struct raft_io *io);
 
 struct raft_io_send;
 typedef void (*raft_io_send_cb)(struct raft_io_send *req, int status);
@@ -422,27 +416,27 @@ struct raft_io_send
     raft_io_send_cb cb; /* Request callback */
 };
 
-struct raft_io_write_snapshot;
-typedef void (*raft_io_write_snapshot_cb)(struct raft_io_write_snapshot *req,
-                                          int status);
+struct raft_io_snapshot_put;
+typedef void (*raft_io_snapshot_put_cb)(struct raft_io_snapshot_put *req,
+                                        int status);
 
-struct raft_io_write_snapshot
+struct raft_io_snapshot_put
 {
-    void *data;                   /* User data */
-    void *impl;                   /* Implementation-specific */
-    raft_io_write_snapshot_cb cb; /* Request callback */
+    void *data;                 /* User data */
+    void *impl;                 /* Implementation-specific */
+    raft_io_snapshot_put_cb cb; /* Request callback */
 };
 
-struct raft_io_read_snapshot;
-typedef void (*raft_io_read_snapshot_cb)(struct raft_io_read_snapshot *req,
-                                         struct raft_snapshot *snapshot,
-                                         int status);
+struct raft_io_snapshot_get;
+typedef void (*raft_io_snapshot_get_cb)(struct raft_io_snapshot_get *req,
+                                        struct raft_snapshot *snapshot,
+                                        int status);
 
-struct raft_io_read_snapshot
+struct raft_io_snapshot_get
 {
-    void *data;                   /* User data */
-    void *impl;                   /* Implementation-specific */
-    raft_io_write_snapshot_cb cb; /* Request callback */
+    void *data;                 /* User data */
+    void *impl;                 /* Implementation-specific */
+    raft_io_snapshot_get_cb cb; /* Request callback */
 };
 
 /**
@@ -467,6 +461,7 @@ struct raft_io
     void *impl;
 
     int (*init)(struct raft_io *io, unsigned id, const char *address);
+
     /**
      * Read persisted state from storage.
      *
@@ -496,15 +491,15 @@ struct raft_io
      */
     int (*start)(struct raft_io *io,
                  unsigned msecs,
-                 void (*tick)(struct raft_io *io, unsigned elapsed),
-                 void (*recv)(struct raft_io *io, struct raft_message *msg));
+                 raft_io_tick_cb tick,
+                 raft_io_recv_cb recv);
 
     /**
-     * Stop accepting new I/O requests and cancel any in-progress I/O as soon as
-     * possible. Invoking the close callback when all I/O has terminated and the
+     * Stop calling the @tick and @recv callbacks, and complete or cancel any
+     * in-progress I/O as soon as possible. Invoke the close callback once the
      * #raft_io instance can be freed.
      */
-    int (*close)(struct raft_io *io, void (*cb)(struct raft_io *io));
+    int (*close)(struct raft_io *io, raft_io_close_cb cb);
 
     /**
      * Bootstrap a server belonging to a new cluster.
@@ -554,14 +549,14 @@ struct raft_io
                 const struct raft_message *message,
                 raft_io_send_cb cb);
 
-    int (*create_snapshot)(struct raft_io *io,
-                           struct raft_io_write_snapshot *req,
-                           const struct raft_snapshot *snapshot,
-                           raft_io_write_snapshot_cb cb);
+    int (*snapshot_put)(struct raft_io *io,
+                        struct raft_io_snapshot_put *req,
+                        const struct raft_snapshot *snapshot,
+                        raft_io_snapshot_put_cb cb);
 
-    int (*get_snapshot)(struct raft_io *io,
-                        struct raft_io_read_snapshot *req,
-                        raft_io_read_snapshot_cb *cb);
+    int (*snapshot_get)(struct raft_io *io,
+                        struct raft_io_snapshot_get *req,
+                        raft_io_snapshot_get_cb cb);
 };
 
 /**
@@ -583,7 +578,7 @@ struct raft_fsm
      */
     int (*snapshot)(struct raft_fsm *fsm,
                     struct raft_buffer *bufs[],
-                    unsigned n_bufs);
+                    unsigned *n_bufs);
 
     /**
      * Restore a snapshot of the state machine.
@@ -838,6 +833,15 @@ struct raft
      * AppendEntries RPC, in milliseconds.
      */
     unsigned timer;
+
+    struct
+    {
+        raft_term term;                  /* Term of last saved snapshot */
+        raft_index index;                /* Index of last saved snapshot */
+        struct raft_snapshot pending;    /* In progress snapshot */
+        unsigned threshold;              /* N. of entries before snapshot */
+        struct raft_io_snapshot_put put; /* Store snapshot request */
+    } snapshot;
 
     /**
      * Registered watchers.

@@ -1,112 +1,80 @@
 #include <string.h>
 
 #include "../include/raft.h"
+#include "../include/raft/io_uv.h"
 
 #include "assert.h"
-#include "binary.h"
+#include "byte.h"
 #include "io_uv_ip.h"
 #include "io_uv_tcp.h"
-#include "io_uv_tcp_connect.h"
-#include "io_uv_tcp_listen.h"
 
-static int raft__io_uv_tcp_init(struct raft_io_uv_transport *t,
-                                unsigned id,
-                                const char *address);
+/* Implementation of raft_io_uv_transport->init. */
+static int tcp_init(struct raft_io_uv_transport *transport,
+                    unsigned id,
+                    const char *address)
+{
+    struct io_uv__tcp *t;
+    int rv;
+    t = transport->impl;
+    t->id = id;
+    t->address = address;
+    rv = uv_tcp_init(t->loop, &t->listener);
+    assert(rv == 0);
+    return 0;
+}
 
-static void raft__io_uv_tcp_close(struct raft_io_uv_transport *t,
-                                  raft_io_uv_transport_close_cb cb);
+/* Close callback for io_uv__tcp->listener. */
+static void listener_close_cb(struct uv_handle_s *handle)
+{
+    struct io_uv__tcp *t = handle->data;
+    if (t->close_cb != NULL) {
+        t->close_cb(t->transport);
+    }
+}
 
-static void raft__io_uv_tcp_maybe_closed(struct raft__io_uv_tcp *tcp);
+/* Implementation of raft_io_uv_transport->close. */
+static void tcp_close(struct raft_io_uv_transport *transport,
+                      raft_io_uv_transport_close_cb cb)
+{
+    struct io_uv__tcp *t = transport->impl;
+    t->close_cb = cb;
+    io_uv__tcp_connect_stop(t);
+    io_uv__tcp_listen_stop(t);
+    uv_close((struct uv_handle_s *)&t->listener, listener_close_cb);
+}
 
-int raft_io_uv_tcp_init(struct raft_io_uv_transport *t,
+int raft_io_uv_tcp_init(struct raft_io_uv_transport *transport,
                         struct raft_logger *logger,
                         struct uv_loop_s *loop)
 {
-    struct raft__io_uv_tcp *tcp;
+    struct io_uv__tcp *t;
 
-    tcp = raft_malloc(sizeof *tcp);
-    if (tcp == NULL) {
+    t = raft_malloc(sizeof *t);
+    if (t == NULL) {
         /* UNTESTED: not interesting */
-        return RAFT_ERR_NOMEM;
+        return RAFT_ENOMEM;
     }
+    t->transport = transport;
+    t->logger = logger;
+    t->loop = loop;
+    t->id = 0;
+    t->address = NULL;
+    t->listener.data = t;
+    t->accept_cb = NULL;
+    t->close_cb = NULL;
+    RAFT__QUEUE_INIT(&t->accept_conns);
+    RAFT__QUEUE_INIT(&t->connect_reqs);
 
-    tcp->transport = t;
-    tcp->logger = logger;
-    tcp->loop = loop;
-    tcp->state = 0;
-    tcp->listening = false;
-
-    tcp->listener.data = tcp;
-
-    RAFT__QUEUE_INIT(&tcp->accept_queue);
-
-    t->impl = tcp;
-    t->init = raft__io_uv_tcp_init;
-    t->listen = raft__io_uv_tcp_listen;
-    t->connect = raft__io_uv_tcp_connect;
-    t->stop = raft__io_uv_tcp_stop;
-    t->close = raft__io_uv_tcp_close;
+    transport->impl = t;
+    transport->init = tcp_init;
+    transport->listen = io_uv__tcp_listen;
+    transport->connect = io_uv__tcp_connect;
+    transport->close = tcp_close;
 
     return 0;
 }
 
-void raft_io_uv_tcp_close(struct raft_io_uv_transport *t)
+void raft_io_uv_tcp_close(struct raft_io_uv_transport *transport)
 {
-    struct raft__io_uv_tcp *tcp = t->impl;
-
-    raft_free(tcp);
-}
-
-void raft__io_uv_tcp_continue(struct raft__io_uv_tcp *tcp)
-{
-    assert(tcp->state == RAFT__IO_UV_TCP_ACTIVE ||
-           tcp->state == RAFT__IO_UV_TCP_CLOSING);
-
-    if (tcp->state == RAFT__IO_UV_TCP_CLOSING) {
-        raft__io_uv_tcp_maybe_closed(tcp);
-    }
-}
-
-static int raft__io_uv_tcp_init(struct raft_io_uv_transport *t,
-                                unsigned id,
-                                const char *address)
-{
-    struct raft__io_uv_tcp *tcp;
-
-    tcp = t->impl;
-
-    tcp->id = id;
-    tcp->address = address;
-
-    tcp->state = RAFT__IO_UV_TCP_ACTIVE;
-
-    return 0;
-}
-
-static void raft__io_uv_tcp_close(struct raft_io_uv_transport *t,
-                                  raft_io_uv_transport_close_cb cb)
-{
-    struct raft__io_uv_tcp *tcp = t->impl;
-
-    assert(tcp->state == RAFT__IO_UV_TCP_ACTIVE);
-
-    tcp->state = RAFT__IO_UV_TCP_CLOSING;
-    tcp->close_cb = cb;
-
-    raft__io_uv_tcp_maybe_closed(tcp);
-}
-
-static void raft__io_uv_tcp_maybe_closed(struct raft__io_uv_tcp *tcp)
-{
-    assert(tcp->state == RAFT__IO_UV_TCP_CLOSING);
-
-    if (tcp->listening) {
-        return;
-    }
-
-    tcp->state = RAFT__IO_UV_TCP_CLOSED;
-
-    if (tcp->close_cb != NULL) {
-        tcp->close_cb(tcp->transport);
-    }
+    raft_free(transport->impl);
 }

@@ -85,16 +85,33 @@ int raft_io_uv_init(struct raft_io *io,
 
 void raft_io_uv_close(struct raft_io *io);
 
+/**
+ * Callback invoked by the transport implementation when a new incoming
+ * connection has been established.
+ *
+ * No references to @address must be kept after this function returns.
+ *
+ * Ownership of @stream is transfered to user code, which is responsible of
+ * uv_close()'ing it and then releasing its memory.
+ */
 typedef void (*raft_io_uv_accept_cb)(struct raft_io_uv_transport *t,
                                      unsigned id,
                                      const char *address,
                                      struct uv_stream_s *stream);
 
+/**
+ * Callback invoked by the transport implementation after a connect request has
+ * completed. If status is #0, then @stream will point to a valid handle, which
+ * user code is then responsible to uv_close() and then release.
+ */
 struct raft_io_uv_connect;
 typedef void (*raft_io_uv_connect_cb)(struct raft_io_uv_connect *req,
                                       struct uv_stream_s *stream,
                                       int status);
 
+/**
+ * Handle to a connect request.
+ */
 struct raft_io_uv_connect
 {
     void *data;               /* User data */
@@ -105,6 +122,10 @@ struct raft_io_uv_connect
     void (*cancel)(struct raft_io_uv_connect *req);
 };
 
+/**
+ * Callback invoked by the transport implementation after a close request is
+ * completed.
+ */
 typedef void (*raft_io_uv_transport_close_cb)(struct raft_io_uv_transport *t);
 
 /**
@@ -124,7 +145,7 @@ struct raft_io_uv_transport
     void *impl;
 
     /**
-     * Initialize the transport with the server's identity.
+     * Initialize the transport with the given server's identity.
      */
     int (*init)(struct raft_io_uv_transport *t,
                 unsigned id,
@@ -143,7 +164,8 @@ struct raft_io_uv_transport
      * Connect to the server with the given ID and address.
      *
      * The @cb callback must be invoked when the connection has been established
-     * or the connection attempt has failed.
+     * or the connection attempt has failed. The memory pointed by @req can be
+     * released only after @cb has fired.
      */
     int (*connect)(struct raft_io_uv_transport *t,
                    struct raft_io_uv_connect *req,
@@ -152,15 +174,18 @@ struct raft_io_uv_transport
                    raft_io_uv_connect_cb cb);
 
     /**
-     * Stop accepting incoming connections.
-     */
-    void (*stop)(struct raft_io_uv_transport *t);
-
-    /**
      * Close the transport.
      *
-     * The @cb callback must be invoked once done. User code can release the
-     * memory of the transport object after the callback is fired.
+     * The implementation must:
+     *
+     * - Stop accepting incoming connections. The @cb callback passed to @listen
+     *   must not be invoked anymore.
+     *
+     * - Abort all pending @connect requests. The callback of each pending
+     *   request must be invoked with #RAFT_ERR_IO_CANCELED.
+     *
+     * - Invoke the @cb callback passed to this method once it's safe to release
+     *   the memory of the transport object.
      */
     void (*close)(struct raft_io_uv_transport *t,
                   raft_io_uv_transport_close_cb cb);

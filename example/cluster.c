@@ -73,7 +73,7 @@ int main(int argc, char *argv[])
         int status;
 
         /* Sleep a little bit. */
-        interval.tv_sec = 5 + random() % 2;
+        interval.tv_sec = 50 + random() % 2;
         interval.tv_nsec = 0;
 
         rv = nanosleep(&interval, NULL);

@@ -6,33 +6,45 @@
 #include "queue.h"
 
 /* Protocol version. */
-#define RAFT__IO_UV_TCP_PROTOCOL 1
+#define TCP_TRANSPORT__HANDSHAKE_PROTOCOL 1
 
-/* State codes */
-enum {
-    RAFT__IO_UV_TCP_ACTIVE = 1,
-    RAFT__IO_UV_TCP_CLOSING,
-    RAFT__IO_UV_TCP_CLOSED
-};
-
-struct raft__io_uv_tcp
+struct io_uv__tcp
 {
-    struct raft_io_uv_transport *transport;
-    struct raft_logger *logger;
-    struct uv_loop_s *loop;
-    unsigned id;
-    const char *address;
-    int state;
-
-    struct uv_tcp_s listener;
-    bool listening;
-
-    raft__queue accept_queue; /* Incoming connections waiting for handshake */
-
-    raft_io_uv_accept_cb accept_cb;
-    raft_io_uv_transport_close_cb close_cb;
+    struct raft_io_uv_transport *transport; /* Interface object we implement */
+    struct raft_logger *logger;             /* Logger */
+    struct uv_loop_s *loop;                 /* UV loop */
+    unsigned id;                            /* ID of this raft server */
+    const char *address;                    /* Address of this raft server */
+    struct uv_tcp_s listener;               /* Listening TCP socket handle */
+    raft_io_uv_accept_cb accept_cb;         /* After accepting a connection */
+    raft_io_uv_transport_close_cb close_cb; /* When it's safe to free us */
+    raft__queue accept_conns;               /* Connections being accepted */
+    raft__queue connect_reqs;               /* Pending connection requests */
 };
 
-void raft__io_uv_tcp_continue(struct raft__io_uv_tcp *tcp);
+/**
+ * Implementation of raft_io_uv_transport->listen.
+ */
+int io_uv__tcp_listen(struct raft_io_uv_transport *t, raft_io_uv_accept_cb cb);
+
+/**
+ * Close the listener handle and all pending incoming connections being
+ * accepted.
+ */
+void io_uv__tcp_listen_stop(struct io_uv__tcp *t);
+
+/**
+ * Implementation of raft_io_uv_transport->connect.
+ */
+int io_uv__tcp_connect(struct raft_io_uv_transport *transport,
+                       struct raft_io_uv_connect *req,
+                       unsigned id,
+                       const char *address,
+                       raft_io_uv_connect_cb cb);
+
+/**
+ * Cancel all pending connection requests.
+ */
+void io_uv__tcp_connect_stop(struct io_uv__tcp *t);
 
 #endif /* RAFT_IO_UV_TCP_H_ */

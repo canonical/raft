@@ -1,11 +1,11 @@
-#include <unistd.h>
 #include <string.h>
+#include <unistd.h>
 
+#include "assert.h"
 #include "io_uv_fs.h"
 #include "uv_file.h"
-#include "assert.h"
 
-void raft__io_uv_fs_join(const char *dir, const char *filename, char *path)
+void io_uv__join(const char *dir, const char *filename, char *path)
 {
     assert(strlen(dir) < RAFT__IO_UV_FS_MAX_DIR_LEN);
     assert(strlen(filename) < RAFT__IO_UV_FS_MAX_FILENAME_LEN);
@@ -15,28 +15,63 @@ void raft__io_uv_fs_join(const char *dir, const char *filename, char *path)
     strcat(path, filename);
 }
 
-int raft__io_uv_fs_open(const char *dir, const char *filename, int flags) {
-    raft__io_uv_fs_path path;
+int io_uv__ensure_dir(struct raft_logger *logger, const char *dir)
+{
+    struct stat sb;
+    int rv;
 
-    raft__io_uv_fs_join(dir, filename, path);
+    /* Ensure that the given path doesn't exceed our static buffer limit */
+    if (strlen(dir) > RAFT__IO_UV_FS_MAX_DIR_LEN) {
+        return RAFT_ERR_IO_NAMETOOLONG;
+    }
 
-    return open(path, flags);
+    /* Make sure we have a directory we can write into. */
+    rv = stat(dir, &sb);
+    if (rv == -1) {
+        if (errno == ENOENT) {
+            rv = mkdir(dir, 0700);
+            if (rv != 0) {
+                raft_errorf(logger, "create data directory %s: %s", dir,
+                            uv_strerror(-errno));
+                return RAFT_ERR_IO;
+            }
+        } else {
+            raft_errorf(logger, "access data directory %s: %s", dir,
+                        uv_strerror(-errno));
+            return RAFT_ERR_IO;
+        }
+    } else if ((sb.st_mode & S_IFMT) != S_IFDIR) {
+        raft_errorf(logger, "path %s is not a directory", dir);
+        return RAFT_ERR_IO;
+    }
+
+    return 0;
 }
 
-int raft__io_uv_fs_stat(const char *dir, const char *filename, struct stat *sb) {
-    raft__io_uv_fs_path path;
+int raft__io_uv_fs_open(const char *dir, const char *filename, int flags)
+{
+    io_uv__path path;
 
-    raft__io_uv_fs_join(dir, filename, path);
+    io_uv__join(dir, filename, path);
+
+    return open(path, flags, S_IRUSR | S_IWUSR);
+}
+
+int raft__io_uv_fs_stat(const char *dir, const char *filename, struct stat *sb)
+{
+    io_uv__path path;
+
+    io_uv__join(dir, filename, path);
 
     return stat(path, sb);
 }
 
 int raft__io_uv_fs_unlink(const char *dir, const char *filename)
 {
-    raft__io_uv_fs_path path;
+    io_uv__path path;
     int rv;
 
-    raft__io_uv_fs_join(dir, filename, path);
+    io_uv__join(dir, filename, path);
 
     rv = unlink(path);
     if (rv == -1) {
@@ -46,13 +81,15 @@ int raft__io_uv_fs_unlink(const char *dir, const char *filename)
     return 0;
 }
 
-int raft__io_uv_fs_truncate(const char *dir, const char *filename, size_t offset)
+int raft__io_uv_fs_truncate(const char *dir,
+                            const char *filename,
+                            size_t offset)
 {
-    raft__io_uv_fs_path path;
+    io_uv__path path;
     int fd;
     int rv;
 
-    raft__io_uv_fs_join(dir, filename, path);
+    io_uv__join(dir, filename, path);
 
     fd = open(path, O_RDWR);
     if (fd == -1) {
@@ -77,16 +114,16 @@ int raft__io_uv_fs_truncate(const char *dir, const char *filename, size_t offset
 }
 
 int raft__io_uv_fs_rename(const char *dir,
-                         const char *filename1,
-                         const char *filename2)
+                          const char *filename1,
+                          const char *filename2)
 {
-    raft__io_uv_fs_path path1;
-    raft__io_uv_fs_path path2;
+    io_uv__path path1;
+    io_uv__path path2;
     int fd;
     int rv;
 
-    raft__io_uv_fs_join(dir, filename1, path1);
-    raft__io_uv_fs_join(dir, filename2, path2);
+    io_uv__join(dir, filename1, path1);
+    io_uv__join(dir, filename2, path2);
 
     /* TODO: double check that filename2 does not exist. */
     rv = rename(path1, path2);
@@ -133,11 +170,11 @@ int raft__io_uv_fs_sync_dir(const char *dir)
 
 int raft__io_uv_fs_is_empty(const char *dir, const char *filename, bool *empty)
 {
-    raft__io_uv_fs_path path;
+    io_uv__path path;
     struct stat st;
     int rv;
 
-    raft__io_uv_fs_join(dir, filename, path);
+    io_uv__join(dir, filename, path);
 
     rv = stat(path, &st);
     if (rv == -1) {
@@ -229,4 +266,3 @@ bool raft__io_uv_fs_is_at_eof(const int fd)
 
     return offset == size;
 }
-

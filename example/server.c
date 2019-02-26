@@ -1,9 +1,11 @@
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include <uv.h>
 
 #include "../include/raft.h"
+#include "../include/raft/io_uv.h"
 
 #define N_SERVERS 3 /* Number of servers in the example cluster */
 
@@ -26,7 +28,47 @@ static int __fsm__apply(struct raft_fsm *fsm, const struct raft_buffer *buf)
 
     f->count += *(uint64_t *)buf->base;
 
-    raft_infof(f->logger, "fsm: count %d", f->count);
+    if (f->count % 20 == 0) {
+        raft_infof(f->logger, "fsm: count %d", f->count);
+    }
+
+    return 0;
+}
+
+static int __fsm__snapshot(struct raft_fsm *fsm,
+                           struct raft_buffer *bufs[],
+                           unsigned *n_bufs)
+{
+    struct __fsm *f = fsm->data;
+
+    *n_bufs = 1;
+
+    *bufs = raft_malloc(sizeof **bufs);
+    if (*bufs == NULL) {
+        return RAFT_ENOMEM;
+    }
+    (*bufs)[0].len = sizeof(uint64_t);
+    (*bufs)[0].base = raft_malloc((*bufs)[0].len);
+    if ((*bufs)[0].base == NULL) {
+        return RAFT_ENOMEM;
+    }
+
+    *(uint64_t *)(*bufs)[0].base = f->count;
+
+    return 0;
+}
+
+static int __fsm__restore(struct raft_fsm *fsm, struct raft_buffer *buf)
+{
+    struct __fsm *f = fsm->data;
+
+    if (buf->len != sizeof(uint64_t)) {
+        return RAFT_ERR_MALFORMED;
+    }
+
+    f->count = *(uint64_t *)buf->base;
+
+    raft_free(buf->base);
 
     return 0;
 }
@@ -46,6 +88,8 @@ static int __fsm_init(struct raft_fsm *fsm, struct raft_logger *logger)
     fsm->version = 1;
     fsm->data = f;
     fsm->apply = __fsm__apply;
+    fsm->snapshot = __fsm__snapshot;
+    fsm->restore = __fsm__restore;
 
     return 0;
 }
@@ -73,18 +117,11 @@ struct __server
     char address[64];
 };
 
-static void __server_raft_stop_cb(struct raft *raft)
-{
-    struct __server *s = raft->data;
-
-    uv_stop(&s->loop);
-}
-
 static void __server_timer_close_cb(struct uv_handle_s *handle)
 {
     struct __server *s = handle->data;
 
-    raft_close(&s->raft, __server_raft_stop_cb);
+    raft_close(&s->raft, NULL);
 }
 
 static void __server_sigint_close_cb(struct uv_handle_s *handle)
@@ -207,6 +244,8 @@ static int __server_init(struct __server *s, const char *dir, unsigned id)
         goto err_after_configuration_init;
     }
     raft_configuration_close(&configuration);
+
+    s->raft.snapshot.threshold = 15;
 
     return 0;
 
