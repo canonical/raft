@@ -9,8 +9,10 @@
 #include "../lib/heap.h"
 #include "../lib/io.h"
 #include "../lib/logger.h"
-#include "../lib/munit.h"
+#include "../lib/runner.h"
 #include "../lib/raft.h"
+
+TEST_MODULE(replication);
 
 /**
  * Helpers
@@ -18,7 +20,7 @@
 
 struct fixture
 {
-    TEST_RAFT_FIXTURE_FIELDS;
+    RAFT_FIXTURE;
 };
 
 /**
@@ -31,7 +33,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 
     (void)user_data;
 
-    TEST_RAFT_FIXTURE_SETUP(f);
+    RAFT_SETUP(f);
 
     return f;
 }
@@ -40,7 +42,7 @@ static void tear_down(void *data)
 {
     struct fixture *f = data;
 
-    TEST_RAFT_FIXTURE_TEAR_DOWN(f);
+    RAFT_TEAR_DOWN(f);
 
     free(f);
 }
@@ -83,6 +85,14 @@ static void tear_down(void *data)
  * raft_replication__send_append_entries
  */
 
+TEST_SUITE(send_append_entries);
+
+static MunitTestSetup send_append_entries__setup = setup;
+static MunitTestTearDown send_append_entries__tear_down = tear_down;
+
+TEST_GROUP(send_append_entries, error);
+TEST_GROUP(send_append_entries, success);
+
 static char *send_ae_oom_heap_fault_delay[] = {"0", NULL};
 static char *send_ae_oom_heap_fault_repeat[] = {"1", NULL};
 
@@ -93,7 +103,7 @@ static MunitParameterEnum send_ae_oom_params[] = {
 };
 
 /* Out of memory failures. */
-static MunitResult test_send_ae_oom(const MunitParameter params[], void *data)
+TEST_CASE(send_append_entries, error, oom, send_ae_oom_params)
 {
     struct fixture *f = data;
     size_t i;
@@ -108,17 +118,16 @@ static MunitResult test_send_ae_oom(const MunitParameter params[], void *data)
 
     test_heap_fault_enable(&f->heap);
 
-    i = raft_configuration__index(&f->raft.configuration, 2);
+    i = configuration__index_of(&f->raft.configuration, 2);
 
     rv = raft_replication__send_append_entries(&f->raft, i);
-    munit_assert_int(rv, ==, RAFT_ERR_NOMEM);
+    munit_assert_int(rv, ==, RAFT_ENOMEM);
 
     return MUNIT_OK;
 }
 
 /* A failure occurs upon submitting the I/O request. */
-static MunitResult test_send_ae_io_err(const MunitParameter params[],
-                                       void *data)
+TEST_CASE(send_append_entries, error, io, NULL)
 {
     struct fixture *f = data;
     size_t i;
@@ -133,7 +142,7 @@ static MunitResult test_send_ae_io_err(const MunitParameter params[],
 
     raft_io_stub_fault(&f->io, 0, 1);
 
-    i = raft_configuration__index(&f->raft.configuration, 2);
+    i = configuration__index_of(&f->raft.configuration, 2);
 
     rv = raft_replication__send_append_entries(&f->raft, i);
     munit_assert_int(rv, ==, RAFT_ERR_IO);
@@ -142,8 +151,7 @@ static MunitResult test_send_ae_io_err(const MunitParameter params[],
 }
 
 /* Send the second log entry. */
-static MunitResult test_send_ae_second_entry(const MunitParameter params[],
-                                             void *data)
+TEST_CASE(send_append_entries, success, second_entry, NULL)
 {
     struct fixture *f = data;
     size_t i;
@@ -156,7 +164,7 @@ static MunitResult test_send_ae_second_entry(const MunitParameter params[],
     __convert_to_leader(f);
     __append_entry(f);
 
-    i = raft_configuration__index(&f->raft.configuration, 2);
+    i = configuration__index_of(&f->raft.configuration, 2);
 
     rv = raft_replication__send_append_entries(&f->raft, i);
     munit_assert_int(rv, ==, 0);
@@ -166,21 +174,20 @@ static MunitResult test_send_ae_second_entry(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static MunitTest send_append_entries_tests[] = {
-    {"/oom", test_send_ae_oom, setup, tear_down, 0, send_ae_oom_params},
-    {"/io-err", test_send_ae_io_err, setup, tear_down, 0, NULL},
-    {"/second-entry", test_send_ae_second_entry, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
  * raft_replication__trigger
  */
 
+TEST_SUITE(trigger);
+
+static MunitTestSetup trigger__setup = setup;
+static MunitTestTearDown trigger__tear_down = tear_down;
+
+TEST_GROUP(trigger, error);
+
 /* A failure occurs upon submitting the I/O request for a particular server, the
  * I/O requests for other servers are still submitted. */
-static MunitResult test_trigger_io_err(const MunitParameter params[],
-                                       void *data)
+TEST_CASE(trigger, error,_io, NULL)
 {
     struct fixture *f = data;
 
@@ -199,17 +206,3 @@ static MunitResult test_trigger_io_err(const MunitParameter params[],
 
     return MUNIT_OK;
 }
-
-static MunitTest trigger_tests[] = {
-    {"/io-err", test_trigger_io_err, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
-/**
- * Suite
- */
-MunitSuite raft_replication_suites[] = {
-    {"/send-append-entries", send_append_entries_tests, NULL, 1, 0},
-    {"/trigger", trigger_tests, NULL, 1, 0},
-    {NULL, NULL, NULL, 0, 0},
-};

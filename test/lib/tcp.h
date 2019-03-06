@@ -38,8 +38,24 @@ void test_tcp_tear_down(struct test_tcp *t);
 void test_tcp_connect(struct test_tcp *t, int port);
 
 /**
+ * Close the client socket.
+ */
+void test_tcp_close(struct test_tcp *t);
+
+/**
  * Send data using the client socket.
  */
 void test_tcp_send(struct test_tcp *t, const void *buf, int len);
+
+/**
+ * Accept inbound client connection and return the relevant socket.
+ */
+int test_tcp_accept(struct test_tcp *t);
+
+/**
+ * Close the server socket.
+ */
+void test_tcp_stop(struct test_tcp *t);
+
 
 #endif /* TEST_TCP_H */

@@ -21,6 +21,11 @@ void raft_state__clear(struct raft *r);
 int raft_state__bump_current_term(struct raft *r, raft_term term);
 
 /**
+ * Set the initial state to follower.
+ */
+void raft_state__start_as_follower(struct raft *r);
+
+/**
  * Convert from candidate or leader to follower.
  *
  * From Figure 3.1:

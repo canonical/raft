@@ -1,11 +1,16 @@
 #include "../../include/raft.h"
+#include "../../include/raft/io_stub.h"
+
+#include "../../src/snapshot.h"
 
 #include "../lib/fsm.h"
 #include "../lib/heap.h"
 #include "../lib/io.h"
 #include "../lib/logger.h"
-#include "../lib/munit.h"
 #include "../lib/raft.h"
+#include "../lib/runner.h"
+
+TEST_MODULE(raft);
 
 /**
  * Helpers
@@ -13,7 +18,7 @@
 
 struct fixture
 {
-    TEST_RAFT_FIXTURE_FIELDS;
+    RAFT_FIXTURE;
     struct
     {
         bool invoked;
@@ -23,13 +28,6 @@ struct fixture
 static int __rand()
 {
     return munit_rand_uint32();
-}
-
-static void __stop_cb(void *data)
-{
-    struct fixture *f = data;
-
-    f->stop_cb.invoked = true;
 }
 
 /**
@@ -42,7 +40,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 
     (void)user_data;
 
-    TEST_RAFT_FIXTURE_SETUP(f);
+    RAFT_SETUP(f);
 
     raft_set_rand(&f->raft, __rand);
 
@@ -55,7 +53,7 @@ static void tear_down(void *data)
 {
     struct fixture *f = data;
 
-    TEST_RAFT_FIXTURE_TEAR_DOWN(f);
+    RAFT_TEAR_DOWN(f);
 
     free(f);
 }
@@ -91,6 +89,14 @@ static void tear_down(void *data)
  * raft_init
  */
 
+TEST_SUITE(init);
+
+static MunitTestSetup init__setup = setup;
+static MunitTestTearDown init__tear_down = tear_down;
+
+TEST_GROUP(init, error);
+TEST_GROUP(init, success);
+
 static char *init_oom_heap_fault_delay[] = {"0", NULL};
 static char *init_oom_heap_fault_repeat[] = {"1", NULL};
 
@@ -101,24 +107,28 @@ static MunitParameterEnum init_oom_params[] = {
 };
 
 /* Out of memory conditions. */
-static MunitResult test_init_oom(const MunitParameter params[], void *data)
+TEST_CASE(init, error, oom, init_oom_params)
 {
     struct fixture *f = data;
+    struct raft_io io;
     struct raft raft;
     int rv;
 
     (void)params;
 
+    raft_io_stub_init(&io, &f->logger);
     test_heap_fault_enable(&f->heap);
 
-    rv = raft_init(&raft, &f->logger, &f->io, &f->fsm, f, 1, "1");
-    munit_assert_int(rv, ==, RAFT_ERR_NOMEM);
+    rv = raft_init(&raft, &f->logger, &io, &f->fsm, f, 1, "1");
+    munit_assert_int(rv, ==, RAFT_ENOMEM);
+
+    raft_io_stub_close(&io);
 
     return MUNIT_OK;
 }
 
 /* The raft state is properly initialized. */
-static MunitResult test_init_state(const MunitParameter params[], void *data)
+TEST_CASE(init, success, state, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -144,34 +154,29 @@ static MunitResult test_init_state(const MunitParameter params[], void *data)
     munit_assert_int(f->raft.configuration_uncommitted_index, ==, 0);
 
     munit_assert_int(f->raft.election_timeout, ==, 1000);
-    munit_assert_int(f->raft.election_timeout_rand, >=,
-                     f->raft.election_timeout);
-    munit_assert_int(f->raft.election_timeout_rand, <,
-                     2 * f->raft.election_timeout);
     munit_assert_int(f->raft.heartbeat_timeout, ==, 100);
 
     munit_assert_int(f->raft.timer, ==, 0);
 
     munit_assert(f->raft.watchers[RAFT_EVENT_STATE_CHANGE] == NULL);
 
-    munit_assert_ptr_equal(f->raft.ctx.state, &f->raft.state);
-    munit_assert_ptr_equal(f->raft.ctx.current_term, &f->raft.current_term);
-
     return MUNIT_OK;
 }
-
-static MunitTest init_tests[] = {
-    {"/oom", test_init_oom, setup, tear_down, 0, init_oom_params},
-    {"/state", test_init_state, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
 
 /**
  * raft_start
  */
 
+TEST_SUITE(start);
+
+static MunitTestSetup start__setup = setup;
+static MunitTestTearDown start__tear_down = tear_down;
+
+TEST_GROUP(start, error);
+TEST_GROUP(start, success);
+
 /* An error occurs when starting the I/O backend. */
-static MunitResult test_start_io_err(const MunitParameter params[], void *data)
+TEST_CASE(start, error, io, NULL)
 {
     struct fixture *f = data;
 
@@ -186,11 +191,9 @@ static MunitResult test_start_io_err(const MunitParameter params[], void *data)
 
 /* The state after a successful start of a pristine server is
  * RAFT_STATE_FOLLOWER. */
-static MunitResult test_start_pristine(const MunitParameter params[],
-                                       void *data)
+TEST_CASE(start, success, pristine, NULL)
 {
     struct fixture *f = data;
-    int rv;
 
     (void)params;
 
@@ -198,20 +201,18 @@ static MunitResult test_start_pristine(const MunitParameter params[],
 
     __assert_state(f, RAFT_STATE_FOLLOWER);
 
-    rv = raft_stop(&f->raft, f, __stop_cb);
-    munit_assert_int(rv, ==, 0);
-
-    munit_assert_true(f->stop_cb.invoked);
+    munit_assert_int(f->raft.election_timeout_rand, >=,
+                     f->raft.election_timeout);
+    munit_assert_int(f->raft.election_timeout_rand, <,
+                     2 * f->raft.election_timeout);
 
     return MUNIT_OK;
 }
 
 /* Start an instance that has been bootstrapped. */
-static MunitResult test_start_bootstrapped(const MunitParameter params[],
-                                           void *data)
+TEST_CASE(start, success, bootstrapped, NULL)
 {
     struct fixture *f = data;
-    int rv;
 
     (void)params;
 
@@ -221,8 +222,29 @@ static MunitResult test_start_bootstrapped(const MunitParameter params[],
 
     __assert_state(f, RAFT_STATE_FOLLOWER);
 
-    rv = raft_stop(&f->raft, NULL, NULL);
-    munit_assert_int(rv, ==, 0);
+    return MUNIT_OK;
+}
+
+/* Start an instance with a state that contains a snapshot. */
+TEST_CASE(start, success, snapshot, NULL)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    test_set_initial_snapshot(&f->raft, 3, 8, 7, 3);
+
+    __start(f);
+
+    munit_assert_int(test_fsm_get_x(&f->fsm), ==, 7);
+    munit_assert_int(test_fsm_get_y(&f->fsm), ==, 3);
+
+    munit_assert_int(f->raft.snapshot.term, ==, 3);
+    munit_assert_int(f->raft.snapshot.index, ==, 8);
+
+    munit_assert_int(f->raft.configuration.n, ==, 1);
+    munit_assert_int(f->raft.configuration.servers[0].id, ==, 1);
+    munit_assert_string_equal(f->raft.configuration.servers[0].address, "1");
 
     return MUNIT_OK;
 }
@@ -238,7 +260,7 @@ static MunitParameterEnum start_oom_params[] = {
 };
 
 /* Out of memory condditions. */
-static MunitResult test_start_oom(const MunitParameter params[], void *data)
+TEST_CASE(start, error, oom, start_oom_params)
 {
     struct fixture *f = data;
 
@@ -248,26 +270,24 @@ static MunitResult test_start_oom(const MunitParameter params[], void *data)
 
     test_heap_fault_enable(&f->heap);
 
-    __assert_start_error(f, RAFT_ERR_NOMEM);
+    __assert_start_error(f, RAFT_ENOMEM);
 
     return MUNIT_OK;
 }
-
-static MunitTest start_tests[] = {
-    {"/io-err", test_start_io_err, setup, tear_down, 0, NULL},
-    {"/pristine", test_start_pristine, setup, tear_down, 0, NULL},
-    {"/bootstrapped", test_start_bootstrapped, setup, tear_down, 0, NULL},
-    {"/oom", test_start_oom, setup, tear_down, 0, start_oom_params},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
 
 /**
  * raft__recv_cb
  */
 
+TEST_SUITE(recv_cb);
+
+static MunitTestSetup recv_cb__setup = setup;
+static MunitTestTearDown recv_cb__tear_down = tear_down;
+
+TEST_GROUP(recv_cb, success);
+
 /* Receive an AppendEntries message. */
-static MunitResult test_recv_cb_append_entries(const MunitParameter params[],
-                                               void *data)
+TEST_CASE(recv_cb, success, append_entries, NULL)
 {
     struct fixture *f = data;
     struct raft_message message;
@@ -308,8 +328,7 @@ static MunitResult test_recv_cb_append_entries(const MunitParameter params[],
 }
 
 /* Receive an RequestVote message. */
-static MunitResult test_recv_cb_request_vote(const MunitParameter params[],
-                                             void *data)
+TEST_CASE(recv_cb, success, request_vote, NULL)
 {
     struct fixture *f = data;
     struct raft_message message;
@@ -332,12 +351,13 @@ static MunitResult test_recv_cb_request_vote(const MunitParameter params[],
     /* The voted for field has been updated. */
     munit_assert_int(f->raft.voted_for, ==, 2);
 
+    raft_io_stub_flush(&f->io);
+
     return MUNIT_OK;
 }
 
 /* Receive a message with an unknown type. */
-static MunitResult test_recv_cb_unknown_type(const MunitParameter params[],
-                                             void *data)
+TEST_CASE(recv_cb, success, unknown_type, NULL)
 {
     struct fixture *f = data;
     struct raft_message message;
@@ -352,21 +372,21 @@ static MunitResult test_recv_cb_unknown_type(const MunitParameter params[],
 
     return MUNIT_OK;
 }
-static MunitTest recv_tests[] = {
-    {"/append-entries", test_recv_cb_append_entries, setup, tear_down, 0, NULL},
-    {"/request-vote", test_recv_cb_request_vote, setup, tear_down, 0, NULL},
-    {"/unknown-type", test_recv_cb_unknown_type, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 
 /**
  * raft_bootstrap
  */
 
+TEST_SUITE(bootstrap);
+
+static MunitTestSetup bootstrap__setup = setup;
+static MunitTestTearDown bootstrap__tear_down = tear_down;
+
+TEST_GROUP(bootstrap, error);
+TEST_GROUP(bootstrap, success);
+
 /* An error occurs when bootstrapping the state on disk. */
-static MunitResult test_bootstrap_io_err(const MunitParameter params[],
-                                         void *data)
+TEST_CASE(bootstrap, error, io, NULL)
 {
     struct fixture *f = data;
     struct raft_configuration configuration;
@@ -388,8 +408,7 @@ static MunitResult test_bootstrap_io_err(const MunitParameter params[],
 
 /* Starting an instance after it's bootstrapped initializes the
  * configuration. */
-static MunitResult test_bootstrap_state(const MunitParameter params[],
-                                        void *data)
+TEST_CASE(bootstrap, success, state, NULL)
 {
     struct fixture *f = data;
     struct raft_configuration configuration;
@@ -415,21 +434,3 @@ static MunitResult test_bootstrap_state(const MunitParameter params[],
 
     return MUNIT_OK;
 }
-
-static MunitTest bootstrap_tests[] = {
-    {"/io-err", test_bootstrap_io_err, setup, tear_down, 0, NULL},
-    {"/state", test_bootstrap_state, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
-/**
- * Test suite
- */
-
-MunitSuite raft_suites[] = {
-    {"/init", init_tests, NULL, 1, 0},
-    {"/start", start_tests, NULL, 1, 0},
-    {"/recv", recv_tests, NULL, 1, 0},
-    {"/bootstrap", bootstrap_tests, NULL, 1, 0},
-    {NULL, NULL, NULL, 0, 0},
-};

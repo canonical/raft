@@ -2,16 +2,24 @@
 
 #include "assert.h"
 #include "configuration.h"
-#include "replication.h"
 #include "election.h"
+#include "replication.h"
 #include "rpc.h"
 #include "state.h"
+
+static void raft_rpc__recv_request_vote_send_cb(struct raft_io_send *req,
+                                                int status)
+{
+    (void)status;
+    raft_free(req);
+}
 
 int raft_rpc__recv_request_vote(struct raft *r,
                                 const unsigned id,
                                 const char *address,
                                 const struct raft_request_vote *args)
 {
+    struct raft_io_send *req;
     struct raft_message message;
     struct raft_request_vote_result *result = &message.request_vote_result;
     int match;
@@ -72,8 +80,14 @@ reply:
     message.server_id = id;
     message.server_address = address;
 
-    rv = r->io->send(r->io, &message, NULL, NULL);
+    req = raft_malloc(sizeof *req);
+    if (req == NULL) {
+        return RAFT_ENOMEM;
+    }
+
+    rv = r->io->send(r->io, req, &message, raft_rpc__recv_request_vote_send_cb);
     if (rv != 0) {
+        raft_free(req);
         return rv;
     }
 
@@ -98,7 +112,7 @@ int raft_rpc__recv_request_vote_result(
 
     raft_debugf(r->logger, "received vote request result from server %ld", id);
 
-    votes_index = raft_configuration__voting_index(&r->configuration, id);
+    votes_index = configuration__index_of_voting(&r->configuration, id);
     if (votes_index == r->configuration.n) {
         raft_infof(r->logger, "non-voting or unknown server -> reject");
         return 0;
@@ -145,7 +159,7 @@ int raft_rpc__recv_request_vote_result(
      */
     if (result->vote_granted) {
         if (raft_election__tally(r, votes_index)) {
-            raft_debugf(r->logger, "votes quorum reached -> convert to leader");
+            raft_infof(r->logger, "votes quorum reached -> convert to leader");
             rv = raft_state__convert_to_leader(r);
             if (rv != 0) {
                 return rv;

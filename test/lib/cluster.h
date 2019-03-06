@@ -125,7 +125,7 @@ bool test_cluster_has_no_leader(struct test_cluster *c);
 /**
  * Simulate a client requesting the leader to accept a new entry.
  */
-void test_cluster_accept(struct test_cluster *c);
+void test_cluster_propose(struct test_cluster *c);
 
 /**
  * Simulate a client requesting the leader to accept a new entry containing a

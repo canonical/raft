@@ -3,78 +3,12 @@
 
 #include <uv.h>
 
-#define RAFT_IO_UV_METADATA_SIZE (8 * 5)              /* Five 64-bit words */
+#define RAFT_IO_UV_METADATA_SIZE (8 * 4)              /* Four 64-bit words */
 #define RAFT_IO_UV_MAX_SEGMENT_SIZE (8 * 1024 * 1024) /* 8 Megabytes */
 
 struct raft_logger;
 struct raft_io;
-
-/**
- * Interface to establish outgoing connections to other Raft servers and to
- * accept incoming connections from them.
- */
-struct raft_io_uv_transport
-{
-    /**
-     * User defined data.
-     */
-    void *data;
-
-    /**
-     * Start accepting incoming connections.
-     *
-     * Once a new connection is accepted, the @cb callback passed in the
-     * initializer must be invoked with the relevant details of the connecting
-     * Raft server.
-     */
-    int (*start)(struct raft_io_uv_transport *t,
-                 unsigned id,
-                 const char *address,
-                 void *data,
-                 void (*cb)(void *data,
-                            unsigned id,
-                            const char *address,
-                            uv_stream_t *stream));
-
-    /**
-     * Stop accepting incoming connections.
-     *
-     * The @cb callback must be invoked once done.
-     */
-    void (*stop)(struct raft_io_uv_transport *t,
-                 void *data,
-                 void (*cb)(void *data));
-
-    /**
-     * Establish a connection with the server with the given ID and address.
-     *
-     * If this function returns with no error, then the @stream pointer must be
-     * initialized with a stream handle that calling code can start writing to:
-     * the connection probably hasn't been established yet, but the OS will
-     * buffer writes and flush them when ready. The handle pointed to by the
-     * @stream pointer must have been allocated with @raft_malloc, and once this
-     * function returns ownership of the memory is transferred to the caller,
-     * which is in charge of releasing it.
-     *
-     * The @cb callback must be invoked when the connection has been established
-     * or the connection attempt has failed.
-     */
-    int (*connect)(struct raft_io_uv_transport *t,
-                   unsigned id,
-                   const char *address,
-                   struct uv_stream_s **stream,
-                   void *data,
-                   void (*cb)(void *data, int status));
-};
-
-/**
- * Init a transport interface that uses TCP sockets.
- */
-int raft_io_uv_tcp_init(struct raft_io_uv_transport *t,
-                        struct raft_logger *logger,
-                        struct uv_loop_s *loop);
-
-void raft_io_uv_tcp_close(struct raft_io_uv_transport *t);
+struct raft_io_uv_transport;
 
 /**
  * Configure the given @raft_io instance to use a libuv-based I/O
@@ -150,5 +84,120 @@ int raft_io_uv_init(struct raft_io *io,
                     struct raft_io_uv_transport *transport);
 
 void raft_io_uv_close(struct raft_io *io);
+
+/**
+ * Callback invoked by the transport implementation when a new incoming
+ * connection has been established.
+ *
+ * No references to @address must be kept after this function returns.
+ *
+ * Ownership of @stream is transfered to user code, which is responsible of
+ * uv_close()'ing it and then releasing its memory.
+ */
+typedef void (*raft_io_uv_accept_cb)(struct raft_io_uv_transport *t,
+                                     unsigned id,
+                                     const char *address,
+                                     struct uv_stream_s *stream);
+
+/**
+ * Callback invoked by the transport implementation after a connect request has
+ * completed. If status is #0, then @stream will point to a valid handle, which
+ * user code is then responsible to uv_close() and then release.
+ */
+struct raft_io_uv_connect;
+typedef void (*raft_io_uv_connect_cb)(struct raft_io_uv_connect *req,
+                                      struct uv_stream_s *stream,
+                                      int status);
+
+/**
+ * Handle to a connect request.
+ */
+struct raft_io_uv_connect
+{
+    void *data;               /* User data */
+    raft_io_uv_connect_cb cb; /* Callback */
+
+    /* Implementation-defined */
+    void *impl;
+    void (*cancel)(struct raft_io_uv_connect *req);
+};
+
+/**
+ * Callback invoked by the transport implementation after a close request is
+ * completed.
+ */
+typedef void (*raft_io_uv_transport_close_cb)(struct raft_io_uv_transport *t);
+
+/**
+ * Interface to establish outgoing connections to other Raft servers and to
+ * accept incoming connections from them.
+ */
+struct raft_io_uv_transport
+{
+    /**
+     * User defined data.
+     */
+    void *data;
+
+    /**
+     * Implementation-defined state.
+     */
+    void *impl;
+
+    /**
+     * Initialize the transport with the given server's identity.
+     */
+    int (*init)(struct raft_io_uv_transport *t,
+                unsigned id,
+                const char *address);
+
+    /**
+     * Listen for incoming connections.
+     *
+     * Once a new connection is accepted, the @cb callback passed in the
+     * initializer must be invoked with the relevant details of the connecting
+     * Raft server.
+     */
+    int (*listen)(struct raft_io_uv_transport *t, raft_io_uv_accept_cb cb);
+
+    /**
+     * Connect to the server with the given ID and address.
+     *
+     * The @cb callback must be invoked when the connection has been established
+     * or the connection attempt has failed. The memory pointed by @req can be
+     * released only after @cb has fired.
+     */
+    int (*connect)(struct raft_io_uv_transport *t,
+                   struct raft_io_uv_connect *req,
+                   unsigned id,
+                   const char *address,
+                   raft_io_uv_connect_cb cb);
+
+    /**
+     * Close the transport.
+     *
+     * The implementation must:
+     *
+     * - Stop accepting incoming connections. The @cb callback passed to @listen
+     *   must not be invoked anymore.
+     *
+     * - Abort all pending @connect requests. The callback of each pending
+     *   request must be invoked with #RAFT_ERR_IO_CANCELED.
+     *
+     * - Invoke the @cb callback passed to this method once it's safe to release
+     *   the memory of the transport object.
+     */
+    void (*close)(struct raft_io_uv_transport *t,
+                  raft_io_uv_transport_close_cb cb);
+};
+
+/**
+ * Init a transport interface that uses TCP sockets.
+ */
+int raft_io_uv_tcp_init(struct raft_io_uv_transport *t,
+                        struct raft_logger *logger,
+                        struct uv_loop_s *loop);
+
+void raft_io_uv_tcp_close(struct raft_io_uv_transport *t);
 
 #endif /* RAFT_IO_UV_H */

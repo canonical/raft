@@ -1,4 +1,5 @@
 #include "../../include/raft.h"
+#include "../../include/raft/io_stub.h"
 
 #include "../../src/configuration.h"
 #include "../../src/election.h"
@@ -7,8 +8,10 @@
 #include "../lib/heap.h"
 #include "../lib/io.h"
 #include "../lib/logger.h"
-#include "../lib/munit.h"
 #include "../lib/raft.h"
+#include "../lib/runner.h"
+
+TEST_MODULE(election);
 
 /**
  * Helpers
@@ -16,7 +19,7 @@
 
 struct fixture
 {
-    TEST_RAFT_FIXTURE_FIELDS;
+    RAFT_FIXTURE;
 };
 
 static void *setup(const MunitParameter params[], void *user_data)
@@ -25,7 +28,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 
     (void)user_data;
 
-    TEST_RAFT_FIXTURE_SETUP(f);
+    RAFT_SETUP(f);
 
     return f;
 }
@@ -34,7 +37,7 @@ static void tear_down(void *data)
 {
     struct fixture *f = data;
 
-    TEST_RAFT_FIXTURE_TEAR_DOWN(f);
+    RAFT_TEAR_DOWN(f);
 
     free(f);
 }
@@ -45,7 +48,7 @@ static void tear_down(void *data)
  */
 #define __set_state_to_candidate(F)                                           \
     {                                                                         \
-        int n_voting = raft_configuration__n_voting(&F->raft.configuration);  \
+        int n_voting = configuration__n_voting(&F->raft.configuration);       \
                                                                               \
         F->raft.state = RAFT_STATE_CANDIDATE;                                 \
         F->raft.candidate_state.votes = raft_malloc(n_voting * sizeof(bool)); \
@@ -55,10 +58,16 @@ static void tear_down(void *data)
  * raft_election__reset_timer
  */
 
+TEST_SUITE(reset_timer);
+
+static MunitTestSetup reset_timer__setup = setup;
+static MunitTestTearDown reset_timer__tear_down = tear_down;
+
+TEST_GROUP(reset_timer, success);
+
 /* The timer is set to a random value between election_timeout and
  * election_timeout * 2. */
-static MunitResult test_reset_timer_range(const MunitParameter params[],
-                                          void *data)
+TEST_CASE(reset_timer, success, range, NULL)
 {
     struct fixture *f = data;
 
@@ -77,18 +86,19 @@ static MunitResult test_reset_timer_range(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static MunitTest reset_timer_tests[] = {
-    {"/range", test_reset_timer_range, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
  * raft_election__start
  */
 
+TEST_SUITE(start);
+
+static MunitTestSetup start__setup = setup;
+static MunitTestTearDown start__tear_down = tear_down;
+
+TEST_GROUP(start, error);
+
 /* An error occurs while persisting the new term. */
-static MunitResult test_start_term_io_err(const MunitParameter params[],
-                                          void *data)
+TEST_CASE(start, error, term_io_err, NULL)
 {
     struct fixture *f = data;
     int rv;
@@ -108,8 +118,7 @@ static MunitResult test_start_term_io_err(const MunitParameter params[],
 }
 
 /* An error occurs while persisting the vote. */
-static MunitResult test_start_vote_io_err(const MunitParameter params[],
-                                          void *data)
+TEST_CASE(start, error, vote_io_err, NULL)
 {
     struct fixture *f = data;
     int rv;
@@ -129,8 +138,7 @@ static MunitResult test_start_vote_io_err(const MunitParameter params[],
 }
 
 /* If an error occurs while sending a request vote message, it's ignored. */
-static MunitResult test_start_send_io_err(const MunitParameter params[],
-                                          void *data)
+TEST_CASE(start, error, send_io_err, NULL)
 {
     struct fixture *f = data;
     int rv;
@@ -150,8 +158,7 @@ static MunitResult test_start_send_io_err(const MunitParameter params[],
 }
 
 /* Messages are sent to request the votes of the other voting servers. */
-static MunitResult test_start_send_messages(const MunitParameter params[],
-                                            void *data)
+TEST_CASE(start, error, send_messages, NULL)
 {
     struct fixture *f = data;
     struct raft_message *messages;
@@ -182,21 +189,20 @@ static MunitResult test_start_send_messages(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static MunitTest start_tests[] = {
-    {"/term-io-err", test_start_term_io_err, setup, tear_down, 0, NULL},
-    {"/vote-io-err", test_start_vote_io_err, setup, tear_down, 0, NULL},
-    {"/send-io-err", test_start_send_io_err, setup, tear_down, 0, NULL},
-    {"/send-messages", test_start_send_messages, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
  * raft_election__vote
  */
 
+TEST_SUITE(vote);
+
+static MunitTestSetup vote__setup = setup;
+static MunitTestTearDown vote__tear_down = tear_down;
+
+TEST_GROUP(vote, success);
+TEST_GROUP(vote, error);
+
 /* The server requesting the vote has a term newer than ours. */
-static MunitResult test_vote_newer_term(const MunitParameter params[],
-                                        void *data)
+TEST_CASE(vote, success, newer_term, NULL)
 {
     struct fixture *f = data;
     struct raft_request_vote args;
@@ -221,7 +227,7 @@ static MunitResult test_vote_newer_term(const MunitParameter params[],
 }
 
 /* An error occurs when persisting the vote. */
-static MunitResult test_vote_io_err(const MunitParameter params[], void *data)
+TEST_CASE(vote, error, io_err, NULL)
 {
     struct fixture *f = data;
     struct raft_request_vote args;
@@ -244,19 +250,3 @@ static MunitResult test_vote_io_err(const MunitParameter params[], void *data)
 
     return MUNIT_OK;
 }
-
-static MunitTest vote_tests[] = {
-    {"/newer-term", test_vote_newer_term, setup, tear_down, 0, NULL},
-    {"/io-err", test_vote_io_err, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
-/**
- * Suite
- */
-MunitSuite raft_election_suites[] = {
-    {"/reset-timer", reset_timer_tests, NULL, 1, 0},
-    {"/start", start_tests, NULL, 1, 0},
-    {"/vote", vote_tests, NULL, 1, 0},
-    {NULL, NULL, NULL, 0, 0},
-};

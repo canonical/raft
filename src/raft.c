@@ -10,11 +10,13 @@
 #include "rpc.h"
 #include "rpc_append_entries.h"
 #include "rpc_request_vote.h"
+#include "rpc_install_snapshot.h"
 #include "state.h"
 #include "tick.h"
 
 #define RAFT__DEFAULT_ELECTION_TIMEOUT 1000
 #define RAFT__DEFAULT_HEARTBEAT_TIMEOUT 100
+#define RAFT__DEFAULT_SNAPSHOT_THRESHOLD 1024
 
 int raft_init(struct raft *r,
               struct raft_logger *logger,
@@ -25,11 +27,13 @@ int raft_init(struct raft *r,
               const char *address)
 {
     int i;
+    int rv;
 
     assert(r != NULL);
 
     r->logger = logger;
     r->io = io;
+    r->io->data = r;
     r->fsm = fsm;
 
     r->id = id;
@@ -37,7 +41,7 @@ int raft_init(struct raft *r,
     /* Make a copy of the address */
     r->address = raft_malloc(strlen(address) + 1);
     if (r->address == NULL) {
-        return RAFT_ERR_NOMEM;
+        return RAFT_ENOMEM;
     }
     strcpy(r->address, address);
 
@@ -62,61 +66,64 @@ int raft_init(struct raft *r,
     r->state = RAFT_STATE_UNAVAILABLE;
 
     r->rand = rand;
-    raft_election__reset_timer(r);
 
     for (i = 0; i < RAFT_EVENT_N; i++) {
         r->watchers[i] = NULL;
     }
 
-    /* Context. */
-    r->ctx.state = &r->state;
-    r->ctx.current_term = &r->current_term;
+    r->close_cb = NULL;
 
-    /* Last error */
-    strcpy(r->errmsg, "");
+    r->snapshot.term = 0;
+    r->snapshot.index = 0;
+    r->snapshot.pending.term = 0;
+    r->snapshot.threshold = RAFT__DEFAULT_SNAPSHOT_THRESHOLD;
 
-    r->stop.data = NULL;
-    r->stop.cb = NULL;
+    rv = r->io->init(r->io, r->id, r->address);
+    if (rv != 0) {
+        return rv;
+    }
 
     return 0;
 }
 
-void raft_close(struct raft *r)
+static void raft__close_cb(struct raft_io *io)
 {
-    assert(r != NULL);
+    struct raft *r = io->data;
+
+    raft_infof(r->logger, "stopped");
 
     raft_free(r->address);
     raft_state__clear(r);
     raft_log__close(&r->log);
     raft_configuration_close(&r->configuration);
-}
 
-static void raft__stop_cb(void *data)
-{
-    struct raft *r;
-
-    r = data;
-
-    if (r->stop.cb != NULL) {
-        r->stop.cb(r->stop.data);
+    if (r->close_cb != NULL) {
+        r->close_cb(r);
     }
 }
 
-static void raft__tick_cb(void *data, unsigned msecs)
+static void raft__tick_cb(struct raft_io *io, unsigned msecs)
 {
     struct raft *r;
 
-    r = data;
+    r = io->data;
 
     raft__tick(r, msecs);
 }
 
-static void raft__recv_cb(void *data, struct raft_message *message)
+static const char *raft__message_names[] = {
+    "append entries",
+    "append entries result",
+    "request vote",
+    "request vote result",
+};
+
+static void raft__recv_cb(struct raft_io *io, struct raft_message *message)
 {
     struct raft *r;
     int rv;
 
-    r = data;
+    r = io->data;
 
     switch (message->type) {
         case RAFT_IO_APPEND_ENTRIES:
@@ -133,54 +140,75 @@ static void raft__recv_cb(void *data, struct raft_message *message)
             rv = raft_rpc__recv_request_vote(r, message->server_id,
                                              message->server_address,
                                              &message->request_vote);
-	    break;
+            break;
         case RAFT_IO_REQUEST_VOTE_RESULT:
             rv = raft_rpc__recv_request_vote_result(
                 r, message->server_id, message->server_address,
                 &message->request_vote_result);
             break;
-        default:
-            rv = RAFT_ERR_MALFORMED;
+        case RAFT_IO_INSTALL_SNAPSHOT:
+            rv = raft_rpc__recv_install_snapshot(
+                r, message->server_id, message->server_address,
+                &message->install_snapshot);
             break;
+        default:
+            raft_warnf(r->logger, "rpc: unknown message type type: %d",
+                       message->type);
+            return;
     };
 
-    if (rv != 0) {
-        raft_warnf(r->logger, "handle message with type %d: %s", message->type,
-                   raft_strerror(rv));
+    if (rv != 0 && rv != RAFT_ERR_IO_CONNECT) {
+        raft_errorf(r->logger, "rpc %s: %s", raft__message_names[message->type],
+                    raft_strerror(rv));
     }
 }
 
 int raft_start(struct raft *r)
 {
     int rv;
-    raft_index start_index;
+    struct raft_snapshot *snapshot;
     struct raft_entry *entries;
     size_t n_entries;
+    raft_index start_index;
     size_t i;
 
     assert(r != NULL);
     assert(r->state == RAFT_STATE_UNAVAILABLE);
 
-    raft_debugf(r->logger, "start");
+    raft_infof(r->logger, "starting");
 
     assert(r->heartbeat_timeout != 0);
     assert(r->heartbeat_timeout < r->election_timeout);
 
-    rv = r->io->start(r->io, r->id, r->address, r->heartbeat_timeout, r,
-                      raft__tick_cb, raft__recv_cb);
+    rv = r->io->load(r->io, &r->current_term, &r->voted_for, &snapshot,
+                     &entries, &n_entries);
     if (rv != 0) {
         goto err;
     }
 
-    rv = r->io->load(r->io, &r->current_term, &r->voted_for, &start_index,
-                     &entries, &n_entries);
-    if (rv != 0) {
-        goto err_after_io_start;
+    if (snapshot == NULL) {
+        start_index = 1;
+    } else {
+        start_index = snapshot->index + 1;
+        assert(snapshot->n_bufs == 1);
+        rv = r->fsm->restore(r->fsm, &snapshot->bufs[0]);
+        if (rv != 0) {
+            goto err_after_load;
+        }
+        r->commit_index = snapshot->index;
+        r->last_applied = snapshot->index;
+        r->snapshot.index = snapshot->index;
+        r->snapshot.term = snapshot->term;
+        r->configuration = snapshot->configuration;
+        r->configuration_index = snapshot->configuration_index;
+        raft_free(snapshot->bufs);
+        raft_free(snapshot);
     }
 
     /* If the start index is 1 and the log is not empty, then the first entry
      * must be a configuration*/
     if (start_index == 1 && n_entries > 0) {
+        assert(snapshot == NULL);
         assert(entries[0].type == RAFT_LOG_CONFIGURATION);
 
         /* As a small optimization, bump the commit index to 1 since we require
@@ -197,7 +225,10 @@ int raft_start(struct raft *r)
             continue;
         }
 
-        rv = raft_configuration_decode(&entry->buf, &r->configuration);
+        raft_configuration_close(&r->configuration);
+        raft_configuration_init(&r->configuration);
+
+        rv = configuration__decode(&entry->buf, &r->configuration);
         if (rv != 0) {
             goto err_after_load;
         }
@@ -208,6 +239,7 @@ int raft_start(struct raft *r)
     }
 
     /* Append the entries to the log. */
+    raft_log__set_offset(&r->log, start_index - 1);
     for (i = 0; i < n_entries; i++) {
         struct raft_entry *entry = &entries[i];
 
@@ -218,11 +250,17 @@ int raft_start(struct raft *r)
         }
     }
 
+    rv =
+        r->io->start(r->io, r->heartbeat_timeout, raft__tick_cb, raft__recv_cb);
+    if (rv != 0) {
+        goto err_after_load;
+    }
+
     if (entries != NULL) {
         raft_free(entries);
     }
 
-    r->state = RAFT_STATE_FOLLOWER;
+    raft_state__start_as_follower(r);
 
     return 0;
 
@@ -232,34 +270,22 @@ err_after_load:
         raft_free(entries);
     }
 
-err_after_io_start:
-    r->io->stop(r->io, r, raft__stop_cb);
-
 err:
     assert(rv != 0);
 
     return rv;
 }
 
-int raft_stop(struct raft *r, void *data, void (*cb)(void *data))
+void raft_close(struct raft *r, void (*cb)(struct raft *r))
 {
-    int rv;
-
     assert(r != NULL);
-    assert(r->stop.data == NULL);
-    assert(r->stop.cb == NULL);
+    assert(r->close_cb == NULL);
 
-    r->stop.data = data;
-    r->stop.cb = cb;
+    r->close_cb = cb;
 
-    raft_debugf(r->logger, "stop");
-
-    rv = r->io->stop(r->io, r, raft__stop_cb);
-    if (rv != 0) {
-        return rv;
-    }
-
-    return 0;
+    raft_state__clear(r);
+    r->state = RAFT_STATE_UNAVAILABLE;
+    r->io->close(r->io, raft__close_cb);
 }
 
 void raft_set_rand(struct raft *r, int (*rand)())
@@ -277,14 +303,6 @@ void raft_set_election_timeout(struct raft *r, const unsigned election_timeout)
 const char *raft_state_name(struct raft *r)
 {
     return raft_state_names[r->state];
-}
-
-const struct raft_entry *raft_get_entry(struct raft *r, const raft_index index)
-{
-    assert(r != NULL);
-    assert(index > 0);
-
-    return raft_log__get(&r->log, index);
 }
 
 int raft_bootstrap(struct raft *r, const struct raft_configuration *conf)

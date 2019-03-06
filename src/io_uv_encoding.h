@@ -5,9 +5,11 @@
 #ifndef RAFT_IO_UV_ENCODING_H
 #define RAFT_IO_UV_ENCODING_H
 
+#include <uv.h>
+
 #include "../include/raft.h"
 
-int raft_io_uv_encode__message(const struct raft_message *message,
+int io_uv__encode_message(const struct raft_message *message,
                                uv_buf_t **bufs,
                                unsigned *n_bufs);
 
@@ -47,5 +49,9 @@ void raft_io_uv_decode__entries_batch(const struct raft_buffer *buf,
  * (which means that all entry data pointers are 8-byte aligned).
  */
 size_t raft_io_uv_sizeof__batch_header(size_t n);
+
+void raft_io_uv_encode__batch_header(const struct raft_entry *entries,
+                                     unsigned n,
+                                     void *buf);
 
 #endif /* RAFT_IO_UV_ENCODING_H */

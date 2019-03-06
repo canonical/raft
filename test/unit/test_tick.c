@@ -1,4 +1,5 @@
 #include "../../include/raft.h"
+#include "../../include/raft/io_stub.h"
 
 #include "../../src/configuration.h"
 #include "../../src/log.h"
@@ -8,8 +9,10 @@
 #include "../lib/heap.h"
 #include "../lib/io.h"
 #include "../lib/logger.h"
-#include "../lib/munit.h"
 #include "../lib/raft.h"
+#include "../lib/runner.h"
+
+TEST_MODULE(tick);
 
 /**
  * Helpers
@@ -17,7 +20,7 @@
 
 struct fixture
 {
-    TEST_RAFT_FIXTURE_FIELDS;
+    RAFT_FIXTURE;
 };
 
 /**
@@ -30,7 +33,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 
     (void)user_data;
 
-    TEST_RAFT_FIXTURE_SETUP(f);
+    RAFT_SETUP(f);
 
     return f;
 }
@@ -39,7 +42,7 @@ static void tear_down(void *data)
 {
     struct fixture *f = data;
 
-    TEST_RAFT_FIXTURE_TEAR_DOWN(f);
+    RAFT_TEAR_DOWN(f);
 
     free(f);
 }
@@ -120,8 +123,16 @@ static void tear_down(void *data)
  * raft__tick
  */
 
+TEST_SUITE(elapse);
+
+static MunitTestSetup elapse__setup = setup;
+static MunitTestTearDown elapse__tear_down = tear_down;
+
+TEST_GROUP(elapse, error);
+TEST_GROUP(elapse, success);
+
 /* If we're in the unavailable state, raft__tick is a no-op. */
-static MunitResult test_unavailable(const MunitParameter params[], void *data)
+TEST_CASE(elapse, success, unavailable, NULL)
 {
     struct fixture *f = data;
 
@@ -134,8 +145,7 @@ static MunitResult test_unavailable(const MunitParameter params[], void *data)
 }
 
 /* Internal timers are updated according to the given time delta. */
-static MunitResult test_updates_timers(const MunitParameter params[],
-                                       void *data)
+TEST_CASE(elapse, success, update_timer, NULL)
 {
     struct fixture *f = data;
 
@@ -154,7 +164,7 @@ static MunitResult test_updates_timers(const MunitParameter params[],
 
 /* If there's only a single voting server and that's us, switch to leader
    state. */
-static MunitResult test_self_elect(const MunitParameter params[], void *data)
+TEST_CASE(elapse, success, self_elect, NULL)
 {
     struct fixture *f = data;
 
@@ -169,8 +179,7 @@ static MunitResult test_self_elect(const MunitParameter params[], void *data)
 }
 
 /* If there's only a single voting server, but it's not us, stay follower. */
-static MunitResult test_one_voter_not_us(const MunitParameter params[],
-                                         void *data)
+TEST_CASE(elapse, success, voter_not_us, NULL)
 {
     struct fixture *f = data;
 
@@ -186,7 +195,7 @@ static MunitResult test_one_voter_not_us(const MunitParameter params[],
 
 /* There's only a single voting server and that's us, but we fail to convert to
    candidate due to an OOM error. */
-static MunitResult test_candidate_oom(const MunitParameter params[], void *data)
+TEST_CASE(elapse, error, candidate_oom, NULL)
 {
     struct fixture *f = data;
     int rv;
@@ -199,15 +208,14 @@ static MunitResult test_candidate_oom(const MunitParameter params[], void *data)
     test_heap_fault_enable(&f->heap);
 
     rv = raft__tick(&f->raft, 100);
-    munit_assert_int(rv, ==, RAFT_ERR_NOMEM);
+    munit_assert_int(rv, ==, RAFT_ENOMEM);
 
     return MUNIT_OK;
 }
 
 /* There's only a single voting server and that's us, but we fail to convert to
    candidate due the disk being full. */
-static MunitResult test_candidate_io_err(const MunitParameter params[],
-                                         void *data)
+TEST_CASE(elapse, error, candidate_io_err, NULL)
 {
     struct fixture *f = data;
     int rv;
@@ -227,7 +235,7 @@ static MunitResult test_candidate_io_err(const MunitParameter params[],
 /* If the election timeout expires, the follower is a voting server, and it
  * hasn't voted yet in this term, then become candidate and start a new
  * election. */
-static MunitResult test_candidate(const MunitParameter params[], void *data)
+TEST_CASE(elapse, success, candidate, NULL)
 {
     struct fixture *f = data;
     int election_timeout;
@@ -265,9 +273,7 @@ static MunitResult test_candidate(const MunitParameter params[], void *data)
 }
 
 /* If the electippon timeout has not elapsed, stay follower. */
-static MunitResult test_election_timer_not_expired(
-    const MunitParameter params[],
-    void *data)
+TEST_CASE(elapse, success, timer_not_expired, NULL)
 {
     struct fixture *f = data;
 
@@ -282,7 +288,7 @@ static MunitResult test_election_timer_not_expired(
 }
 
 /* If the election timeout has elapsed, but we're not voters, stay follower. */
-static MunitResult test_not_voter(const MunitParameter params[], void *data)
+TEST_CASE(elapse, success, not_voter, NULL)
 {
     struct fixture *f = data;
 
@@ -298,8 +304,7 @@ static MunitResult test_not_voter(const MunitParameter params[], void *data)
 
 /* If we're leader and the heartbeat timeout has elapsed, send empty
  * AppendEntries RPCs. */
-static MunitResult test_heartbeat_timeout_elapsed(const MunitParameter params[],
-                                                  void *data)
+TEST_CASE(elapse, success, heartbeat, NULL)
 {
     struct fixture *f = data;
 
@@ -320,9 +325,7 @@ static MunitResult test_heartbeat_timeout_elapsed(const MunitParameter params[],
 }
 
 /* If we're leader and the heartbeat timeout has not elapsed, do nothing. */
-static MunitResult test_heartbeat_timeout_not_elapsed(
-    const MunitParameter params[],
-    void *data)
+TEST_CASE(elapse, success, no_heartbeat, NULL)
 {
     struct fixture *f = data;
     struct raft_message *messages;
@@ -346,7 +349,7 @@ static MunitResult test_heartbeat_timeout_not_elapsed(
 
 /* If we're candidate and the election timeout has elapsed, start a new
  * election. */
-static MunitResult test_new_election(const MunitParameter params[], void *data)
+TEST_CASE(elapse, success, new_election, NULL)
 {
     struct fixture *f = data;
     int election_timeout;
@@ -391,8 +394,7 @@ static MunitResult test_new_election(const MunitParameter params[], void *data)
 }
 
 /* If the election timeout has not elapsed, stay candidate. */
-static MunitResult test_during_election(const MunitParameter params[],
-                                        void *data)
+TEST_CASE(elapse, success, during_election, NULL)
 {
     struct fixture *f = data;
     struct raft_message *messages;
@@ -421,9 +423,7 @@ static MunitResult test_during_election(const MunitParameter params[],
 }
 
 /* Vote requests are sent only to voting servers. */
-static MunitResult test_request_vote_only_to_voters(
-    const MunitParameter params[],
-    void *data)
+TEST_CASE(elapse, success, request_vote_only_to_voters, NULL)
 {
     struct fixture *f = data;
 
@@ -439,34 +439,3 @@ static MunitResult test_request_vote_only_to_voters(
 
     return MUNIT_OK;
 }
-
-static MunitTest tick_tests[] = {
-    {"/unavailable", test_unavailable, setup, tear_down, 0, NULL},
-    {"/updates-timers", test_updates_timers, setup, tear_down, 0, NULL},
-    {"/self-elect", test_self_elect, setup, tear_down, 0, NULL},
-    {"/one-voter-not-us", test_one_voter_not_us, setup, tear_down, 0, NULL},
-    {"/candidate-oom", test_candidate_oom, setup, tear_down, 0, NULL},
-    {"/candidate-io-err", test_candidate_io_err, setup, tear_down, 0, NULL},
-    {"/candidate", test_candidate, setup, tear_down, 0, NULL},
-    {"/election-timer-not-expired", test_election_timer_not_expired, setup,
-     tear_down, 0, NULL},
-    {"/not-voter", test_not_voter, setup, tear_down, 0, NULL},
-    {"/heartbeat-timeout-elapsed", test_heartbeat_timeout_elapsed, setup,
-     tear_down, 0, NULL},
-    {"/heartbeat-timeout-not-elapsed", test_heartbeat_timeout_not_elapsed,
-     setup, tear_down, 0, NULL},
-    {"/new-election", test_new_election, setup, tear_down, 0, NULL},
-    {"/during-election", test_during_election, setup, tear_down, 0, NULL},
-    {"/request-vote-only-to-voters", test_request_vote_only_to_voters, setup,
-     tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
-/**
- * Test suite
- */
-
-MunitSuite raft_tick_suites[] = {
-    {"", tick_tests, NULL, 1, 0},
-    {NULL, NULL, NULL, 0, 0},
-};

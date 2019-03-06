@@ -64,7 +64,7 @@ static MunitResult test_append_entries(const MunitParameter params[],
     rv = test_cluster_run_until(&f->cluster, test_cluster_has_leader, 10000);
     munit_assert_int(rv, ==, 0);
 
-    test_cluster_accept(&f->cluster);
+    test_cluster_propose(&f->cluster);
 
     rv = test_cluster_run_until(&f->cluster, test_cluster_committed_2, 2000);
     munit_assert_int(rv, ==, 0);
@@ -84,7 +84,7 @@ static MunitResult test_availability(const MunitParameter params[], void *data)
     rv = test_cluster_run_until(&f->cluster, test_cluster_has_leader, 10000);
     munit_assert_int(rv, ==, 0);
 
-    test_cluster_accept(&f->cluster);
+    test_cluster_propose(&f->cluster);
 
     rv = test_cluster_run_until(&f->cluster, test_cluster_committed_2, 2000);
 
@@ -98,7 +98,7 @@ static MunitResult test_availability(const MunitParameter params[], void *data)
     rv = test_cluster_run_until(&f->cluster, test_cluster_has_leader, 10000);
     munit_assert_int(rv, ==, 0);
 
-    test_cluster_accept(&f->cluster);
+    test_cluster_propose(&f->cluster);
 
     rv = test_cluster_run_until(&f->cluster, test_cluster_committed_3, 2000);
 
@@ -116,7 +116,7 @@ static MunitResult test_no_quorum(const MunitParameter params[], void *data)
     rv = test_cluster_run_until(&f->cluster, test_cluster_has_leader, 10000);
     munit_assert_int(rv, ==, 0);
 
-    test_cluster_accept(&f->cluster);
+    test_cluster_propose(&f->cluster);
 
     test_cluster_kill_majority(&f->cluster);
 
@@ -156,7 +156,7 @@ static MunitResult test_partitioning(const MunitParameter params[], void *data)
     }
 
     /* Try to append a new entry using the disconnected leader. */
-    test_cluster_accept(&f->cluster);
+    test_cluster_propose(&f->cluster);
 
     /* A new leader gets elected. */
     rv = test_cluster_run_until(&f->cluster, test_cluster_has_no_leader, 10000);
@@ -180,7 +180,7 @@ static MunitResult test_partitioning(const MunitParameter params[], void *data)
     munit_assert_int(rv, ==, 0);
 
     /* Re-try now to append the entry. */
-    test_cluster_accept(&f->cluster);
+    test_cluster_propose(&f->cluster);
 
     rv = test_cluster_run_until(&f->cluster, test_cluster_committed_2, 10000);
     munit_assert_int(rv, ==, 0);

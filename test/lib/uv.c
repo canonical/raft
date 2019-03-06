@@ -2,7 +2,7 @@
 
 #include "uv.h"
 
-#define TEST_UV__MAX_LOOP_RUN 10 /* Max n. of loop iterations upon teardown */
+#define TEST_UV_MAX_LOOP_RUN 10 /* Max n. of loop iterations upon teardown */
 
 void test_uv_setup(const MunitParameter params[], struct uv_loop_s *l)
 {
@@ -18,7 +18,7 @@ void test_uv_setup(const MunitParameter params[], struct uv_loop_s *l)
     munit_assert_int(rv, ==, 0);
 }
 
-unsigned test_uv_run(struct uv_loop_s *l, unsigned n)
+int test_uv_run(struct uv_loop_s *l, unsigned n)
 {
     unsigned i;
     int rv;
@@ -43,10 +43,17 @@ void test_uv_stop(struct uv_loop_s *l)
     unsigned n_handles;
 
     /* Spin a few times to trigger pending callbacks. */
-    n_handles = test_uv_run(l, TEST_UV__MAX_LOOP_RUN);
+    n_handles = test_uv_run(l, TEST_UV_MAX_LOOP_RUN);
     if (n_handles > 0) {
         munit_errorf("loop has still %d pending active handles", n_handles);
     }
+}
+
+static void test_uv__walk_cb(uv_handle_t *handle, void *arg)
+{
+    (void)arg;
+
+    munit_logf(MUNIT_LOG_INFO, "handle %d", handle->type);
 }
 
 void test_uv_tear_down(struct uv_loop_s *l)
@@ -55,6 +62,7 @@ void test_uv_tear_down(struct uv_loop_s *l)
 
     rv = uv_loop_close(l);
     if (rv != 0) {
+        uv_walk(l, test_uv__walk_cb, NULL);
         munit_errorf("uv_loop_close: %s (%d)", uv_strerror(rv), rv);
     }
 

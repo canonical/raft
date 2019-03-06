@@ -148,7 +148,7 @@ static MunitResult test_network_disconnect(const MunitParameter params[],
         test_cluster_run_once(&f->cluster);
 
         if (test_cluster_has_leader(&f->cluster)) {
-            test_cluster_accept(&f->cluster);
+            test_cluster_propose(&f->cluster);
         }
 
         if (f->cluster.commit_index >= 2) {

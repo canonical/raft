@@ -1,6 +1,8 @@
-#include "election.h"
+#include <stdlib.h>
+
 #include "assert.h"
 #include "configuration.h"
+#include "election.h"
 #include "log.h"
 
 void raft_election__reset_timer(struct raft *r)
@@ -14,6 +16,14 @@ void raft_election__reset_timer(struct raft *r)
     r->timer = 0;
 }
 
+static void raft_election__send_request_vote_cb(struct raft_io_send *req,
+                                                int status)
+{
+    (void)status;
+
+    raft_free(req);
+}
+
 /**
  * Send a RequestVote RPC to the given server.
  */
@@ -21,6 +31,7 @@ static int raft_election__send_request_vote(struct raft *r,
                                             const struct raft_server *server)
 {
     struct raft_message message;
+    struct raft_io_send *req;
     int rv;
 
     assert(r != NULL);
@@ -40,8 +51,14 @@ static int raft_election__send_request_vote(struct raft *r,
     message.server_id = server->id;
     message.server_address = server->address;
 
-    rv = r->io->send(r->io, &message, NULL, NULL);
+    req = raft_malloc(sizeof *req);
+    if (req == NULL) {
+        return RAFT_ENOMEM;
+    }
+
+    rv = r->io->send(r->io, req, &message, raft_election__send_request_vote_cb);
     if (rv != 0) {
+        raft_free(req);
         return rv;
     }
 
@@ -59,15 +76,15 @@ int raft_election__start(struct raft *r)
     assert(r != NULL);
     assert(r->state == RAFT_STATE_CANDIDATE);
 
-    n_voting = raft_configuration__n_voting(&r->configuration);
-    voting_index = raft_configuration__voting_index(&r->configuration, r->id);
+    n_voting = configuration__n_voting(&r->configuration);
+    voting_index = configuration__index_of_voting(&r->configuration, r->id);
 
     /* This function should not be invoked if we are not a voting server, hence
      * voting_index must be lower than the number of servers in the
      * configuration (meaning that we are a voting server). */
     assert(voting_index < r->configuration.n);
 
-    /* Sanity check that raft_configuration__n_voting and
+    /* Sanity check that configuration__n_voting and
      * raft_configuration__votes_index have returned somethig that makes
      * sense. */
     assert(n_voting <= r->configuration.n);
@@ -215,7 +232,7 @@ grant_vote:
 
 bool raft_election__tally(struct raft *r, size_t votes_index)
 {
-    size_t n_voting = raft_configuration__n_voting(&r->configuration);
+    size_t n_voting = configuration__n_voting(&r->configuration);
     size_t votes = 0;
     size_t i;
     size_t half = n_voting / 2;

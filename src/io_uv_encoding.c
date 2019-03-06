@@ -1,7 +1,10 @@
 #include <string.h>
 
+#include "../include/raft/io_uv.h"
+
 #include "assert.h"
-#include "binary.h"
+#include "byte.h"
+#include "configuration.h"
 #include "io_uv_encoding.h"
 
 /**
@@ -44,6 +47,20 @@ static size_t raft_io_uv_sizeof__append_entries_result()
            sizeof(uint64_t) /* Last log index. */;
 }
 
+static size_t raft_io_uv_sizeof__install_snapshot(
+    const struct raft_install_snapshot *p)
+{
+    size_t conf_size = configuration__encoded_size(&p->conf);
+    return sizeof(uint64_t) + /* Leader's term. */
+           sizeof(uint64_t) + /* Leader ID */
+           sizeof(uint64_t) + /* Snapshot's last index */
+           sizeof(uint64_t) + /* Term of last index */
+           sizeof(uint64_t) + /* Configuration's index */
+           sizeof(uint64_t) + /* Length of configuration */
+           conf_size +        /* Configuration data */
+           sizeof(uint64_t);  /* Length of snapshot data */
+}
+
 size_t raft_io_uv_sizeof__batch_header(size_t n)
 {
     return 8 + /* Number of entries in the batch, little endian */
@@ -55,10 +72,10 @@ static void raft_io_uv_encode__request_vote(const struct raft_request_vote *p,
 {
     void *cursor = buf;
 
-    raft__put64(&cursor, p->term);
-    raft__put64(&cursor, p->candidate_id);
-    raft__put64(&cursor, p->last_log_index);
-    raft__put64(&cursor, p->last_log_term);
+    byte__put64(&cursor, p->term);
+    byte__put64(&cursor, p->candidate_id);
+    byte__put64(&cursor, p->last_log_index);
+    byte__put64(&cursor, p->last_log_term);
 }
 
 static void raft_io_uv_encode__request_vote_result(
@@ -67,42 +84,25 @@ static void raft_io_uv_encode__request_vote_result(
 {
     void *cursor = buf;
 
-    raft__put64(&cursor, p->term);
-    raft__put64(&cursor, p->vote_granted);
+    byte__put64(&cursor, p->term);
+    byte__put64(&cursor, p->vote_granted);
 }
 
 static void raft_io_uv_encode__append_entries(
     const struct raft_append_entries *p,
     void *buf)
 {
-    size_t i;
     void *cursor;
 
     cursor = buf;
 
-    raft__put64(&cursor, p->term);           /* Leader's term. */
-    raft__put64(&cursor, p->leader_id);      /* Leader ID. */
-    raft__put64(&cursor, p->prev_log_index); /* Previous index. */
-    raft__put64(&cursor, p->prev_log_term);  /* Previous term. */
-    raft__put64(&cursor, p->leader_commit);  /* Commit index. */
+    byte__put64(&cursor, p->term);           /* Leader's term. */
+    byte__put64(&cursor, p->leader_id);      /* Leader ID. */
+    byte__put64(&cursor, p->prev_log_index); /* Previous index. */
+    byte__put64(&cursor, p->prev_log_term);  /* Previous term. */
+    byte__put64(&cursor, p->leader_commit);  /* Commit index. */
 
-    /* Number of entries in the batch, little endian */
-    raft__put64(&cursor, p->n_entries);
-
-    for (i = 0; i < p->n_entries; i++) {
-        const struct raft_entry *entry = &p->entries[i];
-
-        /* Term in which the entry was created, little endian. */
-        raft__put64(&cursor, entry->term);
-
-        /* Message type (Either RAFT_LOG_COMMAND or RAFT_LOG_CONFIGURATION) */
-        raft__put8(&cursor, entry->type);
-
-        cursor += 3; /* Unused */
-
-        /* Size of the log entry data, little endian. */
-        raft__put32(&cursor, entry->buf.len);
-    }
+    raft_io_uv_encode__batch_header(p->entries, p->n_entries, cursor);
 }
 
 static void raft_io_uv_encode__append_entries_result(
@@ -111,14 +111,34 @@ static void raft_io_uv_encode__append_entries_result(
 {
     void *cursor = buf;
 
-    raft__put64(&cursor, p->term);
-    raft__put64(&cursor, p->success);
-    raft__put64(&cursor, p->last_log_index);
+    byte__put64(&cursor, p->term);
+    byte__put64(&cursor, p->success);
+    byte__put64(&cursor, p->last_log_index);
 }
 
-int raft_io_uv_encode__message(const struct raft_message *message,
-                               uv_buf_t **bufs,
-                               unsigned *n_bufs)
+static void raft_io_uv_encode__install_snapshot(
+    const struct raft_install_snapshot *p,
+    void *buf)
+{
+    void *cursor;
+    size_t conf_size = configuration__encoded_size(&p->conf);
+
+    cursor = buf;
+
+    byte__put64(&cursor, p->term);       /* Leader's term. */
+    byte__put64(&cursor, p->leader_id);  /* Leader ID. */
+    byte__put64(&cursor, p->last_index); /* Snapshot last index. */
+    byte__put64(&cursor, p->last_term);  /* Term of last index. */
+    byte__put64(&cursor, p->conf_index); /* Configuration index. */
+    byte__put64(&cursor, conf_size);     /* Configuration length. */
+    configuration__encode_to_buf(&p->conf, cursor);
+    cursor += conf_size;
+    byte__put64(&cursor, p->data.len); /* Snapshot data size. */
+}
+
+int io_uv__encode_message(const struct raft_message *message,
+                          uv_buf_t **bufs,
+                          unsigned *n_bufs)
 {
     uv_buf_t header;
     void *cursor;
@@ -140,6 +160,10 @@ int raft_io_uv_encode__message(const struct raft_message *message,
         case RAFT_IO_APPEND_ENTRIES_RESULT:
             header.len += raft_io_uv_sizeof__append_entries_result();
             break;
+        case RAFT_IO_INSTALL_SNAPSHOT:
+            header.len +=
+                raft_io_uv_sizeof__install_snapshot(&message->install_snapshot);
+            break;
         default:
             return RAFT_ERR_IO_MALFORMED;
     };
@@ -152,8 +176,8 @@ int raft_io_uv_encode__message(const struct raft_message *message,
     cursor = header.base;
 
     /* Encode the request preamble, with message type and message size. */
-    raft__put64(&cursor, message->type);
-    raft__put64(&cursor, header.len - RAFT_IO_UV__PREAMBLE_SIZE);
+    byte__put64(&cursor, message->type);
+    byte__put64(&cursor, header.len - RAFT_IO_UV__PREAMBLE_SIZE);
 
     /* Encode the request header. */
     switch (message->type) {
@@ -171,6 +195,10 @@ int raft_io_uv_encode__message(const struct raft_message *message,
             raft_io_uv_encode__append_entries_result(
                 &message->append_entries_result, cursor);
             break;
+        case RAFT_IO_INSTALL_SNAPSHOT:
+            raft_io_uv_encode__install_snapshot(&message->install_snapshot,
+                                                cursor);
+            break;
     };
 
     *n_bufs = 1;
@@ -178,6 +206,11 @@ int raft_io_uv_encode__message(const struct raft_message *message,
     /* For AppendEntries request we also send the entries payload. */
     if (message->type == RAFT_IO_APPEND_ENTRIES) {
         *n_bufs += message->append_entries.n_entries;
+    }
+
+    /* For InstallSnapshot request we also send the snapshot payload. */
+    if (message->type == RAFT_IO_INSTALL_SNAPSHOT) {
+        *n_bufs += 1;
     }
 
     *bufs = raft_calloc(*n_bufs, sizeof **bufs);
@@ -197,13 +230,43 @@ int raft_io_uv_encode__message(const struct raft_message *message,
         }
     }
 
+    if (message->type == RAFT_IO_INSTALL_SNAPSHOT) {
+        (*bufs)[1] = *(uv_buf_t *)&message->install_snapshot.data;
+    }
+
     return 0;
 
 oom_after_header_alloc:
     raft_free(header.base);
 
 oom:
-    return RAFT_ERR_NOMEM;
+    return RAFT_ENOMEM;
+}
+
+void raft_io_uv_encode__batch_header(const struct raft_entry *entries,
+                                     unsigned n,
+                                     void *buf)
+{
+    unsigned i;
+    void *cursor = buf;
+
+    /* Number of entries in the batch, little endian */
+    byte__put64(&cursor, n);
+
+    for (i = 0; i < n; i++) {
+        const struct raft_entry *entry = &entries[i];
+
+        /* Term in which the entry was created, little endian. */
+        byte__put64(&cursor, entry->term);
+
+        /* Message type (Either RAFT_LOG_COMMAND or RAFT_LOG_CONFIGURATION) */
+        byte__put8(&cursor, entry->type);
+
+        cursor += 3; /* Unused */
+
+        /* Size of the log entry data, little endian. */
+        byte__put32(&cursor, entry->buf.len);
+    }
 }
 
 static void raft_io_uv_decode__request_vote(const uv_buf_t *buf,
@@ -213,10 +276,10 @@ static void raft_io_uv_decode__request_vote(const uv_buf_t *buf,
 
     cursor = buf->base;
 
-    p->term = raft__get64(&cursor);
-    p->candidate_id = raft__get64(&cursor);
-    p->last_log_index = raft__get64(&cursor);
-    p->last_log_term = raft__get64(&cursor);
+    p->term = byte__get64(&cursor);
+    p->candidate_id = byte__get64(&cursor);
+    p->last_log_index = byte__get64(&cursor);
+    p->last_log_term = byte__get64(&cursor);
 }
 
 static void raft_io_uv_decode__request_vote_result(
@@ -227,8 +290,8 @@ static void raft_io_uv_decode__request_vote_result(
 
     cursor = buf->base;
 
-    p->term = raft__get64(&cursor);
-    p->vote_granted = raft__get64(&cursor);
+    p->term = byte__get64(&cursor);
+    p->vote_granted = byte__get64(&cursor);
 }
 
 int raft_io_uv_decode__batch_header(const void *batch,
@@ -239,7 +302,7 @@ int raft_io_uv_decode__batch_header(const void *batch,
     size_t i;
     int rv;
 
-    *n = raft__get64(&cursor);
+    *n = byte__get64(&cursor);
 
     if (*n == 0) {
         *entries = NULL;
@@ -249,15 +312,15 @@ int raft_io_uv_decode__batch_header(const void *batch,
     *entries = raft_malloc(*n * sizeof **entries);
 
     if (*entries == NULL) {
-        rv = RAFT_ERR_NOMEM;
+        rv = RAFT_ENOMEM;
         goto err;
     }
 
     for (i = 0; i < *n; i++) {
         struct raft_entry *entry = &(*entries)[i];
 
-        entry->term = raft__get64(&cursor);
-        entry->type = raft__get8(&cursor);
+        entry->term = byte__get64(&cursor);
+        entry->type = byte__get8(&cursor);
 
         if (entry->type != RAFT_LOG_COMMAND &&
             entry->type != RAFT_LOG_CONFIGURATION) {
@@ -268,7 +331,7 @@ int raft_io_uv_decode__batch_header(const void *batch,
         cursor += 3; /* Unused */
 
         /* Size of the log entry data, little endian. */
-        entry->buf.len = raft__get32(&cursor);
+        entry->buf.len = byte__get32(&cursor);
     }
 
     return 0;
@@ -293,11 +356,11 @@ static int raft_io_uv_decode__append_entries(const uv_buf_t *buf,
 
     cursor = buf->base;
 
-    args->term = raft__get64(&cursor);
-    args->leader_id = raft__get64(&cursor);
-    args->prev_log_index = raft__get64(&cursor);
-    args->prev_log_term = raft__get64(&cursor);
-    args->leader_commit = raft__get64(&cursor);
+    args->term = byte__get64(&cursor);
+    args->leader_id = byte__get64(&cursor);
+    args->prev_log_index = byte__get64(&cursor);
+    args->prev_log_term = byte__get64(&cursor);
+    args->leader_commit = byte__get64(&cursor);
 
     rv = raft_io_uv_decode__batch_header(cursor, &args->entries,
                                          &args->n_entries);
@@ -316,9 +379,40 @@ static void raft_io_uv_decode__append_entries_result(
 
     cursor = buf->base;
 
-    p->term = raft__get64(&cursor);
-    p->success = raft__get64(&cursor);
-    p->last_log_index = raft__get64(&cursor);
+    p->term = byte__get64(&cursor);
+    p->success = byte__get64(&cursor);
+    p->last_log_index = byte__get64(&cursor);
+}
+
+static int raft_io_uv_decode__install_snapshot(
+    const uv_buf_t *buf,
+    struct raft_install_snapshot *args)
+{
+    const void *cursor;
+    struct raft_buffer conf;
+    int rv;
+
+    assert(buf != NULL);
+    assert(args != NULL);
+
+    cursor = buf->base;
+
+    args->term = byte__get64(&cursor);
+    args->leader_id = byte__get64(&cursor);
+    args->last_index = byte__get64(&cursor);
+    args->last_term = byte__get64(&cursor);
+    args->conf_index = byte__get64(&cursor);
+    conf.len = byte__get64(&cursor);
+    conf.base = (void *)cursor;
+    raft_configuration_init(&args->conf);
+    rv = configuration__decode(&conf, &args->conf);
+    if (rv != 0) {
+        return rv;
+    }
+    cursor += conf.len;
+    args->data.len = byte__get64(&cursor);
+
+    return 0;
 }
 
 int raft_io_uv_decode__message(unsigned type,
@@ -352,6 +446,11 @@ int raft_io_uv_decode__message(unsigned type,
         case RAFT_IO_APPEND_ENTRIES_RESULT:
             raft_io_uv_decode__append_entries_result(
                 header, &message->append_entries_result);
+            break;
+        case RAFT_IO_INSTALL_SNAPSHOT:
+            rv = raft_io_uv_decode__install_snapshot(
+                header, &message->install_snapshot);
+            *payload_len += message->install_snapshot.data.len;
             break;
         default:
             rv = RAFT_ERR_IO;

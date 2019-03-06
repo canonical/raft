@@ -1,7 +1,5 @@
 /**
- *
  * Test logger.
- *
  */
 
 #ifndef TEST_LOGGER_H

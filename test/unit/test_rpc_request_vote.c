@@ -1,6 +1,7 @@
 #include <stdio.h>
 
 #include "../../include/raft.h"
+#include "../../include/raft/io_stub.h"
 
 #include "../../src/configuration.h"
 #include "../../src/log.h"
@@ -11,8 +12,10 @@
 #include "../lib/heap.h"
 #include "../lib/io.h"
 #include "../lib/logger.h"
-#include "../lib/munit.h"
 #include "../lib/raft.h"
+#include "../lib/runner.h"
+
+TEST_MODULE(rpc_request_vote);
 
 /**
  * Helpers
@@ -20,7 +23,7 @@
 
 struct fixture
 {
-    TEST_RAFT_FIXTURE_FIELDS;
+    RAFT_FIXTURE;
 };
 
 /**
@@ -33,7 +36,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 
     (void)user_data;
 
-    TEST_RAFT_FIXTURE_SETUP(f);
+    RAFT_SETUP(f);
 
     return f;
 }
@@ -42,7 +45,7 @@ static void tear_down(void *data)
 {
     struct fixture *f = data;
 
-    TEST_RAFT_FIXTURE_TEAR_DOWN(f);
+    RAFT_TEAR_DOWN(f);
 
     free(f);
 }
@@ -149,13 +152,20 @@ static void tear_down(void *data)
     }
 
 /**
- * raft_handle_request_vote
+ * Receive a RequestVote message.
  */
+
+TEST_SUITE(request);
+
+static MunitTestSetup request__setup = setup;
+static MunitTestTearDown request__tear_down = tear_down;
+
+TEST_GROUP(request, error);
+TEST_GROUP(request, success);
 
 /* If the server's current term is higher than the one in the request, the vote
  * is not granted. */
-static MunitResult test_req_higher_term(const MunitParameter params[],
-                                        void *data)
+TEST_CASE(request, error, higher_term, NULL)
 {
     struct fixture *f = data;
     return MUNIT_OK;
@@ -181,8 +191,7 @@ static MunitResult test_req_higher_term(const MunitParameter params[],
 
 /* If the server already has a leader, the vote is not granted (even if the
    request has a higher term). */
-static MunitResult test_req_has_leader(const MunitParameter params[],
-                                       void *data)
+TEST_CASE(request, error, has_leader, NULL)
 {
     struct fixture *f = data;
 
@@ -205,8 +214,7 @@ static MunitResult test_req_has_leader(const MunitParameter params[],
 }
 
 /* If we are not a voting server, the vote is not granted. */
-static MunitResult test_req_non_voting(const MunitParameter params[],
-                                       void *data)
+TEST_CASE(request, error, non_voting, NULL)
 {
     struct fixture *f = data;
 
@@ -225,8 +233,7 @@ static MunitResult test_req_non_voting(const MunitParameter params[],
 }
 
 /* If we have already voted, vote is not granted. */
-static MunitResult test_req_already_voted(const MunitParameter params[],
-                                          void *data)
+TEST_CASE(request, error, already_voted, NULL)
 {
     struct fixture *f = data;
 
@@ -256,7 +263,7 @@ static MunitResult test_req_already_voted(const MunitParameter params[],
 
 /* If we have already voted and the same candidate requests the vote again, the
  * vote is granted. */
-static MunitResult test_req_dupe_vote(const MunitParameter params[], void *data)
+TEST_CASE(request, error, dupe_vote, NULL)
 {
     struct fixture *f = data;
 
@@ -285,7 +292,7 @@ static MunitResult test_req_dupe_vote(const MunitParameter params[], void *data)
 }
 
 /* If server has an empty log, the vote is granted. */
-static MunitResult test_req_empty_log(const MunitParameter params[], void *data)
+TEST_CASE(request, error, empty_log, NULL)
 {
     struct fixture *f = data;
 
@@ -306,8 +313,7 @@ static MunitResult test_req_empty_log(const MunitParameter params[], void *data)
 
 /* If the requester last log entry term is lower than ours, the vote is not
  * granted. */
-static MunitResult test_req_last_term_lower(const MunitParameter params[],
-                                            void *data)
+TEST_CASE(request, error, last_term_lower, NULL)
 {
     struct fixture *f = data;
 
@@ -324,8 +330,7 @@ static MunitResult test_req_last_term_lower(const MunitParameter params[],
 }
 
 /* If the requester last log term is higher than ours, the vote is granted. */
-static MunitResult test_req_last_term_higher(const MunitParameter params[],
-                                             void *data)
+TEST_CASE(request, success, last_term_higher, NULL)
 {
     struct fixture *f = data;
 
@@ -353,8 +358,7 @@ static MunitResult test_req_last_term_higher(const MunitParameter params[],
 
 /* If the requester last log entry index is higher than ours, the vote is
  * granted. */
-static MunitResult test_req_last_idx_higher(const MunitParameter params[],
-                                            void *data)
+TEST_CASE(request, success, last_idx_higher, NULL)
 {
     struct fixture *f = data;
 
@@ -382,8 +386,7 @@ static MunitResult test_req_last_idx_higher(const MunitParameter params[],
 
 /* If the requester last log entry index is the same as ours, the vote is
  * granted. */
-static MunitResult test_req_last_idx_same_index(const MunitParameter params[],
-                                                void *data)
+TEST_CASE(request, success, last_idx_same_index, NULL)
 {
     struct fixture *f = data;
 
@@ -401,12 +404,10 @@ static MunitResult test_req_last_idx_same_index(const MunitParameter params[],
 
 /* If the requester last log entry index is the lower than ours, the vote is not
  * granted. */
-static MunitResult test_req_last_idx_lower_index(const MunitParameter params[],
-                                                 void *data)
+TEST_CASE(request, error, last_idx_lower_index, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry;
-    struct raft_buffer buf;
 
     (void)params;
 
@@ -419,15 +420,12 @@ static MunitResult test_req_last_idx_lower_index(const MunitParameter params[],
 
     entry.type = RAFT_LOG_COMMAND;
     entry.term = 1;
-    entry.buf.base = NULL;
-    entry.buf.len = 0;
+    entry.buf.base = raft_malloc(8);
+    entry.buf.len = 8;
 
     test_io_append_entry(f->raft.io, &entry);
 
     test_start(&f->raft);
-
-    memset(&buf, 0, sizeof buf);
-    raft_log__append(&f->raft.log, 1, RAFT_LOG_COMMAND, &buf, NULL);
 
     munit_assert_int(raft_log__last_index(&f->raft.log), ==, 2);
 
@@ -438,29 +436,22 @@ static MunitResult test_req_last_idx_lower_index(const MunitParameter params[],
     /* The request is unsuccessful */
     __assert_request_vote_result(f, 2, false);
 
+    raft_free(entry.buf.base);
+
     return MUNIT_OK;
 }
-
-static MunitTest req_tests[] = {
-    {"/higher-term", test_req_higher_term, setup, tear_down, 0, NULL},
-    {"/has-leader", test_req_has_leader, setup, tear_down, 0, NULL},
-    {"/non-voting", test_req_non_voting, setup, tear_down, 0, NULL},
-    {"/already-voted", test_req_already_voted, setup, tear_down, 0, NULL},
-    {"/dupe-vote", test_req_dupe_vote, setup, tear_down, 0, NULL},
-    {"/empty-log", test_req_empty_log, setup, tear_down, 0, NULL},
-    {"/last-term-lower", test_req_last_term_lower, setup, tear_down, 0, NULL},
-    {"/last-term-higher", test_req_last_term_higher, setup, tear_down, 0, NULL},
-    {"/last-index-higher", test_req_last_idx_higher, setup, tear_down, 0, NULL},
-    {"/last-index-same", test_req_last_idx_same_index, setup, tear_down, 0,
-     NULL},
-    {"/last-index-lower", test_req_last_idx_lower_index, setup, tear_down, 0,
-     NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
 
 /**
  * raft_rpc__recv_request_vote_result
  */
+
+TEST_SUITE(response);
+
+static MunitTestSetup response__setup = setup;
+static MunitTestTearDown response__tear_down = tear_down;
+
+TEST_GROUP(response, error);
+TEST_GROUP(response, success);
 
 static char *res_oom_heap_fault_delay[] = {"0", "1", NULL};
 static char *res_oom_heap_fault_repeat[] = {"1", NULL};
@@ -472,7 +463,7 @@ static MunitParameterEnum res_oom_params[] = {
 };
 
 /* Out of memory. */
-static MunitResult test_res_oom(const MunitParameter params[], void *data)
+TEST_CASE(response, error, oom, res_oom_params)
 {
     struct fixture *f = data;
     struct raft_request_vote_result result;
@@ -489,14 +480,14 @@ static MunitResult test_res_oom(const MunitParameter params[], void *data)
     test_heap_fault_enable(&f->heap);
 
     rv = raft_rpc__recv_request_vote_result(&f->raft, 2, "2", &result);
-    munit_assert_int(rv, ==, RAFT_ERR_NOMEM);
+    munit_assert_int(rv, ==, RAFT_ENOMEM);
 
     return MUNIT_OK;
 }
 
 /* If a candidate receives a vote request response granting the vote and the
  * quorum is reached, it becomes leader. */
-static MunitResult test_res_quorum(const MunitParameter params[], void *data)
+TEST_CASE(response, success, quorum, NULL)
 {
     struct fixture *f = data;
 
@@ -530,7 +521,7 @@ static MunitResult test_res_quorum(const MunitParameter params[], void *data)
 
 /* If a candidate receives a vote request response granting the vote but the
  * quorum is not reached, it statys candidate. */
-static MunitResult test_res_no_quorum(const MunitParameter params[], void *data)
+TEST_CASE(response, success, no_quorum, NULL)
 {
     struct fixture *f = data;
 
@@ -549,8 +540,7 @@ static MunitResult test_res_no_quorum(const MunitParameter params[], void *data)
 }
 
 /* If the server is not in candidate state the response gets discarded. */
-static MunitResult test_res_not_candidate(const MunitParameter params[],
-                                          void *data)
+TEST_CASE(response, success, not_candidate, NULL)
 {
     struct fixture *f = data;
 
@@ -567,7 +557,7 @@ static MunitResult test_res_not_candidate(const MunitParameter params[],
 
 /* If the server receives a response contaning an higher term than its own, it
    converts to follower. */
-static MunitResult test_res_step_down(const MunitParameter params[], void *data)
+TEST_CASE(response, success, step_down, NULL)
 {
     struct fixture *f = data;
 
@@ -600,7 +590,7 @@ static MunitResult test_res_step_down(const MunitParameter params[], void *data)
 
 /* The server receives a response contaning an higher term than its own, it
  * tries to convert to follower, but an I/O error occcurs. */
-static MunitResult test_res_io_err(const MunitParameter params[], void *data)
+TEST_CASE(response, error, io, NULL)
 {
     struct fixture *f = data;
     struct raft_request_vote_result result;
@@ -624,8 +614,7 @@ static MunitResult test_res_io_err(const MunitParameter params[], void *data)
 
 /* If a candidate server receives a response indicating that the vote was not
  * granted, nothing happens. */
-static MunitResult test_res_not_granted(const MunitParameter params[],
-                                        void *data)
+TEST_CASE(response, success, not_granted, NULL)
 {
     struct fixture *f = data;
 
@@ -643,23 +632,3 @@ static MunitResult test_res_not_granted(const MunitParameter params[],
 
     return MUNIT_OK;
 }
-
-static MunitTest res_tests[] = {
-    {"/oom", test_res_oom, setup, tear_down, 0, res_oom_params},
-    {"/quorum", test_res_quorum, setup, tear_down, 0, NULL},
-    {"/no-quorum", test_res_no_quorum, setup, tear_down, 0, NULL},
-    {"/not-candidate", test_res_not_candidate, setup, tear_down, 0, NULL},
-    {"/step-down", test_res_step_down, setup, tear_down, 0, NULL},
-    {"/io-err", test_res_io_err, setup, tear_down, 0, NULL},
-    {"/not-granted", test_res_not_granted, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
-/**
- * Suite
- */
-MunitSuite raft_rpc_request_vote_suites[] = {
-    {"/req", req_tests, NULL, 1, 0},
-    {"/res", res_tests, NULL, 1, 0},
-    {NULL, NULL, NULL, 0, 0},
-};

@@ -54,9 +54,11 @@ void test_tcp_tear_down(struct test_tcp *t)
 {
     int rv;
 
-    rv = close(t->server.socket);
-    if (rv == -1) {
-        munit_errorf("tcp: close(): %s", strerror(errno));
+    if (t->server.socket != -1) {
+        rv = close(t->server.socket);
+        if (rv == -1) {
+            munit_errorf("tcp: close(): %s", strerror(errno));
+        }
     }
 
     if (t->client.socket != -1) {
@@ -91,6 +93,28 @@ void test_tcp_connect(struct test_tcp *t, int port)
     }
 }
 
+void test_tcp_close(struct test_tcp *t)
+{
+    int rv;
+
+    rv = close(t->client.socket);
+    if (rv == -1) {
+        munit_errorf("tcp: close(): %s", strerror(errno));
+    }
+    t->client.socket = -1;
+}
+
+void test_tcp_stop(struct test_tcp *t)
+{
+    int rv;
+
+    rv = close(t->server.socket);
+    if (rv == -1) {
+        munit_errorf("tcp: close(): %s", strerror(errno));
+    }
+    t->server.socket = -1;
+}
+
 void test_tcp_send(struct test_tcp *t, const void *buf, int len)
 {
     int rv;
@@ -102,4 +126,20 @@ void test_tcp_send(struct test_tcp *t, const void *buf, int len)
     if (rv != len) {
         munit_errorf("tcp: write(): only %d bytes written", rv);
     }
+}
+
+int test_tcp_accept(struct test_tcp *t)
+{
+    int socket;
+    struct sockaddr_in address;
+    socklen_t size;
+
+    size = sizeof(address);
+
+    socket = accept(t->server.socket, (struct sockaddr *)&address, &size);
+    if (socket < 0) {
+        munit_errorf("tcp: accept(): %s", strerror(errno));
+    }
+
+    return socket;
 }

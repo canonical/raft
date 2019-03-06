@@ -3,17 +3,17 @@
 #include "../include/raft.h"
 
 #include "assert.h"
+#include "configuration.h"
 #include "log.h"
 
 /**
  * Calculate the reference count hash table key for the given entry index in an
- * hash table with the given size.
+ * table with the given size.
  *
- * The hash is simply the index minus one module the size. This minimizes
- * conflicts in the most frequent use case, where a new log entry is simpy
- * appended to the log and can use the hash table bucket next to the bucket
- * for the entry with the previous index (possibly resizing the table if its
- * cap is reached).
+ * The hash is simply the index minus one modulo the size. This minimizes
+ * conflicts in the most frequent case, where a new log entry is simpy appended
+ * to the log and can use the hash table bucket next to the bucket for the entry
+ * with the previous index (possibly resizing the table if its cap is reached).
  */
 static size_t raft_log__refs_key(const raft_index index, const size_t size)
 {
@@ -27,9 +27,9 @@ static size_t raft_log__refs_key(const raft_index index, const size_t size)
  * Try to insert a new ref count item into the given reference count hash table.
  *
  * A collision happens when the bucket associated with the hash key of the given
- * index is already used for entries with a different index. In that case the
- * collision output parameter will be set to true and no new entry is inserted
- * into the hash table.
+ * index is already used to refcount entries with a different index. In that
+ * case the collision output parameter will be set to true and no new entry is
+ * inserted into the hash table.
  *
  * If two entries have the same index but different terms, the associated bucket
  * will be grown accordingly.
@@ -86,8 +86,8 @@ static int raft_log__refs_try_insert(struct raft_entry_ref *table,
         assert(next_slot->index == index);
 
         /* It should never happen that two entries with the same index and term
-         * get appended. So no existing slot in this bucket must track an
-         * entries with the same term as the given one. */
+         * get appended. So no existing slot in this bucket must track an entry
+         * with the same term as the given one. */
         assert(next_slot->term != term);
 
         last_slot = next_slot;
@@ -98,7 +98,7 @@ static int raft_log__refs_try_insert(struct raft_entry_ref *table,
 
     slot = raft_malloc(sizeof *slot);
     if (slot == NULL) {
-        return RAFT_ERR_NOMEM;
+        return RAFT_ENOMEM;
     }
 
     last_slot->next = slot;
@@ -159,7 +159,7 @@ static int raft_log__refs_move(struct raft_entry_ref *bucket,
         }
 
         /* The given hash table is assumed to be large enough to hold all ref
-         *counts without any conflict. */
+         * counts without any conflict. */
         assert(!collision);
     };
 
@@ -182,7 +182,7 @@ static int raft_log__refs_grow(struct raft_log *l)
 
     table = raft_calloc(size, sizeof *table);
     if (table == NULL) {
-        return RAFT_ERR_NOMEM;
+        return RAFT_ENOMEM;
     }
 
     /* Populate the new hash table, inserting all entries existing in the
@@ -228,7 +228,7 @@ static int raft_log__refs_init(struct raft_log *l,
 
         l->refs = raft_calloc(l->refs_size, sizeof *l->refs);
         if (l->refs == NULL) {
-            return RAFT_ERR_NOMEM;
+            return RAFT_ENOMEM;
         }
     }
 
@@ -246,7 +246,7 @@ static int raft_log__refs_init(struct raft_log *l,
         rc = raft_log__refs_try_insert(l->refs, l->refs_size, term, index, 1,
                                        &collision);
         if (rc != 0) {
-            return RAFT_ERR_NOMEM;
+            return RAFT_ENOMEM;
         }
 
         if (!collision) {
@@ -364,6 +364,11 @@ void raft_log__init(struct raft_log *l)
     l->refs_size = 0;
 }
 
+void raft_log__set_offset(struct raft_log *l, raft_index offset)
+{
+    l->offset = offset;
+}
+
 /**
  * Return the index of the i'th entry in the log.
  */
@@ -438,7 +443,7 @@ static int raft_log__ensure_capacity(struct raft_log *l)
 
     entries = raft_calloc(size, sizeof *entries);
     if (entries == NULL) {
-        return RAFT_ERR_NOMEM;
+        return RAFT_ENOMEM;
     }
 
     /* Copy all active old entries to the beginning of the newly allocated
@@ -536,7 +541,7 @@ int raft_log__append_configuration(
     assert(configuration != NULL);
 
     /* Encode the configuration into a buffer. */
-    rv = raft_configuration_encode(configuration, &buf);
+    rv = configuration__encode(configuration, &buf);
     if (rv != 0) {
         goto err;
     }
@@ -589,7 +594,7 @@ raft_index raft_log__last_index(struct raft_log *l)
  * If no entry with the given index is in the log return the size of the entries
  * array.
  */
-static size_t raft_log__locate(struct raft_log *l, const uint64_t index)
+static size_t raft_log__locate(struct raft_log *l, const raft_index index)
 {
     if (index < raft_log__first_index(l) || index > raft_log__last_index(l)) {
         return l->size;
@@ -601,7 +606,7 @@ static size_t raft_log__locate(struct raft_log *l, const uint64_t index)
     return (l->front + (index - 1) - l->offset) % l->size;
 }
 
-raft_term raft_log__term_of(struct raft_log *l, const uint64_t index)
+raft_term raft_log__term_of(struct raft_log *l, const raft_index index)
 {
     size_t i;
 
@@ -680,7 +685,7 @@ int raft_log__acquire(struct raft_log *l,
 
     *entries = raft_calloc(*n, sizeof **entries);
     if (*entries == NULL) {
-        return RAFT_ERR_NOMEM;
+        return RAFT_ENOMEM;
     }
 
     for (j = 0; j < *n; j++) {

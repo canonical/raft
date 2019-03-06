@@ -7,9 +7,9 @@
 #include "replication.h"
 #include "state.h"
 
-int raft_accept(struct raft *r,
-                const struct raft_buffer bufs[],
-                const unsigned n)
+int raft_propose(struct raft *r,
+                 const struct raft_buffer bufs[],
+                 const unsigned n)
 {
     raft_index index;
     int rv;
@@ -115,7 +115,7 @@ int raft_add_server(struct raft *r, const unsigned id, const char *address)
      * it. */
     raft_configuration_init(&configuration);
 
-    rv = raft_configuration__copy(&r->configuration, &configuration);
+    rv = configuration__copy(&r->configuration, &configuration);
     if (rv != 0) {
         goto err;
     }
@@ -163,7 +163,7 @@ int raft_promote(struct raft *r, const unsigned id)
         goto err;
     }
 
-    server_index = raft_configuration__index(&r->configuration, id);
+    server_index = configuration__index_of(&r->configuration, id);
     assert(server_index < r->configuration.n);
 
     last_index = raft_log__last_index(&r->log);
@@ -191,7 +191,7 @@ int raft_promote(struct raft *r, const unsigned id)
 
     /* Immediately initiate an AppendEntries request. */
     rv = raft_replication__send_append_entries(r, server_index);
-    if (rv != 0) {
+    if (rv != 0 && rv != RAFT_ERR_IO_CONNECT) {
         /* This error is not fatal. */
         raft_warnf(r->logger,
                    "failed to send append entries to server %ld: %s (%d)",
@@ -229,7 +229,7 @@ int raft_remove_server(struct raft *r, const unsigned id)
      * from it. */
     raft_configuration_init(&configuration);
 
-    rv = raft_configuration__copy(&r->configuration, &configuration);
+    rv = configuration__copy(&r->configuration, &configuration);
     if (rv != 0) {
         goto err;
     }

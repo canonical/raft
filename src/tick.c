@@ -35,9 +35,9 @@ static int raft_tick__follower(struct raft *r)
     /* If there's only one voting server, and that is us, it's safe to convert
      * to leader. If that is not us, we're either joining the cluster or we're
      * simply configured as non-voter, do nothing and wait for RPCs. */
-    if (raft_configuration__n_voting(&r->configuration) == 1) {
+    if (configuration__n_voting(&r->configuration) == 1) {
         if (server->voting) {
-            raft_debugf(r->logger, "tick: self elect and convert to leader");
+            raft_debugf(r->logger, "self elect and convert to leader");
             rv = raft_state__convert_to_candidate(r);
             if (rv != 0) {
                 return rv;
@@ -66,8 +66,7 @@ static int raft_tick__follower(struct raft *r)
      *   current leader or granting vote to candidate, convert to candidate.
      */
     if (r->timer > r->election_timeout_rand && server->voting) {
-        raft_infof(r->logger,
-                   "tick: convert to candidate and start new election");
+        raft_infof(r->logger, "convert to candidate and start new election");
         return raft_state__convert_to_candidate(r);
     }
 
@@ -93,7 +92,7 @@ static int raft_tick__candidate(struct raft *r)
      *   incrementing its term and initiating another round of RequestVote RPCs
      */
     if (r->timer > r->election_timeout_rand) {
-        raft_infof(r->logger, "tick: start new election");
+        raft_infof(r->logger, "start new election");
         return raft_election__start(r);
     }
 
@@ -142,7 +141,7 @@ static int raft_tick__leader(struct raft *r,
         /* If a promotion is in progress, we expect that our configuration
          * contains an entry for the server being promoted, and that the server
          * is not yet considered as voting. */
-        server_index = raft_configuration__index(&r->configuration, id);
+        server_index = configuration__index_of(&r->configuration, id);
         assert(server_index < r->configuration.n);
         assert(!r->configuration.servers[server_index].voting);
 

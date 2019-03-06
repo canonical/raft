@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-#include "../../src/binary.h"
+#include "../../src/byte.h"
 
 #include "network.h"
 

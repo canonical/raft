@@ -1,6 +1,7 @@
 #include <stdio.h>
 
 #include "../../include/raft.h"
+#include "../../include/raft/io_stub.h"
 
 #include "../../src/configuration.h"
 #include "../../src/log.h"
@@ -11,85 +12,33 @@
 #include "../lib/heap.h"
 #include "../lib/io.h"
 #include "../lib/logger.h"
-#include "../lib/munit.h"
 #include "../lib/raft.h"
+#include "../lib/runner.h"
 
-/**
- * Helpers
- */
-
-struct fixture
-{
-    struct raft_heap heap;
-    struct raft_logger logger;
-    struct raft_io io;
-    struct raft_fsm fsm;
-    struct raft raft;
-};
-
-static int __rand()
-{
-    return munit_rand_uint32();
-}
-
-static void *setup(const MunitParameter params[], void *user_data)
-{
-    struct fixture *f = munit_malloc(sizeof *f);
-    const uint64_t id = 1;
-    const char *address = "1";
-    int rv;
-
-    (void)user_data;
-
-    test_heap_setup(params, &f->heap);
-    test_logger_setup(params, &f->logger, id);
-    test_io_setup(params, &f->io, &f->logger);
-    test_fsm_setup(params, &f->fsm);
-
-    rv = raft_init(&f->raft, &f->logger, &f->io, &f->fsm, f, id, address);
-    munit_assert_int(rv, ==, 0);
-
-    raft_set_rand(&f->raft, __rand);
-
-    return f;
-}
-
-static void tear_down(void *data)
-{
-    struct fixture *f = data;
-
-    raft_close(&f->raft);
-
-    test_fsm_tear_down(&f->fsm);
-    test_io_tear_down(&f->io);
-    test_logger_tear_down(&f->logger);
-    test_heap_tear_down(&f->heap);
-
-    free(f);
-}
+TEST_MODULE(client);
 
 /**
  * Submit a request to append a new RAFT_LOG_COMMAND entry.
  */
-#define __accept_entry(F)                    \
-    {                                        \
-        struct raft_buffer buf;              \
-        int rv;                              \
-                                             \
-        test_fsm_encode_set_x(123, &buf);    \
-                                             \
-        rv = raft_accept(&F->raft, &buf, 1); \
-        munit_assert_int(rv, ==, 0);         \
+#define propose_entry                         \
+    {                                         \
+        struct raft_buffer buf;               \
+        int rv;                               \
+                                              \
+        test_fsm_encode_set_x(123, &buf);     \
+                                              \
+        rv = raft_propose(&f->raft, &buf, 1); \
+        munit_assert_int(rv, ==, 0);          \
     }
 
 /**
  * Submit a request to add a new server and check that it returns no error.
  */
-#define __add_server(F, ID, ADDRESS)                 \
+#define add_server(ID, ADDRESS)                      \
     {                                                \
         int rv;                                      \
                                                      \
-        rv = raft_add_server(&F->raft, ID, ADDRESS); \
+        rv = raft_add_server(&f->raft, ID, ADDRESS); \
         munit_assert_int(rv, ==, 0);                 \
     }
 
@@ -228,14 +177,38 @@ static void tear_down(void *data)
     }
 
 /**
- * raft_accept
+ * raft_propose
  */
 
-/* If the raft instance is not in leader state, an error is returned. */
-static MunitResult test_accept_not_leader(const MunitParameter params[],
-                                          void *data)
+TEST_SUITE(propose);
+
+struct propose__fixture
 {
-    struct fixture *f = data;
+    RAFT_FIXTURE;
+};
+
+static void *propose__setup(const MunitParameter params[], void *user_data)
+{
+    struct propose__fixture *f = munit_malloc(sizeof *f);
+    (void)user_data;
+    RAFT_SETUP(f);
+    return f;
+}
+
+static void propose__tear_down(void *data)
+{
+    struct propose__fixture *f = data;
+    RAFT_TEAR_DOWN(f);
+    free(f);
+}
+
+TEST_GROUP(propose, error);
+TEST_GROUP(propose, success);
+
+/* If the raft instance is not in leader state, an error is returned. */
+TEST_CASE(propose, error, not_leader, NULL)
+{
+    struct propose__fixture *f = data;
     struct raft_buffer buf;
     int rv;
 
@@ -245,7 +218,7 @@ static MunitResult test_accept_not_leader(const MunitParameter params[],
 
     test_fsm_encode_set_x(123, &buf);
 
-    rv = raft_accept(&f->raft, &buf, 1);
+    rv = raft_propose(&f->raft, &buf, 1);
     munit_assert_int(rv, ==, RAFT_ERR_NOT_LEADER);
 
     raft_free(buf.base);
@@ -253,19 +226,19 @@ static MunitResult test_accept_not_leader(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static char *accept_oom_heap_fault_delay[] = {"0", "1", "2", NULL};
-static char *accept_oom_heap_fault_repeat[] = {"1", NULL};
+static char *propose_oom_heap_fault_delay[] = {"0", "1", "2", NULL};
+static char *propose_oom_heap_fault_repeat[] = {"1", NULL};
 
-static MunitParameterEnum accept_oom_params[] = {
-    {TEST_HEAP_FAULT_DELAY, accept_oom_heap_fault_delay},
-    {TEST_HEAP_FAULT_REPEAT, accept_oom_heap_fault_repeat},
+static MunitParameterEnum propose_oom_params[] = {
+    {TEST_HEAP_FAULT_DELAY, propose_oom_heap_fault_delay},
+    {TEST_HEAP_FAULT_REPEAT, propose_oom_heap_fault_repeat},
     {NULL, NULL},
 };
 
 /* Out of memory conditions. */
-static MunitResult test_accept_oom(const MunitParameter params[], void *data)
+TEST_CASE(propose, error, oom, propose_oom_params)
 {
-    struct fixture *f = data;
+    struct propose__fixture *f = data;
     struct raft_buffer buf;
     int rv;
 
@@ -284,8 +257,8 @@ static MunitResult test_accept_oom(const MunitParameter params[], void *data)
     f->raft.io_queue.requests = NULL;
     f->raft.io_queue.size = 0;*/
 
-    rv = raft_accept(&f->raft, &buf, 1);
-    munit_assert_int(rv, ==, RAFT_ERR_NOMEM);
+    rv = raft_propose(&f->raft, &buf, 1);
+    munit_assert_int(rv, ==, RAFT_ENOMEM);
 
     raft_free(buf.base);
 
@@ -293,9 +266,9 @@ static MunitResult test_accept_oom(const MunitParameter params[], void *data)
 }
 
 /* I/O error. */
-static MunitResult test_accept_io_err(const MunitParameter params[], void *data)
+TEST_CASE(propose, error, io_err, NULL)
 {
-    struct fixture *f = data;
+    struct propose__fixture *f = data;
     struct raft_buffer buf;
     int rv;
 
@@ -308,7 +281,7 @@ static MunitResult test_accept_io_err(const MunitParameter params[], void *data)
 
     raft_io_stub_fault(&f->io, 0, 1);
 
-    rv = raft_accept(&f->raft, &buf, 1);
+    rv = raft_propose(&f->raft, &buf, 1);
     munit_assert_int(rv, ==, RAFT_ERR_IO);
 
     raft_free(buf.base);
@@ -317,17 +290,16 @@ static MunitResult test_accept_io_err(const MunitParameter params[], void *data)
 }
 
 /* The new entries are sent to all other servers. */
-static MunitResult test_accept_send_entries(const MunitParameter params[],
-                                            void *data)
+TEST_CASE(propose, success, send_entries, NULL)
 {
-    struct fixture *f = data;
+    struct propose__fixture *f = data;
 
     (void)params;
 
     test_bootstrap_and_start(&f->raft, 2, 1, 2);
     test_become_leader(&f->raft);
 
-    __accept_entry(f);
+    propose_entry;
 
     /* A write log and an append entries requests has been submitted. */
     __assert_io(f, 1, 1);
@@ -335,24 +307,40 @@ static MunitResult test_accept_send_entries(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static MunitTest accept_tests[] = {
-    {"/not-leader", test_accept_not_leader, setup, tear_down, 0, NULL},
-    {"/oom", test_accept_oom, setup, tear_down, 0, accept_oom_params},
-    {"/io-err", test_accept_io_err, setup, tear_down, 0, NULL},
-    {"/send-entries", test_accept_send_entries, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
  * raft_add_server
  */
 
+TEST_SUITE(add_server);
+
+struct add_server__fixture
+{
+    RAFT_FIXTURE;
+};
+
+static void *add_server__setup(const MunitParameter params[], void *user_data)
+{
+    struct add_server__fixture *f = munit_malloc(sizeof *f);
+    (void)user_data;
+    RAFT_SETUP(f);
+    return f;
+}
+
+static void add_server__tear_down(void *data)
+{
+    struct add_server__fixture *f = data;
+    RAFT_TEAR_DOWN(f);
+    free(f);
+}
+
+TEST_GROUP(add_server, error);
+TEST_GROUP(add_server, success);
+
 /* Trying to add a server on a node which is not the leader results in an
  * error. */
-static MunitResult test_add_server_not_leader(const MunitParameter params[],
-                                              void *data)
+TEST_CASE(add_server, error, not_leader, NULL)
 {
-    struct fixture *f = data;
+    struct add_server__fixture *f = data;
     int rv;
 
     (void)params;
@@ -367,10 +355,9 @@ static MunitResult test_add_server_not_leader(const MunitParameter params[],
 
 /* Trying to add a server while a configuration change is already in progress
  * results in an error. */
-static MunitResult test_add_server_busy(const MunitParameter params[],
-                                        void *data)
+TEST_CASE(add_server, error, busy, NULL)
 {
-    struct fixture *f = data;
+    struct add_server__fixture *f = data;
     int rv;
 
     (void)params;
@@ -378,7 +365,7 @@ static MunitResult test_add_server_busy(const MunitParameter params[],
     test_bootstrap_and_start(&f->raft, 2, 1, 2);
     test_become_leader(&f->raft);
 
-    __add_server(f, 3, "3");
+    add_server(3, "3");
 
     rv = raft_add_server(&f->raft, 4, "4");
     munit_assert_int(rv, ==, RAFT_ERR_CONFIGURATION_BUSY);
@@ -390,10 +377,9 @@ static MunitResult test_add_server_busy(const MunitParameter params[],
 
 /* Trying to add a server with an ID which is already in use results in an
  * error. */
-static MunitResult test_add_server_dup_id(const MunitParameter params[],
-                                          void *data)
+TEST_CASE(add_server, error, dup_id, NULL)
 {
-    struct fixture *f = data;
+    struct add_server__fixture *f = data;
     int rv;
 
     (void)params;
@@ -408,17 +394,16 @@ static MunitResult test_add_server_dup_id(const MunitParameter params[],
 }
 
 /* Submit a request to add a new non-voting server. */
-static MunitResult test_add_server_submit(const MunitParameter params[],
-                                          void *data)
+TEST_CASE(add_server, success, submit, NULL)
 {
-    struct fixture *f = data;
+    struct add_server__fixture *f = data;
 
     (void)params;
 
     test_bootstrap_and_start(&f->raft, 2, 1, 2);
     test_become_leader(&f->raft);
 
-    __add_server(f, 3, "3");
+    add_server(3, "3");
 
     /* A write log and 2 append entries requests (one for each follower) have
      * been submitted. */
@@ -429,10 +414,9 @@ static MunitResult test_add_server_submit(const MunitParameter params[],
 
 /* After a request to add a new non-voting server is committed, the new
  * configuration is not marked as uncommitted anymore */
-static MunitResult test_add_server_committed(const MunitParameter params[],
-                                             void *data)
+TEST_CASE(add_server, success, committed, NULL)
 {
-    struct fixture *f = data;
+    struct add_server__fixture *f = data;
     const struct raft_server *server;
 
     (void)params;
@@ -440,7 +424,7 @@ static MunitResult test_add_server_committed(const MunitParameter params[],
     test_bootstrap_and_start(&f->raft, 2, 1, 2);
     test_become_leader(&f->raft);
 
-    __add_server(f, 3, "3");
+    add_server(3, "3");
 
     /* The new configuration is already effective. */
     munit_assert_int(f->raft.configuration.n, ==, 3);
@@ -468,25 +452,40 @@ static MunitResult test_add_server_committed(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static MunitTest add_server_tests[] = {
-    {"/not-leader", test_add_server_not_leader, setup, tear_down, 0, NULL},
-    {"/busy", test_add_server_busy, setup, tear_down, 0, NULL},
-    {"/dup-id", test_add_server_dup_id, setup, tear_down, 0, NULL},
-    {"/submit", test_add_server_submit, setup, tear_down, 0, NULL},
-    {"/committed", test_add_server_committed, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
  * raft_promote
  */
 
+TEST_SUITE(promote);
+
+struct promote__fixture
+{
+    RAFT_FIXTURE;
+};
+
+static void *promote__setup(const MunitParameter params[], void *user_data)
+{
+    struct promote__fixture *f = munit_malloc(sizeof *f);
+    (void)user_data;
+    RAFT_SETUP(f);
+    return f;
+}
+
+static void promote__tear_down(void *data)
+{
+    struct promote__fixture *f = data;
+    RAFT_TEAR_DOWN(f);
+    free(f);
+}
+
+TEST_GROUP(promote, error);
+TEST_GROUP(promote, success);
+
 /* Trying to promote a server on a node which is not the leader results in an
  * error. */
-static MunitResult test_promote_not_leader(const MunitParameter params[],
-                                           void *data)
+TEST_CASE(promote, error, not_leader, NULL)
 {
-    struct fixture *f = data;
+    struct promote__fixture *f = data;
     int rv;
 
     (void)params;
@@ -501,10 +500,9 @@ static MunitResult test_promote_not_leader(const MunitParameter params[],
 
 /* Trying to promote a server whose ID is unknown results in an
  * error. */
-static MunitResult test_promote_bad_id(const MunitParameter params[],
-                                       void *data)
+TEST_CASE(promote, error, bad_id, NULL)
 {
-    struct fixture *f = data;
+    struct promote__fixture *f = data;
     int rv;
 
     (void)params;
@@ -519,10 +517,9 @@ static MunitResult test_promote_bad_id(const MunitParameter params[],
 }
 
 /* Promoting a server which is already a voting server is a no-op. */
-static MunitResult test_promote_already_voting(const MunitParameter params[],
-                                               void *data)
+TEST_CASE(promote, error, already_voting, NULL)
 {
-    struct fixture *f = data;
+    struct promote__fixture *f = data;
     int rv;
 
     (void)params;
@@ -538,10 +535,9 @@ static MunitResult test_promote_already_voting(const MunitParameter params[],
 
 /* Trying to promote a server while another server is being promoted results in
  * an error. */
-static MunitResult test_promote_in_progress(const MunitParameter params[],
-                                            void *data)
+TEST_CASE(promote, error, in_progress, NULL)
 {
-    struct fixture *f = data;
+    struct promote__fixture *f = data;
     int rv;
 
     (void)params;
@@ -561,10 +557,9 @@ static MunitResult test_promote_in_progress(const MunitParameter params[],
 
 /* Promoting a server whose log is already up-to-date results in the relevant
  * configuration change to be submitted immediately. */
-static MunitResult test_promote_up_to_date(const MunitParameter params[],
-                                           void *data)
+TEST_CASE(promote, success, up_to_date, NULL)
 {
-    struct fixture *f = data;
+    struct promote__fixture *f = data;
     const struct raft_server *server;
 
     (void)params;
@@ -591,10 +586,9 @@ static MunitResult test_promote_up_to_date(const MunitParameter params[],
 /* Promoting a server whose log is not up-to-date results in catch-up rounds to
  * start. When the server has caught up, the configuration change request gets
  * submitted. */
-static MunitResult test_promote_catch_up(const MunitParameter params[],
-                                         void *data)
+TEST_CASE(promote, success, catch_up, NULL)
 {
-    struct fixture *f = data;
+    struct promote__fixture *f = data;
     const struct raft_server *server;
 
     (void)params;
@@ -635,10 +629,9 @@ static MunitResult test_promote_catch_up(const MunitParameter params[],
 /* Promoting a server whose log is not up-to-date results in catch-up rounds to
  * start. If new entries are appended after a round is started, a new round is
  * initiated once the former one completes. */
-static MunitResult test_promote_new_round(const MunitParameter params[],
-                                          void *data)
+TEST_CASE(promote, success, new_round, NULL)
 {
-    struct fixture *f = data;
+    struct promote__fixture *f = data;
 
     (void)params;
     return 0;
@@ -649,7 +642,7 @@ static MunitResult test_promote_new_round(const MunitParameter params[],
     __promote(f, 3);
 
     /* Now that the catch-up round started, submit a new entry. */
-    __accept_entry(f);
+    propose_entry;
 
     /* Let more than election_timeout milliseconds elapse. */
     __tick(f, f->raft.election_timeout + 100);
@@ -670,10 +663,9 @@ static MunitResult test_promote_new_round(const MunitParameter params[],
 /* Promoting a server whose log is not up-to-date results in catch-up rounds to
  * start. Once a round takes less than election_timeout, a request to append the
  * new configuration is made and eventually committed . */
-static MunitResult test_promote_committed(const MunitParameter params[],
-                                          void *data)
+TEST_CASE(promote, success, committed, NULL)
 {
-    struct fixture *f = data;
+    struct promote__fixture *f = data;
     const struct raft_entry *entry;
 
     (void)params;
@@ -686,7 +678,7 @@ static MunitResult test_promote_committed(const MunitParameter params[],
     __assert_io(f, 0, 1);
 
     /* Now that the catch-up round started, submit a new entry. */
-    __accept_entry(f);
+    propose_entry;
     __assert_io(f, 1, 2);
 
     /* Let more than election_timeout milliseconds elapse. */
@@ -703,7 +695,7 @@ static MunitResult test_promote_committed(const MunitParameter params[],
     /* Make a new client request, so even when this second round that just
      * started completes, the server being promoted will still be missing
      * entries. */
-    __accept_entry(f);
+    propose_entry;
     __assert_io(f, 1, 2);
 
     /* Simulate the server being promoted completing the second round within the
@@ -732,10 +724,9 @@ static MunitResult test_promote_committed(const MunitParameter params[],
 /* If leadership is lost before the configuration change log entry for promoting
  * the new server is committed, the leader configuration gets rolled back and
  * the server being promoted is not considered any more as voting. */
-static MunitResult test_promote_step_down(const MunitParameter params[],
-                                          void *data)
+TEST_CASE(promote, success, step_down, NULL)
 {
-    struct fixture *f = data;
+    struct promote__fixture *f = data;
     struct raft_entry *entries;
     const struct raft_server *server;
 
@@ -792,10 +783,9 @@ static MunitResult test_promote_step_down(const MunitParameter params[],
  * RAFT_LOG_CONFIGURATION entry which promotes a non-voting server, the
  * configuration change is immediately applied locally, even if the entry is not
  * yet committed. Once the entry is committed, the change becomes permanent.*/
-static MunitResult test_promote_follower(const MunitParameter params[],
-                                         void *data)
+TEST_CASE(promote, success, follower, NULL)
 {
-    struct fixture *f = data;
+    struct promote__fixture *f = data;
     struct raft_configuration configuration;
     struct raft_buffer buf;
     struct raft_entry *entries;
@@ -808,12 +798,12 @@ static MunitResult test_promote_follower(const MunitParameter params[],
     /* Encode the new configuration into a buffer. */
     raft_configuration_init(&configuration);
 
-    rv = raft_configuration__copy(&f->raft.configuration, &configuration);
+    rv = configuration__copy(&f->raft.configuration, &configuration);
     munit_assert_int(rv, ==, 0);
 
     configuration.servers[2].voting = true;
 
-    rv = raft_configuration_encode(&configuration, &buf);
+    rv = configuration__encode(&configuration, &buf);
     munit_assert_int(rv, ==, 0);
 
     raft_configuration_close(&configuration);
@@ -845,30 +835,41 @@ static MunitResult test_promote_follower(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static MunitTest promote_tests[] = {
-    {"/not-leader", test_promote_not_leader, setup, tear_down, 0, NULL},
-    {"/bad-id", test_promote_bad_id, setup, tear_down, 0, NULL},
-    {"/already-voting", test_promote_already_voting, setup, tear_down, 0, NULL},
-    {"/in-progress", test_promote_in_progress, setup, tear_down, 0, NULL},
-    {"/up-to-date", test_promote_up_to_date, setup, tear_down, 0, NULL},
-    {"/catch-up", test_promote_catch_up, setup, tear_down, 0, NULL},
-    {"/new-round", test_promote_new_round, setup, tear_down, 0, NULL},
-    {"/committed", test_promote_committed, setup, tear_down, 0, NULL},
-    {"/step-down", test_promote_step_down, setup, tear_down, 0, NULL},
-    {"/follower", test_promote_follower, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
 /**
  * raft_remove_server
  */
 
+TEST_SUITE(remove_server);
+
+struct remove_server__fixture
+{
+    RAFT_FIXTURE;
+};
+
+static void *remove_server__setup(const MunitParameter params[],
+                                  void *user_data)
+{
+    struct remove_server__fixture *f = munit_malloc(sizeof *f);
+    (void)user_data;
+    RAFT_SETUP(f);
+    return f;
+}
+
+static void remove_server__tear_down(void *data)
+{
+    struct remove_server__fixture *f = data;
+    RAFT_TEAR_DOWN(f);
+    free(f);
+}
+
+TEST_GROUP(remove_server, error);
+TEST_GROUP(remove_server, success);
+
 /* Trying to remove a server on a node which is not the leader results in an
  * error. */
-static MunitResult test_remove_server_not_leader(const MunitParameter params[],
-                                                 void *data)
+TEST_CASE(remove_server, error, not_leader, NULL)
 {
-    struct fixture *f = data;
+    struct remove_server__fixture *f = data;
     int rv;
 
     (void)params;
@@ -883,10 +884,9 @@ static MunitResult test_remove_server_not_leader(const MunitParameter params[],
 
 /* Trying to remove a server while a configuration change is already in progress
  * results in an error. */
-static MunitResult test_remove_server_busy(const MunitParameter params[],
-                                           void *data)
+TEST_CASE(remove_server, error, busy, NULL)
 {
-    struct fixture *f = data;
+    struct remove_server__fixture *f = data;
     int rv;
 
     (void)params;
@@ -894,7 +894,7 @@ static MunitResult test_remove_server_busy(const MunitParameter params[],
     test_bootstrap_and_start(&f->raft, 2, 1, 2);
     test_become_leader(&f->raft);
 
-    __add_server(f, 3, "3");
+    add_server(3, "3");
 
     rv = raft_remove_server(&f->raft, 2);
     munit_assert_int(rv, ==, RAFT_ERR_CONFIGURATION_BUSY);
@@ -905,10 +905,9 @@ static MunitResult test_remove_server_busy(const MunitParameter params[],
 }
 
 /* Trying to remove a server with an unknwon ID results in an error. */
-static MunitResult test_remove_server_bad_id(const MunitParameter params[],
-                                             void *data)
+TEST_CASE(remove_server, error, bad_id, NULL)
 {
-    struct fixture *f = data;
+    struct remove_server__fixture *f = data;
     int rv;
 
     (void)params;
@@ -923,10 +922,9 @@ static MunitResult test_remove_server_bad_id(const MunitParameter params[],
 }
 
 /* Submit a request to remove a server. */
-static MunitResult test_remove_server_submit(const MunitParameter params[],
-                                             void *data)
+TEST_CASE(remove_server, success, submit, NULL)
 {
-    struct fixture *f = data;
+    struct remove_server__fixture *f = data;
 
     (void)params;
 
@@ -944,10 +942,9 @@ static MunitResult test_remove_server_submit(const MunitParameter params[],
 
 /* After a request to remove server is committed, the new configuration is not
  * marked as uncommitted anymore */
-static MunitResult test_remove_server_committed(const MunitParameter params[],
-                                                void *data)
+TEST_CASE(remove_server, success, committed, NULL)
 {
-    struct fixture *f = data;
+    struct remove_server__fixture *f = data;
     const struct raft_server *server;
 
     (void)params;
@@ -978,10 +975,9 @@ static MunitResult test_remove_server_committed(const MunitParameter params[],
 }
 
 /* A leader gets a request to remove itself. */
-static MunitResult test_remove_server_self(const MunitParameter params[],
-                                           void *data)
+TEST_CASE(remove_server, success, self, NULL)
 {
-    struct fixture *f = data;
+    struct remove_server__fixture *f = data;
     const struct raft_server *server;
 
     (void)params;
@@ -1021,25 +1017,3 @@ static MunitResult test_remove_server_self(const MunitParameter params[],
 
     return MUNIT_OK;
 }
-
-static MunitTest remove_server_tests[] = {
-    {"/not-leader", test_remove_server_not_leader, setup, tear_down, 0, NULL},
-    {"/busy", test_remove_server_busy, setup, tear_down, 0, NULL},
-    {"/bad-id", test_remove_server_bad_id, setup, tear_down, 0, NULL},
-    {"/submit", test_remove_server_submit, setup, tear_down, 0, NULL},
-    {"/committed", test_remove_server_committed, setup, tear_down, 0, NULL},
-    {"/self", test_remove_server_self, setup, tear_down, 0, NULL},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
-/**
- * Test suite
- */
-
-MunitSuite raft_client_suites[] = {
-    {"/accept", accept_tests, NULL, 1, 0},
-    {"/add-server", add_server_tests, NULL, 1, 0},
-    {"/promote", promote_tests, NULL, 1, 0},
-    {"/remove-server", remove_server_tests, NULL, 1, 0},
-    {NULL, NULL, NULL, 0, 0},
-};

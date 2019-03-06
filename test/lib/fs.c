@@ -8,12 +8,40 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "../../src/aio.h"
+
 #include "fs.h"
 
 #define TEST_DIR_TEMPLATE "./tmp/%s/raft-test-XXXXXX"
 
 char *test_dir_fs_type_supported[] = {"btrfs", "ext4", "tmpfs",
                                       "xfs",   "zfs",  NULL};
+
+char *test_dir_fs_type_btrfs[] = {"btrfs", NULL};
+
+char *test_dir_fs_type_aio[] = {"btrfs", "ext4", "xfs", NULL};
+
+char *test_dir_fs_type_no_aio[] = {"tmpfs", "zfs", NULL};
+
+MunitParameterEnum dir_fs_btrfs_params[] = {
+    {TEST_DIR_FS_TYPE, test_dir_fs_type_btrfs},
+    {NULL, NULL},
+};
+
+MunitParameterEnum dir_fs_supported_params[] = {
+    {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
+    {NULL, NULL},
+};
+
+MunitParameterEnum dir_fs_aio_params[] = {
+    {TEST_DIR_FS_TYPE, test_dir_fs_type_aio},
+    {NULL, NULL},
+};
+
+MunitParameterEnum dir_fs_no_aio_params[] = {
+    {TEST_DIR_FS_TYPE, test_dir_fs_type_no_aio},
+    {NULL, NULL},
+};
 
 char *test_dir_setup(const MunitParameter params[])
 {
@@ -258,9 +286,11 @@ bool test_dir_has_file(const char *dir, const char *filename)
 
 void test_dir_fill(const char *dir, const size_t n)
 {
+    char path[256];
     const char *filename = ".fill";
     struct statvfs fs;
     size_t size;
+    int fd;
     int rv;
 
     rv = statvfs(dir, &fs);
@@ -272,30 +302,74 @@ void test_dir_fill(const char *dir, const size_t n)
         munit_assert_int(size, >=, n);
     }
 
-    test_dir_write_file_with_zeros(dir, filename, size - n);
+    test_dir__join(dir, filename, path);
+
+    fd = open(path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+    munit_assert_int(fd, !=, -1);
+
+    rv = posix_fallocate(fd, 0, size);
+    munit_assert_int(rv, ==, 0);
 
     /* If n is zero, make sure any further write fails with ENOSPC */
     if (n == 0) {
-        char path[256];
         char buf[4096];
-        int fd;
-        int rv;
         int i;
 
-        test_dir__join(dir, filename, path);
-
-        fd = open(path, O_RDWR | O_APPEND, S_IRUSR | S_IWUSR);
-        munit_assert_int(fd, !=, -1);
+        rv = lseek(fd, 0, SEEK_END);
+        munit_assert_int(rv, !=, -1);
 
         for (i = 0; i < 40; i++) {
             rv = write(fd, buf, sizeof buf);
-	    if (rv == 0) {
-	      continue;
-	    }
+            if (rv < 0) {
+                break;
+            }
         }
 
-	munit_assert_int(rv, ==, -1);
-	munit_assert_int(errno, ==, ENOSPC);
-	close(fd);
+        munit_assert_int(rv, ==, -1);
+        munit_assert_int(errno, ==, ENOSPC);
     }
+
+    close(fd);
+}
+
+void test_aio_fill(aio_context_t *ctx, unsigned n)
+{
+    char buf[256];
+    int fd;
+    int rv;
+    int limit;
+    int used;
+
+    /* Figure out how many events are available. */
+    fd = open("/proc/sys/fs/aio-max-nr", O_RDONLY);
+    munit_assert_int(fd, !=, -1);
+
+    rv = read(fd, buf, sizeof buf);
+    munit_assert_int(rv, !=, -1);
+
+    close(fd);
+
+    limit = atoi(buf);
+
+    /* Figure out how many events are in use. */
+    fd = open("/proc/sys/fs/aio-nr", O_RDONLY);
+    munit_assert_int(fd, !=, -1);
+
+    rv = read(fd, buf, sizeof buf);
+    munit_assert_int(rv, !=, -1);
+
+    close(fd);
+
+    used = atoi(buf);
+
+    rv = io_setup(limit - used - n, ctx);
+    munit_assert_int(rv, ==, 0);
+}
+
+void test_aio_destroy(aio_context_t ctx)
+{
+    int rv;
+
+    rv = io_destroy(ctx);
+    munit_assert_int(rv, ==, 0);
 }
