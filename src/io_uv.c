@@ -214,6 +214,13 @@ static int io_uv__set_vote(struct raft_io *io, const unsigned server_id)
     return 0;
 }
 
+/* Implementation of raft_io->time. */
+static raft_time io_uv__time(struct raft_io *io) {
+    struct io_uv *uv;
+    uv = io->impl;
+    return uv_now(uv->loop);
+}
+
 /**
  * Open and allocate the first closed segment, containing just one entry, and
  * return its file descriptor.
@@ -339,6 +346,7 @@ int raft_io_uv_init(struct raft_io *io,
     io->send = io_uv__send;
     io->snapshot_put = io_uv__snapshot_put;
     io->snapshot_get = io_uv__snapshot_get;
+    io->time = io_uv__time;
 
     return 0;
 

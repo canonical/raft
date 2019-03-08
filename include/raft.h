@@ -112,6 +112,11 @@ typedef unsigned long long raft_term;
 typedef unsigned long long raft_index;
 
 /**
+ * Hold a time value expressed in milliseconds since the epoch.
+ */
+typedef unsigned long long raft_time;
+
+/**
  * Logging levels.
  */
 enum { RAFT_DEBUG, RAFT_INFO, RAFT_WARN, RAFT_ERROR };
@@ -557,6 +562,11 @@ struct raft_io
     int (*snapshot_get)(struct raft_io *io,
                         struct raft_io_snapshot_get *req,
                         raft_io_snapshot_get_cb cb);
+
+    /**
+     * Return the current time, expressed in milliseconds since the epoch.
+     */
+    raft_time (*time)(struct raft_io *io);
 };
 
 /**

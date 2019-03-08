@@ -37,7 +37,7 @@ struct send
 struct io_stub
 {
     /* Elapsed time since the backend was started. */
-    unsigned time;
+    raft_time time;
 
     /* Term and vote */
     raft_term term;
@@ -563,6 +563,13 @@ static int io_stub__snapshot_get(struct raft_io *io,
     return 0;
 }
 
+static raft_time io_stub__time(struct raft_io *io) {
+    struct io_stub *s;
+    s = io->impl;
+
+    return s->time;
+}
+
 /**
  * Queue up a request which will be processed later, when io_stub_flush()
  * is invoked.
@@ -632,6 +639,7 @@ int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger)
     io->send = io_stub__send;
     io->snapshot_put = io_stub__snapshot_put;
     io->snapshot_get = io_stub__snapshot_get;
+    io->time = io_stub__time;
 
     return 0;
 }
