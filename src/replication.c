@@ -538,8 +538,7 @@ int raft_replication__update(struct raft *r,
                              const struct raft_append_entries_result *result)
 {
     size_t server_index;
-    raft_index *next_index;
-    raft_index *match_index;
+    struct raft_replication *replication;
     raft_index last_log_index;
     bool is_being_promoted;
     int rv;
@@ -549,12 +548,12 @@ int raft_replication__update(struct raft *r,
     server_index = configuration__index_of(&r->configuration, server->id);
     assert(server_index < r->configuration.n);
 
-    match_index = &r->leader_state.replication[server_index].match_index;
-    next_index = &r->leader_state.replication[server_index].next_index;
+    replication = &r->leader_state.replication[server_index];
+    replication->last_contact = r->io->time(r->io);
 
     /* If the reported index is lower than the match index, it must be an out of
      * order response for an old append entries. Ignore it. */
-    if (*match_index > *next_index - 1) {
+    if (replication->match_index > replication->next_index - 1) {
         raft_debugf(r->logger,
                     "match index higher than reported next index -> ignore");
         return 0;
@@ -574,7 +573,7 @@ int raft_replication__update(struct raft *r,
     if (!result->success) {
         /* If the match index is already up-to-date then the rejection must be
          * stale and come from an out of order message. */
-        if (match_index == next_index - 1) {
+        if (replication->match_index == replication->next_index - 1) {
             raft_debugf(r->logger, "match index is up to date -> ignore ");
             return 0;
         }
@@ -582,16 +581,16 @@ int raft_replication__update(struct raft *r,
         /* If the peer reports a last index lower than what we believed was its
          * next index, decrerment the next index to whatever is shorter: our log
          * or the peer log. Otherwise just blindly decrement next_index by 1. */
-        if (result->last_log_index < *next_index - 1) {
-            *next_index = min(result->last_log_index, last_log_index);
+        if (result->last_log_index < replication->next_index - 1) {
+            replication->next_index = min(result->last_log_index, last_log_index);
         } else {
-            *next_index = *next_index - 1;
+            replication->next_index = replication->next_index - 1;
         }
 
-        *next_index = max(*next_index, 1);
+        replication->next_index = max(replication->next_index, 1);
 
         raft_infof(r->logger, "log mismatch -> send old entries %ld",
-                   *next_index);
+                   replication->next_index);
 
         /* Retry, ignoring errors. */
         raft_replication__send_append_entries(r, server_index);
@@ -599,7 +598,7 @@ int raft_replication__update(struct raft *r,
         return 0;
     }
 
-    if (result->last_log_index <= *match_index) {
+    if (result->last_log_index <= replication->match_index) {
         /* Like above, this must be a stale response. */
         raft_debugf(r->logger, "match index is up to date -> ignore ");
 
@@ -618,10 +617,10 @@ int raft_replication__update(struct raft *r,
      *
      *   If successful update nextIndex and matchIndex for follower.
      */
-    *next_index = result->last_log_index + 1;
-    *match_index = result->last_log_index;
+    replication->next_index = result->last_log_index + 1;
+    replication->match_index = result->last_log_index;
     raft_debugf(r->logger, "match/next idx for server %ld: %ld/%ld",
-                server_index, *match_index, *next_index);
+                server_index, replication->match_index, replication->next_index);
 
     /* If the server is currently being promoted and is catching with logs,
      * update the information about the current catch-up round, and possibly

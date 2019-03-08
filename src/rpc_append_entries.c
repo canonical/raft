@@ -204,7 +204,8 @@ int raft_rpc__recv_append_entries_result(
         return 0;
     }
 
-    /* Update the match/next indexes and possibly send further entries. */
+    /* Update the match/next and the last contact indexes, possibly sending
+     * further entries. */
     rv = raft_replication__update(r, server, result);
     if (rv != 0) {
         return rv;
