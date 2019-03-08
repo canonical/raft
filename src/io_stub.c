@@ -10,7 +10,7 @@
 #include "snapshot.h"
 
 /* Set to 1 to enable logging. */
-#if 1
+#if 0
 #define __debugf(S, MSG, ...) raft_debugf(S->logger, MSG, __VA_ARGS__)
 #else
 #define __debugf(S, MSG, ...)

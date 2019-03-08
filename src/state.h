@@ -1,7 +1,5 @@
 /**
- *
  * Handle raft state transitions.
- *
  */
 
 #ifndef RAFT_STATE_H

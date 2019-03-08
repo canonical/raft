@@ -350,6 +350,26 @@ TEST_CASE(elapse, success, no_heartbeat, NULL)
     return MUNIT_OK;
 }
 
+/* If we're leader election timeout elapses without hearing from a majority of
+ * the cluster, step down. */
+TEST_CASE(elapse, success, no_contact, NULL)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
+    test_become_leader(&f->raft);
+
+    /* Advance timer past the election timeout */
+    __tick(f, f->raft.election_timeout + 100);
+
+    /* We have stepped down. */
+    __assert_state(f, RAFT_STATE_FOLLOWER);
+
+    return MUNIT_OK;
+}
+
 /* If we're candidate and the election timeout has elapsed, start a new
  * election. */
 TEST_CASE(elapse, success, new_election, NULL)

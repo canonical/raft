@@ -183,6 +183,9 @@ TEST_CASE(request, success, twice, NULL)
     struct fixture *f = data;
     struct raft_entry *entries1 = __create_entries_batch();
     struct raft_entry *entries2 = __create_entries_batch();
+    struct raft_message *messages;
+    struct raft_append_entries_result *result;
+    unsigned n;
 
     (void)params;
 
@@ -191,8 +194,20 @@ TEST_CASE(request, success, twice, NULL)
     __recv_append_entries(f, 1, 2, 1, 1, entries1, 1, 1);
     __recv_append_entries(f, 1, 2, 1, 1, entries2, 1, 1);
 
-    /* The request is successful and the duplicate entry has been ignored. */
-    __assert_append_entries_response(f, 1, true, 2);
+    /* The request is successful both times and the duplicate entry has been
+       ignored. */
+    raft_io_stub_flush(&f->io);
+    raft_io_stub_sent(&f->io, &messages, &n);
+
+    munit_assert_int(n, ==, 2);
+
+    result = &messages[0].append_entries_result;
+    munit_assert_int(result->success, ==, 1);
+    munit_assert_int(result->last_log_index, ==, 2);
+
+    result = &messages[1].append_entries_result;
+    munit_assert_int(result->success, ==, 1);
+    munit_assert_int(result->last_log_index, ==, 2);
 
     return MUNIT_OK;
 }
@@ -216,6 +231,8 @@ TEST_CASE(request, success, higher_term, NULL)
     /* We have updated our leader. */
     __assert_current_leader_id(f, 2);
 
+    raft_io_stub_flush(&f->io);
+
     return MUNIT_OK;
 }
 
@@ -237,6 +254,8 @@ TEST_CASE(request, success, same_term, NULL)
 
     /* We have updated our leader. */
     __assert_current_leader_id(f, 2);
+
+    raft_io_stub_flush(&f->io);
 
     return MUNIT_OK;
 }

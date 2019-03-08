@@ -678,8 +678,12 @@ TEST_CASE(promote, success, committed, NULL)
     propose_entry;
     __assert_io(f, 1, 2);
 
-    /* Let more than election_timeout milliseconds elapse. */
-    __tick(f, f->raft.election_timeout + 100);
+    /* Let more than election_timeout milliseconds elapse, but track a contact
+     * from server 2 in between, to avoid stepping down. */
+    __tick(f, f->raft.election_timeout - 100);
+    f->raft.leader_state.replication[1].last_contact = f->io.time(&f->io);
+    raft_io_stub_flush(&f->io);
+    __tick(f, 200);
     __assert_io(f, 0, 2); /* Heartbeat */
 
     /* Simulate the server being promoted sending an AppendEntries result,
@@ -828,6 +832,8 @@ TEST_CASE(promote, success, follower, NULL)
     munit_assert_int(f->raft.configuration_index, ==, 2);
     munit_assert_int(f->raft.configuration_uncommitted_index, ==, 0);
     munit_assert_true(f->raft.configuration.servers[2].voting);
+
+    raft_io_stub_flush(&f->io);
 
     return MUNIT_OK;
 }

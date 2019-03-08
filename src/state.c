@@ -256,6 +256,9 @@ int raft_state__convert_to_leader(struct raft *r)
         struct raft_replication *replication = &r->leader_state.replication[i];
         replication->next_index = raft_log__last_index(&r->log) + 1;
         replication->match_index = 0;
+	/* TODO: we should keep a last_contact array which is independent from
+	 * the replication array, and keep it up-to-date. */
+	replication->last_contact = r->io->time(r->io);
     }
 
     /* Notify watchers */
@@ -324,6 +327,7 @@ int raft_state__rebuild_next_and_match_indexes(
 
         replication[i].next_index = raft_log__last_index(&r->log) + 1;
         replication[i].match_index = 0;
+	replication[i].last_contact = r->io->time(r->io);
     }
 
     raft_free(r->leader_state.replication);

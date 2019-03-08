@@ -28,7 +28,7 @@
 /**
  * Hold context for a #RAFT_IO_APPEND_ENTRIES send request that was submitted.
  */
-struct raft_replication__send_append_entries
+struct send_append_entries
 {
     struct raft *raft;          /* Instance that has submitted the request */
     raft_index index;           /* Index of the first entry in the request. */
@@ -76,7 +76,7 @@ struct raft_replication__follower_append
 static void raft_replication__send_append_entries_cb(struct raft_io_send *req,
                                                      int status)
 {
-    struct raft_replication__send_append_entries *request = req->data;
+    struct send_append_entries *request = req->data;
     struct raft *r = request->raft;
 
     raft_debugf(r->logger, "send append entries completed: status %d", status);
@@ -192,7 +192,7 @@ int raft_replication__send_append_entries(struct raft *r, size_t i)
     raft_index next_index;
     struct raft_message message;
     struct raft_append_entries *args = &message.append_entries;
-    struct raft_replication__send_append_entries *request;
+    struct send_append_entries *request;
     int rv;
 
     assert(r != NULL);
@@ -582,7 +582,8 @@ int raft_replication__update(struct raft *r,
          * next index, decrerment the next index to whatever is shorter: our log
          * or the peer log. Otherwise just blindly decrement next_index by 1. */
         if (result->last_log_index < replication->next_index - 1) {
-            replication->next_index = min(result->last_log_index, last_log_index);
+            replication->next_index =
+                min(result->last_log_index, last_log_index);
         } else {
             replication->next_index = replication->next_index - 1;
         }
@@ -620,7 +621,8 @@ int raft_replication__update(struct raft *r,
     replication->next_index = result->last_log_index + 1;
     replication->match_index = result->last_log_index;
     raft_debugf(r->logger, "match/next idx for server %ld: %ld/%ld",
-                server_index, replication->match_index, replication->next_index);
+                server_index, replication->match_index,
+                replication->next_index);
 
     /* If the server is currently being promoted and is catching with logs,
      * update the information about the current catch-up round, and possibly
@@ -938,7 +940,6 @@ int raft_replication__append(struct raft *r,
     }
 
     *success = true;
-    *async = true;
 
     n = args->n_entries - i; /* Number of new entries */
 
@@ -961,13 +962,10 @@ int raft_replication__append(struct raft *r,
             }
         }
 
-        if (args->n_entries > 0) {
-            raft_free(args->entries[0].batch);
-            raft_free(args->entries);
-        }
-
         return 0;
     }
+
+    *async = true;
 
     request = raft_malloc(sizeof *request);
     if (request == NULL) {
