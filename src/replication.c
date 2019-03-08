@@ -1063,7 +1063,9 @@ static void put_snapshot_cb(struct raft_io_snapshot_put *req, int status)
      *      as cluster configuration).
      */
     local_first_index = raft_log__first_index(&r->log);
-    raft_log__truncate(&r->log, local_first_index);
+    if (local_first_index > 0) {
+        raft_log__truncate(&r->log, local_first_index);
+    }
     raft_log__set_offset(&r->log, snapshot->index);
 
     r->snapshot.index = snapshot->index;
@@ -1219,7 +1221,6 @@ static int raft_replication__apply_command(struct raft *r,
 
 static bool should_take_snapshot(struct raft *r)
 {
-  raft_debugf(r->logger, "TAKE SNAP pending term %d last applied %d index %d threshold %d", r->snapshot.pending.term, r->last_applied, r->snapshot.index, r->snapshot.threshold);
     /* If a snapshot is already in progress, we don't want to start another
      *  one. */
     if (r->snapshot.pending.term != 0) {
