@@ -28,7 +28,7 @@ int test_uv_run(struct uv_loop_s *l, unsigned n);
  * Run the loop until the given function returns true.
  *
  * If the loop exhausts all active handles or if #TEST_UV_MAX_LOOP_RUN is
- * reached without @f returning #true, the test fails.
+ * reached without @F returning #true, the test fails.
  */
 #define test_uv_run_until(LOOP, DATA, F)                                    \
     {                                                                       \
