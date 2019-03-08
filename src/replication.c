@@ -425,6 +425,7 @@ err:
 
 int raft_replication__trigger(struct raft *r, const raft_index index)
 {
+    raft_time now;
     size_t i;
     int rv;
 
@@ -447,13 +448,30 @@ int raft_replication__trigger(struct raft *r, const raft_index index)
      */
     r->timer = 0;
 
-    /* Trigger replication. */
+    now = r->io->time(r->io);
+
+    /* Trigger replication for servers we didn't hear from recently. */
     for (i = 0; i < r->configuration.n; i++) {
         struct raft_server *server = &r->configuration.servers[i];
+        struct raft_replication *replication = &r->leader_state.replication[i];
         int rv;
 
         if (server->id == r->id) {
             continue;
+        }
+
+        /* Send the heartbeat only if we were idle. */
+        if (index == 0) {
+	  /* TODO: since we don't yet keep a last_contact array which is
+	   * independent from the replication array, if the value is 0 it means
+	   * that this is the very first heartbeat being sent after election. In
+	   * this case we unconditionally send a heartbeat message and we set
+	   * last_contact to know to avoid thinking that we lost contact. */
+            if (replication->last_contact == 0) {
+                replication->last_contact = now;
+            } else if (now - replication->last_contact < r->heartbeat_timeout) {
+                continue;
+            }
         }
 
         rv = raft_replication__send_append_entries(r, i);

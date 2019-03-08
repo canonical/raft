@@ -661,6 +661,7 @@ struct raft_replication
     raft_index next_index;  /* Next entry to send */
     raft_index match_index; /* Highest applied idx */
     raft_time last_contact; /* Timestamp of last RPC received */
+    unsigned short state;   /* Probe, pipeline or snapshot */
 };
 
 /**

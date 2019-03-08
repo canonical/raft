@@ -8,6 +8,15 @@
 #include "../include/raft.h"
 
 /**
+ * Possible values for the state field of struct raft_replication.
+ */
+enum {
+    REPLICATION__PROBE = 0, /* At most one AppendEntries per heartbeat */
+    REPLICATION__PIPELINE,  /* Optimistically stream AppendEntries */
+    REPLICATION__SNAPSHOT   /* Sending a snapshot */
+};
+
+/**
  * Release any resources associated with the current state.
  */
 void raft_state__clear(struct raft *r);
