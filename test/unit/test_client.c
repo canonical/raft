@@ -437,8 +437,8 @@ TEST_CASE(add_server, success, committed, NULL)
     __assert_configuration_indexes(f, 1, 2);
 
     /* The next/match indexes now include an entry for the new server. */
-    munit_assert_int(f->raft.leader_state.next_index[2], ==, 3);
-    munit_assert_int(f->raft.leader_state.match_index[2], ==, 0);
+    munit_assert_int(f->raft.leader_state.replication[2].next_index, ==, 3);
+    munit_assert_int(f->raft.leader_state.replication[2].match_index, ==, 0);
 
     __assert_io(f, 1, 2);
 

@@ -644,6 +644,15 @@ enum {
 };
 
 /**
+ * Used by leaders to keep track of replication progress for each server.
+ */
+struct raft_replication
+{
+    raft_index next_index;  /* Next entry to send */
+    raft_index match_index; /* Highest applied idx */
+};
+
+/**
  * Number of available event types.
  */
 #define RAFT_EVENT_N (RAFT_EVENT_PROMOTION_ABORTED + 1)
@@ -796,8 +805,7 @@ struct raft
              * which is specific to leaders (Figure 3.1). This state is
              * reinitialized after the server gets elected.
              */
-            raft_index *next_index;  /* For each server, next entry to send */
-            raft_index *match_index; /* For each server, highest applied idx */
+            struct raft_replication *replication; /* Per-server replication */
 
             /**
              * Fields used to track the progress of pushing entries to the

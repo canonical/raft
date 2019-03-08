@@ -200,12 +200,12 @@ int raft_replication__send_append_entries(struct raft *r, size_t i)
     assert(server != NULL);
     assert(server->id != r->id);
     assert(server->id != 0);
-    assert(r->leader_state.next_index != NULL);
+    assert(r->leader_state.replication != NULL);
 
     args->term = r->current_term;
     args->leader_id = r->id;
 
-    next_index = r->leader_state.next_index[i];
+    next_index = r->leader_state.replication[i].next_index;
 
     /* From Section §3.5:
      *
@@ -354,7 +354,7 @@ static void raft_replication__leader_append_cb(void *data, int status)
      *   replicates log entries but does not count itself in majorities.
      */
     if (server_index < r->configuration.n) {
-        r->leader_state.match_index[server_index] = last_index;
+        r->leader_state.replication[server_index].match_index = last_index;
     } else {
         const struct raft_entry *entry = raft_log__get(&r->log, last_index);
         assert(entry->type == RAFT_LOG_CONFIGURATION);
@@ -549,8 +549,8 @@ int raft_replication__update(struct raft *r,
     server_index = configuration__index_of(&r->configuration, server->id);
     assert(server_index < r->configuration.n);
 
-    match_index = &r->leader_state.match_index[server_index];
-    next_index = &r->leader_state.next_index[server_index];
+    match_index = &r->leader_state.replication[server_index].match_index;
+    next_index = &r->leader_state.replication[server_index].next_index;
 
     /* If the reported index is lower than the match index, it must be an out of
      * order response for an old append entries. Ignore it. */
@@ -1364,7 +1364,7 @@ void raft_replication__quorum(struct raft *r, const raft_index index)
         if (!server->voting) {
             continue;
         }
-        if (r->leader_state.match_index[i] >= index) {
+        if (r->leader_state.replication[i].match_index >= index) {
             votes++;
         }
     }
