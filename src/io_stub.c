@@ -690,7 +690,7 @@ void raft_io_stub_advance(struct raft_io *io, unsigned msecs)
     struct io_stub *s;
     s = io->impl;
     s->time += msecs;
-    s->tick_cb(io, msecs);
+    s->tick_cb(io);
 }
 
 void raft_io_stub_set_time(struct raft_io *io, unsigned time)

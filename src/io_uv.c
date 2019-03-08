@@ -42,13 +42,10 @@ static int io_uv__init(struct raft_io *io, unsigned id, const char *address)
 static void timer_cb(uv_timer_t *timer)
 {
     struct io_uv *uv;
-    uint64_t now;
     uv = timer->data;
-    now = uv_now(uv->loop);
     if (uv->tick_cb != NULL) {
-        uv->tick_cb(uv->io, now - uv->last_tick);
+        uv->tick_cb(uv->io);
     }
-    uv->last_tick = now;
 }
 
 /* Implementation of raft_io->start. */
@@ -63,7 +60,6 @@ static int io_uv__start(struct raft_io *io,
     assert(uv->state == IO_UV__ACTIVE);
     uv->tick_cb = tick_cb;
     uv->recv_cb = recv_cb;
-    uv->last_tick = uv_now(uv->loop);
     rv = io_uv__listen(uv);
     if (rv != 0) {
         return rv;
@@ -329,7 +325,6 @@ int raft_io_uv_init(struct raft_io *io,
     uv->n_blocks = RAFT_IO_UV_MAX_SEGMENT_SIZE / uv->block_size;
 
     uv->tick_cb = NULL;
-    uv->last_tick = 0;
     uv->close_cb = NULL;
 
     /* Set the raft_io implementation. */

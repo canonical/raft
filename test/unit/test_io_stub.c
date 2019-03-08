@@ -44,7 +44,6 @@ struct fixture
     struct
     {
         bool invoked;
-        unsigned elapsed; /* Milliseconds since last call to __tick */
     } tick_cb;
     struct
     {
@@ -67,12 +66,11 @@ struct fixture
     } stop_cb;
 };
 
-static void __tick_cb(struct raft_io *io, const unsigned elapsed)
+static void __tick_cb(struct raft_io *io)
 {
     struct fixture *f = io->data;
 
     f->tick_cb.invoked = true;
-    f->tick_cb.elapsed = elapsed;
 }
 
 static void __append_cb(void *data, const int status)
@@ -106,7 +104,6 @@ static void *setup(const MunitParameter params[], void *user_data)
     f->req.data = f;
 
     f->tick_cb.invoked = false;
-    f->tick_cb.elapsed = 0;
 
     f->append_cb.invoked = 0;
     f->append_cb.status = -1;
@@ -168,7 +165,6 @@ TEST_CASE(start, success, tick, NULL)
     __advance(f, 100);
 
     munit_assert_true(f->tick_cb.invoked);
-    munit_assert_int(f->tick_cb.elapsed, ==, 100);
 
     return MUNIT_OK;
 }

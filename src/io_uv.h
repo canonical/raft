@@ -61,7 +61,6 @@ struct io_uv
     raft__queue snapshot_get_reqs;          /* Inflight get snapshot requests */
     struct io_uv__metadata metadata;        /* Cache of metadata on disk */
     struct uv_timer_s timer;                /* Timer for periodic ticks */
-    uint64_t last_tick;                     /* Timestamp of the last tick */
     raft_io_tick_cb tick_cb;
     raft_io_recv_cb recv_cb;
     raft_io_close_cb close_cb;

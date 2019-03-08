@@ -407,7 +407,7 @@ struct raft_snapshot
 
 struct raft_io;
 
-typedef void (*raft_io_tick_cb)(struct raft_io *io, unsigned elapsed);
+typedef void (*raft_io_tick_cb)(struct raft_io *io);
 typedef void (*raft_io_recv_cb)(struct raft_io *io, struct raft_message *msg);
 typedef void (*raft_io_close_cb)(struct raft_io *io);
 

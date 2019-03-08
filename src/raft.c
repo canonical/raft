@@ -102,13 +102,11 @@ static void raft__close_cb(struct raft_io *io)
     }
 }
 
-static void tick_cb(struct raft_io *io, unsigned msecs)
+static void tick_cb(struct raft_io *io)
 {
     struct raft *r;
-
     r = io->data;
-
-    raft__tick(r, msecs);
+    raft__tick(r);
 }
 
 static const char *raft__message_names[] = {

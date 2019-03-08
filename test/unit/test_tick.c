@@ -209,7 +209,7 @@ TEST_CASE(elapse, error, candidate_oom, NULL)
 
     raft_io_stub_set_time(&f->io, 100);
 
-    rv = raft__tick(&f->raft, 100);
+    rv = raft__tick(&f->raft);
     munit_assert_int(rv, ==, RAFT_ENOMEM);
 
     return MUNIT_OK;
@@ -229,7 +229,7 @@ TEST_CASE(elapse, error, candidate_io_err, NULL)
     raft_io_stub_fault(&f->io, 0, 1);
     raft_io_stub_set_time(&f->io, 100);
 
-    rv = raft__tick(&f->raft, 100);
+    rv = raft__tick(&f->raft);
     munit_assert_int(rv, ==, RAFT_ERR_IO);
 
     return MUNIT_OK;

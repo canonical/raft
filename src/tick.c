@@ -168,10 +168,11 @@ static int raft_tick__leader(struct raft *r,
     return 0;
 }
 
-int raft__tick(struct raft *r, const unsigned msec_since_last_tick)
+int raft__tick(struct raft *r)
 {
     int rv;
     raft_time now;
+    unsigned msecs_since_last_tick;
 
     assert(r != NULL);
 
@@ -186,7 +187,8 @@ int raft__tick(struct raft *r, const unsigned msec_since_last_tick)
 
     now = r->io->time(r->io);
 
-    r->timer += now - r->last_tick;
+    msecs_since_last_tick = now - r->last_tick;
+    r->timer += msecs_since_last_tick;
     r->last_tick = now;
 
     switch (r->state) {
@@ -197,7 +199,7 @@ int raft__tick(struct raft *r, const unsigned msec_since_last_tick)
             rv = raft_tick__candidate(r);
             break;
         case RAFT_STATE_LEADER:
-            rv = raft_tick__leader(r, msec_since_last_tick);
+            rv = raft_tick__leader(r, msecs_since_last_tick);
             break;
         default:
             rv = RAFT_ERR_INTERNAL;
