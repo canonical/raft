@@ -68,7 +68,7 @@ static int io_uv__start(struct raft_io *io,
     if (rv != 0) {
         return rv;
     }
-    rv = uv_timer_start(&uv->timer, timer_cb, 0, msecs);
+    rv = uv_timer_start(&uv->timer, timer_cb, msecs, msecs);
     assert(rv == 0);
     return 0;
 }

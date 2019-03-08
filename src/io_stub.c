@@ -563,7 +563,8 @@ static int io_stub__snapshot_get(struct raft_io *io,
     return 0;
 }
 
-static raft_time io_stub__time(struct raft_io *io) {
+static raft_time io_stub__time(struct raft_io *io)
+{
     struct io_stub *s;
     s = io->impl;
 
@@ -687,14 +688,16 @@ static void io_stub__reset_flushed(struct io_stub *s)
 void raft_io_stub_advance(struct raft_io *io, unsigned msecs)
 {
     struct io_stub *s;
-
-    assert(io != NULL);
-
     s = io->impl;
-
     s->time += msecs;
-
     s->tick_cb(io, msecs);
+}
+
+void raft_io_stub_set_time(struct raft_io *io, unsigned time)
+{
+    struct io_stub *s;
+    s = io->impl;
+    s->time = time;
 }
 
 /**

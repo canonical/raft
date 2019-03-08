@@ -65,8 +65,8 @@ static void tear_down(void *data)
 
 TEST_SUITE(debugf);
 
-static MunitTestSetup debugf__setup = setup;
-static MunitTestTearDown debugf__tear_down = tear_down;
+TEST_SETUP(debugf, setup);
+TEST_TEAR_DOWN(debugf, tear_down);
 
 TEST_GROUP(debugf, success);
 
@@ -97,8 +97,8 @@ TEST_CASE(debugf, success, emit, NULL)
 
 TEST_SUITE(infof);
 
-static MunitTestSetup infof__setup = setup;
-static MunitTestTearDown infof__tear_down = tear_down;
+TEST_SETUP(infof, setup);
+TEST_TEAR_DOWN(infof, tear_down);
 
 TEST_GROUP(infof, success);
 
@@ -129,8 +129,8 @@ TEST_CASE(infof, success, emit, NULL)
 
 TEST_SUITE(warnf);
 
-static MunitTestSetup warnf__setup = setup;
-static MunitTestTearDown warnf__tear_down = tear_down;
+TEST_SETUP(warnf, setup);
+TEST_TEAR_DOWN(warnf, tear_down);
 
 TEST_GROUP(warnf, success);
 
@@ -161,8 +161,8 @@ TEST_CASE(warnf, success, emit, NULL)
 
 TEST_SUITE(errorf);
 
-static MunitTestSetup errorf__setup = setup;
-static MunitTestTearDown errorf__tear_down = tear_down;
+TEST_SETUP(errorf, setup);
+TEST_TEAR_DOWN(errorf, tear_down);
 
 TEST_GROUP(errorf, success);
 
@@ -193,8 +193,8 @@ TEST_CASE(errorf, success, emit, NULL)
 
 TEST_SUITE(default);
 
-static MunitTestSetup default__setup = setup;
-static MunitTestTearDown default__tear_down = tear_down;
+TEST_SETUP(default, setup);
+TEST_TEAR_DOWN(default, tear_down);
 
 TEST_GROUP(default, success);
 

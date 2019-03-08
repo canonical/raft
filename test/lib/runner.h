@@ -155,12 +155,12 @@ extern int _main_suites_n;
 #define TEST_SETUP__MACRO_CHOOSER(...) \
     TEST__GET_3RD_ARG(__VA_ARGS__, TEST_SETUP__2_ARGS, TEST_SETUP__1_ARGS)
 
-#define TEST_SETUP__1_ARGS(S)                                               \
+#define TEST_SETUP__1_ARGS(S)                                                \
     static void *S##__setup(const MunitParameter params[], void *user_data); \
-    __attribute__((constructor)) static void _##S##_setup_init()            \
-    {                                                                       \
+    __attribute__((constructor)) static void _##S##_setup_init()             \
+    {                                                                        \
         _##S##_setup = S##__setup;                                           \
-    }                                                                       \
+    }                                                                        \
     static void *S##__setup(const MunitParameter params[], void *user_data)
 
 #define TEST_SETUP__2_ARGS(S, F)                                 \
@@ -175,12 +175,12 @@ extern int _main_suites_n;
     TEST__GET_3RD_ARG(__VA_ARGS__, TEST_TEAR_DOWN__2_ARGS, \
                       TEST_TEAR_DOWN__1_ARGS)
 
-#define TEST_TEAR_DOWN__1_ARGS(S)                                    \
+#define TEST_TEAR_DOWN__1_ARGS(S)                                     \
     static void S##__tear_down(void *data);                           \
     __attribute__((constructor)) static void _##S##__tear_down_init() \
-    {                                                                \
+    {                                                                 \
         _##S##_tear_down = S##__tear_down;                            \
-    }                                                                \
+    }                                                                 \
     static void S##__tear_down(void *data)
 
 #define TEST_TEAR_DOWN__2_ARGS(S, F)                                 \
@@ -245,7 +245,7 @@ extern int _main_suites_n;
         MunitTest *tests = _##S##_##G##_tests;                               \
         int n = _##S##_##G##_tests_n;                                        \
         TEST_CASE__SET_IN_ARRAY(tests, n, "/" #C, test_##S##_##G##_##C,      \
-                                S##__setup, S##__tear_down, PARAMS);         \
+                                _##S##_setup, _##S##_tear_down, PARAMS);     \
         _##S##_##G##_tests_n = n + 1;                                        \
     }
 

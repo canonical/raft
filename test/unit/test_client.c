@@ -168,12 +168,9 @@ TEST_MODULE(client);
 /**
  * Invoke @raft__tick and check that no errors occur.
  */
-#define __tick(F, MSECS)                  \
-    {                                     \
-        int rv;                           \
-                                          \
-        rv = raft__tick(&F->raft, MSECS); \
-        munit_assert_int(rv, ==, 0);      \
+#define __tick(F, MSECS)                     \
+    {                                        \
+        raft_io_stub_advance(&F->io, MSECS); \
     }
 
 /**
@@ -187,7 +184,7 @@ struct propose__fixture
     RAFT_FIXTURE;
 };
 
-static void *propose__setup(const MunitParameter params[], void *user_data)
+TEST_SETUP(propose)
 {
     struct propose__fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
@@ -195,7 +192,7 @@ static void *propose__setup(const MunitParameter params[], void *user_data)
     return f;
 }
 
-static void propose__tear_down(void *data)
+TEST_TEAR_DOWN(propose)
 {
     struct propose__fixture *f = data;
     RAFT_TEAR_DOWN(f);
@@ -318,7 +315,7 @@ struct add_server__fixture
     RAFT_FIXTURE;
 };
 
-static void *add_server__setup(const MunitParameter params[], void *user_data)
+TEST_SETUP(add_server)
 {
     struct add_server__fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
@@ -326,7 +323,7 @@ static void *add_server__setup(const MunitParameter params[], void *user_data)
     return f;
 }
 
-static void add_server__tear_down(void *data)
+TEST_TEAR_DOWN(add_server)
 {
     struct add_server__fixture *f = data;
     RAFT_TEAR_DOWN(f);
@@ -463,7 +460,7 @@ struct promote__fixture
     RAFT_FIXTURE;
 };
 
-static void *promote__setup(const MunitParameter params[], void *user_data)
+TEST_SETUP(promote)
 {
     struct promote__fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
@@ -471,7 +468,7 @@ static void *promote__setup(const MunitParameter params[], void *user_data)
     return f;
 }
 
-static void promote__tear_down(void *data)
+TEST_TEAR_DOWN(promote)
 {
     struct promote__fixture *f = data;
     RAFT_TEAR_DOWN(f);
@@ -846,8 +843,7 @@ struct remove_server__fixture
     RAFT_FIXTURE;
 };
 
-static void *remove_server__setup(const MunitParameter params[],
-                                  void *user_data)
+TEST_SETUP(remove_server)
 {
     struct remove_server__fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
@@ -855,7 +851,7 @@ static void *remove_server__setup(const MunitParameter params[],
     return f;
 }
 
-static void remove_server__tear_down(void *data)
+TEST_TEAR_DOWN(remove_server)
 {
     struct remove_server__fixture *f = data;
     RAFT_TEAR_DOWN(f);

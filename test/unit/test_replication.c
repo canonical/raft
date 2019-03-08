@@ -87,8 +87,8 @@ static void tear_down(void *data)
 
 TEST_SUITE(send_append_entries);
 
-static MunitTestSetup send_append_entries__setup = setup;
-static MunitTestTearDown send_append_entries__tear_down = tear_down;
+TEST_SETUP(send_append_entries, setup);
+TEST_TEAR_DOWN(send_append_entries, tear_down);
 
 TEST_GROUP(send_append_entries, error);
 TEST_GROUP(send_append_entries, success);
@@ -180,8 +180,8 @@ TEST_CASE(send_append_entries, success, second_entry, NULL)
 
 TEST_SUITE(trigger);
 
-static MunitTestSetup trigger__setup = setup;
-static MunitTestTearDown trigger__tear_down = tear_down;
+TEST_SETUP(trigger, setup);
+TEST_TEAR_DOWN(trigger, tear_down);
 
 TEST_GROUP(trigger, error);
 

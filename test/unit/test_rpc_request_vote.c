@@ -157,8 +157,8 @@ static void tear_down(void *data)
 
 TEST_SUITE(request);
 
-static MunitTestSetup request__setup = setup;
-static MunitTestTearDown request__tear_down = tear_down;
+TEST_SETUP(request, setup);
+TEST_TEAR_DOWN(request, tear_down);
 
 TEST_GROUP(request, error);
 TEST_GROUP(request, success);
@@ -447,8 +447,8 @@ TEST_CASE(request, error, last_idx_lower_index, NULL)
 
 TEST_SUITE(response);
 
-static MunitTestSetup response__setup = setup;
-static MunitTestTearDown response__tear_down = tear_down;
+TEST_SETUP(response, setup);
+TEST_TEAR_DOWN(response, tear_down);
 
 TEST_GROUP(response, error);
 TEST_GROUP(response, success);

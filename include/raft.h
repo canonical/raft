@@ -846,6 +846,13 @@ struct raft
     unsigned election_timeout_rand;
 
     /**
+     * Timestamp of the last call to the tick callback passed to raft_io. This
+     * is used to calculate the time elapsed between subsequent tick calls and
+     * update the timer field below.
+     */
+    raft_time last_tick;
+
+    /**
      * For followers and candidates, time elapsed since the last election
      * started, in millisecond. For leaders time elapsed since the last
      * AppendEntries RPC, in milliseconds.

@@ -360,7 +360,7 @@ static void test_cluster__deliver_or_tick(struct test_cluster *c,
             incoming->timer -= elapse;
         }
 
-        raft__tick(raft, elapse);
+	raft_io_stub_advance(raft->io, elapse);
     }
 
     c->time += elapse;

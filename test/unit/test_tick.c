@@ -51,12 +51,9 @@ static void tear_down(void *data)
  * Tick the raft instance of the given fixture and assert that no error
  * occurred.
  */
-#define __tick(F, MSECS)                  \
-    {                                     \
-        int rv;                           \
-                                          \
-        rv = raft__tick(&F->raft, MSECS); \
-        munit_assert_int(rv, ==, 0);      \
+#define __tick(F, MSECS)                     \
+    {                                        \
+        raft_io_stub_advance(&F->io, MSECS); \
     }
 
 /**
@@ -124,9 +121,8 @@ static void tear_down(void *data)
  */
 
 TEST_SUITE(elapse);
-
-static MunitTestSetup elapse__setup = setup;
-static MunitTestTearDown elapse__tear_down = tear_down;
+TEST_SETUP(elapse, setup);
+TEST_TEAR_DOWN(elapse, tear_down);
 
 TEST_GROUP(elapse, error);
 TEST_GROUP(elapse, success);
@@ -135,8 +131,12 @@ TEST_GROUP(elapse, success);
 TEST_CASE(elapse, success, unavailable, NULL)
 {
     struct fixture *f = data;
+    int rv;
 
     (void)params;
+
+    rv = raft_start(&f->raft);
+    munit_assert_int(rv, ==, 0);
 
     __tick(f, 100);
     __tick(f, 100);
@@ -207,6 +207,8 @@ TEST_CASE(elapse, error, candidate_oom, NULL)
     test_heap_fault_config(&f->heap, 0, 1);
     test_heap_fault_enable(&f->heap);
 
+    raft_io_stub_set_time(&f->io, 100);
+
     rv = raft__tick(&f->raft, 100);
     munit_assert_int(rv, ==, RAFT_ENOMEM);
 
@@ -225,6 +227,7 @@ TEST_CASE(elapse, error, candidate_io_err, NULL)
     test_bootstrap_and_start(&f->raft, 1, 1, 1);
 
     raft_io_stub_fault(&f->io, 0, 1);
+    raft_io_stub_set_time(&f->io, 100);
 
     rv = raft__tick(&f->raft, 100);
     munit_assert_int(rv, ==, RAFT_ERR_IO);

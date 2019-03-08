@@ -28,8 +28,8 @@
  *    message being delivered to the receiver or in a server tick. The global
  *    cluster time is advanced by the latency expiration time or by the raft
  *    timer expiration time, respectively. The latency timer of each RPC message
- *    is updated accordingly and the @raft__tick function of each server is
- *    invoked with the elapsed time.
+ *    is updated accordingly and the @raft_io_stub_advance() is invoked against
+ *    the raft_io instance of each server, which in turn calls @raft__tick.
  *
  * 3. The current cluster leader is detected (if any). When detecting the leader
  *    the Election Safety property is checked: no servers can be in leader state

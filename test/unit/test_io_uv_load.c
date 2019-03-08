@@ -28,7 +28,7 @@ struct list__fixture
     size_t n_segments;
 };
 
-static void *list__setup(const MunitParameter params[], void *user_data)
+TEST_SETUP(list)
 {
     struct list__fixture *f = munit_malloc(sizeof *f);
     IO_UV_SETUP;
@@ -37,7 +37,7 @@ static void *list__setup(const MunitParameter params[], void *user_data)
     return f;
 }
 
-static void list__tear_down(void *data)
+TEST_TEAR_DOWN(list)
 {
     struct list__fixture *f = data;
     if (f->snapshots != NULL) {
@@ -145,8 +145,7 @@ struct load_snapshot__fixture
     struct raft_snapshot snapshot;
 };
 
-static void *load_snapshot__setup(const MunitParameter params[],
-                                  void *user_data)
+TEST_SETUP(load_snapshot)
 {
     struct load_snapshot__fixture *f = munit_malloc(sizeof *f);
     IO_UV_SETUP;
@@ -159,7 +158,7 @@ static void *load_snapshot__setup(const MunitParameter params[],
     return f;
 }
 
-static void load_snapshot__tear_down(void *data)
+TEST_TEAR_DOWN(load_snapshot)
 {
     struct load_snapshot__fixture *f = data;
     raft_configuration_close(&f->snapshot.configuration);
@@ -350,7 +349,7 @@ struct load_all__fixture
     int count;
 };
 
-static void *load_all__setup(const MunitParameter params[], void *user_data)
+TEST_SETUP(load_all)
 {
     struct load_all__fixture *f = munit_malloc(sizeof *f);
     IO_UV_SETUP;
@@ -361,7 +360,7 @@ static void *load_all__setup(const MunitParameter params[], void *user_data)
     return f;
 }
 
-static void load_all__tear_down(void *data)
+TEST_TEAR_DOWN(load_all)
 {
     struct load_all__fixture *f = data;
     if (f->snapshot != NULL) {

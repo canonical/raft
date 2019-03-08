@@ -26,6 +26,11 @@ void raft_io_stub_close(struct raft_io *io);
 void raft_io_stub_advance(struct raft_io *io, unsigned msecs);
 
 /**
+ * Set the current time, without invoking the tick callback.
+ */
+void raft_io_stub_set_time(struct raft_io *io, unsigned time);
+
+/**
  * Dispatch a message, invoking the recv callback.
  */
 void raft_io_stub_dispatch(struct raft_io *io, struct raft_message *message);

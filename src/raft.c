@@ -9,8 +9,8 @@
 #include "log.h"
 #include "rpc.h"
 #include "rpc_append_entries.h"
-#include "rpc_request_vote.h"
 #include "rpc_install_snapshot.h"
+#include "rpc_request_vote.h"
 #include "state.h"
 #include "tick.h"
 
@@ -102,7 +102,7 @@ static void raft__close_cb(struct raft_io *io)
     }
 }
 
-static void raft__tick_cb(struct raft_io *io, unsigned msecs)
+static void tick_cb(struct raft_io *io, unsigned msecs)
 {
     struct raft *r;
 
@@ -118,7 +118,7 @@ static const char *raft__message_names[] = {
     "request vote result",
 };
 
-static void raft__recv_cb(struct raft_io *io, struct raft_message *message)
+static void recv_cb(struct raft_io *io, struct raft_message *message)
 {
     struct raft *r;
     int rv;
@@ -147,9 +147,9 @@ static void raft__recv_cb(struct raft_io *io, struct raft_message *message)
                 &message->request_vote_result);
             break;
         case RAFT_IO_INSTALL_SNAPSHOT:
-            rv = raft_rpc__recv_install_snapshot(
-                r, message->server_id, message->server_address,
-                &message->install_snapshot);
+            rv = raft_rpc__recv_install_snapshot(r, message->server_id,
+                                                 message->server_address,
+                                                 &message->install_snapshot);
             break;
         default:
             raft_warnf(r->logger, "rpc: unknown message type type: %d",
@@ -250,8 +250,13 @@ int raft_start(struct raft *r)
         }
     }
 
-    rv =
-        r->io->start(r->io, r->heartbeat_timeout, raft__tick_cb, raft__recv_cb);
+    /* Initialize the tick timestamp. */
+    r->last_tick = r->io->time(r->io);
+
+    /* Start the I/O backend. The tick callback is expected to fire every
+     * r->heartbeat_timeout milliseconds and the recv callback whenever an RPC
+     * is received. */
+    rv = r->io->start(r->io, r->heartbeat_timeout, tick_cb, recv_cb);
     if (rv != 0) {
         goto err_after_load;
     }

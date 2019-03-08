@@ -91,8 +91,8 @@ static void tear_down(void *data)
 
 TEST_SUITE(init);
 
-static MunitTestSetup init__setup = setup;
-static MunitTestTearDown init__tear_down = tear_down;
+TEST_SETUP(init, setup);
+TEST_TEAR_DOWN(init, tear_down);
 
 TEST_GROUP(init, error);
 TEST_GROUP(init, success);
@@ -169,8 +169,8 @@ TEST_CASE(init, success, state, NULL)
 
 TEST_SUITE(start);
 
-static MunitTestSetup start__setup = setup;
-static MunitTestTearDown start__tear_down = tear_down;
+TEST_SETUP(start, setup);
+TEST_TEAR_DOWN(start, tear_down);
 
 TEST_GROUP(start, error);
 TEST_GROUP(start, success);
@@ -281,8 +281,8 @@ TEST_CASE(start, error, oom, start_oom_params)
 
 TEST_SUITE(recv_cb);
 
-static MunitTestSetup recv_cb__setup = setup;
-static MunitTestTearDown recv_cb__tear_down = tear_down;
+TEST_SETUP(recv_cb, setup);
+TEST_TEAR_DOWN(recv_cb, tear_down);
 
 TEST_GROUP(recv_cb, success);
 
@@ -379,8 +379,8 @@ TEST_CASE(recv_cb, success, unknown_type, NULL)
 
 TEST_SUITE(bootstrap);
 
-static MunitTestSetup bootstrap__setup = setup;
-static MunitTestTearDown bootstrap__tear_down = tear_down;
+TEST_SETUP(bootstrap, setup);
+TEST_TEAR_DOWN(bootstrap, tear_down);
 
 TEST_GROUP(bootstrap, error);
 TEST_GROUP(bootstrap, success);

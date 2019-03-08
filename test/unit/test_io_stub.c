@@ -153,9 +153,8 @@ static void tear_down(void *data)
  */
 
 TEST_SUITE(start);
-
-static MunitTestSetup start__setup = setup;
-static MunitTestTearDown start__tear_down = tear_down;
+TEST_SETUP(start, setup);
+TEST_TEAR_DOWN(start, tear_down);
 
 TEST_GROUP(start, success);
 
@@ -203,8 +202,8 @@ TEST_CASE(start, success, recv, NULL)
 
 TEST_SUITE(load);
 
-static MunitTestSetup load__setup = setup;
-static MunitTestTearDown load__tear_down = tear_down;
+TEST_SETUP(load, setup);
+TEST_TEAR_DOWN(load, tear_down);
 
 TEST_GROUP(load, success);
 
@@ -239,8 +238,8 @@ TEST_CASE(load, success, pristine, NULL)
 
 TEST_SUITE(bootstrap);
 
-static MunitTestSetup bootstrap__setup = setup;
-static MunitTestTearDown bootstrap__tear_down = tear_down;
+TEST_SETUP(bootstrap, setup);
+TEST_TEAR_DOWN(bootstrap, tear_down);
 
 TEST_GROUP(bootstrap, success);
 
@@ -275,8 +274,8 @@ TEST_CASE(bootstrap, success, pristine, NULL)
 
 TEST_SUITE(set_term);
 
-static MunitTestSetup set_term__setup = setup;
-static MunitTestTearDown set_term__tear_down = tear_down;
+TEST_SETUP(set_term, setup);
+TEST_TEAR_DOWN(set_term, tear_down);
 
 TEST_GROUP(set_term, success);
 
@@ -302,8 +301,8 @@ TEST_CASE(set_term, success, pristine, NULL)
 
 TEST_SUITE(set_vote);
 
-static MunitTestSetup set_vote__setup = setup;
-static MunitTestTearDown set_vote__tear_down = tear_down;
+TEST_SETUP(set_vote, setup);
+TEST_TEAR_DOWN(set_vote, tear_down);
 
 TEST_GROUP(set_vote, success);
 
@@ -332,8 +331,8 @@ TEST_CASE(set_vote, success, pristine, NULL)
 
 TEST_SUITE(append);
 
-static MunitTestSetup append__setup = setup;
-static MunitTestTearDown append__tear_down = tear_down;
+TEST_SETUP(append, setup);
+TEST_TEAR_DOWN(append, tear_down);
 
 TEST_GROUP(append, success);
 
@@ -411,8 +410,8 @@ TEST_CASE(append, success, concurrent, NULL)
 
 TEST_SUITE(send);
 
-static MunitTestSetup send__setup = setup;
-static MunitTestTearDown send__tear_down = tear_down;
+TEST_SETUP(send, setup);
+TEST_TEAR_DOWN(send, tear_down);
 
 TEST_GROUP(send, success);
 
