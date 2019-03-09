@@ -100,6 +100,13 @@ int raft_rpc__recv_append_entries(struct raft *r,
     /* Reset the election timer. */
     r->timer = 0;
 
+    /* If we are installing a snapshot, ignore these entries. TODO: we should do
+     * something smarter, e.g. buffering the entries in the I/O backend, which
+     * should be in charge of serializing everything. */
+    if (r->snapshot.put.data != NULL && args->n_entries > 0) {
+        return 0;
+    }
+
     rv = raft_replication__append(r, args, &result->success, &async);
     if (rv != 0) {
         return rv;
@@ -162,11 +169,6 @@ int raft_rpc__recv_append_entries_result(
 
     raft_debugf(r->logger, "received append entries result from server %ld",
                 id);
-
-    if (result->success != 1) {
-        /* TODO: handle failures? */
-        // assert(0);
-    }
 
     if (r->state != RAFT_STATE_LEADER) {
         raft_debugf(r->logger, "local server is not leader -> ignore");

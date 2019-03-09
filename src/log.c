@@ -486,7 +486,7 @@ int raft_log__append(struct raft_log *l,
         return rv;
     }
 
-    index = raft_log__last_index(l) + 1;
+    index = l->offset + raft_log__n_entries(l) + 1;
     rv = raft_log__refs_init(l, term, index);
     if (rv != 0) {
         return rv;
@@ -585,6 +585,9 @@ raft_index raft_log__first_index(struct raft_log *l)
 
 raft_index raft_log__last_index(struct raft_log *l)
 {
+    if (raft_log__n_entries(l) == 0) {
+        return 0;
+    }
     return raft_log__index(l, raft_log__n_entries(l) - 1);
 }
 
@@ -844,6 +847,9 @@ static void raft_log__remove_suffix(struct raft_log *l,
 
 void raft_log__truncate(struct raft_log *l, const raft_index index)
 {
+    if (raft_log__n_entries(l) == 0) {
+        return;
+    }
     return raft_log__remove_suffix(l, index, true);
 }
 

@@ -1,6 +1,6 @@
-#include "io_uv_fs.h"
 #include "assert.h"
 #include "io_uv.h"
+#include "io_uv_fs.h"
 #include "queue.h"
 
 struct segment
@@ -35,8 +35,7 @@ int io_uv__finalize(struct io_uv *uv,
 {
     struct segment *segment;
 
-    /* TODO: this should not be IO_UV__CLOSED */
-    //assert(uv->state == IO_UV__ACTIVE || uv->state == IO_UV__CLOSING);
+    assert(uv->state == IO_UV__ACTIVE || uv->state == IO_UV__CLOSING);
 
     /* If the open segment is not empty, we expect its first index to be the
      * successor of the end index of the last segment we closed. */
@@ -60,7 +59,9 @@ int io_uv__finalize(struct io_uv *uv,
     RAFT__QUEUE_INIT(&segment->queue);
     RAFT__QUEUE_PUSH(&uv->finalize_reqs, &segment->queue);
 
-    uv->finalize_last_index = last_index;
+    if (used > 0) {
+        uv->finalize_last_index = last_index;
+    }
 
     process_requests(uv);
 

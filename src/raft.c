@@ -62,6 +62,7 @@ int raft_init(struct raft *r,
 
     r->commit_index = 0;
     r->last_applied = 0;
+    r->last_stored = 0;
 
     r->state = RAFT_STATE_UNAVAILABLE;
 
@@ -214,6 +215,9 @@ int raft_start(struct raft *r)
         r->commit_index = 1;
         r->last_applied = 1;
     }
+
+    /* Index of the last entry we have on disk. */
+    r->last_stored = start_index + n_entries - 1;
 
     /* Look for the most recent configuration entry, if any. */
     for (i = n_entries; i > 0; i--) {

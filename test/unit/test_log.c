@@ -480,6 +480,19 @@ TEST_CASE(first_index, success, empty, NULL)
     return MUNIT_OK;
 }
 
+/* The log is empty but has an offset. */
+TEST_CASE(first_index, success, empty_with_offset, NULL)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    raft_log__set_offset(&f->log, 10);
+    munit_assert_int(raft_log__first_index(&f->log), ==, 0);
+
+    return MUNIT_OK;
+}
+
 /* The log has one entry. */
 TEST_CASE(first_index, success, one_entry, NULL)
 {
@@ -527,7 +540,7 @@ TEST_SETUP(last_index, setup);
 TEST_TEAR_DOWN(last_index, tear_down);
 
 /* If the log is empty, last index is 0. */
-TEST_CASE(last_index, empty_log, NULL)
+TEST_CASE(last_index, empty, NULL)
 {
     struct fixture *f = data;
 
@@ -538,16 +551,30 @@ TEST_CASE(last_index, empty_log, NULL)
     return MUNIT_OK;
 }
 
+/* If the log is empty and has an offset, last index is 0. */
+TEST_CASE(last_index, empty_with_offset, NULL)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    raft_log__set_offset(&f->log, 10);
+    munit_assert_int(raft_log__last_index(&f->log), ==, 0);
+
+    return MUNIT_OK;
+}
+
 /* If the log starts at a certain offset, the last index is bumped
  * accordingly. */
-TEST_CASE(last_index, empty_log_with_offset, NULL)
+TEST_CASE(last_index, with_offset, NULL)
 {
     struct fixture *f = data;
 
     (void)params;
 
     raft_log__set_offset(&f->log, 3);
-    munit_assert_int(raft_log__last_index(&f->log), ==, 3);
+    __append_empty_entry(f);
+    munit_assert_int(raft_log__last_index(&f->log), ==, 4);
 
     return MUNIT_OK;
 }
@@ -922,6 +949,19 @@ TEST_CASE(truncate, success, acquired, NULL)
     __append_entry(f, 2);
 
     raft_log__release(&f->log, 2, entries, n);
+
+    return MUNIT_OK;
+}
+
+/* Truncate an empty log which has an offset. */
+TEST_CASE(truncate, success, empty_with_offset, NULL)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    raft_log__set_offset(&f->log, 10);
+    raft_log__truncate(&f->log, 1);
 
     return MUNIT_OK;
 }

@@ -828,7 +828,7 @@ static int load_entries_from_segments(struct io_uv *uv,
                 if (prefix > 0) {
                     batch = tmp_entries[prefix].batch;
                     for (j = prefix; j > 0; j--) {
-                        struct raft_entry *entry = &tmp_entries[j-1];
+                        struct raft_entry *entry = &tmp_entries[j - 1];
                         if (entry->batch != batch) {
                             raft_free(entry->batch);
                             batch = entry->batch;
@@ -1094,7 +1094,7 @@ static int load_entries_batch_from_segment(struct raft_logger *logger,
 
     /* Read the batch header, excluding the first 8 bytes containing the number
      * of entries, which we have already read. */
-    header.len = raft_io_uv_sizeof__batch_header(n);
+    header.len = io_uv__sizeof_batch_header(n);
     header.base = raft_malloc(header.len);
     if (header.base == NULL) {
         rv = RAFT_ENOMEM;
@@ -1119,7 +1119,7 @@ static int load_entries_batch_from_segment(struct raft_logger *logger,
     }
 
     /* Decode the batch header, allocating the entries array. */
-    rv = raft_io_uv_decode__batch_header(header.base, entries, n_entries);
+    rv = io_uv__decode_batch_header(header.base, entries, n_entries);
     if (rv != 0) {
         goto err_after_header_alloc;
     }
@@ -1151,7 +1151,7 @@ static int load_entries_batch_from_segment(struct raft_logger *logger,
         goto err_after_data_alloc;
     }
 
-    raft_io_uv_decode__entries_batch(&data, *entries, *n_entries);
+    io_uv__decode_entries_batch(&data, *entries, *n_entries);
 
     raft_free(header.base);
 

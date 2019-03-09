@@ -372,7 +372,7 @@ enum {
     RAFT_IO_APPEND_ENTRIES_RESULT,
     RAFT_IO_REQUEST_VOTE,
     RAFT_IO_REQUEST_VOTE_RESULT,
-    RAFT_IO_INSTALL_SNAPSHOT,
+    RAFT_IO_INSTALL_SNAPSHOT
 };
 
 struct raft_message
@@ -532,6 +532,11 @@ struct raft_io
      */
     int (*set_vote)(struct raft_io *io, unsigned server_id);
 
+    int (*send)(struct raft_io *io,
+                struct raft_io_send *req,
+                const struct raft_message *message,
+                raft_io_send_cb cb);
+
     /**
      * Asynchronously append the given entries to the log.
      *
@@ -548,11 +553,6 @@ struct raft_io
      * Asynchronously truncate all log entries from the given index onwards.
      */
     int (*truncate)(struct raft_io *io, raft_index index);
-
-    int (*send)(struct raft_io *io,
-                struct raft_io_send *req,
-                const struct raft_message *message,
-                raft_io_send_cb cb);
 
     int (*snapshot_put)(struct raft_io *io,
                         struct raft_io_snapshot_put *req,
@@ -784,6 +784,7 @@ struct raft
      */
     raft_index commit_index; /* Highest log entry known to be committed */
     raft_index last_applied; /* Highest log entry applied to the FSM */
+    raft_index last_stored;  /* Highest log entry persisted on disk */
 
     /**
      * Current server state of this raft instance, along with a union defining

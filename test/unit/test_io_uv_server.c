@@ -61,20 +61,32 @@ static void tear_down(void *data)
         test_tcp_send(&f->tcp, f->peer.handshake, sizeof f->peer.handshake); \
     }
 #define recv__set_message_type(TYPE) f->peer.message.type = TYPE;
-#define recv__peer_send                                               \
+
+/* Send the first N buffers of f->peer.message. If N is 0, send the whole
+ * message */
+#define recv__peer_send_bufs(N)                                       \
     {                                                                 \
         uv_buf_t *bufs;                                               \
+        unsigned n;                                                   \
         unsigned n_bufs;                                              \
         unsigned i;                                                   \
         int rv;                                                       \
         rv = io_uv__encode_message(&f->peer.message, &bufs, &n_bufs); \
         munit_assert_int(rv, ==, 0);                                  \
+        if (N == 0) {                                                 \
+            n = n_bufs;                                               \
+        } else {                                                      \
+            n = N;                                                    \
+        }                                                             \
         for (i = 0; i < n_bufs; i++) {                                \
-            test_tcp_send(&f->tcp, bufs[i].base, bufs[i].len);        \
+            if (i < n) {                                              \
+                test_tcp_send(&f->tcp, bufs[i].base, bufs[i].len);    \
+            }                                                         \
             raft_free(bufs[i].base);                                  \
         }                                                             \
         raft_free(bufs);                                              \
     }
+#define recv__peer_send recv__peer_send_bufs(0)
 
 /**
  * Success scenarios.
@@ -398,6 +410,63 @@ TEST_CASE(error, oom, error_oom_params)
     uv_run(&f->loop, UV_RUN_NOWAIT);
 
     munit_assert_false(f->invoked);
+
+    return MUNIT_OK;
+}
+
+/**
+ * Close backend scenarios.
+ */
+
+TEST_SUITE(close);
+
+TEST_SETUP(close, setup);
+TEST_TEAR_DOWN(close, tear_down);
+
+/* The backend is closed just before accepting a new connection. */
+TEST_CASE(close, accept, NULL)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    recv__peer_connect;
+    recv__peer_handshake;
+
+    test_uv_run(&f->loop, 1);
+
+    io_uv__close;
+
+    return MUNIT_OK;
+}
+
+/* The backend is closed after receiving the header of an AppendEntries
+ * message. */
+TEST_CASE(close, append_entries, NULL)
+{
+    struct fixture *f = data;
+    struct raft_entry entry;
+
+    (void)params;
+
+    entry.type = RAFT_LOG_COMMAND;
+    entry.buf.base = raft_malloc(16);
+    entry.buf.len = 16;
+
+    f->peer.message.type = RAFT_IO_APPEND_ENTRIES;
+    f->peer.message.append_entries.entries = &entry;
+    f->peer.message.append_entries.n_entries = 1;
+
+    recv__peer_connect;
+    recv__peer_handshake;
+    recv__peer_send_bufs(1); /* Send only the message header */
+
+    test_uv_run(&f->loop, 2);
+
+    munit_assert_int(f->invoked, ==, 0);
+    munit_assert_ptr_null(f->message);
+
+    io_uv__close;
 
     return MUNIT_OK;
 }

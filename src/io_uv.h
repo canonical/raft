@@ -59,6 +59,7 @@ struct io_uv
     struct uv_work_s truncate_work;         /* Execute truncate log requests */
     raft__queue snapshot_put_reqs;          /* Inflight put snapshot requests */
     raft__queue snapshot_get_reqs;          /* Inflight get snapshot requests */
+    struct uv_work_s snapshot_put_work;     /* Execute snapshot put requests */
     struct io_uv__metadata metadata;        /* Cache of metadata on disk */
     struct uv_timer_s timer;                /* Timer for periodic ticks */
     raft_io_tick_cb tick_cb;
@@ -160,6 +161,11 @@ void io_uv__servers_stop(struct io_uv *uv);
 int io_uv__truncate(struct raft_io *io, raft_index index);
 
 /**
+ * Cancel all pending truncate requests.
+ */
+void io_uv__truncate_stop(struct io_uv *uv);
+
+/**
  * Callback invoked after a segment has been finalized. It will check if there
  * are pending truncate requests waiting for open segments to be finalized, and
  * possibly start executing the oldest one of them if no unfinalized open
@@ -192,6 +198,12 @@ int io_uv__snapshot_put(struct raft_io *io,
                         struct raft_io_snapshot_put *req,
                         const struct raft_snapshot *snapshot,
                         raft_io_snapshot_put_cb cb);
+
+/**
+ * Callback invoked after truncation has completed, possibly unblocking pending
+ * snapshot put requests.
+ */
+void io_uv__snapshot_put_unblock(struct io_uv *uv);
 
 /**
  * Implementation of raft_io->snapshot_get.

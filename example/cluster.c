@@ -73,7 +73,7 @@ int main(int argc, char *argv[])
         int status;
 
         /* Sleep a little bit. */
-        interval.tv_sec = 50 + random() % 2;
+        interval.tv_sec = 10 + random() % 30;
         interval.tv_nsec = 0;
 
         rv = nanosleep(&interval, NULL);
@@ -90,6 +90,11 @@ int main(int argc, char *argv[])
         }
 
         waitpid(pids[i], &status, 0);
+
+        rv = nanosleep(&interval, NULL);
+        if (rv != 0) {
+            printf("error: sleep: %s", strerror(errno));
+        }
 
         __fork_server(top_dir, i, &pids[i]);
     }

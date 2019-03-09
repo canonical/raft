@@ -87,7 +87,20 @@ static int server_init(struct io_uv__server *s,
 static void server_close(struct io_uv__server *s)
 {
     if (s->header.base != NULL) {
+        /* This means we were interrupted while reading the header. */
         raft_free(s->header.base);
+    }
+    if (s->payload.base != NULL) {
+        /* This means we were interrupted while reading the payload. */
+        switch (s->message.type) {
+            case RAFT_IO_APPEND_ENTRIES:
+                raft_free(s->message.append_entries.entries);
+                break;
+            case RAFT_IO_INSTALL_SNAPSHOT:
+                raft_configuration_close(&s->message.install_snapshot.conf);
+                break;
+        }
+        raft_free(s->payload.base);
     }
     raft_free(s->address);
     raft_free(s->stream);
@@ -247,8 +260,8 @@ static void read_cb(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
             type = byte__flip64(s->preamble[0]);
             assert(type > 0);
 
-            rv = raft_io_uv_decode__message(type, &s->header, &s->message,
-                                            &s->payload.len);
+            rv = io_uv__decode_message(type, &s->header, &s->message,
+                                       &s->payload.len);
             if (rv != 0) {
                 raft_warnf(s->uv->logger, "decode message: %s",
                            raft_strerror(rv));
@@ -273,13 +286,13 @@ static void read_cb(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
                 case RAFT_IO_APPEND_ENTRIES:
                     buf.base = s->payload.base;
                     buf.len = s->payload.len;
-                    raft_io_uv_decode__entries_batch(
+                    io_uv__decode_entries_batch(
                         &buf, s->message.append_entries.entries,
                         s->message.append_entries.n_entries);
                     break;
                 case RAFT_IO_INSTALL_SNAPSHOT:
                     s->message.install_snapshot.data.base = s->payload.base;
-		    break;
+                    break;
                 default:
                     /* We should never have read a payload in the first place */
                     assert(0);
@@ -396,13 +409,23 @@ static void accept_cb(struct raft_io_uv_transport *transport,
 {
     struct io_uv *uv = transport->data;
     int rv;
-    assert(uv->state == IO_UV__ACTIVE);
+
+    assert(uv->state == IO_UV__ACTIVE || uv->state == IO_UV__CLOSING);
+
+    if (uv->state == IO_UV__CLOSING) {
+        goto abort;
+    }
 
     rv = server_add(uv, id, address, stream);
     if (rv != 0) {
         raft_warnf(uv->logger, "add server: %s", raft_strerror(rv));
-        uv_close((struct uv_handle_s *)stream, (uv_close_cb)raft_free);
+        goto abort;
     }
+
+    return;
+
+abort:
+    uv_close((struct uv_handle_s *)stream, (uv_close_cb)raft_free);
 }
 
 int io_uv__listen(struct io_uv *uv)

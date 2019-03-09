@@ -64,7 +64,7 @@ static int truncate_closed_segment(struct io_uv *uv,
 
     buf.len = sizeof(uint64_t) +     /* Format version */
               sizeof(uint32_t) * 2 + /* CRC checksum */
-              raft_io_uv_sizeof__batch_header(m) /* Batch header */;
+              io_uv__sizeof_batch_header(m) /* Batch header */;
     buf.base = raft_malloc(buf.len);
 
     if (buf.base == NULL) {
@@ -101,7 +101,7 @@ static int truncate_closed_segment(struct io_uv *uv,
         crc2 = byte__crc32(entry->buf.base, entry->buf.len, crc2);
     }
 
-    crc1 = byte__crc32(header, raft_io_uv_sizeof__batch_header(m), 0);
+    crc1 = byte__crc32(header, io_uv__sizeof_batch_header(m), 0);
 
     byte__put32(&crc1_p, crc1);
     byte__put32(&crc2_p, crc2);
@@ -184,13 +184,17 @@ static void work_cb(uv_work_t *work)
     if (rv != 0) {
         goto err;
     }
-
-    /* TODO: this assertion should always hold except for snapshots */
-    assert(n_segments > 0);
+    if (snapshots != NULL) {
+        raft_free(snapshots);
+    }
 
     /* Look for the segment that contains the truncate point. */
     for (i = 0; i < n_segments; i++) {
         segment = &segments[i];
+
+        if (segment->is_open) {
+            continue;
+        }
 
         if (r->index >= segment->first_index &&
             r->index <= segment->end_index) {
@@ -198,8 +202,10 @@ static void work_cb(uv_work_t *work)
         }
     }
 
-    /* TODO: this assertion should always hold except for snapshots */
-    assert(i < n_segments);
+    /* If there's no segment at all to truncate, we're done. */
+    if (i == n_segments) {
+        goto out;
+    }
 
     /* If the truncate index is not the first of the segment, we need to
      * truncate it. */
@@ -212,6 +218,10 @@ static void work_cb(uv_work_t *work)
 
     for (j = i; j < n_segments; j++) {
         segment = &segments[j];
+
+        if (segment->is_open) {
+            continue;
+        }
 
         rv = raft__io_uv_fs_unlink(uv->dir, segment->filename);
         if (rv != 0) {
@@ -229,7 +239,10 @@ static void work_cb(uv_work_t *work)
         goto err_after_list;
     }
 
-    raft_free(segments);
+out:
+    if (segments != NULL) {
+        raft_free(segments);
+    }
 
     r->status = 0;
 
@@ -255,10 +268,16 @@ static void after_work_cb(uv_work_t *work, int status)
         uv->errored = true;
     }
 
+    /* Update the finalizer last index setting it to the truncation index minus
+     * one (i.e. the index of the last entry we truncated), since the next
+     * segment to be finalized should start at the truncation index. */
+    uv->finalize_last_index = r->index - 1;
+
     uv->truncate_work.data = NULL;
     raft_free(r);
 
     io_uv__append_unblock(uv);
+    io_uv__snapshot_put_unblock(uv);
     io_uv__maybe_close(uv);
 }
 
@@ -281,7 +300,7 @@ static int truncate_start(struct truncate *r)
     return 0;
 }
 
-/* Process pending truncate requests.. */
+/* Process pending truncate requests. */
 static void process_requests(struct io_uv *uv)
 {
     struct truncate *r;
@@ -336,7 +355,7 @@ int io_uv__truncate(struct raft_io *io, raft_index index)
     req->uv = uv;
     req->index = index;
 
-    /* The next entry will be appended at the truncation index */
+    /* The next entry will be appended at the truncation index. */
     uv->append_next_index = index;
 
     /* Make sure that we wait for any inflight writes to finish and then close
@@ -363,4 +382,16 @@ err:
 void io_uv__truncate_unblock(struct io_uv *uv)
 {
     process_requests(uv);
+}
+
+void io_uv__truncate_stop(struct io_uv *uv)
+{
+    while (!RAFT__QUEUE_IS_EMPTY(&uv->truncate_reqs)) {
+        struct truncate *r;
+        raft__queue *head;
+        head = RAFT__QUEUE_HEAD(&uv->truncate_reqs);
+        RAFT__QUEUE_REMOVE(head);
+        r = RAFT__QUEUE_DATA(head, struct truncate, queue);
+        raft_free(r);
+    }
 }

@@ -511,8 +511,15 @@ static int io_stub__truncate(struct raft_io *io, raft_index index)
         }
         s->entries = entries;
     } else {
-        free(s->entries);
-        s->entries = NULL;
+        /* Release everything we have */
+        if (s->entries != NULL) {
+            size_t i;
+            for (i = 0; i < s->n; i++) {
+                raft_free(s->entries[i].buf.base);
+            }
+            raft_free(s->entries);
+            s->entries = NULL;
+        }
     }
 
     s->n = n;
