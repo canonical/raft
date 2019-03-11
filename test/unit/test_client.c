@@ -425,7 +425,7 @@ TEST_CASE(add_server, error, dup_id, NULL)
     test_become_leader(&f->raft);
 
     rv = raft_add_server(&f->raft, 1, "3");
-    munit_assert_int(rv, ==, RAFT_ERR_DUP_SERVER_ID);
+    munit_assert_int(rv, ==, RAFT_EDUPID);
 
     return MUNIT_OK;
 }
@@ -554,7 +554,7 @@ TEST_CASE(promote, error, bad_id, NULL)
     test_become_leader(&f->raft);
 
     rv = raft_promote(&f->raft, 4);
-    munit_assert_int(rv, ==, RAFT_ERR_BAD_SERVER_ID);
+    munit_assert_int(rv, ==, RAFT_EBADID);
 
     return MUNIT_OK;
 }
@@ -571,7 +571,7 @@ TEST_CASE(promote, error, already_voting, NULL)
     test_become_leader(&f->raft);
 
     rv = raft_promote(&f->raft, 2);
-    munit_assert_int(rv, ==, RAFT_ERR_SERVER_ALREADY_VOTING);
+    munit_assert_int(rv, ==, RAFT_EALREADYVOTING);
 
     return MUNIT_OK;
 }
@@ -964,7 +964,7 @@ TEST_CASE(remove_server, error, bad_id, NULL)
     test_become_leader(&f->raft);
 
     rv = raft_remove_server(&f->raft, 3);
-    munit_assert_int(rv, ==, RAFT_ERR_BAD_SERVER_ID);
+    munit_assert_int(rv, ==, RAFT_EBADID);
 
     return MUNIT_OK;
 }

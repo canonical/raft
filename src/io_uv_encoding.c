@@ -325,7 +325,7 @@ int io_uv__decode_batch_header(const void *batch,
 
         if (entry->type != RAFT_COMMAND &&
             entry->type != RAFT_CONFIGURATION) {
-            rv = RAFT_ERR_MALFORMED;
+            rv = RAFT_EMALFORMED;
             goto err_after_alloc;
         }
 

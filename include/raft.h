@@ -10,14 +10,11 @@
  */
 enum {
     RAFT_ENOMEM = 1,
-    RAFT_ERR_BAD_SERVER_ID,
-    RAFT_ERR_UNKNOWN_SERVER_ID,
-    RAFT_ERR_DUP_SERVER_ID,
-    RAFT_ERR_DUP_SERVER_ADDRESS,
-    RAFT_ERR_SERVER_ALREADY_VOTING,
-    RAFT_ERR_EMPTY_CONFIGURATION,
-    RAFT_ERR_CONFIGURATION_NOT_EMPTY,
-    RAFT_ERR_MALFORMED,
+    RAFT_EBADID,
+    RAFT_EDUPID,
+    RAFT_EDUPADDR,
+    RAFT_EALREADYVOTING,
+    RAFT_EMALFORMED,
     RAFT_ERR_NO_SPACE,
     RAFT_ERR_BUSY,
     RAFT_ERR_NOT_LEADER,
@@ -40,14 +37,11 @@ enum {
  */
 #define RAFT_ERRNO_MAP(X)                                                \
     X(RAFT_ENOMEM, "out of memory")                                      \
-    X(RAFT_ERR_BAD_SERVER_ID, "server ID is not valid")                  \
-    X(RAFT_ERR_UNKNOWN_SERVER_ID, "server ID is unknown")                \
-    X(RAFT_ERR_DUP_SERVER_ID, "server ID already in use")                \
-    X(RAFT_ERR_DUP_SERVER_ADDRESS, "server address already in use")      \
-    X(RAFT_ERR_SERVER_ALREADY_VOTING, "server is already voting")        \
-    X(RAFT_ERR_EMPTY_CONFIGURATION, "configuration has no servers")      \
-    X(RAFT_ERR_CONFIGURATION_NOT_EMPTY, "configuration has servers")     \
-    X(RAFT_ERR_MALFORMED, "encoded data is malformed")                   \
+    X(RAFT_EBADID, "server ID is not valid")                             \
+    X(RAFT_EDUPID, "server ID already in use")                           \
+    X(RAFT_EDUPADDR, "server address already in use")                    \
+    X(RAFT_EALREADYVOTING, "server is already voting")                   \
+    X(RAFT_EMALFORMED, "encoded data is malformed")                      \
     X(RAFT_ERR_NO_SPACE, "no space left on device")                      \
     X(RAFT_ERR_BUSY, "an append entries request is already in progress") \
     X(RAFT_ERR_NOT_LEADER, "server is not the leader")                   \
@@ -196,8 +190,14 @@ struct raft_configuration
     unsigned n;                  /* Number of servers in the array. */
 };
 
+/**
+ * Initialize an empty raft configuration.
+ */
 void raft_configuration_init(struct raft_configuration *c);
 
+/**
+ * Release all memory used by the given configuration object.
+ */
 void raft_configuration_close(struct raft_configuration *c);
 
 /**
@@ -215,12 +215,6 @@ int raft_configuration_add(struct raft_configuration *c,
                            const unsigned id,
                            const char *address,
                            const bool voting);
-
-/**
- * Remove a server from a raft configuration. The given ID must match the one of
- * an existing server in the configuration.
- */
-int raft_configuration_remove(struct raft_configuration *c, const unsigned id);
 
 /**
  * Log entry types.

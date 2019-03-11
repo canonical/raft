@@ -161,12 +161,12 @@ int raft_promote(struct raft *r, const unsigned id)
 
     server = configuration__get(&r->configuration, id);
     if (server == NULL) {
-        rv = RAFT_ERR_BAD_SERVER_ID;
+        rv = RAFT_EBADID;
         goto err;
     }
 
     if (server->voting) {
-        rv = RAFT_ERR_SERVER_ALREADY_VOTING;
+        rv = RAFT_EALREADYVOTING;
         goto err;
     }
 
@@ -226,7 +226,7 @@ int raft_remove_server(struct raft *r, const unsigned id)
 
     server = configuration__get(&r->configuration, id);
     if (server == NULL) {
-        rv = RAFT_ERR_BAD_SERVER_ID;
+        rv = RAFT_EBADID;
         goto err;
     }
 
@@ -241,7 +241,7 @@ int raft_remove_server(struct raft *r, const unsigned id)
         goto err;
     }
 
-    rv = raft_configuration_remove(&configuration, id);
+    rv = configuration__remove(&configuration, id);
     if (rv != 0) {
         goto err_after_configuration_copy;
     }

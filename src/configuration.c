@@ -145,10 +145,10 @@ int raft_configuration_add(struct raft_configuration *c,
     for (i = 0; i < c->n; i++) {
         server = &c->servers[i];
         if (server->id == id) {
-            return RAFT_ERR_DUP_SERVER_ID;
+            return RAFT_EDUPID;
         }
         if (strcmp(server->address, address) == 0) {
-            return RAFT_ERR_DUP_SERVER_ADDRESS;
+            return RAFT_EDUPADDR;
         }
     }
 
@@ -183,7 +183,7 @@ int raft_configuration_add(struct raft_configuration *c,
     return 0;
 }
 
-int raft_configuration_remove(struct raft_configuration *c, const unsigned id)
+int configuration__remove(struct raft_configuration *c, const unsigned id)
 {
     size_t i;
     size_t j;
@@ -193,7 +193,7 @@ int raft_configuration_remove(struct raft_configuration *c, const unsigned id)
 
     i = configuration__index_of(c, id);
     if (i == c->n) {
-        return RAFT_ERR_UNKNOWN_SERVER_ID;
+        return RAFT_EBADID;
     }
 
     assert(i < c->n);
@@ -295,9 +295,7 @@ int configuration__encode(const struct raft_configuration *c,
     assert(buf != NULL);
 
     /* The configuration can't be empty. */
-    if (c->n == 0) {
-        return RAFT_ERR_EMPTY_CONFIGURATION;
-    }
+    assert(c->n > 0);
 
     buf->len = configuration__encoded_size(c);
     buf->base = raft_malloc(buf->len);
@@ -324,16 +322,14 @@ int configuration__decode(const struct raft_buffer *buf,
     assert(buf->len > 0);
 
     /* Check that the target configuration is empty. */
-    if (c->n != 0) {
-        return RAFT_ERR_CONFIGURATION_NOT_EMPTY;
-    }
+    assert(c->n == 0);
     assert(c->servers == NULL);
 
     cursor = buf->base;
 
     /* Check the encoding format version */
     if (byte__get8(&cursor) != RAFT_CONFIGURATION__FORMAT) {
-        return RAFT_ERR_MALFORMED;
+        return RAFT_EMALFORMED;
     }
 
     /* Read the number of servers. */
@@ -358,7 +354,7 @@ int configuration__decode(const struct raft_buffer *buf,
             address_len++;
         }
         if (cursor + address_len == buf->base + buf->len) {
-            return RAFT_ERR_MALFORMED;
+            return RAFT_EMALFORMED;
         }
         address = (const char *)cursor;
         cursor += address_len + 1;

@@ -8,6 +8,12 @@
 #include "../include/raft.h"
 
 /**
+ * Remove a server from a raft configuration. The given ID must match the one of
+ * an existing server in the configuration.
+ */
+int configuration__remove(struct raft_configuration *c, const unsigned id);
+
+/**
  * Return the index of the server with the given ID (relative to the c->servers
  * array). If there's no server with the given ID, return the number of servers.
  */
@@ -33,7 +39,7 @@ const struct raft_server *configuration__get(const struct raft_configuration *c,
 size_t configuration__n_voting(const struct raft_configuration *c);
 
 /**
- * Add all servers in c1 to c2.
+ * Add all servers in c1 to c2 (which must be empty).
  */
 int configuration__copy(const struct raft_configuration *c1,
                         struct raft_configuration *c2);
