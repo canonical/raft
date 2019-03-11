@@ -35,7 +35,7 @@ static int raft_election__send_request_vote(struct raft *r,
     int rv;
 
     assert(r != NULL);
-    assert(r->state == RAFT_STATE_CANDIDATE);
+    assert(r->state == RAFT_CANDIDATE);
 
     assert(server != NULL);
     assert(server->id != r->id);
@@ -74,7 +74,7 @@ int raft_election__start(struct raft *r)
     int rv;
 
     assert(r != NULL);
-    assert(r->state == RAFT_STATE_CANDIDATE);
+    assert(r->state == RAFT_CANDIDATE);
 
     n_voting = configuration__n_voting(&r->configuration);
     voting_index = configuration__index_of_voting(&r->configuration, r->id);
@@ -238,7 +238,7 @@ bool raft_election__tally(struct raft *r, size_t votes_index)
     size_t half = n_voting / 2;
 
     assert(r != NULL);
-    assert(r->state == RAFT_STATE_CANDIDATE);
+    assert(r->state == RAFT_CANDIDATE);
     assert(r->candidate_state.votes != NULL);
 
     r->candidate_state.votes[votes_index] = true;

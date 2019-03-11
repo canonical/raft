@@ -80,10 +80,10 @@ int raft_rpc__recv_append_entries(struct raft *r,
      * (and in that case we reject the request above), or a higher term (and in
      * that case we step down).
      */
-    assert(r->state == RAFT_STATE_FOLLOWER || r->state == RAFT_STATE_CANDIDATE);
+    assert(r->state == RAFT_FOLLOWER || r->state == RAFT_CANDIDATE);
     assert(r->current_term == args->term);
 
-    if (r->state == RAFT_STATE_CANDIDATE) {
+    if (r->state == RAFT_CANDIDATE) {
         raft_debugf(r->logger, "discovered leader -> step down ");
         rv = raft_state__convert_to_follower(r, args->term);
         if (rv != 0) {
@@ -91,7 +91,7 @@ int raft_rpc__recv_append_entries(struct raft *r,
         }
     }
 
-    assert(r->state == RAFT_STATE_FOLLOWER);
+    assert(r->state == RAFT_FOLLOWER);
 
     /* Update current leader because the term in this AppendEntries RPC is up to
      * date. */
@@ -170,7 +170,7 @@ int raft_rpc__recv_append_entries_result(
     raft_debugf(r->logger, "received append entries result from server %ld",
                 id);
 
-    if (r->state != RAFT_STATE_LEADER) {
+    if (r->state != RAFT_LEADER) {
         raft_debugf(r->logger, "local server is not leader -> ignore");
         return 0;
     }
@@ -193,7 +193,7 @@ int raft_rpc__recv_append_entries_result(
      *   term T > currentTerm: set currentTerm = T, convert to follower.
      */
     if (match > 0) {
-        assert(r->state == RAFT_STATE_FOLLOWER);
+        assert(r->state == RAFT_FOLLOWER);
         return 0;
     }
 

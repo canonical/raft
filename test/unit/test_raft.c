@@ -137,7 +137,7 @@ TEST_CASE(init, success, state, NULL)
 
     munit_assert_int(f->raft.id, ==, 1);
 
-    munit_assert_int(f->raft.state, ==, RAFT_STATE_UNAVAILABLE);
+    munit_assert_int(f->raft.state, ==, RAFT_UNAVAILABLE);
 
     munit_assert_int(f->raft.current_term, ==, 0);
     munit_assert_int(f->raft.voted_for, ==, 0);
@@ -190,7 +190,7 @@ TEST_CASE(start, error, io, NULL)
 }
 
 /* The state after a successful start of a pristine server is
- * RAFT_STATE_FOLLOWER. */
+ * RAFT_FOLLOWER. */
 TEST_CASE(start, success, pristine, NULL)
 {
     struct fixture *f = data;
@@ -199,7 +199,7 @@ TEST_CASE(start, success, pristine, NULL)
 
     __start(f);
 
-    __assert_state(f, RAFT_STATE_FOLLOWER);
+    __assert_state(f, RAFT_FOLLOWER);
 
     munit_assert_int(f->raft.election_timeout_rand, >=,
                      f->raft.election_timeout);
@@ -220,7 +220,7 @@ TEST_CASE(start, success, bootstrapped, NULL)
 
     __start(f);
 
-    __assert_state(f, RAFT_STATE_FOLLOWER);
+    __assert_state(f, RAFT_FOLLOWER);
 
     return MUNIT_OK;
 }

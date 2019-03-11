@@ -173,7 +173,7 @@ TEST_CASE(elapse, success, self_elect, NULL)
     test_bootstrap_and_start(&f->raft, 1, 1, 1);
 
     __tick(f, 100);
-    __assert_state(f, RAFT_STATE_LEADER);
+    __assert_state(f, RAFT_LEADER);
 
     return MUNIT_OK;
 }
@@ -188,7 +188,7 @@ TEST_CASE(elapse, success, voter_not_us, NULL)
     test_bootstrap_and_start(&f->raft, 2, 2, 2);
 
     __tick(f, 100);
-    __assert_state(f, RAFT_STATE_FOLLOWER);
+    __assert_state(f, RAFT_FOLLOWER);
 
     return MUNIT_OK;
 }
@@ -263,7 +263,7 @@ TEST_CASE(elapse, success, candidate, NULL)
     munit_assert_int(f->raft.election_timeout_rand, !=, election_timeout);
 
     /* We are candidate */
-    __assert_state(f, RAFT_STATE_CANDIDATE);
+    __assert_state(f, RAFT_CANDIDATE);
 
     /* The votes array is initialized */
     munit_assert_ptr_not_null(f->raft.candidate_state.votes);
@@ -285,7 +285,7 @@ TEST_CASE(elapse, success, timer_not_expired, NULL)
     test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
     __tick(f, f->raft.election_timeout_rand - 100);
-    __assert_state(f, RAFT_STATE_FOLLOWER);
+    __assert_state(f, RAFT_FOLLOWER);
 
     return MUNIT_OK;
 }
@@ -300,7 +300,7 @@ TEST_CASE(elapse, success, not_voter, NULL)
     test_bootstrap_and_start(&f->raft, 3, 2, 3);
 
     __tick(f, f->raft.election_timeout_rand + 100);
-    __assert_state(f, RAFT_STATE_FOLLOWER);
+    __assert_state(f, RAFT_FOLLOWER);
 
     return MUNIT_OK;
 }
@@ -365,7 +365,7 @@ TEST_CASE(elapse, success, no_contact, NULL)
     __tick(f, f->raft.election_timeout + 100);
 
     /* We have stepped down. */
-    __assert_state(f, RAFT_STATE_FOLLOWER);
+    __assert_state(f, RAFT_FOLLOWER);
 
     return MUNIT_OK;
 }
@@ -403,7 +403,7 @@ TEST_CASE(elapse, success, new_election, NULL)
     munit_assert_int(f->raft.election_timeout_rand, !=, election_timeout);
 
     /* We are still candidate */
-    __assert_state(f, RAFT_STATE_CANDIDATE);
+    __assert_state(f, RAFT_CANDIDATE);
 
     /* The votes array is initialized */
     munit_assert_ptr_not_null(f->raft.candidate_state.votes);
@@ -435,7 +435,7 @@ TEST_CASE(elapse, success, during_election, NULL)
     __tick(f, f->raft.election_timeout_rand - 100);
 
     /* We are still candidate */
-    __assert_state(f, RAFT_STATE_CANDIDATE);
+    __assert_state(f, RAFT_CANDIDATE);
 
     /* No new vote request has been sent */
     raft_io_stub_flush(&f->io);

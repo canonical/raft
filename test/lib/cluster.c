@@ -275,7 +275,7 @@ static void test_cluster__message_with_lowest_timer(
  */
 static int test_cluster__raft_remaining_time(struct raft *r)
 {
-    if (r->state == RAFT_STATE_LEADER) {
+    if (r->state == RAFT_LEADER) {
         return r->heartbeat_timeout - r->timer;
     } else {
         return r->election_timeout_rand - r->timer;
@@ -391,7 +391,7 @@ static bool test_cluster__update_leader(struct test_cluster *c)
             continue;
         }
 
-        if (raft->state == RAFT_STATE_LEADER) {
+        if (raft->state == RAFT_LEADER) {
             /* No other server is leader for this term. */
             for (j = 0; j < c->n; j++) {
                 struct raft *other = &c->rafts[j];
@@ -400,7 +400,7 @@ static bool test_cluster__update_leader(struct test_cluster *c)
                     continue;
                 }
 
-                if (other->state == RAFT_STATE_LEADER) {
+                if (other->state == RAFT_LEADER) {
                     if (other->current_term == raft->current_term) {
                         munit_errorf(
                             "server %u and %u are both leaders in term %llu",
@@ -444,7 +444,7 @@ static bool test_cluster__update_leader(struct test_cluster *c)
                 break;
             }
 
-            if (raft->state != RAFT_STATE_FOLLOWER) {
+            if (raft->state != RAFT_FOLLOWER) {
                 acked = false;
                 break;
             }

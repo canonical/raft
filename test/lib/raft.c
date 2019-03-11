@@ -101,7 +101,7 @@ void test_become_candidate(struct raft *r)
     /* Become candidate */
     raft_io_stub_advance(r->io, r->election_timeout_rand + 100);
 
-    munit_assert_int(r->state, ==, RAFT_STATE_CANDIDATE);
+    munit_assert_int(r->state, ==, RAFT_CANDIDATE);
 
     raft_io_stub_flush(r->io);
 }
@@ -139,7 +139,7 @@ void test_become_leader(struct raft *r)
         munit_error("could not get all required votes");
     }
 
-    munit_assert_int(r->state, ==, RAFT_STATE_LEADER);
+    munit_assert_int(r->state, ==, RAFT_LEADER);
 
     raft_io_stub_flush(r->io);
 }

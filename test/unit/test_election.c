@@ -43,14 +43,14 @@ static void tear_down(void *data)
 }
 
 /**
- * Set the state of the fixture's raft instance to #RAFT_STATE_CANDIDATE, and
+ * Set the state of the fixture's raft instance to #RAFT_CANDIDATE, and
  * initialize the votes array.
  */
 #define __set_state_to_candidate(F)                                           \
     {                                                                         \
         int n_voting = configuration__n_voting(&F->raft.configuration);       \
                                                                               \
-        F->raft.state = RAFT_STATE_CANDIDATE;                                 \
+        F->raft.state = RAFT_CANDIDATE;                                       \
         F->raft.candidate_state.votes = raft_malloc(n_voting * sizeof(bool)); \
     }
 

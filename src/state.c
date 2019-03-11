@@ -69,18 +69,17 @@ static void raft_state__clear_leader(struct raft *r)
 void raft_state__clear(struct raft *r)
 {
     assert(r != NULL);
-    assert(r->state == RAFT_STATE_UNAVAILABLE ||
-           r->state == RAFT_STATE_FOLLOWER ||
-           r->state == RAFT_STATE_CANDIDATE || r->state == RAFT_STATE_LEADER);
+    assert(r->state == RAFT_UNAVAILABLE || r->state == RAFT_FOLLOWER ||
+           r->state == RAFT_CANDIDATE || r->state == RAFT_LEADER);
 
     switch (r->state) {
-        case RAFT_STATE_FOLLOWER:
+        case RAFT_FOLLOWER:
             raft_state__clear_follower(r);
             break;
-        case RAFT_STATE_CANDIDATE:
+        case RAFT_CANDIDATE:
             raft_state__clear_candidate(r);
             break;
-        case RAFT_STATE_LEADER:
+        case RAFT_LEADER:
             raft_state__clear_leader(r);
             break;
     }
@@ -92,14 +91,14 @@ void raft_state__clear(struct raft *r)
 static void raft_state__change(struct raft *r, int state)
 {
     assert(r != NULL);
-    assert(state == RAFT_STATE_FOLLOWER || state == RAFT_STATE_CANDIDATE ||
-           state == RAFT_STATE_LEADER);
+    assert(state == RAFT_FOLLOWER || state == RAFT_CANDIDATE ||
+           state == RAFT_LEADER);
 
     /* Check that the transition is legal, see Figure 3.3. */
-    assert((r->state == RAFT_STATE_FOLLOWER && state == RAFT_STATE_CANDIDATE) ||
-           (r->state == RAFT_STATE_CANDIDATE && state == RAFT_STATE_FOLLOWER) ||
-           (r->state == RAFT_STATE_CANDIDATE && state == RAFT_STATE_LEADER) ||
-           (r->state == RAFT_STATE_LEADER && state == RAFT_STATE_FOLLOWER));
+    assert((r->state == RAFT_FOLLOWER && state == RAFT_CANDIDATE) ||
+           (r->state == RAFT_CANDIDATE && state == RAFT_FOLLOWER) ||
+           (r->state == RAFT_CANDIDATE && state == RAFT_LEADER) ||
+           (r->state == RAFT_LEADER && state == RAFT_FOLLOWER));
 
     r->state = state;
 }
@@ -139,9 +138,9 @@ static void raft_state__reset_follower(struct raft *r)
 
 void raft_state__start_as_follower(struct raft *r)
 {
-    assert(r->state == RAFT_STATE_UNAVAILABLE);
+    assert(r->state == RAFT_UNAVAILABLE);
 
-    r->state = RAFT_STATE_FOLLOWER;
+    r->state = RAFT_FOLLOWER;
 
     raft_state__reset_follower(r);
 }
@@ -151,18 +150,18 @@ int raft_state__convert_to_follower(struct raft *r, raft_term term)
     int rv;
     unsigned short prev_state = r->state;
 
-    assert(r->state == RAFT_STATE_CANDIDATE || r->state == RAFT_STATE_LEADER);
+    assert(r->state == RAFT_CANDIDATE || r->state == RAFT_LEADER);
 
     switch (r->state) {
-        case RAFT_STATE_CANDIDATE:
+        case RAFT_CANDIDATE:
             raft_state__clear_candidate(r);
             break;
-        case RAFT_STATE_LEADER:
+        case RAFT_LEADER:
             raft_state__clear_leader(r);
             break;
     }
 
-    raft_state__change(r, RAFT_STATE_FOLLOWER);
+    raft_state__change(r, RAFT_FOLLOWER);
 
     /* We only need to write the new term if it differs form the current
      * one. The only case were this is not the case is if the leader decides to
@@ -187,12 +186,12 @@ int raft_state__convert_to_candidate(struct raft *r)
     size_t n_voting = configuration__n_voting(&r->configuration);
     int rv;
 
-    assert(r->state == RAFT_STATE_FOLLOWER);
+    assert(r->state == RAFT_FOLLOWER);
 
     raft_state__clear_follower(r);
 
     /* Change state */
-    raft_state__change(r, RAFT_STATE_CANDIDATE);
+    raft_state__change(r, RAFT_CANDIDATE);
 
     /* Allocate the votes array. */
     r->candidate_state.votes = raft_malloc(n_voting * sizeof(bool));
@@ -204,13 +203,13 @@ int raft_state__convert_to_candidate(struct raft *r)
     /* Start a new election round */
     rv = raft_election__start(r);
     if (rv != 0) {
-        r->state = RAFT_STATE_FOLLOWER;
+        r->state = RAFT_FOLLOWER;
         raft_free(r->candidate_state.votes);
         return rv;
     }
 
     /* Notify watchers */
-    raft_watch__state_change(r, RAFT_STATE_FOLLOWER);
+    raft_watch__state_change(r, RAFT_FOLLOWER);
 
     return 0;
 
@@ -250,11 +249,11 @@ int raft_state__convert_to_leader(struct raft *r)
 
     assert(r != NULL);
 
-    assert(r->state == RAFT_STATE_CANDIDATE);
+    assert(r->state == RAFT_CANDIDATE);
 
     raft_state__clear_candidate(r);
 
-    raft_state__change(r, RAFT_STATE_LEADER);
+    raft_state__change(r, RAFT_LEADER);
 
     /* Reset apply requests queue */
     RAFT__QUEUE_INIT(&r->leader_state.apply_reqs);
@@ -279,7 +278,7 @@ int raft_state__convert_to_leader(struct raft *r)
     }
 
     /* Notify watchers */
-    raft_watch__state_change(r, RAFT_STATE_CANDIDATE);
+    raft_watch__state_change(r, RAFT_CANDIDATE);
 
     /* Reset promotion state. */
     r->leader_state.promotee_id = 0;
@@ -304,7 +303,7 @@ int raft_state__rebuild_next_and_match_indexes(
 
     assert(r != NULL);
     assert(configuration != NULL);
-    assert(r->state == RAFT_STATE_LEADER);
+    assert(r->state == RAFT_LEADER);
 
     /* Allocate the new replication states array. */
     rv = alloc_replication(configuration->n, &replication);

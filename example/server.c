@@ -305,7 +305,7 @@ static void __server_timer_cb(uv_timer_t *timer)
     struct raft_buffer buf;
     int rv;
 
-    if (s->raft.state != RAFT_STATE_LEADER) {
+    if (s->raft.state != RAFT_LEADER) {
         return;
     }
 

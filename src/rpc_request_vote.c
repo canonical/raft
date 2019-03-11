@@ -42,8 +42,7 @@ int raft_rpc__recv_request_vote(struct raft *r,
      *   request within the minimum election timeout of hearing from a current
      *   leader, it does not update its term or grant its vote
      */
-    if (r->state == RAFT_STATE_FOLLOWER &&
-        r->follower_state.current_leader_id != 0) {
+    if (r->state == RAFT_FOLLOWER && r->follower_state.current_leader_id != 0) {
         raft_debugf(r->logger, "local server has a leader -> reject ");
         goto reply;
     }
@@ -119,7 +118,7 @@ int raft_rpc__recv_request_vote_result(
     }
 
     /* Ignore responses if we are not candidate anymore */
-    if (r->state != RAFT_STATE_CANDIDATE) {
+    if (r->state != RAFT_CANDIDATE) {
         raft_debugf(r->logger, "local server is not candidate -> ignore");
         return 0;
     }
