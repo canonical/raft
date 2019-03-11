@@ -20,15 +20,17 @@ TEST_MODULE(client);
 /**
  * Submit a request to append a new RAFT_LOG_COMMAND entry.
  */
-#define propose_entry                         \
-    {                                         \
-        struct raft_buffer buf;               \
-        int rv;                               \
-                                              \
-        test_fsm_encode_set_x(123, &buf);     \
-                                              \
-        rv = raft_propose(&f->raft, &buf, 1); \
-        munit_assert_int(rv, ==, 0);          \
+#define propose_entry                                       \
+    {                                                       \
+        struct raft_buffer buf;                             \
+        struct raft_apply *req = munit_malloc(sizeof *req); \
+        int rv;                                             \
+                                                            \
+        test_fsm_encode_set_x(123, &buf);                   \
+                                                            \
+        req->data = f;                                      \
+        rv = raft_apply(&f->raft, req, &buf, 1, apply_cb);  \
+        munit_assert_int(rv, ==, 0);                        \
     }
 
 /**
@@ -174,7 +176,7 @@ TEST_MODULE(client);
     }
 
 /**
- * raft_propose
+ * raft_apply
  */
 
 TEST_SUITE(propose);
@@ -182,6 +184,8 @@ TEST_SUITE(propose);
 struct propose__fixture
 {
     RAFT_FIXTURE;
+    bool invoked;
+    int status;
 };
 
 TEST_SETUP(propose)
@@ -189,6 +193,8 @@ TEST_SETUP(propose)
     struct propose__fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
     RAFT_SETUP(f);
+    f->invoked = false;
+    f->status = -1;
     return f;
 }
 
@@ -199,6 +205,14 @@ TEST_TEAR_DOWN(propose)
     free(f);
 }
 
+static void apply_cb(struct raft_apply *req, int status)
+{
+    struct propose__fixture *f = req->data;
+    f->invoked = true;
+    f->status = status;
+    free(req);
+}
+
 TEST_GROUP(propose, error);
 TEST_GROUP(propose, success);
 
@@ -206,6 +220,7 @@ TEST_GROUP(propose, success);
 TEST_CASE(propose, error, not_leader, NULL)
 {
     struct propose__fixture *f = data;
+    struct raft_apply req;
     struct raft_buffer buf;
     int rv;
 
@@ -215,7 +230,7 @@ TEST_CASE(propose, error, not_leader, NULL)
 
     test_fsm_encode_set_x(123, &buf);
 
-    rv = raft_propose(&f->raft, &buf, 1);
+    rv = raft_apply(&f->raft, &req, &buf, 1, NULL);
     munit_assert_int(rv, ==, RAFT_ERR_NOT_LEADER);
 
     raft_free(buf.base);
@@ -236,6 +251,7 @@ static MunitParameterEnum propose_oom_params[] = {
 TEST_CASE(propose, error, oom, propose_oom_params)
 {
     struct propose__fixture *f = data;
+    struct raft_apply req;
     struct raft_buffer buf;
     int rv;
 
@@ -254,7 +270,7 @@ TEST_CASE(propose, error, oom, propose_oom_params)
     f->raft.io_queue.requests = NULL;
     f->raft.io_queue.size = 0;*/
 
-    rv = raft_propose(&f->raft, &buf, 1);
+    rv = raft_apply(&f->raft, &req, &buf, 1, NULL);
     munit_assert_int(rv, ==, RAFT_ENOMEM);
 
     raft_free(buf.base);
@@ -266,6 +282,7 @@ TEST_CASE(propose, error, oom, propose_oom_params)
 TEST_CASE(propose, error, io_err, NULL)
 {
     struct propose__fixture *f = data;
+    struct raft_apply req;
     struct raft_buffer buf;
     int rv;
 
@@ -278,7 +295,7 @@ TEST_CASE(propose, error, io_err, NULL)
 
     raft_io_stub_fault(&f->io, 0, 1);
 
-    rv = raft_propose(&f->raft, &buf, 1);
+    rv = raft_apply(&f->raft, &req, &buf, 1, NULL);
     munit_assert_int(rv, ==, RAFT_ERR_IO);
 
     raft_free(buf.base);
@@ -458,6 +475,9 @@ TEST_SUITE(promote);
 struct promote__fixture
 {
     RAFT_FIXTURE;
+    struct raft_apply req;
+    bool invoked;
+    int status;
 };
 
 TEST_SETUP(promote)
@@ -465,6 +485,9 @@ TEST_SETUP(promote)
     struct promote__fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
     RAFT_SETUP(f);
+    f->req.data = f;
+    f->invoked = false;
+    f->status = -1;
     return f;
 }
 

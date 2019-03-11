@@ -50,7 +50,6 @@ struct __item
         for (i = 0; i < n; i++) {                      \
             struct __item *item = &items[i];           \
             item->value = i + 1;                       \
-            RAFT__QUEUE_INIT(&item->queue);            \
             RAFT__QUEUE_PUSH(&F->queue, &item->queue); \
         }                                              \
     }
@@ -296,3 +295,73 @@ TEST_CASE(tail, success, three, NULL)
 
     return MUNIT_OK;
 }
+
+/**
+ * RAFT__QUEUE_FOREACH
+ */
+
+TEST_SUITE(foreach);
+
+TEST_SETUP(foreach, setup);
+TEST_TEAR_DOWN(foreach, tear_down);
+
+/* Loop through a queue of zero items. */
+TEST_CASE(foreach, zero, NULL)
+{
+    struct fixture *f = data;
+    raft__queue *head;
+    int count = 0;
+
+    (void)params;
+
+    RAFT__QUEUE_FOREACH(head, &f->queue) {
+      count++;
+    }
+
+    munit_assert_int(count, ==, 0);
+
+    return MUNIT_OK;
+}
+
+/* Loop through a queue of one item. */
+TEST_CASE(foreach, one, NULL)
+{
+    struct fixture *f = data;
+    struct __item items[1];
+    raft__queue *head;
+    int count = 0;
+
+    (void)params;
+
+    __push(f, items);
+
+    RAFT__QUEUE_FOREACH(head, &f->queue) {
+      count++;
+    }
+
+    munit_assert_int(count, ==, 1);
+
+    return MUNIT_OK;
+}
+
+/* Loop through a queue of two items. */
+TEST_CASE(foreach, two, NULL)
+{
+    struct fixture *f = data;
+    struct __item items[2];
+    raft__queue *head;
+    int count = 0;
+
+    (void)params;
+
+    __push(f, items);
+
+    RAFT__QUEUE_FOREACH(head, &f->queue) {
+      count++;
+    }
+
+    munit_assert_int(count, ==, 2);
+
+    return MUNIT_OK;
+}
+

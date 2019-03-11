@@ -28,10 +28,6 @@ static int __fsm__apply(struct raft_fsm *fsm, const struct raft_buffer *buf)
 
     f->count += *(uint64_t *)buf->base;
 
-    if (f->count % 50 == 0) {
-        raft_infof(f->logger, "fsm: count %d", f->count);
-    }
-
     return 0;
 }
 
@@ -112,6 +108,7 @@ struct __server
     struct raft_io io;
     struct raft_fsm fsm;
     struct raft raft;
+    struct raft_apply req;
     const char *dir;
     unsigned id;
     char address[64];
@@ -247,6 +244,8 @@ static int __server_init(struct __server *s, const char *dir, unsigned id)
 
     s->raft.snapshot.threshold = 15;
 
+    s->req.data = s;
+
     return 0;
 
 err_after_configuration_init:
@@ -285,6 +284,21 @@ static void __server_close(struct __server *s)
     uv_loop_close(&s->loop);
 }
 
+static void __server_apply_cb(struct raft_apply *req, int status)
+{
+    struct __server *s = req->data;
+    struct __fsm *f = s->fsm.data;
+
+    if (status != 0) {
+        raft_warnf(&s->logger, "fsm: apply error: %s", raft_strerror(status));
+        return;
+    }
+
+    if (f->count % 50 == 0) {
+        raft_infof(f->logger, "fsm: count %d", f->count);
+    }
+}
+
 static void __server_timer_cb(uv_timer_t *timer)
 {
     struct __server *s = timer->data;
@@ -305,7 +319,7 @@ static void __server_timer_cb(uv_timer_t *timer)
         return;
     }
 
-    rv = raft_propose(&s->raft, &buf, 1);
+    rv = raft_apply(&s->raft, &s->req, &buf, 1, __server_apply_cb);
     if (rv != 0) {
         printf("error: propose new entry: %s\n", raft_strerror(rv));
         return;

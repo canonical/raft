@@ -4,12 +4,15 @@
 #include "configuration.h"
 #include "log.h"
 #include "membership.h"
+#include "queue.h"
 #include "replication.h"
 #include "state.h"
 
-int raft_propose(struct raft *r,
-                 const struct raft_buffer bufs[],
-                 const unsigned n)
+int raft_apply(struct raft *r,
+               struct raft_apply *req,
+               const struct raft_buffer bufs[],
+               const unsigned n,
+               raft_apply_cb cb)
 {
     raft_index index;
     int rv;
@@ -28,11 +31,16 @@ int raft_propose(struct raft *r,
     /* Index of the first entry being appended. */
     index = raft_log__last_index(&r->log) + 1;
 
+    req->index = index;
+    req->cb = cb;
+
     /* Append the new entries to the log. */
     rv = raft_log__append_commands(&r->log, r->current_term, bufs, n);
     if (rv != 0) {
         goto err;
     }
+
+    RAFT__QUEUE_PUSH(&r->leader_state.apply_reqs, &req->queue);
 
     rv = raft_replication__trigger(r, index);
     if (rv != 0) {
@@ -43,10 +51,9 @@ int raft_propose(struct raft *r,
 
 err_after_log_append:
     raft_log__discard(&r->log, index);
-
+    RAFT__QUEUE_REMOVE(&req->queue);
 err:
     assert(rv != 0);
-
     return rv;
 }
 

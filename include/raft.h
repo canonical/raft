@@ -22,6 +22,7 @@ enum {
     RAFT_ERR_NO_SPACE,
     RAFT_ERR_BUSY,
     RAFT_ERR_NOT_LEADER,
+    RAFT_ERR_LEADERSHIP_LOST,
     RAFT_ERR_SHUTDOWN,
     RAFT_ERR_CONFIGURATION_BUSY,
     RAFT_ERR_IO,
@@ -52,6 +53,7 @@ enum {
     X(RAFT_ERR_NO_SPACE, "no space left on device")                      \
     X(RAFT_ERR_BUSY, "an append entries request is already in progress") \
     X(RAFT_ERR_NOT_LEADER, "server is not the leader")                   \
+    X(RAFT_ERR_LEADERSHIP_LOST, "server has lost leadership")            \
     X(RAFT_ERR_CONFIGURATION_BUSY,                                       \
       "a configuration change is already in progress")                   \
     X(RAFT_ERR_IO, "I/O error")                                          \
@@ -828,6 +830,11 @@ struct raft
             unsigned short round_number; /* Number of the current sync round */
             raft_index round_index;      /* Target of the current round */
             unsigned round_duration;     /* Duration of the current round */
+
+            /**
+             * Queue of outstanding apply requests.
+             */
+            void *apply_reqs[2];
         } leader_state;
     };
 
@@ -934,8 +941,23 @@ void raft_set_election_timeout(struct raft *r, const unsigned election_timeout);
  */
 const char *raft_state_name(struct raft *r);
 
+struct raft_apply;
+typedef void (*raft_apply_cb)(struct raft_apply *req, int status);
+
 /**
- * Propose to append new FSM commands to the log.
+ * Request to apply a new command.
+ */
+struct raft_apply
+{
+    void *data;
+    raft_index index;
+    raft_apply_cb cb;
+    void *queue[2];
+};
+
+/**
+ * Propose to append a new command to the log and apply it to the FSM once
+ * committed.
  *
  * If this server is the leader, it will create @n new log entries of type
  * #RAFT_LOG_COMMAND using the given buffers as their payloads, append them to
@@ -949,9 +971,11 @@ const char *raft_state_name(struct raft *r);
  * releasing it when appropriate. Any further client access to such memory leads
  * to undefined behavior.
  */
-int raft_propose(struct raft *r,
-                 const struct raft_buffer bufs[],
-                 const unsigned n);
+int raft_apply(struct raft *r,
+               struct raft_apply *req,
+               const struct raft_buffer bufs[],
+               const unsigned n,
+               raft_apply_cb cb);
 
 /**
  * Add a new non-voting server to the cluster configuration.
