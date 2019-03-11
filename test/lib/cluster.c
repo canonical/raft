@@ -360,7 +360,7 @@ static void test_cluster__deliver_or_tick(struct test_cluster *c,
             incoming->timer -= elapse;
         }
 
-	raft_io_stub_advance(raft->io, elapse);
+        raft_io_stub_advance(raft->io, elapse);
     }
 
     c->time += elapse;
@@ -644,7 +644,7 @@ void test_cluster_propose(struct test_cluster *c)
     buf.base = entry_id;
     buf.len = sizeof *entry_id;
 
-    rv = raft_propose(raft, &buf, 1);
+    rv = raft_apply(raft, &buf, 1);
     munit_assert_int(rv, ==, 0);
 }
 

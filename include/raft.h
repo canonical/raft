@@ -935,7 +935,8 @@ void raft_set_election_timeout(struct raft *r, const unsigned election_timeout);
 const char *raft_state_name(struct raft *r);
 
 /**
- * Propose to append new FSM commands to the log.
+ * Propose to append a new command to the log and apply it to the FSM once
+ * committed.
  *
  * If this server is the leader, it will create @n new log entries of type
  * #RAFT_LOG_COMMAND using the given buffers as their payloads, append them to
@@ -949,9 +950,9 @@ const char *raft_state_name(struct raft *r);
  * releasing it when appropriate. Any further client access to such memory leads
  * to undefined behavior.
  */
-int raft_propose(struct raft *r,
-                 const struct raft_buffer bufs[],
-                 const unsigned n);
+int raft_apply(struct raft *r,
+               const struct raft_buffer bufs[],
+               const unsigned n);
 
 /**
  * Add a new non-voting server to the cluster configuration.

@@ -305,7 +305,7 @@ static void __server_timer_cb(uv_timer_t *timer)
         return;
     }
 
-    rv = raft_propose(&s->raft, &buf, 1);
+    rv = raft_apply(&s->raft, &buf, 1);
     if (rv != 0) {
         printf("error: propose new entry: %s\n", raft_strerror(rv));
         return;

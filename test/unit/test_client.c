@@ -20,15 +20,15 @@ TEST_MODULE(client);
 /**
  * Submit a request to append a new RAFT_LOG_COMMAND entry.
  */
-#define propose_entry                         \
-    {                                         \
-        struct raft_buffer buf;               \
-        int rv;                               \
-                                              \
-        test_fsm_encode_set_x(123, &buf);     \
-                                              \
-        rv = raft_propose(&f->raft, &buf, 1); \
-        munit_assert_int(rv, ==, 0);          \
+#define propose_entry                       \
+    {                                       \
+        struct raft_buffer buf;             \
+        int rv;                             \
+                                            \
+        test_fsm_encode_set_x(123, &buf);   \
+                                            \
+        rv = raft_apply(&f->raft, &buf, 1); \
+        munit_assert_int(rv, ==, 0);        \
     }
 
 /**
@@ -174,7 +174,7 @@ TEST_MODULE(client);
     }
 
 /**
- * raft_propose
+ * raft_apply
  */
 
 TEST_SUITE(propose);
@@ -215,7 +215,7 @@ TEST_CASE(propose, error, not_leader, NULL)
 
     test_fsm_encode_set_x(123, &buf);
 
-    rv = raft_propose(&f->raft, &buf, 1);
+    rv = raft_apply(&f->raft, &buf, 1);
     munit_assert_int(rv, ==, RAFT_ERR_NOT_LEADER);
 
     raft_free(buf.base);
@@ -254,7 +254,7 @@ TEST_CASE(propose, error, oom, propose_oom_params)
     f->raft.io_queue.requests = NULL;
     f->raft.io_queue.size = 0;*/
 
-    rv = raft_propose(&f->raft, &buf, 1);
+    rv = raft_apply(&f->raft, &buf, 1);
     munit_assert_int(rv, ==, RAFT_ENOMEM);
 
     raft_free(buf.base);
@@ -278,7 +278,7 @@ TEST_CASE(propose, error, io_err, NULL)
 
     raft_io_stub_fault(&f->io, 0, 1);
 
-    rv = raft_propose(&f->raft, &buf, 1);
+    rv = raft_apply(&f->raft, &buf, 1);
     munit_assert_int(rv, ==, RAFT_ERR_IO);
 
     raft_free(buf.base);

@@ -669,7 +669,7 @@ TEST_CASE(response, success, commit, NULL)
     /* Append an entry to our log and handle the associated successful write. */
     test_fsm_encode_set_x(123, &buf);
 
-    rv = raft_propose(&f->raft, &buf, 1);
+    rv = raft_apply(&f->raft, &buf, 1);
     munit_assert_int(rv, ==, 0);
 
     raft_io_stub_flush(f->raft.io);
@@ -704,7 +704,7 @@ TEST_CASE(response, success, snapshot, NULL)
      * successful write. */
     for (i = 0; i < 2; i++) {
         test_fsm_encode_set_x(i, &buf);
-        rv = raft_propose(&f->raft, &buf, 1);
+        rv = raft_apply(&f->raft, &buf, 1);
         munit_assert_int(rv, ==, 0);
         raft_io_stub_flush(f->raft.io);
     }
@@ -748,7 +748,7 @@ TEST_CASE(response, success, send_snapshot, NULL)
      * successful write. */
     for (i = 0; i < 2; i++) {
         test_fsm_encode_set_x(i, &buf);
-        rv = raft_propose(&f->raft, &buf, 1);
+        rv = raft_apply(&f->raft, &buf, 1);
         munit_assert_int(rv, ==, 0);
         raft_io_stub_flush(f->raft.io);
     }

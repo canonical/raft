@@ -7,9 +7,9 @@
 #include "replication.h"
 #include "state.h"
 
-int raft_propose(struct raft *r,
-                 const struct raft_buffer bufs[],
-                 const unsigned n)
+int raft_apply(struct raft *r,
+               const struct raft_buffer bufs[],
+               const unsigned n)
 {
     raft_index index;
     int rv;
