@@ -70,7 +70,7 @@ size_t configuration__index_of_voting(const struct raft_configuration *c,
     return c->n;
 }
 
-const struct raft_server *raft_configuration__get(
+const struct raft_server *configuration__get(
     const struct raft_configuration *c,
     const unsigned id)
 {

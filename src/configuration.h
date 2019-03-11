@@ -24,9 +24,8 @@ size_t configuration__index_of_voting(const struct raft_configuration *c,
 /**
  * Get the server with the given ID, or #NULL if no matching server is found.
  */
-const struct raft_server *raft_configuration__get(
-    const struct raft_configuration *c,
-    unsigned id);
+const struct raft_server *configuration__get(const struct raft_configuration *c,
+                                             unsigned id);
 
 /**
  * Return the number of voting servers.

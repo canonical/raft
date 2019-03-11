@@ -120,7 +120,7 @@ static void snapshot_get_cb(struct raft_io_snapshot_get *req,
         goto err_with_snapshot;
     }
 
-    server = raft_configuration__get(&r->configuration, request->server_id);
+    server = configuration__get(&r->configuration, request->server_id);
     if (server == NULL) {
         /* Probably the server was removed in the meantime. */
         goto err_with_snapshot;
@@ -765,7 +765,7 @@ static void raft_replication__follower_append_cb(void *data, int status)
      * later, after we have applied the configuraiton entry. Similarly, it might
      * be that we're going to apply a new configuration where the leader is
      * removing itself, so we need to save its address here. */
-    leader = raft_configuration__get(&r->configuration, args->leader_id);
+    leader = configuration__get(&r->configuration, args->leader_id);
     if (leader != NULL) {
         leader_address = leader->address;
     }
@@ -817,7 +817,7 @@ static void raft_replication__follower_append_cb(void *data, int status)
 respond:
     /* Refresh the leader address, in case it has changed or it was added in a
      * new configuration. */
-    leader = raft_configuration__get(&r->configuration, args->leader_id);
+    leader = configuration__get(&r->configuration, args->leader_id);
     if (leader != NULL) {
         leader_address = leader->address;
     }
@@ -1283,7 +1283,7 @@ static void raft_replication__apply_configuration(struct raft *r,
      *   down once the Cnew entry is committed.
      */
     if (r->state == RAFT_LEADER &&
-        raft_configuration__get(&r->configuration, r->id) == NULL) {
+        configuration__get(&r->configuration, r->id) == NULL) {
         /* Ignore the return value, since we can't fail in this case (no actual
          * write for the new term will be done) */
         raft_state__convert_to_follower(r, r->current_term);

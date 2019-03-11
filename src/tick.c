@@ -24,7 +24,7 @@ static int follower_tick(struct raft *r)
     assert(r != NULL);
     assert(r->state == RAFT_FOLLOWER);
 
-    server = raft_configuration__get(&r->configuration, r->id);
+    server = configuration__get(&r->configuration, r->id);
 
     /* If we have been removed from the configuration, or maybe we didn't
      * receive one yet, just stay follower. */

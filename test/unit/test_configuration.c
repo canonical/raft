@@ -142,7 +142,7 @@ TEST_CASE(index, error, no_match, NULL)
 }
 
 /**
- * raft_configuration__get
+ * configuration__get
  */
 
 TEST_SUITE(get);
@@ -163,7 +163,7 @@ TEST_CASE(get, success, match, NULL)
     __add(f, 1, "192.168.1.1:666", true);
     __add(f, 2, "192.168.1.2:666", false);
 
-    server = raft_configuration__get(&f->configuration, 2);
+    server = configuration__get(&f->configuration, 2);
 
     munit_assert_ptr_not_null(server);
     munit_assert_int(server->id, ==, 2);
@@ -182,7 +182,7 @@ TEST_CASE(get, success, no_match, NULL)
 
     __add(f, 1, "127.0.0.1:666", true);
 
-    server = raft_configuration__get(&f->configuration, 3);
+    server = configuration__get(&f->configuration, 3);
     munit_assert_ptr_null(server);
 
     return MUNIT_OK;

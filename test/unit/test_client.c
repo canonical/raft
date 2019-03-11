@@ -617,7 +617,7 @@ TEST_CASE(promote, success, up_to_date, NULL)
 
     /* Server 3 is being considered as voting, even though the configuration
      * change is not committed yet. */
-    server = raft_configuration__get(&f->raft.configuration, 3);
+    server = configuration__get(&f->raft.configuration, 3);
     munit_assert_true(server->voting);
 
     /* A configuration change request has been submitted. */
@@ -654,7 +654,7 @@ TEST_CASE(promote, success, catch_up, NULL)
        uncommitted. */
     __assert_catch_up_round(f, 0, 0, 0);
     munit_assert_int(f->raft.configuration_uncommitted_index, ==, 2);
-    server = raft_configuration__get(&f->raft.configuration, 3);
+    server = configuration__get(&f->raft.configuration, 3);
     munit_assert_true(server->voting);
 
     /* Simulate the server being promoted notifying that it has appended the new
@@ -792,7 +792,7 @@ TEST_CASE(promote, success, step_down, NULL)
     __assert_catch_up_round(f, 0, 0, 0);
     __assert_configuration_indexes(f, 1, 2);
 
-    server = raft_configuration__get(&f->raft.configuration, 3);
+    server = configuration__get(&f->raft.configuration, 3);
     munit_assert_true(server->voting);
 
     __assert_io(f, 1, 2);
@@ -800,7 +800,7 @@ TEST_CASE(promote, success, step_down, NULL)
     /* Receive an AppendEntries RPC from a leader with a higher term, forcing
      * this leader to step down and to discard the uncommitted configuration
      * change log entry. */
-    server = raft_configuration__get(&f->raft.configuration, 2);
+    server = configuration__get(&f->raft.configuration, 2);
 
     entries = raft_calloc(1, sizeof *entries);
     munit_assert_ptr_not_null(entries);
@@ -818,7 +818,7 @@ TEST_CASE(promote, success, step_down, NULL)
     munit_assert_int(f->raft.state, ==, RAFT_FOLLOWER);
 
     /* Server 3 is not being considered voting anymore. */
-    server = raft_configuration__get(&f->raft.configuration, 3);
+    server = configuration__get(&f->raft.configuration, 3);
     munit_assert_false(server->voting);
 
     raft_io_stub_flush(&f->io);
@@ -1004,7 +1004,7 @@ TEST_CASE(remove_server, success, committed, NULL)
 
     /* The new configuration is already effective. */
     munit_assert_int(f->raft.configuration.n, ==, 2);
-    server = raft_configuration__get(&f->raft.configuration, 3);
+    server = configuration__get(&f->raft.configuration, 3);
     munit_assert_ptr_null(server);
 
     /* The new configuration is marked as uncommitted. */
@@ -1037,7 +1037,7 @@ TEST_CASE(remove_server, success, self, NULL)
 
     /* The new configuration is already effective. */
     munit_assert_int(f->raft.configuration.n, ==, 2);
-    server = raft_configuration__get(&f->raft.configuration, 1);
+    server = configuration__get(&f->raft.configuration, 1);
     munit_assert_ptr_null(server);
 
     /* The new configuration is marked as uncommitted. */

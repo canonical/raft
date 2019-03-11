@@ -157,7 +157,7 @@ int raft_election__vote(struct raft *r,
     assert(args != NULL);
     assert(granted != NULL);
 
-    local_server = raft_configuration__get(&r->configuration, r->id);
+    local_server = configuration__get(&r->configuration, r->id);
 
     *granted = false;
 

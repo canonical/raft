@@ -159,7 +159,7 @@ int raft_promote(struct raft *r, const unsigned id)
         return rv;
     }
 
-    server = raft_configuration__get(&r->configuration, id);
+    server = configuration__get(&r->configuration, id);
     if (server == NULL) {
         rv = RAFT_ERR_BAD_SERVER_ID;
         goto err;
@@ -224,7 +224,7 @@ int raft_remove_server(struct raft *r, const unsigned id)
         return rv;
     }
 
-    server = raft_configuration__get(&r->configuration, id);
+    server = configuration__get(&r->configuration, id);
     if (server == NULL) {
         rv = RAFT_ERR_BAD_SERVER_ID;
         goto err;
