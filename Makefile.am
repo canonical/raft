@@ -81,6 +81,14 @@ if IO_STUB
 endif
 include_HEADERS += \
   include/raft.h
+if IO_STUB
+  include_HEADERS += \
+  include/raft/io_stub.h
+endif
+if IO_UV
+  include_HEADERS += \
+  include/raft/io_uv.h
+endif
 
 check_PROGRAMS += \
   unit-test \
