@@ -9,6 +9,11 @@
 const char *raft_state_names[] = {"unavailable", "follower", "candidate",
                                   "leader"};
 
+int raft_state(struct raft *r)
+{
+    return r->state;
+}
+
 /**
  * Clear follower state.
  */

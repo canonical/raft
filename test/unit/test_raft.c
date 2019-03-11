@@ -83,7 +83,11 @@ static void tear_down(void *data)
 /**
  * Assert the current state of the raft instance of the given fixture.
  */
-#define __assert_state(F, STATE) munit_assert_int(F->raft.state, ==, STATE);
+#define __assert_state(F, STATE)            \
+    {                                       \
+        int state = raft_state(&F->raft);   \
+        munit_assert_int(state, ==, STATE); \
+    }
 
 /**
  * raft_init

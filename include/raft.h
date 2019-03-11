@@ -932,6 +932,11 @@ void raft_set_rand(struct raft *r, int (*rand)());
 void raft_set_election_timeout(struct raft *r, const unsigned election_timeout);
 
 /**
+ * Return the code of the current raft state.
+ */
+int raft_state(struct raft *r);
+
+/**
  * Human readable version of the current state.
  */
 const char *raft_state_name(struct raft *r);
