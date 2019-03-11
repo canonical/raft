@@ -3,6 +3,7 @@
 #include "configuration.h"
 #include "election.h"
 #include "log.h"
+#include "queue.h"
 #include "watch.h"
 
 const char *raft_state_names[] = {"unavailable", "follower", "candidate",
@@ -50,6 +51,18 @@ static void raft_state__clear_leader(struct raft *r)
      * promotion just yet. */
     if (r->leader_state.promotee_id > 0) {
         raft_watch__promotion_aborted(r, r->leader_state.promotee_id);
+    }
+
+    /* Fail all outstanding apply requests */
+    while (!RAFT__QUEUE_IS_EMPTY(&r->leader_state.apply_reqs)) {
+        struct raft_apply *req;
+        raft__queue *head;
+        head = RAFT__QUEUE_HEAD(&r->leader_state.apply_reqs);
+        RAFT__QUEUE_REMOVE(head);
+        req = RAFT__QUEUE_DATA(head, struct raft_apply, queue);
+        if (req->cb != NULL) {
+            req->cb(req, RAFT_ERR_LEADERSHIP_LOST);
+        }
     }
 }
 
@@ -243,6 +256,9 @@ int raft_state__convert_to_leader(struct raft *r)
 
     raft_state__change(r, RAFT_STATE_LEADER);
 
+    /* Reset apply requests queue */
+    RAFT__QUEUE_INIT(&r->leader_state.apply_reqs);
+
     /* Allocate the next_index and match_index arrays. */
     rv = alloc_replication(r->configuration.n, &r->leader_state.replication);
     if (rv != 0) {
@@ -256,10 +272,10 @@ int raft_state__convert_to_leader(struct raft *r)
         struct raft_replication *replication = &r->leader_state.replication[i];
         replication->next_index = raft_log__last_index(&r->log) + 1;
         replication->match_index = 0;
-	/* TODO: we should keep a last_contact array which is independent from
-	 * the replication array, and keep it up-to-date.  */
-	replication->last_contact = 0;
-	replication->state = REPLICATION__PROBE;
+        /* TODO: we should keep a last_contact array which is independent from
+         * the replication array, and keep it up-to-date.  */
+        replication->last_contact = 0;
+        replication->state = REPLICATION__PROBE;
     }
 
     /* Notify watchers */
@@ -328,7 +344,7 @@ int raft_state__rebuild_next_and_match_indexes(
 
         replication[i].next_index = raft_log__last_index(&r->log) + 1;
         replication[i].match_index = 0;
-	replication[i].last_contact = r->io->time(r->io);
+        replication[i].last_contact = r->io->time(r->io);
     }
 
     raft_free(r->leader_state.replication);

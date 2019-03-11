@@ -28,10 +28,6 @@ static int __fsm__apply(struct raft_fsm *fsm, const struct raft_buffer *buf)
 
     f->count += *(uint64_t *)buf->base;
 
-    if (f->count % 50 == 0) {
-        raft_infof(f->logger, "fsm: count %d", f->count);
-    }
-
     return 0;
 }
 
@@ -290,8 +286,17 @@ static void __server_close(struct __server *s)
 
 static void __server_apply_cb(struct raft_apply *req, int status)
 {
-    (void)status;
-    (void)req;
+    struct __server *s = req->data;
+    struct __fsm *f = s->fsm.data;
+
+    if (status != 0) {
+        raft_warnf(&s->logger, "fsm: apply error: %s", raft_strerror(status));
+        return;
+    }
+
+    if (f->count % 50 == 0) {
+        raft_infof(f->logger, "fsm: count %d", f->count);
+    }
 }
 
 static void __server_timer_cb(uv_timer_t *timer)

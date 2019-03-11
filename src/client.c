@@ -4,6 +4,7 @@
 #include "configuration.h"
 #include "log.h"
 #include "membership.h"
+#include "queue.h"
 #include "replication.h"
 #include "state.h"
 
@@ -25,18 +26,21 @@ int raft_apply(struct raft *r,
         goto err;
     }
 
-    req->cb = cb;
-
     raft_debugf(r->logger, "client request: %d entries", n);
 
     /* Index of the first entry being appended. */
     index = raft_log__last_index(&r->log) + 1;
+
+    req->index = index;
+    req->cb = cb;
 
     /* Append the new entries to the log. */
     rv = raft_log__append_commands(&r->log, r->current_term, bufs, n);
     if (rv != 0) {
         goto err;
     }
+
+    RAFT__QUEUE_PUSH(&r->leader_state.apply_reqs, &req->queue);
 
     rv = raft_replication__trigger(r, index);
     if (rv != 0) {
@@ -47,10 +51,9 @@ int raft_apply(struct raft *r,
 
 err_after_log_append:
     raft_log__discard(&r->log, index);
-
+    RAFT__QUEUE_REMOVE(&req->queue);
 err:
     assert(rv != 0);
-
     return rv;
 }
 

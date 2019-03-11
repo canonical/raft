@@ -22,6 +22,7 @@ enum {
     RAFT_ERR_NO_SPACE,
     RAFT_ERR_BUSY,
     RAFT_ERR_NOT_LEADER,
+    RAFT_ERR_LEADERSHIP_LOST,
     RAFT_ERR_SHUTDOWN,
     RAFT_ERR_CONFIGURATION_BUSY,
     RAFT_ERR_IO,
@@ -52,6 +53,7 @@ enum {
     X(RAFT_ERR_NO_SPACE, "no space left on device")                      \
     X(RAFT_ERR_BUSY, "an append entries request is already in progress") \
     X(RAFT_ERR_NOT_LEADER, "server is not the leader")                   \
+    X(RAFT_ERR_LEADERSHIP_LOST, "server has lost leadership")            \
     X(RAFT_ERR_CONFIGURATION_BUSY,                                       \
       "a configuration change is already in progress")                   \
     X(RAFT_ERR_IO, "I/O error")                                          \
@@ -828,6 +830,11 @@ struct raft
             unsigned short round_number; /* Number of the current sync round */
             raft_index round_index;      /* Target of the current round */
             unsigned round_duration;     /* Duration of the current round */
+
+            /**
+             * Queue of outstanding apply requests.
+             */
+            void *apply_reqs[2];
         } leader_state;
     };
 

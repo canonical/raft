@@ -5,6 +5,7 @@
 #include "error.h"
 #include "log.h"
 #include "membership.h"
+#include "queue.h"
 #include "replication.h"
 #include "snapshot.h"
 #include "state.h"
@@ -1299,10 +1300,26 @@ static int raft_replication__apply_command(struct raft *r,
                                            const struct raft_buffer *buf)
 {
     int rv;
+    raft__queue *head;
 
     rv = r->fsm->apply(r->fsm, buf);
     if (rv != 0) {
         return rv;
+    }
+
+    if (r->state == RAFT_STATE_LEADER) {
+        struct raft_apply *req;
+        RAFT__QUEUE_FOREACH(head, &r->leader_state.apply_reqs)
+        {
+            req = RAFT__QUEUE_DATA(head, struct raft_apply, queue);
+            if (req->index == index) {
+                RAFT__QUEUE_REMOVE(head);
+                if (req->cb != NULL) {
+                    req->cb(req, 0);
+                }
+                break;
+            }
+        }
     }
 
     raft_watch__command_applied(r, index);
