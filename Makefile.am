@@ -81,12 +81,13 @@ if IO_STUB
 endif
 include_HEADERS += \
   include/raft.h
+pkginclude_HEADERS =
 if IO_STUB
-  include_HEADERS += \
+  pkginclude_HEADERS += \
   include/raft/io_stub.h
 endif
 if IO_UV
-  include_HEADERS += \
+  pkginclude_HEADERS += \
   include/raft/io_uv.h
 endif
 
