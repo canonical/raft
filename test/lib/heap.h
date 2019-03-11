@@ -1,5 +1,6 @@
 /**
- * Add support for fault injection and leak detection to stdlib's malloc() family.
+ * Add support for fault injection and leak detection to stdlib's malloc()
+ * family.
  */
 
 #ifndef TEST_HEAP_H
@@ -24,11 +25,18 @@
  */
 #define TEST_HEAP_FAULT_REPEAT "heap-fault-repeat"
 
-void test_heap_setup(const MunitParameter params[], struct raft_heap *h);
+/**
+ * Fixture helpers.
+ */
+#define FIXTURE_HEAP struct raft_heap heap;
+#define SETUP_HEAP test_heap_setup(params, &f->heap)
+#define TEAR_DOWN_HEAP test_heap_tear_down(&f->heap)
 
+void test_heap_setup(const MunitParameter params[], struct raft_heap *h);
 void test_heap_tear_down(struct raft_heap *h);
 
 void test_heap_fault_config(struct raft_heap *h, int delay, int repeat);
 void test_heap_fault_enable(struct raft_heap *h);
 
 #endif /* TEST_HEAP_H */
+

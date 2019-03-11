@@ -227,7 +227,7 @@ int raft_configuration_remove(struct raft_configuration *c, const unsigned id);
 /**
  * Log entry types.
  */
-enum { RAFT_LOG_COMMAND = 1, RAFT_LOG_CONFIGURATION };
+enum { RAFT_COMMAND = 1, RAFT_CONFIGURATION };
 
 /**
  * A single entry in the raft log.

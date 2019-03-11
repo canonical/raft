@@ -56,7 +56,7 @@ static struct raft_entry *__create_entries_batch()
 
     entries = raft_malloc(sizeof *entries);
     entries[0].term = 1;
-    entries[0].type = RAFT_LOG_COMMAND;
+    entries[0].type = RAFT_COMMAND;
     entries[0].buf.base = batch + 8 + 16;
     entries[0].buf.len = 8;
     entries[0].batch = batch;
@@ -340,12 +340,12 @@ TEST_CASE(request, error, prev_log_term_mismatch, NULL)
     test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
     /* Append two uncommitted entries. */
-    entries[0].type = RAFT_LOG_COMMAND;
+    entries[0].type = RAFT_COMMAND;
     entries[0].term = 1;
     entries[0].buf.base = raft_malloc(8);
     entries[0].buf.len = 8;
 
-    entries[1].type = RAFT_LOG_COMMAND;
+    entries[1].type = RAFT_COMMAND;
     entries[1].term = 1;
     entries[1].buf.base = raft_malloc(8);
     entries[1].buf.len = 8;
@@ -355,8 +355,8 @@ TEST_CASE(request, error, prev_log_term_mismatch, NULL)
 
     memset(&buf, 0, sizeof buf);
 
-    log__append(&f->raft.log, 1, RAFT_LOG_COMMAND, &buf, NULL);
-    log__append(&f->raft.log, 1, RAFT_LOG_COMMAND, &buf, NULL);
+    log__append(&f->raft.log, 1, RAFT_COMMAND, &buf, NULL);
+    log__append(&f->raft.log, 1, RAFT_COMMAND, &buf, NULL);
 
     __recv_append_entries(f, 1, 2, 2, 2, NULL, 0, 1);
 
@@ -412,19 +412,19 @@ TEST_CASE(request, success, skip, NULL)
 
     test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
-    entries[0].type = RAFT_LOG_COMMAND;
+    entries[0].type = RAFT_COMMAND;
     entries[0].term = 1;
     entries[0].buf.base = buf1;
     entries[0].buf.len = 1;
 
-    entries[1].type = RAFT_LOG_COMMAND;
+    entries[1].type = RAFT_COMMAND;
     entries[1].term = 1;
     entries[1].buf.base = buf2;
     entries[1].buf.len = 1;
 
     /* Append the first entry to our log. */
     test_io_append_entry(f->raft.io, &entries[0]);
-    rv = log__append(&f->raft.log, 1, RAFT_LOG_COMMAND, &entries[0].buf,
+    rv = log__append(&f->raft.log, 1, RAFT_COMMAND, &entries[0].buf,
                           NULL);
     munit_assert_int(rv, ==, 0);
 
@@ -436,7 +436,7 @@ TEST_CASE(request, success, skip, NULL)
     raft_io_stub_appended(&f->io, &entries, &n);
 
     munit_assert_int(n, ==, 1);
-    munit_assert_int(entries[0].type, ==, RAFT_LOG_COMMAND);
+    munit_assert_int(entries[0].type, ==, RAFT_COMMAND);
     munit_assert_int(*(uint8_t *)entries[0].buf.base, ==, 2);
 
     return MUNIT_OK;
@@ -465,21 +465,21 @@ TEST_CASE(request, success, truncate, NULL)
     test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
     /* Append an additional entry to our log. */
-    entry.type = RAFT_LOG_COMMAND;
+    entry.type = RAFT_COMMAND;
     entry.term = 1;
     entry.buf.base = buf1;
     entry.buf.len = 1;
 
     test_io_append_entry(&f->io, &entry);
-    rv = log__append(&f->raft.log, 1, RAFT_LOG_COMMAND, &entry.buf, NULL);
+    rv = log__append(&f->raft.log, 1, RAFT_COMMAND, &entry.buf, NULL);
     munit_assert_int(rv, ==, 0);
 
     /* Include two new entries with a different term in the request */
-    entries[0].type = RAFT_LOG_COMMAND;
+    entries[0].type = RAFT_COMMAND;
     entries[0].term = 2;
     entries[0].buf.base = buf2;
     entries[0].buf.len = 1;
-    entries[1].type = RAFT_LOG_COMMAND;
+    entries[1].type = RAFT_COMMAND;
     entries[1].term = 2;
     entries[1].buf.base = buf3;
     entries[1].buf.len = 1;
@@ -521,24 +521,24 @@ TEST_CASE(request, error, conflict, NULL)
     test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
     /* Append an additional entry to our log, with index 2 and term 1. */
-    entry.type = RAFT_LOG_COMMAND;
+    entry.type = RAFT_COMMAND;
     entry.term = 1;
     entry.buf.base = buf1;
     entry.buf.len = 1;
 
     test_io_append_entry(f->raft.io, &entry);
-    rv = log__append(&f->raft.log, 1, RAFT_LOG_COMMAND, &entry.buf, NULL);
+    rv = log__append(&f->raft.log, 1, RAFT_COMMAND, &entry.buf, NULL);
     munit_assert_int(rv, ==, 0);
 
     /* Bump the commit index. */
     f->raft.commit_index = 2;
 
     /* Include two new entries with a different term in the request */
-    entries[0].type = RAFT_LOG_COMMAND;
+    entries[0].type = RAFT_COMMAND;
     entries[0].term = 2;
     entries[0].buf.base = &buf2;
     entries[0].buf.len = 1;
-    entries[1].type = RAFT_LOG_COMMAND;
+    entries[1].type = RAFT_COMMAND;
     entries[1].term = 2;
     entries[1].buf.base = &buf3;
     entries[1].buf.len = 1;

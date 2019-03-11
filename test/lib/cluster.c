@@ -510,7 +510,7 @@ static void test_cluster__check_leader_append_only(struct test_cluster *c)
         munit_assert_ptr_not_null(entry2);
 
         /* TODO: check other entry types too. */
-        if (entry1->type != RAFT_LOG_COMMAND) {
+        if (entry1->type != RAFT_COMMAND) {
             continue;
         }
 

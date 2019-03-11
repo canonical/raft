@@ -418,7 +418,7 @@ TEST_CASE(request, error, last_idx_lower_index, NULL)
      * candidate for term 2) */
     test_io_set_term_and_vote(&f->io, 2, 0);
 
-    entry.type = RAFT_LOG_COMMAND;
+    entry.type = RAFT_COMMAND;
     entry.term = 1;
     entry.buf.base = raft_malloc(8);
     entry.buf.len = 8;

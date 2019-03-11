@@ -208,7 +208,7 @@ int raft_start(struct raft *r)
      * must be a configuration*/
     if (start_index == 1 && n_entries > 0) {
         assert(snapshot == NULL);
-        assert(entries[0].type == RAFT_LOG_CONFIGURATION);
+        assert(entries[0].type == RAFT_CONFIGURATION);
 
         /* As a small optimization, bump the commit index to 1 since we require
          * the first entry to be the same on all servers. */
@@ -223,7 +223,7 @@ int raft_start(struct raft *r)
     for (i = n_entries; i > 0; i--) {
         struct raft_entry *entry = &entries[i - 1];
 
-        if (entry->type != RAFT_LOG_CONFIGURATION) {
+        if (entry->type != RAFT_CONFIGURATION) {
             continue;
         }
 

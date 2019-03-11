@@ -87,7 +87,7 @@ static void append_cb(void *data, int status)
         for (i = 0; i < N; i++) {                                       \
             struct raft_entry *entry = &entries[i];                     \
             entry->term = 1;                                            \
-            entry->type = RAFT_LOG_COMMAND;                             \
+            entry->type = RAFT_COMMAND;                             \
             entry->buf.base = munit_malloc(8);                          \
             entry->buf.len = 8;                                         \
             entry->batch = NULL;                                        \

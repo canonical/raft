@@ -41,7 +41,7 @@ static struct raft_entry *__create_entries_batch()
 
     entries = raft_malloc(sizeof *entries);
     entries[0].term = 1;
-    entries[0].type = RAFT_LOG_COMMAND;
+    entries[0].type = RAFT_COMMAND;
     entries[0].buf.base = batch + 8 + 16;
     entries[0].buf.len = 8;
     entries[0].batch = batch;

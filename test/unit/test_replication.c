@@ -77,7 +77,7 @@ static void tear_down(void *data)
         buf.base = raft_malloc(buf.len);                                      \
         munit_assert_ptr_not_null(buf.base);                                  \
                                                                               \
-        rv = log__append(&F->raft.log, 1, RAFT_LOG_COMMAND, &buf, NULL); \
+        rv = log__append(&F->raft.log, 1, RAFT_COMMAND, &buf, NULL); \
         munit_assert_int(rv, ==, 0);                                          \
     }
 

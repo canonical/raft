@@ -18,7 +18,7 @@
 TEST_MODULE(client);
 
 /**
- * Submit a request to append a new RAFT_LOG_COMMAND entry.
+ * Submit a request to append a new RAFT_COMMAND entry.
  */
 #define propose_entry                                       \
     {                                                       \
@@ -763,7 +763,7 @@ TEST_CASE(promote, success, committed, NULL)
     __assert_configuration_indexes(f, 4, 0);
 
     entry = log__get(&f->raft.log, 4);
-    munit_assert_int(entry->type, ==, RAFT_LOG_CONFIGURATION);
+    munit_assert_int(entry->type, ==, RAFT_CONFIGURATION);
 
     return MUNIT_OK;
 }
@@ -810,7 +810,7 @@ TEST_CASE(promote, success, step_down, NULL)
 
     entries[0].buf.base = entries[0].batch;
     entries[0].buf.len = 1;
-    entries[0].type = RAFT_LOG_COMMAND;
+    entries[0].type = RAFT_COMMAND;
     entries[0].term = f->raft.current_term + 1;
 
     __handle_append_entries(f, 3, 2, 1, 1, entries, 1, 1);
@@ -827,7 +827,7 @@ TEST_CASE(promote, success, step_down, NULL)
 }
 
 /* If a follower receives an AppendEntries RPC containing a
- * RAFT_LOG_CONFIGURATION entry which promotes a non-voting server, the
+ * RAFT_CONFIGURATION entry which promotes a non-voting server, the
  * configuration change is immediately applied locally, even if the entry is not
  * yet committed. Once the entry is committed, the change becomes permanent.*/
 TEST_CASE(promote, success, follower, NULL)
@@ -861,7 +861,7 @@ TEST_CASE(promote, success, follower, NULL)
     entries[0].batch = buf.base;
 
     entries[0].buf = buf;
-    entries[0].type = RAFT_LOG_CONFIGURATION;
+    entries[0].type = RAFT_CONFIGURATION;
     entries[0].term = f->raft.current_term;
 
     __handle_append_entries(f, 1, 2, 1, 1, entries, 1, 1);
