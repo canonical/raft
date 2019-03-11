@@ -112,6 +112,7 @@ struct __server
     struct raft_io io;
     struct raft_fsm fsm;
     struct raft raft;
+    struct raft_apply req;
     const char *dir;
     unsigned id;
     char address[64];
@@ -247,6 +248,8 @@ static int __server_init(struct __server *s, const char *dir, unsigned id)
 
     s->raft.snapshot.threshold = 15;
 
+    s->req.data = s;
+
     return 0;
 
 err_after_configuration_init:
@@ -285,6 +288,12 @@ static void __server_close(struct __server *s)
     uv_loop_close(&s->loop);
 }
 
+static void __server_apply_cb(struct raft_apply *req, int status)
+{
+    (void)status;
+    (void)req;
+}
+
 static void __server_timer_cb(uv_timer_t *timer)
 {
     struct __server *s = timer->data;
@@ -305,7 +314,7 @@ static void __server_timer_cb(uv_timer_t *timer)
         return;
     }
 
-    rv = raft_apply(&s->raft, &buf, 1);
+    rv = raft_apply(&s->raft, &s->req, &buf, 1, __server_apply_cb);
     if (rv != 0) {
         printf("error: propose new entry: %s\n", raft_strerror(rv));
         return;

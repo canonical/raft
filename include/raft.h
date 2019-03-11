@@ -934,6 +934,20 @@ void raft_set_election_timeout(struct raft *r, const unsigned election_timeout);
  */
 const char *raft_state_name(struct raft *r);
 
+struct raft_apply;
+typedef void (*raft_apply_cb)(struct raft_apply *req, int status);
+
+/**
+ * Request to apply a new command.
+ */
+struct raft_apply
+{
+    void *data;
+    raft_index index;
+    raft_apply_cb cb;
+    void *queue[2];
+};
+
 /**
  * Propose to append a new command to the log and apply it to the FSM once
  * committed.
@@ -951,8 +965,10 @@ const char *raft_state_name(struct raft *r);
  * to undefined behavior.
  */
 int raft_apply(struct raft *r,
+               struct raft_apply *req,
                const struct raft_buffer bufs[],
-               const unsigned n);
+               const unsigned n,
+               raft_apply_cb cb);
 
 /**
  * Add a new non-voting server to the cluster configuration.

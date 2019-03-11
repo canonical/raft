@@ -8,8 +8,10 @@
 #include "state.h"
 
 int raft_apply(struct raft *r,
+               struct raft_apply *req,
                const struct raft_buffer bufs[],
-               const unsigned n)
+               const unsigned n,
+               raft_apply_cb cb)
 {
     raft_index index;
     int rv;
@@ -22,6 +24,8 @@ int raft_apply(struct raft *r,
         rv = RAFT_ERR_NOT_LEADER;
         goto err;
     }
+
+    req->cb = cb;
 
     raft_debugf(r->logger, "client request: %d entries", n);
 
