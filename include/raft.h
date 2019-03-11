@@ -10,7 +10,6 @@
  */
 enum {
     RAFT_ENOMEM = 1,
-    RAFT_ERR_INTERNAL,
     RAFT_ERR_BAD_SERVER_ID,
     RAFT_ERR_UNKNOWN_SERVER_ID,
     RAFT_ERR_DUP_SERVER_ID,
@@ -41,7 +40,6 @@ enum {
  */
 #define RAFT_ERRNO_MAP(X)                                                \
     X(RAFT_ENOMEM, "out of memory")                                      \
-    X(RAFT_ERR_INTERNAL, "internal error")                               \
     X(RAFT_ERR_BAD_SERVER_ID, "server ID is not valid")                  \
     X(RAFT_ERR_UNKNOWN_SERVER_ID, "server ID is unknown")                \
     X(RAFT_ERR_DUP_SERVER_ID, "server ID already in use")                \

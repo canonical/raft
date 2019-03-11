@@ -247,9 +247,6 @@ int raft__tick(struct raft *r)
         case RAFT_LEADER:
             rv = leader_tick(r, msecs_since_last_tick);
             break;
-        default:
-            rv = RAFT_ERR_INTERNAL;
-            break;
     }
 
     return rv;
