@@ -5,36 +5,26 @@
 #include "../../src/aio.h"
 #include "../../src/uv_file.h"
 
-TEST_MODULE(uv_file);
+TEST_MODULE(uv__file);
 
-/**
+/******************************************************************************
+ *
  * Helpers
- */
+ *
+ *****************************************************************************/
 
-#define FIXTURE \
-    char *dir;  \
-    struct uv_loop_s loop;
-
-#define SETUP                        \
-    (void)user_data;                 \
-    f->dir = test_dir_setup(params); \
-    test_uv_setup(params, &f->loop);
-
-#define TEAR_DOWN                \
-    test_uv_stop(&f->loop);      \
-    test_uv_tear_down(&f->loop); \
-    test_dir_tear_down(f->dir);  \
-    free(f);
-
-#define FILE_FIXTURE      \
-    FIXTURE;              \
+#define FIXTURE_FILE      \
+    FIXTURE_DIR;          \
+    FIXTURE_UV;           \
     size_t block_size;    \
     struct uv__file file; \
     bool closed;
 
-#define FILE_SETUP                                    \
+#define SETUP_FILE                                    \
     int rv;                                           \
-    SETUP;                                            \
+    (void)user_data;                                  \
+    SETUP_DIR;                                        \
+    SETUP_UV;                                         \
     rv = uv__file_block_size(f->dir, &f->block_size); \
     munit_assert_int(rv, ==, 0);                      \
     rv = uv__file_init(&f->file, &f->loop);           \
@@ -42,47 +32,67 @@ TEST_MODULE(uv_file);
     f->file.data = f;                                 \
     f->closed = false;
 
-#define FILE_TEAR_DOWN                  \
+#define TEAR_DOWN_FILE                  \
     if (!f->closed) {                   \
         uv__file_close(&f->file, NULL); \
     }                                   \
-    TEAR_DOWN;
+    TEAR_DOWN_UV;                       \
+    TEAR_DOWN_DIR;
 
 /**
- * uv__file_block_size
+ * Invoke @uv__file_block_size and assert that it returns the given code.
  */
-
-TEST_SUITE(block_size);
-
-TEST_GROUP(block_size, error)
-
-struct block_size_fixture
-{
-    FIXTURE;
-};
-
-TEST_SETUP(block_size)
-{
-    struct block_size_fixture *f = munit_malloc(sizeof *f);
-    SETUP;
-    return f;
-}
-
-TEST_TEAR_DOWN(block_size)
-{
-    struct block_size_fixture *f = data;
-    TEAR_DOWN;
-}
-
-/* Invoke @uv__file_block_size and assert that it returns the given code.
- */
-#define block_size__invoke(RV)                   \
+#define BLOCK_SIZE__INVOKE(RV)                   \
     {                                            \
         size_t size;                             \
         int rv;                                  \
         rv = uv__file_block_size(f->dir, &size); \
         munit_assert_int(rv, ==, RV);            \
     }
+
+/**
+ * Invoke @uv__file_create and assert that it returns the given code.
+ */
+#define CREATE__INVOKE(RV)                                        \
+    {                                                             \
+        int rv;                                                   \
+        rv = uv__file_create(&f->file, &f->req, f->path, f->size, \
+                             f->max_n_writes, create__cb);        \
+        munit_assert_int(rv, ==, RV);                             \
+    }
+
+/******************************************************************************
+ *
+ * uv__file_block_size
+ *
+ *****************************************************************************/
+
+TEST_SUITE(block_size);
+
+struct block_size_fixture
+{
+    FIXTURE_DIR;
+    FIXTURE_UV;
+};
+
+TEST_SETUP(block_size)
+{
+    struct block_size_fixture *f = munit_malloc(sizeof *f);
+    (void)user_data;
+    SETUP_DIR;
+    SETUP_UV;
+    return f;
+}
+
+TEST_TEAR_DOWN(block_size)
+{
+    struct block_size_fixture *f = data;
+    TEAR_DOWN_UV;
+    TEAR_DOWN_DIR;
+    free(f);
+}
+
+TEST_GROUP(block_size, error)
 
 /* If the given path is not executable, the block size of the underlying file
  * system can't be determined and an error is returned. */
@@ -95,7 +105,7 @@ TEST_CASE(block_size, error, no_access, NULL)
 
     test_dir_unexecutable(f->dir);
 
-    block_size__invoke(UV_EACCES);
+    BLOCK_SIZE__INVOKE(UV_EACCES);
 
     return MUNIT_OK;
 }
@@ -109,7 +119,7 @@ TEST_CASE(block_size, error, no_space, dir_fs_btrfs_params)
 
     test_dir_fill(f->dir, 0);
 
-    block_size__invoke(UV_ENOSPC);
+    BLOCK_SIZE__INVOKE(UV_ENOSPC);
 
     return MUNIT_OK;
 }
@@ -124,7 +134,7 @@ TEST_CASE(block_size, error, no_resources, dir_fs_btrfs_params)
 
     test_aio_fill(&ctx, 0);
 
-    block_size__invoke(UV_EAGAIN);
+    BLOCK_SIZE__INVOKE(UV_EAGAIN);
 
     test_aio_destroy(ctx);
 
@@ -132,18 +142,17 @@ TEST_CASE(block_size, error, no_resources, dir_fs_btrfs_params)
 }
 #endif /* RWF_NOWAIT */
 
-/**
+/******************************************************************************
+ *
  * uv__file_create
- */
+ *
+ *****************************************************************************/
 
 TEST_SUITE(create);
 
-TEST_GROUP(create, success)
-TEST_GROUP(create, error)
-
 struct create_fixture
 {
-    FILE_FIXTURE;
+    FIXTURE_FILE;
     struct uv__file_create req;
     char path[64];         /* Path of the file to create */
     size_t size;           /* Size of the file to create */
@@ -155,7 +164,7 @@ struct create_fixture
 TEST_SETUP(create)
 {
     struct create_fixture *f = munit_malloc(sizeof *f);
-    FILE_SETUP;
+    SETUP_FILE;
     f->req.data = f;
     sprintf(f->path, "%s/foo", f->dir);
     f->size = 4096;
@@ -167,7 +176,8 @@ TEST_SETUP(create)
 TEST_TEAR_DOWN(create)
 {
     struct create_fixture *f = data;
-    FILE_TEAR_DOWN;
+    TEAR_DOWN_FILE;
+    free(f);
 }
 
 static void create__cb(struct uv__file_create *req, int status)
@@ -177,19 +187,10 @@ static void create__cb(struct uv__file_create *req, int status)
     f->status = status;
 }
 
-/* Invoke @uv__file_create and assert that it returns the given code. */
-#define create__invoke(RV)                                        \
-    {                                                             \
-        int rv;                                                   \
-        rv = uv__file_create(&f->file, &f->req, f->path, f->size, \
-                             f->max_n_writes, create__cb);        \
-        munit_assert_int(rv, ==, RV);                             \
-    }
-
 /**
  * Wait for the create callback to fire and check its status.
  */
-#define create__wait_cb(STATUS)                  \
+#define CREATE__WAIT_CB(STATUS)                  \
     {                                            \
         int i;                                   \
         for (i = 0; i < 2; i++) {                \
@@ -202,24 +203,26 @@ static void create__cb(struct uv__file_create *req, int status)
         munit_assert_int(f->status, ==, STATUS); \
     }
 
-#define create__close                   \
+#define CREATE__CLOSE                   \
     {                                   \
         uv__file_close(&f->file, NULL); \
         f->closed = true;               \
     }
 
 /* If the given path is valid, the file gets opened. */
-TEST_CASE(create, success, path, dir_fs_supported_params)
+TEST_CASE(create, success, dir_fs_supported_params)
 {
     struct create_fixture *f = data;
 
     (void)params;
 
-    create__invoke(0);
-    create__wait_cb(0);
+    CREATE__INVOKE(0);
+    CREATE__WAIT_CB(0);
 
     return MUNIT_OK;
 }
+
+TEST_GROUP(create, error)
 
 /* The directory of given path does not exist, an error is returned. */
 TEST_CASE(create, error, no_entry, NULL)
@@ -230,7 +233,7 @@ TEST_CASE(create, error, no_entry, NULL)
 
     (void)params;
 
-    create__invoke(UV_ENOENT);
+    CREATE__INVOKE(UV_ENOENT);
 
     return MUNIT_OK;
 }
@@ -245,7 +248,7 @@ TEST_CASE(create, error, already_exists, NULL)
 
     test_dir_write_file(f->dir, "foo", buf, sizeof buf);
 
-    create__invoke(UV_EEXIST);
+    CREATE__INVOKE(UV_EEXIST);
 
     return MUNIT_OK;
 }
@@ -259,8 +262,8 @@ TEST_CASE(create, error, no_space, NULL)
 
     f->size = 4096 * 32768;
 
-    create__invoke(0);
-    create__wait_cb(UV_ENOSPC);
+    CREATE__INVOKE(0);
+    CREATE__WAIT_CB(UV_ENOSPC);
 
     return MUNIT_OK;
 }
@@ -275,7 +278,7 @@ TEST_CASE(create, error, no_resources, NULL)
 
     test_aio_fill(&ctx, 0);
 
-    create__invoke(UV_EAGAIN);
+    CREATE__INVOKE(UV_EAGAIN);
 
     test_aio_destroy(ctx);
 
@@ -289,19 +292,21 @@ TEST_CASE(create, error, cancel, NULL)
 
     (void)params;
 
-    create__invoke(0);
-    create__close;
+    CREATE__INVOKE(0);
+    CREATE__CLOSE;
 
-    create__wait_cb(UV_ECANCELED);
+    CREATE__WAIT_CB(UV_ECANCELED);
 
     munit_assert_false(test_dir_has_file(f->dir, "foo"));
 
     return MUNIT_OK;
 }
 
-/**
+/******************************************************************************
+ *
  * uv__file_write
- */
+ *
+ *****************************************************************************/
 
 TEST_SUITE(write);
 
@@ -310,7 +315,7 @@ TEST_GROUP(write, error)
 
 struct write_fixture
 {
-    FILE_FIXTURE;
+    FIXTURE_FILE;
     struct uv__file_write req;
     uv_buf_t bufs[2];
     unsigned n_bufs;
@@ -326,7 +331,7 @@ TEST_SETUP(write)
     int i;
     char path[64];
     size_t size = 4096;
-    FILE_SETUP;
+    SETUP_FILE;
     sprintf(path, "%s/foo", f->dir);
     rv = uv__file_create(&f->file, &req, path, size, 2, NULL);
     munit_assert_int(rv, ==, 0);
@@ -352,7 +357,7 @@ TEST_TEAR_DOWN(write)
     for (i = 0; i < 2; i++) {
         free(f->bufs[i].base);
     }
-    FILE_TEAR_DOWN;
+    TEAR_DOWN_FILE;
 }
 
 static void write_cb(struct uv__file_write *req, int status)

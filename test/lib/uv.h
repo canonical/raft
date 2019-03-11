@@ -12,6 +12,17 @@
 /* Max n. of loop iterations ran by a single function call */
 #define TEST_UV_MAX_LOOP_RUN 10
 
+#define FIXTURE_UV struct uv_loop_s loop
+#define SETUP_UV test_uv_setup(params, &f->loop)
+#define TEAR_DOWN_UV                         \
+    {                                        \
+        int alive = uv_loop_alive(&f->loop); \
+        if (alive) {                         \
+            test_uv_stop(&f->loop);          \
+        }                                    \
+        test_uv_tear_down(&f->loop);	     \
+    }
+
 void test_uv_setup(const MunitParameter params[], struct uv_loop_s *l);
 
 void test_uv_tear_down(struct uv_loop_s *l);

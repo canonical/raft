@@ -59,7 +59,7 @@ static int __fsm__restore(struct raft_fsm *fsm, struct raft_buffer *buf)
     struct __fsm *f = fsm->data;
 
     if (buf->len != sizeof(uint64_t)) {
-        return RAFT_ERR_MALFORMED;
+        return RAFT_EMALFORMED;
     }
 
     f->count = *(uint64_t *)buf->base;
