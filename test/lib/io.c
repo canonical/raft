@@ -41,10 +41,10 @@ void test_io_bootstrap(struct raft_io *io,
 
     for (i = 0; i < n_servers; i++) {
         unsigned id = i + 1;
-        char address[4];
+        char address[11];
         bool voting = (int)id >= voting_a && (int)id <= voting_b;
 
-        sprintf(address, "%d", id);
+        sprintf(address, "%u", id);
         rv = raft_configuration_add(&configuration, id, address, voting);
         munit_assert_int(rv, ==, 0);
     }
