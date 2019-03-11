@@ -94,14 +94,14 @@ void test_cluster_setup(const MunitParameter params[], struct test_cluster *c)
 
     c->commit_index = 1; /* The initial configuration is committed. */
 
-    raft_log__init(&c->log);
+    log__init(&c->log);
 }
 
 void test_cluster_tear_down(struct test_cluster *c)
 {
     size_t i;
 
-    raft_log__close(&c->log);
+    log__close(&c->log);
 
     for (i = 0; i < c->n; i++) {
         struct raft_logger *logger = &c->loggers[i];
@@ -485,7 +485,7 @@ static void test_cluster__check_leader_append_only(struct test_cluster *c)
 {
     struct raft *raft = &c->rafts[c->leader_id - 1];
     raft_index index;
-    raft_index last = raft_log__last_index(&c->log);
+    raft_index last = log__last_index(&c->log);
 
     if (last == 0) {
         /* If the cached log is empty it means there was no leader before. */
@@ -501,8 +501,8 @@ static void test_cluster__check_leader_append_only(struct test_cluster *c)
         const struct raft_entry *entry1;
         const struct raft_entry *entry2;
 
-        entry1 = raft_log__get(&c->log, index);
-        entry2 = raft_log__get(&raft->log, index);
+        entry1 = log__get(&c->log, index);
+        entry2 = log__get(&raft->log, index);
 
         munit_assert_ptr_not_null(entry1);
 
@@ -532,10 +532,10 @@ static void test_cluster__copy_leader_log(struct test_cluster *c)
     int rv;
 
     /* Log copy */
-    raft_log__close(&c->log);
-    raft_log__init(&c->log);
+    log__close(&c->log);
+    log__init(&c->log);
 
-    rv = raft_log__acquire(&raft->log, 1, &entries, &n);
+    rv = log__acquire(&raft->log, 1, &entries, &n);
     munit_assert_int(rv, ==, 0);
 
     for (i = 0; i < n; i++) {
@@ -546,11 +546,11 @@ static void test_cluster__copy_leader_log(struct test_cluster *c)
         buf.base = raft_malloc(buf.len);
         memcpy(buf.base, entry->buf.base, buf.len);
 
-        rv = raft_log__append(&c->log, entry->term, entry->type, &buf, NULL);
+        rv = log__append(&c->log, entry->term, entry->type, &buf, NULL);
         munit_assert_int(rv, ==, 0);
     }
 
-    raft_log__release(&raft->log, 1, entries, n);
+    log__release(&raft->log, 1, entries, n);
 }
 
 /* Update the commit index to match the one from the current leader. */

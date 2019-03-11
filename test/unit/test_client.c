@@ -762,7 +762,7 @@ TEST_CASE(promote, success, committed, NULL)
     __assert_catch_up_round(f, 0, 0, 0);
     __assert_configuration_indexes(f, 4, 0);
 
-    entry = raft_log__get(&f->raft.log, 4);
+    entry = log__get(&f->raft.log, 4);
     munit_assert_int(entry->type, ==, RAFT_LOG_CONFIGURATION);
 
     return MUNIT_OK;

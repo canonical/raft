@@ -35,7 +35,7 @@ int raft_rpc__recv_append_entries(struct raft *r,
                 args->n_entries, id);
 
     result->success = false;
-    result->last_log_index = raft_log__last_index(&r->log);
+    result->last_log_index = log__last_index(&r->log);
 
     rv = raft_rpc__ensure_matching_terms(r, args->term, &match);
     if (rv != 0) {

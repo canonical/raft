@@ -51,7 +51,7 @@ int raft_init(struct raft *r,
     /* Initial persistent server state. */
     r->current_term = 0;
     r->voted_for = 0;
-    raft_log__init(&r->log);
+    log__init(&r->log);
 
     raft_configuration_init(&r->configuration);
     r->configuration_index = 0;
@@ -95,7 +95,7 @@ static void raft__close_cb(struct raft_io *io)
 
     raft_free(r->address);
     raft_state__clear(r);
-    raft_log__close(&r->log);
+    log__close(&r->log);
     raft_configuration_close(&r->configuration);
 
     if (r->close_cb != NULL) {
@@ -241,11 +241,11 @@ int raft_start(struct raft *r)
     }
 
     /* Append the entries to the log. */
-    raft_log__set_offset(&r->log, start_index - 1);
+    log__set_offset(&r->log, start_index - 1);
     for (i = 0; i < n_entries; i++) {
         struct raft_entry *entry = &entries[i];
 
-        rv = raft_log__append(&r->log, entry->term, entry->type, &entry->buf,
+        rv = log__append(&r->log, entry->term, entry->type, &entry->buf,
                               entry->batch);
         if (rv != 0) {
             goto err_after_load;

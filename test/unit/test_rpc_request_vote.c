@@ -223,8 +223,8 @@ TEST_CASE(request, error, non_voting, NULL)
     test_bootstrap_and_start(&f->raft, 2, 2, 2);
 
     __recv_request_vote(f, f->raft.current_term + 1, 2,
-                        raft_log__last_index(&f->raft.log),
-                        raft_log__last_term(&f->raft.log));
+                        log__last_index(&f->raft.log),
+                        log__last_term(&f->raft.log));
 
     /* The request is unsuccessful */
     __assert_request_vote_result(f, 2, false);
@@ -243,8 +243,8 @@ TEST_CASE(request, error, already_voted, NULL)
 
     /* Grant vote to server 2 */
     __recv_request_vote(f, f->raft.current_term + 1, 2,
-                        raft_log__last_index(&f->raft.log),
-                        raft_log__last_term(&f->raft.log));
+                        log__last_index(&f->raft.log),
+                        log__last_term(&f->raft.log));
 
     munit_assert_int(f->raft.voted_for, ==, 2);
 
@@ -252,8 +252,8 @@ TEST_CASE(request, error, already_voted, NULL)
 
     /* Refuse vote to server 3 */
     __recv_request_vote(f, f->raft.current_term, 3,
-                        raft_log__last_index(&f->raft.log),
-                        raft_log__last_term(&f->raft.log));
+                        log__last_index(&f->raft.log),
+                        log__last_term(&f->raft.log));
 
     /* The request is unsuccessful */
     __assert_request_vote_result(f, 2, false);
@@ -273,8 +273,8 @@ TEST_CASE(request, error, dupe_vote, NULL)
 
     /* Grant vote */
     __recv_request_vote(f, f->raft.current_term + 1, 2,
-                        raft_log__last_index(&f->raft.log),
-                        raft_log__last_term(&f->raft.log));
+                        log__last_index(&f->raft.log),
+                        log__last_term(&f->raft.log));
 
     munit_assert_int(f->raft.voted_for, ==, 2);
 
@@ -282,8 +282,8 @@ TEST_CASE(request, error, dupe_vote, NULL)
 
     /* Grant again */
     __recv_request_vote(f, f->raft.current_term, 2,
-                        raft_log__last_index(&f->raft.log),
-                        raft_log__last_term(&f->raft.log));
+                        log__last_index(&f->raft.log),
+                        log__last_term(&f->raft.log));
 
     /* The request is successful */
     __assert_request_vote_result(f, 2, true);
@@ -427,7 +427,7 @@ TEST_CASE(request, error, last_idx_lower_index, NULL)
 
     test_start(&f->raft);
 
-    munit_assert_int(raft_log__last_index(&f->raft.log), ==, 2);
+    munit_assert_int(log__last_index(&f->raft.log), ==, 2);
 
     /* Receive a vote request from a server that does not have this new
      * entry. */

@@ -26,7 +26,7 @@ struct fixture
         buf.base = NULL;                                                 \
         buf.len = 0;                                                     \
                                                                          \
-        rv = raft_log__append(&F->log, 1, RAFT_LOG_COMMAND, &buf, NULL); \
+        rv = log__append(&F->log, 1, RAFT_LOG_COMMAND, &buf, NULL); \
         munit_assert_int(rv, ==, 0);                                     \
     }
 
@@ -43,7 +43,7 @@ struct fixture
                                                                             \
         strcpy(buf.base, "hello");                                          \
                                                                             \
-        rv = raft_log__append(&F->log, TERM, RAFT_LOG_COMMAND, &buf, NULL); \
+        rv = log__append(&F->log, TERM, RAFT_LOG_COMMAND, &buf, NULL); \
         munit_assert_int(rv, ==, 0);                                        \
     }
 
@@ -71,7 +71,7 @@ struct fixture
                                                                               \
             *(uint64_t *)buf.base = i * 1000;                                 \
                                                                               \
-            rv = raft_log__append(&F->log, 1, RAFT_LOG_COMMAND, &buf, batch); \
+            rv = log__append(&F->log, 1, RAFT_LOG_COMMAND, &buf, batch); \
             munit_assert_int(rv, ==, 0);                                      \
                                                                               \
             offset += 8;                                                      \
@@ -88,7 +88,7 @@ struct fixture
         munit_assert_int(f->log.front, ==, FRONT);             \
         munit_assert_int(f->log.back, ==, BACK);               \
         munit_assert_int(f->log.offset, ==, OFFSET);           \
-        munit_assert_int(raft_log__n_entries(&f->log), ==, N); \
+        munit_assert_int(log__n_entries(&f->log), ==, N); \
     }
 
 /**
@@ -142,7 +142,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 
     test_heap_setup(params, &f->heap);
 
-    raft_log__init(&f->log);
+    log__init(&f->log);
 
     return f;
 }
@@ -151,7 +151,7 @@ static void tear_down(void *data)
 {
     struct fixture *f = data;
 
-    raft_log__close(&f->log);
+    log__close(&f->log);
 
     test_heap_tear_down(&f->heap);
 
@@ -193,7 +193,7 @@ TEST_CASE(append, error, oom, append_oom_params)
 
     test_heap_fault_enable(&f->heap);
 
-    rv = raft_log__append(&f->log, 1, RAFT_LOG_COMMAND, &buf, NULL);
+    rv = log__append(&f->log, 1, RAFT_LOG_COMMAND, &buf, NULL);
     munit_assert_int(rv, ==, RAFT_ENOMEM);
 
     return MUNIT_OK;
@@ -209,7 +209,7 @@ TEST_CASE(append, success, oom_refs, NULL)
 
     (void)params;
 
-    for (i = 0; i < RAFT_LOG__REFS_INITIAL_SIZE; i++) {
+    for (i = 0; i < LOG__REFS_INITIAL_SIZE; i++) {
         __append_entry(f, 1);
     }
 
@@ -219,7 +219,7 @@ TEST_CASE(append, success, oom_refs, NULL)
     buf.base = NULL;
     buf.len = 0;
 
-    rv = raft_log__append(&f->log, 1, RAFT_LOG_COMMAND, &buf, NULL);
+    rv = log__append(&f->log, 1, RAFT_LOG_COMMAND, &buf, NULL);
     munit_assert_int(rv, ==, RAFT_ENOMEM);
 
     return MUNIT_OK;
@@ -334,7 +334,7 @@ TEST_CASE(append, success, wrap, NULL)
     __assert_state(f, 6, 0, 5, 0, 5);
 
     /* Delete the first 4 entries. */
-    raft_log__shift(&f->log, 4);
+    log__shift(&f->log, 4);
 
     /* Now the log is [NULL, NULL, NULL, NULL, e5, NULL] */
     __assert_state(f, 6, 4, 5, 4, 1);
@@ -408,7 +408,7 @@ TEST_CASE(append_configuration, error, _oom, append_configuration_oom_params)
 
     test_heap_fault_enable(&f->heap);
 
-    rv = raft_log__append_configuration(&f->log, 1, &configuration);
+    rv = log__append_configuration(&f->log, 1, &configuration);
     munit_assert_int(rv, ==, RAFT_ENOMEM);
 
     raft_configuration_close(&configuration);
@@ -417,7 +417,7 @@ TEST_CASE(append_configuration, error, _oom, append_configuration_oom_params)
 }
 
 /**
- * raft_log__n_entries
+ * log__n_entries
  */
 
 TEST_SUITE(n_entries);
@@ -435,7 +435,7 @@ TEST_CASE(n_entries, success, empty, NULL)
 
     (void)params;
 
-    n = raft_log__n_entries(&f->log);
+    n = log__n_entries(&f->log);
     munit_assert_int(n, ==, 0);
 
     return MUNIT_OK;
@@ -451,14 +451,14 @@ TEST_CASE(n_entries, success, not_wrapped, NULL)
 
     __append_empty_entry(f);
 
-    n = raft_log__n_entries(&f->log);
+    n = log__n_entries(&f->log);
     munit_assert_int(n, ==, 1);
 
     return MUNIT_OK;
 }
 
 /**
- * raft_log__first_index
+ * log__first_index
  */
 
 TEST_SUITE(first_index);
@@ -475,7 +475,7 @@ TEST_CASE(first_index, success, empty, NULL)
 
     (void)params;
 
-    munit_assert_int(raft_log__first_index(&f->log), ==, 0);
+    munit_assert_int(log__first_index(&f->log), ==, 0);
 
     return MUNIT_OK;
 }
@@ -487,8 +487,8 @@ TEST_CASE(first_index, success, empty_with_offset, NULL)
 
     (void)params;
 
-    raft_log__set_offset(&f->log, 10);
-    munit_assert_int(raft_log__first_index(&f->log), ==, 0);
+    log__set_offset(&f->log, 10);
+    munit_assert_int(log__first_index(&f->log), ==, 0);
 
     return MUNIT_OK;
 }
@@ -502,13 +502,13 @@ TEST_CASE(first_index, success, one_entry, NULL)
 
     __append_empty_entry(f);
 
-    munit_assert_int(raft_log__first_index(&f->log), ==, 1);
+    munit_assert_int(log__first_index(&f->log), ==, 1);
 
     return MUNIT_OK;
 }
 
 /**
- * raft_log__last_term
+ * log__last_term
  */
 
 TEST_SUITE(last_term);
@@ -525,13 +525,13 @@ TEST_CASE(last_term, success, empty_log, NULL)
 
     (void)params;
 
-    munit_assert_int(raft_log__last_term(&f->log), ==, 0);
+    munit_assert_int(log__last_term(&f->log), ==, 0);
 
     return MUNIT_OK;
 }
 
 /**
- * raft_log__last_index
+ * log__last_index
  */
 
 TEST_SUITE(last_index);
@@ -546,7 +546,7 @@ TEST_CASE(last_index, empty, NULL)
 
     (void)params;
 
-    munit_assert_int(raft_log__last_index(&f->log), ==, 0);
+    munit_assert_int(log__last_index(&f->log), ==, 0);
 
     return MUNIT_OK;
 }
@@ -558,8 +558,8 @@ TEST_CASE(last_index, empty_with_offset, NULL)
 
     (void)params;
 
-    raft_log__set_offset(&f->log, 10);
-    munit_assert_int(raft_log__last_index(&f->log), ==, 0);
+    log__set_offset(&f->log, 10);
+    munit_assert_int(log__last_index(&f->log), ==, 0);
 
     return MUNIT_OK;
 }
@@ -572,15 +572,15 @@ TEST_CASE(last_index, with_offset, NULL)
 
     (void)params;
 
-    raft_log__set_offset(&f->log, 3);
+    log__set_offset(&f->log, 3);
     __append_empty_entry(f);
-    munit_assert_int(raft_log__last_index(&f->log), ==, 4);
+    munit_assert_int(log__last_index(&f->log), ==, 4);
 
     return MUNIT_OK;
 }
 
 /**
- * raft_log__acquire
+ * log__acquire
  */
 
 TEST_SUITE(acquire);
@@ -604,13 +604,13 @@ TEST_CASE(acquire, error, out_of_range, NULL)
     __append_empty_entry(f);
     __append_empty_entry(f);
 
-    raft_log__shift(&f->log, 1);
+    log__shift(&f->log, 1);
 
-    rv = raft_log__acquire(&f->log, 1, &entries, &n);
+    rv = log__acquire(&f->log, 1, &entries, &n);
     munit_assert_int(rv, ==, 0);
     munit_assert_ptr_null(entries);
 
-    rv = raft_log__acquire(&f->log, 3, &entries, &n);
+    rv = log__acquire(&f->log, 3, &entries, &n);
     munit_assert_int(rv, ==, 0);
     munit_assert_ptr_null(entries);
 
@@ -632,7 +632,7 @@ TEST_CASE(acquire, error, oom, NULL)
     test_heap_fault_config(&f->heap, 0, 1);
     test_heap_fault_enable(&f->heap);
 
-    rv = raft_log__acquire(&f->log, 1, &entries, &n);
+    rv = log__acquire(&f->log, 1, &entries, &n);
     munit_assert_int(rv, ==, RAFT_ENOMEM);
 
     return MUNIT_OK;
@@ -650,7 +650,7 @@ TEST_CASE(acquire, success, one, NULL)
 
     __append_entry(f, 1);
 
-    rv = raft_log__acquire(&f->log, 1, &entries, &n);
+    rv = log__acquire(&f->log, 1, &entries, &n);
     munit_assert_int(rv, ==, 0);
 
     munit_assert_ptr_not_null(entries);
@@ -659,7 +659,7 @@ TEST_CASE(acquire, success, one, NULL)
 
     __assert_refcount(f, 1, 2);
 
-    raft_log__release(&f->log, 1, entries, n);
+    log__release(&f->log, 1, entries, n);
 
     __assert_refcount(f, 1, 1);
 
@@ -679,7 +679,7 @@ TEST_CASE(acquire, success, two, NULL)
     __append_entry(f, 1);
     __append_entry(f, 1);
 
-    rv = raft_log__acquire(&f->log, 1, &entries, &n);
+    rv = log__acquire(&f->log, 1, &entries, &n);
     munit_assert_int(rv, ==, 0);
 
     munit_assert_ptr_not_null(entries);
@@ -690,7 +690,7 @@ TEST_CASE(acquire, success, two, NULL)
     __assert_refcount(f, 1, 2);
     __assert_refcount(f, 2, 2);
 
-    raft_log__release(&f->log, 1, entries, n);
+    log__release(&f->log, 1, entries, n);
 
     __assert_refcount(f, 1, 1);
     __assert_refcount(f, 2, 1);
@@ -717,7 +717,7 @@ TEST_CASE(acquire, success, wrap, NULL)
     __assert_state(f, 6, 0, 5, 0, 5);
 
     /* Delete the first 4 entries. */
-    raft_log__shift(&f->log, 4);
+    log__shift(&f->log, 4);
 
     /* Now the log is [NULL, NULL, NULL, NULL, e5, NULL] */
     __assert_state(f, 6, 4, 5, 4, 1);
@@ -730,12 +730,12 @@ TEST_CASE(acquire, success, wrap, NULL)
     /* Now the log is [e7, e8, NULL, NULL, e5, e6] */
     __assert_state(f, 6, 4, 2, 4, 4);
 
-    rv = raft_log__acquire(&f->log, 6, &entries, &n);
+    rv = log__acquire(&f->log, 6, &entries, &n);
     munit_assert_int(rv, ==, 0);
 
     munit_assert_int(n, ==, 3);
 
-    raft_log__release(&f->log, 6, entries, n);
+    log__release(&f->log, 6, entries, n);
 
     return MUNIT_OK;
 }
@@ -755,7 +755,7 @@ TEST_CASE(acquire, success, batch, NULL)
     __append_entry(f, 1);
     __append_batch(f, 3);
 
-    rv = raft_log__acquire(&f->log, 2, &entries, &n);
+    rv = log__acquire(&f->log, 2, &entries, &n);
     munit_assert_int(rv, ==, 0);
 
     munit_assert_ptr_not_null(entries);
@@ -765,9 +765,9 @@ TEST_CASE(acquire, success, batch, NULL)
 
     /* Truncate the last 5 entries, so the only references left for the second
      * batch are the ones in the acquired entries. */
-    raft_log__truncate(&f->log, 3);
+    log__truncate(&f->log, 3);
 
-    raft_log__release(&f->log, 2, entries, n);
+    log__release(&f->log, 2, entries, n);
 
     __assert_refcount(f, 2, 1);
 
@@ -775,7 +775,7 @@ TEST_CASE(acquire, success, batch, NULL)
 }
 
 /**
- * raft_log__truncate
+ * log__truncate
  */
 
 TEST_SUITE(truncate);
@@ -795,7 +795,7 @@ TEST_CASE(truncate, success, 1_last, NULL)
 
     __append_empty_entry(f);
 
-    raft_log__truncate(&f->log, 1);
+    log__truncate(&f->log, 1);
 
     __assert_state(f, 0, 0, 0, 0, 0);
 
@@ -812,7 +812,7 @@ TEST_CASE(truncate, success, 2_last, NULL)
     __append_empty_entry(f);
     __append_empty_entry(f);
 
-    raft_log__truncate(&f->log, 2);
+    log__truncate(&f->log, 2);
 
     __assert_state(f, 6, 0, 1, 0, 1);
     __assert_term(f, 0, 1);
@@ -832,7 +832,7 @@ TEST_CASE(truncate, success, compacted, NULL)
     __append_empty_entry(f);
     __append_empty_entry(f);
 
-    raft_log__truncate(&f->log, 2);
+    log__truncate(&f->log, 2);
 
     __assert_state(f, 0, 0, 0, 2, 0);
 
@@ -855,7 +855,7 @@ TEST_CASE(truncate, success, wrap, NULL)
     __assert_state(f, 6, 0, 5, 0, 5);
 
     /* Delete the first 4 entries. */
-    raft_log__shift(&f->log, 4);
+    log__shift(&f->log, 4);
 
     /* Now the log is [NULL, NULL, NULL, NULL, e5, NULL] */
     __assert_state(f, 6, 4, 5, 4, 1);
@@ -869,7 +869,7 @@ TEST_CASE(truncate, success, wrap, NULL)
     __assert_state(f, 6, 4, 2, 4, 4);
 
     /* Truncate from e6 onward (wrapping) */
-    raft_log__truncate(&f->log, 6);
+    log__truncate(&f->log, 6);
 
     /* Now the log is [NULL, NULL, NULL, NULL, e5, NULL] */
     __assert_state(f, 6, 4, 5, 4, 1);
@@ -878,7 +878,7 @@ TEST_CASE(truncate, success, wrap, NULL)
 }
 
 /* Truncate the last entry of a log with a single entry, which still has an
- * outstanding reference created by a call to raft_log__acquire(). */
+ * outstanding reference created by a call to log__acquire(). */
 TEST_CASE(truncate, success, referenced, NULL)
 {
     struct fixture *f = data;
@@ -890,10 +890,10 @@ TEST_CASE(truncate, success, referenced, NULL)
 
     __append_entry(f, 1);
 
-    rv = raft_log__acquire(&f->log, 1, &entries, &n);
+    rv = log__acquire(&f->log, 1, &entries, &n);
     munit_assert_int(rv, ==, 0);
 
-    raft_log__truncate(&f->log, 1);
+    log__truncate(&f->log, 1);
 
     __assert_state(f, 0, 0, 0, 0, 0);
 
@@ -902,7 +902,7 @@ TEST_CASE(truncate, success, referenced, NULL)
 
     munit_assert_string_equal((const char *)entries[0].buf.base, "hello");
 
-    raft_log__release(&f->log, 1, entries, n);
+    log__release(&f->log, 1, entries, n);
 
     __assert_refcount(f, 1, 0);
 
@@ -918,7 +918,7 @@ TEST_CASE(truncate, success, batch, NULL)
 
     __append_batch(f, 3);
 
-    raft_log__truncate(&f->log, 1);
+    log__truncate(&f->log, 1);
 
     munit_assert_int(f->log.size, ==, 0);
 
@@ -940,15 +940,15 @@ TEST_CASE(truncate, success, acquired, NULL)
     __append_entry(f, 1);
     __append_entry(f, 1);
 
-    rv = raft_log__acquire(&f->log, 2, &entries, &n);
+    rv = log__acquire(&f->log, 2, &entries, &n);
     munit_assert_int(rv, ==, 0);
     munit_assert_int(n, ==, 1);
 
-    raft_log__truncate(&f->log, 2);
+    log__truncate(&f->log, 2);
 
     __append_entry(f, 2);
 
-    raft_log__release(&f->log, 2, entries, n);
+    log__release(&f->log, 2, entries, n);
 
     return MUNIT_OK;
 }
@@ -960,8 +960,8 @@ TEST_CASE(truncate, success, empty_with_offset, NULL)
 
     (void)params;
 
-    raft_log__set_offset(&f->log, 10);
-    raft_log__truncate(&f->log, 1);
+    log__set_offset(&f->log, 10);
+    log__truncate(&f->log, 1);
 
     return MUNIT_OK;
 }
@@ -991,21 +991,21 @@ TEST_CASE(truncate, error, acquired_oom, truncate_acquired_oom_params)
     __append_entry(f, 1);
     __append_entry(f, 1);
 
-    rv = raft_log__acquire(&f->log, 2, &entries, &n);
+    rv = log__acquire(&f->log, 2, &entries, &n);
     munit_assert_int(rv, ==, 0);
     munit_assert_int(n, ==, 1);
 
-    raft_log__truncate(&f->log, 2);
+    log__truncate(&f->log, 2);
 
     buf.base = NULL;
     buf.len = 0;
 
     test_heap_fault_enable(&f->heap);
 
-    rv = raft_log__append(&f->log, 2, RAFT_LOG_COMMAND, &buf, NULL);
+    rv = log__append(&f->log, 2, RAFT_LOG_COMMAND, &buf, NULL);
     munit_assert_int(rv, ==, RAFT_ENOMEM);
 
-    raft_log__release(&f->log, 2, entries, n);
+    log__release(&f->log, 2, entries, n);
 
     return MUNIT_OK;
 }
@@ -1025,23 +1025,23 @@ TEST_CASE(truncate, success, acquire_append, NULL)
     __append_entry(f, 1);
     __append_entry(f, 1);
 
-    rv = raft_log__acquire(&f->log, 2, &entries, &n);
+    rv = log__acquire(&f->log, 2, &entries, &n);
     munit_assert_int(rv, ==, 0);
     munit_assert_int(n, ==, 1);
 
-    raft_log__truncate(&f->log, 2);
+    log__truncate(&f->log, 2);
 
-    for (i = 0; i < RAFT_LOG__REFS_INITIAL_SIZE; i++) {
+    for (i = 0; i < LOG__REFS_INITIAL_SIZE; i++) {
         __append_entry(f, 2);
     }
 
-    raft_log__release(&f->log, 2, entries, n);
+    log__release(&f->log, 2, entries, n);
 
     return MUNIT_OK;
 }
 
 /**
- * raft_log__shift
+ * log__shift
  */
 
 TEST_SUITE(shift);
@@ -1060,7 +1060,7 @@ TEST_CASE(shift, success, 1_first, NULL)
 
     __append_entry(f, 1);
 
-    raft_log__shift(&f->log, 1);
+    log__shift(&f->log, 1);
 
     __assert_state(f, 0, 0, 0, 1, 0);
 
@@ -1077,7 +1077,7 @@ TEST_CASE(shift, success, 2_first, NULL)
     __append_empty_entry(f);
     __append_empty_entry(f);
 
-    raft_log__shift(&f->log, 1);
+    log__shift(&f->log, 1);
 
     __assert_state(f, 6, 1, 2, 1, 1);
 
@@ -1100,7 +1100,7 @@ TEST_CASE(shift, success, wrap, NULL)
     __assert_state(f, 6, 0, 5, 0, 5);
 
     /* Delete the first 4 entries. */
-    raft_log__shift(&f->log, 4);
+    log__shift(&f->log, 4);
 
     /* Now the log is [NULL, NULL, NULL, NULL, e5, NULL] */
     __assert_state(f, 6, 4, 5, 4, 1);
@@ -1114,7 +1114,7 @@ TEST_CASE(shift, success, wrap, NULL)
     __assert_state(f, 6, 4, 3, 4, 5);
 
     /* Shift up to e7 included (wrapping) */
-    raft_log__shift(&f->log, 7);
+    log__shift(&f->log, 7);
 
     /* Now the log is [NULL, e8, e9, NULL, NULL, NULL] */
     __assert_state(f, 6, 1, 3, 7, 2);

@@ -355,8 +355,8 @@ TEST_CASE(request, error, prev_log_term_mismatch, NULL)
 
     memset(&buf, 0, sizeof buf);
 
-    raft_log__append(&f->raft.log, 1, RAFT_LOG_COMMAND, &buf, NULL);
-    raft_log__append(&f->raft.log, 1, RAFT_LOG_COMMAND, &buf, NULL);
+    log__append(&f->raft.log, 1, RAFT_LOG_COMMAND, &buf, NULL);
+    log__append(&f->raft.log, 1, RAFT_LOG_COMMAND, &buf, NULL);
 
     __recv_append_entries(f, 1, 2, 2, 2, NULL, 0, 1);
 
@@ -424,7 +424,7 @@ TEST_CASE(request, success, skip, NULL)
 
     /* Append the first entry to our log. */
     test_io_append_entry(f->raft.io, &entries[0]);
-    rv = raft_log__append(&f->raft.log, 1, RAFT_LOG_COMMAND, &entries[0].buf,
+    rv = log__append(&f->raft.log, 1, RAFT_LOG_COMMAND, &entries[0].buf,
                           NULL);
     munit_assert_int(rv, ==, 0);
 
@@ -471,7 +471,7 @@ TEST_CASE(request, success, truncate, NULL)
     entry.buf.len = 1;
 
     test_io_append_entry(&f->io, &entry);
-    rv = raft_log__append(&f->raft.log, 1, RAFT_LOG_COMMAND, &entry.buf, NULL);
+    rv = log__append(&f->raft.log, 1, RAFT_LOG_COMMAND, &entry.buf, NULL);
     munit_assert_int(rv, ==, 0);
 
     /* Include two new entries with a different term in the request */
@@ -527,7 +527,7 @@ TEST_CASE(request, error, conflict, NULL)
     entry.buf.len = 1;
 
     test_io_append_entry(f->raft.io, &entry);
-    rv = raft_log__append(&f->raft.log, 1, RAFT_LOG_COMMAND, &entry.buf, NULL);
+    rv = log__append(&f->raft.log, 1, RAFT_LOG_COMMAND, &entry.buf, NULL);
     munit_assert_int(rv, ==, 0);
 
     /* Bump the commit index. */
