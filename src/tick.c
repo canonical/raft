@@ -22,7 +22,7 @@ static int follower_tick(struct raft *r)
     int rv;
 
     assert(r != NULL);
-    assert(r->state == RAFT_STATE_FOLLOWER);
+    assert(r->state == RAFT_FOLLOWER);
 
     server = raft_configuration__get(&r->configuration, r->id);
 
@@ -79,7 +79,7 @@ static int follower_tick(struct raft *r)
 static int candidate_tick(struct raft *r)
 {
     assert(r != NULL);
-    assert(r->state == RAFT_STATE_CANDIDATE);
+    assert(r->state == RAFT_CANDIDATE);
 
     /* Check if we need to start an election.
      *
@@ -138,7 +138,7 @@ static int leader_tick(struct raft *r, const unsigned msec_since_last_tick)
     int rv;
 
     assert(r != NULL);
-    assert(r->state == RAFT_STATE_LEADER);
+    assert(r->state == RAFT_LEADER);
 
     /* Check if we still can reach a majority of servers.
      *
@@ -223,12 +223,11 @@ int raft__tick(struct raft *r)
 
     assert(r != NULL);
 
-    assert(r->state == RAFT_STATE_UNAVAILABLE ||
-           r->state == RAFT_STATE_FOLLOWER ||
-           r->state == RAFT_STATE_CANDIDATE || r->state == RAFT_STATE_LEADER);
+    assert(r->state == RAFT_UNAVAILABLE || r->state == RAFT_FOLLOWER ||
+           r->state == RAFT_CANDIDATE || r->state == RAFT_LEADER);
 
     /* If we are not available, let's do nothing. */
-    if (r->state == RAFT_STATE_UNAVAILABLE) {
+    if (r->state == RAFT_UNAVAILABLE) {
         return 0;
     }
 
@@ -239,13 +238,13 @@ int raft__tick(struct raft *r)
     r->last_tick = now;
 
     switch (r->state) {
-        case RAFT_STATE_FOLLOWER:
+        case RAFT_FOLLOWER:
             rv = follower_tick(r);
             break;
-        case RAFT_STATE_CANDIDATE:
+        case RAFT_CANDIDATE:
             rv = candidate_tick(r);
             break;
-        case RAFT_STATE_LEADER:
+        case RAFT_LEADER:
             rv = leader_tick(r, msecs_since_last_tick);
             break;
         default:

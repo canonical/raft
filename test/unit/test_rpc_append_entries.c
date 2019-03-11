@@ -226,7 +226,7 @@ TEST_CASE(request, success, higher_term, NULL)
     __recv_append_entries(f, 3, 2, 1, 1, NULL, 0, 1);
 
     /* We have stepped down to follower. */
-    __assert_state(f, RAFT_STATE_FOLLOWER);
+    __assert_state(f, RAFT_FOLLOWER);
 
     /* We have updated our leader. */
     __assert_current_leader_id(f, 2);
@@ -250,7 +250,7 @@ TEST_CASE(request, success, same_term, NULL)
     __recv_append_entries(f, 2, 2, 1, 1, NULL, 0, 1);
 
     /* We have stepped down to follower. */
-    __assert_state(f, RAFT_STATE_FOLLOWER);
+    __assert_state(f, RAFT_FOLLOWER);
 
     /* We have updated our leader. */
     __assert_current_leader_id(f, 2);
@@ -621,7 +621,7 @@ TEST_CASE(response, error, step_down, NULL)
     /* Receive an append entries response with a newer term. */
     __recv_append_entries_result(f, 2, 3, false, 2);
 
-    __assert_state(f, RAFT_STATE_FOLLOWER);
+    __assert_state(f, RAFT_FOLLOWER);
 
     return MUNIT_OK;
 }

@@ -116,7 +116,7 @@ static void snapshot_get_cb(struct raft_io_snapshot_get *req,
         goto err;
     }
 
-    if (r->state != RAFT_STATE_LEADER) {
+    if (r->state != RAFT_LEADER) {
         goto err_with_snapshot;
     }
 
@@ -206,7 +206,7 @@ int raft_replication__send_append_entries(struct raft *r, size_t i)
     int rv;
 
     assert(r != NULL);
-    assert(r->state == RAFT_STATE_LEADER);
+    assert(r->state == RAFT_LEADER);
     assert(server != NULL);
     assert(server->id != r->id);
     assert(server->id != 0);
@@ -374,7 +374,7 @@ static void raft_replication__leader_append_cb(void *data, int status)
     raft_free(request);
 
     /* If we are not leader anymore, just discard the result. */
-    if (r->state != RAFT_STATE_LEADER) {
+    if (r->state != RAFT_LEADER) {
         raft_debugf(r->logger,
                     "local server is not leader -> ignore write log result");
         return;
@@ -423,7 +423,7 @@ static int raft_replication__leader_append(struct raft *r, unsigned index)
     struct raft_replication__leader_append *request;
     int rv;
 
-    assert(r->state == RAFT_STATE_LEADER);
+    assert(r->state == RAFT_LEADER);
 
     if (index == 0) {
         return 0;
@@ -476,7 +476,7 @@ int raft_replication__trigger(struct raft *r, const raft_index index)
     size_t i;
     int rv;
 
-    assert(r->state == RAFT_STATE_LEADER);
+    assert(r->state == RAFT_LEADER);
 
     rv = raft_replication__leader_append(r, index);
     if (rv != 0) {
@@ -556,7 +556,7 @@ static int raft_replication__trigger_promotion(struct raft *r)
     struct raft_server *server;
     int rv;
 
-    assert(r->state == RAFT_STATE_LEADER);
+    assert(r->state == RAFT_LEADER);
     assert(r->leader_state.promotee_id != 0);
 
     server_index =
@@ -610,7 +610,7 @@ int raft_replication__update(struct raft *r,
     bool is_being_promoted;
     int rv;
 
-    assert(r->state == RAFT_STATE_LEADER);
+    assert(r->state == RAFT_LEADER);
 
     server_index = configuration__index_of(&r->configuration, server->id);
     assert(server_index < r->configuration.n);
@@ -748,7 +748,7 @@ static void raft_replication__follower_append_cb(void *data, int status)
     i = update_last_stored(r, request->index, args->entries, args->n_entries);
 
     /* If we are not followers anymore, just discard the result. */
-    if (r->state != RAFT_STATE_FOLLOWER) {
+    if (r->state != RAFT_FOLLOWER) {
         raft_debugf(r->logger,
                     "local server is not follower -> ignore I/O result");
         goto out;
@@ -991,7 +991,7 @@ int raft_replication__append(struct raft *r,
     assert(success != NULL);
     assert(async != NULL);
 
-    assert(r->state == RAFT_STATE_FOLLOWER);
+    assert(r->state == RAFT_FOLLOWER);
 
     *success = false;
     *async = false;
@@ -1175,7 +1175,7 @@ int raft_replication__install_snapshot(struct raft *r,
     raft_term local_term;
     int rv;
 
-    assert(r->state == RAFT_STATE_FOLLOWER);
+    assert(r->state == RAFT_FOLLOWER);
 
     *success = false;
     *async = false;
@@ -1282,7 +1282,7 @@ static void raft_replication__apply_configuration(struct raft *r,
      *   In this approach, a leader that is removed from the configuration steps
      *   down once the Cnew entry is committed.
      */
-    if (r->state == RAFT_STATE_LEADER &&
+    if (r->state == RAFT_LEADER &&
         raft_configuration__get(&r->configuration, r->id) == NULL) {
         /* Ignore the return value, since we can't fail in this case (no actual
          * write for the new term will be done) */
@@ -1307,7 +1307,7 @@ static int raft_replication__apply_command(struct raft *r,
         return rv;
     }
 
-    if (r->state == RAFT_STATE_LEADER) {
+    if (r->state == RAFT_LEADER) {
         struct raft_apply *req;
         RAFT__QUEUE_FOREACH(head, &r->leader_state.apply_reqs)
         {
@@ -1429,7 +1429,7 @@ int raft_replication__apply(struct raft *r)
     raft_index index;
     int rv;
 
-    assert(r->state == RAFT_STATE_LEADER || r->state == RAFT_STATE_FOLLOWER);
+    assert(r->state == RAFT_LEADER || r->state == RAFT_FOLLOWER);
     assert(r->last_applied <= r->commit_index);
 
     if (r->last_applied == r->commit_index) {
@@ -1472,7 +1472,7 @@ void raft_replication__quorum(struct raft *r, const raft_index index)
     size_t votes = 0;
     size_t i;
 
-    assert(r->state == RAFT_STATE_LEADER);
+    assert(r->state == RAFT_LEADER);
 
     if (index <= r->commit_index) {
         return;

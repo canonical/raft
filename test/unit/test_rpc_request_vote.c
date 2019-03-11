@@ -301,7 +301,7 @@ TEST_CASE(request, error, empty_log, NULL)
     __configuration_add(f, 1, "1", true);
     __configuration_add(f, 2, "2", true);
 
-    f->raft.state = RAFT_STATE_FOLLOWER;
+    f->raft.state = RAFT_FOLLOWER;
 
     __recv_request_vote(f, f->raft.current_term + 1, 2, 1, 1);
 
@@ -499,7 +499,7 @@ TEST_CASE(response, success, quorum, NULL)
     __recv_request_vote_result(f, 2, 2, true);
 
     /* We are leader */
-    __assert_state(f, RAFT_STATE_LEADER);
+    __assert_state(f, RAFT_LEADER);
 
     munit_assert_ptr_not_null(f->raft.leader_state.replication);
 
@@ -534,7 +534,7 @@ TEST_CASE(response, success, no_quorum, NULL)
 
     /* We are still candidate, since majority requires 3 votes, but we have
      * 2. */
-    __assert_state(f, RAFT_STATE_CANDIDATE);
+    __assert_state(f, RAFT_CANDIDATE);
 
     return MUNIT_OK;
 }
@@ -550,7 +550,7 @@ TEST_CASE(response, success, not_candidate, NULL)
 
     __recv_request_vote_result(f, 2, 2, true);
 
-    __assert_state(f, RAFT_STATE_FOLLOWER);
+    __assert_state(f, RAFT_FOLLOWER);
 
     return MUNIT_OK;
 }
@@ -580,7 +580,7 @@ TEST_CASE(response, success, step_down, NULL)
     munit_assert_int(f->raft.timer, ==, 0);
 
     /* We are follower */
-    munit_assert_int(f->raft.state, ==, RAFT_STATE_FOLLOWER);
+    munit_assert_int(f->raft.state, ==, RAFT_FOLLOWER);
 
     /* No leader is set. */
     munit_assert_int(f->raft.follower_state.current_leader_id, ==, 0);
@@ -628,7 +628,7 @@ TEST_CASE(response, success, not_granted, NULL)
     __recv_request_vote_result(f, 2, 2, false);
 
     /* We are still candidate */
-    __assert_state(f, RAFT_STATE_CANDIDATE);
+    __assert_state(f, RAFT_CANDIDATE);
 
     return MUNIT_OK;
 }

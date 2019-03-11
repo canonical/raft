@@ -1,9 +1,9 @@
 #include "rpc_install_snapshot.h"
 #include "assert.h"
+#include "log.h"
 #include "replication.h"
 #include "rpc.h"
 #include "state.h"
-#include "log.h"
 
 static void send_append_entries_result_cb(struct raft_io_send *req, int status)
 {
@@ -26,7 +26,7 @@ int raft_rpc__recv_install_snapshot(struct raft *r,
     assert(address != NULL);
 
     raft_infof(r->logger, "received snapshot %d from server %ld",
-                args->last_index, id);
+               args->last_index, id);
 
     result->success = false;
     result->last_log_index = raft_log__last_index(&r->log);
@@ -42,10 +42,10 @@ int raft_rpc__recv_install_snapshot(struct raft *r,
     }
 
     /* TODO: this logic duplicates the one in the AppendEntries handler */
-    assert(r->state == RAFT_STATE_FOLLOWER || r->state == RAFT_STATE_CANDIDATE);
+    assert(r->state == RAFT_FOLLOWER || r->state == RAFT_CANDIDATE);
     assert(r->current_term == args->term);
 
-    if (r->state == RAFT_STATE_CANDIDATE) {
+    if (r->state == RAFT_CANDIDATE) {
         raft_debugf(r->logger, "discovered leader -> step down ");
         rv = raft_state__convert_to_follower(r, args->term);
         if (rv != 0) {

@@ -9,8 +9,8 @@
 #include "../lib/heap.h"
 #include "../lib/io.h"
 #include "../lib/logger.h"
-#include "../lib/runner.h"
 #include "../lib/raft.h"
+#include "../lib/runner.h"
 
 TEST_MODULE(replication);
 
@@ -50,19 +50,19 @@ static void tear_down(void *data)
 /**
  * Transition the state of the raft instance to RAFT_LEADER.
  */
-#define __convert_to_leader(F)                                  \
-    {                                                           \
-        int rv;                                                 \
-                                                                \
-        rv = raft_state__convert_to_candidate(&F->raft);        \
-        munit_assert_int(rv, ==, 0);                            \
-                                                                \
-        rv = raft_state__convert_to_leader(&F->raft);           \
-        munit_assert_int(rv, ==, 0);                            \
-                                                                \
-        munit_assert_int(F->raft.state, ==, RAFT_STATE_LEADER); \
-                                                                \
-        raft_io_stub_flush(&F->io);                             \
+#define __convert_to_leader(F)                            \
+    {                                                     \
+        int rv;                                           \
+                                                          \
+        rv = raft_state__convert_to_candidate(&F->raft);  \
+        munit_assert_int(rv, ==, 0);                      \
+                                                          \
+        rv = raft_state__convert_to_leader(&F->raft);     \
+        munit_assert_int(rv, ==, 0);                      \
+                                                          \
+        munit_assert_int(F->raft.state, ==, RAFT_LEADER); \
+                                                          \
+        raft_io_stub_flush(&F->io);                       \
     }
 
 /**
@@ -187,7 +187,7 @@ TEST_GROUP(trigger, error);
 
 /* A failure occurs upon submitting the I/O request for a particular server, the
  * I/O requests for other servers are still submitted. */
-TEST_CASE(trigger, error,_io, NULL)
+TEST_CASE(trigger, error, _io, NULL)
 {
     struct fixture *f = data;
 

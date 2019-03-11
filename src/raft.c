@@ -64,7 +64,7 @@ int raft_init(struct raft *r,
     r->last_applied = 0;
     r->last_stored = 0;
 
-    r->state = RAFT_STATE_UNAVAILABLE;
+    r->state = RAFT_UNAVAILABLE;
 
     r->rand = rand;
 
@@ -172,7 +172,7 @@ int raft_start(struct raft *r)
     size_t i;
 
     assert(r != NULL);
-    assert(r->state == RAFT_STATE_UNAVAILABLE);
+    assert(r->state == RAFT_UNAVAILABLE);
 
     raft_infof(r->logger, "starting");
 
@@ -291,7 +291,7 @@ void raft_close(struct raft *r, void (*cb)(struct raft *r))
     r->close_cb = cb;
 
     raft_state__clear(r);
-    r->state = RAFT_STATE_UNAVAILABLE;
+    r->state = RAFT_UNAVAILABLE;
     r->io->close(r->io, raft__close_cb);
 }
 
@@ -316,7 +316,7 @@ int raft_bootstrap(struct raft *r, const struct raft_configuration *conf)
 {
     int rv;
 
-    assert(r->state == RAFT_STATE_UNAVAILABLE);
+    assert(r->state == RAFT_UNAVAILABLE);
 
     rv = r->io->bootstrap(r->io, conf);
     if (rv != 0) {

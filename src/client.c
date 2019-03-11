@@ -21,7 +21,7 @@ int raft_apply(struct raft *r,
     assert(bufs != NULL);
     assert(n > 0);
 
-    if (r->state != RAFT_STATE_LEADER) {
+    if (r->state != RAFT_LEADER) {
         rv = RAFT_ERR_NOT_LEADER;
         goto err;
     }

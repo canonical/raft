@@ -31,9 +31,10 @@ int raft_rpc__ensure_matching_terms(struct raft *r, raft_term term, int *match)
      *   immediately reverts to follower state.
      */
     if (term > r->current_term) {
-        if (r->state == RAFT_STATE_FOLLOWER) {
+        if (r->state == RAFT_FOLLOWER) {
             /* Just bump the current term */
-            raft_infof(r->logger, "remote server term is higher -> bump local term");
+            raft_infof(r->logger,
+                       "remote server term is higher -> bump local term");
             rv = raft_state__bump_current_term(r, term);
         } else {
             /* Bump current state and also convert to follower. */

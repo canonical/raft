@@ -9,7 +9,7 @@ int raft_membership__can_change_configuration(struct raft *r)
 {
     int rv;
 
-    if (r->state != RAFT_STATE_LEADER) {
+    if (r->state != RAFT_LEADER) {
         rv = RAFT_ERR_NOT_LEADER;
         return rv;
     }
@@ -48,7 +48,7 @@ bool raft_membership__update_catch_up_round(struct raft *r)
     bool is_up_to_date;
     bool is_fast_enough;
 
-    assert(r->state == RAFT_STATE_LEADER);
+    assert(r->state == RAFT_LEADER);
     assert(r->leader_state.promotee_id != 0);
 
     server_index =
@@ -96,7 +96,7 @@ int raft_membership__apply(struct raft *r,
     int rv;
 
     assert(r != NULL);
-    assert(r->state == RAFT_STATE_FOLLOWER);
+    assert(r->state == RAFT_FOLLOWER);
     assert(entry != NULL);
     assert(entry->type == RAFT_LOG_CONFIGURATION);
 
@@ -125,7 +125,7 @@ int raft_membership__rollback(struct raft *r)
     int rv;
 
     assert(r != NULL);
-    assert(r->state == RAFT_STATE_FOLLOWER);
+    assert(r->state == RAFT_FOLLOWER);
 
     /* If no configuration change is in progress, there's nothing to
      * rollback. */

@@ -601,12 +601,7 @@ struct raft_fsm
 /**
  * State codes.
  */
-enum {
-    RAFT_STATE_UNAVAILABLE,
-    RAFT_STATE_FOLLOWER,
-    RAFT_STATE_CANDIDATE,
-    RAFT_STATE_LEADER
-};
+enum { RAFT_UNAVAILABLE, RAFT_FOLLOWER, RAFT_CANDIDATE, RAFT_LEADER };
 
 /**
  * Server state names ('unavailable', 'follower', 'candidate', 'leader'),
@@ -935,6 +930,11 @@ void raft_set_rand(struct raft *r, int (*rand)());
  *   clusters, and typically results in much lower rates.
  */
 void raft_set_election_timeout(struct raft *r, const unsigned election_timeout);
+
+/**
+ * Return the code of the current raft state.
+ */
+int raft_state(struct raft *r);
 
 /**
  * Human readable version of the current state.

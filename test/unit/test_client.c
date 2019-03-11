@@ -815,7 +815,7 @@ TEST_CASE(promote, success, step_down, NULL)
 
     __handle_append_entries(f, 3, 2, 1, 1, entries, 1, 1);
 
-    munit_assert_int(f->raft.state, ==, RAFT_STATE_FOLLOWER);
+    munit_assert_int(f->raft.state, ==, RAFT_FOLLOWER);
 
     /* Server 3 is not being considered voting anymore. */
     server = raft_configuration__get(&f->raft.configuration, 3);
@@ -1061,7 +1061,7 @@ TEST_CASE(remove_server, success, self, NULL)
     __assert_configuration_indexes(f, 2, 0);
 
     /* We have stepped down. */
-    __assert_state(f, RAFT_STATE_FOLLOWER);
+    __assert_state(f, RAFT_FOLLOWER);
 
     return MUNIT_OK;
 }
