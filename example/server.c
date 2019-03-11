@@ -28,7 +28,7 @@ static int __fsm__apply(struct raft_fsm *fsm, const struct raft_buffer *buf)
 
     f->count += *(uint64_t *)buf->base;
 
-    if (f->count % 20 == 0) {
+    if (f->count % 50 == 0) {
         raft_infof(f->logger, "fsm: count %d", f->count);
     }
 
@@ -328,7 +328,7 @@ static int __server_start(struct __server *s)
         goto err_after_raft_start;
     }
 
-    rv = uv_timer_start(&s->timer, __server_timer_cb, 0, 1000);
+    rv = uv_timer_start(&s->timer, __server_timer_cb, 0, 225);
     if (rv != 0) {
         printf("error: sigint start: %s\n", uv_strerror(rv));
         goto err_after_sigint_start;

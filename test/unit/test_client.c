@@ -168,12 +168,9 @@ TEST_MODULE(client);
 /**
  * Invoke @raft__tick and check that no errors occur.
  */
-#define __tick(F, MSECS)                  \
-    {                                     \
-        int rv;                           \
-                                          \
-        rv = raft__tick(&F->raft, MSECS); \
-        munit_assert_int(rv, ==, 0);      \
+#define __tick(F, MSECS)                     \
+    {                                        \
+        raft_io_stub_advance(&F->io, MSECS); \
     }
 
 /**
@@ -187,7 +184,7 @@ struct propose__fixture
     RAFT_FIXTURE;
 };
 
-static void *propose__setup(const MunitParameter params[], void *user_data)
+TEST_SETUP(propose)
 {
     struct propose__fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
@@ -195,7 +192,7 @@ static void *propose__setup(const MunitParameter params[], void *user_data)
     return f;
 }
 
-static void propose__tear_down(void *data)
+TEST_TEAR_DOWN(propose)
 {
     struct propose__fixture *f = data;
     RAFT_TEAR_DOWN(f);
@@ -318,7 +315,7 @@ struct add_server__fixture
     RAFT_FIXTURE;
 };
 
-static void *add_server__setup(const MunitParameter params[], void *user_data)
+TEST_SETUP(add_server)
 {
     struct add_server__fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
@@ -326,7 +323,7 @@ static void *add_server__setup(const MunitParameter params[], void *user_data)
     return f;
 }
 
-static void add_server__tear_down(void *data)
+TEST_TEAR_DOWN(add_server)
 {
     struct add_server__fixture *f = data;
     RAFT_TEAR_DOWN(f);
@@ -437,8 +434,8 @@ TEST_CASE(add_server, success, committed, NULL)
     __assert_configuration_indexes(f, 1, 2);
 
     /* The next/match indexes now include an entry for the new server. */
-    munit_assert_int(f->raft.leader_state.next_index[2], ==, 3);
-    munit_assert_int(f->raft.leader_state.match_index[2], ==, 0);
+    munit_assert_int(f->raft.leader_state.replication[2].next_index, ==, 3);
+    munit_assert_int(f->raft.leader_state.replication[2].match_index, ==, 0);
 
     __assert_io(f, 1, 2);
 
@@ -463,7 +460,7 @@ struct promote__fixture
     RAFT_FIXTURE;
 };
 
-static void *promote__setup(const MunitParameter params[], void *user_data)
+TEST_SETUP(promote)
 {
     struct promote__fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
@@ -471,7 +468,7 @@ static void *promote__setup(const MunitParameter params[], void *user_data)
     return f;
 }
 
-static void promote__tear_down(void *data)
+TEST_TEAR_DOWN(promote)
 {
     struct promote__fixture *f = data;
     RAFT_TEAR_DOWN(f);
@@ -681,8 +678,12 @@ TEST_CASE(promote, success, committed, NULL)
     propose_entry;
     __assert_io(f, 1, 2);
 
-    /* Let more than election_timeout milliseconds elapse. */
-    __tick(f, f->raft.election_timeout + 100);
+    /* Let more than election_timeout milliseconds elapse, but track a contact
+     * from server 2 in between, to avoid stepping down. */
+    __tick(f, f->raft.election_timeout - 100);
+    f->raft.leader_state.replication[1].last_contact = f->io.time(&f->io);
+    raft_io_stub_flush(&f->io);
+    __tick(f, 200);
     __assert_io(f, 0, 2); /* Heartbeat */
 
     /* Simulate the server being promoted sending an AppendEntries result,
@@ -832,6 +833,8 @@ TEST_CASE(promote, success, follower, NULL)
     munit_assert_int(f->raft.configuration_uncommitted_index, ==, 0);
     munit_assert_true(f->raft.configuration.servers[2].voting);
 
+    raft_io_stub_flush(&f->io);
+
     return MUNIT_OK;
 }
 
@@ -846,8 +849,7 @@ struct remove_server__fixture
     RAFT_FIXTURE;
 };
 
-static void *remove_server__setup(const MunitParameter params[],
-                                  void *user_data)
+TEST_SETUP(remove_server)
 {
     struct remove_server__fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
@@ -855,7 +857,7 @@ static void *remove_server__setup(const MunitParameter params[],
     return f;
 }
 
-static void remove_server__tear_down(void *data)
+TEST_TEAR_DOWN(remove_server)
 {
     struct remove_server__fixture *f = data;
     RAFT_TEAR_DOWN(f);

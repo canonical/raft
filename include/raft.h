@@ -112,6 +112,11 @@ typedef unsigned long long raft_term;
 typedef unsigned long long raft_index;
 
 /**
+ * Hold a time value expressed in milliseconds since the epoch.
+ */
+typedef unsigned long long raft_time;
+
+/**
  * Logging levels.
  */
 enum { RAFT_DEBUG, RAFT_INFO, RAFT_WARN, RAFT_ERROR };
@@ -367,7 +372,7 @@ enum {
     RAFT_IO_APPEND_ENTRIES_RESULT,
     RAFT_IO_REQUEST_VOTE,
     RAFT_IO_REQUEST_VOTE_RESULT,
-    RAFT_IO_INSTALL_SNAPSHOT,
+    RAFT_IO_INSTALL_SNAPSHOT
 };
 
 struct raft_message
@@ -402,7 +407,7 @@ struct raft_snapshot
 
 struct raft_io;
 
-typedef void (*raft_io_tick_cb)(struct raft_io *io, unsigned elapsed);
+typedef void (*raft_io_tick_cb)(struct raft_io *io);
 typedef void (*raft_io_recv_cb)(struct raft_io *io, struct raft_message *msg);
 typedef void (*raft_io_close_cb)(struct raft_io *io);
 
@@ -527,6 +532,11 @@ struct raft_io
      */
     int (*set_vote)(struct raft_io *io, unsigned server_id);
 
+    int (*send)(struct raft_io *io,
+                struct raft_io_send *req,
+                const struct raft_message *message,
+                raft_io_send_cb cb);
+
     /**
      * Asynchronously append the given entries to the log.
      *
@@ -544,11 +554,6 @@ struct raft_io
      */
     int (*truncate)(struct raft_io *io, raft_index index);
 
-    int (*send)(struct raft_io *io,
-                struct raft_io_send *req,
-                const struct raft_message *message,
-                raft_io_send_cb cb);
-
     int (*snapshot_put)(struct raft_io *io,
                         struct raft_io_snapshot_put *req,
                         const struct raft_snapshot *snapshot,
@@ -557,6 +562,11 @@ struct raft_io
     int (*snapshot_get)(struct raft_io *io,
                         struct raft_io_snapshot_get *req,
                         raft_io_snapshot_get_cb cb);
+
+    /**
+     * Return the current time, expressed in milliseconds since the epoch.
+     */
+    raft_time (*time)(struct raft_io *io);
 };
 
 /**
@@ -641,6 +651,17 @@ enum {
      * server that was being promoted.
      */
     RAFT_EVENT_PROMOTION_ABORTED
+};
+
+/**
+ * Used by leaders to keep track of replication progress for each server.
+ */
+struct raft_replication
+{
+    raft_index next_index;  /* Next entry to send */
+    raft_index match_index; /* Highest applied idx */
+    raft_time last_contact; /* Timestamp of last RPC received */
+    unsigned short state;   /* Probe, pipeline or snapshot */
 };
 
 /**
@@ -763,6 +784,7 @@ struct raft
      */
     raft_index commit_index; /* Highest log entry known to be committed */
     raft_index last_applied; /* Highest log entry applied to the FSM */
+    raft_index last_stored;  /* Highest log entry persisted on disk */
 
     /**
      * Current server state of this raft instance, along with a union defining
@@ -796,8 +818,7 @@ struct raft
              * which is specific to leaders (Figure 3.1). This state is
              * reinitialized after the server gets elected.
              */
-            raft_index *next_index;  /* For each server, next entry to send */
-            raft_index *match_index; /* For each server, highest applied idx */
+            struct raft_replication *replication; /* Per-server replication */
 
             /**
              * Fields used to track the progress of pushing entries to the
@@ -826,6 +847,13 @@ struct raft
      *   in a timely manner).
      */
     unsigned election_timeout_rand;
+
+    /**
+     * Timestamp of the last call to the tick callback passed to raft_io. This
+     * is used to calculate the time elapsed between subsequent tick calls and
+     * update the timer field below.
+     */
+    raft_time last_tick;
 
     /**
      * For followers and candidates, time elapsed since the last election

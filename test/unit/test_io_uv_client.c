@@ -1,3 +1,5 @@
+#include <unistd.h>
+
 #include "../lib/io_uv.h"
 #include "../lib/runner.h"
 
@@ -51,17 +53,18 @@ static void send__send_cb(struct raft_io_send *req, int status)
         munit_assert_int(rv, ==, RV);                                 \
     }
 
-#define send__wait_cb(STATUS)                \
-    {                                        \
-        int i;                               \
-        for (i = 0; i < 5; i++) {            \
-            if (f->invoked > 0) {            \
-                break;                       \
-            }                                \
-            test_uv_run(&f->loop, 1);        \
-        }                                    \
-        munit_assert_int(f->invoked, ==, 1); \
-        f->invoked = 0;                      \
+#define send__wait_cb(STATUS)                    \
+    {                                            \
+        int i;                                   \
+        for (i = 0; i < 5; i++) {                \
+            if (f->invoked > 0) {                \
+                break;                           \
+            }                                    \
+            test_uv_run(&f->loop, 1);            \
+        }                                        \
+        munit_assert_int(f->invoked, ==, 1);     \
+        munit_assert_int(f->status, ==, STATUS); \
+        f->invoked = 0;                          \
     }
 
 #define send__set_message_type(TYPE) f->message.type = TYPE;
@@ -283,14 +286,15 @@ TEST_CASE(error, bad_message, NULL)
 TEST_CASE(error, reconnect, NULL)
 {
     struct fixture *f = data;
+    int socket;
 
     (void)params;
 
     send__invoke(0);
     send__wait_cb(0);
 
-    test_tcp_accept(&f->tcp);
-    test_tcp_stop(&f->tcp);
+    socket = test_tcp_accept(&f->tcp);
+    close(socket);
 
     send__invoke(0);
     send__wait_cb(RAFT_ERR_IO);
@@ -301,7 +305,27 @@ TEST_CASE(error, reconnect, NULL)
     return MUNIT_OK;
 }
 
-static char *error_oom_heap_fault_delay[] = {"0", "1", "2", "3", "4", NULL};
+/* If there's no more space in the queue of pending requests, the oldest request
+ * gets evicted and its callback fired with RAFT_ERR_IO_CONNECT. */
+TEST_CASE(error, queue, NULL)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    test_tcp_stop(&f->tcp);
+
+    send__invoke(0);
+    send__invoke(0);
+    send__invoke(0);
+    send__invoke(0);
+
+    send__wait_cb(RAFT_ERR_IO_CONNECT);
+
+    return MUNIT_OK;
+}
+
+static char *error_oom_heap_fault_delay[] = {"0", "1", "2", "3", "4", "5", NULL};
 static char *error_oom_heap_fault_repeat[] = {"1", NULL};
 
 static MunitParameterEnum error_oom_params[] = {
@@ -324,7 +348,7 @@ TEST_CASE(error, oom, error_oom_params)
     return MUNIT_OK;
 }
 
-static char *error_oom_async_heap_fault_delay[] = {"0", "1", NULL};
+static char *error_oom_async_heap_fault_delay[] = {"0", NULL};
 static char *error_oom_async_heap_fault_repeat[] = {"1", NULL};
 
 static MunitParameterEnum error_oom_async_params[] = {
@@ -333,7 +357,8 @@ static MunitParameterEnum error_oom_async_params[] = {
     {NULL, NULL},
 };
 
-/* Out of memory happening after @raft__io_uv_rpc_send has returned. */
+/* Transient out of memory error happening after @raft__io_uv_rpc_send has
+ * returned. */
 TEST_CASE(error, oom_async, error_oom_async_params)
 {
     struct fixture *f = data;
@@ -346,7 +371,65 @@ TEST_CASE(error, oom_async, error_oom_async_params)
 
     test_heap_fault_enable(&f->heap);
 
-    send__wait_cb(RAFT_ENOMEM);
+    send__wait_cb(0);
 
     return MUNIT_OK;
 }
+
+/**
+ * Close back scenarios.
+ */
+
+TEST_SUITE(close);
+
+TEST_SETUP(close, setup);
+TEST_TEAR_DOWN(close, tear_down);
+
+/* The backend gets closed while there is a pending write. */
+TEST_CASE(close, writing, NULL)
+{
+    struct fixture *f = data;
+    struct raft_entry entry;
+
+    (void)params;
+
+    /* Set a very large message that is likely to fill the socket buffer.
+     * TODO: figure a more deterministic way to choose the value. */
+    entry.buf.len = 1024 * 1024 * 8;
+    entry.buf.base = raft_malloc(entry.buf.len);
+
+    send__set_message_type(RAFT_IO_APPEND_ENTRIES);
+
+    f->message.append_entries.entries = &entry;
+    f->message.append_entries.n_entries = 1;
+
+    send__invoke(0);
+
+    /* Spin once so the connection attempt succeeds and we flush the pending
+     * request, triggering the write. */
+    test_uv_run(&f->loop, 1);
+
+    io_uv__close;
+
+    send__wait_cb(RAFT_ERR_IO_CANCELED);
+
+    raft_free(entry.buf.base);
+
+    return MUNIT_OK;
+}
+
+/* The backend gets closed while there is a pending connect request. */
+TEST_CASE(close, connecting, NULL)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    send__invoke(0);
+    io_uv__close;
+
+    send__wait_cb(RAFT_ERR_IO_CANCELED);
+
+    return MUNIT_OK;
+}
+

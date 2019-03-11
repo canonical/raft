@@ -25,7 +25,7 @@ int raft_rpc__recv_install_snapshot(struct raft *r,
 
     assert(address != NULL);
 
-    raft_debugf(r->logger, "received snapshot %d from server %ld",
+    raft_infof(r->logger, "received snapshot %d from server %ld",
                 args->last_index, id);
 
     result->success = false;

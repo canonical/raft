@@ -30,6 +30,13 @@
  *   stream, and start a re-connection attempt.
  */
 
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(C, MSG, ...) raft_debugf(C->uv->logger, MSG, ##__VA_ARGS__)
+#else
+#define tracef(C, MSG, ...)
+#endif
+
 /* Client state codes. */
 enum {
     CONNECTING = 1,
@@ -40,7 +47,7 @@ enum {
 };
 
 /* Maximum number of requests that can be buffered.  */
-#define QUEUE_SIZE 16
+#define QUEUE_SIZE 3
 
 struct io_uv__client
 {
@@ -81,7 +88,7 @@ static void send_close(struct send *r)
 static void copy_address(const char *address1, char **address2)
 {
     *address2 = raft_malloc(strlen(address1) + 1);
-    if (address2 == NULL) {
+    if (*address2 == NULL) {
         return;
     }
     strcpy(*address2, address1);
@@ -133,6 +140,8 @@ static void client_write_cb(struct uv_write_s *write, const int status)
     struct io_uv__client *c = r->c;
     int cb_status = 0;
 
+    tracef(c, "message write completed -> status %d", status);
+
     /* If the write failed and we're not currently disconnecting, let's close
      * the stream handle, and trigger a new connection
      * attempt. */
@@ -169,17 +178,30 @@ int io_uv__client_send(struct io_uv__client *c, struct send *r)
      * fail immediately. */
     if (c->state == DELAY || c->state == CONNECTING) {
         assert(c->stream == NULL);
-        if (c->n_send_reqs < QUEUE_SIZE) {
-            RAFT__QUEUE_PUSH(&c->send_reqs, &r->queue);
-            c->n_send_reqs++;
-            return 0;
+        if (c->n_send_reqs == QUEUE_SIZE) {
+            /* Fail the last request */
+            tracef(c, "queue full -> evict oldest message");
+            raft__queue *head;
+            struct send *r;
+            head = RAFT__QUEUE_HEAD(&c->send_reqs);
+            r = RAFT__QUEUE_DATA(head, struct send, queue);
+            RAFT__QUEUE_REMOVE(head);
+            r->req->cb(r->req, RAFT_ERR_IO_CONNECT);
+            send_close(r);
+            raft_free(r);
+            c->n_send_reqs--;
         }
-        return RAFT_ERR_IO_CONNECT;
+        tracef(c, "no connection available -> enqueue message");
+        RAFT__QUEUE_PUSH(&c->send_reqs, &r->queue);
+        c->n_send_reqs++;
+        return 0;
     }
 
     assert(c->stream != NULL);
+    tracef(c, "connection available -> write message");
     rv = uv_write(&r->write, c->stream, r->bufs, r->n_bufs, client_write_cb);
     if (rv != 0) {
+        tracef(c, "write message failed -> rv %d", rv);
         /* UNTESTED: what are the error conditions? perhaps ENOMEM */
         return RAFT_ERR_IO;
     }
@@ -195,6 +217,7 @@ static void client_flush_queue(struct io_uv__client *c)
     int rv;
     assert(c->state == CONNECTED);
     assert(c->stream != NULL);
+    tracef(c, "flush pending messages");
     while (!RAFT__QUEUE_IS_EMPTY(&c->send_reqs)) {
         raft__queue *head;
         struct send *r;
@@ -218,6 +241,7 @@ static void client_timer_cb(uv_timer_t *timer)
     struct io_uv__client *c = timer->data;
     assert(c->state == DELAY);
     assert(c->stream == NULL);
+    tracef(c, "timer expired -> attempt to reconnect");
     client_connect(c); /* Retry to connect. */
 }
 
@@ -229,14 +253,16 @@ static void client_connect_cb(struct raft_io_uv_connect *req,
     void (*log)(struct raft_logger * logger, const char *format, ...);
     int rv;
 
+    tracef(c, "connect attempt completed -> status %d", status);
+
     assert(c->state == CONNECTING || c->state == CLOSING);
     assert(c->stream == NULL);
 
     /* If the transport has been closed before the connection was fully setup,
      * it means that we're shutting down: let's bail out. */
     if (status == RAFT_ERR_IO_CANCELED) {
-      /* We must be careful to not reference c->uv, since that io_uv object
-       * might have been released already. */
+        /* We must be careful to not reference c->uv, since that io_uv object
+         * might have been released already. */
         assert(stream == NULL);
         assert(c->state == CLOSING);
         uv_close((struct uv_handle_s *)&c->timer, timer_close_cb);
@@ -477,6 +503,7 @@ static void client_stop(struct io_uv__client *c)
      * makes sure that the connect and write callbacks get executed before we
      * destroy ourselves. */
     assert(c->stream != NULL);
+    tracef(c, "client stopped -> close outbound stream");
     uv_close((uv_handle_t *)c->stream, stream_close_cb);
 
 out:

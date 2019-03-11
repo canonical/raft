@@ -168,7 +168,7 @@ int raft_promote(struct raft *r, const unsigned id)
 
     last_index = raft_log__last_index(&r->log);
 
-    if (r->leader_state.match_index[server_index] == last_index) {
+    if (r->leader_state.replication[server_index].match_index == last_index) {
         /* The log of this non-voting server is already up-to-date, so we can
          * ask its promotion immediately. */
         r->configuration.servers[server_index].voting = true;

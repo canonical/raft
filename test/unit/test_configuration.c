@@ -101,8 +101,8 @@ static void tear_down(void *data)
 
 TEST_SUITE(index);
 
-static MunitTestSetup index__setup = setup;
-static MunitTestTearDown index__tear_down = tear_down;
+TEST_SETUP(index, setup);
+TEST_TEAR_DOWN(index, tear_down);
 
 TEST_GROUP(index, success);
 TEST_GROUP(index, error);
@@ -147,8 +147,8 @@ TEST_CASE(index, error, no_match, NULL)
 
 TEST_SUITE(get);
 
-static MunitTestSetup get__setup = setup;
-static MunitTestTearDown get__tear_down = tear_down;
+TEST_SETUP(get, setup);
+TEST_TEAR_DOWN(get, tear_down);
 
 TEST_GROUP(get, success);
 
@@ -194,8 +194,8 @@ TEST_CASE(get, success, no_match, NULL)
 
 TEST_SUITE(voting_index);
 
-static MunitTestSetup voting_index__setup = setup;
-static MunitTestTearDown voting_index__tear_down = tear_down;
+TEST_SETUP(voting_index, setup);
+TEST_TEAR_DOWN(voting_index, tear_down);
 
 TEST_GROUP(voting_index, success);
 
@@ -258,8 +258,8 @@ TEST_CASE(voting_index, success, non_voting, NULL)
 
 TEST_SUITE(n_voting);
 
-static MunitTestSetup n_voting__setup = setup;
-static MunitTestTearDown n_voting__tear_down = tear_down;
+TEST_SETUP(n_voting, setup);
+TEST_TEAR_DOWN(n_voting, tear_down);
 
 TEST_GROUP(n_voting, success);
 
@@ -286,8 +286,8 @@ TEST_CASE(n_voting, success, filter, NULL)
 
 TEST_SUITE(copy);
 
-static MunitTestSetup copy__setup = setup;
-static MunitTestTearDown copy__tear_down = tear_down;
+TEST_SETUP(copy, setup);
+TEST_TEAR_DOWN(copy, tear_down);
 
 TEST_GROUP(copy, success);
 TEST_GROUP(copy, error);
@@ -346,8 +346,8 @@ TEST_CASE(copy, error, oom, NULL)
 
 TEST_SUITE(add);
 
-static MunitTestSetup add__setup = setup;
-static MunitTestTearDown add__tear_down = tear_down;
+TEST_SETUP(add, setup);
+TEST_TEAR_DOWN(add, tear_down);
 
 TEST_GROUP(add, success);
 TEST_GROUP(add, error);
@@ -454,8 +454,8 @@ TEST_CASE(add, success, oom, add_oom_params)
 
 TEST_SUITE(remove);
 
-static MunitTestSetup remove__setup = setup;
-static MunitTestTearDown remove__tear_down = tear_down;
+TEST_SETUP(remove, setup);
+TEST_TEAR_DOWN(remove, tear_down);
 
 TEST_GROUP(remove, success);
 TEST_GROUP(remove, error);
@@ -556,8 +556,8 @@ TEST_CASE(remove, error, oom, NULL)
 
 TEST_SUITE(encode);
 
-static MunitTestSetup encode__setup = setup;
-static MunitTestTearDown encode__tear_down = tear_down;
+TEST_SETUP(encode, setup);
+TEST_TEAR_DOWN(encode, tear_down);
 
 TEST_GROUP(encode, error);
 TEST_GROUP(encode, success);
@@ -687,8 +687,8 @@ TEST_CASE(encode, success, two_servers, NULL)
 
 TEST_SUITE(decode);
 
-static MunitTestSetup decode__setup = setup;
-static MunitTestTearDown decode__tear_down = tear_down;
+TEST_SETUP(decode, setup);
+TEST_TEAR_DOWN(decode, tear_down);
 
 TEST_GROUP(decode, error);
 TEST_GROUP(decode, success);

@@ -109,8 +109,8 @@ struct __item
 
 TEST_SUITE(is_empty);
 
-static MunitTestSetup is_empty__setup = setup;
-static MunitTestTearDown is_empty__tear_down = tear_down;
+TEST_SETUP(is_empty, setup);
+TEST_TEAR_DOWN(is_empty, tear_down);
 
 TEST_GROUP(is_empty, success);
 
@@ -145,8 +145,8 @@ TEST_CASE(is_empty, success, no, NULL)
 
 TEST_SUITE(push);
 
-static MunitTestSetup push__setup = setup;
-static MunitTestTearDown push__tear_down = tear_down;
+TEST_SETUP(push, setup);
+TEST_TEAR_DOWN(push, tear_down);
 
 TEST_GROUP(push, success);
 
@@ -191,8 +191,8 @@ TEST_CASE(push, success, two, NULL)
 
 TEST_SUITE(remove);
 
-static MunitTestSetup remove__setup = setup;
-static MunitTestTearDown remove__tear_down = tear_down;
+TEST_SETUP(remove, setup);
+TEST_TEAR_DOWN(remove, tear_down);
 
 TEST_GROUP(remove, success);
 
@@ -250,8 +250,8 @@ TEST_CASE(remove, success, third, NULL)
 
 TEST_SUITE(tail);
 
-static MunitTestSetup tail__setup = setup;
-static MunitTestTearDown tail__tear_down = tear_down;
+TEST_SETUP(tail, setup);
+TEST_TEAR_DOWN(tail, tear_down);
 
 TEST_GROUP(tail, success);
 

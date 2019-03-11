@@ -118,7 +118,7 @@ static size_t test__io_uv_create_segment(const char *dir,
     unsigned crc1;
     unsigned crc2;
     uint8_t *batch; /* Start of the batch */
-    size_t header_size = raft_io_uv_sizeof__batch_header(1);
+    size_t header_size = io_uv__sizeof_batch_header(1);
     size_t data_size = __WORD_SIZE;
 
     size = __WORD_SIZE /* Format version */;

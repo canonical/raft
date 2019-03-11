@@ -10,21 +10,21 @@
 #include "../include/raft.h"
 
 int io_uv__encode_message(const struct raft_message *message,
-                               uv_buf_t **bufs,
-                               unsigned *n_bufs);
+                          uv_buf_t **bufs,
+                          unsigned *n_bufs);
 
-int raft_io_uv_decode__message(unsigned type,
-                               const uv_buf_t *header,
-                               struct raft_message *message,
-                               size_t *payload_len);
+int io_uv__decode_message(unsigned type,
+                          const uv_buf_t *header,
+                          struct raft_message *message,
+                          size_t *payload_len);
 
-int raft_io_uv_decode__batch_header(const void *batch,
-                                    struct raft_entry **entries,
-                                    unsigned *n);
+int io_uv__decode_batch_header(const void *batch,
+                               struct raft_entry **entries,
+                               unsigned *n);
 
-void raft_io_uv_decode__entries_batch(const struct raft_buffer *buf,
-                                      struct raft_entry *entries,
-                                      unsigned n);
+void io_uv__decode_entries_batch(const struct raft_buffer *buf,
+                                 struct raft_entry *entries,
+                                 unsigned n);
 
 /**
  * The layout of the memory pointed at by a @batch pointer is the following:
@@ -48,10 +48,10 @@ void raft_io_uv_decode__entries_batch(const struct raft_buffer *buf,
  * arbitrary lengths, possibly padded with extra bytes to reach 8-byte boundary
  * (which means that all entry data pointers are 8-byte aligned).
  */
-size_t raft_io_uv_sizeof__batch_header(size_t n);
+size_t io_uv__sizeof_batch_header(size_t n);
 
-void raft_io_uv_encode__batch_header(const struct raft_entry *entries,
-                                     unsigned n,
-                                     void *buf);
+void io_uv__encode_batch_header(const struct raft_entry *entries,
+                                unsigned n,
+                                void *buf);
 
 #endif /* RAFT_IO_UV_ENCODING_H */

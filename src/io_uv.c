@@ -42,13 +42,10 @@ static int io_uv__init(struct raft_io *io, unsigned id, const char *address)
 static void timer_cb(uv_timer_t *timer)
 {
     struct io_uv *uv;
-    uint64_t now;
     uv = timer->data;
-    now = uv_now(uv->loop);
     if (uv->tick_cb != NULL) {
-        uv->tick_cb(uv->io, now - uv->last_tick);
+        uv->tick_cb(uv->io);
     }
-    uv->last_tick = now;
 }
 
 /* Implementation of raft_io->start. */
@@ -63,12 +60,11 @@ static int io_uv__start(struct raft_io *io,
     assert(uv->state == IO_UV__ACTIVE);
     uv->tick_cb = tick_cb;
     uv->recv_cb = recv_cb;
-    uv->last_tick = uv_now(uv->loop);
     rv = io_uv__listen(uv);
     if (rv != 0) {
         return rv;
     }
-    rv = uv_timer_start(&uv->timer, timer_cb, 0, msecs);
+    rv = uv_timer_start(&uv->timer, timer_cb, msecs, msecs);
     assert(rv == 0);
     return 0;
 }
@@ -120,6 +116,7 @@ static void timer_close_cb(uv_handle_t *handle)
     io_uv__servers_stop(uv);
     io_uv__prepare_stop(uv);
     io_uv__append_stop(uv);
+    io_uv__truncate_stop(uv);
     uv->transport->close(uv->transport, transport_close_cb);
 }
 
@@ -214,6 +211,14 @@ static int io_uv__set_vote(struct raft_io *io, const unsigned server_id)
     return 0;
 }
 
+/* Implementation of raft_io->time. */
+static raft_time io_uv__time(struct raft_io *io)
+{
+    struct io_uv *uv;
+    uv = io->impl;
+    return uv_now(uv->loop);
+}
+
 /**
  * Open and allocate the first closed segment, containing just one entry, and
  * return its file descriptor.
@@ -296,6 +301,7 @@ int raft_io_uv_init(struct raft_io *io,
     uv->truncate_work.data = NULL;
     RAFT__QUEUE_INIT(&uv->snapshot_put_reqs);
     RAFT__QUEUE_INIT(&uv->snapshot_get_reqs);
+    uv->snapshot_put_work.data = NULL;
 
     /* Ensure that the data directory exists and is accessible */
     rv = io_uv__ensure_dir(logger, uv->dir);
@@ -322,7 +328,6 @@ int raft_io_uv_init(struct raft_io *io,
     uv->n_blocks = RAFT_IO_UV_MAX_SEGMENT_SIZE / uv->block_size;
 
     uv->tick_cb = NULL;
-    uv->last_tick = 0;
     uv->close_cb = NULL;
 
     /* Set the raft_io implementation. */
@@ -339,6 +344,7 @@ int raft_io_uv_init(struct raft_io *io,
     io->send = io_uv__send;
     io->snapshot_put = io_uv__snapshot_put;
     io->snapshot_get = io_uv__snapshot_get;
+    io->time = io_uv__time;
 
     return 0;
 
@@ -460,14 +466,14 @@ static int raft__io_uv_write_closed_1_1(struct io_uv *uv,
 
     /* Make sure that the given encoded configuration fits in the first
      * block */
-    cap = uv->block_size - (sizeof(uint64_t) /* Format version */ +
-                            sizeof(uint64_t) /* Checksums */ +
-                            raft_io_uv_sizeof__batch_header(1));
+    cap = uv->block_size -
+          (sizeof(uint64_t) /* Format version */ +
+           sizeof(uint64_t) /* Checksums */ + io_uv__sizeof_batch_header(1));
     if (conf->len > cap) {
         return RAFT_ERR_IO_TOOBIG;
     }
 
-    len = sizeof(uint64_t) * 2 + raft_io_uv_sizeof__batch_header(1) + conf->len;
+    len = sizeof(uint64_t) * 2 + io_uv__sizeof_batch_header(1) + conf->len;
     buf = malloc(len);
     if (buf == NULL) {
         return RAFT_ENOMEM;
@@ -495,7 +501,7 @@ static int raft__io_uv_write_closed_1_1(struct io_uv *uv,
 
     memcpy(cursor, conf->base, conf->len);
 
-    crc1 = byte__crc32(header, raft_io_uv_sizeof__batch_header(1), 0);
+    crc1 = byte__crc32(header, io_uv__sizeof_batch_header(1), 0);
     byte__put32(&crc1_p, crc1);
 
     crc2 = byte__crc32(conf->base, conf->len, 0);

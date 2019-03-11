@@ -60,8 +60,8 @@ static void tear_down(void *data)
 
 TEST_SUITE(reset_timer);
 
-static MunitTestSetup reset_timer__setup = setup;
-static MunitTestTearDown reset_timer__tear_down = tear_down;
+TEST_SETUP(reset_timer, setup);
+TEST_TEAR_DOWN(reset_timer, tear_down);
 
 TEST_GROUP(reset_timer, success);
 
@@ -92,8 +92,8 @@ TEST_CASE(reset_timer, success, range, NULL)
 
 TEST_SUITE(start);
 
-static MunitTestSetup start__setup = setup;
-static MunitTestTearDown start__tear_down = tear_down;
+TEST_SETUP(start, setup);
+TEST_TEAR_DOWN(start, tear_down);
 
 TEST_GROUP(start, error);
 
@@ -195,8 +195,8 @@ TEST_CASE(start, error, send_messages, NULL)
 
 TEST_SUITE(vote);
 
-static MunitTestSetup vote__setup = setup;
-static MunitTestTearDown vote__tear_down = tear_down;
+TEST_SETUP(vote, setup);
+TEST_TEAR_DOWN(vote, tear_down);
 
 TEST_GROUP(vote, success);
 TEST_GROUP(vote, error);

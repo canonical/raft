@@ -157,8 +157,8 @@ static void tear_down(void *data)
 
 TEST_SUITE(request);
 
-static MunitTestSetup request__setup = setup;
-static MunitTestTearDown request__tear_down = tear_down;
+TEST_SETUP(request, setup);
+TEST_TEAR_DOWN(request, tear_down);
 
 TEST_GROUP(request, error);
 TEST_GROUP(request, success);
@@ -447,13 +447,13 @@ TEST_CASE(request, error, last_idx_lower_index, NULL)
 
 TEST_SUITE(response);
 
-static MunitTestSetup response__setup = setup;
-static MunitTestTearDown response__tear_down = tear_down;
+TEST_SETUP(response, setup);
+TEST_TEAR_DOWN(response, tear_down);
 
 TEST_GROUP(response, error);
 TEST_GROUP(response, success);
 
-static char *res_oom_heap_fault_delay[] = {"0", "1", NULL};
+static char *res_oom_heap_fault_delay[] = {"0", NULL};
 static char *res_oom_heap_fault_repeat[] = {"1", NULL};
 
 static MunitParameterEnum res_oom_params[] = {
@@ -501,15 +501,15 @@ TEST_CASE(response, success, quorum, NULL)
     /* We are leader */
     __assert_state(f, RAFT_STATE_LEADER);
 
+    munit_assert_ptr_not_null(f->raft.leader_state.replication);
+
     /* The next_index array is initialized */
-    munit_assert_ptr_not_null(f->raft.leader_state.next_index);
-    munit_assert_int(f->raft.leader_state.next_index[0], ==, 2);
-    munit_assert_int(f->raft.leader_state.next_index[1], ==, 2);
+    munit_assert_int(f->raft.leader_state.replication[0].next_index, ==, 2);
+    munit_assert_int(f->raft.leader_state.replication[1].next_index, ==, 2);
 
     /* The match_index array is initialized */
-    munit_assert_ptr_not_null(f->raft.leader_state.match_index);
-    munit_assert_int(f->raft.leader_state.match_index[0], ==, 0);
-    munit_assert_int(f->raft.leader_state.match_index[1], ==, 0);
+    munit_assert_int(f->raft.leader_state.replication[0].match_index, ==, 0);
+    munit_assert_int(f->raft.leader_state.replication[1].match_index, ==, 0);
 
     /* We have sent heartbeats */
     __assert_heartbeat(f, 2, 2, 1, 1);

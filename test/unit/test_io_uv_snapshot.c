@@ -23,6 +23,7 @@ struct put_fixture
     struct raft_buffer bufs[2];
     bool invoked;
     int status;
+    bool appended;
 };
 
 static void put_cb(struct raft_io_snapshot_put *req, int status)
@@ -30,6 +31,7 @@ static void put_cb(struct raft_io_snapshot_put *req, int status)
     struct put_fixture *f = req->data;
     f->invoked = true;
     f->status = status;
+    f->appended = false;
 }
 
 static bool put_cb_was_invoked(void *data)
@@ -68,6 +70,52 @@ TEST_TEAR_DOWN(put)
     raft_free(f->bufs[1].base);
     IO_UV_TEAR_DOWN;
 }
+
+static void append_cb(void *data, int status)
+{
+    struct put_fixture *f = data;
+    munit_assert_int(status, ==, 0);
+    f->appended = true;
+}
+
+/* Append N entries to the log. */
+#define append(N)                                                       \
+    {                                                                   \
+        int rv;                                                         \
+        int i;                                                          \
+        struct raft_entry *entries = munit_malloc(N * sizeof *entries); \
+        for (i = 0; i < N; i++) {                                       \
+            struct raft_entry *entry = &entries[i];                     \
+            entry->term = 1;                                            \
+            entry->type = RAFT_LOG_COMMAND;                             \
+            entry->buf.base = munit_malloc(8);                          \
+            entry->buf.len = 8;                                         \
+            entry->batch = NULL;                                        \
+        }                                                               \
+        rv = f->io.append(&f->io, entries, N, f, append_cb);            \
+        munit_assert_int(rv, ==, 0);                                    \
+                                                                        \
+        for (i = 0; i < 5; i++) {                                       \
+            test_uv_run(&f->loop, 1);                                   \
+            if (f->appended) {                                          \
+                break;                                                  \
+            }                                                           \
+        }                                                               \
+        munit_assert(f->appended);                                      \
+        for (i = 0; i < N; i++) {                                       \
+            struct raft_entry *entry = &entries[i];                     \
+            free(entry->buf.base);                                      \
+        }                                                               \
+        free(entries);                                                  \
+    }
+
+/* Submit a request to truncate the log at N */
+#define truncate(N)                     \
+    {                                   \
+        int rv;                         \
+        rv = f->io.truncate(&f->io, N); \
+        munit_assert_int(rv, ==, 0);    \
+    }
 
 /* Invoke the snapshot_put method and check that it returns the given code. */
 #define put__invoke(RV)                                                 \
@@ -111,6 +159,24 @@ TEST_CASE(put, first, NULL)
     raft_snapshot__close(&snapshot);
 
     raft_free(snapshots);
+
+    return MUNIT_OK;
+}
+
+/* Request to install a snapshot right after a truncation request. */
+TEST_CASE(put, after_truncate, NULL)
+{
+    struct put_fixture *f = data;
+
+    (void)params;
+
+    append(4);
+    truncate(1);
+
+    put__invoke(0);
+    put__wait_cb(0);
+
+    munit_assert_true(RAFT__QUEUE_IS_EMPTY(&f->uv->snapshot_put_reqs));
 
     return MUNIT_OK;
 }

@@ -98,11 +98,8 @@ void test_set_initial_snapshot(struct raft *r,
 
 void test_become_candidate(struct raft *r)
 {
-    int rv;
-
     /* Become candidate */
-    rv = raft__tick(r, r->election_timeout_rand + 100);
-    munit_assert_int(rv, ==, 0);
+    raft_io_stub_advance(r->io, r->election_timeout_rand + 100);
 
     munit_assert_int(r->state, ==, RAFT_STATE_CANDIDATE);
 

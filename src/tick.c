@@ -16,7 +16,7 @@
 /**
  * Apply time-dependent rules for followers (Figure 3.1).
  */
-static int raft_tick__follower(struct raft *r)
+static int follower_tick(struct raft *r)
 {
     const struct raft_server *server;
     int rv;
@@ -76,7 +76,7 @@ static int raft_tick__follower(struct raft *r)
 /**
  * Apply time-dependent rules for candidates (Figure 3.1).
  */
-static int raft_tick__candidate(struct raft *r)
+static int candidate_tick(struct raft *r)
 {
     assert(r != NULL);
     assert(r->state == RAFT_STATE_CANDIDATE);
@@ -100,13 +100,60 @@ static int raft_tick__candidate(struct raft *r)
 }
 
 /**
+ * Return true if the leader has been contacted by a majority of servers in the
+ * last @election_timeout milliseconds.
+ */
+static bool leader_has_been_contacted_by_majority_of_servers(struct raft *r)
+{
+    raft_time now = r->io->time(r->io);
+    unsigned i;
+    unsigned contacts = 0;
+
+    for (i = 0; i < r->configuration.n; i++) {
+        struct raft_server *server = &r->configuration.servers[i];
+        struct raft_replication *replication = &r->leader_state.replication[i];
+
+        if (!server->voting) {
+            continue;
+        }
+
+        if (server->id == r->id) {
+            contacts++;
+            continue;
+        }
+
+        if (now - replication->last_contact < r->election_timeout) {
+            contacts++;
+        }
+    }
+
+    return contacts > configuration__n_voting(&r->configuration) / 2;
+}
+
+/**
  * Apply time-dependent rules for leaders (Figure 3.1).
  */
-static int raft_tick__leader(struct raft *r,
-                             const unsigned msec_since_last_tick)
+static int leader_tick(struct raft *r, const unsigned msec_since_last_tick)
 {
+    int rv;
+
     assert(r != NULL);
     assert(r->state == RAFT_STATE_LEADER);
+
+    /* Check if we still can reach a majority of servers.
+     *
+     * From Section 6.2:
+     *
+     *   A leader in Raft steps down if an election timeout elapses without a
+     *   successful round of heartbeats to a majority of its cluster; this
+     *   allows clients to retry their requests with another server.
+     */
+    if (!leader_has_been_contacted_by_majority_of_servers(r)) {
+        raft_warnf(r->logger,
+                   "unable to contact majority of cluster -> step down");
+        rv = raft_state__convert_to_follower(r, r->current_term);
+        return rv;
+    }
 
     /* Check if we need to send heartbeats.
      *
@@ -168,9 +215,11 @@ static int raft_tick__leader(struct raft *r,
     return 0;
 }
 
-int raft__tick(struct raft *r, const unsigned msec_since_last_tick)
+int raft__tick(struct raft *r)
 {
     int rv;
+    raft_time now;
+    unsigned msecs_since_last_tick;
 
     assert(r != NULL);
 
@@ -183,17 +232,21 @@ int raft__tick(struct raft *r, const unsigned msec_since_last_tick)
         return 0;
     }
 
-    r->timer += msec_since_last_tick;
+    now = r->io->time(r->io);
+
+    msecs_since_last_tick = now - r->last_tick;
+    r->timer += msecs_since_last_tick;
+    r->last_tick = now;
 
     switch (r->state) {
         case RAFT_STATE_FOLLOWER:
-            rv = raft_tick__follower(r);
+            rv = follower_tick(r);
             break;
         case RAFT_STATE_CANDIDATE:
-            rv = raft_tick__candidate(r);
+            rv = candidate_tick(r);
             break;
         case RAFT_STATE_LEADER:
-            rv = raft_tick__leader(r, msec_since_last_tick);
+            rv = leader_tick(r, msecs_since_last_tick);
             break;
         default:
             rv = RAFT_ERR_INTERNAL;

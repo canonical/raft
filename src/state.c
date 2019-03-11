@@ -32,14 +32,9 @@ static void raft_state__clear_candidate(struct raft *r)
  */
 static void raft_state__clear_leader(struct raft *r)
 {
-    if (r->leader_state.next_index != NULL) {
-        raft_free(r->leader_state.next_index);
-        r->leader_state.next_index = NULL;
-    }
-
-    if (r->leader_state.match_index != NULL) {
-        raft_free(r->leader_state.match_index);
-        r->leader_state.match_index = NULL;
+    if (r->leader_state.replication != NULL) {
+        raft_free(r->leader_state.replication);
+        r->leader_state.replication = NULL;
     }
 
     /* If a promotion request is in progress and we are waiting for the server
@@ -212,27 +207,18 @@ err:
 }
 
 /**
- * Allocate the given next/match indexes.
+ * Allocate the replication state for n_servers.
  */
-static int raft_state__alloc_next_and_match_indexes(struct raft *r,
-                                                    size_t n_servers,
-                                                    raft_index **next_index,
-                                                    raft_index **match_index)
+static int alloc_replication(size_t n_servers,
+                             struct raft_replication **replication)
 {
     int rv;
 
     assert(n_servers > 0);
-    assert(next_index != NULL);
-    assert(match_index != NULL);
+    assert(replication != NULL);
 
-    *next_index = raft_calloc(n_servers, sizeof **next_index);
-    if (*next_index == NULL) {
-        rv = RAFT_ENOMEM;
-        goto err;
-    }
-
-    *match_index = raft_calloc(n_servers, sizeof **match_index);
-    if (*match_index == NULL) {
+    *replication = raft_calloc(n_servers, sizeof **replication);
+    if (*replication == NULL) {
         rv = RAFT_ENOMEM;
         goto err;
     }
@@ -258,17 +244,22 @@ int raft_state__convert_to_leader(struct raft *r)
     raft_state__change(r, RAFT_STATE_LEADER);
 
     /* Allocate the next_index and match_index arrays. */
-    rv = raft_state__alloc_next_and_match_indexes(r, r->configuration.n,
-                                                  &r->leader_state.next_index,
-                                                  &r->leader_state.match_index);
+    rv = alloc_replication(r->configuration.n, &r->leader_state.replication);
     if (rv != 0) {
         goto err;
     }
 
-    /* Initialize the next_index and match_index arrays. */
+    /* Initialize the replication state for each server. We optimistically
+     * assume that servers are up-to-date and back track if turns out not to be
+     * so (TODO: include reference to raft paper). */
     for (i = 0; i < r->configuration.n; i++) {
-        r->leader_state.next_index[i] = raft_log__last_index(&r->log) + 1;
-        r->leader_state.match_index[i] = 0;
+        struct raft_replication *replication = &r->leader_state.replication[i];
+        replication->next_index = raft_log__last_index(&r->log) + 1;
+        replication->match_index = 0;
+	/* TODO: we should keep a last_contact array which is independent from
+	 * the replication array, and keep it up-to-date.  */
+	replication->last_contact = 0;
+	replication->state = REPLICATION__PROBE;
     }
 
     /* Notify watchers */
@@ -291,8 +282,7 @@ int raft_state__rebuild_next_and_match_indexes(
     struct raft *r,
     const struct raft_configuration *configuration)
 {
-    raft_index *next_index;  /* New next index */
-    raft_index *match_index; /* New match index */
+    struct raft_replication *replication; /* New replication array */
     size_t i;
     int rv;
 
@@ -300,15 +290,14 @@ int raft_state__rebuild_next_and_match_indexes(
     assert(configuration != NULL);
     assert(r->state == RAFT_STATE_LEADER);
 
-    /* Allocate the new next_index and match_index arrays. */
-    rv = raft_state__alloc_next_and_match_indexes(r, configuration->n,
-                                                  &next_index, &match_index);
+    /* Allocate the new replication states array. */
+    rv = alloc_replication(configuration->n, &replication);
     if (rv != 0) {
         goto err;
     }
 
-    /* First copy the current next/match index value for the servers that exists
-     * both in the current and in the new configuration. */
+    /* First copy the current replication state for the servers that exists both
+     * in the current and in the new configuration. */
     for (i = 0; i < r->configuration.n; i++) {
         unsigned id = r->configuration.servers[i].id;
         size_t j = configuration__index_of(configuration, id);
@@ -319,12 +308,11 @@ int raft_state__rebuild_next_and_match_indexes(
             continue;
         }
 
-        next_index[j] = r->leader_state.next_index[i];
-        match_index[j] = r->leader_state.match_index[j];
+        replication[j] = r->leader_state.replication[i];
     }
 
-    /* The reset the next/match index value for servers that are present in the
-     * new configuration, but not in the current one. */
+    /* Then reset the replication state for servers that are present in the new
+     * configuration, but not in the current one. */
     for (i = 0; i < configuration->n; i++) {
         unsigned id = configuration->servers[i].id;
         size_t j = configuration__index_of(&r->configuration, id);
@@ -338,15 +326,14 @@ int raft_state__rebuild_next_and_match_indexes(
 
         assert(j == r->configuration.n);
 
-        next_index[i] = raft_log__last_index(&r->log) + 1;
-        match_index[i] = 0;
+        replication[i].next_index = raft_log__last_index(&r->log) + 1;
+        replication[i].match_index = 0;
+	replication[i].last_contact = r->io->time(r->io);
     }
 
-    raft_free(r->leader_state.next_index);
-    raft_free(r->leader_state.match_index);
+    raft_free(r->leader_state.replication);
 
-    r->leader_state.next_index = next_index;
-    r->leader_state.match_index = match_index;
+    r->leader_state.replication = replication;
 
     return 0;
 

@@ -164,8 +164,8 @@ static void tear_down(void *data)
 
 TEST_SUITE(append);
 
-static MunitTestSetup append__setup = setup;
-static MunitTestTearDown append__tear_down = tear_down;
+TEST_SETUP(append, setup);
+TEST_TEAR_DOWN(append, tear_down);
 
 TEST_GROUP(append, error);
 TEST_GROUP(append, success);
@@ -378,8 +378,8 @@ TEST_CASE(append, success, batch, NULL)
 
 TEST_SUITE(append_configuration);
 
-static MunitTestSetup append_configuration__setup = setup;
-static MunitTestTearDown append_configuration__tear_down = tear_down;
+TEST_SETUP(append_configuration, setup);
+TEST_TEAR_DOWN(append_configuration, tear_down);
 
 TEST_GROUP(append_configuration, error);
 
@@ -422,8 +422,8 @@ TEST_CASE(append_configuration, error, _oom, append_configuration_oom_params)
 
 TEST_SUITE(n_entries);
 
-static MunitTestSetup n_entries__setup = setup;
-static MunitTestTearDown n_entries__tear_down = tear_down;
+TEST_SETUP(n_entries, setup);
+TEST_TEAR_DOWN(n_entries, tear_down);
 
 TEST_GROUP(n_entries, success);
 
@@ -463,8 +463,8 @@ TEST_CASE(n_entries, success, not_wrapped, NULL)
 
 TEST_SUITE(first_index);
 
-static MunitTestSetup first_index__setup = setup;
-static MunitTestTearDown first_index__tear_down = tear_down;
+TEST_SETUP(first_index, setup);
+TEST_TEAR_DOWN(first_index, tear_down);
 
 TEST_GROUP(first_index, success);
 
@@ -475,6 +475,19 @@ TEST_CASE(first_index, success, empty, NULL)
 
     (void)params;
 
+    munit_assert_int(raft_log__first_index(&f->log), ==, 0);
+
+    return MUNIT_OK;
+}
+
+/* The log is empty but has an offset. */
+TEST_CASE(first_index, success, empty_with_offset, NULL)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    raft_log__set_offset(&f->log, 10);
     munit_assert_int(raft_log__first_index(&f->log), ==, 0);
 
     return MUNIT_OK;
@@ -500,8 +513,8 @@ TEST_CASE(first_index, success, one_entry, NULL)
 
 TEST_SUITE(last_term);
 
-static MunitTestSetup last_term__setup = setup;
-static MunitTestTearDown last_term__tear_down = tear_down;
+TEST_SETUP(last_term, setup);
+TEST_TEAR_DOWN(last_term, tear_down);
 
 TEST_GROUP(last_term, success);
 
@@ -527,7 +540,7 @@ TEST_SETUP(last_index, setup);
 TEST_TEAR_DOWN(last_index, tear_down);
 
 /* If the log is empty, last index is 0. */
-TEST_CASE(last_index, empty_log, NULL)
+TEST_CASE(last_index, empty, NULL)
 {
     struct fixture *f = data;
 
@@ -538,16 +551,30 @@ TEST_CASE(last_index, empty_log, NULL)
     return MUNIT_OK;
 }
 
+/* If the log is empty and has an offset, last index is 0. */
+TEST_CASE(last_index, empty_with_offset, NULL)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    raft_log__set_offset(&f->log, 10);
+    munit_assert_int(raft_log__last_index(&f->log), ==, 0);
+
+    return MUNIT_OK;
+}
+
 /* If the log starts at a certain offset, the last index is bumped
  * accordingly. */
-TEST_CASE(last_index, empty_log_with_offset, NULL)
+TEST_CASE(last_index, with_offset, NULL)
 {
     struct fixture *f = data;
 
     (void)params;
 
     raft_log__set_offset(&f->log, 3);
-    munit_assert_int(raft_log__last_index(&f->log), ==, 3);
+    __append_empty_entry(f);
+    munit_assert_int(raft_log__last_index(&f->log), ==, 4);
 
     return MUNIT_OK;
 }
@@ -558,8 +585,8 @@ TEST_CASE(last_index, empty_log_with_offset, NULL)
 
 TEST_SUITE(acquire);
 
-static MunitTestSetup acquire__setup = setup;
-static MunitTestTearDown acquire__tear_down = tear_down;
+TEST_SETUP(acquire, setup);
+TEST_TEAR_DOWN(acquire, tear_down);
 
 TEST_GROUP(acquire, error);
 TEST_GROUP(acquire, success);
@@ -753,8 +780,8 @@ TEST_CASE(acquire, success, batch, NULL)
 
 TEST_SUITE(truncate);
 
-static MunitTestSetup truncate__setup = setup;
-static MunitTestTearDown truncate__tear_down = tear_down;
+TEST_SETUP(truncate, setup);
+TEST_TEAR_DOWN(truncate, tear_down);
 
 TEST_GROUP(truncate, success);
 TEST_GROUP(truncate, error);
@@ -926,6 +953,19 @@ TEST_CASE(truncate, success, acquired, NULL)
     return MUNIT_OK;
 }
 
+/* Truncate an empty log which has an offset. */
+TEST_CASE(truncate, success, empty_with_offset, NULL)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    raft_log__set_offset(&f->log, 10);
+    raft_log__truncate(&f->log, 1);
+
+    return MUNIT_OK;
+}
+
 static char *truncate_acquired_heap_fault_delay[] = {"0", NULL};
 static char *truncate_acquired_fault_repeat[] = {"1", NULL};
 
@@ -1006,8 +1046,8 @@ TEST_CASE(truncate, success, acquire_append, NULL)
 
 TEST_SUITE(shift);
 
-static MunitTestSetup shift__setup = setup;
-static MunitTestTearDown shift__tear_down = tear_down;
+TEST_SETUP(shift, setup);
+TEST_TEAR_DOWN(shift, tear_down);
 
 TEST_GROUP(shift, success);
 

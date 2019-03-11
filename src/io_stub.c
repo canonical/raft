@@ -10,7 +10,7 @@
 #include "snapshot.h"
 
 /* Set to 1 to enable logging. */
-#if 1
+#if 0
 #define __debugf(S, MSG, ...) raft_debugf(S->logger, MSG, __VA_ARGS__)
 #else
 #define __debugf(S, MSG, ...)
@@ -37,7 +37,7 @@ struct send
 struct io_stub
 {
     /* Elapsed time since the backend was started. */
-    unsigned time;
+    raft_time time;
 
     /* Term and vote */
     raft_term term;
@@ -511,8 +511,15 @@ static int io_stub__truncate(struct raft_io *io, raft_index index)
         }
         s->entries = entries;
     } else {
-        free(s->entries);
-        s->entries = NULL;
+        /* Release everything we have */
+        if (s->entries != NULL) {
+            size_t i;
+            for (i = 0; i < s->n; i++) {
+                raft_free(s->entries[i].buf.base);
+            }
+            raft_free(s->entries);
+            s->entries = NULL;
+        }
     }
 
     s->n = n;
@@ -561,6 +568,14 @@ static int io_stub__snapshot_get(struct raft_io *io,
     s->snapshot_get = req;
 
     return 0;
+}
+
+static raft_time io_stub__time(struct raft_io *io)
+{
+    struct io_stub *s;
+    s = io->impl;
+
+    return s->time;
 }
 
 /**
@@ -632,6 +647,7 @@ int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger)
     io->send = io_stub__send;
     io->snapshot_put = io_stub__snapshot_put;
     io->snapshot_get = io_stub__snapshot_get;
+    io->time = io_stub__time;
 
     return 0;
 }
@@ -679,14 +695,16 @@ static void io_stub__reset_flushed(struct io_stub *s)
 void raft_io_stub_advance(struct raft_io *io, unsigned msecs)
 {
     struct io_stub *s;
-
-    assert(io != NULL);
-
     s = io->impl;
-
     s->time += msecs;
+    s->tick_cb(io);
+}
 
-    s->tick_cb(io, msecs);
+void raft_io_stub_set_time(struct raft_io *io, unsigned time)
+{
+    struct io_stub *s;
+    s = io->impl;
+    s->time = time;
 }
 
 /**

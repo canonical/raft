@@ -52,7 +52,7 @@ struct segment
     size_t size;                   /* Total number of bytes used */
     unsigned next_block;           /* Next segment block to write */
     uv_buf_t arena;                /* Memory for the write buffer */
-    uv_buf_t buf;                  /* Write buffer */
+    uv_buf_t buf;                  /* Write buffer for current write */
     size_t scheduled;              /* Number of bytes of the next write */
     size_t written;                /* Number of bytes actually written */
     raft__queue queue;             /* Segment queue */
@@ -86,9 +86,9 @@ static void init_append_req(struct append *r,
     r->data = data;
     r->cb = cb;
 
-    r->size = sizeof(uint32_t) * 2;                   /* CRC checksums */
-    r->size += raft_io_uv_sizeof__batch_header(r->n); /* Batch header */
-    for (i = 0; i < r->n; i++) {                      /* Entries data */
+    r->size = sizeof(uint32_t) * 2;              /* CRC checksums */
+    r->size += io_uv__sizeof_batch_header(r->n); /* Batch header */
+    for (i = 0; i < r->n; i++) {                 /* Entries data */
         size_t len = r->entries[i].buf.len;
         r->size += len;
         if (len % 8 != 0) {
@@ -97,8 +97,8 @@ static void init_append_req(struct append *r,
     }
 }
 
-/* Return @true if the remaining capacity of the segment is equal or greater
- * than @size. */
+/* Return #true if the remaining capacity of the given segment is equal or
+ * greater than @size. */
 static bool segment_has_enough_spare_capacity(struct segment *s, size_t size)
 {
     size_t cap = s->uv->block_size * s->uv->n_blocks;
@@ -142,7 +142,7 @@ static int ensure_segment_write_buf_is_large_enough(struct segment *s,
      * since it might have data that we want to retain in the next write. */
     if (s->arena.base != NULL) {
         assert(s->arena.len >= s->uv->block_size);
-        memcpy(base, s->arena.base, s->uv->block_size);
+        memcpy(base, s->arena.base, s->arena.len);
         free(s->arena.base);
     }
 
@@ -153,7 +153,8 @@ static int ensure_segment_write_buf_is_large_enough(struct segment *s,
 }
 
 /* Extend the segment's write buffer by encoding the entries in the given
- * request into it. */
+ * request into it. IOW, previous data in the write buffeer will be retained,
+ * and data for these new entries will be appendede. */
 static int encode_entries_to_segment_write_buf(struct segment *s,
                                                struct append *req)
 {
@@ -198,9 +199,9 @@ static int encode_entries_to_segment_write_buf(struct segment *s,
 
     /* Batch header */
     header = cursor;
-    raft_io_uv_encode__batch_header(req->entries, req->n, cursor);
-    crc1 = byte__crc32(header, raft_io_uv_sizeof__batch_header(req->n), 0);
-    cursor += raft_io_uv_sizeof__batch_header(req->n);
+    io_uv__encode_batch_header(req->entries, req->n, cursor);
+    crc1 = byte__crc32(header, io_uv__sizeof_batch_header(req->n), 0);
+    cursor += io_uv__sizeof_batch_header(req->n);
 
     /* Batch data */
     crc2 = 0;
@@ -246,9 +247,6 @@ static void finalize_segment(struct segment *s)
         free(s->arena.base);
     }
     RAFT__QUEUE_REMOVE(&s->queue);
-    int n = 0;
-    raft__queue *head;
-    RAFT__QUEUE_FOREACH(head, &uv->append_segments) { n++; }
 
     raft_free(s);
     io_uv__maybe_close(uv);
@@ -449,10 +447,16 @@ prepare:
 
     /* If we have no more requests for this segment, let's check if it has been
      * marked for closing, and in that case finalize it and possibly trigger a
-     * write against the next segment. */
+     * write against the next segment (unless there is a truncate request, in
+     * that case we need to wait for it). Otherwise it must mean we have
+     * exhausted the queue of pending append requests. */
     if (n_reqs == 0) {
+        assert(RAFT__QUEUE_IS_EMPTY(&uv->append_writing_reqs));
         if (segment->finalize) {
             finalize_segment(segment);
+            if (!RAFT__QUEUE_IS_EMPTY(&uv->truncate_reqs)) {
+                return;
+            }
             if (!RAFT__QUEUE_IS_EMPTY(&uv->append_pending_reqs)) {
                 goto prepare;
             }
@@ -567,7 +571,7 @@ err:
 static int enqueue_append_request(struct io_uv *uv, struct append *req)
 {
     struct segment *segment;
-    raft__queue *head;
+    raft__queue *tail;
     bool fits;
     int rv;
 
@@ -589,8 +593,8 @@ static int enqueue_append_request(struct io_uv *uv, struct append *req)
     if (RAFT__QUEUE_IS_EMPTY(&uv->append_segments)) {
         fits = false;
     } else {
-        head = RAFT__QUEUE_HEAD(&uv->append_segments);
-        segment = RAFT__QUEUE_DATA(head, struct segment, queue);
+        tail = RAFT__QUEUE_HEAD(&uv->append_segments);
+        segment = RAFT__QUEUE_DATA(tail, struct segment, queue);
         fits = segment_has_enough_spare_capacity(segment, req->size);
         if (!fits) {
             segment->finalize = true; /* Finalize when all writes are done */
@@ -607,8 +611,8 @@ static int enqueue_append_request(struct io_uv *uv, struct append *req)
     }
 
     /* Get the last added segment */
-    head = RAFT__QUEUE_TAIL(&uv->append_segments);
-    segment = RAFT__QUEUE_DATA(head, struct segment, queue);
+    tail = RAFT__QUEUE_TAIL(&uv->append_segments);
+    segment = RAFT__QUEUE_DATA(tail, struct segment, queue);
 
     reserve_segment_capacity(segment, req->size);
 
@@ -726,9 +730,22 @@ void io_uv__append_unblock(struct io_uv *uv)
 
 void io_uv__append_stop(struct io_uv *uv)
 {
+    struct segment *s;
+    raft__queue *tail;
+
     flush_append_requests(&uv->append_pending_reqs, RAFT_ERR_IO_CANCELED);
-    /* TODO: we should also finalize the segments that we didn't write at all
-     * and are just sitting in the append_segments queue waiting for writes
-     * against the current segment to complete. */
     finalize_current_segment(uv);
+
+    /* Also finalize the segments that we didn't write at all and are just
+     * sitting in the append_segments queue waiting for writes against the
+     * current segment to complete. */
+    while (!RAFT__QUEUE_IS_EMPTY(&uv->append_segments)) {
+        tail = RAFT__QUEUE_TAIL(&uv->append_segments);
+        s = RAFT__QUEUE_DATA(tail, struct segment, queue);
+        if (s->finalize) {
+            break; /* This is the current segment, which is the head */
+        }
+        assert(s->written == 0);
+        finalize_segment(s);
+    }
 }

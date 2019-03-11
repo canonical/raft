@@ -20,8 +20,8 @@ struct fixture
     struct raft_entry *entries;
     unsigned n;
     int count;   /* To generate deterministic entry data */
-    int invoked; /* Number of append_cb was invoked */
-    int status;  /* Last status passed append_cb */
+    int invoked; /* Number of times append_cb was invoked */
+    int status;  /* Last status passed to append_cb */
 };
 
 struct append_req
@@ -127,78 +127,79 @@ static void append_cb(void *data, int status)
 
 /* Assert that the open segment with the given counter has format version 1 and
  * N entries with a total data size of S bytes. */
-#define assert_segment(COUNTER, N, SIZE)                                      \
-    {                                                                         \
-        struct raft_buffer buf;                                               \
-        const void *cursor;                                                   \
-        char filename[strlen("open-N") + 1];                                  \
-        unsigned i = 0;                                                       \
-        size_t total_data_size = 0;                                           \
-                                                                              \
-        sprintf(filename, "open-%d", COUNTER);                                \
-                                                                              \
-        buf.len = MAX_SEGMENT_BLOCKS * f->uv->block_size;                     \
-        buf.base = munit_malloc(buf.len);                                     \
-                                                                              \
-        test_dir_read_file(f->dir, filename, buf.base, buf.len);              \
-                                                                              \
-        cursor = buf.base;                                                    \
-        munit_assert_int(byte__get64(&cursor), ==, 1);                        \
-                                                                              \
-        while (i < N) {                                                       \
-            unsigned crc1 = byte__get32(&cursor);                             \
-            unsigned crc2 = byte__get32(&cursor);                             \
-            const void *header = cursor;                                      \
-            const void *data;                                                 \
-            unsigned n = byte__get64(&cursor);                                \
-            struct raft_entry *entries = munit_malloc(n * sizeof *entries);   \
-            unsigned j;                                                       \
-            unsigned crc;                                                     \
-            size_t data_size = 0;                                             \
-                                                                              \
-            for (j = 0; j < n; j++) {                                         \
-                struct raft_entry *entry = &entries[j];                       \
-                                                                              \
-                entry->term = byte__get64(&cursor);                           \
-                entry->type = byte__get8(&cursor);                            \
-                byte__get8(&cursor);                                          \
-                byte__get8(&cursor);                                          \
-                byte__get8(&cursor);                                          \
-                entry->buf.len = byte__get32(&cursor);                        \
-                                                                              \
-                munit_assert_int(entry->term, ==, 1);                         \
-                munit_assert_int(entry->type, ==, RAFT_LOG_COMMAND);          \
-                                                                              \
-                data_size += entry->buf.len;                                  \
-            }                                                                 \
-                                                                              \
-            crc = byte__crc32(header, raft_io_uv_sizeof__batch_header(n), 0); \
-            munit_assert_int(crc, ==, crc1);                                  \
-                                                                              \
-            data = cursor;                                                    \
-                                                                              \
-            for (j = 0; j < n; j++) {                                         \
-                struct raft_entry *entry = &entries[j];                       \
-                uint64_t value;                                               \
-                                                                              \
-                value = byte__flip64(*(uint64_t *)cursor);                    \
-                munit_assert_int(value, ==, i);                               \
-                                                                              \
-                cursor += entry->buf.len;                                     \
-                                                                              \
-                i++;                                                          \
-            }                                                                 \
-                                                                              \
-            crc = byte__crc32(data, data_size, 0);                            \
-            munit_assert_int(crc, ==, crc2);                                  \
-                                                                              \
-            free(entries);                                                    \
-                                                                              \
-            total_data_size += data_size;                                     \
-        }                                                                     \
-                                                                              \
-        munit_assert_int(total_data_size, ==, SIZE);                          \
-        free(buf.base);                                                       \
+#define assert_segment(COUNTER, N, SIZE)                                    \
+    {                                                                       \
+        struct raft_buffer buf;                                             \
+        const void *cursor;                                                 \
+        char filename[strlen("open-N") + 1];                                \
+        unsigned i = 0;                                                     \
+        size_t total_data_size = 0;                                         \
+                                                                            \
+        sprintf(filename, "open-%d", COUNTER);                              \
+                                                                            \
+        buf.len = MAX_SEGMENT_BLOCKS * f->uv->block_size;                   \
+        buf.base = munit_malloc(buf.len);                                   \
+                                                                            \
+        test_dir_read_file(f->dir, filename, buf.base, buf.len);            \
+                                                                            \
+        cursor = buf.base;                                                  \
+        munit_assert_int(byte__get64(&cursor), ==, 1);                      \
+                                                                            \
+        while (i < N) {                                                     \
+            unsigned crc1 = byte__get32(&cursor);                           \
+            unsigned crc2 = byte__get32(&cursor);                           \
+            const void *header = cursor;                                    \
+            const void *data;                                               \
+            unsigned n = byte__get64(&cursor);                              \
+            struct raft_entry *entries = munit_malloc(n * sizeof *entries); \
+            unsigned j;                                                     \
+            unsigned crc;                                                   \
+            size_t data_size = 0;                                           \
+	    munit_logf(MUNIT_LOG_INFO, "batch %d has %d entries", i, n);\
+                                                                            \
+            for (j = 0; j < n; j++) {                                       \
+                struct raft_entry *entry = &entries[j];                     \
+                                                                            \
+                entry->term = byte__get64(&cursor);                         \
+                entry->type = byte__get8(&cursor);                          \
+                byte__get8(&cursor);                                        \
+                byte__get8(&cursor);                                        \
+                byte__get8(&cursor);                                        \
+                entry->buf.len = byte__get32(&cursor);                      \
+                                                                            \
+                munit_assert_int(entry->term, ==, 1);                       \
+                munit_assert_int(entry->type, ==, RAFT_LOG_COMMAND);        \
+                                                                            \
+                data_size += entry->buf.len;                                \
+            }                                                               \
+                                                                            \
+            crc = byte__crc32(header, io_uv__sizeof_batch_header(n), 0);    \
+            munit_assert_int(crc, ==, crc1);                                \
+                                                                            \
+            data = cursor;                                                  \
+                                                                            \
+            for (j = 0; j < n; j++) {                                       \
+                struct raft_entry *entry = &entries[j];                     \
+                uint64_t value;                                             \
+                                                                            \
+                value = byte__flip64(*(uint64_t *)cursor);                  \
+                munit_assert_int(value, ==, i);                             \
+                                                                            \
+                cursor += entry->buf.len;                                   \
+                                                                            \
+                i++;                                                        \
+            }                                                               \
+                                                                            \
+            crc = byte__crc32(data, data_size, 0);                          \
+            munit_assert_int(crc, ==, crc2);                                \
+                                                                            \
+            free(entries);                                                  \
+                                                                            \
+            total_data_size += data_size;                                   \
+        }                                                                   \
+                                                                            \
+        munit_assert_int(total_data_size, ==, SIZE);                        \
+        free(buf.base);                                                     \
     }
 
 /**
@@ -255,9 +256,9 @@ TEST_CASE(success, match_block, NULL)
     (void)params;
 
     size = f->uv->block_size;
-    size -= sizeof(uint64_t) +                  /* Format */
-            sizeof(uint64_t) +                  /* Checksums */
-            raft_io_uv_sizeof__batch_header(1); /* Header */
+    size -= sizeof(uint64_t) +             /* Format */
+            sizeof(uint64_t) +             /* Checksums */
+            io_uv__sizeof_batch_header(1); /* Header */
 
     append_args(1, size);
     append_invoke(0);
@@ -295,17 +296,17 @@ TEST_CASE(success, exceed_block, NULL)
     append_invoke(0);
     append_wait_cb(1, 0);
 
-    written = sizeof(uint64_t) +                   /* Format version */
-              2 * sizeof(uint32_t) +               /* CRC sums of first batch */
-              raft_io_uv_sizeof__batch_header(1) + /* Header of first batch */
-              size1 +                              /* Size of first batch */
-              2 * sizeof(uint32_t) +               /* CRC of second batch */
-              raft_io_uv_sizeof__batch_header(1) + /* Header of second batch */
-              64;                                  /* Size of second batch */
+    written = sizeof(uint64_t) +              /* Format version */
+              2 * sizeof(uint32_t) +          /* CRC sums of first batch */
+              io_uv__sizeof_batch_header(1) + /* Header of first batch */
+              size1 +                         /* Size of first batch */
+              2 * sizeof(uint32_t) +          /* CRC of second batch */
+              io_uv__sizeof_batch_header(1) + /* Header of second batch */
+              64;                             /* Size of second batch */
 
     /* Write a third entry that fills the second block exactly */
     size2 = f->uv->block_size - (written % f->uv->block_size);
-    size2 -= (2 * sizeof(uint32_t) + raft_io_uv_sizeof__batch_header(1));
+    size2 -= (2 * sizeof(uint32_t) + io_uv__sizeof_batch_header(1));
     size2 += f->uv->block_size;
 
     append_args(1, size2);
@@ -360,6 +361,91 @@ TEST_CASE(success, wait, NULL)
 
     append_wait_cb(1, 0);
     append_wait_cb(1, 0);
+
+    return MUNIT_OK;
+}
+
+/* Several batches with different size gets appended in fast pace, which forces
+ * the segment arena to grow. */
+TEST_CASE(success, resize_arena, NULL)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    append_args(2, 64);
+    append_invoke(0);
+
+    append_args(1, f->uv->block_size);
+    append_invoke(0);
+
+    append_args(2, 64);
+    append_invoke(0);
+
+    append_args(1, f->uv->block_size);
+    append_invoke(0);
+
+    append_args(1, f->uv->block_size);
+    append_invoke(0);
+
+    append_wait_cb(5, 0);
+
+    assert_segment(1, 7, 64 * 4 + f->uv->block_size * 3);
+
+    return MUNIT_OK;
+}
+
+/* A few append requests get queued, then a truncate request comes in and other
+ * append requests right after, before truncation is fully completed. */
+TEST_CASE(success, truncate, NULL)
+{
+    struct fixture *f = data;
+    int rv;
+
+    (void)params;
+
+    append_args(2, 64);
+    append_invoke(0);
+    append_wait_cb(1, 0);
+
+    append_args(2, 64);
+
+    append_invoke(0);
+
+    rv = f->io.truncate(&f->io, 2);
+    munit_assert_int(rv, ==, 0);
+
+    append_args(2, 64);
+    append_invoke(0);
+
+    append_wait_cb(2, 0);
+
+    return MUNIT_OK;
+}
+
+/* A few append requests get queued, then a truncate request comes in and other
+ * append requests right after, before truncation is fully completed. However
+ * the backend is closed before the truncation request can be processed. */
+TEST_CASE(success, truncate_closing, NULL)
+{
+    struct fixture *f = data;
+    int rv;
+
+    (void)params;
+
+    append_args(2, 64);
+    append_invoke(0);
+    append_wait_cb(1, 0);
+
+    append_args(2, 64);
+
+    append_invoke(0);
+
+    rv = f->io.truncate(&f->io, 2);
+    munit_assert_int(rv, ==, 0);
+
+    append_args(2, 64);
+    append_invoke(0);
 
     return MUNIT_OK;
 }
