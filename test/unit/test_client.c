@@ -238,6 +238,29 @@ TEST_CASE(propose, error, not_leader, NULL)
     return MUNIT_OK;
 }
 
+/* If the raft instance steps down from leader state, the apply callback fires
+ * with an error. */
+TEST_CASE(propose, error, leadership_lost, NULL)
+{
+    struct propose__fixture *f = data;
+
+    (void)params;
+
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
+    test_become_leader(&f->raft);
+
+    propose_entry;
+
+    /* Advance timer past the election timeout, forcing a step down */
+    raft_io_stub_advance(&f->io, f->raft.election_timeout + 100);
+
+    munit_assert_int(f->status, ==, RAFT_ERR_LEADERSHIP_LOST);
+
+    raft_io_stub_flush(&f->io);
+
+    return MUNIT_OK;
+}
+
 static char *propose_oom_heap_fault_delay[] = {"0", "1", "2", NULL};
 static char *propose_oom_heap_fault_repeat[] = {"1", NULL};
 

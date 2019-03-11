@@ -231,7 +231,8 @@ int io_uv__encode_message(const struct raft_message *message,
     }
 
     if (message->type == RAFT_IO_INSTALL_SNAPSHOT) {
-        (*bufs)[1] = *(uv_buf_t *)&message->install_snapshot.data;
+        (*bufs)[1].base = message->install_snapshot.data.base;
+        (*bufs)[1].len = message->install_snapshot.data.len;
     }
 
     return 0;

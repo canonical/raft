@@ -276,7 +276,7 @@ int uv__file_block_size(const char *dir, size_t *size)
 
     *size = 4096;
     while (*size >= 512) {
-        bool ok;
+        bool ok = false;
 
         rv = probe_block_size(fd, *size, &ok);
         if (rv != 0) {

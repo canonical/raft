@@ -734,7 +734,7 @@ static void raft_replication__follower_append_cb(void *data, int status)
     struct raft_append_entries_result *result = &message.append_entries_result;
     const struct raft_server *leader;
     struct raft_io_send *req;
-    const char *leader_address;
+    const char *leader_address = "";
     size_t i;
     size_t j;
     int rv;

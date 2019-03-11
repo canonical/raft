@@ -1110,7 +1110,7 @@ static int load_entries_batch_from_segment(struct raft_logger *logger,
     }
 
     /* Check batch header integrity. */
-    crc1 = byte__flip32(*(uint32_t *)preamble);
+    crc1 = byte__flip32(*(uint64_t *)preamble);
     crc2 = byte__crc32(header.base, header.len, 0);
     if (crc1 != crc2) {
         raft_errorf(logger, "corrupted batch header");
