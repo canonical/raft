@@ -9,7 +9,8 @@ AC_USE_SYSTEM_EXTENSIONS
 AC_LANG([C])
 AC_PROG_CC
 
-AM_INIT_AUTOMAKE([subdir-objects -Wall -Werror foreign])
+#AM_INIT_AUTOMAKE([subdir-objects -Wall -Werror foreign])
+AM_INIT_AUTOMAKE([subdir-objects -Wall foreign])
 AM_SILENT_RULES([yes])
 
 LT_INIT

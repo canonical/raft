@@ -19,7 +19,8 @@ endif
 if DEBUG
   AM_CFLAGS +=
 else
-  AM_CFLAGS += -Werror
+#  AM_CFLAGS += -Werror
+  AM_CFLAGS +=
 endif
 if COVERAGE
   AM_CFLAGS += -fprofile-arcs -ftest-coverage
