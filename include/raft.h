@@ -933,6 +933,11 @@ void raft_set_election_timeout(struct raft *r, const unsigned election_timeout);
 int raft_state(struct raft *r);
 
 /**
+ * Return the ID and address of the current known leader, if any.
+ */
+void raft_leader(struct raft *r, unsigned *id, const char **address);
+
+/**
  * Human readable version of the current state.
  */
 const char *raft_state_name(struct raft *r);
