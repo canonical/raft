@@ -491,7 +491,7 @@ TEST_CASE(append, pristine, NULL)
     __load(f);
 
     entry.term = 1;
-    entry.type = RAFT_LOG_COMMAND;
+    entry.type = RAFT_COMMAND;
     entry.buf.base = munit_malloc(8);
     entry.buf.len = 8;
 

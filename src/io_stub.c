@@ -370,7 +370,7 @@ static int io_stub__bootstrap(struct raft_io *io,
     }
 
     entries[0].term = 1;
-    entries[0].type = RAFT_LOG_CONFIGURATION;
+    entries[0].type = RAFT_CONFIGURATION;
     entries[0].buf = buf;
 
     s->term = 1;

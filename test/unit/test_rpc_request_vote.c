@@ -202,7 +202,7 @@ TEST_CASE(request, error, has_leader, NULL)
     /* Receive a valid AppendEntries RPC to update our leader to server 2. */
     test_receive_heartbeat(&f->raft, 2);
 
-    munit_assert_int(f->raft.follower_state.current_leader_id, ==, 2);
+    munit_assert_int(f->raft.follower_state.current_leader.id, ==, 2);
 
     /* Receive a vote request from server 3, with a higher term than ours. */
     __recv_request_vote(f, f->raft.current_term + 1, 3, 1, 1);
@@ -223,8 +223,8 @@ TEST_CASE(request, error, non_voting, NULL)
     test_bootstrap_and_start(&f->raft, 2, 2, 2);
 
     __recv_request_vote(f, f->raft.current_term + 1, 2,
-                        raft_log__last_index(&f->raft.log),
-                        raft_log__last_term(&f->raft.log));
+                        log__last_index(&f->raft.log),
+                        log__last_term(&f->raft.log));
 
     /* The request is unsuccessful */
     __assert_request_vote_result(f, 2, false);
@@ -243,8 +243,8 @@ TEST_CASE(request, error, already_voted, NULL)
 
     /* Grant vote to server 2 */
     __recv_request_vote(f, f->raft.current_term + 1, 2,
-                        raft_log__last_index(&f->raft.log),
-                        raft_log__last_term(&f->raft.log));
+                        log__last_index(&f->raft.log),
+                        log__last_term(&f->raft.log));
 
     munit_assert_int(f->raft.voted_for, ==, 2);
 
@@ -252,8 +252,8 @@ TEST_CASE(request, error, already_voted, NULL)
 
     /* Refuse vote to server 3 */
     __recv_request_vote(f, f->raft.current_term, 3,
-                        raft_log__last_index(&f->raft.log),
-                        raft_log__last_term(&f->raft.log));
+                        log__last_index(&f->raft.log),
+                        log__last_term(&f->raft.log));
 
     /* The request is unsuccessful */
     __assert_request_vote_result(f, 2, false);
@@ -273,8 +273,8 @@ TEST_CASE(request, error, dupe_vote, NULL)
 
     /* Grant vote */
     __recv_request_vote(f, f->raft.current_term + 1, 2,
-                        raft_log__last_index(&f->raft.log),
-                        raft_log__last_term(&f->raft.log));
+                        log__last_index(&f->raft.log),
+                        log__last_term(&f->raft.log));
 
     munit_assert_int(f->raft.voted_for, ==, 2);
 
@@ -282,8 +282,8 @@ TEST_CASE(request, error, dupe_vote, NULL)
 
     /* Grant again */
     __recv_request_vote(f, f->raft.current_term, 2,
-                        raft_log__last_index(&f->raft.log),
-                        raft_log__last_term(&f->raft.log));
+                        log__last_index(&f->raft.log),
+                        log__last_term(&f->raft.log));
 
     /* The request is successful */
     __assert_request_vote_result(f, 2, true);
@@ -418,7 +418,7 @@ TEST_CASE(request, error, last_idx_lower_index, NULL)
      * candidate for term 2) */
     test_io_set_term_and_vote(&f->io, 2, 0);
 
-    entry.type = RAFT_LOG_COMMAND;
+    entry.type = RAFT_COMMAND;
     entry.term = 1;
     entry.buf.base = raft_malloc(8);
     entry.buf.len = 8;
@@ -427,7 +427,7 @@ TEST_CASE(request, error, last_idx_lower_index, NULL)
 
     test_start(&f->raft);
 
-    munit_assert_int(raft_log__last_index(&f->raft.log), ==, 2);
+    munit_assert_int(log__last_index(&f->raft.log), ==, 2);
 
     /* Receive a vote request from a server that does not have this new
      * entry. */
@@ -583,7 +583,7 @@ TEST_CASE(response, success, step_down, NULL)
     munit_assert_int(f->raft.state, ==, RAFT_FOLLOWER);
 
     /* No leader is set. */
-    munit_assert_int(f->raft.follower_state.current_leader_id, ==, 0);
+    munit_assert_int(f->raft.follower_state.current_leader.id, ==, 0);
 
     return MUNIT_OK;
 }

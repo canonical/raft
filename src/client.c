@@ -29,13 +29,13 @@ int raft_apply(struct raft *r,
     raft_debugf(r->logger, "client request: %d entries", n);
 
     /* Index of the first entry being appended. */
-    index = raft_log__last_index(&r->log) + 1;
+    index = log__last_index(&r->log) + 1;
 
     req->index = index;
     req->cb = cb;
 
     /* Append the new entries to the log. */
-    rv = raft_log__append_commands(&r->log, r->current_term, bufs, n);
+    rv = log__append_commands(&r->log, r->current_term, bufs, n);
     if (rv != 0) {
         goto err;
     }
@@ -50,7 +50,7 @@ int raft_apply(struct raft *r,
     return 0;
 
 err_after_log_append:
-    raft_log__discard(&r->log, index);
+    log__discard(&r->log, index);
     RAFT__QUEUE_REMOVE(&req->queue);
 err:
     assert(rv != 0);
@@ -66,10 +66,10 @@ static int raft_client__change_configuration(
     int rv;
 
     /* Index of the entry being appended. */
-    index = raft_log__last_index(&r->log) + 1;
+    index = log__last_index(&r->log) + 1;
 
     /* Encode the new configuration and append it to the log. */
-    rv = raft_log__append_configuration(&r->log, term, configuration);
+    rv = log__append_configuration(&r->log, term, configuration);
     if (rv != 0) {
         goto err;
     }
@@ -99,7 +99,7 @@ static int raft_client__change_configuration(
     return 0;
 
 err_after_log_append:
-    raft_log__truncate(&r->log, index);
+    log__truncate(&r->log, index);
 
 err:
     assert(rv != 0);
@@ -159,21 +159,21 @@ int raft_promote(struct raft *r, const unsigned id)
         return rv;
     }
 
-    server = raft_configuration__get(&r->configuration, id);
+    server = configuration__get(&r->configuration, id);
     if (server == NULL) {
-        rv = RAFT_ERR_BAD_SERVER_ID;
+        rv = RAFT_EBADID;
         goto err;
     }
 
     if (server->voting) {
-        rv = RAFT_ERR_SERVER_ALREADY_VOTING;
+        rv = RAFT_EALREADYVOTING;
         goto err;
     }
 
     server_index = configuration__index_of(&r->configuration, id);
     assert(server_index < r->configuration.n);
 
-    last_index = raft_log__last_index(&r->log);
+    last_index = log__last_index(&r->log);
 
     if (r->leader_state.replication[server_index].match_index == last_index) {
         /* The log of this non-voting server is already up-to-date, so we can
@@ -224,9 +224,9 @@ int raft_remove_server(struct raft *r, const unsigned id)
         return rv;
     }
 
-    server = raft_configuration__get(&r->configuration, id);
+    server = configuration__get(&r->configuration, id);
     if (server == NULL) {
-        rv = RAFT_ERR_BAD_SERVER_ID;
+        rv = RAFT_EBADID;
         goto err;
     }
 
@@ -241,7 +241,7 @@ int raft_remove_server(struct raft *r, const unsigned id)
         goto err;
     }
 
-    rv = raft_configuration_remove(&configuration, id);
+    rv = configuration__remove(&configuration, id);
     if (rv != 0) {
         goto err_after_configuration_copy;
     }

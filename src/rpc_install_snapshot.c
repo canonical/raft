@@ -29,7 +29,7 @@ int raft_rpc__recv_install_snapshot(struct raft *r,
                args->last_index, id);
 
     result->success = false;
-    result->last_log_index = raft_log__last_index(&r->log);
+    result->last_log_index = log__last_index(&r->log);
 
     rv = raft_rpc__ensure_matching_terms(r, args->term, &match);
     if (rv != 0) {
@@ -53,7 +53,8 @@ int raft_rpc__recv_install_snapshot(struct raft *r,
         }
     }
 
-    r->follower_state.current_leader_id = id;
+    r->follower_state.current_leader.id = id;
+    r->follower_state.current_leader.address = address;
     r->timer = 0;
 
     rv = raft_replication__install_snapshot(r, args, &result->success, &async);

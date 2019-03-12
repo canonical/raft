@@ -307,7 +307,7 @@ TEST_CASE(recv_cb, success, append_entries, NULL)
     message.server_address = "2";
 
     /* Include a log entry in the message */
-    entry->type = RAFT_LOG_COMMAND;
+    entry->type = RAFT_COMMAND;
     entry->term = 1;
 
     test_fsm_encode_set_x(123, &entry->buf);

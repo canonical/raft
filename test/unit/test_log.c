@@ -1,174 +1,233 @@
-#include "../../src/log.h"
-
 #include "../lib/heap.h"
+#include "../lib/log.h"
 #include "../lib/runner.h"
 
 TEST_MODULE(log);
 
-/**
+/******************************************************************************
+ *
  * Helpers
- */
+ *
+ *****************************************************************************/
 
 struct fixture
 {
-    struct raft_heap heap;
-    struct raft_log log;
+    FIXTURE_HEAP;
+    FIXTURE_LOG;
 };
-
-/**
- * Append an empty entry to the log and check the result.
- */
-#define __append_empty_entry(F)                                          \
-    {                                                                    \
-        struct raft_buffer buf;                                          \
-        int rv;                                                          \
-                                                                         \
-        buf.base = NULL;                                                 \
-        buf.len = 0;                                                     \
-                                                                         \
-        rv = raft_log__append(&F->log, 1, RAFT_LOG_COMMAND, &buf, NULL); \
-        munit_assert_int(rv, ==, 0);                                     \
-    }
-
-/**
- * Append an entry with a small payload to the log and check the result.
- */
-#define __append_entry(F, TERM)                                             \
-    {                                                                       \
-        struct raft_buffer buf;                                             \
-        int rv;                                                             \
-                                                                            \
-        buf.base = raft_malloc(8);                                          \
-        buf.len = 8;                                                        \
-                                                                            \
-        strcpy(buf.base, "hello");                                          \
-                                                                            \
-        rv = raft_log__append(&F->log, TERM, RAFT_LOG_COMMAND, &buf, NULL); \
-        munit_assert_int(rv, ==, 0);                                        \
-    }
-
-/**
- * Append N entries all belonging to the same batch.
- */
-#define __append_batch(F, N)                                                  \
-    {                                                                         \
-        void *batch;                                                          \
-        size_t offset;                                                        \
-        int i;                                                                \
-                                                                              \
-        batch = raft_malloc(8 * N);                                           \
-                                                                              \
-        munit_assert_ptr_not_null(batch);                                     \
-                                                                              \
-        offset = 0;                                                           \
-                                                                              \
-        for (i = 0; i < N; i++) {                                             \
-            struct raft_buffer buf;                                           \
-            int rv;                                                           \
-                                                                              \
-            buf.base = batch + offset;                                        \
-            buf.len = 8;                                                      \
-                                                                              \
-            *(uint64_t *)buf.base = i * 1000;                                 \
-                                                                              \
-            rv = raft_log__append(&F->log, 1, RAFT_LOG_COMMAND, &buf, batch); \
-            munit_assert_int(rv, ==, 0);                                      \
-                                                                              \
-            offset += 8;                                                      \
-        }                                                                     \
-    }
-
-/**
- * Assert the state of the fixture's log in terms of size, front/back indexes,
- * offset and number of entries.
- */
-#define __assert_state(F, SIZE, FRONT, BACK, OFFSET, N)        \
-    {                                                          \
-        munit_assert_int(f->log.size, ==, SIZE);               \
-        munit_assert_int(f->log.front, ==, FRONT);             \
-        munit_assert_int(f->log.back, ==, BACK);               \
-        munit_assert_int(f->log.offset, ==, OFFSET);           \
-        munit_assert_int(raft_log__n_entries(&f->log), ==, N); \
-    }
-
-/**
- * Assert the term of the I'th entry in the entries array.
- */
-#define __assert_term(F, I, TERM)                           \
-    {                                                       \
-        munit_assert_int(F->log.entries[I].term, ==, TERM); \
-    }
-
-/**
- * Assert the type of the I'th entryin the entries array.
- */
-#define __assert_type(F, I, TYPE)                           \
-    {                                                       \
-        munit_assert_int(F->log.entries[I].type, ==, TYPE); \
-    }
-
-/**
- * Assert the number of outstanding references for the entry at the given index.
- */
-#define __assert_refcount(F, INDEX, COUNT)                            \
-    {                                                                 \
-        size_t i;                                                     \
-                                                                      \
-        munit_assert_ptr_not_null(F->log.refs);                       \
-                                                                      \
-        for (i = 0; i < F->log.refs_size; i++) {                      \
-            if (F->log.refs[i].index == INDEX) {                      \
-                munit_assert_int(F->log.refs[i].count, ==, COUNT);    \
-                break;                                                \
-            }                                                         \
-        }                                                             \
-                                                                      \
-        if (i == F->log.refs_size) {                                  \
-            munit_errorf("no refcount found for entry with index %d", \
-                         (int)INDEX);                                 \
-        }                                                             \
-    }
-
-/**
- * Setup and tear down
- */
 
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-
     (void)user_data;
-    (void)params;
-
-    test_heap_setup(params, &f->heap);
-
-    raft_log__init(&f->log);
-
+    SETUP_HEAP;
+    SETUP_LOG;
     return f;
 }
 
 static void tear_down(void *data)
 {
     struct fixture *f = data;
-
-    raft_log__close(&f->log);
-
-    test_heap_tear_down(&f->heap);
-
+    TEAR_DOWN_LOG;
+    TEAR_DOWN_HEAP;
     free(f);
 }
 
-/**
- * raft_log_append
- */
+/******************************************************************************
+ *
+ * log__set_offset
+ *
+ *****************************************************************************/
+
+TEST_SUITE(set_offset);
+TEST_SETUP(set_offset, setup);
+TEST_TEAR_DOWN(set_offset, tear_down);
+
+/* By default the offset is 0 and the first appended entry has index 1. */
+TEST_CASE(set_offset, default, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+    LOG__APPEND(1 /* term */);
+    munit_assert_int(LOG__FIRST_INDEX, ==, 1);
+    return MUNIT_OK;
+}
+
+/* Set the offset to one. */
+TEST_CASE(set_offset, one, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+    LOG__SET_OFFSET(1);
+    LOG__APPEND(1 /* term */);
+    munit_assert_int(LOG__FIRST_INDEX, ==, 2);
+    return MUNIT_OK;
+}
+
+/******************************************************************************
+ *
+ * log__append
+ *
+ *****************************************************************************/
 
 TEST_SUITE(append);
 
 TEST_SETUP(append, setup);
 TEST_TEAR_DOWN(append, tear_down);
 
+/* Append one entry to an empty log. */
+TEST_CASE(append, one, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+
+    LOG__APPEND(1 /* term */);
+
+    LOG__ASSERT(2 /* size                                                    */,
+                0 /* front                                                   */,
+                1 /* back                                                    */,
+                0 /* offset                                                  */,
+                1 /* n */);
+    LOG__ASSERT_TERM_OF(1 /* entry index */, 1 /* term */);
+    LOG__ASSERT_REFCOUNT(1 /* entry index */, 1 /* count */);
+
+    return MUNIT_OK;
+}
+
+/* Append two entries to to an empty log. */
+TEST_CASE(append, two, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+
+    LOG__APPEND(1 /* term */);
+    LOG__APPEND(1 /* term */);
+
+    LOG__ASSERT(6 /* size                                                    */,
+                0 /* front                                                   */,
+                2 /* back                                                    */,
+                0 /* offset                                                  */,
+                2 /* n */);
+    LOG__ASSERT_TERM_OF(1 /* entry index */, 1 /* term */);
+    LOG__ASSERT_TERM_OF(2 /* entry index */, 1 /* term */);
+    LOG__ASSERT_REFCOUNT(1 /* entry index */, 1 /* count */);
+    LOG__ASSERT_REFCOUNT(2 /* entry index */, 1 /* count */);
+
+    return MUNIT_OK;
+}
+
+/* Append three entries in sequence. */
+TEST_CASE(append, three, NULL)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    /* One -> [e1, NULL] */
+    LOG__APPEND(1 /* term */);
+
+    /* Two -> [e1, e2, NULL, NULL, NULL, NULL] */
+    LOG__APPEND(1 /* term */);
+
+    /* Three -> [e1, e2, e3, NULL, NULL, NULL] */
+    LOG__APPEND(1 /* term */);
+
+    LOG__ASSERT(6 /* size                                                    */,
+                0 /* front                                                   */,
+                3 /* back                                                    */,
+                0 /* offset                                                  */,
+                3 /* n */);
+    LOG__ASSERT_TERM_OF(1 /* entry index */, 1 /* term */);
+    LOG__ASSERT_TERM_OF(2 /* entry index */, 1 /* term */);
+    LOG__ASSERT_TERM_OF(3 /* entry index */, 1 /* term */);
+    LOG__ASSERT_REFCOUNT(1 /* entry index */, 1 /* count */);
+    LOG__ASSERT_REFCOUNT(2 /* entry index */, 1 /* count */);
+    LOG__ASSERT_REFCOUNT(3 /* entry index */, 1 /* count */);
+
+    return MUNIT_OK;
+}
+
+/* Append enough entries to force the reference count hash table to be
+ * resized. */
+TEST_CASE(append, many, NULL)
+{
+    struct fixture *f = data;
+    int i;
+    (void)params;
+    for (i = 0; i < 3000; i++) {
+        LOG__APPEND(1 /* term */);
+    }
+    munit_assert_int(f->log.refs_size, ==, 4096);
+    return MUNIT_OK;
+}
+
+/* Append to wrapped log that needs to be grown. */
+TEST_CASE(append, wrap, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+
+    LOG__APPEND_MANY(1 /* term */, 5 /* n */);
+
+    /* Now the log is [e1, e2, e3, e4, e5, NULL] */
+    LOG__ASSERT(6 /* size                                                    */,
+                0 /* front                                                   */,
+                5 /* back                                                    */,
+                0 /* offset                                                  */,
+                5 /* n */);
+
+    /* Delete the first 4 entries. */
+    LOG__SHIFT(4);
+
+    /* Now the log is [NULL, NULL, NULL, NULL, e5, NULL] */
+    LOG__ASSERT(6 /* size                                                    */,
+                4 /* front                                                   */,
+                5 /* back                                                    */,
+                4 /* offset                                                  */,
+                1 /* n */);
+
+    /* Append another 3 entries. */
+    LOG__APPEND_MANY(1 /* term */, 3 /* n */);
+
+    /* Now the log is [e7, e8, NULL, NULL, e5, e6] */
+    LOG__ASSERT(6 /* size                                                    */,
+                4 /* front                                                   */,
+                2 /* back                                                    */,
+                4 /* offset                                                  */,
+                4 /* n */);
+
+    /* Append another 3 entries. */
+    LOG__APPEND_MANY(1 /* term */, 3 /* n */);
+
+    /* Now the log is [e5, ..., e11, NULL, ..., NULL] */
+    LOG__ASSERT(14 /* size                                                 */,
+                0 /* front                                                 */,
+                7 /* back                                                  */,
+                4 /* offset                                                */,
+                7 /* n */);
+
+    return MUNIT_OK;
+}
+
+/* Append a batch of entries to an empty log. */
+TEST_CASE(append, batch, NULL)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    LOG__APPEND_BATCH(3);
+
+    LOG__ASSERT(6 /* size                                                 */,
+                0 /* front                                                 */,
+                3 /* back                                                  */,
+                0 /* offset                                                */,
+                3 /* n */);
+
+    return MUNIT_OK;
+}
+
 TEST_GROUP(append, error);
-TEST_GROUP(append, success);
 
 static char *append_oom_heap_fault_delay[] = {"0", "1", NULL};
 static char *append_oom_heap_fault_repeat[] = {"1", NULL};
@@ -185,33 +244,24 @@ TEST_CASE(append, error, oom, append_oom_params)
     struct fixture *f = data;
     struct raft_buffer buf;
     int rv;
-
     (void)params;
-
     buf.base = NULL;
     buf.len = 0;
-
     test_heap_fault_enable(&f->heap);
-
-    rv = raft_log__append(&f->log, 1, RAFT_LOG_COMMAND, &buf, NULL);
+    rv = log__append(&f->log, 1, RAFT_COMMAND, &buf, NULL);
     munit_assert_int(rv, ==, RAFT_ENOMEM);
-
     return MUNIT_OK;
 }
 
 /* Out of memory when trying to grow the refs count table. */
-TEST_CASE(append, success, oom_refs, NULL)
+TEST_CASE(append, error, oom_refs, NULL)
 {
     struct fixture *f = data;
     struct raft_buffer buf;
-    int i;
     int rv;
-
     (void)params;
 
-    for (i = 0; i < RAFT_LOG__REFS_INITIAL_SIZE; i++) {
-        __append_entry(f, 1);
-    }
+    LOG__APPEND_MANY(1, LOG__REFS_INITIAL_SIZE);
 
     test_heap_fault_config(&f->heap, 0, 1);
     test_heap_fault_enable(&f->heap);
@@ -219,162 +269,17 @@ TEST_CASE(append, success, oom_refs, NULL)
     buf.base = NULL;
     buf.len = 0;
 
-    rv = raft_log__append(&f->log, 1, RAFT_LOG_COMMAND, &buf, NULL);
+    rv = log__append(&f->log, 1, RAFT_COMMAND, &buf, NULL);
     munit_assert_int(rv, ==, RAFT_ENOMEM);
 
     return MUNIT_OK;
 }
 
-/* Append one entry to an empty log. */
-TEST_CASE(append, success, one, NULL)
-{
-    struct fixture *f = data;
-
-    (void)params;
-
-    __append_empty_entry(f);
-
-    __assert_state(f, 2, 0, 1, 0, 1);
-    __assert_term(f, 0, 1);
-    __assert_refcount(f, 1, 1);
-
-    return MUNIT_OK;
-}
-
-/* Append two entries to to an empty log. */
-TEST_CASE(append, success, two, NULL)
-{
-    struct fixture *f = data;
-
-    (void)params;
-
-    __append_empty_entry(f);
-    __append_empty_entry(f);
-
-    __assert_state(f, 6, 0, 2, 0, 2);
-
-    __assert_term(f, 0, 1);
-    __assert_type(f, 0, RAFT_LOG_COMMAND);
-    __assert_term(f, 1, 1);
-    __assert_type(f, 1, RAFT_LOG_COMMAND);
-
-    __assert_refcount(f, 1, 1);
-    __assert_refcount(f, 2, 1);
-
-    return MUNIT_OK;
-}
-
-/* Append three entries in sequence. */
-TEST_CASE(append, success, three, NULL)
-{
-    struct fixture *f = data;
-
-    (void)params;
-
-    /* One -> [e1, NULL] */
-    __append_empty_entry(f);
-
-    __assert_state(f, 2, 0, 1, 0, 1);
-    __assert_term(f, 0, 1);
-
-    /* Two -> [e1, e2, NULL, NULL, NULL, NULL] */
-    __append_empty_entry(f);
-
-    __assert_state(f, 6, 0, 2, 0, 2);
-    __assert_term(f, 0, 1);
-    __assert_term(f, 1, 1);
-
-    /* Three -> [e1, e2, e3, NULL, NULL, NULL] */
-    __append_empty_entry(f);
-
-    __assert_state(f, 6, 0, 3, 0, 3);
-    __assert_term(f, 0, 1);
-    __assert_term(f, 1, 1);
-    __assert_term(f, 2, 1);
-
-    __assert_refcount(f, 1, 1);
-    __assert_refcount(f, 2, 1);
-    __assert_refcount(f, 3, 1);
-
-    return MUNIT_OK;
-}
-
-/* Append enough entries to force the reference count hash table to be
- * resized. */
-TEST_CASE(append, success, many, NULL)
-{
-    struct fixture *f = data;
-    int i;
-
-    (void)params;
-
-    for (i = 0; i < 3000; i++) {
-        __append_empty_entry(f);
-        __assert_refcount(f, i + 1, 1);
-    }
-
-    munit_assert_int(f->log.refs_size, ==, 4096);
-
-    return MUNIT_OK;
-}
-
-/* Append to wrapped log that needs to be grown. */
-TEST_CASE(append, success, wrap, NULL)
-{
-    struct fixture *f = data;
-    int i;
-
-    (void)params;
-
-    for (i = 0; i < 5; i++) {
-        __append_empty_entry(f);
-    }
-
-    /* Now the log is [e1, e2, e3, e4, e5, NULL] */
-    __assert_state(f, 6, 0, 5, 0, 5);
-
-    /* Delete the first 4 entries. */
-    raft_log__shift(&f->log, 4);
-
-    /* Now the log is [NULL, NULL, NULL, NULL, e5, NULL] */
-    __assert_state(f, 6, 4, 5, 4, 1);
-
-    /* Append another 3 entries. */
-    for (i = 0; i < 3; i++) {
-        __append_empty_entry(f);
-    }
-
-    /* Now the log is [e7, e8, NULL, NULL, e5, e6] */
-    __assert_state(f, 6, 4, 2, 4, 4);
-
-    /* Append another 3 entries. */
-    for (i = 0; i < 3; i++) {
-        __append_empty_entry(f);
-    }
-
-    /* Now the log is [e5, ..., e11, NULL, ..., NULL] */
-    __assert_state(f, 14, 0, 7, 4, 7);
-
-    return MUNIT_OK;
-}
-
-/* Append a batch of entries to an empty log. */
-TEST_CASE(append, success, batch, NULL)
-{
-    struct fixture *f = data;
-
-    (void)params;
-
-    __append_batch(f, 3);
-
-    __assert_state(f, 6, 0, 3, 0, 3);
-
-    return MUNIT_OK;
-}
-
-/**
- * raft_log_append_configuration
- */
+/******************************************************************************
+ *
+ * log__append_configuration
+ *
+ *****************************************************************************/
 
 TEST_SUITE(append_configuration);
 
@@ -393,22 +298,20 @@ static MunitParameterEnum append_configuration_oom_params[] = {
 };
 
 /* Out of memory. */
-TEST_CASE(append_configuration, error, _oom, append_configuration_oom_params)
+TEST_CASE(append_configuration, error, oom, append_configuration_oom_params)
 {
     struct fixture *f = data;
     struct raft_configuration configuration;
     int rv;
-
     (void)params;
 
     raft_configuration_init(&configuration);
-
     rv = raft_configuration_add(&configuration, 1, "1", true);
     munit_assert_int(rv, ==, 0);
 
     test_heap_fault_enable(&f->heap);
 
-    rv = raft_log__append_configuration(&f->log, 1, &configuration);
+    rv = log__append_configuration(&f->log, 1, &configuration);
     munit_assert_int(rv, ==, RAFT_ENOMEM);
 
     raft_configuration_close(&configuration);
@@ -416,123 +319,138 @@ TEST_CASE(append_configuration, error, _oom, append_configuration_oom_params)
     return MUNIT_OK;
 }
 
-/**
- * raft_log__n_entries
- */
+/******************************************************************************
+ *
+ * log__n_entries
+ *
+ *****************************************************************************/
 
 TEST_SUITE(n_entries);
 
 TEST_SETUP(n_entries, setup);
 TEST_TEAR_DOWN(n_entries, tear_down);
 
-TEST_GROUP(n_entries, success);
-
 /* The log is empty. */
-TEST_CASE(n_entries, success, empty, NULL)
+TEST_CASE(n_entries, empty, NULL)
 {
     struct fixture *f = data;
-    size_t n;
-
     (void)params;
-
-    n = raft_log__n_entries(&f->log);
-    munit_assert_int(n, ==, 0);
-
+    munit_assert_int(LOG__N_ENTRIES, ==, 0);
     return MUNIT_OK;
 }
 
 /* The log is not wrapped. */
-TEST_CASE(n_entries, success, not_wrapped, NULL)
+TEST_CASE(n_entries, not_wrapped, NULL)
 {
     struct fixture *f = data;
-    size_t n;
-
     (void)params;
-
-    __append_empty_entry(f);
-
-    n = raft_log__n_entries(&f->log);
-    munit_assert_int(n, ==, 1);
-
+    LOG__APPEND(1 /* term */);
+    munit_assert_int(LOG__N_ENTRIES, ==, 1);
     return MUNIT_OK;
 }
 
-/**
- * raft_log__first_index
- */
+/* The log is wrapped. */
+TEST_CASE(n_entries, wrapped, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+    LOG__APPEND_MANY(1 /* term */, 5 /* term */);
+    LOG__SHIFT(4);
+    LOG__APPEND_MANY(1 /* term */, 3 /* term */);
+    munit_assert_int(LOG__N_ENTRIES, ==, 4);
+    return MUNIT_OK;
+}
+
+/* The log has an offset. */
+TEST_CASE(n_entries, offset, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+    LOG__SET_OFFSET(10);
+    munit_assert_int(LOG__N_ENTRIES, ==, 0);
+    return MUNIT_OK;
+}
+
+/* The log has an offset and is not empty. */
+TEST_CASE(n_entries, offset_not_empty, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+    LOG__SET_OFFSET(10);
+    LOG__APPEND_MANY(1 /* term */, 3 /* n */);
+    munit_assert_int(LOG__N_ENTRIES, ==, 3);
+    return MUNIT_OK;
+}
+
+/* The log has an offset and is wrapped. */
+TEST_CASE(n_entries, offset_and_wrapped, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+    LOG__SET_OFFSET(9);
+    LOG__APPEND_MANY(1 /* term */, 5 /* term */);
+    LOG__SHIFT(14);
+    LOG__APPEND_MANY(1 /* term */, 3 /* term */);
+    munit_assert_int(LOG__N_ENTRIES, ==, 3);
+    return MUNIT_OK;
+}
+
+/******************************************************************************
+ *
+ * log__first_index
+ *
+ *****************************************************************************/
 
 TEST_SUITE(first_index);
 
 TEST_SETUP(first_index, setup);
 TEST_TEAR_DOWN(first_index, tear_down);
 
-TEST_GROUP(first_index, success);
-
 /* The log is empty. */
-TEST_CASE(first_index, success, empty, NULL)
+TEST_CASE(first_index, empty, NULL)
 {
     struct fixture *f = data;
-
     (void)params;
-
-    munit_assert_int(raft_log__first_index(&f->log), ==, 0);
-
+    munit_assert_int(LOG__FIRST_INDEX, ==, 0);
     return MUNIT_OK;
 }
 
 /* The log is empty but has an offset. */
-TEST_CASE(first_index, success, empty_with_offset, NULL)
+TEST_CASE(first_index, empty_with_offset, NULL)
 {
     struct fixture *f = data;
-
     (void)params;
-
-    raft_log__set_offset(&f->log, 10);
-    munit_assert_int(raft_log__first_index(&f->log), ==, 0);
-
+    LOG__SET_OFFSET(10);
+    munit_assert_int(LOG__FIRST_INDEX, ==, 0);
     return MUNIT_OK;
 }
 
 /* The log has one entry. */
-TEST_CASE(first_index, success, one_entry, NULL)
+TEST_CASE(first_index, one, NULL)
 {
     struct fixture *f = data;
-
     (void)params;
-
-    __append_empty_entry(f);
-
-    munit_assert_int(raft_log__first_index(&f->log), ==, 1);
-
+    LOG__APPEND(1 /* term */);
+    munit_assert_int(LOG__FIRST_INDEX, ==, 1);
     return MUNIT_OK;
 }
 
-/**
- * raft_log__last_term
- */
-
-TEST_SUITE(last_term);
-
-TEST_SETUP(last_term, setup);
-TEST_TEAR_DOWN(last_term, tear_down);
-
-TEST_GROUP(last_term, success);
-
-/* If the log is empty, last term is 0. */
-TEST_CASE(last_term, success, empty_log, NULL)
+/* The log has one entry and an offset. */
+TEST_CASE(first_index, one_with_offset, NULL)
 {
     struct fixture *f = data;
-
     (void)params;
-
-    munit_assert_int(raft_log__last_term(&f->log), ==, 0);
-
+    LOG__SET_OFFSET(10);
+    LOG__APPEND(1 /* term */);
+    munit_assert_int(LOG__FIRST_INDEX, ==, 11);
     return MUNIT_OK;
 }
 
-/**
- * raft_log__last_index
- */
+/******************************************************************************
+ *
+ * log__last_index
+ *
+ *****************************************************************************/
 
 TEST_SUITE(last_index);
 
@@ -543,11 +461,8 @@ TEST_TEAR_DOWN(last_index, tear_down);
 TEST_CASE(last_index, empty, NULL)
 {
     struct fixture *f = data;
-
     (void)params;
-
-    munit_assert_int(raft_log__last_index(&f->log), ==, 0);
-
+    munit_assert_int(LOG__LAST_INDEX, ==, 0);
     return MUNIT_OK;
 }
 
@@ -555,41 +470,218 @@ TEST_CASE(last_index, empty, NULL)
 TEST_CASE(last_index, empty_with_offset, NULL)
 {
     struct fixture *f = data;
+    (void)params;
+    LOG__SET_OFFSET(10);
+    munit_assert_int(LOG__LAST_INDEX, ==, 0);
+    return MUNIT_OK;
+}
+
+/* The log has one entry. */
+TEST_CASE(last_index, one, NULL)
+{
+    struct fixture *f = data;
 
     (void)params;
+    LOG__APPEND(1 /* term */);
+    munit_assert_int(LOG__LAST_INDEX, ==, 1);
 
-    raft_log__set_offset(&f->log, 10);
-    munit_assert_int(raft_log__last_index(&f->log), ==, 0);
+    return MUNIT_OK;
+}
+
+/* The log has two entries. */
+TEST_CASE(last_index, two, NULL)
+{
+    struct fixture *f = data;
+
+    (void)params;
+    LOG__APPEND_MANY(1 /* term */, 2 /* n */);
+    munit_assert_int(LOG__LAST_INDEX, ==, 2);
 
     return MUNIT_OK;
 }
 
 /* If the log starts at a certain offset, the last index is bumped
  * accordingly. */
-TEST_CASE(last_index, with_offset, NULL)
+TEST_CASE(last_index, two_with_offset, NULL)
 {
     struct fixture *f = data;
 
     (void)params;
-
-    raft_log__set_offset(&f->log, 3);
-    __append_empty_entry(f);
-    munit_assert_int(raft_log__last_index(&f->log), ==, 4);
+    LOG__SET_OFFSET(3);
+    LOG__APPEND(1 /* term */);
+    LOG__APPEND(1 /* term */);
+    munit_assert_int(LOG__LAST_INDEX, ==, 5);
 
     return MUNIT_OK;
 }
 
-/**
- * raft_log__acquire
- */
+/******************************************************************************
+ *
+ * log__last_term
+ *
+ *****************************************************************************/
+
+TEST_SUITE(last_term);
+
+TEST_SETUP(last_term, setup);
+TEST_TEAR_DOWN(last_term, tear_down);
+
+/* If the log is empty, last term is 0. */
+TEST_CASE(last_term, empty_log, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+    munit_assert_int(LOG__LAST_TERM, ==, 0);
+    return MUNIT_OK;
+}
+
+/******************************************************************************
+ *
+ * log__acquire
+ *
+ *****************************************************************************/
 
 TEST_SUITE(acquire);
 
 TEST_SETUP(acquire, setup);
 TEST_TEAR_DOWN(acquire, tear_down);
 
+/* Acquire a single log entry. */
+TEST_CASE(acquire, one, NULL)
+{
+    struct fixture *f = data;
+    struct raft_entry *entries;
+    unsigned n;
+
+    (void)params;
+
+    LOG__APPEND(1 /* term */);
+
+    LOG__ACQUIRE(1);
+
+    munit_assert_ptr_not_null(entries);
+    munit_assert_int(n, ==, 1);
+    munit_assert_int(entries[0].type, ==, RAFT_COMMAND);
+
+    LOG__ASSERT_REFCOUNT(1, 2);
+
+    LOG__RELEASE(1);
+
+    LOG__ASSERT_REFCOUNT(1, 1);
+
+    return MUNIT_OK;
+}
+
+/* Acquire two log entries. */
+TEST_CASE(acquire, two, NULL)
+{
+    struct fixture *f = data;
+    struct raft_entry *entries;
+    unsigned n;
+
+    (void)params;
+
+    LOG__APPEND(1 /* term */);
+    LOG__APPEND(1 /* term */);
+
+    LOG__ACQUIRE(1);
+
+    munit_assert_ptr_not_null(entries);
+    munit_assert_int(n, ==, 2);
+    munit_assert_int(entries[0].type, ==, RAFT_COMMAND);
+    munit_assert_int(entries[1].type, ==, RAFT_COMMAND);
+
+    LOG__ASSERT_REFCOUNT(1, 2);
+    LOG__ASSERT_REFCOUNT(2, 2);
+
+    LOG__RELEASE(1);
+
+    LOG__ASSERT_REFCOUNT(1, 1);
+    LOG__ASSERT_REFCOUNT(2, 1);
+
+    return MUNIT_OK;
+}
+
+/* Acquire two log entries in a wrapped log. */
+TEST_CASE(acquire, wrap, NULL)
+{
+    struct fixture *f = data;
+    struct raft_entry *entries;
+    unsigned n;
+
+    (void)params;
+
+    LOG__APPEND_MANY(1 /* term */, 5 /* n */);
+
+    /* Now the log is [e1, e2, e3, e4, e5, NULL] */
+    LOG__ASSERT(6 /* size                                                 */,
+                0 /* front                                                */,
+                5 /* back                                                 */,
+                0 /* offset                                               */,
+                5 /* n */);
+
+    /* Delete the first 4 entries. */
+    LOG__SHIFT(4);
+
+    /* Now the log is [NULL, NULL, NULL, NULL, e5, NULL] */
+    LOG__ASSERT(6 /* size                                                 */,
+                4 /* front                                                */,
+                5 /* back                                                 */,
+                4 /* offset                                               */,
+                1 /* n */);
+
+    /* Append another 3 entries. */
+    LOG__APPEND_MANY(1 /* term */, 3 /* n */);
+
+    /* Now the log is [e7, e8, NULL, NULL, e5, e6] */
+    LOG__ASSERT(6 /* size                                                 */,
+                4 /* front                                                */,
+                2 /* back                                                 */,
+                4 /* offset                                               */,
+                4 /* n */);
+
+    LOG__ACQUIRE(6);
+
+    munit_assert_int(n, ==, 3);
+
+    LOG__RELEASE(6);
+
+    return MUNIT_OK;
+}
+
+/* Acquire several entries some of which belong to batches. */
+TEST_CASE(acquire, batch, NULL)
+{
+    struct fixture *f = data;
+    struct raft_entry *entries;
+    unsigned n;
+
+    (void)params;
+
+    LOG__APPEND(1 /* term */);
+    LOG__APPEND_BATCH(2 /* n entries */);
+    LOG__APPEND(1 /* term */);
+    LOG__APPEND_BATCH(3 /* n entries */);
+
+    LOG__ACQUIRE(2);
+
+    munit_assert_ptr_not_null(entries);
+    munit_assert_int(n, ==, 6);
+
+    LOG__ASSERT_REFCOUNT(2, 2);
+
+    /* Truncate the last 5 entries, so the only references left for the second
+     * batch are the ones in the acquired entries. */
+    LOG__TRUNCATE(3);
+
+    LOG__RELEASE(2);
+
+    LOG__ASSERT_REFCOUNT(2, 1);
+
+    return MUNIT_OK;
+}
+
 TEST_GROUP(acquire, error);
-TEST_GROUP(acquire, success);
 
 /* Trying to acquire entries out of range results in a NULL pointer. */
 TEST_CASE(acquire, error, out_of_range, NULL)
@@ -597,21 +689,20 @@ TEST_CASE(acquire, error, out_of_range, NULL)
     struct fixture *f = data;
     struct raft_entry *entries;
     unsigned n;
-    int rv;
 
     (void)params;
 
-    __append_empty_entry(f);
-    __append_empty_entry(f);
+    LOG__APPEND(1 /* term */);
+    LOG__APPEND(1 /* term */);
 
-    raft_log__shift(&f->log, 1);
+    LOG__SHIFT(1);
 
-    rv = raft_log__acquire(&f->log, 1, &entries, &n);
-    munit_assert_int(rv, ==, 0);
+    LOG__ACQUIRE(1);
+
     munit_assert_ptr_null(entries);
 
-    rv = raft_log__acquire(&f->log, 3, &entries, &n);
-    munit_assert_int(rv, ==, 0);
+    LOG__ACQUIRE(3);
+
     munit_assert_ptr_null(entries);
 
     return MUNIT_OK;
@@ -627,298 +718,178 @@ TEST_CASE(acquire, error, oom, NULL)
 
     (void)params;
 
-    __append_empty_entry(f);
+    LOG__APPEND(1 /* term */);
 
     test_heap_fault_config(&f->heap, 0, 1);
     test_heap_fault_enable(&f->heap);
 
-    rv = raft_log__acquire(&f->log, 1, &entries, &n);
+    rv = log__acquire(&f->log, 1, &entries, &n);
     munit_assert_int(rv, ==, RAFT_ENOMEM);
 
     return MUNIT_OK;
 }
 
-/* Acquire a single log entry. */
-TEST_CASE(acquire, success, one, NULL)
-{
-    struct fixture *f = data;
-    struct raft_entry *entries;
-    unsigned n;
-    int rv;
-
-    (void)params;
-
-    __append_entry(f, 1);
-
-    rv = raft_log__acquire(&f->log, 1, &entries, &n);
-    munit_assert_int(rv, ==, 0);
-
-    munit_assert_ptr_not_null(entries);
-    munit_assert_int(n, ==, 1);
-    munit_assert_int(entries[0].type, ==, RAFT_LOG_COMMAND);
-
-    __assert_refcount(f, 1, 2);
-
-    raft_log__release(&f->log, 1, entries, n);
-
-    __assert_refcount(f, 1, 1);
-
-    return MUNIT_OK;
-}
-
-/* Acquire two log entries. */
-TEST_CASE(acquire, success, two, NULL)
-{
-    struct fixture *f = data;
-    struct raft_entry *entries;
-    unsigned n;
-    int rv;
-
-    (void)params;
-
-    __append_entry(f, 1);
-    __append_entry(f, 1);
-
-    rv = raft_log__acquire(&f->log, 1, &entries, &n);
-    munit_assert_int(rv, ==, 0);
-
-    munit_assert_ptr_not_null(entries);
-    munit_assert_int(n, ==, 2);
-    munit_assert_int(entries[0].type, ==, RAFT_LOG_COMMAND);
-    munit_assert_int(entries[1].type, ==, RAFT_LOG_COMMAND);
-
-    __assert_refcount(f, 1, 2);
-    __assert_refcount(f, 2, 2);
-
-    raft_log__release(&f->log, 1, entries, n);
-
-    __assert_refcount(f, 1, 1);
-    __assert_refcount(f, 2, 1);
-
-    return MUNIT_OK;
-}
-
-/* Acquire two log entries in a wrapped log. */
-TEST_CASE(acquire, success, wrap, NULL)
-{
-    struct fixture *f = data;
-    int i;
-    struct raft_entry *entries;
-    unsigned n;
-    int rv;
-
-    (void)params;
-
-    for (i = 0; i < 5; i++) {
-        __append_empty_entry(f);
-    }
-
-    /* Now the log is [e1, e2, e3, e4, e5, NULL] */
-    __assert_state(f, 6, 0, 5, 0, 5);
-
-    /* Delete the first 4 entries. */
-    raft_log__shift(&f->log, 4);
-
-    /* Now the log is [NULL, NULL, NULL, NULL, e5, NULL] */
-    __assert_state(f, 6, 4, 5, 4, 1);
-
-    /* Append another 3 entries. */
-    for (i = 0; i < 3; i++) {
-        __append_empty_entry(f);
-    }
-
-    /* Now the log is [e7, e8, NULL, NULL, e5, e6] */
-    __assert_state(f, 6, 4, 2, 4, 4);
-
-    rv = raft_log__acquire(&f->log, 6, &entries, &n);
-    munit_assert_int(rv, ==, 0);
-
-    munit_assert_int(n, ==, 3);
-
-    raft_log__release(&f->log, 6, entries, n);
-
-    return MUNIT_OK;
-}
-
-/* Acquire several entries some of which belong to batches. */
-TEST_CASE(acquire, success, batch, NULL)
-{
-    struct fixture *f = data;
-    struct raft_entry *entries;
-    unsigned n;
-    int rv;
-
-    (void)params;
-
-    __append_entry(f, 1);
-    __append_batch(f, 2);
-    __append_entry(f, 1);
-    __append_batch(f, 3);
-
-    rv = raft_log__acquire(&f->log, 2, &entries, &n);
-    munit_assert_int(rv, ==, 0);
-
-    munit_assert_ptr_not_null(entries);
-    munit_assert_int(n, ==, 6);
-
-    __assert_refcount(f, 2, 2);
-
-    /* Truncate the last 5 entries, so the only references left for the second
-     * batch are the ones in the acquired entries. */
-    raft_log__truncate(&f->log, 3);
-
-    raft_log__release(&f->log, 2, entries, n);
-
-    __assert_refcount(f, 2, 1);
-
-    return MUNIT_OK;
-}
-
-/**
- * raft_log__truncate
- */
+/******************************************************************************
+ *
+ * log__truncate
+ *
+ *****************************************************************************/
 
 TEST_SUITE(truncate);
 
 TEST_SETUP(truncate, setup);
 TEST_TEAR_DOWN(truncate, tear_down);
 
-TEST_GROUP(truncate, success);
-TEST_GROUP(truncate, error);
-
 /* Truncate the last entry of a log with a single entry. */
-TEST_CASE(truncate, success, 1_last, NULL)
+TEST_CASE(truncate, 1_last, NULL)
 {
     struct fixture *f = data;
-
     (void)params;
 
-    __append_empty_entry(f);
+    LOG__APPEND(1 /* term */);
+    LOG__TRUNCATE(1);
 
-    raft_log__truncate(&f->log, 1);
-
-    __assert_state(f, 0, 0, 0, 0, 0);
+    LOG__ASSERT(0 /* size                                                 */,
+                0 /* front                                                */,
+                0 /* back                                                 */,
+                0 /* offset                                               */,
+                0 /* n */);
 
     return MUNIT_OK;
 }
 
 /* Truncate the last entry of a log with a two entries. */
-TEST_CASE(truncate, success, 2_last, NULL)
+TEST_CASE(truncate, 2_last, NULL)
 {
     struct fixture *f = data;
-
     (void)params;
 
-    __append_empty_entry(f);
-    __append_empty_entry(f);
+    LOG__APPEND(1 /* term */);
+    LOG__APPEND(1 /* term */);
 
-    raft_log__truncate(&f->log, 2);
+    LOG__TRUNCATE(2);
 
-    __assert_state(f, 6, 0, 1, 0, 1);
-    __assert_term(f, 0, 1);
+    LOG__ASSERT(6 /* size                                                 */,
+                0 /* front                                                */,
+                1 /* back                                                 */,
+                0 /* offset                                               */,
+                1 /* n */);
+    LOG__ASSERT_TERM_OF(1 /* entry index */, 1 /* term */);
 
     return MUNIT_OK;
 }
 
 /* Truncate from an entry which is older than the first one in the log. */
-TEST_CASE(truncate, success, compacted, NULL)
+TEST_CASE(truncate, compacted, NULL)
 {
     struct fixture *f = data;
-
     (void)params;
 
-    f->log.offset = 2;
+    LOG__SET_OFFSET(2);
 
-    __append_empty_entry(f);
-    __append_empty_entry(f);
+    LOG__APPEND(1 /* term */);
+    LOG__APPEND(1 /* term */);
 
-    raft_log__truncate(&f->log, 2);
+    LOG__TRUNCATE(2);
 
-    __assert_state(f, 0, 0, 0, 2, 0);
+    LOG__ASSERT(0 /* size                                                 */,
+                0 /* front                                                */,
+                0 /* back                                                 */,
+                2 /* offset                                               */,
+                0 /* n */);
 
     return MUNIT_OK;
 }
 
 /* Truncate from an entry which makes the log wrap. */
-TEST_CASE(truncate, success, wrap, NULL)
+TEST_CASE(truncate, wrap, NULL)
 {
     struct fixture *f = data;
-    int i;
-
     (void)params;
 
-    for (i = 0; i < 5; i++) {
-        __append_empty_entry(f);
-    }
+    LOG__APPEND_MANY(1 /* term */, 5 /* n entries */);
 
     /* Now the log is [e1, e2, e3, e4, e5, NULL] */
-    __assert_state(f, 6, 0, 5, 0, 5);
+    LOG__ASSERT(6 /* size                                                 */,
+                0 /* front                                                */,
+                5 /* back                                                 */,
+                0 /* offset                                               */,
+                5 /* n */);
 
     /* Delete the first 4 entries. */
-    raft_log__shift(&f->log, 4);
+    LOG__SHIFT(4);
 
     /* Now the log is [NULL, NULL, NULL, NULL, e5, NULL] */
-    __assert_state(f, 6, 4, 5, 4, 1);
+    LOG__ASSERT(6 /* size                                                 */,
+                4 /* front                                                */,
+                5 /* back                                                 */,
+                4 /* offset                                               */,
+                1 /* n */);
 
     /* Append another 3 entries. */
-    for (i = 0; i < 3; i++) {
-        __append_empty_entry(f);
-    }
+    LOG__APPEND_MANY(1 /* term */, 3 /* n entries */);
 
     /* Now the log is [e7, e8, NULL, NULL, e5, e6] */
-    __assert_state(f, 6, 4, 2, 4, 4);
+    LOG__ASSERT(6 /* size                                                 */,
+                4 /* front                                                */,
+                2 /* back                                                 */,
+                4 /* offset                                               */,
+                4 /* n */);
 
     /* Truncate from e6 onward (wrapping) */
-    raft_log__truncate(&f->log, 6);
+    LOG__TRUNCATE(6);
 
     /* Now the log is [NULL, NULL, NULL, NULL, e5, NULL] */
-    __assert_state(f, 6, 4, 5, 4, 1);
+    LOG__ASSERT(6 /* size                                                 */,
+                4 /* front                                                */,
+                5 /* back                                                 */,
+                4 /* offset                                               */,
+                1 /* n */);
 
     return MUNIT_OK;
 }
 
 /* Truncate the last entry of a log with a single entry, which still has an
- * outstanding reference created by a call to raft_log__acquire(). */
-TEST_CASE(truncate, success, referenced, NULL)
+ * outstanding reference created by a call to log__acquire(). */
+TEST_CASE(truncate, referenced, NULL)
 {
     struct fixture *f = data;
     struct raft_entry *entries;
     unsigned n;
-    int rv;
 
     (void)params;
 
-    __append_entry(f, 1);
+    LOG__APPEND(1 /* term */);
+    LOG__ACQUIRE(1 /* index */);
+    LOG__TRUNCATE(1 /* index */);
 
-    rv = raft_log__acquire(&f->log, 1, &entries, &n);
-    munit_assert_int(rv, ==, 0);
-
-    raft_log__truncate(&f->log, 1);
-
-    __assert_state(f, 0, 0, 0, 0, 0);
+    LOG__ASSERT(0 /* size                                                 */,
+                0 /* front                                                */,
+                0 /* back                                                 */,
+                0 /* offset                                               */,
+                0 /* n */);
 
     /* The entry has still an outstanding reference. */
-    __assert_refcount(f, 1, 1);
+    LOG__ASSERT_REFCOUNT(1, 1);
 
     munit_assert_string_equal((const char *)entries[0].buf.base, "hello");
 
-    raft_log__release(&f->log, 1, entries, n);
-
-    __assert_refcount(f, 1, 0);
+    LOG__RELEASE(1);
+    LOG__ASSERT_REFCOUNT(1, 0);
 
     return MUNIT_OK;
 }
 
 /* Truncate all entries belonging to a batch. */
-TEST_CASE(truncate, success, batch, NULL)
+TEST_CASE(truncate, batch, NULL)
 {
     struct fixture *f = data;
 
     (void)params;
 
-    __append_batch(f, 3);
+    LOG__APPEND_BATCH(3);
 
-    raft_log__truncate(&f->log, 1);
+    LOG__TRUNCATE(1);
 
     munit_assert_int(f->log.size, ==, 0);
 
@@ -928,43 +899,73 @@ TEST_CASE(truncate, success, batch, NULL)
 /* Acquire entries at a certain index. Truncate the log at that index. The
  * truncated entries are still referenced. Then append a new entry, which will
  * have the same index but different term. */
-TEST_CASE(truncate, success, acquired, NULL)
+TEST_CASE(truncate, acquired, NULL)
 {
     struct fixture *f = data;
     struct raft_entry *entries;
     unsigned n;
-    int rv;
 
     (void)params;
 
-    __append_entry(f, 1);
-    __append_entry(f, 1);
+    LOG__APPEND(1 /* term */);
+    LOG__APPEND(1 /* term */);
 
-    rv = raft_log__acquire(&f->log, 2, &entries, &n);
-    munit_assert_int(rv, ==, 0);
+    LOG__ACQUIRE(2);
+
     munit_assert_int(n, ==, 1);
 
-    raft_log__truncate(&f->log, 2);
+    LOG__TRUNCATE(2);
 
-    __append_entry(f, 2);
+    LOG__APPEND(2 /* term */);
 
-    raft_log__release(&f->log, 2, entries, n);
+    LOG__RELEASE(2);
+
+    return MUNIT_OK;
+}
+
+/* Acquire some entries, truncate the log and then append new ones forcing the
+   log to be grown and the reference count hash table to be re-built. */
+TEST_CASE(truncate, acquire_append, NULL)
+{
+    struct fixture *f = data;
+    struct raft_entry *entries;
+    unsigned n;
+    size_t i;
+
+    (void)params;
+
+    LOG__APPEND(1 /* term */);
+    LOG__APPEND(1 /* term */);
+
+    LOG__ACQUIRE(2);
+
+    munit_assert_int(n, ==, 1);
+
+    LOG__TRUNCATE(2);
+
+    for (i = 0; i < LOG__REFS_INITIAL_SIZE; i++) {
+        LOG__APPEND(2 /* term */);
+    }
+
+    LOG__RELEASE(2);
 
     return MUNIT_OK;
 }
 
 /* Truncate an empty log which has an offset. */
-TEST_CASE(truncate, success, empty_with_offset, NULL)
+TEST_CASE(truncate, empty_with_offset, NULL)
 {
     struct fixture *f = data;
 
     (void)params;
 
-    raft_log__set_offset(&f->log, 10);
-    raft_log__truncate(&f->log, 1);
+    LOG__SET_OFFSET(10);
+    LOG__TRUNCATE(1);
 
     return MUNIT_OK;
 }
+
+TEST_GROUP(truncate, error);
 
 static char *truncate_acquired_heap_fault_delay[] = {"0", NULL};
 static char *truncate_acquired_fault_repeat[] = {"1", NULL};
@@ -988,104 +989,81 @@ TEST_CASE(truncate, error, acquired_oom, truncate_acquired_oom_params)
 
     (void)params;
 
-    __append_entry(f, 1);
-    __append_entry(f, 1);
+    LOG__APPEND(1 /* term */);
+    LOG__APPEND(1 /* term */);
 
-    rv = raft_log__acquire(&f->log, 2, &entries, &n);
-    munit_assert_int(rv, ==, 0);
+    LOG__ACQUIRE(2);
     munit_assert_int(n, ==, 1);
 
-    raft_log__truncate(&f->log, 2);
+    LOG__TRUNCATE(2);
 
     buf.base = NULL;
     buf.len = 0;
 
     test_heap_fault_enable(&f->heap);
 
-    rv = raft_log__append(&f->log, 2, RAFT_LOG_COMMAND, &buf, NULL);
+    rv = log__append(&f->log, 2, RAFT_COMMAND, &buf, NULL);
     munit_assert_int(rv, ==, RAFT_ENOMEM);
 
-    raft_log__release(&f->log, 2, entries, n);
+    LOG__RELEASE(2);
 
     return MUNIT_OK;
 }
 
-/* Acquire some entries, truncate the log and then append new ones forcing the
-   log to be grown and the reference count hash table to be re-built. */
-TEST_CASE(truncate, success, acquire_append, NULL)
-{
-    struct fixture *f = data;
-    struct raft_entry *entries;
-    unsigned n;
-    size_t i;
-    int rv;
-
-    (void)params;
-
-    __append_entry(f, 1);
-    __append_entry(f, 1);
-
-    rv = raft_log__acquire(&f->log, 2, &entries, &n);
-    munit_assert_int(rv, ==, 0);
-    munit_assert_int(n, ==, 1);
-
-    raft_log__truncate(&f->log, 2);
-
-    for (i = 0; i < RAFT_LOG__REFS_INITIAL_SIZE; i++) {
-        __append_entry(f, 2);
-    }
-
-    raft_log__release(&f->log, 2, entries, n);
-
-    return MUNIT_OK;
-}
-
-/**
- * raft_log__shift
- */
+/******************************************************************************
+ *
+ * log__truncate
+ *
+ *****************************************************************************/
 
 TEST_SUITE(shift);
 
 TEST_SETUP(shift, setup);
 TEST_TEAR_DOWN(shift, tear_down);
 
-TEST_GROUP(shift, success);
-
 /* Shift up to the first entry of a log with a single entry. */
-TEST_CASE(shift, success, 1_first, NULL)
+TEST_CASE(shift, 1_first, NULL)
 {
     struct fixture *f = data;
 
     (void)params;
 
-    __append_entry(f, 1);
+    LOG__APPEND(1 /* term */);
 
-    raft_log__shift(&f->log, 1);
+    LOG__SHIFT(1);
 
-    __assert_state(f, 0, 0, 0, 1, 0);
+    LOG__ASSERT(0 /* size                                                 */,
+                0 /* front                                                */,
+                0 /* back                                                 */,
+                1 /* offset                                               */,
+                0 /* n */);
 
     return MUNIT_OK;
 }
 
 /* Shift up to the first entry of a log with a two entries. */
-TEST_CASE(shift, success, 2_first, NULL)
+TEST_CASE(shift, 2_first, NULL)
 {
     struct fixture *f = data;
 
     (void)params;
 
-    __append_empty_entry(f);
-    __append_empty_entry(f);
+    LOG__APPEND(1 /* term */);
+    LOG__APPEND(1 /* term */);
 
-    raft_log__shift(&f->log, 1);
+    LOG__SHIFT(1);
 
-    __assert_state(f, 6, 1, 2, 1, 1);
+    LOG__ASSERT(6 /* size                                                 */,
+                1 /* front                                                */,
+                2 /* back                                                 */,
+                1 /* offset                                               */,
+                1 /* n */);
 
     return MUNIT_OK;
 }
 
 /* Shift to an entry which makes the log wrap. */
-TEST_CASE(shift, success, wrap, NULL)
+TEST_CASE(shift, wrap, NULL)
 {
     struct fixture *f = data;
     int i;
@@ -1093,31 +1071,45 @@ TEST_CASE(shift, success, wrap, NULL)
     (void)params;
 
     for (i = 0; i < 5; i++) {
-        __append_empty_entry(f);
+        LOG__APPEND(1 /* term */);
     }
 
     /* Now the log is [e1, e2, e3, e4, e5, NULL] */
-    __assert_state(f, 6, 0, 5, 0, 5);
+    LOG__ASSERT(6 /* size                                                 */,
+                0 /* front                                                */,
+                5 /* back                                                 */,
+                0 /* offset                                               */,
+                5 /* n */);
 
     /* Delete the first 4 entries. */
-    raft_log__shift(&f->log, 4);
+    LOG__SHIFT(4);
 
     /* Now the log is [NULL, NULL, NULL, NULL, e5, NULL] */
-    __assert_state(f, 6, 4, 5, 4, 1);
+    LOG__ASSERT(6 /* size                                                 */,
+                4 /* front                                                */,
+                5 /* back                                                 */,
+                4 /* offset                                               */,
+                1 /* n */);
 
     /* Append another 4 entries. */
-    for (i = 0; i < 4; i++) {
-        __append_empty_entry(f);
-    }
+    LOG__APPEND_MANY(1 /* term */, 4 /* n */);
 
     /* Now the log is [e7, e8, e9, NULL, e5, e6] */
-    __assert_state(f, 6, 4, 3, 4, 5);
+    LOG__ASSERT(6 /* size                                                 */,
+                4 /* front                                                */,
+                3 /* back                                                 */,
+                4 /* offset                                               */,
+                5 /* n */);
 
     /* Shift up to e7 included (wrapping) */
-    raft_log__shift(&f->log, 7);
+    LOG__SHIFT(7);
 
     /* Now the log is [NULL, e8, e9, NULL, NULL, NULL] */
-    __assert_state(f, 6, 1, 3, 7, 2);
+    LOG__ASSERT(6 /* size                                                 */,
+                1 /* front                                                */,
+                3 /* back                                                 */,
+                7 /* offset                                               */,
+                2 /* n */);
 
     return MUNIT_OK;
 }

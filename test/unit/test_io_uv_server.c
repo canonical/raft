@@ -176,12 +176,12 @@ TEST_CASE(success, append_entries, NULL)
 
     (void)params;
 
-    entries[0].type = RAFT_LOG_COMMAND;
+    entries[0].type = RAFT_COMMAND;
     entries[0].buf.base = raft_malloc(16);
     entries[0].buf.len = 16;
     strcpy(entries[0].buf.base, "hello");
 
-    entries[1].type = RAFT_LOG_COMMAND;
+    entries[1].type = RAFT_COMMAND;
     entries[1].buf.base = raft_malloc(8);
     entries[1].buf.len = 8;
     strcpy(entries[1].buf.base, "world");
@@ -449,7 +449,7 @@ TEST_CASE(close, append_entries, NULL)
 
     (void)params;
 
-    entry.type = RAFT_LOG_COMMAND;
+    entry.type = RAFT_COMMAND;
     entry.buf.base = raft_malloc(16);
     entry.buf.len = 16;
 

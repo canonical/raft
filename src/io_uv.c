@@ -493,7 +493,7 @@ static int raft__io_uv_write_closed_1_1(struct io_uv *uv,
     header = cursor;
     byte__put64(&cursor, 1);                     /* Number of entries */
     byte__put64(&cursor, 1);                     /* Entry term */
-    byte__put8(&cursor, RAFT_LOG_CONFIGURATION); /* Entry type */
+    byte__put8(&cursor, RAFT_CONFIGURATION); /* Entry type */
     byte__put8(&cursor, 0);                      /* Unused */
     byte__put8(&cursor, 0);                      /* Unused */
     byte__put8(&cursor, 0);                      /* Unused */

@@ -10,66 +10,72 @@
 /**
  * Initial size of the entry reference count hash table.
  */
-#define RAFT_LOG__REFS_INITIAL_SIZE 256
-
-void raft_log__init(struct raft_log *l);
-
-void raft_log__close(struct raft_log *l);
+#define LOG__REFS_INITIAL_SIZE 256
 
 /**
- * Set the offset of the first entry in the log.
+ * Initialize an empty in-memory log of raft entries.
  */
-void raft_log__set_offset(struct raft_log *l, raft_index offset);
+void log__init(struct raft_log *l);
+
+/**
+ * Release all memory used by the given log object.
+ */
+void log__close(struct raft_log *l);
+
+/**
+ * Set the offset of the first entry in the log, which will then have index
+ * equal to offset + 1.
+ */
+void log__set_offset(struct raft_log *l, raft_index offset);
 
 /**
  * Append the an entry to the log.
  */
-int raft_log__append(struct raft_log *l,
-                     const raft_term term,
-                     const int type,
-                     const struct raft_buffer *buf,
-                     void *batch);
+int log__append(struct raft_log *l,
+                const raft_term term,
+                const int type,
+                const struct raft_buffer *buf,
+                void *batch);
 
 /**
- * Convenience to append a series of RAFT_LOG_COMMAND entries.
+ * Convenience to append a series of RAFT_COMMAND entries.
  */
-int raft_log__append_commands(struct raft_log *l,
+int log__append_commands(struct raft_log *l,
+                         const raft_term term,
+                         const struct raft_buffer bufs[],
+                         const unsigned n);
+
+/**
+ * Convenience to encode and append a single RAFT_CONFIGURATION entry.
+ */
+int log__append_configuration(struct raft_log *l,
                               const raft_term term,
-                              const struct raft_buffer bufs[],
-                              const unsigned n);
+                              const struct raft_configuration *configuration);
 
 /**
- * Convenience to encode and append a single RAFT_LOG_CONFIGURATION entry.
+ * Get the current number of entries in the log. Return 0 if the log is empty.
  */
-int raft_log__append_configuration(
-    struct raft_log *l,
-    const raft_term term,
-    const struct raft_configuration *configuration);
+size_t log__n_entries(struct raft_log *l);
 
 /**
- * Get the current number of entries in the log.
+ * Get the index of the first entry in the log. Return 0 if the log is empty.
  */
-size_t raft_log__n_entries(struct raft_log *l);
-
-/**
- * Get the index of the first entry in the log.
- */
-raft_index raft_log__first_index(struct raft_log *l);
+raft_index log__first_index(struct raft_log *l);
 
 /**
  * Get the index of the last entry in the log.
  */
-raft_index raft_log__last_index(struct raft_log *l);
+raft_index log__last_index(struct raft_log *l);
 
 /**
  * Get the term of the entry with the given index.
  */
-raft_term raft_log__term_of(struct raft_log *l, raft_index index);
+raft_term log__term_of(struct raft_log *l, raft_index index);
 
 /**
  * Get the term of the last entry in the log.
  */
-raft_term raft_log__last_term(struct raft_log *l);
+raft_term log__last_term(struct raft_log *l);
 
 /**
  * Get the entry with the given index.
@@ -77,42 +83,41 @@ raft_term raft_log__last_term(struct raft_log *l);
  * The returned pointer remains valid only as long as no API that might delete
  * the entry with the given index is invoked.
  */
-const struct raft_entry *raft_log__get(struct raft_log *l,
-                                       const raft_index index);
+const struct raft_entry *log__get(struct raft_log *l, const raft_index index);
 
 /**
  * Acquire an array of entries from the given index onwards.
  *
  * The payload memory referenced by the #buf attribute of the returned entries
- * is guaranteed to be valid until raft_log__release() is called.
+ * is guaranteed to be valid until log__release() is called.
  */
-int raft_log__acquire(struct raft_log *l,
-                      const raft_index index,
-                      struct raft_entry *entries[],
-                      unsigned *n);
+int log__acquire(struct raft_log *l,
+                 const raft_index index,
+                 struct raft_entry *entries[],
+                 unsigned *n);
 
 /**
  * Release a previously acquired array of entries.
  */
-void raft_log__release(struct raft_log *l,
-                       const raft_index index,
-                       struct raft_entry entries[],
-                       const size_t n);
+void log__release(struct raft_log *l,
+                  const raft_index index,
+                  struct raft_entry entries[],
+                  const size_t n);
 
 /**
  * Delete all entries from the given index (included) onwards.
  */
-void raft_log__truncate(struct raft_log *l, const raft_index index);
+void log__truncate(struct raft_log *l, const raft_index index);
 
 /**
  * Discard all entries from the given index (included) onwards. This is exactly
  * the same as truncate, but the memory of the entries does not gets released.
  */
-void raft_log__discard(struct raft_log *l, const raft_index index);
+void log__discard(struct raft_log *l, const raft_index index);
 
 /**
  * Delete all entries up to the given index (included).
  */
-void raft_log__shift(struct raft_log *l, const raft_index index);
+void log__shift(struct raft_log *l, const raft_index index);
 
 #endif /* RAFT_LOG_H */

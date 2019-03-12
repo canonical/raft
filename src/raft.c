@@ -51,7 +51,7 @@ int raft_init(struct raft *r,
     /* Initial persistent server state. */
     r->current_term = 0;
     r->voted_for = 0;
-    raft_log__init(&r->log);
+    log__init(&r->log);
 
     raft_configuration_init(&r->configuration);
     r->configuration_index = 0;
@@ -78,6 +78,7 @@ int raft_init(struct raft *r,
     r->snapshot.index = 0;
     r->snapshot.pending.term = 0;
     r->snapshot.threshold = RAFT__DEFAULT_SNAPSHOT_THRESHOLD;
+    r->snapshot.put.data = NULL;
 
     rv = r->io->init(r->io, r->id, r->address);
     if (rv != 0) {
@@ -95,7 +96,7 @@ static void raft__close_cb(struct raft_io *io)
 
     raft_free(r->address);
     raft_state__clear(r);
-    raft_log__close(&r->log);
+    log__close(&r->log);
     raft_configuration_close(&r->configuration);
 
     if (r->close_cb != NULL) {
@@ -208,7 +209,7 @@ int raft_start(struct raft *r)
      * must be a configuration*/
     if (start_index == 1 && n_entries > 0) {
         assert(snapshot == NULL);
-        assert(entries[0].type == RAFT_LOG_CONFIGURATION);
+        assert(entries[0].type == RAFT_CONFIGURATION);
 
         /* As a small optimization, bump the commit index to 1 since we require
          * the first entry to be the same on all servers. */
@@ -223,7 +224,7 @@ int raft_start(struct raft *r)
     for (i = n_entries; i > 0; i--) {
         struct raft_entry *entry = &entries[i - 1];
 
-        if (entry->type != RAFT_LOG_CONFIGURATION) {
+        if (entry->type != RAFT_CONFIGURATION) {
             continue;
         }
 
@@ -241,11 +242,11 @@ int raft_start(struct raft *r)
     }
 
     /* Append the entries to the log. */
-    raft_log__set_offset(&r->log, start_index - 1);
+    log__set_offset(&r->log, start_index - 1);
     for (i = 0; i < n_entries; i++) {
         struct raft_entry *entry = &entries[i];
 
-        rv = raft_log__append(&r->log, entry->term, entry->type, &entry->buf,
+        rv = log__append(&r->log, entry->term, entry->type, &entry->buf,
                               entry->batch);
         if (rv != 0) {
             goto err_after_load;

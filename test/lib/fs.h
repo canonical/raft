@@ -18,6 +18,10 @@
  */
 #define TEST_DIR_FS_TYPE "dir-fs-type"
 
+#define FIXTURE_DIR char *dir
+#define SETUP_DIR f->dir = test_dir_setup(params)
+#define TEAR_DOWN_DIR test_dir_tear_down(f->dir)
+
 /**
  * List of all supported file system types.
  */

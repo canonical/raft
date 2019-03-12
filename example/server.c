@@ -59,7 +59,7 @@ static int __fsm__restore(struct raft_fsm *fsm, struct raft_buffer *buf)
     struct __fsm *f = fsm->data;
 
     if (buf->len != sizeof(uint64_t)) {
-        return RAFT_ERR_MALFORMED;
+        return RAFT_EMALFORMED;
     }
 
     f->count = *(uint64_t *)buf->base;
@@ -108,7 +108,6 @@ struct __server
     struct raft_io io;
     struct raft_fsm fsm;
     struct raft raft;
-    struct raft_apply req;
     const char *dir;
     unsigned id;
     char address[64];
@@ -244,8 +243,6 @@ static int __server_init(struct __server *s, const char *dir, unsigned id)
 
     s->raft.snapshot.threshold = 15;
 
-    s->req.data = s;
-
     return 0;
 
 err_after_configuration_init:
@@ -289,6 +286,8 @@ static void __server_apply_cb(struct raft_apply *req, int status)
     struct __server *s = req->data;
     struct __fsm *f = s->fsm.data;
 
+    raft_free(req);
+
     if (status != 0) {
         raft_warnf(&s->logger, "fsm: apply error: %s", raft_strerror(status));
         return;
@@ -303,6 +302,8 @@ static void __server_timer_cb(uv_timer_t *timer)
 {
     struct __server *s = timer->data;
     struct raft_buffer buf;
+    struct raft_apply *req;
+
     int rv;
 
     if (s->raft.state != RAFT_LEADER) {
@@ -311,15 +312,21 @@ static void __server_timer_cb(uv_timer_t *timer)
 
     buf.len = sizeof(uint64_t);
     buf.base = raft_malloc(buf.len);
-
-    *(uint64_t *)buf.base = 1;
-
     if (buf.base == NULL) {
         printf("error: allocate new entry: out of memory\n");
         return;
     }
 
-    rv = raft_apply(&s->raft, &s->req, &buf, 1, __server_apply_cb);
+    *(uint64_t *)buf.base = 1;
+
+    req = raft_malloc(sizeof *req);
+    if (req == NULL) {
+        printf("error: allocate new apply request: out of memory\n");
+        return;
+    }
+    req->data = s;
+
+    rv = raft_apply(&s->raft, req, &buf, 1, __server_apply_cb);
     if (rv != 0) {
         printf("error: propose new entry: %s\n", raft_strerror(rv));
         return;

@@ -160,8 +160,8 @@ void test_receive_heartbeat(struct raft *r, unsigned leader_id)
     args->term = r->current_term;
     args->leader_id = leader_id;
 
-    args->prev_log_index = raft_log__last_index(&r->log);
-    args->prev_log_term = raft_log__last_term(&r->log);
+    args->prev_log_index = log__last_index(&r->log);
+    args->prev_log_term = log__last_term(&r->log);
 
     args->entries = NULL;
     args->n_entries = 0;

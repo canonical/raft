@@ -14,12 +14,32 @@ int raft_state(struct raft *r)
     return r->state;
 }
 
+void raft_leader(struct raft *r, unsigned *id, const char **address)
+{
+    switch (r->state) {
+        case RAFT_UNAVAILABLE:
+        case RAFT_CANDIDATE:
+            *id = 0;
+            *address = NULL;
+            return;
+        case RAFT_FOLLOWER:
+            *id = r->follower_state.current_leader.id;
+            *address = r->follower_state.current_leader.address;
+            return;
+        case RAFT_LEADER:
+            *id = r->id;
+            *address = r->address;
+            break;
+    }
+}
+
 /**
  * Clear follower state.
  */
 static void raft_state__clear_follower(struct raft *r)
 {
-    r->follower_state.current_leader_id = 0;
+    r->follower_state.current_leader.id = 0;
+    r->follower_state.current_leader.address = NULL;
 }
 
 /**
@@ -138,7 +158,8 @@ static void raft_state__reset_follower(struct raft *r)
 
     /* The current leader will be set next time that we receive an AppendEntries
      * RPC. */
-    r->follower_state.current_leader_id = 0;
+    r->follower_state.current_leader.id = 0;
+    r->follower_state.current_leader.address = NULL;
 }
 
 void raft_state__start_as_follower(struct raft *r)
@@ -274,7 +295,7 @@ int raft_state__convert_to_leader(struct raft *r)
      * so (TODO: include reference to raft paper). */
     for (i = 0; i < r->configuration.n; i++) {
         struct raft_replication *replication = &r->leader_state.replication[i];
-        replication->next_index = raft_log__last_index(&r->log) + 1;
+        replication->next_index = log__last_index(&r->log) + 1;
         replication->match_index = 0;
         /* TODO: we should keep a last_contact array which is independent from
          * the replication array, and keep it up-to-date.  */
@@ -346,7 +367,7 @@ int raft_state__rebuild_next_and_match_indexes(
 
         assert(j == r->configuration.n);
 
-        replication[i].next_index = raft_log__last_index(&r->log) + 1;
+        replication[i].next_index = log__last_index(&r->log) + 1;
         replication[i].match_index = 0;
         replication[i].last_contact = r->io->time(r->io);
     }

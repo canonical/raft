@@ -344,7 +344,7 @@ TEST_CASE(append, success, pristine, NULL)
     __load(f);
 
     entry.term = 1;
-    entry.type = RAFT_LOG_COMMAND;
+    entry.type = RAFT_COMMAND;
     entry.buf.base = munit_malloc(1);
     entry.buf.len = 1;
 
@@ -375,12 +375,12 @@ TEST_CASE(append, success, concurrent, NULL)
     __load(f);
 
     entry1.term = 1;
-    entry1.type = RAFT_LOG_COMMAND;
+    entry1.type = RAFT_COMMAND;
     entry1.buf.base = munit_malloc(1);
     entry1.buf.len = 1;
 
     entry2.term = 1;
-    entry2.type = RAFT_LOG_COMMAND;
+    entry2.type = RAFT_COMMAND;
     entry2.buf.base = munit_malloc(1);
     entry2.buf.len = 1;
 

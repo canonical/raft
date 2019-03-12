@@ -507,7 +507,7 @@ TEST_CASE(load_all, success, open_not_all_zeros, NULL)
     byte__put64(&cursor, 123);             /* Invalid checksums */
     byte__put64(&cursor, 1);               /* Number of entries */
     byte__put64(&cursor, 1);               /* Entry term */
-    byte__put8(&cursor, RAFT_LOG_COMMAND); /* Entry type */
+    byte__put8(&cursor, RAFT_COMMAND); /* Entry type */
     byte__put8(&cursor, 0);                /* Unused */
     byte__put8(&cursor, 0);                /* Unused */
     byte__put8(&cursor, 0);                /* Unused */

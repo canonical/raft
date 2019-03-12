@@ -77,7 +77,7 @@ static void append_cb(void *data, int status)
             struct raft_entry *entry = &f->entries[i];           \
             void *cursor;                                        \
             entry->term = 1;                                     \
-            entry->type = RAFT_LOG_COMMAND;                      \
+            entry->type = RAFT_COMMAND;                      \
             entry->buf.base = raft_malloc(SIZE);                 \
             entry->buf.len = SIZE;                               \
             entry->batch = NULL;                                 \
@@ -168,7 +168,7 @@ static void append_cb(void *data, int status)
                 entry->buf.len = byte__get32(&cursor);                      \
                                                                             \
                 munit_assert_int(entry->term, ==, 1);                       \
-                munit_assert_int(entry->type, ==, RAFT_LOG_COMMAND);        \
+                munit_assert_int(entry->type, ==, RAFT_COMMAND);        \
                                                                             \
                 data_size += entry->buf.len;                                \
             }                                                               \

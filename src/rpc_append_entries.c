@@ -35,7 +35,7 @@ int raft_rpc__recv_append_entries(struct raft *r,
                 args->n_entries, id);
 
     result->success = false;
-    result->last_log_index = raft_log__last_index(&r->log);
+    result->last_log_index = log__last_index(&r->log);
 
     rv = raft_rpc__ensure_matching_terms(r, args->term, &match);
     if (rv != 0) {
@@ -95,7 +95,8 @@ int raft_rpc__recv_append_entries(struct raft *r,
 
     /* Update current leader because the term in this AppendEntries RPC is up to
      * date. */
-    r->follower_state.current_leader_id = id;
+    r->follower_state.current_leader.id = id;
+    r->follower_state.current_leader.address = address;
 
     /* Reset the election timer. */
     r->timer = 0;
@@ -200,7 +201,7 @@ int raft_rpc__recv_append_entries_result(
     assert(result->term == r->current_term);
 
     /* Ignore responses from servers that have been removed */
-    server = raft_configuration__get(&r->configuration, id);
+    server = configuration__get(&r->configuration, id);
     if (server == NULL) {
         raft_errorf(r->logger, "unknown server -> ignore");
         return 0;

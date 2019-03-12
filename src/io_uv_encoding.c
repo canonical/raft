@@ -260,7 +260,7 @@ void io_uv__encode_batch_header(const struct raft_entry *entries,
         /* Term in which the entry was created, little endian. */
         byte__put64(&cursor, entry->term);
 
-        /* Message type (Either RAFT_LOG_COMMAND or RAFT_LOG_CONFIGURATION) */
+        /* Message type (Either RAFT_COMMAND or RAFT_CONFIGURATION) */
         byte__put8(&cursor, entry->type);
 
         cursor += 3; /* Unused */
@@ -323,9 +323,9 @@ int io_uv__decode_batch_header(const void *batch,
         entry->term = byte__get64(&cursor);
         entry->type = byte__get8(&cursor);
 
-        if (entry->type != RAFT_LOG_COMMAND &&
-            entry->type != RAFT_LOG_CONFIGURATION) {
-            rv = RAFT_ERR_MALFORMED;
+        if (entry->type != RAFT_COMMAND &&
+            entry->type != RAFT_CONFIGURATION) {
+            rv = RAFT_EMALFORMED;
             goto err_after_alloc;
         }
 

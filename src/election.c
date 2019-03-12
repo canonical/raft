@@ -46,8 +46,8 @@ static int raft_election__send_request_vote(struct raft *r,
     message.type = RAFT_IO_REQUEST_VOTE;
     message.request_vote.term = r->current_term;
     message.request_vote.candidate_id = r->id;
-    message.request_vote.last_log_index = raft_log__last_index(&r->log);
-    message.request_vote.last_log_term = raft_log__last_term(&r->log);
+    message.request_vote.last_log_index = log__last_index(&r->log);
+    message.request_vote.last_log_term = log__last_term(&r->log);
     message.server_id = server->id;
     message.server_address = server->address;
 
@@ -157,7 +157,7 @@ int raft_election__vote(struct raft *r,
     assert(args != NULL);
     assert(granted != NULL);
 
-    local_server = raft_configuration__get(&r->configuration, r->id);
+    local_server = configuration__get(&r->configuration, r->id);
 
     *granted = false;
 
@@ -173,7 +173,7 @@ int raft_election__vote(struct raft *r,
         return 0;
     }
 
-    local_last_log_index = raft_log__last_index(&r->log);
+    local_last_log_index = log__last_index(&r->log);
 
     /* Our log is definitely not more up-to-date if it's empty! */
     if (local_last_log_index == 0) {
@@ -182,7 +182,7 @@ int raft_election__vote(struct raft *r,
     }
 
     /* TODO: account for snapshots */
-    local_last_log_term = raft_log__last_term(&r->log);
+    local_last_log_term = log__last_term(&r->log);
 
     if (args->last_log_term < local_last_log_term) {
         /* The requesting server has last entry's log term lower than ours. */
