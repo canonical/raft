@@ -732,9 +732,7 @@ static void raft_replication__follower_append_cb(void *data, int status)
     struct raft_append_entries *args = &request->args;
     struct raft_message message;
     struct raft_append_entries_result *result = &message.append_entries_result;
-    const struct raft_server *leader;
     struct raft_io_send *req;
-    const char *leader_address = "";
     size_t i;
     size_t j;
     int rv;
@@ -757,17 +755,6 @@ static void raft_replication__follower_append_cb(void *data, int status)
     if (status != 0) {
         result->success = false;
         goto respond;
-    }
-
-    /* Try getting the leader address from the current configuration. If no
-     * server with a matching ID exists, it probably means that this is the very
-     * first entry being appended and the configuration is empty. We'll retry
-     * later, after we have applied the configuraiton entry. Similarly, it might
-     * be that we're going to apply a new configuration where the leader is
-     * removing itself, so we need to save its address here. */
-    leader = configuration__get(&r->configuration, args->leader_id);
-    if (leader != NULL) {
-        leader_address = leader->address;
     }
 
     result->term = r->current_term;
@@ -815,21 +802,11 @@ static void raft_replication__follower_append_cb(void *data, int status)
     result->success = true;
 
 respond:
-    /* Refresh the leader address, in case it has changed or it was added in a
-     * new configuration. */
-    leader = configuration__get(&r->configuration, args->leader_id);
-    if (leader != NULL) {
-        leader_address = leader->address;
-    }
-
-    /* TODO: are there cases were this assertion is unsafe? */
-    assert(leader_address != NULL);
-
     result->last_log_index = r->last_stored;
 
     message.type = RAFT_IO_APPEND_ENTRIES_RESULT;
-    message.server_id = args->leader_id;
-    message.server_address = leader_address;
+    message.server_id = r->follower_state.current_leader.id;
+    message.server_address = r->follower_state.current_leader.address;
 
     req = raft_malloc(sizeof *req);
     if (req == NULL) {

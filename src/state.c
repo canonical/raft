@@ -19,7 +19,8 @@ int raft_state(struct raft *r)
  */
 static void raft_state__clear_follower(struct raft *r)
 {
-    r->follower_state.current_leader_id = 0;
+    r->follower_state.current_leader.id = 0;
+    r->follower_state.current_leader.address = NULL;
 }
 
 /**
@@ -138,7 +139,8 @@ static void raft_state__reset_follower(struct raft *r)
 
     /* The current leader will be set next time that we receive an AppendEntries
      * RPC. */
-    r->follower_state.current_leader_id = 0;
+    r->follower_state.current_leader.id = 0;
+    r->follower_state.current_leader.address = NULL;
 }
 
 void raft_state__start_as_follower(struct raft *r)

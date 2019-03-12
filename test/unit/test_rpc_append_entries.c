@@ -121,7 +121,7 @@ static struct raft_entry *__create_entries_batch()
  * Assert the current leader ID of the raft instance of the given fixture.
  */
 #define __assert_current_leader_id(F, ID) \
-    munit_assert_int(F->raft.follower_state.current_leader_id, ==, ID);
+    munit_assert_int(F->raft.follower_state.current_leader.id, ==, ID);
 
 /**
  * Assert that the test I/O implementation has received exactly one

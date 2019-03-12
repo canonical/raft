@@ -202,7 +202,7 @@ TEST_CASE(request, error, has_leader, NULL)
     /* Receive a valid AppendEntries RPC to update our leader to server 2. */
     test_receive_heartbeat(&f->raft, 2);
 
-    munit_assert_int(f->raft.follower_state.current_leader_id, ==, 2);
+    munit_assert_int(f->raft.follower_state.current_leader.id, ==, 2);
 
     /* Receive a vote request from server 3, with a higher term than ours. */
     __recv_request_vote(f, f->raft.current_term + 1, 3, 1, 1);
@@ -583,7 +583,7 @@ TEST_CASE(response, success, step_down, NULL)
     munit_assert_int(f->raft.state, ==, RAFT_FOLLOWER);
 
     /* No leader is set. */
-    munit_assert_int(f->raft.follower_state.current_leader_id, ==, 0);
+    munit_assert_int(f->raft.follower_state.current_leader.id, ==, 0);
 
     return MUNIT_OK;
 }

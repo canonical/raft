@@ -449,12 +449,12 @@ static bool test_cluster__update_leader(struct test_cluster *c)
                 break;
             }
 
-            if (raft->follower_state.current_leader_id == 0) {
+            if (raft->follower_state.current_leader.id == 0) {
                 acked = false;
                 break;
             }
 
-            if (raft->follower_state.current_leader_id != leader_id) {
+            if (raft->follower_state.current_leader.id != leader_id) {
                 acked = false;
                 break;
             }

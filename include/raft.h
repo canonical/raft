@@ -787,7 +787,11 @@ struct raft
              * The fields below hold the part of the server's volatile state
              * which is specific to followers.
              */
-            unsigned current_leader_id;
+            struct
+            {
+                unsigned id;
+                const char *address;
+            } current_leader;
         } follower_state;
 
         struct

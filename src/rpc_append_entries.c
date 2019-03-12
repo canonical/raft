@@ -95,7 +95,8 @@ int raft_rpc__recv_append_entries(struct raft *r,
 
     /* Update current leader because the term in this AppendEntries RPC is up to
      * date. */
-    r->follower_state.current_leader_id = id;
+    r->follower_state.current_leader.id = id;
+    r->follower_state.current_leader.address = address;
 
     /* Reset the election timer. */
     r->timer = 0;
