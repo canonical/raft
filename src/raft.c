@@ -78,6 +78,7 @@ int raft_init(struct raft *r,
     r->snapshot.index = 0;
     r->snapshot.pending.term = 0;
     r->snapshot.threshold = RAFT__DEFAULT_SNAPSHOT_THRESHOLD;
+    r->snapshot.put.data = NULL;
 
     rv = r->io->init(r->io, r->id, r->address);
     if (rv != 0) {
