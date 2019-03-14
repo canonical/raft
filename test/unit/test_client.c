@@ -301,6 +301,29 @@ TEST_CASE(propose, error, oom, propose_oom_params)
     return MUNIT_OK;
 }
 
+/* The raft instance is shutdown. */
+TEST_CASE(propose, error, shutdown, NULL)
+{
+    struct propose__fixture *f = data;
+    struct raft_apply *req = munit_malloc(sizeof *req);
+    struct raft_buffer buf;
+    int rv;
+
+    (void)params;
+
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
+    test_become_leader(&f->raft);
+
+    test_fsm_encode_set_x(123, &buf);
+
+    req->data = f;
+
+    rv = raft_apply(&f->raft, req, &buf, 1, apply_cb);
+    munit_assert_int(rv, ==, 0);
+
+    return MUNIT_OK;
+}
+
 /* I/O error. */
 TEST_CASE(propose, error, io_err, NULL)
 {

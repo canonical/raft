@@ -186,6 +186,8 @@ static int io_stub__close(struct raft_io *io, void (*cb)(struct raft_io *io))
 
     s = io->impl;
 
+    raft_io_stub_flush(io);
+
     for (i = 0; i < s->n; i++) {
         struct raft_entry *entry = &s->entries[i];
         raft_free(entry->buf.base);

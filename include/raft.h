@@ -573,7 +573,7 @@ struct raft_fsm
     void *data;  /* Custom user data. */
 
     /**
-     * Apply a committed RAFT_LOG_COMMAND entry to the state machine.
+     * Apply a committed RAFT_COMMAND entry to the state machine.
      */
     int (*apply)(struct raft_fsm *fsm, const struct raft_buffer *buf);
 
@@ -961,7 +961,7 @@ struct raft_apply
  * committed.
  *
  * If this server is the leader, it will create @n new log entries of type
- * #RAFT_LOG_COMMAND using the given buffers as their payloads, append them to
+ * #RAFT_COMMAND using the given buffers as their payloads, append them to
  * its own log and attempt to replicate them on other servers by sending
  * AppendEntries RPCs.
  *
@@ -971,6 +971,10 @@ struct raft_apply
  * implicitely transferred to the raft library, which will take care of
  * releasing it when appropriate. Any further client access to such memory leads
  * to undefined behavior.
+ *
+ * The ownership of the memory of the @bufs array itself is not transferred to
+ * the raft library, and, if allocated dynamically, must be deallocated by the
+ * caller.
  */
 int raft_apply(struct raft *r,
                struct raft_apply *req,
