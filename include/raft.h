@@ -938,6 +938,11 @@ int raft_state(struct raft *r);
 void raft_leader(struct raft *r, unsigned *id, const char **address);
 
 /**
+ * Return the ID of the last entry that was applied to the local FSM.
+ */
+raft_index raft_last_applied(struct raft *r);
+
+/**
  * Human readable version of the current state.
  */
 const char *raft_state_name(struct raft *r);

@@ -33,6 +33,11 @@ void raft_leader(struct raft *r, unsigned *id, const char **address)
     }
 }
 
+raft_index raft_last_applied(struct raft *r)
+{
+    return r->last_applied;
+}
+
 /**
  * Clear follower state.
  */
@@ -80,7 +85,7 @@ static void raft_state__clear_leader(struct raft *r)
 
     /* Fail all outstanding apply requests */
     while (!RAFT__QUEUE_IS_EMPTY(&r->leader_state.apply_reqs)) {
-       struct raft_apply *req;
+        struct raft_apply *req;
         raft__queue *head;
         head = RAFT__QUEUE_HEAD(&r->leader_state.apply_reqs);
         RAFT__QUEUE_REMOVE(head);
