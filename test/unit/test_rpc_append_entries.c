@@ -132,7 +132,7 @@ static struct raft_entry *__create_entries_batch()
         struct raft_message *message;                                       \
         struct raft_append_entries_result *result;                          \
                                                                             \
-        munit_assert_int(raft_io_stub_sending_n(&F->io), ==, 1);            \
+        munit_assert_int(raft_io_stub_n_sending(&F->io), ==, 1);            \
                                                                             \
         raft_io_stub_sending(&F->io, 0, &message);                          \
         munit_assert_int(message->type, ==, RAFT_IO_APPEND_ENTRIES_RESULT); \
@@ -194,7 +194,7 @@ TEST_CASE(request, success, twice, NULL)
     /* The duplicate entry has been ignored. */
     raft_io_stub_flush(&f->io);
 
-    munit_assert_int(raft_io_stub_sending_n(&f->io), ==, 1);
+    munit_assert_int(raft_io_stub_n_sending(&f->io), ==, 1);
 
     raft_io_stub_sending(&f->io, 0, &message);
     result = &message->append_entries_result;
@@ -376,7 +376,7 @@ TEST_CASE(request, success, write_log, NULL)
     __recv_append_entries(f, 1, 2, 1, 1, entries, 1, 1);
 
     /* A write request has been submitted. */
-    munit_assert_int(raft_io_stub_appending_n(&f->io), ==, 1);
+    munit_assert_int(raft_io_stub_n_appending(&f->io), ==, 1);
 
     return MUNIT_OK;
 }
@@ -420,7 +420,7 @@ TEST_CASE(request, success, skip, NULL)
     __recv_append_entries(f, 1, 2, 1, 1, entries, 2, 1);
 
     /* A write request has been submitted, only for the second entry. */
-    munit_assert_int(raft_io_stub_appending_n(&f->io), ==, 1);
+    munit_assert_int(raft_io_stub_n_appending(&f->io), ==, 1);
 
     raft_io_stub_appending(&f->io, 0, &entries, &n);
     munit_assert_int(n, ==, 1);
@@ -475,7 +475,7 @@ TEST_CASE(request, success, truncate, NULL)
     __recv_append_entries(f, 2, 2, 1, 1, entries, 2, 1);
 
     /* A write request has been submitted, for both the two new entries. */
-    munit_assert_int(raft_io_stub_appending_n(&f->io), ==, 1);
+    munit_assert_int(raft_io_stub_n_appending(&f->io), ==, 1);
 
     raft_io_stub_appending(&f->io, 0, &entries, &n);
 
@@ -631,7 +631,7 @@ TEST_CASE(response, error, retry, NULL)
     __recv_append_entries_result(f, 2, 2, false, 0);
 
     /* We have resent entry 1. */
-    munit_assert_int(raft_io_stub_sending_n(&f->io), ==, 1);
+    munit_assert_int(raft_io_stub_n_sending(&f->io), ==, 1);
     raft_io_stub_sending(&f->io, 0, &message);
     munit_assert_int(message->append_entries.n_entries, ==, 1);
 

@@ -112,7 +112,7 @@ TEST_CASE(start, send_request_vote_rpcs, NULL)
     munit_assert_int(rv, ==, 0);
 
     /* Since there's only one other voting server, we sent only one message. */
-    munit_assert_int(raft_io_stub_sending_n(&f->io), ==, 1);
+    munit_assert_int(raft_io_stub_n_sending(&f->io), ==, 1);
 
     raft_io_stub_sending(&f->io, 0, &message);
     munit_assert_int(message->server_id, ==, 2);

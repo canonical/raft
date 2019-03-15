@@ -117,7 +117,7 @@ static void tear_down(void *data)
         struct raft_message *message;                            \
         struct raft_request_vote_result *result;                 \
                                                                  \
-        munit_assert_int(raft_io_stub_sending_n(&F->io), ==, 1); \
+        munit_assert_int(raft_io_stub_n_sending(&F->io), ==, 1); \
                                                                  \
         raft_io_stub_sending(&F->io, 0, &message);               \
         result = &message->request_vote_result;                  \
@@ -134,7 +134,7 @@ static void tear_down(void *data)
         struct raft_message *message;                                         \
         struct raft_append_entries *args;                                     \
                                                                               \
-        munit_assert_int(raft_io_stub_sending_n(&F->io), ==, 1);              \
+        munit_assert_int(raft_io_stub_n_sending(&F->io), ==, 1);              \
                                                                               \
         raft_io_stub_sending(&F->io, 0, &message);                            \
         args = &message->append_entries;                                      \

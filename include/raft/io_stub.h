@@ -48,7 +48,7 @@ void raft_io_stub_flush(struct raft_io *io);
  * submitted with raft_io->append(), but whose callbacks haven't been fired
  * yet).
  */
-unsigned raft_io_stub_appending_n(struct raft_io *io);
+unsigned raft_io_stub_n_appending(struct raft_io *io);
 
 /**
  * Return the entries if the i'th pending append request, or NULL.
@@ -63,7 +63,7 @@ void raft_io_stub_appending(struct raft_io *io,
  * successfully submitted with raft_io->send(), but whose callbacks haven't been
  * fired yet).
  */
-unsigned raft_io_stub_sending_n(struct raft_io *io);
+unsigned raft_io_stub_n_sending(struct raft_io *io);
 
 /**
  * Return a pointer to the message associated with the i'th pending raft_io_send

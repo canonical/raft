@@ -216,7 +216,7 @@ static void test_cluster__flush_io(struct test_cluster *c)
         unsigned n;
         unsigned i;
 
-        n = raft_io_stub_sending_n(io);
+        n = raft_io_stub_n_sending(io);
         for (i = 0; i < n; i++) {
             struct raft_message *message;
             raft_io_stub_sending(io, i, &message);

@@ -124,7 +124,7 @@ TEST_MODULE(client);
         unsigned n_append_entries = 0;                                       \
         unsigned i;                                                          \
                                                                              \
-        n = raft_io_stub_sending_n(&F->io);                                  \
+        n = raft_io_stub_n_sending(&F->io);                                  \
         for (i = 0; i < n; i++) {                                            \
             struct raft_message *message;                                    \
             raft_io_stub_sending(&F->io, i, &message);                       \
@@ -133,7 +133,7 @@ TEST_MODULE(client);
             }                                                                \
         }                                                                    \
         munit_assert_int(n_append_entries, ==, N_APPEND_ENTRIES);            \
-        munit_assert_int(raft_io_stub_appending_n(&F->io), ==, N_WRITE_LOG); \
+        munit_assert_int(raft_io_stub_n_appending(&F->io), ==, N_WRITE_LOG); \
                                                                              \
         raft_io_stub_flush(&F->io);                                          \
     }

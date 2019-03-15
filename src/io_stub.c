@@ -948,7 +948,7 @@ void raft_io_stub_flush(struct raft_io *io)
     }
 }
 
-unsigned raft_io_stub_appending_n(struct raft_io *io)
+unsigned raft_io_stub_n_appending(struct raft_io *io)
 {
     struct io_stub *s;
     s = io->impl;
@@ -967,7 +967,7 @@ void raft_io_stub_appending(struct raft_io *io,
     *entries = s->append.pending.entries;
 }
 
-unsigned raft_io_stub_sending_n(struct raft_io *io)
+unsigned raft_io_stub_n_sending(struct raft_io *io)
 {
     struct io_stub *s;
     s = io->impl;
