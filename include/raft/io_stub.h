@@ -17,6 +17,9 @@ struct raft_entry;
  */
 int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger);
 
+/**
+ * Release all memory held by the given stub I/O implementation.
+ */
 void raft_io_stub_close(struct raft_io *io);
 
 /**
@@ -41,6 +44,21 @@ void raft_io_stub_dispatch(struct raft_io *io, struct raft_message *message);
 void raft_io_stub_flush(struct raft_io *io);
 
 /**
+ * Return the number of pending append requests (i.e. requests successfully
+ * submitted with raft_io->append(), but whose callbacks haven't been fired
+ * yet).
+ */
+unsigned raft_io_stub_appending_n(struct raft_io *io);
+
+/**
+ * Return the entries if the i'th pending append request, or NULL.
+ */
+void raft_io_stub_appending(struct raft_io *io,
+                            unsigned i,
+                            struct raft_entry **entries,
+                            unsigned *n);
+
+/**
  * Return the number of pending raft_io_send requests (i.e. requests
  * successfully submitted with raft_io->send(), but whose callbacks haven't been
  * fired yet).
@@ -51,15 +69,9 @@ unsigned raft_io_stub_sending_n(struct raft_io *io);
  * Return a pointer to the message associated with the i'th pending raft_io_send
  * request, or NULL.
  */
-struct raft_message *raft_io_stub_sending(struct raft_io *io, unsigned i);
-
-/**
- * Return a copy of the pending log entries that where flushed upon the last
- * call to @raft_io_stub_flush.
- */
-void raft_io_stub_appended(struct raft_io *io,
-                           struct raft_entry **entries,
-                           unsigned *n);
+void raft_io_stub_sending(struct raft_io *io,
+                          unsigned i,
+                          struct raft_message **message);
 
 /**
  * Inject a failure that will be triggered after @delay I/O requests and occur

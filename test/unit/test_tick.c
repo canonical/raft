@@ -78,7 +78,7 @@ static void tear_down(void *data)
                                                                     \
         munit_assert_int(raft_io_stub_sending_n(&F->io), ==, 1);    \
                                                                     \
-        message = raft_io_stub_sending(&F->io, 0);                  \
+        raft_io_stub_sending(&F->io, 0, &message);                  \
         munit_assert_int(message->type, ==, RAFT_IO_REQUEST_VOTE);  \
         munit_assert_int(message->server_id, ==, SERVER_ID);        \
                                                                     \
@@ -99,7 +99,7 @@ static void tear_down(void *data)
                                                                               \
         munit_assert_int(raft_io_stub_sending_n(&F->io), ==, 1);              \
                                                                               \
-        message = raft_io_stub_sending(&F->io, 0);                            \
+        raft_io_stub_sending(&F->io, 0, &message);                            \
         munit_assert_int(message->type, ==, RAFT_IO_APPEND_ENTRIES);          \
                                                                               \
         args = &message->append_entries;                                      \

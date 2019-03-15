@@ -118,29 +118,24 @@ TEST_MODULE(client);
  * Complete any outstanding I/O operation requests, asserting that they match
  * the given numbers.
  */
-#define __assert_io(F, N_WRITE_LOG, N_APPEND_ENTRIES)             \
-    {                                                             \
-        struct raft_entry *entries;                               \
-        unsigned n;                                               \
-        unsigned n_append_entries = 0;                            \
-        unsigned i;                                               \
-                                                                  \
-        n = raft_io_stub_sending_n(&F->io);                       \
-        for (i = 0; i < n; i++) {                                 \
-            struct raft_message *message;                         \
-            message = raft_io_stub_sending(&F->io, i);            \
-            if (message->type == RAFT_IO_APPEND_ENTRIES) {        \
-                n_append_entries++;                               \
-            }                                                     \
-        }                                                         \
-        munit_assert_int(n_append_entries, ==, N_APPEND_ENTRIES); \
-                                                                  \
-        raft_io_stub_flush(&F->io);                               \
-                                                                  \
-        if (N_WRITE_LOG == 1) {                                   \
-            raft_io_stub_appended(&F->io, &entries, &n);          \
-            munit_assert_ptr_not_null(entries);                   \
-        }                                                         \
+#define __assert_io(F, N_WRITE_LOG, N_APPEND_ENTRIES)                        \
+    {                                                                        \
+        unsigned n;                                                          \
+        unsigned n_append_entries = 0;                                       \
+        unsigned i;                                                          \
+                                                                             \
+        n = raft_io_stub_sending_n(&F->io);                                  \
+        for (i = 0; i < n; i++) {                                            \
+            struct raft_message *message;                                    \
+            raft_io_stub_sending(&F->io, i, &message);                       \
+            if (message->type == RAFT_IO_APPEND_ENTRIES) {                   \
+                n_append_entries++;                                          \
+            }                                                                \
+        }                                                                    \
+        munit_assert_int(n_append_entries, ==, N_APPEND_ENTRIES);            \
+        munit_assert_int(raft_io_stub_appending_n(&F->io), ==, N_WRITE_LOG); \
+                                                                             \
+        raft_io_stub_flush(&F->io);                                          \
     }
 
 /**

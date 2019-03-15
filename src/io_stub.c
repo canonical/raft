@@ -10,11 +10,11 @@
 #include "queue.h"
 #include "snapshot.h"
 
-/* Set to 1 to enable logging. */
+/* Set to 1 to enable tracing. */
 #if 0
-#define __debugf(S, MSG, ...) raft_debugf(S->logger, MSG, __VA_ARGS__)
+#define tracef(S, MSG, ...) raft_debugf(S->logger, MSG, __VA_ARGS__)
 #else
-#define __debugf(S, MSG, ...)
+#define tracef(S, MSG, ...)
 #endif
 
 /* Maximum number of messages inflight on the network. This should be enough for
@@ -25,13 +25,30 @@
  * instance. This should be enough for testing purposes. */
 #define MAX_PEERS 8
 
-/* Information about a pending request to send a message. */
+#define REQUEST \
+    int type;   \
+    raft__queue queue
+
+/* Base type for an asynchronous request submitted to the stub I/o
+ * implementation. */
+struct request
+{
+    REQUEST;
+};
+
+/* Pending request to append entries to the log. */
+struct append
+{
+    REQUEST;
+};
+
+/* Pending request to send a message. */
 struct send
 {
+    REQUEST;
     struct raft_io_send *req;
     struct raft_message message;
     raft_io_send_cb cb;
-    raft__queue queue;
 };
 
 /* Message that has been written to the network and is waiting to be delivered
@@ -712,8 +729,8 @@ static void io_stub__reset_flushed(struct io_stub *s)
                 break;
         }
 
-	raft_free(transmit);
-	s->n_transmit--;
+        raft_free(transmit);
+        s->n_transmit--;
     }
     assert(s->n_transmit == 0);
 }
@@ -857,13 +874,13 @@ void raft_io_stub_flush(struct raft_io *io)
         RAFT__QUEUE_REMOVE(head);
         send = RAFT__QUEUE_DATA(head, struct send, queue);
 
-	transmit = raft_malloc(sizeof *transmit);
-	assert(transmit != NULL);
+        transmit = raft_malloc(sizeof *transmit);
+        assert(transmit != NULL);
 
         src = &send->message;
         dst = &transmit->message;
 
-	RAFT__QUEUE_PUSH(&s->transmit, &transmit->queue);
+        RAFT__QUEUE_PUSH(&s->transmit, &transmit->queue);
         s->n_transmit++;
 
         *dst = *src;
@@ -901,7 +918,7 @@ void raft_io_stub_flush(struct raft_io *io)
                 break;
         }
 
-        __debugf(s, "io: flush to server %u: %s", src->server_id, desc);
+        tracef(s, "io: flush to server %u: %s", src->server_id, desc);
 
         if (send->cb != NULL) {
             send->cb(send->req, 0);
@@ -931,6 +948,25 @@ void raft_io_stub_flush(struct raft_io *io)
     }
 }
 
+unsigned raft_io_stub_appending_n(struct raft_io *io)
+{
+    struct io_stub *s;
+    s = io->impl;
+    return s->append.pending.n_cbs;
+}
+
+void raft_io_stub_appending(struct raft_io *io,
+                            unsigned i,
+                            struct raft_entry **entries,
+                            unsigned *n)
+{
+    struct io_stub *s;
+    s = io->impl;
+    (void)i;
+    *n = s->append.pending.n_entries;
+    *entries = s->append.pending.entries;
+}
+
 unsigned raft_io_stub_sending_n(struct raft_io *io)
 {
     struct io_stub *s;
@@ -938,7 +974,9 @@ unsigned raft_io_stub_sending_n(struct raft_io *io)
     return s->n_send;
 }
 
-struct raft_message *raft_io_stub_sending(struct raft_io *io, unsigned i)
+void raft_io_stub_sending(struct raft_io *io,
+                          unsigned i,
+                          struct raft_message **message)
 {
     struct io_stub *s;
     raft__queue *head;
@@ -948,21 +986,12 @@ struct raft_message *raft_io_stub_sending(struct raft_io *io, unsigned i)
     {
         struct send *r = RAFT__QUEUE_DATA(head, struct send, queue);
         if (count == i) {
-            return &r->message;
+            *message = &r->message;
+            return;
         }
         count++;
     }
-    return NULL;
-}
-
-void raft_io_stub_appended(struct raft_io *io,
-                           struct raft_entry **entries,
-                           unsigned *n)
-{
-    struct io_stub *s;
-    s = io->impl;
-    *entries = s->append.flushed.entries;
-    *n = s->append.flushed.n_entries;
+    *message = NULL;
 }
 
 void raft_io_stub_dispatch(struct raft_io *io, struct raft_message *message)

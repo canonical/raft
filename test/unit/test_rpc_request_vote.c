@@ -119,7 +119,7 @@ static void tear_down(void *data)
                                                                  \
         munit_assert_int(raft_io_stub_sending_n(&F->io), ==, 1); \
                                                                  \
-        message = raft_io_stub_sending(&F->io, 0);               \
+        raft_io_stub_sending(&F->io, 0, &message);               \
         result = &message->request_vote_result;                  \
         munit_assert_int(result->term, ==, TERM);                \
         munit_assert_int(result->vote_granted, ==, GRANTED);     \
@@ -136,7 +136,7 @@ static void tear_down(void *data)
                                                                               \
         munit_assert_int(raft_io_stub_sending_n(&F->io), ==, 1);              \
                                                                               \
-        message = raft_io_stub_sending(&F->io, 0);                            \
+        raft_io_stub_sending(&F->io, 0, &message);                            \
         args = &message->append_entries;                                      \
                                                                               \
         munit_assert_int(args->term, ==, TERM);                               \

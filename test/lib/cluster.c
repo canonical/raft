@@ -218,7 +218,8 @@ static void test_cluster__flush_io(struct test_cluster *c)
 
         n = raft_io_stub_sending_n(io);
         for (i = 0; i < n; i++) {
-            struct raft_message *message = raft_io_stub_sending(io, i);
+            struct raft_message *message;
+            raft_io_stub_sending(io, i, &message);
             test_cluster__enqueue_message(c, raft, message);
         }
 
