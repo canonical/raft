@@ -29,6 +29,9 @@
     int type;   \
     raft__queue queue
 
+/* Request types. */
+enum { APPEND = 1, SEND };
+
 /* Base type for an asynchronous request submitted to the stub I/o
  * implementation. */
 struct request
@@ -40,6 +43,10 @@ struct request
 struct append
 {
     REQUEST;
+    const struct raft_entry *entries;
+    unsigned n;
+    void *data;
+    void (*cb)(void *data, int status);
 };
 
 /* Pending request to send a message. */
@@ -83,31 +90,14 @@ struct io_stub
     raft_io_tick_cb tick_cb;
     raft_io_recv_cb recv_cb;
 
-    /* Append requests. */
-    struct
-    {
-        /* Pending */
-        struct
-        {
-            struct raft_entry *entries;
-            size_t n_entries;
-            struct
-            {
-                void *data;
-                void (*f)(void *data, int status);
-            } cbs[64];
-            size_t n_cbs;
-        } pending;
-        /* Copy of the last entries that where appended upon flush. */
-        struct
-        {
-            struct raft_entry *entries;
-            unsigned n_entries;
-        } flushed;
-    } append;
+    /* Queue of pending asynchronous requests, whose callbacks still haven't
+     * been fired. */
+    raft__queue requests;
+
+    unsigned n_append;
 
     /* Queue of pending requests submitted with raft_io->send(), whose callbacks
-     * still have to be fired. */
+     * still haven't been fired. */
     raft__queue send;
     unsigned n_send;
 
@@ -218,10 +208,6 @@ static int io_stub__close(struct raft_io *io, void (*cb)(struct raft_io *io))
 
     if (s->entries != NULL) {
         raft_free(s->entries);
-    }
-
-    if (s->append.pending.entries != NULL) {
-        raft_free(s->append.pending.entries);
     }
 
     io_stub__reset_flushed(s);
@@ -438,33 +424,6 @@ static int io_stub__set_vote(struct raft_io *io, const unsigned server_id)
     return 0;
 }
 
-/**
- * Append to @entries2 all entries in @entries1.
- */
-static int io_stub__extend_entries(const struct raft_entry *entries1,
-                                   const size_t n_entries1,
-                                   struct raft_entry **entries2,
-                                   size_t *n_entries2)
-{
-    struct raft_entry *entries; /* To re-allocate the given entries */
-    size_t i;
-
-    entries =
-        raft_realloc(*entries2, (*n_entries2 + n_entries1) * sizeof *entries);
-    if (entries == NULL) {
-        return RAFT_ENOMEM;
-    }
-
-    for (i = 0; i < n_entries1; i++) {
-        entries[*n_entries2 + i] = entries1[i];
-    }
-
-    *entries2 = entries;
-    *n_entries2 += n_entries1;
-
-    return 0;
-}
-
 static int io_stub__append(struct raft_io *io,
                            const struct raft_entry entries[],
                            unsigned n,
@@ -472,7 +431,7 @@ static int io_stub__append(struct raft_io *io,
                            void (*cb)(void *data, int status))
 {
     struct io_stub *s;
-    int rv;
+    struct append *r;
 
     s = io->impl;
 
@@ -480,16 +439,18 @@ static int io_stub__append(struct raft_io *io,
         return RAFT_ERR_IO;
     }
 
-    rv = io_stub__extend_entries(entries, n, &s->append.pending.entries,
-                                 &s->append.pending.n_entries);
-    if (rv != 0) {
-        return rv;
-    }
+    r = raft_malloc(sizeof *r);
+    assert(r != NULL);
 
-    s->append.pending.cbs[s->append.pending.n_cbs].f = cb;
-    s->append.pending.cbs[s->append.pending.n_cbs].data = data;
+    r->type = APPEND;
+    r->entries = entries;
+    r->n = n;
+    r->data = data;
+    r->cb = cb;
 
-    s->append.pending.n_cbs++;
+    RAFT__QUEUE_PUSH(&s->requests, &r->queue);
+
+    s->n_append++;
 
     return 0;
 }
@@ -653,7 +614,9 @@ int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger)
     s->snapshot = NULL;
     s->n = 0;
 
-    memset(&s->append, 0, sizeof s->append);
+    RAFT__QUEUE_INIT(&s->requests);
+
+    s->n_append = 0;
 
     RAFT__QUEUE_INIT(&s->send);
     s->n_send = 0;
@@ -697,14 +660,6 @@ void raft_io_stub_close(struct raft_io *io)
  */
 static void io_stub__reset_flushed(struct io_stub *s)
 {
-    if (s->append.flushed.entries != NULL) {
-        raft_free(s->append.flushed.entries[0].batch);
-        raft_free(s->append.flushed.entries);
-
-        s->append.flushed.entries = NULL;
-        s->append.flushed.n_entries = 0;
-    }
-
     while (!RAFT__QUEUE_IS_EMPTY(&s->transmit)) {
         raft__queue *head;
         struct transmit *transmit;
@@ -794,61 +749,48 @@ static void io_stub__copy_entries(const struct raft_entry *src,
     }
 }
 
-static void io_stub__append_cb(struct io_stub *s)
+static void io_stub__flush_append(struct io_stub *s, struct append *append)
 {
-    int status = 0;
-    size_t n = s->append.pending.n_entries;
-    struct raft_entry *all_entries;
-    const struct raft_entry *new_entries = s->append.pending.entries;
-    size_t i;
+    struct raft_entry *entries;
+    unsigned i;
 
-    assert(new_entries != NULL);
-    assert(n > 0);
+    /* Allocate an array for the old entries plus the new ones. */
+    entries = raft_realloc(s->entries, (s->n + append->n) * sizeof *s->entries);
+    assert(entries != NULL);
 
-    /* Allocate an array for the old entries plus ne the new ons. */
-    all_entries = raft_malloc((s->n + n) * sizeof *all_entries);
-    assert(all_entries != NULL);
-
-    /* If it's not the very first write, copy the existing entries into the
-     * new array. */
-    if (s->n > 0) {
-        assert(s->entries != NULL);
-        memcpy(all_entries, s->entries, s->n * sizeof *s->entries);
-    }
-
-    /* Copy the new entries into the new array. */
-    memcpy(all_entries + s->n, new_entries, n * sizeof *new_entries);
-    for (i = 0; i < n; i++) {
-        struct raft_entry *entry = &all_entries[s->n + i];
+    /* Copy new entries into the new array. */
+    memcpy(entries + s->n, append->entries, append->n * sizeof *entries);
+    for (i = 0; i < append->n; i++) {
+        struct raft_entry *entry = &entries[s->n + i];
 
         /* Make a copy of the actual entry data. */
         entry->buf.base = raft_malloc(entry->buf.len);
         assert(entry->buf.base != NULL);
-        memcpy(entry->buf.base, new_entries[i].buf.base, entry->buf.len);
+        memcpy(entry->buf.base, append->entries[i].buf.base, entry->buf.len);
     }
 
-    if (s->entries != NULL) {
-        raft_free(s->entries);
+    s->entries = entries;
+    s->n += append->n;
+
+    if (append->cb != NULL) {
+        append->cb(append->data, 0);
     }
+    free(append);
 
-    s->entries = all_entries;
-    s->n += n;
+    s->n_append--;
+}
 
-    io_stub__copy_entries(s->append.pending.entries, &s->append.flushed.entries,
-                          s->append.pending.n_entries);
-    s->append.flushed.n_entries = s->append.pending.n_entries;
-
-    for (i = 0; i < s->append.pending.n_cbs; i++) {
-        void *data = s->append.pending.cbs[i].data;
-        void (*f)(void *data, int status) = s->append.pending.cbs[i].f;
-
-        if (f != NULL) {
-            f(data, status);
-        }
+static void io_stub__append_cb(struct io_stub *s)
+{
+    while (!RAFT__QUEUE_IS_EMPTY(&s->requests)) {
+        raft__queue *head;
+        struct append *append;
+        head = RAFT__QUEUE_HEAD(&s->requests);
+        RAFT__QUEUE_REMOVE(head);
+        append = RAFT__QUEUE_DATA(head, struct append, queue);
+	io_stub__flush_append(s, append);
     }
-
-    s->append.pending.n_entries = 0;
-    s->append.pending.n_cbs = 0;
+    assert(s->n_append == 0);
 }
 
 void raft_io_stub_flush(struct raft_io *io)
@@ -928,7 +870,7 @@ void raft_io_stub_flush(struct raft_io *io)
     }
     assert(s->n_send == 0);
 
-    if (s->append.pending.n_cbs > 0) {
+    if (s->n_append > 0) {
         io_stub__append_cb(s);
     }
 
@@ -952,19 +894,30 @@ unsigned raft_io_stub_n_appending(struct raft_io *io)
 {
     struct io_stub *s;
     s = io->impl;
-    return s->append.pending.n_cbs;
+    return s->n_append;
 }
 
 void raft_io_stub_appending(struct raft_io *io,
                             unsigned i,
-                            struct raft_entry **entries,
+                            const struct raft_entry **entries,
                             unsigned *n)
 {
     struct io_stub *s;
+    raft__queue *head;
+    unsigned count = 0;
     s = io->impl;
-    (void)i;
-    *n = s->append.pending.n_entries;
-    *entries = s->append.pending.entries;
+    RAFT__QUEUE_FOREACH(head, &s->requests)
+    {
+        struct append *r = RAFT__QUEUE_DATA(head, struct append, queue);
+        if (count == i) {
+            *entries = r->entries;
+            *n = r->n;
+            return;
+        }
+        count++;
+    }
+    *entries = NULL;
+    *n = 0;
 }
 
 unsigned raft_io_stub_n_sending(struct raft_io *io)

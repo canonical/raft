@@ -55,7 +55,7 @@ unsigned raft_io_stub_n_appending(struct raft_io *io);
  */
 void raft_io_stub_appending(struct raft_io *io,
                             unsigned i,
-                            struct raft_entry **entries,
+                            const struct raft_entry **entries,
                             unsigned *n);
 
 /**
