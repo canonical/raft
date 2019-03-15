@@ -96,7 +96,7 @@ struct io_stub
 
     /* Queue of messages that have been written to the network, i.e. the
      * callback of the associated raft_io->send() request has been fired. */
-    struct raft_message transmit[MAX_TRANSMIT];
+    raft__queue transmit;
     unsigned n_transmit;
 
     /* Peers connected to us. */
@@ -641,7 +641,9 @@ int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger)
     RAFT__QUEUE_INIT(&s->send);
     s->n_send = 0;
 
+    RAFT__QUEUE_INIT(&s->transmit);
     s->n_transmit = 0;
+
     s->n_peers = 0;
 
     s->snapshot_put = NULL;
@@ -678,8 +680,6 @@ void raft_io_stub_close(struct raft_io *io)
  */
 static void io_stub__reset_flushed(struct io_stub *s)
 {
-    unsigned i;
-
     if (s->append.flushed.entries != NULL) {
         raft_free(s->append.flushed.entries[0].batch);
         raft_free(s->append.flushed.entries);
@@ -688,8 +688,16 @@ static void io_stub__reset_flushed(struct io_stub *s)
         s->append.flushed.n_entries = 0;
     }
 
-    for (i = 0; i < s->n_transmit; i++) {
-        struct raft_message *message = &s->transmit[i];
+    while (!RAFT__QUEUE_IS_EMPTY(&s->transmit)) {
+        raft__queue *head;
+        struct transmit *transmit;
+        struct raft_message *message;
+
+        head = RAFT__QUEUE_HEAD(&s->transmit);
+        RAFT__QUEUE_REMOVE(head);
+        transmit = RAFT__QUEUE_DATA(head, struct transmit, queue);
+
+        message = &transmit->message;
 
         switch (message->type) {
             case RAFT_IO_APPEND_ENTRIES:
@@ -703,9 +711,11 @@ static void io_stub__reset_flushed(struct io_stub *s)
                 raft_free(message->install_snapshot.data.base);
                 break;
         }
-    }
 
-    s->n_transmit = 0;
+	raft_free(transmit);
+	s->n_transmit--;
+    }
+    assert(s->n_transmit == 0);
 }
 
 void raft_io_stub_advance(struct raft_io *io, unsigned msecs)
@@ -838,6 +848,7 @@ void raft_io_stub_flush(struct raft_io *io)
     while (!RAFT__QUEUE_IS_EMPTY(&s->send)) {
         raft__queue *head;
         struct send *send;
+        struct transmit *transmit;
         struct raft_message *src;
         struct raft_message *dst;
         char desc[256];
@@ -846,9 +857,13 @@ void raft_io_stub_flush(struct raft_io *io)
         RAFT__QUEUE_REMOVE(head);
         send = RAFT__QUEUE_DATA(head, struct send, queue);
 
-        src = &send->message;
-        dst = &s->transmit[s->n_transmit];
+	transmit = raft_malloc(sizeof *transmit);
+	assert(transmit != NULL);
 
+        src = &send->message;
+        dst = &transmit->message;
+
+	RAFT__QUEUE_PUSH(&s->transmit, &transmit->queue);
         s->n_transmit++;
 
         *dst = *src;
