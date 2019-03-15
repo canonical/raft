@@ -39,9 +39,17 @@ void raft_io_stub_set_time(struct raft_io *io, unsigned time);
 void raft_io_stub_dispatch(struct raft_io *io, struct raft_message *message);
 
 /**
- * Flush all pending I/O requests, invoking the @notify callback as appropriate.
+ * Flush the oldest request in the pending I/O queue, invoking the associated
+ * callback as appropriate.
+ *
+ * Return true if there are more pending requests in the queue.
  */
-void raft_io_stub_flush(struct raft_io *io);
+bool raft_io_stub_flush(struct raft_io *io);
+
+/**
+ * Flush all pending I/O requests.
+ */
+void raft_io_stub_flush_all(struct raft_io *io);
 
 /**
  * Return the number of pending append requests (i.e. requests successfully

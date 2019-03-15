@@ -411,7 +411,6 @@ typedef void (*raft_io_send_cb)(struct raft_io_send *req, int status);
 struct raft_io_send
 {
     void *data;         /* User data */
-    void *impl;         /* Implementation-specific */
     raft_io_send_cb cb; /* Request callback */
 };
 
@@ -422,7 +421,6 @@ typedef void (*raft_io_snapshot_put_cb)(struct raft_io_snapshot_put *req,
 struct raft_io_snapshot_put
 {
     void *data;                 /* User data */
-    void *impl;                 /* Implementation-specific */
     raft_io_snapshot_put_cb cb; /* Request callback */
 };
 
@@ -434,7 +432,6 @@ typedef void (*raft_io_snapshot_get_cb)(struct raft_io_snapshot_get *req,
 struct raft_io_snapshot_get
 {
     void *data;                 /* User data */
-    void *impl;                 /* Implementation-specific */
     raft_io_snapshot_get_cb cb; /* Request callback */
 };
 

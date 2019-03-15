@@ -275,29 +275,30 @@ err:
     assert(rv != 0);
 }
 
-int io_uv__tcp_listen(struct raft_io_uv_transport *t, raft_io_uv_accept_cb cb)
+int io_uv__tcp_listen(struct raft_io_uv_transport *transport,
+                      raft_io_uv_accept_cb cb)
 {
-    struct io_uv__tcp *tcp;
+    struct io_uv__tcp *t;
     struct sockaddr_in addr;
     int rv;
 
-    tcp = t->impl;
-    tcp->accept_cb = cb;
+    t = transport->impl;
+    t->accept_cb = cb;
 
-    rv = raft__io_uv_ip_parse(tcp->address, &addr);
+    rv = raft__io_uv_ip_parse(t->address, &addr);
     if (rv != 0) {
         return rv;
     }
-    rv = uv_tcp_bind(&tcp->listener, (const struct sockaddr *)&addr, 0);
+    rv = uv_tcp_bind(&t->listener, (const struct sockaddr *)&addr, 0);
     if (rv != 0) {
         /* UNTESTED: what are the error conditions? */
-        raft_warnf(tcp->logger, "uv_tcp_bind: %s", uv_strerror(rv));
+        raft_warnf(t->logger, "uv_tcp_bind: %s", uv_strerror(rv));
         return RAFT_ERR_IO;
     }
-    rv = uv_listen((uv_stream_t *)&tcp->listener, 1, listen_cb);
+    rv = uv_listen((uv_stream_t *)&t->listener, 1, listen_cb);
     if (rv != 0) {
         /* UNTESTED: what are the error conditions? */
-        raft_warnf(tcp->logger, "uv_tcp_listen: %s", uv_strerror(rv));
+        raft_warnf(t->logger, "uv_tcp_listen: %s", uv_strerror(rv));
         return RAFT_ERR_IO;
     }
 

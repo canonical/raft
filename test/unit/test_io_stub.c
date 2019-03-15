@@ -353,7 +353,7 @@ TEST_CASE(append, success, pristine, NULL)
     rv = f->io.append(&f->io, &entry, 1, f, __append_cb);
     munit_assert_int(rv, ==, 0);
 
-    raft_io_stub_flush(&f->io);
+    raft_io_stub_flush_all(&f->io);
 
     munit_assert_int(f->append_cb.invoked, ==, 1);
 
@@ -390,7 +390,7 @@ TEST_CASE(append, success, concurrent, NULL)
     rv = f->io.append(&f->io, &entry1, 1, f, __append_cb);
     munit_assert_int(rv, ==, 0);
 
-    raft_io_stub_flush(&f->io);
+    raft_io_stub_flush_all(&f->io);
 
     munit_assert_int(f->append_cb.invoked, ==, 2);
 
@@ -427,7 +427,7 @@ TEST_CASE(send, first, NULL)
     rv = f->io.send(&f->io, &f->req, &message, __send_cb);
     munit_assert_int(rv, ==, 0);
 
-    raft_io_stub_flush(&f->io);
+    raft_io_stub_flush_all(&f->io);
 
     munit_assert_true(f->send_cb.invoked);
 
@@ -509,7 +509,7 @@ TEST_CASE(snapshot_put, first, NULL)
 
     put__invoke(0);
 
-    raft_io_stub_flush(&f->io);
+    raft_io_stub_flush_all(&f->io);
 
     return MUNIT_OK;
 }

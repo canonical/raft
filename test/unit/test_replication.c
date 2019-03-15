@@ -62,7 +62,7 @@ static void tear_down(void *data)
                                                           \
         munit_assert_int(F->raft.state, ==, RAFT_LEADER); \
                                                           \
-        raft_io_stub_flush(&F->io);                       \
+        raft_io_stub_flush_all(&F->io);                       \
     }
 
 /**
@@ -169,7 +169,7 @@ TEST_CASE(send_append_entries, success, second_entry, NULL)
     rv = raft_replication__send_append_entries(&f->raft, i);
     munit_assert_int(rv, ==, 0);
 
-    raft_io_stub_flush(&f->io);
+    raft_io_stub_flush_all(&f->io);
 
     return MUNIT_OK;
 }
@@ -202,7 +202,7 @@ TEST_CASE(trigger, error, _io, NULL)
 
     raft_replication__trigger(&f->raft, 0);
 
-    raft_io_stub_flush(&f->io);
+    raft_io_stub_flush_all(&f->io);
 
     return MUNIT_OK;
 }

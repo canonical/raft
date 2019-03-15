@@ -135,7 +135,7 @@ TEST_MODULE(client);
         munit_assert_int(n_append_entries, ==, N_APPEND_ENTRIES);            \
         munit_assert_int(raft_io_stub_n_appending(&F->io), ==, N_WRITE_LOG); \
                                                                              \
-        raft_io_stub_flush(&F->io);                                          \
+        raft_io_stub_flush_all(&F->io);                                          \
     }
 
 /**
@@ -252,7 +252,7 @@ TEST_CASE(propose, error, leadership_lost, NULL)
 
     munit_assert_int(f->status, ==, RAFT_ERR_LEADERSHIP_LOST);
 
-    raft_io_stub_flush(&f->io);
+    raft_io_stub_flush_all(&f->io);
 
     return MUNIT_OK;
 }
@@ -426,7 +426,7 @@ TEST_CASE(add_server, error, busy, NULL)
     rv = raft_add_server(&f->raft, 4, "4");
     munit_assert_int(rv, ==, RAFT_ERR_CONFIGURATION_BUSY);
 
-    raft_io_stub_flush(&f->io);
+    raft_io_stub_flush_all(&f->io);
 
     return MUNIT_OK;
 }
@@ -612,7 +612,7 @@ TEST_CASE(promote, error, in_progress, NULL)
     rv = raft_promote(&f->raft, 4);
     munit_assert_int(rv, ==, RAFT_ERR_CONFIGURATION_BUSY);
 
-    raft_io_stub_flush(&f->io);
+    raft_io_stub_flush_all(&f->io);
 
     return MUNIT_OK;
 }
@@ -747,7 +747,7 @@ TEST_CASE(promote, success, committed, NULL)
      * from server 2 in between, to avoid stepping down. */
     __tick(f, f->raft.election_timeout - 100);
     f->raft.leader_state.replication[1].last_contact = f->io.time(&f->io);
-    raft_io_stub_flush(&f->io);
+    raft_io_stub_flush_all(&f->io);
     __tick(f, 200);
     __assert_io(f, 0, 2); /* Heartbeat */
 
@@ -840,7 +840,7 @@ TEST_CASE(promote, success, step_down, NULL)
     server = configuration__get(&f->raft.configuration, 3);
     munit_assert_false(server->voting);
 
-    raft_io_stub_flush(&f->io);
+    raft_io_stub_flush_all(&f->io);
 
     return MUNIT_OK;
 }
@@ -898,7 +898,7 @@ TEST_CASE(promote, success, follower, NULL)
     munit_assert_int(f->raft.configuration_uncommitted_index, ==, 0);
     munit_assert_true(f->raft.configuration.servers[2].voting);
 
-    raft_io_stub_flush(&f->io);
+    raft_io_stub_flush_all(&f->io);
 
     return MUNIT_OK;
 }
@@ -966,7 +966,7 @@ TEST_CASE(remove_server, error, busy, NULL)
     rv = raft_remove_server(&f->raft, 2);
     munit_assert_int(rv, ==, RAFT_ERR_CONFIGURATION_BUSY);
 
-    raft_io_stub_flush(&f->io);
+    raft_io_stub_flush_all(&f->io);
 
     return MUNIT_OK;
 }

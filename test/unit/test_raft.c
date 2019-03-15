@@ -323,7 +323,7 @@ TEST_CASE(recv_cb, success, append_entries, NULL)
     raft_io_stub_dispatch(&f->io, &message);
 
     /* Notify the raft instance about the completed write. */
-    raft_io_stub_flush(f->raft.io);
+    raft_io_stub_flush_all(f->raft.io);
 
     /* The commit index has been bumped. */
     munit_assert_int(f->raft.commit_index, ==, 2);
@@ -355,7 +355,7 @@ TEST_CASE(recv_cb, success, request_vote, NULL)
     /* The voted for field has been updated. */
     munit_assert_int(f->raft.voted_for, ==, 2);
 
-    raft_io_stub_flush(&f->io);
+    raft_io_stub_flush_all(&f->io);
 
     return MUNIT_OK;
 }

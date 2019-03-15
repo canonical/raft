@@ -30,7 +30,7 @@
     raft__queue queue
 
 /* Request types. */
-enum { APPEND = 1, SEND };
+enum { APPEND = 1, SEND, SNAPSHOT_PUT, SNAPSHOT_GET };
 
 /* Base type for an asynchronous request submitted to the stub I/o
  * implementation. */
@@ -55,7 +55,21 @@ struct send
     REQUEST;
     struct raft_io_send *req;
     struct raft_message message;
-    raft_io_send_cb cb;
+};
+
+/* Pending request to store a snapshot. */
+struct snapshot_put
+{
+    REQUEST;
+    struct raft_io_snapshot_put *req;
+    const struct raft_snapshot *snapshot;
+};
+
+/* Pending request to load a snapshot. */
+struct snapshot_get
+{
+    REQUEST;
+    struct raft_io_snapshot_get *req;
 };
 
 /* Message that has been written to the network and is waiting to be delivered
@@ -94,12 +108,10 @@ struct io_stub
      * been fired. */
     raft__queue requests;
 
-    unsigned n_append;
-
-    /* Queue of pending requests submitted with raft_io->send(), whose callbacks
-     * still haven't been fired. */
-    raft__queue send;
-    unsigned n_send;
+    unsigned n_append;       /* Number of pending append entries requests */
+    unsigned n_send;         /* Number of pending send message requests */
+    unsigned n_snapshot_put; /* Number of pending snapshot put requests */
+    unsigned n_snapshot_get; /* Number of pending snapshot get requests */
 
     /* Queue of messages that have been written to the network, i.e. the
      * callback of the associated raft_io->send() request has been fired. */
@@ -115,9 +127,6 @@ struct io_stub
         int countdown; /* Trigger the fault when this counter gets to zero. */
         int n;         /* Repeat the fault this many times. Default is -1. */
     } fault;
-
-    struct raft_io_snapshot_put *snapshot_put;
-    struct raft_io_snapshot_get *snapshot_get;
 };
 
 /**
@@ -199,7 +208,7 @@ static int io_stub__close(struct raft_io *io, void (*cb)(struct raft_io *io))
 
     s = io->impl;
 
-    raft_io_stub_flush(io);
+    raft_io_stub_flush_all(io);
 
     for (i = 0; i < s->n; i++) {
         struct raft_entry *entry = &s->entries[i];
@@ -519,26 +528,21 @@ static int io_stub__snapshot_put(struct raft_io *io,
                                  raft_io_snapshot_put_cb cb)
 {
     struct io_stub *s;
+    struct snapshot_put *r;
     s = io->impl;
 
-    assert(s->snapshot_put == NULL);
+    assert(s->n_snapshot_put == 0);
 
-    if (s->snapshot == NULL) {
-        s->snapshot = raft_malloc(sizeof *s->snapshot);
-        assert(s->snapshot != NULL);
-    } else {
-        unsigned i;
-        raft_configuration_close(&s->snapshot->configuration);
-        for (i = 0; i < s->snapshot->n_bufs; i++) {
-            raft_free(s->snapshot->bufs[0].base);
-        }
-        raft_free(s->snapshot->bufs);
-    }
+    r = raft_malloc(sizeof *r);
+    assert(r != NULL);
 
-    snapshot_copy(snapshot, s->snapshot);
+    r->type = SNAPSHOT_PUT;
+    r->req = req;
+    r->req->cb = cb;
+    r->snapshot = snapshot;
 
-    req->cb = cb;
-    s->snapshot_put = req;
+    RAFT__QUEUE_PUSH(&s->requests, &r->queue);
+    s->n_snapshot_put++;
 
     return 0;
 }
@@ -548,10 +552,20 @@ static int io_stub__snapshot_get(struct raft_io *io,
                                  raft_io_snapshot_get_cb cb)
 {
     struct io_stub *s;
+    struct snapshot_get *r;
     s = io->impl;
 
-    req->cb = cb;
-    s->snapshot_get = req;
+    assert(s->n_snapshot_put == 0);
+
+    r = raft_malloc(sizeof *r);
+    assert(r != NULL);
+
+    r->type = SNAPSHOT_GET;
+    r->req = req;
+    r->req->cb = cb;
+
+    RAFT__QUEUE_PUSH(&s->requests, &r->queue);
+    s->n_snapshot_get++;
 
     return 0;
 }
@@ -585,11 +599,12 @@ static int io_stub__send(struct raft_io *io,
     r = raft_malloc(sizeof *r);
     assert(r != NULL);
 
+    r->type = SEND;
     r->req = req;
     r->message = *message;
-    r->cb = cb;
+    r->req->cb = cb;
 
-    RAFT__QUEUE_PUSH(&s->send, &r->queue);
+    RAFT__QUEUE_PUSH(&s->requests, &r->queue);
     s->n_send++;
 
     return 0;
@@ -617,17 +632,14 @@ int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger)
     RAFT__QUEUE_INIT(&s->requests);
 
     s->n_append = 0;
-
-    RAFT__QUEUE_INIT(&s->send);
     s->n_send = 0;
+    s->n_snapshot_put = 0;
+    s->n_snapshot_get = 0;
 
     RAFT__QUEUE_INIT(&s->transmit);
     s->n_transmit = 0;
 
     s->n_peers = 0;
-
-    s->snapshot_put = NULL;
-    s->snapshot_get = NULL;
 
     s->fault.countdown = -1;
     s->fault.n = -1;
@@ -780,114 +792,143 @@ static void io_stub__flush_append(struct io_stub *s, struct append *append)
     s->n_append--;
 }
 
-static void io_stub__append_cb(struct io_stub *s)
+static void io_stub__flush_send(struct io_stub *s, struct send *send)
 {
-    while (!RAFT__QUEUE_IS_EMPTY(&s->requests)) {
-        raft__queue *head;
-        struct append *append;
-        head = RAFT__QUEUE_HEAD(&s->requests);
-        RAFT__QUEUE_REMOVE(head);
-        append = RAFT__QUEUE_DATA(head, struct append, queue);
-	io_stub__flush_append(s, append);
-    }
-    assert(s->n_append == 0);
-}
-
-void raft_io_stub_flush(struct raft_io *io)
-{
-    struct io_stub *s;
+    struct transmit *transmit;
+    struct raft_message *src;
+    struct raft_message *dst;
+    char desc[256];
     int rv;
 
-    assert(io != NULL);
+    transmit = raft_malloc(sizeof *transmit);
+    assert(transmit != NULL);
 
+    src = &send->message;
+    dst = &transmit->message;
+
+    RAFT__QUEUE_PUSH(&s->transmit, &transmit->queue);
+    s->n_transmit++;
+
+    *dst = *src;
+
+    switch (dst->type) {
+        case RAFT_IO_APPEND_ENTRIES:
+            sprintf(desc, "append entries");
+            /* Make a copy of the entries being sent */
+            io_stub__copy_entries(src->append_entries.entries,
+                                  &dst->append_entries.entries,
+                                  src->append_entries.n_entries);
+            dst->append_entries.n_entries = src->append_entries.n_entries;
+            break;
+        case RAFT_IO_APPEND_ENTRIES_RESULT:
+            sprintf(desc, "append entries result");
+            break;
+        case RAFT_IO_REQUEST_VOTE:
+            sprintf(desc, "request vote");
+            break;
+        case RAFT_IO_REQUEST_VOTE_RESULT:
+            sprintf(desc, "request vote result");
+            break;
+        case RAFT_IO_INSTALL_SNAPSHOT:
+            sprintf(desc, "install snapshot");
+            raft_configuration_init(&dst->install_snapshot.conf);
+            rv = configuration__copy(&src->install_snapshot.conf,
+                                     &dst->install_snapshot.conf);
+            dst->install_snapshot.data.base =
+                raft_malloc(dst->install_snapshot.data.len);
+            assert(dst->install_snapshot.data.base != NULL);
+            assert(rv == 0);
+            memcpy(dst->install_snapshot.data.base,
+                   src->install_snapshot.data.base,
+                   src->install_snapshot.data.len);
+            break;
+    }
+
+    tracef(s, "io: flush to server %u: %s", src->server_id, desc);
+
+    if (send->req->cb != NULL) {
+        send->req->cb(send->req, 0);
+    }
+    raft_free(send);
+    s->n_send--;
+}
+
+static void io_stub__flush_snapshot_put(struct io_stub *s,
+                                        struct snapshot_put *r)
+{
+    if (s->snapshot == NULL) {
+        s->snapshot = raft_malloc(sizeof *s->snapshot);
+        assert(s->snapshot != NULL);
+    } else {
+        raft_snapshot__close(s->snapshot);
+    }
+
+    snapshot_copy(r->snapshot, s->snapshot);
+
+    if (r->req->cb != NULL) {
+        r->req->cb(r->req, 0);
+    }
+    raft_free(r);
+    s->n_snapshot_put--;
+}
+
+static void io_stub__flush_snapshot_get(struct io_stub *s,
+                                        struct snapshot_get *r)
+{
+    struct raft_snapshot *snapshot = raft_malloc(sizeof *snapshot);
+    assert(snapshot != NULL);
+    snapshot_copy(s->snapshot, snapshot);
+    r->req->cb(r->req, snapshot, 0);
+    raft_free(r);
+    s->n_snapshot_get--;
+}
+
+bool raft_io_stub_flush(struct raft_io *io)
+{
+    struct io_stub *s;
+    raft__queue *head;
+    struct request *r;
+
+    s = io->impl;
+
+    head = RAFT__QUEUE_HEAD(&s->requests);
+    RAFT__QUEUE_REMOVE(head);
+    r = RAFT__QUEUE_DATA(head, struct request, queue);
+
+    switch (r->type) {
+        case APPEND:
+            io_stub__flush_append(s, (struct append *)r);
+            break;
+        case SEND:
+            io_stub__flush_send(s, (struct send *)r);
+            break;
+        case SNAPSHOT_PUT:
+            io_stub__flush_snapshot_put(s, (struct snapshot_put *)r);
+            break;
+        case SNAPSHOT_GET:
+            io_stub__flush_snapshot_get(s, (struct snapshot_get *)r);
+            break;
+    }
+
+    return !RAFT__QUEUE_IS_EMPTY(&s->requests);
+}
+
+void raft_io_stub_flush_all(struct raft_io *io)
+{
+    struct io_stub *s;
+    bool has_more_requests;
     s = io->impl;
 
     io_stub__reset_flushed(s);
 
-    while (!RAFT__QUEUE_IS_EMPTY(&s->send)) {
-        raft__queue *head;
-        struct send *send;
-        struct transmit *transmit;
-        struct raft_message *src;
-        struct raft_message *dst;
-        char desc[256];
+    do {
+        has_more_requests = raft_io_stub_flush(io);
+    } while (has_more_requests);
 
-        head = RAFT__QUEUE_HEAD(&s->send);
-        RAFT__QUEUE_REMOVE(head);
-        send = RAFT__QUEUE_DATA(head, struct send, queue);
-
-        transmit = raft_malloc(sizeof *transmit);
-        assert(transmit != NULL);
-
-        src = &send->message;
-        dst = &transmit->message;
-
-        RAFT__QUEUE_PUSH(&s->transmit, &transmit->queue);
-        s->n_transmit++;
-
-        *dst = *src;
-
-        switch (dst->type) {
-            case RAFT_IO_APPEND_ENTRIES:
-                sprintf(desc, "append entries");
-                /* Make a copy of the entries being sent */
-                io_stub__copy_entries(src->append_entries.entries,
-                                      &dst->append_entries.entries,
-                                      src->append_entries.n_entries);
-                dst->append_entries.n_entries = src->append_entries.n_entries;
-                break;
-            case RAFT_IO_APPEND_ENTRIES_RESULT:
-                sprintf(desc, "append entries result");
-                break;
-            case RAFT_IO_REQUEST_VOTE:
-                sprintf(desc, "request vote");
-                break;
-            case RAFT_IO_REQUEST_VOTE_RESULT:
-                sprintf(desc, "request vote result");
-                break;
-            case RAFT_IO_INSTALL_SNAPSHOT:
-                sprintf(desc, "install snapshot");
-                raft_configuration_init(&dst->install_snapshot.conf);
-                rv = configuration__copy(&src->install_snapshot.conf,
-                                         &dst->install_snapshot.conf);
-                dst->install_snapshot.data.base =
-                    raft_malloc(dst->install_snapshot.data.len);
-                assert(dst->install_snapshot.data.base != NULL);
-                assert(rv == 0);
-                memcpy(dst->install_snapshot.data.base,
-                       src->install_snapshot.data.base,
-                       src->install_snapshot.data.len);
-                break;
-        }
-
-        tracef(s, "io: flush to server %u: %s", src->server_id, desc);
-
-        if (send->cb != NULL) {
-            send->cb(send->req, 0);
-        }
-        raft_free(send);
-        s->n_send--;
-    }
+    assert(s->n_append == 0);
     assert(s->n_send == 0);
-
-    if (s->n_append > 0) {
-        io_stub__append_cb(s);
-    }
-
-    if (s->snapshot_put != NULL) {
-        if (s->snapshot_put->cb != NULL) {
-            s->snapshot_put->cb(s->snapshot_put, 0);
-        }
-        s->snapshot_put = NULL;
-    }
-
-    if (s->snapshot_get != NULL) {
-        struct raft_snapshot *snapshot = raft_malloc(sizeof *snapshot);
-        assert(snapshot != NULL);
-        snapshot_copy(s->snapshot, snapshot);
-        s->snapshot_get->cb(s->snapshot_get, snapshot, 0);
-        s->snapshot_get = NULL;
-    }
+    assert(s->n_snapshot_put == 0);
+    assert(s->n_snapshot_get == 0);
 }
 
 unsigned raft_io_stub_n_appending(struct raft_io *io)
@@ -897,27 +938,46 @@ unsigned raft_io_stub_n_appending(struct raft_io *io)
     return s->n_append;
 }
 
+/* Return the i-th pending request of the given type, or NULL. */
+static struct request *raft_io_stub__pending(struct io_stub *s,
+                                             unsigned i,
+                                             int type)
+{
+    raft__queue *head;
+    unsigned count = 0;
+
+    RAFT__QUEUE_FOREACH(head, &s->requests)
+    {
+        struct request *r = RAFT__QUEUE_DATA(head, struct request, queue);
+        if (r->type != type) {
+            continue;
+        }
+        if (count == i) {
+            return r;
+        }
+        count++;
+    }
+    return NULL;
+}
+
 void raft_io_stub_appending(struct raft_io *io,
                             unsigned i,
                             const struct raft_entry **entries,
                             unsigned *n)
 {
     struct io_stub *s;
-    raft__queue *head;
-    unsigned count = 0;
+    struct append *r;
+
     s = io->impl;
-    RAFT__QUEUE_FOREACH(head, &s->requests)
-    {
-        struct append *r = RAFT__QUEUE_DATA(head, struct append, queue);
-        if (count == i) {
-            *entries = r->entries;
-            *n = r->n;
-            return;
-        }
-        count++;
-    }
+
     *entries = NULL;
     *n = 0;
+
+    r = (struct append *)raft_io_stub__pending(s, i, APPEND);
+    if (r != NULL) {
+        *entries = ((struct append *)r)->entries;
+        *n = ((struct append *)r)->n;
+    }
 }
 
 unsigned raft_io_stub_n_sending(struct raft_io *io)
@@ -932,19 +992,16 @@ void raft_io_stub_sending(struct raft_io *io,
                           struct raft_message **message)
 {
     struct io_stub *s;
-    raft__queue *head;
-    unsigned count = 0;
+    struct send *r;
+
     s = io->impl;
-    RAFT__QUEUE_FOREACH(head, &s->send)
-    {
-        struct send *r = RAFT__QUEUE_DATA(head, struct send, queue);
-        if (count == i) {
-            *message = &r->message;
-            return;
-        }
-        count++;
-    }
+
     *message = NULL;
+
+    r = (struct send *)raft_io_stub__pending(s, i, SEND);
+    if (r != NULL) {
+        *message = &((struct send *)r)->message;
+    }
 }
 
 void raft_io_stub_dispatch(struct raft_io *io, struct raft_message *message)

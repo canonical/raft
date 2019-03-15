@@ -318,7 +318,7 @@ TEST_CASE(elapse, success, heartbeat, NULL)
     /* We have sent a heartbeat to our follower */
     __assert_heartbeat(f, 2, 2, 1, 1);
 
-    raft_io_stub_flush(&f->io);
+    raft_io_stub_flush_all(&f->io);
 
     return MUNIT_OK;
 }
@@ -376,7 +376,7 @@ TEST_CASE(elapse, success, new_election, NULL)
     /* Become candidate */
     __tick(f, f->raft.election_timeout_rand + 100);
 
-    raft_io_stub_flush(f->raft.io);
+    raft_io_stub_flush_all(f->raft.io);
 
     election_timeout = f->raft.election_timeout_rand;
 
@@ -420,7 +420,7 @@ TEST_CASE(elapse, success, during_election, NULL)
     /* Become candidate */
     __tick(f, f->raft.election_timeout_rand + 100);
 
-    raft_io_stub_flush(f->raft.io);
+    raft_io_stub_flush_all(f->raft.io);
 
     __tick(f, f->raft.election_timeout_rand - 100);
 

@@ -139,13 +139,13 @@ TEST_CASE(success, replace_log, NULL)
     test_bootstrap_and_start(&f->raft, 3, 1, 3);
 
     __recv_append_entries(f, 1, 2, 1, 1, entries1, 1, 2);
-    raft_io_stub_flush(&f->io);
+    raft_io_stub_flush_all(&f->io);
 
     __recv_append_entries(f, 1, 2, 2, 1, entries2, 1, 3);
-    raft_io_stub_flush(&f->io);
+    raft_io_stub_flush_all(&f->io);
 
     __recv_install_snapshot(f, 2, 3, 2, 2);
-    raft_io_stub_flush(&f->io);
+    raft_io_stub_flush_all(&f->io);
 
     return MUNIT_OK;
 }

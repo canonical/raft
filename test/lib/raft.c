@@ -103,7 +103,7 @@ void test_become_candidate(struct raft *r)
 
     munit_assert_int(r->state, ==, RAFT_CANDIDATE);
 
-    raft_io_stub_flush(r->io);
+    raft_io_stub_flush_all(r->io);
 }
 
 void test_become_leader(struct raft *r)
@@ -141,7 +141,7 @@ void test_become_leader(struct raft *r)
 
     munit_assert_int(r->state, ==, RAFT_LEADER);
 
-    raft_io_stub_flush(r->io);
+    raft_io_stub_flush_all(r->io);
 }
 
 void test_receive_heartbeat(struct raft *r, unsigned leader_id)
@@ -168,5 +168,5 @@ void test_receive_heartbeat(struct raft *r, unsigned leader_id)
     args->leader_commit = r->commit_index;
 
     raft_io_stub_dispatch(r->io, &message);
-    raft_io_stub_flush(r->io);
+    raft_io_stub_flush_all(r->io);
 }

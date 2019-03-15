@@ -109,7 +109,7 @@ void test_cluster_tear_down(struct test_cluster *c)
         struct raft_fsm *fsm = &c->fsms[i];
         struct raft *raft = &c->rafts[i];
 
-        raft_io_stub_flush(io);
+        raft_io_stub_flush_all(io);
 
         raft_close(raft, NULL);
         test_fsm_tear_down(fsm);
@@ -223,7 +223,7 @@ static void test_cluster__flush_io(struct test_cluster *c)
             test_cluster__enqueue_message(c, raft, message);
         }
 
-        raft_io_stub_flush(io);
+        raft_io_stub_flush_all(io);
     }
 }
 
