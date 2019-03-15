@@ -127,22 +127,20 @@ static struct raft_entry *__create_entries_batch()
  * Assert that the test I/O implementation has received exactly one
  * AppendEntries response RPC with the given parameters.
  */
-#define __assert_append_entries_response(F, TERM, SUCCESS, LAST_LOG_INDEX)     \
-    {                                                                          \
-        struct raft_message *messages;                                         \
-        unsigned n;                                                            \
-        struct raft_append_entries_result *result;                             \
-                                                                               \
-        raft_io_stub_flush(&F->io);                                            \
-        raft_io_stub_sent(&F->io, &messages, &n);                              \
-                                                                               \
-        munit_assert_int(n, ==, 1);                                            \
-        munit_assert_int(messages[0].type, ==, RAFT_IO_APPEND_ENTRIES_RESULT); \
-                                                                               \
-        result = &messages[0].append_entries_result;                           \
-        munit_assert_int(result->term, ==, TERM);                              \
-        munit_assert_int(result->success, ==, SUCCESS);                        \
-        munit_assert_int(result->last_log_index, ==, LAST_LOG_INDEX);          \
+#define __assert_append_entries_response(F, TERM, SUCCESS, LAST_LOG_INDEX)  \
+    {                                                                       \
+        struct raft_message *message;                                       \
+        struct raft_append_entries_result *result;                          \
+                                                                            \
+        munit_assert_int(raft_io_stub_sending_n(&F->io), ==, 1);            \
+                                                                            \
+        message = raft_io_stub_sending(&F->io, 0);                          \
+        munit_assert_int(message->type, ==, RAFT_IO_APPEND_ENTRIES_RESULT); \
+                                                                            \
+        result = &message->append_entries_result;                           \
+        munit_assert_int(result->term, ==, TERM);                           \
+        munit_assert_int(result->success, ==, SUCCESS);                     \
+        munit_assert_int(result->last_log_index, ==, LAST_LOG_INDEX);       \
     }
 
 /**
@@ -183,9 +181,8 @@ TEST_CASE(request, success, twice, NULL)
     struct fixture *f = data;
     struct raft_entry *entries1 = __create_entries_batch();
     struct raft_entry *entries2 = __create_entries_batch();
-    struct raft_message *messages;
+    struct raft_message *message;
     struct raft_append_entries_result *result;
-    unsigned n;
 
     (void)params;
 
@@ -194,18 +191,13 @@ TEST_CASE(request, success, twice, NULL)
     __recv_append_entries(f, 1, 2, 1, 1, entries1, 1, 1);
     __recv_append_entries(f, 1, 2, 1, 1, entries2, 1, 1);
 
-    /* The request is successful both times and the duplicate entry has been
-       ignored. */
+    /* The duplicate entry has been ignored. */
     raft_io_stub_flush(&f->io);
-    raft_io_stub_sent(&f->io, &messages, &n);
 
-    munit_assert_int(n, ==, 2);
+    munit_assert_int(raft_io_stub_sending_n(&f->io), ==, 1);
 
-    result = &messages[0].append_entries_result;
-    munit_assert_int(result->success, ==, 1);
-    munit_assert_int(result->last_log_index, ==, 2);
-
-    result = &messages[1].append_entries_result;
+    message = raft_io_stub_sending(&f->io, 0);
+    result = &message->append_entries_result;
     munit_assert_int(result->success, ==, 1);
     munit_assert_int(result->last_log_index, ==, 2);
 
@@ -276,7 +268,9 @@ TEST_CASE(request, success, snapshot_match, NULL)
 
     __recv_append_entries(f, 2, 2, 4, 2, entries, 1, 4);
 
-    /* The request gets rejected. */
+    raft_io_stub_flush(&f->io);
+
+    /* The request got accepted. */
     __assert_append_entries_response(f, 2, true, 5);
 
     return MUNIT_OK;
@@ -424,8 +418,7 @@ TEST_CASE(request, success, skip, NULL)
 
     /* Append the first entry to our log. */
     test_io_append_entry(f->raft.io, &entries[0]);
-    rv = log__append(&f->raft.log, 1, RAFT_COMMAND, &entries[0].buf,
-                          NULL);
+    rv = log__append(&f->raft.log, 1, RAFT_COMMAND, &entries[0].buf, NULL);
     munit_assert_int(rv, ==, 0);
 
     __recv_append_entries(f, 1, 2, 1, 1, entries, 2, 1);
@@ -631,8 +624,7 @@ TEST_CASE(response, error, step_down, NULL)
 TEST_CASE(response, error, retry, NULL)
 {
     struct fixture *f = data;
-    struct raft_message *messages;
-    unsigned n;
+    struct raft_message *message;
 
     (void)params;
 
@@ -644,12 +636,9 @@ TEST_CASE(response, error, retry, NULL)
     __recv_append_entries_result(f, 2, 2, false, 0);
 
     /* We have resent entry 1. */
-    raft_io_stub_flush(&f->io);
-
-    raft_io_stub_sent(&f->io, &messages, &n);
-
-    munit_assert_int(n, ==, 1);
-    munit_assert_int(messages[0].append_entries.n_entries, ==, 1);
+    munit_assert_int(raft_io_stub_sending_n(&f->io), ==, 1);
+    message = raft_io_stub_sending(&f->io, 0);
+    munit_assert_int(message->append_entries.n_entries, ==, 1);
 
     return MUNIT_OK;
 }

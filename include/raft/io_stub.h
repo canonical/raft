@@ -50,6 +50,19 @@ void raft_io_stub_sent(struct raft_io *io,
                        unsigned *n);
 
 /**
+ * Return the number of pending raft_io_send requests (i.e. requests
+ * successfully submitted with raft_io->send(), but whose callbacks haven't been
+ * fired yet).
+ */
+unsigned raft_io_stub_sending_n(struct raft_io *io);
+
+/**
+ * Return a pointer to the message associated with the i'th pending raft_io_send
+ * request, or NULL.
+ */
+struct raft_message *raft_io_stub_sending(struct raft_io *io, unsigned i);
+
+/**
  * Return a copy of the pending log entries that where flushed upon the last
  * call to @raft_io_stub_flush.
  */

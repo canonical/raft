@@ -95,6 +95,34 @@ TEST_SUITE(start);
 TEST_SETUP(start, setup);
 TEST_TEAR_DOWN(start, tear_down);
 
+/* Messages are sent to request the votes of the other voting servers. */
+TEST_CASE(start, send_request_vote_rpcs, NULL)
+{
+    struct fixture *f = data;
+    struct raft_message *message;
+    int rv;
+
+    (void)params;
+
+    test_bootstrap_and_start(&f->raft, 3, 1, 2);
+
+    __set_state_to_candidate(f);
+
+    rv = raft_election__start(&f->raft);
+    munit_assert_int(rv, ==, 0);
+
+    /* Since there's only one other voting server, we sent only one message. */
+    munit_assert_int(raft_io_stub_sending_n(&f->io), ==, 1);
+
+    message = raft_io_stub_sending(&f->io, 0);
+    munit_assert_int(message->server_id, ==, 2);
+    munit_assert_string_equal(message->server_address, "2");
+    munit_assert_int(message->request_vote.term, ==, 2);
+    munit_assert_int(message->request_vote.candidate_id, ==, 1);
+
+    return MUNIT_OK;
+}
+
 TEST_GROUP(start, error);
 
 /* An error occurs while persisting the new term. */
@@ -153,38 +181,6 @@ TEST_CASE(start, error, send_io_err, NULL)
 
     rv = raft_election__start(&f->raft);
     munit_assert_int(rv, ==, 0);
-
-    return MUNIT_OK;
-}
-
-/* Messages are sent to request the votes of the other voting servers. */
-TEST_CASE(start, error, send_messages, NULL)
-{
-    struct fixture *f = data;
-    struct raft_message *messages;
-    unsigned n;
-    int rv;
-
-    (void)params;
-
-    test_bootstrap_and_start(&f->raft, 3, 1, 2);
-
-    __set_state_to_candidate(f);
-
-    rv = raft_election__start(&f->raft);
-    munit_assert_int(rv, ==, 0);
-
-    raft_io_stub_flush(&f->io);
-
-    /* Since there's only one other voting server, we sent only one message. */
-    raft_io_stub_sent(&f->io, &messages, &n);
-
-    munit_assert_int(n, ==, 1);
-
-    munit_assert_int(messages[0].server_id, ==, 2);
-    munit_assert_string_equal(messages[0].server_address, "2");
-    munit_assert_int(messages[0].request_vote.term, ==, 2);
-    munit_assert_int(messages[0].request_vote.candidate_id, ==, 1);
 
     return MUNIT_OK;
 }

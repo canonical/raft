@@ -121,10 +121,19 @@ TEST_MODULE(client);
 #define __assert_io(F, N_WRITE_LOG, N_APPEND_ENTRIES)             \
     {                                                             \
         struct raft_entry *entries;                               \
-        struct raft_message *messages;                            \
         unsigned n;                                               \
         unsigned n_append_entries = 0;                            \
         unsigned i;                                               \
+                                                                  \
+        n = raft_io_stub_sending_n(&F->io);                       \
+        for (i = 0; i < n; i++) {                                 \
+            struct raft_message *message;                         \
+            message = raft_io_stub_sending(&F->io, i);            \
+            if (message->type == RAFT_IO_APPEND_ENTRIES) {        \
+                n_append_entries++;                               \
+            }                                                     \
+        }                                                         \
+        munit_assert_int(n_append_entries, ==, N_APPEND_ENTRIES); \
                                                                   \
         raft_io_stub_flush(&F->io);                               \
                                                                   \
@@ -132,14 +141,6 @@ TEST_MODULE(client);
             raft_io_stub_appended(&F->io, &entries, &n);          \
             munit_assert_ptr_not_null(entries);                   \
         }                                                         \
-                                                                  \
-        raft_io_stub_sent(&F->io, &messages, &n);                 \
-        for (i = 0; i < n; i++) {                                 \
-            if (messages[i].type == RAFT_IO_APPEND_ENTRIES) {     \
-                n_append_entries++;                               \
-            }                                                     \
-        }                                                         \
-        munit_assert_int(n_append_entries, ==, N_APPEND_ENTRIES); \
     }
 
 /**

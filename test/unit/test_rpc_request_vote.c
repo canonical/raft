@@ -112,19 +112,17 @@ static void tear_down(void *data)
  * Assert that the I/O queue has exactly one pending RAFT_IO_REQUEST_VOTE_RESULT
  * request, with the given parameters.
  */
-#define __assert_request_vote_result(F, TERM, GRANTED)       \
-    {                                                        \
-        struct raft_message *messages;                       \
-        struct raft_request_vote_result *result;             \
-        unsigned n;                                          \
-                                                             \
-        raft_io_stub_flush(&F->io);                          \
-        raft_io_stub_sent(&F->io, &messages, &n);            \
-        munit_assert_int(n, ==, 1);                          \
-                                                             \
-        result = &messages[0].request_vote_result;           \
-        munit_assert_int(result->term, ==, TERM);            \
-        munit_assert_int(result->vote_granted, ==, GRANTED); \
+#define __assert_request_vote_result(F, TERM, GRANTED)           \
+    {                                                            \
+        struct raft_message *message;                            \
+        struct raft_request_vote_result *result;                 \
+                                                                 \
+        munit_assert_int(raft_io_stub_sending_n(&F->io), ==, 1); \
+                                                                 \
+        message = raft_io_stub_sending(&F->io, 0);               \
+        result = &message->request_vote_result;                  \
+        munit_assert_int(result->term, ==, TERM);                \
+        munit_assert_int(result->vote_granted, ==, GRANTED);     \
     }
 
 /**
@@ -133,15 +131,13 @@ static void tear_down(void *data)
  */
 #define __assert_heartbeat(F, SERVER_ID, TERM, PREV_LOG_INDEX, PREV_LOG_TERM) \
     {                                                                         \
-        struct raft_message *messages;                                        \
+        struct raft_message *message;                                         \
         struct raft_append_entries *args;                                     \
-        unsigned n;                                                           \
                                                                               \
-        raft_io_stub_flush(&F->io);                                           \
-        raft_io_stub_sent(&F->io, &messages, &n);                             \
-        munit_assert_int(n, ==, 1);                                           \
+        munit_assert_int(raft_io_stub_sending_n(&F->io), ==, 1);              \
                                                                               \
-        args = &messages[0].append_entries;                                   \
+        message = raft_io_stub_sending(&F->io, 0);                            \
+        args = &message->append_entries;                                      \
                                                                               \
         munit_assert_int(args->term, ==, TERM);                               \
         munit_assert_int(args->prev_log_index, ==, PREV_LOG_INDEX);           \

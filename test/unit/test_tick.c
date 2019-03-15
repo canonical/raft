@@ -70,24 +70,22 @@ static void tear_down(void *data)
 /**
  * Assert that a RequestVote RPC with the given parameters has been submitted.
  */
-#define __assert_request_vote(F, SERVER_ID, TERM, LAST_LOG_INDEX,     \
-                              LAST_LOG_TERM)                          \
-    {                                                                 \
-        struct raft_message *messages;                                \
-        struct raft_request_vote *args;                               \
-        unsigned n;                                                   \
-                                                                      \
-        raft_io_stub_flush(&F->io);                                   \
-        raft_io_stub_sent(&F->io, &messages, &n);                     \
-                                                                      \
-        munit_assert_int(n, ==, 1);                                   \
-        munit_assert_int(messages[0].type, ==, RAFT_IO_REQUEST_VOTE); \
-        munit_assert_int(messages[0].server_id, ==, SERVER_ID);       \
-                                                                      \
-        args = &messages[0].request_vote;                             \
-        munit_assert_int(args->term, ==, TERM);                       \
-        munit_assert_int(args->last_log_index, ==, LAST_LOG_INDEX);   \
-        munit_assert_int(args->last_log_term, ==, LAST_LOG_TERM);     \
+#define __assert_request_vote(F, SERVER_ID, TERM, LAST_LOG_INDEX,   \
+                              LAST_LOG_TERM)                        \
+    {                                                               \
+        struct raft_message *message;                               \
+        struct raft_request_vote *args;                             \
+                                                                    \
+        munit_assert_int(raft_io_stub_sending_n(&F->io), ==, 1);    \
+                                                                    \
+        message = raft_io_stub_sending(&F->io, 0);                  \
+        munit_assert_int(message->type, ==, RAFT_IO_REQUEST_VOTE);  \
+        munit_assert_int(message->server_id, ==, SERVER_ID);        \
+                                                                    \
+        args = &message->request_vote;                              \
+        munit_assert_int(args->term, ==, TERM);                     \
+        munit_assert_int(args->last_log_index, ==, LAST_LOG_INDEX); \
+        munit_assert_int(args->last_log_term, ==, LAST_LOG_TERM);   \
     }
 
 /**
@@ -96,17 +94,15 @@ static void tear_down(void *data)
  */
 #define __assert_heartbeat(F, SERVER_ID, TERM, PREV_LOG_INDEX, PREV_LOG_TERM) \
     {                                                                         \
-        struct raft_message *messages;                                        \
+        struct raft_message *message;                                         \
         struct raft_append_entries *args;                                     \
-        unsigned n;                                                           \
                                                                               \
-        raft_io_stub_flush(&F->io);                                           \
-        raft_io_stub_sent(&F->io, &messages, &n);                             \
+        munit_assert_int(raft_io_stub_sending_n(&F->io), ==, 1);              \
                                                                               \
-        munit_assert_int(n, ==, 1);                                           \
-        munit_assert_int(messages[0].type, ==, RAFT_IO_APPEND_ENTRIES);       \
+        message = raft_io_stub_sending(&F->io, 0);                            \
+        munit_assert_int(message->type, ==, RAFT_IO_APPEND_ENTRIES);          \
                                                                               \
-        args = &messages[0].append_entries;                                   \
+        args = &message->append_entries;                                      \
                                                                               \
         munit_assert_int(args->term, ==, TERM);                               \
         munit_assert_int(args->prev_log_index, ==, PREV_LOG_INDEX);           \
@@ -331,8 +327,6 @@ TEST_CASE(elapse, success, heartbeat, NULL)
 TEST_CASE(elapse, success, no_heartbeat, NULL)
 {
     struct fixture *f = data;
-    struct raft_message *messages;
-    unsigned n;
 
     (void)params;
 
@@ -343,9 +337,7 @@ TEST_CASE(elapse, success, no_heartbeat, NULL)
     __tick(f, f->raft.heartbeat_timeout - 100);
 
     /* We have sent no heartbeats */
-    raft_io_stub_flush(&f->io);
-    raft_io_stub_sent(&f->io, &messages, &n);
-    munit_assert_int(n, ==, 0);
+    munit_assert_int(raft_io_stub_sending_n(&f->io), ==, 0);
 
     return MUNIT_OK;
 }
@@ -420,8 +412,6 @@ TEST_CASE(elapse, success, new_election, NULL)
 TEST_CASE(elapse, success, during_election, NULL)
 {
     struct fixture *f = data;
-    struct raft_message *messages;
-    unsigned n;
 
     (void)params;
 
@@ -438,9 +428,7 @@ TEST_CASE(elapse, success, during_election, NULL)
     __assert_state(f, RAFT_CANDIDATE);
 
     /* No new vote request has been sent */
-    raft_io_stub_flush(&f->io);
-    raft_io_stub_sent(&f->io, &messages, &n);
-    munit_assert_int(n, ==, 0);
+    munit_assert_int(raft_io_stub_sending_n(&f->io), ==, 0);
 
     return MUNIT_OK;
 }
