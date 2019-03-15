@@ -940,16 +940,6 @@ struct raft_message *raft_io_stub_sending(struct raft_io *io, unsigned i)
     return NULL;
 }
 
-void raft_io_stub_sent(struct raft_io *io,
-                       struct raft_message **messages,
-                       unsigned *n)
-{
-    struct io_stub *s;
-    s = io->impl;
-    *messages = s->transmit;
-    *n = s->n_transmit;
-}
-
 void raft_io_stub_appended(struct raft_io *io,
                            struct raft_entry **entries,
                            unsigned *n)
