@@ -21,6 +21,10 @@
  * testing purposes. */
 #define MAX_TRANSMIT 64
 
+/* Maximum number of peer stub instances connected to a certain stub
+ * instance. This should be enough for testing purposes. */
+#define MAX_PEERS 8
+
 /* Information about a pending request to send a message. */
 struct send
 {
@@ -88,13 +92,16 @@ struct io_stub
     /* Queue of pending requests submitted with raft_io->send(), whose callbacks
      * still have to be fired. */
     raft__queue send;
+    unsigned n_send;
 
     /* Queue of messages that have been written to the network, i.e. the
      * callback of the associated raft_io->send() request has been fired. */
     struct raft_message transmit[MAX_TRANSMIT];
-    size_t n_transmit;
+    unsigned n_transmit;
 
-    /* Incoming messages. */
+    /* Peers connected to us. */
+    struct io_stub *peers[MAX_PEERS];
+    unsigned n_peers;
 
     struct
     {
@@ -605,43 +612,45 @@ static int io_stub__send(struct raft_io *io,
     r->cb = cb;
 
     RAFT__QUEUE_PUSH(&s->send, &r->queue);
+    s->n_send++;
 
     return 0;
 }
 
 int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger)
 {
-    struct io_stub *stub;
+    struct io_stub *s;
 
     assert(io != NULL);
 
-    stub = raft_malloc(sizeof *stub);
-    if (stub == NULL) {
+    s = raft_malloc(sizeof *s);
+    if (s == NULL) {
         return RAFT_ENOMEM;
     }
 
-    stub->logger = logger;
-    stub->time = 0;
-    stub->term = 0;
-    stub->voted_for = 0;
-    stub->entries = NULL;
-    stub->snapshot = NULL;
-    stub->n = 0;
+    s->logger = logger;
+    s->time = 0;
+    s->term = 0;
+    s->voted_for = 0;
+    s->entries = NULL;
+    s->snapshot = NULL;
+    s->n = 0;
 
-    memset(&stub->append, 0, sizeof stub->append);
+    memset(&s->append, 0, sizeof s->append);
 
-    RAFT__QUEUE_INIT(&stub->send);
+    RAFT__QUEUE_INIT(&s->send);
+    s->n_send = 0;
 
-    memset(&stub->transmit, 0, sizeof stub->transmit);
-    stub->n_transmit = 0;
+    s->n_transmit = 0;
+    s->n_peers = 0;
 
-    stub->snapshot_put = NULL;
-    stub->snapshot_get = NULL;
+    s->snapshot_put = NULL;
+    s->snapshot_get = NULL;
 
-    stub->fault.countdown = -1;
-    stub->fault.n = -1;
+    s->fault.countdown = -1;
+    s->fault.n = -1;
 
-    io->impl = stub;
+    io->impl = s;
     io->init = io_stub__init;
     io->start = io_stub__start;
     io->close = io_stub__close;
@@ -826,10 +835,6 @@ void raft_io_stub_flush(struct raft_io *io)
 
     io_stub__reset_flushed(s);
 
-    if (s->append.pending.n_cbs > 0) {
-        io_stub__append_cb(s);
-    }
-
     while (!RAFT__QUEUE_IS_EMPTY(&s->send)) {
         raft__queue *head;
         struct send *send;
@@ -887,6 +892,12 @@ void raft_io_stub_flush(struct raft_io *io)
             send->cb(send->req, 0);
         }
         raft_free(send);
+        s->n_send--;
+    }
+    assert(s->n_send == 0);
+
+    if (s->append.pending.n_cbs > 0) {
+        io_stub__append_cb(s);
     }
 
     if (s->snapshot_put != NULL) {
@@ -905,14 +916,36 @@ void raft_io_stub_flush(struct raft_io *io)
     }
 }
 
+unsigned raft_io_stub_sending_n(struct raft_io *io)
+{
+    struct io_stub *s;
+    s = io->impl;
+    return s->n_send;
+}
+
+struct raft_message *raft_io_stub_sending(struct raft_io *io, unsigned i)
+{
+    struct io_stub *s;
+    raft__queue *head;
+    unsigned count = 0;
+    s = io->impl;
+    RAFT__QUEUE_FOREACH(head, &s->send)
+    {
+        struct send *r = RAFT__QUEUE_DATA(head, struct send, queue);
+        if (count == i) {
+            return &r->message;
+        }
+        count++;
+    }
+    return NULL;
+}
+
 void raft_io_stub_sent(struct raft_io *io,
                        struct raft_message **messages,
                        unsigned *n)
 {
     struct io_stub *s;
-
     s = io->impl;
-
     *messages = s->transmit;
     *n = s->n_transmit;
 }
@@ -922,9 +955,7 @@ void raft_io_stub_appended(struct raft_io *io,
                            unsigned *n)
 {
     struct io_stub *s;
-
     s = io->impl;
-
     *entries = s->append.flushed.entries;
     *n = s->append.flushed.n_entries;
 }
@@ -932,18 +963,14 @@ void raft_io_stub_appended(struct raft_io *io,
 void raft_io_stub_dispatch(struct raft_io *io, struct raft_message *message)
 {
     struct io_stub *s;
-
     s = io->impl;
-
     s->recv_cb(io, message);
 }
 
 void raft_io_stub_fault(struct raft_io *io, int delay, int repeat)
 {
     struct io_stub *s;
-
     s = io->impl;
-
     s->fault.countdown = delay;
     s->fault.n = repeat;
 }
@@ -951,17 +978,13 @@ void raft_io_stub_fault(struct raft_io *io, int delay, int repeat)
 unsigned raft_io_stub_term(struct raft_io *io)
 {
     struct io_stub *s;
-
     s = io->impl;
-
     return s->term;
 }
 
 unsigned raft_io_stub_vote(struct raft_io *io)
 {
     struct io_stub *s;
-
     s = io->impl;
-
     return s->voted_for;
 }
