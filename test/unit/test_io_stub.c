@@ -409,10 +409,8 @@ TEST_SUITE(send);
 TEST_SETUP(send, setup);
 TEST_TEAR_DOWN(send, tear_down);
 
-TEST_GROUP(send, success);
-
 /* Send the very first message. */
-TEST_CASE(send, success, first, NULL)
+TEST_CASE(send, first, NULL)
 {
     struct fixture *f = data;
     struct raft_message message;
