@@ -127,7 +127,7 @@ void test_become_leader(struct raft *r)
         message.request_vote_result.term = r->current_term;
         message.request_vote_result.vote_granted = 1;
 
-        raft_io_stub_dispatch(r->io, &message);
+        raft_io_stub_deliver(r->io, &message);
 
         votes--;
         if (votes == 0) {
@@ -167,6 +167,6 @@ void test_receive_heartbeat(struct raft *r, unsigned leader_id)
     args->n_entries = 0;
     args->leader_commit = r->commit_index;
 
-    raft_io_stub_dispatch(r->io, &message);
+    raft_io_stub_deliver(r->io, &message);
     raft_io_stub_flush_all(r->io);
 }

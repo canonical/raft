@@ -22,11 +22,6 @@ int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger);
  */
 void raft_io_stub_close(struct raft_io *io);
 
-/**
- * Advance the stub time by the given number of milliseconds, and invoke the
- * tick callback accordingly.
- */
-void raft_io_stub_advance(struct raft_io *io, unsigned msecs);
 
 /**
  * Set the current time, without invoking the tick callback.
@@ -47,9 +42,12 @@ void raft_io_stub_set_randint(struct raft_io *io, int (*randint)(int, int));
 void raft_io_stub_set_latency(struct raft_io *io, unsigned min, unsigned max);
 
 /**
- * Dispatch a message, invoking the recv callback.
+ * Advance the stub time by the given number of milliseconds, and invoke the
+ * tick callback accordingly. Also, update the timers of messages in the
+ * transmit queue, and if any of them expires deliver it to the destination peer
+ * (if connected).
  */
-void raft_io_stub_dispatch(struct raft_io *io, struct raft_message *message);
+void raft_io_stub_advance(struct raft_io *io, unsigned msecs);
 
 /**
  * Flush the oldest request in the pending I/O queue, invoking the associated
@@ -63,6 +61,17 @@ bool raft_io_stub_flush(struct raft_io *io);
  * Flush all pending I/O requests.
  */
 void raft_io_stub_flush_all(struct raft_io *io);
+
+/**
+ * Return the amount of milliseconds left before the next message gets
+ * delivered. If no delivery is pending, return -1.
+ */
+int raft_io_stub_next_deliver_timeout(struct raft_io *io);
+
+/**
+ * Manually trigger the delivery of a message, invoking the recv callback.
+ */
+void raft_io_stub_deliver(struct raft_io *io, struct raft_message *message);
 
 /**
  * Return the number of pending append requests (i.e. requests successfully
@@ -114,6 +123,11 @@ unsigned raft_io_stub_vote(struct raft_io *io);
  * Connect @io to @other, enabling delivery of messages sent from @io to @other.
  */
 void raft_io_stub_connect(struct raft_io *io, struct raft_io *other);
+
+/**
+ * Return #true if @io is connected to @other.
+ */
+bool raft_io_stub_connected(struct raft_io *io, struct raft_io *other);
 
 /**
  * Diconnect @io from @other, disabling delivery of messages sent from @io to

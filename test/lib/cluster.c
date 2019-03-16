@@ -56,15 +56,12 @@ void test_cluster_setup(const MunitParameter params[], struct test_cluster *c)
     c->time = 0;
     c->leader_id = 0;
 
-    test_network_setup(params, &c->network, c->n);
-
     for (i = 0; i < c->n; i++) {
         unsigned id = i + 1;
         struct raft_logger *logger = &c->loggers[i];
         struct raft_io *io = &c->ios[i];
         struct raft_fsm *fsm = &c->fsms[i];
         struct raft *raft = &c->rafts[i];
-        struct test_host *host = test_network_host(&c->network, id);
         char address[4];
 
         sprintf(address, "%d", id);
@@ -75,16 +72,16 @@ void test_cluster_setup(const MunitParameter params[], struct test_cluster *c)
         test_logger_time(logger, c, test_cluster__time);
 
         test_io_setup(params, io, logger);
+        raft_io_stub_set_latency(io, 5, 50);
 
         test_fsm_setup(params, fsm);
 
         raft_init(raft, logger, io, fsm, c, id, address);
 
+	raft->heartbeat_timeout = 50;
         raft_set_election_timeout(raft, 250);
 
         test_bootstrap_and_start(raft, c->n, 1, c->n_voting);
-
-        host->raft = raft;
     }
 
     /* Connect all servers to each another */
@@ -125,89 +122,11 @@ void test_cluster_tear_down(struct test_cluster *c)
         test_logger_tear_down(logger);
     }
 
-    test_network_tear_down(&c->network);
-
     raft_free(c->loggers);
     raft_free(c->fsms);
     raft_free(c->ios);
     raft_free(c->rafts);
     raft_free(c->alive);
-}
-
-/**
- * Copy all entries in @src into @dst.
- */
-static void test_cluster__copy_entries(const struct raft_entry *src,
-                                       struct raft_entry **dst,
-                                       unsigned n)
-{
-    size_t size = 0;
-    void *batch;
-    void *cursor;
-    unsigned i;
-
-    if (n == 0) {
-        *dst = NULL;
-        return;
-    }
-
-    /* Calculate the total size of the entries content and allocate the
-     * batch. */
-    for (i = 0; i < n; i++) {
-        size += src[i].buf.len;
-    }
-
-    batch = raft_malloc(size);
-    munit_assert_ptr_not_null(batch);
-
-    /* Copy the entries. */
-    *dst = raft_malloc(n * sizeof **dst);
-    munit_assert_ptr_not_null(*dst);
-
-    cursor = batch;
-
-    for (i = 0; i < n; i++) {
-        (*dst)[i] = src[i];
-
-        (*dst)[i].buf.base = cursor;
-        memcpy((*dst)[i].buf.base, src[i].buf.base, src[i].buf.len);
-
-        (*dst)[i].batch = batch;
-
-        cursor += src[i].buf.len;
-    }
-}
-
-/**
- * Make a copy of the content of the given message and push it to the incoming
- * queue of the receiver.
- */
-static void test_cluster__enqueue_message(struct test_cluster *c,
-                                          struct raft *sender,
-                                          struct raft_message *src)
-{
-    struct test_host *host = test_network_host(&c->network, src->server_id);
-    struct raft_message dst;
-    struct test_message msg;
-
-    dst = *src;
-    dst.server_id = sender->id;
-    dst.server_address = sender->address;
-
-    switch (src->type) {
-        case RAFT_IO_APPEND_ENTRIES:
-            /* Make a copy of the entries being sent */
-            test_cluster__copy_entries(src->append_entries.entries,
-                                       &dst.append_entries.entries,
-                                       src->append_entries.n_entries);
-            dst.append_entries.n_entries = src->append_entries.n_entries;
-            break;
-    }
-
-    msg.sender_id = sender->id;
-    msg.message = dst;
-
-    test_host_enqueue(host, &msg);
 }
 
 /**
@@ -218,145 +137,80 @@ static void test_cluster__flush_io(struct test_cluster *c)
 {
     size_t i;
     for (i = 0; i < c->n; i++) {
-        struct raft *raft = &c->rafts[i];
         struct raft_io *io = &c->ios[i];
-        unsigned n;
-        unsigned i;
-
-        n = raft_io_stub_n_sending(io);
-        for (i = 0; i < n; i++) {
-            struct raft_message *message;
-            raft_io_stub_sending(io, i, &message);
-            test_cluster__enqueue_message(c, raft, message);
-        }
-
         raft_io_stub_flush_all(io);
     }
 }
 
 /**
- * Figure what's the message with the lowest timer, i.e. the
- * message that should be delivered first (if any is pending).
+ * Figure what's the lowest delivery timer across all stub I/O instances,
+ * i.e. the time at which the next message should be delivered (if any is
+ * pending).
  */
-static void test_cluster__message_with_lowest_timer(
-    struct test_cluster *c,
-    struct test_message **message,
-    struct test_host **host)
+static int test_cluster__next_deliver_timeout(struct test_cluster *c)
 {
+    int min_timeout = -1;
     size_t i;
 
-    *message = NULL;
-
     for (i = 0; i < c->n; i++) {
-        struct test_host *h = test_network_host(&c->network, i + 1);
-        struct test_message *m = test_host_peek(h);
-
-        if (m == NULL) {
-            continue;
-        }
-
-        if (!c->alive[h->raft->id - 1]) {
-            /* Drop the message */
-            test_network_close_message(m);
-            continue;
-        }
-
-        if (*message == NULL) {
-            *host = h;
-            *message = m;
-            continue;
-        }
-
-        if (m->timer < (*message)->timer) {
-            *host = h;
-            *message = m;
-            continue;
+        struct raft_io *io = &c->ios[i];
+        int timeout;
+        timeout = raft_io_stub_next_deliver_timeout(io);
+	if (timeout == -1) {
+	  continue;
+	}
+        if (min_timeout == -1 || timeout < min_timeout) {
+            min_timeout = timeout;
         }
     }
+
+    return min_timeout;
 }
 
 /**
  * Check what's the raft instance whose timer is closest to expiration.
  */
-static void test_cluster__raft_with_lowest_timer(struct test_cluster *c,
-                                                 struct raft **raft)
+static unsigned test_cluster__next_raft_timeout(struct test_cluster *c)
 {
     size_t i;
-    int lowest = 0; /* Lowest remaining time before expiration */
-
-    *raft = NULL;
+    unsigned min_timeout = 0; /* Lowest remaining time before expiration */
 
     for (i = 0; i < c->n; i++) {
         struct raft *r = &c->rafts[i];
-        int remaining; /* Milliseconds remaining before expiration. */
+        unsigned timeout; /* Milliseconds remaining before expiration. */
 
         if (!c->alive[i]) {
             continue;
         }
 
-        remaining = raft_next_timeout(r);
-
-        if (*raft == NULL) {
-            *raft = r;
-            lowest = remaining;
-            continue;
-        }
-
-        if (remaining < lowest) {
-            *raft = r;
-            lowest = remaining;
+        timeout = raft_next_timeout(r);
+        if (min_timeout == 0 || timeout < min_timeout) {
+            min_timeout = timeout;
         }
     }
 
-    munit_assert_ptr_not_null(*raft);
+    return min_timeout;
 }
 
 /**
  * Fire either a message delivery or a raft tick, depending on whose timer is
  * closest to expiration.
  */
-static void test_cluster__deliver_or_tick(struct test_cluster *c,
-                                          struct test_message *next_message,
-                                          struct test_host *next_host,
-                                          struct raft *next_raft)
+static void test_cluster__advance(struct test_cluster *c, unsigned msecs)
 {
-    size_t i, j;
-    int remaining = raft_next_timeout(next_raft);
-    int elapse;
+    size_t i;
 
-    if (next_message != NULL && next_message->timer < remaining) {
-        elapse = next_message->timer + 1;
-        raft_io_stub_dispatch(next_host->raft->io, &next_message->message);
-        next_message->sender_id = 0;
-    } else {
-        elapse = remaining + 1;
-    }
-
-    if (elapse < 0) {
-        elapse = 0;
-    }
+    c->time += msecs;
 
     for (i = 0; i < c->n; i++) {
         struct raft *raft = &c->rafts[i];
-        struct test_host *host = &c->network.hosts[i];
 
         if (!c->alive[i]) {
             continue;
         }
 
-        for (j = 0; j < TEST_NETWORK_INCOMING_QUEUE_SIZE; j++) {
-            struct test_message *incoming = &host->incoming[j];
-
-            if (incoming->sender_id == 0) {
-                continue;
-            }
-            incoming->timer -= elapse;
-        }
-
-        raft_io_stub_advance(raft->io, elapse);
+        raft_io_stub_advance(raft->io, msecs);
     }
-
-    c->time += elapse;
 }
 
 /**
@@ -425,8 +279,7 @@ static bool test_cluster__update_leader(struct test_cluster *c)
                 continue;
             }
 
-            if (!c->alive[i] || !c->network.connectivity[i * c->n + j] ||
-                !c->network.connectivity[j * c->n + i]) {
+            if (!c->alive[i] || !test_cluster_connected(c, leader_id, raft->id)) {
                 /* This server is not alive or not connected to this leader, so
                  * don't count it in for stability. */
                 continue;
@@ -557,23 +410,29 @@ static void test_cluster__update_commit_index(struct test_cluster *c)
 
 void test_cluster_run_once(struct test_cluster *c)
 {
-    struct test_host *next_host;
-    struct test_message *next_message;
-    struct raft *next_raft;
+    int deliver_timeout;
+    unsigned raft_timeout;
+    unsigned timeout;
 
     /* First flush I/O operations. */
     test_cluster__flush_io(c);
 
     /* Second, figure what's the message with the lowest timer (i.e. the
      * message that should be delivered first) */
-    test_cluster__message_with_lowest_timer(c, &next_message, &next_host);
+    deliver_timeout = test_cluster__next_deliver_timeout(c);
 
     /* Now check what's the raft instance whose timer is closest to
      * expiration. */
-    test_cluster__raft_with_lowest_timer(c, &next_raft);
+    raft_timeout = test_cluster__next_raft_timeout(c);
 
     /* Fire either a raft tick or a message delivery. */
-    test_cluster__deliver_or_tick(c, next_message, next_host, next_raft);
+    if (deliver_timeout != -1 && (unsigned)deliver_timeout < raft_timeout) {
+      timeout = deliver_timeout;
+    } else {
+      timeout = raft_timeout;
+    }
+
+    test_cluster__advance(c, timeout + 1);
 
     /* If the leader has not changed check the Leader Append-Only
      * guarantee. */
@@ -657,10 +516,10 @@ void test_cluster_add_server(struct test_cluster *c)
     struct raft_io *io;
     struct raft_fsm *fsm;
     struct raft *raft;
-    struct test_host *host;
     struct raft *leader;
     MunitParameter params[] = {{NULL, NULL}};
     int rv;
+    unsigned i;
 
     /* Create a new raft instance for the new server. */
     c->n++;
@@ -674,15 +533,19 @@ void test_cluster_add_server(struct test_cluster *c)
     fsm = &c->fsms[c->n - 1];
     raft = &c->rafts[c->n - 1];
 
-    test_network_add_host(&c->network);
-    host = test_network_host(&c->network, id);
-
     c->alive[c->n - 1] = true;
 
     test_logger_setup(params, logger, id);
     test_logger_time(logger, c, test_cluster__time);
 
     test_io_setup(params, io, logger);
+    raft_io_stub_set_latency(io, 5, 50);
+
+    for (i = 0; i < c->n - 1; i++) {
+        struct raft_io *other = &c->ios[i];
+        raft_io_stub_connect(io, other);
+        raft_io_stub_connect(other, io);
+    }
 
     test_fsm_setup(params, fsm);
 
@@ -692,8 +555,6 @@ void test_cluster_add_server(struct test_cluster *c)
     munit_assert_int(rv, ==, 0);
 
     raft_set_election_timeout(raft, 250);
-
-    host->raft = raft;
 
     leader = &c->rafts[leader_id - 1];
 
@@ -757,8 +618,8 @@ bool test_cluster_connected(struct test_cluster *c, unsigned id1, unsigned id2)
     i = id1 - 1;
     j = id2 - 1;
 
-    return c->network.connectivity[i * c->n + j] &&
-           c->network.connectivity[j * c->n + i];
+    return raft_io_stub_connected(&c->ios[i], &c->ios[j]) &&
+           raft_io_stub_connected(&c->ios[j], &c->ios[i]);
 }
 
 void test_cluster_disconnect(struct test_cluster *c, unsigned id1, unsigned id2)
@@ -768,8 +629,8 @@ void test_cluster_disconnect(struct test_cluster *c, unsigned id1, unsigned id2)
     i = id1 - 1;
     j = id2 - 1;
 
-    c->network.connectivity[i * c->n + j] = false;
-    c->network.connectivity[j * c->n + i] = false;
+    raft_io_stub_disconnect(&c->ios[i], &c->ios[j]);
+    raft_io_stub_disconnect(&c->ios[j], &c->ios[i]);
 }
 
 void test_cluster_reconnect(struct test_cluster *c, unsigned id1, unsigned id2)
@@ -779,6 +640,6 @@ void test_cluster_reconnect(struct test_cluster *c, unsigned id1, unsigned id2)
     i = id1 - 1;
     j = id2 - 1;
 
-    c->network.connectivity[i * c->n + j] = true;
-    c->network.connectivity[j * c->n + i] = true;
+    raft_io_stub_reconnect(&c->ios[i], &c->ios[j]);
+    raft_io_stub_reconnect(&c->ios[j], &c->ios[i]);
 }

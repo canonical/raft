@@ -21,7 +21,7 @@ unsigned raft_next_timeout(struct raft *r)
     } else {
         timeout = r->election_timeout_rand;
     }
-    return timeout - r->timer;
+    return timeout > r->timer ? timeout - r->timer : 0 ;
 }
 
 /**
@@ -123,6 +123,7 @@ static bool leader_has_been_contacted_by_majority_of_servers(struct raft *r)
     for (i = 0; i < r->configuration.n; i++) {
         struct raft_server *server = &r->configuration.servers[i];
         struct raft_replication *replication = &r->leader_state.replication[i];
+        unsigned elapsed;
 
         if (!server->voting) {
             continue;
@@ -133,8 +134,15 @@ static bool leader_has_been_contacted_by_majority_of_servers(struct raft *r)
             continue;
         }
 
-        if (now - replication->last_contact < r->election_timeout) {
+        elapsed = now - replication->last_contact;
+
+        if (elapsed <= r->election_timeout) {
             contacts++;
+        } else {
+            raft_debugf(
+                r->logger,
+                "lost contact with server %d: no message since %u msecs (last contact %u, now %u)",
+                server->id, elapsed,replication->last_contact, now);
         }
     }
 

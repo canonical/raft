@@ -97,8 +97,8 @@ struct peer
  */
 struct io_stub
 {
-    /* Elapsed time since the backend was started. */
-    raft_time time;
+    struct raft_io *io; /* I/O object we're implementing */
+    raft_time time;     /* Elapsed time since the backend was started. */
 
     /* Term and vote */
     raft_term term;
@@ -220,7 +220,42 @@ static int io_stub__start(struct raft_io *io,
     return 0;
 }
 
-static void io_stub__reset_flushed(struct io_stub *s);
+static void drop_transmit(struct io_stub *s, struct transmit *transmit)
+{
+    struct raft_message *message;
+    message = &transmit->message;
+
+    switch (message->type) {
+        case RAFT_IO_APPEND_ENTRIES:
+            if (message->append_entries.entries != NULL) {
+                raft_free(message->append_entries.entries[0].batch);
+                raft_free(message->append_entries.entries);
+            }
+            break;
+        case RAFT_IO_INSTALL_SNAPSHOT:
+            raft_configuration_close(&message->install_snapshot.conf);
+            raft_free(message->install_snapshot.data.base);
+            break;
+    }
+
+    raft_free(transmit);
+    s->n_transmit--;
+}
+
+/* Drop all messages in the transmit queue. */
+static void drop_all_transmit(struct io_stub *s)
+{
+    while (!RAFT__QUEUE_IS_EMPTY(&s->transmit)) {
+        raft__queue *head;
+        struct transmit *transmit;
+
+        head = RAFT__QUEUE_HEAD(&s->transmit);
+        RAFT__QUEUE_REMOVE(head);
+        transmit = RAFT__QUEUE_DATA(head, struct transmit, queue);
+        drop_transmit(s, transmit);
+    }
+    assert(s->n_transmit == 0);
+}
 
 static int io_stub__close(struct raft_io *io, void (*cb)(struct raft_io *io))
 {
@@ -240,7 +275,7 @@ static int io_stub__close(struct raft_io *io, void (*cb)(struct raft_io *io))
         raft_free(s->entries);
     }
 
-    io_stub__reset_flushed(s);
+    drop_all_transmit(s);
 
     if (s->snapshot != NULL) {
         raft_snapshot__close(s->snapshot);
@@ -654,6 +689,7 @@ int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger)
         return RAFT_ENOMEM;
     }
 
+    s->io = io;
     s->logger = logger;
     s->time = 0;
     s->term = 0;
@@ -706,47 +742,68 @@ void raft_io_stub_close(struct raft_io *io)
     raft_free(io->impl);
 }
 
-/**
- * Reset data about last appended or sent entries.
- */
-static void io_stub__reset_flushed(struct io_stub *s)
+static void deliver_transmit(struct io_stub *s, struct transmit *transmit)
 {
-    while (!RAFT__QUEUE_IS_EMPTY(&s->transmit)) {
-        raft__queue *head;
-        struct transmit *transmit;
-        struct raft_message *message;
+    struct raft_message *message = &transmit->message;
+    unsigned i;
 
-        head = RAFT__QUEUE_HEAD(&s->transmit);
-        RAFT__QUEUE_REMOVE(head);
-        transmit = RAFT__QUEUE_DATA(head, struct transmit, queue);
-
-        message = &transmit->message;
-
-        switch (message->type) {
-            case RAFT_IO_APPEND_ENTRIES:
-                if (message->append_entries.entries != NULL) {
-                    raft_free(message->append_entries.entries[0].batch);
-                    raft_free(message->append_entries.entries);
-                }
-                break;
-            case RAFT_IO_INSTALL_SNAPSHOT:
-                raft_configuration_close(&message->install_snapshot.conf);
-                raft_free(message->install_snapshot.data.base);
-                break;
+    /* Search for the destination server. */
+    for (i = 0; i < s->n_peers; i++) {
+        if (s->peers[i].s->id == message->server_id) {
+            break;
         }
-
-        raft_free(transmit);
-        s->n_transmit--;
     }
-    assert(s->n_transmit == 0);
+
+    /* We don't have any peer with this ID or if the peers is disconnect, let's
+     * drop the message */
+    if (i == s->n_peers || !s->peers[i].connected) {
+        drop_transmit(s, transmit);
+        return;
+    }
+
+    /* Update the message object with our details. */
+    message->server_id = s->id;
+    message->server_address = s->address;
+
+    raft_io_stub_deliver(s->peers[i].s->io, message);
+    raft_free(transmit);
+    s->n_transmit--;
 }
 
 void raft_io_stub_advance(struct raft_io *io, unsigned msecs)
 {
     struct io_stub *s;
+    raft__queue queue;
+
     s = io->impl;
     s->time += msecs;
     s->tick_cb(io);
+
+    /* Deliver or messages whose timer expires */
+    RAFT__QUEUE_INIT(&queue);
+    while (!RAFT__QUEUE_IS_EMPTY(&s->transmit)) {
+        raft__queue *head;
+        struct transmit *transmit;
+
+        head = RAFT__QUEUE_HEAD(&s->transmit);
+        RAFT__QUEUE_REMOVE(head);
+        transmit = RAFT__QUEUE_DATA(head, struct transmit, queue);
+
+        transmit->timer -= msecs;
+
+        if (transmit->timer <= 0) {
+            deliver_transmit(s, transmit);
+        } else {
+            RAFT__QUEUE_PUSH(&queue, &transmit->queue);
+        }
+    }
+
+    while (!RAFT__QUEUE_IS_EMPTY(&queue)) {
+        raft__queue *head;
+        head = RAFT__QUEUE_HEAD(&queue);
+        RAFT__QUEUE_REMOVE(head);
+        RAFT__QUEUE_PUSH(&s->transmit, head);
+    }
 }
 
 void raft_io_stub_set_time(struct raft_io *io, unsigned time)
@@ -860,8 +917,11 @@ static void io_stub__flush_send(struct io_stub *s, struct send *send)
     assert(transmit != NULL);
 
     if (s->min_latency != 0) {
-        // transmit->timer
+        transmit->timer = s->randint(s->min_latency, s->max_latency);
+    } else {
+        transmit->timer = 0;
     }
+
     src = &send->message;
     dst = &transmit->message;
 
@@ -968,8 +1028,6 @@ void raft_io_stub_flush_all(struct raft_io *io)
     bool has_more_requests;
     s = io->impl;
 
-    io_stub__reset_flushed(s);
-
     do {
         has_more_requests = raft_io_stub_flush(io);
     } while (has_more_requests);
@@ -1053,7 +1111,26 @@ void raft_io_stub_sending(struct raft_io *io,
     }
 }
 
-void raft_io_stub_dispatch(struct raft_io *io, struct raft_message *message)
+int raft_io_stub_next_deliver_timeout(struct raft_io *io)
+{
+    struct io_stub *s;
+    int lowest_timer = -1;
+    raft__queue *head;
+    s = io->impl;
+    RAFT__QUEUE_FOREACH(head, &s->transmit)
+    {
+        struct transmit *t = RAFT__QUEUE_DATA(head, struct transmit, queue);
+        if (lowest_timer == -1) {
+            lowest_timer = t->timer;
+        } else if (t->timer < lowest_timer) {
+            lowest_timer = t->timer;
+        }
+    }
+    assert(lowest_timer == -1 || lowest_timer >= 0);
+    return lowest_timer;
+}
+
+void raft_io_stub_deliver(struct raft_io *io, struct raft_message *message)
 {
     struct io_stub *s;
     s = io->impl;
@@ -1094,34 +1171,47 @@ void raft_io_stub_connect(struct raft_io *io, struct raft_io *other)
     s->n_peers++;
 }
 
+static struct peer *get_peer(struct io_stub *s, unsigned id)
+{
+    unsigned i;
+    for (i = 0; i < s->n_peers; i++) {
+        struct peer *peer = &s->peers[i];
+        if (peer->s->id == id) {
+            return peer;
+        }
+    }
+    return NULL;
+}
+
+bool raft_io_stub_connected(struct raft_io *io, struct raft_io *other)
+{
+    struct io_stub *s;
+    struct io_stub *s_other;
+    struct peer *peer;
+    s = io->impl;
+    s_other = other->impl;
+    peer = get_peer(s, s_other->id);
+    return peer != NULL && peer->connected;
+}
+
 void raft_io_stub_disconnect(struct raft_io *io, struct raft_io *other)
 {
     struct io_stub *s;
     struct io_stub *s_other;
-    unsigned i;
+    struct peer *peer;
     s = io->impl;
     s_other = other->impl;
-    for (i = 0; i < s->n_peers; i++) {
-        if (s->peers[i].s == s_other) {
-            s->peers[i].connected = false;
-            break;
-        }
-    }
-    assert(i < s->n_peers);
+    peer = get_peer(s, s_other->id);
+    peer->connected = false;
 }
 
 void raft_io_stub_reconnect(struct raft_io *io, struct raft_io *other)
 {
     struct io_stub *s;
     struct io_stub *s_other;
-    unsigned i;
+    struct peer *peer;
     s = io->impl;
     s_other = other->impl;
-    for (i = 0; i < s->n_peers; i++) {
-        if (s->peers[i].s == s_other) {
-            s->peers[i].connected = true;
-            break;
-        }
-    }
-    assert(i < s->n_peers);
+    peer = get_peer(s, s_other->id);
+    peer->connected = true;
 }

@@ -20,10 +20,10 @@
 #endif
 
 /* Set to 1 to enable debug logging. */
-#if 0
-#define __logf(MSG, ...) raft_debugf(r->logger, MSG, __VA_ARGS__)
+#if 1
+#define tracef(MSG, ...) raft_debugf(r->logger, MSG, __VA_ARGS__)
 #else
-#define __logf(MSG, ...)
+#define tracef(MSG, ...)
 #endif
 
 /**
@@ -273,8 +273,7 @@ int raft_replication__send_append_entries(struct raft *r, size_t i)
         }
     }
 
-    rv = log__acquire(&r->log, next_index, &args->entries,
-                           &args->n_entries);
+    rv = log__acquire(&r->log, next_index, &args->entries, &args->n_entries);
     if (rv != 0) {
         goto err;
     }
@@ -289,7 +288,7 @@ int raft_replication__send_append_entries(struct raft *r, size_t i)
      */
     args->leader_commit = r->commit_index;
 
-    __logf("send %ld entries to server %ld (log size %ld)", args->n_entries,
+    tracef("send %ld entries to server %ld (log size %ld)", args->n_entries,
            server->id, log__n_entries(&r->log));
 
     message.type = RAFT_IO_APPEND_ENTRIES;
@@ -822,7 +821,7 @@ respond:
 
 out:
     log__release(&r->log, request->index, request->args.entries,
-                      request->args.n_entries);
+                 request->args.n_entries);
 
     raft_free(request);
 }
@@ -1029,7 +1028,7 @@ int raft_replication__append(struct raft *r,
         struct raft_entry *entry = &args->entries[i + j];
 
         rv = log__append(&r->log, entry->term, entry->type, &entry->buf,
-                              entry->batch);
+                         entry->batch);
         if (rv != 0) {
             /* TODO: we should revert any changes we made to the log */
             goto err_after_request_alloc;
@@ -1038,7 +1037,7 @@ int raft_replication__append(struct raft *r,
 
     /* Acquire the relevant entries from the log. */
     rv = log__acquire(&r->log, request->index, &request->args.entries,
-                           &request->args.n_entries);
+                      &request->args.n_entries);
     if (rv != 0) {
         goto err_after_request_alloc;
     }
@@ -1059,7 +1058,7 @@ int raft_replication__append(struct raft *r,
 
 err_after_acquire_entries:
     log__release(&r->log, request->index, request->args.entries,
-                      request->args.n_entries);
+                 request->args.n_entries);
 
 err_after_request_alloc:
     raft_free(request);
@@ -1472,7 +1471,7 @@ void raft_replication__quorum(struct raft *r, const raft_index index)
     if (votes > configuration__n_voting(&r->configuration) / 2) {
         r->commit_index = index;
 
-        __logf("new commit index %ld", r->commit_index);
+        tracef("new commit index %ld", r->commit_index);
     }
 
     return;

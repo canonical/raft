@@ -7,9 +7,11 @@
 
 TEST_MODULE(io_stub);
 
-/**
+/*******************************************************************************
+ *
  * Helpers
- */
+ *
+ ******************************************************************************/
 
 #define FIXTURE                \
     struct raft_heap heap;     \
@@ -120,17 +122,13 @@ static void tear_down(void *data)
     TEAR_DOWN;
 }
 
-/**
- * Advance time.
- */
+/* Advance time. */
 #define __advance(F, MSECS)                  \
     {                                        \
         raft_io_stub_advance(&F->io, MSECS); \
     }
 
-/**
- * Load the initial state from the store and check that no error occurs.
- */
+/* Load the initial state from the store and check that no error occurs. */
 #define __load(F)                                                       \
     {                                                                   \
         raft_term term;                                                 \
@@ -145,18 +143,18 @@ static void tear_down(void *data)
         munit_assert_int(rv, ==, 0);                                    \
     }
 
-/**
- * io_stub__start
- */
+/*******************************************************************************
+ *
+ * raft_io->start
+ *
+ ******************************************************************************/
 
 TEST_SUITE(start);
 TEST_SETUP(start, setup);
 TEST_TEAR_DOWN(start, tear_down);
 
-TEST_GROUP(start, success);
-
 /* When raft_io_stub_advance is called, the tick callback is invoked. */
-TEST_CASE(start, success, tick, NULL)
+TEST_CASE(start, tick, NULL)
 {
     struct fixture *f = data;
 
@@ -171,7 +169,7 @@ TEST_CASE(start, success, tick, NULL)
 
 /* Once the raft_io_uv instance is started, the recv callback is invoked when a
  * message is received.. */
-TEST_CASE(start, success, recv, NULL)
+TEST_CASE(start, recv, NULL)
 {
     struct fixture *f = data;
     struct raft_message message;
@@ -182,7 +180,7 @@ TEST_CASE(start, success, recv, NULL)
     message.server_id = 2;
     message.server_address = "2";
 
-    raft_io_stub_dispatch(&f->io, &message);
+    raft_io_stub_deliver(&f->io, &message);
 
     munit_assert_true(f->recv_cb.invoked);
     munit_assert_int(f->recv_cb.message->type, ==, RAFT_IO_REQUEST_VOTE);
@@ -192,19 +190,19 @@ TEST_CASE(start, success, recv, NULL)
     return MUNIT_OK;
 }
 
-/**
- * io_stub__load
- */
+/*******************************************************************************
+ *
+ * raft_io->load
+ *
+ ******************************************************************************/
 
 TEST_SUITE(load);
 
 TEST_SETUP(load, setup);
 TEST_TEAR_DOWN(load, tear_down);
 
-TEST_GROUP(load, success);
-
 /* Load the initial state of a pristine server. */
-TEST_CASE(load, success, pristine, NULL)
+TEST_CASE(load, pristine, NULL)
 {
     struct fixture *f = data;
     raft_term term;
@@ -228,19 +226,19 @@ TEST_CASE(load, success, pristine, NULL)
     return MUNIT_OK;
 }
 
-/**
- * io_stub__bootstrap
- */
+/*******************************************************************************
+ *
+ * raft_io->bootstrap
+ *
+ ******************************************************************************/
 
 TEST_SUITE(bootstrap);
 
 TEST_SETUP(bootstrap, setup);
 TEST_TEAR_DOWN(bootstrap, tear_down);
 
-TEST_GROUP(bootstrap, success);
-
 /* Bootstrap a pristine server. */
-TEST_CASE(bootstrap, success, pristine, NULL)
+TEST_CASE(bootstrap, pristine, NULL)
 {
     struct fixture *f = data;
     struct raft_configuration configuration;
@@ -264,19 +262,19 @@ TEST_CASE(bootstrap, success, pristine, NULL)
     return MUNIT_OK;
 }
 
-/**
- * io_stub__set_term
- */
+/*******************************************************************************
+ *
+ * raft_io->set_term
+ *
+ ******************************************************************************/
 
 TEST_SUITE(set_term);
 
 TEST_SETUP(set_term, setup);
 TEST_TEAR_DOWN(set_term, tear_down);
 
-TEST_GROUP(set_term, success);
-
 /* Set the term on a pristine store. */
-TEST_CASE(set_term, success, pristine, NULL)
+TEST_CASE(set_term, pristine, NULL)
 {
     struct fixture *f = data;
     int rv;
@@ -291,19 +289,19 @@ TEST_CASE(set_term, success, pristine, NULL)
     return MUNIT_OK;
 }
 
-/**
- * io_stub__set_vote
- */
+/*******************************************************************************
+ *
+ * raft_io->set_vote
+ *
+ ******************************************************************************/
 
 TEST_SUITE(set_vote);
 
 TEST_SETUP(set_vote, setup);
 TEST_TEAR_DOWN(set_vote, tear_down);
 
-TEST_GROUP(set_vote, success);
-
 /* Set the vote on a pristine store. */
-TEST_CASE(set_vote, success, pristine, NULL)
+TEST_CASE(set_vote, pristine, NULL)
 {
     struct fixture *f = data;
     int rv;
@@ -321,19 +319,19 @@ TEST_CASE(set_vote, success, pristine, NULL)
     return MUNIT_OK;
 }
 
-/**
- * io_stub__append
- */
+/*******************************************************************************
+ *
+ * raft_io->append
+ *
+ ******************************************************************************/
 
 TEST_SUITE(append);
 
 TEST_SETUP(append, setup);
 TEST_TEAR_DOWN(append, tear_down);
 
-TEST_GROUP(append, success);
-
 /* Append entries on a pristine store. */
-TEST_CASE(append, success, pristine, NULL)
+TEST_CASE(append, pristine, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry;
@@ -363,7 +361,7 @@ TEST_CASE(append, success, pristine, NULL)
 }
 
 /* Make two request append entries requests concurrently. */
-TEST_CASE(append, success, concurrent, NULL)
+TEST_CASE(append, concurrent, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry1;
@@ -400,9 +398,11 @@ TEST_CASE(append, success, concurrent, NULL)
     return MUNIT_OK;
 }
 
-/**
- * io_stub__send
- */
+/*******************************************************************************
+ *
+ * raft_io->send
+ *
+ ******************************************************************************/
 
 TEST_SUITE(send);
 
@@ -434,13 +434,11 @@ TEST_CASE(send, first, NULL)
     return MUNIT_OK;
 }
 
-/**
- * io_stub__snapshot_put
- */
-
-/**
- * io_uv__snapshot_put
- */
+/*******************************************************************************
+ *
+ * raft_io->snapshot_put
+ *
+ ******************************************************************************/
 
 TEST_SUITE(snapshot_put);
 
@@ -510,6 +508,83 @@ TEST_CASE(snapshot_put, first, NULL)
     put__invoke(0);
 
     raft_io_stub_flush_all(&f->io);
+
+    return MUNIT_OK;
+}
+
+/*******************************************************************************
+ *
+ * rat_io_stub_connect
+ *
+ ******************************************************************************/
+
+TEST_SUITE(connect);
+
+struct connect_fixture
+{
+    FIXTURE
+    struct raft_io_send req;
+    struct raft_io other;
+    bool invoked;
+    struct raft_message *message;
+};
+
+static void other_recv_cb(struct raft_io *io, struct raft_message *message)
+{
+    struct connect_fixture *f = io->data;
+
+    munit_assert_ptr_equal(io, &f->other);
+    f->invoked = true;
+    f->message = message;
+    munit_assert_int(f->message->type, ==, RAFT_IO_REQUEST_VOTE);
+}
+
+TEST_SETUP(connect)
+{
+    struct connect_fixture *f = munit_malloc(sizeof *f);
+    SETUP;
+    rv = raft_io_stub_init(&f->other, &f->logger);
+    munit_assert_int(rv, ==, 0);
+    rv = f->io.init(&f->other, 2, "2");
+    munit_assert_int(rv, ==, 0);
+    rv = f->io.start(&f->other, 50, NULL, other_recv_cb);
+    munit_assert_int(rv, ==, 0);
+    f->other.data = f;
+    f->invoked = false;
+    f->message = NULL;
+    raft_io_stub_connect(&f->io, &f->other);
+    return f;
+}
+
+TEST_TEAR_DOWN(connect)
+{
+    struct connect_fixture *f = data;
+    f->other.close(&f->other, NULL);
+    raft_io_stub_close(&f->other);
+    TEAR_DOWN;
+}
+
+/* Put the first snapshot. */
+TEST_CASE(connect, deliver, NULL)
+{
+    struct connect_fixture *f = data;
+    struct raft_message message;
+    int rv;
+
+    (void)params;
+
+    message.type = RAFT_IO_REQUEST_VOTE;
+    message.server_id = 2;
+    message.server_address = "2";
+
+    rv = f->io.send(&f->io, &f->req, &message, NULL);
+    munit_assert_int(rv, ==, 0);
+
+    raft_io_stub_flush(&f->io);
+    raft_io_stub_advance(&f->io, 0);
+
+    munit_assert_true(f->invoked);
+    munit_assert_ptr_not_null(f->message);
 
     return MUNIT_OK;
 }
