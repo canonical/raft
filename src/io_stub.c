@@ -80,6 +80,13 @@ struct transmit
     raft__queue queue;
 };
 
+/* Information about a peer server. */
+struct peer
+{
+    struct io_stub *s;
+    bool connected;
+};
+
 /**
  * Stub I/O implementation implementing all operations in-memory.
  */
@@ -119,7 +126,7 @@ struct io_stub
     unsigned n_transmit;
 
     /* Peers connected to us. */
-    struct io_stub *peers[MAX_PEERS];
+    struct peer peers[MAX_PEERS];
     unsigned n_peers;
 
     struct
@@ -1031,4 +1038,48 @@ unsigned raft_io_stub_vote(struct raft_io *io)
     struct io_stub *s;
     s = io->impl;
     return s->voted_for;
+}
+
+void raft_io_stub_connect(struct raft_io *io, struct raft_io *other)
+{
+    struct io_stub *s;
+    struct io_stub *s_other;
+    s = io->impl;
+    s_other = other->impl;
+    assert(s->n_peers < MAX_PEERS);
+    s->peers[s->n_peers].s = s_other;
+    s->peers[s->n_peers].connected = true;
+    s->n_peers++;
+}
+
+void raft_io_stub_disconnect(struct raft_io *io, struct raft_io *other)
+{
+    struct io_stub *s;
+    struct io_stub *s_other;
+    unsigned i;
+    s = io->impl;
+    s_other = other->impl;
+    for (i = 0; i < s->n_peers; i++) {
+        if (s->peers[i].s == s_other) {
+            s->peers[i].connected = false;
+            break;
+        }
+    }
+    assert(i < s->n_peers);
+}
+
+void raft_io_stub_reconnect(struct raft_io *io, struct raft_io *other)
+{
+    struct io_stub *s;
+    struct io_stub *s_other;
+    unsigned i;
+    s = io->impl;
+    s_other = other->impl;
+    for (i = 0; i < s->n_peers; i++) {
+        if (s->peers[i].s == s_other) {
+            s->peers[i].connected = true;
+            break;
+        }
+    }
+    assert(i < s->n_peers);
 }

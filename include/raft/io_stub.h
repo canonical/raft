@@ -97,4 +97,21 @@ unsigned raft_io_stub_term(struct raft_io *io);
  */
 unsigned raft_io_stub_vote(struct raft_io *io);
 
+/**
+ * Connect @io to @other, enabling delivery of messages sent from @io to @other.
+ */
+void raft_io_stub_connect(struct raft_io *io, struct raft_io *other);
+
+/**
+ * Diconnect @io from @other, disabling delivery of messages sent from @io to
+ * @other.
+ */
+void raft_io_stub_disconnect(struct raft_io *io, struct raft_io *other);
+
+/**
+ * Reconnect @io to @other, re-enabling delivery of messages sent from @io to
+ * @other.
+ */
+void raft_io_stub_reconnect(struct raft_io *io, struct raft_io *other);
+
 #endif /* RAFT_IO_STUB_H */

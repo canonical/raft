@@ -35,6 +35,7 @@ void test_cluster_setup(const MunitParameter params[], struct test_cluster *c)
     const char *n = munit_parameters_get(params, TEST_CLUSTER_SERVERS);
     const char *n_voting = munit_parameters_get(params, TEST_CLUSTER_VOTING);
     size_t i;
+    size_t j;
 
     if (n == NULL) {
         n = "3";
@@ -90,6 +91,18 @@ void test_cluster_setup(const MunitParameter params[], struct test_cluster *c)
         test_bootstrap_and_start(raft, c->n, 1, c->n_voting);
 
         host->raft = raft;
+    }
+
+    /* Connect all servers to each another */
+    for (i = 0; i < c->n; i++) {
+        for (j = 0; j < c->n; j++) {
+            struct raft_io *io1 = &c->ios[i];
+            struct raft_io *io2 = &c->ios[j];
+            if (i == j) {
+                continue;
+            }
+            raft_io_stub_connect(io1, io2);
+        }
     }
 
     c->commit_index = 1; /* The initial configuration is committed. */
