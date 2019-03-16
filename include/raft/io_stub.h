@@ -17,13 +17,11 @@ struct raft_entry;
  */
 int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger);
 
+/**
+ * Release all memory held by the given stub I/O implementation.
+ */
 void raft_io_stub_close(struct raft_io *io);
 
-/**
- * Advance the stub time by the given number of milliseconds, and invoke the
- * tick callback accordingly.
- */
-void raft_io_stub_advance(struct raft_io *io, unsigned msecs);
 
 /**
  * Set the current time, without invoking the tick callback.
@@ -31,44 +29,79 @@ void raft_io_stub_advance(struct raft_io *io, unsigned msecs);
 void raft_io_stub_set_time(struct raft_io *io, unsigned time);
 
 /**
- * Dispatch a message, invoking the recv callback.
+ * Set the random integer generator.
  */
-void raft_io_stub_dispatch(struct raft_io *io, struct raft_message *message);
+void raft_io_stub_set_randint(struct raft_io *io, int (*randint)(int, int));
 
 /**
- * Flush all pending I/O requests, invoking the @notify callback as appropriate.
+ * Set the minimum and maximum values of the random latency that is assigned to
+ * a message once the callback of its send request has been fired and it has
+ * been enqueued for delivery. By default there is no latency and messages are
+ * delivered instantaneously.
  */
-void raft_io_stub_flush(struct raft_io *io);
+void raft_io_stub_set_latency(struct raft_io *io, unsigned min, unsigned max);
 
 /**
- * Return a copy of the pending messages that where flushed upon the last call
- * to
- * @raft_io_stub_flush.
+ * Advance the stub time by the given number of milliseconds, and invoke the
+ * tick callback accordingly. Also, update the timers of messages in the
+ * transmit queue, and if any of them expires deliver it to the destination peer
+ * (if connected).
  */
-void raft_io_stub_sent(struct raft_io *io,
-                       struct raft_message **messages,
-                       unsigned *n);
+void raft_io_stub_advance(struct raft_io *io, unsigned msecs);
+
+/**
+ * Flush the oldest request in the pending I/O queue, invoking the associated
+ * callback as appropriate.
+ *
+ * Return true if there are more pending requests in the queue.
+ */
+bool raft_io_stub_flush(struct raft_io *io);
+
+/**
+ * Flush all pending I/O requests.
+ */
+void raft_io_stub_flush_all(struct raft_io *io);
+
+/**
+ * Return the amount of milliseconds left before the next message gets
+ * delivered. If no delivery is pending, return -1.
+ */
+int raft_io_stub_next_deliver_timeout(struct raft_io *io);
+
+/**
+ * Manually trigger the delivery of a message, invoking the recv callback.
+ */
+void raft_io_stub_deliver(struct raft_io *io, struct raft_message *message);
+
+/**
+ * Return the number of pending append requests (i.e. requests successfully
+ * submitted with raft_io->append(), but whose callbacks haven't been fired
+ * yet).
+ */
+unsigned raft_io_stub_n_appending(struct raft_io *io);
+
+/**
+ * Return the entries if the i'th pending append request, or NULL.
+ */
+void raft_io_stub_appending(struct raft_io *io,
+                            unsigned i,
+                            const struct raft_entry **entries,
+                            unsigned *n);
 
 /**
  * Return the number of pending raft_io_send requests (i.e. requests
  * successfully submitted with raft_io->send(), but whose callbacks haven't been
  * fired yet).
  */
-unsigned raft_io_stub_sending_n(struct raft_io *io);
+unsigned raft_io_stub_n_sending(struct raft_io *io);
 
 /**
  * Return a pointer to the message associated with the i'th pending raft_io_send
  * request, or NULL.
  */
-struct raft_message *raft_io_stub_sending(struct raft_io *io, unsigned i);
-
-/**
- * Return a copy of the pending log entries that where flushed upon the last
- * call to @raft_io_stub_flush.
- */
-void raft_io_stub_appended(struct raft_io *io,
-                           struct raft_entry **entries,
-                           unsigned *n);
+void raft_io_stub_sending(struct raft_io *io,
+                          unsigned i,
+                          struct raft_message **message);
 
 /**
  * Inject a failure that will be triggered after @delay I/O requests and occur
@@ -85,5 +118,27 @@ unsigned raft_io_stub_term(struct raft_io *io);
  * Convenience for getting the current vote stored in the stub.
  */
 unsigned raft_io_stub_vote(struct raft_io *io);
+
+/**
+ * Connect @io to @other, enabling delivery of messages sent from @io to @other.
+ */
+void raft_io_stub_connect(struct raft_io *io, struct raft_io *other);
+
+/**
+ * Return #true if @io is connected to @other.
+ */
+bool raft_io_stub_connected(struct raft_io *io, struct raft_io *other);
+
+/**
+ * Diconnect @io from @other, disabling delivery of messages sent from @io to
+ * @other.
+ */
+void raft_io_stub_disconnect(struct raft_io *io, struct raft_io *other);
+
+/**
+ * Reconnect @io to @other, re-enabling delivery of messages sent from @io to
+ * @other.
+ */
+void raft_io_stub_reconnect(struct raft_io *io, struct raft_io *other);
 
 #endif /* RAFT_IO_STUB_H */

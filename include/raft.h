@@ -411,7 +411,6 @@ typedef void (*raft_io_send_cb)(struct raft_io_send *req, int status);
 struct raft_io_send
 {
     void *data;         /* User data */
-    void *impl;         /* Implementation-specific */
     raft_io_send_cb cb; /* Request callback */
 };
 
@@ -422,7 +421,6 @@ typedef void (*raft_io_snapshot_put_cb)(struct raft_io_snapshot_put *req,
 struct raft_io_snapshot_put
 {
     void *data;                 /* User data */
-    void *impl;                 /* Implementation-specific */
     raft_io_snapshot_put_cb cb; /* Request callback */
 };
 
@@ -434,7 +432,6 @@ typedef void (*raft_io_snapshot_get_cb)(struct raft_io_snapshot_get *req,
 struct raft_io_snapshot_get
 {
     void *data;                 /* User data */
-    void *impl;                 /* Implementation-specific */
     raft_io_snapshot_get_cb cb; /* Request callback */
 };
 
@@ -561,6 +558,11 @@ struct raft_io
      * Return the current time, expressed in milliseconds since the epoch.
      */
     raft_time (*time)(struct raft_io *io);
+
+    /**
+     * Generate a random integer between min and max.
+     */
+    int (*randint)(struct raft_io *io, int min, int max);
 };
 
 /**
@@ -830,11 +832,6 @@ struct raft
     };
 
     /**
-     * Random generator. Defaults to stdlib rand().
-     */
-    int (*rand)();
-
-    /**
      * Current election timeout. Randomized from election_timeout.
      *
      * From §9.3:
@@ -908,11 +905,6 @@ int raft_bootstrap(struct raft *r, const struct raft_configuration *conf);
 int raft_start(struct raft *r);
 
 /**
- * Set a custom rand() function.
- */
-void raft_set_rand(struct raft *r, int (*rand)());
-
-/**
  * Set the election timeout.
  *
  * Every raft instance is initialized with a default election timeout of 1000
@@ -933,6 +925,11 @@ void raft_set_election_timeout(struct raft *r, const unsigned election_timeout);
 int raft_state(struct raft *r);
 
 /**
+ * Human readable version of the current state.
+ */
+const char *raft_state_name(struct raft *r);
+
+/**
  * Return the ID and address of the current known leader, if any.
  */
 void raft_leader(struct raft *r, unsigned *id, const char **address);
@@ -943,9 +940,11 @@ void raft_leader(struct raft *r, unsigned *id, const char **address);
 raft_index raft_last_applied(struct raft *r);
 
 /**
- * Human readable version of the current state.
+ * Return the amount of milliseconds left before the next timeout triggers. If
+ * the instance is in leader state this is the heartbeat timeout, otherwise it's
+ * the election timeout.
  */
-const char *raft_state_name(struct raft *r);
+unsigned raft_next_timeout(struct raft *r);
 
 struct raft_apply;
 typedef void (*raft_apply_cb)(struct raft_apply *req, int status);

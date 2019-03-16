@@ -419,8 +419,6 @@ int io_uv__send(struct raft_io *io,
     }
 
     r->req = req;
-
-    req->impl = r;
     req->cb = cb;
 
     rv = io_uv__encode_message(message, &r->bufs, &r->n_bufs);

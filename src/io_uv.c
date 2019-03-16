@@ -219,6 +219,13 @@ static raft_time io_uv__time(struct raft_io *io)
     return uv_now(uv->loop);
 }
 
+/* Implementation of raft_io->randint. */
+static int io_uv__randint(struct raft_io *io, int min, int max)
+{
+    (void)io;
+    return min + (abs(rand()) % (max - min));
+}
+
 /**
  * Open and allocate the first closed segment, containing just one entry, and
  * return its file descriptor.
@@ -345,6 +352,7 @@ int raft_io_uv_init(struct raft_io *io,
     io->snapshot_put = io_uv__snapshot_put;
     io->snapshot_get = io_uv__snapshot_get;
     io->time = io_uv__time;
+    io->randint = io_uv__randint;
 
     return 0;
 
@@ -491,13 +499,13 @@ static int raft__io_uv_write_closed_1_1(struct io_uv *uv,
     byte__put32(&cursor, 0);
 
     header = cursor;
-    byte__put64(&cursor, 1);                     /* Number of entries */
-    byte__put64(&cursor, 1);                     /* Entry term */
+    byte__put64(&cursor, 1);                 /* Number of entries */
+    byte__put64(&cursor, 1);                 /* Entry term */
     byte__put8(&cursor, RAFT_CONFIGURATION); /* Entry type */
-    byte__put8(&cursor, 0);                      /* Unused */
-    byte__put8(&cursor, 0);                      /* Unused */
-    byte__put8(&cursor, 0);                      /* Unused */
-    byte__put32(&cursor, conf->len);             /* Size of entry data */
+    byte__put8(&cursor, 0);                  /* Unused */
+    byte__put8(&cursor, 0);                  /* Unused */
+    byte__put8(&cursor, 0);                  /* Unused */
+    byte__put32(&cursor, conf->len);         /* Size of entry data */
 
     memcpy(cursor, conf->base, conf->len);
 

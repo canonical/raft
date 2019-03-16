@@ -19,7 +19,6 @@ static void test_logger__emit(void *data,
     struct test_logger *t = data;
     char buf[1024];
     const char *level_name;
-    int i;
 
     (void)data;
 
@@ -47,17 +46,6 @@ static void test_logger__emit(void *data,
     sprintf(buf + strlen(buf), "%2d -> [%s] ", t->id, level_name);
 
     vsnprintf(buf + strlen(buf), 1024 - strlen(buf), format, args);
-    munit_log(MUNIT_LOG_INFO, buf);
-    return;
-
-    snprintf(buf + strlen(buf), 1024 - strlen(buf), " ");
-
-    for (i = strlen(buf); i < 85; i++) {
-        buf[i] = ' ';
-    }
-
-    //raft_context_format(buf + 85, 1024 - strlen(buf), ctx);
-
     munit_log(MUNIT_LOG_INFO, buf);
 }
 

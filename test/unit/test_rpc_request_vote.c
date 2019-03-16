@@ -117,9 +117,9 @@ static void tear_down(void *data)
         struct raft_message *message;                            \
         struct raft_request_vote_result *result;                 \
                                                                  \
-        munit_assert_int(raft_io_stub_sending_n(&F->io), ==, 1); \
+        munit_assert_int(raft_io_stub_n_sending(&F->io), ==, 1); \
                                                                  \
-        message = raft_io_stub_sending(&F->io, 0);               \
+        raft_io_stub_sending(&F->io, 0, &message);               \
         result = &message->request_vote_result;                  \
         munit_assert_int(result->term, ==, TERM);                \
         munit_assert_int(result->vote_granted, ==, GRANTED);     \
@@ -134,9 +134,9 @@ static void tear_down(void *data)
         struct raft_message *message;                                         \
         struct raft_append_entries *args;                                     \
                                                                               \
-        munit_assert_int(raft_io_stub_sending_n(&F->io), ==, 1);              \
+        munit_assert_int(raft_io_stub_n_sending(&F->io), ==, 1);              \
                                                                               \
-        message = raft_io_stub_sending(&F->io, 0);                            \
+        raft_io_stub_sending(&F->io, 0, &message);                            \
         args = &message->append_entries;                                      \
                                                                               \
         munit_assert_int(args->term, ==, TERM);                               \
@@ -244,7 +244,7 @@ TEST_CASE(request, error, already_voted, NULL)
 
     munit_assert_int(f->raft.voted_for, ==, 2);
 
-    raft_io_stub_flush(f->raft.io);
+    raft_io_stub_flush_all(f->raft.io);
 
     /* Refuse vote to server 3 */
     __recv_request_vote(f, f->raft.current_term, 3,
@@ -274,7 +274,7 @@ TEST_CASE(request, error, dupe_vote, NULL)
 
     munit_assert_int(f->raft.voted_for, ==, 2);
 
-    raft_io_stub_flush(f->raft.io);
+    raft_io_stub_flush_all(f->raft.io);
 
     /* Grant again */
     __recv_request_vote(f, f->raft.current_term, 2,
@@ -510,7 +510,7 @@ TEST_CASE(response, success, quorum, NULL)
     /* We have sent heartbeats */
     __assert_heartbeat(f, 2, 2, 1, 1);
 
-    raft_io_stub_flush(&f->io);
+    raft_io_stub_flush_all(&f->io);
 
     return MUNIT_OK;
 }

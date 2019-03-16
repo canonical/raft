@@ -76,9 +76,9 @@ static void tear_down(void *data)
         struct raft_message *message;                               \
         struct raft_request_vote *args;                             \
                                                                     \
-        munit_assert_int(raft_io_stub_sending_n(&F->io), ==, 1);    \
+        munit_assert_int(raft_io_stub_n_sending(&F->io), ==, 1);    \
                                                                     \
-        message = raft_io_stub_sending(&F->io, 0);                  \
+        raft_io_stub_sending(&F->io, 0, &message);                  \
         munit_assert_int(message->type, ==, RAFT_IO_REQUEST_VOTE);  \
         munit_assert_int(message->server_id, ==, SERVER_ID);        \
                                                                     \
@@ -97,9 +97,9 @@ static void tear_down(void *data)
         struct raft_message *message;                                         \
         struct raft_append_entries *args;                                     \
                                                                               \
-        munit_assert_int(raft_io_stub_sending_n(&F->io), ==, 1);              \
+        munit_assert_int(raft_io_stub_n_sending(&F->io), ==, 1);              \
                                                                               \
-        message = raft_io_stub_sending(&F->io, 0);                            \
+        raft_io_stub_sending(&F->io, 0, &message);                            \
         munit_assert_int(message->type, ==, RAFT_IO_APPEND_ENTRIES);          \
                                                                               \
         args = &message->append_entries;                                      \
@@ -318,7 +318,7 @@ TEST_CASE(elapse, success, heartbeat, NULL)
     /* We have sent a heartbeat to our follower */
     __assert_heartbeat(f, 2, 2, 1, 1);
 
-    raft_io_stub_flush(&f->io);
+    raft_io_stub_flush_all(&f->io);
 
     return MUNIT_OK;
 }
@@ -337,7 +337,7 @@ TEST_CASE(elapse, success, no_heartbeat, NULL)
     __tick(f, f->raft.heartbeat_timeout - 100);
 
     /* We have sent no heartbeats */
-    munit_assert_int(raft_io_stub_sending_n(&f->io), ==, 0);
+    munit_assert_int(raft_io_stub_n_sending(&f->io), ==, 0);
 
     return MUNIT_OK;
 }
@@ -376,7 +376,7 @@ TEST_CASE(elapse, success, new_election, NULL)
     /* Become candidate */
     __tick(f, f->raft.election_timeout_rand + 100);
 
-    raft_io_stub_flush(f->raft.io);
+    raft_io_stub_flush_all(f->raft.io);
 
     election_timeout = f->raft.election_timeout_rand;
 
@@ -420,7 +420,7 @@ TEST_CASE(elapse, success, during_election, NULL)
     /* Become candidate */
     __tick(f, f->raft.election_timeout_rand + 100);
 
-    raft_io_stub_flush(f->raft.io);
+    raft_io_stub_flush_all(f->raft.io);
 
     __tick(f, f->raft.election_timeout_rand - 100);
 
@@ -428,7 +428,7 @@ TEST_CASE(elapse, success, during_election, NULL)
     __assert_state(f, RAFT_CANDIDATE);
 
     /* No new vote request has been sent */
-    munit_assert_int(raft_io_stub_sending_n(&f->io), ==, 0);
+    munit_assert_int(raft_io_stub_n_sending(&f->io), ==, 0);
 
     return MUNIT_OK;
 }

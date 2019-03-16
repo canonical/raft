@@ -104,7 +104,6 @@ test_lib_SOURCES = \
   test/lib/io.c \
   test/lib/logger.c \
   test/lib/munit.c \
-  test/lib/network.c \
   test/lib/raft.c \
   test/lib/tcp.c
 if IO_UV

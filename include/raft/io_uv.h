@@ -116,10 +116,6 @@ struct raft_io_uv_connect
 {
     void *data;               /* User data */
     raft_io_uv_connect_cb cb; /* Callback */
-
-    /* Implementation-defined */
-    void *impl;
-    void (*cancel)(struct raft_io_uv_connect *req);
 };
 
 /**

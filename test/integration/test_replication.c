@@ -130,7 +130,7 @@ static MunitResult test_no_quorum(const MunitParameter params[], void *data)
 static MunitResult test_partitioning(const MunitParameter params[], void *data)
 {
     struct fixture *f = data;
-    uint64_t leader1;
+    unsigned leader_id;
     size_t i;
     size_t n;
     int rv;
@@ -140,18 +140,18 @@ static MunitResult test_partitioning(const MunitParameter params[], void *data)
     rv = test_cluster_run_until(&f->cluster, test_cluster_has_leader, 10000);
     munit_assert_int(rv, ==, 0);
 
-    leader1 = test_cluster_leader(&f->cluster);
+    leader_id = test_cluster_leader(&f->cluster);
 
     /* Disconnect the leader from a majority of servers */
     n = 0;
     for (i = 0; n < (f->cluster.n / 2) + 1; i++) {
       struct raft *raft = &f->cluster.rafts[i];
 
-      if (raft->id == leader1) {
+      if (raft->id == leader_id) {
 	continue;
       }
 
-      test_cluster_disconnect(&f->cluster, leader1, raft->id);
+      test_cluster_disconnect(&f->cluster, leader_id, raft->id);
       n++;
     }
 
@@ -169,7 +169,10 @@ static MunitResult test_partitioning(const MunitParameter params[], void *data)
     /* Reconnect the old leader */
     for (i = 0; i < f->cluster.n; i++) {
       struct raft *raft = &f->cluster.rafts[i];
-      test_cluster_reconnect(&f->cluster, leader1, raft->id);
+      if (raft->id == leader_id) {
+	continue;
+      }
+      test_cluster_reconnect(&f->cluster, leader_id, raft->id);
     }
 
     /* FIXME: wait a bit more otherwise test_cluster_has_leader would return

@@ -66,8 +66,6 @@ int raft_init(struct raft *r,
 
     r->state = RAFT_UNAVAILABLE;
 
-    r->rand = rand;
-
     for (i = 0; i < RAFT_EVENT_N; i++) {
         r->watchers[i] = NULL;
     }
@@ -294,12 +292,6 @@ void raft_close(struct raft *r, void (*cb)(struct raft *r))
     raft_state__clear(r);
     r->state = RAFT_UNAVAILABLE;
     r->io->close(r->io, raft__close_cb);
-}
-
-void raft_set_rand(struct raft *r, int (*rand)())
-{
-    r->rand = rand;
-    raft_election__reset_timer(r);
 }
 
 void raft_set_election_timeout(struct raft *r, const unsigned election_timeout)

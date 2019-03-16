@@ -229,7 +229,6 @@ int io_uv__tcp_connect(struct raft_io_uv_transport *transport,
     r->status = 0;
 
     req->cb = cb;
-    req->impl = r;
 
     /* Start connecting */
     rv = tcp_connect__start(r, address);
