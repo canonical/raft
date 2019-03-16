@@ -13,6 +13,10 @@
 /* Set to 1 to enable tracing. */
 #if 0
 #define tracef(S, MSG, ...) raft_debugf(S->logger, MSG, __VA_ARGS__)
+static const char *message_names[6] = {
+    NULL,           "append entries",      "append entries result",
+    "request vote", "request vote result", "install snapshot"};
+
 #else
 #define tracef(S, MSG, ...)
 #endif
@@ -76,7 +80,8 @@ struct snapshot_get
  * (or discarded) */
 struct transmit
 {
-    struct raft_message message;
+    struct raft_message message; /* Message to deliver */
+    int timer;                   /* Deliver after this n of msecs. */
     raft__queue queue;
 };
 
@@ -128,6 +133,15 @@ struct io_stub
     /* Peers connected to us. */
     struct peer peers[MAX_PEERS];
     unsigned n_peers;
+
+    /* Minimum and maximum values for the random latency assigned to messages in
+     * the transmit queue. It models how much time the network needs to transmit
+     * a certain message. This is zero by default, meaning that delivery is
+     * instantaneous. */
+    unsigned min_latency;
+    unsigned max_latency;
+
+    int (*randint)(int, int); /* Random integer generator */
 
     struct
     {
@@ -585,6 +599,18 @@ static raft_time io_stub__time(struct raft_io *io)
     return s->time;
 }
 
+static int io_stub__randint(struct raft_io *io, int min, int max)
+{
+    struct io_stub *s;
+    s = io->impl;
+
+    if (s->randint == NULL) {
+        return (max - min) / 2;
+    }
+
+    return s->randint(min, max);
+}
+
 /**
  * Queue up a request which will be processed later, when io_stub_flush()
  * is invoked.
@@ -648,6 +674,11 @@ int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger)
 
     s->n_peers = 0;
 
+    s->min_latency = 0;
+    s->max_latency = 0;
+
+    s->randint = NULL;
+
     s->fault.countdown = -1;
     s->fault.n = -1;
 
@@ -665,6 +696,7 @@ int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger)
     io->snapshot_put = io_stub__snapshot_put;
     io->snapshot_get = io_stub__snapshot_get;
     io->time = io_stub__time;
+    io->randint = io_stub__randint;
 
     return 0;
 }
@@ -722,6 +754,24 @@ void raft_io_stub_set_time(struct raft_io *io, unsigned time)
     struct io_stub *s;
     s = io->impl;
     s->time = time;
+}
+
+void raft_io_stub_set_randint(struct raft_io *io, int (*randint)(int, int))
+{
+    struct io_stub *s;
+    s = io->impl;
+    s->randint = randint;
+}
+
+void raft_io_stub_set_latency(struct raft_io *io, unsigned min, unsigned max)
+{
+    struct io_stub *s;
+    s = io->impl;
+    assert(min != 0);
+    assert(max != 0);
+    assert(min <= max);
+    s->min_latency = min;
+    s->max_latency = max;
 }
 
 /**
@@ -804,12 +854,14 @@ static void io_stub__flush_send(struct io_stub *s, struct send *send)
     struct transmit *transmit;
     struct raft_message *src;
     struct raft_message *dst;
-    char desc[256];
     int rv;
 
     transmit = raft_malloc(sizeof *transmit);
     assert(transmit != NULL);
 
+    if (s->min_latency != 0) {
+        // transmit->timer
+    }
     src = &send->message;
     dst = &transmit->message;
 
@@ -820,24 +872,13 @@ static void io_stub__flush_send(struct io_stub *s, struct send *send)
 
     switch (dst->type) {
         case RAFT_IO_APPEND_ENTRIES:
-            sprintf(desc, "append entries");
             /* Make a copy of the entries being sent */
             io_stub__copy_entries(src->append_entries.entries,
                                   &dst->append_entries.entries,
                                   src->append_entries.n_entries);
             dst->append_entries.n_entries = src->append_entries.n_entries;
             break;
-        case RAFT_IO_APPEND_ENTRIES_RESULT:
-            sprintf(desc, "append entries result");
-            break;
-        case RAFT_IO_REQUEST_VOTE:
-            sprintf(desc, "request vote");
-            break;
-        case RAFT_IO_REQUEST_VOTE_RESULT:
-            sprintf(desc, "request vote result");
-            break;
         case RAFT_IO_INSTALL_SNAPSHOT:
-            sprintf(desc, "install snapshot");
             raft_configuration_init(&dst->install_snapshot.conf);
             rv = configuration__copy(&src->install_snapshot.conf,
                                      &dst->install_snapshot.conf);
@@ -851,7 +892,8 @@ static void io_stub__flush_send(struct io_stub *s, struct send *send)
             break;
     }
 
-    tracef(s, "io: flush to server %u: %s", src->server_id, desc);
+    tracef(s, "io: flush to server %u: %s", src->server_id,
+           message_names[dst->type]);
 
     if (send->req->cb != NULL) {
         send->req->cb(send->req, 0);

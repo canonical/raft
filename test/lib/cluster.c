@@ -15,11 +15,6 @@
  */
 #define TEST_CLUSTER__N 16
 
-static int test_cluster__rand()
-{
-    return munit_rand_uint32();
-}
-
 /**
  * Return the global time of the cluster, which is the same for all servers.
  */
@@ -85,7 +80,6 @@ void test_cluster_setup(const MunitParameter params[], struct test_cluster *c)
 
         raft_init(raft, logger, io, fsm, c, id, address);
 
-        raft_set_rand(raft, test_cluster__rand);
         raft_set_election_timeout(raft, 250);
 
         test_bootstrap_and_start(raft, c->n, 1, c->n_voting);
@@ -282,19 +276,6 @@ static void test_cluster__message_with_lowest_timer(
 }
 
 /**
- * Get the amount of milliseconds left before the timer of the given raft
- * instance expires (either triggering a heartbeat or an election).
- */
-static int test_cluster__raft_remaining_time(struct raft *r)
-{
-    if (r->state == RAFT_LEADER) {
-        return r->heartbeat_timeout - r->timer;
-    } else {
-        return r->election_timeout_rand - r->timer;
-    }
-}
-
-/**
  * Check what's the raft instance whose timer is closest to expiration.
  */
 static void test_cluster__raft_with_lowest_timer(struct test_cluster *c,
@@ -313,7 +294,7 @@ static void test_cluster__raft_with_lowest_timer(struct test_cluster *c,
             continue;
         }
 
-        remaining = test_cluster__raft_remaining_time(r);
+        remaining = raft_next_timeout(r);
 
         if (*raft == NULL) {
             *raft = r;
@@ -340,7 +321,7 @@ static void test_cluster__deliver_or_tick(struct test_cluster *c,
                                           struct raft *next_raft)
 {
     size_t i, j;
-    int remaining = test_cluster__raft_remaining_time(next_raft);
+    int remaining = raft_next_timeout(next_raft);
     int elapse;
 
     if (next_message != NULL && next_message->timer < remaining) {
@@ -710,7 +691,6 @@ void test_cluster_add_server(struct test_cluster *c)
     rv = raft_start(raft);
     munit_assert_int(rv, ==, 0);
 
-    raft_set_rand(raft, test_cluster__rand);
     raft_set_election_timeout(raft, 250);
 
     host->raft = raft;

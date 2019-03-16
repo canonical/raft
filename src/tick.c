@@ -13,6 +13,17 @@
  */
 #define RAFT_MAX_CATCH_UP_DURATION (30 * 1000)
 
+unsigned raft_next_timeout(struct raft *r)
+{
+    unsigned timeout;
+    if (r->state == RAFT_LEADER) {
+        timeout = r->heartbeat_timeout;
+    } else {
+        timeout = r->election_timeout_rand;
+    }
+    return timeout - r->timer;
+}
+
 /**
  * Apply time-dependent rules for followers (Figure 3.1).
  */

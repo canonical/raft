@@ -1,5 +1,3 @@
-#include <stdlib.h>
-
 #include "assert.h"
 #include "configuration.h"
 #include "election.h"
@@ -9,10 +7,8 @@ void raft_election__reset_timer(struct raft *r)
 {
     assert(r != NULL);
 
-    /* [election_timeout, 2 * election_timeout) */
     r->election_timeout_rand =
-        r->election_timeout + (abs(r->rand()) % r->election_timeout);
-
+        r->io->randint(r->io, r->election_timeout, 2 * r->election_timeout);
     r->timer = 0;
 }
 

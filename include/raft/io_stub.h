@@ -34,6 +34,19 @@ void raft_io_stub_advance(struct raft_io *io, unsigned msecs);
 void raft_io_stub_set_time(struct raft_io *io, unsigned time);
 
 /**
+ * Set the random integer generator.
+ */
+void raft_io_stub_set_randint(struct raft_io *io, int (*randint)(int, int));
+
+/**
+ * Set the minimum and maximum values of the random latency that is assigned to
+ * a message once the callback of its send request has been fired and it has
+ * been enqueued for delivery. By default there is no latency and messages are
+ * delivered instantaneously.
+ */
+void raft_io_stub_set_latency(struct raft_io *io, unsigned min, unsigned max);
+
+/**
  * Dispatch a message, invoking the recv callback.
  */
 void raft_io_stub_dispatch(struct raft_io *io, struct raft_message *message);

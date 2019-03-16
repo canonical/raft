@@ -38,7 +38,6 @@
         test_fsm_setup(params, &F->fsm);                                       \
         rv = raft_init(&F->raft, &F->logger, &F->io, &F->fsm, F, id, address); \
         munit_assert_int(rv, ==, 0);                                           \
-        raft_set_rand(&f->raft, (int (*)())munit_rand_uint32);                 \
     }
 
 #define RAFT_TEAR_DOWN(F)                  \

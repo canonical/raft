@@ -25,11 +25,6 @@ struct fixture
     } stop_cb;
 };
 
-static int __rand()
-{
-    return munit_rand_uint32();
-}
-
 /**
  * Setup and tear down
  */
@@ -41,8 +36,6 @@ static void *setup(const MunitParameter params[], void *user_data)
     (void)user_data;
 
     RAFT_SETUP(f);
-
-    raft_set_rand(&f->raft, __rand);
 
     f->stop_cb.invoked = false;
 
