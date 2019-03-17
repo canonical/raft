@@ -75,14 +75,14 @@ if IO_UV
   src/io_uv_truncate.c \
   src/uv_file.c
 endif
-if IO_STUB
+if FAKE
   libraft_la_SOURCES += \
   src/io_stub.c
 endif
 include_HEADERS += \
   include/raft.h
 pkginclude_HEADERS =
-if IO_STUB
+if FAKE
   pkginclude_HEADERS += \
   include/raft/io_stub.h
 endif
@@ -145,7 +145,7 @@ if IO_UV
   test/unit/test_io_uv_truncate.c \
   test/unit/test_uv_file.c
 endif
-if IO_STUB
+if FAKE
   unit_test_SOURCES += \
   test/unit/test_io_stub.c
 endif

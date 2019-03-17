@@ -38,18 +38,17 @@ AM_COND_IF(IO_UV,
    AC_DEFINE(RAFT_IO_UV)])
 
 # Enable building the stub I/O implementation, for testing.
-AC_ARG_ENABLE(io-stub,
+AC_ARG_ENABLE(fake,
   AS_HELP_STRING(
-    [--enable-io-stub],
+    [--enable-fake],
     [enable the stub I/O implementation, default: no]),
   [case "${enableval}" in
-     yes) io_stub=true ;;
-     no)  io_stub=false ;;
-     *)   AC_MSG_ERROR([bad value ${enableval} for --enable-io-stub]) ;;
+     yes) fake=true ;;
+     no)  fake=false ;;
+     *)   AC_MSG_ERROR([bad value ${enableval} for --enable-fake]) ;;
    esac],
-  [io_stub=true])
-AM_CONDITIONAL(IO_STUB, test x"$io_stub" = x"true")
-AM_COND_IF(IO_STUB, AC_DEFINE(RAFT_IO_STUB))
+  [fake=true])
+AM_CONDITIONAL(FAKE, test x"$fake" = x"true")
 
 # Enable building the example server.
 AC_ARG_ENABLE(example,
