@@ -22,7 +22,6 @@ int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger);
  */
 void raft_io_stub_close(struct raft_io *io);
 
-
 /**
  * Set the current time, without invoking the tick callback.
  */
