@@ -47,7 +47,7 @@ AC_ARG_ENABLE(io-stub,
      no)  io_stub=false ;;
      *)   AC_MSG_ERROR([bad value ${enableval} for --enable-io-stub]) ;;
    esac],
-  [io_stub=false])
+  [io_stub=true])
 AM_CONDITIONAL(IO_STUB, test x"$io_stub" = x"true")
 AM_COND_IF(IO_STUB, AC_DEFINE(RAFT_IO_STUB))
 
