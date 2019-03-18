@@ -15,16 +15,6 @@
  */
 #define TEST_CLUSTER__N 16
 
-/**
- * Return the global time of the cluster, which is the same for all servers.
- */
-static int test_cluster__time(void *data)
-{
-    struct test_cluster *c = data;
-
-    return c->time;
-}
-
 void test_cluster_setup(const MunitParameter params[], struct test_cluster *c)
 {
     const char *n = munit_parameters_get(params, TEST_CLUSTER_SERVERS);

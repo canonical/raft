@@ -10,6 +10,7 @@
 
 struct raft_fixture
 {
+    raft_time time; /* Number of milliseconds elapsed. */
     unsigned n;
     struct raft_fixture_server
     {

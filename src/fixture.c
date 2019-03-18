@@ -52,6 +52,7 @@ int raft_fixture_setup(struct raft_fixture *f,
     assert(n_voting >= 1);
     assert(n_voting <= n);
 
+    f->time = 0;
     f->n = n;
     f->servers = raft_malloc(n * sizeof *f->servers);
     if (f->servers == NULL) {
@@ -175,6 +176,7 @@ static void advance(struct raft_fixture *f, unsigned msecs)
         struct raft_io *io = &f->servers[i].io;
         raft_io_stub_advance(io, msecs);
     }
+    f->time += msecs;
 }
 
 void raft_fixture_step(struct raft_fixture *f)
