@@ -294,7 +294,7 @@ static void __server_apply_cb(struct raft_apply *req, int status)
     }
 
     if (f->count % 50 == 0) {
-        raft_infof(f->logger, "fsm: count %d", f->count);
+        s->io.emit(&s->io, RAFT_INFO, "fsm: count %d", f->count);
     }
 }
 
