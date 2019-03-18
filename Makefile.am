@@ -44,6 +44,7 @@ libraft_la_SOURCES = \
   src/heap.c \
   src/log.c \
   src/logger.c \
+  src/logging.c \
   src/membership.c \
   src/raft.c \
   src/replication.c \
