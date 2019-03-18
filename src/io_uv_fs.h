@@ -46,7 +46,7 @@ void io_uv__join(const char *dir, const char *filename, char *path);
 /**
  * Check that the given directory exists, and try to create it if it doesn't.
  */
-int io_uv__ensure_dir(struct raft_logger *logger, const char *dir);
+int io_uv__ensure_dir(struct raft_io *io, const char *dir);
 
 /**
  * Open a file in a directory.

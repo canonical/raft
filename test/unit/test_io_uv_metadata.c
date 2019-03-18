@@ -4,6 +4,7 @@
 #include "../lib/heap.h"
 #include "../lib/logger.h"
 #include "../lib/runner.h"
+#include "../lib/io.h"
 
 #include "../../include/raft/io_uv.h"
 
@@ -20,6 +21,7 @@ struct fixture
 {
     struct raft_heap heap;           /* Testable allocator */
     struct raft_logger logger;       /* Test logger */
+    struct raft_io io;               /* Test I/O */
     char *dir;                       /* Data directory */
     struct io_uv__metadata metadata; /* Metadata object */
 };
@@ -30,6 +32,7 @@ static void *setup(const MunitParameter params[], void *user_data)
     (void)user_data;
     test_heap_setup(params, &f->heap);
     test_logger_setup(params, &f->logger, 1);
+    test_io_setup(params, &f->io, &f->logger);
     f->dir = test_dir_setup(params);
     return f;
 }
@@ -38,6 +41,7 @@ static void tear_down(void *data)
 {
     struct fixture *f = data;
     test_dir_tear_down(f->dir);
+    test_io_tear_down(&f->io);
     test_logger_tear_down(&f->logger);
     test_heap_tear_down(&f->heap);
     free(f);
@@ -68,12 +72,12 @@ TEST_TEAR_DOWN(load, tear_down);
     }
 
 /* Assert that @io_uv__metadata_load returns the given code. */
-#define load__invoke(RV)                                             \
-    {                                                                \
-        int rv;                                                      \
-                                                                     \
-        rv = io_uv__metadata_load(&f->logger, f->dir, &f->metadata); \
-        munit_assert_int(rv, ==, RV);                                \
+#define load__invoke(RV)                                         \
+    {                                                            \
+        int rv;                                                  \
+                                                                 \
+        rv = io_uv__metadata_load(&f->io, f->dir, &f->metadata); \
+        munit_assert_int(rv, ==, RV);                            \
     }
 
 /* Assert that the metadata of the last load request equals the given values. */

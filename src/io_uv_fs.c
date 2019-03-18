@@ -3,6 +3,7 @@
 
 #include "assert.h"
 #include "io_uv_fs.h"
+#include "logging.h"
 #include "uv_file.h"
 
 void io_uv__join(const char *dir, const char *filename, char *path)
@@ -15,7 +16,7 @@ void io_uv__join(const char *dir, const char *filename, char *path)
     strcat(path, filename);
 }
 
-int io_uv__ensure_dir(struct raft_logger *logger, const char *dir)
+int io_uv__ensure_dir(struct raft_io *io, const char *dir)
 {
     struct stat sb;
     int rv;
@@ -31,17 +32,17 @@ int io_uv__ensure_dir(struct raft_logger *logger, const char *dir)
         if (errno == ENOENT) {
             rv = mkdir(dir, 0700);
             if (rv != 0) {
-                raft_errorf(logger, "create data directory %s: %s", dir,
-                            uv_strerror(-errno));
+                errorf(io, "create data directory %s: %s", dir,
+                       uv_strerror(-errno));
                 return RAFT_ERR_IO;
             }
         } else {
-            raft_errorf(logger, "access data directory %s: %s", dir,
-                        uv_strerror(-errno));
+            errorf(io, "access data directory %s: %s", dir,
+                   uv_strerror(-errno));
             return RAFT_ERR_IO;
         }
     } else if ((sb.st_mode & S_IFMT) != S_IFDIR) {
-        raft_errorf(logger, "path %s is not a directory", dir);
+        errorf(io, "path %s is not a directory", dir);
         return RAFT_ERR_IO;
     }
 

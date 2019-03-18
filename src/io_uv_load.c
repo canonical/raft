@@ -97,7 +97,7 @@ static int load_entries_from_segments(struct io_uv *uv,
                                       size_t *n_entries);
 
 /* Open a segment file and read its format version. */
-static int open_segment_meta(struct raft_logger *logger,
+static int open_segment_meta(struct raft_io *io,
                              const char *dir,
                              const char *filename,
                              const int flags,
@@ -106,7 +106,7 @@ static int open_segment_meta(struct raft_logger *logger,
 
 /* Load the entries stored in an open segment. If there are no entries at all,
  * remove the open segment, mark it as closed (by renaming it). */
-static int load_entries_from_open_segment(struct raft_logger *logger,
+static int load_entries_from_open_segment(struct raft_io *io,
                                           const char *dir,
                                           struct io_uv__segment_meta *segment,
                                           struct raft_entry **entries,
@@ -116,7 +116,7 @@ static int load_entries_from_open_segment(struct raft_logger *logger,
 /* Load a single batch of entries from a segment.
  *
  * Set @last to #true if the loaded batch is the last one. */
-static int load_entries_batch_from_segment(struct raft_logger *logger,
+static int load_entries_batch_from_segment(struct raft_io *io,
                                            const int fd,
                                            struct raft_entry **entries,
                                            unsigned *n_entries,
@@ -246,8 +246,8 @@ int io_uv__load_closed(struct io_uv *uv,
     }
 
     /* Open the segment file. */
-    rv = open_segment_meta(uv->logger, uv->dir, segment->filename, O_RDONLY,
-                           &fd, &format);
+    rv = open_segment_meta(uv->io, uv->dir, segment->filename, O_RDONLY, &fd,
+                           &format);
     if (rv != 0) {
         goto err;
     }
@@ -265,8 +265,8 @@ int io_uv__load_closed(struct io_uv *uv,
 
     last = false;
     for (i = 1; !last; i++) {
-        rv = load_entries_batch_from_segment(uv->logger, fd, &tmp_entries,
-                                             &tmp_n, &last);
+        rv = load_entries_batch_from_segment(uv->io, fd, &tmp_entries, &tmp_n,
+                                             &last);
         if (rv != 0) {
             goto err_after_open;
         }
@@ -769,7 +769,7 @@ static int load_entries_from_segments(struct io_uv *uv,
 
         if (segment->is_open) {
             rv = load_entries_from_open_segment(
-                uv->logger, uv->dir, segment, entries, n_entries, &next_index);
+                uv->io, uv->dir, segment, entries, n_entries, &next_index);
             if (rv != 0) {
                 goto err;
             }
@@ -802,8 +802,8 @@ static int load_entries_from_segments(struct io_uv *uv,
              * loaded, and it must be the first segment we're loading. */
             if (segment->first_index < next_index) {
                 if (*n_entries != 0) {
-                    raft_errorf(
-                        uv->logger,
+                    errorf(
+                        uv->io,
                         "segment %s: expected first segment at %lld or lower",
                         segment->filename, next_index);
                     rv = RAFT_ERR_IO_CORRUPT;
@@ -876,7 +876,7 @@ err:
     return rv;
 }
 
-static int load_entries_from_open_segment(struct raft_logger *logger,
+static int load_entries_from_open_segment(struct raft_io *io,
                                           const char *dir,
                                           struct io_uv__segment_meta *segment,
                                           struct raft_entry **entries,
@@ -909,8 +909,7 @@ static int load_entries_from_open_segment(struct raft_logger *logger,
         goto done;
     }
 
-    rv =
-        open_segment_meta(logger, dir, segment->filename, O_RDWR, &fd, &format);
+    rv = open_segment_meta(io, dir, segment->filename, O_RDWR, &fd, &format);
     if (rv != 0) {
         goto err;
     }
@@ -932,8 +931,8 @@ static int load_entries_from_open_segment(struct raft_logger *logger,
             }
         }
 
-        raft_errorf(logger, "segment %s: unexpected format version: %lu",
-                    segment->filename, format);
+        errorf(io, "segment %s: unexpected format version: %lu",
+               segment->filename, format);
         rv = RAFT_ERR_IO;
         goto err_after_open;
     }
@@ -945,12 +944,12 @@ static int load_entries_from_open_segment(struct raft_logger *logger,
         off_t offset = lseek(fd, 0, SEEK_CUR);
 
         if (offset == -1) {
-            raft_errorf(logger, "segment %s: batch %d: save offset: %s",
-                        segment->filename, i, uv_strerror(-errno));
+            errorf(io, "segment %s: batch %d: save offset: %s",
+                   segment->filename, i, uv_strerror(-errno));
             return RAFT_ERR_IO;
         }
 
-        rv = load_entries_batch_from_segment(logger, fd, &tmp_entries,
+        rv = load_entries_batch_from_segment(io, fd, &tmp_entries,
                                              &tmp_n_entries, &last);
         if (rv != 0) {
             int rv2;
@@ -1046,7 +1045,7 @@ err:
     return rv;
 }
 
-static int load_entries_batch_from_segment(struct raft_logger *logger,
+static int load_entries_batch_from_segment(struct raft_io *io,
                                            const int fd,
                                            struct raft_entry **entries,
                                            unsigned *n_entries,
@@ -1074,7 +1073,7 @@ static int load_entries_batch_from_segment(struct raft_logger *logger,
     n = byte__flip64(preamble[1]);
 
     if (n == 0) {
-        raft_errorf(logger, "batch has zero entries");
+        errorf(io, "batch has zero entries");
         rv = RAFT_ERR_IO_CORRUPT;
         goto err;
     }
@@ -1086,7 +1085,7 @@ static int load_entries_batch_from_segment(struct raft_logger *logger,
     max_n = RAFT_IO_UV_MAX_SEGMENT_SIZE / (sizeof(uint64_t) * 4);
 
     if (n > max_n) {
-        raft_errorf(logger, "batch has %u entries (preamble at %d)", n, pos);
+        errorf(io, "batch has %u entries (preamble at %d)", n, pos);
         rv = RAFT_ERR_IO_CORRUPT;
         goto err;
     }
@@ -1112,7 +1111,7 @@ static int load_entries_batch_from_segment(struct raft_logger *logger,
     crc1 = byte__flip32(*(uint64_t *)preamble);
     crc2 = byte__crc32(header.base, header.len, 0);
     if (crc1 != crc2) {
-        raft_errorf(logger, "corrupted batch header");
+        errorf(io, "corrupted batch header");
         rv = RAFT_ERR_IO_CORRUPT;
         goto err_after_header_alloc;
     }
@@ -1145,7 +1144,7 @@ static int load_entries_batch_from_segment(struct raft_logger *logger,
     crc1 = byte__flip32(*((uint32_t *)preamble + 1));
     crc2 = byte__crc32(data.base, data.len, 0);
     if (crc1 != crc2) {
-        raft_errorf(logger, "corrupted batch data");
+        errorf(io, "corrupted batch data");
         rv = RAFT_ERR_IO_CORRUPT;
         goto err_after_data_alloc;
     }
@@ -1180,7 +1179,7 @@ static void closed_segment_filename(const raft_index first_index,
     sprintf(filename, CLOSED_SEGMENT_TEMPLATE, first_index, end_index);
 }
 
-static int open_segment_meta(struct raft_logger *logger,
+static int open_segment_meta(struct raft_io *io,
                              const char *dir,
                              const char *filename,
                              const int flags,
@@ -1191,7 +1190,7 @@ static int open_segment_meta(struct raft_logger *logger,
 
     *fd = raft__io_uv_fs_open(dir, filename, flags);
     if (*fd == -1) {
-        raft_errorf(logger, "open %s: %s", filename, uv_strerror(-errno));
+        errorf(io, "open %s: %s", filename, uv_strerror(-errno));
         return RAFT_ERR_IO;
     }
 

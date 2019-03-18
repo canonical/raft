@@ -190,7 +190,7 @@ static int io_uv__set_term(struct raft_io *io, const raft_term term)
     uv->metadata.version++;
     uv->metadata.term = term;
     uv->metadata.voted_for = 0;
-    rv = io_uv__metadata_store(uv->logger, uv->dir, &uv->metadata);
+    rv = io_uv__metadata_store(uv->io, uv->dir, &uv->metadata);
     if (rv != 0) {
         return rv;
     }
@@ -206,7 +206,7 @@ static int io_uv__set_vote(struct raft_io *io, const unsigned server_id)
     assert(uv->metadata.version > 0);
     uv->metadata.version++;
     uv->metadata.voted_for = server_id;
-    rv = io_uv__metadata_store(uv->logger, uv->dir, &uv->metadata);
+    rv = io_uv__metadata_store(uv->io, uv->dir, &uv->metadata);
     if (rv != 0) {
         return rv;
     }
@@ -324,14 +324,17 @@ int raft_io_uv_init(struct raft_io *io,
     RAFT__QUEUE_INIT(&uv->snapshot_get_reqs);
     uv->snapshot_put_work.data = NULL;
 
+    io->emit = io_uv__emit; /* Used below */
+    io->impl = uv;
+
     /* Ensure that the data directory exists and is accessible */
-    rv = io_uv__ensure_dir(logger, uv->dir);
+    rv = io_uv__ensure_dir(uv->io, uv->dir);
     if (rv != 0) {
         goto err_after_dir_alloc;
     }
 
     /* Load current metadata */
-    rv = io_uv__metadata_load(logger, dir, &uv->metadata);
+    rv = io_uv__metadata_load(io, dir, &uv->metadata);
     if (rv != 0) {
         goto err_after_dir_alloc;
     }
@@ -339,7 +342,7 @@ int raft_io_uv_init(struct raft_io *io,
     /* Detect the file system block size */
     rv = uv__file_block_size(uv->dir, &uv->block_size);
     if (rv != 0) {
-        raft_errorf(logger, "detect block size: %s", uv_strerror(rv));
+        errorf(io, "detect block size: %s", uv_strerror(rv));
         rv = RAFT_ERR_IO;
         goto err_after_dir_alloc;
     }
@@ -352,7 +355,6 @@ int raft_io_uv_init(struct raft_io *io,
     uv->close_cb = NULL;
 
     /* Set the raft_io implementation. */
-    io->impl = uv;
     io->init = io_uv__init;
     io->start = io_uv__start;
     io->close = io_uv__close;
@@ -367,7 +369,6 @@ int raft_io_uv_init(struct raft_io *io,
     io->snapshot_get = io_uv__snapshot_get;
     io->time = io_uv__time;
     io->random = io_uv__random;
-    io->emit = io_uv__emit;
 
     return 0;
 

@@ -21,7 +21,7 @@ struct io_uv__metadata
  * Read Raft metadata from disk, choosing the most recent version (either the
  * metadata1 or metadata2 file).
  */
-int io_uv__metadata_load(struct raft_logger *logger,
+int io_uv__metadata_load(struct raft_io *io,
                          const char *dir,
                          struct io_uv__metadata *metadata);
 
@@ -30,7 +30,7 @@ int io_uv__metadata_load(struct raft_logger *logger,
  * according to the metadata version (if the version is odd, write metadata1,
  * otherwise write metadata2).
  */
-int io_uv__metadata_store(struct raft_logger *logger,
+int io_uv__metadata_store(struct raft_io *io,
                           const char *dir,
                           const struct io_uv__metadata *metadata);
 

@@ -2,6 +2,7 @@
 #include "io_uv.h"
 #include "io_uv_fs.h"
 #include "queue.h"
+#include "logging.h"
 
 struct segment
 {
@@ -112,7 +113,7 @@ static int segment_close(struct segment *s)
 
     rv = uv_queue_work(uv->loop, &uv->finalize_work, work_cb, after_work_cb);
     if (rv != 0) {
-        raft_errorf(uv->logger, "start to truncate segment file %d: %s",
+        errorf(uv->io, "start to truncate segment file %d: %s",
                     s->counter, uv_strerror(rv));
         return RAFT_ERR_IO;
     }
@@ -140,7 +141,7 @@ static void work_cb(uv_work_t *work)
     /* Truncate and rename the segment */
     rv = raft__io_uv_fs_truncate(uv->dir, filename1, s->used);
     if (rv != 0) {
-        raft_errorf(uv->logger, "truncate segment file %s: %s", filename1,
+        errorf(uv->io, "truncate segment file %s: %s", filename1,
                     uv_strerror(rv));
         rv = RAFT_ERR_IO;
         goto abort;
@@ -150,7 +151,7 @@ static void work_cb(uv_work_t *work)
 
     rv = raft__io_uv_fs_rename(uv->dir, filename1, filename2);
     if (rv != 0) {
-        raft_errorf(uv->logger, "rename segment file %d: %s", s->counter,
+        errorf(uv->io, "rename segment file %d: %s", s->counter,
                     uv_strerror(rv));
         rv = RAFT_ERR_IO;
         goto abort;

@@ -101,11 +101,3 @@ void raft_default_logger_set_level(int level)
 {
     raft_default_logger_options.level = level;
 }
-
-void raft_errorf(struct raft_logger *logger, const char *format, ...)
-{
-    va_list args;
-    va_start(args, format);
-    logger->emit(logger->data, RAFT_ERROR, format, args);
-    va_end(args);
-}
