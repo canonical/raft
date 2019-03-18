@@ -57,4 +57,14 @@ void raft_fixture_elect(struct raft_fixture *f, unsigned id);
  */
 void raft_fixture_depose(struct raft_fixture *f);
 
+/**
+ * Disconnect the given server from all the others.
+ */
+void raft_fixture_disconnect(struct raft_fixture *f, unsigned id);
+
+/**
+ * Reconnect the given server to all the others.
+ */
+void raft_fixture_disconnect(struct raft_fixture *f, unsigned id);
+
 #endif /* RAFT_FAKE_H */

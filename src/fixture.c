@@ -285,3 +285,29 @@ void raft_fixture_depose(struct raft_fixture *f)
 
     assert(0);
 }
+
+void raft_fixture_disconnect(struct raft_fixture *f, unsigned id)
+{
+    unsigned i;
+    struct raft_io *io1 = &f->servers[id - 1].io;
+    for (i = 0; i < f->n; i++) {
+        struct raft_io *io2 = &f->servers[i].io;
+        if (i == id - 1) {
+            continue;
+        }
+        raft_io_stub_disconnect(io1, io2);
+    }
+}
+
+void raft_fixture_reconnect(struct raft_fixture *f, unsigned id)
+{
+    unsigned i;
+    struct raft_io *io1 = &f->servers[id - 1].io;
+    for (i = 0; i < f->n; i++) {
+        struct raft_io *io2 = &f->servers[i].io;
+        if (i == id - 1) {
+            continue;
+        }
+        raft_io_stub_reconnect(io1, io2);
+    }
+}
