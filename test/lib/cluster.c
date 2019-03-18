@@ -47,7 +47,6 @@ void test_cluster_setup(const MunitParameter params[], struct test_cluster *c)
     munit_assert_int(c->n_voting, <=, c->n);
     munit_assert_int(c->n, <=, TEST_CLUSTER__N);
 
-    c->loggers = raft_calloc(TEST_CLUSTER__N, sizeof *c->loggers);
     c->ios = raft_calloc(TEST_CLUSTER__N, sizeof *c->ios);
     c->fsms = raft_calloc(TEST_CLUSTER__N, sizeof *c->fsms);
     c->rafts = raft_calloc(TEST_CLUSTER__N, sizeof *c->rafts);
@@ -58,7 +57,6 @@ void test_cluster_setup(const MunitParameter params[], struct test_cluster *c)
 
     for (i = 0; i < c->n; i++) {
         unsigned id = i + 1;
-        struct raft_logger *logger = &c->loggers[i];
         struct raft_io *io = &c->ios[i];
         struct raft_fsm *fsm = &c->fsms[i];
         struct raft *raft = &c->rafts[i];
@@ -67,9 +65,6 @@ void test_cluster_setup(const MunitParameter params[], struct test_cluster *c)
         sprintf(address, "%d", id);
 
         c->alive[i] = true;
-
-        test_logger_setup(params, logger, id);
-        test_logger_time(logger, c, test_cluster__time);
 
         test_io_setup(params, io);
         raft_io_stub_set_latency(io, 5, 50);
@@ -108,7 +103,6 @@ void test_cluster_tear_down(struct test_cluster *c)
     log__close(&c->log);
 
     for (i = 0; i < c->n; i++) {
-        struct raft_logger *logger = &c->loggers[i];
         struct raft_io *io = &c->ios[i];
         struct raft_fsm *fsm = &c->fsms[i];
         struct raft *raft = &c->rafts[i];
@@ -118,11 +112,8 @@ void test_cluster_tear_down(struct test_cluster *c)
         raft_close(raft, NULL);
         test_fsm_tear_down(fsm);
         test_io_tear_down(io);
-
-        test_logger_tear_down(logger);
     }
 
-    raft_free(c->loggers);
     raft_free(c->fsms);
     raft_free(c->ios);
     raft_free(c->rafts);
@@ -512,7 +503,6 @@ void test_cluster_add_server(struct test_cluster *c)
     unsigned leader_id = test_cluster_leader(c);
     unsigned id = c->n + 1;
     char *address = munit_malloc(4);
-    struct raft_logger *logger;
     struct raft_io *io;
     struct raft_fsm *fsm;
     struct raft *raft;
@@ -528,15 +518,11 @@ void test_cluster_add_server(struct test_cluster *c)
 
     munit_assert_int(c->n, <=, TEST_CLUSTER__N);
 
-    logger = &c->loggers[c->n - 1];
     io = &c->ios[c->n - 1];
     fsm = &c->fsms[c->n - 1];
     raft = &c->rafts[c->n - 1];
 
     c->alive[c->n - 1] = true;
-
-    test_logger_setup(params, logger, id);
-    test_logger_time(logger, c, test_cluster__time);
 
     test_io_setup(params, io);
     raft_io_stub_set_latency(io, 5, 50);

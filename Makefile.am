@@ -43,7 +43,6 @@ libraft_la_SOURCES = \
   src/error.c \
   src/heap.c \
   src/log.c \
-  src/logger.c \
   src/logging.c \
   src/membership.c \
   src/raft.c \
@@ -105,7 +104,6 @@ test_lib_SOURCES = \
   test/lib/fsm.c \
   test/lib/heap.c \
   test/lib/io.c \
-  test/lib/logger.c \
   test/lib/munit.c \
   test/lib/raft.c \
   test/lib/tcp.c

@@ -12,7 +12,6 @@
 
 #include "fs.h"
 #include "heap.h"
-#include "logger.h"
 #include "munit.h"
 #include "tcp.h"
 #include "uv.h"
@@ -20,7 +19,6 @@
 #define IO_UV_FIXTURE                      \
     struct raft_heap heap;                 \
     struct test_tcp tcp;                   \
-    struct raft_logger logger;             \
     struct uv_loop_s loop;                 \
     char *dir;                             \
     struct raft_io_uv_transport transport; \
@@ -33,7 +31,6 @@
     (void)user_data;                                               \
     test_heap_setup(params, &f->heap);                             \
     test_tcp_setup(params, &f->tcp);                               \
-    test_logger_setup(params, &f->logger, 1);                      \
     test_uv_setup(params, &f->loop);                               \
     f->dir = test_dir_setup(params);                               \
     rv = raft_io_uv_tcp_init(&f->transport, &f->loop);             \
@@ -55,7 +52,6 @@
     raft_io_uv_tcp_close(&f->transport); \
     test_dir_tear_down(f->dir);          \
     test_uv_tear_down(&f->loop);         \
-    test_logger_tear_down(&f->logger);   \
     test_tcp_tear_down(&f->tcp);         \
     test_heap_tear_down(&f->heap);
 

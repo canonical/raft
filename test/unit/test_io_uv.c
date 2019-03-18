@@ -6,7 +6,6 @@
 
 #include "../lib/fs.h"
 #include "../lib/heap.h"
-#include "../lib/logger.h"
 #include "../lib/runner.h"
 #include "../lib/tcp.h"
 #include "../lib/uv.h"
@@ -20,7 +19,6 @@ TEST_MODULE(io_uv);
 struct fixture
 {
     struct raft_heap heap;
-    struct raft_logger logger;
     struct test_tcp tcp;
     struct uv_loop_s loop;
     char *dir;
@@ -99,7 +97,6 @@ static void *setup(const MunitParameter params[], void *user_data)
     (void)user_data;
 
     test_heap_setup(params, &f->heap);
-    test_logger_setup(params, &f->logger, id);
     test_tcp_setup(params, &f->tcp);
     test_uv_setup(params, &f->loop);
 
@@ -152,7 +149,6 @@ static void tear_down(void *data)
 
     test_uv_tear_down(&f->loop);
     test_tcp_tear_down(&f->tcp);
-    test_logger_tear_down(&f->logger);
     test_heap_tear_down(&f->heap);
 
     free(f);

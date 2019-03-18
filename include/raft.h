@@ -116,22 +116,6 @@ typedef unsigned long long raft_time;
 enum { RAFT_DEBUG, RAFT_INFO, RAFT_WARN, RAFT_ERROR };
 
 /**
- * Handle log messages at different levels.
- *
- * The @data field will be passed as first argument to the @emit function.
- */
-struct raft_logger
-{
-    void *data;
-    void (*emit)(void *data, int level, const char *fmt, va_list args);
-};
-
-/**
- * Default logger, emitting messages to stderr.
- */
-extern struct raft_logger raft_default_logger;
-
-/**
  * Optionally set the server ID that the default logger will include in emitted
  * messages. The default is to not include any server ID in emitted messages.
  */

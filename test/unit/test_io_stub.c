@@ -2,7 +2,6 @@
 #include "../../include/raft/io_stub.h"
 
 #include "../lib/heap.h"
-#include "../lib/logger.h"
 #include "../lib/runner.h"
 
 TEST_MODULE(io_stub);
@@ -15,15 +14,12 @@ TEST_MODULE(io_stub);
 
 #define FIXTURE                \
     struct raft_heap heap;     \
-    struct raft_logger logger; \
     struct raft_io io;
 
 #define SETUP                                           \
-    const uint64_t id = 1;                              \
     int rv;                                             \
     (void)user_data;                                    \
     test_heap_setup(params, &f->heap);                  \
-    test_logger_setup(params, &f->logger, id);          \
     rv = raft_io_stub_init(&f->io);                     \
     munit_assert_int(rv, ==, 0);                        \
     rv = f->io.init(&f->io, 1, "1");                    \
@@ -35,7 +31,6 @@ TEST_MODULE(io_stub);
 #define TEAR_DOWN                      \
     f->io.close(&f->io, NULL);         \
     raft_io_stub_close(&f->io);        \
-    test_logger_tear_down(&f->logger); \
     test_heap_tear_down(&f->heap);     \
     free(f);
 

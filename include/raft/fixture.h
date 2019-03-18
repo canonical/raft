@@ -14,7 +14,6 @@ struct raft_fixture
     {
         unsigned id;
         char *address[8];
-        struct raft_logger logger;
         struct raft_io io;
         struct raft raft;
     } * servers;

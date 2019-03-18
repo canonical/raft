@@ -1,5 +1,4 @@
 #include "../lib/heap.h"
-#include "../lib/logger.h"
 #include "../lib/runner.h"
 #include "../lib/tcp.h"
 #include "../lib/uv.h"
@@ -18,7 +17,6 @@ TEST_MODULE(io_uv_tcp);
 #define FIXTURE                            \
     struct raft_heap heap;                 \
     struct test_tcp tcp;                   \
-    struct raft_logger logger;             \
     struct uv_loop_s loop;                 \
     struct raft_io_uv_transport transport; \
     bool closed;
@@ -28,7 +26,6 @@ TEST_MODULE(io_uv_tcp);
     (void)user_data;                                            \
     test_heap_setup(params, &f->heap);                          \
     test_tcp_setup(params, &f->tcp);                            \
-    test_logger_setup(params, &f->logger, 1);                   \
     test_uv_setup(params, &f->loop);                            \
     raft_io_uv_tcp_init(&f->transport, &f->loop);               \
     rv = f->transport.init(&f->transport, 1, "127.0.0.1:9000"); \
@@ -42,7 +39,6 @@ TEST_MODULE(io_uv_tcp);
     test_uv_stop(&f->loop);                      \
     raft_io_uv_tcp_close(&f->transport);         \
     test_uv_tear_down(&f->loop);                 \
-    test_logger_tear_down(&f->logger);           \
     test_tcp_tear_down(&f->tcp);                 \
     test_heap_tear_down(&f->heap);
 

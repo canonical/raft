@@ -14,7 +14,6 @@
  */
 struct __fsm
 {
-    struct raft_logger *logger;
     int count;
 };
 
@@ -69,7 +68,7 @@ static int __fsm__restore(struct raft_fsm *fsm, struct raft_buffer *buf)
     return 0;
 }
 
-static int __fsm_init(struct raft_fsm *fsm, struct raft_logger *logger)
+static int __fsm_init(struct raft_fsm *fsm)
 {
     struct __fsm *f = raft_malloc(sizeof *fsm);
 
@@ -78,7 +77,6 @@ static int __fsm_init(struct raft_fsm *fsm, struct raft_logger *logger)
         return 1;
     }
 
-    f->logger = logger;
     f->count = 0;
 
     fsm->version = 1;
@@ -103,7 +101,6 @@ struct __server
     struct uv_loop_s loop;
     struct uv_signal_s sigint;
     struct uv_timer_s timer;
-    struct raft_logger logger;
     struct raft_io_uv_transport transport;
     struct raft_io io;
     struct raft_fsm fsm;
@@ -183,12 +180,6 @@ static int __server_init(struct __server *s, const char *dir, unsigned id)
     }
     s->timer.data = s;
 
-    /* Setup logging */
-    raft_default_logger_set_server_id(id);
-    raft_default_logger_set_level(RAFT_INFO);
-
-    s->logger = raft_default_logger;
-
     /* Initialize the TCP-based RPC transport */
     rv = raft_io_uv_tcp_init(&s->transport, &s->loop);
     if (rv != 0) {
@@ -204,7 +195,7 @@ static int __server_init(struct __server *s, const char *dir, unsigned id)
     }
 
     /* Initialize the finite state machine. */
-    rv = __fsm_init(&s->fsm, &s->logger);
+    rv = __fsm_init(&s->fsm);
     if (rv != 0) {
         goto err_after_io_init;
     }

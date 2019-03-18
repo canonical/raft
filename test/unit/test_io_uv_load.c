@@ -1,7 +1,6 @@
 #include "../lib/fs.h"
 #include "../lib/heap.h"
 #include "../lib/io_uv.h"
-#include "../lib/logger.h"
 #include "../lib/runner.h"
 
 #include "../../src/byte.h"

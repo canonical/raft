@@ -61,7 +61,6 @@
 
 #include "fsm.h"
 #include "io.h"
-#include "logger.h"
 #include "munit.h"
 
 /**
@@ -82,7 +81,6 @@ struct test_cluster
     int time;                    /* Elapsed time, in milliseconds */
     bool *alive;                 /* Whether a server is alive. */
     unsigned leader_id;          /* Current leader, if any. */
-    struct raft_logger *loggers; /* Loggers. */
     struct raft_io *ios;         /* Test I/O implementations. */
     struct raft_fsm *fsms;       /* Test FSM implementations. */
     struct raft *rafts;          /* Raft instances */

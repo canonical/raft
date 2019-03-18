@@ -2,7 +2,6 @@
 
 #include "../lib/fs.h"
 #include "../lib/heap.h"
-#include "../lib/logger.h"
 #include "../lib/runner.h"
 #include "../lib/io.h"
 
@@ -20,7 +19,6 @@ TEST_MODULE(io_uv__metadata);
 struct fixture
 {
     struct raft_heap heap;           /* Testable allocator */
-    struct raft_logger logger;       /* Test logger */
     struct raft_io io;               /* Test I/O */
     char *dir;                       /* Data directory */
     struct io_uv__metadata metadata; /* Metadata object */
@@ -31,7 +29,6 @@ static void *setup(const MunitParameter params[], void *user_data)
     struct fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
     test_heap_setup(params, &f->heap);
-    test_logger_setup(params, &f->logger, 1);
     test_io_setup(params, &f->io);
     f->dir = test_dir_setup(params);
     return f;
@@ -42,7 +39,6 @@ static void tear_down(void *data)
     struct fixture *f = data;
     test_dir_tear_down(f->dir);
     test_io_tear_down(&f->io);
-    test_logger_tear_down(&f->logger);
     test_heap_tear_down(&f->heap);
     free(f);
 }
