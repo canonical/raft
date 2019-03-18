@@ -151,8 +151,7 @@ static void recv_cb(struct raft_io *io, struct raft_message *message)
                                                  &message->install_snapshot);
             break;
         default:
-            raft_warnf(r->logger, "rpc: unknown message type type: %d",
-                       message->type);
+            warnf(r->io, "rpc: unknown message type type: %d", message->type);
             return;
     };
 

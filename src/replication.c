@@ -522,9 +522,8 @@ int raft_replication__trigger(struct raft *r, const raft_index index)
         rv = raft_replication__send_append_entries(r, i);
         if (rv != 0 && rv != RAFT_ERR_IO_CONNECT) {
             /* This is not a critical failure, let's just log it. */
-            raft_warnf(r->logger,
-                       "failed to send append entries to server %ld: %s (%d)",
-                       server->id, raft_strerror(rv), rv);
+            warnf(r->io, "failed to send append entries to server %ld: %s (%d)",
+                  server->id, raft_strerror(rv), rv);
         }
     }
 

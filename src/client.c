@@ -201,9 +201,8 @@ int raft_promote(struct raft *r, const unsigned id)
     rv = raft_replication__send_append_entries(r, server_index);
     if (rv != 0 && rv != RAFT_ERR_IO_CONNECT) {
         /* This error is not fatal. */
-        raft_warnf(r->logger,
-                   "failed to send append entries to server %ld: %s (%d)",
-                   server->id, raft_strerror(rv), rv);
+        warnf(r->io, "failed to send append entries to server %ld: %s (%d)",
+              server->id, raft_strerror(rv), rv);
     }
 
     return 0;

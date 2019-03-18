@@ -128,9 +128,8 @@ int raft_election__start(struct raft *r)
         rv = raft_election__send_request_vote(r, server);
         if (rv != 0) {
             /* This is not a critical failure, let's just log it. */
-            raft_warnf(r->logger,
-                       "failed to send vote request to server %ld: %s (%d)",
-                       server->id, raft_strerror(rv), rv);
+            warnf(r->io, "failed to send vote request to server %ld: %s (%d)",
+                  server->id, raft_strerror(rv), rv);
         }
     }
 

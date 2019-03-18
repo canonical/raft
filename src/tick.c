@@ -169,8 +169,7 @@ static int leader_tick(struct raft *r, const unsigned msec_since_last_tick)
      *   allows clients to retry their requests with another server.
      */
     if (!leader_has_been_contacted_by_majority_of_servers(r)) {
-        raft_warnf(r->logger,
-                   "unable to contact majority of cluster -> step down");
+        warnf(r->io, "unable to contact majority of cluster -> step down");
         rv = raft_state__convert_to_follower(r, r->current_term);
         return rv;
     }

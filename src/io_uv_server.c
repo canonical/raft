@@ -6,6 +6,7 @@
 #include "byte.h"
 #include "io_uv.h"
 #include "io_uv_encoding.h"
+#include "logging.h"
 
 /* The happy path for a receiving an RPC message is:
  *
@@ -247,7 +248,7 @@ static void read_cb(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
 
             /* The length of the header must be greater than zero. */
             if (s->header.len == 0) {
-                raft_warnf(s->uv->logger, "message has zero length");
+                warnf(s->uv->io, "message has zero length");
                 goto abort;
             }
         } else if (s->payload.len == 0) {
@@ -263,8 +264,7 @@ static void read_cb(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
             rv = io_uv__decode_message(type, &s->header, &s->message,
                                        &s->payload.len);
             if (rv != 0) {
-                raft_warnf(s->uv->logger, "decode message: %s",
-                           raft_strerror(rv));
+                warnf(s->uv->io, "decode message: %s", raft_strerror(rv));
                 goto abort;
             }
 
@@ -323,7 +323,7 @@ static void read_cb(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
      * with a goto and never reach this point. */
     assert(nread < 0);
 
-    raft_warnf(s->uv->logger, "receive data: %s", uv_strerror(nread));
+    warnf(s->uv->io, "receive data: %s", uv_strerror(nread));
 
 abort:
     server_remove(s);
@@ -337,7 +337,7 @@ static int server_start(struct io_uv__server *s)
 
     rv = uv_read_start(s->stream, alloc_cb, read_cb);
     if (rv != 0) {
-        raft_warnf(s->uv->logger, "start reading: %s", uv_strerror(rv));
+        warnf(s->uv->io, "start reading: %s", uv_strerror(rv));
         return RAFT_ERR_IO;
     }
 
@@ -418,7 +418,7 @@ static void accept_cb(struct raft_io_uv_transport *transport,
 
     rv = server_add(uv, id, address, stream);
     if (rv != 0) {
-        raft_warnf(uv->logger, "add server: %s", raft_strerror(rv));
+        warnf(uv->io, "add server: %s", raft_strerror(rv));
         goto abort;
     }
 
