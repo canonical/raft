@@ -148,6 +148,8 @@ struct io_stub
         int countdown; /* Trigger the fault when this counter gets to zero. */
         int n;         /* Repeat the fault this many times. Default is -1. */
     } fault;
+
+    bool drop[5];
 };
 
 /**
@@ -730,6 +732,8 @@ int raft_io_stub_init(struct raft_io *io)
     s->fault.countdown = -1;
     s->fault.n = -1;
 
+    memset(s->drop, 0, sizeof s->drop);
+
     io->impl = s;
     io->init = io_stub__init;
     io->start = io_stub__start;
@@ -759,6 +763,12 @@ static void deliver_transmit(struct io_stub *s, struct transmit *transmit)
 {
     struct raft_message *message = &transmit->message;
     unsigned i;
+
+    /* If this message type is in the drop list, let's discard it */
+    if (s->drop[message->type - 1]) {
+        drop_transmit(s, transmit);
+        return;
+    }
 
     /* Search for the destination server. */
     for (i = 0; i < s->n_peers; i++) {
@@ -1226,4 +1236,11 @@ void raft_io_stub_reconnect(struct raft_io *io, struct raft_io *other)
     s_other = other->impl;
     peer = get_peer(s, s_other->id);
     peer->connected = true;
+}
+
+void raft_io_stub_drop(struct raft_io *io, int type, bool flag)
+{
+    struct io_stub *s;
+    s = io->impl;
+    s->drop[type - 1] = flag;
 }

@@ -139,4 +139,9 @@ void raft_io_stub_disconnect(struct raft_io *io, struct raft_io *other);
  */
 void raft_io_stub_reconnect(struct raft_io *io, struct raft_io *other);
 
+/**
+ * Enable or disable silently dropping all outgoing messages of type @type.
+ */
+void raft_io_stub_drop(struct raft_io *io, int type, bool flag);
+
 #endif /* RAFT_IO_STUB_H */

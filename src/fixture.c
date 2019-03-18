@@ -199,3 +199,60 @@ void raft_fixture_step(struct raft_fixture *f)
 
     advance(f, timeout + 1);
 }
+
+static unsigned leader_id(struct raft_fixture *f)
+{
+    unsigned i;
+    for (i = 0; i < f->n; i++) {
+        struct raft_fixture_server *s = &f->servers[i];
+        if (raft_state(&s->raft) == RAFT_LEADER) {
+            return s->id;
+        }
+    }
+    return 0;
+}
+
+/* Enable/disable dropping outgoing messages of a certain type from all servers
+ * except one. */
+static void drop_all_except(struct raft_fixture *f,
+                            int type,
+                            bool flag,
+                            unsigned id)
+{
+    unsigned i;
+    for (i = 0; i < f->n; i++) {
+        struct raft_fixture_server *s = &f->servers[i];
+        if (s->id == id) {
+            continue;
+        }
+        raft_io_stub_drop(&s->io, type, flag);
+    }
+}
+
+void raft_fixture_elect(struct raft_fixture *f, unsigned id)
+{
+    unsigned i;
+
+    /* Make sure there's currently no leader. */
+    assert(leader_id(f) == 0);
+
+    /* TODO: make sure that the server with the given id is a voting one */
+
+    /* Prevent all servers from sending request vote messages, except for the
+     * one to be elected. */
+    drop_all_except(f, RAFT_IO_REQUEST_VOTE, true, id);
+
+    for (i = 0; i < 100; i++) {
+        unsigned elected_id;
+        raft_fixture_step(f);
+        elected_id = leader_id(f);
+        if (elected_id == 0) {
+            continue;
+        }
+        assert(elected_id == id);
+        drop_all_except(f, RAFT_IO_REQUEST_VOTE, false, id);
+        return;
+    }
+
+    assert(0);
+}

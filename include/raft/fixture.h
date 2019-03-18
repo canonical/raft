@@ -37,6 +37,17 @@ int raft_fixture_setup(struct raft_fixture *f,
  */
 void raft_fixture_tear_down(struct raft_fixture *f);
 
+/**
+ * Step through the cluster state advancing the time to the minimum value needed
+ * for it to make progress (i.e. for a message to be delivered or for a server
+ * time out).
+ */
 void raft_fixture_step(struct raft_fixture *f);
+
+/**
+ * Drive the cluster so the server with the given @id gets elected as
+ * leader. There must currently be no leader.
+ */
+void raft_fixture_elect(struct raft_fixture *f, unsigned id);
 
 #endif /* RAFT_FAKE_H */

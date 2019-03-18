@@ -49,6 +49,6 @@ TEST_CASE(elect, first, NULL)
 {
     struct fixture *f = data;
     (void)params;
-    raft_fixture_step(&f->fixture);
+    raft_fixture_elect(&f->fixture, 1);
     return MUNIT_OK;
 }
