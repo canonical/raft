@@ -10,10 +10,10 @@
 
 struct raft_fixture
 {
+    unsigned n;
     struct raft_fixture_server
     {
-        unsigned id;
-        char *address[8];
+        char address[8];
         struct raft_io io;
         struct raft raft;
     } * servers;

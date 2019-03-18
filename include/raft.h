@@ -116,17 +116,6 @@ typedef unsigned long long raft_time;
 enum { RAFT_DEBUG, RAFT_INFO, RAFT_WARN, RAFT_ERROR };
 
 /**
- * Optionally set the server ID that the default logger will include in emitted
- * messages. The default is to not include any server ID in emitted messages.
- */
-void raft_default_logger_set_server_id(unsigned id);
-
-/**
- * Emit only messages of this level or above. The default is #RAFT_WARN.
- */
-void raft_default_logger_set_level(int level);
-
-/**
  * A data buffer.
  */
 struct raft_buffer
