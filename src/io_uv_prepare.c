@@ -3,6 +3,7 @@
 #include "assert.h"
 #include "io_uv.h"
 #include "io_uv_fs.h"
+#include "logging.h"
 
 /* The happy path for a io_uv__prepare request is:
  *
@@ -187,8 +188,8 @@ static int create_segment(struct io_uv *uv)
 
     rv = uv__file_init(s->file, uv->loop);
     if (rv != 0) {
-        raft_errorf(uv->logger, "init open segment file %d: %s", s->counter,
-                    uv_strerror(rv));
+        errorf(uv->io, "init open segment file %d: %s", s->counter,
+               uv_strerror(rv));
         rv = RAFT_ERR_IO;
         goto err_after_file_alloc;
     }
@@ -204,8 +205,8 @@ static int create_segment(struct io_uv *uv)
                          uv->block_size * uv->n_blocks, MAX_CONCURRENT_WRITES,
                          create_segment_cb);
     if (rv != 0) {
-        raft_errorf(uv->logger, "request creation of open segment %d: %s",
-                    s->counter, uv_strerror(rv));
+        errorf(uv->io, "request creation of open segment %d: %s", s->counter,
+               uv_strerror(rv));
         rv = RAFT_ERR_IO;
         goto err_after_file_init;
     }
@@ -251,8 +252,8 @@ static void create_segment_cb(struct uv__file_create *req, int status)
         flush_requests(uv, RAFT_ERR_IO);
         uv->preparing = NULL;
         uv->errored = true;
-        raft_errorf(uv->logger, "create open segment %s: %s", s->path,
-                    uv_strerror(status));
+        errorf(uv->io, "create open segment %s: %s", s->path,
+               uv_strerror(status));
         uv__file_close(req->file, (uv__file_close_cb)raft_free);
         raft_free(s);
         return;

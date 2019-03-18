@@ -5,6 +5,7 @@
 #include "assert.h"
 #include "io_uv.h"
 #include "io_uv_encoding.h"
+#include "logging.h"
 
 /* The happy path for an io_uv_send request is:
  *
@@ -32,7 +33,7 @@
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(C, MSG, ...) raft_debugf(C->uv->logger, MSG, ##__VA_ARGS__)
+#define tracef(C, MSG, ...) debugf(C->uv->io, MSG, ##__VA_ARGS__)
 #else
 #define tracef(C, MSG, ...)
 #endif
@@ -250,7 +251,7 @@ static void client_connect_cb(struct raft_io_uv_connect *req,
                               int status)
 {
     struct io_uv__client *c = req->data;
-    void (*log)(struct raft_logger * logger, const char *format, ...);
+    int level = RAFT_DEBUG;
     int rv;
 
     tracef(c, "connect attempt completed -> status %d", status);
@@ -284,14 +285,12 @@ static void client_connect_cb(struct raft_io_uv_connect *req,
 
     /* Use debug level for logging the first few attempts, then switch to
      * warn. */
-    if (c->n_connect_attempt < 10) {
-        log = raft_debugf;
-    } else {
-        log = raft_warnf;
+    if (c->n_connect_attempt >= 10) {
+        level = RAFT_WARN;
     }
 
-    log(c->uv->logger, "connect to %d (%s): %s", c->id, c->address,
-        raft_strerror(status));
+    c->uv->io->emit(c->uv->io, level, "connect to %d (%s): %s", c->id,
+                    c->address, raft_strerror(status));
 
     /* Let's schedule another attempt. */
     c->state = DELAY;

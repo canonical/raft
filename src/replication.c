@@ -4,6 +4,7 @@
 #include "configuration.h"
 #include "error.h"
 #include "log.h"
+#include "logging.h"
 #include "membership.h"
 #include "queue.h"
 #include "replication.h"
@@ -21,7 +22,7 @@
 
 /* Set to 1 to enable debug logging. */
 #if 1
-#define tracef(MSG, ...) raft_debugf(r->logger, MSG, __VA_ARGS__)
+#define tracef(MSG, ...) debugf(r->io, MSG, __VA_ARGS__)
 #else
 #define tracef(MSG, ...)
 #endif
@@ -80,7 +81,7 @@ static void raft_replication__send_append_entries_cb(struct raft_io_send *req,
     struct send_append_entries *request = req->data;
     struct raft *r = request->raft;
 
-    raft_debugf(r->logger, "send append entries completed: status %d", status);
+    debugf(r->io, "send append entries completed: status %d", status);
 
     /* Tell the log that we're done referencing these entries. */
     log__release(&r->log, request->index, request->entries, request->n);
@@ -93,8 +94,7 @@ static void send_install_snapshot_cb(struct raft_io_send *req, int status)
     struct send_install_snapshot *request = req->data;
     struct raft *r = request->raft;
 
-    raft_debugf(r->logger, "send install snapshot completed: status %d",
-                status);
+    debugf(r->io, "send install snapshot completed: status %d", status);
     raft_snapshot__close(request->snapshot);
     raft_free(request->snapshot);
     raft_free(request);
@@ -112,7 +112,7 @@ static void snapshot_get_cb(struct raft_io_snapshot_get *req,
     int rv;
 
     if (status != 0) {
-        raft_errorf(r->logger, "get snapshot %s", raft_strerror(status));
+        errorf(r->io, "get snapshot %s", raft_strerror(status));
         goto err;
     }
 
@@ -143,8 +143,7 @@ static void snapshot_get_cb(struct raft_io_snapshot_get *req,
     request->snapshot = snapshot;
     request->send.data = request;
 
-    raft_infof(r->logger, "sending snapshot %ld to %ld", snapshot->index,
-               server->id);
+    infof(r->io, "sending snapshot %ld to %ld", snapshot->index, server->id);
 
     rv = r->io->send(r->io, &request->send, &message, send_install_snapshot_cb);
     if (rv != 0) {
@@ -264,9 +263,8 @@ int raft_replication__send_append_entries(struct raft *r, size_t i)
             assert(r->snapshot.index > 0);
             assert(next_index - 1 <= r->snapshot.index);
             if (next_index - 1 < r->snapshot.index) {
-                raft_infof(r->logger,
-                           "missing entry at index %lld -> send snapshot",
-                           next_index - 1);
+                infof(r->io, "missing entry at index %lld -> send snapshot",
+                      next_index - 1);
                 return raft_replication__send_snapshot(r, i);
             }
             args->prev_log_term = r->snapshot.term;
@@ -363,7 +361,7 @@ static void raft_replication__leader_append_cb(void *data, int status)
     size_t server_index;
     int rv;
 
-    raft_debugf(r->logger, "write log completed on leader: status %d", status);
+    debugf(r->io, "write log completed on leader: status %d", status);
 
     update_last_stored(r, request->index, request->entries, request->n);
 
@@ -374,8 +372,7 @@ static void raft_replication__leader_append_cb(void *data, int status)
 
     /* If we are not leader anymore, just discard the result. */
     if (r->state != RAFT_LEADER) {
-        raft_debugf(r->logger,
-                    "local server is not leader -> ignore write log result");
+        debugf(r->io, "local server is not leader -> ignore write log result");
         return;
     }
 
@@ -525,9 +522,8 @@ int raft_replication__trigger(struct raft *r, const raft_index index)
         rv = raft_replication__send_append_entries(r, i);
         if (rv != 0 && rv != RAFT_ERR_IO_CONNECT) {
             /* This is not a critical failure, let's just log it. */
-            raft_warnf(r->logger,
-                       "failed to send append entries to server %ld: %s (%d)",
-                       server->id, raft_strerror(rv), rv);
+            warnf(r->io, "failed to send append entries to server %ld: %s (%d)",
+                  server->id, raft_strerror(rv), rv);
         }
     }
 
@@ -620,15 +616,14 @@ int raft_replication__update(struct raft *r,
     /* Reset the replication state to probe, as we might need to send the
      * snapshot again. */
     if (replication->state == REPLICATION__SNAPSHOT) {
-        raft_debugf(r->logger, "reset replication from snapshot to probe");
+        debugf(r->io, "reset replication from snapshot to probe");
         replication->state = REPLICATION__PROBE;
     }
 
     /* If the reported index is lower than the match index, it must be an out of
      * order response for an old append entries. Ignore it. */
     if (replication->match_index > replication->next_index - 1) {
-        raft_debugf(r->logger,
-                    "match index higher than reported next index -> ignore");
+        debugf(r->io, "match index higher than reported next index -> ignore");
         return 0;
     }
 
@@ -647,7 +642,7 @@ int raft_replication__update(struct raft *r,
         /* If the match index is already up-to-date then the rejection must be
          * stale and come from an out of order message. */
         if (replication->match_index == replication->next_index - 1) {
-            raft_debugf(r->logger, "match index is up to date -> ignore ");
+            debugf(r->io, "match index is up to date -> ignore ");
             return 0;
         }
 
@@ -663,8 +658,8 @@ int raft_replication__update(struct raft *r,
 
         replication->next_index = max(replication->next_index, 1);
 
-        raft_infof(r->logger, "log mismatch -> send old entries %ld",
-                   replication->next_index);
+        infof(r->io, "log mismatch -> send old entries %ld",
+              replication->next_index);
 
         /* Retry, ignoring errors. */
         raft_replication__send_append_entries(r, server_index);
@@ -674,7 +669,7 @@ int raft_replication__update(struct raft *r,
 
     if (result->last_log_index <= replication->match_index) {
         /* Like above, this must be a stale response. */
-        raft_debugf(r->logger, "match index is up to date -> ignore ");
+        debugf(r->io, "match index is up to date -> ignore ");
 
         return 0;
     }
@@ -693,9 +688,8 @@ int raft_replication__update(struct raft *r,
      */
     replication->next_index = result->last_log_index + 1;
     replication->match_index = result->last_log_index;
-    raft_debugf(r->logger, "match/next idx for server %ld: %ld/%ld",
-                server_index, replication->match_index,
-                replication->next_index);
+    debugf(r->io, "match/next idx for server %ld: %ld/%ld", server->id,
+           replication->match_index, replication->next_index);
 
     /* If the server is currently being promoted and is catching with logs,
      * update the information about the current catch-up round, and possibly
@@ -736,7 +730,7 @@ static void raft_replication__follower_append_cb(void *data, int status)
     size_t j;
     int rv;
 
-    raft_debugf(r->logger, "I/O completed on follower: status %d", status);
+    debugf(r->io, "I/O completed on follower: status %d", status);
 
     assert(args->leader_id > 0);
     assert(args->entries != NULL);
@@ -746,8 +740,7 @@ static void raft_replication__follower_append_cb(void *data, int status)
 
     /* If we are not followers anymore, just discard the result. */
     if (r->state != RAFT_FOLLOWER) {
-        raft_debugf(r->logger,
-                    "local server is not follower -> ignore I/O result");
+        debugf(r->io, "local server is not follower -> ignore I/O result");
         goto out;
     }
 
@@ -861,19 +854,19 @@ static int raft_replication__check_prev_log_entry(
     }
 
     if (local_prev_term == 0) {
-        raft_debugf(r->logger, "no entry at previous index -> reject");
+        debugf(r->io, "no entry at previous index -> reject");
         return 1;
     }
 
     if (local_prev_term != args->prev_log_term) {
         if (args->prev_log_index <= r->commit_index) {
             /* Should never happen; something is seriously wrong! */
-            raft_errorf(r->logger,
-                        "previous index conflicts with "
-                        "committed entry -> shutdown");
+            errorf(r->io,
+                   "previous index conflicts with "
+                   "committed entry -> shutdown");
             return -1;
         }
-        raft_debugf(r->logger, "previous term mismatch -> reject");
+        debugf(r->io, "previous term mismatch -> reject");
         return 1;
     }
 
@@ -911,15 +904,14 @@ static int raft_replication__delete_conflicting_entries(
         if (local_term > 0 && local_term != entry->term) {
             if (entry_index <= r->commit_index) {
                 /* Should never happen; something is seriously wrong! */
-                raft_errorf(r->logger,
-                            "new index conflicts with "
-                            "committed entry -> shutdown");
+                errorf(r->io,
+                       "new index conflicts with "
+                       "committed entry -> shutdown");
 
                 return RAFT_ERR_SHUTDOWN;
             }
 
-            raft_debugf(r->logger, "log mismatch -> truncate (%ld)",
-                        entry_index);
+            debugf(r->io, "log mismatch -> truncate (%ld)", entry_index);
 
             /* Discard any uncommitted voting change. */
             rv = raft_membership__rollback(r);
@@ -1080,8 +1072,8 @@ static void put_snapshot_cb(struct raft_io_snapshot_put *req, int status)
     r->snapshot.put.data = NULL;
 
     if (status != 0) {
-        raft_errorf(r->logger, "save snapshot %d: %s", snapshot->index,
-                    raft_strerror(status));
+        errorf(r->io, "save snapshot %d: %s", snapshot->index,
+               raft_strerror(status));
         goto err;
     }
 
@@ -1117,8 +1109,8 @@ static void put_snapshot_cb(struct raft_io_snapshot_put *req, int status)
 
     rv = r->fsm->restore(r->fsm, &snapshot->bufs[0]);
     if (rv != 0) {
-        raft_errorf(r->logger, "restore snapshot %d: %s", snapshot->index,
-                    raft_strerror(status));
+        errorf(r->io, "restore snapshot %d: %s", snapshot->index,
+               raft_strerror(status));
         goto err;
     }
 
@@ -1331,8 +1323,8 @@ static void snapshot_put_cb(struct raft_io_snapshot_put *req, int status)
     snapshot = &r->snapshot.pending;
 
     if (status != 0) {
-        raft_debugf(r->logger, "snapshot %lld at term %lld: %s",
-                    snapshot->index, snapshot->term, raft_strerror(status));
+        debugf(r->io, "snapshot %lld at term %lld: %s", snapshot->index,
+               snapshot->term, raft_strerror(status));
         goto out;
     }
 

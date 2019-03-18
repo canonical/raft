@@ -125,7 +125,6 @@ static void address_read_cb(uv_stream_t *stream,
         return;
     }
     if (nread < 0) {
-        raft_warnf(c->t->logger, "tcp read: %s", uv_strerror(nread));
         conn_stop(c);
         return;
     }
@@ -169,7 +168,6 @@ static void preamble_read_cb(uv_stream_t *stream,
         return;
     }
     if (nread < 0) {
-        raft_warnf(c->t->logger, "tcp read: %s", uv_strerror(nread));
         conn_stop(c);
         return;
     }
@@ -219,7 +217,6 @@ static int conn_start_handshake(struct conn *c)
     rv = uv_accept((struct uv_stream_s *)&c->t->listener,
                    (struct uv_stream_s *)c->tcp);
     if (rv != 0) {
-        raft_warnf(c->t->logger, "uv_accept: %s", uv_strerror(rv));
         rv = RAFT_ERR_IO;
         goto err_after_client_init;
     }
@@ -247,7 +244,6 @@ static void listen_cb(struct uv_stream_s *stream, int status)
     assert(stream == (struct uv_stream_s *)&t->listener);
 
     if (status < 0) {
-        raft_warnf(t->logger, "uv_connection_cb: %s", uv_strerror(status));
         rv = RAFT_ERR_IO;
         goto err;
     }
@@ -292,13 +288,11 @@ int io_uv__tcp_listen(struct raft_io_uv_transport *transport,
     rv = uv_tcp_bind(&t->listener, (const struct sockaddr *)&addr, 0);
     if (rv != 0) {
         /* UNTESTED: what are the error conditions? */
-        raft_warnf(t->logger, "uv_tcp_bind: %s", uv_strerror(rv));
         return RAFT_ERR_IO;
     }
     rv = uv_listen((uv_stream_t *)&t->listener, 1, listen_cb);
     if (rv != 0) {
         /* UNTESTED: what are the error conditions? */
-        raft_warnf(t->logger, "uv_tcp_listen: %s", uv_strerror(rv));
         return RAFT_ERR_IO;
     }
 

@@ -7,6 +7,7 @@
 #include "configuration.h"
 #include "election.h"
 #include "log.h"
+#include "logging.h"
 #include "rpc.h"
 #include "rpc_append_entries.h"
 #include "rpc_install_snapshot.h"
@@ -19,7 +20,6 @@
 #define RAFT__DEFAULT_SNAPSHOT_THRESHOLD 1024
 
 int raft_init(struct raft *r,
-              struct raft_logger *logger,
               struct raft_io *io,
               struct raft_fsm *fsm,
               void *data,
@@ -31,7 +31,6 @@ int raft_init(struct raft *r,
 
     assert(r != NULL);
 
-    r->logger = logger;
     r->io = io;
     r->io->data = r;
     r->fsm = fsm;
@@ -90,7 +89,7 @@ static void raft__close_cb(struct raft_io *io)
 {
     struct raft *r = io->data;
 
-    raft_infof(r->logger, "stopped");
+    infof(r->io, "stopped");
 
     raft_free(r->address);
     raft_state__clear(r);
@@ -150,14 +149,13 @@ static void recv_cb(struct raft_io *io, struct raft_message *message)
                                                  &message->install_snapshot);
             break;
         default:
-            raft_warnf(r->logger, "rpc: unknown message type type: %d",
-                       message->type);
+            warnf(r->io, "rpc: unknown message type type: %d", message->type);
             return;
     };
 
     if (rv != 0 && rv != RAFT_ERR_IO_CONNECT) {
-        raft_errorf(r->logger, "rpc %s: %s", raft__message_names[message->type],
-                    raft_strerror(rv));
+        errorf(r->io, "rpc %s: %s", raft__message_names[message->type],
+               raft_strerror(rv));
     }
 }
 
@@ -173,7 +171,7 @@ int raft_start(struct raft *r)
     assert(r != NULL);
     assert(r->state == RAFT_UNAVAILABLE);
 
-    raft_infof(r->logger, "starting");
+    infof(r->io, "starting");
 
     assert(r->heartbeat_timeout != 0);
     assert(r->heartbeat_timeout < r->election_timeout);
@@ -245,7 +243,7 @@ int raft_start(struct raft *r)
         struct raft_entry *entry = &entries[i];
 
         rv = log__append(&r->log, entry->term, entry->type, &entry->buf,
-                              entry->batch);
+                         entry->batch);
         if (rv != 0) {
             goto err_after_load;
         }

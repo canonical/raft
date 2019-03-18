@@ -6,7 +6,6 @@
 #define RAFT_IO_UV_METADATA_SIZE (8 * 4)              /* Four 64-bit words */
 #define RAFT_IO_UV_MAX_SEGMENT_SIZE (8 * 1024 * 1024) /* 8 Megabytes */
 
-struct raft_logger;
 struct raft_io;
 struct raft_io_uv_transport;
 
@@ -78,7 +77,6 @@ struct raft_io_uv_transport;
  * [0] https://github.com/logcabin/logcabin/blob/master/Storage/SegmentedLog.h
  */
 int raft_io_uv_init(struct raft_io *io,
-                    struct raft_logger *logger,
                     struct uv_loop_s *loop,
                     const char *dir,
                     struct raft_io_uv_transport *transport);
@@ -190,9 +188,7 @@ struct raft_io_uv_transport
 /**
  * Init a transport interface that uses TCP sockets.
  */
-int raft_io_uv_tcp_init(struct raft_io_uv_transport *t,
-                        struct raft_logger *logger,
-                        struct uv_loop_s *loop);
+int raft_io_uv_tcp_init(struct raft_io_uv_transport *t, struct uv_loop_s *loop);
 
 void raft_io_uv_tcp_close(struct raft_io_uv_transport *t);
 

@@ -6,6 +6,7 @@
 #include "io_uv.h"
 #include "io_uv_encoding.h"
 #include "io_uv_load.h"
+#include "logging.h"
 
 struct truncate
 {
@@ -36,8 +37,8 @@ static int truncate_closed_segment(struct io_uv *uv,
     int fd;
     int rv = 0;
 
-    raft_infof(uv->logger, "truncate %u-%u at %u", segment->first_index,
-               segment->end_index, index);
+    infof(uv->io, "truncate %u-%u at %u", segment->first_index,
+          segment->end_index, index);
 
     rv = io_uv__load_closed(uv, segment, &entries, &n);
     if (rv != 0) {
@@ -58,7 +59,7 @@ static int truncate_closed_segment(struct io_uv *uv,
     /* Open the file. */
     fd = raft__io_uv_fs_open(uv->dir, filename, O_WRONLY | O_CREAT | O_EXCL);
     if (fd == -1) {
-        raft_errorf(uv->logger, "open %s: %s", filename, strerror(errno));
+        errorf(uv->io, "open %s: %s", filename, strerror(errno));
         goto out_after_load;
     }
 
@@ -111,13 +112,12 @@ static int truncate_closed_segment(struct io_uv *uv,
     raft_free(buf.base);
 
     if (rv == -1) {
-        raft_errorf(uv->logger, "write %s: %s", filename, strerror(errno));
+        errorf(uv->io, "write %s: %s", filename, strerror(errno));
         rv = RAFT_ERR_IO;
         goto out_after_open;
     }
     if (rv != (int)buf.len) {
-        raft_errorf(uv->logger, "write %s: only %d bytes written", filename,
-                    rv);
+        errorf(uv->io, "write %s: only %d bytes written", filename, rv);
         rv = RAFT_ERR_IO;
         goto out_after_open;
     }
@@ -127,13 +127,12 @@ static int truncate_closed_segment(struct io_uv *uv,
 
         rv = write(fd, entry->buf.base, entry->buf.len);
         if (rv == -1) {
-            raft_errorf(uv->logger, "write %s: %s", filename, strerror(errno));
+            errorf(uv->io, "write %s: %s", filename, strerror(errno));
             rv = RAFT_ERR_IO;
             goto out_after_open;
         }
         if (rv != (int)entry->buf.len) {
-            raft_errorf(uv->logger, "write %s: only %d bytes written", filename,
-                        rv);
+            errorf(uv->io, "write %s: only %d bytes written", filename, rv);
             rv = RAFT_ERR_IO;
             goto out_after_open;
         }
@@ -141,7 +140,7 @@ static int truncate_closed_segment(struct io_uv *uv,
 
     rv = fsync(fd);
     if (rv == -1) {
-        raft_errorf(uv->logger, "fsync %s: %s", filename, strerror(errno));
+        errorf(uv->io, "fsync %s: %s", filename, strerror(errno));
         rv = RAFT_ERR_IO;
         goto out_after_open;
     }
@@ -225,8 +224,8 @@ static void work_cb(uv_work_t *work)
 
         rv = raft__io_uv_fs_unlink(uv->dir, segment->filename);
         if (rv != 0) {
-            raft_errorf(uv->logger, "unlink segment %s: %s", segment->filename,
-                        uv_strerror(rv));
+            errorf(uv->io, "unlink segment %s: %s", segment->filename,
+                   uv_strerror(rv));
             rv = RAFT_ERR_IO;
             goto err_after_list;
         }
@@ -234,7 +233,7 @@ static void work_cb(uv_work_t *work)
 
     rv = raft__io_uv_fs_sync_dir(uv->dir);
     if (rv != 0) {
-        raft_errorf(uv->logger, "sync data directory: %s", uv_strerror(rv));
+        errorf(uv->io, "sync data directory: %s", uv_strerror(rv));
         rv = RAFT_ERR_IO;
         goto err_after_list;
     }
@@ -292,8 +291,8 @@ static int truncate_start(struct truncate *r)
 
     rv = uv_queue_work(uv->loop, &uv->truncate_work, work_cb, after_work_cb);
     if (rv != 0) {
-        raft_errorf(uv->logger, "start to truncate log at index %lld: %s",
-                    r->index, uv_strerror(rv));
+        errorf(uv->io, "start to truncate log at index %lld: %s", r->index,
+               uv_strerror(rv));
         return RAFT_ERR_IO;
     }
 

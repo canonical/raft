@@ -1,6 +1,7 @@
 #include "rpc_install_snapshot.h"
 #include "assert.h"
 #include "log.h"
+#include "logging.h"
 #include "replication.h"
 #include "rpc.h"
 #include "state.h"
@@ -25,8 +26,7 @@ int raft_rpc__recv_install_snapshot(struct raft *r,
 
     assert(address != NULL);
 
-    raft_infof(r->logger, "received snapshot %d from server %ld",
-               args->last_index, id);
+    infof(r->io, "received snapshot %d from server %ld", args->last_index, id);
 
     result->success = false;
     result->last_log_index = log__last_index(&r->log);
@@ -37,7 +37,7 @@ int raft_rpc__recv_install_snapshot(struct raft *r,
     }
 
     if (match < 0) {
-        raft_debugf(r->logger, "local term is higher -> reject ");
+        debugf(r->io, "local term is higher -> reject ");
         goto reply;
     }
 
@@ -46,7 +46,7 @@ int raft_rpc__recv_install_snapshot(struct raft *r,
     assert(r->current_term == args->term);
 
     if (r->state == RAFT_CANDIDATE) {
-        raft_debugf(r->logger, "discovered leader -> step down ");
+        debugf(r->io, "discovered leader -> step down ");
         rv = raft_state__convert_to_follower(r, args->term);
         if (rv != 0) {
             return rv;

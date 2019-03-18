@@ -7,7 +7,6 @@
 #include <stdbool.h>
 
 struct raft_io;
-struct raft_logger;
 struct raft_message;
 struct raft_entry;
 
@@ -15,13 +14,12 @@ struct raft_entry;
  * Configure the given @raft_io instance to use a stub in-memory I/O
  * implementation.
  */
-int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger);
+int raft_io_stub_init(struct raft_io *io);
 
 /**
  * Release all memory held by the given stub I/O implementation.
  */
 void raft_io_stub_close(struct raft_io *io);
-
 
 /**
  * Set the current time, without invoking the tick callback.
@@ -31,7 +29,7 @@ void raft_io_stub_set_time(struct raft_io *io, unsigned time);
 /**
  * Set the random integer generator.
  */
-void raft_io_stub_set_randint(struct raft_io *io, int (*randint)(int, int));
+void raft_io_stub_set_random(struct raft_io *io, int (*f)(int, int));
 
 /**
  * Set the minimum and maximum values of the random latency that is assigned to
@@ -140,5 +138,10 @@ void raft_io_stub_disconnect(struct raft_io *io, struct raft_io *other);
  * @other.
  */
 void raft_io_stub_reconnect(struct raft_io *io, struct raft_io *other);
+
+/**
+ * Enable or disable silently dropping all outgoing messages of type @type.
+ */
+void raft_io_stub_drop(struct raft_io *io, int type, bool flag);
 
 #endif /* RAFT_IO_STUB_H */

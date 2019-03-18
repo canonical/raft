@@ -3,6 +3,7 @@
 #include "assert.h"
 #include "configuration.h"
 #include "election.h"
+#include "logging.h"
 #include "replication.h"
 #include "state.h"
 #include "watch.h"
@@ -21,7 +22,7 @@ unsigned raft_next_timeout(struct raft *r)
     } else {
         timeout = r->election_timeout_rand;
     }
-    return timeout > r->timer ? timeout - r->timer : 0 ;
+    return timeout > r->timer ? timeout - r->timer : 0;
 }
 
 /**
@@ -48,7 +49,7 @@ static int follower_tick(struct raft *r)
      * simply configured as non-voter, do nothing and wait for RPCs. */
     if (configuration__n_voting(&r->configuration) == 1) {
         if (server->voting) {
-            raft_debugf(r->logger, "self elect and convert to leader");
+            debugf(r->io, "self elect and convert to leader");
             rv = raft_state__convert_to_candidate(r);
             if (rv != 0) {
                 return rv;
@@ -77,7 +78,7 @@ static int follower_tick(struct raft *r)
      *   current leader or granting vote to candidate, convert to candidate.
      */
     if (r->timer > r->election_timeout_rand && server->voting) {
-        raft_infof(r->logger, "convert to candidate and start new election");
+        infof(r->io, "convert to candidate and start new election");
         return raft_state__convert_to_candidate(r);
     }
 
@@ -103,7 +104,7 @@ static int candidate_tick(struct raft *r)
      *   incrementing its term and initiating another round of RequestVote RPCs
      */
     if (r->timer > r->election_timeout_rand) {
-        raft_infof(r->logger, "start new election");
+        infof(r->io, "start new election");
         return raft_election__start(r);
     }
 
@@ -139,10 +140,10 @@ static bool leader_has_been_contacted_by_majority_of_servers(struct raft *r)
         if (elapsed <= r->election_timeout) {
             contacts++;
         } else {
-            raft_debugf(
-                r->logger,
-                "lost contact with server %d: no message since %u msecs (last contact %u, now %u)",
-                server->id, elapsed,replication->last_contact, now);
+            debugf(r->io,
+                   "lost contact with server %d: no message since %u "
+                   "msecs (last contact %u, now %u)",
+                   server->id, elapsed, replication->last_contact, now);
         }
     }
 
@@ -168,8 +169,7 @@ static int leader_tick(struct raft *r, const unsigned msec_since_last_tick)
      *   allows clients to retry their requests with another server.
      */
     if (!leader_has_been_contacted_by_majority_of_servers(r)) {
-        raft_warnf(r->logger,
-                   "unable to contact majority of cluster -> step down");
+        warnf(r->io, "unable to contact majority of cluster -> step down");
         rv = raft_state__convert_to_follower(r, r->current_term);
         return rv;
     }

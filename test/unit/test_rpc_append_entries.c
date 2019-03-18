@@ -9,7 +9,6 @@
 #include "../lib/fsm.h"
 #include "../lib/heap.h"
 #include "../lib/io.h"
-#include "../lib/logger.h"
 #include "../lib/raft.h"
 #include "../lib/runner.h"
 

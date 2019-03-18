@@ -14,6 +14,7 @@
 #include "io_uv_encoding.h"
 #include "io_uv_fs.h"
 #include "io_uv_load.h"
+#include "logging.h"
 
 /* Retry to connect to peer servers every second.
  *
@@ -27,6 +28,7 @@ static int io_uv__init(struct raft_io *io, unsigned id, const char *address)
     int rv;
     uv = io->impl;
     assert(uv->state == 0);
+    uv->id = id;
     rv = uv->transport->init(uv->transport, id, address);
     if (rv != 0) {
         return rv;
@@ -188,7 +190,7 @@ static int io_uv__set_term(struct raft_io *io, const raft_term term)
     uv->metadata.version++;
     uv->metadata.term = term;
     uv->metadata.voted_for = 0;
-    rv = io_uv__metadata_store(uv->logger, uv->dir, &uv->metadata);
+    rv = io_uv__metadata_store(uv->io, uv->dir, &uv->metadata);
     if (rv != 0) {
         return rv;
     }
@@ -204,7 +206,7 @@ static int io_uv__set_vote(struct raft_io *io, const unsigned server_id)
     assert(uv->metadata.version > 0);
     uv->metadata.version++;
     uv->metadata.voted_for = server_id;
-    rv = io_uv__metadata_store(uv->logger, uv->dir, &uv->metadata);
+    rv = io_uv__metadata_store(uv->io, uv->dir, &uv->metadata);
     if (rv != 0) {
         return rv;
     }
@@ -219,11 +221,22 @@ static raft_time io_uv__time(struct raft_io *io)
     return uv_now(uv->loop);
 }
 
-/* Implementation of raft_io->randint. */
-static int io_uv__randint(struct raft_io *io, int min, int max)
+/* Implementation of raft_io->random. */
+static int io_uv__random(struct raft_io *io, int min, int max)
 {
     (void)io;
     return min + (abs(rand()) % (max - min));
+}
+
+/* Implementation of raft_io->emit. */
+static void io_uv__emit(struct raft_io *io, int level, const char *format, ...)
+{
+    struct io_uv *uv;
+    va_list args;
+    uv = io->impl;
+    va_start(args, format);
+    emit_to_stream(stderr, uv->id, uv_now(uv->loop), level, format, args);
+    va_end(args);
 }
 
 /**
@@ -255,7 +268,6 @@ static void copy_dir(const char *dir1, char **dir2)
 }
 
 int raft_io_uv_init(struct raft_io *io,
-                    struct raft_logger *logger,
                     struct uv_loop_s *loop,
                     const char *dir,
                     struct raft_io_uv_transport *transport)
@@ -275,7 +287,6 @@ int raft_io_uv_init(struct raft_io *io,
     }
 
     uv->io = io;
-    uv->logger = logger;
     uv->loop = loop;
     copy_dir(dir, &uv->dir);
     if (uv->dir == NULL) {
@@ -284,6 +295,7 @@ int raft_io_uv_init(struct raft_io *io,
     }
     uv->transport = transport;
     uv->transport->data = uv;
+    uv->id = 0;
     uv->state = 0;
     uv->errored = false;
     uv->block_size = 0; /* Detected in raft_io->init() */
@@ -310,14 +322,17 @@ int raft_io_uv_init(struct raft_io *io,
     RAFT__QUEUE_INIT(&uv->snapshot_get_reqs);
     uv->snapshot_put_work.data = NULL;
 
+    io->emit = io_uv__emit; /* Used below */
+    io->impl = uv;
+
     /* Ensure that the data directory exists and is accessible */
-    rv = io_uv__ensure_dir(logger, uv->dir);
+    rv = io_uv__ensure_dir(uv->io, uv->dir);
     if (rv != 0) {
         goto err_after_dir_alloc;
     }
 
     /* Load current metadata */
-    rv = io_uv__metadata_load(logger, dir, &uv->metadata);
+    rv = io_uv__metadata_load(io, dir, &uv->metadata);
     if (rv != 0) {
         goto err_after_dir_alloc;
     }
@@ -325,7 +340,7 @@ int raft_io_uv_init(struct raft_io *io,
     /* Detect the file system block size */
     rv = uv__file_block_size(uv->dir, &uv->block_size);
     if (rv != 0) {
-        raft_errorf(logger, "detect block size: %s", uv_strerror(rv));
+        errorf(io, "detect block size: %s", uv_strerror(rv));
         rv = RAFT_ERR_IO;
         goto err_after_dir_alloc;
     }
@@ -338,7 +353,6 @@ int raft_io_uv_init(struct raft_io *io,
     uv->close_cb = NULL;
 
     /* Set the raft_io implementation. */
-    io->impl = uv;
     io->init = io_uv__init;
     io->start = io_uv__start;
     io->close = io_uv__close;
@@ -352,7 +366,7 @@ int raft_io_uv_init(struct raft_io *io,
     io->snapshot_put = io_uv__snapshot_put;
     io->snapshot_get = io_uv__snapshot_get;
     io->time = io_uv__time;
-    io->randint = io_uv__randint;
+    io->random = io_uv__random;
 
     return 0;
 
@@ -437,7 +451,7 @@ static int raft__io_uv_create_closed_1_1(struct io_uv *uv,
     /* Open the file. */
     fd = raft__io_uv_fs_open(uv->dir, filename, O_WRONLY | O_CREAT | O_EXCL);
     if (fd == -1) {
-        raft_errorf(uv->logger, "open %s: %s", filename, strerror(errno));
+        errorf(uv->io, "open %s: %s", filename, strerror(errno));
         return RAFT_ERR_IO;
     }
 
@@ -518,12 +532,12 @@ static int raft__io_uv_write_closed_1_1(struct io_uv *uv,
     rv = write(fd, buf, len);
     if (rv == -1) {
         free(buf);
-        raft_errorf(uv->logger, "write segment 1: %s", strerror(errno));
+        errorf(uv->io, "write segment 1: %s", strerror(errno));
         return RAFT_ERR_IO;
     }
     if (rv != (int)len) {
         free(buf);
-        raft_errorf(uv->logger, "write segment 1: only %d bytes written", rv);
+        errorf(uv->io, "write segment 1: only %d bytes written", rv);
         return RAFT_ERR_IO;
     }
 
@@ -531,7 +545,7 @@ static int raft__io_uv_write_closed_1_1(struct io_uv *uv,
 
     rv = fsync(fd);
     if (rv == -1) {
-        raft_errorf(uv->logger, "fsync segment 1: %s", strerror(errno));
+        errorf(uv->io, "fsync segment 1: %s", strerror(errno));
         return RAFT_ERR_IO;
     }
 

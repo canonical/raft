@@ -7,6 +7,7 @@
 #include "io_uv.h"
 #include "io_uv_fs.h"
 #include "io_uv_load.h"
+#include "logging.h"
 
 /* Template string for snapshot filenames: snapshot term, snapshot index,
  * creation timestamp (milliseconds since epoch). */
@@ -41,7 +42,7 @@ struct get
     raft__queue queue;
 };
 
-static int write_file(struct raft_logger *logger,
+static int write_file(struct raft_io *io,
                       const char *dir,
                       const char *filename,
                       struct raft_buffer *bufs,
@@ -60,25 +61,25 @@ static int write_file(struct raft_logger *logger,
 
     fd = raft__io_uv_fs_open(dir, filename, flags);
     if (fd == -1) {
-        raft_errorf(logger, "open %s: %s", filename, uv_strerror(-errno));
+        errorf(io, "open %s: %s", filename, uv_strerror(-errno));
         return RAFT_ERR_IO;
     }
 
     rv = writev(fd, (const struct iovec *)bufs, n_bufs);
     if (rv != (int)(size)) {
-        raft_errorf(logger, "write %s: %s", filename, uv_strerror(-errno));
+        errorf(io, "write %s: %s", filename, uv_strerror(-errno));
         goto err_after_file_open;
     }
 
     rv = fsync(fd);
     if (rv == -1) {
-        raft_errorf(logger, "fsync %s: %s", filename, uv_strerror(-errno));
+        errorf(io, "fsync %s: %s", filename, uv_strerror(-errno));
         goto err_after_file_open;
     }
 
     rv = close(fd);
     if (rv == -1) {
-        raft_errorf(logger, "close %s: %s", filename, uv_strerror(-errno));
+        errorf(io, "close %s: %s", filename, uv_strerror(-errno));
         goto err;
     }
 
@@ -172,7 +173,7 @@ static void put_work_cb(uv_work_t *work)
     sprintf(filename, SNAPSHOT_META_TEMPLATE, r->snapshot->term,
             r->snapshot->index, r->meta.timestamp);
 
-    rv = write_file(uv->logger, uv->dir, filename, r->meta.bufs, 2);
+    rv = write_file(uv->io, uv->dir, filename, r->meta.bufs, 2);
     if (rv != 0) {
         r->status = rv;
         return;
@@ -181,7 +182,7 @@ static void put_work_cb(uv_work_t *work)
     sprintf(filename, SNAPSHOT_TEMPLATE, r->snapshot->term, r->snapshot->index,
             r->meta.timestamp);
 
-    rv = write_file(uv->logger, uv->dir, filename, r->snapshot->bufs,
+    rv = write_file(uv->io, uv->dir, filename, r->snapshot->bufs,
                     r->snapshot->n_bufs);
     if (rv != 0) {
         r->status = rv;
@@ -253,8 +254,8 @@ static void process_put_requests(struct io_uv *uv)
     rv = uv_queue_work(uv->loop, &uv->snapshot_put_work, put_work_cb,
                        put_after_work_cb);
     if (rv != 0) {
-        raft_errorf(uv->logger, "store snapshot %lld: %s", r->snapshot->index,
-                    uv_strerror(rv));
+        errorf(uv->io, "store snapshot %lld: %s", r->snapshot->index,
+               uv_strerror(rv));
         uv->errored = true;
     }
 }
@@ -399,7 +400,7 @@ int io_uv__snapshot_get(struct raft_io *io,
     RAFT__QUEUE_PUSH(&uv->snapshot_get_reqs, &r->queue);
     rv = uv_queue_work(uv->loop, &r->work, get_work_cb, get_after_work_cb);
     if (rv != 0) {
-        raft_errorf(uv->logger, "get last snapshot: %s", uv_strerror(rv));
+        errorf(uv->io, "get last snapshot: %s", uv_strerror(rv));
         rv = RAFT_ERR_IO;
         goto err_after_snapshot_alloc;
     }

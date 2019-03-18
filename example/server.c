@@ -14,7 +14,6 @@
  */
 struct __fsm
 {
-    struct raft_logger *logger;
     int count;
 };
 
@@ -69,7 +68,7 @@ static int __fsm__restore(struct raft_fsm *fsm, struct raft_buffer *buf)
     return 0;
 }
 
-static int __fsm_init(struct raft_fsm *fsm, struct raft_logger *logger)
+static int __fsm_init(struct raft_fsm *fsm)
 {
     struct __fsm *f = raft_malloc(sizeof *fsm);
 
@@ -78,7 +77,6 @@ static int __fsm_init(struct raft_fsm *fsm, struct raft_logger *logger)
         return 1;
     }
 
-    f->logger = logger;
     f->count = 0;
 
     fsm->version = 1;
@@ -103,7 +101,6 @@ struct __server
     struct uv_loop_s loop;
     struct uv_signal_s sigint;
     struct uv_timer_s timer;
-    struct raft_logger logger;
     struct raft_io_uv_transport transport;
     struct raft_io io;
     struct raft_fsm fsm;
@@ -138,7 +135,7 @@ static void __server_sigint_cb(struct uv_signal_s *handle, int signum)
 
     assert(signum == SIGINT);
 
-    raft_infof(&s->logger, "server: stopping");
+    s->io.emit(&s->io, RAFT_INFO, "server: stopping");
 
     uv_signal_stop(handle);
 
@@ -183,28 +180,22 @@ static int __server_init(struct __server *s, const char *dir, unsigned id)
     }
     s->timer.data = s;
 
-    /* Setup logging */
-    raft_default_logger_set_server_id(id);
-    raft_default_logger_set_level(RAFT_INFO);
-
-    s->logger = raft_default_logger;
-
     /* Initialize the TCP-based RPC transport */
-    rv = raft_io_uv_tcp_init(&s->transport, &s->logger, &s->loop);
+    rv = raft_io_uv_tcp_init(&s->transport, &s->loop);
     if (rv != 0) {
         printf("error: init TCP transport: %s\n", raft_strerror(rv));
         goto err_after_timer_init;
     }
 
     /* Initialize the libuv-based I/O backend */
-    rv = raft_io_uv_init(&s->io, &s->logger, &s->loop, dir, &s->transport);
+    rv = raft_io_uv_init(&s->io, &s->loop, dir, &s->transport);
     if (rv != 0) {
         printf("error: enable uv integration: %s\n", raft_strerror(rv));
         goto err_after_tcp_init;
     }
 
     /* Initialize the finite state machine. */
-    rv = __fsm_init(&s->fsm, &s->logger);
+    rv = __fsm_init(&s->fsm);
     if (rv != 0) {
         goto err_after_io_init;
     }
@@ -213,7 +204,7 @@ static int __server_init(struct __server *s, const char *dir, unsigned id)
     sprintf(s->address, "127.0.0.1:900%d", id);
 
     /* Initialize and start the engine, using the libuv-based I/O backend. */
-    rv = raft_init(&s->raft, &s->logger, &s->io, &s->fsm, NULL, id, s->address);
+    rv = raft_init(&s->raft, &s->io, &s->fsm, NULL, id, s->address);
     if (rv != 0) {
         printf("error: init engine: %s\n", raft_strerror(rv));
         goto err_after_fsm_init;
@@ -289,12 +280,13 @@ static void __server_apply_cb(struct raft_apply *req, int status)
     raft_free(req);
 
     if (status != 0) {
-        raft_warnf(&s->logger, "fsm: apply error: %s", raft_strerror(status));
+        s->io.emit(&s->io, RAFT_WARN, "fsm: apply error: %s",
+                   raft_strerror(status));
         return;
     }
 
     if (f->count % 50 == 0) {
-        raft_infof(f->logger, "fsm: count %d", f->count);
+        s->io.emit(&s->io, RAFT_INFO, "fsm: count %d", f->count);
     }
 }
 

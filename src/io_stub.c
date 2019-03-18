@@ -7,12 +7,13 @@
 
 #include "assert.h"
 #include "configuration.h"
+#include "logging.h"
 #include "queue.h"
 #include "snapshot.h"
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(S, MSG, ...) raft_debugf(S->logger, MSG, __VA_ARGS__)
+#define tracef(S, MSG, ...) debugf(S->io, MSG, __VA_ARGS__)
 static const char *message_names[6] = {
     NULL,           "append entries",      "append entries result",
     "request vote", "request vote result", "install snapshot"};
@@ -110,7 +111,6 @@ struct io_stub
     size_t n;                       /* Size of the persisted entries array */
 
     /* Parameters passed via raft_io->init */
-    struct raft_logger *logger;
     unsigned id;
     const char *address;
     raft_io_tick_cb tick_cb;
@@ -141,13 +141,15 @@ struct io_stub
     unsigned min_latency;
     unsigned max_latency;
 
-    int (*randint)(int, int); /* Random integer generator */
+    int (*random)(int, int); /* Random integer generator */
 
     struct
     {
         int countdown; /* Trigger the fault when this counter gets to zero. */
         int n;         /* Repeat the fault this many times. Default is -1. */
     } fault;
+
+    bool drop[5];
 };
 
 /**
@@ -634,16 +636,29 @@ static raft_time io_stub__time(struct raft_io *io)
     return s->time;
 }
 
-static int io_stub__randint(struct raft_io *io, int min, int max)
+static int io_stub__random(struct raft_io *io, int min, int max)
 {
     struct io_stub *s;
     s = io->impl;
 
-    if (s->randint == NULL) {
+    if (s->random == NULL) {
         return (max - min) / 2;
     }
 
-    return s->randint(min, max);
+    return s->random(min, max);
+}
+
+static void io_stub__emit(struct raft_io *io,
+                          int level,
+                          const char *format,
+                          ...)
+{
+    struct io_stub *s;
+    va_list args;
+    va_start(args, format);
+    s = io->impl;
+    emit_to_stream(stderr, s->id, s->time, level, format, args);
+    va_end(args);
 }
 
 /**
@@ -678,7 +693,7 @@ static int io_stub__send(struct raft_io *io,
     return 0;
 }
 
-int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger)
+int raft_io_stub_init(struct raft_io *io)
 {
     struct io_stub *s;
 
@@ -690,7 +705,6 @@ int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger)
     }
 
     s->io = io;
-    s->logger = logger;
     s->time = 0;
     s->term = 0;
     s->voted_for = 0;
@@ -713,10 +727,12 @@ int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger)
     s->min_latency = 0;
     s->max_latency = 0;
 
-    s->randint = NULL;
+    s->random = NULL;
 
     s->fault.countdown = -1;
     s->fault.n = -1;
+
+    memset(s->drop, 0, sizeof s->drop);
 
     io->impl = s;
     io->init = io_stub__init;
@@ -732,7 +748,8 @@ int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger)
     io->snapshot_put = io_stub__snapshot_put;
     io->snapshot_get = io_stub__snapshot_get;
     io->time = io_stub__time;
-    io->randint = io_stub__randint;
+    io->random = io_stub__random;
+    io->emit = io_stub__emit;
 
     return 0;
 }
@@ -746,6 +763,12 @@ static void deliver_transmit(struct io_stub *s, struct transmit *transmit)
 {
     struct raft_message *message = &transmit->message;
     unsigned i;
+
+    /* If this message type is in the drop list, let's discard it */
+    if (s->drop[message->type - 1]) {
+        drop_transmit(s, transmit);
+        return;
+    }
 
     /* Search for the destination server. */
     for (i = 0; i < s->n_peers; i++) {
@@ -813,11 +836,11 @@ void raft_io_stub_set_time(struct raft_io *io, unsigned time)
     s->time = time;
 }
 
-void raft_io_stub_set_randint(struct raft_io *io, int (*randint)(int, int))
+void raft_io_stub_set_random(struct raft_io *io, int (*f)(int, int))
 {
     struct io_stub *s;
     s = io->impl;
-    s->randint = randint;
+    s->random = f;
 }
 
 void raft_io_stub_set_latency(struct raft_io *io, unsigned min, unsigned max)
@@ -917,7 +940,7 @@ static void io_stub__flush_send(struct io_stub *s, struct send *send)
     assert(transmit != NULL);
 
     if (s->min_latency != 0) {
-        transmit->timer = s->randint(s->min_latency, s->max_latency);
+        transmit->timer = s->random(s->min_latency, s->max_latency);
     } else {
         transmit->timer = 0;
     }
@@ -1025,12 +1048,11 @@ bool raft_io_stub_flush(struct raft_io *io)
 void raft_io_stub_flush_all(struct raft_io *io)
 {
     struct io_stub *s;
-    bool has_more_requests;
     s = io->impl;
 
-    do {
-        has_more_requests = raft_io_stub_flush(io);
-    } while (has_more_requests);
+    while (!RAFT__QUEUE_IS_EMPTY(&s->requests)) {
+        raft_io_stub_flush(io);
+    };
 
     assert(s->n_append == 0);
     assert(s->n_send == 0);
@@ -1214,4 +1236,11 @@ void raft_io_stub_reconnect(struct raft_io *io, struct raft_io *other)
     s_other = other->impl;
     peer = get_peer(s, s_other->id);
     peer->connected = true;
+}
+
+void raft_io_stub_drop(struct raft_io *io, int type, bool flag)
+{
+    struct io_stub *s;
+    s = io->impl;
+    s->drop[type - 1] = flag;
 }

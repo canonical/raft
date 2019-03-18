@@ -116,53 +116,6 @@ typedef unsigned long long raft_time;
 enum { RAFT_DEBUG, RAFT_INFO, RAFT_WARN, RAFT_ERROR };
 
 /**
- * Handle log messages at different levels.
- *
- * The @data field will be passed as first argument to the @emit function.
- */
-struct raft_logger
-{
-    void *data;
-    void (*emit)(void *data, int level, const char *fmt, va_list args);
-};
-
-/**
- * Emit a message with level #RAFT_DEBUG
- */
-void raft_debugf(struct raft_logger *logger, const char *format, ...);
-
-/**
- * Emit a message with level #RAFT_INFO
- */
-void raft_infof(struct raft_logger *logger, const char *format, ...);
-
-/**
- * Emit a message with level #RAFT_WARN
- */
-void raft_warnf(struct raft_logger *logger, const char *format, ...);
-
-/**
- * Emit a message with level #RAFT_ERROR
- */
-void raft_errorf(struct raft_logger *logger, const char *format, ...);
-
-/**
- * Default logger, emitting messages to stderr.
- */
-extern struct raft_logger raft_default_logger;
-
-/**
- * Optionally set the server ID that the default logger will include in emitted
- * messages. The default is to not include any server ID in emitted messages.
- */
-void raft_default_logger_set_server_id(unsigned id);
-
-/**
- * Emit only messages of this level or above. The default is #RAFT_WARN.
- */
-void raft_default_logger_set_level(int level);
-
-/**
  * A data buffer.
  */
 struct raft_buffer
@@ -562,7 +515,12 @@ struct raft_io
     /**
      * Generate a random integer between min and max.
      */
-    int (*randint)(struct raft_io *io, int min, int max);
+    int (*random)(struct raft_io *io, int min, int max);
+
+    /**
+     * Emit a log message.
+     */
+    void (*emit)(struct raft_io *io, int level, const char *format, ...);
 };
 
 /**
@@ -665,11 +623,6 @@ struct raft_replication
  */
 struct raft
 {
-    /**
-     * Logger to use to emit messages.
-     */
-    struct raft_logger *logger;
-
     /**
      * User-defined disk and network I/O interface implementation.
      */
@@ -881,7 +834,6 @@ struct raft
  * Initialize a raft server object.
  */
 int raft_init(struct raft *r,
-              struct raft_logger *logger,
               struct raft_io *io,
               struct raft_fsm *fsm,
               void *data,

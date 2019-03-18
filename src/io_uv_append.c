@@ -8,6 +8,7 @@
 #include "io_uv.h"
 #include "io_uv_encoding.h"
 #include "queue.h"
+#include "logging.h"
 
 /* The happy path for an append request is:
  *
@@ -284,9 +285,9 @@ static void segment_write_cb(struct uv__file_write *write, const int status)
     if (status != (int)s->buf.len) {
         assert(status != UV_ECANCELED); /* We never cancel write requests */
         if (status < 0) {
-            raft_errorf(uv->logger, "write: %s", uv_strerror(status));
+            errorf(uv->io, "write: %s", uv_strerror(status));
         } else {
-            raft_errorf(uv->logger, "only %d bytes written", status);
+            errorf(uv->io, "only %d bytes written", status);
         }
         result = RAFT_ERR_IO;
         uv->errored = true;

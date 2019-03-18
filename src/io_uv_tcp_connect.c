@@ -104,7 +104,6 @@ static void write_cb(struct uv_write_s *write, int status)
     RAFT__QUEUE_REMOVE(&r->queue);
 
     if (status != 0) {
-        raft_warnf(r->t->logger, "write: %s", uv_strerror(status));
         rv = RAFT_ERR_IO_CONNECT;
         goto err;
     }
@@ -132,7 +131,6 @@ static void connect_cb(struct uv_connect_s *connect, int status)
     }
 
     if (status != 0) {
-        raft_warnf(r->t->logger, "connect: %s", uv_strerror(status));
         rv = RAFT_ERR_IO_CONNECT;
         goto err;
     }
@@ -146,7 +144,6 @@ static void connect_cb(struct uv_connect_s *connect, int status)
                   write_cb);
     if (rv != 0) {
         /* UNTESTED: what are the error conditions? perhaps ENOMEM */
-        raft_warnf(r->t->logger, "write: %s", uv_strerror(rv));
         rv = RAFT_ERR_IO;
         goto err_after_encode_handshake;
     }
@@ -191,7 +188,6 @@ static int tcp_connect__start(struct connect *r, const char *address)
     if (rv != 0) {
         /* UNTESTED: since parsing succeed, this should fail only because of
          * lack of system resources */
-        raft_warnf(r->t->logger, "connect: %s", uv_strerror(rv));
         rv = RAFT_ERR_IO_CONNECT;
         goto err_after_tcp_init;
     }

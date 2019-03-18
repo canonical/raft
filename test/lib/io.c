@@ -5,16 +5,15 @@
 #include "io.h"
 
 void test_io_setup(const MunitParameter params[],
-                   struct raft_io *io,
-                   struct raft_logger *logger)
+                   struct raft_io *io)
 {
     int rv;
 
     (void)params;
 
-    rv = raft_io_stub_init(io, logger);
+    rv = raft_io_stub_init(io);
     munit_assert_int(rv, ==, 0);
-    raft_io_stub_set_randint(io, munit_rand_int_range);
+    raft_io_stub_set_random(io, munit_rand_int_range);
 }
 
 void test_io_tear_down(struct raft_io *io)

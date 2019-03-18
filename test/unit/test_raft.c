@@ -6,7 +6,6 @@
 #include "../lib/fsm.h"
 #include "../lib/heap.h"
 #include "../lib/io.h"
-#include "../lib/logger.h"
 #include "../lib/raft.h"
 #include "../lib/runner.h"
 
@@ -113,10 +112,10 @@ TEST_CASE(init, error, oom, init_oom_params)
 
     (void)params;
 
-    raft_io_stub_init(&io, &f->logger);
+    raft_io_stub_init(&io);
     test_heap_fault_enable(&f->heap);
 
-    rv = raft_init(&raft, &f->logger, &io, &f->fsm, f, 1, "1");
+    rv = raft_init(&raft, &io, &f->fsm, f, 1, "1");
     munit_assert_int(rv, ==, RAFT_ENOMEM);
 
     raft_io_stub_close(&io);

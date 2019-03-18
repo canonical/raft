@@ -3,6 +3,7 @@
 #include "assert.h"
 #include "configuration.h"
 #include "log.h"
+#include "logging.h"
 #include "membership.h"
 #include "queue.h"
 #include "replication.h"
@@ -26,7 +27,7 @@ int raft_apply(struct raft *r,
         goto err;
     }
 
-    raft_debugf(r->logger, "client request: %d entries", n);
+    debugf(r->io, "client request: %d entries", n);
 
     /* Index of the first entry being appended. */
     index = log__last_index(&r->log) + 1;
@@ -116,7 +117,7 @@ int raft_add_server(struct raft *r, const unsigned id, const char *address)
         return rv;
     }
 
-    raft_debugf(r->logger, "add server: id %d, address %s", id, address);
+    debugf(r->io, "add server: id %d, address %s", id, address);
 
     /* Make a copy of the current configuration, and add the new server to
      * it. */
@@ -159,6 +160,8 @@ int raft_promote(struct raft *r, const unsigned id)
         return rv;
     }
 
+    debugf(r->io, "promote server: id %d", id);
+
     server = configuration__get(&r->configuration, id);
     if (server == NULL) {
         rv = RAFT_EBADID;
@@ -200,9 +203,8 @@ int raft_promote(struct raft *r, const unsigned id)
     rv = raft_replication__send_append_entries(r, server_index);
     if (rv != 0 && rv != RAFT_ERR_IO_CONNECT) {
         /* This error is not fatal. */
-        raft_warnf(r->logger,
-                   "failed to send append entries to server %ld: %s (%d)",
-                   server->id, raft_strerror(rv), rv);
+        warnf(r->io, "failed to send append entries to server %ld: %s (%d)",
+              server->id, raft_strerror(rv), rv);
     }
 
     return 0;
@@ -230,7 +232,7 @@ int raft_remove_server(struct raft *r, const unsigned id)
         goto err;
     }
 
-    raft_debugf(r->logger, "remove server: id %d", id);
+    debugf(r->io, "remove server: id %d", id);
 
     /* Make a copy of the current configuration, and remove the given server
      * from it. */

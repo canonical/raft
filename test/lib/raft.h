@@ -10,7 +10,6 @@
 #include "fsm.h"
 #include "heap.h"
 #include "io.h"
-#include "logger.h"
 #include "munit.h"
 
 /**
@@ -18,7 +17,6 @@
  */
 #define RAFT_FIXTURE           \
     struct raft_heap heap;     \
-    struct raft_logger logger; \
     struct raft_io io;         \
     struct raft_fsm fsm;       \
     struct raft raft
@@ -26,18 +24,17 @@
 /**
  * Setup the raft instance of a fixture.
  */
-#define RAFT_SETUP(F)                                                          \
-    {                                                                          \
-        uint64_t id = 1;                                                       \
-        const char *address = "1";                                             \
-        int rv;                                                                \
-        (void)user_data;                                                       \
-        test_heap_setup(params, &F->heap);                                     \
-        test_logger_setup(params, &F->logger, id);                             \
-        test_io_setup(params, &F->io, &F->logger);                             \
-        test_fsm_setup(params, &F->fsm);                                       \
-        rv = raft_init(&F->raft, &F->logger, &F->io, &F->fsm, F, id, address); \
-        munit_assert_int(rv, ==, 0);                                           \
+#define RAFT_SETUP(F)                                              \
+    {                                                              \
+        uint64_t id = 1;                                           \
+        const char *address = "1";                                 \
+        int rv;                                                    \
+        (void)user_data;                                           \
+        test_heap_setup(params, &F->heap);                         \
+        test_io_setup(params, &F->io);                             \
+        test_fsm_setup(params, &F->fsm);                           \
+        rv = raft_init(&F->raft, &F->io, &F->fsm, F, id, address); \
+        munit_assert_int(rv, ==, 0);                               \
     }
 
 #define RAFT_TEAR_DOWN(F)                  \
@@ -46,7 +43,6 @@
                                            \
         test_fsm_tear_down(&F->fsm);       \
         test_io_tear_down(&F->io);         \
-        test_logger_tear_down(&F->logger); \
         test_heap_tear_down(&F->heap);     \
     }
 

@@ -144,8 +144,8 @@ static MunitResult test_partitioning(const MunitParameter params[], void *data)
 
     /* Disconnect the leader from a majority of servers */
     n = 0;
-    for (i = 0; n < (f->cluster.n / 2) + 1; i++) {
-      struct raft *raft = &f->cluster.rafts[i];
+    for (i = 0; n < (f->cluster.fixture.n / 2) + 1; i++) {
+      struct raft *raft = &f->cluster.fixture.servers[i].raft;
 
       if (raft->id == leader_id) {
 	continue;
@@ -167,8 +167,8 @@ static MunitResult test_partitioning(const MunitParameter params[], void *data)
     munit_assert_int(rv, !=, 0);
 
     /* Reconnect the old leader */
-    for (i = 0; i < f->cluster.n; i++) {
-      struct raft *raft = &f->cluster.rafts[i];
+    for (i = 0; i < f->cluster.fixture.n; i++) {
+      struct raft *raft = &f->cluster.fixture.servers[i].raft;
       if (raft->id == leader_id) {
 	continue;
       }
