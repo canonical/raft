@@ -127,11 +127,6 @@ struct raft_logger
 };
 
 /**
- * Emit a message with level #RAFT_DEBUG
- */
-void raft_debugf(struct raft_logger *logger, const char *format, ...);
-
-/**
  * Emit a message with level #RAFT_INFO
  */
 void raft_infof(struct raft_logger *logger, const char *format, ...);

@@ -33,7 +33,7 @@
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(C, MSG, ...) raft_debugf(C->uv->logger, MSG, ##__VA_ARGS__)
+#define tracef(C, MSG, ...) debugf(C->uv->io, MSG, ##__VA_ARGS__)
 #else
 #define tracef(C, MSG, ...)
 #endif

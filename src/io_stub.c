@@ -13,7 +13,7 @@
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(S, MSG, ...) raft_debugf(S->logger, MSG, __VA_ARGS__)
+#define tracef(S, MSG, ...) debugf(S->io, MSG, __VA_ARGS__)
 static const char *message_names[6] = {
     NULL,           "append entries",      "append entries result",
     "request vote", "request vote result", "install snapshot"};

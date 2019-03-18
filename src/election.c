@@ -180,9 +180,8 @@ int raft_election__vote(struct raft *r,
 
     if (args->last_log_term < local_last_log_term) {
         /* The requesting server has last entry's log term lower than ours. */
-        raft_debugf(
-            r->logger,
-            "local log last entry has higher last term -> not granting");
+        debugf(r->io,
+               "local log last entry has higher last term -> not granting");
         return 0;
     }
 
