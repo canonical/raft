@@ -7,6 +7,7 @@
 #include "io_uv.h"
 #include "io_uv_fs.h"
 #include "io_uv_load.h"
+#include "logging.h"
 
 /* Template string for snapshot filenames: snapshot term, snapshot index,
  * creation timestamp (milliseconds since epoch). */
@@ -253,8 +254,8 @@ static void process_put_requests(struct io_uv *uv)
     rv = uv_queue_work(uv->loop, &uv->snapshot_put_work, put_work_cb,
                        put_after_work_cb);
     if (rv != 0) {
-        raft_errorf(uv->logger, "store snapshot %lld: %s", r->snapshot->index,
-                    uv_strerror(rv));
+        errorf(uv->io, "store snapshot %lld: %s", r->snapshot->index,
+               uv_strerror(rv));
         uv->errored = true;
     }
 }
@@ -399,7 +400,7 @@ int io_uv__snapshot_get(struct raft_io *io,
     RAFT__QUEUE_PUSH(&uv->snapshot_get_reqs, &r->queue);
     rv = uv_queue_work(uv->loop, &r->work, get_work_cb, get_after_work_cb);
     if (rv != 0) {
-        raft_errorf(uv->logger, "get last snapshot: %s", uv_strerror(rv));
+        errorf(uv->io, "get last snapshot: %s", uv_strerror(rv));
         rv = RAFT_ERR_IO;
         goto err_after_snapshot_alloc;
     }

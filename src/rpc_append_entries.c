@@ -202,7 +202,7 @@ int raft_rpc__recv_append_entries_result(
     /* Ignore responses from servers that have been removed */
     server = configuration__get(&r->configuration, id);
     if (server == NULL) {
-        raft_errorf(r->logger, "unknown server -> ignore");
+        errorf(r->io, "unknown server -> ignore");
         return 0;
     }
 

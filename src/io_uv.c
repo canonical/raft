@@ -452,7 +452,7 @@ static int raft__io_uv_create_closed_1_1(struct io_uv *uv,
     /* Open the file. */
     fd = raft__io_uv_fs_open(uv->dir, filename, O_WRONLY | O_CREAT | O_EXCL);
     if (fd == -1) {
-        raft_errorf(uv->logger, "open %s: %s", filename, strerror(errno));
+        errorf(uv->io, "open %s: %s", filename, strerror(errno));
         return RAFT_ERR_IO;
     }
 
@@ -533,12 +533,12 @@ static int raft__io_uv_write_closed_1_1(struct io_uv *uv,
     rv = write(fd, buf, len);
     if (rv == -1) {
         free(buf);
-        raft_errorf(uv->logger, "write segment 1: %s", strerror(errno));
+        errorf(uv->io, "write segment 1: %s", strerror(errno));
         return RAFT_ERR_IO;
     }
     if (rv != (int)len) {
         free(buf);
-        raft_errorf(uv->logger, "write segment 1: only %d bytes written", rv);
+        errorf(uv->io, "write segment 1: only %d bytes written", rv);
         return RAFT_ERR_IO;
     }
 
@@ -546,7 +546,7 @@ static int raft__io_uv_write_closed_1_1(struct io_uv *uv,
 
     rv = fsync(fd);
     if (rv == -1) {
-        raft_errorf(uv->logger, "fsync segment 1: %s", strerror(errno));
+        errorf(uv->io, "fsync segment 1: %s", strerror(errno));
         return RAFT_ERR_IO;
     }
 

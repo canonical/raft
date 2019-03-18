@@ -112,7 +112,7 @@ static void snapshot_get_cb(struct raft_io_snapshot_get *req,
     int rv;
 
     if (status != 0) {
-        raft_errorf(r->logger, "get snapshot %s", raft_strerror(status));
+        errorf(r->io, "get snapshot %s", raft_strerror(status));
         goto err;
     }
 
@@ -861,9 +861,9 @@ static int raft_replication__check_prev_log_entry(
     if (local_prev_term != args->prev_log_term) {
         if (args->prev_log_index <= r->commit_index) {
             /* Should never happen; something is seriously wrong! */
-            raft_errorf(r->logger,
-                        "previous index conflicts with "
-                        "committed entry -> shutdown");
+            errorf(r->io,
+                   "previous index conflicts with "
+                   "committed entry -> shutdown");
             return -1;
         }
         debugf(r->io, "previous term mismatch -> reject");
@@ -904,9 +904,9 @@ static int raft_replication__delete_conflicting_entries(
         if (local_term > 0 && local_term != entry->term) {
             if (entry_index <= r->commit_index) {
                 /* Should never happen; something is seriously wrong! */
-                raft_errorf(r->logger,
-                            "new index conflicts with "
-                            "committed entry -> shutdown");
+                errorf(r->io,
+                       "new index conflicts with "
+                       "committed entry -> shutdown");
 
                 return RAFT_ERR_SHUTDOWN;
             }
@@ -1072,8 +1072,8 @@ static void put_snapshot_cb(struct raft_io_snapshot_put *req, int status)
     r->snapshot.put.data = NULL;
 
     if (status != 0) {
-        raft_errorf(r->logger, "save snapshot %d: %s", snapshot->index,
-                    raft_strerror(status));
+        errorf(r->io, "save snapshot %d: %s", snapshot->index,
+               raft_strerror(status));
         goto err;
     }
 
@@ -1109,8 +1109,8 @@ static void put_snapshot_cb(struct raft_io_snapshot_put *req, int status)
 
     rv = r->fsm->restore(r->fsm, &snapshot->bufs[0]);
     if (rv != 0) {
-        raft_errorf(r->logger, "restore snapshot %d: %s", snapshot->index,
-                    raft_strerror(status));
+        errorf(r->io, "restore snapshot %d: %s", snapshot->index,
+               raft_strerror(status));
         goto err;
     }
 

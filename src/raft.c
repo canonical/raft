@@ -156,8 +156,8 @@ static void recv_cb(struct raft_io *io, struct raft_message *message)
     };
 
     if (rv != 0 && rv != RAFT_ERR_IO_CONNECT) {
-        raft_errorf(r->logger, "rpc %s: %s", raft__message_names[message->type],
-                    raft_strerror(rv));
+        errorf(r->io, "rpc %s: %s", raft__message_names[message->type],
+               raft_strerror(rv));
     }
 }
 

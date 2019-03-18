@@ -10,6 +10,7 @@
 #include "io_uv.h"
 #include "io_uv_encoding.h"
 #include "io_uv_load.h"
+#include "logging.h"
 
 /* Template string for snapshot filenames: snapshot term, snapshot index,
  * creation timestamp (milliseconds since epoch). */
@@ -145,7 +146,7 @@ int io_uv__load_list(struct io_uv *uv,
 
     n_dirents = scandir(uv->dir, &dirents, NULL, alphasort);
     if (n_dirents < 0) {
-        raft_errorf(uv->logger, "scan %s: %s", uv->dir, uv_strerror(-errno));
+        errorf(uv->io, "scan %s: %s", uv->dir, uv_strerror(-errno));
         return RAFT_ERR_IO;
     }
 
@@ -239,7 +240,7 @@ int io_uv__load_closed(struct io_uv *uv,
         goto err;
     }
     if (empty) {
-        raft_errorf(uv->logger, "segment %s: file is empty", segment->filename);
+        errorf(uv->io, "segment %s: file is empty", segment->filename);
         rv = RAFT_ERR_IO_CORRUPT;
         goto err;
     }
@@ -252,8 +253,8 @@ int io_uv__load_closed(struct io_uv *uv,
     }
 
     if (format != IO_UV__DISK_FORMAT) {
-        raft_errorf(uv->logger, "segment %s: unexpected format version: %lu",
-                    segment->filename, format);
+        errorf(uv->io, "segment %s: unexpected format version: %lu",
+               segment->filename, format);
         rv = RAFT_ERR_IO;
         goto err_after_open;
     }
@@ -545,23 +546,22 @@ static int load_snapshot_meta(struct io_uv *uv,
 
     fd = raft__io_uv_fs_open(uv->dir, meta->filename, O_RDONLY);
     if (fd == -1) {
-        raft_errorf(uv->logger, "open %s: %s", meta->filename,
-                    uv_strerror(-errno));
+        errorf(uv->io, "open %s: %s", meta->filename, uv_strerror(-errno));
         rv = RAFT_ERR_IO;
         goto err;
     }
 
     rv = raft__io_uv_fs_read_n(fd, header, sizeof header);
     if (rv != 0) {
-        raft_errorf(uv->logger, "read %s: %s", meta->filename, uv_strerror(rv));
+        errorf(uv->io, "read %s: %s", meta->filename, uv_strerror(rv));
         rv = RAFT_ERR_IO;
         goto err_after_open;
     }
 
     format = byte__flip64(header[0]);
     if (format != IO_UV__DISK_FORMAT) {
-        raft_errorf(uv->logger, "read %s: unsupported format %lu",
-                    meta->filename, format);
+        errorf(uv->io, "read %s: unsupported format %lu", meta->filename,
+               format);
         rv = RAFT_ERR_IO_CORRUPT;
         goto err_after_open;
     }
@@ -571,14 +571,14 @@ static int load_snapshot_meta(struct io_uv *uv,
     snapshot->configuration_index = byte__flip64(header[2]);
     buf.len = byte__flip64(header[3]);
     if (buf.len > SNAPSHOT_META_MAX_CONFIGURATION_SIZE) {
-        raft_errorf(uv->logger, "read %s: configuration data too big (%ld)",
-                    meta->filename, buf.len);
+        errorf(uv->io, "read %s: configuration data too big (%ld)",
+               meta->filename, buf.len);
         rv = RAFT_ERR_IO_CORRUPT;
         goto err_after_open;
     }
     if (buf.len == 0) {
-        raft_errorf(uv->logger, "read %s: no configuration data",
-                    meta->filename, buf.len);
+        errorf(uv->io, "read %s: no configuration data", meta->filename,
+               buf.len);
         rv = RAFT_ERR_IO_CORRUPT;
         goto err_after_open;
     }
@@ -597,7 +597,7 @@ static int load_snapshot_meta(struct io_uv *uv,
     crc2 = byte__crc32(buf.base, buf.len, crc2);
 
     if (crc1 != crc2) {
-        raft_errorf(uv->logger, "read %s: corrupted data", meta->filename);
+        errorf(uv->io, "read %s: corrupted data", meta->filename);
         rv = RAFT_ERR_IO_CORRUPT;
         goto err_after_open;
     }
@@ -638,14 +638,14 @@ static int load_snapshot_data(struct io_uv *uv,
 
     rv = raft__io_uv_fs_stat(uv->dir, filename, &sb);
     if (rv != 0) {
-        raft_errorf(uv->logger, "stat %s: %s", filename, uv_strerror(-errno));
+        errorf(uv->io, "stat %s: %s", filename, uv_strerror(-errno));
         rv = RAFT_ERR_IO;
         goto err;
     }
 
     fd = raft__io_uv_fs_open(uv->dir, filename, O_RDONLY);
     if (fd == -1) {
-        raft_errorf(uv->logger, "open %s: %s", filename, uv_strerror(-errno));
+        errorf(uv->io, "open %s: %s", filename, uv_strerror(-errno));
         rv = RAFT_ERR_IO;
         goto err;
     }
@@ -791,9 +791,8 @@ static int load_entries_from_segments(struct io_uv *uv,
             /* Check that start index encoded in the name of the segment matches
              * what we expect. */
             if (segment->first_index > next_index) {
-                raft_errorf(uv->logger,
-                            "segment %s: expected first index to be %lld",
-                            segment->filename, next_index);
+                errorf(uv->io, "segment %s: expected first index to be %lld",
+                       segment->filename, next_index);
                 rv = RAFT_ERR_IO_CORRUPT;
                 goto err;
             }
