@@ -58,6 +58,7 @@
 #define TEST_CLUSTER_H
 
 #include "../../include/raft.h"
+#include "../../include/raft/fixture.h"
 
 #include "fsm.h"
 #include "io.h"
@@ -76,16 +77,11 @@
 
 struct test_cluster
 {
-    size_t n;                    /* N. of servers in the cluster. */
-    size_t n_voting;             /* N. of voting servers (highest IDs) */
-    int time;                    /* Elapsed time, in milliseconds */
-    bool *alive;                 /* Whether a server is alive. */
-    unsigned leader_id;          /* Current leader, if any. */
-    struct raft_io *ios;         /* Test I/O implementations. */
-    struct raft_fsm *fsms;       /* Test FSM implementations. */
-    struct raft *rafts;          /* Raft instances */
-    raft_index commit_index;     /* Index of last committed entry. */
-    struct raft_log log;         /* Copy of leader's log at last iteration. */
+    struct raft_fixture fixture;
+    struct raft_fsm fsms[RAFT_FIXTURE_MAX_SERVERS];
+    unsigned leader_id;      /* Current leader, if any. */
+    raft_index commit_index; /* Index of last committed entry. */
+    struct raft_log log;     /* Copy of leader's log at last iteration. */
 };
 
 void test_cluster_setup(const MunitParameter params[], struct test_cluster *c);
@@ -101,7 +97,7 @@ void test_cluster_run_once(struct test_cluster *c);
  */
 int test_cluster_run_until(struct test_cluster *c,
                            bool (*stop)(struct test_cluster *c),
-                           int max_msecs);
+                           unsigned max_msecs);
 
 /**
  * Return the server ID of the leader, or 0 if there's no leader.

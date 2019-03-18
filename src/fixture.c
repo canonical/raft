@@ -15,7 +15,7 @@ static int setup_server(unsigned i,
                         int (*random)(int, int))
 {
     int rc;
-    s->alive =true;
+    s->alive = true;
     s->id = i + 1;
     sprintf(s->address, "%u", s->id);
     rc = raft_io_stub_init(&s->io);
@@ -39,6 +39,20 @@ static void tear_down_server(struct raft_fixture_server *s)
     raft_io_stub_close(&s->io);
 }
 
+/* Connect the server with the given index to all others */
+static void connect_to_all(struct raft_fixture *f, unsigned i)
+{
+    unsigned j;
+    for (j = 0; j < f->n; j++) {
+        struct raft_io *io1 = &f->servers[i].io;
+        struct raft_io *io2 = &f->servers[j].io;
+        if (i == j) {
+            continue;
+        }
+        raft_io_stub_connect(io1, io2);
+    }
+}
+
 int raft_fixture_setup(struct raft_fixture *f,
                        unsigned n,
                        unsigned n_voting,
@@ -47,7 +61,6 @@ int raft_fixture_setup(struct raft_fixture *f,
 {
     struct raft_configuration configuration;
     unsigned i;
-    unsigned j;
     int rc;
     assert(n >= 1);
     assert(n_voting >= 1);
@@ -55,10 +68,7 @@ int raft_fixture_setup(struct raft_fixture *f,
 
     f->time = 0;
     f->n = n;
-    f->servers = raft_malloc(n * sizeof *f->servers);
-    if (f->servers == NULL) {
-        return RAFT_ENOMEM;
-    }
+    f->random = random;
 
     /* Setup all servers */
     raft_configuration_init(&configuration);
@@ -77,14 +87,7 @@ int raft_fixture_setup(struct raft_fixture *f,
 
     /* Connect all servers to each another */
     for (i = 0; i < f->n; i++) {
-        for (j = 0; j < f->n; j++) {
-            struct raft_io *io1 = &f->servers[i].io;
-            struct raft_io *io2 = &f->servers[j].io;
-            if (i == j) {
-                continue;
-            }
-            raft_io_stub_connect(io1, io2);
-        }
+        connect_to_all(f, i);
     }
 
     /* Bootstrap and start */
@@ -111,7 +114,6 @@ void raft_fixture_tear_down(struct raft_fixture *f)
     for (i = 0; i < f->n; i++) {
         tear_down_server(&f->servers[i]);
     }
-    raft_free(f->servers);
 }
 
 /* Flush any pending write to the disk and any pending message into the network
@@ -292,34 +294,83 @@ void raft_fixture_depose(struct raft_fixture *f)
     assert(0);
 }
 
-void raft_fixture_disconnect(struct raft_fixture *f, unsigned id)
+void raft_fixture_disconnect(struct raft_fixture *f, unsigned id1, unsigned id2)
+{
+    struct raft_io *io1 = &f->servers[id1 - 1].io;
+    struct raft_io *io2 = &f->servers[id2 - 1].io;
+    raft_io_stub_disconnect(io1, io2);
+    raft_io_stub_disconnect(io2, io1);
+}
+
+void raft_fixture_disconnect_from_all(struct raft_fixture *f, unsigned id)
 {
     unsigned i;
-    struct raft_io *io1 = &f->servers[id - 1].io;
     for (i = 0; i < f->n; i++) {
-        struct raft_io *io2 = &f->servers[i].io;
         if (i == id - 1) {
             continue;
         }
-        raft_io_stub_disconnect(io1, io2);
+        raft_fixture_disconnect(f, id, f->servers[i].id);
     }
 }
 
-void raft_fixture_reconnect(struct raft_fixture *f, unsigned id)
+bool raft_fixture_connected(struct raft_fixture *f, unsigned id1, unsigned id2)
+{
+    struct raft_io *io1 = &f->servers[id1 - 1].io;
+    struct raft_io *io2 = &f->servers[id2 - 1].io;
+    return raft_io_stub_connected(io1, io2) && raft_io_stub_connected(io2, io1);
+}
+
+void raft_fixture_reconnect(struct raft_fixture *f, unsigned id1, unsigned id2)
+{
+    struct raft_io *io1 = &f->servers[id1 - 1].io;
+    struct raft_io *io2 = &f->servers[id2 - 1].io;
+    raft_io_stub_reconnect(io1, io2);
+    raft_io_stub_reconnect(io2, io1);
+}
+
+void raft_fixture_reconnect_to_all(struct raft_fixture *f, unsigned id)
 {
     unsigned i;
-    struct raft_io *io1 = &f->servers[id - 1].io;
     for (i = 0; i < f->n; i++) {
-        struct raft_io *io2 = &f->servers[i].io;
         if (i == id - 1) {
             continue;
         }
-        raft_io_stub_reconnect(io1, io2);
+        raft_fixture_reconnect(f, id, f->servers[i].id);
     }
 }
 
 void raft_fixture_kill(struct raft_fixture *f, unsigned id)
 {
-    raft_fixture_disconnect(f, id);
+    raft_fixture_disconnect_from_all(f, id);
     f->servers[id - 1].alive = false;
+}
+
+int raft_fixture_add_server(struct raft_fixture *f, struct raft_fsm *fsm)
+{
+    struct raft_fixture_server *s;
+    unsigned i;
+    unsigned j;
+    int rc;
+    i = f->n;
+    f->n++;
+    s = &f->servers[i];
+
+    rc = setup_server(i, s, fsm, f->random);
+    if (rc != 0) {
+        return rc;
+    }
+
+    connect_to_all(f, i);
+    for (j = 0; j < f->n; j++) {
+        struct raft_io *io1 = &f->servers[i].io;
+        struct raft_io *io2 = &f->servers[j].io;
+        raft_io_stub_connect(io2, io1);
+    }
+
+    rc = raft_start(&s->raft);
+    if (rc != 0) {
+        return rc;
+    }
+
+    return 0;
 }

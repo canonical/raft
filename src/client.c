@@ -160,6 +160,8 @@ int raft_promote(struct raft *r, const unsigned id)
         return rv;
     }
 
+    debugf(r->io, "promote server: id %d", id);
+
     server = configuration__get(&r->configuration, id);
     if (server == NULL) {
         rv = RAFT_EBADID;

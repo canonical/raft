@@ -8,6 +8,8 @@
 
 #include "../raft.h"
 
+#define RAFT_FIXTURE_MAX_SERVERS 16
+
 struct raft_fixture
 {
     raft_time time; /* Number of milliseconds elapsed. */
@@ -19,7 +21,8 @@ struct raft_fixture
         char address[8];
         struct raft_io io;
         struct raft raft;
-    } * servers;
+    } servers[RAFT_FIXTURE_MAX_SERVERS];
+    int (*random)(int, int);
 };
 
 /**
@@ -60,19 +63,43 @@ void raft_fixture_elect(struct raft_fixture *f, unsigned id);
 void raft_fixture_depose(struct raft_fixture *f);
 
 /**
+ * Return true if the given servers are connected.
+ */
+bool raft_fixture_connected(struct raft_fixture *f, unsigned id1, unsigned id2);
+
+/**
+ * Disconnect the two given servers from one another.
+ */
+void raft_fixture_disconnect(struct raft_fixture *f,
+                             unsigned id1,
+                             unsigned id2);
+
+/**
  * Disconnect the given server from all the others.
  */
-void raft_fixture_disconnect(struct raft_fixture *f, unsigned id);
+void raft_fixture_disconnect_from_all(struct raft_fixture *f, unsigned id);
+
+/**
+ * Reconnect the two given servers to one another.
+ */
+void raft_fixture_reconnect(struct raft_fixture *f,
+                             unsigned id1,
+                             unsigned id2);
 
 /**
  * Reconnect the given server to all the others.
  */
-void raft_fixture_disconnect(struct raft_fixture *f, unsigned id);
+void raft_fixture_reconnect_to_all(struct raft_fixture *f, unsigned id);
 
 /**
  * Kill the server with the given ID. The server won't receive any message and
  * its tick callback won't be invoked.
  */
 void raft_fixture_kill(struct raft_fixture *f, unsigned id);
+
+/**
+ * Add a new empty server to the cluster and connect it to all others.
+ */
+int raft_fixture_add_server(struct raft_fixture *f, struct raft_fsm *fsm);
 
 #endif /* RAFT_FAKE_H */

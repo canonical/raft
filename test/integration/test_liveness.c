@@ -45,7 +45,7 @@ static MunitParameterEnum params[] = {
  */
 static int __server_pairs(struct fixture *f)
 {
-    return f->cluster.n * (f->cluster.n - 1) / 2;
+    return f->cluster.fixture.n * (f->cluster.fixture.n - 1) / 2;
 }
 
 /**
@@ -104,8 +104,8 @@ static void *setup(const MunitParameter params[], void *user_data)
     f->disconnections = munit_malloc(pairs * sizeof *f->disconnections);
 
     k = 0;
-    for (i = 0; i < f->cluster.n; i++) {
-        for (j = i + 1; j < f->cluster.n; j++) {
+    for (i = 0; i < f->cluster.fixture.n; i++) {
+        for (j = i + 1; j < f->cluster.fixture.n; j++) {
             struct disconnection *disconnection = &f->disconnections[k];
             disconnection->id1 = i + 1;
             disconnection->id2 = j + 1;

@@ -21,7 +21,7 @@
 #endif
 
 /* Set to 1 to enable debug logging. */
-#if 0
+#if 1
 #define tracef(MSG, ...) debugf(r->io, MSG, __VA_ARGS__)
 #else
 #define tracef(MSG, ...)
@@ -688,7 +688,7 @@ int raft_replication__update(struct raft *r,
      */
     replication->next_index = result->last_log_index + 1;
     replication->match_index = result->last_log_index;
-    debugf(r->io, "match/next idx for server %ld: %ld/%ld", server_index,
+    debugf(r->io, "match/next idx for server %ld: %ld/%ld", server->id,
            replication->match_index, replication->next_index);
 
     /* If the server is currently being promoted and is catching with logs,
