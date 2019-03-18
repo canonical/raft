@@ -141,7 +141,7 @@ struct io_stub
     unsigned min_latency;
     unsigned max_latency;
 
-    int (*randint)(int, int); /* Random integer generator */
+    int (*random)(int, int); /* Random integer generator */
 
     struct
     {
@@ -634,16 +634,16 @@ static raft_time io_stub__time(struct raft_io *io)
     return s->time;
 }
 
-static int io_stub__randint(struct raft_io *io, int min, int max)
+static int io_stub__random(struct raft_io *io, int min, int max)
 {
     struct io_stub *s;
     s = io->impl;
 
-    if (s->randint == NULL) {
+    if (s->random == NULL) {
         return (max - min) / 2;
     }
 
-    return s->randint(min, max);
+    return s->random(min, max);
 }
 
 /**
@@ -713,7 +713,7 @@ int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger)
     s->min_latency = 0;
     s->max_latency = 0;
 
-    s->randint = NULL;
+    s->random = NULL;
 
     s->fault.countdown = -1;
     s->fault.n = -1;
@@ -732,7 +732,7 @@ int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger)
     io->snapshot_put = io_stub__snapshot_put;
     io->snapshot_get = io_stub__snapshot_get;
     io->time = io_stub__time;
-    io->randint = io_stub__randint;
+    io->random = io_stub__random;
 
     return 0;
 }
@@ -813,11 +813,11 @@ void raft_io_stub_set_time(struct raft_io *io, unsigned time)
     s->time = time;
 }
 
-void raft_io_stub_set_randint(struct raft_io *io, int (*randint)(int, int))
+void raft_io_stub_set_random(struct raft_io *io, int (*f)(int, int))
 {
     struct io_stub *s;
     s = io->impl;
-    s->randint = randint;
+    s->random = f;
 }
 
 void raft_io_stub_set_latency(struct raft_io *io, unsigned min, unsigned max)
@@ -917,7 +917,7 @@ static void io_stub__flush_send(struct io_stub *s, struct send *send)
     assert(transmit != NULL);
 
     if (s->min_latency != 0) {
-        transmit->timer = s->randint(s->min_latency, s->max_latency);
+        transmit->timer = s->random(s->min_latency, s->max_latency);
     } else {
         transmit->timer = 0;
     }

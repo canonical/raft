@@ -219,8 +219,8 @@ static raft_time io_uv__time(struct raft_io *io)
     return uv_now(uv->loop);
 }
 
-/* Implementation of raft_io->randint. */
-static int io_uv__randint(struct raft_io *io, int min, int max)
+/* Implementation of raft_io->random. */
+static int io_uv__random(struct raft_io *io, int min, int max)
 {
     (void)io;
     return min + (abs(rand()) % (max - min));
@@ -352,7 +352,7 @@ int raft_io_uv_init(struct raft_io *io,
     io->snapshot_put = io_uv__snapshot_put;
     io->snapshot_get = io_uv__snapshot_get;
     io->time = io_uv__time;
-    io->randint = io_uv__randint;
+    io->random = io_uv__random;
 
     return 0;
 

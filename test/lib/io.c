@@ -14,7 +14,7 @@ void test_io_setup(const MunitParameter params[],
 
     rv = raft_io_stub_init(io, logger);
     munit_assert_int(rv, ==, 0);
-    raft_io_stub_set_randint(io, munit_rand_int_range);
+    raft_io_stub_set_random(io, munit_rand_int_range);
 }
 
 void test_io_tear_down(struct raft_io *io)

@@ -30,7 +30,7 @@ void raft_io_stub_set_time(struct raft_io *io, unsigned time);
 /**
  * Set the random integer generator.
  */
-void raft_io_stub_set_randint(struct raft_io *io, int (*randint)(int, int));
+void raft_io_stub_set_random(struct raft_io *io, int (*f)(int, int));
 
 /**
  * Set the minimum and maximum values of the random latency that is assigned to
