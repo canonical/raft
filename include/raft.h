@@ -651,11 +651,6 @@ struct raft_replication
 struct raft
 {
     /**
-     * Logger to use to emit messages.
-     */
-    struct raft_logger *logger;
-
-    /**
      * User-defined disk and network I/O interface implementation.
      */
     struct raft_io *io;

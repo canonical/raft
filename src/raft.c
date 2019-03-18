@@ -32,7 +32,6 @@ int raft_init(struct raft *r,
 
     assert(r != NULL);
 
-    r->logger = logger;
     r->io = io;
     r->io->data = r;
     r->fsm = fsm;
