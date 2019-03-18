@@ -14,6 +14,7 @@
 #include "io_uv_encoding.h"
 #include "io_uv_fs.h"
 #include "io_uv_load.h"
+#include "logging.h"
 
 /* Retry to connect to peer servers every second.
  *
@@ -27,6 +28,7 @@ static int io_uv__init(struct raft_io *io, unsigned id, const char *address)
     int rv;
     uv = io->impl;
     assert(uv->state == 0);
+    uv->id = id;
     rv = uv->transport->init(uv->transport, id, address);
     if (rv != 0) {
         return rv;
@@ -226,6 +228,17 @@ static int io_uv__random(struct raft_io *io, int min, int max)
     return min + (abs(rand()) % (max - min));
 }
 
+/* Implementation of raft_io->emit. */
+static void io_uv__emit(struct raft_io *io,
+                          int level,
+                          const char *fmt,
+                          va_list args)
+{
+    struct io_uv *uv;
+    uv = io->impl;
+    emit_to_stream(stderr, uv->id, uv_now(uv->loop), level, fmt, args);
+}
+
 /**
  * Open and allocate the first closed segment, containing just one entry, and
  * return its file descriptor.
@@ -284,6 +297,7 @@ int raft_io_uv_init(struct raft_io *io,
     }
     uv->transport = transport;
     uv->transport->data = uv;
+    uv->id = 0;
     uv->state = 0;
     uv->errored = false;
     uv->block_size = 0; /* Detected in raft_io->init() */
@@ -353,6 +367,7 @@ int raft_io_uv_init(struct raft_io *io,
     io->snapshot_get = io_uv__snapshot_get;
     io->time = io_uv__time;
     io->random = io_uv__random;
+    io->emit = io_uv__emit;
 
     return 0;
 

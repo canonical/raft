@@ -35,6 +35,7 @@ struct io_uv
     struct uv_loop_s *loop;                 /* UV event loop */
     char *dir;                              /* Data directory */
     struct raft_io_uv_transport *transport; /* Network transport */
+    unsigned id;                            /* Server ID */
     int state;                              /* Current state */
     bool errored;                           /* If a disk I/O error was hit */
     size_t block_size;                      /* Block size of the data dir */

@@ -7,6 +7,7 @@
 #include "configuration.h"
 #include "election.h"
 #include "log.h"
+#include "logging.h"
 #include "rpc.h"
 #include "rpc_append_entries.h"
 #include "rpc_install_snapshot.h"
@@ -173,7 +174,7 @@ int raft_start(struct raft *r)
     assert(r != NULL);
     assert(r->state == RAFT_UNAVAILABLE);
 
-    raft_infof(r->logger, "starting");
+    infof(r->io, "starting");
 
     assert(r->heartbeat_timeout != 0);
     assert(r->heartbeat_timeout < r->election_timeout);
@@ -245,7 +246,7 @@ int raft_start(struct raft *r)
         struct raft_entry *entry = &entries[i];
 
         rv = log__append(&r->log, entry->term, entry->type, &entry->buf,
-                              entry->batch);
+                         entry->batch);
         if (rv != 0) {
             goto err_after_load;
         }

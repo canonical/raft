@@ -7,6 +7,7 @@
 
 #include "assert.h"
 #include "configuration.h"
+#include "logging.h"
 #include "queue.h"
 #include "snapshot.h"
 
@@ -646,6 +647,16 @@ static int io_stub__random(struct raft_io *io, int min, int max)
     return s->random(min, max);
 }
 
+static void io_stub__emit(struct raft_io *io,
+                          int level,
+                          const char *fmt,
+                          va_list args)
+{
+    struct io_stub *s;
+    s = io->impl;
+    emit_to_stream(stderr, s->id, s->time, level, fmt, args);
+}
+
 /**
  * Queue up a request which will be processed later, when io_stub_flush()
  * is invoked.
@@ -733,6 +744,7 @@ int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger)
     io->snapshot_get = io_stub__snapshot_get;
     io->time = io_stub__time;
     io->random = io_stub__random;
+    io->emit = io_stub__emit;
 
     return 0;
 }
