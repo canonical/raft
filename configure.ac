@@ -21,46 +21,46 @@ AC_PROG_LN_S
 # TODO: eventually enable this
 # AX_CHECK_COMPILE_FLAG([-Weverything], AM_CFLAGS+=" -Weverything")
 
-# Enable building the I/O implementation based on libuv.
+# Enable integration with libuv.
 AC_ARG_ENABLE(io-uv,
   AS_HELP_STRING(
     [--enable-io-uv],
-    [enable I/O implementation based on libuv, default: no]),
+    [enable integration with libuv, default: yes]),
   [case "${enableval}" in
      yes) io_uv=true ;;
      no)  io_uv=false ;;
      *)   AC_MSG_ERROR([bad value ${enableval} for --enable-io-uv]) ;;
    esac],
-  [io_uv=false])
+  [io_uv=true])
 AM_CONDITIONAL(IO_UV, test x"$io_uv" = x"true")
 AM_COND_IF(IO_UV,
   [PKG_CHECK_MODULES(UV, [libuv >= 1.8.0], [], [])
    AC_DEFINE(RAFT_IO_UV)])
 
-# Enable building the stub I/O implementation, for testing.
-AC_ARG_ENABLE(fake,
+# Enable the fake I/O implementation and associated fixture, for testing.
+AC_ARG_ENABLE(fixture,
   AS_HELP_STRING(
-    [--enable-fake],
-    [enable the stub I/O implementation, default: no]),
+    [--enable-fixture],
+    [enable raft test fixture, default: no]),
   [case "${enableval}" in
-     yes) fake=true ;;
-     no)  fake=false ;;
-     *)   AC_MSG_ERROR([bad value ${enableval} for --enable-fake]) ;;
+     yes) fixture=true ;;
+     no)  fixture=false ;;
+     *)   AC_MSG_ERROR([bad value ${enableval} for --enable-fixture]) ;;
    esac],
-  [fake=true])
-AM_CONDITIONAL(FAKE, test x"$fake" = x"true")
+  [fixture=true])
+AM_CONDITIONAL(FIXTURE, test x"$fixture" = x"true")
 
-# Enable building the example server.
+# Enable the example server.
 AC_ARG_ENABLE(example,
   AS_HELP_STRING(
     [--enable-example],
-    [enable building example server, default: no]),
+    [enable example server, default: yes]),
   [case "${enableval}" in
      yes) example=true ;;
      no)  example=false ;;
      *)   AC_MSG_ERROR([bad value ${enableval} for --enable-example]) ;;
    esac],
-  [example=false])
+  [example=true])
 AM_CONDITIONAL(EXAMPLE, test x"$example" = x"true")
 
 # Enable debugging output.

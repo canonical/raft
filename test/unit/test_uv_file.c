@@ -358,6 +358,7 @@ TEST_TEAR_DOWN(write)
         free(f->bufs[i].base);
     }
     TEAR_DOWN_FILE;
+    free(f);
 }
 
 static void write_cb(struct uv__file_write *req, int status)

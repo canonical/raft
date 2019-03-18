@@ -75,16 +75,18 @@ if IO_UV
   src/io_uv_truncate.c \
   src/uv_file.c
 endif
-if FAKE
+if FIXTURE
   libraft_la_SOURCES += \
-  src/io_stub.c
+  src/io_stub.c \
+  src/fixture.c
 endif
 include_HEADERS += \
   include/raft.h
 pkginclude_HEADERS =
-if FAKE
+if FIXTURE
   pkginclude_HEADERS += \
-  include/raft/io_stub.h
+  include/raft/io_stub.h \
+  include/raft/fixture.h
 endif
 if IO_UV
   pkginclude_HEADERS += \
@@ -145,9 +147,10 @@ if IO_UV
   test/unit/test_io_uv_truncate.c \
   test/unit/test_uv_file.c
 endif
-if FAKE
+if FIXTURE
   unit_test_SOURCES += \
-  test/unit/test_io_stub.c
+  test/unit/test_io_stub.c \
+  test/unit/test_fixture.c
 endif
 unit_test_CFLAGS = $(AM_CFLAGS) -DRAFT_TEST -DMUNIT_TEST_NAME_LEN=60
 unit_test_CFLAGS += -I$(top_srcdir)/tests/unit
