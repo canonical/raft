@@ -7,13 +7,15 @@
 
 static int setup_server(unsigned i,
                         struct raft_fixture_server *s,
-                        struct raft_fsm *fsm)
+                        struct raft_fsm *fsm,
+                        int (*random)(int, int))
 {
     int rc;
     rc = raft_io_stub_init(&s->io);
     if (rc != 0) {
         return rc;
     }
+    raft_io_stub_set_random(&s->io, random);
     raft_io_stub_set_latency(&s->io, 5, 50);
     s->id = i + 1;
     sprintf(s->address, "%u", s->id);
@@ -35,7 +37,8 @@ static void tear_down_server(struct raft_fixture_server *s)
 int raft_fixture_setup(struct raft_fixture *f,
                        unsigned n,
                        unsigned n_voting,
-                       struct raft_fsm *fsms)
+                       struct raft_fsm *fsms,
+                       int (*random)(int, int))
 {
     struct raft_configuration configuration;
     unsigned i;
@@ -56,7 +59,7 @@ int raft_fixture_setup(struct raft_fixture *f,
     for (i = 0; i < n; i++) {
         struct raft_fixture_server *s = &f->servers[i];
         bool voting = i < n_voting;
-        rc = setup_server(i, s, &fsms[i]);
+        rc = setup_server(i, s, &fsms[i], random);
         if (rc != 0) {
             return rc;
         }
@@ -85,7 +88,7 @@ int raft_fixture_setup(struct raft_fixture *f,
         if (rc != 0) {
             return rc;
         }
-	rc = raft_start(&s->raft);
+        rc = raft_start(&s->raft);
         if (rc != 0) {
             return rc;
         }
@@ -103,4 +106,96 @@ void raft_fixture_tear_down(struct raft_fixture *f)
         tear_down_server(&f->servers[i]);
     }
     raft_free(f->servers);
+}
+
+/* Flush any pending write to the disk and any pending message into the network
+ * buffers (this will assign them a latency timer). */
+static void flush_io(struct raft_fixture *f)
+{
+    size_t i;
+    for (i = 0; i < f->n; i++) {
+        struct raft_io *io = &f->servers[i].io;
+        raft_io_stub_flush_all(io);
+    }
+}
+
+/* Figure what's the lowest delivery timer across all stub I/O instances,
+ * i.e. the time at which the next message should be delivered (if any is
+ * pending). */
+static int lowest_deliver_timeout(struct raft_fixture *f)
+{
+    int min_timeout = -1;
+    size_t i;
+
+    for (i = 0; i < f->n; i++) {
+        struct raft_io *io = &f->servers[i].io;
+        int timeout;
+        timeout = raft_io_stub_next_deliver_timeout(io);
+        if (timeout == -1) {
+            continue;
+        }
+        if (min_timeout == -1 || timeout < min_timeout) {
+            min_timeout = timeout;
+        }
+    }
+
+    return min_timeout;
+}
+
+/* Check what's the raft instance whose timer is closest to expiration. */
+static unsigned lowest_raft_timeout(struct raft_fixture *f)
+{
+    size_t i;
+    unsigned min_timeout = 0; /* Lowest remaining time before expiration */
+
+    for (i = 0; i < f->n; i++) {
+        struct raft *r = &f->servers[i].raft;
+        unsigned timeout; /* Milliseconds remaining before expiration. */
+
+        timeout = raft_next_timeout(r);
+        if (min_timeout == 0 || timeout < min_timeout) {
+            min_timeout = timeout;
+        }
+    }
+
+    return min_timeout;
+}
+
+/* Fire either a message delivery or a raft tick, depending on whose timer is
+ * closest to expiration. */
+static void advance(struct raft_fixture *f, unsigned msecs)
+{
+    size_t i;
+
+    for (i = 0; i < f->n; i++) {
+        struct raft_io *io = &f->servers[i].io;
+        raft_io_stub_advance(io, msecs);
+    }
+}
+
+void raft_fixture_step(struct raft_fixture *f)
+{
+    int deliver_timeout;
+    unsigned raft_timeout;
+    unsigned timeout;
+
+    /* First flush I/O operations. */
+    flush_io(f);
+
+    /* Second, figure what's the message with the lowest timer (i.e. the
+     * message that should be delivered first) */
+    deliver_timeout = lowest_deliver_timeout(f);
+
+    /* Now check what's the raft instance whose timer is closest to
+     * expiration. */
+    raft_timeout = lowest_raft_timeout(f);
+
+    /* Fire either a raft tick or a message delivery. */
+    if (deliver_timeout != -1 && (unsigned)deliver_timeout < raft_timeout) {
+        timeout = deliver_timeout;
+    } else {
+        timeout = raft_timeout;
+    }
+
+    advance(f, timeout + 1);
 }

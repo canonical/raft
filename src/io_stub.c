@@ -1038,12 +1038,11 @@ bool raft_io_stub_flush(struct raft_io *io)
 void raft_io_stub_flush_all(struct raft_io *io)
 {
     struct io_stub *s;
-    bool has_more_requests;
     s = io->impl;
 
-    do {
-        has_more_requests = raft_io_stub_flush(io);
-    } while (has_more_requests);
+    while (!RAFT__QUEUE_IS_EMPTY(&s->requests)) {
+        raft_io_stub_flush(io);
+    };
 
     assert(s->n_append == 0);
     assert(s->n_send == 0);

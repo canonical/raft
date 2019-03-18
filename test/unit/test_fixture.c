@@ -24,7 +24,8 @@ static void *setup(const MunitParameter params[], void *user_data)
         test_fsm_setup(params, &f->fsms[i]);
     }
 
-    rc = raft_fixture_setup(&f->fixture, N_SERVERS, N_SERVERS, f->fsms);
+    rc = raft_fixture_setup(&f->fixture, N_SERVERS, N_SERVERS, f->fsms,
+                            munit_rand_int_range);
     munit_assert_int(rc, ==, 0);
     return f;
 }
@@ -48,5 +49,6 @@ TEST_CASE(elect, first, NULL)
 {
     struct fixture *f = data;
     (void)params;
+    raft_fixture_step(&f->fixture);
     return MUNIT_OK;
 }
