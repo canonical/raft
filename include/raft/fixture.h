@@ -46,8 +46,15 @@ void raft_fixture_step(struct raft_fixture *f);
 
 /**
  * Drive the cluster so the server with the given @id gets elected as
- * leader. There must currently be no leader.
+ * leader. There must currently be no leader. This is achieved by dropping all
+ * RequestVote messages sent by other servers.
  */
 void raft_fixture_elect(struct raft_fixture *f, unsigned id);
+
+/**
+ * Drive the cluster so the current leader gets deposed. This is achieved by
+ * dropping all AppendEntries result messages sent by followers to the leader.
+ */
+void raft_fixture_depose(struct raft_fixture *f);
 
 #endif /* RAFT_FAKE_H */

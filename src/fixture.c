@@ -5,6 +5,10 @@
 
 #include "assert.h"
 
+/* Maximum number of cluster steps to perform when waiting for a certain state
+ * to be reached. */
+#define MAX_STEPS 100
+
 static int setup_server(unsigned i,
                         struct raft_fixture_server *s,
                         struct raft_fsm *fsm,
@@ -200,7 +204,7 @@ void raft_fixture_step(struct raft_fixture *f)
     advance(f, timeout + 1);
 }
 
-static unsigned leader_id(struct raft_fixture *f)
+static unsigned current_leader_id(struct raft_fixture *f)
 {
     unsigned i;
     for (i = 0; i < f->n; i++) {
@@ -234,7 +238,7 @@ void raft_fixture_elect(struct raft_fixture *f, unsigned id)
     unsigned i;
 
     /* Make sure there's currently no leader. */
-    assert(leader_id(f) == 0);
+    assert(current_leader_id(f) == 0);
 
     /* TODO: make sure that the server with the given id is a voting one */
 
@@ -242,16 +246,41 @@ void raft_fixture_elect(struct raft_fixture *f, unsigned id)
      * one to be elected. */
     drop_all_except(f, RAFT_IO_REQUEST_VOTE, true, id);
 
-    for (i = 0; i < 100; i++) {
-        unsigned elected_id;
+    for (i = 0; i < MAX_STEPS; i++) {
+        unsigned leader_id;
         raft_fixture_step(f);
-        elected_id = leader_id(f);
-        if (elected_id == 0) {
+        leader_id = current_leader_id(f);
+        if (leader_id == 0) {
             continue;
         }
-        assert(elected_id == id);
+        assert(leader_id == id);
         drop_all_except(f, RAFT_IO_REQUEST_VOTE, false, id);
         return;
+    }
+
+    assert(0);
+}
+
+void raft_fixture_depose(struct raft_fixture *f)
+{
+    unsigned leader_id = current_leader_id(f);
+    struct raft_fixture_server *s;
+    unsigned i;
+
+    assert(leader_id != 0);
+    s = &f->servers[leader_id - 1];
+
+    /* Prevent all servers from sending append entries results, so the leader
+     * will eventually step down. */
+    drop_all_except(f, RAFT_IO_APPEND_ENTRIES_RESULT, true, leader_id);
+
+    for (i = 0; i < MAX_STEPS; i++) {
+        raft_fixture_step(f);
+        leader_id = current_leader_id(f);
+        if (leader_id == 0) {
+            drop_all_except(f, RAFT_IO_APPEND_ENTRIES_RESULT, false, leader_id);
+            return;
+        }
     }
 
     assert(0);
