@@ -289,7 +289,8 @@ static void __server_apply_cb(struct raft_apply *req, int status)
     raft_free(req);
 
     if (status != 0) {
-        raft_warnf(&s->logger, "fsm: apply error: %s", raft_strerror(status));
+        s->io.emit(&s->io, RAFT_WARN, "fsm: apply error: %s",
+                   raft_strerror(status));
         return;
     }
 
