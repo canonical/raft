@@ -76,7 +76,7 @@ void test_cluster_setup(const MunitParameter params[], struct test_cluster *c)
 
         test_fsm_setup(params, fsm);
 
-        raft_init(raft, logger, io, fsm, c, id, address);
+        raft_init(raft, io, fsm, c, id, address);
 
 	raft->heartbeat_timeout = 50;
         raft_set_election_timeout(raft, 250);
@@ -549,7 +549,7 @@ void test_cluster_add_server(struct test_cluster *c)
 
     test_fsm_setup(params, fsm);
 
-    raft_init(raft, logger, io, fsm, c, id, address);
+    raft_init(raft, io, fsm, c, id, address);
 
     rv = raft_start(raft);
     munit_assert_int(rv, ==, 0);

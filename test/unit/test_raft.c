@@ -116,7 +116,7 @@ TEST_CASE(init, error, oom, init_oom_params)
     raft_io_stub_init(&io, &f->logger);
     test_heap_fault_enable(&f->heap);
 
-    rv = raft_init(&raft, &f->logger, &io, &f->fsm, f, 1, "1");
+    rv = raft_init(&raft, &io, &f->fsm, f, 1, "1");
     munit_assert_int(rv, ==, RAFT_ENOMEM);
 
     raft_io_stub_close(&io);

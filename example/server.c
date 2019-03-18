@@ -213,7 +213,7 @@ static int __server_init(struct __server *s, const char *dir, unsigned id)
     sprintf(s->address, "127.0.0.1:900%d", id);
 
     /* Initialize and start the engine, using the libuv-based I/O backend. */
-    rv = raft_init(&s->raft, &s->logger, &s->io, &s->fsm, NULL, id, s->address);
+    rv = raft_init(&s->raft, &s->io, &s->fsm, NULL, id, s->address);
     if (rv != 0) {
         printf("error: init engine: %s\n", raft_strerror(rv));
         goto err_after_fsm_init;

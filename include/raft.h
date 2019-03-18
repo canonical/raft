@@ -861,7 +861,6 @@ struct raft
  * Initialize a raft server object.
  */
 int raft_init(struct raft *r,
-              struct raft_logger *logger,
               struct raft_io *io,
               struct raft_fsm *fsm,
               void *data,
