@@ -24,7 +24,7 @@ TEST_MODULE(io_stub);
     (void)user_data;                                    \
     test_heap_setup(params, &f->heap);                  \
     test_logger_setup(params, &f->logger, id);          \
-    rv = raft_io_stub_init(&f->io, &f->logger);         \
+    rv = raft_io_stub_init(&f->io);                     \
     munit_assert_int(rv, ==, 0);                        \
     rv = f->io.init(&f->io, 1, "1");                    \
     munit_assert_int(rv, ==, 0);                        \
@@ -543,7 +543,7 @@ TEST_SETUP(connect)
 {
     struct connect_fixture *f = munit_malloc(sizeof *f);
     SETUP;
-    rv = raft_io_stub_init(&f->other, &f->logger);
+    rv = raft_io_stub_init(&f->other);
     munit_assert_int(rv, ==, 0);
     rv = f->io.init(&f->other, 2, "2");
     munit_assert_int(rv, ==, 0);

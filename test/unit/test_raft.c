@@ -113,7 +113,7 @@ TEST_CASE(init, error, oom, init_oom_params)
 
     (void)params;
 
-    raft_io_stub_init(&io, &f->logger);
+    raft_io_stub_init(&io);
     test_heap_fault_enable(&f->heap);
 
     rv = raft_init(&raft, &io, &f->fsm, f, 1, "1");

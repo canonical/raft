@@ -111,7 +111,6 @@ struct io_stub
     size_t n;                       /* Size of the persisted entries array */
 
     /* Parameters passed via raft_io->init */
-    struct raft_logger *logger;
     unsigned id;
     const char *address;
     raft_io_tick_cb tick_cb;
@@ -692,7 +691,7 @@ static int io_stub__send(struct raft_io *io,
     return 0;
 }
 
-int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger)
+int raft_io_stub_init(struct raft_io *io)
 {
     struct io_stub *s;
 
@@ -704,7 +703,6 @@ int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger)
     }
 
     s->io = io;
-    s->logger = logger;
     s->time = 0;
     s->term = 0;
     s->voted_for = 0;

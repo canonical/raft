@@ -7,7 +7,6 @@
 #include <stdbool.h>
 
 struct raft_io;
-struct raft_logger;
 struct raft_message;
 struct raft_entry;
 
@@ -15,7 +14,7 @@ struct raft_entry;
  * Configure the given @raft_io instance to use a stub in-memory I/O
  * implementation.
  */
-int raft_io_stub_init(struct raft_io *io, struct raft_logger *logger);
+int raft_io_stub_init(struct raft_io *io);
 
 /**
  * Release all memory held by the given stub I/O implementation.
