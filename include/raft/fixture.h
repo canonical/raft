@@ -13,6 +13,7 @@ struct raft_fixture
     unsigned n;
     struct raft_fixture_server
     {
+        unsigned id;
         char address[8];
         struct raft_io io;
         struct raft raft;
@@ -20,11 +21,13 @@ struct raft_fixture
 };
 
 /**
- * Setup a raft cluster fixture with @n servers, each one using an in-memory
- * @raft_io implementation and one of the given @fsms.
+ * Setup a raft cluster fixture with @n servers, the first @n_voting of which
+ * are voting servers. Each server will use an in-memory @raft_io implementation
+ * and one of the given @fsms.
  */
 int raft_fixture_setup(struct raft_fixture *f,
                        unsigned n,
+                       unsigned n_voting,
                        struct raft_fsm *fsms);
 
 /**

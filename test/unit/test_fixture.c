@@ -24,7 +24,7 @@ static void *setup(const MunitParameter params[], void *user_data)
         test_fsm_setup(params, &f->fsms[i]);
     }
 
-    rc = raft_fixture_setup(&f->fixture, N_SERVERS, NULL);
+    rc = raft_fixture_setup(&f->fixture, N_SERVERS, N_SERVERS, f->fsms);
     munit_assert_int(rc, ==, 0);
     return f;
 }
