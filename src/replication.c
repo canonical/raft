@@ -4,6 +4,7 @@
 #include "configuration.h"
 #include "error.h"
 #include "log.h"
+#include "logging.h"
 #include "membership.h"
 #include "queue.h"
 #include "replication.h"
@@ -143,8 +144,7 @@ static void snapshot_get_cb(struct raft_io_snapshot_get *req,
     request->snapshot = snapshot;
     request->send.data = request;
 
-    raft_infof(r->logger, "sending snapshot %ld to %ld", snapshot->index,
-               server->id);
+    infof(r->io, "sending snapshot %ld to %ld", snapshot->index, server->id);
 
     rv = r->io->send(r->io, &request->send, &message, send_install_snapshot_cb);
     if (rv != 0) {
@@ -264,9 +264,8 @@ int raft_replication__send_append_entries(struct raft *r, size_t i)
             assert(r->snapshot.index > 0);
             assert(next_index - 1 <= r->snapshot.index);
             if (next_index - 1 < r->snapshot.index) {
-                raft_infof(r->logger,
-                           "missing entry at index %lld -> send snapshot",
-                           next_index - 1);
+                infof(r->io, "missing entry at index %lld -> send snapshot",
+                      next_index - 1);
                 return raft_replication__send_snapshot(r, i);
             }
             args->prev_log_term = r->snapshot.term;
@@ -663,8 +662,8 @@ int raft_replication__update(struct raft *r,
 
         replication->next_index = max(replication->next_index, 1);
 
-        raft_infof(r->logger, "log mismatch -> send old entries %ld",
-                   replication->next_index);
+        infof(r->io, "log mismatch -> send old entries %ld",
+              replication->next_index);
 
         /* Retry, ignoring errors. */
         raft_replication__send_append_entries(r, server_index);

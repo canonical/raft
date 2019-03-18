@@ -91,7 +91,7 @@ static void raft__close_cb(struct raft_io *io)
 {
     struct raft *r = io->data;
 
-    raft_infof(r->logger, "stopped");
+    infof(r->io, "stopped");
 
     raft_free(r->address);
     raft_state__clear(r);

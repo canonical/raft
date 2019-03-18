@@ -3,6 +3,7 @@
 #include "assert.h"
 #include "configuration.h"
 #include "election.h"
+#include "logging.h"
 #include "replication.h"
 #include "rpc.h"
 #include "state.h"
@@ -113,7 +114,7 @@ int raft_rpc__recv_request_vote_result(
 
     votes_index = configuration__index_of_voting(&r->configuration, id);
     if (votes_index == r->configuration.n) {
-        raft_infof(r->logger, "non-voting or unknown server -> reject");
+        infof(r->io, "non-voting or unknown server -> reject");
         return 0;
     }
 
@@ -158,7 +159,7 @@ int raft_rpc__recv_request_vote_result(
      */
     if (result->vote_granted) {
         if (raft_election__tally(r, votes_index)) {
-            raft_infof(r->logger, "votes quorum reached -> convert to leader");
+            infof(r->io, "votes quorum reached -> convert to leader");
             rv = raft_state__convert_to_leader(r);
             if (rv != 0) {
                 return rv;

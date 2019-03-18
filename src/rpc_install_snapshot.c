@@ -1,6 +1,7 @@
 #include "rpc_install_snapshot.h"
 #include "assert.h"
 #include "log.h"
+#include "logging.h"
 #include "replication.h"
 #include "rpc.h"
 #include "state.h"
@@ -25,8 +26,7 @@ int raft_rpc__recv_install_snapshot(struct raft *r,
 
     assert(address != NULL);
 
-    raft_infof(r->logger, "received snapshot %d from server %ld",
-               args->last_index, id);
+    infof(r->io, "received snapshot %d from server %ld", args->last_index, id);
 
     result->success = false;
     result->last_log_index = log__last_index(&r->log);
