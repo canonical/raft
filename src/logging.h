@@ -10,24 +10,12 @@
 #include "../include/raft.h"
 
 /**
- * Emit a message with level #RAFT_DEBUG
+ * Emit a log message with a certain level.
  */
-void debugf(struct raft_io *io, const char *format, ...);
-
-/**
- * Emit a message with level #RAFT_INFO
- */
-void infof(struct raft_io *io, const char *format, ...);
-
-/**
- * Emit a message with level #RAFT_WARN
- */
-void warnf(struct raft_io *io, const char *format, ...);
-
-/**
- * Emit a message with level #RAFT_ERROR
- */
-void errorf(struct raft_io *io, const char *format, ...);
+#define debugf(IO, FORMAT, ...) IO->emit(IO, RAFT_DEBUG, FORMAT, ##__VA_ARGS__);
+#define infof(IO, FORMAT, ...) IO->emit(IO, RAFT_INFO, FORMAT, ##__VA_ARGS__);
+#define warnf(IO, FORMAT, ...) IO->emit(IO, RAFT_WARN, FORMAT, ##__VA_ARGS__);
+#define errorf(IO, FORMAT, ...) IO->emit(IO, RAFT_ERROR, FORMAT, ##__VA_ARGS__);
 
 /**
  * Emit a message to the given stream.

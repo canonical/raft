@@ -649,12 +649,15 @@ static int io_stub__random(struct raft_io *io, int min, int max)
 
 static void io_stub__emit(struct raft_io *io,
                           int level,
-                          const char *fmt,
-                          va_list args)
+                          const char *format,
+                          ...)
 {
     struct io_stub *s;
+    va_list args;
+    va_start(args, format);
     s = io->impl;
-    emit_to_stream(stderr, s->id, s->time, level, fmt, args);
+    emit_to_stream(stderr, s->id, s->time, level, format, args);
+    va_end(args);
 }
 
 /**

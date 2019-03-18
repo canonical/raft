@@ -138,7 +138,7 @@ static void __server_sigint_cb(struct uv_signal_s *handle, int signum)
 
     assert(signum == SIGINT);
 
-    raft_infof(&s->logger, "server: stopping");
+    s->io.emit(&s->io, RAFT_INFO, "server: stopping");
 
     uv_signal_stop(handle);
 

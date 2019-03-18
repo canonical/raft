@@ -229,14 +229,14 @@ static int io_uv__random(struct raft_io *io, int min, int max)
 }
 
 /* Implementation of raft_io->emit. */
-static void io_uv__emit(struct raft_io *io,
-                          int level,
-                          const char *fmt,
-                          va_list args)
+static void io_uv__emit(struct raft_io *io, int level, const char *format, ...)
 {
     struct io_uv *uv;
+    va_list args;
     uv = io->impl;
-    emit_to_stream(stderr, uv->id, uv_now(uv->loop), level, fmt, args);
+    va_start(args, format);
+    emit_to_stream(stderr, uv->id, uv_now(uv->loop), level, format, args);
+    va_end(args);
 }
 
 /**

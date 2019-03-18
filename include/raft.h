@@ -562,7 +562,7 @@ struct raft_io
     /**
      * Emit a log message.
      */
-    void (*emit)(struct raft_io *io, int level, const char *fmt, va_list args);
+    void (*emit)(struct raft_io *io, int level, const char *format, ...);
 };
 
 /**

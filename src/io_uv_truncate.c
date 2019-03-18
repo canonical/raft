@@ -37,8 +37,8 @@ static int truncate_closed_segment(struct io_uv *uv,
     int fd;
     int rv = 0;
 
-    raft_infof(uv->logger, "truncate %u-%u at %u", segment->first_index,
-               segment->end_index, index);
+    infof(uv->io, "truncate %u-%u at %u", segment->first_index,
+          segment->end_index, index);
 
     rv = io_uv__load_closed(uv, segment, &entries, &n);
     if (rv != 0) {

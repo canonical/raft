@@ -251,7 +251,7 @@ static void client_connect_cb(struct raft_io_uv_connect *req,
                               int status)
 {
     struct io_uv__client *c = req->data;
-    void (*log)(struct raft_io * io, const char *format, ...);
+    int level = RAFT_DEBUG;
     int rv;
 
     tracef(c, "connect attempt completed -> status %d", status);
@@ -285,14 +285,12 @@ static void client_connect_cb(struct raft_io_uv_connect *req,
 
     /* Use debug level for logging the first few attempts, then switch to
      * warn. */
-    if (c->n_connect_attempt < 10) {
-        log = debugf;
-    } else {
-        log = warnf;
+    if (c->n_connect_attempt >= 10) {
+        level = RAFT_WARN;
     }
 
-    log(c->uv->io, "connect to %d (%s): %s", c->id, c->address,
-        raft_strerror(status));
+    c->uv->io->emit(c->uv->io, level, "connect to %d (%s): %s", c->id,
+                    c->address, raft_strerror(status));
 
     /* Let's schedule another attempt. */
     c->state = DELAY;

@@ -5,38 +5,6 @@
 
 #define EMIT_BUF_LEN 1024
 
-void debugf(struct raft_io *io, const char *format, ...)
-{
-    va_list args;
-    va_start(args, format);
-    io->emit(io, RAFT_DEBUG, format, args);
-    va_end(args);
-}
-
-void infof(struct raft_io *io, const char *format, ...)
-{
-    va_list args;
-    va_start(args, format);
-    io->emit(io, RAFT_INFO, format, args);
-    va_end(args);
-}
-
-void warnf(struct raft_io *io, const char *format, ...)
-{
-    va_list args;
-    va_start(args, format);
-    io->emit(io, RAFT_WARN, format, args);
-    va_end(args);
-}
-
-void errorf(struct raft_io *io, const char *format, ...)
-{
-    va_list args;
-    va_start(args, format);
-    io->emit(io, RAFT_ERROR, format, args);
-    va_end(args);
-}
-
 void emit_to_stream(FILE *stream,
                     unsigned server_id,
                     raft_time time,
