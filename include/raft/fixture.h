@@ -14,6 +14,7 @@ struct raft_fixture
     unsigned n;
     struct raft_fixture_server
     {
+        bool alive;
         unsigned id;
         char address[8];
         struct raft_io io;
@@ -67,5 +68,11 @@ void raft_fixture_disconnect(struct raft_fixture *f, unsigned id);
  * Reconnect the given server to all the others.
  */
 void raft_fixture_disconnect(struct raft_fixture *f, unsigned id);
+
+/**
+ * Kill the server with the given ID. The server won't receive any message and
+ * its tick callback won't be invoked.
+ */
+void raft_fixture_kill(struct raft_fixture *f, unsigned id);
 
 #endif /* RAFT_FAKE_H */

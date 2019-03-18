@@ -63,7 +63,7 @@ void test_cluster_setup(const MunitParameter params[], struct test_cluster *c)
 
         raft_init(raft, io, fsm, c, id, address);
 
-	raft->heartbeat_timeout = 50;
+        raft->heartbeat_timeout = 50;
         raft_set_election_timeout(raft, 250);
 
         test_bootstrap_and_start(raft, c->n, 1, c->n_voting);
@@ -137,9 +137,9 @@ static int test_cluster__next_deliver_timeout(struct test_cluster *c)
         struct raft_io *io = &c->ios[i];
         int timeout;
         timeout = raft_io_stub_next_deliver_timeout(io);
-	if (timeout == -1) {
-	  continue;
-	}
+        if (timeout == -1) {
+            continue;
+        }
         if (min_timeout == -1 || timeout < min_timeout) {
             min_timeout = timeout;
         }
@@ -260,7 +260,8 @@ static bool test_cluster__update_leader(struct test_cluster *c)
                 continue;
             }
 
-            if (!c->alive[i] || !test_cluster_connected(c, leader_id, raft->id)) {
+            if (!c->alive[i] ||
+                !test_cluster_connected(c, leader_id, raft->id)) {
                 /* This server is not alive or not connected to this leader, so
                  * don't count it in for stability. */
                 continue;
@@ -408,9 +409,9 @@ void test_cluster_run_once(struct test_cluster *c)
 
     /* Fire either a raft tick or a message delivery. */
     if (deliver_timeout != -1 && (unsigned)deliver_timeout < raft_timeout) {
-      timeout = deliver_timeout;
+        timeout = deliver_timeout;
     } else {
-      timeout = raft_timeout;
+        timeout = raft_timeout;
     }
 
     test_cluster__advance(c, timeout + 1);

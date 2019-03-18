@@ -15,14 +15,15 @@ static int setup_server(unsigned i,
                         int (*random)(int, int))
 {
     int rc;
+    s->alive =true;
+    s->id = i + 1;
+    sprintf(s->address, "%u", s->id);
     rc = raft_io_stub_init(&s->io);
     if (rc != 0) {
         return rc;
     }
     raft_io_stub_set_random(&s->io, random);
     raft_io_stub_set_latency(&s->io, 5, 50);
-    s->id = i + 1;
-    sprintf(s->address, "%u", s->id);
     rc = raft_init(&s->raft, &s->io, fsm, NULL, s->id, s->address);
     if (rc != 0) {
         return rc;
@@ -173,8 +174,11 @@ static void advance(struct raft_fixture *f, unsigned msecs)
     size_t i;
 
     for (i = 0; i < f->n; i++) {
-        struct raft_io *io = &f->servers[i].io;
-        raft_io_stub_advance(io, msecs);
+        struct raft_fixture_server *s = &f->servers[i];
+        if (!s->alive) {
+            continue;
+        }
+        raft_io_stub_advance(&s->io, msecs);
     }
     f->time += msecs;
 }
@@ -312,4 +316,10 @@ void raft_fixture_reconnect(struct raft_fixture *f, unsigned id)
         }
         raft_io_stub_reconnect(io1, io2);
     }
+}
+
+void raft_fixture_kill(struct raft_fixture *f, unsigned id)
+{
+    raft_fixture_disconnect(f, id);
+    f->servers[id - 1].alive = false;
 }
