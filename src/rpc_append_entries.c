@@ -6,6 +6,7 @@
 #include "replication.h"
 #include "rpc.h"
 #include "state.h"
+#include "logging.h"
 
 static void raft_rpc__recv_append_entries_send_cb(struct raft_io_send *req,
                                                   int status)
@@ -31,8 +32,7 @@ int raft_rpc__recv_append_entries(struct raft *r,
     assert(args != NULL);
     assert(address != NULL);
 
-    raft_debugf(r->logger, "received %d entries from server %ld",
-                args->n_entries, id);
+    debugf(r->io, "received %d entries from server %ld", args->n_entries, id);
 
     result->success = false;
     result->last_log_index = log__last_index(&r->log);
@@ -48,7 +48,7 @@ int raft_rpc__recv_append_entries(struct raft *r,
      *   currentTerm.
      */
     if (match < 0) {
-        raft_debugf(r->logger, "local term is higher -> reject ");
+        debugf(r->io, "local term is higher -> reject ");
         goto reply;
     }
 
@@ -84,7 +84,7 @@ int raft_rpc__recv_append_entries(struct raft *r,
     assert(r->current_term == args->term);
 
     if (r->state == RAFT_CANDIDATE) {
-        raft_debugf(r->logger, "discovered leader -> step down ");
+        debugf(r->io, "discovered leader -> step down ");
         rv = raft_state__convert_to_follower(r, args->term);
         if (rv != 0) {
             return rv;
@@ -168,11 +168,10 @@ int raft_rpc__recv_append_entries_result(
     assert(address != NULL);
     assert(result != NULL);
 
-    raft_debugf(r->logger, "received append entries result from server %ld",
-                id);
+    debugf(r->io, "received append entries result from server %ld", id);
 
     if (r->state != RAFT_LEADER) {
-        raft_debugf(r->logger, "local server is not leader -> ignore");
+        debugf(r->io, "local server is not leader -> ignore");
         return 0;
     }
 
@@ -182,7 +181,7 @@ int raft_rpc__recv_append_entries_result(
     }
 
     if (match < 0) {
-        raft_debugf(r->logger, "local term is higher -> ignore ");
+        debugf(r->io, "local term is higher -> ignore ");
         return 0;
     }
 

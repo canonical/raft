@@ -32,7 +32,7 @@ int raft_rpc__recv_request_vote(struct raft *r,
 
     result->vote_granted = false;
 
-    raft_debugf(r->logger, "received vote request from server %ld", id);
+    debugf(r->io, "received vote request from server %ld", id);
 
     /* Reject the request if we have a leader.
      *
@@ -44,7 +44,7 @@ int raft_rpc__recv_request_vote(struct raft *r,
      *   leader, it does not update its term or grant its vote
      */
     if (r->state == RAFT_FOLLOWER && r->follower_state.current_leader.id != 0) {
-        raft_debugf(r->logger, "local server has a leader -> reject ");
+        debugf(r->io, "local server has a leader -> reject ");
         goto reply;
     }
 
@@ -60,7 +60,7 @@ int raft_rpc__recv_request_vote(struct raft *r,
      *
      */
     if (match < 0) {
-        raft_debugf(r->logger, "local term is higher -> reject ");
+        debugf(r->io, "local term is higher -> reject ");
         goto reply;
     }
 
@@ -110,7 +110,7 @@ int raft_rpc__recv_request_vote_result(
     assert(id > 0);
     assert(result != NULL);
 
-    raft_debugf(r->logger, "received vote request result from server %ld", id);
+    debugf(r->io, "received vote request result from server %ld", id);
 
     votes_index = configuration__index_of_voting(&r->configuration, id);
     if (votes_index == r->configuration.n) {
@@ -120,7 +120,7 @@ int raft_rpc__recv_request_vote_result(
 
     /* Ignore responses if we are not candidate anymore */
     if (r->state != RAFT_CANDIDATE) {
-        raft_debugf(r->logger, "local server is not candidate -> ignore");
+        debugf(r->io, "local server is not candidate -> ignore");
         return 0;
     }
 
@@ -133,7 +133,7 @@ int raft_rpc__recv_request_vote_result(
         /* If the term in the result is older than ours, this is an old message
          * we should ignore, because the node who voted for us would have
          * obtained our term.  This happens if the network is pretty choppy. */
-        raft_debugf(r->logger, "local term is higher -> ignore");
+        debugf(r->io, "local term is higher -> ignore");
         return 0;
     }
 

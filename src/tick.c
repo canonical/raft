@@ -49,7 +49,7 @@ static int follower_tick(struct raft *r)
      * simply configured as non-voter, do nothing and wait for RPCs. */
     if (configuration__n_voting(&r->configuration) == 1) {
         if (server->voting) {
-            raft_debugf(r->logger, "self elect and convert to leader");
+            debugf(r->io, "self elect and convert to leader");
             rv = raft_state__convert_to_candidate(r);
             if (rv != 0) {
                 return rv;
@@ -140,10 +140,10 @@ static bool leader_has_been_contacted_by_majority_of_servers(struct raft *r)
         if (elapsed <= r->election_timeout) {
             contacts++;
         } else {
-            raft_debugf(r->logger,
-                        "lost contact with server %d: no message since %u "
-                        "msecs (last contact %u, now %u)",
-                        server->id, elapsed, replication->last_contact, now);
+            debugf(r->io,
+                   "lost contact with server %d: no message since %u "
+                   "msecs (last contact %u, now %u)",
+                   server->id, elapsed, replication->last_contact, now);
         }
     }
 

@@ -1,7 +1,8 @@
+#include "election.h"
 #include "assert.h"
 #include "configuration.h"
-#include "election.h"
 #include "log.h"
+#include "logging.h"
 
 void raft_election__reset_timer(struct raft *r)
 {
@@ -158,14 +159,12 @@ int raft_election__vote(struct raft *r,
     *granted = false;
 
     if (local_server == NULL || !local_server->voting) {
-        raft_debugf(r->logger,
-                    "local server is not voting -> not granting vote");
+        debugf(r->io, "local server is not voting -> not granting vote");
         return 0;
     }
 
     if (r->voted_for != 0 && r->voted_for != args->candidate_id) {
-        raft_debugf(r->logger,
-                    "local server already voted -> not granting vote");
+        debugf(r->io, "local server already voted -> not granting vote");
         return 0;
     }
 
@@ -173,7 +172,7 @@ int raft_election__vote(struct raft *r,
 
     /* Our log is definitely not more up-to-date if it's empty! */
     if (local_last_log_index == 0) {
-        raft_debugf(r->logger, "local log is empty -> granting vote");
+        debugf(r->io, "local log is empty -> granting vote");
         goto grant_vote;
     }
 
@@ -190,8 +189,7 @@ int raft_election__vote(struct raft *r,
 
     if (args->last_log_term > local_last_log_term) {
         /* The requesting server has a more up-to-date log. */
-        raft_debugf(r->logger,
-                    "remote log last entry has higher term -> granting vote");
+        debugf(r->io, "remote log last entry has higher term -> granting vote");
         goto grant_vote;
     }
 
@@ -201,13 +199,11 @@ int raft_election__vote(struct raft *r,
 
     if (local_last_log_index <= args->last_log_index) {
         /* Our log is shorter or equal to the one of the requester. */
-        raft_debugf(r->logger,
-                    "remote log equal or longer than local -> granting vote");
+        debugf(r->io, "remote log equal or longer than local -> granting vote");
         goto grant_vote;
     }
 
-    raft_debugf(r->logger,
-                "remote log shorter than local -> not granting vote");
+    debugf(r->io, "remote log shorter than local -> not granting vote");
 
     return 0;
 

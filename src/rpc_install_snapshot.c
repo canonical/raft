@@ -37,7 +37,7 @@ int raft_rpc__recv_install_snapshot(struct raft *r,
     }
 
     if (match < 0) {
-        raft_debugf(r->logger, "local term is higher -> reject ");
+        debugf(r->io, "local term is higher -> reject ");
         goto reply;
     }
 
@@ -46,7 +46,7 @@ int raft_rpc__recv_install_snapshot(struct raft *r,
     assert(r->current_term == args->term);
 
     if (r->state == RAFT_CANDIDATE) {
-        raft_debugf(r->logger, "discovered leader -> step down ");
+        debugf(r->io, "discovered leader -> step down ");
         rv = raft_state__convert_to_follower(r, args->term);
         if (rv != 0) {
             return rv;
