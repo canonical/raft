@@ -32,7 +32,7 @@ static void *setup(const MunitParameter params[], void *user_data)
     (void)user_data;
     test_heap_setup(params, &f->heap);
     test_logger_setup(params, &f->logger, 1);
-    test_io_setup(params, &f->io, &f->logger);
+    test_io_setup(params, &f->io);
     f->dir = test_dir_setup(params);
     return f;
 }

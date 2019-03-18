@@ -34,7 +34,7 @@
         (void)user_data;                                           \
         test_heap_setup(params, &F->heap);                         \
         test_logger_setup(params, &F->logger, id);                 \
-        test_io_setup(params, &F->io, &F->logger);                 \
+        test_io_setup(params, &F->io);                             \
         test_fsm_setup(params, &F->fsm);                           \
         rv = raft_init(&F->raft, &F->io, &F->fsm, F, id, address); \
         munit_assert_int(rv, ==, 0);                               \

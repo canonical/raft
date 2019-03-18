@@ -5,8 +5,7 @@
 #include "io.h"
 
 void test_io_setup(const MunitParameter params[],
-                   struct raft_io *io,
-                   struct raft_logger *logger)
+                   struct raft_io *io)
 {
     int rv;
 

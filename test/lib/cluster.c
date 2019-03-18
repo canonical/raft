@@ -71,7 +71,7 @@ void test_cluster_setup(const MunitParameter params[], struct test_cluster *c)
         test_logger_setup(params, logger, id);
         test_logger_time(logger, c, test_cluster__time);
 
-        test_io_setup(params, io, logger);
+        test_io_setup(params, io);
         raft_io_stub_set_latency(io, 5, 50);
 
         test_fsm_setup(params, fsm);
@@ -538,7 +538,7 @@ void test_cluster_add_server(struct test_cluster *c)
     test_logger_setup(params, logger, id);
     test_logger_time(logger, c, test_cluster__time);
 
-    test_io_setup(params, io, logger);
+    test_io_setup(params, io);
     raft_io_stub_set_latency(io, 5, 50);
 
     for (i = 0; i < c->n - 1; i++) {

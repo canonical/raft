@@ -10,9 +10,7 @@
 
 #include "munit.h"
 
-void test_io_setup(const MunitParameter params[],
-                   struct raft_io *io,
-                   struct raft_logger *logger);
+void test_io_setup(const MunitParameter params[], struct raft_io *io);
 
 void test_io_tear_down(struct raft_io *io);
 
