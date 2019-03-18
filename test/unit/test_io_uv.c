@@ -105,10 +105,10 @@ static void *setup(const MunitParameter params[], void *user_data)
 
     f->dir = test_dir_setup(params);
 
-    rv = raft_io_uv_tcp_init(&f->transport, &f->logger, &f->loop);
+    rv = raft_io_uv_tcp_init(&f->transport, &f->loop);
     munit_assert_int(rv, ==, 0);
 
-    rv = raft_io_uv_init(&f->io, &f->logger, &f->loop, f->dir, &f->transport);
+    rv = raft_io_uv_init(&f->io, &f->loop, f->dir, &f->transport);
     munit_assert_int(rv, ==, 0);
 
     rv = f->io.init(&f->io, 1, "127.0.0.1:9000");
@@ -203,7 +203,7 @@ TEST_CASE(init, oom, init_oom_params)
 
     test_heap_fault_enable(&f->heap);
 
-    rv = raft_io_uv_init(&io, &f->logger, &f->loop, f->dir, &f->transport);
+    rv = raft_io_uv_init(&io, &f->loop, f->dir, &f->transport);
     munit_assert_int(rv, ==, RAFT_ENOMEM);
 
     return MUNIT_OK;
@@ -219,7 +219,7 @@ TEST_CASE(init, not_a_dir, NULL)
 
     (void)params;
 
-    rv = raft_io_uv_init(&io, &f->logger, &f->loop, "/dev/null", &f->transport);
+    rv = raft_io_uv_init(&io, &f->loop, "/dev/null", &f->transport);
     munit_assert_int(rv, ==, RAFT_ERR_IO);
 
     return MUNIT_OK;
@@ -240,7 +240,7 @@ TEST_CASE(init, dir_too_long, NULL)
     memset(dir, 'a', sizeof dir - 1);
     dir[sizeof dir - 1] = 0;
 
-    rv = raft_io_uv_init(&io, &f->logger, &f->loop, dir, &transport);
+    rv = raft_io_uv_init(&io, &f->loop, dir, &transport);
     munit_assert_int(rv, ==, RAFT_ERR_IO_NAMETOOLONG);
 
     return MUNIT_OK;
@@ -258,7 +258,7 @@ TEST_CASE(init, cant_create_dir, NULL)
 
     const char *dir = "/non/existing/path";
 
-    rv = raft_io_uv_init(&io, &f->logger, &f->loop, dir, &transport);
+    rv = raft_io_uv_init(&io, &f->loop, dir, &transport);
     munit_assert_int(rv, ==, RAFT_ERR_IO);
 
     return MUNIT_OK;
@@ -276,7 +276,7 @@ TEST_CASE(init, access_error, NULL)
 
     const char *dir = "/root/foo";
 
-    rv = raft_io_uv_init(&io, &f->logger, &f->loop, dir, &transport);
+    rv = raft_io_uv_init(&io, &f->loop, dir, &transport);
     munit_assert_int(rv, ==, RAFT_ERR_IO);
 
     return MUNIT_OK;

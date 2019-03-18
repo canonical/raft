@@ -30,7 +30,7 @@ TEST_MODULE(io_uv_tcp);
     test_tcp_setup(params, &f->tcp);                            \
     test_logger_setup(params, &f->logger, 1);                   \
     test_uv_setup(params, &f->loop);                            \
-    raft_io_uv_tcp_init(&f->transport, &f->logger, &f->loop);   \
+    raft_io_uv_tcp_init(&f->transport, &f->loop);               \
     rv = f->transport.init(&f->transport, 1, "127.0.0.1:9000"); \
     munit_assert_int(rv, ==, 0);                                \
     f->closed = false;

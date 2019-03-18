@@ -44,7 +44,6 @@ static void tcp_close(struct raft_io_uv_transport *transport,
 }
 
 int raft_io_uv_tcp_init(struct raft_io_uv_transport *transport,
-                        struct raft_logger *logger,
                         struct uv_loop_s *loop)
 {
     struct io_uv__tcp *t;
@@ -55,7 +54,6 @@ int raft_io_uv_tcp_init(struct raft_io_uv_transport *transport,
         return RAFT_ENOMEM;
     }
     t->transport = transport;
-    t->logger = logger;
     t->loop = loop;
     t->id = 0;
     t->address = NULL;

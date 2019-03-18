@@ -28,22 +28,22 @@
     struct io_uv *uv;                      \
     bool closed;
 
-#define IO_UV_SETUP                                                            \
-    int rv;                                                                    \
-    (void)user_data;                                                           \
-    test_heap_setup(params, &f->heap);                                         \
-    test_tcp_setup(params, &f->tcp);                                           \
-    test_logger_setup(params, &f->logger, 1);                                  \
-    test_uv_setup(params, &f->loop);                                           \
-    f->dir = test_dir_setup(params);                                           \
-    rv = raft_io_uv_tcp_init(&f->transport, &f->logger, &f->loop);             \
-    munit_assert_int(rv, ==, 0);                                               \
-    rv = raft_io_uv_init(&f->io, &f->logger, &f->loop, f->dir, &f->transport); \
-    munit_assert_int(rv, ==, 0);                                               \
-    f->io.data = f;                                                            \
-    rv = f->io.init(&f->io, 1, "127.0.0.1:9000");                              \
-    munit_assert_int(rv, ==, 0);                                               \
-    f->uv = f->io.impl;                                                        \
+#define IO_UV_SETUP                                                \
+    int rv;                                                        \
+    (void)user_data;                                               \
+    test_heap_setup(params, &f->heap);                             \
+    test_tcp_setup(params, &f->tcp);                               \
+    test_logger_setup(params, &f->logger, 1);                      \
+    test_uv_setup(params, &f->loop);                               \
+    f->dir = test_dir_setup(params);                               \
+    rv = raft_io_uv_tcp_init(&f->transport, &f->loop);             \
+    munit_assert_int(rv, ==, 0);                                   \
+    rv = raft_io_uv_init(&f->io, &f->loop, f->dir, &f->transport); \
+    munit_assert_int(rv, ==, 0);                                   \
+    f->io.data = f;                                                \
+    rv = f->io.init(&f->io, 1, "127.0.0.1:9000");                  \
+    munit_assert_int(rv, ==, 0);                                   \
+    f->uv = f->io.impl;                                            \
     f->closed = false;
 
 #define IO_UV_TEAR_DOWN                  \

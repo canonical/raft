@@ -2,6 +2,7 @@
 #define RAFT_IO_UV_TCP_H_
 
 #include "../include/raft.h"
+#include "../include/raft/io_uv.h"
 
 #include "queue.h"
 
@@ -11,7 +12,6 @@
 struct io_uv__tcp
 {
     struct raft_io_uv_transport *transport; /* Interface object we implement */
-    struct raft_logger *logger;             /* Logger */
     struct uv_loop_s *loop;                 /* UV loop */
     unsigned id;                            /* ID of this raft server */
     const char *address;                    /* Address of this raft server */

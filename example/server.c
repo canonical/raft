@@ -190,14 +190,14 @@ static int __server_init(struct __server *s, const char *dir, unsigned id)
     s->logger = raft_default_logger;
 
     /* Initialize the TCP-based RPC transport */
-    rv = raft_io_uv_tcp_init(&s->transport, &s->logger, &s->loop);
+    rv = raft_io_uv_tcp_init(&s->transport, &s->loop);
     if (rv != 0) {
         printf("error: init TCP transport: %s\n", raft_strerror(rv));
         goto err_after_timer_init;
     }
 
     /* Initialize the libuv-based I/O backend */
-    rv = raft_io_uv_init(&s->io, &s->logger, &s->loop, dir, &s->transport);
+    rv = raft_io_uv_init(&s->io, &s->loop, dir, &s->transport);
     if (rv != 0) {
         printf("error: enable uv integration: %s\n", raft_strerror(rv));
         goto err_after_tcp_init;

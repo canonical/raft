@@ -31,7 +31,6 @@ typedef unsigned long long io_uv__counter;
 struct io_uv
 {
     struct raft_io *io;                     /* I/O object we're implementing */
-    struct raft_logger *logger;             /* Logger */
     struct uv_loop_s *loop;                 /* UV event loop */
     char *dir;                              /* Data directory */
     struct raft_io_uv_transport *transport; /* Network transport */

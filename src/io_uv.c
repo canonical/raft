@@ -268,7 +268,6 @@ static void copy_dir(const char *dir1, char **dir2)
 }
 
 int raft_io_uv_init(struct raft_io *io,
-                    struct raft_logger *logger,
                     struct uv_loop_s *loop,
                     const char *dir,
                     struct raft_io_uv_transport *transport)
@@ -288,7 +287,6 @@ int raft_io_uv_init(struct raft_io *io,
     }
 
     uv->io = io;
-    uv->logger = logger;
     uv->loop = loop;
     copy_dir(dir, &uv->dir);
     if (uv->dir == NULL) {
