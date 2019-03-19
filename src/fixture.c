@@ -180,7 +180,7 @@ static unsigned lowest_raft_timeout(struct raft_fixture *f)
         unsigned timeout; /* Milliseconds remaining before expiration. */
 
         timeout = raft_next_timeout(r);
-        if (min_timeout == 0 || timeout < min_timeout) {
+        if (i == 0 || timeout <= min_timeout) {
             min_timeout = timeout;
         }
     }
@@ -302,10 +302,31 @@ void raft_fixture_elect(struct raft_fixture *f, unsigned i)
         }
         assert((unsigned)leader == i);
         drop_all_except(f, RAFT_IO_REQUEST_VOTE, false, i);
-	set_all_election_timeouts_except(f, ELECTION_TIMEOUT, i);
+        set_all_election_timeouts_except(f, ELECTION_TIMEOUT, i);
         return;
     }
 
+    assert(0);
+}
+
+void raft_fixture_wait_applied(struct raft_fixture *f, raft_index index)
+{
+    unsigned applied;
+    unsigned i;
+    for (i = 0; i < MAX_STEPS; i++) {
+        unsigned j;
+        applied = 0;
+        raft_fixture_step(f);
+        for (j = 0; j < f->n; j++) {
+            struct raft *raft = &f->servers[j].raft;
+            if (raft_last_applied(raft) >= index) {
+                applied++;
+            }
+        }
+        if (applied == f->n) {
+            return;
+        }
+    }
     assert(0);
 }
 

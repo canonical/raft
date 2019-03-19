@@ -74,6 +74,11 @@ bool raft_fixture_alive(struct raft_fixture *f, unsigned i);
 void raft_fixture_elect(struct raft_fixture *f, unsigned i);
 
 /**
+ * Wait until all servers have applied the entry at the given index.
+ */
+void raft_fixture_wait_applied(struct raft_fixture *f, raft_index index);
+
+/**
  * Drive the cluster so the current leader gets deposed. This is achieved by
  * dropping all AppendEntries result messages sent by followers to the leader.
  */
