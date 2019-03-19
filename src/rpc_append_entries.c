@@ -3,10 +3,10 @@
 #include "assert.h"
 #include "configuration.h"
 #include "log.h"
+#include "logging.h"
 #include "replication.h"
 #include "rpc.h"
 #include "state.h"
-#include "logging.h"
 
 static void raft_rpc__recv_append_entries_send_cb(struct raft_io_send *req,
                                                   int status)
