@@ -9,6 +9,8 @@
  * to be reached. */
 #define MAX_STEPS 100
 
+#define ELECTION_TIMEOUT 250
+
 static int setup_server(unsigned i,
                         struct raft_fixture_server *s,
                         struct raft_fsm *fsm,
@@ -29,7 +31,7 @@ static int setup_server(unsigned i,
         return rc;
     }
     s->raft.heartbeat_timeout = 50;
-    raft_set_election_timeout(&s->raft, 250);
+    raft_set_election_timeout(&s->raft, ELECTION_TIMEOUT);
     return 0;
 }
 
@@ -259,6 +261,21 @@ static void drop_all_except(struct raft_fixture *f,
     }
 }
 
+/* Set the election timeout on all servers except the given one. */
+static void set_all_election_timeouts_except(struct raft_fixture *f,
+                                             unsigned msecs,
+                                             unsigned i)
+{
+    unsigned j;
+    for (j = 0; j < f->n; j++) {
+        struct raft *raft = &f->servers[j].raft;
+        if (j == i) {
+            continue;
+        }
+        raft->election_timeout = msecs;
+    }
+}
+
 void raft_fixture_elect(struct raft_fixture *f, unsigned i)
 {
     unsigned j;
@@ -271,6 +288,10 @@ void raft_fixture_elect(struct raft_fixture *f, unsigned i)
     /* Prevent all servers from sending request vote messages, except for the
      * one to be elected. */
     drop_all_except(f, RAFT_IO_REQUEST_VOTE, true, i);
+    set_all_election_timeouts_except(f, ELECTION_TIMEOUT * 3, i);
+
+    /* Set a very large election timeout on all servers, except the one being
+     * elected. This effectively avoids competition. */
 
     for (j = 0; j < MAX_STEPS; j++) {
         int leader;
@@ -281,6 +302,7 @@ void raft_fixture_elect(struct raft_fixture *f, unsigned i)
         }
         assert((unsigned)leader == i);
         drop_all_except(f, RAFT_IO_REQUEST_VOTE, false, i);
+	set_all_election_timeouts_except(f, ELECTION_TIMEOUT, i);
         return;
     }
 
