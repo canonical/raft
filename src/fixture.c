@@ -116,6 +116,23 @@ void raft_fixture_tear_down(struct raft_fixture *f)
     }
 }
 
+unsigned raft_fixture_n(struct raft_fixture *f)
+{
+    return f->n;
+}
+
+struct raft *raft_fixture_get(struct raft_fixture *f, unsigned i)
+{
+    assert(i < f->n);
+    return &f->servers[i].raft;
+}
+
+bool raft_fixture_alive(struct raft_fixture *f, unsigned i)
+{
+    assert(i < f->n);
+    return f->servers[i].alive;
+}
+
 /* Flush any pending write to the disk and any pending message into the network
  * buffers (this will assign them a latency timer). */
 static void flush_io(struct raft_fixture *f)

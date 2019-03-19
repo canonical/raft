@@ -10,18 +10,20 @@
 
 #define RAFT_FIXTURE_MAX_SERVERS 16
 
+struct raft_fixture_server
+{
+    bool alive;
+    unsigned id;
+    char address[8];
+    struct raft_io io;
+    struct raft raft;
+};
+
 struct raft_fixture
 {
     raft_time time; /* Number of milliseconds elapsed. */
     unsigned n;
-    struct raft_fixture_server
-    {
-        bool alive;
-        unsigned id;
-        char address[8];
-        struct raft_io io;
-        struct raft raft;
-    } servers[RAFT_FIXTURE_MAX_SERVERS];
+    struct raft_fixture_server servers[RAFT_FIXTURE_MAX_SERVERS];
     int (*random)(int, int);
 };
 
@@ -48,6 +50,21 @@ void raft_fixture_tear_down(struct raft_fixture *f);
  * time out).
  */
 void raft_fixture_step(struct raft_fixture *f);
+
+/**
+ * Return the current number of servers in the fixture.
+ */
+unsigned raft_fixture_n(struct raft_fixture *f);
+
+/**
+ * Return the raft instance associated with the i'th server of the fixture.
+ */
+struct raft * raft_fixture_get(struct raft_fixture *f, unsigned i);
+
+/**
+ * Return @true if the i'th server hasn't been killed.
+ */
+bool raft_fixture_alive(struct raft_fixture *f, unsigned i);
 
 /**
  * Drive the cluster so the server with the given @id gets elected as
@@ -82,9 +99,7 @@ void raft_fixture_disconnect_from_all(struct raft_fixture *f, unsigned id);
 /**
  * Reconnect the two given servers to one another.
  */
-void raft_fixture_reconnect(struct raft_fixture *f,
-                             unsigned id1,
-                             unsigned id2);
+void raft_fixture_reconnect(struct raft_fixture *f, unsigned id1, unsigned id2);
 
 /**
  * Reconnect the given server to all the others.

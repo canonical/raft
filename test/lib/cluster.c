@@ -20,36 +20,28 @@ void test_cluster_setup(const MunitParameter params[], struct test_cluster *c)
     const char *n_voting = munit_parameters_get(params, TEST_CLUSTER_VOTING);
     int i;
     int rc;
-
     if (n == NULL) {
         n = "3";
     }
     if (n_voting == NULL) {
         n_voting = n;
     }
-
     for (i = 0; i < atoi(n); i++) {
         struct raft_fsm *fsm = &c->fsms[i];
         test_fsm_setup(params, fsm);
     }
-
     rc = raft_fixture_setup(&c->fixture, atoi(n), atoi(n_voting), c->fsms,
                             munit_rand_int_range);
     munit_assert_int(rc, ==, 0);
-
     c->commit_index = 1; /* The initial configuration is committed. */
-
     log__init(&c->log);
 }
 
 void test_cluster_tear_down(struct test_cluster *c)
 {
     unsigned i;
-
     log__close(&c->log);
-
     raft_fixture_tear_down(&c->fixture);
-
     for (i = 0; i < c->fixture.n; i++) {
         struct raft_fsm *fsm = &c->fsms[i];
         test_fsm_tear_down(fsm);
@@ -71,20 +63,21 @@ static bool test_cluster__update_leader(struct test_cluster *c)
 {
     unsigned leader_id = 0;
     raft_term leader_term = 0;
+    unsigned n = raft_fixture_n(&c->fixture);
     size_t i, j;
     bool changed;
 
-    for (i = 0; i < c->fixture.n; i++) {
-        struct raft *raft = &c->fixture.servers[i].raft;
+    for (i = 0; i < n; i++) {
+        struct raft *raft = raft_fixture_get(&c->fixture, i);
 
-        if (!c->fixture.servers[i].alive) {
+        if (!raft_fixture_alive(&c->fixture, i)) {
             continue;
         }
 
         if (raft->state == RAFT_LEADER) {
             /* No other server is leader for this term. */
             for (j = 0; j < c->fixture.n; j++) {
-                struct raft *other = &c->fixture.servers[j].raft;
+                struct raft *other = raft_fixture_get(&c->fixture, j);
 
                 if (other->id == raft->id) {
                     continue;
@@ -110,20 +103,20 @@ static bool test_cluster__update_leader(struct test_cluster *c)
      * acknowledged by all alive servers connected to it, and those servers
      * together with the leader form a majority. */
     if (leader_id != 0) {
-        size_t n = 0;
+        unsigned n_acks = 0;
         bool acked = true;
 
         j = leader_id - 1;
 
-        for (i = 0; i < c->fixture.n; i++) {
-            struct raft *raft = &c->fixture.servers[i].raft;
+        for (i = 0; i < n; i++) {
+            struct raft *raft = raft_fixture_get(&c->fixture, i);
 
             if (raft->id == leader_id) {
                 continue;
             }
 
-            if (!c->fixture.servers[i].alive ||
-                !test_cluster_connected(c, leader_id, raft->id)) {
+            if (!raft_fixture_alive(&c->fixture, i) ||
+                !raft_fixture_connected(&c->fixture, leader_id, raft->id)) {
                 /* This server is not alive or not connected to this leader, so
                  * don't count it in for stability. */
                 continue;
@@ -149,10 +142,10 @@ static bool test_cluster__update_leader(struct test_cluster *c)
                 break;
             }
 
-            n++;
+            n_acks++;
         }
 
-        if (!acked || n < (c->fixture.n / 2)) {
+        if (!acked || n_acks < (n / 2)) {
             leader_id = 0;
         }
     }
@@ -173,7 +166,7 @@ static bool test_cluster__update_leader(struct test_cluster *c)
  */
 static void test_cluster__check_leader_append_only(struct test_cluster *c)
 {
-    struct raft *raft = &c->fixture.servers[c->leader_id - 1].raft;
+    struct raft *raft;
     raft_index index;
     raft_index last = log__last_index(&c->log);
 
@@ -186,6 +179,9 @@ static void test_cluster__check_leader_append_only(struct test_cluster *c)
     if (c->leader_id == 0) {
         return;
     }
+
+    raft = raft_fixture_get(&c->fixture, c->leader_id - 1);
+    last = log__last_index(&c->log);
 
     for (index = 1; index <= last; index++) {
         const struct raft_entry *entry1;
