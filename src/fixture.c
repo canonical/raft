@@ -229,16 +229,17 @@ void raft_fixture_step(struct raft_fixture *f)
     advance(f, timeout + 1);
 }
 
-static unsigned current_leader_id(struct raft_fixture *f)
+/* Return the index of the current leader, or -1 */
+static int current_leader_index(struct raft_fixture *f)
 {
     unsigned i;
     for (i = 0; i < f->n; i++) {
         struct raft_fixture_server *s = &f->servers[i];
         if (raft_state(&s->raft) == RAFT_LEADER) {
-            return s->id;
+            return i;
         }
     }
-    return 0;
+    return -1;
 }
 
 /* Enable/disable dropping outgoing messages of a certain type from all servers
@@ -246,40 +247,40 @@ static unsigned current_leader_id(struct raft_fixture *f)
 static void drop_all_except(struct raft_fixture *f,
                             int type,
                             bool flag,
-                            unsigned id)
+                            unsigned i)
 {
-    unsigned i;
-    for (i = 0; i < f->n; i++) {
-        struct raft_fixture_server *s = &f->servers[i];
-        if (s->id == id) {
+    unsigned j;
+    for (j = 0; j < f->n; j++) {
+        struct raft_fixture_server *s = &f->servers[j];
+        if (j == i) {
             continue;
         }
         raft_io_stub_drop(&s->io, type, flag);
     }
 }
 
-void raft_fixture_elect(struct raft_fixture *f, unsigned id)
+void raft_fixture_elect(struct raft_fixture *f, unsigned i)
 {
-    unsigned i;
+    unsigned j;
 
     /* Make sure there's currently no leader. */
-    assert(current_leader_id(f) == 0);
+    assert(current_leader_index(f) == -1);
 
     /* TODO: make sure that the server with the given id is a voting one */
 
     /* Prevent all servers from sending request vote messages, except for the
      * one to be elected. */
-    drop_all_except(f, RAFT_IO_REQUEST_VOTE, true, id);
+    drop_all_except(f, RAFT_IO_REQUEST_VOTE, true, i);
 
-    for (i = 0; i < MAX_STEPS; i++) {
-        unsigned leader_id;
+    for (j = 0; j < MAX_STEPS; j++) {
+        int leader;
         raft_fixture_step(f);
-        leader_id = current_leader_id(f);
-        if (leader_id == 0) {
+        leader = current_leader_index(f);
+        if (leader == -1) {
             continue;
         }
-        assert(leader_id == id);
-        drop_all_except(f, RAFT_IO_REQUEST_VOTE, false, id);
+        assert((unsigned)leader == i);
+        drop_all_except(f, RAFT_IO_REQUEST_VOTE, false, i);
         return;
     }
 
@@ -288,22 +289,20 @@ void raft_fixture_elect(struct raft_fixture *f, unsigned id)
 
 void raft_fixture_depose(struct raft_fixture *f)
 {
-    unsigned leader_id = current_leader_id(f);
-    struct raft_fixture_server *s;
+    int leader = current_leader_index(f);
     unsigned i;
 
-    assert(leader_id != 0);
-    s = &f->servers[leader_id - 1];
+    assert(leader != -1);
 
     /* Prevent all servers from sending append entries results, so the leader
      * will eventually step down. */
-    drop_all_except(f, RAFT_IO_APPEND_ENTRIES_RESULT, true, leader_id);
+    drop_all_except(f, RAFT_IO_APPEND_ENTRIES_RESULT, true, leader);
 
     for (i = 0; i < MAX_STEPS; i++) {
         raft_fixture_step(f);
-        leader_id = current_leader_id(f);
-        if (leader_id == 0) {
-            drop_all_except(f, RAFT_IO_APPEND_ENTRIES_RESULT, false, leader_id);
+        leader = current_leader_index(f);
+        if (leader == -1) {
+            drop_all_except(f, RAFT_IO_APPEND_ENTRIES_RESULT, false, leader);
             return;
         }
     }
@@ -311,55 +310,55 @@ void raft_fixture_depose(struct raft_fixture *f)
     assert(0);
 }
 
-void raft_fixture_disconnect(struct raft_fixture *f, unsigned id1, unsigned id2)
+void raft_fixture_disconnect(struct raft_fixture *f, unsigned i, unsigned j)
 {
-    struct raft_io *io1 = &f->servers[id1 - 1].io;
-    struct raft_io *io2 = &f->servers[id2 - 1].io;
+    struct raft_io *io1 = &f->servers[i].io;
+    struct raft_io *io2 = &f->servers[j].io;
     raft_io_stub_disconnect(io1, io2);
     raft_io_stub_disconnect(io2, io1);
 }
 
-void raft_fixture_disconnect_from_all(struct raft_fixture *f, unsigned id)
+void raft_fixture_disconnect_from_all(struct raft_fixture *f, unsigned i)
 {
-    unsigned i;
-    for (i = 0; i < f->n; i++) {
-        if (i == id - 1) {
+    unsigned j;
+    for (j = 0; j < f->n; j++) {
+        if (j == i) {
             continue;
         }
-        raft_fixture_disconnect(f, id, f->servers[i].id);
+        raft_fixture_disconnect(f, i, j);
     }
 }
 
-bool raft_fixture_connected(struct raft_fixture *f, unsigned id1, unsigned id2)
+bool raft_fixture_connected(struct raft_fixture *f, unsigned i, unsigned j)
 {
-    struct raft_io *io1 = &f->servers[id1 - 1].io;
-    struct raft_io *io2 = &f->servers[id2 - 1].io;
+    struct raft_io *io1 = &f->servers[i].io;
+    struct raft_io *io2 = &f->servers[j].io;
     return raft_io_stub_connected(io1, io2) && raft_io_stub_connected(io2, io1);
 }
 
-void raft_fixture_reconnect(struct raft_fixture *f, unsigned id1, unsigned id2)
+void raft_fixture_reconnect(struct raft_fixture *f, unsigned i, unsigned j)
 {
-    struct raft_io *io1 = &f->servers[id1 - 1].io;
-    struct raft_io *io2 = &f->servers[id2 - 1].io;
+    struct raft_io *io1 = &f->servers[i].io;
+    struct raft_io *io2 = &f->servers[j].io;
     raft_io_stub_reconnect(io1, io2);
     raft_io_stub_reconnect(io2, io1);
 }
 
-void raft_fixture_reconnect_to_all(struct raft_fixture *f, unsigned id)
+void raft_fixture_reconnect_to_all(struct raft_fixture *f, unsigned i)
 {
-    unsigned i;
-    for (i = 0; i < f->n; i++) {
-        if (i == id - 1) {
+    unsigned j;
+    for (j = 0; i < f->n; j++) {
+        if (j == i) {
             continue;
         }
-        raft_fixture_reconnect(f, id, f->servers[i].id);
+        raft_fixture_reconnect(f, i, j);
     }
 }
 
-void raft_fixture_kill(struct raft_fixture *f, unsigned id)
+void raft_fixture_kill(struct raft_fixture *f, unsigned i)
 {
-    raft_fixture_disconnect_from_all(f, id);
-    f->servers[id - 1].alive = false;
+    raft_fixture_disconnect_from_all(f, i);
+    f->servers[i].alive = false;
 }
 
 int raft_fixture_add_server(struct raft_fixture *f, struct raft_fsm *fsm)

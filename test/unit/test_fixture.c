@@ -49,7 +49,7 @@ TEST_CASE(elect, first, NULL)
 {
     struct fixture *f = data;
     (void)params;
-    raft_fixture_elect(&f->fixture, 1);
+    raft_fixture_elect(&f->fixture, 0);
     return MUNIT_OK;
 }
 
@@ -57,7 +57,7 @@ TEST_CASE(elect, second, NULL)
 {
     struct fixture *f = data;
     (void)params;
-    raft_fixture_elect(&f->fixture, 2);
+    raft_fixture_elect(&f->fixture, 1);
     return MUNIT_OK;
 }
 
@@ -65,8 +65,8 @@ TEST_CASE(elect, change, NULL)
 {
     struct fixture *f = data;
     (void)params;
-    raft_fixture_elect(&f->fixture, 1);
+    raft_fixture_elect(&f->fixture, 0);
     raft_fixture_depose(&f->fixture);
-    raft_fixture_elect(&f->fixture, 2);
+    raft_fixture_elect(&f->fixture, 1);
     return MUNIT_OK;
 }

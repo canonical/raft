@@ -116,7 +116,7 @@ static bool test_cluster__update_leader(struct test_cluster *c)
             }
 
             if (!raft_fixture_alive(&c->fixture, i) ||
-                !raft_fixture_connected(&c->fixture, leader_id, raft->id)) {
+                !raft_fixture_connected(&c->fixture, leader_id - 1, raft->id - 1)) {
                 /* This server is not alive or not connected to this leader, so
                  * don't count it in for stability. */
                 continue;
@@ -211,7 +211,7 @@ static void test_cluster__check_leader_append_only(struct test_cluster *c)
  * Append-Only check at the next iteration. */
 static void test_cluster__copy_leader_log(struct test_cluster *c)
 {
-    struct raft *raft = &c->fixture.servers[c->leader_id - 1].raft;
+    struct raft *raft = raft_fixture_get(&c->fixture, c->leader_id - 1);
     struct raft_entry *entries;
     unsigned n;
     size_t i;
@@ -242,7 +242,7 @@ static void test_cluster__copy_leader_log(struct test_cluster *c)
 /* Update the commit index to match the one from the current leader. */
 static void test_cluster__update_commit_index(struct test_cluster *c)
 {
-    struct raft *raft = &c->fixture.servers[c->leader_id - 1].raft;
+    struct raft *raft = raft_fixture_get(&c->fixture, c->leader_id - 1);
     if (raft->commit_index > c->commit_index) {
         c->commit_index = raft->commit_index;
     }
@@ -341,7 +341,7 @@ void test_cluster_add_server(struct test_cluster *c)
     munit_assert_int(rc, ==, 0);
 
     sprintf(address, "%u", id);
-    leader = &c->fixture.servers[leader_id - 1].raft;
+    leader = raft_fixture_get(&c->fixture, leader_id - 1);
 
     rc = raft_add_server(leader, id, address);
     munit_assert_int(rc, ==, 0);
@@ -356,7 +356,7 @@ void test_cluster_promote(struct test_cluster *c)
     struct raft *leader;
     int rv;
 
-    leader = &c->fixture.servers[leader_id - 1].raft;
+    leader = raft_fixture_get(&c->fixture, leader_id - 1);
 
     id = c->fixture.n; /* Last server that was added. */
 
@@ -376,7 +376,7 @@ bool test_cluster_committed_3(struct test_cluster *c)
 
 void test_cluster_kill(struct test_cluster *c, unsigned id)
 {
-    raft_fixture_kill(&c->fixture, id);
+    raft_fixture_kill(&c->fixture, id - 1);
 }
 
 void test_cluster_kill_majority(struct test_cluster *c)
@@ -394,17 +394,12 @@ void test_cluster_kill_majority(struct test_cluster *c)
     }
 }
 
-bool test_cluster_connected(struct test_cluster *c, unsigned id1, unsigned id2)
-{
-    return raft_fixture_connected(&c->fixture, id1, id2);
-}
-
 void test_cluster_disconnect(struct test_cluster *c, unsigned id1, unsigned id2)
 {
-    raft_fixture_disconnect(&c->fixture, id1, id2);
+    raft_fixture_disconnect(&c->fixture, id1 - 1, id2 - 1);
 }
 
 void test_cluster_reconnect(struct test_cluster *c, unsigned id1, unsigned id2)
 {
-    raft_fixture_reconnect(&c->fixture, id1, id2);
+    raft_fixture_reconnect(&c->fixture, id1 - 1, id2 - 1);
 }

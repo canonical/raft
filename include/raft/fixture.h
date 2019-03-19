@@ -22,7 +22,7 @@ struct raft_fixture_server
 struct raft_fixture
 {
     raft_time time; /* Number of milliseconds elapsed. */
-    unsigned n;
+    unsigned n;     /* Number of servers */
     struct raft_fixture_server servers[RAFT_FIXTURE_MAX_SERVERS];
     int (*random)(int, int);
 };
@@ -59,7 +59,7 @@ unsigned raft_fixture_n(struct raft_fixture *f);
 /**
  * Return the raft instance associated with the i'th server of the fixture.
  */
-struct raft * raft_fixture_get(struct raft_fixture *f, unsigned i);
+struct raft *raft_fixture_get(struct raft_fixture *f, unsigned i);
 
 /**
  * Return @true if the i'th server hasn't been killed.
@@ -67,11 +67,11 @@ struct raft * raft_fixture_get(struct raft_fixture *f, unsigned i);
 bool raft_fixture_alive(struct raft_fixture *f, unsigned i);
 
 /**
- * Drive the cluster so the server with the given @id gets elected as
- * leader. There must currently be no leader. This is achieved by dropping all
- * RequestVote messages sent by other servers.
+ * Drive the cluster so the i'th server gets elected as leader. There must
+ * currently be no leader. This is achieved by dropping all RequestVote messages
+ * sent by other servers.
  */
-void raft_fixture_elect(struct raft_fixture *f, unsigned id);
+void raft_fixture_elect(struct raft_fixture *f, unsigned i);
 
 /**
  * Drive the cluster so the current leader gets deposed. This is achieved by
@@ -80,37 +80,37 @@ void raft_fixture_elect(struct raft_fixture *f, unsigned id);
 void raft_fixture_depose(struct raft_fixture *f);
 
 /**
- * Return true if the given servers are connected.
+ * Return true if the servers with the given indexes are connected.
  */
-bool raft_fixture_connected(struct raft_fixture *f, unsigned id1, unsigned id2);
+bool raft_fixture_connected(struct raft_fixture *f, unsigned i, unsigned j);
 
 /**
- * Disconnect the two given servers from one another.
+ * Disconnect the servers with the given indexes from one another.
  */
 void raft_fixture_disconnect(struct raft_fixture *f,
-                             unsigned id1,
-                             unsigned id2);
+                             unsigned i,
+                             unsigned j);
 
 /**
- * Disconnect the given server from all the others.
+ * Disconnect the server with given index from all the others.
  */
-void raft_fixture_disconnect_from_all(struct raft_fixture *f, unsigned id);
+void raft_fixture_disconnect_from_all(struct raft_fixture *f, unsigned i);
 
 /**
- * Reconnect the two given servers to one another.
+ * Reconnect the servers with given indexes to one another.
  */
-void raft_fixture_reconnect(struct raft_fixture *f, unsigned id1, unsigned id2);
+void raft_fixture_reconnect(struct raft_fixture *f, unsigned i, unsigned j);
 
 /**
- * Reconnect the given server to all the others.
+ * Reconnect the server with the given index to all other servers.
  */
-void raft_fixture_reconnect_to_all(struct raft_fixture *f, unsigned id);
+void raft_fixture_reconnect_to_all(struct raft_fixture *f, unsigned i);
 
 /**
- * Kill the server with the given ID. The server won't receive any message and
- * its tick callback won't be invoked.
+ * Kill the server with the given index. The server won't receive any message
+ * and its tick callback won't be invoked.
  */
-void raft_fixture_kill(struct raft_fixture *f, unsigned id);
+void raft_fixture_kill(struct raft_fixture *f, unsigned i);
 
 /**
  * Add a new empty server to the cluster and connect it to all others.

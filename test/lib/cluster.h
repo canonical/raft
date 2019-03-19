@@ -152,11 +152,6 @@ void test_cluster_kill(struct test_cluster *c, unsigned id);
 void test_cluster_kill_majority(struct test_cluster *c);
 
 /**
- * Return true if the given servers are connected.
- */
-bool test_cluster_connected(struct test_cluster *c, unsigned id1, unsigned id2);
-
-/**
  * Disconnect a server from another.
  */
 void test_cluster_disconnect(struct test_cluster *c,
