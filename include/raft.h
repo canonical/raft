@@ -183,18 +183,18 @@ enum { RAFT_COMMAND = 1, RAFT_CONFIGURATION };
  *   change], and term when entry was received by the leader.
  *
  * An entry that originated from this raft instance while it was the leader
- * (typically via client calls to raft_propose()) should normaly have a @buf
+ * (typically via client calls to raft_apply()) should normaly have a @buf
  * attribute that points directly to the memory that was originally allocated by
  * the client itself to contain the entry data, and the @batch attribute is set
  * to #NULL.
  *
- * An entry that was received from the network upon an AppendEntries RPC or that
- * was loaded from disk at startup should normally have a @batch attribute that
- * points to a contiguous chunk of memory containing the data of the entry
- * itself plus possibly the data for other entries that were received or loaded
- * with it in the same request. In this case the @buf pointer will be equal to
- * the @batch pointer plus an offset, that locates the position of the entry's
- * data within the batch.
+ * An entry that was received from the network as part of an AppendEntries RPC
+ * or that was loaded from disk at startup should normally have a @batch
+ * attribute that points to a contiguous chunk of memory containing the data of
+ * the entry itself plus possibly the data for other entries that were received
+ * or loaded with it at the same time. In this case the @buf pointer will be
+ * equal to the @batch pointer plus an offset, that locates the position of the
+ * entry's data within the batch.
  *
  * When the @batch attribute is not #NULL the raft library will take care of
  * releasing that memory only once there are no more references to the
@@ -216,12 +216,12 @@ struct raft_entry
  * one referencing the entry). Whenever an entry is included in an I/O request
  * (write entries to disk or send entries to other servers) its refcount is
  * increased by one. Whenever an entry gets deleted from the log its refcount is
- * decreased by one, likewise whenever an I/O request is completed the refcount
+ * decreased by one. Likewise, whenever an I/O request is completed the refcount
  * of the relevant entries is decreased by one. When the refcount drops to zero
- * the memory that its @buf attribute points to gets released, or if the @batch
- * attribute is non-NULL a check is made to see if there's any other entry of
- * the same batch with a non-zero refcount, and the memory pointed that @batch
- * itself points to gets released if there's no such other entry.
+ * the memory that its @buf attribute points to gets released, or, if the @batch
+ * attribute is non-NULL, a check is made to see if all other entries of the
+ * same batch also have a zero refcount, and the memory that @batch points to
+ * gets released if that's the case.
  */
 struct raft_entry_ref
 {
@@ -235,8 +235,8 @@ struct raft_entry_ref
  * In-memory cache of the persistent raft log stored on disk.
  *
  * The raft log cache is implemented as a circular buffer of log entries, which
- * makes some common operations (e.g. deleting the first N entries when
- * snapshotting) very efficient.
+ * makes some frequent operations very efficient (e.g. deleting the first N
+ * entries when snapshotting).
  */
 struct raft_log
 {
