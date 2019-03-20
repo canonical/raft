@@ -20,8 +20,8 @@
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
-/* Set to 1 to enable debug logging. */
-#if 1
+/* Set to 1 to enable tracing. */
+#if 0
 #define tracef(MSG, ...) debugf(r->io, MSG, __VA_ARGS__)
 #else
 #define tracef(MSG, ...)

@@ -163,7 +163,7 @@ TEST_MODULE(client);
 #define __assert_state(F, STATE) munit_assert_int(F->raft.state, ==, STATE);
 
 /**
- * Invoke @raft__tick and check that no errors occur.
+ * Trigger the tick callback.
  */
 #define __tick(F, MSECS)                     \
     {                                        \

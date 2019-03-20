@@ -13,6 +13,6 @@
  * This function needs to be called periodically, in order to process events
  * that are dependent on time passing.
  */
-int raft__tick(struct raft *r);
+int tick(struct raft *r);
 
 #endif /* RAFT_TICK_H */

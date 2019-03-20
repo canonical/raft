@@ -1,4 +1,3 @@
-#include <stdlib.h>
 #include <string.h>
 
 #include "../include/raft.h"
@@ -8,7 +7,6 @@
 #include "election.h"
 #include "log.h"
 #include "logging.h"
-#include "rpc.h"
 #include "rpc_append_entries.h"
 #include "rpc_install_snapshot.h"
 #include "rpc_request_vote.h"
@@ -18,6 +16,13 @@
 #define DEFAULT_ELECTION_TIMEOUT 1000 /* One second */
 #define DEFAULT_HEARTBEAT_TIMEOUT 100 /* One tenth of a second */
 #define DEFAULT_SNAPSHOT_THRESHOLD 1024
+
+/* Set to 1 to enable debug logging. */
+#if 0
+#define tracef(MSG, ...) tracef(r->io, MSG, __VA_ARGS__)
+#else
+#define tracef(MSG, ...)
+#endif
 
 int raft_init(struct raft *r,
               struct raft_io *io,
@@ -33,62 +38,50 @@ int raft_init(struct raft *r,
     r->io = io;
     r->io->data = r;
     r->fsm = fsm;
-
     r->id = id;
-
     /* Make a copy of the address */
     r->address = raft_malloc(strlen(address) + 1);
     if (r->address == NULL) {
         return RAFT_ENOMEM;
     }
     strcpy(r->address, address);
-
-    /* Initial persistent server state. */
     r->current_term = 0;
     r->voted_for = 0;
     log__init(&r->log);
-
     raft_configuration_init(&r->configuration);
     r->configuration_index = 0;
     r->configuration_uncommitted_index = 0;
-
     r->election_timeout = DEFAULT_ELECTION_TIMEOUT;
     r->heartbeat_timeout = DEFAULT_HEARTBEAT_TIMEOUT;
-
     r->commit_index = 0;
     r->last_applied = 0;
     r->last_stored = 0;
-
     r->state = RAFT_UNAVAILABLE;
-
-    for (i = 0; i < RAFT_EVENT_N; i++) {
-        r->watchers[i] = NULL;
-    }
-
-    r->close_cb = NULL;
-
+    r->election_timeout_rand = 0;
+    r->last_tick = 0;
+    r->timer = 0;
     r->snapshot.term = 0;
     r->snapshot.index = 0;
     r->snapshot.pending.term = 0;
     r->snapshot.threshold = DEFAULT_SNAPSHOT_THRESHOLD;
     r->snapshot.put.data = NULL;
-
+    for (i = 0; i < RAFT_EVENT_N; i++) {
+        r->watchers[i] = NULL;
+    }
+    r->close_cb = NULL;
     rv = r->io->init(r->io, r->id, r->address);
     if (rv != 0) {
         return rv;
     }
-
     return 0;
 }
 
-static void raft__close_cb(struct raft_io *io)
+static void io_close_cb(struct raft_io *io)
 {
     struct raft *r = io->data;
-
     infof(r->io, "stopped");
 
     raft_free(r->address);
-    raft_state__clear(r);
     log__close(&r->log);
     raft_configuration_close(&r->configuration);
 
@@ -101,21 +94,21 @@ static void tick_cb(struct raft_io *io)
 {
     struct raft *r;
     r = io->data;
-    raft__tick(r);
+    tick(r);
 }
 
-static const char *raft__message_names[] = {
+static const char *message_descs[] = {
     "append entries",
     "append entries result",
     "request vote",
     "request vote result",
+    "install snapshot"
 };
 
 static void recv_cb(struct raft_io *io, struct raft_message *message)
 {
     struct raft *r;
     int rv;
-
     r = io->data;
 
     switch (message->type) {
@@ -150,7 +143,7 @@ static void recv_cb(struct raft_io *io, struct raft_message *message)
     };
 
     if (rv != 0 && rv != RAFT_ERR_IO_CONNECT) {
-        errorf(r->io, "rpc %s: %s", raft__message_names[message->type],
+        errorf(r->io, "rpc %s: %s", message_descs[message->type],
                raft_strerror(rv));
     }
 }
@@ -179,9 +172,9 @@ int raft_start(struct raft *r)
         goto err;
     }
 
-    if (snapshot == NULL) {
-        start_index = 1;
-    } else {
+    /* If we have a snapshot, let's restore it, updating the start index. */
+    start_index = 1;
+    if (snapshot != NULL) {
         start_index = snapshot->index + 1;
         assert(snapshot->n_bufs == 1);
         rv = r->fsm->restore(r->fsm, &snapshot->bufs[0]);
@@ -303,7 +296,7 @@ void raft_close(struct raft *r, void (*cb)(struct raft *r))
 
     raft_state__clear(r);
     r->state = RAFT_UNAVAILABLE;
-    r->io->close(r->io, raft__close_cb);
+    r->io->close(r->io, io_close_cb);
 }
 
 void raft_set_election_timeout(struct raft *r, const unsigned msecs)
