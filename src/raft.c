@@ -310,10 +310,14 @@ void raft_close(struct raft *r, void (*cb)(struct raft *r))
     r->io->close(r->io, raft__close_cb);
 }
 
-void raft_set_election_timeout(struct raft *r, const unsigned election_timeout)
+void raft_set_election_timeout(struct raft *r, const unsigned msecs)
 {
-    r->election_timeout = election_timeout;
+    r->election_timeout = msecs;
     raft_election__reset_timer(r);
+}
+
+void raft_set_heartbeat_timeout(struct raft *r, const unsigned msecs) {
+    r->heartbeat_timeout = msecs;
 }
 
 const char *raft_state_name(struct raft *r)

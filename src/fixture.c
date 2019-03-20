@@ -9,6 +9,7 @@
  * to be reached. */
 #define MAX_STEPS 100
 
+#define HEARTBEAT_TIMEOUT 50
 #define ELECTION_TIMEOUT 250
 
 static int setup_server(unsigned i,
@@ -30,8 +31,8 @@ static int setup_server(unsigned i,
     if (rc != 0) {
         return rc;
     }
-    s->raft.heartbeat_timeout = 50;
     raft_set_election_timeout(&s->raft, ELECTION_TIMEOUT);
+    raft_set_heartbeat_timeout(&s->raft, HEARTBEAT_TIMEOUT);
     return 0;
 }
 
