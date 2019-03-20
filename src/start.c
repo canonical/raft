@@ -10,36 +10,31 @@
 #include "state.h"
 #include "tick.h"
 
-/* Restore the most recent configuration among the given entries, if any. */
+/* Restore the most recent configuration. */
 static int restore_most_recent_configuration(struct raft *r,
-                                             struct raft_entry *entries,
-                                             size_t n)
+                                             struct raft_entry *entry,
+                                             raft_index index)
 {
     struct raft_configuration configuration;
-    size_t i;
     int rc;
-    for (i = n; i > 0; i--) {
-        struct raft_entry *entry = &entries[i - 1];
-        if (entry->type != RAFT_CONFIGURATION) {
-            continue;
-        }
-        raft_configuration_init(&configuration);
-        rc = configuration__decode(&entry->buf, &configuration);
-        if (rc != 0) {
-            raft_configuration_close(&configuration);
-            return rc;
-        }
-        raft_configuration_close(&r->configuration);
-        r->configuration = configuration;
-        r->configuration_index = r->last_stored - (n - i);
-        break;
+    raft_configuration_init(&configuration);
+    rc = configuration__decode(&entry->buf, &configuration);
+    if (rc != 0) {
+        raft_configuration_close(&configuration);
+        return rc;
     }
+    raft_configuration_close(&r->configuration);
+    r->configuration = configuration;
+    r->configuration_index = index;
     return 0;
 }
 
-/* Restore the given entries that were loaded from persistent storage. */
+/* Restore the entries that were loaded from persistent storage. The most recent
+ * configuration entry will be restored as well, if any. */
 static int restore_entries(struct raft *r, struct raft_entry *entries, size_t n)
 {
+    struct raft_entry *conf = NULL;
+    raft_index conf_index;
     size_t i;
     int rc;
     for (i = 0; i < n; i++) {
@@ -47,14 +42,28 @@ static int restore_entries(struct raft *r, struct raft_entry *entries, size_t n)
         rc = log__append(&r->log, entry->term, entry->type, &entry->buf,
                          entry->batch);
         if (rc != 0) {
-            if (log__n_entries(&r->log) > 0) {
-                log__discard(&r->log, log__first_index(&r->log));
-            }
-            return rc;
+            goto err;
+        }
+        r->last_stored++;
+        if (entry->type == RAFT_CONFIGURATION) {
+            conf = entry;
+            conf_index = r->last_stored;
+        }
+    }
+    if (conf != NULL) {
+        rc = restore_most_recent_configuration(r, conf, conf_index);
+        if (rc != 0) {
+            goto err;
         }
     }
     raft_free(entries);
     return 0;
+
+ err:
+    if (log__n_entries(&r->log) > 0) {
+        log__discard(&r->log, log__first_index(&r->log));
+    }
+    return rc;
 }
 
 /* Automatically self-elect ourselves and convert to leader if we're the only
@@ -120,17 +129,8 @@ int raft_start(struct raft *r)
         r->last_applied = 1;
     }
 
-    /* Index of the last entry we have on disk. */
-    r->last_stored += n_entries;
-
-    /* Look for the most recent configuration entry, if any. */
-    rc = restore_most_recent_configuration(r, entries, n_entries);
-    if (rc != 0) {
-        entry_batches__destroy(entries, n_entries);
-        return rc;
-    }
-
-    /* Append the entries to the log. */
+    /* Append the entries to the log, possibly restoring the last
+     * configuration. */
     rc = restore_entries(r, entries, n_entries);
     if (rc != 0) {
         entry_batches__destroy(entries, n_entries);

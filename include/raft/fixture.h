@@ -19,10 +19,28 @@ struct raft_fixture_server
     struct raft raft;
 };
 
+/**
+ * Test implementation of a cluster of N servers, each having a user-provided
+ * FSM.
+ *
+ * Out of the N servers, there can be V voting servers, with V <= N.
+ *
+ * The cluster can simulate network latency and time elapsed on individual
+ * servers.
+ *
+ * Servers can be alive or dead. Network messages sent to dead servers are
+ * dropped. Dead servers do not have their @raft_io_tick_cb callback invoked.
+ *
+ * Any two servers can be connected or disconnected. Network messages sent
+ * between disconnected servers are dropped.
+ */
 struct raft_fixture
 {
-    raft_time time; /* Number of milliseconds elapsed. */
-    unsigned n;     /* Number of servers */
+    raft_time time;          /* Number of milliseconds elapsed. */
+    unsigned n;              /* Number of servers */
+    unsigned leader_id;      /* ID of current leader, or 0 */
+    struct raft_log log;     /* Copy of leader's log */
+    raft_index commit_index; /* Current commit index on leader */
     struct raft_fixture_server servers[RAFT_FIXTURE_MAX_SERVERS];
     int (*random)(int, int);
 };
@@ -48,6 +66,44 @@ void raft_fixture_tear_down(struct raft_fixture *f);
  * Step through the cluster state advancing the time to the minimum value needed
  * for it to make progress (i.e. for a message to be delivered or for a server
  * time out).
+ *
+ * In particular, the following happens:
+ *
+ * 1. All pending I/O requests across all servers are flushed. This simulates
+ *    completion of disk writes (@raft_io_append, @raft_io_snapshot_put, etc),
+ *    and completion RPC @raft_io_send requests. A completed network request
+ *    does not mean that the receiver immediately receives the message, it just
+ *    means that any buffer allocated by the sender can be released (e.g. log
+ *    entries). The in-memory I/O implementation assigns a random latency to
+ *    each RPC message, which will get delivered to the receiver only after that
+ *    amount of time elapses. If the sender and the receiver are currently
+ *    disconnected, the RPC message is simply dropped.
+ *
+ * 2. All pending RPC messages across all servers are scanned and the one with
+ *    the lowest delivery time is picked. All servers are scanned too, and the
+ *    one with the lowest timer expiration time is picked (that will be either
+ *    election timer or heartbeat timer, depending on the server state). The two
+ *    times are compared and the lower one is picked. If there's an RPC to be
+ *    delivered, the receiver's @raft_io_recv_cb callback gets fired. Then the
+ *    @raft_io_tick_cb callback of all servers is invoked, with amount of time
+ *    elapsed. The timer of each remaining RPC message is updated accordingly.
+ *
+ * 3. The current cluster leader is detected (if any). When detecting the leader
+ *    the Election Safety property is checked: no servers can be in leader state
+ *    for the same term. The server in leader state with the highest term is
+ *    considered the current cluster leader, as long as it's "stable", i.e. it
+ *    has been acknowledged by all servers connected to it, and those servers
+ *    form a majority (this means that no further leader change can happen,
+ *    unless the network gets disrupted). If there is a stable leader and it has
+ *    not changed with respect to the previous call to @raft_fixture_step(),
+ *    then the Leader Append-Only property is checked, by comparing its log with
+ *    a copy of it that was taken during the previous iteration.
+ *
+ * 4. If there is a stable leader, its current log is copied, in order to be
+ *    able to check the Leader Append-Only property at the next call.
+ *
+ * 5. If there is a stable leader, its commit index gets copied.
+ *
  */
 void raft_fixture_step(struct raft_fixture *f);
 
@@ -92,9 +148,7 @@ bool raft_fixture_connected(struct raft_fixture *f, unsigned i, unsigned j);
 /**
  * Disconnect the servers with the given indexes from one another.
  */
-void raft_fixture_disconnect(struct raft_fixture *f,
-                             unsigned i,
-                             unsigned j);
+void raft_fixture_disconnect(struct raft_fixture *f, unsigned i, unsigned j);
 
 /**
  * Disconnect the server with given index from all the others.

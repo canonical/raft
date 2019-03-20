@@ -151,12 +151,12 @@ static MunitResult test_network_disconnect(const MunitParameter params[],
             test_cluster_propose(&f->cluster);
         }
 
-        if (f->cluster.commit_index >= 2) {
+        if (f->cluster.fixture.commit_index >= 2) {
             break;
         }
     }
 
-    munit_assert_int(f->cluster.commit_index, >=, 2);
+    munit_assert_int(f->cluster.fixture.commit_index, >=, 2);
 
     return MUNIT_OK;
 }

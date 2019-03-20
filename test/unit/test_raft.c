@@ -281,8 +281,7 @@ TEST_CASE(start, success, snapshot, NULL)
     return MUNIT_OK;
 }
 
-static char *start_oom_heap_fault_delay[] = {"0", "1,", "2", "3", "4",
-                                             "5", "6",  "7", NULL};
+static char *start_oom_heap_fault_delay[] = {"0", "1,", "2", "3", NULL};
 static char *start_oom_heap_fault_repeat[] = {"1", NULL};
 
 static MunitParameterEnum start_oom_params[] = {

@@ -79,9 +79,6 @@ struct test_cluster
 {
     struct raft_fixture fixture;
     struct raft_fsm fsms[RAFT_FIXTURE_MAX_SERVERS];
-    unsigned leader_id;      /* Current leader, if any. */
-    raft_index commit_index; /* Index of last committed entry. */
-    struct raft_log log;     /* Copy of leader's log at last iteration. */
 };
 
 void test_cluster_setup(const MunitParameter params[], struct test_cluster *c);
