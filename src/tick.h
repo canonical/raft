@@ -8,11 +8,9 @@
 #include "../include/raft.h"
 
 /**
- * Notify the raft instance that a certain amout of time as elapsed.
- *
- * This function needs to be called periodically, in order to process events
- * that are dependent on time passing.
+ * Callback to be passed to the @raft_io implementation. It notifies us that a
+ * certain amount of time has elapsed and will be invoked periodically.
  */
-int tick(struct raft *r);
+void tick_cb(struct raft_io *io);
 
 #endif /* RAFT_TICK_H */

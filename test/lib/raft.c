@@ -93,7 +93,7 @@ void test_set_initial_snapshot(struct raft *r,
     test_fsm_tear_down(&fsm);
 
     test_io_set_snapshot(r->io, &snapshot);
-    raft_snapshot__close(&snapshot);
+    snapshot__close(&snapshot);
 }
 
 void test_become_candidate(struct raft *r)

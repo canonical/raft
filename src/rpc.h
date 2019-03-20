@@ -11,7 +11,7 @@
  * Callback to be passed to the @raft_io implementation. It will be invoked upon
  * receiving an RPC message.
  */
-void raft_rpc__recv_cb(void *data, struct raft_message *message);
+void rpc__recv_cb(struct raft_io *io, struct raft_message *message);
 
 /**
  * Common logic for RPC handlers, comparing the request's term with the server's

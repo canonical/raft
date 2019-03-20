@@ -280,7 +280,7 @@ static int io_stub__close(struct raft_io *io, void (*cb)(struct raft_io *io))
     drop_all_transmit(s);
 
     if (s->snapshot != NULL) {
-        raft_snapshot__close(s->snapshot);
+        snapshot__close(s->snapshot);
         raft_free(s->snapshot);
     }
 
@@ -992,7 +992,7 @@ static void io_stub__flush_snapshot_put(struct io_stub *s,
         s->snapshot = raft_malloc(sizeof *s->snapshot);
         assert(s->snapshot != NULL);
     } else {
-        raft_snapshot__close(s->snapshot);
+        snapshot__close(s->snapshot);
     }
 
     snapshot_copy(r->snapshot, s->snapshot);

@@ -95,7 +95,7 @@ static void send_install_snapshot_cb(struct raft_io_send *req, int status)
     struct raft *r = request->raft;
 
     debugf(r->io, "send install snapshot completed: status %d", status);
-    raft_snapshot__close(request->snapshot);
+    snapshot__close(request->snapshot);
     raft_free(request->snapshot);
     raft_free(request);
 }
@@ -153,7 +153,7 @@ static void snapshot_get_cb(struct raft_io_snapshot_get *req,
     return;
 
 err_with_snapshot:
-    raft_snapshot__close(snapshot);
+    snapshot__close(snapshot);
     raft_free(snapshot);
 err:
     raft_free(request);
@@ -1342,7 +1342,7 @@ static void snapshot_put_cb(struct raft_io_snapshot_put *req, int status)
     }
 
 out:
-    raft_snapshot__close(&r->snapshot.pending);
+    snapshot__close(&r->snapshot.pending);
     r->snapshot.pending.term = 0;
 }
 

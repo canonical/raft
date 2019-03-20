@@ -5,11 +5,10 @@
 #include "assert.h"
 #include "configuration.h"
 #include "election.h"
+#include "entry.h"
 #include "log.h"
 #include "logging.h"
-#include "rpc_append_entries.h"
-#include "rpc_install_snapshot.h"
-#include "rpc_request_vote.h"
+#include "rpc.h"
 #include "snapshot.h"
 #include "state.h"
 #include "tick.h"
@@ -91,69 +90,80 @@ static void io_close_cb(struct raft_io *io)
     }
 }
 
-static void tick_cb(struct raft_io *io)
+/* Restore the most recent configuration among the given entries, if any. */
+static int restore_most_recent_configuration(struct raft *r,
+                                             struct raft_entry *entries,
+                                             size_t n)
 {
-    struct raft *r;
-    r = io->data;
-    tick(r);
+    struct raft_configuration configuration;
+    size_t i;
+    int rc;
+    for (i = n; i > 0; i--) {
+        struct raft_entry *entry = &entries[i - 1];
+        if (entry->type != RAFT_CONFIGURATION) {
+            continue;
+        }
+        raft_configuration_init(&configuration);
+        rc = configuration__decode(&entry->buf, &configuration);
+        if (rc != 0) {
+            raft_configuration_close(&configuration);
+            return rc;
+        }
+        raft_configuration_close(&r->configuration);
+        r->configuration = configuration;
+        r->configuration_index = r->last_stored - (n - i);
+        break;
+    }
+    return 0;
 }
 
-static const char *message_descs[] = {"append entries", "append entries result",
-                                      "request vote", "request vote result",
-                                      "install snapshot"};
-
-static void recv_cb(struct raft_io *io, struct raft_message *message)
+/* Restore the given entries that were loaded from persistent storage. */
+static int restore_entries(struct raft *r, struct raft_entry *entries, size_t n)
 {
-    struct raft *r;
-    int rv;
-    r = io->data;
-
-    switch (message->type) {
-        case RAFT_IO_APPEND_ENTRIES:
-            rv = raft_rpc__recv_append_entries(r, message->server_id,
-                                               message->server_address,
-                                               &message->append_entries);
-            break;
-        case RAFT_IO_APPEND_ENTRIES_RESULT:
-            rv = raft_rpc__recv_append_entries_result(
-                r, message->server_id, message->server_address,
-                &message->append_entries_result);
-            break;
-        case RAFT_IO_REQUEST_VOTE:
-            rv = raft_rpc__recv_request_vote(r, message->server_id,
-                                             message->server_address,
-                                             &message->request_vote);
-            break;
-        case RAFT_IO_REQUEST_VOTE_RESULT:
-            rv = raft_rpc__recv_request_vote_result(
-                r, message->server_id, message->server_address,
-                &message->request_vote_result);
-            break;
-        case RAFT_IO_INSTALL_SNAPSHOT:
-            rv = raft_rpc__recv_install_snapshot(r, message->server_id,
-                                                 message->server_address,
-                                                 &message->install_snapshot);
-            break;
-        default:
-            warnf(r->io, "rpc: unknown message type type: %d", message->type);
-            return;
-    };
-
-    if (rv != 0 && rv != RAFT_ERR_IO_CONNECT) {
-        errorf(r->io, "rpc %s: %s", message_descs[message->type],
-               raft_strerror(rv));
+    size_t i;
+    int rc;
+    for (i = 0; i < n; i++) {
+        struct raft_entry *entry = &entries[i];
+        rc = log__append(&r->log, entry->term, entry->type, &entry->buf,
+                         entry->batch);
+        if (rc != 0) {
+            if (log__n_entries(&r->log) > 0) {
+                log__discard(&r->log, log__first_index(&r->log));
+            }
+            return rc;
+        }
     }
+    raft_free(entries);
+    return 0;
+}
+
+/* Automatically self-elect ourselves and convert to leader if we're the only
+ * voting server in the configuration. */
+static int maybe_self_elect(struct raft *r) {
+    const struct raft_server *server;
+    int rc;
+    server = configuration__get(&r->configuration, r->id);
+    if (server != NULL && server->voting &&
+        configuration__n_voting(&r->configuration) == 1) {
+        debugf(r->io, "self elect and convert to leader");
+        rc = raft_state__convert_to_candidate(r);
+        if (rc != 0) {
+            return rc;
+        }
+        rc = raft_state__convert_to_leader(r);
+        if (rc != 0) {
+            return rc;
+        }
+    }
+    return 0;
 }
 
 int raft_start(struct raft *r)
 {
-    int rv;
+    int rc;
     struct raft_snapshot *snapshot;
     struct raft_entry *entries;
     size_t n_entries;
-    raft_index start_index;
-    const struct raft_server *server;
-    size_t i;
 
     assert(r != NULL);
     assert(r->state == RAFT_UNAVAILABLE);
@@ -164,20 +174,19 @@ int raft_start(struct raft *r)
 
     infof(r->io, "starting");
 
-
-    rv = r->io->load(r->io, &r->current_term, &r->voted_for, &snapshot,
+    rc = r->io->load(r->io, &r->current_term, &r->voted_for, &snapshot,
                      &entries, &n_entries);
-    if (rv != 0) {
-        goto err;
+    if (rc != 0) {
+        return rc;
     }
 
     /* If we have a snapshot, let's restore it, updating the start index. */
-    start_index = 1;
     if (snapshot != NULL) {
-        start_index = snapshot->index + 1;
-        rv = snapshot__restore(r, snapshot);
-        if (rv != 0) {
-            goto err_after_load;
+        rc = snapshot__restore(r, snapshot);
+        if (rc != 0) {
+            snapshot__destroy(snapshot);
+            entry_batches__destroy(entries, n_entries);
+            return rc;
         }
     } else if (n_entries > 0) {
         /* If we don't have a snapshot and the on-disk log is not empty, then
@@ -194,35 +203,17 @@ int raft_start(struct raft *r)
     r->last_stored += n_entries;
 
     /* Look for the most recent configuration entry, if any. */
-    for (i = n_entries; i > 0; i--) {
-        struct raft_entry *entry = &entries[i - 1];
-
-        if (entry->type != RAFT_CONFIGURATION) {
-            continue;
-        }
-
-        raft_configuration_close(&r->configuration);
-        raft_configuration_init(&r->configuration);
-
-        rv = configuration__decode(&entry->buf, &r->configuration);
-        if (rv != 0) {
-            goto err_after_load;
-        }
-
-        r->configuration_index = start_index + i - 1;
-
-        break;
+    rc = restore_most_recent_configuration(r, entries, n_entries);
+    if (rc != 0) {
+        entry_batches__destroy(entries, n_entries);
+        return rc;
     }
 
     /* Append the entries to the log. */
-    for (i = 0; i < n_entries; i++) {
-        struct raft_entry *entry = &entries[i];
-
-        rv = log__append(&r->log, entry->term, entry->type, &entry->buf,
-                         entry->batch);
-        if (rv != 0) {
-            goto err_after_load;
-        }
+    rc = restore_entries(r, entries, n_entries);
+    if (rc != 0) {
+        entry_batches__destroy(entries, n_entries);
+        return rc;
     }
 
     /* Initialize the tick timestamp. */
@@ -231,46 +222,22 @@ int raft_start(struct raft *r)
     /* Start the I/O backend. The tick callback is expected to fire every
      * r->heartbeat_timeout milliseconds and the recv callback whenever an RPC
      * is received. */
-    rv = r->io->start(r->io, r->heartbeat_timeout, tick_cb, recv_cb);
-    if (rv != 0) {
-        goto err_after_load;
-    }
-
-    if (entries != NULL) {
-        raft_free(entries);
+    rc = r->io->start(r->io, r->heartbeat_timeout, tick_cb, rpc__recv_cb);
+    if (rc != 0) {
+        return rc;
     }
 
     raft_state__start_as_follower(r);
 
     /* If there's only one voting server, and that is us, it's safe to convert
      * to leader right away. If that is not us, we're either joining the cluster
-     * or we're simply configured as non-voter, so we stay follower. */
-    server = configuration__get(&r->configuration, r->id);
-    if (server != NULL && server->voting &&
-        configuration__n_voting(&r->configuration) == 1) {
-        debugf(r->io, "self elect and convert to leader");
-        rv = raft_state__convert_to_candidate(r);
-        if (rv != 0) {
-            return rv;
-        }
-        rv = raft_state__convert_to_leader(r);
-        if (rv != 0) {
-            return rv;
-        }
+     * or we're simply configured as non-voter, and we'll stay follower. */
+    rc = maybe_self_elect(r);
+    if (rc != 0) {
+      return rc;
     }
 
     return 0;
-
-err_after_load:
-    if (entries != NULL) {
-        raft_free(entries[0].batch);
-        raft_free(entries);
-    }
-
-err:
-    assert(rv != 0);
-
-    return rv;
 }
 
 void raft_close(struct raft *r, void (*cb)(struct raft *r))

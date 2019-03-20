@@ -1,9 +1,9 @@
 #include "snapshot.h"
-#include "logging.h"
 #include "assert.h"
 #include "log.h"
+#include "logging.h"
 
-void raft_snapshot__close(struct raft_snapshot *s)
+void snapshot__close(struct raft_snapshot *s)
 {
     unsigned i;
     raft_configuration_close(&s->configuration);
@@ -11,6 +11,12 @@ void raft_snapshot__close(struct raft_snapshot *s)
         raft_free(s->bufs[0].base);
     }
     raft_free(s->bufs);
+}
+
+void snapshot__destroy(struct raft_snapshot *s)
+{
+    snapshot__close(s);
+    raft_free(s);
 }
 
 int snapshot__restore(struct raft *r, struct raft_snapshot *snapshot)

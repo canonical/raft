@@ -40,6 +40,7 @@ libraft_la_SOURCES = \
   src/client.c \
   src/configuration.c \
   src/election.c \
+  src/entry.c \
   src/error.c \
   src/heap.c \
   src/log.c \
