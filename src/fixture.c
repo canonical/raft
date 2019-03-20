@@ -27,7 +27,7 @@ static int setup_server(unsigned i,
     }
     raft_io_stub_set_random(&s->io, random);
     raft_io_stub_set_latency(&s->io, 5, 50);
-    rc = raft_init(&s->raft, &s->io, fsm, NULL, s->id, s->address);
+    rc = raft_init(&s->raft, &s->io, fsm, s->id, s->address);
     if (rc != 0) {
         return rc;
     }

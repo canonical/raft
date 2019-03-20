@@ -15,14 +15,13 @@
 #include "state.h"
 #include "tick.h"
 
-#define RAFT__DEFAULT_ELECTION_TIMEOUT 1000
-#define RAFT__DEFAULT_HEARTBEAT_TIMEOUT 100
-#define RAFT__DEFAULT_SNAPSHOT_THRESHOLD 1024
+#define DEFAULT_ELECTION_TIMEOUT 1000 /* One second */
+#define DEFAULT_HEARTBEAT_TIMEOUT 100 /* One tenth of a second */
+#define DEFAULT_SNAPSHOT_THRESHOLD 1024
 
 int raft_init(struct raft *r,
               struct raft_io *io,
               struct raft_fsm *fsm,
-              void *data,
               const unsigned id,
               const char *address)
 {
@@ -44,9 +43,6 @@ int raft_init(struct raft *r,
     }
     strcpy(r->address, address);
 
-    /* User-defined */
-    r->data = data;
-
     /* Initial persistent server state. */
     r->current_term = 0;
     r->voted_for = 0;
@@ -56,8 +52,8 @@ int raft_init(struct raft *r,
     r->configuration_index = 0;
     r->configuration_uncommitted_index = 0;
 
-    r->election_timeout = RAFT__DEFAULT_ELECTION_TIMEOUT;
-    r->heartbeat_timeout = RAFT__DEFAULT_HEARTBEAT_TIMEOUT;
+    r->election_timeout = DEFAULT_ELECTION_TIMEOUT;
+    r->heartbeat_timeout = DEFAULT_HEARTBEAT_TIMEOUT;
 
     r->commit_index = 0;
     r->last_applied = 0;
@@ -74,7 +70,7 @@ int raft_init(struct raft *r,
     r->snapshot.term = 0;
     r->snapshot.index = 0;
     r->snapshot.pending.term = 0;
-    r->snapshot.threshold = RAFT__DEFAULT_SNAPSHOT_THRESHOLD;
+    r->snapshot.threshold = DEFAULT_SNAPSHOT_THRESHOLD;
     r->snapshot.put.data = NULL;
 
     rv = r->io->init(r->io, r->id, r->address);
@@ -316,7 +312,8 @@ void raft_set_election_timeout(struct raft *r, const unsigned msecs)
     raft_election__reset_timer(r);
 }
 
-void raft_set_heartbeat_timeout(struct raft *r, const unsigned msecs) {
+void raft_set_heartbeat_timeout(struct raft *r, const unsigned msecs)
+{
     r->heartbeat_timeout = msecs;
 }
 

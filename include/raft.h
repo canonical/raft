@@ -603,6 +603,11 @@ enum {
 struct raft
 {
     /**
+     * Custom user data.
+     */
+    void *data;
+
+    /**
      * User-defined disk and network I/O interface implementation.
      */
     struct raft_io *io;
@@ -621,12 +626,6 @@ struct raft
      * Server address of this raft instance.
      */
     char *address;
-
-    /**
-     * Custom user data. It will be passed back to callbacks registered with
-     * raft_watch().
-     */
-    void *data;
 
     /**
      * The fields below are a cache of the server's persistent state, updated on
@@ -815,7 +814,6 @@ struct raft
 int raft_init(struct raft *r,
               struct raft_io *io,
               struct raft_fsm *fsm,
-              void *data,
               unsigned id,
               const char *address);
 
