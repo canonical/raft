@@ -166,6 +166,7 @@ int raft_start(struct raft *r)
     struct raft_entry *entries;
     size_t n_entries;
     raft_index start_index;
+    const struct raft_server *server;
     size_t i;
 
     assert(r != NULL);
@@ -265,6 +266,23 @@ int raft_start(struct raft *r)
     }
 
     raft_state__start_as_follower(r);
+
+    /* If there's only one voting server, and that is us, it's safe to convert
+     * to leader right away. If that is not us, we're either joining the cluster
+     * or we're simply configured as non-voter, so we stay follower. */
+    server = configuration__get(&r->configuration, r->id);
+    if (server != NULL && server->voting &&
+        configuration__n_voting(&r->configuration) == 1) {
+        debugf(r->io, "self elect and convert to leader");
+        rv = raft_state__convert_to_candidate(r);
+        if (rv != 0) {
+            return rv;
+        }
+        rv = raft_state__convert_to_leader(r);
+        if (rv != 0) {
+            return rv;
+        }
+    }
 
     return 0;
 

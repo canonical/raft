@@ -119,7 +119,6 @@ TEST_SUITE(elapse);
 TEST_SETUP(elapse, setup);
 TEST_TEAR_DOWN(elapse, tear_down);
 
-TEST_GROUP(elapse, error);
 TEST_GROUP(elapse, success);
 
 /* If we're in the unavailable state, raft__tick is a no-op. */
@@ -184,48 +183,6 @@ TEST_CASE(elapse, success, voter_not_us, NULL)
 
     __tick(f, 100);
     __assert_state(f, RAFT_FOLLOWER);
-
-    return MUNIT_OK;
-}
-
-/* There's only a single voting server and that's us, but we fail to convert to
-   candidate due to an OOM error. */
-TEST_CASE(elapse, error, candidate_oom, NULL)
-{
-    struct fixture *f = data;
-    int rv;
-
-    (void)params;
-
-    test_bootstrap_and_start(&f->raft, 1, 1, 1);
-
-    test_heap_fault_config(&f->heap, 0, 1);
-    test_heap_fault_enable(&f->heap);
-
-    raft_io_stub_set_time(&f->io, 100);
-
-    rv = raft__tick(&f->raft);
-    munit_assert_int(rv, ==, RAFT_ENOMEM);
-
-    return MUNIT_OK;
-}
-
-/* There's only a single voting server and that's us, but we fail to convert to
-   candidate due the disk being full. */
-TEST_CASE(elapse, error, candidate_io_err, NULL)
-{
-    struct fixture *f = data;
-    int rv;
-
-    (void)params;
-
-    test_bootstrap_and_start(&f->raft, 1, 1, 1);
-
-    raft_io_stub_fault(&f->io, 0, 1);
-    raft_io_stub_set_time(&f->io, 100);
-
-    rv = raft__tick(&f->raft);
-    munit_assert_int(rv, ==, RAFT_ERR_IO);
 
     return MUNIT_OK;
 }
