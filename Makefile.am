@@ -53,6 +53,7 @@ libraft_la_SOURCES = \
   src/rpc_request_vote.c \
   src/rpc_install_snapshot.c \
   src/snapshot.c \
+  src/start.c \
   src/state.c \
   src/tick.c \
   src/watch.c
