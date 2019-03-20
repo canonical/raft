@@ -316,7 +316,9 @@ struct raft_snapshot
     struct raft_configuration configuration;
     raft_index configuration_index;
 
-    /* Content of the snapshot */
+    /* Content of the snapshot. When a snapshot is taken, the user FSM can fill
+     * the bufs array with more than one buffer. When a snapshot is restored,
+     * there will always be a single buffer. */
     struct raft_buffer *bufs;
     unsigned n_bufs;
 };

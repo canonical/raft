@@ -10,6 +10,7 @@
 #include "rpc_append_entries.h"
 #include "rpc_install_snapshot.h"
 #include "rpc_request_vote.h"
+#include "snapshot.h"
 #include "state.h"
 #include "tick.h"
 
@@ -97,13 +98,9 @@ static void tick_cb(struct raft_io *io)
     tick(r);
 }
 
-static const char *message_descs[] = {
-    "append entries",
-    "append entries result",
-    "request vote",
-    "request vote result",
-    "install snapshot"
-};
+static const char *message_descs[] = {"append entries", "append entries result",
+                                      "request vote", "request vote result",
+                                      "install snapshot"};
 
 static void recv_cb(struct raft_io *io, struct raft_message *message)
 {
@@ -160,11 +157,13 @@ int raft_start(struct raft *r)
 
     assert(r != NULL);
     assert(r->state == RAFT_UNAVAILABLE);
+    assert(r->heartbeat_timeout != 0);
+    assert(r->heartbeat_timeout < r->election_timeout);
+    assert(log__n_entries(&r->log) == 0);
+    assert(r->last_stored == 0);
 
     infof(r->io, "starting");
 
-    assert(r->heartbeat_timeout != 0);
-    assert(r->heartbeat_timeout < r->election_timeout);
 
     rv = r->io->load(r->io, &r->current_term, &r->voted_for, &snapshot,
                      &entries, &n_entries);
@@ -176,25 +175,13 @@ int raft_start(struct raft *r)
     start_index = 1;
     if (snapshot != NULL) {
         start_index = snapshot->index + 1;
-        assert(snapshot->n_bufs == 1);
-        rv = r->fsm->restore(r->fsm, &snapshot->bufs[0]);
+        rv = snapshot__restore(r, snapshot);
         if (rv != 0) {
             goto err_after_load;
         }
-        r->commit_index = snapshot->index;
-        r->last_applied = snapshot->index;
-        r->snapshot.index = snapshot->index;
-        r->snapshot.term = snapshot->term;
-        r->configuration = snapshot->configuration;
-        r->configuration_index = snapshot->configuration_index;
-        raft_free(snapshot->bufs);
-        raft_free(snapshot);
-    }
-
-    /* If the start index is 1 and the log is not empty, then the first entry
-     * must be a configuration*/
-    if (start_index == 1 && n_entries > 0) {
-        assert(snapshot == NULL);
+    } else if (n_entries > 0) {
+        /* If we don't have a snapshot and the on-disk log is not empty, then
+         * the first entry must be a configuration entry. */
         assert(entries[0].type == RAFT_CONFIGURATION);
 
         /* As a small optimization, bump the commit index to 1 since we require
@@ -204,7 +191,7 @@ int raft_start(struct raft *r)
     }
 
     /* Index of the last entry we have on disk. */
-    r->last_stored = start_index + n_entries - 1;
+    r->last_stored += n_entries;
 
     /* Look for the most recent configuration entry, if any. */
     for (i = n_entries; i > 0; i--) {
@@ -228,7 +215,6 @@ int raft_start(struct raft *r)
     }
 
     /* Append the entries to the log. */
-    log__set_offset(&r->log, start_index - 1);
     for (i = 0; i < n_entries; i++) {
         struct raft_entry *entry = &entries[i];
 
