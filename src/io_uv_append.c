@@ -257,10 +257,20 @@ static void finalize_segment(struct segment *s)
  * given status. */
 static void flush_append_requests(raft__queue *queue, int status)
 {
+    raft__queue queue_copy;
+
+    RAFT__QUEUE_INIT(&queue_copy);
     while (!RAFT__QUEUE_IS_EMPTY(queue)) {
-        struct append *r;
         raft__queue *head;
         head = RAFT__QUEUE_HEAD(queue);
+        RAFT__QUEUE_REMOVE(head);
+	RAFT__QUEUE_PUSH(&queue_copy, head);
+    }
+
+    while (!RAFT__QUEUE_IS_EMPTY(&queue_copy)) {
+        struct append *r;
+        raft__queue *head;
+        head = RAFT__QUEUE_HEAD(&queue_copy);
         RAFT__QUEUE_REMOVE(head);
         r = RAFT__QUEUE_DATA(head, struct append, queue);
         r->cb(r->data, status);

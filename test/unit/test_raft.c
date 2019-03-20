@@ -185,6 +185,42 @@ TEST_CASE(start, error, io, NULL)
     return MUNIT_OK;
 }
 
+/* There's only a single voting server and that's us, but we fail to convert to
+   candidate due to an OOM error. */
+TEST_CASE(start, error, self_elect_candidate_oom, NULL)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    test_io_bootstrap(&f->io, 1, 1, 1);
+
+    test_heap_fault_config(&f->heap, 0, 1);
+    test_heap_fault_enable(&f->heap);
+
+    __assert_start_error(f, RAFT_ENOMEM);
+
+    return MUNIT_OK;
+}
+
+/* There's only a single voting server and that's us, but we fail to convert to
+   candidate due the disk being full. */
+TEST_CASE(start, error, self_elect_candidate_io_err, NULL)
+{
+    struct fixture *f = data;
+
+    (void)params;
+
+    test_io_bootstrap(&f->io, 1, 1, 1);
+
+    raft_io_stub_fault(&f->io, 0, 1);
+    raft_io_stub_set_time(&f->io, 100);
+
+    __assert_start_error(f, RAFT_ERR_IO);
+
+    return MUNIT_OK;
+}
+
 /* The state after a successful start of a pristine server is
  * RAFT_FOLLOWER. */
 TEST_CASE(start, success, pristine, NULL)

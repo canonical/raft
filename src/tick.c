@@ -31,7 +31,6 @@ unsigned raft_next_timeout(struct raft *r)
 static int follower_tick(struct raft *r)
 {
     const struct raft_server *server;
-    int rv;
 
     assert(r != NULL);
     assert(r->state == RAFT_FOLLOWER);
@@ -41,26 +40,6 @@ static int follower_tick(struct raft *r)
     /* If we have been removed from the configuration, or maybe we didn't
      * receive one yet, just stay follower. */
     if (server == NULL) {
-        return 0;
-    }
-
-    /* If there's only one voting server, and that is us, it's safe to convert
-     * to leader. If that is not us, we're either joining the cluster or we're
-     * simply configured as non-voter, do nothing and wait for RPCs. */
-    if (configuration__n_voting(&r->configuration) == 1) {
-        if (server->voting) {
-            debugf(r->io, "self elect and convert to leader");
-            rv = raft_state__convert_to_candidate(r);
-            if (rv != 0) {
-                return rv;
-            }
-            rv = raft_state__convert_to_leader(r);
-            if (rv != 0) {
-                return rv;
-            }
-            return 0;
-        }
-
         return 0;
     }
 
