@@ -4,10 +4,8 @@
 #include "byte.h"
 #include "configuration.h"
 
-/**
- * Current encoding format version.
- */
-#define RAFT_CONFIGURATION__FORMAT 1
+/* Current encoding format version. */
+#define ENCODING_FORMAT 1
 
 void raft_configuration_init(struct raft_configuration *c)
 {
@@ -18,14 +16,11 @@ void raft_configuration_init(struct raft_configuration *c)
 void raft_configuration_close(struct raft_configuration *c)
 {
     size_t i;
-
     assert(c != NULL);
     assert(c->n == 0 || c->servers != NULL);
-
     for (i = 0; i < c->n; i++) {
         raft_free(c->servers[i].address);
     }
-
     if (c->servers != NULL) {
         raft_free(c->servers);
     }
@@ -35,15 +30,12 @@ size_t configuration__index_of(const struct raft_configuration *c,
                                const unsigned id)
 {
     size_t i;
-
     assert(c != NULL);
-
     for (i = 0; i < c->n; i++) {
         if (c->servers[i].id == id) {
             return i;
         }
     }
-
     return c->n;
 }
 
@@ -52,7 +44,6 @@ size_t configuration__index_of_voting(const struct raft_configuration *c,
 {
     size_t i;
     size_t j = 0;
-
     assert(c != NULL);
 
     for (i = 0; i < c->n; i++) {
@@ -70,12 +61,10 @@ size_t configuration__index_of_voting(const struct raft_configuration *c,
     return c->n;
 }
 
-const struct raft_server *configuration__get(
-    const struct raft_configuration *c,
-    const unsigned id)
+const struct raft_server *configuration__get(const struct raft_configuration *c,
+                                             const unsigned id)
 {
     size_t i;
-
     assert(c != NULL);
     assert(id > 0);
 
@@ -96,7 +85,6 @@ size_t configuration__n_voting(const struct raft_configuration *c)
 {
     size_t i;
     size_t n = 0;
-
     assert(c != NULL);
 
     for (i = 0; i < c->n; i++) {
@@ -113,7 +101,6 @@ int configuration__copy(const struct raft_configuration *c1,
 {
     size_t i;
     int rv;
-
     assert(c1 != NULL);
     assert(c2 != NULL);
 
@@ -137,7 +124,6 @@ int raft_configuration_add(struct raft_configuration *c,
     struct raft_server *servers;
     struct raft_server *server;
     size_t i;
-
     assert(c != NULL);
     assert(id != 0);
 
@@ -188,7 +174,6 @@ int configuration__remove(struct raft_configuration *c, const unsigned id)
     size_t i;
     size_t j;
     struct raft_server *servers;
-
     assert(c != NULL);
 
     i = configuration__index_of(c, id);
@@ -250,12 +235,10 @@ size_t configuration__encoded_size(const struct raft_configuration *c)
     /* Then some space for each server. */
     for (i = 0; i < c->n; i++) {
         struct raft_server *server = &c->servers[i];
-
         assert(server->address != NULL);
-
-        n += sizeof(uint64_t) /* Server ID */;
-        n += strlen(server->address) + 1;
-        n++; /* Voting flag */
+        n += sizeof(uint64_t);            /* Server ID */
+        n += strlen(server->address) + 1; /* Address length */
+        n++;                              /* Voting flag */
     };
 
     n = byte__pad64(n);
@@ -269,7 +252,7 @@ void configuration__encode_to_buf(const struct raft_configuration *c, void *buf)
     size_t i;
 
     /* Encoding format version */
-    byte__put8(&cursor, RAFT_CONFIGURATION__FORMAT);
+    byte__put8(&cursor, ENCODING_FORMAT);
 
     /* Number of servers */
     byte__put64(&cursor, c->n);
@@ -328,7 +311,7 @@ int configuration__decode(const struct raft_buffer *buf,
     cursor = buf->base;
 
     /* Check the encoding format version */
-    if (byte__get8(&cursor) != RAFT_CONFIGURATION__FORMAT) {
+    if (byte__get8(&cursor) != ENCODING_FORMAT) {
         return RAFT_EMALFORMED;
     }
 
