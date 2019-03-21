@@ -110,6 +110,32 @@
     raft_last_applied(raft_fixture_get(&f->cluster, I))
 
 /**
+ * Add a new pristine server to the cluster, connected to all others. Then
+ * submit a request to add it to the configuration as non-voting server.
+ */
+#define CLUSTER_ADD                                                     \
+    {                                                                   \
+        int rc;                                                         \
+        struct raft *raft;                                              \
+        test_fsm_setup(NULL, &f->fsms[CLUSTER_N]);                      \
+        rc = raft_fixture_add_server(&f->cluster, &f->fsms[CLUSTER_N]); \
+        munit_assert_int(rc, ==, 0);                                    \
+        raft = CLUSTER_GET(CLUSTER_N - 1);                              \
+        rc = raft_add_server(CLUSTER_GET(CLUSTER_LEADER), raft->id,     \
+                             raft->address);                            \
+        munit_assert_int(rc, ==, 0);                                    \
+    }
+
+#define CLUSTER_PROMOTE                                     \
+    {                                                       \
+        unsigned id;                                        \
+        int rc;                                             \
+        id = CLUSTER_N; /* Last server that was added. */   \
+        rc = raft_promote(CLUSTER_GET(CLUSTER_LEADER), id); \
+        munit_assert_int(rc, ==, 0);                        \
+    }
+
+/**
  * Munit parameter defining after how many servers to run. Default is 3.
  */
 #define TEST_CLUSTER_SERVERS "cluster-servers"

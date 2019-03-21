@@ -1,157 +1,127 @@
-#include "../../include/raft.h"
-
 #include "../lib/cluster.h"
 #include "../lib/heap.h"
+#include "../lib/runner.h"
 
-/**
- * Helpers
- */
+TEST_MODULE(membership);
+
+/******************************************************************************
+ *
+ * Fixture
+ *
+ *****************************************************************************/
 
 struct fixture
 {
-    struct raft_heap heap;
-    struct test_cluster cluster;
+    FIXTURE_HEAP;
+    FIXTURE_CLUSTER;
 };
 
-static char *servers[] = {"3", "4", "5", NULL};
+static char *n[] = {"3", "4", "5", NULL};
 
 static MunitParameterEnum params[] = {
-    {TEST_CLUSTER_SERVERS, servers},
+    {CLUSTER_N_PARAM, n},
     {NULL, NULL},
 };
-
-/**
- * Setup and tear down
- */
 
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-
     (void)user_data;
-
-    test_heap_setup(params, &f->heap);
-
-    test_cluster_setup(params, &f->cluster);
-
+    SETUP_HEAP;
+    SETUP_CLUSTER(CLUSTER_N_PARAM_GET);
+    CLUSTER_BOOTSTRAP;
+    CLUSTER_START;
+    CLUSTER_STEP_UNTIL_HAS_LEADER(10000);
     return f;
 }
 
 static void tear_down(void *data)
 {
     struct fixture *f = data;
-
-    test_cluster_tear_down(&f->cluster);
-
-    test_heap_tear_down(&f->heap);
-
+    TEAR_DOWN_CLUSTER;
+    TEAR_DOWN_HEAP;
     free(f);
 }
 
-/**
- * Membership tests
- */
+/******************************************************************************
+ *
+ * Helper macros
+ *
+ *****************************************************************************/
 
-static MunitResult test_add_non_voting(const MunitParameter params[],
-                                       void *data)
+/******************************************************************************
+ *
+ * Tests
+ *
+ *****************************************************************************/
+
+TEST_SUITE(add);
+TEST_SETUP(add, setup);
+TEST_TEAR_DOWN(add, tear_down);
+
+TEST_CASE(add, non_voting, params)
 {
     struct fixture *f = data;
-    unsigned leader_id;
     const struct raft_server *server;
     struct raft *raft;
-    int rv;
 
     (void)params;
 
-    rv = test_cluster_run_until(&f->cluster, test_cluster_has_leader, 10000);
-    munit_assert_int(rv, ==, 0);
+    CLUSTER_ADD;
+    CLUSTER_STEP_UNTIL_APPLIED(2, 2000);
 
-    test_cluster_add_server(&f->cluster);
+    raft = CLUSTER_GET(CLUSTER_LEADER);
 
-    rv = test_cluster_run_until(&f->cluster, test_cluster_committed_2, 2000);
-    munit_assert_int(rv, ==, 0);
-
-    leader_id = test_cluster_leader(&f->cluster);
-    raft = &f->cluster.fixture.servers[leader_id - 1].raft;
-
-    server = &raft->configuration.servers[f->cluster.fixture.n - 1];
-    munit_assert_int(server->id, ==, f->cluster.fixture.n);
+    server = &raft->configuration.servers[CLUSTER_N - 1];
+    munit_assert_int(server->id, ==, CLUSTER_N);
 
     return MUNIT_OK;
 }
 
-static MunitResult test_add_voting(const MunitParameter params[], void *data)
+TEST_CASE(add, voting, params)
 {
     struct fixture *f = data;
-    unsigned leader_id;
     const struct raft_server *server;
     struct raft *raft;
-    int rv;
 
     (void)params;
 
-    /* First add the new server as non-voting. */
-    rv = test_cluster_run_until(&f->cluster, test_cluster_has_leader, 10000);
-    munit_assert_int(rv, ==, 0);
-
-    test_cluster_add_server(&f->cluster);
-
-    rv = test_cluster_run_until(&f->cluster, test_cluster_committed_2, 2000);
-    munit_assert_int(rv, ==, 0);
+    CLUSTER_ADD;
+    CLUSTER_STEP_UNTIL_APPLIED(2, 2000);
 
     /* Then promote it. */
-    test_cluster_promote(&f->cluster);
+    CLUSTER_PROMOTE;
 
-    rv = test_cluster_run_until(&f->cluster, test_cluster_committed_3, 2000);
-    munit_assert_int(rv, ==, 0);
+    CLUSTER_STEP_UNTIL_APPLIED(3, 2000);
 
-    leader_id = test_cluster_leader(&f->cluster);
-    raft = &f->cluster.fixture.servers[leader_id - 1].raft;
+    raft = CLUSTER_GET(CLUSTER_LEADER);
 
-    server = &raft->configuration.servers[f->cluster.fixture.n - 1];
+    server = &raft->configuration.servers[CLUSTER_N - 1];
     munit_assert_true(server->voting);
 
     return MUNIT_OK;
 }
 
-static MunitResult test_remove(const MunitParameter params[], void *data)
+TEST_SUITE(remove);
+TEST_SETUP(remove, setup);
+TEST_TEAR_DOWN(remove, tear_down);
+
+TEST_CASE(remove, voting, params)
 {
     struct fixture *f = data;
-    unsigned leader_id;
     struct raft *raft;
     int rv;
 
     (void)params;
 
-    rv = test_cluster_run_until(&f->cluster, test_cluster_has_leader, 10000);
+    raft = CLUSTER_GET(CLUSTER_LEADER);
+
+    rv = raft_remove_server(raft, CLUSTER_LEADER % CLUSTER_N + 1);
     munit_assert_int(rv, ==, 0);
 
-    leader_id = test_cluster_leader(&f->cluster);
-    raft = &f->cluster.fixture.servers[leader_id - 1].raft;
+    CLUSTER_STEP_UNTIL_APPLIED(2, 2000);
 
-    rv = raft_remove_server(raft, leader_id % f->cluster.fixture.n + 1);
-    munit_assert_int(rv, ==, 0);
-
-    rv = test_cluster_run_until(&f->cluster, test_cluster_committed_2, 2000);
-    munit_assert_int(rv, ==, 0);
-
-    munit_assert_int(raft->configuration.n, ==, f->cluster.fixture.n - 1);
+    munit_assert_int(raft->configuration.n, ==, CLUSTER_N - 1);
 
     return 0;
 }
-
-static MunitTest membership_tests[] = {
-    {"/add-non-voting", test_add_non_voting, setup, tear_down, 0, params},
-    {"/add-voting", test_add_voting, setup, tear_down, 0, params},
-    {"/remove", test_remove, setup, tear_down, 0, params},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
-/**
- * Test suite
- */
-
-MunitSuite raft_membership_suites[] = {
-    {"", membership_tests, NULL, 1, 0},
-    {NULL, NULL, NULL, 0, 0},
-};

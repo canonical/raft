@@ -791,4 +791,5 @@ void raft_fixture_set_random(struct raft_fixture *f, int (*random)(int, int))
         struct raft_fixture_server *s = &f->servers[i];
         raft_io_stub_set_random(&s->io, random);
     }
+    f->random = random;
 }
