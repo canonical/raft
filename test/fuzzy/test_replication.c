@@ -139,7 +139,7 @@ TEST_CASE(entries, partitioned, params)
     /* Disconnect the leader from a majority of servers */
     n = 0;
     for (i = 0; n < (CLUSTER_N / 2) + 1; i++) {
-        struct raft *raft = CLUSTER_GET(i);
+        struct raft *raft = CLUSTER_RAFT(i);
         if (raft->id == leader_id) {
             continue;
         }
@@ -158,7 +158,7 @@ TEST_CASE(entries, partitioned, params)
 
     /* Reconnect the old leader */
     for (i = 0; i < CLUSTER_N; i++) {
-        struct raft *raft = CLUSTER_GET(i);
+        struct raft *raft = CLUSTER_RAFT(i);
         if (raft->id == leader_id) {
             continue;
         }

@@ -11,12 +11,7 @@ struct test_fsm
 };
 
 /* Command codes */
-enum {
-      SET_X = 1,
-      SET_Y,
-      ADD_X,
-      ADD_Y
-};
+enum { SET_X = 1, SET_Y, ADD_X, ADD_Y };
 
 static int test_fsm__apply(struct raft_fsm *fsm, const struct raft_buffer *buf)
 {
@@ -66,27 +61,42 @@ static int test_fsm__restore(struct raft_fsm *fsm, struct raft_buffer *buf)
     return 0;
 }
 
-static int test_fsm__snapshot(struct raft_fsm *fsm,
-                              struct raft_buffer *bufs[],
-                              unsigned *n_bufs)
+static int encode_snapshot(int x,
+                           int y,
+                           struct raft_buffer *bufs[],
+                           unsigned *n_bufs)
 {
-    struct test_fsm *t = fsm->data;
+    struct raft_buffer *buf;
     void *cursor;
 
     *n_bufs = 1;
 
     *bufs = raft_malloc(sizeof **bufs);
-    munit_assert_ptr_not_null(*bufs);
-    (*bufs)[0].len = sizeof(uint64_t) * 2;
-    (*bufs)[0].base = raft_malloc((*bufs)[0].len);
-    munit_assert_ptr_not_null((*bufs)[0].base);
+    if (*bufs == NULL) {
+        return RAFT_ENOMEM;
+    }
+
+    buf = &(*bufs)[0];
+    buf->len = sizeof(uint64_t) * 2;
+    buf->base = raft_malloc(buf->len);
+    if (buf->base == NULL) {
+        return RAFT_ENOMEM;
+    }
 
     cursor = (*bufs)[0].base;
 
-    byte__put64(&cursor, t->x);
-    byte__put64(&cursor, t->y);
+    byte__put64(&cursor, x);
+    byte__put64(&cursor, y);
 
     return 0;
+}
+
+static int test_fsm__snapshot(struct raft_fsm *fsm,
+                              struct raft_buffer *bufs[],
+                              unsigned *n_bufs)
+{
+    struct test_fsm *t = fsm->data;
+    return encode_snapshot(t->x, t->y, bufs, n_bufs);
 }
 
 void test_fsm_setup(const MunitParameter params[], struct raft_fsm *fsm)
@@ -155,6 +165,16 @@ void test_fsm_encode_add_y(const int value, struct raft_buffer *buf)
     *(int64_t *)(buf->base + 8) = value;
 }
 
+void test_fsm_encode_snapshot(int x,
+                              int y,
+                              struct raft_buffer *bufs[],
+                              unsigned *n_bufs)
+{
+    int rc;
+    rc = encode_snapshot(x, y, bufs, n_bufs);
+    munit_assert_int(rc, ==, 0);
+}
+
 int test_fsm_get_x(struct raft_fsm *fsm)
 {
     struct test_fsm *t = fsm->data;
@@ -165,4 +185,16 @@ int test_fsm_get_y(struct raft_fsm *fsm)
 {
     struct test_fsm *t = fsm->data;
     return t->y;
+}
+
+void test_fsm_set_x(struct raft_fsm *fsm, int value)
+{
+    struct test_fsm *t = fsm->data;
+    t->x = value;
+}
+
+void test_fsm_set_y(struct raft_fsm *fsm, int value)
+{
+    struct test_fsm *t = fsm->data;
+    t->y = value;
 }

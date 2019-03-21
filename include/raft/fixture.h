@@ -42,7 +42,6 @@ struct raft_fixture
     struct raft_log log;     /* Copy of leader's log */
     raft_index commit_index; /* Current commit index on leader */
     struct raft_fixture_server servers[RAFT_FIXTURE_MAX_SERVERS];
-    int (*random)(int, int);
 };
 
 /**
@@ -61,10 +60,18 @@ int raft_fixture_init(struct raft_fixture *f,
 void raft_fixture_close(struct raft_fixture *f);
 
 /**
- * Bootstrap the initial configuration of each server in the cluster. The first
- * @n_voting servers will be voting. There must be at least one voting server.
+ * Generate a configuration object containing all servers in the cluster. The
+ * first @n_voting servers will be voting ones.
  */
-int raft_fixture_bootstrap(struct raft_fixture *f, unsigned n_voting);
+int raft_fixture_configuration(struct raft_fixture *f,
+                               unsigned n_voting,
+                               struct raft_configuration *configuration);
+
+/**
+ * Bootstrap all servers in the cluster with the given configuration.
+ */
+int raft_fixture_bootstrap(struct raft_fixture *f,
+                           struct raft_configuration *configuration);
 
 /**
  * Start all servers in the fixture.
@@ -222,18 +229,36 @@ void raft_fixture_kill(struct raft_fixture *f, unsigned i);
 int raft_fixture_grow(struct raft_fixture *f, struct raft_fsm *fsm);
 
 /**
+ * Set the function that will be used to generate random values for the @i'th
+ * server, such as the randomized election timeout and randomized network
+ * latency for individual RPC messages sent by the server.
+ */
+void raft_fixture_set_random(struct raft_fixture *f,
+                             unsigned i,
+                             int (*random)(int, int));
+
+/**
  * Set the network latency in milliseconds. Each RPC message will be assigned a
  * random latency value within the given range.
  */
 void raft_fixture_set_latency(struct raft_fixture *f,
+                              unsigned i,
                               unsigned min,
                               unsigned max);
 
 /**
- * Set the function to use to to generate random values within a range. The raft
- * servers will use it to generate a random election timeout, and the fixture
- * itself will use it to assign a random network latency to RPC message.
+ * Set the persisted snapshot of the @i'th server.
  */
-void raft_fixture_set_random(struct raft_fixture *f, int (*random)(int, int));
+void raft_fixture_set_snapshot(struct raft_fixture *f,
+                               unsigned i,
+                               struct raft_snapshot *snapshot);
+
+/**
+ * Set the persisted entries of the @i'th server.
+ */
+void raft_fixture_set_entries(struct raft_fixture *f,
+                              unsigned i,
+                              struct raft_entry *entries,
+                              unsigned n);
 
 #endif /* RAFT_FAKE_H */

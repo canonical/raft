@@ -99,34 +99,43 @@ void raft_fixture_close(struct raft_fixture *f)
     log__close(&f->log);
 }
 
-int raft_fixture_bootstrap(struct raft_fixture *f, unsigned n_voting)
+int raft_fixture_configuration(struct raft_fixture *f,
+                               unsigned n_voting,
+                               struct raft_configuration *configuration)
 {
     unsigned i;
-    struct raft_configuration configuration;
-    struct raft_fixture_server *s;
-    int rc;
-    assert(n_voting >= 1);
-    assert(n_voting <= f->n);
-    raft_configuration_init(&configuration);
-    for (i = 0; i < f->n; i++) {
-        bool voting = i < n_voting;
-        s = &f->servers[i];
-        rc = raft_configuration_add(&configuration, s->id, s->address, voting);
-        if (rc != 0) {
-            return rc;
-        }
-    }
-    for (i = 0; i < f->n; i++) {
-        s = &f->servers[i];
-        rc = raft_bootstrap(&s->raft, &configuration);
-        if (rc != 0) {
-            return rc;
-        }
-    }
-    raft_configuration_close(&configuration);
 
-    /* The initial configuration is automatically considered committed. */
-    f->commit_index = 1;
+    assert(f->n > 0);
+    assert(n_voting > 0);
+    assert(n_voting <= f->n);
+
+    raft_configuration_init(configuration);
+
+    for (i = 0; i < f->n; i++) {
+        struct raft_fixture_server *s;
+        bool voting = i < n_voting;
+        int rc;
+        s = &f->servers[i];
+        rc = raft_configuration_add(configuration, s->id, s->address, voting);
+        if (rc != 0) {
+            return rc;
+        }
+    }
+    return 0;
+}
+
+int raft_fixture_bootstrap(struct raft_fixture *f,
+                           struct raft_configuration *configuration)
+{
+    unsigned i;
+    for (i = 0; i < f->n; i++) {
+        struct raft *raft = raft_fixture_get(f, i);
+        int rc;
+        rc = raft_bootstrap(raft, configuration);
+        if (rc != 0) {
+            return rc;
+        }
+    }
     return 0;
 }
 
@@ -689,7 +698,6 @@ int raft_fixture_grow(struct raft_fixture *f, struct raft_fsm *fsm)
     if (rc != 0) {
         return rc;
     }
-    raft_io_stub_set_random(&s->io, f->random);
 
     connect_to_all(f, i);
     for (j = 0; j < f->n; j++) {
@@ -706,12 +714,27 @@ int raft_fixture_grow(struct raft_fixture *f, struct raft_fsm *fsm)
     return 0;
 }
 
-void raft_fixture_set_random(struct raft_fixture *f, int (*random)(int, int))
+void raft_fixture_set_random(struct raft_fixture *f,
+                             unsigned i,
+                             int (*random)(int, int))
 {
-    unsigned i;
-    for (i = 0; i < f->n; i++) {
-        struct raft_fixture_server *s = &f->servers[i];
-        raft_io_stub_set_random(&s->io, random);
-    }
-    f->random = random;
+    struct raft_fixture_server *s = &f->servers[i];
+    raft_io_stub_set_random(&s->io, random);
+}
+
+void raft_fixture_set_snapshot(struct raft_fixture *f,
+                               unsigned i,
+                               struct raft_snapshot *snapshot)
+{
+    struct raft_fixture_server *s = &f->servers[i];
+    raft_io_stub_set_snapshot(&s->io, snapshot);
+}
+
+void raft_fixture_set_entries(struct raft_fixture *f,
+                              unsigned i,
+                              struct raft_entry *entries,
+                              unsigned n)
+{
+    struct raft_fixture_server *s = &f->servers[i];
+    raft_io_stub_set_entries(&s->io, entries, n);
 }

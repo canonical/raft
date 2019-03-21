@@ -22,6 +22,7 @@ struct fixture
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
+    struct raft_configuration configuration;
     unsigned i;
     int rc;
     (void)user_data;
@@ -33,10 +34,17 @@ static void *setup(const MunitParameter params[], void *user_data)
     rc = raft_fixture_init(&f->fixture, N_SERVERS, f->fsms);
     munit_assert_int(rc, ==, 0);
 
-    raft_fixture_set_random(&f->fixture, munit_rand_int_range);
+    for (i = 0; i < N_SERVERS; i++) {
+        raft_fixture_set_random(&f->fixture, i, munit_rand_int_range);
+    }
 
-    rc = raft_fixture_bootstrap(&f->fixture, N_SERVERS);
+    rc = raft_fixture_configuration(&f->fixture, N_SERVERS, &configuration);
     munit_assert_int(rc, ==, 0);
+
+    rc = raft_fixture_bootstrap(&f->fixture, &configuration);
+    munit_assert_int(rc, ==, 0);
+
+    raft_configuration_close(&configuration);
 
     rc = raft_fixture_start(&f->fixture);
     munit_assert_int(rc, ==, 0);

@@ -9,6 +9,9 @@
 struct raft_io;
 struct raft_message;
 struct raft_entry;
+struct raft_snapshot;
+
+typedef unsigned long long raft_term;
 
 /**
  * Configure the given @raft_io instance to use a stub in-memory I/O
@@ -38,6 +41,19 @@ void raft_io_stub_set_random(struct raft_io *io, int (*f)(int, int));
  * delivered instantaneously.
  */
 void raft_io_stub_set_latency(struct raft_io *io, unsigned min, unsigned max);
+
+/**
+ * Set the initial snapshot stored in this instance.
+ */
+void raft_io_stub_set_snapshot(struct raft_io *io,
+                               struct raft_snapshot *snapshot);
+
+/**
+ * Set the initial entries stored in this instance.
+ */
+void raft_io_stub_set_entries(struct raft_io *io,
+                              struct raft_entry *entry,
+                              unsigned n);
 
 /**
  * Advance the stub time by the given number of milliseconds, and invoke the

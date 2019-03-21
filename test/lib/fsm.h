@@ -35,8 +35,18 @@ void test_fsm_encode_set_y(int value, struct raft_buffer *buf);
  */
 void test_fsm_encode_add_y(int value, struct raft_buffer *buf);
 
+/**
+ * Encode a snapshot of an FSM with the given values for x and y.
+ */
+void test_fsm_encode_snapshot(int x,
+                              int y,
+                              struct raft_buffer *bufs[],
+                              unsigned *n_bufs);
+
 int test_fsm_get_x(struct raft_fsm *fsm);
 int test_fsm_get_y(struct raft_fsm *fsm);
 
+void test_fsm_set_x(struct raft_fsm *fsm, int value);
+void test_fsm_set_y(struct raft_fsm *fsm, int value);
 
 #endif /* TEST_FSM_H */

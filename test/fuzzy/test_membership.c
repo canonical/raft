@@ -60,7 +60,7 @@ TEST_CASE(add, non_voting, params)
     CLUSTER_ADD;
     CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_N, 2, 2000);
 
-    raft = CLUSTER_GET(CLUSTER_LEADER);
+    raft = CLUSTER_RAFT(CLUSTER_LEADER);
 
     server = &raft->configuration.servers[CLUSTER_N - 1];
     munit_assert_int(server->id, ==, CLUSTER_N);
@@ -84,7 +84,7 @@ TEST_CASE(add, voting, params)
 
     CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_N, 3, 2000);
 
-    raft = CLUSTER_GET(CLUSTER_LEADER);
+    raft = CLUSTER_RAFT(CLUSTER_LEADER);
 
     server = &raft->configuration.servers[CLUSTER_N - 1];
     munit_assert_true(server->voting);
@@ -104,7 +104,7 @@ TEST_CASE(remove, voting, params)
 
     (void)params;
 
-    raft = CLUSTER_GET(CLUSTER_LEADER);
+    raft = CLUSTER_RAFT(CLUSTER_LEADER);
 
     rv = raft_remove_server(raft, CLUSTER_LEADER % CLUSTER_N + 1);
     munit_assert_int(rv, ==, 0);
