@@ -14,8 +14,10 @@
  * to be reached. */
 #define MAX_STEPS 100
 
-#define HEARTBEAT_TIMEOUT 50
-#define ELECTION_TIMEOUT 250
+#define HEARTBEAT_TIMEOUT 100
+#define ELECTION_TIMEOUT 1000
+#define MIN_LATENCY 5
+#define MAX_LATENCY 50
 
 static int init_server(unsigned i,
                        struct raft_fixture_server *s,
@@ -29,7 +31,7 @@ static int init_server(unsigned i,
     if (rc != 0) {
         return rc;
     }
-    raft_io_stub_set_latency(&s->io, 5, 50);
+    raft_io_stub_set_latency(&s->io, MIN_LATENCY, MAX_LATENCY);
     rc = raft_init(&s->raft, &s->io, fsm, s->id, s->address);
     if (rc != 0) {
         return rc;
