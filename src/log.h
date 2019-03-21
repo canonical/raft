@@ -23,8 +23,43 @@ void log__init(struct raft_log *l);
 void log__close(struct raft_log *l);
 
 /**
+ * Get the current number of entries in the log. Return #0 if the log is empty.
+ */
+size_t log__n_entries(struct raft_log *l);
+
+/**
+ * Get the index of the first entry in the log. Return #0 if the log is empty.
+ */
+raft_index log__first_index(struct raft_log *l);
+
+/**
+ * Get the index of the last entry in the log. Return #0 if the log is empty.
+ */
+raft_index log__last_index(struct raft_log *l);
+
+/**
+ * Get the term of the entry with the given index. Return #0 if there is no such
+ * entry.
+ */
+raft_term log__term_of(struct raft_log *l, raft_index index);
+
+/**
+ * Get the term of the last entry in the log. Return #0 if the log is empty.
+ */
+raft_term log__last_term(struct raft_log *l);
+
+/**
+ * Get the entry with the given index.
+ *
+ * The returned pointer remains valid only as long as no API that might delete
+ * the entry with the given index is invoked. Return #NULL if there is no such
+ * entry.
+ */
+const struct raft_entry *log__get(struct raft_log *l, const raft_index index);
+
+/**
  * Set the offset of the first entry in the log, which will then have index
- * equal to offset + 1.
+ * equal to offset + 1. By default the offset is 0.
  */
 void log__set_offset(struct raft_log *l, raft_index offset);
 
@@ -38,7 +73,7 @@ int log__append(struct raft_log *l,
                 void *batch);
 
 /**
- * Convenience to append a series of RAFT_COMMAND entries.
+ * Convenience to append a series of #RAFT_COMMAND entries.
  */
 int log__append_commands(struct raft_log *l,
                          const raft_term term,
@@ -46,49 +81,17 @@ int log__append_commands(struct raft_log *l,
                          const unsigned n);
 
 /**
- * Convenience to encode and append a single RAFT_CONFIGURATION entry.
+ * Convenience to encode and append a single #RAFT_CONFIGURATION entry.
  */
 int log__append_configuration(struct raft_log *l,
                               const raft_term term,
                               const struct raft_configuration *configuration);
 
-/**
- * Get the current number of entries in the log. Return 0 if the log is empty.
- */
-size_t log__n_entries(struct raft_log *l);
-
-/**
- * Get the index of the first entry in the log. Return 0 if the log is empty.
- */
-raft_index log__first_index(struct raft_log *l);
-
-/**
- * Get the index of the last entry in the log.
- */
-raft_index log__last_index(struct raft_log *l);
-
-/**
- * Get the term of the entry with the given index.
- */
-raft_term log__term_of(struct raft_log *l, raft_index index);
-
-/**
- * Get the term of the last entry in the log.
- */
-raft_term log__last_term(struct raft_log *l);
-
-/**
- * Get the entry with the given index.
- *
- * The returned pointer remains valid only as long as no API that might delete
- * the entry with the given index is invoked.
- */
-const struct raft_entry *log__get(struct raft_log *l, const raft_index index);
 
 /**
  * Acquire an array of entries from the given index onwards.
  *
- * The payload memory referenced by the #buf attribute of the returned entries
+ * The payload memory referenced by the @buf attribute of the returned entries
  * is guaranteed to be valid until log__release() is called.
  */
 int log__acquire(struct raft_log *l,
@@ -105,7 +108,9 @@ void log__release(struct raft_log *l,
                   const size_t n);
 
 /**
- * Delete all entries from the given index (included) onwards.
+ * Delete all entries from the given index (included) onwards. If the log is
+ * empty this is a no-op. If @index is lower than or equal to the index of the
+ * first entry in the log, then the log will become empty.
  */
 void log__truncate(struct raft_log *l, const raft_index index);
 

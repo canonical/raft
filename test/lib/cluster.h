@@ -1,61 +1,7 @@
-/**
- * Test implementation of a cluster of N servers, using an in-memory test
- * network to communicate.
- *
- * Out of the N servers, there are V voting servers, with V <= N.
- *
- * A monotonic global cluster clock is used to simulate network latency and time
- * elapsed on individual servers.
- *
- * Once the cluster loop starts running, at each iteration the following steps
- * are taken:
- *
- * 1. All pending I/O requests across all servers are flushed. This simulates
- *    either a successful disk write of log entries, or a successful network
- *    write of an RPC message (e.g. writev() returns successfully). A successful
- *    network write does not mean that the receiver immediately receives the
- *    message, it just means that any buffer allocated by the sender can be
- *    released (e.g. log entries). The network assigns a random latency to each
- *    RPC message, which will get delivered to the receiver after that amount of
- *    time elapses. If the sender and the receiver are currently disconnected,
- *    the RPC message is simply dropped.
- *
- * 2. All pending RPC messages across all servers are scanned and the one with
- *    the lowest latency expiration time is picked. All servers are scanned too,
- *    and the one with the lowest timer expiration time is picked. (either
- *    election timer or heartbeat timer, depending on the server state). The two
- *    times are compared and the lower one is picked, resulting in either an RPC
- *    message being delivered to the receiver or in a server tick. The global
- *    cluster time is advanced by the latency expiration time or by the raft
- *    timer expiration time, respectively. The latency timer of each RPC message
- *    is updated accordingly and the @raft_io_stub_advance() is invoked against
- *    the raft_io instance of each server, which in turn calls @raft__tick.
- *
- * 3. The current cluster leader is detected (if any). When detecting the leader
- *    the Election Safety property is checked: no servers can be in leader state
- *    for the same term. The server in leader state with the highest term is
- *    considered the current cluster leader, as long as it's "stable", i.e. it
- *    has been acknowledged by all servers connected to it, and those servers
- *    form a majority (this means that no further leader change can happen,
- *    unless the network gets disrupted). If there is a stable leader and it has
- *    not changed with respect to the previous cluster iteration, the Leader
- *    Append-Only property is checked, by comparing its log with a copy of it
- *    that was taken during the previous iteration.
- *
- * 4. If there is a stable leader, its current log is copied, in order to be
- *    able to check the Leader Append-Only property at the next iteration.
- *
- * 5. If there is a stable leader, its commit index gets copied.
- *
- * Servers can be alive or dead. Network messages sent to dead servers are
- * dropped. Dead servers are not tick'ed in step 2.
- *
- * Any two servers can be connected or disconnected. Network messages sent
- * between disconnected servers are dropped.
- */
-
 #ifndef TEST_CLUSTER_H
 #define TEST_CLUSTER_H
+
+#include <stdlib.h>
 
 #include "../../include/raft.h"
 #include "../../include/raft/fixture.h"
@@ -64,103 +10,129 @@
 #include "io.h"
 #include "munit.h"
 
-/**
- * Munit parameter defining after how many servers to run. Default is 3.
- */
-#define TEST_CLUSTER_SERVERS "cluster-servers"
+#define FIXTURE_CLUSTER                             \
+    struct raft_fsm fsms[RAFT_FIXTURE_MAX_SERVERS]; \
+    struct raft_fixture cluster;
+
+#define SETUP_CLUSTER(N)                                            \
+    {                                                               \
+        unsigned i;                                                 \
+        int rc;                                                     \
+        for (i = 0; i < N; i++) {                                   \
+            test_fsm_setup(NULL, &f->fsms[i]);                      \
+        }                                                           \
+        rc = raft_fixture_init(&f->cluster, N, f->fsms);            \
+        munit_assert_int(rc, ==, 0);                                \
+        raft_fixture_set_random(&f->cluster, munit_rand_int_range); \
+    }
+
+#define TEAR_DOWN_CLUSTER                    \
+    {                                        \
+        unsigned n = CLUSTER_N;              \
+        unsigned i;                          \
+        raft_fixture_close(&f->cluster);     \
+        for (i = 0; i < n; i++) {            \
+            test_fsm_tear_down(&f->fsms[i]); \
+        }                                    \
+    }
+
+#define CLUSTER_N raft_fixture_n(&f->cluster)
+
+#define CLUSTER_N_PARAM "cluster-n"
+#define CLUSTER_N_PARAM_GET \
+    (unsigned)atoi(munit_parameters_get(params, CLUSTER_N_PARAM))
 
 /**
- * Munit parameter defining after how many of the servers are voting
- * servers. Default is 3.
+ * Bootstrap all servers in the cluster. All of them will be voting.
  */
-#define TEST_CLUSTER_VOTING "cluster-voting"
-
-struct test_cluster
-{
-    struct raft_fixture fixture;
-    struct raft_fsm fsms[RAFT_FIXTURE_MAX_SERVERS];
-    unsigned leader_id;      /* Current leader, if any. */
-    raft_index commit_index; /* Index of last committed entry. */
-    struct raft_log log;     /* Copy of leader's log at last iteration. */
-};
-
-void test_cluster_setup(const MunitParameter params[], struct test_cluster *c);
-void test_cluster_tear_down(struct test_cluster *c);
+#define CLUSTER_BOOTSTRAP                                    \
+    {                                                        \
+        int rc;                                              \
+        rc = raft_fixture_bootstrap(&f->cluster, CLUSTER_N); \
+        munit_assert_int(rc, ==, 0);                         \
+    }
 
 /**
- * Run a single cluster loop iteration.
+ * Start all servers in the test cluster.
  */
-void test_cluster_run_once(struct test_cluster *c);
+#define CLUSTER_START                         \
+    {                                         \
+        int rc;                               \
+        rc = raft_fixture_start(&f->cluster); \
+        munit_assert_int(rc, ==, 0);          \
+    }
 
 /**
- * Run until the given stop condition becomes true, or max_msecs have elapsed.
+ * Index of the current leader, or CLUSTER_N if there's no leader.
  */
-int test_cluster_run_until(struct test_cluster *c,
-                           bool (*stop)(struct test_cluster *c),
-                           unsigned max_msecs);
+#define CLUSTER_LEADER raft_fixture_leader_index(&f->cluster)
+
+#define CLUSTER_GET(I) raft_fixture_get(&f->cluster, I)
 
 /**
- * Return the server ID of the leader, or 0 if there's no leader.
+ * Step the cluster until a leader is elected or #MAX_MSECS have elapsed.
  */
-unsigned test_cluster_leader(struct test_cluster *c);
+#define CLUSTER_STEP_UNTIL_HAS_LEADER(MAX_MSECS) \
+    raft_fixture_step_until_has_leader(&f->cluster, MAX_MSECS)
 
 /**
- * Return true if the cluster has a leader.
+ * Step the cluster until there's no leader or #MAX_MSECS have elapsed.
  */
-bool test_cluster_has_leader(struct test_cluster *c);
+#define CLUSTER_STEP_UNTIL_HAS_NO_LEADER(MAX_MSECS) \
+    raft_fixture_step_until_has_no_leader(&f->cluster, MAX_MSECS)
 
 /**
- * Return true if the cluster has no leader.
+ * Step the cluster until all nodes have applied the given index or #MAX_MSECS
+ * have elapsed.
  */
-bool test_cluster_has_no_leader(struct test_cluster *c);
+#define CLUSTER_STEP_UNTIL_APPLIED(INDEX, MAX_MSECS) \
+    raft_fixture_step_until_applied(&f->cluster, INDEX, MAX_MSECS)
 
 /**
- * Simulate a client requesting the leader to accept a new entry.
+ * Request to apply an FSM command to add the given value to x.
  */
-void test_cluster_propose(struct test_cluster *c);
+#define CLUSTER_APPLY_ADD_X(REQ, VALUE, CB)                   \
+    {                                                         \
+        struct raft_buffer buf;                               \
+        struct raft *raft;                                    \
+        int rc;                                               \
+        munit_assert_int(CLUSTER_LEADER, !=, CLUSTER_N);      \
+        test_fsm_encode_add_x(VALUE, &buf);                   \
+        raft = raft_fixture_get(&f->cluster, CLUSTER_LEADER); \
+        rc = raft_apply(raft, REQ, &buf, 1, CB);              \
+        munit_assert_int(rc, ==, 0);                          \
+    }
 
 /**
- * Simulate a client requesting the leader to accept a new entry containing a
- * configuration change that adds a new non-voting server.
+ * Return the last index applied on server I.
  */
-void test_cluster_add_server(struct test_cluster *c);
+#define CLUSTER_LAST_APPLIED(I) \
+    raft_last_applied(raft_fixture_get(&f->cluster, I))
 
 /**
- * Simulate a client requesting the leader to promote the last server that was
- * added.
+ * Add a new pristine server to the cluster, connected to all others. Then
+ * submit a request to add it to the configuration as non-voting server.
  */
-void test_cluster_promote(struct test_cluster *c);
+#define CLUSTER_ADD                                                     \
+    {                                                                   \
+        int rc;                                                         \
+        struct raft *raft;                                              \
+        test_fsm_setup(NULL, &f->fsms[CLUSTER_N]);                      \
+        rc = raft_fixture_add_server(&f->cluster, &f->fsms[CLUSTER_N]); \
+        munit_assert_int(rc, ==, 0);                                    \
+        raft = CLUSTER_GET(CLUSTER_N - 1);                              \
+        rc = raft_add_server(CLUSTER_GET(CLUSTER_LEADER), raft->id,     \
+                             raft->address);                            \
+        munit_assert_int(rc, ==, 0);                                    \
+    }
 
-/**
- * Return true if at least two log entries were committed to the log.
- */
-bool test_cluster_committed_2(struct test_cluster *c);
-
-/**
- * Return true if at least three log entries were committed to the log.
- */
-bool test_cluster_committed_3(struct test_cluster *c);
-
-/**
- * Kill a server.
- */
-void test_cluster_kill(struct test_cluster *c, unsigned id);
-
-/**
- * Kill the majority of servers (excluding the current leader).
- */
-void test_cluster_kill_majority(struct test_cluster *c);
-
-/**
- * Disconnect a server from another.
- */
-void test_cluster_disconnect(struct test_cluster *c,
-                             unsigned id1,
-                             unsigned id2);
-
-/**
- * Reconnect two servers.
- */
-void test_cluster_reconnect(struct test_cluster *c, unsigned id1, unsigned id2);
+#define CLUSTER_PROMOTE                                     \
+    {                                                       \
+        unsigned id;                                        \
+        int rc;                                             \
+        id = CLUSTER_N; /* Last server that was added. */   \
+        rc = raft_promote(CLUSTER_GET(CLUSTER_LEADER), id); \
+        munit_assert_int(rc, ==, 0);                        \
+    }
 
 #endif /* TEST_CLUSTER_H */

@@ -213,7 +213,7 @@ static int leader_tick(struct raft *r, const unsigned msec_since_last_tick)
     return 0;
 }
 
-int raft__tick(struct raft *r)
+static int tick(struct raft *r)
 {
     int rv;
     raft_time now;
@@ -249,3 +249,11 @@ int raft__tick(struct raft *r)
 
     return rv;
 }
+
+void tick_cb(struct raft_io *io)
+{
+    struct raft *r;
+    r = io->data;
+    tick(r);
+}
+

@@ -1,22 +1,21 @@
-#include "../../include/raft.h"
-
 #include "../lib/cluster.h"
 #include "../lib/heap.h"
+#include "../lib/runner.h"
 
-/**
- * Maximum number of cluster loop iterations each test should perform.
- */
+TEST_MODULE(liveness);
+
+/******************************************************************************
+ *
+ * Fixture
+ *
+ *****************************************************************************/
+
+/* Maximum number of cluster loop iterations each test should perform. */
 #define MAX_ITERATIONS 50000
 
-/**
- * Maximum number of cluster loop iterations a pair of servers should stay
- * disconnected.
- */
+/* Maximum number of cluster loop iterations a pair of servers should stay
+ * disconnected. */
 #define MAX_DISCONNECT 150
-
-/**
- * Helpers
- */
 
 struct disconnection
 {
@@ -28,29 +27,25 @@ struct disconnection
 
 struct fixture
 {
-    struct raft_heap heap;
-    struct test_cluster cluster;
+    FIXTURE_HEAP;
+    FIXTURE_CLUSTER;
     struct disconnection *disconnections;
 };
 
-static char *servers[] = {"3", NULL};
+static char *n[] = {"3", NULL};
 
 static MunitParameterEnum params[] = {
-    {TEST_CLUSTER_SERVERS, servers},
+    {CLUSTER_N_PARAM, n},
     {NULL, NULL},
 };
 
-/**
- * Return the number of distinct server pairs in the cluster.
- */
+/* Return the number of distinct server pairs in the cluster. */
 static int __server_pairs(struct fixture *f)
 {
-    return f->cluster.fixture.n * (f->cluster.fixture.n - 1) / 2;
+    return CLUSTER_N * (CLUSTER_N - 1) / 2;
 }
 
-/**
- * Update the cluster connectivity for the given iteration.
- */
+/* Update the cluster connectivity for the given iteration. */
 static void __update_connectivity(struct fixture *f, int i)
 {
     int p;
@@ -67,36 +62,29 @@ static void __update_connectivity(struct fixture *f, int i)
                 disconnection->start = i;
                 disconnection->duration =
                     munit_rand_int_range(50, MAX_DISCONNECT);
-                test_cluster_disconnect(&f->cluster, id1, id2);
+                raft_fixture_disconnect(&f->cluster, id1 - 1, id2 - 1);
             }
         } else {
             /* Decide whether to reconnect this pair. */
             if (i - disconnection->start > disconnection->duration) {
-                test_cluster_reconnect(&f->cluster, id1, id2);
+                raft_fixture_reconnect(&f->cluster, id1 - 1, id2 - 1);
                 disconnection->start = 0;
             }
         }
     }
 }
 
-/**
- * Setup and tear down
- */
-static int cnt = 0;
-
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     int pairs;
     size_t i, j, k;
-
     (void)user_data;
-
-    cnt++;
-    munit_logf(MUNIT_LOG_WARNING, "START TEST %d", cnt);
-    test_heap_setup(params, &f->heap);
-
-    test_cluster_setup(params, &f->cluster);
+    SETUP_HEAP;
+    SETUP_CLUSTER(CLUSTER_N_PARAM_GET);
+    CLUSTER_BOOTSTRAP;
+    CLUSTER_START;
+    // CLUSTER_STEP_UNTIL_HAS_LEADER(10000);
 
     /* Number of distinct pairs of servers. */
     pairs = __server_pairs(f);
@@ -104,8 +92,8 @@ static void *setup(const MunitParameter params[], void *user_data)
     f->disconnections = munit_malloc(pairs * sizeof *f->disconnections);
 
     k = 0;
-    for (i = 0; i < f->cluster.fixture.n; i++) {
-        for (j = i + 1; j < f->cluster.fixture.n; j++) {
+    for (i = 0; i < CLUSTER_N; i++) {
+        for (j = i + 1; j < CLUSTER_N; j++) {
             struct disconnection *disconnection = &f->disconnections[k];
             disconnection->id1 = i + 1;
             disconnection->id2 = j + 1;
@@ -121,22 +109,30 @@ static void *setup(const MunitParameter params[], void *user_data)
 static void tear_down(void *data)
 {
     struct fixture *f = data;
-
-    test_cluster_tear_down(&f->cluster);
-
-    test_heap_tear_down(&f->heap);
-
+    TEAR_DOWN_CLUSTER;
+    TEAR_DOWN_HEAP;
     free(f->disconnections);
     free(f);
 }
 
-/**
- * Liveness tests
- */
+/******************************************************************************
+ *
+ * Tests
+ *
+ *****************************************************************************/
+
+TEST_SUITE(network);
+TEST_SETUP(network, setup);
+TEST_TEAR_DOWN(network, tear_down);
+
+static void apply_cb(struct raft_apply *req, int status)
+{
+    (void)status;
+    free(req);
+}
 
 /* The system makes progress even in case of network disruptions. */
-static MunitResult test_network_disconnect(const MunitParameter params[],
-                                           void *data)
+TEST_CASE(network, disconnect, params)
 {
     struct fixture *f = data;
     int i = 0;
@@ -145,32 +141,18 @@ static MunitResult test_network_disconnect(const MunitParameter params[],
 
     for (i = 0; i < MAX_ITERATIONS; i++) {
         __update_connectivity(f, i);
-        test_cluster_run_once(&f->cluster);
+        raft_fixture_step(&f->cluster);
 
-        if (test_cluster_has_leader(&f->cluster)) {
-            test_cluster_propose(&f->cluster);
-        }
-
-        if (f->cluster.commit_index >= 2) {
-            break;
+        if (CLUSTER_LEADER != CLUSTER_N) {
+            struct raft_apply *req = munit_malloc(sizeof *req);
+            CLUSTER_APPLY_ADD_X(req, 1, apply_cb);
+            if (CLUSTER_LAST_APPLIED(CLUSTER_LEADER) >= 2) {
+                break;
+            }
         }
     }
 
-    munit_assert_int(f->cluster.commit_index, >=, 2);
+    munit_assert_int(CLUSTER_LAST_APPLIED(CLUSTER_LEADER), >=, 2);
 
     return MUNIT_OK;
 }
-
-static MunitTest network_tests[] = {
-    {"/disconnect", test_network_disconnect, setup, tear_down, 0, params},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
-/**
- * Test suite
- */
-
-MunitSuite raft_liveness_suites[] = {
-    {"/network", network_tests, NULL, 1, 0},
-    {NULL, NULL, NULL, 0, 0},
-};

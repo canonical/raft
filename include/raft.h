@@ -64,38 +64,6 @@ enum {
 const char *raft_strerror(int errnum);
 
 /**
- * User-definable dynamic memory allocation functions.
- *
- * The @data field will be passed as first argument to all functions.
- */
-struct raft_heap
-{
-    void *data; /* User data */
-    void *(*malloc)(void *data, size_t size);
-    void (*free)(void *data, void *ptr);
-    void *(*calloc)(void *data, size_t nmemb, size_t size);
-    void *(*realloc)(void *data, void *ptr, size_t size);
-    void *(*aligned_alloc)(void *data, size_t alignment, size_t size);
-};
-
-void *raft_malloc(size_t size);
-void raft_free(void *ptr);
-void *raft_calloc(size_t nmemb, size_t size);
-void *raft_realloc(void *ptr, size_t size);
-void *raft_aligned_alloc(size_t alignment, size_t size);
-
-/**
- * Use a custom dynamic memory allocator.
- */
-void raft_heap_set(struct raft_heap *heap);
-
-/**
- * Use the default dynamic memory allocator (from the stdlib). This clears any
- * custom allocator specified with @raft_heap_set.
- */
-void raft_heap_set_default();
-
-/**
  * Hold the value of a raft term. Guaranteed to be at least 64-bit long.
  */
 typedef unsigned long long raft_term;
@@ -109,11 +77,6 @@ typedef unsigned long long raft_index;
  * Hold a time value expressed in milliseconds since the epoch.
  */
 typedef unsigned long long raft_time;
-
-/**
- * Logging levels.
- */
-enum { RAFT_DEBUG, RAFT_INFO, RAFT_WARN, RAFT_ERROR };
 
 /**
  * A data buffer.
@@ -183,18 +146,18 @@ enum { RAFT_COMMAND = 1, RAFT_CONFIGURATION };
  *   change], and term when entry was received by the leader.
  *
  * An entry that originated from this raft instance while it was the leader
- * (typically via client calls to raft_propose()) should normaly have a @buf
+ * (typically via client calls to raft_apply()) should normaly have a @buf
  * attribute that points directly to the memory that was originally allocated by
  * the client itself to contain the entry data, and the @batch attribute is set
  * to #NULL.
  *
- * An entry that was received from the network upon an AppendEntries RPC or that
- * was loaded from disk at startup should normally have a @batch attribute that
- * points to a contiguous chunk of memory containing the data of the entry
- * itself plus possibly the data for other entries that were received or loaded
- * with it in the same request. In this case the @buf pointer will be equal to
- * the @batch pointer plus an offset, that locates the position of the entry's
- * data within the batch.
+ * An entry that was received from the network as part of an AppendEntries RPC
+ * or that was loaded from disk at startup should normally have a @batch
+ * attribute that points to a contiguous chunk of memory containing the data of
+ * the entry itself plus possibly the data for other entries that were received
+ * or loaded with it at the same time. In this case the @buf pointer will be
+ * equal to the @batch pointer plus an offset, that locates the position of the
+ * entry's data within the batch.
  *
  * When the @batch attribute is not #NULL the raft library will take care of
  * releasing that memory only once there are no more references to the
@@ -216,12 +179,12 @@ struct raft_entry
  * one referencing the entry). Whenever an entry is included in an I/O request
  * (write entries to disk or send entries to other servers) its refcount is
  * increased by one. Whenever an entry gets deleted from the log its refcount is
- * decreased by one, likewise whenever an I/O request is completed the refcount
+ * decreased by one. Likewise, whenever an I/O request is completed the refcount
  * of the relevant entries is decreased by one. When the refcount drops to zero
- * the memory that its @buf attribute points to gets released, or if the @batch
- * attribute is non-NULL a check is made to see if there's any other entry of
- * the same batch with a non-zero refcount, and the memory pointed that @batch
- * itself points to gets released if there's no such other entry.
+ * the memory that its @buf attribute points to gets released, or, if the @batch
+ * attribute is non-NULL, a check is made to see if all other entries of the
+ * same batch also have a zero refcount, and the memory that @batch points to
+ * gets released if that's the case.
  */
 struct raft_entry_ref
 {
@@ -235,8 +198,8 @@ struct raft_entry_ref
  * In-memory cache of the persistent raft log stored on disk.
  *
  * The raft log cache is implemented as a circular buffer of log entries, which
- * makes some common operations (e.g. deleting the first N entries when
- * snapshotting) very efficient.
+ * makes some frequent operations very efficient (e.g. deleting the first N
+ * entries when snapshotting).
  */
 struct raft_log
 {
@@ -322,11 +285,14 @@ enum {
     RAFT_IO_INSTALL_SNAPSHOT
 };
 
+/**
+ * A single RPC message that can be sent or received over the network.
+ */
 struct raft_message
 {
-    unsigned short type;
-    unsigned server_id;
-    const char *server_address;
+    unsigned short type;        /* Type code */
+    unsigned server_id;         /* ID of sending or destination server */
+    const char *server_address; /* Address of sending or destination server */
     union {
         struct raft_request_vote request_vote;
         struct raft_request_vote_result request_vote_result;
@@ -336,52 +302,57 @@ struct raft_message
     };
 };
 
+/**
+ * Hold the details of a snapshot.
+ */
 struct raft_snapshot
 {
     /* Index and term of last entry included in the snapshot. */
     raft_index index;
     raft_term term;
 
-    /* Content and index of last committed configuration included in the
-     * snapshot */
+    /* Last committed configuration included in the snapshot, along with the
+     * index it was committed at. */
     struct raft_configuration configuration;
     raft_index configuration_index;
 
-    /* Content of the snapshot */
+    /* Content of the snapshot. When a snapshot is taken, the user FSM can fill
+     * the bufs array with more than one buffer. When a snapshot is restored,
+     * there will always be a single buffer. */
     struct raft_buffer *bufs;
     unsigned n_bufs;
 };
 
-struct raft_io;
-
-typedef void (*raft_io_tick_cb)(struct raft_io *io);
-typedef void (*raft_io_recv_cb)(struct raft_io *io, struct raft_message *msg);
-typedef void (*raft_io_close_cb)(struct raft_io *io);
-
+/**
+ * Asynchronous request to send an RPC message.
+ */
 struct raft_io_send;
 typedef void (*raft_io_send_cb)(struct raft_io_send *req, int status);
-
 struct raft_io_send
 {
     void *data;         /* User data */
     raft_io_send_cb cb; /* Request callback */
 };
 
+/**
+ * Asynchronous request to store a new snapshot.
+ */
 struct raft_io_snapshot_put;
 typedef void (*raft_io_snapshot_put_cb)(struct raft_io_snapshot_put *req,
                                         int status);
-
 struct raft_io_snapshot_put
 {
     void *data;                 /* User data */
     raft_io_snapshot_put_cb cb; /* Request callback */
 };
 
+/**
+ * Asynchronous request to load the most recent snapshot available.
+ */
 struct raft_io_snapshot_get;
 typedef void (*raft_io_snapshot_get_cb)(struct raft_io_snapshot_get *req,
                                         struct raft_snapshot *snapshot,
                                         int status);
-
 struct raft_io_snapshot_get
 {
     void *data;                 /* User data */
@@ -389,9 +360,19 @@ struct raft_io_snapshot_get
 };
 
 /**
+ * Logging levels.
+ */
+enum { RAFT_DEBUG, RAFT_INFO, RAFT_WARN, RAFT_ERROR };
+
+/**
  * I/O backend interface implementing periodic ticks, log store read/writes
  * and send/receive of network RPCs.
  */
+struct raft_io;
+typedef void (*raft_io_tick_cb)(struct raft_io *io);
+typedef void (*raft_io_recv_cb)(struct raft_io *io, struct raft_message *msg);
+typedef void (*raft_io_close_cb)(struct raft_io *io);
+
 struct raft_io
 {
     /**
@@ -562,6 +543,17 @@ enum { RAFT_UNAVAILABLE, RAFT_FOLLOWER, RAFT_CANDIDATE, RAFT_LEADER };
 extern const char *raft_state_names[];
 
 /**
+ * Used by leaders to keep track of replication progress for each server.
+ */
+struct raft_replication
+{
+    raft_index next_index;  /* Next entry to send */
+    raft_index match_index; /* Highest applied idx */
+    raft_time last_contact; /* Timestamp of last RPC received */
+    unsigned short state;   /* Probe, pipeline or snapshot */
+};
+
+/**
  * Event types IDs.
  */
 enum {
@@ -603,17 +595,6 @@ enum {
 };
 
 /**
- * Used by leaders to keep track of replication progress for each server.
- */
-struct raft_replication
-{
-    raft_index next_index;  /* Next entry to send */
-    raft_index match_index; /* Highest applied idx */
-    raft_time last_contact; /* Timestamp of last RPC received */
-    unsigned short state;   /* Probe, pipeline or snapshot */
-};
-
-/**
  * Number of available event types.
  */
 #define RAFT_EVENT_N (RAFT_EVENT_PROMOTION_ABORTED + 1)
@@ -623,6 +604,11 @@ struct raft_replication
  */
 struct raft
 {
+    /**
+     * Custom user data.
+     */
+    void *data;
+
     /**
      * User-defined disk and network I/O interface implementation.
      */
@@ -642,12 +628,6 @@ struct raft
      * Server address of this raft instance.
      */
     char *address;
-
-    /**
-     * Custom user data. It will be passed back to callbacks registered with
-     * raft_watch().
-     */
-    void *data;
 
     /**
      * The fields below are a cache of the server's persistent state, updated on
@@ -836,7 +816,6 @@ struct raft
 int raft_init(struct raft *r,
               struct raft_io *io,
               struct raft_fsm *fsm,
-              void *data,
               unsigned id,
               const char *address);
 
@@ -868,8 +847,16 @@ int raft_start(struct raft *r);
  *   We recommend a range that is 10–20 times the one-way network latency, which
  *   keeps split votes rates under 40% in all cases for reasonably sized
  *   clusters, and typically results in much lower rates.
+ *
+ * Note that the current random election timer will be reset and a new one timer
+ * will be generated.
  */
-void raft_set_election_timeout(struct raft *r, const unsigned election_timeout);
+void raft_set_election_timeout(struct raft *r, unsigned msecs);
+
+/**
+ * Set the heartbeat timeout.
+ */
+void raft_set_heartbeat_timeout(struct raft *r, unsigned msecs);
 
 /**
  * Return the code of the current raft state.
@@ -898,12 +885,12 @@ raft_index raft_last_applied(struct raft *r);
  */
 unsigned raft_next_timeout(struct raft *r);
 
+/**
+ * Asynchronous request to append a new command entry to the log and apply it to
+ * the FSM when a quorum is reached.
+ */
 struct raft_apply;
 typedef void (*raft_apply_cb)(struct raft_apply *req, int status);
-
-/**
- * Request to apply a new command.
- */
 struct raft_apply
 {
     void *data;
@@ -964,5 +951,37 @@ int raft_remove_server(struct raft *r, const unsigned id);
  * callback disable notifications for that event.
  */
 void raft_watch(struct raft *r, int event, void (*cb)(void *, int, void *));
+
+/**
+ * User-definable dynamic memory allocation functions.
+ *
+ * The @data field will be passed as first argument to all functions.
+ */
+struct raft_heap
+{
+    void *data; /* User data */
+    void *(*malloc)(void *data, size_t size);
+    void (*free)(void *data, void *ptr);
+    void *(*calloc)(void *data, size_t nmemb, size_t size);
+    void *(*realloc)(void *data, void *ptr, size_t size);
+    void *(*aligned_alloc)(void *data, size_t alignment, size_t size);
+};
+
+void *raft_malloc(size_t size);
+void raft_free(void *ptr);
+void *raft_calloc(size_t nmemb, size_t size);
+void *raft_realloc(void *ptr, size_t size);
+void *raft_aligned_alloc(size_t alignment, size_t size);
+
+/**
+ * Use a custom dynamic memory allocator.
+ */
+void raft_heap_set(struct raft_heap *heap);
+
+/**
+ * Use the default dynamic memory allocator (from the stdlib). This clears any
+ * custom allocator specified with @raft_heap_set.
+ */
+void raft_heap_set_default();
 
 #endif /* RAFT_H */

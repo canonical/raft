@@ -20,7 +20,7 @@ stamp-h1
 .deps/
 .libs/
 unit-test*
-integration-test*
+fuzzy-test*
 test-suite.log
 tests/main_test.c
 coverage/

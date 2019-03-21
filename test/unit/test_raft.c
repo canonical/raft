@@ -115,7 +115,7 @@ TEST_CASE(init, error, oom, init_oom_params)
     raft_io_stub_init(&io);
     test_heap_fault_enable(&f->heap);
 
-    rv = raft_init(&raft, &io, &f->fsm, f, 1, "1");
+    rv = raft_init(&raft, &io, &f->fsm, 1, "1");
     munit_assert_int(rv, ==, RAFT_ENOMEM);
 
     raft_io_stub_close(&io);
@@ -281,8 +281,7 @@ TEST_CASE(start, success, snapshot, NULL)
     return MUNIT_OK;
 }
 
-static char *start_oom_heap_fault_delay[] = {"0", "1,", "2", "3", "4",
-                                             "5", "6",  "7", NULL};
+static char *start_oom_heap_fault_delay[] = {"0", "1,", "2", "3", NULL};
 static char *start_oom_heap_fault_repeat[] = {"1", NULL};
 
 static MunitParameterEnum start_oom_params[] = {

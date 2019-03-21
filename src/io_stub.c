@@ -280,7 +280,7 @@ static int io_stub__close(struct raft_io *io, void (*cb)(struct raft_io *io))
     drop_all_transmit(s);
 
     if (s->snapshot != NULL) {
-        raft_snapshot__close(s->snapshot);
+        snapshot__close(s->snapshot);
         raft_free(s->snapshot);
     }
 
@@ -641,10 +641,6 @@ static int io_stub__random(struct raft_io *io, int min, int max)
     struct io_stub *s;
     s = io->impl;
 
-    if (s->random == NULL) {
-        return (max - min) / 2;
-    }
-
     return s->random(min, max);
 }
 
@@ -693,6 +689,12 @@ static int io_stub__send(struct raft_io *io,
     return 0;
 }
 
+static int default_random(int min, int max)
+{
+    assert(min < max);
+    return min + (rand() % (max + 1 - min));
+}
+
 int raft_io_stub_init(struct raft_io *io)
 {
     struct io_stub *s;
@@ -727,7 +729,7 @@ int raft_io_stub_init(struct raft_io *io)
     s->min_latency = 0;
     s->max_latency = 0;
 
-    s->random = NULL;
+    s->random = default_random;
 
     s->fault.countdown = -1;
     s->fault.n = -1;
@@ -992,7 +994,7 @@ static void io_stub__flush_snapshot_put(struct io_stub *s,
         s->snapshot = raft_malloc(sizeof *s->snapshot);
         assert(s->snapshot != NULL);
     } else {
-        raft_snapshot__close(s->snapshot);
+        snapshot__close(s->snapshot);
     }
 
     snapshot_copy(r->snapshot, s->snapshot);

@@ -40,6 +40,7 @@ libraft_la_SOURCES = \
   src/client.c \
   src/configuration.c \
   src/election.c \
+  src/entry.c \
   src/error.c \
   src/heap.c \
   src/log.c \
@@ -52,6 +53,7 @@ libraft_la_SOURCES = \
   src/rpc_request_vote.c \
   src/rpc_install_snapshot.c \
   src/snapshot.c \
+  src/start.c \
   src/state.c \
   src/tick.c \
   src/watch.c
@@ -95,10 +97,9 @@ endif
 
 check_PROGRAMS += \
   unit-test \
-  integration-test
+  fuzzy-test
 
 test_lib_SOURCES = \
-  test/lib/cluster.c \
   test/lib/fault.c \
   test/lib/fs.c \
   test/lib/fsm.c \
@@ -157,23 +158,23 @@ if IO_UV
   unit_test_LDFLAGS += $(UV_LIBS)
 endif
 
-integration_test_SOURCES = $(test_lib_SOURCES)
-integration_test_SOURCES += \
-  test/integration/main.c \
-  test/integration/test_election.c \
-  test/integration/test_liveness.c \
-  test/integration/test_membership.c \
-  test/integration/test_replication.c
-integration_test_CFLAGS = $(AM_CFLAGS)
+fuzzy_test_SOURCES = $(test_lib_SOURCES)
+fuzzy_test_SOURCES += \
+  test/fuzzy/main.c \
+  test/fuzzy/test_election.c \
+  test/fuzzy/test_liveness.c \
+  test/fuzzy/test_membership.c \
+  test/fuzzy/test_replication.c
+fuzzy_test_CFLAGS = $(AM_CFLAGS)
 #-DMUNIT_NO_FORK
-integration_test_CFLAGS += -I$(top_srcdir)/tests/integration
-integration_test_LDADD = libraft.la
-integration_test_LDFLAGS =
+fuzzy_test_CFLAGS += -I$(top_srcdir)/tests/fuzzy
+fuzzy_test_LDADD = libraft.la
+fuzzy_test_LDFLAGS =
 if IO_UV
-  integration_test_LDFLAGS += $(UV_LIBS)
+  fuzzy_test_LDFLAGS += $(UV_LIBS)
 endif
 
-TESTS = unit-test integration-test
+TESTS = unit-test fuzzy-test
 
 COV_FLAGS = --rc genhtml_branch_coverage=1 --rc lcov_branch_coverage=1 --rc lcov_excl_br_line="assert\("
 COV_FLAGS += --compat-libtool --directory src --capture --output-file coverage/raft.info

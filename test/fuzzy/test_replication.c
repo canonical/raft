@@ -1,0 +1,204 @@
+#include "../lib/cluster.h"
+#include "../lib/heap.h"
+#include "../lib/runner.h"
+
+TEST_MODULE(replication);
+
+/******************************************************************************
+ *
+ * Fixture
+ *
+ *****************************************************************************/
+
+struct fixture
+{
+    FIXTURE_HEAP;
+    FIXTURE_CLUSTER;
+};
+
+static char *n[] = {"3", "5", "7", NULL};
+
+static MunitParameterEnum params[] = {
+    {CLUSTER_N_PARAM, n},
+    {NULL, NULL},
+};
+
+static void *setup(const MunitParameter params[], void *user_data)
+{
+    struct fixture *f = munit_malloc(sizeof *f);
+    (void)user_data;
+    SETUP_HEAP;
+    SETUP_CLUSTER(CLUSTER_N_PARAM_GET);
+    CLUSTER_BOOTSTRAP;
+    CLUSTER_START;
+    CLUSTER_STEP_UNTIL_HAS_LEADER(10000);
+    return f;
+}
+
+static void tear_down(void *data)
+{
+    struct fixture *f = data;
+    TEAR_DOWN_CLUSTER;
+    TEAR_DOWN_HEAP;
+    free(f);
+}
+
+/******************************************************************************
+ *
+ * Helper macros
+ *
+ *****************************************************************************/
+
+#define APPLY_ADD_ONE(REQ) CLUSTER_APPLY_ADD_X(REQ, 1, NULL);
+
+#define STEP_UNTIL_APPLIED(INDEX, MSECS) \
+    CLUSTER_STEP_UNTIL_APPLIED(INDEX, MSECS);
+
+#define KILL(I) raft_fixture_kill(&f->cluster, I);
+#define KILL_LEADER KILL(CLUSTER_LEADER)
+#define KILL_MAJORITY                                      \
+    {                                                      \
+        size_t i;                                          \
+        size_t n;                                          \
+        for (i = 0, n = 0; n < (CLUSTER_N / 2) + 1; i++) { \
+            KILL(i)                                        \
+            n++;                                           \
+        }                                                  \
+    }
+
+/******************************************************************************
+ *
+ * Tests
+ *
+ *****************************************************************************/
+
+TEST_SUITE(entries);
+TEST_SETUP(entries, setup);
+TEST_TEAR_DOWN(entries, tear_down);
+
+/* New entries on the leader are eventually replicated to followers. */
+TEST_CASE(entries, append, params)
+{
+    struct fixture *f = data;
+    struct raft_apply *req = munit_malloc(sizeof *req);
+    (void)params;
+    APPLY_ADD_ONE(req);
+    STEP_UNTIL_APPLIED(2, 2000);
+    free(req);
+    return MUNIT_OK;
+}
+
+/* The cluster remains available even if the current leader dies and a new
+ * leader gets elected. */
+TEST_CASE(entries, availability, params)
+{
+    struct fixture *f = data;
+    struct raft_apply *req1 = munit_malloc(sizeof *req1);
+    struct raft_apply *req2 = munit_malloc(sizeof *req2);
+
+    (void)params;
+
+    APPLY_ADD_ONE(req1);
+    STEP_UNTIL_APPLIED(2, 2000);
+
+    munit_assert_int(CLUSTER_LAST_APPLIED(0), ==, 2);
+    munit_assert_int(CLUSTER_LAST_APPLIED(1), ==, 2);
+    munit_assert_int(CLUSTER_LAST_APPLIED(2), ==, 2);
+
+    KILL_LEADER;
+    CLUSTER_STEP_UNTIL_HAS_NO_LEADER(10000);
+    CLUSTER_STEP_UNTIL_HAS_LEADER(10000);
+
+    APPLY_ADD_ONE(req2);
+    STEP_UNTIL_APPLIED(3, 2000);
+
+    munit_assert_int(CLUSTER_LAST_APPLIED(CLUSTER_LEADER), ==, 3);
+
+    free(req1);
+    free(req2);
+
+    return MUNIT_OK;
+}
+
+static void apply_cb(struct raft_apply *req, int status)
+{
+    (void)status;
+    free(req);
+}
+
+/* If no quorum is available, entries don't get committed. */
+TEST_CASE(entries, no_quorum, params)
+{
+    struct fixture *f = data;
+    struct raft_apply *req = munit_malloc(sizeof *req);
+    unsigned i;
+
+    (void)params;
+
+    CLUSTER_APPLY_ADD_X(req, 1, apply_cb);
+    KILL_MAJORITY;
+
+    STEP_UNTIL_APPLIED(2, 10000);
+
+    for (i = 0; i < CLUSTER_N; i++) {
+        munit_assert_int(CLUSTER_LAST_APPLIED(i), ==, 1);
+    }
+
+    return MUNIT_OK;
+}
+
+/* If the cluster is partitioned, entries don't get committed. */
+TEST_CASE(entries, partitioned, params)
+{
+    struct fixture *f = data;
+    struct raft_apply *req1 = munit_malloc(sizeof *req1);
+    struct raft_apply *req2 = munit_malloc(sizeof *req2);
+    unsigned leader_id;
+    size_t i;
+    size_t n;
+
+    (void)params;
+
+    leader_id = CLUSTER_LEADER + 1;
+
+    /* Disconnect the leader from a majority of servers */
+    n = 0;
+    for (i = 0; n < (CLUSTER_N / 2) + 1; i++) {
+        struct raft *raft = CLUSTER_GET(i);
+        if (raft->id == leader_id) {
+            continue;
+        }
+        raft_fixture_disconnect(&f->cluster, leader_id - 1, raft->id - 1);
+        n++;
+    }
+
+    /* Try to append a new entry using the disconnected leader. */
+    CLUSTER_APPLY_ADD_X(req1, 1, apply_cb);
+
+    /* The leader gets deposed. */
+    CLUSTER_STEP_UNTIL_HAS_NO_LEADER(10000);
+
+    /* The entry does not get committed. */
+    CLUSTER_STEP_UNTIL_APPLIED(2, 5000);
+
+    /* Reconnect the old leader */
+    for (i = 0; i < CLUSTER_N; i++) {
+        struct raft *raft = CLUSTER_GET(i);
+        if (raft->id == leader_id) {
+            continue;
+        }
+        raft_fixture_reconnect(&f->cluster, leader_id - 1, raft->id - 1);
+    }
+
+    /* FIXME: wait a bit more otherwise test_cluster_has_leader would return
+     * immediately. */
+    CLUSTER_STEP_UNTIL_APPLIED(2, 100);
+
+    CLUSTER_STEP_UNTIL_HAS_LEADER(10000);
+
+    /* Re-try now to append the entry. */
+    CLUSTER_APPLY_ADD_X(req2, 1, apply_cb);
+    CLUSTER_STEP_UNTIL_APPLIED(2, 10000);
+
+    return MUNIT_OK;
+}

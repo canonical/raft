@@ -1,5 +1,5 @@
 /**
- * Helpers around @raft_configuration objects.
+ * Modify and inspect @raft_configuration objects.
  */
 
 #ifndef RAFT_CONFIGURATION_H
@@ -8,10 +8,9 @@
 #include "../include/raft.h"
 
 /**
- * Remove a server from a raft configuration. The given ID must match the one of
- * an existing server in the configuration.
+ * Return the number of voting servers.
  */
-int configuration__remove(struct raft_configuration *c, const unsigned id);
+size_t configuration__n_voting(const struct raft_configuration *c);
 
 /**
  * Return the index of the server with the given ID (relative to the c->servers
@@ -34,9 +33,10 @@ const struct raft_server *configuration__get(const struct raft_configuration *c,
                                              unsigned id);
 
 /**
- * Return the number of voting servers.
+ * Remove a server from a raft configuration. The given ID must match the one of
+ * an existing server in the configuration.
  */
-size_t configuration__n_voting(const struct raft_configuration *c);
+int configuration__remove(struct raft_configuration *c, const unsigned id);
 
 /**
  * Add all servers in c1 to c2 (which must be empty).

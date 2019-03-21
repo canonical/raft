@@ -112,7 +112,7 @@ static void tear_down(void *data)
     }
 
 /**
- * raft__tick
+ * tick
  */
 
 TEST_SUITE(elapse);
@@ -121,7 +121,7 @@ TEST_TEAR_DOWN(elapse, tear_down);
 
 TEST_GROUP(elapse, success);
 
-/* If we're in the unavailable state, raft__tick is a no-op. */
+/* If we're in the unavailable state, tick() is a no-op. */
 TEST_CASE(elapse, success, unavailable, NULL)
 {
     struct fixture *f = data;

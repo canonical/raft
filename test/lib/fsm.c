@@ -3,13 +3,19 @@
 
 #include "../../src/byte.h"
 
-/**
- * In-memory implementation of the raft_fsm interface.
- */
+/* In-memory implementation of the raft_fsm interface. */
 struct test_fsm
 {
     int x;
     int y;
+};
+
+/* Command codes */
+enum {
+      SET_X = 1,
+      SET_Y,
+      ADD_X,
+      ADD_Y
 };
 
 static int test_fsm__apply(struct raft_fsm *fsm, const struct raft_buffer *buf)
@@ -26,11 +32,17 @@ static int test_fsm__apply(struct raft_fsm *fsm, const struct raft_buffer *buf)
     value = *(int64_t *)(buf->base + 8);
 
     switch (command) {
-        case 1:
+        case SET_X:
             t->x = value;
             break;
-        case 2:
+        case SET_Y:
             t->y = value;
+            break;
+        case ADD_X:
+            t->x += value;
+            break;
+        case ADD_Y:
+            t->y += value;
             break;
         default:
             return -1;
@@ -106,7 +118,18 @@ void test_fsm_encode_set_x(const int value, struct raft_buffer *buf)
 
     munit_assert_ptr_not_null(buf->base);
 
-    *(uint64_t *)buf->base = 1;
+    *(uint64_t *)buf->base = SET_X;
+    *(int64_t *)(buf->base + 8) = value;
+}
+
+void test_fsm_encode_add_x(const int value, struct raft_buffer *buf)
+{
+    buf->base = raft_malloc(16);
+    buf->len = 16;
+
+    munit_assert_ptr_not_null(buf->base);
+
+    *(uint64_t *)buf->base = ADD_X;
     *(int64_t *)(buf->base + 8) = value;
 }
 
@@ -117,7 +140,18 @@ void test_fsm_encode_set_y(const int value, struct raft_buffer *buf)
 
     munit_assert_ptr_not_null(buf->base);
 
-    *(uint64_t *)buf->base = 2;
+    *(uint64_t *)buf->base = SET_Y;
+    *(int64_t *)(buf->base + 8) = value;
+}
+
+void test_fsm_encode_add_y(const int value, struct raft_buffer *buf)
+{
+    buf->base = raft_malloc(16);
+    buf->len = 16;
+
+    munit_assert_ptr_not_null(buf->base);
+
+    *(uint64_t *)buf->base = ADD_Y;
     *(int64_t *)(buf->base + 8) = value;
 }
 
