@@ -18,10 +18,10 @@ script:
   - ./configure --enable-debug --enable-coverage
   - make
   - make ./unit-test
-  - make ./integration-test
+  - make ./fuzzy-test
   - ./test/lib/fs.sh setup
   - ./unit-test
-  - ./integration-test
+  - ./fuzzy-test
   - ./test/lib/fs.sh teardown
 after_success:
   - bash <(curl -s https://codecov.io/bash) -G "./src*"
