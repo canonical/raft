@@ -1,12 +1,13 @@
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
 #include <string.h>
 
 #include "../include/raft/fixture.h"
 #include "../include/raft/io_stub.h"
 
 #include "assert.h"
+#include "configuration.h"
 #include "log.h"
 
 /* Maximum number of cluster steps to perform when waiting for a certain state
@@ -15,6 +16,34 @@
 
 #define HEARTBEAT_TIMEOUT 50
 #define ELECTION_TIMEOUT 250
+
+static int init_server(unsigned i,
+                       struct raft_fixture_server *s,
+                       struct raft_fsm *fsm)
+{
+    int rc;
+    s->alive = true;
+    s->id = i + 1;
+    sprintf(s->address, "%u", s->id);
+    rc = raft_io_stub_init(&s->io);
+    if (rc != 0) {
+        return rc;
+    }
+    raft_io_stub_set_latency(&s->io, 5, 50);
+    rc = raft_init(&s->raft, &s->io, fsm, s->id, s->address);
+    if (rc != 0) {
+        return rc;
+    }
+    raft_set_election_timeout(&s->raft, ELECTION_TIMEOUT);
+    raft_set_heartbeat_timeout(&s->raft, HEARTBEAT_TIMEOUT);
+    return 0;
+}
+
+static void close_server(struct raft_fixture_server *s)
+{
+    raft_close(&s->raft, NULL);
+    raft_io_stub_close(&s->io);
+}
 
 static int setup_server(unsigned i,
                         struct raft_fixture_server *s,
@@ -58,6 +87,89 @@ static void connect_to_all(struct raft_fixture *f, unsigned i)
         }
         raft_io_stub_connect(io1, io2);
     }
+}
+
+int raft_fixture_init(struct raft_fixture *f, unsigned n, struct raft_fsm *fsms)
+{
+    unsigned i;
+    int rc;
+    assert(n >= 1);
+
+    f->time = 0;
+    f->n = n;
+
+    /* Initialize all servers */
+    for (i = 0; i < n; i++) {
+        struct raft_fixture_server *s = &f->servers[i];
+        rc = init_server(i, s, &fsms[i]);
+        if (rc != 0) {
+            return rc;
+        }
+    }
+
+    /* Connect all servers to each another */
+    for (i = 0; i < f->n; i++) {
+        connect_to_all(f, i);
+    }
+
+    log__init(&f->log);
+    f->commit_index = 0;
+
+    return 0;
+}
+
+void raft_fixture_close(struct raft_fixture *f)
+{
+    unsigned i;
+    for (i = 0; i < f->n; i++) {
+        close_server(&f->servers[i]);
+    }
+    log__close(&f->log);
+}
+
+int raft_fixture_bootstrap(struct raft_fixture *f, unsigned n_voting)
+{
+    unsigned i;
+    struct raft_configuration configuration;
+    struct raft_fixture_server *s;
+    int rc;
+    assert(n_voting >= 1);
+    assert(n_voting <= f->n);
+    raft_configuration_init(&configuration);
+    for (i = 0; i < f->n; i++) {
+        bool voting = i < n_voting;
+        s = &f->servers[i];
+        rc = raft_configuration_add(&configuration, s->id, s->address, voting);
+        if (rc != 0) {
+            return rc;
+        }
+    }
+    for (i = 0; i < f->n; i++) {
+        s = &f->servers[i];
+        rc = raft_bootstrap(&s->raft, &configuration);
+        if (rc != 0) {
+            return rc;
+        }
+    }
+    raft_configuration_close(&configuration);
+
+    /* The initial configuration is automatically considered committed. */
+    f->commit_index = 1;
+    return 0;
+}
+
+int raft_fixture_start(struct raft_fixture *f)
+{
+    unsigned i;
+    int rc;
+    for (i = 0; i < f->n; i++) {
+        struct raft_fixture_server *s = &f->servers[i];
+        rc = raft_start(&s->raft);
+        if (rc != 0) {
+            return rc;
+        }
+    }
+    return 0;
 }
 
 int raft_fixture_setup(struct raft_fixture *f,
@@ -446,17 +558,16 @@ void raft_fixture_step(struct raft_fixture *f)
     }
 }
 
-/* Return the index of the current leader, or -1 */
-static int current_leader_index(struct raft_fixture *f)
+bool raft_fixture_step_until(struct raft_fixture *f,
+                             bool (*stop)(struct raft_fixture *f, void *arg),
+                             void *arg,
+                             unsigned max_msecs)
 {
-    unsigned i;
-    for (i = 0; i < f->n; i++) {
-        struct raft_fixture_server *s = &f->servers[i];
-        if (raft_state(&s->raft) == RAFT_LEADER) {
-            return i;
-        }
+    unsigned start = f->time;
+    while (!stop(f, arg) && (f->time - start) < max_msecs) {
+        raft_fixture_step(f);
     }
-    return -1;
+    return f->time - start < max_msecs;
 }
 
 /* Enable/disable dropping outgoing messages of a certain type from all servers
@@ -476,7 +587,7 @@ static void drop_all_except(struct raft_fixture *f,
     }
 }
 
-/* Set the election timeout on all servers except the given one. */
+/* Reset the election timeout on all servers except the given one. */
 static void set_all_election_timeouts_except(struct raft_fixture *f,
                                              unsigned msecs,
                                              unsigned i)
@@ -487,85 +598,89 @@ static void set_all_election_timeouts_except(struct raft_fixture *f,
         if (j == i) {
             continue;
         }
-        raft->election_timeout = msecs;
+        raft_set_election_timeout(raft, msecs);
     }
+}
+
+static bool has_leader(struct raft_fixture *f, void *arg)
+{
+    (void)arg;
+    return f->leader_id != 0;
 }
 
 void raft_fixture_elect(struct raft_fixture *f, unsigned i)
 {
+    struct raft *raft = raft_fixture_get(f, i);
     unsigned j;
 
     /* Make sure there's currently no leader. */
-    assert(current_leader_index(f) == -1);
+    assert(f->leader_id == 0);
 
-    /* TODO: make sure that the server with the given id is a voting one */
+    /* Make sure that the given server is voting. */
+    assert(configuration__get(&raft->configuration, raft->id)->voting);
 
-    /* Prevent all servers from sending request vote messages, except for the
-     * one to be elected. */
-    drop_all_except(f, RAFT_IO_REQUEST_VOTE, true, i);
-    set_all_election_timeouts_except(f, ELECTION_TIMEOUT * 3, i);
+    /* Make sure all servers are currently followers */
+    for (j = 0; j < f->n; j++) {
+        assert(raft_state(&f->servers[j].raft) == RAFT_FOLLOWER);
+    }
 
     /* Set a very large election timeout on all servers, except the one being
-     * elected. This effectively avoids competition. */
+     * elected, effectively preventing competition. */
+    set_all_election_timeouts_except(f, ELECTION_TIMEOUT * 10, i);
 
-    for (j = 0; j < MAX_STEPS; j++) {
-        int leader;
-        raft_fixture_step(f);
-        leader = current_leader_index(f);
-        if (leader == -1) {
-            continue;
-        }
-        assert((unsigned)leader == i);
-        drop_all_except(f, RAFT_IO_REQUEST_VOTE, false, i);
-        set_all_election_timeouts_except(f, ELECTION_TIMEOUT, i);
-        return;
-    }
-
-    assert(0);
+    raft_fixture_step_until(f, has_leader, NULL, ELECTION_TIMEOUT * 3);
+    assert(f->leader_id == raft->id);
+    set_all_election_timeouts_except(f, ELECTION_TIMEOUT, i);
 }
 
-void raft_fixture_wait_applied(struct raft_fixture *f, raft_index index)
+static bool has_no_leader(struct raft_fixture *f, void *arg)
 {
-    unsigned applied;
-    unsigned i;
-    for (i = 0; i < MAX_STEPS; i++) {
-        unsigned j;
-        applied = 0;
-        raft_fixture_step(f);
-        for (j = 0; j < f->n; j++) {
-            struct raft *raft = &f->servers[j].raft;
-            if (raft_last_applied(raft) >= index) {
-                applied++;
-            }
-        }
-        if (applied == f->n) {
-            return;
-        }
-    }
-    assert(0);
+    (void)arg;
+    return f->leader_id == 0;
 }
 
 void raft_fixture_depose(struct raft_fixture *f)
 {
-    int leader = current_leader_index(f);
-    unsigned i;
+    unsigned leader_i;
 
-    assert(leader != -1);
+    assert(f->leader_id != 0);
+    leader_i = f->leader_id - 1;
+
+    /* Set a very large election timeout on all followers, to prevent them from
+     * starting an election. */
+    set_all_election_timeouts_except(f, ELECTION_TIMEOUT * 10, leader_i);
 
     /* Prevent all servers from sending append entries results, so the leader
      * will eventually step down. */
-    drop_all_except(f, RAFT_IO_APPEND_ENTRIES_RESULT, true, leader);
+    drop_all_except(f, RAFT_IO_APPEND_ENTRIES_RESULT, true, leader_i);
 
-    for (i = 0; i < MAX_STEPS; i++) {
-        raft_fixture_step(f);
-        leader = current_leader_index(f);
-        if (leader == -1) {
-            drop_all_except(f, RAFT_IO_APPEND_ENTRIES_RESULT, false, leader);
-            return;
+    raft_fixture_step_until(f, has_no_leader, NULL, ELECTION_TIMEOUT * 3);
+    assert(f->leader_id == 0);
+    drop_all_except(f, RAFT_IO_APPEND_ENTRIES_RESULT, false, leader_i);
+    set_all_election_timeouts_except(f, ELECTION_TIMEOUT, leader_i);
+}
+
+static bool has_applied_index(struct raft_fixture *f, void *arg)
+{
+    raft_index index = *(raft_index *)arg;
+    unsigned n = 0;
+    unsigned i;
+    for (i = 0; i < f->n; i++) {
+        struct raft *raft = raft_fixture_get(f, i);
+        if (raft_last_applied(raft) >= index) {
+            n++;
         }
     }
+    return n == f->n;
+}
 
-    assert(0);
+void raft_fixture_wait_applied(struct raft_fixture *f,
+                               raft_index index,
+                               unsigned max_msecs)
+{
+    bool done;
+    done = raft_fixture_step_until(f, has_applied_index, &index, max_msecs);
+    assert(done);
 }
 
 void raft_fixture_disconnect(struct raft_fixture *f, unsigned i, unsigned j)
@@ -647,4 +762,13 @@ int raft_fixture_add_server(struct raft_fixture *f, struct raft_fsm *fsm)
     }
 
     return 0;
+}
+
+void raft_fixture_set_random(struct raft_fixture *f, int (*random)(int, int))
+{
+    unsigned i;
+    for (i = 0; i < f->n; i++) {
+        struct raft_fixture_server *s = &f->servers[i];
+        raft_io_stub_set_random(&s->io, random);
+    }
 }

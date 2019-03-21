@@ -46,21 +46,73 @@ struct raft_fixture
 };
 
 /**
- * Setup a raft cluster fixture with @n servers, the first @n_voting of which
- * are voting servers. Each server will use an in-memory @raft_io implementation
- * and one of the given @fsms. The @random function can be used in order to be
- * able to reproduce particular test runs.
+ * Initialize a raft cluster fixture with @n servers. Each server will use an
+ * in-memory @raft_io implementation and one of the given @fsms. All servers
+ * will be initially connected to one another, but they won't be bootstrapped or
+ * started.
  */
-int raft_fixture_setup(struct raft_fixture *f,
-                       unsigned n,
-                       unsigned n_voting,
-                       struct raft_fsm *fsms,
-                       int (*random)(int, int));
+int raft_fixture_init(struct raft_fixture *f,
+                      unsigned n,
+                      struct raft_fsm *fsms);
 
 /**
- * Release any memory used by the given raft cluster fixture.
+ * Release all memory used by the fixture.
  */
-void raft_fixture_tear_down(struct raft_fixture *f);
+void raft_fixture_close(struct raft_fixture *f);
+
+/**
+ * Bootstrap the initial configuration of each server in the cluster. The first
+ * @n_voting servers will be voting. There must be at least one voting server.
+ */
+int raft_fixture_bootstrap(struct raft_fixture *f, unsigned n_voting);
+
+/**
+ * Start all servers in the fixture.
+ */
+int raft_fixture_start(struct raft_fixture *f);
+
+/**
+ * Return the current number of servers in the fixture.
+ */
+unsigned raft_fixture_n(struct raft_fixture *f);
+
+/**
+ * Return the raft instance associated with the i'th server of the fixture.
+ */
+struct raft *raft_fixture_get(struct raft_fixture *f, unsigned i);
+
+/**
+ * Return @true if the i'th server hasn't been killed.
+ */
+bool raft_fixture_alive(struct raft_fixture *f, unsigned i);
+
+/**
+ * Drive the cluster so the i'th server gets elected as leader.
+ *
+ * This is achieved by resetting the election timeout of all other servers to a
+ * very high value, letting the one of the i'th server expire and then advancing
+ * the cluster until the election is won.
+ *
+ * There must currently be no leader and no candidate and the given server must
+ * be a voting one.
+ */
+void raft_fixture_elect(struct raft_fixture *f, unsigned i);
+
+/**
+ * Drive the cluster so the current leader gets deposed.
+ *
+ * This is achieved by dropping all AppendEntries result messages sent by
+ * followers to the leader, until the leader decides to step down.
+ */
+void raft_fixture_depose(struct raft_fixture *f);
+
+/**
+ * Wait until all servers have applied the entry at the given index. Abort if
+ * @max_msecs elapse without that happening.
+ */
+void raft_fixture_wait_applied(struct raft_fixture *f,
+                               raft_index index,
+                               unsigned max_msecs);
 
 /**
  * Step through the cluster state advancing the time to the minimum value needed
@@ -108,37 +160,15 @@ void raft_fixture_tear_down(struct raft_fixture *f);
 void raft_fixture_step(struct raft_fixture *f);
 
 /**
- * Return the current number of servers in the fixture.
+ * Step the cluster until the given @stop function returns #true, or @max_msecs
+ * have elapsed.
+ *
+ * Return #true if the @stop function has returned #true within @max_msecs.
  */
-unsigned raft_fixture_n(struct raft_fixture *f);
-
-/**
- * Return the raft instance associated with the i'th server of the fixture.
- */
-struct raft *raft_fixture_get(struct raft_fixture *f, unsigned i);
-
-/**
- * Return @true if the i'th server hasn't been killed.
- */
-bool raft_fixture_alive(struct raft_fixture *f, unsigned i);
-
-/**
- * Drive the cluster so the i'th server gets elected as leader. There must
- * currently be no leader. This is achieved by dropping all RequestVote messages
- * sent by other servers.
- */
-void raft_fixture_elect(struct raft_fixture *f, unsigned i);
-
-/**
- * Wait until all servers have applied the entry at the given index.
- */
-void raft_fixture_wait_applied(struct raft_fixture *f, raft_index index);
-
-/**
- * Drive the cluster so the current leader gets deposed. This is achieved by
- * dropping all AppendEntries result messages sent by followers to the leader.
- */
-void raft_fixture_depose(struct raft_fixture *f);
+bool raft_fixture_step_until(struct raft_fixture *f,
+                             bool (*stop)(struct raft_fixture *f, void *arg),
+                             void *arg,
+                             unsigned max_msecs);
 
 /**
  * Return true if the servers with the given indexes are connected.
@@ -175,5 +205,37 @@ void raft_fixture_kill(struct raft_fixture *f, unsigned i);
  * Add a new empty server to the cluster and connect it to all others.
  */
 int raft_fixture_add_server(struct raft_fixture *f, struct raft_fsm *fsm);
+
+/**
+ * Set the network latency in milliseconds. Each RPC message will be assigned a
+ * random latency value within the given range.
+ */
+void raft_fixture_set_latency(struct raft_fixture *f,
+                              unsigned min,
+                              unsigned max);
+
+/**
+ * Set the function to use to to generate random values within a range. The raft
+ * servers will use it to generate a random election timeout, and the fixture
+ * itself will use it to assign a random network latency to RPC message.
+ */
+void raft_fixture_set_random(struct raft_fixture *f, int (*random)(int, int));
+
+/**
+ * Setup a raft cluster fixture with @n servers, the first @n_voting of which
+ * are voting servers. Each server will use an in-memory @raft_io implementation
+ * and one of the given @fsms. The @random function can be used in order to be
+ * able to reproduce particular test runs.
+ */
+int raft_fixture_setup(struct raft_fixture *f,
+                       unsigned n,
+                       unsigned n_voting,
+                       struct raft_fsm *fsms,
+                       int (*random)(int, int));
+
+/**
+ * Release any memory used by the given raft cluster fixture.
+ */
+void raft_fixture_tear_down(struct raft_fixture *f);
 
 #endif /* RAFT_FAKE_H */

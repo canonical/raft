@@ -847,6 +847,9 @@ int raft_start(struct raft *r);
  *   We recommend a range that is 10–20 times the one-way network latency, which
  *   keeps split votes rates under 40% in all cases for reasonably sized
  *   clusters, and typically results in much lower rates.
+ *
+ * Note that the current random election timer will be reset and a new one timer
+ * will be generated.
  */
 void raft_set_election_timeout(struct raft *r, unsigned msecs);
 
