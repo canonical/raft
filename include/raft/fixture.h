@@ -169,6 +169,11 @@ bool raft_fixture_step_until(struct raft_fixture *f,
                              unsigned max_msecs);
 
 /**
+ * Step the cluster until @msecs have elapsed.
+ */
+void raft_fixture_step_until_elapsed(struct raft_fixture *f, unsigned msecs);
+
+/**
  * Step the cluster until a leader is elected, or @max_msecs have elapsed.
  */
 bool raft_fixture_step_until_has_leader(struct raft_fixture *f,
@@ -182,10 +187,12 @@ bool raft_fixture_step_until_has_no_leader(struct raft_fixture *f,
                                            unsigned max_msecs);
 
 /**
- * Step the cluster until all servers have applied the entry at the given index,
- * or @max_msecs have elapsed.
+ * Step the cluster until the @i'th server has applied the entry at the given
+ * index, or @max_msecs have elapsed. If @i equals the number of servers, then
+ * step until all servers have applied the given entry.
  */
 bool raft_fixture_step_until_applied(struct raft_fixture *f,
+                                     unsigned i,
                                      raft_index index,
                                      unsigned max_msecs);
 /**
@@ -212,7 +219,7 @@ void raft_fixture_kill(struct raft_fixture *f, unsigned i);
 /**
  * Add a new empty server to the cluster and connect it to all others.
  */
-int raft_fixture_add_server(struct raft_fixture *f, struct raft_fsm *fsm);
+int raft_fixture_grow(struct raft_fixture *f, struct raft_fsm *fsm);
 
 /**
  * Set the network latency in milliseconds. Each RPC message will be assigned a

@@ -74,7 +74,7 @@ static void tear_down(void *data)
         munit_assert_int(rc, ==, 0);                 \
     }
 #define STEP_UNTIL_APPLIED(INDEX) \
-    raft_fixture_step_until_applied(&f->fixture, INDEX, INDEX * 1000)
+    raft_fixture_step_until_applied(&f->fixture, N_SERVERS, INDEX, INDEX * 1000)
 
 /******************************************************************************
  *

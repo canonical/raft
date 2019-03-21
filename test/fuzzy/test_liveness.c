@@ -1,5 +1,4 @@
 #include "../lib/cluster.h"
-#include "../lib/heap.h"
 #include "../lib/runner.h"
 
 TEST_MODULE(liveness);
@@ -27,7 +26,6 @@ struct disconnection
 
 struct fixture
 {
-    FIXTURE_HEAP;
     FIXTURE_CLUSTER;
     struct disconnection *disconnections;
 };
@@ -80,11 +78,9 @@ static void *setup(const MunitParameter params[], void *user_data)
     int pairs;
     size_t i, j, k;
     (void)user_data;
-    SETUP_HEAP;
     SETUP_CLUSTER(CLUSTER_N_PARAM_GET);
     CLUSTER_BOOTSTRAP;
     CLUSTER_START;
-    // CLUSTER_STEP_UNTIL_HAS_LEADER(10000);
 
     /* Number of distinct pairs of servers. */
     pairs = __server_pairs(f);
@@ -110,7 +106,6 @@ static void tear_down(void *data)
 {
     struct fixture *f = data;
     TEAR_DOWN_CLUSTER;
-    TEAR_DOWN_HEAP;
     free(f->disconnections);
     free(f);
 }

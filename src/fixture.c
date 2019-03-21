@@ -483,6 +483,18 @@ bool raft_fixture_step_until(struct raft_fixture *f,
     return f->time - start < max_msecs;
 }
 
+static bool spin(struct raft_fixture *f, void *arg)
+{
+    (void)f;
+    (void)arg;
+    return false;
+}
+
+void raft_fixture_step_until_elapsed(struct raft_fixture *f, unsigned msecs)
+{
+    raft_fixture_step_until(f, spin, NULL, msecs);
+}
+
 static bool has_leader(struct raft_fixture *f, void *arg)
 {
     (void)arg;
@@ -587,14 +599,27 @@ void raft_fixture_depose(struct raft_fixture *f)
     set_all_election_timeouts_except(f, ELECTION_TIMEOUT, leader_i);
 }
 
+struct step_apply
+{
+    unsigned i;
+    raft_index index;
+};
+
 static bool has_applied_index(struct raft_fixture *f, void *arg)
 {
-    raft_index index = *(raft_index *)arg;
+    struct step_apply *apply = (struct step_apply *)arg;
+    struct raft *raft;
     unsigned n = 0;
     unsigned i;
+
+    if (apply->i < f->n) {
+        raft = raft_fixture_get(f, apply->i);
+        return raft_last_applied(raft) >= apply->index;
+    }
+
     for (i = 0; i < f->n; i++) {
-        struct raft *raft = raft_fixture_get(f, i);
-        if (raft_last_applied(raft) >= index) {
+        raft = raft_fixture_get(f, i);
+        if (raft_last_applied(raft) >= apply->index) {
             n++;
         }
     }
@@ -602,10 +627,12 @@ static bool has_applied_index(struct raft_fixture *f, void *arg)
 }
 
 bool raft_fixture_step_until_applied(struct raft_fixture *f,
+                                     unsigned i,
                                      raft_index index,
                                      unsigned max_msecs)
 {
-    return raft_fixture_step_until(f, has_applied_index, &index, max_msecs);
+    struct step_apply apply = {i, index};
+    return raft_fixture_step_until(f, has_applied_index, &apply, max_msecs);
 }
 
 void raft_fixture_disconnect(struct raft_fixture *f, unsigned i, unsigned j)
@@ -648,7 +675,7 @@ void raft_fixture_kill(struct raft_fixture *f, unsigned i)
     f->servers[i].alive = false;
 }
 
-int raft_fixture_add_server(struct raft_fixture *f, struct raft_fsm *fsm)
+int raft_fixture_grow(struct raft_fixture *f, struct raft_fsm *fsm)
 {
     struct raft_fixture_server *s;
     unsigned i;
