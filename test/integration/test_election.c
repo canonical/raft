@@ -1,5 +1,3 @@
-#include "../../include/raft.h"
-
 #include "../lib/cluster.h"
 #include "../lib/heap.h"
 #include "../lib/runner.h"
@@ -51,7 +49,11 @@ static void tear_down(void *data)
  *****************************************************************************/
 
 #define STEP_UNTIL_HAS_LEADER(MAX_MSECS) \
-    raft_fixture_step_until_has_leader(&f->cluster, MAX_MSECS)
+    CLUSTER_STEP_UNTIL_HAS_LEADER(MAX_MSECS)
+
+#define STEP_UNTIL_HAS_NO_LEADER(MAX_MSECS) \
+    CLUSTER_STEP_UNTIL_HAS_NO_LEADER(MAX_MSECS)
+
 #define KILL(I) raft_fixture_kill(&f->cluster, I);
 #define KILL_LEADER KILL(CLUSTER_LEADER)
 #define KILL_MAJORITY                                      \
@@ -101,6 +103,7 @@ TEST_CASE(run, change, params)
     STEP_UNTIL_HAS_LEADER(10000);
     ASSERT_HAS_LEADER;
     KILL_LEADER;
+    STEP_UNTIL_HAS_NO_LEADER(10000);
     STEP_UNTIL_HAS_LEADER(10000);
     ASSERT_HAS_LEADER;
     return MUNIT_OK;

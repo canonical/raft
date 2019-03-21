@@ -113,14 +113,6 @@ void raft_fixture_elect(struct raft_fixture *f, unsigned i);
 void raft_fixture_depose(struct raft_fixture *f);
 
 /**
- * Wait until all servers have applied the entry at the given index. Abort if
- * @max_msecs elapse without that happening.
- */
-void raft_fixture_wait_applied(struct raft_fixture *f,
-                               raft_index index,
-                               unsigned max_msecs);
-
-/**
  * Step through the cluster state advancing the time to the minimum value needed
  * for it to make progress (i.e. for a message to be delivered or for a server
  * time out).
@@ -182,6 +174,20 @@ bool raft_fixture_step_until(struct raft_fixture *f,
 bool raft_fixture_step_until_has_leader(struct raft_fixture *f,
                                         unsigned max_msecs);
 
+/**
+ * Step the cluster until the current leader gets deposed, or @max_msecs have
+ * elapsed.
+ */
+bool raft_fixture_step_until_has_no_leader(struct raft_fixture *f,
+                                           unsigned max_msecs);
+
+/**
+ * Step the cluster until all servers have applied the entry at the given index,
+ * or @max_msecs have elapsed.
+ */
+bool raft_fixture_step_until_applied(struct raft_fixture *f,
+                                     raft_index index,
+                                     unsigned max_msecs);
 /**
  * Return true if the servers with the given indexes are connected.
  */

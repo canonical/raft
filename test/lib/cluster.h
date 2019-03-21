@@ -67,6 +67,48 @@
  */
 #define CLUSTER_LEADER raft_fixture_leader_index(&f->cluster)
 
+#define CLUSTER_GET(I) raft_fixture_get(&f->cluster, I)
+
+/**
+ * Step the cluster until a leader is elected or #MAX_MSECS have elapsed.
+ */
+#define CLUSTER_STEP_UNTIL_HAS_LEADER(MAX_MSECS) \
+    raft_fixture_step_until_has_leader(&f->cluster, MAX_MSECS)
+
+/**
+ * Step the cluster until there's no leader or #MAX_MSECS have elapsed.
+ */
+#define CLUSTER_STEP_UNTIL_HAS_NO_LEADER(MAX_MSECS) \
+    raft_fixture_step_until_has_no_leader(&f->cluster, MAX_MSECS)
+
+/**
+ * Step the cluster until all nodes have applied the given index or #MAX_MSECS
+ * have elapsed.
+ */
+#define CLUSTER_STEP_UNTIL_APPLIED(INDEX, MAX_MSECS) \
+    raft_fixture_step_until_applied(&f->cluster, INDEX, MAX_MSECS)
+
+/**
+ * Request to apply an FSM command to add the given value to x.
+ */
+#define CLUSTER_APPLY_ADD_X(REQ, VALUE, CB)                   \
+    {                                                         \
+        struct raft_buffer buf;                               \
+        struct raft *raft;                                    \
+        int rc;                                               \
+        munit_assert_int(CLUSTER_LEADER, !=, CLUSTER_N);      \
+        test_fsm_encode_add_x(VALUE, &buf);                   \
+        raft = raft_fixture_get(&f->cluster, CLUSTER_LEADER); \
+        rc = raft_apply(raft, REQ, &buf, 1, CB);              \
+        munit_assert_int(rc, ==, 0);                          \
+    }
+
+/**
+ * Return the last index applied on server I.
+ */
+#define CLUSTER_LAST_APPLIED(I) \
+    raft_last_applied(raft_fixture_get(&f->cluster, I))
+
 /**
  * Munit parameter defining after how many servers to run. Default is 3.
  */

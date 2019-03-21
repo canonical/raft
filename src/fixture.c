@@ -590,6 +590,18 @@ bool raft_fixture_step_until_has_leader(struct raft_fixture *f,
     return raft_fixture_step_until(f, has_leader, NULL, max_msecs);
 }
 
+static bool has_no_leader(struct raft_fixture *f, void *arg)
+{
+    (void)arg;
+    return f->leader_id == 0;
+}
+
+bool raft_fixture_step_until_has_no_leader(struct raft_fixture *f,
+                                           unsigned max_msecs)
+{
+    return raft_fixture_step_until(f, has_no_leader, NULL, max_msecs);
+}
+
 /* Enable/disable dropping outgoing messages of a certain type from all servers
  * except one. */
 static void drop_all_except(struct raft_fixture *f,
@@ -642,15 +654,10 @@ void raft_fixture_elect(struct raft_fixture *f, unsigned i)
      * elected, effectively preventing competition. */
     set_all_election_timeouts_except(f, ELECTION_TIMEOUT * 10, i);
 
-    raft_fixture_step_until(f, has_leader, NULL, ELECTION_TIMEOUT * 3);
+    raft_fixture_step_until_has_leader(f, ELECTION_TIMEOUT * 3);
     assert(f->leader_id == raft->id);
-    set_all_election_timeouts_except(f, ELECTION_TIMEOUT, i);
-}
 
-static bool has_no_leader(struct raft_fixture *f, void *arg)
-{
-    (void)arg;
-    return f->leader_id == 0;
+    set_all_election_timeouts_except(f, ELECTION_TIMEOUT, i);
 }
 
 void raft_fixture_depose(struct raft_fixture *f)
@@ -668,8 +675,9 @@ void raft_fixture_depose(struct raft_fixture *f)
      * will eventually step down. */
     drop_all_except(f, RAFT_IO_APPEND_ENTRIES_RESULT, true, leader_i);
 
-    raft_fixture_step_until(f, has_no_leader, NULL, ELECTION_TIMEOUT * 3);
+    raft_fixture_step_until_has_no_leader(f, ELECTION_TIMEOUT * 3);
     assert(f->leader_id == 0);
+
     drop_all_except(f, RAFT_IO_APPEND_ENTRIES_RESULT, false, leader_i);
     set_all_election_timeouts_except(f, ELECTION_TIMEOUT, leader_i);
 }
@@ -688,13 +696,11 @@ static bool has_applied_index(struct raft_fixture *f, void *arg)
     return n == f->n;
 }
 
-void raft_fixture_wait_applied(struct raft_fixture *f,
-                               raft_index index,
-                               unsigned max_msecs)
+bool raft_fixture_step_until_applied(struct raft_fixture *f,
+                                     raft_index index,
+                                     unsigned max_msecs)
 {
-    bool done;
-    done = raft_fixture_step_until(f, has_applied_index, &index, max_msecs);
-    assert(done);
+    return raft_fixture_step_until(f, has_applied_index, &index, max_msecs);
 }
 
 void raft_fixture_disconnect(struct raft_fixture *f, unsigned i, unsigned j)
