@@ -100,7 +100,6 @@ check_PROGRAMS += \
   integration-test
 
 test_lib_SOURCES = \
-  test/lib/cluster.c \
   test/lib/fault.c \
   test/lib/fs.c \
   test/lib/fsm.c \
