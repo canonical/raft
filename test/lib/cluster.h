@@ -1,61 +1,7 @@
-/**
- * Test implementation of a cluster of N servers, using an in-memory test
- * network to communicate.
- *
- * Out of the N servers, there are V voting servers, with V <= N.
- *
- * A monotonic global cluster clock is used to simulate network latency and time
- * elapsed on individual servers.
- *
- * Once the cluster loop starts running, at each iteration the following steps
- * are taken:
- *
- * 1. All pending I/O requests across all servers are flushed. This simulates
- *    either a successful disk write of log entries, or a successful network
- *    write of an RPC message (e.g. writev() returns successfully). A successful
- *    network write does not mean that the receiver immediately receives the
- *    message, it just means that any buffer allocated by the sender can be
- *    released (e.g. log entries). The network assigns a random latency to each
- *    RPC message, which will get delivered to the receiver after that amount of
- *    time elapses. If the sender and the receiver are currently disconnected,
- *    the RPC message is simply dropped.
- *
- * 2. All pending RPC messages across all servers are scanned and the one with
- *    the lowest latency expiration time is picked. All servers are scanned too,
- *    and the one with the lowest timer expiration time is picked. (either
- *    election timer or heartbeat timer, depending on the server state). The two
- *    times are compared and the lower one is picked, resulting in either an RPC
- *    message being delivered to the receiver or in a server tick. The global
- *    cluster time is advanced by the latency expiration time or by the raft
- *    timer expiration time, respectively. The latency timer of each RPC message
- *    is updated accordingly and the @raft_io_stub_advance() is invoked against
- *    the raft_io instance of each server, which in turn calls @tick.
- *
- * 3. The current cluster leader is detected (if any). When detecting the leader
- *    the Election Safety property is checked: no servers can be in leader state
- *    for the same term. The server in leader state with the highest term is
- *    considered the current cluster leader, as long as it's "stable", i.e. it
- *    has been acknowledged by all servers connected to it, and those servers
- *    form a majority (this means that no further leader change can happen,
- *    unless the network gets disrupted). If there is a stable leader and it has
- *    not changed with respect to the previous cluster iteration, the Leader
- *    Append-Only property is checked, by comparing its log with a copy of it
- *    that was taken during the previous iteration.
- *
- * 4. If there is a stable leader, its current log is copied, in order to be
- *    able to check the Leader Append-Only property at the next iteration.
- *
- * 5. If there is a stable leader, its commit index gets copied.
- *
- * Servers can be alive or dead. Network messages sent to dead servers are
- * dropped. Dead servers are not tick'ed in step 2.
- *
- * Any two servers can be connected or disconnected. Network messages sent
- * between disconnected servers are dropped.
- */
-
 #ifndef TEST_CLUSTER_H
 #define TEST_CLUSTER_H
+
+#include <stdlib.h>
 
 #include "../../include/raft.h"
 #include "../../include/raft/fixture.h"
@@ -63,6 +9,63 @@
 #include "fsm.h"
 #include "io.h"
 #include "munit.h"
+
+#define FIXTURE_CLUSTER                             \
+    struct raft_fsm fsms[RAFT_FIXTURE_MAX_SERVERS]; \
+    struct raft_fixture cluster;
+
+#define SETUP_CLUSTER(N)                                            \
+    {                                                               \
+        unsigned i;                                                 \
+        int rc;                                                     \
+        for (i = 0; i < N; i++) {                                   \
+            test_fsm_setup(NULL, &f->fsms[i]);                      \
+        }                                                           \
+        rc = raft_fixture_init(&f->cluster, N, f->fsms);            \
+        munit_assert_int(rc, ==, 0);                                \
+        raft_fixture_set_random(&f->cluster, munit_rand_int_range); \
+    }
+
+#define TEAR_DOWN_CLUSTER                    \
+    {                                        \
+        unsigned n = CLUSTER_N;              \
+        unsigned i;                          \
+        raft_fixture_close(&f->cluster);     \
+        for (i = 0; i < n; i++) {            \
+            test_fsm_tear_down(&f->fsms[i]); \
+        }                                    \
+    }
+
+#define CLUSTER_N raft_fixture_n(&f->cluster)
+
+#define CLUSTER_N_PARAM "cluster-n"
+#define CLUSTER_N_PARAM_GET \
+    (unsigned)atoi(munit_parameters_get(params, CLUSTER_N_PARAM))
+
+/**
+ * Bootstrap all servers in the cluster. All of them will be voting.
+ */
+#define CLUSTER_BOOTSTRAP                                    \
+    {                                                        \
+        int rc;                                              \
+        rc = raft_fixture_bootstrap(&f->cluster, CLUSTER_N); \
+        munit_assert_int(rc, ==, 0);                         \
+    }
+
+/**
+ * Start all servers in the test cluster.
+ */
+#define CLUSTER_START                         \
+    {                                         \
+        int rc;                               \
+        rc = raft_fixture_start(&f->cluster); \
+        munit_assert_int(rc, ==, 0);          \
+    }
+
+/**
+ * Index of the current leader, or CLUSTER_N if there's no leader.
+ */
+#define CLUSTER_LEADER raft_fixture_leader_index(&f->cluster)
 
 /**
  * Munit parameter defining after how many servers to run. Default is 3.

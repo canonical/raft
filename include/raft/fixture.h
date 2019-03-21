@@ -8,7 +8,7 @@
 
 #include "../raft.h"
 
-#define RAFT_FIXTURE_MAX_SERVERS 16
+#define RAFT_FIXTURE_MAX_SERVERS 8
 
 struct raft_fixture_server
 {
@@ -85,6 +85,12 @@ struct raft *raft_fixture_get(struct raft_fixture *f, unsigned i);
  * Return @true if the i'th server hasn't been killed.
  */
 bool raft_fixture_alive(struct raft_fixture *f, unsigned i);
+
+/**
+ * Return the index of the current leader, or the current number of servers if
+ * there's no leader.
+ */
+unsigned raft_fixture_leader_index(struct raft_fixture *f);
 
 /**
  * Drive the cluster so the i'th server gets elected as leader.
@@ -169,6 +175,12 @@ bool raft_fixture_step_until(struct raft_fixture *f,
                              bool (*stop)(struct raft_fixture *f, void *arg),
                              void *arg,
                              unsigned max_msecs);
+
+/**
+ * Step the cluster until a leader is elected, or @max_msecs have elapsed.
+ */
+bool raft_fixture_step_until_has_leader(struct raft_fixture *f,
+                                        unsigned max_msecs);
 
 /**
  * Return true if the servers with the given indexes are connected.

@@ -256,6 +256,14 @@ bool raft_fixture_alive(struct raft_fixture *f, unsigned i)
     return f->servers[i].alive;
 }
 
+unsigned raft_fixture_leader_index(struct raft_fixture *f)
+{
+    if (f->leader_id != 0) {
+        return f->leader_id - 1;
+    }
+    return f->n;
+}
+
 /* Flush any pending write to the disk and any pending message into the network
  * buffers (this will assign them a latency timer). */
 static void flush_io(struct raft_fixture *f)
@@ -570,6 +578,18 @@ bool raft_fixture_step_until(struct raft_fixture *f,
     return f->time - start < max_msecs;
 }
 
+static bool has_leader(struct raft_fixture *f, void *arg)
+{
+    (void)arg;
+    return f->leader_id != 0;
+}
+
+bool raft_fixture_step_until_has_leader(struct raft_fixture *f,
+                                        unsigned max_msecs)
+{
+    return raft_fixture_step_until(f, has_leader, NULL, max_msecs);
+}
+
 /* Enable/disable dropping outgoing messages of a certain type from all servers
  * except one. */
 static void drop_all_except(struct raft_fixture *f,
@@ -600,12 +620,6 @@ static void set_all_election_timeouts_except(struct raft_fixture *f,
         }
         raft_set_election_timeout(raft, msecs);
     }
-}
-
-static bool has_leader(struct raft_fixture *f, void *arg)
-{
-    (void)arg;
-    return f->leader_id != 0;
 }
 
 void raft_fixture_elect(struct raft_fixture *f, unsigned i)

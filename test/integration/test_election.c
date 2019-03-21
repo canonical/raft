@@ -2,115 +2,117 @@
 
 #include "../lib/cluster.h"
 #include "../lib/heap.h"
+#include "../lib/runner.h"
 
-/**
- * Helpers
- */
+TEST_MODULE(election);
+
+/******************************************************************************
+ *
+ * Fixture
+ *
+ *****************************************************************************/
 
 struct fixture
 {
-    struct raft_heap heap;
-    struct test_cluster cluster;
+    FIXTURE_HEAP;
+    FIXTURE_CLUSTER;
 };
 
-static char *servers[] = {"3", "5", "7", NULL};
+static char *n[] = {"3", "5", "7", NULL};
 
 static MunitParameterEnum params[] = {
-    {TEST_CLUSTER_SERVERS, servers},
+    {CLUSTER_N_PARAM, n},
     {NULL, NULL},
 };
 
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-
     (void)user_data;
-
-    test_heap_setup(params, &f->heap);
-    test_cluster_setup(params, &f->cluster);
-
+    SETUP_HEAP;
+    SETUP_CLUSTER(CLUSTER_N_PARAM_GET);
+    CLUSTER_BOOTSTRAP;
+    CLUSTER_START;
     return f;
 }
 
 static void tear_down(void *data)
 {
     struct fixture *f = data;
-
-    test_cluster_tear_down(&f->cluster);
-    test_heap_tear_down(&f->heap);
-
+    TEAR_DOWN_CLUSTER;
+    TEAR_DOWN_HEAP;
     free(f);
 }
 
-/**
- * Election tests
- */
+/******************************************************************************
+ *
+ * Helper macros
+ *
+ *****************************************************************************/
+
+#define STEP_UNTIL_HAS_LEADER(MAX_MSECS) \
+    raft_fixture_step_until_has_leader(&f->cluster, MAX_MSECS)
+#define KILL(I) raft_fixture_kill(&f->cluster, I);
+#define KILL_LEADER KILL(CLUSTER_LEADER)
+#define KILL_MAJORITY                                      \
+    {                                                      \
+        size_t i;                                          \
+        size_t n;                                          \
+        for (i = 0, n = 0; n < (CLUSTER_N / 2) + 1; i++) { \
+            KILL(i)                                        \
+            n++;                                           \
+        }                                                  \
+    }
+
+/******************************************************************************
+ *
+ * Assertions
+ *
+ *****************************************************************************/
+
+#define ASSERT_HAS_LEADER munit_assert_int(CLUSTER_LEADER, <, CLUSTER_N)
+#define ASSERT_HAS_NO_LEADER munit_assert_int(CLUSTER_LEADER, ==, CLUSTER_N)
+
+/******************************************************************************
+ *
+ * Tests
+ *
+ *****************************************************************************/
+
+TEST_SUITE(run);
+TEST_SETUP(run, setup);
+TEST_TEAR_DOWN(run, tear_down);
 
 /* A leader is eventually elected */
-static MunitResult test_leader_elected(const MunitParameter params[],
-                                       void *data)
+TEST_CASE(run, win, params)
 {
     struct fixture *f = data;
-    int rv;
-
     (void)params;
-
-    rv = test_cluster_run_until(&f->cluster, test_cluster_has_leader, 10000);
-    munit_assert_int(rv, ==, 0);
-
+    STEP_UNTIL_HAS_LEADER(10000);
+    ASSERT_HAS_LEADER;
     return MUNIT_OK;
 }
 
 /* A new leader is elected if the current one dies. */
-static MunitResult test_leader_change(const MunitParameter params[], void *data)
+TEST_CASE(run, change, params)
 {
     struct fixture *f = data;
-    int rv;
-
     (void)params;
-
-    rv = test_cluster_run_until(&f->cluster, test_cluster_has_leader, 10000);
-    munit_assert_int(rv, ==, 0);
-
-    test_cluster_kill(&f->cluster, test_cluster_leader(&f->cluster));
-
-    rv = test_cluster_run_until(&f->cluster, test_cluster_has_no_leader, 10000);
-    munit_assert_int(rv, ==, 0);
-
-    rv = test_cluster_run_until(&f->cluster, test_cluster_has_leader, 10000);
-    munit_assert_int(rv, ==, 0);
-
+    STEP_UNTIL_HAS_LEADER(10000);
+    ASSERT_HAS_LEADER;
+    KILL_LEADER;
+    STEP_UNTIL_HAS_LEADER(10000);
+    ASSERT_HAS_LEADER;
     return MUNIT_OK;
 }
 
 /* If no majority of servers is online, no leader is elected. */
-static MunitResult test_no_quorum(const MunitParameter params[], void *data)
+TEST_CASE(run, no_quorum, params)
 {
     struct fixture *f = data;
-    int rv;
-
     (void)params;
-
-    test_cluster_kill_majority(&f->cluster);
-
-    rv = test_cluster_run_until(&f->cluster, test_cluster_has_leader, 30000);
-    munit_assert_int(rv, !=, 0);
-
+    KILL_MAJORITY;
+    STEP_UNTIL_HAS_LEADER(30000);
+    ASSERT_HAS_NO_LEADER;
     return MUNIT_OK;
 }
-
-static MunitTest election_tests[] = {
-    {"/leader-elected", test_leader_elected, setup, tear_down, 0, params},
-    {"/leader-change", test_leader_change, setup, tear_down, 0, params},
-    {"/no-quorum", test_no_quorum, setup, tear_down, 0, params},
-    {NULL, NULL, NULL, NULL, 0, NULL},
-};
-
-/**
- * Test suite
- */
-
-MunitSuite raft_election_suites[] = {
-    {"", election_tests, NULL, 1, 0},
-    {NULL, NULL, NULL, 0, 0},
-};
