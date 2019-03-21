@@ -45,36 +45,6 @@ static void close_server(struct raft_fixture_server *s)
     raft_io_stub_close(&s->io);
 }
 
-static int setup_server(unsigned i,
-                        struct raft_fixture_server *s,
-                        struct raft_fsm *fsm,
-                        int (*random)(int, int))
-{
-    int rc;
-    s->alive = true;
-    s->id = i + 1;
-    sprintf(s->address, "%u", s->id);
-    rc = raft_io_stub_init(&s->io);
-    if (rc != 0) {
-        return rc;
-    }
-    raft_io_stub_set_random(&s->io, random);
-    raft_io_stub_set_latency(&s->io, 5, 50);
-    rc = raft_init(&s->raft, &s->io, fsm, s->id, s->address);
-    if (rc != 0) {
-        return rc;
-    }
-    raft_set_election_timeout(&s->raft, ELECTION_TIMEOUT);
-    raft_set_heartbeat_timeout(&s->raft, HEARTBEAT_TIMEOUT);
-    return 0;
-}
-
-static void tear_down_server(struct raft_fixture_server *s)
-{
-    raft_close(&s->raft, NULL);
-    raft_io_stub_close(&s->io);
-}
-
 /* Connect the server with the given index to all others */
 static void connect_to_all(struct raft_fixture *f, unsigned i)
 {
@@ -170,73 +140,6 @@ int raft_fixture_start(struct raft_fixture *f)
         }
     }
     return 0;
-}
-
-int raft_fixture_setup(struct raft_fixture *f,
-                       unsigned n,
-                       unsigned n_voting,
-                       struct raft_fsm *fsms,
-                       int (*random)(int, int))
-{
-    struct raft_configuration configuration;
-    unsigned i;
-    int rc;
-    assert(n >= 1);
-    assert(n_voting >= 1);
-    assert(n_voting <= n);
-
-    f->time = 0;
-    f->n = n;
-    f->random = random;
-
-    /* Setup all servers */
-    raft_configuration_init(&configuration);
-    for (i = 0; i < n; i++) {
-        struct raft_fixture_server *s = &f->servers[i];
-        bool voting = i < n_voting;
-        rc = setup_server(i, s, &fsms[i], random);
-        if (rc != 0) {
-            return rc;
-        }
-        rc = raft_configuration_add(&configuration, s->id, s->address, voting);
-        if (rc != 0) {
-            return rc;
-        }
-    }
-
-    /* Connect all servers to each another */
-    for (i = 0; i < f->n; i++) {
-        connect_to_all(f, i);
-    }
-
-    /* Bootstrap and start */
-    for (i = 0; i < f->n; i++) {
-        struct raft_fixture_server *s = &f->servers[i];
-        rc = raft_bootstrap(&s->raft, &configuration);
-        if (rc != 0) {
-            return rc;
-        }
-        rc = raft_start(&s->raft);
-        if (rc != 0) {
-            return rc;
-        }
-    }
-
-    raft_configuration_close(&configuration);
-
-    log__init(&f->log);
-    f->commit_index = 1; /* The initial configuration is committed. */
-
-    return 0;
-}
-
-void raft_fixture_tear_down(struct raft_fixture *f)
-{
-    unsigned i;
-    for (i = 0; i < f->n; i++) {
-        tear_down_server(&f->servers[i]);
-    }
-    log__close(&f->log);
 }
 
 unsigned raft_fixture_n(struct raft_fixture *f)
@@ -764,10 +667,11 @@ int raft_fixture_add_server(struct raft_fixture *f, struct raft_fsm *fsm)
     f->n++;
     s = &f->servers[i];
 
-    rc = setup_server(i, s, fsm, f->random);
+    rc = init_server(i, s, fsm);
     if (rc != 0) {
         return rc;
     }
+    raft_io_stub_set_random(&s->io, f->random);
 
     connect_to_all(f, i);
     for (j = 0; j < f->n; j++) {
