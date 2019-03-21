@@ -614,7 +614,7 @@ void raft_fixture_disconnect(struct raft_fixture *f, unsigned i, unsigned j)
     raft_io_stub_disconnect(io2, io1);
 }
 
-void raft_fixture_disconnect_from_all(struct raft_fixture *f, unsigned i)
+static void disconnect_from_all(struct raft_fixture *f, unsigned i)
 {
     unsigned j;
     for (j = 0; j < f->n; j++) {
@@ -640,20 +640,9 @@ void raft_fixture_reconnect(struct raft_fixture *f, unsigned i, unsigned j)
     raft_io_stub_reconnect(io2, io1);
 }
 
-void raft_fixture_reconnect_to_all(struct raft_fixture *f, unsigned i)
-{
-    unsigned j;
-    for (j = 0; i < f->n; j++) {
-        if (j == i) {
-            continue;
-        }
-        raft_fixture_reconnect(f, i, j);
-    }
-}
-
 void raft_fixture_kill(struct raft_fixture *f, unsigned i)
 {
-    raft_fixture_disconnect_from_all(f, i);
+    disconnect_from_all(f, i);
     f->servers[i].alive = false;
 }
 

@@ -199,19 +199,9 @@ bool raft_fixture_connected(struct raft_fixture *f, unsigned i, unsigned j);
 void raft_fixture_disconnect(struct raft_fixture *f, unsigned i, unsigned j);
 
 /**
- * Disconnect the server with given index from all the others.
- */
-void raft_fixture_disconnect_from_all(struct raft_fixture *f, unsigned i);
-
-/**
  * Reconnect the servers with given indexes to one another.
  */
 void raft_fixture_reconnect(struct raft_fixture *f, unsigned i, unsigned j);
-
-/**
- * Reconnect the server with the given index to all other servers.
- */
-void raft_fixture_reconnect_to_all(struct raft_fixture *f, unsigned i);
 
 /**
  * Kill the server with the given index. The server won't receive any message
