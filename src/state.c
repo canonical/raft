@@ -276,6 +276,8 @@ err:
 int raft_state__convert_to_leader(struct raft *r)
 {
     size_t i;
+    raft_index last_index;
+    raft_term last_term;
     int rv;
 
     assert(r != NULL);
@@ -295,12 +297,14 @@ int raft_state__convert_to_leader(struct raft *r)
         goto err;
     }
 
+    local_last_index_and_term(r, &last_index, &last_term);
+
     /* Initialize the replication state for each server. We optimistically
      * assume that servers are up-to-date and back track if turns out not to be
      * so (TODO: include reference to raft paper). */
     for (i = 0; i < r->configuration.n; i++) {
         struct raft_replication *replication = &r->leader_state.replication[i];
-        replication->next_index = log__last_index(&r->log) + 1;
+        replication->next_index = last_index + 1;
         replication->match_index = 0;
         /* TODO: we should keep a last_contact array which is independent from
          * the replication array, and keep it up-to-date.  */

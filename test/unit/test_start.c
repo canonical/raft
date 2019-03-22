@@ -6,23 +6,6 @@ TEST_MODULE(start);
 
 /******************************************************************************
  *
- * Helper macros
- *
- *****************************************************************************/
-
-/* Run the first election and then apply an entry */
-#define MAKE_PROGRESS                                                    \
-    {                                                                    \
-        struct raft_apply *req = munit_malloc(sizeof *req);              \
-        CLUSTER_STEP_UNTIL_HAS_LEADER(3000);                             \
-        CLUSTER_APPLY_ADD_X(req, 1, NULL);                               \
-        CLUSTER_STEP_UNTIL_APPLIED(                                      \
-            CLUSTER_LEADER, CLUSTER_LAST_APPLIED(CLUSTER_LEADER), 3000); \
-        free(req);                                                       \
-    }
-
-/******************************************************************************
- *
  * Start with a snapshot present on disk.
  *
  *****************************************************************************/
@@ -65,7 +48,6 @@ TEST_CASE(snapshot, no_entries, NULL)
 {
     struct snapshot_fixture *f = data;
     (void)params;
-    return MUNIT_SKIP;
     CLUSTER_SET_SNAPSHOT(0 /*                                               */,
                          6 /* last index                                    */,
                          2 /* last term                                     */,
@@ -74,6 +56,6 @@ TEST_CASE(snapshot, no_entries, NULL)
                          7 /* y                                             */);
     CLUSTER_SET_TERM(0, 2);
     CLUSTER_START;
-    MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
     return MUNIT_OK;
 }

@@ -224,6 +224,24 @@
     }
 
 /**
+ * Ensure that the cluster can make progress from the current state.
+ *
+ * - If no leader is present, wait for one to be elected.
+ * - Submit a request to apply a new FSM command and wait for it to complete.
+ */
+#define CLUSTER_MAKE_PROGRESS                                                \
+    {                                                                        \
+        struct raft_apply *req = munit_malloc(sizeof *req);                  \
+        if (!(CLUSTER_HAS_LEADER)) {                                         \
+            CLUSTER_STEP_UNTIL_HAS_LEADER(3000);                             \
+        }                                                                    \
+        CLUSTER_APPLY_ADD_X(req, 1, NULL);                                   \
+        CLUSTER_STEP_UNTIL_APPLIED(                                          \
+            CLUSTER_LEADER, CLUSTER_LAST_APPLIED(CLUSTER_LEADER) + 1, 3000); \
+        free(req);                                                           \
+    }
+
+/**
  * Elect the I'th server.
  */
 #define CLUSTER_ELECT(I) raft_fixture_elect(&f->fixture, I)
