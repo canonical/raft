@@ -722,6 +722,12 @@ void raft_fixture_set_random(struct raft_fixture *f,
     raft_io_stub_set_random(&s->io, random);
 }
 
+void raft_fixture_set_term(struct raft_fixture *f, unsigned i, raft_term term)
+{
+    struct raft_fixture_server *s = &f->servers[i];
+    raft_io_stub_set_term(&s->io, term);
+}
+
 void raft_fixture_set_snapshot(struct raft_fixture *f,
                                unsigned i,
                                struct raft_snapshot *snapshot)

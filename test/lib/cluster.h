@@ -211,6 +211,9 @@
         munit_assert_int(rc, ==, 0);                                 \
     }
 
+/**
+ * Promote the server that was added last.
+ */
 #define CLUSTER_PROMOTE                                      \
     {                                                        \
         unsigned id;                                         \
@@ -219,6 +222,17 @@
         rc = raft_promote(CLUSTER_RAFT(CLUSTER_LEADER), id); \
         munit_assert_int(rc, ==, 0);                         \
     }
+
+/**
+ * Elect the I'th server.
+ */
+#define CLUSTER_ELECT(I) raft_fixture_elect(&f->fixture, I)
+
+/**
+ * Set the term persisted on the I'th server. This must be called before
+ * starting the cluster.
+ */
+#define CLUSTER_SET_TERM(I, TERM) raft_fixture_set_term(&f->cluster, I, TERM)
 
 /**
  * Set the snapshot persisted on the I'th server. This must be called before

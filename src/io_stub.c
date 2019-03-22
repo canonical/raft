@@ -856,6 +856,12 @@ void raft_io_stub_set_latency(struct raft_io *io, unsigned min, unsigned max)
     s->max_latency = max;
 }
 
+void raft_io_stub_set_term(struct raft_io *io, raft_term term) {
+    struct io_stub *s;
+    s = io->impl;
+    s->term = term;
+}
+
 void raft_io_stub_set_snapshot(struct raft_io *io,
                                struct raft_snapshot *snapshot)
 {

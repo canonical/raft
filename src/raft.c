@@ -13,9 +13,9 @@
 #define DEFAULT_HEARTBEAT_TIMEOUT 100 /* One tenth of a second */
 #define DEFAULT_SNAPSHOT_THRESHOLD 1024
 
-/* Set to 1 to enable debug logging. */
+/* Set to 1 to enable tracing. */
 #if 0
-#define tracef(MSG, ...) tracef(r->io, MSG, __VA_ARGS__)
+#define tracef(MSG, ...) debugf(r->io, MSG, ##__VA_ARGS__)
 #else
 #define tracef(MSG, ...)
 #endif

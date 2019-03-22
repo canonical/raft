@@ -247,6 +247,11 @@ void raft_fixture_set_latency(struct raft_fixture *f,
                               unsigned max);
 
 /**
+ * Set the persisted term of the @i'th server.
+ */
+void raft_fixture_set_term(struct raft_fixture *f, unsigned i, raft_term term);
+
+/**
  * Set the persisted snapshot of the @i'th server.
  */
 void raft_fixture_set_snapshot(struct raft_fixture *f,

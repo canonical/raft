@@ -21,6 +21,36 @@ static void raft_election__send_request_vote_cb(struct raft_io_send *req,
     raft_free(req);
 }
 
+/* Figure out the local last index and term, taking snapshots into account */
+void local_last_index_and_term(struct raft *r,
+                                      raft_index *index,
+                                      raft_term *term)
+{
+    *index = log__last_index(&r->log);
+    *term = log__last_term(&r->log);
+
+    assert((*index == 0 && *term == 0) || (*index > 0 && *term > 0));
+
+    /* If we have snapshot, there are two possible situations:
+     *
+     * 1) The in-memory log is empty. In this case use the snapshot's last index
+     *   and last term as last local index and term.
+     *
+     * 2) The in-memory log is not empty. In this case check that the last index
+     *    in the in-memory log is greater than the snapshot last index.
+     */
+    if (r->snapshot.term != 0) {
+        assert(r->snapshot.index != 0);
+        if (*index == 0) {
+            *index = r->snapshot.index;
+            *term = r->snapshot.term;
+        } else {
+            assert(r->snapshot.index <= *index);
+            assert(r->snapshot.term <= *term);
+        }
+    }
+}
+
 /**
  * Send a RequestVote RPC to the given server.
  */
@@ -43,8 +73,10 @@ static int raft_election__send_request_vote(struct raft *r,
     message.type = RAFT_IO_REQUEST_VOTE;
     message.request_vote.term = r->current_term;
     message.request_vote.candidate_id = r->id;
-    message.request_vote.last_log_index = log__last_index(&r->log);
-    message.request_vote.last_log_term = log__last_term(&r->log);
+
+    local_last_index_and_term(r, &message.request_vote.last_log_index,
+                              &message.request_vote.last_log_term);
+
     message.server_id = server->id;
     message.server_address = server->address;
 
@@ -167,16 +199,13 @@ int raft_election__vote(struct raft *r,
         return 0;
     }
 
-    local_last_log_index = log__last_index(&r->log);
+    local_last_index_and_term(r, &local_last_log_index, &local_last_log_term);
 
     /* Our log is definitely not more up-to-date if it's empty! */
     if (local_last_log_index == 0) {
         debugf(r->io, "local log is empty -> granting vote");
         goto grant_vote;
     }
-
-    /* TODO: account for snapshots */
-    local_last_log_term = log__last_term(&r->log);
 
     if (args->last_log_term < local_last_log_term) {
         /* The requesting server has last entry's log term lower than ours. */
