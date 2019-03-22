@@ -710,8 +710,8 @@ int raft_io_stub_init(struct raft_io *io)
     s->time = 0;
     s->term = 0;
     s->voted_for = 0;
-    s->entries = NULL;
     s->snapshot = NULL;
+    s->entries = NULL;
     s->n = 0;
 
     RAFT__QUEUE_INIT(&s->requests);
@@ -854,6 +854,30 @@ void raft_io_stub_set_latency(struct raft_io *io, unsigned min, unsigned max)
     assert(min <= max);
     s->min_latency = min;
     s->max_latency = max;
+}
+
+void raft_io_stub_set_term(struct raft_io *io, raft_term term) {
+    struct io_stub *s;
+    s = io->impl;
+    s->term = term;
+}
+
+void raft_io_stub_set_snapshot(struct raft_io *io,
+                               struct raft_snapshot *snapshot)
+{
+    struct io_stub *s;
+    s = io->impl;
+    s->snapshot = snapshot;
+}
+
+void raft_io_stub_set_entries(struct raft_io *io,
+                              struct raft_entry *entries,
+                              unsigned n)
+{
+    struct io_stub *s;
+    s = io->impl;
+    s->entries = entries;
+    s->n = n;
 }
 
 /**

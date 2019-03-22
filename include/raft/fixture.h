@@ -42,7 +42,6 @@ struct raft_fixture
     struct raft_log log;     /* Copy of leader's log */
     raft_index commit_index; /* Current commit index on leader */
     struct raft_fixture_server servers[RAFT_FIXTURE_MAX_SERVERS];
-    int (*random)(int, int);
 };
 
 /**
@@ -61,10 +60,18 @@ int raft_fixture_init(struct raft_fixture *f,
 void raft_fixture_close(struct raft_fixture *f);
 
 /**
- * Bootstrap the initial configuration of each server in the cluster. The first
- * @n_voting servers will be voting. There must be at least one voting server.
+ * Generate a configuration object containing all servers in the cluster. The
+ * first @n_voting servers will be voting ones.
  */
-int raft_fixture_bootstrap(struct raft_fixture *f, unsigned n_voting);
+int raft_fixture_configuration(struct raft_fixture *f,
+                               unsigned n_voting,
+                               struct raft_configuration *configuration);
+
+/**
+ * Bootstrap all servers in the cluster with the given configuration.
+ */
+int raft_fixture_bootstrap(struct raft_fixture *f,
+                           struct raft_configuration *configuration);
 
 /**
  * Start all servers in the fixture.
@@ -169,6 +176,11 @@ bool raft_fixture_step_until(struct raft_fixture *f,
                              unsigned max_msecs);
 
 /**
+ * Step the cluster until @msecs have elapsed.
+ */
+void raft_fixture_step_until_elapsed(struct raft_fixture *f, unsigned msecs);
+
+/**
  * Step the cluster until a leader is elected, or @max_msecs have elapsed.
  */
 bool raft_fixture_step_until_has_leader(struct raft_fixture *f,
@@ -182,10 +194,12 @@ bool raft_fixture_step_until_has_no_leader(struct raft_fixture *f,
                                            unsigned max_msecs);
 
 /**
- * Step the cluster until all servers have applied the entry at the given index,
- * or @max_msecs have elapsed.
+ * Step the cluster until the @i'th server has applied the entry at the given
+ * index, or @max_msecs have elapsed. If @i equals the number of servers, then
+ * step until all servers have applied the given entry.
  */
 bool raft_fixture_step_until_applied(struct raft_fixture *f,
+                                     unsigned i,
                                      raft_index index,
                                      unsigned max_msecs);
 /**
@@ -199,19 +213,9 @@ bool raft_fixture_connected(struct raft_fixture *f, unsigned i, unsigned j);
 void raft_fixture_disconnect(struct raft_fixture *f, unsigned i, unsigned j);
 
 /**
- * Disconnect the server with given index from all the others.
- */
-void raft_fixture_disconnect_from_all(struct raft_fixture *f, unsigned i);
-
-/**
  * Reconnect the servers with given indexes to one another.
  */
 void raft_fixture_reconnect(struct raft_fixture *f, unsigned i, unsigned j);
-
-/**
- * Reconnect the server with the given index to all other servers.
- */
-void raft_fixture_reconnect_to_all(struct raft_fixture *f, unsigned i);
 
 /**
  * Kill the server with the given index. The server won't receive any message
@@ -222,38 +226,44 @@ void raft_fixture_kill(struct raft_fixture *f, unsigned i);
 /**
  * Add a new empty server to the cluster and connect it to all others.
  */
-int raft_fixture_add_server(struct raft_fixture *f, struct raft_fsm *fsm);
+int raft_fixture_grow(struct raft_fixture *f, struct raft_fsm *fsm);
+
+/**
+ * Set the function that will be used to generate random values for the @i'th
+ * server, such as the randomized election timeout and randomized network
+ * latency for individual RPC messages sent by the server.
+ */
+void raft_fixture_set_random(struct raft_fixture *f,
+                             unsigned i,
+                             int (*random)(int, int));
 
 /**
  * Set the network latency in milliseconds. Each RPC message will be assigned a
  * random latency value within the given range.
  */
 void raft_fixture_set_latency(struct raft_fixture *f,
+                              unsigned i,
                               unsigned min,
                               unsigned max);
 
 /**
- * Set the function to use to to generate random values within a range. The raft
- * servers will use it to generate a random election timeout, and the fixture
- * itself will use it to assign a random network latency to RPC message.
+ * Set the persisted term of the @i'th server.
  */
-void raft_fixture_set_random(struct raft_fixture *f, int (*random)(int, int));
+void raft_fixture_set_term(struct raft_fixture *f, unsigned i, raft_term term);
 
 /**
- * Setup a raft cluster fixture with @n servers, the first @n_voting of which
- * are voting servers. Each server will use an in-memory @raft_io implementation
- * and one of the given @fsms. The @random function can be used in order to be
- * able to reproduce particular test runs.
+ * Set the persisted snapshot of the @i'th server.
  */
-int raft_fixture_setup(struct raft_fixture *f,
-                       unsigned n,
-                       unsigned n_voting,
-                       struct raft_fsm *fsms,
-                       int (*random)(int, int));
+void raft_fixture_set_snapshot(struct raft_fixture *f,
+                               unsigned i,
+                               struct raft_snapshot *snapshot);
 
 /**
- * Release any memory used by the given raft cluster fixture.
+ * Set the persisted entries of the @i'th server.
  */
-void raft_fixture_tear_down(struct raft_fixture *f);
+void raft_fixture_set_entries(struct raft_fixture *f,
+                              unsigned i,
+                              struct raft_entry *entries,
+                              unsigned n);
 
 #endif /* RAFT_FAKE_H */

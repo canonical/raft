@@ -1,5 +1,4 @@
 #include "../lib/cluster.h"
-#include "../lib/heap.h"
 #include "../lib/runner.h"
 
 TEST_MODULE(replication);
@@ -12,7 +11,6 @@ TEST_MODULE(replication);
 
 struct fixture
 {
-    FIXTURE_HEAP;
     FIXTURE_CLUSTER;
 };
 
@@ -27,7 +25,6 @@ static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
-    SETUP_HEAP;
     SETUP_CLUSTER(CLUSTER_N_PARAM_GET);
     CLUSTER_BOOTSTRAP;
     CLUSTER_START;
@@ -39,7 +36,6 @@ static void tear_down(void *data)
 {
     struct fixture *f = data;
     TEAR_DOWN_CLUSTER;
-    TEAR_DOWN_HEAP;
     free(f);
 }
 
@@ -50,21 +46,6 @@ static void tear_down(void *data)
  *****************************************************************************/
 
 #define APPLY_ADD_ONE(REQ) CLUSTER_APPLY_ADD_X(REQ, 1, NULL);
-
-#define STEP_UNTIL_APPLIED(INDEX, MSECS) \
-    CLUSTER_STEP_UNTIL_APPLIED(INDEX, MSECS);
-
-#define KILL(I) raft_fixture_kill(&f->cluster, I);
-#define KILL_LEADER KILL(CLUSTER_LEADER)
-#define KILL_MAJORITY                                      \
-    {                                                      \
-        size_t i;                                          \
-        size_t n;                                          \
-        for (i = 0, n = 0; n < (CLUSTER_N / 2) + 1; i++) { \
-            KILL(i)                                        \
-            n++;                                           \
-        }                                                  \
-    }
 
 /******************************************************************************
  *
@@ -83,7 +64,7 @@ TEST_CASE(entries, append, params)
     struct raft_apply *req = munit_malloc(sizeof *req);
     (void)params;
     APPLY_ADD_ONE(req);
-    STEP_UNTIL_APPLIED(2, 2000);
+    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_N, 2, 2000);
     free(req);
     return MUNIT_OK;
 }
@@ -99,20 +80,14 @@ TEST_CASE(entries, availability, params)
     (void)params;
 
     APPLY_ADD_ONE(req1);
-    STEP_UNTIL_APPLIED(2, 2000);
+    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_N, 2, 2000);
 
-    munit_assert_int(CLUSTER_LAST_APPLIED(0), ==, 2);
-    munit_assert_int(CLUSTER_LAST_APPLIED(1), ==, 2);
-    munit_assert_int(CLUSTER_LAST_APPLIED(2), ==, 2);
-
-    KILL_LEADER;
+    CLUSTER_KILL_LEADER;
     CLUSTER_STEP_UNTIL_HAS_NO_LEADER(10000);
     CLUSTER_STEP_UNTIL_HAS_LEADER(10000);
 
     APPLY_ADD_ONE(req2);
-    STEP_UNTIL_APPLIED(3, 2000);
-
-    munit_assert_int(CLUSTER_LAST_APPLIED(CLUSTER_LEADER), ==, 3);
+    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_LEADER, 3, 2000);
 
     free(req1);
     free(req2);
@@ -136,9 +111,9 @@ TEST_CASE(entries, no_quorum, params)
     (void)params;
 
     CLUSTER_APPLY_ADD_X(req, 1, apply_cb);
-    KILL_MAJORITY;
+    CLUSTER_KILL_MAJORITY;
 
-    STEP_UNTIL_APPLIED(2, 10000);
+    CLUSTER_STEP_UNTIL_ELAPSED(10000);
 
     for (i = 0; i < CLUSTER_N; i++) {
         munit_assert_int(CLUSTER_LAST_APPLIED(i), ==, 1);
@@ -164,7 +139,7 @@ TEST_CASE(entries, partitioned, params)
     /* Disconnect the leader from a majority of servers */
     n = 0;
     for (i = 0; n < (CLUSTER_N / 2) + 1; i++) {
-        struct raft *raft = CLUSTER_GET(i);
+        struct raft *raft = CLUSTER_RAFT(i);
         if (raft->id == leader_id) {
             continue;
         }
@@ -179,11 +154,11 @@ TEST_CASE(entries, partitioned, params)
     CLUSTER_STEP_UNTIL_HAS_NO_LEADER(10000);
 
     /* The entry does not get committed. */
-    CLUSTER_STEP_UNTIL_APPLIED(2, 5000);
+    CLUSTER_STEP_UNTIL_ELAPSED(5000);
 
     /* Reconnect the old leader */
     for (i = 0; i < CLUSTER_N; i++) {
-        struct raft *raft = CLUSTER_GET(i);
+        struct raft *raft = CLUSTER_RAFT(i);
         if (raft->id == leader_id) {
             continue;
         }
@@ -192,13 +167,13 @@ TEST_CASE(entries, partitioned, params)
 
     /* FIXME: wait a bit more otherwise test_cluster_has_leader would return
      * immediately. */
-    CLUSTER_STEP_UNTIL_APPLIED(2, 100);
+    CLUSTER_STEP_UNTIL_ELAPSED(100);
 
     CLUSTER_STEP_UNTIL_HAS_LEADER(10000);
 
     /* Re-try now to append the entry. */
     CLUSTER_APPLY_ADD_X(req2, 1, apply_cb);
-    CLUSTER_STEP_UNTIL_APPLIED(2, 10000);
+    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_LEADER, 2, 10000);
 
     return MUNIT_OK;
 }

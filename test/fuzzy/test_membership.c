@@ -1,5 +1,4 @@
 #include "../lib/cluster.h"
-#include "../lib/heap.h"
 #include "../lib/runner.h"
 
 TEST_MODULE(membership);
@@ -12,7 +11,6 @@ TEST_MODULE(membership);
 
 struct fixture
 {
-    FIXTURE_HEAP;
     FIXTURE_CLUSTER;
 };
 
@@ -27,7 +25,6 @@ static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
-    SETUP_HEAP;
     SETUP_CLUSTER(CLUSTER_N_PARAM_GET);
     CLUSTER_BOOTSTRAP;
     CLUSTER_START;
@@ -39,15 +36,8 @@ static void tear_down(void *data)
 {
     struct fixture *f = data;
     TEAR_DOWN_CLUSTER;
-    TEAR_DOWN_HEAP;
     free(f);
 }
-
-/******************************************************************************
- *
- * Helper macros
- *
- *****************************************************************************/
 
 /******************************************************************************
  *
@@ -68,9 +58,9 @@ TEST_CASE(add, non_voting, params)
     (void)params;
 
     CLUSTER_ADD;
-    CLUSTER_STEP_UNTIL_APPLIED(2, 2000);
+    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_N, 2, 2000);
 
-    raft = CLUSTER_GET(CLUSTER_LEADER);
+    raft = CLUSTER_RAFT(CLUSTER_LEADER);
 
     server = &raft->configuration.servers[CLUSTER_N - 1];
     munit_assert_int(server->id, ==, CLUSTER_N);
@@ -87,14 +77,14 @@ TEST_CASE(add, voting, params)
     (void)params;
 
     CLUSTER_ADD;
-    CLUSTER_STEP_UNTIL_APPLIED(2, 2000);
+    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_N, 2, 2000);
 
     /* Then promote it. */
     CLUSTER_PROMOTE;
 
-    CLUSTER_STEP_UNTIL_APPLIED(3, 2000);
+    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_N, 3, 2000);
 
-    raft = CLUSTER_GET(CLUSTER_LEADER);
+    raft = CLUSTER_RAFT(CLUSTER_LEADER);
 
     server = &raft->configuration.servers[CLUSTER_N - 1];
     munit_assert_true(server->voting);
@@ -114,12 +104,12 @@ TEST_CASE(remove, voting, params)
 
     (void)params;
 
-    raft = CLUSTER_GET(CLUSTER_LEADER);
+    raft = CLUSTER_RAFT(CLUSTER_LEADER);
 
     rv = raft_remove_server(raft, CLUSTER_LEADER % CLUSTER_N + 1);
     munit_assert_int(rv, ==, 0);
 
-    CLUSTER_STEP_UNTIL_APPLIED(2, 2000);
+    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_LEADER, 2, 2000);
 
     munit_assert_int(raft->configuration.n, ==, CLUSTER_N - 1);
 

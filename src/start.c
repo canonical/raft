@@ -10,6 +10,13 @@
 #include "state.h"
 #include "tick.h"
 
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(MSG, ...) debugf(r->io, "start: " MSG, ##__VA_ARGS__)
+#else
+#define tracef(MSG, ...)
+#endif
+
 /* Restore the most recent configuration. */
 static int restore_most_recent_configuration(struct raft *r,
                                              struct raft_entry *entry,
@@ -59,7 +66,7 @@ static int restore_entries(struct raft *r, struct raft_entry *entries, size_t n)
     raft_free(entries);
     return 0;
 
- err:
+err:
     if (log__n_entries(&r->log) > 0) {
         log__discard(&r->log, log__first_index(&r->log));
     }
@@ -112,6 +119,8 @@ int raft_start(struct raft *r)
 
     /* If we have a snapshot, let's restore it, updating the start index. */
     if (snapshot != NULL) {
+        tracef("snapshot: index %llu, term %llu", snapshot->index,
+               snapshot->term);
         rc = snapshot__restore(r, snapshot);
         if (rc != 0) {
             snapshot__destroy(snapshot);
@@ -143,6 +152,8 @@ int raft_start(struct raft *r)
     /* Start the I/O backend. The tick callback is expected to fire every
      * r->heartbeat_timeout milliseconds and the recv callback whenever an RPC
      * is received. */
+    tracef("log: %lu entries, offset %lu", log__n_entries(&r->log),
+           r->log.offset);
     rc = r->io->start(r->io, r->heartbeat_timeout, tick_cb, rpc__recv_cb);
     if (rc != 0) {
         return rc;

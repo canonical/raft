@@ -3,6 +3,7 @@
 #include "assert.h"
 #include "configuration.h"
 #include "log.h"
+#include "election.h"
 #include "logging.h"
 #include "membership.h"
 #include "queue.h"
@@ -16,6 +17,7 @@ int raft_apply(struct raft *r,
                raft_apply_cb cb)
 {
     raft_index index;
+    raft_term term;
     int rv;
 
     assert(r != NULL);
@@ -29,8 +31,10 @@ int raft_apply(struct raft *r,
 
     debugf(r->io, "client request: %d entries", n);
 
+    local_last_index_and_term(r, &index, &term);
+
     /* Index of the first entry being appended. */
-    index = log__last_index(&r->log) + 1;
+    index += 1;
 
     req->index = index;
     req->cb = cb;
