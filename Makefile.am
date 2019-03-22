@@ -39,6 +39,7 @@ libraft_la_SOURCES = \
   src/byte.c \
   src/client.c \
   src/configuration.c \
+  src/convert.c \
   src/election.c \
   src/entry.c \
   src/error.c \

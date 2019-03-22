@@ -2,6 +2,7 @@
 
 #include "assert.h"
 #include "configuration.h"
+#include "convert.h"
 #include "election.h"
 #include "logging.h"
 #include "replication.h"
@@ -160,7 +161,7 @@ int raft_rpc__recv_request_vote_result(
     if (result->vote_granted) {
         if (raft_election__tally(r, votes_index)) {
             infof(r->io, "votes quorum reached -> convert to leader");
-            rv = raft_state__convert_to_leader(r);
+            rv = convert__to_leader(r);
             if (rv != 0) {
                 return rv;
             }

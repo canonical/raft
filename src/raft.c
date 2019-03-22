@@ -4,6 +4,7 @@
 
 #include "assert.h"
 #include "configuration.h"
+#include "convert.h"
 #include "election.h"
 #include "log.h"
 #include "logging.h"
@@ -90,11 +91,10 @@ void raft_close(struct raft *r, void (*cb)(struct raft *r))
 {
     assert(r != NULL);
     assert(r->close_cb == NULL);
-
+    if (r->state != RAFT_UNAVAILABLE) {
+        convert__to_unavailable(r);
+    }
     r->close_cb = cb;
-
-    raft_state__clear(r);
-    r->state = RAFT_UNAVAILABLE;
     r->io->close(r->io, io_close_cb);
 }
 

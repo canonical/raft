@@ -5,6 +5,7 @@
 #include "replication.h"
 #include "rpc.h"
 #include "state.h"
+#include "convert.h"
 
 static void send_append_entries_result_cb(struct raft_io_send *req, int status)
 {
@@ -47,10 +48,7 @@ int raft_rpc__recv_install_snapshot(struct raft *r,
 
     if (r->state == RAFT_CANDIDATE) {
         debugf(r->io, "discovered leader -> step down ");
-        rv = raft_state__convert_to_follower(r, args->term);
-        if (rv != 0) {
-            return rv;
-        }
+        convert__to_follower(r);
     }
 
     r->follower_state.current_leader.id = id;

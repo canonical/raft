@@ -6,6 +6,7 @@
 #include "logging.h"
 #include "replication.h"
 #include "state.h"
+#include "convert.h"
 #include "watch.h"
 
 /**
@@ -58,7 +59,7 @@ static int follower_tick(struct raft *r)
      */
     if (r->timer > r->election_timeout_rand && server->voting) {
         infof(r->io, "convert to candidate and start new election");
-        return raft_state__convert_to_candidate(r);
+        return convert__to_candidate(r);
     }
 
     return 0;
@@ -149,8 +150,8 @@ static int leader_tick(struct raft *r, const unsigned msec_since_last_tick)
      */
     if (!leader_has_been_contacted_by_majority_of_servers(r)) {
         warnf(r->io, "unable to contact majority of cluster -> step down");
-        rv = raft_state__convert_to_follower(r, r->current_term);
-        return rv;
+        convert__to_follower(r);
+        return 0;
     }
 
     /* Check if we need to send heartbeats.

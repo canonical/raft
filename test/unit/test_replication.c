@@ -1,6 +1,7 @@
 #include "../../include/raft.h"
 
 #include "../../src/configuration.h"
+#include "../../src/convert.h"
 #include "../../src/log.h"
 #include "../../src/replication.h"
 #include "../../src/state.h"
@@ -53,31 +54,31 @@ static void tear_down(void *data)
     {                                                     \
         int rv;                                           \
                                                           \
-        rv = raft_state__convert_to_candidate(&F->raft);  \
+        rv = convert__to_candidate(&F->raft);             \
         munit_assert_int(rv, ==, 0);                      \
                                                           \
-        rv = raft_state__convert_to_leader(&F->raft);     \
+        rv = convert__to_leader(&F->raft);                \
         munit_assert_int(rv, ==, 0);                      \
                                                           \
         munit_assert_int(F->raft.state, ==, RAFT_LEADER); \
                                                           \
-        raft_io_stub_flush_all(&F->io);                       \
+        raft_io_stub_flush_all(&F->io);                   \
     }
 
 /**
  * Append an entry to the log.
  */
-#define __append_entry(F)                                                     \
-    {                                                                         \
-        struct raft_buffer buf;                                               \
-        int rv;                                                               \
-                                                                              \
-        buf.len = 8;                                                          \
-        buf.base = raft_malloc(buf.len);                                      \
-        munit_assert_ptr_not_null(buf.base);                                  \
-                                                                              \
+#define __append_entry(F)                                            \
+    {                                                                \
+        struct raft_buffer buf;                                      \
+        int rv;                                                      \
+                                                                     \
+        buf.len = 8;                                                 \
+        buf.base = raft_malloc(buf.len);                             \
+        munit_assert_ptr_not_null(buf.base);                         \
+                                                                     \
         rv = log__append(&F->raft.log, 1, RAFT_COMMAND, &buf, NULL); \
-        munit_assert_int(rv, ==, 0);                                          \
+        munit_assert_int(rv, ==, 0);                                 \
     }
 
 /**

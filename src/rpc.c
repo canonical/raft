@@ -7,6 +7,7 @@
 #include "rpc_install_snapshot.h"
 #include "rpc_request_vote.h"
 #include "state.h"
+#include "convert.h"
 
 static const char *message_descs[] = {"append entries", "append entries result",
                                       "request vote", "request vote result",
@@ -93,7 +94,8 @@ int raft_rpc__ensure_matching_terms(struct raft *r, raft_term term, int *match)
         } else {
             /* Bump current state and also convert to follower. */
             infof(r->io, "remote server term is higher -> step down");
-            rv = raft_state__convert_to_follower(r, term);
+            rv = raft_state__bump_current_term(r, term);
+            convert__to_follower(r);
         }
 
         if (rv != 0) {

@@ -7,8 +7,8 @@
 #include "logging.h"
 #include "rpc.h"
 #include "snapshot.h"
-#include "state.h"
 #include "tick.h"
+#include "convert.h"
 
 /* Set to 1 to enable tracing. */
 #if 0
@@ -83,11 +83,11 @@ static int maybe_self_elect(struct raft *r)
     if (server != NULL && server->voting &&
         configuration__n_voting(&r->configuration) == 1) {
         debugf(r->io, "self elect and convert to leader");
-        rc = raft_state__convert_to_candidate(r);
+        rc = convert__to_candidate(r);
         if (rc != 0) {
             return rc;
         }
-        rc = raft_state__convert_to_leader(r);
+        rc = convert__to_leader(r);
         if (rc != 0) {
             return rc;
         }
@@ -159,7 +159,7 @@ int raft_start(struct raft *r)
         return rc;
     }
 
-    raft_state__start_as_follower(r);
+    convert__to_follower(r);
 
     /* If there's only one voting server, and that is us, it's safe to convert
      * to leader right away. If that is not us, we're either joining the cluster

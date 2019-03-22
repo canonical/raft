@@ -11,6 +11,7 @@
 #include "snapshot.h"
 #include "state.h"
 #include "watch.h"
+#include "convert.h"
 
 #ifndef max
 #define max(a, b) ((a) < (b) ? (b) : (a))
@@ -21,7 +22,7 @@
 #endif
 
 /* Set to 1 to enable tracing. */
-#if 1
+#if 0
 #define tracef(MSG, ...) debugf(r->io, "replication: " MSG, __VA_ARGS__)
 #else
 #define tracef(MSG, ...)
@@ -1252,9 +1253,7 @@ static void raft_replication__apply_configuration(struct raft *r,
      */
     if (r->state == RAFT_LEADER &&
         configuration__get(&r->configuration, r->id) == NULL) {
-        /* Ignore the return value, since we can't fail in this case (no actual
-         * write for the new term will be done) */
-        raft_state__convert_to_follower(r, r->current_term);
+        convert__to_follower(r);
     }
 
     raft_watch__configuration_applied(r);
