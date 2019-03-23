@@ -1,6 +1,7 @@
 #include "convert.h"
 #include "assert.h"
 #include "configuration.h"
+#include "log.h"
 #include "election.h"
 #include "queue.h"
 #include "state.h"
@@ -157,7 +158,6 @@ int convert__to_leader(struct raft *r)
 {
     size_t i;
     raft_index last_index;
-    raft_term last_term;
     int rv;
 
     clear(r);
@@ -172,7 +172,7 @@ int convert__to_leader(struct raft *r)
         return rv;
     }
 
-    local_last_index_and_term(r, &last_index, &last_term);
+    last_index = log__last_index(&r->log);
 
     /* Initialize the replication state for each server. We optimistically
      * assume that servers are up-to-date and back track if turns out not to be

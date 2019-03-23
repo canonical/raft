@@ -79,8 +79,4 @@ int raft_election__vote(struct raft *r,
  */
 bool raft_election__tally(struct raft *r, size_t votes_index);
 
-void local_last_index_and_term(struct raft *r,
-                               raft_index *index,
-                               raft_term *term);
-
 #endif /* RAFT_ELECTION_H */

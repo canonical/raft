@@ -40,14 +40,11 @@ static void tear_down(void *data)
  *****************************************************************************/
 
 /* Accessors */
-#define N_ENTRIES log__n_entries(&f->log)
-#define FIRST_INDEX log__first_index(&f->log)
+#define N_OUTSTANDING log__n_outstanding(&f->log)
 #define LAST_INDEX log__last_index(&f->log)
 #define TERM_OF(INDEX) log__term_of(&f->log, INDEX)
 #define LAST_TERM log__last_term(&f->log)
 #define GET(INDEX) log__get(&f->log, INDEX)
-
-#define SET_OFFSET(OFFSET) log__set_offset(&f->log, OFFSET)
 
 /* Append one command entry with the given term and a hard-coded payload. */
 #define APPEND(TERM)                                               \
@@ -102,8 +99,8 @@ static void tear_down(void *data)
 #define RELEASE(INDEX) log__release(&f->log, INDEX, entries, n);
 
 #define TRUNCATE(N) log__truncate(&f->log, N)
-#define SHIFT(N) log__shift(&f->log, N)
 #define SNAPSHOT(INDEX, TRAILING) log__snapshot(&f->log, INDEX, TRAILING)
+#define RESTORE(INDEX, TERM) log__restore(&f->log, INDEX, TERM)
 
 /******************************************************************************
  *
@@ -118,12 +115,12 @@ static void tear_down(void *data)
     munit_assert_int(f->log.front, ==, FRONT);   \
     munit_assert_int(f->log.back, ==, BACK);     \
     munit_assert_int(f->log.offset, ==, OFFSET); \
-    munit_assert_int(log__n_entries(&f->log), ==, N)
+    munit_assert_int(log__n_outstanding(&f->log), ==, N)
 
 /* Assert the last index and term of the most recent snapshot. */
-#define ASSERT_SNAPSHOT(LAST_INDEX, LAST_TERM)                    \
-    munit_assert_int(f->log.snapshot.last_index, ==, LAST_INDEX); \
-    munit_assert_int(f->log.snapshot.last_term, ==, LAST_TERM)
+#define ASSERT_SNAPSHOT(INDEX, TERM)                         \
+    munit_assert_int(f->log.snapshot.last_index, ==, INDEX); \
+    munit_assert_int(f->log.snapshot.last_term, ==, TERM)
 
 /* Assert that the term of entry at INDEX equals TERM. */
 #define ASSERT_TERM_OF(INDEX, TERM)              \
@@ -154,130 +151,65 @@ static void tear_down(void *data)
 
 /******************************************************************************
  *
- * log__n_entries
+ * log__n_outstanding
  *
  *****************************************************************************/
 
-TEST_SUITE(n_entries);
+TEST_SUITE(n_outstanding);
 
-TEST_SETUP(n_entries, setup);
-TEST_TEAR_DOWN(n_entries, tear_down);
+TEST_SETUP(n_outstanding, setup);
+TEST_TEAR_DOWN(n_outstanding, tear_down);
 
 /* The log is empty. */
-TEST_CASE(n_entries, empty, NULL)
+TEST_CASE(n_outstanding, empty, NULL)
 {
     struct fixture *f = data;
     (void)params;
-    munit_assert_int(N_ENTRIES, ==, 0);
+    munit_assert_int(N_OUTSTANDING, ==, 0);
     return MUNIT_OK;
 }
 
 /* The log is not wrapped. */
-TEST_CASE(n_entries, not_wrapped, NULL)
+TEST_CASE(n_outstanding, not_wrapped, NULL)
 {
     struct fixture *f = data;
     (void)params;
     APPEND(1 /* term */);
-    munit_assert_int(N_ENTRIES, ==, 1);
+    munit_assert_int(N_OUTSTANDING, ==, 1);
     return MUNIT_OK;
 }
 
 /* The log is wrapped. */
-TEST_CASE(n_entries, wrapped, NULL)
+TEST_CASE(n_outstanding, wrapped, NULL)
 {
     struct fixture *f = data;
     (void)params;
-    APPEND_MANY(1 /* term */, 5 /* term */);
-    SHIFT(4);
-    APPEND_MANY(1 /* term */, 3 /* term */);
-    munit_assert_int(N_ENTRIES, ==, 4);
+    APPEND_MANY(1 /* term */, 5 /* n entries */);
+    SNAPSHOT(4, 1);
+    APPEND_MANY(1 /* term */, 2 /* n entries */);
+    munit_assert_int(N_OUTSTANDING, ==, 4);
     return MUNIT_OK;
 }
 
 /* The log has an offset and is empty. */
-TEST_CASE(n_entries, offset, NULL)
+TEST_CASE(n_outstanding, offset, NULL)
 {
     struct fixture *f = data;
     (void)params;
-    SET_OFFSET(10);
-    munit_assert_int(N_ENTRIES, ==, 0);
+    APPEND_MANY(1 /* term */, 5 /* n entries */);
+    SNAPSHOT(5, 0);
+    munit_assert_int(N_OUTSTANDING, ==, 0);
     return MUNIT_OK;
 }
 
 /* The log has an offset and is not empty. */
-TEST_CASE(n_entries, offset_not_empty, NULL)
+TEST_CASE(n_outstanding, offset_not_empty, NULL)
 {
     struct fixture *f = data;
     (void)params;
-    SET_OFFSET(10);
-    APPEND_MANY(1 /* term */, 3 /* n */);
-    munit_assert_int(N_ENTRIES, ==, 3);
-    return MUNIT_OK;
-}
-
-/* The log has an offset and is wrapped. */
-TEST_CASE(n_entries, offset_and_wrapped, NULL)
-{
-    struct fixture *f = data;
-    (void)params;
-    SET_OFFSET(10);
-    APPEND_MANY(1 /* term */, 5 /* term */);
-    munit_assert_int(N_ENTRIES, ==, 5);
-    SHIFT(14);
-    munit_assert_int(N_ENTRIES, ==, 1);
-    APPEND_MANY(1 /* term */, 3 /* n */);
-    munit_assert_int(N_ENTRIES, ==, 4);
-    return MUNIT_OK;
-}
-
-/******************************************************************************
- *
- * log__first_index
- *
- *****************************************************************************/
-
-TEST_SUITE(first_index);
-
-TEST_SETUP(first_index, setup);
-TEST_TEAR_DOWN(first_index, tear_down);
-
-/* The log is empty. */
-TEST_CASE(first_index, empty, NULL)
-{
-    struct fixture *f = data;
-    (void)params;
-    munit_assert_int(FIRST_INDEX, ==, 0);
-    return MUNIT_OK;
-}
-
-/* The log is empty but has an offset. */
-TEST_CASE(first_index, empty_with_offset, NULL)
-{
-    struct fixture *f = data;
-    (void)params;
-    SET_OFFSET(10);
-    munit_assert_int(FIRST_INDEX, ==, 0);
-    return MUNIT_OK;
-}
-
-/* The log has one entry. */
-TEST_CASE(first_index, one, NULL)
-{
-    struct fixture *f = data;
-    (void)params;
-    APPEND(1 /* term */);
-    munit_assert_int(FIRST_INDEX, ==, 1);
-    return MUNIT_OK;
-}
-
-/* The log has one entry and an offset. */
-TEST_CASE(first_index, one_with_offset, NULL)
-{
-    struct fixture *f = data;
-    (void)params;
-    SET_OFFSET(10);
-    APPEND(1 /* term */);
-    munit_assert_int(FIRST_INDEX, ==, 11);
+    APPEND_MANY(1 /* term */, 5 /* n entries */);
+    SNAPSHOT(4, 2);
+    munit_assert_int(N_OUTSTANDING, ==, 3);
     return MUNIT_OK;
 }
 
@@ -301,13 +233,15 @@ TEST_CASE(last_index, empty, NULL)
     return MUNIT_OK;
 }
 
-/* If the log is empty and has an offset, last index is 0. */
+/* If the log is empty and has an offset, last index is calculated
+   accordingly. */
 TEST_CASE(last_index, empty_with_offset, NULL)
 {
     struct fixture *f = data;
     (void)params;
-    SET_OFFSET(10);
-    munit_assert_int(LAST_INDEX, ==, 0);
+    APPEND(1);
+    SNAPSHOT(1, 0);
+    munit_assert_int(LAST_INDEX, ==, 1);
     return MUNIT_OK;
 }
 
@@ -342,11 +276,33 @@ TEST_CASE(last_index, two_with_offset, NULL)
     struct fixture *f = data;
 
     (void)params;
-    SET_OFFSET(3);
-    APPEND(1 /* term */);
-    APPEND(1 /* term */);
+    APPEND_MANY(1 /* term */, 5 /* n */);
+    SNAPSHOT(5, 2);
     munit_assert_int(LAST_INDEX, ==, 5);
 
+    return MUNIT_OK;
+}
+
+/******************************************************************************
+ *
+ * log__last_term
+ *
+ *****************************************************************************/
+
+TEST_SUITE(last_term);
+
+TEST_SETUP(last_term, setup);
+TEST_TEAR_DOWN(last_term, tear_down);
+
+/* If the log has a snapshot and no outstanding entries, return the last term of
+ * the snapshot. */
+TEST_CASE(last_term, snapshot, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+    APPEND(1);
+    SNAPSHOT(1, 0);
+    munit_assert_int(LAST_TERM, ==, 1);
     return MUNIT_OK;
 }
 
@@ -361,26 +317,26 @@ TEST_SUITE(term_of);
 TEST_SETUP(term_of, setup);
 TEST_TEAR_DOWN(term_of, tear_down);
 
-/* If the log is empty, the return value is always 0. */
-TEST_CASE(term_of, empty, NULL)
+/* If the given index is beyond the last index, return 0. */
+TEST_CASE(term_of, beyond_last, NULL)
 {
     struct fixture *f = data;
     (void)params;
-    munit_assert_int(TERM_OF(0), ==, 0);
-    munit_assert_int(TERM_OF(1), ==, 0);
+    APPEND(1);
+    munit_assert_int(TERM_OF(2), ==, 0);
     munit_assert_int(TERM_OF(10), ==, 0);
     return MUNIT_OK;
 }
 
-/* If the log is empty and has an offset, the return value is always 0. */
-TEST_CASE(term_of, empty_with_offset, NULL)
+/* If the log is empty and but has a snapshot, and the given index matches the
+ * last index of the snapshot, return the snapshot last term. */
+TEST_CASE(term_of, snapshot_last_index, NULL)
 {
     struct fixture *f = data;
     (void)params;
-    SET_OFFSET(10);
-    munit_assert_int(TERM_OF(0), ==, 0);
-    munit_assert_int(TERM_OF(1), ==, 0);
-    munit_assert_int(TERM_OF(10), ==, 0);
+    APPEND_MANY(1 /* term */, 5 /* n entries */);
+    SNAPSHOT(5, 0);
+    munit_assert_int(TERM_OF(5), ==, 1);
     return MUNIT_OK;
 }
 
@@ -409,42 +365,20 @@ TEST_CASE(term_of, two, NULL)
     return MUNIT_OK;
 }
 
-/* The log starts at a certain offset. */
-TEST_CASE(term_of, two_with_offset, NULL)
+/* The log has a snapshot and hence an offset. */
+TEST_CASE(term_of, before_snapshot, NULL)
 {
     struct fixture *f = data;
 
     (void)params;
-    SET_OFFSET(3);
-    APPEND(2 /* term */);
-    APPEND(3 /* term */);
-
+    APPEND_MANY(1 /* term */, 5 /* n entries */);
+    SNAPSHOT(3, 0);
     munit_assert_int(TERM_OF(1), ==, 0);
     munit_assert_int(TERM_OF(2), ==, 0);
-    munit_assert_int(TERM_OF(3), ==, 0);
-    munit_assert_int(TERM_OF(4), ==, 2);
-    munit_assert_int(TERM_OF(5), ==, 3);
+    munit_assert_int(TERM_OF(3), ==, 1);
+    munit_assert_int(TERM_OF(4), ==, 1);
+    munit_assert_int(TERM_OF(5), ==, 1);
 
-    return MUNIT_OK;
-}
-
-/******************************************************************************
- *
- * log__last_term
- *
- *****************************************************************************/
-
-TEST_SUITE(last_term);
-
-TEST_SETUP(last_term, setup);
-TEST_TEAR_DOWN(last_term, tear_down);
-
-/* If the log is empty, last term is 0. */
-TEST_CASE(last_term, empty_log, NULL)
-{
-    struct fixture *f = data;
-    (void)params;
-    munit_assert_int(LAST_TERM, ==, 0);
     return MUNIT_OK;
 }
 
@@ -473,7 +407,8 @@ TEST_CASE(get, empty_with_offset, NULL)
 {
     struct fixture *f = data;
     (void)params;
-    SET_OFFSET(10);
+    APPEND_MANY(4 /* term */, 10 /* n */);
+    SNAPSHOT(10, 0);
     munit_assert_ptr_null(GET(1));
     munit_assert_ptr_null(GET(10));
     munit_assert_ptr_null(GET(11));
@@ -484,8 +419,8 @@ TEST_CASE(get, empty_with_offset, NULL)
 TEST_CASE(get, one, NULL)
 {
     struct fixture *f = data;
-
     (void)params;
+
     APPEND(3 /* term */);
 
     munit_assert_int(GET(1)->term, ==, 3);
@@ -517,9 +452,10 @@ TEST_CASE(get, two_with_offset, NULL)
     struct fixture *f = data;
 
     (void)params;
-    SET_OFFSET(3);
+    APPEND_MANY(1 /* term */, 3 /* n */);
     APPEND(2 /* term */);
     APPEND(3 /* term */);
+    SNAPSHOT(4, 1);
 
     munit_assert_ptr_null(GET(1));
     munit_assert_ptr_null(GET(2));
@@ -528,37 +464,6 @@ TEST_CASE(get, two_with_offset, NULL)
     munit_assert_int(GET(4)->term, ==, 2);
     munit_assert_int(GET(5)->term, ==, 3);
 
-    return MUNIT_OK;
-}
-
-/******************************************************************************
- *
- * log__set_offset
- *
- *****************************************************************************/
-
-TEST_SUITE(set_offset);
-TEST_SETUP(set_offset, setup);
-TEST_TEAR_DOWN(set_offset, tear_down);
-
-/* By default the offset is 0 and the first appended entry has index 1. */
-TEST_CASE(set_offset, default, NULL)
-{
-    struct fixture *f = data;
-    (void)params;
-    APPEND(1 /* term */);
-    munit_assert_int(FIRST_INDEX, ==, 1);
-    return MUNIT_OK;
-}
-
-/* Set the offset to one. */
-TEST_CASE(set_offset, one, NULL)
-{
-    struct fixture *f = data;
-    (void)params;
-    SET_OFFSET(1);
-    APPEND(1 /* term */);
-    munit_assert_int(FIRST_INDEX, ==, 2);
     return MUNIT_OK;
 }
 
@@ -675,7 +580,7 @@ TEST_CASE(append, wrap, NULL)
            5 /* n */);
 
     /* Delete the first 4 entries. */
-    SHIFT(4);
+    SNAPSHOT(4, 0);
 
     /* Now the log is [NULL, NULL, NULL, NULL, e5, NULL] */
     ASSERT(6 /* size                                                    */,
@@ -903,7 +808,7 @@ TEST_CASE(acquire, wrap, NULL)
            5 /* n */);
 
     /* Delete the first 4 entries. */
-    SHIFT(4);
+    SNAPSHOT(4, 0);
 
     /* Now the log is [NULL, NULL, NULL, NULL, e5, NULL] */
     ASSERT(6 /* size                                                 */,
@@ -977,7 +882,7 @@ TEST_CASE(acquire, error, out_of_range, NULL)
     APPEND(1 /* term */);
     APPEND(1 /* term */);
 
-    SHIFT(1);
+    SNAPSHOT(1, 0);
 
     ACQUIRE(1);
 
@@ -1061,28 +966,6 @@ TEST_CASE(truncate, 2_last, NULL)
     return MUNIT_OK;
 }
 
-/* Truncate from an entry which is older than the first one in the log. */
-TEST_CASE(truncate, compacted, NULL)
-{
-    struct fixture *f = data;
-    (void)params;
-
-    SET_OFFSET(2);
-
-    APPEND(1 /* term */);
-    APPEND(1 /* term */);
-
-    TRUNCATE(2);
-
-    ASSERT(0 /* size                                                 */,
-           0 /* front                                                */,
-           0 /* back                                                 */,
-           2 /* offset                                               */,
-           0 /* n */);
-
-    return MUNIT_OK;
-}
-
 /* Truncate from an entry which makes the log wrap. */
 TEST_CASE(truncate, wrap, NULL)
 {
@@ -1099,7 +982,7 @@ TEST_CASE(truncate, wrap, NULL)
            5 /* n */);
 
     /* Delete the first 4 entries. */
-    SHIFT(4);
+    SNAPSHOT(4, 0);
 
     /* Now the log is [NULL, NULL, NULL, NULL, e5, NULL] */
     ASSERT(6 /* size                                                 */,
@@ -1241,7 +1124,7 @@ TEST_CASE(truncate, empty_with_offset, NULL)
 
     (void)params;
 
-    SET_OFFSET(10);
+    //SET_OFFSET(10);
     TRUNCATE(1);
 
     return MUNIT_OK;
@@ -1430,5 +1313,28 @@ TEST_CASE(snapshot, wrap, NULL)
 
     ASSERT_SNAPSHOT(8 /* index */, 1 /* term */);
 
+    return MUNIT_OK;
+}
+
+/******************************************************************************
+ *
+ * log__restore
+ *
+ *****************************************************************************/
+
+TEST_SUITE(restore);
+
+TEST_SETUP(restore, setup);
+TEST_TEAR_DOWN(restore, tear_down);
+
+/* Mimick the initial restore of a snapshot after loading state from disk, when
+ * there are no outstanding entries.. */
+TEST_CASE(restore, initial, NULL)
+{
+    (void)params;
+    struct fixture *f = data;
+    RESTORE(2, 3);
+    ASSERT_SNAPSHOT(2 /* index */, 3 /* term */);
+    munit_assert_int(LAST_INDEX, ==, 2);
     return MUNIT_OK;
 }

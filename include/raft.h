@@ -206,7 +206,7 @@ struct raft_log
     struct raft_entry *entries;  /* Buffer of log entries. */
     size_t size;                 /* Number of available slots in the buffer */
     size_t front, back;          /* Indexes of used slots [front, back). */
-    raft_index offset;           /* Index offest of the first entry. */
+    raft_index offset;           /* Index of first entry is offset+1. */
     struct raft_entry_ref *refs; /* Log entries reference counts hash table */
     size_t refs_size;            /* Size of the reference counts hash table */
     struct
@@ -797,8 +797,6 @@ struct raft
 
     struct
     {
-        raft_term term;                  /* Term of last saved snapshot */
-        raft_index index;                /* Index of last saved snapshot */
         struct raft_snapshot pending;    /* In progress snapshot */
         unsigned threshold;              /* N. of entries before snapshot */
         struct raft_io_snapshot_put put; /* Store snapshot request */

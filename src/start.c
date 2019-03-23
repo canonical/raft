@@ -67,8 +67,8 @@ static int restore_entries(struct raft *r, struct raft_entry *entries, size_t n)
     return 0;
 
 err:
-    if (log__n_entries(&r->log) > 0) {
-        log__discard(&r->log, log__first_index(&r->log));
+    if (log__n_outstanding(&r->log) > 0) {
+        log__discard(&r->log, r->log.offset + 1);
     }
     return rc;
 }
@@ -106,7 +106,7 @@ int raft_start(struct raft *r)
     assert(r->state == RAFT_UNAVAILABLE);
     assert(r->heartbeat_timeout != 0);
     assert(r->heartbeat_timeout < r->election_timeout);
-    assert(log__n_entries(&r->log) == 0);
+    assert(log__n_outstanding(&r->log) == 0);
     assert(r->last_stored == 0);
 
     infof(r->io, "starting");
@@ -152,7 +152,7 @@ int raft_start(struct raft *r)
     /* Start the I/O backend. The tick callback is expected to fire every
      * r->heartbeat_timeout milliseconds and the recv callback whenever an RPC
      * is received. */
-    tracef("log: %lu entries, offset %lu", log__n_entries(&r->log),
+    tracef("log: %lu entries, offset %lu", log__n_outstanding(&r->log),
            r->log.offset);
     rc = r->io->start(r->io, r->heartbeat_timeout, tick_cb, rpc__recv_cb);
     if (rc != 0) {

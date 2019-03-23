@@ -271,8 +271,8 @@ TEST_CASE(start, success, snapshot, NULL)
     munit_assert_int(test_fsm_get_x(&f->fsm), ==, 7);
     munit_assert_int(test_fsm_get_y(&f->fsm), ==, 3);
 
-    munit_assert_int(f->raft.snapshot.term, ==, 3);
-    munit_assert_int(f->raft.snapshot.index, ==, 8);
+    munit_assert_int(f->raft.log.snapshot.last_term, ==, 3);
+    munit_assert_int(f->raft.log.snapshot.last_index, ==, 8);
 
     munit_assert_int(f->raft.configuration.n, ==, 1);
     munit_assert_int(f->raft.configuration.servers[0].id, ==, 1);

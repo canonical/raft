@@ -2,6 +2,7 @@
 
 #include "assert.h"
 #include "configuration.h"
+#include "convert.h"
 #include "error.h"
 #include "log.h"
 #include "logging.h"
@@ -11,7 +12,6 @@
 #include "snapshot.h"
 #include "state.h"
 #include "watch.h"
-#include "convert.h"
 
 #ifndef max
 #define max(a, b) ((a) < (b) ? (b) : (a))
@@ -242,7 +242,8 @@ int raft_replication__send_append_entries(struct raft *r, size_t i)
     if (next_index == 1) {
         /* We're including the very first log entry, so prevIndex and prevTerm
          * are null. */
-        if (log__term_of(&r->log, 1) == 0) {
+        if (r->log.offset > 0) {
+            assert(r->log.snapshot.last_index > 0);
             return raft_replication__send_snapshot(r, i);
         }
         args->prev_log_index = 0;
@@ -261,14 +262,14 @@ int raft_replication__send_append_entries(struct raft *r, size_t i)
          * send the whole snapshot. Otherwise if next_index - 1 is exactly the
          * snapshot last index, we need to send all the current log. */
         if (args->prev_log_term == 0) {
-            assert(r->snapshot.index > 0);
-            assert(next_index - 1 <= r->snapshot.index);
-            if (next_index - 1 < r->snapshot.index) {
+            assert(r->log.snapshot.last_index > 0);
+            assert(next_index - 1 <= r->log.snapshot.last_index);
+            if (next_index - 1 < r->log.snapshot.last_index) {
                 infof(r->io, "missing entry at index %lld -> send snapshot",
                       next_index - 1);
                 return raft_replication__send_snapshot(r, i);
             }
-            args->prev_log_term = r->snapshot.term;
+            args->prev_log_term = r->log.snapshot.last_term;
         }
     }
 
@@ -288,7 +289,7 @@ int raft_replication__send_append_entries(struct raft *r, size_t i)
     args->leader_commit = r->commit_index;
 
     tracef("send %ld entries to server %ld (log size %ld)", args->n_entries,
-           server->id, log__n_entries(&r->log));
+           server->id, log__n_outstanding(&r->log));
 
     message.type = RAFT_IO_APPEND_ENTRIES;
     message.server_id = server->id;
@@ -848,11 +849,7 @@ static int raft_replication__check_prev_log_entry(
         return 0;
     }
 
-    if (r->snapshot.index == args->prev_log_index) {
-        local_prev_term = r->snapshot.term;
-    } else {
-        local_prev_term = log__term_of(&r->log, args->prev_log_index);
-    }
+    local_prev_term = log__term_of(&r->log, args->prev_log_index);
 
     if (local_prev_term == 0) {
         debugf(r->io, "no entry at previous index -> reject");
@@ -1067,7 +1064,6 @@ static void put_snapshot_cb(struct raft_io_snapshot_put *req, int status)
     struct raft *r = request->raft;
     struct raft_snapshot *snapshot = &request->snapshot;
     /* raft_term local_term; */
-    raft_index local_first_index;
     int rv;
 
     r->snapshot.put.data = NULL;
@@ -1097,15 +1093,13 @@ static void put_snapshot_cb(struct raft_io_snapshot_put *req, int status)
      *   8. Reset state machine using snapshot contents (and load lastConfig
      *      as cluster configuration).
      */
-    local_first_index = log__first_index(&r->log);
-    assert(local_first_index == 0);
+    /* local_first_index = log__first_index(&r->log); */
+    /* assert(local_first_index == 0); */
     /* if (local_first_index > 0) { */
     /*     log__truncate(&r->log, local_first_index); */
     /* } */
-    log__set_offset(&r->log, snapshot->index);
+    log__restore(&r->log, snapshot->index, snapshot->term);
 
-    r->snapshot.index = snapshot->index;
-    r->snapshot.term = snapshot->term;
     r->last_stored = snapshot->index;
 
     rv = r->fsm->restore(r->fsm, &snapshot->bufs[0]);
@@ -1158,7 +1152,7 @@ int raft_replication__install_snapshot(struct raft *r,
     }
 
     /* If our last snapshot is more up-to-date, this is a no-op */
-    if (r->snapshot.index >= args->last_index) {
+    if (r->log.snapshot.last_index >= args->last_index) {
         *success = true;
         return 0;
     }
@@ -1303,7 +1297,7 @@ static bool should_take_snapshot(struct raft *r)
     };
 
     /* If we didn't reach the threshold yet, do nothing. */
-    if (r->last_applied - r->snapshot.index < r->snapshot.threshold) {
+    if (r->last_applied - r->log.snapshot.last_index < r->snapshot.threshold) {
         return false;
     }
 
@@ -1314,9 +1308,6 @@ static void snapshot_put_cb(struct raft_io_snapshot_put *req, int status)
 {
     struct raft *r = req->data;
     struct raft_snapshot *snapshot;
-    size_t n_entries;
-    raft_index last_index;
-    raft_index shift_index;
 
     r->snapshot.put.data = NULL;
     snapshot = &r->snapshot.pending;
@@ -1327,18 +1318,8 @@ static void snapshot_put_cb(struct raft_io_snapshot_put *req, int status)
         goto out;
     }
 
-    r->snapshot.term = snapshot->term;
-    r->snapshot.index = snapshot->index;
     /* TODO: make the number of trailing entries configurable */
-    n_entries = log__n_entries(&r->log);
-    last_index = log__last_index(&r->log);
-    if (n_entries > 100) {
-        shift_index = last_index - 100;
-        if (snapshot->index < shift_index) {
-            shift_index = snapshot->index;
-        }
-        log__shift(&r->log, shift_index);
-    }
+    log__snapshot(&r->log, snapshot->index, 100);
 
 out:
     snapshot__close(&r->snapshot.pending);

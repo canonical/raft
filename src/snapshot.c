@@ -24,7 +24,7 @@ int snapshot__restore(struct raft *r, struct raft_snapshot *snapshot)
     int rc;
 
     assert(snapshot->n_bufs == 1);
-    assert(log__n_entries(&r->log) == 0);
+    assert(log__n_outstanding(&r->log) == 0);
 
     rc = r->fsm->restore(r->fsm, &snapshot->bufs[0]);
     if (rc != 0) {
@@ -33,14 +33,11 @@ int snapshot__restore(struct raft *r, struct raft_snapshot *snapshot)
         return rc;
     }
 
-    r->snapshot.index = snapshot->index;
-    r->snapshot.term = snapshot->term;
-
     raft_configuration_close(&r->configuration);
     r->configuration = snapshot->configuration;
     r->configuration_index = snapshot->configuration_index;
 
-    log__set_offset(&r->log, snapshot->index);
+    log__restore(&r->log, snapshot->index, snapshot->term);
 
     r->commit_index = snapshot->index;
     r->last_applied = snapshot->index;

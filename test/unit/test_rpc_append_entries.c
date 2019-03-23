@@ -714,8 +714,8 @@ TEST_CASE(response, success, snapshot, NULL)
 
     raft_io_stub_flush_all(f->raft.io);
 
-    munit_assert_int(f->raft.snapshot.index, ==, 3);
-    munit_assert_int(f->raft.snapshot.term, ==, 2);
+    munit_assert_int(f->raft.log.snapshot.last_index, ==, 3);
+    munit_assert_int(f->raft.log.snapshot.last_term, ==, 2);
 
     return MUNIT_OK;
 }
@@ -752,8 +752,8 @@ TEST_CASE(response, success, send_snapshot, NULL)
 
     /* Wait for the resulting snapshot to complete. */
     raft_io_stub_flush_all(f->raft.io);
-    munit_assert_int(f->raft.snapshot.index, ==, 3);
-    munit_assert_int(f->raft.snapshot.term, ==, 2);
+    munit_assert_int(f->raft.log.snapshot.last_index, ==, 3);
+    munit_assert_int(f->raft.log.snapshot.last_term, ==, 2);
 
     raft_io_stub_advance(&f->io, f->raft.heartbeat_timeout + 1);
 

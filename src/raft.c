@@ -57,8 +57,6 @@ int raft_init(struct raft *r,
     r->election_timeout_rand = 0;
     r->last_tick = 0;
     r->timer = 0;
-    r->snapshot.term = 0;
-    r->snapshot.index = 0;
     r->snapshot.pending.term = 0;
     r->snapshot.threshold = DEFAULT_SNAPSHOT_THRESHOLD;
     r->snapshot.put.data = NULL;
