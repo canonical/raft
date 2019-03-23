@@ -125,4 +125,14 @@ void log__discard(struct raft_log *l, const raft_index index);
  */
 void log__shift(struct raft_log *l, const raft_index index);
 
+/**
+ * To be called when taking a new snapshot of the FSM.
+ *
+ * The log must contain an entry at @index, which is the last entry included in
+ * the snapshot. The function update the last snapshot information and delete
+ * all entries up @index - @trailing. If the log contains no entry a @index -
+ * @trailing, then no entry will be deleted.
+ */
+void log__snapshot(struct raft_log *l, raft_index index, unsigned trailing);
+
 #endif /* RAFT_LOG_H */

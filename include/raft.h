@@ -209,6 +209,11 @@ struct raft_log
     raft_index offset;           /* Index offest of the first entry. */
     struct raft_entry_ref *refs; /* Log entries reference counts hash table */
     size_t refs_size;            /* Size of the reference counts hash table */
+    struct
+    {
+        raft_index last_index; /* A snapshot replaces all entries up to here */
+        raft_term last_term;   /* Term of last index */
+    } snapshot;
 };
 
 /**

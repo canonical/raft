@@ -103,6 +103,7 @@ static void tear_down(void *data)
 
 #define TRUNCATE(N) log__truncate(&f->log, N)
 #define SHIFT(N) log__shift(&f->log, N)
+#define SNAPSHOT(INDEX, TRAILING) log__snapshot(&f->log, INDEX, TRAILING)
 
 /******************************************************************************
  *
@@ -112,14 +113,17 @@ static void tear_down(void *data)
 
 /* Assert the state of the fixture's log in terms of size, front/back indexes,
  * offset and number of entries. */
-#define ASSERT(SIZE, FRONT, BACK, OFFSET, N)              \
-    {                                                     \
-        munit_assert_int(f->log.size, ==, SIZE);          \
-        munit_assert_int(f->log.front, ==, FRONT);        \
-        munit_assert_int(f->log.back, ==, BACK);          \
-        munit_assert_int(f->log.offset, ==, OFFSET);      \
-        munit_assert_int(log__n_entries(&f->log), ==, N); \
-    }
+#define ASSERT(SIZE, FRONT, BACK, OFFSET, N)     \
+    munit_assert_int(f->log.size, ==, SIZE);     \
+    munit_assert_int(f->log.front, ==, FRONT);   \
+    munit_assert_int(f->log.back, ==, BACK);     \
+    munit_assert_int(f->log.offset, ==, OFFSET); \
+    munit_assert_int(log__n_entries(&f->log), ==, N)
+
+/* Assert the last index and term of the most recent snapshot. */
+#define ASSERT_SNAPSHOT(LAST_INDEX, LAST_TERM)                    \
+    munit_assert_int(f->log.snapshot.last_index, ==, LAST_INDEX); \
+    munit_assert_int(f->log.snapshot.last_term, ==, LAST_TERM)
 
 /* Assert that the term of entry at INDEX equals TERM. */
 #define ASSERT_TERM_OF(INDEX, TERM)              \
@@ -1290,67 +1294,100 @@ TEST_CASE(truncate, error, acquired_oom, truncate_acquired_oom_params)
 
 /******************************************************************************
  *
- * log__truncate
+ * log__snapshot
  *
  *****************************************************************************/
 
-TEST_SUITE(shift);
+TEST_SUITE(snapshot);
 
-TEST_SETUP(shift, setup);
-TEST_TEAR_DOWN(shift, tear_down);
+TEST_SETUP(snapshot, setup);
+TEST_TEAR_DOWN(snapshot, tear_down);
 
-/* Shift up to the first entry of a log with a single entry. */
-TEST_CASE(shift, 1_first, NULL)
+/* Take a snapshot at entry 3, keeping 2 trailing entries. */
+TEST_CASE(snapshot, trailing, NULL)
 {
     struct fixture *f = data;
-
     (void)params;
 
     APPEND(1 /* term */);
+    APPEND(2 /* term */);
+    APPEND(2 /* term */);
 
-    SHIFT(1);
-
-    ASSERT(0 /* size                                                 */,
-           0 /* front                                                */,
-           0 /* back                                                 */,
-           1 /* offset                                               */,
-           0 /* n */);
-
-    return MUNIT_OK;
-}
-
-/* Shift up to the first entry of a log with a two entries. */
-TEST_CASE(shift, 2_first, NULL)
-{
-    struct fixture *f = data;
-
-    (void)params;
-
-    APPEND(1 /* term */);
-    APPEND(1 /* term */);
-
-    SHIFT(1);
+    SNAPSHOT(3, 2);
 
     ASSERT(6 /* size                                                 */,
            1 /* front                                                */,
-           2 /* back                                                 */,
+           3 /* back                                                 */,
            1 /* offset                                               */,
-           1 /* n */);
+           2 /* n */);
+
+    ASSERT_SNAPSHOT(3 /* index */, 2 /* term */);
 
     return MUNIT_OK;
 }
 
-/* Shift to an entry which makes the log wrap. */
-TEST_CASE(shift, wrap, NULL)
+/* Take a snapshot when the number of outstanding entries is lower than the
+ * desired trail (so no entry will be deleted). */
+TEST_CASE(snapshot, trailing_higher_than_outstanding, NULL)
 {
     struct fixture *f = data;
-    int i;
-
     (void)params;
 
-    for (i = 0; i < 5; i++) {
-        APPEND(1 /* term */);
-    }
+    /* Take a snapshot leaving just one entry in the log. */
+    APPEND_MANY(1 /* term */, 3 /* n entries */);
+    SNAPSHOT(3, 1);
+
+    /* Take another snapshot, trying to leave 3 entries, but only 2 are
+     * available at all. */
+    APPEND(2 /* term */);
+
+    SNAPSHOT(4, 3);
+
+    ASSERT(6 /* size                                                 */,
+           2 /* front                                                */,
+           4 /* back                                                 */,
+           2 /* offset                                               */,
+           2 /* n */);
+
+    ASSERT_SNAPSHOT(4 /* index */, 2 /* term */);
+
+    return MUNIT_OK;
+}
+
+/* Take a snapshot when the number of outstanding entries is exactly equal to
+ * the desired trail (so no entry will be deleted). */
+TEST_CASE(snapshot, trailing_matches_outstanding, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+
+    /* Take a snapshot leaving just one entry in the log. */
+    APPEND_MANY(1 /* term */, 3 /* n entries */);
+    SNAPSHOT(3, 1);
+
+    /* Take another snapshot, leaving 2 entries, which are the ones we have. */
+    APPEND(2 /* term */);
+
+    SNAPSHOT(4, 2);
+
+    ASSERT(6 /* size                                                 */,
+           2 /* front                                                */,
+           4 /* back                                                 */,
+           2 /* offset                                               */,
+           2 /* n */);
+
+    ASSERT_SNAPSHOT(4 /* index */, 2 /* term */);
+
+    return MUNIT_OK;
+}
+
+/* Take a snapshot at a point where the log needs to wrap. */
+TEST_CASE(snapshot, wrap, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+
+    APPEND_MANY(1 /* term */, 5 /* n entries */);
 
     /* Now the log is [e1, e2, e3, e4, e5, NULL] */
     ASSERT(6 /* size                                                 */,
@@ -1359,8 +1396,8 @@ TEST_CASE(shift, wrap, NULL)
            0 /* offset                                               */,
            5 /* n */);
 
-    /* Delete the first 4 entries. */
-    SHIFT(4);
+    /* Take a snapshot at e5, keeping just e5 itself. */
+    SNAPSHOT(5, 1);
 
     /* Now the log is [NULL, NULL, NULL, NULL, e5, NULL] */
     ASSERT(6 /* size                                                 */,
@@ -1368,6 +1405,8 @@ TEST_CASE(shift, wrap, NULL)
            5 /* back                                                 */,
            4 /* offset                                               */,
            1 /* n */);
+
+    ASSERT_SNAPSHOT(5 /* index */, 1 /* term */);
 
     /* Append another 4 entries. */
     APPEND_MANY(1 /* term */, 4 /* n */);
@@ -1379,8 +1418,8 @@ TEST_CASE(shift, wrap, NULL)
            4 /* offset                                               */,
            5 /* n */);
 
-    /* Shift up to e7 included (wrapping) */
-    SHIFT(7);
+    /* Take a snapshot at e8 keeping only e8 itself (wrapping) */
+    SNAPSHOT(8, 1);
 
     /* Now the log is [NULL, e8, e9, NULL, NULL, NULL] */
     ASSERT(6 /* size                                                 */,
@@ -1388,6 +1427,8 @@ TEST_CASE(shift, wrap, NULL)
            3 /* back                                                 */,
            7 /* offset                                               */,
            2 /* n */);
+
+    ASSERT_SNAPSHOT(8 /* index */, 1 /* term */);
 
     return MUNIT_OK;
 }

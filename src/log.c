@@ -361,6 +361,8 @@ void log__init(struct raft_log *l)
     l->offset = 0;
     l->refs = NULL;
     l->refs_size = 0;
+    l->snapshot.last_index = 0;
+    l->snapshot.last_term = 0;
 }
 
 void log__set_offset(struct raft_log *l, raft_index offset)
@@ -887,4 +889,24 @@ void log__shift(struct raft_log *l, const raft_index index)
     }
 
     clear_if_empty(l);
+}
+
+void log__snapshot(struct raft_log *l, raft_index index, unsigned trailing)
+{
+    raft_term term = log__term_of(l, index);
+
+    /* We must have an entry at this index */
+    assert(term != 0);
+
+    l->snapshot.last_index = index;
+    l->snapshot.last_term = term;
+
+    assert(index - trailing > 0);
+
+    /* If we have not at least n entries preceeding index, we're done */
+    if (locate_entry(l, index - trailing) == l->size) {
+        return;
+    }
+
+    log__shift(l, index - trailing);
 }
