@@ -32,7 +32,7 @@
  *   s. We believe these election times are more than adequate for most WAN
  *   deployments.
  */
-void raft_election__reset_timer(struct raft *r);
+void election__reset_timer(struct raft *r);
 
 /**
  * Start a new election round.
@@ -53,7 +53,7 @@ void raft_election__reset_timer(struct raft *r);
  *   transitions to candidate state.  It then votes for itself and issues
  *   RequestVote RPCs in parallel to each of the other servers in the cluster.
  */
-int raft_election__start(struct raft *r);
+int election__start(struct raft *r);
 
 /**
  * Decide whether our vote should be granted to the requesting server and update
@@ -68,15 +68,15 @@ int raft_election__start(struct raft *r);
  *
  * The outcome of the decision is stored through the @granted pointer.
  */
-int raft_election__vote(struct raft *r,
-                        const struct raft_request_vote *args,
-                        bool *granted);
+int election__vote(struct raft *r,
+                   const struct raft_request_vote *args,
+                   bool *granted);
 
 /**
  * Update the votes array by adding the vote from the server at the given
  * index. Return true if with this vote the server has reached the majority of
  * votes and won elections.
  */
-bool raft_election__tally(struct raft *r, size_t votes_index);
+bool election__tally(struct raft *r, size_t votes_index);
 
 #endif /* RAFT_ELECTION_H */

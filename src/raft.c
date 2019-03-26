@@ -99,7 +99,7 @@ void raft_close(struct raft *r, void (*cb)(struct raft *r))
 void raft_set_election_timeout(struct raft *r, const unsigned msecs)
 {
     r->election_timeout = msecs;
-    raft_election__reset_timer(r);
+    election__reset_timer(r);
 }
 
 void raft_set_heartbeat_timeout(struct raft *r, const unsigned msecs)

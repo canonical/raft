@@ -85,7 +85,7 @@ static int candidate_tick(struct raft *r)
      */
     if (r->timer > r->election_timeout_rand) {
         infof(r->io, "start new election");
-        return raft_election__start(r);
+        return election__start(r);
     }
 
     return 0;

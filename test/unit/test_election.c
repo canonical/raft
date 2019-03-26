@@ -54,7 +54,7 @@ static void tear_down(void *data)
     }
 
 /**
- * raft_election__reset_timer
+ * election__reset_timer
  */
 
 TEST_SUITE(reset_timer);
@@ -74,7 +74,7 @@ TEST_CASE(reset_timer, success, range, NULL)
 
     test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
-    raft_election__reset_timer(&f->raft);
+    election__reset_timer(&f->raft);
 
     munit_assert_int(f->raft.election_timeout_rand, >=,
                      f->raft.election_timeout);
@@ -86,7 +86,7 @@ TEST_CASE(reset_timer, success, range, NULL)
 }
 
 /**
- * raft_election__start
+ * election__start
  */
 
 TEST_SUITE(start);
@@ -107,7 +107,7 @@ TEST_CASE(start, send_request_vote_rpcs, NULL)
 
     __set_state_to_candidate(f);
 
-    rv = raft_election__start(&f->raft);
+    rv = election__start(&f->raft);
     munit_assert_int(rv, ==, 0);
 
     /* Since there's only one other voting server, we sent only one message. */
@@ -138,7 +138,7 @@ TEST_CASE(start, error, term_io_err, NULL)
 
     raft_io_stub_fault(&f->io, 0, 1);
 
-    rv = raft_election__start(&f->raft);
+    rv = election__start(&f->raft);
     munit_assert_int(rv, ==, RAFT_ERR_IO);
 
     return MUNIT_OK;
@@ -158,7 +158,7 @@ TEST_CASE(start, error, vote_io_err, NULL)
 
     raft_io_stub_fault(&f->io, 1, 1);
 
-    rv = raft_election__start(&f->raft);
+    rv = election__start(&f->raft);
     munit_assert_int(rv, ==, RAFT_ERR_IO);
 
     return MUNIT_OK;
@@ -178,14 +178,14 @@ TEST_CASE(start, error, send_io_err, NULL)
 
     raft_io_stub_fault(&f->io, 2, 1);
 
-    rv = raft_election__start(&f->raft);
+    rv = election__start(&f->raft);
     munit_assert_int(rv, ==, 0);
 
     return MUNIT_OK;
 }
 
 /**
- * raft_election__vote
+ * election__vote
  */
 
 TEST_SUITE(vote);
@@ -213,7 +213,7 @@ TEST_CASE(vote, success, newer_term, NULL)
     args.last_log_index = 1;
     args.last_log_term = 1;
 
-    rv = raft_election__vote(&f->raft, &args, &granted);
+    rv = election__vote(&f->raft, &args, &granted);
     munit_assert_int(rv, ==, 0);
 
     munit_assert_true(granted);
@@ -240,7 +240,7 @@ TEST_CASE(vote, error, io_err, NULL)
 
     raft_io_stub_fault(&f->io, 0, 1);
 
-    rv = raft_election__vote(&f->raft, &args, &granted);
+    rv = election__vote(&f->raft, &args, &granted);
     munit_assert_int(rv, ==, RAFT_ERR_IO);
 
     return MUNIT_OK;

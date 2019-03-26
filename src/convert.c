@@ -100,7 +100,7 @@ void convert__to_follower(struct raft *r)
     set_state(r, RAFT_FOLLOWER);
 
     /* Reset election timer. */
-    raft_election__reset_timer(r);
+    election__reset_timer(r);
 
     /* The current leader will be set next time that we receive an AppendEntries
      * RPC. */
@@ -123,7 +123,7 @@ int convert__to_candidate(struct raft *r)
     }
 
     /* Start a new election round */
-    rv = raft_election__start(r);
+    rv = election__start(r);
     if (rv != 0) {
         r->state = RAFT_FOLLOWER;
         raft_free(r->candidate_state.votes);

@@ -160,7 +160,7 @@ TEST_SUITE(n_outstanding);
 TEST_SETUP(n_outstanding, setup);
 TEST_TEAR_DOWN(n_outstanding, tear_down);
 
-/* The log is empty. */
+/* If the log is empty, the return value is zero. */
 TEST_CASE(n_outstanding, empty, NULL)
 {
     struct fixture *f = data;
@@ -328,8 +328,8 @@ TEST_CASE(term_of, beyond_last, NULL)
     return MUNIT_OK;
 }
 
-/* If the log is empty and but has a snapshot, and the given index matches the
- * last index of the snapshot, return the snapshot last term. */
+/* If the log is empty but has a snapshot, and the given index matches the last
+ * index of the snapshot, return the snapshot last term. */
 TEST_CASE(term_of, snapshot_last_index, NULL)
 {
     struct fixture *f = data;

@@ -69,7 +69,7 @@ int raft_rpc__recv_request_vote(struct raft *r,
      * (otherwise we would have reject the request */
     assert(r->current_term <= args->term);
 
-    rv = raft_election__vote(r, args, &result->vote_granted);
+    rv = election__vote(r, args, &result->vote_granted);
     if (rv != 0) {
         return rv;
     }
@@ -159,7 +159,7 @@ int raft_rpc__recv_request_vote_result(
      *   it becomes leader.
      */
     if (result->vote_granted) {
-        if (raft_election__tally(r, votes_index)) {
+        if (election__tally(r, votes_index)) {
             infof(r->io, "votes quorum reached -> convert to leader");
             rv = convert__to_leader(r);
             if (rv != 0) {

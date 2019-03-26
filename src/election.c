@@ -4,7 +4,7 @@
 #include "log.h"
 #include "logging.h"
 
-void raft_election__reset_timer(struct raft *r)
+void election__reset_timer(struct raft *r)
 {
     assert(r != NULL);
 
@@ -13,19 +13,14 @@ void raft_election__reset_timer(struct raft *r)
     r->timer = 0;
 }
 
-static void raft_election__send_request_vote_cb(struct raft_io_send *req,
-                                                int status)
+static void send_request_vote_cb(struct raft_io_send *req, int status)
 {
     (void)status;
-
     raft_free(req);
 }
 
-/**
- * Send a RequestVote RPC to the given server.
- */
-static int raft_election__send_request_vote(struct raft *r,
-                                            const struct raft_server *server)
+/* Send a RequestVote RPC to the given server. */
+static int send_request_vote(struct raft *r, const struct raft_server *server)
 {
     struct raft_message message;
     struct raft_io_send *req;
@@ -37,8 +32,6 @@ static int raft_election__send_request_vote(struct raft *r,
     assert(server != NULL);
     assert(server->id != r->id);
     assert(server->id != 0);
-
-    /* TODO: account for snapshots */
 
     message.type = RAFT_IO_REQUEST_VOTE;
     message.request_vote.term = r->current_term;
@@ -53,7 +46,7 @@ static int raft_election__send_request_vote(struct raft *r,
         return RAFT_ENOMEM;
     }
 
-    rv = r->io->send(r->io, req, &message, raft_election__send_request_vote_cb);
+    rv = r->io->send(r->io, req, &message, send_request_vote_cb);
     if (rv != 0) {
         raft_free(req);
         return rv;
@@ -62,7 +55,7 @@ static int raft_election__send_request_vote(struct raft *r,
     return 0;
 }
 
-int raft_election__start(struct raft *r)
+int election__start(struct raft *r)
 {
     raft_term term;
     size_t n_voting;
@@ -82,7 +75,7 @@ int raft_election__start(struct raft *r)
     assert(voting_index < r->configuration.n);
 
     /* Sanity check that configuration__n_voting and
-     * raft_configuration__votes_index have returned somethig that makes
+     * configuration__index_of_voting have returned somethig that makes
      * sense. */
     assert(n_voting <= r->configuration.n);
     assert(voting_index < n_voting);
@@ -105,7 +98,7 @@ int raft_election__start(struct raft *r)
     r->voted_for = r->id;
 
     /* Reset election timer. */
-    raft_election__reset_timer(r);
+    election__reset_timer(r);
 
     assert(r->candidate_state.votes != NULL);
 
@@ -125,7 +118,7 @@ int raft_election__start(struct raft *r)
             continue;
         }
 
-        rv = raft_election__send_request_vote(r, server);
+        rv = send_request_vote(r, server);
         if (rv != 0) {
             /* This is not a critical failure, let's just log it. */
             warnf(r->io, "failed to send vote request to server %ld: %s (%d)",
@@ -140,9 +133,9 @@ err:
     return rv;
 }
 
-int raft_election__vote(struct raft *r,
-                        const struct raft_request_vote *args,
-                        bool *granted)
+int election__vote(struct raft *r,
+                   const struct raft_request_vote *args,
+                   bool *granted)
 {
     const struct raft_server *local_server;
     raft_index local_last_log_index;
@@ -219,7 +212,7 @@ grant_vote:
     return 0;
 }
 
-bool raft_election__tally(struct raft *r, size_t votes_index)
+bool election__tally(struct raft *r, size_t votes_index)
 {
     size_t n_voting = configuration__n_voting(&r->configuration);
     size_t votes = 0;
