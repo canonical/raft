@@ -47,6 +47,7 @@ libraft_la_SOURCES = \
   src/log.c \
   src/logging.c \
   src/membership.c \
+  src/progress.c \
   src/raft.c \
   src/replication.c \
   src/rpc.c \

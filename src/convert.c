@@ -3,6 +3,7 @@
 #include "configuration.h"
 #include "election.h"
 #include "log.h"
+#include "progress.h"
 #include "queue.h"
 #include "state.h"
 
@@ -178,13 +179,7 @@ int convert__to_leader(struct raft *r)
      * assume that servers are up-to-date and back track if turns out not to be
      * so (TODO: include reference to raft paper). */
     for (i = 0; i < r->configuration.n; i++) {
-        struct raft_progress *replication = &r->leader_state.progress[i];
-        replication->next_index = last_index + 1;
-        replication->match_index = 0;
-        /* TODO: we should keep a last_contact array which is independent from
-         * the replication array, and keep it up-to-date.  */
-        replication->last_contact = 0;
-        replication->state = REPLICATION__PROBE;
+        progress__init(&r->leader_state.progress[i], last_index);
     }
 
     /* Reset promotion state. */
