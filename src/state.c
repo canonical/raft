@@ -62,7 +62,7 @@ int raft_state__bump_current_term(struct raft *r, raft_term term)
  * Allocate the replication state for n_servers.
  */
 static int alloc_replication(size_t n_servers,
-                             struct raft_replication **replication)
+                             struct raft_progress **replication)
 {
     int rv;
 
@@ -86,7 +86,7 @@ int raft_state__rebuild_next_and_match_indexes(
     struct raft *r,
     const struct raft_configuration *configuration)
 {
-    struct raft_replication *replication; /* New replication array */
+    struct raft_progress *replication; /* New replication array */
     size_t i;
     int rv;
 
@@ -112,7 +112,7 @@ int raft_state__rebuild_next_and_match_indexes(
             continue;
         }
 
-        replication[j] = r->leader_state.replication[i];
+        replication[j] = r->leader_state.progress[i];
     }
 
     /* Then reset the replication state for servers that are present in the new
@@ -135,9 +135,9 @@ int raft_state__rebuild_next_and_match_indexes(
         replication[i].last_contact = r->io->time(r->io);
     }
 
-    raft_free(r->leader_state.replication);
+    raft_free(r->leader_state.progress);
 
-    r->leader_state.replication = replication;
+    r->leader_state.progress = replication;
 
     return 0;
 

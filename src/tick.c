@@ -103,7 +103,7 @@ static bool leader_has_been_contacted_by_majority_of_servers(struct raft *r)
 
     for (i = 0; i < r->configuration.n; i++) {
         struct raft_server *server = &r->configuration.servers[i];
-        struct raft_replication *replication = &r->leader_state.replication[i];
+        struct raft_progress *replication = &r->leader_state.progress[i];
         unsigned elapsed;
 
         if (!server->voting) {
@@ -135,8 +135,6 @@ static bool leader_has_been_contacted_by_majority_of_servers(struct raft *r)
  */
 static int leader_tick(struct raft *r, const unsigned msec_since_last_tick)
 {
-    int rv;
-
     assert(r != NULL);
     assert(r->state == RAFT_LEADER);
 

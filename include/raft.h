@@ -550,7 +550,7 @@ extern const char *raft_state_names[];
 /**
  * Used by leaders to keep track of replication progress for each server.
  */
-struct raft_replication
+struct raft_progress
 {
     raft_index next_index;  /* Next entry to send */
     raft_index match_index; /* Highest applied idx */
@@ -751,7 +751,7 @@ struct raft
              * which is specific to leaders (Figure 3.1). This state is
              * reinitialized after the server gets elected.
              */
-            struct raft_replication *replication; /* Per-server replication */
+            struct raft_progress *progress; /* Per-server replication state */
 
             /**
              * Fields used to track the progress of pushing entries to the

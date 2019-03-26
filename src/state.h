@@ -8,7 +8,7 @@
 #include "../include/raft.h"
 
 /**
- * Possible values for the state field of struct raft_replication.
+ * Possible values for the state field of struct raft_progress.
  */
 enum {
     REPLICATION__PROBE = 0, /* At most one AppendEntries per heartbeat */

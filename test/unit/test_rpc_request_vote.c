@@ -496,15 +496,15 @@ TEST_CASE(response, success, quorum, NULL)
     /* We are leader */
     __assert_state(f, RAFT_LEADER);
 
-    munit_assert_ptr_not_null(f->raft.leader_state.replication);
+    munit_assert_ptr_not_null(f->raft.leader_state.progress);
 
     /* The next_index array is initialized */
-    munit_assert_int(f->raft.leader_state.replication[0].next_index, ==, 2);
-    munit_assert_int(f->raft.leader_state.replication[1].next_index, ==, 2);
+    munit_assert_int(f->raft.leader_state.progress[0].next_index, ==, 2);
+    munit_assert_int(f->raft.leader_state.progress[1].next_index, ==, 2);
 
     /* The match_index array is initialized */
-    munit_assert_int(f->raft.leader_state.replication[0].match_index, ==, 0);
-    munit_assert_int(f->raft.leader_state.replication[1].match_index, ==, 0);
+    munit_assert_int(f->raft.leader_state.progress[0].match_index, ==, 0);
+    munit_assert_int(f->raft.leader_state.progress[1].match_index, ==, 0);
 
     /* We have sent heartbeats */
     __assert_heartbeat(f, 2, 2, 1, 1);

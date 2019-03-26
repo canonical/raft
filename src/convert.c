@@ -1,8 +1,8 @@
 #include "convert.h"
 #include "assert.h"
 #include "configuration.h"
-#include "log.h"
 #include "election.h"
+#include "log.h"
 #include "queue.h"
 #include "state.h"
 
@@ -43,9 +43,9 @@ static void clear_candidate(struct raft *r)
 /*Clear leader state. */
 static void clear_leader(struct raft *r)
 {
-    if (r->leader_state.replication != NULL) {
-        raft_free(r->leader_state.replication);
-        r->leader_state.replication = NULL;
+    if (r->leader_state.progress != NULL) {
+        raft_free(r->leader_state.progress);
+        r->leader_state.progress = NULL;
     }
 
     /* If a promotion request is in progress and we are waiting for the server
@@ -134,7 +134,7 @@ int convert__to_candidate(struct raft *r)
 
 /* Allocate the replication state for n_servers. */
 static int alloc_replication(size_t n_servers,
-                             struct raft_replication **replication)
+                             struct raft_progress **replication)
 {
     int rv;
 
@@ -167,7 +167,7 @@ int convert__to_leader(struct raft *r)
     RAFT__QUEUE_INIT(&r->leader_state.apply_reqs);
 
     /* Allocate the next_index and match_index arrays. */
-    rv = alloc_replication(r->configuration.n, &r->leader_state.replication);
+    rv = alloc_replication(r->configuration.n, &r->leader_state.progress);
     if (rv != 0) {
         return rv;
     }
@@ -178,7 +178,7 @@ int convert__to_leader(struct raft *r)
      * assume that servers are up-to-date and back track if turns out not to be
      * so (TODO: include reference to raft paper). */
     for (i = 0; i < r->configuration.n; i++) {
-        struct raft_replication *replication = &r->leader_state.replication[i];
+        struct raft_progress *replication = &r->leader_state.progress[i];
         replication->next_index = last_index + 1;
         replication->match_index = 0;
         /* TODO: we should keep a last_contact array which is independent from
@@ -196,7 +196,8 @@ int convert__to_leader(struct raft *r)
     return 0;
 }
 
-void convert__to_unavailable(struct raft *r) {
+void convert__to_unavailable(struct raft *r)
+{
     clear(r);
     set_state(r, RAFT_UNAVAILABLE);
 }

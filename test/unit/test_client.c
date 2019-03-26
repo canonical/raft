@@ -492,8 +492,8 @@ TEST_CASE(add_server, success, committed, NULL)
     __assert_configuration_indexes(f, 1, 2);
 
     /* The next/match indexes now include an entry for the new server. */
-    munit_assert_int(f->raft.leader_state.replication[2].next_index, ==, 3);
-    munit_assert_int(f->raft.leader_state.replication[2].match_index, ==, 0);
+    munit_assert_int(f->raft.leader_state.progress[2].next_index, ==, 3);
+    munit_assert_int(f->raft.leader_state.progress[2].match_index, ==, 0);
 
     __assert_io(f, 1, 2);
 
@@ -745,7 +745,7 @@ TEST_CASE(promote, success, committed, NULL)
     /* Let more than election_timeout milliseconds elapse, but track a contact
      * from server 2 in between, to avoid stepping down. */
     __tick(f, f->raft.election_timeout - 100);
-    f->raft.leader_state.replication[1].last_contact = f->io.time(&f->io);
+    f->raft.leader_state.progress[1].last_contact = f->io.time(&f->io);
     raft_io_stub_flush_all(&f->io);
     __tick(f, 200);
     __assert_io(f, 0, 2); /* Heartbeat */

@@ -164,7 +164,7 @@ err:
 static int raft_replication__send_snapshot(struct raft *r, size_t i)
 {
     struct raft_server *server = &r->configuration.servers[i];
-    struct raft_replication *replication = &r->leader_state.replication[i];
+    struct raft_progress *replication = &r->leader_state.progress[i];
     struct send_install_snapshot *request;
     int rv;
 
@@ -197,7 +197,7 @@ err:
 int raft_replication__send_append_entries(struct raft *r, size_t i)
 {
     struct raft_server *server = &r->configuration.servers[i];
-    struct raft_replication *replication = &r->leader_state.replication[i];
+    struct raft_progress *replication = &r->leader_state.progress[i];
     raft_index next_index;
     struct raft_message message;
     struct raft_append_entries *args = &message.append_entries;
@@ -210,7 +210,7 @@ int raft_replication__send_append_entries(struct raft *r, size_t i)
     assert(server != NULL);
     assert(server->id != r->id);
     assert(server->id != 0);
-    assert(r->leader_state.replication != NULL);
+    assert(r->leader_state.progress != NULL);
 
     args->term = r->current_term;
     args->leader_id = r->id;
@@ -399,7 +399,7 @@ static void raft_replication__leader_append_cb(void *data, int status)
      *   replicates log entries but does not count itself in majorities.
      */
     if (server_index < r->configuration.n) {
-        r->leader_state.replication[server_index].match_index = r->last_stored;
+        r->leader_state.progress[server_index].match_index = r->last_stored;
     } else {
         const struct raft_entry *entry = log__get(&r->log, r->last_stored);
         assert(entry->type == RAFT_CONFIGURATION);
@@ -498,7 +498,7 @@ int raft_replication__trigger(struct raft *r, const raft_index index)
     /* Trigger replication for servers we didn't hear from recently. */
     for (i = 0; i < r->configuration.n; i++) {
         struct raft_server *server = &r->configuration.servers[i];
-        struct raft_replication *replication = &r->leader_state.replication[i];
+        struct raft_progress *replication = &r->leader_state.progress[i];
         int rv;
 
         if (server->id == r->id) {
@@ -602,7 +602,7 @@ int raft_replication__update(struct raft *r,
                              const struct raft_append_entries_result *result)
 {
     size_t server_index;
-    struct raft_replication *replication;
+    struct raft_progress *replication;
     raft_index last_log_index;
     bool is_being_promoted;
     int rv;
@@ -612,7 +612,7 @@ int raft_replication__update(struct raft *r,
     server_index = configuration__index_of(&r->configuration, server->id);
     assert(server_index < r->configuration.n);
 
-    replication = &r->leader_state.replication[server_index];
+    replication = &r->leader_state.progress[server_index];
     replication->last_contact = r->io->time(r->io);
 
     /* Reset the replication state to probe, as we might need to send the
@@ -1435,7 +1435,7 @@ void raft_replication__quorum(struct raft *r, const raft_index index)
         if (!server->voting) {
             continue;
         }
-        if (r->leader_state.replication[i].match_index >= index) {
+        if (r->leader_state.progress[i].match_index >= index) {
             votes++;
         }
     }
