@@ -67,6 +67,11 @@
 #define CLUSTER_RAFT(I) raft_fixture_get(&f->cluster, I)
 
 /**
+ * Get the state of the I'th server.
+ */
+#define CLUSTER_STATE(I) raft_state(raft_fixture_get(&f->cluster, I))
+
+/**
  * Get the struct fsm object of the I'th server.
  */
 #define CLUSTER_FSM(I) &f->fsms[I]
@@ -76,6 +81,11 @@
  */
 #define CLUSTER_LAST_APPLIED(I) \
     raft_last_applied(raft_fixture_get(&f->cluster, I))
+
+/**
+ * Return the ID of the server the I'th server has voted for.
+ */
+#define CLUSTER_VOTED_FOR(I) raft_fixture_voted_for(&f->cluster, I)
 
 /**
  * Populate the given configuration with all servers in the fixture. All servers
@@ -110,6 +120,11 @@
         rc = raft_fixture_start(&f->cluster); \
         munit_assert_int(rc, ==, 0);          \
     }
+
+/**
+ * Step the cluster.
+ */
+#define CLUSTER_STEP raft_fixture_step(&f->cluster);
 
 /**
  * Step the cluster until a leader is elected or #MAX_MSECS have elapsed.
@@ -193,6 +208,16 @@
     }
 
 /**
+ * Grow the cluster adding one server.
+ */
+#define CLUSTER_GROW                                              \
+    {                                                             \
+        int rv;                                                   \
+        rv = raft_fixture_grow(&f->cluster, &f->fsms[CLUSTER_N]); \
+        munit_assert_int(rv, ==, 0);                              \
+    }
+
+/**
  * Add a new pristine server to the cluster, connected to all others. Then
  * submit a request to add it to the configuration as non-voting server.
  */
@@ -201,7 +226,8 @@
         int rc;                                                      \
         struct raft *raft;                                           \
         test_fsm_setup(NULL, &f->fsms[CLUSTER_N]);                   \
-        rc = raft_fixture_grow(&f->cluster, &f->fsms[CLUSTER_N]);    \
+        CLUSTER_GROW;                                                \
+        rc = raft_start(CLUSTER_RAFT(CLUSTER_N - 1));                \
         munit_assert_int(rc, ==, 0);                                 \
         raft_fixture_set_random(&f->cluster, CLUSTER_N - 1,          \
                                 munit_rand_int_range);               \
@@ -247,6 +273,18 @@
 #define CLUSTER_ELECT(I) raft_fixture_elect(&f->fixture, I)
 
 /**
+ * Set the random function used by the I'th server.
+ */
+#define CLUSTER_SET_RANDOM(I, RANDOM) \
+    raft_fixture_set_random(&f->cluster, I, RANDOM)
+
+/**
+ * Set the minimum and maximum network latency of outgoing messages of server I.
+ */
+#define CLUSTER_SET_LATENCY(I, MIN, MAX) \
+    raft_fixture_set_latency(&f->cluster, I, MIN, MAX)
+
+/**
  * Set the term persisted on the I'th server. This must be called before
  * starting the cluster.
  */
@@ -266,5 +304,11 @@
         raft_configuration_close(&configuration);                        \
         raft_fixture_set_snapshot(&f->cluster, I, snapshot);             \
     }
+
+/**
+ * Make an I/O error occur on the I'th server after @DELAY operations.
+ */
+#define CLUSTER_IO_FAULT(I, DELAY, REPEAT) \
+    raft_fixture_io_fault(&f->cluster, I, DELAY, REPEAT)
 
 #endif /* TEST_CLUSTER_H */

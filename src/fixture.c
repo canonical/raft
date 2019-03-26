@@ -178,6 +178,11 @@ unsigned raft_fixture_leader_index(struct raft_fixture *f)
     return f->n;
 }
 
+unsigned raft_fixture_voted_for(struct raft_fixture *f, unsigned i)
+{
+    return raft_io_stub_vote(&f->servers[i].io);
+}
+
 /* Flush any pending write to the disk and any pending message into the network
  * buffers (this will assign them a latency timer). */
 static void flush_io(struct raft_fixture *f)
@@ -706,11 +711,6 @@ int raft_fixture_grow(struct raft_fixture *f, struct raft_fsm *fsm)
         raft_io_stub_connect(io2, io1);
     }
 
-    rc = raft_start(&s->raft);
-    if (rc != 0) {
-        return rc;
-    }
-
     return 0;
 }
 
@@ -720,6 +720,15 @@ void raft_fixture_set_random(struct raft_fixture *f,
 {
     struct raft_fixture_server *s = &f->servers[i];
     raft_io_stub_set_random(&s->io, random);
+}
+
+void raft_fixture_set_latency(struct raft_fixture *f,
+                              unsigned i,
+                              unsigned min,
+                              unsigned max)
+{
+    struct raft_fixture_server *s = &f->servers[i];
+    raft_io_stub_set_latency(&s->io, min, max);
 }
 
 void raft_fixture_set_term(struct raft_fixture *f, unsigned i, raft_term term)
@@ -743,4 +752,13 @@ void raft_fixture_set_entries(struct raft_fixture *f,
 {
     struct raft_fixture_server *s = &f->servers[i];
     raft_io_stub_set_entries(&s->io, entries, n);
+}
+
+void raft_fixture_io_fault(struct raft_fixture *f,
+                           unsigned i,
+                           int delay,
+                           int repeat)
+{
+    struct raft_fixture_server *s = &f->servers[i];
+    raft_io_stub_fault(&s->io, delay, repeat);
 }
