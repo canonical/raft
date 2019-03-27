@@ -5,8 +5,8 @@
 #include "convert.h"
 #include "election.h"
 #include "logging.h"
+#include "progress.h"
 #include "replication.h"
-#include "state.h"
 #include "watch.h"
 
 /**
@@ -96,48 +96,7 @@ static int candidate_tick(struct raft *r)
     return 0;
 }
 
-/**
- * Return true if the leader has been contacted by a majority of servers in the
- * last @election_timeout milliseconds.
- */
-static bool leader_has_been_contacted_by_majority_of_servers(struct raft *r)
-{
-    raft_time now = r->io->time(r->io);
-    unsigned i;
-    unsigned contacts = 0;
-
-    for (i = 0; i < r->configuration.n; i++) {
-        struct raft_server *server = &r->configuration.servers[i];
-        struct raft_progress *replication = &r->leader_state.progress[i];
-        unsigned elapsed;
-
-        if (!server->voting) {
-            continue;
-        }
-
-        if (server->id == r->id) {
-            contacts++;
-            continue;
-        }
-
-        elapsed = now - replication->last_contact;
-
-        if (elapsed <= r->election_timeout) {
-            contacts++;
-        } else {
-            debugf(r->io,
-                   "lost contact with server %d: no message since %u "
-                   "msecs (last contact %u, now %u)",
-                   server->id, elapsed, replication->last_contact, now);
-        }
-    }
-
-    return contacts > configuration__n_voting(&r->configuration) / 2;
-}
-
-/**
- * Apply time-dependent rules for leaders (Figure 3.1).
- */
+/* Apply time-dependent rules for leaders (Figure 3.1). */
 static int leader_tick(struct raft *r, const unsigned msec_since_last_tick)
 {
     assert(r != NULL);
@@ -151,7 +110,7 @@ static int leader_tick(struct raft *r, const unsigned msec_since_last_tick)
      *   successful round of heartbeats to a majority of its cluster; this
      *   allows clients to retry their requests with another server.
      */
-    if (!leader_has_been_contacted_by_majority_of_servers(r)) {
+    if (!progress__has_still_quorum(r)) {
         warnf(r->io, "unable to contact majority of cluster -> step down");
         convert__to_follower(r);
         return 0;
@@ -165,8 +124,8 @@ static int leader_tick(struct raft *r, const unsigned msec_since_last_tick)
      *   timeouts.
      */
     if (r->timer > r->heartbeat_timeout) {
-        raft_replication__trigger(r, 0);
         r->timer = 0;
+        raft_replication__trigger(r, 0);
     }
 
     /* If a server is being promoted, increment the timer of the current

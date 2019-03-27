@@ -8,20 +8,23 @@
 #include "../include/raft.h"
 
 /**
- * Create and initialize an array of progress objects used by the leader to
- * track followers. The match index will be set to zero, and the last index to
- * @last_index + 1.
+ * Create and initialize the array of progress objects used by the leader to
+ * track followers. The match index will be set to zero, and the current last
+ * index plus 1.
  */
-struct raft_progress *progress__create_array(unsigned n_servers,
-                                             raft_index last_index);
+int progress__create_array(struct raft *r);
 
 /**
- * Re-build the given array or project objects against a new configuration.
+ * Re-build the progress array against a new configuration.
  */
-struct raft_progress *progress__update_array(
-    struct raft_progress *cur_p,
-    raft_index last_index,
-    const struct raft_configuration *cur_configuration,
-    const struct raft_configuration *new_configuration);
+int progress__update_array(struct raft *r,
+                           const struct raft_configuration *configuration);
+
+/**
+ * Return true if the last_contact field of the objects in the progress array
+ * indicates that the leader has been contacted by a majority of voting servers
+ * in the last election_timeout milliseconds.
+ */
+bool progress__has_still_quorum(struct raft *r);
 
 #endif /* RAFT_PROGRESS_H_ */

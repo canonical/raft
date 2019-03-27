@@ -76,15 +76,10 @@ static int raft_client__change_configuration(
     }
 
     if (configuration->n != r->configuration.n) {
-        struct raft_progress *progress;
-        progress = progress__update_array(r->leader_state.progress, index,
-                                          &r->configuration, configuration);
-        if (progress == NULL) {
-            rv = RAFT_ENOMEM;
+        rv = progress__update_array(r, configuration);
+        if (rv != 0) {
             goto err;
         }
-        raft_free(r->leader_state.progress);
-        r->leader_state.progress = progress;
     }
 
     /* Update the current configuration if we've created a new object. */

@@ -134,6 +134,8 @@ int convert__to_candidate(struct raft *r)
 
 int convert__to_leader(struct raft *r)
 {
+    int rv;
+
     clear(r);
     set_state(r, RAFT_LEADER);
 
@@ -141,10 +143,9 @@ int convert__to_leader(struct raft *r)
     RAFT__QUEUE_INIT(&r->leader_state.apply_reqs);
 
     /* Allocate the progress array. */
-    r->leader_state.progress =
-        progress__create_array(r->configuration.n, log__last_index(&r->log));
-    if (r->leader_state.progress == NULL) {
-        return RAFT_ENOMEM;
+    rv = progress__create_array(r);
+    if (rv != 0) {
+        return rv;
     }
 
     /* Reset promotion state. */
