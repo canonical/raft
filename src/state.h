@@ -16,10 +16,4 @@ enum {
     REPLICATION__SNAPSHOT   /* Sending a snapshot */
 };
 
-/**
- * Bump the current term to the given value and reset our vote, persiting the
- * change to disk.
- */
-int raft_state__bump_current_term(struct raft *r, raft_term term);
-
 #endif /* RAFT_STATE_H */

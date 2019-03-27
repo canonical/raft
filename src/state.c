@@ -37,23 +37,3 @@ raft_index raft_last_applied(struct raft *r)
 {
     return r->last_applied;
 }
-
-int raft_state__bump_current_term(struct raft *r, raft_term term)
-{
-    int rv;
-
-    assert(r != NULL);
-    assert(term >= r->current_term);
-
-    /* Save the new term to persistent store, resetting the vote. */
-    rv = r->io->set_term(r->io, term);
-    if (rv != 0) {
-        return rv;
-    }
-
-    /* Update our cache too. */
-    r->current_term = term;
-    r->voted_for = 0;
-
-    return 0;
-}

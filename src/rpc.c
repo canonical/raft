@@ -7,7 +7,6 @@
 #include "rpc_append_entries.h"
 #include "rpc_install_snapshot.h"
 #include "rpc_request_vote.h"
-#include "state.h"
 
 static const char *message_descs[] = {"append entries", "append entries result",
                                       "request vote", "request vote result",
@@ -67,6 +66,28 @@ void rpc__recv_cb(struct raft_io *io, struct raft_message *message)
     }
 }
 
+/* Bump the current term to the given value and reset our vote, persiting the
+ * change to disk. */
+static int bump_current_term(struct raft *r, raft_term term)
+{
+    int rv;
+
+    assert(r != NULL);
+    assert(term >= r->current_term);
+
+    /* Save the new term to persistent store, resetting the vote. */
+    rv = r->io->set_term(r->io, term);
+    if (rv != 0) {
+        return rv;
+    }
+
+    /* Update our cache too. */
+    r->current_term = term;
+    r->voted_for = 0;
+
+    return 0;
+}
+
 int raft_rpc__ensure_matching_terms(struct raft *r, raft_term term, int *match)
 {
     int rv;
@@ -94,21 +115,16 @@ int raft_rpc__ensure_matching_terms(struct raft *r, raft_term term, int *match)
      *   immediately reverts to follower state.
      */
     if (term > r->current_term) {
-        if (r->state == RAFT_FOLLOWER) {
-            /* Just bump the current term */
-            infof(r->io, "remote server term is higher -> bump local term");
-            rv = raft_state__bump_current_term(r, term);
-        } else {
-            /* Bump current state and also convert to follower. */
-            infof(r->io, "remote server term is higher -> step down");
-            rv = raft_state__bump_current_term(r, term);
-            convert__to_follower(r);
-        }
-
+        infof(r->io, "remote server term is higher -> bump local term");
+        rv = bump_current_term(r, term);
         if (rv != 0) {
             return rv;
         }
-
+        if (r->state != RAFT_FOLLOWER) {
+            /* Bump current state and also convert to follower. */
+            infof(r->io, "remote server term is higher -> step down");
+            convert__to_follower(r);
+        }
         *match = 1;
     } else {
         *match = 0;
