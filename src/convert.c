@@ -5,7 +5,6 @@
 #include "log.h"
 #include "progress.h"
 #include "queue.h"
-#include "state.h"
 
 /* Convenience for setting a new state value and asserting that the transition
  * is valid. */
@@ -133,33 +132,10 @@ int convert__to_candidate(struct raft *r)
     return 0;
 }
 
-/* Allocate the replication state for n_servers. */
-static int alloc_replication(size_t n_servers,
-                             struct raft_progress **replication)
-{
-    int rv;
-
-    assert(n_servers > 0);
-    assert(replication != NULL);
-
-    *replication = raft_calloc(n_servers, sizeof **replication);
-    if (*replication == NULL) {
-        rv = RAFT_ENOMEM;
-        goto err;
-    }
-
-    return 0;
-
-err:
-    assert(rv != 0);
-    return rv;
-}
-
 int convert__to_leader(struct raft *r)
 {
     size_t i;
     raft_index last_index;
-    int rv;
 
     clear(r);
     set_state(r, RAFT_LEADER);
@@ -167,10 +143,11 @@ int convert__to_leader(struct raft *r)
     /* Reset apply requests queue */
     RAFT__QUEUE_INIT(&r->leader_state.apply_reqs);
 
-    /* Allocate the next_index and match_index arrays. */
-    rv = alloc_replication(r->configuration.n, &r->leader_state.progress);
-    if (rv != 0) {
-        return rv;
+    /* Allocate the progress array. */
+    r->leader_state.progress =
+        raft_calloc(r->configuration.n, sizeof *r->leader_state.progress);
+    if (r->leader_state.progress == NULL) {
+        return RAFT_ENOMEM;
     }
 
     last_index = log__last_index(&r->log);
