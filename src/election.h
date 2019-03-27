@@ -8,7 +8,7 @@
 #include "../include/raft.h"
 
 /**
- * Reset the election_timer clock and set election_timeout_rand to a random
+ * Reset the election_timer clock and set randomized_election_timeout to a random
  * value between election_timeout and 2 * election_timeout.
  *
  * From Section §3.4:

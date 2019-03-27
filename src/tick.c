@@ -21,7 +21,7 @@ unsigned raft_next_timeout(struct raft *r)
     if (r->state == RAFT_LEADER) {
         timeout = r->heartbeat_timeout;
     } else {
-        timeout = r->election_timeout_rand;
+        timeout = r->randomized_election_timeout;
     }
     return timeout > r->timer ? timeout - r->timer : 0;
 }
@@ -58,7 +58,7 @@ static int follower_tick(struct raft *r)
      *   If election timeout elapses without receiving AppendEntries RPC from
      *   current leader or granting vote to candidate, convert to candidate.
      */
-    if (r->timer > r->election_timeout_rand && server->voting) {
+    if (r->timer > r->randomized_election_timeout && server->voting) {
         infof(r->io, "convert to candidate and start new election");
         rv = convert__to_candidate(r);
         if (rv != 0) {
@@ -88,7 +88,7 @@ static int candidate_tick(struct raft *r)
      *   happens, each candidate will time out and start a new election by
      *   incrementing its term and initiating another round of RequestVote RPCs
      */
-    if (r->timer > r->election_timeout_rand) {
+    if (r->timer > r->randomized_election_timeout) {
         infof(r->io, "start new election");
         return election__start(r);
     }

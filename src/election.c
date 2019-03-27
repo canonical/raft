@@ -7,7 +7,7 @@
 void election__reset_timer(struct raft *r)
 {
     assert(r != NULL);
-    r->election_timeout_rand =
+    r->randomized_election_timeout =
         r->io->random(r->io, r->election_timeout, 2 * r->election_timeout);
     r->timer = 0;
 }

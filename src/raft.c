@@ -54,7 +54,7 @@ int raft_init(struct raft *r,
     r->last_applied = 0;
     r->last_stored = 0;
     r->state = RAFT_UNAVAILABLE;
-    r->election_timeout_rand = 0;
+    r->randomized_election_timeout = 0;
     r->last_tick = 0;
     r->timer = 0;
     r->snapshot.pending.term = 0;

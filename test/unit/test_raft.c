@@ -233,9 +233,9 @@ TEST_CASE(start, success, pristine, NULL)
 
     __assert_state(f, RAFT_FOLLOWER);
 
-    munit_assert_int(f->raft.election_timeout_rand, >=,
+    munit_assert_int(f->raft.randomized_election_timeout, >=,
                      f->raft.election_timeout);
-    munit_assert_int(f->raft.election_timeout_rand, <,
+    munit_assert_int(f->raft.randomized_election_timeout, <,
                      2 * f->raft.election_timeout);
 
     return MUNIT_OK;

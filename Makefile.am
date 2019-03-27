@@ -44,6 +44,7 @@ libraft_la_SOURCES = \
   src/entry.c \
   src/error.c \
   src/heap.c \
+  src/heartbeat.c \
   src/log.c \
   src/logging.c \
   src/membership.c \

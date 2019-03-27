@@ -770,7 +770,10 @@ struct raft
     };
 
     /**
-     * Current election timeout. Randomized from election_timeout.
+     * Current election timeout.
+     *
+     * Randomized number between electiontimeout and 2 * electiontimeout - 1. It
+     * gets reset when raft changes its state to follower or candidate.
      *
      * From §9.3:
      *
@@ -779,7 +782,7 @@ struct raft
      *   than anticipated, most clusters would still be able to elect a leader
      *   in a timely manner).
      */
-    unsigned election_timeout_rand;
+    unsigned randomized_election_timeout;
 
     /**
      * Timestamp of the last call to the tick callback passed to raft_io. This
