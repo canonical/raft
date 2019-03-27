@@ -779,8 +779,9 @@ struct raft
 
     struct
     {
-        struct raft_snapshot pending;    /* In progress snapshot */
         unsigned threshold;              /* N. of entries before snapshot */
+        unsigned trailing;               /* N. of trailing entries to retain */
+        struct raft_snapshot pending;    /* In progress snapshot */
         struct raft_io_snapshot_put put; /* Store snapshot request */
     } snapshot;
 
@@ -842,6 +843,19 @@ void raft_set_election_timeout(struct raft *r, unsigned msecs);
  * Set the heartbeat timeout.
  */
 void raft_set_heartbeat_timeout(struct raft *r, unsigned msecs);
+
+/**
+ * Number of outstanding log entries before starting a new snapshot. The default
+ * is 1024.
+ */
+void raft_set_snapshot_threshold(struct raft *r, unsigned n);
+
+/**
+ * Number of outstanding log entries to keep in the log after a snapshot has
+ * been taken. This avoids sending snapshots when a follower is behind by just a
+ * few entries. The default is 128.
+ */
+void raft_set_snapshot_trailing(struct raft *r, unsigned n);
 
 /**
  * Return the code of the current raft state.

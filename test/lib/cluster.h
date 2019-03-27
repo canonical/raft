@@ -273,6 +273,16 @@
 #define CLUSTER_ELECT(I) raft_fixture_elect(&f->cluster, I)
 
 /**
+ * Disconnect two servers.
+ */
+#define CLUSTER_DISCONNECT(I, J) raft_fixture_disconnect(&f->cluster, I, J)
+
+/**
+ * Reconnect two servers.
+ */
+#define CLUSTER_RECONNECT(I, J) raft_fixture_reconnect(&f->cluster, I, J)
+
+/**
  * Set the random function used by the I'th server.
  */
 #define CLUSTER_SET_RANDOM(I, RANDOM) \

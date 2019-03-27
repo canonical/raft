@@ -394,8 +394,11 @@ static void check_leader_append_only(struct raft_fixture *f)
 
         assert(entry1 != NULL);
 
-        /* Entry was not deleted. */
-        assert(entry2 != NULL);
+        /* Check if the entry was snapshotted. */
+        if (entry2 == NULL) {
+            assert(raft->log.snapshot.last_index >= index);
+	    continue;
+        }
 
         /* TODO: check other entry types too. */
         if (entry1->type != RAFT_COMMAND) {

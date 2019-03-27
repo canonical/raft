@@ -20,7 +20,6 @@ static void *setup(const MunitParameter params[], void *user_data)
     (void)user_data;
     SETUP_CLUSTER(2);
     CLUSTER_BOOTSTRAP;
-    // CLUSTER_START;
     /* Assign a constant latency to all network messages */
     CLUSTER_SET_LATENCY(0, 25, 26);
     CLUSTER_SET_LATENCY(1, 25, 26);

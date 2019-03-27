@@ -13,6 +13,7 @@
 #define DEFAULT_ELECTION_TIMEOUT 1000 /* One second */
 #define DEFAULT_HEARTBEAT_TIMEOUT 100 /* One tenth of a second */
 #define DEFAULT_SNAPSHOT_THRESHOLD 1024
+#define DEFAULT_SNAPSHOT_TRAILING 128
 
 /* Set to 1 to enable tracing. */
 #if 0
@@ -59,6 +60,7 @@ int raft_init(struct raft *r,
     r->election_elapsed = 0;
     r->snapshot.pending.term = 0;
     r->snapshot.threshold = DEFAULT_SNAPSHOT_THRESHOLD;
+    r->snapshot.trailing = DEFAULT_SNAPSHOT_TRAILING;
     r->snapshot.put.data = NULL;
     for (i = 0; i < RAFT_EVENT_N; i++) {
         r->watchers[i] = NULL;
@@ -105,6 +107,16 @@ void raft_set_election_timeout(struct raft *r, const unsigned msecs)
 void raft_set_heartbeat_timeout(struct raft *r, const unsigned msecs)
 {
     r->heartbeat_timeout = msecs;
+}
+
+void raft_set_snapshot_threshold(struct raft *r, unsigned n)
+{
+    r->snapshot.threshold = n;
+}
+
+void raft_set_snapshot_trailing(struct raft *r, unsigned n)
+{
+    r->snapshot.trailing = n;
 }
 
 const char *raft_state_name(struct raft *r)

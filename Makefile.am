@@ -50,6 +50,7 @@ libraft_la_SOURCES = \
   src/membership.c \
   src/progress.c \
   src/raft.c \
+  src/recv.c \
   src/replication.c \
   src/rpc.c \
   src/rpc_append_entries.c \
@@ -132,7 +133,7 @@ unit_test_SOURCES += \
   test/unit/test_replication.c \
   test/unit/test_rpc_append_entries.c \
   test/unit/test_rpc_request_vote.c \
-  test/unit/test_rpc_install_snapshot.c \
+  test/unit/test_snapshot.c \
   test/unit/test_start.c \
   test/unit/test_tick.c
 if IO_UV

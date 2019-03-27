@@ -1296,8 +1296,7 @@ static void snapshot_put_cb(struct raft_io_snapshot_put *req, int status)
         goto out;
     }
 
-    /* TODO: make the number of trailing entries configurable */
-    log__snapshot(&r->log, snapshot->index, 100);
+    log__snapshot(&r->log, snapshot->index, r->snapshot.trailing);
 
 out:
     snapshot__close(&r->snapshot.pending);
@@ -1309,6 +1308,8 @@ static int take_snapshot(struct raft *r)
     struct raft_snapshot *snapshot;
     unsigned i;
     int rv;
+
+    debugf(r->io, "take snapshot at %lld", r->last_applied);
 
     snapshot = &r->snapshot.pending;
     snapshot->index = r->last_applied;
