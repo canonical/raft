@@ -53,7 +53,7 @@ int raft_rpc__recv_install_snapshot(struct raft *r,
 
     r->follower_state.current_leader.id = id;
     r->follower_state.current_leader.address = address;
-    r->timer = 0;
+    r->election_elapsed = 0;
 
     rv = raft_replication__install_snapshot(r, args, &result->success, &async);
     if (rv != 0) {

@@ -763,6 +763,11 @@ struct raft
             unsigned round_duration;     /* Duration of the current round */
 
             /**
+             * Number of milliseconds since we last reached heartbeat_timeout.
+             */
+            unsigned heartbeat_elapsed;
+
+            /**
              * Queue of outstanding apply requests.
              */
             void *apply_reqs[2];
@@ -792,11 +797,12 @@ struct raft
     raft_time last_tick;
 
     /**
-     * For followers and candidates, time elapsed since the last election
-     * started, in millisecond. For leaders time elapsed since the last
-     * AppendEntries RPC, in milliseconds.
+     * Number of milliseconds since we last reached election_timeout when it is
+     * leader or candidate. Number of milliseconds since we last reached
+     * election_timeout or received a valid message from current leader when it
+     * is a follower.
      */
-    unsigned timer;
+    unsigned election_elapsed;
 
     struct
     {

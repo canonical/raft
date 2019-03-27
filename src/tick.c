@@ -18,12 +18,15 @@
 unsigned raft_next_timeout(struct raft *r)
 {
     unsigned timeout;
+    unsigned elapsed;
     if (r->state == RAFT_LEADER) {
         timeout = r->heartbeat_timeout;
+	elapsed = r->leader_state.heartbeat_elapsed;
     } else {
         timeout = r->randomized_election_timeout;
+	elapsed = r->election_elapsed;
     }
-    return timeout > r->timer ? timeout - r->timer : 0;
+    return timeout > elapsed ? timeout - elapsed : 0;
 }
 
 /**
@@ -58,7 +61,7 @@ static int follower_tick(struct raft *r)
      *   If election timeout elapses without receiving AppendEntries RPC from
      *   current leader or granting vote to candidate, convert to candidate.
      */
-    if (r->timer > r->randomized_election_timeout && server->voting) {
+    if (r->election_elapsed > r->randomized_election_timeout && server->voting) {
         infof(r->io, "convert to candidate and start new election");
         rv = convert__to_candidate(r);
         if (rv != 0) {
@@ -88,7 +91,7 @@ static int candidate_tick(struct raft *r)
      *   happens, each candidate will time out and start a new election by
      *   incrementing its term and initiating another round of RequestVote RPCs
      */
-    if (r->timer > r->randomized_election_timeout) {
+    if (r->election_elapsed > r->randomized_election_timeout) {
         infof(r->io, "start new election");
         return election__start(r);
     }
@@ -101,6 +104,8 @@ static int leader_tick(struct raft *r, const unsigned msec_since_last_tick)
 {
     assert(r != NULL);
     assert(r->state == RAFT_LEADER);
+
+    r->leader_state.heartbeat_elapsed += msec_since_last_tick;
 
     /* Check if we still can reach a majority of servers.
      *
@@ -123,8 +128,8 @@ static int leader_tick(struct raft *r, const unsigned msec_since_last_tick)
      *   Send empty AppendEntries RPC during idle periods to prevent election
      *   timeouts.
      */
-    if (r->timer > r->heartbeat_timeout) {
-        r->timer = 0;
+    if (r->leader_state.heartbeat_elapsed > r->heartbeat_timeout) {
+        r->leader_state.heartbeat_elapsed = 0;
         raft_replication__trigger(r, 0);
     }
 
@@ -195,7 +200,7 @@ static int tick(struct raft *r)
     now = r->io->time(r->io);
 
     msecs_since_last_tick = now - r->last_tick;
-    r->timer += msecs_since_last_tick;
+    r->election_elapsed += msecs_since_last_tick;
     r->last_tick = now;
 
     switch (r->state) {

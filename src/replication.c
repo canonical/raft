@@ -491,7 +491,7 @@ int raft_replication__trigger(struct raft *r, const raft_index index)
      *   AppendEntries RPCs (heartbeat) to each server; repeat during idle
      *   periods to prevent election timeouts
      */
-    r->timer = 0;
+    r->leader_state.heartbeat_elapsed = 0;
 
     now = r->io->time(r->io);
 

@@ -572,7 +572,7 @@ TEST_CASE(response, success, step_down, NULL)
     munit_assert_int(f->raft.voted_for, ==, 0);
 
     /* The election timeout has been reset. */
-    munit_assert_int(f->raft.timer, ==, 0);
+    munit_assert_int(f->raft.election_elapsed, ==, 0);
 
     /* We are follower */
     munit_assert_int(f->raft.state, ==, RAFT_FOLLOWER);

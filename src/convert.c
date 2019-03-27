@@ -139,6 +139,8 @@ int convert__to_leader(struct raft *r)
     clear(r);
     set_state(r, RAFT_LEADER);
 
+    r->leader_state.heartbeat_elapsed = 0;
+
     /* Reset apply requests queue */
     RAFT__QUEUE_INIT(&r->leader_state.apply_reqs);
 

@@ -59,7 +59,8 @@ static void tear_down(void *data)
  * Assert the current value of the timer of the raft instance of the given
  * fixture.
  */
-#define __assert_timer(F, MSECS) munit_assert_int(F->raft.timer, ==, MSECS);
+#define __assert_timer(F, MSECS) \
+    munit_assert_int(F->raft.election_elapsed, ==, MSECS);
 
 /**
  * Assert the current state of the raft instance of the given fixture.

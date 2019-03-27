@@ -9,7 +9,7 @@ void election__reset_timer(struct raft *r)
     assert(r != NULL);
     r->randomized_election_timeout =
         r->io->random(r->io, r->election_timeout, 2 * r->election_timeout);
-    r->timer = 0;
+    r->election_elapsed = 0;
 }
 
 static void send_request_vote_cb(struct raft_io_send *req, int status)
@@ -206,7 +206,7 @@ grant_vote:
     r->voted_for = args->candidate_id;
 
     /* Reset the election timer. */
-    r->timer = 0;
+    r->election_elapsed = 0;
 
     return 0;
 }

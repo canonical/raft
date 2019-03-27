@@ -152,7 +152,7 @@ TEST_CASE(init, success, state, NULL)
     munit_assert_int(f->raft.election_timeout, ==, 1000);
     munit_assert_int(f->raft.heartbeat_timeout, ==, 100);
 
-    munit_assert_int(f->raft.timer, ==, 0);
+    munit_assert_int(f->raft.election_elapsed, ==, 0);
 
     munit_assert(f->raft.watchers[RAFT_EVENT_STATE_CHANGE] == NULL);
 

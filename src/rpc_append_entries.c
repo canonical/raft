@@ -97,7 +97,7 @@ int raft_rpc__recv_append_entries(struct raft *r,
     r->follower_state.current_leader.address = address;
 
     /* Reset the election timer. */
-    r->timer = 0;
+    r->election_elapsed = 0;
 
     /* If we are installing a snapshot, ignore these entries. TODO: we should do
      * something smarter, e.g. buffering the entries in the I/O backend, which
