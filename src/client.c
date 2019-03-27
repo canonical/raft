@@ -5,9 +5,9 @@
 #include "log.h"
 #include "logging.h"
 #include "membership.h"
+#include "progress.h"
 #include "queue.h"
 #include "replication.h"
-#include "state.h"
 
 int raft_apply(struct raft *r,
                struct raft_apply *req,
@@ -76,10 +76,15 @@ static int raft_client__change_configuration(
     }
 
     if (configuration->n != r->configuration.n) {
-        rv = raft_state__rebuild_next_and_match_indexes(r, configuration);
-        if (rv != 0) {
+        struct raft_progress *progress;
+        progress = progress__update_array(r->leader_state.progress, index,
+                                          &r->configuration, configuration);
+        if (progress == NULL) {
+            rv = RAFT_ENOMEM;
             goto err;
         }
+        raft_free(r->leader_state.progress);
+        r->leader_state.progress = progress;
     }
 
     /* Update the current configuration if we've created a new object. */

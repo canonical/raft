@@ -134,9 +134,6 @@ int convert__to_candidate(struct raft *r)
 
 int convert__to_leader(struct raft *r)
 {
-    size_t i;
-    raft_index last_index;
-
     clear(r);
     set_state(r, RAFT_LEADER);
 
@@ -145,18 +142,9 @@ int convert__to_leader(struct raft *r)
 
     /* Allocate the progress array. */
     r->leader_state.progress =
-        raft_calloc(r->configuration.n, sizeof *r->leader_state.progress);
+        progress__create_array(r->configuration.n, log__last_index(&r->log));
     if (r->leader_state.progress == NULL) {
         return RAFT_ENOMEM;
-    }
-
-    last_index = log__last_index(&r->log);
-
-    /* Initialize the replication state for each server. We optimistically
-     * assume that servers are up-to-date and back track if turns out not to be
-     * so (TODO: include reference to raft paper). */
-    for (i = 0; i < r->configuration.n; i++) {
-        progress__init(&r->leader_state.progress[i], last_index);
     }
 
     /* Reset promotion state. */
