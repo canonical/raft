@@ -79,12 +79,16 @@ int raft_rpc__recv_append_entries(struct raft *r,
      * Note that it should not be possible for us to be in leader state, because
      * the leader that is sending us the request should have either a lower term
      * (and in that case we reject the request above), or a higher term (and in
-     * that case we step down).
+     * that case we step down). It can't have the same term because at most one
+     * leader can be elected at any given term.
      */
     assert(r->state == RAFT_FOLLOWER || r->state == RAFT_CANDIDATE);
     assert(r->current_term == args->term);
 
     if (r->state == RAFT_CANDIDATE) {
+        /* The current term and the peer one must match, otherwise we would have
+         * either rejected the request or stepped down to followers. */
+        assert(match == 0);
         debugf(r->io, "discovered leader -> step down ");
         convert__to_follower(r);
     }

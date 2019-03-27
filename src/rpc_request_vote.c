@@ -64,9 +64,9 @@ int raft_rpc__recv_request_vote(struct raft *r,
         goto reply;
     }
 
-    /* At this point our term must be the same or lower than the request term
-     * (otherwise we would have reject the request */
-    assert(r->current_term <= args->term);
+    /* At this point our term must be the same as the request term (otherwise we
+     * would have rejected the request or bumped our term). */
+    assert(r->current_term == args->term);
 
     rv = election__vote(r, args, &result->vote_granted);
     if (rv != 0) {

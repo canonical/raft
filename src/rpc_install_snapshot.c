@@ -45,8 +45,8 @@ int raft_rpc__recv_install_snapshot(struct raft *r,
     /* TODO: this logic duplicates the one in the AppendEntries handler */
     assert(r->state == RAFT_FOLLOWER || r->state == RAFT_CANDIDATE);
     assert(r->current_term == args->term);
-
     if (r->state == RAFT_CANDIDATE) {
+        assert(match == 0);
         debugf(r->io, "discovered leader -> step down ");
         convert__to_follower(r);
     }
