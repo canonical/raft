@@ -745,7 +745,7 @@ TEST_CASE(promote, success, committed, NULL)
     /* Let more than election_timeout milliseconds elapse, but track a contact
      * from server 2 in between, to avoid stepping down. */
     __tick(f, f->raft.election_timeout - 100);
-    f->raft.leader_state.progress[1].recent_activity = true;
+    f->raft.leader_state.progress[1].recent_recv = true;
     raft_io_stub_flush_all(&f->io);
     __tick(f, 200);
     __assert_io(f, 0, 2); /* Heartbeat */

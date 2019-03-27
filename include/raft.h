@@ -556,7 +556,8 @@ struct raft_progress
     raft_index next_index;     /* Next entry to send */
     raft_index match_index;    /* Highest applied idx */
     raft_index snapshot_index; /* Last index of most recent snapshot sent */
-    bool recent_activity;      /* Whether the peer has contacted us */
+    bool recent_send;          /* A msg was sent within heartbeat timeout */
+    bool recent_recv;          /* A msg was received within election timeout */
 };
 
 /**

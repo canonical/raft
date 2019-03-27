@@ -22,7 +22,7 @@ int progress__update_array(struct raft *r,
 
 /**
  * Return true if a majority of voting servers have made_contact with us since
- * the last check, i.e. the recent_activity flag of the associated progress
+ * the last check, i.e. the recent_recv flag of the associated progress
  * object is true, and then reset the flag as well.
  */
 bool progress__check_quorum(struct raft *r);

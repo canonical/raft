@@ -15,7 +15,7 @@ static void init_progress(struct raft_progress *p, raft_index last_index)
     p->next_index = last_index + 1;
     p->match_index = 0;
     p->snapshot_index = 0;
-    p->recent_activity = false;
+    p->recent_recv = false;
     p->state = PROBE;
 }
 
@@ -89,8 +89,8 @@ bool progress__check_quorum(struct raft *r)
     for (i = 0; i < r->configuration.n; i++) {
         struct raft_server *server = &r->configuration.servers[i];
         struct raft_progress *progress = &r->leader_state.progress[i];
-	bool recent_activity = progress->recent_activity;
-	progress->recent_activity = false;
+	bool recent_recv = progress->recent_recv;
+	progress->recent_recv = false;
         if (!server->voting) {
             continue;
         }
@@ -98,7 +98,7 @@ bool progress__check_quorum(struct raft *r)
             contacts++;
             continue;
         }
-        if (recent_activity) {
+        if (recent_recv) {
             contacts++;
         }
     }

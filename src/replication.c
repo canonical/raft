@@ -592,7 +592,7 @@ int raft_replication__update(struct raft *r,
     assert(server_index < r->configuration.n);
 
     replication = &r->leader_state.progress[server_index];
-    replication->recent_activity = true;
+    replication->recent_recv = true;
 
     /* Reset the replication state to probe, as we might need to send the
      * snapshot again. */
