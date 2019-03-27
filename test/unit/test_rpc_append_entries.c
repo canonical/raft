@@ -4,7 +4,6 @@
 
 #include "../../src/configuration.h"
 #include "../../src/log.h"
-#include "../../src/rpc_append_entries.h"
 
 #include "../lib/fsm.h"
 #include "../lib/heap.h"
@@ -67,48 +66,52 @@ static struct raft_entry *__create_entries_batch()
  * Call raft_rpc__recv_append_entries with the given parameters and check that
  * no error occurs.
  */
-#define __recv_append_entries(F, TERM, LEADER_ID, PREV_LOG_INDEX,        \
-                              PREV_LOG_TERM, ENTRIES, N, COMMIT)         \
-    {                                                                    \
-        struct raft_append_entries args;                                 \
-        char address[4];                                                 \
-        int rv;                                                          \
-                                                                         \
-        sprintf(address, "%d", LEADER_ID);                               \
-                                                                         \
-        args.term = TERM;                                                \
-        args.leader_id = LEADER_ID;                                      \
-        args.prev_log_index = PREV_LOG_INDEX;                            \
-        args.prev_log_term = PREV_LOG_TERM;                              \
-        args.entries = ENTRIES;                                          \
-        args.n_entries = N;                                              \
-        args.leader_commit = COMMIT;                                     \
-                                                                         \
-        rv = raft_rpc__recv_append_entries(&F->raft, LEADER_ID, address, \
-                                           &args);                       \
-        munit_assert_int(rv, ==, 0);                                     \
+#define __recv_append_entries(F, TERM, LEADER_ID, PREV_LOG_INDEX, \
+                              PREV_LOG_TERM, ENTRIES, N, COMMIT)  \
+    {                                                             \
+        struct raft_message message;                              \
+        struct raft_append_entries *args;                         \
+        char address[4];                                          \
+                                                                  \
+        sprintf(address, "%d", LEADER_ID);                        \
+        message.type = RAFT_IO_APPEND_ENTRIES;                    \
+        message.server_id = LEADER_ID;                            \
+        message.server_address = address;                         \
+                                                                  \
+        args = &message.append_entries;                           \
+        args->term = TERM;                                        \
+        args->leader_id = LEADER_ID;                              \
+        args->prev_log_index = PREV_LOG_INDEX;                    \
+        args->prev_log_term = PREV_LOG_TERM;                      \
+        args->entries = ENTRIES;                                  \
+        args->n_entries = N;                                      \
+        args->leader_commit = COMMIT;                             \
+                                                                  \
+        raft_io_stub_deliver(&F->io, &message);                   \
     }
 
 /**
  * Call raft_rpc__recv_append_entries_result with the given parameters and check
  * that no error occurs.
  */
-#define __recv_append_entries_result(F, SERVER_ID, TERM, SUCCESS,      \
-                                     LAST_LOG_INDEX)                   \
-    {                                                                  \
-        char address[4];                                               \
-        struct raft_append_entries_result result;                      \
-        int rv;                                                        \
-                                                                       \
-        sprintf(address, "%d", SERVER_ID);                             \
-                                                                       \
-        result.term = TERM;                                            \
-        result.success = SUCCESS;                                      \
-        result.last_log_index = LAST_LOG_INDEX;                        \
-                                                                       \
-        rv = raft_rpc__recv_append_entries_result(&F->raft, SERVER_ID, \
-                                                  address, &result);   \
-        munit_assert_int(rv, ==, 0);                                   \
+#define __recv_append_entries_result(F, SERVER_ID, TERM, SUCCESS, \
+                                     LAST_LOG_INDEX)              \
+    {                                                             \
+        struct raft_message message;                              \
+        struct raft_append_entries_result *result;                \
+        char address[4];                                          \
+                                                                  \
+        sprintf(address, "%d", SERVER_ID);                        \
+        message.type = RAFT_IO_APPEND_ENTRIES_RESULT;             \
+        message.server_id = SERVER_ID;                            \
+        message.server_address = address;                         \
+                                                                  \
+        result = &message.append_entries_result;                  \
+        result->term = TERM;                                      \
+        result->success = SUCCESS;                                \
+        result->last_log_index = LAST_LOG_INDEX;                  \
+                                                                  \
+        raft_io_stub_deliver(&F->io, &message);                   \
     }
 
 /**
@@ -303,23 +306,27 @@ TEST_CASE(request, error, missing_entries, NULL)
 TEST_CASE(request, error, prev_index_conflict, NULL)
 {
     struct fixture *f = data;
-    struct raft_append_entries args;
-    int rv;
+    struct raft_message message;
+    struct raft_append_entries *args;
 
     (void)params;
 
     test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
-    args.term = 1;
-    args.leader_id = 2;
-    args.prev_log_index = 1;
-    args.prev_log_term = 2;
-    args.entries = NULL;
-    args.n_entries = 0;
-    args.leader_commit = 1;
+    message.type = RAFT_IO_APPEND_ENTRIES;
+    message.server_id = 2;
+    message.server_address = "2";
 
-    rv = raft_rpc__recv_append_entries(&f->raft, 2, "2", &args);
-    munit_assert_int(rv, ==, RAFT_ERR_SHUTDOWN);
+    args = &message.append_entries;
+    args->term = 1;
+    args->leader_id = 2;
+    args->prev_log_index = 1;
+    args->prev_log_term = 2;
+    args->entries = NULL;
+    args->n_entries = 0;
+    args->leader_commit = 1;
+
+    raft_io_stub_deliver(&f->io, &message);
 
     return MUNIT_OK;
 }
@@ -500,7 +507,8 @@ TEST_CASE(request, error, conflict, NULL)
     struct fixture *f = data;
     struct raft_entry entry;
     struct raft_entry *entries = raft_malloc(2 * sizeof *entries);
-    struct raft_append_entries args;
+    struct raft_message message;
+    struct raft_append_entries *args = &message.append_entries;
     uint8_t *buf1 = raft_malloc(1);
     uint8_t *buf2 = raft_malloc(1);
     uint8_t *buf3 = raft_malloc(1);
@@ -537,17 +545,20 @@ TEST_CASE(request, error, conflict, NULL)
     entries[1].buf.base = &buf3;
     entries[1].buf.len = 1;
 
-    args.term = 2;
-    args.leader_id = 2;
-    args.prev_log_index = 1;
-    args.prev_log_term = 1;
-    args.entries = entries;
-    args.n_entries = 2;
-    args.leader_commit = 1;
+    message.type = RAFT_IO_APPEND_ENTRIES;
+    message.server_id = 2;
+    message.server_address = "2";
+
+    args->term = 2;
+    args->leader_id = 2;
+    args->prev_log_index = 1;
+    args->prev_log_term = 1;
+    args->entries = entries;
+    args->n_entries = 2;
+    args->leader_commit = 1;
 
     /* We return a shutdown error. */
-    rv = raft_rpc__recv_append_entries(&f->raft, 2, "2", &args);
-    munit_assert_int(rv, ==, RAFT_ERR_SHUTDOWN);
+    raft_io_stub_deliver(&f->io, &message);
 
     /* TODO: should the code itself perform this cleanup? */
     raft_free(buf2);

@@ -2,13 +2,13 @@
 
 #include "assert.h"
 #include "configuration.h"
+#include "convert.h"
 #include "entry.h"
 #include "log.h"
 #include "logging.h"
-#include "rpc.h"
+#include "recv.h"
 #include "snapshot.h"
 #include "tick.h"
-#include "convert.h"
 
 /* Set to 1 to enable tracing. */
 #if 0
@@ -154,7 +154,7 @@ int raft_start(struct raft *r)
      * is received. */
     tracef("log: %lu entries, offset %lu", log__n_outstanding(&r->log),
            r->log.offset);
-    rc = r->io->start(r->io, r->heartbeat_timeout, tick_cb, rpc__recv_cb);
+    rc = r->io->start(r->io, r->heartbeat_timeout, tick_cb, recv_cb);
     if (rc != 0) {
         return rc;
     }
