@@ -21,10 +21,10 @@ int progress__update_array(struct raft *r,
                            const struct raft_configuration *configuration);
 
 /**
- * Return true if the last_contact field of the objects in the progress array
- * indicates that the leader has been contacted by a majority of voting servers
- * in the last election_timeout milliseconds.
+ * Return true if a majority of voting servers have made_contact with us in the
+ * last election_timeout milliseconds (i.e. the recent_activity flag of the
+ * associated progress object is true). Reset the recent_activity flag too.
  */
-bool progress__has_still_quorum(struct raft *r);
+bool progress__check_quorum(struct raft *r);
 
 #endif /* RAFT_PROGRESS_H_ */

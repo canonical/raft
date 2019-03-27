@@ -21,10 +21,10 @@ unsigned raft_next_timeout(struct raft *r)
     unsigned elapsed;
     if (r->state == RAFT_LEADER) {
         timeout = r->heartbeat_timeout;
-	elapsed = r->leader_state.heartbeat_elapsed;
+        elapsed = r->leader_state.heartbeat_elapsed;
     } else {
         timeout = r->randomized_election_timeout;
-	elapsed = r->election_elapsed;
+        elapsed = r->election_elapsed;
     }
     return timeout > elapsed ? timeout - elapsed : 0;
 }
@@ -61,7 +61,8 @@ static int follower_tick(struct raft *r)
      *   If election timeout elapses without receiving AppendEntries RPC from
      *   current leader or granting vote to candidate, convert to candidate.
      */
-    if (r->election_elapsed > r->randomized_election_timeout && server->voting) {
+    if (r->election_elapsed > r->randomized_election_timeout &&
+        server->voting) {
         infof(r->io, "convert to candidate and start new election");
         rv = convert__to_candidate(r);
         if (rv != 0) {
@@ -115,7 +116,7 @@ static int leader_tick(struct raft *r, const unsigned msecs_since_last_tick)
      *   successful round of heartbeats to a majority of its cluster; this
      *   allows clients to retry their requests with another server.
      */
-    if (!progress__has_still_quorum(r)) {
+    if (!progress__check_quorum(r)) {
         warnf(r->io, "unable to contact majority of cluster -> step down");
         convert__to_follower(r);
         return 0;

@@ -552,10 +552,10 @@ extern const char *raft_state_names[];
  */
 struct raft_progress
 {
+    unsigned short state;   /* Probe, pipeline or snapshot */
     raft_index next_index;  /* Next entry to send */
     raft_index match_index; /* Highest applied idx */
-    raft_time last_contact; /* Timestamp of last RPC received */
-    unsigned short state;   /* Probe, pipeline or snapshot */
+    bool recent_activity;   /* Whether the peer has contacted us */
 };
 
 /**

@@ -91,7 +91,6 @@ static void __stop_cb(struct raft_io *io)
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    const uint64_t id = 1;
     int rv;
 
     (void)user_data;

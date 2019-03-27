@@ -14,7 +14,7 @@ static void init_progress(struct raft_progress *p, raft_index last_index)
 {
     p->next_index = last_index + 1;
     p->match_index = 0;
-    p->last_contact = 0;
+    p->recent_activity = false;
     p->state = PROBE;
 }
 
@@ -80,15 +80,21 @@ int progress__update_array(struct raft *r,
     return 0;
 }
 
-bool progress__has_still_quorum(struct raft *r)
+bool progress__check_quorum(struct raft *r)
 {
     unsigned i;
     unsigned contacts = 0;
 
+    /* If the election timeout hasn't expired yet, don't perform any check. */
+    if (r->election_elapsed < r->election_timeout) {
+        return true;
+    }
+
     for (i = 0; i < r->configuration.n; i++) {
         struct raft_server *server = &r->configuration.servers[i];
         struct raft_progress *progress = &r->leader_state.progress[i];
-        unsigned elapsed;
+	bool recent_activity = progress->recent_activity;
+	progress->recent_activity = false;
         if (!server->voting) {
             continue;
         }
@@ -96,8 +102,7 @@ bool progress__has_still_quorum(struct raft *r)
             contacts++;
             continue;
         }
-        elapsed = r->io->time(r->io) - progress->last_contact;
-        if (elapsed <= r->election_timeout) {
+        if (recent_activity) {
             contacts++;
         }
     }

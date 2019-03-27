@@ -202,7 +202,6 @@ int raft_replication__send_append_entries(struct raft *r, size_t i)
     struct raft_message message;
     struct raft_append_entries *args = &message.append_entries;
     struct send_append_entries *request;
-    raft_time msecs_without_contact;
     int rv;
 
     assert(r != NULL);
@@ -218,9 +217,9 @@ int raft_replication__send_append_entries(struct raft *r, size_t i)
     /* If we have already sent a snapshot or we haven't hear back from the
      * server since a while, just send heartbeats until we hear back again from
      * the server (at that point we'll set the state back to probe). */
-    msecs_without_contact = r->io->time(r->io) - replication->last_contact;
-    if (replication->state == REPLICATION__SNAPSHOT ||
-        msecs_without_contact > 5000 /* TODO: make this configurable */) {
+    //msecs_without_contact = r->io->time(r->io) - replication->last_contact;
+    if (replication->state == REPLICATION__SNAPSHOT /* || */
+        /* msecs_without_contact > 5000 */ /* TODO: make this configurable */) {
         next_index = log__last_index(&r->log) + 1;
     } else {
         next_index = replication->next_index;
@@ -470,7 +469,6 @@ err:
 
 int raft_replication__trigger(struct raft *r, const raft_index index)
 {
-    raft_time now;
     size_t i;
     int rv;
 
@@ -493,32 +491,13 @@ int raft_replication__trigger(struct raft *r, const raft_index index)
      */
     r->leader_state.heartbeat_elapsed = 0;
 
-    now = r->io->time(r->io);
-
     /* Trigger replication for servers we didn't hear from recently. */
     for (i = 0; i < r->configuration.n; i++) {
         struct raft_server *server = &r->configuration.servers[i];
-        struct raft_progress *replication = &r->leader_state.progress[i];
         int rv;
 
         if (server->id == r->id) {
             continue;
-        }
-
-        /* Send the heartbeat only if we were idle. */
-        if (index == 0) {
-            /* TODO: since we don't yet keep a last_contact array which is
-             * independent from the replication array, if the value is 0 it
-             * means that this is the very first heartbeat being sent after
-             * election. In this case we unconditionally send a heartbeat
-             * message and we set
-             * last_contact to know to avoid thinking that we lost contact. */
-            if (replication->last_contact == 0) {
-                replication->last_contact = now;
-            } else if (now - replication->last_contact <
-                       r->heartbeat_timeout / 2) {
-                continue;
-            }
         }
 
         rv = raft_replication__send_append_entries(r, i);
@@ -613,7 +592,7 @@ int raft_replication__update(struct raft *r,
     assert(server_index < r->configuration.n);
 
     replication = &r->leader_state.progress[server_index];
-    replication->last_contact = r->io->time(r->io);
+    replication->recent_activity = true;
 
     /* Reset the replication state to probe, as we might need to send the
      * snapshot again. */
