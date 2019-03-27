@@ -244,7 +244,8 @@ void raft_fixture_set_random(struct raft_fixture *f,
 
 /**
  * Set the network latency in milliseconds. Each RPC message will be assigned a
- * random latency value within the given range.
+ * random latency value within the given range. By default the minimum latency
+ * is 5 milliseconds and the maximum is 50.
  */
 void raft_fixture_set_latency(struct raft_fixture *f,
                               unsigned i,

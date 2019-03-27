@@ -16,19 +16,19 @@
     struct raft_fsm fsms[RAFT_FIXTURE_MAX_SERVERS]; \
     struct raft_fixture cluster;
 
-#define SETUP_CLUSTER(N)                                                   \
-    SETUP_HEAP;                                                            \
-    {                                                                      \
-        unsigned i;                                                        \
-        int rc;                                                            \
-        for (i = 0; i < N; i++) {                                          \
-            test_fsm_setup(NULL, &f->fsms[i]);                             \
-        }                                                                  \
-        rc = raft_fixture_init(&f->cluster, N, f->fsms);                   \
-        munit_assert_int(rc, ==, 0);                                       \
-        for (i = 0; i < N; i++) {                                          \
-            raft_fixture_set_random(&f->cluster, i, munit_rand_int_range); \
-        }                                                                  \
+#define SETUP_CLUSTER(N)                                 \
+    SETUP_HEAP;                                          \
+    {                                                    \
+        unsigned i;                                      \
+        int rc;                                          \
+        for (i = 0; i < N; i++) {                        \
+            test_fsm_setup(NULL, &f->fsms[i]);           \
+        }                                                \
+        rc = raft_fixture_init(&f->cluster, N, f->fsms); \
+        munit_assert_int(rc, ==, 0);                     \
+        for (i = 0; i < N; i++) {                        \
+            CLUSTER_SET_RANDOM(i, munit_rand_int_range); \
+        }                                                \
     }
 
 #define TEAR_DOWN_CLUSTER                    \
@@ -270,7 +270,7 @@
 /**
  * Elect the I'th server.
  */
-#define CLUSTER_ELECT(I) raft_fixture_elect(&f->fixture, I)
+#define CLUSTER_ELECT(I) raft_fixture_elect(&f->cluster, I)
 
 /**
  * Set the random function used by the I'th server.
