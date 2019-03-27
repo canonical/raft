@@ -723,54 +723,25 @@ struct raft
     union {
         struct
         {
-            /**
-             * The fields below hold the part of the server's volatile state
-             * which is specific to followers.
-             */
             struct
             {
                 unsigned id;
                 const char *address;
             } current_leader;
         } follower_state;
-
         struct
         {
-            /**
-             * The fields below hold the part of the server's volatile state
-             * which is specific to candidates. This state is reinitialized
-             * after the server starts a new election round.
-             */
             bool *votes; /* For each server, whether vote was granted */
         } candidate_state;
-
         struct
         {
-            /**
-             * The fields below hold the part of the server's volatile state
-             * which is specific to leaders (Figure 3.1). This state is
-             * reinitialized after the server gets elected.
-             */
             struct raft_progress *progress; /* Per-server replication state */
-
-            /**
-             * Fields used to track the progress of pushing entries to the
-             * server being promoted (4.2.1 Catching up new servers).
-             */
-            unsigned promotee_id;        /* ID of server being promoted, or 0 */
-            unsigned short round_number; /* Number of the current sync round */
-            raft_index round_index;      /* Target of the current round */
-            unsigned round_duration;     /* Duration of the current round */
-
-            /**
-             * Number of milliseconds since we last reached heartbeat_timeout.
-             */
-            unsigned heartbeat_elapsed;
-
-            /**
-             * Queue of outstanding apply requests.
-             */
-            void *apply_reqs[2];
+            unsigned promotee_id;           /* ID of server being promoted */
+            unsigned short round_number;    /* Current sync round */
+            raft_index round_index;         /* Target of the current round */
+            unsigned round_duration;        /* Duration of the current round */
+            unsigned heartbeat_elapsed;     /* Msecs since last heartbeat */
+            void *apply_reqs[2];            /* Queue of apply requests */
         } leader_state;
     };
 

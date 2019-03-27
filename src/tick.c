@@ -100,12 +100,12 @@ static int candidate_tick(struct raft *r)
 }
 
 /* Apply time-dependent rules for leaders (Figure 3.1). */
-static int leader_tick(struct raft *r, const unsigned msec_since_last_tick)
+static int leader_tick(struct raft *r, const unsigned msecs_since_last_tick)
 {
     assert(r != NULL);
     assert(r->state == RAFT_LEADER);
 
-    r->leader_state.heartbeat_elapsed += msec_since_last_tick;
+    r->leader_state.heartbeat_elapsed += msecs_since_last_tick;
 
     /* Check if we still can reach a majority of servers.
      *
@@ -158,7 +158,7 @@ static int leader_tick(struct raft *r, const unsigned msec_since_last_tick)
         assert(server_index < r->configuration.n);
         assert(!r->configuration.servers[server_index].voting);
 
-        r->leader_state.round_duration += msec_since_last_tick;
+        r->leader_state.round_duration += msecs_since_last_tick;
 
         is_too_slow = (r->leader_state.round_number == 10 &&
                        r->leader_state.round_duration > r->election_timeout);
