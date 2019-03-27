@@ -1,11 +1,11 @@
-#include "rpc_install_snapshot.h"
+#include "recv_install_snapshot.h"
 #include "assert.h"
+#include "convert.h"
 #include "log.h"
 #include "logging.h"
 #include "replication.h"
-#include "rpc.h"
+#include "recv.h"
 #include "state.h"
-#include "convert.h"
 
 static void send_append_entries_result_cb(struct raft_io_send *req, int status)
 {
@@ -27,12 +27,10 @@ int raft_rpc__recv_install_snapshot(struct raft *r,
 
     assert(address != NULL);
 
-    infof(r->io, "received snapshot %d from server %ld", args->last_index, id);
-
     result->success = false;
     result->last_log_index = log__last_index(&r->log);
 
-    rv = raft_rpc__ensure_matching_terms(r, args->term, &match);
+    rv = recv__ensure_matching_terms(r, args->term, &match);
     if (rv != 0) {
         return rv;
     }

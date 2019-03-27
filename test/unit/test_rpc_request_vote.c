@@ -49,7 +49,7 @@ static void tear_down(void *data)
 }
 
 /**
- * Call raft_rpc__recv_request_vote with the given parameters and check that no
+ * Call recv__request_vote with the given parameters and check that no
  * error occurs.
  */
 #define __recv_request_vote(F, TERM, CANDIDATE_ID, LAST_LOG_INDEX, \
@@ -74,7 +74,7 @@ static void tear_down(void *data)
     }
 
 /**
- * Call raft_rpc__recv_request_vote_result with the given parameters and check
+ * Call recv__request_vote_result with the given parameters and check
  * that no error occurs.
  */
 #define __recv_request_vote_result(F, VOTER_ID, TERM, GRANTED) \
@@ -420,7 +420,7 @@ TEST_CASE(request, error, last_idx_lower_index, NULL)
 }
 
 /**
- * raft_rpc__recv_request_vote_result
+ * recv__request_vote_result
  */
 
 TEST_SUITE(response);

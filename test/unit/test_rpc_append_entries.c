@@ -63,7 +63,7 @@ static struct raft_entry *__create_entries_batch()
 }
 
 /**
- * Call raft_rpc__recv_append_entries with the given parameters and check that
+ * Call recv__append_entries with the given parameters and check that
  * no error occurs.
  */
 #define __recv_append_entries(F, TERM, LEADER_ID, PREV_LOG_INDEX, \
@@ -91,7 +91,7 @@ static struct raft_entry *__create_entries_batch()
     }
 
 /**
- * Call raft_rpc__recv_append_entries_result with the given parameters and check
+ * Call recv__append_entries_result with the given parameters and check
  * that no error occurs.
  */
 #define __recv_append_entries_result(F, SERVER_ID, TERM, SUCCESS, \

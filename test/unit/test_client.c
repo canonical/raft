@@ -5,7 +5,6 @@
 
 #include "../../src/configuration.h"
 #include "../../src/log.h"
-#include "../../src/rpc_append_entries.h"
 #include "../../src/tick.h"
 
 #include "../lib/fsm.h"
@@ -94,7 +93,7 @@ TEST_MODULE(client);
     }
 
 /**
- * Call raft_rpc__recv_append_entries_result with the given parameters and check
+ * Call recv__append_entries_result with the given parameters and check
  * that no error occurs.
  */
 #define __handle_append_entries_response(F, SERVER_ID, TERM, SUCCESS, \

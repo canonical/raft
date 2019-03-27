@@ -51,11 +51,12 @@ libraft_la_SOURCES = \
   src/progress.c \
   src/raft.c \
   src/recv.c \
+  src/recv_append_entries.c \
+  src/recv_append_entries_result.c \
+  src/recv_request_vote.c \
+  src/recv_request_vote_result.c \
+  src/recv_install_snapshot.c \
   src/replication.c \
-  src/rpc.c \
-  src/rpc_append_entries.c \
-  src/rpc_request_vote.c \
-  src/rpc_install_snapshot.c \
   src/snapshot.c \
   src/start.c \
   src/state.c \

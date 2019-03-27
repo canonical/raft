@@ -323,8 +323,7 @@ int io_uv__decode_batch_header(const void *batch,
         entry->term = byte__get64(&cursor);
         entry->type = byte__get8(&cursor);
 
-        if (entry->type != RAFT_COMMAND &&
-            entry->type != RAFT_CONFIGURATION) {
+        if (entry->type != RAFT_COMMAND && entry->type != RAFT_CONFIGURATION) {
             rv = RAFT_EMALFORMED;
             goto err_after_alloc;
         }

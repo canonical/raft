@@ -1,25 +1,22 @@
-#include "../include/raft.h"
-
+#include "recv_append_entries.h"
 #include "assert.h"
 #include "configuration.h"
 #include "convert.h"
 #include "log.h"
 #include "logging.h"
+#include "recv.h"
 #include "replication.h"
-#include "rpc.h"
-#include "state.h"
 
-static void raft_rpc__recv_append_entries_send_cb(struct raft_io_send *req,
-                                                  int status)
+static void send_cb(struct raft_io_send *req, int status)
 {
     (void)status;
     raft_free(req);
 }
 
-int raft_rpc__recv_append_entries(struct raft *r,
-                                  const unsigned id,
-                                  const char *address,
-                                  const struct raft_append_entries *args)
+int recv__append_entries(struct raft *r,
+                         const unsigned id,
+                         const char *address,
+                         const struct raft_append_entries *args)
 {
     struct raft_io_send *req;
     struct raft_message message;
@@ -33,12 +30,10 @@ int raft_rpc__recv_append_entries(struct raft *r,
     assert(args != NULL);
     assert(address != NULL);
 
-    debugf(r->io, "received %d entries from server %ld", args->n_entries, id);
-
     result->success = false;
     result->last_log_index = log__last_index(&r->log);
 
-    rv = raft_rpc__ensure_matching_terms(r, args->term, &match);
+    rv = recv__ensure_matching_terms(r, args->term, &match);
     if (rv != 0) {
         return rv;
     }
@@ -145,81 +140,9 @@ reply:
         return RAFT_ENOMEM;
     }
 
-    rv = r->io->send(r->io, req, &message,
-                     raft_rpc__recv_append_entries_send_cb);
+    rv = r->io->send(r->io, req, &message, send_cb);
     if (rv != 0) {
         raft_free(req);
-        return rv;
-    }
-
-    return 0;
-}
-
-int raft_rpc__recv_append_entries_result(
-    struct raft *r,
-    const unsigned id,
-    const char *address,
-    const struct raft_append_entries_result *result)
-{
-    int match;
-    const struct raft_server *server;
-    int rv;
-
-    assert(r != NULL);
-    assert(id > 0);
-    assert(address != NULL);
-    assert(result != NULL);
-
-    debugf(r->io, "received append entries result from server %ld", id);
-
-    if (r->state != RAFT_LEADER) {
-        debugf(r->io, "local server is not leader -> ignore");
-        return 0;
-    }
-
-    rv = raft_rpc__ensure_matching_terms(r, result->term, &match);
-    if (rv != 0) {
-        return rv;
-    }
-
-    if (match < 0) {
-        debugf(r->io, "local term is higher -> ignore ");
-        return 0;
-    }
-
-    /* If we have stepped down, abort here.
-     *
-     * From Figure 3.1:
-     *
-     *   [Rules for Servers] All Servers: If RPC request or response contains
-     *   term T > currentTerm: set currentTerm = T, convert to follower.
-     */
-    if (match > 0) {
-        assert(r->state == RAFT_FOLLOWER);
-        return 0;
-    }
-
-    assert(result->term == r->current_term);
-
-    /* Ignore responses from servers that have been removed */
-    server = configuration__get(&r->configuration, id);
-    if (server == NULL) {
-        errorf(r->io, "unknown server -> ignore");
-        return 0;
-    }
-
-    /* Update the match/next and the last contact indexes, possibly sending
-     * further entries. */
-    rv = raft_replication__update(r, server, result);
-    if (rv != 0) {
-        return rv;
-    }
-
-    /* Commit entries if possible */
-    raft_replication__quorum(r, result->last_log_index);
-
-    rv = raft_replication__apply(r);
-    if (rv != 0) {
         return rv;
     }
 

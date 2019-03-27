@@ -194,13 +194,9 @@ TEST_CASE(elapse, success, voter_not_us, NULL)
 TEST_CASE(elapse, success, candidate, NULL)
 {
     struct fixture *f = data;
-    int election_timeout;
-
     (void)params;
 
     test_bootstrap_and_start(&f->raft, 2, 1, 2);
-
-    election_timeout = f->raft.randomized_election_timeout;
 
     __tick(f, f->raft.randomized_election_timeout + 100);
 
@@ -211,9 +207,6 @@ TEST_CASE(elapse, success, candidate, NULL)
     /* We have voted for ouselves. */
     munit_assert_int(f->raft.voted_for, ==, 1);
     munit_assert_int(raft_io_stub_vote(&f->io), ==, 1);
-
-    /* The election timeout has been reset. */
-    munit_assert_int(f->raft.randomized_election_timeout, !=, election_timeout);
 
     /* We are candidate */
     __assert_state(f, RAFT_CANDIDATE);
