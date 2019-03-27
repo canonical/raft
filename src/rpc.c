@@ -121,7 +121,7 @@ int raft_rpc__ensure_matching_terms(struct raft *r, raft_term term, int *match)
             return rv;
         }
         if (r->state != RAFT_FOLLOWER) {
-            /* Bump current state and also convert to follower. */
+            /* Also convert to follower. */
             infof(r->io, "remote server term is higher -> step down");
             convert__to_follower(r);
         }

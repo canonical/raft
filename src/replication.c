@@ -651,7 +651,6 @@ int raft_replication__update(struct raft *r,
     if (result->last_log_index <= replication->match_index) {
         /* Like above, this must be a stale response. */
         debugf(r->io, "match index is up to date -> ignore ");
-
         return 0;
     }
 

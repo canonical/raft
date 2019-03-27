@@ -116,10 +116,13 @@ static int leader_tick(struct raft *r, const unsigned msecs_since_last_tick)
      *   successful round of heartbeats to a majority of its cluster; this
      *   allows clients to retry their requests with another server.
      */
-    if (!progress__check_quorum(r)) {
-        warnf(r->io, "unable to contact majority of cluster -> step down");
-        convert__to_follower(r);
-        return 0;
+    if (r->election_elapsed > r->election_timeout) {
+        if (!progress__check_quorum(r)) {
+            warnf(r->io, "unable to contact majority of cluster -> step down");
+            convert__to_follower(r);
+            return 0;
+        }
+	r->election_elapsed = 0;
     }
 
     /* Check if we need to send heartbeats.

@@ -7,7 +7,6 @@
 #include "logging.h"
 #include "replication.h"
 #include "rpc.h"
-#include "state.h"
 
 static void raft_rpc__recv_request_vote_send_cb(struct raft_io_send *req,
                                                 int status)

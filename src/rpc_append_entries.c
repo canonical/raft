@@ -2,12 +2,12 @@
 
 #include "assert.h"
 #include "configuration.h"
+#include "convert.h"
 #include "log.h"
 #include "logging.h"
 #include "replication.h"
 #include "rpc.h"
 #include "state.h"
-#include "convert.h"
 
 static void raft_rpc__recv_append_entries_send_cb(struct raft_io_send *req,
                                                   int status)
@@ -54,8 +54,8 @@ int raft_rpc__recv_append_entries(struct raft *r,
     }
 
     /* If we get here it means that the term in the request matches our current
-     * term. If we're candidate, we want to step down to follower, because we
-     * discovered the current leader.
+     * term or it was higher and we have possibly stepped down, because we
+     * discovered the current leader:
      *
      * From Figure 3.1:
      *
