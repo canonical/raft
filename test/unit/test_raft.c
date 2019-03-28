@@ -53,23 +53,21 @@ static void tear_down(void *data)
 /**
  * Start the fixture's instance and check that no error occurs.
  */
-#define __start(F)                   \
-    {                                \
-        int rv;                      \
-                                     \
-        rv = raft_start(&F->raft);   \
-        munit_assert_int(rv, ==, 0); \
+#define __start(F)                    \
+    {                                 \
+        int rv2;                      \
+        rv2 = raft_start(&F->raft);   \
+        munit_assert_int(rv2, ==, 0); \
     }
 
 /**
  * Start the fixture's instance and that the given error occurs.
  */
-#define __assert_start_error(F, RV)   \
-    {                                 \
-        int rv;                       \
-                                      \
-        rv = raft_start(&F->raft);    \
-        munit_assert_int(rv, ==, RV); \
+#define __assert_start_error(F, RV)    \
+    {                                  \
+        int rv2;                       \
+        rv2 = raft_start(&F->raft);    \
+        munit_assert_int(rv2, ==, RV); \
     }
 
 /**

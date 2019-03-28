@@ -260,8 +260,8 @@ struct raft_append_entries
  */
 struct raft_append_entries_result
 {
-    raft_term term; /* Receiver's current_term, for leader to update itself. */
-    bool success; /* True if follower had entry matching prev_log_index/term. */
+    raft_term term;            /* Receiver's current_term */
+    raft_index rejected;       /* If non-zero, the index that was rejected */
     raft_index last_log_index; /* Receiver's last log entry index, as hint */
 };
 
@@ -414,6 +414,7 @@ struct raft_io
                 raft_term *term,
                 unsigned *voted_for,
                 struct raft_snapshot **snapshot,
+		raft_index *start_index,
                 struct raft_entry *entries[],
                 size_t *n_entries);
 

@@ -300,12 +300,12 @@ err:
 
 int io_uv__load_all(struct io_uv *uv,
                     struct raft_snapshot **snapshot,
+                    raft_index *start_index,
                     struct raft_entry *entries[],
                     size_t *n)
 {
     struct io_uv__snapshot_meta *snapshots;
     struct io_uv__segment_meta *segments;
-    raft_index start_index = 1;
     size_t n_snapshots;
     size_t n_segments;
     int rv;
@@ -313,6 +313,7 @@ int io_uv__load_all(struct io_uv *uv,
     *snapshot = NULL;
     *entries = NULL;
     *n = 0;
+    *start_index = 1;
 
     /* List available snapshots and segments. */
     rv = io_uv__load_list(uv, &snapshots, &n_snapshots, &segments, &n_segments);
@@ -322,6 +323,8 @@ int io_uv__load_all(struct io_uv *uv,
 
     /* Load the most recent snapshot, if any. */
     if (snapshots != NULL) {
+        raft_index last_index;
+
         *snapshot = raft_malloc(sizeof **snapshot);
         if (*snapshot == NULL) {
             rv = RAFT_ENOMEM;
@@ -333,12 +336,22 @@ int io_uv__load_all(struct io_uv *uv,
         }
         raft_free(snapshots);
         snapshots = NULL;
-        start_index = (*snapshot)->index + 1;
+
+        last_index = (*snapshot)->index;
+        /* Update the start index. If there are closed segments on disk and the
+         * first index of the first closed segment is lower than the snapshot's
+         * last index, let's try to retain n_trailing entries if available. */
+        if (segments != NULL && !segments[0].is_open &&
+            segments[0].first_index <= last_index) {
+            *start_index = segments[0].first_index;
+        } else {
+            *start_index = (*snapshot)->index + 1;
+        }
     }
 
     /* Read data from segments, closing any open segments. */
     if (segments != NULL) {
-        rv = load_entries_from_segments(uv, start_index, segments, n_segments,
+        rv = load_entries_from_segments(uv, *start_index, segments, n_segments,
                                         entries, n);
         if (rv != 0) {
             goto err;

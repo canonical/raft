@@ -3,9 +3,16 @@
 #include "configuration.h"
 #include "convert.h"
 #include "election.h"
+#include "heartbeat.h"
 #include "logging.h"
 #include "recv.h"
-#include "replication.h"
+
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(MSG, ...) debugf(r->io, MSG, __VA_ARGS__)
+#else
+#define tracef(MSG, ...)
+#endif
 
 int recv__request_vote_result(struct raft *r,
                               unsigned id,
@@ -29,7 +36,7 @@ int recv__request_vote_result(struct raft *r,
 
     /* Ignore responses if we are not candidate anymore */
     if (r->state != RAFT_CANDIDATE) {
-        debugf(r->io, "local server is not candidate -> ignore");
+        tracef("local server is not candidate -> ignore");
         return 0;
     }
 
@@ -42,7 +49,7 @@ int recv__request_vote_result(struct raft *r,
         /* If the term in the result is older than ours, this is an old message
          * we should ignore, because the node who voted for us would have
          * obtained our term.  This happens if the network is pretty choppy. */
-        debugf(r->io, "local term is higher -> ignore");
+        tracef("local term is higher -> ignore");
         return 0;
     }
 
@@ -73,13 +80,13 @@ int recv__request_vote_result(struct raft *r,
             if (rv != 0) {
                 return rv;
             }
-            /* Send heartbeat messages.
-             *
-             * Note that since we have just set the next_index to the latest
-             * index in our log, the AppendEntries RPC that we send here will
-             * carry 0 entries, and indeed act as initial heartbeat. */
-            raft_replication__trigger(r, 0);
+            /* Send initial heartbeat. */
+            heartbeat__send(r);
+        } else {
+            tracef("votes quorum not reached");
         }
+    } else {
+        tracef("vote was not granted");
     }
 
     return 0;

@@ -4,6 +4,13 @@
 #include "log.h"
 #include "logging.h"
 
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(MSG, ...) debugf(r->io, MSG, __VA_ARGS__)
+#else
+#define tracef(MSG, ...)
+#endif
+
 void election__reset_timer(struct raft *r)
 {
     assert(r != NULL);
@@ -111,12 +118,9 @@ int election__start(struct raft *r)
     }
     for (i = 0; i < r->configuration.n; i++) {
         const struct raft_server *server = &r->configuration.servers[i];
-        int rv;
-
         if (server->id == r->id || !server->voting) {
             continue;
         }
-
         rv = send_request_vote(r, server);
         if (rv != 0) {
             /* This is not a critical failure, let's just log it. */
@@ -137,8 +141,8 @@ int election__vote(struct raft *r,
                    bool *granted)
 {
     const struct raft_server *local_server;
-    raft_index local_last_log_index;
-    raft_term local_last_log_term;
+    raft_index local_last_index;
+    raft_term local_last_term;
     int rv;
 
     assert(r != NULL);
@@ -150,49 +154,54 @@ int election__vote(struct raft *r,
     *granted = false;
 
     if (local_server == NULL || !local_server->voting) {
-        debugf(r->io, "local server is not voting -> not granting vote");
+        tracef("local server is not voting -> not granting vote");
         return 0;
     }
 
     if (r->voted_for != 0 && r->voted_for != args->candidate_id) {
-        debugf(r->io, "local server already voted -> not granting vote");
+        tracef("local server already voted -> not granting vote");
         return 0;
     }
 
-    local_last_log_index = log__last_index(&r->log);
+    local_last_index = log__last_index(&r->log);
 
     /* Our log is definitely not more up-to-date if it's empty! */
-    if (local_last_log_index == 0) {
-        debugf(r->io, "local log is empty -> granting vote");
+    if (local_last_index == 0) {
+        tracef("local log is empty -> granting vote");
         goto grant_vote;
     }
 
-    local_last_log_term = log__last_term(&r->log);
+    local_last_term = log__last_term(&r->log);
 
-    if (args->last_log_term < local_last_log_term) {
+    if (args->last_log_term < local_last_term) {
         /* The requesting server has last entry's log term lower than ours. */
-        debugf(r->io,
-               "local log last entry has higher last term -> not granting");
+        tracef(
+            "local last entry %llu has term %llu higher than %llu -> not "
+            "granting",
+            local_last_index, local_last_term, args->last_log_term);
         return 0;
     }
 
-    if (args->last_log_term > local_last_log_term) {
+    if (args->last_log_term > local_last_term) {
         /* The requesting server has a more up-to-date log. */
-        debugf(r->io, "remote log last entry has higher term -> granting vote");
+        tracef(
+            "remote last entry %llu has term %llu higher than %llu -> "
+            "granting vote",
+            args->last_log_index, args->last_log_term, local_last_term);
         goto grant_vote;
     }
 
     /* The term of the last log entry is the same, so let's compare the length
      * of the log. */
-    assert(args->last_log_term == local_last_log_term);
+    assert(args->last_log_term == local_last_term);
 
-    if (local_last_log_index <= args->last_log_index) {
+    if (local_last_index <= args->last_log_index) {
         /* Our log is shorter or equal to the one of the requester. */
-        debugf(r->io, "remote log equal or longer than local -> granting vote");
+        tracef("remote log equal or longer than local -> granting vote");
         goto grant_vote;
     }
 
-    debugf(r->io, "remote log shorter than local -> not granting vote");
+    tracef("remote log shorter than local -> not granting vote");
 
     return 0;
 

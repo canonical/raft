@@ -146,8 +146,8 @@ int convert__to_leader(struct raft *r)
     /* Reset apply requests queue */
     RAFT__QUEUE_INIT(&r->leader_state.apply_reqs);
 
-    /* Allocate the progress array. */
-    rv = progress__create_array(r);
+    /* Allocate and initialize the progress array. */
+    rv = progress__build_array(r);
     if (rv != 0) {
         return rv;
     }

@@ -35,17 +35,23 @@ size_t log__n_outstanding(struct raft_log *l);
 raft_index log__last_index(struct raft_log *l);
 
 /**
- * Get the term of the last entry in the log. Must be invoked only if the log is
- * not empty.
+ * Get the term of the last entry in the log. Return #0 if the log is empty.
  */
 raft_term log__last_term(struct raft_log *l);
 
 /**
  * Get the term of the entry with the given index. Return #0 if @index is
- * greater than the last index of the log, or if it's lower than the last index
- * of the most recent snapshot.
+ * greater than the last index of the log, or if it's lower than oldest index we
+ * know the term of (either because it's outstanding or because it's the last
+ * entry in the most recent snapshot).
  */
 raft_term log__term_of(struct raft_log *l, raft_index index);
+
+/**
+ * Get the last index of the most recent snapshot. Return #0 if there are no
+ * snapshots.
+ */
+raft_index log__snapshot_index(struct raft_log *l);
 
 /**
  * Get the entry with the given index.

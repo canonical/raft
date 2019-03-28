@@ -2,8 +2,8 @@
 
 #include "../lib/fs.h"
 #include "../lib/heap.h"
-#include "../lib/runner.h"
 #include "../lib/io.h"
+#include "../lib/runner.h"
 
 #include "../../include/raft/io_uv.h"
 
@@ -85,17 +85,17 @@ TEST_TEAR_DOWN(load, tear_down);
 
 /* Assert that the content of either the metadata1 or metadata2 file match the
  * given values. */
-#define load__assert_file(N, VERSION, TERM, VOTED_FOR)         \
-    {                                                          \
-        uint8_t buf[RAFT_IO_UV_METADATA_SIZE];                 \
-        const void *cursor = buf;                              \
-        char filename[strlen("metadataN") + 1];                \
-        sprintf(filename, "metadata%d", N);                    \
-        test_dir_read_file(f->dir, filename, buf, sizeof buf); \
-        munit_assert_int(byte__get64(&cursor), ==, 1);         \
-        munit_assert_int(byte__get64(&cursor), ==, VERSION);   \
-        munit_assert_int(byte__get64(&cursor), ==, TERM);      \
-        munit_assert_int(byte__get64(&cursor), ==, VOTED_FOR); \
+#define load__assert_file(N, VERSION, TERM, VOTED_FOR)           \
+    {                                                            \
+        uint8_t buf2[RAFT_IO_UV_METADATA_SIZE];                  \
+        const void *cursor = buf2;                               \
+        char filename[strlen("metadataN") + 1];                  \
+        sprintf(filename, "metadata%d", N);                      \
+        test_dir_read_file(f->dir, filename, buf2, sizeof buf2); \
+        munit_assert_int(byte__get64(&cursor), ==, 1);           \
+        munit_assert_int(byte__get64(&cursor), ==, VERSION);     \
+        munit_assert_int(byte__get64(&cursor), ==, TERM);        \
+        munit_assert_int(byte__get64(&cursor), ==, VOTED_FOR);   \
     }
 
 /* The data directory is empty. */

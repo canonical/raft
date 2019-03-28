@@ -47,15 +47,15 @@ static void tear_down(void *data)
 #define GET(INDEX) log__get(&f->log, INDEX)
 
 /* Append one command entry with the given term and a hard-coded payload. */
-#define APPEND(TERM)                                               \
-    {                                                              \
-        struct raft_buffer buf;                                    \
-        int rv;                                                    \
-        buf.base = raft_malloc(8);                                 \
-        buf.len = 8;                                               \
-        strcpy(buf.base, "hello");                                 \
-        rv = log__append(&f->log, TERM, RAFT_COMMAND, &buf, NULL); \
-        munit_assert_int(rv, ==, 0);                               \
+#define APPEND(TERM)                                                 \
+    {                                                                \
+        struct raft_buffer buf2;                                     \
+        int rv2;                                                     \
+        buf2.base = raft_malloc(8);                                  \
+        buf2.len = 8;                                                \
+        strcpy(buf2.base, "hello");                                  \
+        rv2 = log__append(&f->log, TERM, RAFT_COMMAND, &buf2, NULL); \
+        munit_assert_int(rv2, ==, 0);                                \
     }
 
 /* Same as APPEND, but repeated N times. */
@@ -89,11 +89,11 @@ static void tear_down(void *data)
         }                                                            \
     }
 
-#define ACQUIRE(INDEX)                                   \
-    {                                                    \
-        int rv;                                          \
-        rv = log__acquire(&f->log, INDEX, &entries, &n); \
-        munit_assert_int(rv, ==, 0);                     \
+#define ACQUIRE(INDEX)                                    \
+    {                                                     \
+        int rv2;                                          \
+        rv2 = log__acquire(&f->log, INDEX, &entries, &n); \
+        munit_assert_int(rv2, ==, 0);                     \
     }
 
 #define RELEASE(INDEX) log__release(&f->log, INDEX, entries, n);
@@ -293,6 +293,15 @@ TEST_SUITE(last_term);
 
 TEST_SETUP(last_term, setup);
 TEST_TEAR_DOWN(last_term, tear_down);
+
+/* If the log is empty, return zero. */
+TEST_CASE(last_term, empty, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+    munit_assert_int(LAST_TERM, ==, 0);
+    return MUNIT_OK;
+}
 
 /* If the log has a snapshot and no outstanding entries, return the last term of
  * the snapshot. */
@@ -1124,7 +1133,7 @@ TEST_CASE(truncate, empty_with_offset, NULL)
 
     (void)params;
 
-    //SET_OFFSET(10);
+    // SET_OFFSET(10);
     TRUNCATE(1);
 
     return MUNIT_OK;

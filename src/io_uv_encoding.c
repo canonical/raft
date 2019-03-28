@@ -112,7 +112,7 @@ static void raft_io_uv_encode__append_entries_result(
     void *cursor = buf;
 
     byte__put64(&cursor, p->term);
-    byte__put64(&cursor, p->success);
+    byte__put64(&cursor, p->rejected);
     byte__put64(&cursor, p->last_log_index);
 }
 
@@ -379,7 +379,7 @@ static void raft_io_uv_decode__append_entries_result(
     cursor = buf->base;
 
     p->term = byte__get64(&cursor);
-    p->success = byte__get64(&cursor);
+    p->rejected = byte__get64(&cursor);
     p->last_log_index = byte__get64(&cursor);
 }
 

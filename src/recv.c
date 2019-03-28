@@ -8,6 +8,7 @@
 #include "recv_install_snapshot.h"
 #include "recv_request_vote.h"
 #include "recv_request_vote_result.h"
+#include "string.h"
 
 static const char *message_descs[] = {"append entries", "append entries result",
                                       "request vote", "request vote result",
@@ -20,12 +21,12 @@ static int recv(struct raft *r, struct raft_message *message)
 
     if (message->type < RAFT_IO_APPEND_ENTRIES ||
         message->type > RAFT_IO_INSTALL_SNAPSHOT) {
-        warnf(r->io, "recv: unknown message type type: %d", message->type);
+        warnf(r->io, "received unknown message type type: %d", message->type);
         return 0;
     }
 
-    debugf(r->io, "recv: %s from server %ld", message_descs[message->type - 1],
-           message->server_id);
+    debugf(r->io, "received %s from server %ld",
+           message_descs[message->type - 1], message->server_id);
 
     switch (message->type) {
         case RAFT_IO_APPEND_ENTRIES:
@@ -40,13 +41,13 @@ static int recv(struct raft *r, struct raft_message *message)
             break;
         case RAFT_IO_REQUEST_VOTE:
             rv = recv__request_vote(r, message->server_id,
-                                             message->server_address,
-                                             &message->request_vote);
+                                    message->server_address,
+                                    &message->request_vote);
             break;
         case RAFT_IO_REQUEST_VOTE_RESULT:
-            rv = recv__request_vote_result(
-                r, message->server_id, message->server_address,
-                &message->request_vote_result);
+            rv = recv__request_vote_result(r, message->server_id,
+                                           message->server_address,
+                                           &message->request_vote_result);
             break;
         case RAFT_IO_INSTALL_SNAPSHOT:
             rv = raft_rpc__recv_install_snapshot(r, message->server_id,
@@ -123,14 +124,19 @@ int recv__ensure_matching_terms(struct raft *r, raft_term term, int *match)
      *   immediately reverts to follower state.
      */
     if (term > r->current_term) {
-        infof(r->io, "remote server term is higher -> bump local term");
+        char msg[1204];
+        sprintf(msg, "remote term %lld is higher than %lld -> bump local term",
+                term, r->current_term);
+        if (r->state != RAFT_FOLLOWER) {
+            strcat(msg, " and step down");
+        }
+        infof(r->io, msg);
         rv = bump_current_term(r, term);
         if (rv != 0) {
             return rv;
         }
         if (r->state != RAFT_FOLLOWER) {
             /* Also convert to follower. */
-            infof(r->io, "remote server term is higher -> step down");
             convert__to_follower(r);
         }
         *match = 1;

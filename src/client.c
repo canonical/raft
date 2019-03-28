@@ -27,10 +27,10 @@ int raft_apply(struct raft *r,
         goto err;
     }
 
-    debugf(r->io, "client request: %d entries", n);
-
     /* Index of the first entry being appended. */
     index = log__last_index(&r->log) + 1;
+
+    debugf(r->io, "client request: apply %u entries starting at %lld", n, index);
 
     req->index = index;
     req->cb = cb;
@@ -76,7 +76,7 @@ static int raft_client__change_configuration(
     }
 
     if (configuration->n != r->configuration.n) {
-        rv = progress__update_array(r, configuration);
+        rv = progress__rebuild_array(r, configuration);
         if (rv != 0) {
             goto err;
         }
@@ -200,7 +200,7 @@ int raft_promote(struct raft *r, const unsigned id)
     r->leader_state.round_duration = 0;
 
     /* Immediately initiate an AppendEntries request. */
-    rv = raft_replication__send_append_entries(r, server_index);
+    rv = replication__trigger(r, server_index);
     if (rv != 0 && rv != RAFT_ERR_IO_CONNECT) {
         /* This error is not fatal. */
         warnf(r->io, "failed to send append entries to server %ld: %s (%d)",

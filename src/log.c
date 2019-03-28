@@ -609,8 +609,10 @@ raft_term log__term_of(struct raft_log *l, const raft_index index)
 {
     size_t i;
     assert(index > 0);
+    assert(l->offset <= l->snapshot.last_index);
 
-    if (index < l->snapshot.last_index || index > log__last_index(l)) {
+    if ((index < l->offset + 1 && index != l->snapshot.last_index) ||
+        index > log__last_index(l)) {
         return 0;
     }
 
@@ -630,10 +632,16 @@ raft_term log__term_of(struct raft_log *l, const raft_index index)
     return l->entries[i].term;
 }
 
+raft_index log__snapshot_index(struct raft_log *l)
+{
+    return l->snapshot.last_index;
+}
+
 raft_term log__last_term(struct raft_log *l)
 {
-    assert(log__n_outstanding(l) > 0 || l->snapshot.last_index > 0);
-    return log__term_of(l, log__last_index(l));
+    raft_index last_index;
+    last_index = log__last_index(l);
+    return last_index > 0 ? log__term_of(l, last_index) : 0;
 }
 
 const struct raft_entry *log__get(struct raft_log *l, const raft_index index)

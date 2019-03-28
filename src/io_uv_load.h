@@ -74,6 +74,7 @@ int io_uv__load_closed(struct io_uv *uv,
  */
 int io_uv__load_all(struct io_uv *uv,
                     struct raft_snapshot **snapshot,
+		    raft_index *start_index,
                     struct raft_entry *entries[],
                     size_t *n);
 

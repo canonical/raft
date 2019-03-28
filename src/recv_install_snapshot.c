@@ -27,7 +27,7 @@ int raft_rpc__recv_install_snapshot(struct raft *r,
 
     assert(address != NULL);
 
-    result->success = false;
+    result->rejected = args->last_index;
     result->last_log_index = log__last_index(&r->log);
 
     rv = recv__ensure_matching_terms(r, args->term, &match);
@@ -53,7 +53,7 @@ int raft_rpc__recv_install_snapshot(struct raft *r,
     r->follower_state.current_leader.address = address;
     r->election_elapsed = 0;
 
-    rv = raft_replication__install_snapshot(r, args, &result->success, &async);
+    rv = raft_replication__install_snapshot(r, args, &result->rejected, &async);
     if (rv != 0) {
         return rv;
     }
@@ -62,7 +62,7 @@ int raft_rpc__recv_install_snapshot(struct raft *r,
         return 0;
     }
 
-    if (result->success) {
+    if (result->rejected == 0) {
         /* Echo back to the leader the point that we reached. */
         result->last_log_index = args->last_index;
     }

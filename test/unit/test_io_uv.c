@@ -156,18 +156,18 @@ static void tear_down(void *data)
 /**
  * Load the initial state from the store and check that no error occurs.
  */
-#define __load(F)                                                       \
-    {                                                                   \
-        raft_term term;                                                 \
-        unsigned voted_for;                                             \
-        struct raft_snapshot *snapshot;                                 \
-        struct raft_entry *entries;                                     \
-        size_t n_entries;                                               \
-        int rv;                                                         \
-                                                                        \
-        rv = F->io.load(&F->io, &term, &voted_for, &snapshot, &entries, \
-                        &n_entries);                                    \
-        munit_assert_int(rv, ==, 0);                                    \
+#define __load(F)                                                            \
+    {                                                                        \
+        raft_term term;                                                      \
+        unsigned voted_for;                                                  \
+        struct raft_snapshot *snapshot;                                      \
+        raft_index start_index;                                              \
+        struct raft_entry *entries;                                          \
+        size_t n_entries;                                                    \
+        int rv2;                                                             \
+        rv2 = F->io.load(&F->io, &term, &voted_for, &snapshot, &start_index, \
+                         &entries, &n_entries);                              \
+        munit_assert_int(rv2, ==, 0);                                        \
     }
 
 /**
@@ -364,13 +364,15 @@ TEST_CASE(load, pristine, NULL)
     raft_term term;
     unsigned voted_for;
     struct raft_snapshot *snapshot;
+    raft_index start_index;
     struct raft_entry *entries;
     size_t n_entries;
     int rv;
 
     (void)params;
 
-    rv = f->io.load(&f->io, &term, &voted_for, &snapshot, &entries, &n_entries);
+    rv = f->io.load(&f->io, &term, &voted_for, &snapshot, &start_index,
+                    &entries, &n_entries);
     munit_assert_int(rv, ==, 0);
 
     munit_assert_int(term, ==, 0);

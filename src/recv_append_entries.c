@@ -30,7 +30,7 @@ int recv__append_entries(struct raft *r,
     assert(args != NULL);
     assert(address != NULL);
 
-    result->success = false;
+    result->rejected = args->prev_log_index;
     result->last_log_index = log__last_index(&r->log);
 
     rv = recv__ensure_matching_terms(r, args->term, &match);
@@ -105,7 +105,7 @@ int recv__append_entries(struct raft *r,
         return 0;
     }
 
-    rv = raft_replication__append(r, args, &result->success, &async);
+    rv = raft_replication__append(r, args, &result->rejected, &async);
     if (rv != 0) {
         return rv;
     }
@@ -114,10 +114,8 @@ int recv__append_entries(struct raft *r,
         return 0;
     }
 
-    if (result->success) {
-        /* Echo back to the leader the point that we reached. */
-        result->last_log_index = args->prev_log_index + args->n_entries;
-    }
+    /* Echo back to the leader the point that we reached. */
+    result->last_log_index = r->last_stored;
 
 reply:
     result->term = r->current_term;
@@ -140,6 +138,8 @@ reply:
         return RAFT_ENOMEM;
     }
 
+    debugf(r->io, "send append entries result (rejected=%llu last_index=%lld)",
+           result->rejected, result->last_log_index);
     rv = r->io->send(r->io, req, &message, send_cb);
     if (rv != 0) {
         raft_free(req);

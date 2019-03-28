@@ -215,12 +215,12 @@ static int __server_init(struct __server *s, const char *dir, unsigned id)
     raft_configuration_init(&configuration);
     for (i = 0; i < N_SERVERS; i++) {
         char address[64];
-        unsigned id = i + 1;
+        unsigned server_id = i + 1;
 
-        sprintf(address, "127.0.0.1:900%d", id);
-        rv = raft_configuration_add(&configuration, id, address, true);
+        sprintf(address, "127.0.0.1:900%d", server_id);
+        rv = raft_configuration_add(&configuration, server_id, address, true);
         if (rv != 0) {
-            printf("error: add server %d to configuration: %s\n", id,
+            printf("error: add server %d to configuration: %s\n", server_id,
                    raft_strerror(rv));
             goto err_after_raft_init;
         }

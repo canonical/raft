@@ -16,19 +16,19 @@
     struct raft_fsm fsms[RAFT_FIXTURE_MAX_SERVERS]; \
     struct raft_fixture cluster;
 
-#define SETUP_CLUSTER(N)                                 \
-    SETUP_HEAP;                                          \
-    {                                                    \
-        unsigned i;                                      \
-        int rc;                                          \
-        for (i = 0; i < N; i++) {                        \
-            test_fsm_setup(NULL, &f->fsms[i]);           \
-        }                                                \
-        rc = raft_fixture_init(&f->cluster, N, f->fsms); \
-        munit_assert_int(rc, ==, 0);                     \
-        for (i = 0; i < N; i++) {                        \
-            CLUSTER_SET_RANDOM(i, munit_rand_int_range); \
-        }                                                \
+#define SETUP_CLUSTER(N)                                  \
+    SETUP_HEAP;                                           \
+    {                                                     \
+        unsigned i;                                       \
+        int rc2;                                          \
+        for (i = 0; i < N; i++) {                         \
+            test_fsm_setup(NULL, &f->fsms[i]);            \
+        }                                                 \
+        rc2 = raft_fixture_init(&f->cluster, N, f->fsms); \
+        munit_assert_int(rc2, ==, 0);                     \
+        for (i = 0; i < N; i++) {                         \
+            CLUSTER_SET_RANDOM(i, munit_rand_int_range);  \
+        }                                                 \
     }
 
 #define TEAR_DOWN_CLUSTER                    \
@@ -91,11 +91,11 @@
  * Populate the given configuration with all servers in the fixture. All servers
  * will be voting.
  */
-#define CLUSTER_CONFIGURATION(CONF)                                    \
-    {                                                                  \
-        int rc;                                                        \
-        rc = raft_fixture_configuration(&f->cluster, CLUSTER_N, CONF); \
-        munit_assert_int(rc, ==, 0);                                   \
+#define CLUSTER_CONFIGURATION(CONF)                                     \
+    {                                                                   \
+        int rc2;                                                        \
+        rc2 = raft_fixture_configuration(&f->cluster, CLUSTER_N, CONF); \
+        munit_assert_int(rc2, ==, 0);                                   \
     }
 
 /**
@@ -255,16 +255,16 @@
  * - If no leader is present, wait for one to be elected.
  * - Submit a request to apply a new FSM command and wait for it to complete.
  */
-#define CLUSTER_MAKE_PROGRESS                                                \
-    {                                                                        \
-        struct raft_apply *req = munit_malloc(sizeof *req);                  \
-        if (!(CLUSTER_HAS_LEADER)) {                                         \
-            CLUSTER_STEP_UNTIL_HAS_LEADER(3000);                             \
-        }                                                                    \
-        CLUSTER_APPLY_ADD_X(req, 1, NULL);                                   \
-        CLUSTER_STEP_UNTIL_APPLIED(                                          \
-            CLUSTER_LEADER, CLUSTER_LAST_APPLIED(CLUSTER_LEADER) + 1, 3000); \
-        free(req);                                                           \
+#define CLUSTER_MAKE_PROGRESS                                               \
+    {                                                                       \
+        struct raft_apply *req = munit_malloc(sizeof *req);                 \
+        if (!(CLUSTER_HAS_LEADER)) {                                        \
+            CLUSTER_STEP_UNTIL_HAS_LEADER(3000);                            \
+        }                                                                   \
+        CLUSTER_APPLY_ADD_X(req, 1, NULL);                                  \
+        CLUSTER_STEP_UNTIL_APPLIED(                                         \
+            CLUSTER_LEADER, CLUSTER_LAST_APPLIED(CLUSTER_LEADER) + 1, 500); \
+        free(req);                                                          \
     }
 
 /**

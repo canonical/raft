@@ -51,18 +51,20 @@ int recv__append_entries_result(struct raft *r,
     /* Ignore responses from servers that have been removed */
     server = configuration__get(&r->configuration, id);
     if (server == NULL) {
-        errorf(r->io, "unknown server -> ignore");
+        warnf(r->io, "unknown server -> ignore");
         return 0;
     }
 
     /* Update the match/next and the last contact indexes, possibly sending
      * further entries. */
-    rv = raft_replication__update(r, server, result);
+    rv = replication__update(r, server, result);
     if (rv != 0) {
         return rv;
     }
 
-    /* Commit entries if possible */
+    /* Commit entries if possible.
+     *
+     * TODO: trigger an heartbeat if the commit index was updated */
     raft_replication__quorum(r, result->last_log_index);
 
     rv = raft_replication__apply(r);

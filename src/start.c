@@ -11,7 +11,7 @@
 #include "tick.h"
 
 /* Set to 1 to enable tracing. */
-#if 0
+#if 1
 #define tracef(MSG, ...) debugf(r->io, "start: " MSG, ##__VA_ARGS__)
 #else
 #define tracef(MSG, ...)
@@ -99,6 +99,7 @@ int raft_start(struct raft *r)
 {
     int rc;
     struct raft_snapshot *snapshot;
+    raft_index start_index;
     struct raft_entry *entries;
     size_t n_entries;
 
@@ -112,10 +113,12 @@ int raft_start(struct raft *r)
     infof(r->io, "starting");
 
     rc = r->io->load(r->io, &r->current_term, &r->voted_for, &snapshot,
-                     &entries, &n_entries);
+                     &start_index, &entries, &n_entries);
     if (rc != 0) {
         return rc;
     }
+
+    assert(start_index >= 1);
 
     /* If we have a snapshot, let's restore it, updating the start index. */
     if (snapshot != NULL) {
@@ -140,6 +143,8 @@ int raft_start(struct raft *r)
 
     /* Append the entries to the log, possibly restoring the last
      * configuration. */
+    tracef("entries: %lu starting at %llu", n_entries, start_index);
+    r->log.offset = start_index - 1;
     rc = restore_entries(r, entries, n_entries);
     if (rc != 0) {
         entry_batches__destroy(entries, n_entries);

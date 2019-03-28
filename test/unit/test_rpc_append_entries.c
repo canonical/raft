@@ -69,16 +69,16 @@ static struct raft_entry *__create_entries_batch()
 #define __recv_append_entries(F, TERM, LEADER_ID, PREV_LOG_INDEX, \
                               PREV_LOG_TERM, ENTRIES, N, COMMIT)  \
     {                                                             \
-        struct raft_message message;                              \
+        struct raft_message message2;                             \
         struct raft_append_entries *args;                         \
         char address[4];                                          \
                                                                   \
         sprintf(address, "%d", LEADER_ID);                        \
-        message.type = RAFT_IO_APPEND_ENTRIES;                    \
-        message.server_id = LEADER_ID;                            \
-        message.server_address = address;                         \
+        message2.type = RAFT_IO_APPEND_ENTRIES;                   \
+        message2.server_id = LEADER_ID;                           \
+        message2.server_address = address;                        \
                                                                   \
-        args = &message.append_entries;                           \
+        args = &message2.append_entries;                          \
         args->term = TERM;                                        \
         args->leader_id = LEADER_ID;                              \
         args->prev_log_index = PREV_LOG_INDEX;                    \
@@ -87,7 +87,7 @@ static struct raft_entry *__create_entries_batch()
         args->n_entries = N;                                      \
         args->leader_commit = COMMIT;                             \
                                                                   \
-        raft_io_stub_deliver(&F->io, &message);                   \
+        raft_io_stub_deliver(&F->io, &message2);                  \
     }
 
 /**
@@ -97,21 +97,21 @@ static struct raft_entry *__create_entries_batch()
 #define __recv_append_entries_result(F, SERVER_ID, TERM, SUCCESS, \
                                      LAST_LOG_INDEX)              \
     {                                                             \
-        struct raft_message message;                              \
+        struct raft_message message2;                             \
         struct raft_append_entries_result *result;                \
         char address[4];                                          \
                                                                   \
         sprintf(address, "%d", SERVER_ID);                        \
-        message.type = RAFT_IO_APPEND_ENTRIES_RESULT;             \
-        message.server_id = SERVER_ID;                            \
-        message.server_address = address;                         \
+        message2.type = RAFT_IO_APPEND_ENTRIES_RESULT;            \
+        message2.server_id = SERVER_ID;                           \
+        message2.server_address = address;                        \
                                                                   \
-        result = &message.append_entries_result;                  \
+        result = &message2.append_entries_result;                 \
         result->term = TERM;                                      \
-        result->success = SUCCESS;                                \
+        result->rejected = SUCCESS ? 0 : 1;                       \
         result->last_log_index = LAST_LOG_INDEX;                  \
                                                                   \
-        raft_io_stub_deliver(&F->io, &message);                   \
+        raft_io_stub_deliver(&F->io, &message2);                  \
     }
 
 /**
@@ -129,7 +129,7 @@ static struct raft_entry *__create_entries_batch()
  * Assert that the test I/O implementation has received exactly one
  * AppendEntries response RPC with the given parameters.
  */
-#define __assert_append_entries_response(F, TERM, SUCCESS, LAST_LOG_INDEX)  \
+#define __assert_append_entries_response(F, TERM, REJECTED, LAST_LOG_INDEX) \
     {                                                                       \
         struct raft_message *message;                                       \
         struct raft_append_entries_result *result;                          \
@@ -141,7 +141,7 @@ static struct raft_entry *__create_entries_batch()
                                                                             \
         result = &message->append_entries_result;                           \
         munit_assert_int(result->term, ==, TERM);                           \
-        munit_assert_int(result->success, ==, SUCCESS);                     \
+        munit_assert_int(result->rejected, ==, REJECTED);                   \
         munit_assert_int(result->last_log_index, ==, LAST_LOG_INDEX);       \
     }
 
@@ -172,7 +172,7 @@ TEST_CASE(request, success, stale_term, NULL)
     __recv_append_entries(f, 1, 2, 0, 0, NULL, 0, 1);
 
     /* The request is unsuccessful */
-    __assert_append_entries_response(f, 2, false, 1);
+    __assert_append_entries_response(f, 2, 0, 1);
 
     return MUNIT_OK;
 }
@@ -200,12 +200,12 @@ TEST_CASE(request, success, twice, NULL)
 
     raft_io_stub_sending(&f->io, 0, &message);
     result = &message->append_entries_result;
-    munit_assert_int(result->success, ==, 1);
-    munit_assert_int(result->last_log_index, ==, 2);
+    munit_assert_int(result->rejected, ==, 0);
+    munit_assert_int(result->last_log_index, ==, 1);
 
     raft_io_stub_sending(&f->io, 1, &message);
     result = &message->append_entries_result;
-    munit_assert_int(result->success, ==, 1);
+    munit_assert_int(result->rejected, ==, 0);
     munit_assert_int(result->last_log_index, ==, 2);
 
     return MUNIT_OK;
@@ -278,7 +278,7 @@ TEST_CASE(request, success, snapshot_match, NULL)
     raft_io_stub_flush(&f->io);
 
     /* The request got accepted. */
-    __assert_append_entries_response(f, 2, true, 5);
+    __assert_append_entries_response(f, 2, 0, 5);
 
     return MUNIT_OK;
 }
@@ -295,7 +295,7 @@ TEST_CASE(request, error, missing_entries, NULL)
     __recv_append_entries(f, 1, 2, 2, 1, NULL, 0, 1);
 
     /* The request is unsuccessful */
-    __assert_append_entries_response(f, 1, false, 1);
+    __assert_append_entries_response(f, 1, 2, 1);
 
     return MUNIT_OK;
 }
@@ -366,7 +366,7 @@ TEST_CASE(request, error, prev_log_term_mismatch, NULL)
     __recv_append_entries(f, 1, 2, 2, 2, NULL, 0, 1);
 
     /* The request gets rejected. */
-    __assert_append_entries_response(f, 1, false, 3);
+    __assert_append_entries_response(f, 1, 2, 1);
 
     raft_free(entries[0].buf.base);
     raft_free(entries[1].buf.base);

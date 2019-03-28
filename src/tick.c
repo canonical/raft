@@ -6,7 +6,7 @@
 #include "election.h"
 #include "logging.h"
 #include "progress.h"
-#include "replication.h"
+#include "heartbeat.h"
 #include "watch.h"
 
 /**
@@ -93,7 +93,7 @@ static int candidate_tick(struct raft *r)
      *   incrementing its term and initiating another round of RequestVote RPCs
      */
     if (r->election_elapsed > r->randomized_election_timeout) {
-        infof(r->io, "start new election");
+        infof(r->io, "tick: start new election");
         return election__start(r);
     }
 
@@ -118,11 +118,12 @@ static int leader_tick(struct raft *r, const unsigned msecs_since_last_tick)
      */
     if (r->election_elapsed > r->election_timeout) {
         if (!progress__check_quorum(r)) {
-            warnf(r->io, "unable to contact majority of cluster -> step down");
+            warnf(r->io,
+                  "tick: unable to contact majority of cluster -> step down");
             convert__to_follower(r);
             return 0;
         }
-	r->election_elapsed = 0;
+        r->election_elapsed = 0;
     }
 
     /* Check if we need to send heartbeats.
@@ -134,7 +135,7 @@ static int leader_tick(struct raft *r, const unsigned msecs_since_last_tick)
      */
     if (r->leader_state.heartbeat_elapsed > r->heartbeat_timeout) {
         r->leader_state.heartbeat_elapsed = 0;
-        raft_replication__trigger(r, 0);
+        heartbeat__send(r);
     }
 
     /* If a server is being promoted, increment the timer of the current

@@ -34,23 +34,21 @@ TEST_MODULE(client);
 /**
  * Submit a request to add a new server and check that it returns no error.
  */
-#define add_server(ID, ADDRESS)                      \
-    {                                                \
-        int rv;                                      \
-                                                     \
-        rv = raft_add_server(&f->raft, ID, ADDRESS); \
-        munit_assert_int(rv, ==, 0);                 \
+#define add_server(ID, ADDRESS)                       \
+    {                                                 \
+        int rv2;                                      \
+        rv2 = raft_add_server(&f->raft, ID, ADDRESS); \
+        munit_assert_int(rv2, ==, 0);                 \
     }
 
 /**
  * Submit a request to promote a server and check that it returns no error.
  */
-#define __promote(F, ID)                 \
-    {                                    \
-        int rv;                          \
-                                         \
-        rv = raft_promote(&F->raft, ID); \
-        munit_assert_int(rv, ==, 0);     \
+#define __promote(F, ID)                  \
+    {                                     \
+        int rv2;                          \
+        rv2 = raft_promote(&F->raft, ID); \
+        munit_assert_int(rv2, ==, 0);     \
     }
 
 /**
@@ -68,28 +66,28 @@ TEST_MODULE(client);
  * Call raft_handle_append_entries with the given parameters and check that no
  * error occurs.
  */
-#define __handle_append_entries(F, TERM, LEADER_ID, PREV_LOG_INDEX,      \
-                                PREV_LOG_TERM, ENTRIES, N, COMMIT)       \
-    {                                                                    \
-        struct raft_message message;                              \
-        struct raft_append_entries *args;                         \
-        char address[4];                                          \
-                                                                  \
-        sprintf(address, "%d", LEADER_ID);                        \
-        message.type = RAFT_IO_APPEND_ENTRIES;                    \
-        message.server_id = LEADER_ID;                            \
-        message.server_address = address;                         \
-                                                                  \
-        args = &message.append_entries;                           \
-        args->term = TERM;                                        \
-        args->leader_id = LEADER_ID;                              \
-        args->prev_log_index = PREV_LOG_INDEX;                    \
-        args->prev_log_term = PREV_LOG_TERM;                      \
-        args->entries = ENTRIES;                                  \
-        args->n_entries = N;                                      \
-        args->leader_commit = COMMIT;                             \
-                                                                  \
-        raft_io_stub_deliver(&F->io, &message);                   \
+#define __handle_append_entries(F, TERM, LEADER_ID, PREV_LOG_INDEX, \
+                                PREV_LOG_TERM, ENTRIES, N, COMMIT)  \
+    {                                                               \
+        struct raft_message message;                                \
+        struct raft_append_entries *args;                           \
+        char address[4];                                            \
+                                                                    \
+        sprintf(address, "%d", LEADER_ID);                          \
+        message.type = RAFT_IO_APPEND_ENTRIES;                      \
+        message.server_id = LEADER_ID;                              \
+        message.server_address = address;                           \
+                                                                    \
+        args = &message.append_entries;                             \
+        args->term = TERM;                                          \
+        args->leader_id = LEADER_ID;                                \
+        args->prev_log_index = PREV_LOG_INDEX;                      \
+        args->prev_log_term = PREV_LOG_TERM;                        \
+        args->entries = ENTRIES;                                    \
+        args->n_entries = N;                                        \
+        args->leader_commit = COMMIT;                               \
+                                                                    \
+        raft_io_stub_deliver(&F->io, &message);                     \
     }
 
 /**
@@ -111,7 +109,7 @@ TEST_MODULE(client);
         result = &message.append_entries_result;                      \
                                                                       \
         result->term = TERM;                                          \
-        result->success = SUCCESS;                                    \
+        result->rejected = SUCCESS ? 0 : 1;                           \
         result->last_log_index = LAST_LOG_INDEX;                      \
         raft_io_stub_deliver(&F->io, &message);                       \
     }

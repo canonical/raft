@@ -158,7 +158,6 @@ if FIXTURE
   test/unit/test_fixture.c
 endif
 unit_test_CFLAGS = $(AM_CFLAGS) -DRAFT_TEST -DMUNIT_TEST_NAME_LEN=60
-unit_test_CFLAGS += -I$(top_srcdir)/tests/unit
 unit_test_LDFLAGS =
 if IO_UV
   unit_test_LDFLAGS += $(UV_LIBS)
@@ -172,8 +171,6 @@ fuzzy_test_SOURCES += \
   test/fuzzy/test_membership.c \
   test/fuzzy/test_replication.c
 fuzzy_test_CFLAGS = $(AM_CFLAGS)
-#-DMUNIT_NO_FORK
-fuzzy_test_CFLAGS += -I$(top_srcdir)/tests/fuzzy
 fuzzy_test_LDADD = libraft.la
 fuzzy_test_LDFLAGS =
 if IO_UV
