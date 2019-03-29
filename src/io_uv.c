@@ -143,11 +143,11 @@ static int io_uv__load(struct raft_io *io,
                        raft_term *term,
                        unsigned *voted_for,
                        struct raft_snapshot **snapshot,
+                       raft_index *start_index,
                        struct raft_entry **entries,
                        size_t *n_entries)
 {
     struct io_uv *uv;
-    raft_index start_index = 1;
     raft_index last_index;
     int rv;
 
@@ -158,15 +158,12 @@ static int io_uv__load(struct raft_io *io,
     *voted_for = uv->metadata.voted_for;
     *snapshot = NULL;
 
-    rv = io_uv__load_all(uv, snapshot, entries, n_entries);
+    rv = io_uv__load_all(uv, snapshot, start_index, entries, n_entries);
     if (rv != 0) {
         return rv;
     }
 
-    if (*snapshot != NULL) {
-        start_index = (*snapshot)->index + 1;
-    }
-    last_index = start_index + *n_entries - 1;
+    last_index = *start_index + *n_entries - 1;
 
     /* Set the index of the last entry that was persisted. */
     uv->finalize_last_index = last_index;

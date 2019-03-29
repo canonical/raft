@@ -23,14 +23,11 @@ void log__init(struct raft_log *l);
 void log__close(struct raft_log *l);
 
 /**
- * Get the current number of entries in the log. Return #0 if the log is empty.
+ * Get the current number of outstanding entries in the log, i.e. the number of
+ * entries that are not included in the most recent snapshot (if any). Return #0
+ * if there are no outstanding entries.
  */
-size_t log__n_entries(struct raft_log *l);
-
-/**
- * Get the index of the first entry in the log. Return #0 if the log is empty.
- */
-raft_index log__first_index(struct raft_log *l);
+size_t log__n_outstanding(struct raft_log *l);
 
 /**
  * Get the index of the last entry in the log. Return #0 if the log is empty.
@@ -38,15 +35,23 @@ raft_index log__first_index(struct raft_log *l);
 raft_index log__last_index(struct raft_log *l);
 
 /**
- * Get the term of the entry with the given index. Return #0 if there is no such
- * entry.
+ * Get the term of the last entry in the log. Return #0 if the log is empty.
+ */
+raft_term log__last_term(struct raft_log *l);
+
+/**
+ * Get the term of the entry with the given index. Return #0 if @index is
+ * greater than the last index of the log, or if it's lower than oldest index we
+ * know the term of (either because it's outstanding or because it's the last
+ * entry in the most recent snapshot).
  */
 raft_term log__term_of(struct raft_log *l, raft_index index);
 
 /**
- * Get the term of the last entry in the log. Return #0 if the log is empty.
+ * Get the last index of the most recent snapshot. Return #0 if there are no
+ * snapshots.
  */
-raft_term log__last_term(struct raft_log *l);
+raft_index log__snapshot_index(struct raft_log *l);
 
 /**
  * Get the entry with the given index.
@@ -56,12 +61,6 @@ raft_term log__last_term(struct raft_log *l);
  * entry.
  */
 const struct raft_entry *log__get(struct raft_log *l, const raft_index index);
-
-/**
- * Set the offset of the first entry in the log, which will then have index
- * equal to offset + 1. By default the offset is 0.
- */
-void log__set_offset(struct raft_log *l, raft_index offset);
 
 /**
  * Append the an entry to the log.
@@ -86,7 +85,6 @@ int log__append_commands(struct raft_log *l,
 int log__append_configuration(struct raft_log *l,
                               const raft_term term,
                               const struct raft_configuration *configuration);
-
 
 /**
  * Acquire an array of entries from the given index onwards.
@@ -121,8 +119,30 @@ void log__truncate(struct raft_log *l, const raft_index index);
 void log__discard(struct raft_log *l, const raft_index index);
 
 /**
- * Delete all entries up to the given index (included).
+ * To be called when taking a new snapshot.
+ *
+ * The log must contain an entry at @last_index, which is the index of the last
+ * entry included in the snapshot. The function will update the last snapshot
+ * information and delete all entries up @last_index - @trailing. If the log
+ * contains no entry a @last_index - @trailing, then no entry will be deleted.
  */
-void log__shift(struct raft_log *l, const raft_index index);
+void log__snapshot(struct raft_log *l, raft_index last_index, unsigned trailing);
+
+/**
+ * To be called when restoring a new snapshot.
+ *
+ * The log can be in any state. All outstanding entries will be discarded, the
+ * last index and last term of the most recent snapshot will be set to the given
+ * values, and the offset adjusted accordingly.
+ */
+void log__restore(struct raft_log *l,
+                  raft_index last_index,
+                  raft_term last_term);
+
+/**
+ * Change the current offset of outstanding entries. This is called at startup
+ * when populating the log with entries loaded from disk.
+ */
+void log__seek(struct raft_log *l, raft_index start_index);
 
 #endif /* RAFT_LOG_H */

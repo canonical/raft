@@ -105,6 +105,26 @@ TEST_CASE(success, whole_segment, NULL)
     return MUNIT_OK;
 }
 
+/* The index to truncate is the same as the last appended entry. */
+TEST_CASE(success, same_as_last_index, NULL)
+{
+    struct fixture *f = data;
+    /* TODO: fix timeouts like
+     * https://travis-ci.org/CanonicalLtd/raft/jobs/503676478 */
+    return MUNIT_SKIP;
+
+    (void)params;
+
+    append(3);
+    invoke(3, 0);
+    test_uv_run(&f->loop, 3);
+
+    munit_assert_false(test_dir_has_file(f->dir, "1-3"));
+    munit_assert_false(test_dir_has_file(f->dir, "4-4"));
+
+    return MUNIT_OK;
+}
+
 /* If the index to truncate is not at the start of a segment, that segment gets
  * truncated. */
 TEST_CASE(success, partial_segment, NULL)

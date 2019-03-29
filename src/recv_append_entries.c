@@ -1,24 +1,22 @@
-#include "../include/raft.h"
-
+#include "recv_append_entries.h"
 #include "assert.h"
 #include "configuration.h"
+#include "convert.h"
 #include "log.h"
 #include "logging.h"
+#include "recv.h"
 #include "replication.h"
-#include "rpc.h"
-#include "state.h"
 
-static void raft_rpc__recv_append_entries_send_cb(struct raft_io_send *req,
-                                                  int status)
+static void send_cb(struct raft_io_send *req, int status)
 {
     (void)status;
     raft_free(req);
 }
 
-int raft_rpc__recv_append_entries(struct raft *r,
-                                  const unsigned id,
-                                  const char *address,
-                                  const struct raft_append_entries *args)
+int recv__append_entries(struct raft *r,
+                         const unsigned id,
+                         const char *address,
+                         const struct raft_append_entries *args)
 {
     struct raft_io_send *req;
     struct raft_message message;
@@ -32,12 +30,10 @@ int raft_rpc__recv_append_entries(struct raft *r,
     assert(args != NULL);
     assert(address != NULL);
 
-    debugf(r->io, "received %d entries from server %ld", args->n_entries, id);
-
-    result->success = false;
+    result->rejected = args->prev_log_index;
     result->last_log_index = log__last_index(&r->log);
 
-    rv = raft_rpc__ensure_matching_terms(r, args->term, &match);
+    rv = recv__ensure_matching_terms(r, args->term, &match);
     if (rv != 0) {
         return rv;
     }
@@ -53,8 +49,8 @@ int raft_rpc__recv_append_entries(struct raft *r,
     }
 
     /* If we get here it means that the term in the request matches our current
-     * term. If we're candidate, we want to step down to follower, because we
-     * discovered the current leader.
+     * term or it was higher and we have possibly stepped down, because we
+     * discovered the current leader:
      *
      * From Figure 3.1:
      *
@@ -78,28 +74,31 @@ int raft_rpc__recv_append_entries(struct raft *r,
      * Note that it should not be possible for us to be in leader state, because
      * the leader that is sending us the request should have either a lower term
      * (and in that case we reject the request above), or a higher term (and in
-     * that case we step down).
+     * that case we step down). It can't have the same term because at most one
+     * leader can be elected at any given term.
      */
     assert(r->state == RAFT_FOLLOWER || r->state == RAFT_CANDIDATE);
     assert(r->current_term == args->term);
 
     if (r->state == RAFT_CANDIDATE) {
+        /* The current term and the peer one must match, otherwise we would have
+         * either rejected the request or stepped down to followers. */
+        assert(match == 0);
         debugf(r->io, "discovered leader -> step down ");
-        rv = raft_state__convert_to_follower(r, args->term);
-        if (rv != 0) {
-            return rv;
-        }
+        convert__to_follower(r);
     }
 
     assert(r->state == RAFT_FOLLOWER);
 
     /* Update current leader because the term in this AppendEntries RPC is up to
      * date. */
-    r->follower_state.current_leader.id = id;
-    r->follower_state.current_leader.address = address;
+    rv = recv__update_leader(r, id, address);
+    if (rv != 0) {
+        return rv;
+    }
 
     /* Reset the election timer. */
-    r->timer = 0;
+    r->election_elapsed = 0;
 
     /* If we are installing a snapshot, ignore these entries. TODO: we should do
      * something smarter, e.g. buffering the entries in the I/O backend, which
@@ -108,7 +107,7 @@ int raft_rpc__recv_append_entries(struct raft *r,
         return 0;
     }
 
-    rv = raft_replication__append(r, args, &result->success, &async);
+    rv = raft_replication__append(r, args, &result->rejected, &async);
     if (rv != 0) {
         return rv;
     }
@@ -117,10 +116,8 @@ int raft_rpc__recv_append_entries(struct raft *r,
         return 0;
     }
 
-    if (result->success) {
-        /* Echo back to the leader the point that we reached. */
-        result->last_log_index = args->prev_log_index + args->n_entries;
-    }
+    /* Echo back to the leader the point that we reached. */
+    result->last_log_index = r->last_stored;
 
 reply:
     result->term = r->current_term;
@@ -143,81 +140,11 @@ reply:
         return RAFT_ENOMEM;
     }
 
-    rv = r->io->send(r->io, req, &message,
-                     raft_rpc__recv_append_entries_send_cb);
+    debugf(r->io, "send append entries result (rejected=%llu last_index=%lld)",
+           result->rejected, result->last_log_index);
+    rv = r->io->send(r->io, req, &message, send_cb);
     if (rv != 0) {
         raft_free(req);
-        return rv;
-    }
-
-    return 0;
-}
-
-int raft_rpc__recv_append_entries_result(
-    struct raft *r,
-    const unsigned id,
-    const char *address,
-    const struct raft_append_entries_result *result)
-{
-    int match;
-    const struct raft_server *server;
-    int rv;
-
-    assert(r != NULL);
-    assert(id > 0);
-    assert(address != NULL);
-    assert(result != NULL);
-
-    debugf(r->io, "received append entries result from server %ld", id);
-
-    if (r->state != RAFT_LEADER) {
-        debugf(r->io, "local server is not leader -> ignore");
-        return 0;
-    }
-
-    rv = raft_rpc__ensure_matching_terms(r, result->term, &match);
-    if (rv != 0) {
-        return rv;
-    }
-
-    if (match < 0) {
-        debugf(r->io, "local term is higher -> ignore ");
-        return 0;
-    }
-
-    /* If we have stepped down, abort here.
-     *
-     * From Figure 3.1:
-     *
-     *   [Rules for Servers] All Servers: If RPC request or response contains
-     *   term T > currentTerm: set currentTerm = T, convert to follower.
-     */
-    if (match > 0) {
-        assert(r->state == RAFT_FOLLOWER);
-        return 0;
-    }
-
-    assert(result->term == r->current_term);
-
-    /* Ignore responses from servers that have been removed */
-    server = configuration__get(&r->configuration, id);
-    if (server == NULL) {
-        errorf(r->io, "unknown server -> ignore");
-        return 0;
-    }
-
-    /* Update the match/next and the last contact indexes, possibly sending
-     * further entries. */
-    rv = raft_replication__update(r, server, result);
-    if (rv != 0) {
-        return rv;
-    }
-
-    /* Commit entries if possible */
-    raft_replication__quorum(r, result->last_log_index);
-
-    rv = raft_replication__apply(r);
-    if (rv != 0) {
         return rv;
     }
 

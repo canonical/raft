@@ -242,7 +242,7 @@ TEST_CASE(success, append_entries_result, NULL)
 
     f->peer.message.type = RAFT_IO_APPEND_ENTRIES_RESULT;
     f->peer.message.append_entries_result.term = 3;
-    f->peer.message.append_entries_result.success = true;
+    f->peer.message.append_entries_result.rejected = 0;
     f->peer.message.append_entries_result.last_log_index = 123;
 
     recv__peer_connect;
@@ -254,7 +254,7 @@ TEST_CASE(success, append_entries_result, NULL)
     munit_assert_int(f->message->type, ==, RAFT_IO_APPEND_ENTRIES_RESULT);
 
     munit_assert_int(f->message->append_entries_result.term, ==, 3);
-    munit_assert_true(f->message->append_entries_result.success);
+    munit_assert_int(f->message->append_entries_result.rejected, ==, 0);
     munit_assert_int(f->message->append_entries_result.last_log_index, ==, 123);
 
     return MUNIT_OK;

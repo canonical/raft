@@ -5,7 +5,6 @@
 
 #include "../../src/configuration.h"
 #include "../../src/log.h"
-#include "../../src/rpc_request_vote.h"
 #include "../../src/tick.h"
 
 #include "../lib/fsm.h"
@@ -50,45 +49,49 @@ static void tear_down(void *data)
 }
 
 /**
- * Call raft_rpc__recv_request_vote with the given parameters and check that no
+ * Call recv__request_vote with the given parameters and check that no
  * error occurs.
  */
-#define __recv_request_vote(F, TERM, CANDIDATE_ID, LAST_LOG_INDEX,        \
-                            LAST_LOG_TERM)                                \
-    {                                                                     \
-        int rv;                                                           \
-        struct raft_request_vote args;                                    \
-        char address[4];                                                  \
-                                                                          \
-        sprintf(address, "%d", CANDIDATE_ID);                             \
-                                                                          \
-        args.term = TERM;                                                 \
-        args.candidate_id = CANDIDATE_ID;                                 \
-        args.last_log_index = LAST_LOG_INDEX;                             \
-        args.last_log_term = LAST_LOG_TERM;                               \
-                                                                          \
-        rv = raft_rpc__recv_request_vote(&F->raft, CANDIDATE_ID, address, \
-                                         &args);                          \
-        munit_assert_int(rv, ==, 0);                                      \
+#define __recv_request_vote(F, TERM, CANDIDATE_ID, LAST_LOG_INDEX, \
+                            LAST_LOG_TERM)                         \
+    {                                                              \
+        struct raft_message message;                               \
+        struct raft_request_vote *args;                            \
+        char address[4];                                           \
+                                                                   \
+        sprintf(address, "%d", CANDIDATE_ID);                      \
+        message.type = RAFT_IO_REQUEST_VOTE;                       \
+        message.server_id = CANDIDATE_ID;                          \
+        message.server_address = address;                          \
+                                                                   \
+        args = &message.request_vote;                              \
+        args->term = TERM;                                         \
+        args->candidate_id = CANDIDATE_ID;                         \
+        args->last_log_index = LAST_LOG_INDEX;                     \
+        args->last_log_term = LAST_LOG_TERM;                       \
+                                                                   \
+        raft_io_stub_deliver(&F->io, &message);                    \
     }
 
 /**
- * Call raft_rpc__recv_request_vote_result with the given parameters and check
+ * Call recv__request_vote_result with the given parameters and check
  * that no error occurs.
  */
-#define __recv_request_vote_result(F, VOTER_ID, TERM, GRANTED)               \
-    {                                                                        \
-        struct raft_request_vote_result result;                              \
-        char address[4];                                                     \
-        int rv;                                                              \
-                                                                             \
-        sprintf(address, "%d", VOTER_ID);                                    \
-                                                                             \
-        result.term = TERM;                                                  \
-        result.vote_granted = GRANTED;                                       \
-        rv = raft_rpc__recv_request_vote_result(&F->raft, VOTER_ID, address, \
-                                                &result);                    \
-        munit_assert_int(rv, ==, 0);                                         \
+#define __recv_request_vote_result(F, VOTER_ID, TERM, GRANTED) \
+    {                                                          \
+        struct raft_message message;                           \
+        struct raft_request_vote_result *result;               \
+        char address[4];                                       \
+                                                               \
+        sprintf(address, "%d", VOTER_ID);                      \
+        message.type = RAFT_IO_REQUEST_VOTE_RESULT;            \
+        message.server_id = VOTER_ID;                          \
+        message.server_address = address;                      \
+                                                               \
+        result = &message.request_vote_result;                 \
+        result->term = TERM;                                   \
+        result->vote_granted = GRANTED;                        \
+        raft_io_stub_deliver(&F->io, &message);                \
     }
 
 /**
@@ -286,26 +289,6 @@ TEST_CASE(request, error, dupe_vote, NULL)
     return MUNIT_OK;
 }
 
-/* If server has an empty log, the vote is granted. */
-TEST_CASE(request, error, empty_log, NULL)
-{
-    struct fixture *f = data;
-
-    (void)params;
-
-    __configuration_add(f, 1, "1", true);
-    __configuration_add(f, 2, "2", true);
-
-    f->raft.state = RAFT_FOLLOWER;
-
-    __recv_request_vote(f, f->raft.current_term + 1, 2, 1, 1);
-
-    /* The request is successful */
-    __assert_request_vote_result(f, 1, true);
-
-    return MUNIT_OK;
-}
-
 /* If the requester last log entry term is lower than ours, the vote is not
  * granted. */
 TEST_CASE(request, error, last_term_lower, NULL)
@@ -437,7 +420,7 @@ TEST_CASE(request, error, last_idx_lower_index, NULL)
 }
 
 /**
- * raft_rpc__recv_request_vote_result
+ * recv__request_vote_result
  */
 
 TEST_SUITE(response);
@@ -461,21 +444,24 @@ static MunitParameterEnum res_oom_params[] = {
 TEST_CASE(response, error, oom, res_oom_params)
 {
     struct fixture *f = data;
-    struct raft_request_vote_result result;
-    int rv;
+    struct raft_message message;
+    struct raft_request_vote_result *result = &message.request_vote_result;
 
     (void)params;
 
     test_bootstrap_and_start(&f->raft, 2, 1, 2);
     test_become_candidate(&f->raft);
 
-    result.term = 2;
-    result.vote_granted = 1;
+    message.type = RAFT_IO_REQUEST_VOTE_RESULT;
+    message.server_id = 2;
+    message.server_address = "2";
+
+    result->term = 2;
+    result->vote_granted = 1;
 
     test_heap_fault_enable(&f->heap);
 
-    rv = raft_rpc__recv_request_vote_result(&f->raft, 2, "2", &result);
-    munit_assert_int(rv, ==, RAFT_ENOMEM);
+    raft_io_stub_deliver(&f->io, &message);
 
     return MUNIT_OK;
 }
@@ -496,15 +482,15 @@ TEST_CASE(response, success, quorum, NULL)
     /* We are leader */
     __assert_state(f, RAFT_LEADER);
 
-    munit_assert_ptr_not_null(f->raft.leader_state.replication);
+    munit_assert_ptr_not_null(f->raft.leader_state.progress);
 
     /* The next_index array is initialized */
-    munit_assert_int(f->raft.leader_state.replication[0].next_index, ==, 2);
-    munit_assert_int(f->raft.leader_state.replication[1].next_index, ==, 2);
+    munit_assert_int(f->raft.leader_state.progress[0].next_index, ==, 2);
+    munit_assert_int(f->raft.leader_state.progress[1].next_index, ==, 2);
 
     /* The match_index array is initialized */
-    munit_assert_int(f->raft.leader_state.replication[0].match_index, ==, 0);
-    munit_assert_int(f->raft.leader_state.replication[1].match_index, ==, 0);
+    munit_assert_int(f->raft.leader_state.progress[0].match_index, ==, 0);
+    munit_assert_int(f->raft.leader_state.progress[1].match_index, ==, 0);
 
     /* We have sent heartbeats */
     __assert_heartbeat(f, 2, 2, 1, 1);
@@ -572,7 +558,7 @@ TEST_CASE(response, success, step_down, NULL)
     munit_assert_int(f->raft.voted_for, ==, 0);
 
     /* The election timeout has been reset. */
-    munit_assert_int(f->raft.timer, ==, 0);
+    munit_assert_int(f->raft.election_elapsed, ==, 0);
 
     /* We are follower */
     munit_assert_int(f->raft.state, ==, RAFT_FOLLOWER);
@@ -588,21 +574,25 @@ TEST_CASE(response, success, step_down, NULL)
 TEST_CASE(response, error, io, NULL)
 {
     struct fixture *f = data;
-    struct raft_request_vote_result result;
-    int rv;
+    struct raft_message message;
+    struct raft_request_vote_result *result;
 
     (void)params;
 
     test_bootstrap_and_start(&f->raft, 2, 1, 2);
     test_become_candidate(&f->raft);
 
-    result.term = 3;
-    result.vote_granted = 0;
+    message.type = RAFT_IO_REQUEST_VOTE_RESULT;
+    message.server_id = 2;
+    message.server_address = "2";
+
+    result = &message.request_vote_result;
+    result->term = 3;
+    result->vote_granted = 0;
 
     raft_io_stub_fault(&f->io, 0, 1);
 
-    rv = raft_rpc__recv_request_vote_result(&f->raft, 2, "2", &result);
-    munit_assert_int(rv, ==, RAFT_ERR_IO);
+    raft_io_stub_deliver(&f->io, &message);
 
     return MUNIT_OK;
 }

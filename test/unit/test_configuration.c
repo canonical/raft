@@ -44,25 +44,24 @@ static void tear_down(void *data)
 /* Accessors */
 #define N_VOTING configuration__n_voting(&f->configuration)
 #define INDEX_OF(ID) configuration__index_of(&f->configuration, ID)
-#define INDEX_OF_VOTING(ID) configuration__index_of_voting(&f->configuration, ID)
+#define INDEX_OF_VOTING(ID) \
+    configuration__index_of_voting(&f->configuration, ID)
 #define GET(ID) configuration__get(&f->configuration, ID)
 
 /* Add a server to the fixture's configuration. */
-#define ADD(ID, ADDRESS, VOTING)                                             \
-    {                                                                        \
-        int rv;                                                              \
-                                                                             \
-        rv = raft_configuration_add(&f->configuration, ID, ADDRESS, VOTING); \
-        munit_assert_int(rv, ==, 0);                                         \
+#define ADD(ID, ADDRESS, VOTING)                                              \
+    {                                                                         \
+        int rv2;                                                              \
+        rv2 = raft_configuration_add(&f->configuration, ID, ADDRESS, VOTING); \
+        munit_assert_int(rv2, ==, 0);                                         \
     }
 
 /* Remove a server from the fixture's configuration */
-#define REMOVE(ID)                                         \
-    {                                                      \
-        int rv;                                            \
-                                                           \
-        rv = configuration__remove(&f->configuration, ID); \
-        munit_assert_int(rv, ==, 0);                       \
+#define REMOVE(ID)                                          \
+    {                                                       \
+        int rv2;                                            \
+        rv2 = configuration__remove(&f->configuration, ID); \
+        munit_assert_int(rv2, ==, 0);                       \
     }
 
 /******************************************************************************

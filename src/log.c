@@ -361,11 +361,8 @@ void log__init(struct raft_log *l)
     l->offset = 0;
     l->refs = NULL;
     l->refs_size = 0;
-}
-
-void log__set_offset(struct raft_log *l, raft_index offset)
-{
-    l->offset = offset;
+    l->snapshot.last_index = 0;
+    l->snapshot.last_term = 0;
 }
 
 /**
@@ -384,7 +381,7 @@ void log__close(struct raft_log *l)
 
     if (l->entries != NULL) {
         size_t i;
-        size_t n = log__n_entries(l);
+        size_t n = log__n_outstanding(l);
 
         for (i = 0; i < n; i++) {
             struct raft_entry *entry = &l->entries[(l->front + i) % l->size];
@@ -430,7 +427,7 @@ static int ensure_capacity(struct raft_log *l)
     size_t size;                /* Size of the new array */
     size_t i, j;
 
-    n = log__n_entries(l);
+    n = log__n_outstanding(l);
 
     if (n + 1 < l->size) {
         return 0;
@@ -485,7 +482,7 @@ int log__append(struct raft_log *l,
         return rv;
     }
 
-    index = l->offset + log__n_entries(l) + 1;
+    index = l->offset + log__n_outstanding(l) + 1;
     rv = refs_init(l, term, index);
     if (rv != 0) {
         return rv;
@@ -560,7 +557,7 @@ err:
     return rv;
 }
 
-size_t log__n_entries(struct raft_log *l)
+size_t log__n_outstanding(struct raft_log *l)
 {
     assert(l != NULL);
 
@@ -573,20 +570,16 @@ size_t log__n_entries(struct raft_log *l)
     return l->size - l->front + l->back;
 }
 
-raft_index log__first_index(struct raft_log *l)
-{
-    if (log__n_entries(l) == 0) {
-        return 0;
-    }
-    return log__index(l, 0);
-}
-
 raft_index log__last_index(struct raft_log *l)
 {
-    if (log__n_entries(l) == 0) {
-        return 0;
+    /* If there are no outstanding in-memory entries, but there is a snapshot
+     * available return its last index. */
+    if (log__n_outstanding(l) == 0 && l->snapshot.last_index != 0) {
+        /* Sanity check that the offset is set consistently */
+        assert(l->offset == l->snapshot.last_index);
+        return l->snapshot.last_index;
     }
-    return log__index(l, log__n_entries(l) - 1);
+    return l->offset + log__n_outstanding(l);
 }
 
 /**
@@ -597,7 +590,12 @@ raft_index log__last_index(struct raft_log *l)
  */
 static size_t locate_entry(struct raft_log *l, const raft_index index)
 {
-    if (index < log__first_index(l) || index > log__last_index(l)) {
+    if (log__n_outstanding(l) == 0) {
+        return 0;
+    }
+
+    if (index < log__index(l, 0) ||
+        index > log__index(l, log__n_outstanding(l) - 1)) {
         return l->size;
     }
 
@@ -610,25 +608,40 @@ static size_t locate_entry(struct raft_log *l, const raft_index index)
 raft_term log__term_of(struct raft_log *l, const raft_index index)
 {
     size_t i;
+    assert(index > 0);
+    assert(l->offset <= l->snapshot.last_index);
 
-    if (log__n_entries(l) == 0) {
+    if ((index < l->offset + 1 && index != l->snapshot.last_index) ||
+        index > log__last_index(l)) {
         return 0;
+    }
+
+    if (index == l->snapshot.last_index) {
+        assert(l->snapshot.last_term != 0);
+        /* Sanity check that if we still have the entry at last_index, its term
+         * matches the one in the snapshot. */
+        i = locate_entry(l, index);
+        if (i != l->size) {
+            assert(l->entries[i].term == l->snapshot.last_term);
+        }
+        return l->snapshot.last_term;
     }
 
     i = locate_entry(l, index);
-
-    if (i == l->size) {
-        return 0;
-    }
-
     assert(i < l->size);
-
     return l->entries[i].term;
+}
+
+raft_index log__snapshot_index(struct raft_log *l)
+{
+    return l->snapshot.last_index;
 }
 
 raft_term log__last_term(struct raft_log *l)
 {
-    return log__term_of(l, log__last_index(l));
+    raft_index last_index;
+    last_index = log__last_index(l);
+    return last_index > 0 ? log__term_of(l, last_index) : 0;
 }
 
 const struct raft_entry *log__get(struct raft_log *l, const raft_index index)
@@ -704,7 +717,7 @@ int log__acquire(struct raft_log *l,
  */
 static bool is_batch_referenced(struct raft_log *l, const void *batch)
 {
-    size_t n = log__n_entries(l);
+    size_t n = log__n_outstanding(l);
     size_t i;
 
     /* Iterate through all live entries to see if there's one
@@ -768,7 +781,7 @@ void log__release(struct raft_log *l,
  */
 static void clear_if_empty(struct raft_log *l)
 {
-    if (log__n_entries(l) == 0) {
+    if (log__n_outstanding(l) == 0) {
         raft_free(l->entries);
         l->entries = NULL;
         l->size = 0;
@@ -806,15 +819,8 @@ static void remove_suffix(struct raft_log *l,
     raft_index start = index;
 
     assert(l != NULL);
-    assert(index > 0);
+    assert(index > l->offset);
     assert(index <= log__last_index(l));
-
-    /* If we are asked to delete entries starting from an index which is lower
-     * than our first one, just normalize the request and start from what we
-     * have. */
-    if (index < log__first_index(l)) {
-        start = log__first_index(l);
-    }
 
     /* Number of entries to delete */
     n = (log__last_index(l) - start) + 1;
@@ -843,7 +849,7 @@ static void remove_suffix(struct raft_log *l,
 
 void log__truncate(struct raft_log *l, const raft_index index)
 {
-    if (log__n_entries(l) == 0) {
+    if (log__n_outstanding(l) == 0) {
         return;
     }
     return remove_suffix(l, index, true);
@@ -854,7 +860,8 @@ void log__discard(struct raft_log *l, const raft_index index)
     return remove_suffix(l, index, false);
 }
 
-void log__shift(struct raft_log *l, const raft_index index)
+/* Delete all entries up to the given index (included). */
+static void remove_prefix(struct raft_log *l, const raft_index index)
 {
     size_t i;
     size_t n;
@@ -864,7 +871,7 @@ void log__shift(struct raft_log *l, const raft_index index)
     assert(index <= log__last_index(l));
 
     /* Number of entries to delete */
-    n = (index - log__first_index(l)) + 1;
+    n = (index - log__index(l, 0)) + 1;
 
     for (i = 0; i < n; i++) {
         struct raft_entry *entry;
@@ -887,4 +894,43 @@ void log__shift(struct raft_log *l, const raft_index index)
     }
 
     clear_if_empty(l);
+}
+
+void log__snapshot(struct raft_log *l, raft_index last_index, unsigned trailing)
+{
+    raft_term last_term = log__term_of(l, last_index);
+
+    /* We must have an entry at this index */
+    assert(last_term != 0);
+
+    l->snapshot.last_index = last_index;
+    l->snapshot.last_term = last_term;
+
+    /* If we have not at least n entries preceeding index, we're done */
+    if (last_index <= trailing ||
+        locate_entry(l, last_index - trailing) == l->size) {
+        return;
+    }
+
+    remove_prefix(l, last_index - trailing);
+}
+
+void log__restore(struct raft_log *l,
+                  raft_index last_index,
+                  raft_term last_term)
+{
+    size_t n = log__n_outstanding(l);
+    if (n > 0) {
+        log__truncate(l, log__last_index(l) - n + 1);
+    }
+    l->snapshot.last_index = last_index;
+    l->snapshot.last_term = last_term;
+    l->offset = last_index;
+}
+
+void log__seek(struct raft_log *l, raft_index start_index)
+{
+    assert(start_index > 0);
+    assert(start_index - 1 <= l->snapshot.last_index);
+    l->offset = start_index - 1;
 }

@@ -206,9 +206,14 @@ struct raft_log
     struct raft_entry *entries;  /* Buffer of log entries. */
     size_t size;                 /* Number of available slots in the buffer */
     size_t front, back;          /* Indexes of used slots [front, back). */
-    raft_index offset;           /* Index offest of the first entry. */
+    raft_index offset;           /* Index of first entry is offset+1. */
     struct raft_entry_ref *refs; /* Log entries reference counts hash table */
     size_t refs_size;            /* Size of the reference counts hash table */
+    struct
+    {
+        raft_index last_index; /* A snapshot replaces all entries up to here */
+        raft_term last_term;   /* Term of last index */
+    } snapshot;
 };
 
 /**
@@ -255,8 +260,8 @@ struct raft_append_entries
  */
 struct raft_append_entries_result
 {
-    raft_term term; /* Receiver's current_term, for leader to update itself. */
-    bool success; /* True if follower had entry matching prev_log_index/term. */
+    raft_term term;            /* Receiver's current_term */
+    raft_index rejected;       /* If non-zero, the index that was rejected */
     raft_index last_log_index; /* Receiver's last log entry index, as hint */
 };
 
@@ -409,6 +414,7 @@ struct raft_io
                 raft_term *term,
                 unsigned *voted_for,
                 struct raft_snapshot **snapshot,
+		raft_index *start_index,
                 struct raft_entry *entries[],
                 size_t *n_entries);
 
@@ -545,12 +551,14 @@ extern const char *raft_state_names[];
 /**
  * Used by leaders to keep track of replication progress for each server.
  */
-struct raft_replication
+struct raft_progress
 {
-    raft_index next_index;  /* Next entry to send */
-    raft_index match_index; /* Highest applied idx */
-    raft_time last_contact; /* Timestamp of last RPC received */
-    unsigned short state;   /* Probe, pipeline or snapshot */
+    unsigned short state;      /* Probe, pipeline or snapshot */
+    raft_index next_index;     /* Next entry to send */
+    raft_index match_index;    /* Highest applied idx */
+    raft_index snapshot_index; /* Last index of most recent snapshot sent */
+    bool recent_send;          /* A msg was sent within heartbeat timeout */
+    bool recent_recv;          /* A msg was received within election timeout */
 };
 
 /**
@@ -718,54 +726,33 @@ struct raft
     union {
         struct
         {
-            /**
-             * The fields below hold the part of the server's volatile state
-             * which is specific to followers.
-             */
             struct
             {
                 unsigned id;
-                const char *address;
+                char *address;
             } current_leader;
         } follower_state;
-
         struct
         {
-            /**
-             * The fields below hold the part of the server's volatile state
-             * which is specific to candidates. This state is reinitialized
-             * after the server starts a new election round.
-             */
             bool *votes; /* For each server, whether vote was granted */
         } candidate_state;
-
         struct
         {
-            /**
-             * The fields below hold the part of the server's volatile state
-             * which is specific to leaders (Figure 3.1). This state is
-             * reinitialized after the server gets elected.
-             */
-            struct raft_replication *replication; /* Per-server replication */
-
-            /**
-             * Fields used to track the progress of pushing entries to the
-             * server being promoted (4.2.1 Catching up new servers).
-             */
-            unsigned promotee_id;        /* ID of server being promoted, or 0 */
-            unsigned short round_number; /* Number of the current sync round */
-            raft_index round_index;      /* Target of the current round */
-            unsigned round_duration;     /* Duration of the current round */
-
-            /**
-             * Queue of outstanding apply requests.
-             */
-            void *apply_reqs[2];
+            struct raft_progress *progress; /* Per-server replication state */
+            unsigned promotee_id;           /* ID of server being promoted */
+            unsigned short round_number;    /* Current sync round */
+            raft_index round_index;         /* Target of the current round */
+            unsigned round_duration;        /* Duration of the current round */
+            unsigned heartbeat_elapsed;     /* Msecs since last heartbeat */
+            void *apply_reqs[2];            /* Queue of apply requests */
         } leader_state;
     };
 
     /**
-     * Current election timeout. Randomized from election_timeout.
+     * Current election timeout.
+     *
+     * Randomized number between electiontimeout and 2 * electiontimeout - 1. It
+     * gets reset when raft changes its state to follower or candidate.
      *
      * From §9.3:
      *
@@ -774,7 +761,7 @@ struct raft
      *   than anticipated, most clusters would still be able to elect a leader
      *   in a timely manner).
      */
-    unsigned election_timeout_rand;
+    unsigned randomized_election_timeout;
 
     /**
      * Timestamp of the last call to the tick callback passed to raft_io. This
@@ -784,18 +771,18 @@ struct raft
     raft_time last_tick;
 
     /**
-     * For followers and candidates, time elapsed since the last election
-     * started, in millisecond. For leaders time elapsed since the last
-     * AppendEntries RPC, in milliseconds.
+     * Number of milliseconds since we last reached election_timeout when it is
+     * leader or candidate. Number of milliseconds since we last reached
+     * election_timeout or received a valid message from current leader when it
+     * is a follower.
      */
-    unsigned timer;
+    unsigned election_elapsed;
 
     struct
     {
-        raft_term term;                  /* Term of last saved snapshot */
-        raft_index index;                /* Index of last saved snapshot */
-        struct raft_snapshot pending;    /* In progress snapshot */
         unsigned threshold;              /* N. of entries before snapshot */
+        unsigned trailing;               /* N. of trailing entries to retain */
+        struct raft_snapshot pending;    /* In progress snapshot */
         struct raft_io_snapshot_put put; /* Store snapshot request */
     } snapshot;
 
@@ -857,6 +844,19 @@ void raft_set_election_timeout(struct raft *r, unsigned msecs);
  * Set the heartbeat timeout.
  */
 void raft_set_heartbeat_timeout(struct raft *r, unsigned msecs);
+
+/**
+ * Number of outstanding log entries before starting a new snapshot. The default
+ * is 1024.
+ */
+void raft_set_snapshot_threshold(struct raft *r, unsigned n);
+
+/**
+ * Number of outstanding log entries to keep in the log after a snapshot has
+ * been taken. This avoids sending snapshots when a follower is behind by just a
+ * few entries. The default is 128.
+ */
+void raft_set_snapshot_trailing(struct raft *r, unsigned n);
 
 /**
  * Return the code of the current raft state.

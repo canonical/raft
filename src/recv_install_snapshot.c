@@ -1,9 +1,10 @@
-#include "rpc_install_snapshot.h"
+#include "recv_install_snapshot.h"
 #include "assert.h"
+#include "convert.h"
 #include "log.h"
 #include "logging.h"
 #include "replication.h"
-#include "rpc.h"
+#include "recv.h"
 #include "state.h"
 
 static void send_append_entries_result_cb(struct raft_io_send *req, int status)
@@ -26,12 +27,10 @@ int raft_rpc__recv_install_snapshot(struct raft *r,
 
     assert(address != NULL);
 
-    infof(r->io, "received snapshot %d from server %ld", args->last_index, id);
-
-    result->success = false;
+    result->rejected = args->last_index;
     result->last_log_index = log__last_index(&r->log);
 
-    rv = raft_rpc__ensure_matching_terms(r, args->term, &match);
+    rv = recv__ensure_matching_terms(r, args->term, &match);
     if (rv != 0) {
         return rv;
     }
@@ -44,20 +43,19 @@ int raft_rpc__recv_install_snapshot(struct raft *r,
     /* TODO: this logic duplicates the one in the AppendEntries handler */
     assert(r->state == RAFT_FOLLOWER || r->state == RAFT_CANDIDATE);
     assert(r->current_term == args->term);
-
     if (r->state == RAFT_CANDIDATE) {
+        assert(match == 0);
         debugf(r->io, "discovered leader -> step down ");
-        rv = raft_state__convert_to_follower(r, args->term);
-        if (rv != 0) {
-            return rv;
-        }
+        convert__to_follower(r);
     }
 
-    r->follower_state.current_leader.id = id;
-    r->follower_state.current_leader.address = address;
-    r->timer = 0;
+    rv = recv__update_leader(r, id, address);
+    if (rv != 0) {
+        return rv;
+    }
+    r->election_elapsed = 0;
 
-    rv = raft_replication__install_snapshot(r, args, &result->success, &async);
+    rv = raft_replication__install_snapshot(r, args, &result->rejected, &async);
     if (rv != 0) {
         return rv;
     }
@@ -66,7 +64,7 @@ int raft_rpc__recv_install_snapshot(struct raft *r,
         return 0;
     }
 
-    if (result->success) {
+    if (result->rejected == 0) {
         /* Echo back to the leader the point that we reached. */
         result->last_log_index = args->last_index;
     }

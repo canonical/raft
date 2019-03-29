@@ -175,21 +175,20 @@ int io_uv__client_send(struct io_uv__client *c, struct send *r)
            c->state == CONNECTING);
     r->c = c;
 
-    /* If there's no connection available, let's either queue the request or
-     * fail immediately. */
+    /* If there's no connection available, let's queue the request. */
     if (c->state == DELAY || c->state == CONNECTING) {
         assert(c->stream == NULL);
         if (c->n_send_reqs == QUEUE_SIZE) {
             /* Fail the last request */
             tracef(c, "queue full -> evict oldest message");
             raft__queue *head;
-            struct send *r;
+            struct send *r2;
             head = RAFT__QUEUE_HEAD(&c->send_reqs);
-            r = RAFT__QUEUE_DATA(head, struct send, queue);
+            r2 = RAFT__QUEUE_DATA(head, struct send, queue);
             RAFT__QUEUE_REMOVE(head);
-            r->req->cb(r->req, RAFT_ERR_IO_CONNECT);
-            send_close(r);
-            raft_free(r);
+            r2->req->cb(r2->req, RAFT_ERR_IO_CONNECT);
+            send_close(r2);
+            raft_free(r2);
             c->n_send_reqs--;
         }
         tracef(c, "no connection available -> enqueue message");

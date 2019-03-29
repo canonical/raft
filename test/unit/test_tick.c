@@ -59,7 +59,8 @@ static void tear_down(void *data)
  * Assert the current value of the timer of the raft instance of the given
  * fixture.
  */
-#define __assert_timer(F, MSECS) munit_assert_int(F->raft.timer, ==, MSECS);
+#define __assert_timer(F, MSECS) \
+    munit_assert_int(F->raft.election_elapsed, ==, MSECS);
 
 /**
  * Assert the current state of the raft instance of the given fixture.
@@ -193,15 +194,11 @@ TEST_CASE(elapse, success, voter_not_us, NULL)
 TEST_CASE(elapse, success, candidate, NULL)
 {
     struct fixture *f = data;
-    int election_timeout;
-
     (void)params;
 
     test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
-    election_timeout = f->raft.election_timeout_rand;
-
-    __tick(f, f->raft.election_timeout_rand + 100);
+    __tick(f, f->raft.randomized_election_timeout + 100);
 
     /* The term has been incremeted and saved to stable store. */
     munit_assert_int(f->raft.current_term, ==, 2);
@@ -210,9 +207,6 @@ TEST_CASE(elapse, success, candidate, NULL)
     /* We have voted for ouselves. */
     munit_assert_int(f->raft.voted_for, ==, 1);
     munit_assert_int(raft_io_stub_vote(&f->io), ==, 1);
-
-    /* The election timeout has been reset. */
-    munit_assert_int(f->raft.election_timeout_rand, !=, election_timeout);
 
     /* We are candidate */
     __assert_state(f, RAFT_CANDIDATE);
@@ -236,7 +230,7 @@ TEST_CASE(elapse, success, timer_not_expired, NULL)
 
     test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
-    __tick(f, f->raft.election_timeout_rand - 100);
+    __tick(f, f->raft.randomized_election_timeout - 100);
     __assert_state(f, RAFT_FOLLOWER);
 
     return MUNIT_OK;
@@ -251,7 +245,7 @@ TEST_CASE(elapse, success, not_voter, NULL)
 
     test_bootstrap_and_start(&f->raft, 3, 2, 3);
 
-    __tick(f, f->raft.election_timeout_rand + 100);
+    __tick(f, f->raft.randomized_election_timeout + 100);
     __assert_state(f, RAFT_FOLLOWER);
 
     return MUNIT_OK;
@@ -330,14 +324,14 @@ TEST_CASE(elapse, success, new_election, NULL)
     test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
     /* Become candidate */
-    __tick(f, f->raft.election_timeout_rand + 100);
+    __tick(f, f->raft.randomized_election_timeout + 100);
 
     raft_io_stub_flush_all(f->raft.io);
 
-    election_timeout = f->raft.election_timeout_rand;
+    election_timeout = f->raft.randomized_election_timeout;
 
     /* Expire the election timeout */
-    __tick(f, f->raft.election_timeout_rand + 100);
+    __tick(f, f->raft.randomized_election_timeout + 100);
 
     /* The term has been incremeted and saved to stable store. */
     munit_assert_int(f->raft.current_term, ==, 3);
@@ -348,7 +342,7 @@ TEST_CASE(elapse, success, new_election, NULL)
     munit_assert_int(raft_io_stub_vote(&f->io), ==, 1);
 
     /* The election timeout has been reset. */
-    munit_assert_int(f->raft.election_timeout_rand, !=, election_timeout);
+    munit_assert_int(f->raft.randomized_election_timeout, !=, election_timeout);
 
     /* We are still candidate */
     __assert_state(f, RAFT_CANDIDATE);
@@ -374,11 +368,11 @@ TEST_CASE(elapse, success, during_election, NULL)
     test_bootstrap_and_start(&f->raft, 2, 1, 2);
 
     /* Become candidate */
-    __tick(f, f->raft.election_timeout_rand + 100);
+    __tick(f, f->raft.randomized_election_timeout + 100);
 
     raft_io_stub_flush_all(f->raft.io);
 
-    __tick(f, f->raft.election_timeout_rand - 100);
+    __tick(f, f->raft.randomized_election_timeout - 100);
 
     /* We are still candidate */
     __assert_state(f, RAFT_CANDIDATE);
@@ -399,7 +393,7 @@ TEST_CASE(elapse, success, request_vote_only_to_voters, NULL)
     test_bootstrap_and_start(&f->raft, 3, 1, 2);
 
     /* Become candidate */
-    __tick(f, f->raft.election_timeout_rand + 100);
+    __tick(f, f->raft.randomized_election_timeout + 100);
 
     /* We have sent vote requests only to the voting server */
     __assert_request_vote(f, 2, 2, 1, 1);

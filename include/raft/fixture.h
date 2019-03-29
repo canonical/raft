@@ -100,6 +100,11 @@ bool raft_fixture_alive(struct raft_fixture *f, unsigned i);
 unsigned raft_fixture_leader_index(struct raft_fixture *f);
 
 /**
+ * Return the ID of the server the @i'th server has voted for, or zero.
+ */
+unsigned raft_fixture_voted_for(struct raft_fixture *f, unsigned i);
+
+/**
  * Drive the cluster so the i'th server gets elected as leader.
  *
  * This is achieved by resetting the election timeout of all other servers to a
@@ -239,7 +244,8 @@ void raft_fixture_set_random(struct raft_fixture *f,
 
 /**
  * Set the network latency in milliseconds. Each RPC message will be assigned a
- * random latency value within the given range.
+ * random latency value within the given range. By default the minimum latency
+ * is 5 milliseconds and the maximum is 50.
  */
 void raft_fixture_set_latency(struct raft_fixture *f,
                               unsigned i,
@@ -266,4 +272,13 @@ void raft_fixture_set_entries(struct raft_fixture *f,
                               struct raft_entry *entries,
                               unsigned n);
 
-#endif /* RAFT_FAKE_H */
+/**
+ * Inject an I/O failure that will be triggered on the @i'th server after @delay
+ * I/O requests and occur @repeat times.
+ */
+void raft_fixture_io_fault(struct raft_fixture *f,
+                           unsigned i,
+                           int delay,
+                           int repeat);
+
+#endif /* RAFT_FIXTURE_H */

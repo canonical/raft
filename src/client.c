@@ -3,12 +3,11 @@
 #include "assert.h"
 #include "configuration.h"
 #include "log.h"
-#include "election.h"
 #include "logging.h"
 #include "membership.h"
+#include "progress.h"
 #include "queue.h"
 #include "replication.h"
-#include "state.h"
 
 int raft_apply(struct raft *r,
                struct raft_apply *req,
@@ -17,7 +16,6 @@ int raft_apply(struct raft *r,
                raft_apply_cb cb)
 {
     raft_index index;
-    raft_term term;
     int rv;
 
     assert(r != NULL);
@@ -29,12 +27,10 @@ int raft_apply(struct raft *r,
         goto err;
     }
 
-    debugf(r->io, "client request: %d entries", n);
-
-    local_last_index_and_term(r, &index, &term);
-
     /* Index of the first entry being appended. */
-    index += 1;
+    index = log__last_index(&r->log) + 1;
+
+    debugf(r->io, "client request: apply %u entries starting at %lld", n, index);
 
     req->index = index;
     req->cb = cb;
@@ -80,7 +76,7 @@ static int raft_client__change_configuration(
     }
 
     if (configuration->n != r->configuration.n) {
-        rv = raft_state__rebuild_next_and_match_indexes(r, configuration);
+        rv = progress__rebuild_array(r, configuration);
         if (rv != 0) {
             goto err;
         }
@@ -182,7 +178,7 @@ int raft_promote(struct raft *r, const unsigned id)
 
     last_index = log__last_index(&r->log);
 
-    if (r->leader_state.replication[server_index].match_index == last_index) {
+    if (r->leader_state.progress[server_index].match_index == last_index) {
         /* The log of this non-voting server is already up-to-date, so we can
          * ask its promotion immediately. */
         r->configuration.servers[server_index].voting = true;
@@ -204,7 +200,7 @@ int raft_promote(struct raft *r, const unsigned id)
     r->leader_state.round_duration = 0;
 
     /* Immediately initiate an AppendEntries request. */
-    rv = raft_replication__send_append_entries(r, server_index);
+    rv = replication__trigger(r, server_index);
     if (rv != 0 && rv != RAFT_ERR_IO_CONNECT) {
         /* This error is not fatal. */
         warnf(r->io, "failed to send append entries to server %ld: %s (%d)",

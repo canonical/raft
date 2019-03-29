@@ -53,23 +53,21 @@ static void tear_down(void *data)
 /**
  * Start the fixture's instance and check that no error occurs.
  */
-#define __start(F)                   \
-    {                                \
-        int rv;                      \
-                                     \
-        rv = raft_start(&F->raft);   \
-        munit_assert_int(rv, ==, 0); \
+#define __start(F)                    \
+    {                                 \
+        int rv2;                      \
+        rv2 = raft_start(&F->raft);   \
+        munit_assert_int(rv2, ==, 0); \
     }
 
 /**
  * Start the fixture's instance and that the given error occurs.
  */
-#define __assert_start_error(F, RV)   \
-    {                                 \
-        int rv;                       \
-                                      \
-        rv = raft_start(&F->raft);    \
-        munit_assert_int(rv, ==, RV); \
+#define __assert_start_error(F, RV)    \
+    {                                  \
+        int rv2;                       \
+        rv2 = raft_start(&F->raft);    \
+        munit_assert_int(rv2, ==, RV); \
     }
 
 /**
@@ -152,7 +150,7 @@ TEST_CASE(init, success, state, NULL)
     munit_assert_int(f->raft.election_timeout, ==, 1000);
     munit_assert_int(f->raft.heartbeat_timeout, ==, 100);
 
-    munit_assert_int(f->raft.timer, ==, 0);
+    munit_assert_int(f->raft.election_elapsed, ==, 0);
 
     munit_assert(f->raft.watchers[RAFT_EVENT_STATE_CHANGE] == NULL);
 
@@ -233,9 +231,9 @@ TEST_CASE(start, success, pristine, NULL)
 
     __assert_state(f, RAFT_FOLLOWER);
 
-    munit_assert_int(f->raft.election_timeout_rand, >=,
+    munit_assert_int(f->raft.randomized_election_timeout, >=,
                      f->raft.election_timeout);
-    munit_assert_int(f->raft.election_timeout_rand, <,
+    munit_assert_int(f->raft.randomized_election_timeout, <,
                      2 * f->raft.election_timeout);
 
     return MUNIT_OK;
@@ -271,8 +269,8 @@ TEST_CASE(start, success, snapshot, NULL)
     munit_assert_int(test_fsm_get_x(&f->fsm), ==, 7);
     munit_assert_int(test_fsm_get_y(&f->fsm), ==, 3);
 
-    munit_assert_int(f->raft.snapshot.term, ==, 3);
-    munit_assert_int(f->raft.snapshot.index, ==, 8);
+    munit_assert_int(f->raft.log.snapshot.last_term, ==, 3);
+    munit_assert_int(f->raft.log.snapshot.last_index, ==, 8);
 
     munit_assert_int(f->raft.configuration.n, ==, 1);
     munit_assert_int(f->raft.configuration.servers[0].id, ==, 1);

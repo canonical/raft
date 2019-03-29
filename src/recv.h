@@ -1,9 +1,9 @@
 /**
- * RPC-related helpers.
+ * Receive an RPC message.
  */
 
-#ifndef RAFT_RPC_H
-#define RAFT_RPC_H
+#ifndef RAFT_RECV_H_
+#define RAFT_RECV_H_
 
 #include "../include/raft.h"
 
@@ -11,7 +11,7 @@
  * Callback to be passed to the @raft_io implementation. It will be invoked upon
  * receiving an RPC message.
  */
-void rpc__recv_cb(struct raft_io *io, struct raft_message *message);
+void recv_cb(struct raft_io *io, struct raft_message *message);
 
 /**
  * Common logic for RPC handlers, comparing the request's term with the server's
@@ -29,6 +29,9 @@ void rpc__recv_cb(struct raft_io *io, struct raft_message *message);
  * request's term was higher but we have successfully bumped the local one to
  * match it (and stepped down to follower in that case, if we were not already).
  */
-int raft_rpc__ensure_matching_terms(struct raft *r, raft_term term, int *match);
+int recv__ensure_matching_terms(struct raft *r, raft_term term, int *match);
 
-#endif /* RAFT_RPC_H */
+int recv__update_leader(struct raft *r, unsigned id, const char *address);
+
+#endif /* RAFT_RECV_H_ */
+

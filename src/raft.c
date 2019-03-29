@@ -4,6 +4,7 @@
 
 #include "assert.h"
 #include "configuration.h"
+#include "convert.h"
 #include "election.h"
 #include "log.h"
 #include "logging.h"
@@ -12,6 +13,7 @@
 #define DEFAULT_ELECTION_TIMEOUT 1000 /* One second */
 #define DEFAULT_HEARTBEAT_TIMEOUT 100 /* One tenth of a second */
 #define DEFAULT_SNAPSHOT_THRESHOLD 1024
+#define DEFAULT_SNAPSHOT_TRAILING 128
 
 /* Set to 1 to enable tracing. */
 #if 0
@@ -53,13 +55,12 @@ int raft_init(struct raft *r,
     r->last_applied = 0;
     r->last_stored = 0;
     r->state = RAFT_UNAVAILABLE;
-    r->election_timeout_rand = 0;
+    r->randomized_election_timeout = 0;
     r->last_tick = 0;
-    r->timer = 0;
-    r->snapshot.term = 0;
-    r->snapshot.index = 0;
+    r->election_elapsed = 0;
     r->snapshot.pending.term = 0;
     r->snapshot.threshold = DEFAULT_SNAPSHOT_THRESHOLD;
+    r->snapshot.trailing = DEFAULT_SNAPSHOT_TRAILING;
     r->snapshot.put.data = NULL;
     for (i = 0; i < RAFT_EVENT_N; i++) {
         r->watchers[i] = NULL;
@@ -90,23 +91,32 @@ void raft_close(struct raft *r, void (*cb)(struct raft *r))
 {
     assert(r != NULL);
     assert(r->close_cb == NULL);
-
+    if (r->state != RAFT_UNAVAILABLE) {
+        convert__to_unavailable(r);
+    }
     r->close_cb = cb;
-
-    raft_state__clear(r);
-    r->state = RAFT_UNAVAILABLE;
     r->io->close(r->io, io_close_cb);
 }
 
 void raft_set_election_timeout(struct raft *r, const unsigned msecs)
 {
     r->election_timeout = msecs;
-    raft_election__reset_timer(r);
+    election__reset_timer(r);
 }
 
 void raft_set_heartbeat_timeout(struct raft *r, const unsigned msecs)
 {
     r->heartbeat_timeout = msecs;
+}
+
+void raft_set_snapshot_threshold(struct raft *r, unsigned n)
+{
+    r->snapshot.threshold = n;
+}
+
+void raft_set_snapshot_trailing(struct raft *r, unsigned n)
+{
+    r->snapshot.trailing = n;
 }
 
 const char *raft_state_name(struct raft *r)

@@ -112,7 +112,7 @@ static void raft_io_uv_encode__append_entries_result(
     void *cursor = buf;
 
     byte__put64(&cursor, p->term);
-    byte__put64(&cursor, p->success);
+    byte__put64(&cursor, p->rejected);
     byte__put64(&cursor, p->last_log_index);
 }
 
@@ -323,8 +323,7 @@ int io_uv__decode_batch_header(const void *batch,
         entry->term = byte__get64(&cursor);
         entry->type = byte__get8(&cursor);
 
-        if (entry->type != RAFT_COMMAND &&
-            entry->type != RAFT_CONFIGURATION) {
+        if (entry->type != RAFT_COMMAND && entry->type != RAFT_CONFIGURATION) {
             rv = RAFT_EMALFORMED;
             goto err_after_alloc;
         }
@@ -380,7 +379,7 @@ static void raft_io_uv_decode__append_entries_result(
     cursor = buf->base;
 
     p->term = byte__get64(&cursor);
-    p->success = byte__get64(&cursor);
+    p->rejected = byte__get64(&cursor);
     p->last_log_index = byte__get64(&cursor);
 }
 

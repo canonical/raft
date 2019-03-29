@@ -2,10 +2,11 @@
 
 #include "assert.h"
 #include "configuration.h"
+#include "convert.h"
 #include "election.h"
 #include "logging.h"
-#include "replication.h"
-#include "state.h"
+#include "progress.h"
+#include "heartbeat.h"
 #include "watch.h"
 
 /**
@@ -17,12 +18,15 @@
 unsigned raft_next_timeout(struct raft *r)
 {
     unsigned timeout;
+    unsigned elapsed;
     if (r->state == RAFT_LEADER) {
         timeout = r->heartbeat_timeout;
+        elapsed = r->leader_state.heartbeat_elapsed;
     } else {
-        timeout = r->election_timeout_rand;
+        timeout = r->randomized_election_timeout;
+        elapsed = r->election_elapsed;
     }
-    return timeout > r->timer ? timeout - r->timer : 0;
+    return timeout > elapsed ? timeout - elapsed : 0;
 }
 
 /**
@@ -31,6 +35,7 @@ unsigned raft_next_timeout(struct raft *r)
 static int follower_tick(struct raft *r)
 {
     const struct raft_server *server;
+    int rv;
 
     assert(r != NULL);
     assert(r->state == RAFT_FOLLOWER);
@@ -56,9 +61,14 @@ static int follower_tick(struct raft *r)
      *   If election timeout elapses without receiving AppendEntries RPC from
      *   current leader or granting vote to candidate, convert to candidate.
      */
-    if (r->timer > r->election_timeout_rand && server->voting) {
+    if (r->election_elapsed > r->randomized_election_timeout &&
+        server->voting) {
         infof(r->io, "convert to candidate and start new election");
-        return raft_state__convert_to_candidate(r);
+        rv = convert__to_candidate(r);
+        if (rv != 0) {
+            errorf(r->io, "convert to candidate: %s", raft_strerror(rv));
+            return rv;
+        }
     }
 
     return 0;
@@ -82,62 +92,21 @@ static int candidate_tick(struct raft *r)
      *   happens, each candidate will time out and start a new election by
      *   incrementing its term and initiating another round of RequestVote RPCs
      */
-    if (r->timer > r->election_timeout_rand) {
-        infof(r->io, "start new election");
-        return raft_election__start(r);
+    if (r->election_elapsed > r->randomized_election_timeout) {
+        infof(r->io, "tick: start new election");
+        return election__start(r);
     }
 
     return 0;
 }
 
-/**
- * Return true if the leader has been contacted by a majority of servers in the
- * last @election_timeout milliseconds.
- */
-static bool leader_has_been_contacted_by_majority_of_servers(struct raft *r)
+/* Apply time-dependent rules for leaders (Figure 3.1). */
+static int leader_tick(struct raft *r, const unsigned msecs_since_last_tick)
 {
-    raft_time now = r->io->time(r->io);
-    unsigned i;
-    unsigned contacts = 0;
-
-    for (i = 0; i < r->configuration.n; i++) {
-        struct raft_server *server = &r->configuration.servers[i];
-        struct raft_replication *replication = &r->leader_state.replication[i];
-        unsigned elapsed;
-
-        if (!server->voting) {
-            continue;
-        }
-
-        if (server->id == r->id) {
-            contacts++;
-            continue;
-        }
-
-        elapsed = now - replication->last_contact;
-
-        if (elapsed <= r->election_timeout) {
-            contacts++;
-        } else {
-            debugf(r->io,
-                   "lost contact with server %d: no message since %u "
-                   "msecs (last contact %u, now %u)",
-                   server->id, elapsed, replication->last_contact, now);
-        }
-    }
-
-    return contacts > configuration__n_voting(&r->configuration) / 2;
-}
-
-/**
- * Apply time-dependent rules for leaders (Figure 3.1).
- */
-static int leader_tick(struct raft *r, const unsigned msec_since_last_tick)
-{
-    int rv;
-
     assert(r != NULL);
     assert(r->state == RAFT_LEADER);
+
+    r->leader_state.heartbeat_elapsed += msecs_since_last_tick;
 
     /* Check if we still can reach a majority of servers.
      *
@@ -147,10 +116,14 @@ static int leader_tick(struct raft *r, const unsigned msec_since_last_tick)
      *   successful round of heartbeats to a majority of its cluster; this
      *   allows clients to retry their requests with another server.
      */
-    if (!leader_has_been_contacted_by_majority_of_servers(r)) {
-        warnf(r->io, "unable to contact majority of cluster -> step down");
-        rv = raft_state__convert_to_follower(r, r->current_term);
-        return rv;
+    if (r->election_elapsed > r->election_timeout) {
+        if (!progress__check_quorum(r)) {
+            warnf(r->io,
+                  "tick: unable to contact majority of cluster -> step down");
+            convert__to_follower(r);
+            return 0;
+        }
+        r->election_elapsed = 0;
     }
 
     /* Check if we need to send heartbeats.
@@ -160,9 +133,9 @@ static int leader_tick(struct raft *r, const unsigned msec_since_last_tick)
      *   Send empty AppendEntries RPC during idle periods to prevent election
      *   timeouts.
      */
-    if (r->timer > r->heartbeat_timeout) {
-        raft_replication__trigger(r, 0);
-        r->timer = 0;
+    if (r->leader_state.heartbeat_elapsed > r->heartbeat_timeout) {
+        r->leader_state.heartbeat_elapsed = 0;
+        heartbeat__send(r);
     }
 
     /* If a server is being promoted, increment the timer of the current
@@ -190,7 +163,7 @@ static int leader_tick(struct raft *r, const unsigned msec_since_last_tick)
         assert(server_index < r->configuration.n);
         assert(!r->configuration.servers[server_index].voting);
 
-        r->leader_state.round_duration += msec_since_last_tick;
+        r->leader_state.round_duration += msecs_since_last_tick;
 
         is_too_slow = (r->leader_state.round_number == 10 &&
                        r->leader_state.round_duration > r->election_timeout);
@@ -232,7 +205,7 @@ static int tick(struct raft *r)
     now = r->io->time(r->io);
 
     msecs_since_last_tick = now - r->last_tick;
-    r->timer += msecs_since_last_tick;
+    r->election_elapsed += msecs_since_last_tick;
     r->last_tick = now;
 
     switch (r->state) {
@@ -253,7 +226,10 @@ static int tick(struct raft *r)
 void tick_cb(struct raft_io *io)
 {
     struct raft *r;
+    int rv;
     r = io->data;
-    tick(r);
+    rv = tick(r);
+    if (rv != 0) {
+        convert__to_unavailable(r);
+    }
 }
-

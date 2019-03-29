@@ -11,6 +11,7 @@
 #include "io_uv_encoding.h"
 #include "io_uv_load.h"
 #include "logging.h"
+#include "entry.h"
 
 /* Template string for snapshot filenames: snapshot term, snapshot index,
  * creation timestamp (milliseconds since epoch). */
@@ -300,19 +301,21 @@ err:
 
 int io_uv__load_all(struct io_uv *uv,
                     struct raft_snapshot **snapshot,
+                    raft_index *start_index,
                     struct raft_entry *entries[],
                     size_t *n)
 {
     struct io_uv__snapshot_meta *snapshots;
     struct io_uv__segment_meta *segments;
-    raft_index start_index = 1;
     size_t n_snapshots;
     size_t n_segments;
+    raft_index last_index;
     int rv;
 
     *snapshot = NULL;
     *entries = NULL;
     *n = 0;
+    *start_index = 1;
 
     /* List available snapshots and segments. */
     rv = io_uv__load_list(uv, &snapshots, &n_snapshots, &segments, &n_segments);
@@ -333,18 +336,39 @@ int io_uv__load_all(struct io_uv *uv,
         }
         raft_free(snapshots);
         snapshots = NULL;
-        start_index = (*snapshot)->index + 1;
+
+        last_index = (*snapshot)->index;
+        /* Update the start index. If there are closed segments on disk and the
+         * first index of the first closed segment is lower than the snapshot's
+         * last index, let's retain those entries. TODO: implement a trailing
+         * amount. */
+        if (segments != NULL && !segments[0].is_open &&
+            segments[0].first_index <= last_index) {
+            *start_index = segments[0].first_index;
+        } else {
+            *start_index = (*snapshot)->index + 1;
+        }
     }
 
     /* Read data from segments, closing any open segments. */
     if (segments != NULL) {
-        rv = load_entries_from_segments(uv, start_index, segments, n_segments,
+        rv = load_entries_from_segments(uv, *start_index, segments, n_segments,
                                         entries, n);
         if (rv != 0) {
             goto err;
         }
         raft_free(segments);
         segments = NULL;
+    }
+
+    last_index = *start_index + *n - 1;
+    if (*snapshot != NULL && last_index < (*snapshot)->index) {
+        /* TODO: entries are behind the snapshot, we should delete them from
+         * disk. */
+        *start_index = (*snapshot)->index + 1;
+	entry_batches__destroy(*entries, *n);
+	*entries = NULL;
+	*n = 0;
     }
 
     return 0;

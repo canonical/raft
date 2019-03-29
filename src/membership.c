@@ -55,7 +55,7 @@ bool raft_membership__update_catch_up_round(struct raft *r)
         configuration__index_of(&r->configuration, r->leader_state.promotee_id);
     assert(server_index < r->configuration.n);
 
-    match_index = r->leader_state.replication[server_index].match_index;
+    match_index = r->leader_state.progress[server_index].match_index;
 
     /* If the server did not reach the target index for this round, it did not
      * catch up. */

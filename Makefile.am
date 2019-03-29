@@ -39,19 +39,24 @@ libraft_la_SOURCES = \
   src/byte.c \
   src/client.c \
   src/configuration.c \
+  src/convert.c \
   src/election.c \
   src/entry.c \
   src/error.c \
   src/heap.c \
+  src/heartbeat.c \
   src/log.c \
   src/logging.c \
   src/membership.c \
+  src/progress.c \
   src/raft.c \
+  src/recv.c \
+  src/recv_append_entries.c \
+  src/recv_append_entries_result.c \
+  src/recv_request_vote.c \
+  src/recv_request_vote_result.c \
+  src/recv_install_snapshot.c \
   src/replication.c \
-  src/rpc.c \
-  src/rpc_append_entries.c \
-  src/rpc_request_vote.c \
-  src/rpc_install_snapshot.c \
   src/snapshot.c \
   src/start.c \
   src/state.c \
@@ -129,7 +134,7 @@ unit_test_SOURCES += \
   test/unit/test_replication.c \
   test/unit/test_rpc_append_entries.c \
   test/unit/test_rpc_request_vote.c \
-  test/unit/test_rpc_install_snapshot.c \
+  test/unit/test_snapshot.c \
   test/unit/test_start.c \
   test/unit/test_tick.c
 if IO_UV
@@ -153,7 +158,6 @@ if FIXTURE
   test/unit/test_fixture.c
 endif
 unit_test_CFLAGS = $(AM_CFLAGS) -DRAFT_TEST -DMUNIT_TEST_NAME_LEN=60
-unit_test_CFLAGS += -I$(top_srcdir)/tests/unit
 unit_test_LDFLAGS =
 if IO_UV
   unit_test_LDFLAGS += $(UV_LIBS)
@@ -167,8 +171,6 @@ fuzzy_test_SOURCES += \
   test/fuzzy/test_membership.c \
   test/fuzzy/test_replication.c
 fuzzy_test_CFLAGS = $(AM_CFLAGS)
-#-DMUNIT_NO_FORK
-fuzzy_test_CFLAGS += -I$(top_srcdir)/tests/fuzzy
 fuzzy_test_LDADD = libraft.la
 fuzzy_test_LDFLAGS =
 if IO_UV

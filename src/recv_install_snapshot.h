@@ -2,8 +2,8 @@
  * InstallSnapshpt RPC handlers.
  */
 
-#ifndef RAFT_RPC_INSTALL_SNAPSHOT_H_
-#define RAFT_RPC_INSTALL_SNAPSHOT_H_
+#ifndef RAFT_RECV_INSTALL_SNAPSHOT_H_
+#define RAFT_RECV_INSTALL_SNAPSHOT_H_
 
 #include "../include/raft.h"
 
@@ -15,4 +15,4 @@ int raft_rpc__recv_install_snapshot(struct raft *r,
                                     const char *address,
                                     struct raft_install_snapshot *args);
 
-#endif /* RAFT_RPC_INSTALL_SNAPSHOT_H_ */
+#endif /* RAFT_RECV_INSTALL_SNAPSHOT_H_ */

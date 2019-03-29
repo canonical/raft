@@ -2,12 +2,12 @@
 
 #include "assert.h"
 #include "configuration.h"
+#include "convert.h"
 #include "entry.h"
 #include "log.h"
 #include "logging.h"
-#include "rpc.h"
+#include "recv.h"
 #include "snapshot.h"
-#include "state.h"
 #include "tick.h"
 
 /* Set to 1 to enable tracing. */
@@ -38,12 +38,16 @@ static int restore_most_recent_configuration(struct raft *r,
 
 /* Restore the entries that were loaded from persistent storage. The most recent
  * configuration entry will be restored as well, if any. */
-static int restore_entries(struct raft *r, struct raft_entry *entries, size_t n)
+static int restore_entries(struct raft *r,
+                           raft_index start_index,
+                           struct raft_entry *entries,
+                           size_t n)
 {
     struct raft_entry *conf = NULL;
     raft_index conf_index;
     size_t i;
     int rc;
+    log__seek(&r->log, start_index);
     for (i = 0; i < n; i++) {
         struct raft_entry *entry = &entries[i];
         rc = log__append(&r->log, entry->term, entry->type, &entry->buf,
@@ -67,8 +71,8 @@ static int restore_entries(struct raft *r, struct raft_entry *entries, size_t n)
     return 0;
 
 err:
-    if (log__n_entries(&r->log) > 0) {
-        log__discard(&r->log, log__first_index(&r->log));
+    if (log__n_outstanding(&r->log) > 0) {
+        log__discard(&r->log, r->log.offset + 1);
     }
     return rc;
 }
@@ -80,17 +84,18 @@ static int maybe_self_elect(struct raft *r)
     const struct raft_server *server;
     int rc;
     server = configuration__get(&r->configuration, r->id);
-    if (server != NULL && server->voting &&
-        configuration__n_voting(&r->configuration) == 1) {
-        debugf(r->io, "self elect and convert to leader");
-        rc = raft_state__convert_to_candidate(r);
-        if (rc != 0) {
-            return rc;
-        }
-        rc = raft_state__convert_to_leader(r);
-        if (rc != 0) {
-            return rc;
-        }
+    if (server == NULL || !server->voting ||
+        configuration__n_voting(&r->configuration) > 1) {
+        return 0;
+    }
+    debugf(r->io, "self elect and convert to leader");
+    rc = convert__to_candidate(r);
+    if (rc != 0) {
+        return rc;
+    }
+    rc = convert__to_leader(r);
+    if (rc != 0) {
+        return rc;
     }
     return 0;
 }
@@ -99,6 +104,7 @@ int raft_start(struct raft *r)
 {
     int rc;
     struct raft_snapshot *snapshot;
+    raft_index start_index;
     struct raft_entry *entries;
     size_t n_entries;
 
@@ -106,30 +112,33 @@ int raft_start(struct raft *r)
     assert(r->state == RAFT_UNAVAILABLE);
     assert(r->heartbeat_timeout != 0);
     assert(r->heartbeat_timeout < r->election_timeout);
-    assert(log__n_entries(&r->log) == 0);
+    assert(log__n_outstanding(&r->log) == 0);
     assert(r->last_stored == 0);
 
     infof(r->io, "starting");
-
     rc = r->io->load(r->io, &r->current_term, &r->voted_for, &snapshot,
-                     &entries, &n_entries);
+                     &start_index, &entries, &n_entries);
     if (rc != 0) {
         return rc;
     }
+    assert(start_index >= 1);
 
     /* If we have a snapshot, let's restore it, updating the start index. */
     if (snapshot != NULL) {
-        tracef("snapshot: index %llu, term %llu", snapshot->index,
-               snapshot->term);
+        tracef("restore snapshot with last index %llu and last term %llu",
+               snapshot->index, snapshot->term);
         rc = snapshot__restore(r, snapshot);
         if (rc != 0) {
             snapshot__destroy(snapshot);
             entry_batches__destroy(entries, n_entries);
             return rc;
         }
+	log__restore(&r->log, snapshot->index, snapshot->term);
+        raft_free(snapshot);
     } else if (n_entries > 0) {
         /* If we don't have a snapshot and the on-disk log is not empty, then
          * the first entry must be a configuration entry. */
+        assert(start_index == 1);
         assert(entries[0].type == RAFT_CONFIGURATION);
 
         /* As a small optimization, bump the commit index to 1 since we require
@@ -140,7 +149,8 @@ int raft_start(struct raft *r)
 
     /* Append the entries to the log, possibly restoring the last
      * configuration. */
-    rc = restore_entries(r, entries, n_entries);
+    tracef("restore %lu entries starting at %llu", n_entries, start_index);
+    rc = restore_entries(r, start_index, entries, n_entries);
     if (rc != 0) {
         entry_batches__destroy(entries, n_entries);
         return rc;
@@ -152,14 +162,12 @@ int raft_start(struct raft *r)
     /* Start the I/O backend. The tick callback is expected to fire every
      * r->heartbeat_timeout milliseconds and the recv callback whenever an RPC
      * is received. */
-    tracef("log: %lu entries, offset %lu", log__n_entries(&r->log),
-           r->log.offset);
-    rc = r->io->start(r->io, r->heartbeat_timeout, tick_cb, rpc__recv_cb);
+    rc = r->io->start(r->io, r->heartbeat_timeout, tick_cb, recv_cb);
     if (rc != 0) {
         return rc;
     }
 
-    raft_state__start_as_follower(r);
+    convert__to_follower(r);
 
     /* If there's only one voting server, and that is us, it's safe to convert
      * to leader right away. If that is not us, we're either joining the cluster

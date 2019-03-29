@@ -344,7 +344,7 @@ int io_uv__truncate(struct raft_io *io, raft_index index)
 
     /* We should truncate only entries that we were requested to append in the
      * first place. */
-    assert(index < uv->append_next_index);
+    assert(index <= uv->append_next_index);
 
     req = raft_malloc(sizeof *req);
     if (req == NULL) {

@@ -8,14 +8,15 @@
 #include "../include/raft.h"
 
 /**
- * Send an AppendEntries RPC to the server with the given index in the
- * configuration.
+ * Trigger an AppendEntries or an InstallSnapshot RPC to the server with the
+ * given index.
  *
- * The RPC will contain all entries in our log from next_index[<server>] onward.
+ * The RPC will contain all entries in our log from the server's next_index
+ * onward, or a snapshot if we don't have anymore the needed log suffix.
  *
  * It must be called only by leaders.
  */
-int raft_replication__send_append_entries(struct raft *r, size_t i);
+int replication__trigger(struct raft *r, unsigned i);
 
 /**
  * Helper triggering I/O requests for newly appended log entries or heartbeat.
@@ -36,14 +37,15 @@ int raft_replication__trigger(struct raft *r, const raft_index index);
  * Update the replication state (match and next indexes) for the given server
  * using the given AppendEntries RPC result.
  *
- * Possibly send to the server a new set of entries to replicate if the result
- * was unsuccessful because of missing entries.
+ * Possibly send to the server a new set of entries or a snapshot if the result
+ * was unsuccessful because of missing entries or if new entries were added to
+ * our log in the meantime.
  *
  * It must be called only by leaders.
  */
-int raft_replication__update(struct raft *r,
-                             const struct raft_server *server,
-                             const struct raft_append_entries_result *result);
+int replication__update(struct raft *r,
+                        const struct raft_server *server,
+                        const struct raft_append_entries_result *result);
 
 /**
  * Append the log entries in the given request if the Log Matching Property is
@@ -61,12 +63,12 @@ int raft_replication__update(struct raft *r,
  */
 int raft_replication__append(struct raft *r,
                              const struct raft_append_entries *args,
-                             bool *success,
+                             raft_index *rejected,
                              bool *async);
 
 int raft_replication__install_snapshot(struct raft *r,
                                        const struct raft_install_snapshot *args,
-                                       bool *success,
+                                       raft_index *rejected,
                                        bool *async);
 
 /**

@@ -335,6 +335,7 @@ static int io_stub__load(struct raft_io *io,
                          raft_term *term,
                          unsigned *voted_for,
                          struct raft_snapshot **snapshot,
+                         raft_index *start_index,
                          struct raft_entry **entries,
                          size_t *n_entries)
 {
@@ -353,6 +354,7 @@ static int io_stub__load(struct raft_io *io,
 
     *term = s->term;
     *voted_for = s->voted_for;
+    *start_index = 1;
 
     if (s->n == 0) {
         *entries = NULL;
@@ -399,6 +401,7 @@ snapshot:
         *snapshot = raft_malloc(sizeof **snapshot);
         assert(*snapshot != NULL);
         snapshot_copy(s->snapshot, *snapshot);
+	*start_index  = (*snapshot)->index + 1;
     } else {
         *snapshot = NULL;
     }
@@ -856,7 +859,8 @@ void raft_io_stub_set_latency(struct raft_io *io, unsigned min, unsigned max)
     s->max_latency = max;
 }
 
-void raft_io_stub_set_term(struct raft_io *io, raft_term term) {
+void raft_io_stub_set_term(struct raft_io *io, raft_term term)
+{
     struct io_stub *s;
     s = io->impl;
     s->term = term;
