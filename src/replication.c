@@ -1106,12 +1106,10 @@ int raft_replication__install_snapshot(struct raft *r,
 
     *async = true;
 
-    /* Premptively update our in-memory state.
-     * TODO: we should roll this back in case of failure, or something. */
-    r->last_applied = args->last_index;
+    /* Premptively update our in-memory state. */
+    log__restore(&r->log, args->last_index, args->last_term);
 
     /* We need to truncate our entire log */
-    log__truncate(&r->log, 1);
     rv = r->io->truncate(r->io, 1);
     if (rv != 0) {
         goto err;

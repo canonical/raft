@@ -133,6 +133,7 @@ int raft_start(struct raft *r)
             entry_batches__destroy(entries, n_entries);
             return rc;
         }
+	log__restore(&r->log, snapshot->index, snapshot->term);
         raft_free(snapshot);
     } else if (n_entries > 0) {
         /* If we don't have a snapshot and the on-disk log is not empty, then

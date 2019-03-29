@@ -32,8 +32,6 @@ int snapshot__restore(struct raft *r, struct raft_snapshot *snapshot)
         return rc;
     }
 
-    log__restore(&r->log, snapshot->index, snapshot->term);
-
     raft_configuration_close(&r->configuration);
     r->configuration = snapshot->configuration;
     r->configuration_index = snapshot->configuration_index;

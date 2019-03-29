@@ -11,6 +11,7 @@
 #include "io_uv_encoding.h"
 #include "io_uv_load.h"
 #include "logging.h"
+#include "entry.h"
 
 /* Template string for snapshot filenames: snapshot term, snapshot index,
  * creation timestamp (milliseconds since epoch). */
@@ -308,6 +309,7 @@ int io_uv__load_all(struct io_uv *uv,
     struct io_uv__segment_meta *segments;
     size_t n_snapshots;
     size_t n_segments;
+    raft_index last_index;
     int rv;
 
     *snapshot = NULL;
@@ -323,8 +325,6 @@ int io_uv__load_all(struct io_uv *uv,
 
     /* Load the most recent snapshot, if any. */
     if (snapshots != NULL) {
-        raft_index last_index;
-
         *snapshot = raft_malloc(sizeof **snapshot);
         if (*snapshot == NULL) {
             rv = RAFT_ENOMEM;
@@ -359,6 +359,16 @@ int io_uv__load_all(struct io_uv *uv,
         }
         raft_free(segments);
         segments = NULL;
+    }
+
+    last_index = *start_index + *n - 1;
+    if (*snapshot != NULL && last_index < (*snapshot)->index) {
+        /* TODO: entries are behind the snapshot, we should delete them from
+         * disk. */
+        *start_index = (*snapshot)->index + 1;
+	entry_batches__destroy(*entries, *n);
+	*entries = NULL;
+	*n = 0;
     }
 
     return 0;

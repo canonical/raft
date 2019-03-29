@@ -164,13 +164,6 @@ static int io_uv__load(struct raft_io *io,
     }
 
     last_index = *start_index + *n_entries - 1;
-    if (*snapshot != NULL && last_index < (*snapshot)->index) {
-        /* TODO: all entries are behind the snapshot, we should delete them
-         * instead of aborting */
-        errorf(io, "last index %llu is behind snapshot %llu", last_index,
-               (*snapshot)->index);
-        return RAFT_ERR_IO_CORRUPT;
-    }
 
     /* Set the index of the last entry that was persisted. */
     uv->finalize_last_index = last_index;
