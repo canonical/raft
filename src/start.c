@@ -111,13 +111,11 @@ int raft_start(struct raft *r)
     assert(r->last_stored == 0);
 
     infof(r->io, "starting");
-
     rc = r->io->load(r->io, &r->current_term, &r->voted_for, &snapshot,
                      &start_index, &entries, &n_entries);
     if (rc != 0) {
         return rc;
     }
-
     assert(start_index >= 1);
 
     /* If we have a snapshot, let's restore it, updating the start index. */
@@ -130,9 +128,11 @@ int raft_start(struct raft *r)
             entry_batches__destroy(entries, n_entries);
             return rc;
         }
+	raft_free(snapshot);
     } else if (n_entries > 0) {
         /* If we don't have a snapshot and the on-disk log is not empty, then
          * the first entry must be a configuration entry. */
+        assert(start_index == 1);
         assert(entries[0].type == RAFT_CONFIGURATION);
 
         /* As a small optimization, bump the commit index to 1 since we require

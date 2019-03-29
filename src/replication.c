@@ -1044,20 +1044,12 @@ static void put_snapshot_cb(struct raft_io_snapshot_put *req, int status)
     /* if (local_first_index > 0) { */
     /*     log__truncate(&r->log, local_first_index); */
     /* } */
-    log__restore(&r->log, snapshot->index, snapshot->term);
-
-    r->last_stored = snapshot->index;
-
-    rv = r->fsm->restore(r->fsm, &snapshot->bufs[0]);
+    rv = snapshot__restore(r, snapshot);
     if (rv != 0) {
         errorf(r->io, "restore snapshot %d: %s", snapshot->index,
                raft_strerror(status));
         goto err;
     }
-
-    raft_configuration_close(&r->configuration);
-    r->configuration = snapshot->configuration;
-    r->configuration_index = snapshot->configuration_index;
 
     debugf(r->io, "restored snapshot with last index %llu", snapshot->index);
 
@@ -1072,9 +1064,6 @@ err:
     raft_configuration_close(&snapshot->configuration);
 
 out:
-    /* Don't free the snapshot data buffer, as ownership has been trasfered to
-     * the fsm. */
-    raft_free(snapshot->bufs);
     raft_free(request);
 }
 
