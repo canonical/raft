@@ -374,8 +374,8 @@ TEST_CASE(term_of, two, NULL)
     return MUNIT_OK;
 }
 
-/* The log has a snapshot and hence an offset. */
-TEST_CASE(term_of, before_snapshot, NULL)
+/* The log has a snapshot and hence has an offset. */
+TEST_CASE(term_of, with_snapshot, NULL)
 {
     struct fixture *f = data;
 
@@ -384,6 +384,23 @@ TEST_CASE(term_of, before_snapshot, NULL)
     SNAPSHOT(3, 0);
     munit_assert_int(TERM_OF(1), ==, 0);
     munit_assert_int(TERM_OF(2), ==, 0);
+    munit_assert_int(TERM_OF(3), ==, 1);
+    munit_assert_int(TERM_OF(4), ==, 1);
+    munit_assert_int(TERM_OF(5), ==, 1);
+
+    return MUNIT_OK;
+}
+
+/* The log has a snapshot with trailing entries. */
+TEST_CASE(term_of, snapshot_trailing, NULL)
+{
+    struct fixture *f = data;
+
+    (void)params;
+    APPEND_MANY(1 /* term */, 5 /* n entries */);
+    SNAPSHOT(3, 2);
+    munit_assert_int(TERM_OF(1), ==, 0);
+    munit_assert_int(TERM_OF(2), ==, 1);
     munit_assert_int(TERM_OF(3), ==, 1);
     munit_assert_int(TERM_OF(4), ==, 1);
     munit_assert_int(TERM_OF(5), ==, 1);
@@ -1215,6 +1232,9 @@ TEST_CASE(snapshot, trailing, NULL)
 
     ASSERT_SNAPSHOT(3 /* index */, 2 /* term */);
 
+    munit_assert_int(N_OUTSTANDING, ==, 2);
+    munit_assert_int(LAST_INDEX, ==, 3);
+
     return MUNIT_OK;
 }
 
@@ -1243,6 +1263,9 @@ TEST_CASE(snapshot, trailing_higher_than_outstanding, NULL)
 
     ASSERT_SNAPSHOT(4 /* index */, 2 /* term */);
 
+    munit_assert_int(N_OUTSTANDING, ==, 2);
+    munit_assert_int(LAST_INDEX, ==, 4);
+
     return MUNIT_OK;
 }
 
@@ -1269,6 +1292,33 @@ TEST_CASE(snapshot, trailing_matches_outstanding, NULL)
            2 /* n */);
 
     ASSERT_SNAPSHOT(4 /* index */, 2 /* term */);
+
+    munit_assert_int(N_OUTSTANDING, ==, 2);
+    munit_assert_int(LAST_INDEX, ==, 4);
+
+    return MUNIT_OK;
+}
+
+/* Take a snapshot at an index which is not the last one. */
+TEST_CASE(snapshot, less_than_highest_index, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+
+    /* Take a snapshot leaving just one entry in the log. */
+    APPEND_MANY(1 /* term */, 5 /* n entries */);
+    SNAPSHOT(4, 2);
+
+    ASSERT(6 /* size                                                 */,
+           2 /* front                                                */,
+           5 /* back                                                 */,
+           2 /* offset                                               */,
+           3 /* n */);
+
+    ASSERT_SNAPSHOT(4 /* index */, 1 /* term */);
+
+    munit_assert_int(N_OUTSTANDING, ==, 3);
+    munit_assert_int(LAST_INDEX, ==, 5);
 
     return MUNIT_OK;
 }

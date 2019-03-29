@@ -906,10 +906,8 @@ void log__snapshot(struct raft_log *l, raft_index index, unsigned trailing)
     l->snapshot.last_index = index;
     l->snapshot.last_term = term;
 
-    assert(index - trailing > 0);
-
     /* If we have not at least n entries preceeding index, we're done */
-    if (locate_entry(l, index - trailing) == l->size) {
+    if (index <= trailing || locate_entry(l, index - trailing) == l->size) {
         return;
     }
 
