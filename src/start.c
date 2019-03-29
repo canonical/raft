@@ -11,7 +11,7 @@
 #include "tick.h"
 
 /* Set to 1 to enable tracing. */
-#if 1
+#if 0
 #define tracef(MSG, ...) debugf(r->io, "start: " MSG, ##__VA_ARGS__)
 #else
 #define tracef(MSG, ...)
@@ -38,12 +38,16 @@ static int restore_most_recent_configuration(struct raft *r,
 
 /* Restore the entries that were loaded from persistent storage. The most recent
  * configuration entry will be restored as well, if any. */
-static int restore_entries(struct raft *r, struct raft_entry *entries, size_t n)
+static int restore_entries(struct raft *r,
+                           raft_index start_index,
+                           struct raft_entry *entries,
+                           size_t n)
 {
     struct raft_entry *conf = NULL;
     raft_index conf_index;
     size_t i;
     int rc;
+    log__seek(&r->log, start_index);
     for (i = 0; i < n; i++) {
         struct raft_entry *entry = &entries[i];
         rc = log__append(&r->log, entry->term, entry->type, &entry->buf,
@@ -80,17 +84,18 @@ static int maybe_self_elect(struct raft *r)
     const struct raft_server *server;
     int rc;
     server = configuration__get(&r->configuration, r->id);
-    if (server != NULL && server->voting &&
-        configuration__n_voting(&r->configuration) == 1) {
-        debugf(r->io, "self elect and convert to leader");
-        rc = convert__to_candidate(r);
-        if (rc != 0) {
-            return rc;
-        }
-        rc = convert__to_leader(r);
-        if (rc != 0) {
-            return rc;
-        }
+    if (server == NULL || !server->voting ||
+        configuration__n_voting(&r->configuration) > 1) {
+        return 0;
+    }
+    debugf(r->io, "self elect and convert to leader");
+    rc = convert__to_candidate(r);
+    if (rc != 0) {
+        return rc;
+    }
+    rc = convert__to_leader(r);
+    if (rc != 0) {
+        return rc;
     }
     return 0;
 }
@@ -120,15 +125,15 @@ int raft_start(struct raft *r)
 
     /* If we have a snapshot, let's restore it, updating the start index. */
     if (snapshot != NULL) {
-        tracef("snapshot: index %llu, term %llu", snapshot->index,
-               snapshot->term);
+        tracef("restore snapshot with last index %llu and last term %llu",
+               snapshot->index, snapshot->term);
         rc = snapshot__restore(r, snapshot);
         if (rc != 0) {
             snapshot__destroy(snapshot);
             entry_batches__destroy(entries, n_entries);
             return rc;
         }
-	raft_free(snapshot);
+        raft_free(snapshot);
     } else if (n_entries > 0) {
         /* If we don't have a snapshot and the on-disk log is not empty, then
          * the first entry must be a configuration entry. */
@@ -143,9 +148,8 @@ int raft_start(struct raft *r)
 
     /* Append the entries to the log, possibly restoring the last
      * configuration. */
-    tracef("entries: %lu starting at %llu", n_entries, start_index);
-    r->log.offset = start_index - 1;
-    rc = restore_entries(r, entries, n_entries);
+    tracef("restore %lu entries starting at %llu", n_entries, start_index);
+    rc = restore_entries(r, start_index, entries, n_entries);
     if (rc != 0) {
         entry_batches__destroy(entries, n_entries);
         return rc;
@@ -157,8 +161,6 @@ int raft_start(struct raft *r)
     /* Start the I/O backend. The tick callback is expected to fire every
      * r->heartbeat_timeout milliseconds and the recv callback whenever an RPC
      * is received. */
-    tracef("log: %lu entries, offset %lu", log__n_outstanding(&r->log),
-           r->log.offset);
     rc = r->io->start(r->io, r->heartbeat_timeout, tick_cb, recv_cb);
     if (rc != 0) {
         return rc;

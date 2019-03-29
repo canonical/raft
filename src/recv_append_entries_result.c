@@ -55,8 +55,7 @@ int recv__append_entries_result(struct raft *r,
         return 0;
     }
 
-    /* Update the match/next and the last contact indexes, possibly sending
-     * further entries. */
+    /* Update the progress of this server, possibly sending further entries. */
     rv = replication__update(r, server, result);
     if (rv != 0) {
         return rv;

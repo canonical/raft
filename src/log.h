@@ -86,7 +86,6 @@ int log__append_configuration(struct raft_log *l,
                               const raft_term term,
                               const struct raft_configuration *configuration);
 
-
 /**
  * Acquire an array of entries from the given index onwards.
  *
@@ -122,12 +121,12 @@ void log__discard(struct raft_log *l, const raft_index index);
 /**
  * To be called when taking a new snapshot.
  *
- * The log must contain an entry at @index, which is the last entry included in
- * the snapshot. The function update the last snapshot information and delete
- * all entries up @index - @trailing. If the log contains no entry a @index -
- * @trailing, then no entry will be deleted.
+ * The log must contain an entry at @last_index, which is the index of the last
+ * entry included in the snapshot. The function will update the last snapshot
+ * information and delete all entries up @last_index - @trailing. If the log
+ * contains no entry a @last_index - @trailing, then no entry will be deleted.
  */
-void log__snapshot(struct raft_log *l, raft_index index, unsigned trailing);
+void log__snapshot(struct raft_log *l, raft_index last_index, unsigned trailing);
 
 /**
  * To be called when restoring a new snapshot.
@@ -136,6 +135,14 @@ void log__snapshot(struct raft_log *l, raft_index index, unsigned trailing);
  * last index and last term of the most recent snapshot will be set to the given
  * values, and the offset adjusted accordingly.
  */
-void log__restore(struct raft_log *l, raft_index index, raft_term term);
+void log__restore(struct raft_log *l,
+                  raft_index last_index,
+                  raft_term last_term);
+
+/**
+ * Change the current offset of outstanding entries. This is called at startup
+ * when populating the log with entries loaded from disk.
+ */
+void log__seek(struct raft_log *l, raft_index start_index);
 
 #endif /* RAFT_LOG_H */

@@ -14,19 +14,19 @@
 #include "state.h"
 #include "watch.h"
 
+/* Set to 1 to enable tracing. */
+#if 1
+#define tracef(MSG, ...) debugf(r->io, "replication: " MSG, __VA_ARGS__)
+#else
+#define tracef(MSG, ...)
+#endif
+
 #ifndef max
 #define max(a, b) ((a) < (b) ? (b) : (a))
 #endif
 
 #ifndef min
 #define min(a, b) ((a) < (b) ? (a) : (b))
-#endif
-
-/* Set to 1 to enable tracing. */
-#if 1
-#define tracef(MSG, ...) debugf(r->io, "replication: " MSG, __VA_ARGS__)
-#else
-#define tracef(MSG, ...)
 #endif
 
 /**
@@ -235,8 +235,9 @@ static int send_append_entries(struct raft *r,
      */
     args->leader_commit = r->commit_index;
 
-    tracef("send %ld entries to server %ld (log size %ld)", args->n_entries,
-           server->id, log__n_outstanding(&r->log));
+    tracef("send %lu entries starting at %llu to server %lu (last index %llu)",
+           args->n_entries, args->prev_log_index, server->id,
+           log__last_index(&r->log));
 
     message.type = RAFT_IO_APPEND_ENTRIES;
     message.server_id = server->id;
@@ -279,6 +280,13 @@ int replication__trigger(struct raft *r, unsigned i)
 
     assert(r->state == RAFT_LEADER);
     assert(server->id != r->id);
+
+    /* If we have already sent a snapshot, don't send any further entry and
+     * let's wait for the server reply. We'll abort and rollback to probe if we
+     * don't hear anything for a while. */
+    if (progress__state(r, server) == PROGRESS__SNAPSHOT) {
+        return 0;
+    }
 
     next_index = progress__next_index(r, server);
     snapshot_index = log__snapshot_index(&r->log);
@@ -603,7 +611,7 @@ int replication__update(struct raft *r,
                                           result->last_log_index);
         if (retry) {
             /* Retry, ignoring errors. */
-            debugf(r->io, "log mismatch -> send old entries to %u", server->id);
+            tracef("log mismatch -> send old entries to %u", server->id);
             replication__trigger(r, server_index);
         }
         return 0;
@@ -655,11 +663,34 @@ int replication__update(struct raft *r,
     return 0;
 }
 
-static void raft_replication__follower_respond_cb(struct raft_io_send *req,
-                                                  int status)
+static void send_append_entries_result_cb(struct raft_io_send *req, int status)
 {
     (void)status;
     raft_free(req);
+}
+
+static void send_append_entries_result(
+    struct raft *r,
+    const struct raft_append_entries_result *result)
+{
+    struct raft_message message;
+    struct raft_io_send *req;
+    int rc;
+
+    message.type = RAFT_IO_APPEND_ENTRIES_RESULT;
+    message.server_id = r->follower_state.current_leader.id;
+    message.server_address = r->follower_state.current_leader.address;
+    message.append_entries_result = *result;
+
+    req = raft_malloc(sizeof *req);
+    if (req == NULL) {
+        return;
+    }
+
+    rc = r->io->send(r->io, req, &message, send_append_entries_result_cb);
+    if (rc != 0) {
+        raft_free(req);
+    }
 }
 
 static void raft_replication__follower_append_cb(void *data, int status)
@@ -667,9 +698,7 @@ static void raft_replication__follower_append_cb(void *data, int status)
     struct raft_replication__follower_append *request = data;
     struct raft *r = request->raft;
     struct raft_append_entries *args = &request->args;
-    struct raft_message message;
-    struct raft_append_entries_result *result = &message.append_entries_result;
-    struct raft_io_send *req;
+    struct raft_append_entries_result result;
     size_t i;
     size_t j;
     int rv;
@@ -688,12 +717,11 @@ static void raft_replication__follower_append_cb(void *data, int status)
         goto out;
     }
 
+    result.term = r->current_term;
     if (status != 0) {
-        result->rejected = args->prev_log_index + 1;
+        result.rejected = args->prev_log_index + 1;
         goto respond;
     }
-
-    result->term = r->current_term;
 
     /* If none of the entries that we persisted is present anymore in our
      * in-memory log, there's nothing to report or to do. We just discard
@@ -735,26 +763,11 @@ static void raft_replication__follower_append_cb(void *data, int status)
         }
     }
 
-    result->rejected = 0;
+    result.rejected = 0;
 
 respond:
-    result->last_log_index = r->last_stored;
-
-    message.type = RAFT_IO_APPEND_ENTRIES_RESULT;
-    message.server_id = r->follower_state.current_leader.id;
-    message.server_address = r->follower_state.current_leader.address;
-
-    req = raft_malloc(sizeof *req);
-    if (req == NULL) {
-        goto out;
-    }
-
-    rv = r->io->send(r->io, req, &message,
-                     raft_replication__follower_respond_cb);
-    if (rv != 0) {
-        raft_free(req);
-        goto out;
-    }
+    result.last_log_index = r->last_stored;
+    send_append_entries_result(r, &result);
 
 out:
     log__release(&r->log, request->index, request->args.entries,
@@ -1009,12 +1022,15 @@ static void put_snapshot_cb(struct raft_io_snapshot_put *req, int status)
     struct recv_install_snapshot *request = req->data;
     struct raft *r = request->raft;
     struct raft_snapshot *snapshot = &request->snapshot;
-    /* raft_term local_term; */
+    struct raft_append_entries_result result;
     int rv;
 
     r->snapshot.put.data = NULL;
 
+    result.term = r->current_term;
+
     if (status != 0) {
+        result.rejected = snapshot->index;
         errorf(r->io, "save snapshot %d: %s", snapshot->index,
                raft_strerror(status));
         goto err;
@@ -1022,30 +1038,13 @@ static void put_snapshot_cb(struct raft_io_snapshot_put *req, int status)
 
     /* From Figure 5.3:
      *
-     *   6. If existing entry has same index and term as lastIndex and lastTerm,
-     *      discard log up through lastIndex (but retain any following entries)
-     *      and reply.
-     */
-    /* TODO: at the moment we just ignore snapshots of entries that we have */
-    /* local_term = log__term_of(&r->log, snapshot->index); */
-    /* if (local_term == snapshot->term) { */
-    /*     log__shift(&r->log, snapshot->index); */
-    /*     goto err; */
-    /* } */
-
-    /* From Figure 5.3:
-     *
      *   7. Discard the entire log
      *   8. Reset state machine using snapshot contents (and load lastConfig
      *      as cluster configuration).
      */
-    /* local_first_index = log__first_index(&r->log); */
-    /* assert(local_first_index == 0); */
-    /* if (local_first_index > 0) { */
-    /*     log__truncate(&r->log, local_first_index); */
-    /* } */
     rv = snapshot__restore(r, snapshot);
     if (rv != 0) {
+        result.rejected = snapshot->index;
         errorf(r->io, "restore snapshot %d: %s", snapshot->index,
                raft_strerror(status));
         goto err;
@@ -1053,9 +1052,9 @@ static void put_snapshot_cb(struct raft_io_snapshot_put *req, int status)
 
     debugf(r->io, "restored snapshot with last index %llu", snapshot->index);
 
-    /* TODO: send AppendEntries result */
+    result.rejected = 0;
 
-    goto out;
+    goto respond;
 
 err:
     /* In case of error we must also free the snapshot data buffer and free the
@@ -1063,7 +1062,9 @@ err:
     raft_free(snapshot->bufs[0].base);
     raft_configuration_close(&snapshot->configuration);
 
-out:
+respond:
+    result.last_log_index = r->last_stored;
+    send_append_entries_result(r, &result);
     raft_free(request);
 }
 

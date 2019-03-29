@@ -896,31 +896,41 @@ static void remove_prefix(struct raft_log *l, const raft_index index)
     clear_if_empty(l);
 }
 
-void log__snapshot(struct raft_log *l, raft_index index, unsigned trailing)
+void log__snapshot(struct raft_log *l, raft_index last_index, unsigned trailing)
 {
-    raft_term term = log__term_of(l, index);
+    raft_term last_term = log__term_of(l, last_index);
 
     /* We must have an entry at this index */
-    assert(term != 0);
+    assert(last_term != 0);
 
-    l->snapshot.last_index = index;
-    l->snapshot.last_term = term;
+    l->snapshot.last_index = last_index;
+    l->snapshot.last_term = last_term;
 
     /* If we have not at least n entries preceeding index, we're done */
-    if (index <= trailing || locate_entry(l, index - trailing) == l->size) {
+    if (last_index <= trailing ||
+        locate_entry(l, last_index - trailing) == l->size) {
         return;
     }
 
-    remove_prefix(l, index - trailing);
+    remove_prefix(l, last_index - trailing);
 }
 
-void log__restore(struct raft_log *l, raft_index index, raft_term term)
+void log__restore(struct raft_log *l,
+                  raft_index last_index,
+                  raft_term last_term)
 {
     size_t n = log__n_outstanding(l);
     if (n > 0) {
         log__truncate(l, log__last_index(l) - n + 1);
     }
-    l->snapshot.last_index = index;
-    l->snapshot.last_term = term;
-    l->offset = index;
+    l->snapshot.last_index = last_index;
+    l->snapshot.last_term = last_term;
+    l->offset = last_index;
+}
+
+void log__seek(struct raft_log *l, raft_index start_index)
+{
+    assert(start_index > 0);
+    assert(start_index - 1 <= l->snapshot.last_index);
+    l->offset = start_index - 1;
 }

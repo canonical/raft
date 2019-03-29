@@ -4,6 +4,13 @@
 #include "log.h"
 #include "logging.h"
 
+/* Set to 1 to enable tracing. */
+#if 1
+#define tracef(MSG, ...) debugf(r->io, "progress: " MSG, ##__VA_ARGS__)
+#else
+#define tracef(MSG, ...)
+#endif
+
 #ifndef max
 #define max(a, b) ((a) < (b) ? (b) : (a))
 #endif
@@ -128,11 +135,6 @@ raft_index progress__next_index(struct raft *r,
                                 const struct raft_server *server)
 {
     struct raft_progress *p = get(r, server);
-    /* If we have sent a snapshot, let's send only entries after the
-     * snapshot. */
-    if (p->state == PROGRESS__SNAPSHOT) {
-        return p->snapshot_index + 1;
-    }
     return p->next_index;
 }
 
@@ -145,11 +147,12 @@ bool progress__maybe_decrement(struct raft *r,
                                raft_index last_index)
 {
     struct raft_progress *p = get(r, server);
+
     if (p->state == PROGRESS__PIPELINE) {
         /* The rejection must be stale if the rejected index is smaller than the
          * matched one. */
         if (rejected <= p->match_index) {
-            debugf(r->io, "match index is up to date -> ignore ");
+            tracef("match index is up to date -> ignore ");
             return false;
         }
         /* Directly decrease next to match + 1 */
@@ -157,12 +160,17 @@ bool progress__maybe_decrement(struct raft *r,
         return true;
     }
 
+    /* TODO: remove once we implement pipelining. See etcd/raft/progress.go */
+    if (rejected <= p->match_index) {
+      tracef("match index is up to date -> ignore ");
+      return false;
+    }
+
     /* The rejection must be stale or spurious (e.g. when the follower rejects
      * heartbeats sent concurrently with a snapshot) if the rejected index does
      * not match the next index minus one. */
     if (rejected != p->next_index - 1) {
-        debugf(r->io,
-               "rejected index %llu different from next index %lld -> ignore ",
+        tracef("rejected index %llu different from next index %lld -> ignore ",
                rejected, p->next_index);
         return false;
     }
