@@ -340,7 +340,8 @@ int io_uv__load_all(struct io_uv *uv,
         last_index = (*snapshot)->index;
         /* Update the start index. If there are closed segments on disk and the
          * first index of the first closed segment is lower than the snapshot's
-         * last index, let's try to retain n_trailing entries if available. */
+         * last index, let's retain those entries. TODO: implement a trailing
+         * amount. */
         if (segments != NULL && !segments[0].is_open &&
             segments[0].first_index <= last_index) {
             *start_index = segments[0].first_index;

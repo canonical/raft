@@ -1387,11 +1387,23 @@ TEST_SETUP(restore, setup);
 TEST_TEAR_DOWN(restore, tear_down);
 
 /* Mimick the initial restore of a snapshot after loading state from disk, when
- * there are no outstanding entries.. */
+ * there are no outstanding entries. */
 TEST_CASE(restore, initial, NULL)
 {
     (void)params;
     struct fixture *f = data;
+    RESTORE(2, 3);
+    ASSERT_SNAPSHOT(2 /* index */, 3 /* term */);
+    munit_assert_int(LAST_INDEX, ==, 2);
+    return MUNIT_OK;
+}
+
+/* If there are existing entries they are wiped out. */
+TEST_CASE(restore, wipe, NULL)
+{
+    (void)params;
+    struct fixture *f = data;
+    APPEND_MANY(1 /* term */, 5 /* n entries */);
     RESTORE(2, 3);
     ASSERT_SNAPSHOT(2 /* index */, 3 /* term */);
     munit_assert_int(LAST_INDEX, ==, 2);

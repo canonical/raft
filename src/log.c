@@ -916,7 +916,10 @@ void log__snapshot(struct raft_log *l, raft_index index, unsigned trailing)
 
 void log__restore(struct raft_log *l, raft_index index, raft_term term)
 {
-    log__truncate(l, 1);
+    size_t n = log__n_outstanding(l);
+    if (n > 0) {
+        log__truncate(l, log__last_index(l) - n + 1);
+    }
     l->snapshot.last_index = index;
     l->snapshot.last_term = term;
     l->offset = index;
