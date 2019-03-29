@@ -28,6 +28,9 @@ static void set_state(struct raft *r, int state)
 static void clear_follower(struct raft *r)
 {
     r->follower_state.current_leader.id = 0;
+    if (r->follower_state.current_leader.address != NULL) {
+        raft_free(r->follower_state.current_leader.address);
+    }
     r->follower_state.current_leader.address = NULL;
 }
 
@@ -101,11 +104,6 @@ void convert__to_follower(struct raft *r)
 
     /* Reset election timer. */
     election__reset_timer(r);
-
-    /* The current leader will be set next time that we receive an AppendEntries
-     * RPC. */
-    r->follower_state.current_leader.id = 0;
-    r->follower_state.current_leader.address = NULL;
 }
 
 int convert__to_candidate(struct raft *r)

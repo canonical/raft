@@ -92,8 +92,10 @@ int recv__append_entries(struct raft *r,
 
     /* Update current leader because the term in this AppendEntries RPC is up to
      * date. */
-    r->follower_state.current_leader.id = id;
-    r->follower_state.current_leader.address = address;
+    rv = recv__update_leader(r, id, address);
+    if (rv != 0) {
+        return rv;
+    }
 
     /* Reset the election timer. */
     r->election_elapsed = 0;

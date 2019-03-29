@@ -703,6 +703,11 @@ static void raft_replication__follower_append_cb(void *data, int status)
     size_t j;
     int rv;
 
+    /* Abort here if we're not followers anymore (e.g. we're shutting down) */
+    if (r->state != RAFT_FOLLOWER) {
+        goto out;
+    }
+
     debugf(r->io, "I/O completed on follower: status %d", status);
 
     assert(args->leader_id > 0);
@@ -1381,7 +1386,6 @@ void raft_replication__quorum(struct raft *r, const raft_index index)
 
     if (votes > configuration__n_voting(&r->configuration) / 2) {
         r->commit_index = index;
-
         tracef("new commit index %ld", r->commit_index);
     }
 

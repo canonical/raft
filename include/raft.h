@@ -729,7 +729,7 @@ struct raft
             struct
             {
                 unsigned id;
-                const char *address;
+                char *address;
             } current_leader;
         } follower_state;
         struct

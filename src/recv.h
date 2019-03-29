@@ -31,5 +31,7 @@ void recv_cb(struct raft_io *io, struct raft_message *message);
  */
 int recv__ensure_matching_terms(struct raft *r, raft_term term, int *match);
 
+int recv__update_leader(struct raft *r, unsigned id, const char *address);
+
 #endif /* RAFT_RECV_H_ */
 

@@ -232,7 +232,8 @@ static int __server_init(struct __server *s, const char *dir, unsigned id)
     }
     raft_configuration_close(&configuration);
 
-    s->raft.snapshot.threshold = 15;
+    raft_set_snapshot_threshold(&s->raft, 15);
+    raft_set_snapshot_trailing(&s->raft, 10);
 
     return 0;
 
