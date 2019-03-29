@@ -104,6 +104,9 @@ void convert__to_follower(struct raft *r)
 
     /* Reset election timer. */
     election__reset_timer(r);
+
+    r->follower_state.current_leader.id = 0;
+    r->follower_state.current_leader.address = NULL;
 }
 
 int convert__to_candidate(struct raft *r)
