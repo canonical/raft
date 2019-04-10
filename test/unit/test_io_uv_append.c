@@ -69,15 +69,15 @@ static void append_cb(void *data, int status)
  * be populated with N entries each of size SIZE. */
 #define append_args(N, SIZE)                                     \
     {                                                            \
-        int i;                                                   \
+        int i2;                                                  \
         f->entries = raft_malloc(N * sizeof(struct raft_entry)); \
         f->n = N;                                                \
         munit_assert_ptr_not_null(f->entries);                   \
-        for (i = 0; i < N; i++) {                                \
-            struct raft_entry *entry = &f->entries[i];           \
+        for (i2 = 0; i2 < N; i2++) {                             \
+            struct raft_entry *entry = &f->entries[i2];          \
             void *cursor;                                        \
             entry->term = 1;                                     \
-            entry->type = RAFT_COMMAND;                      \
+            entry->type = RAFT_COMMAND;                          \
             entry->buf.base = raft_malloc(SIZE);                 \
             entry->buf.len = SIZE;                               \
             entry->batch = NULL;                                 \
@@ -90,31 +90,31 @@ static void append_cb(void *data, int status)
     }
 
 /* Invoke raft_io->append() and assert that it returns the given code. */
-#define append_invoke(RV)                                          \
-    {                                                              \
-        unsigned i;                                                \
-        struct append_req *r = munit_malloc(sizeof *r);            \
-        int rv;                                                    \
-        r->f = f;                                                  \
-        r->entries = f->entries;                                   \
-        r->n = f->n;                                               \
-        rv = f->io.append(&f->io, f->entries, f->n, r, append_cb); \
-        munit_assert_int(rv, ==, RV);                              \
-        if (rv != 0) {                                             \
-            for (i = 0; i < f->n; i++) {                           \
-                raft_free(f->entries[i].buf.base);                 \
-            }                                                      \
-            raft_free(f->entries);                                 \
-            free(r);                                               \
-        }                                                          \
+#define append_invoke(RV)                                           \
+    {                                                               \
+        unsigned i2;                                                \
+        struct append_req *r = munit_malloc(sizeof *r);             \
+        int rv2;                                                    \
+        r->f = f;                                                   \
+        r->entries = f->entries;                                    \
+        r->n = f->n;                                                \
+        rv2 = f->io.append(&f->io, f->entries, f->n, r, append_cb); \
+        munit_assert_int(rv2, ==, RV);                              \
+        if (rv2 != 0) {                                             \
+            for (i2 = 0; i2 < f->n; i2++) {                         \
+                raft_free(f->entries[i2].buf.base);                 \
+            }                                                       \
+            raft_free(f->entries);                                  \
+            free(r);                                                \
+        }                                                           \
     }
 
 /* Wait for the given number of append request callbacks to fire and check the
  * last status. */
 #define append_wait_cb(N, STATUS)                \
     {                                            \
-        int i;                                   \
-        for (i = 0; i < 5; i++) {                \
+        int i2;                                  \
+        for (i2 = 0; i2 < 5; i2++) {             \
             test_uv_run(&f->loop, 1);            \
             if (f->invoked == N) {               \
                 break;                           \
@@ -149,13 +149,13 @@ static void append_cb(void *data, int status)
             unsigned crc1 = byte__get32(&cursor);                           \
             unsigned crc2 = byte__get32(&cursor);                           \
             const void *header = cursor;                                    \
-            const void *data;                                               \
+            const void *content;                                            \
             unsigned n = byte__get64(&cursor);                              \
             struct raft_entry *entries = munit_malloc(n * sizeof *entries); \
             unsigned j;                                                     \
             unsigned crc;                                                   \
             size_t data_size = 0;                                           \
-	    munit_logf(MUNIT_LOG_INFO, "batch %d has %d entries", i, n);\
+            munit_logf(MUNIT_LOG_INFO, "batch %d has %d entries", i, n);    \
                                                                             \
             for (j = 0; j < n; j++) {                                       \
                 struct raft_entry *entry = &entries[j];                     \
@@ -168,7 +168,7 @@ static void append_cb(void *data, int status)
                 entry->buf.len = byte__get32(&cursor);                      \
                                                                             \
                 munit_assert_int(entry->term, ==, 1);                       \
-                munit_assert_int(entry->type, ==, RAFT_COMMAND);        \
+                munit_assert_int(entry->type, ==, RAFT_COMMAND);            \
                                                                             \
                 data_size += entry->buf.len;                                \
             }                                                               \
@@ -176,7 +176,7 @@ static void append_cb(void *data, int status)
             crc = byte__crc32(header, io_uv__sizeof_batch_header(n), 0);    \
             munit_assert_int(crc, ==, crc1);                                \
                                                                             \
-            data = cursor;                                                  \
+            content = cursor;                                               \
                                                                             \
             for (j = 0; j < n; j++) {                                       \
                 struct raft_entry *entry = &entries[j];                     \
@@ -190,7 +190,7 @@ static void append_cb(void *data, int status)
                 i++;                                                        \
             }                                                               \
                                                                             \
-            crc = byte__crc32(data, data_size, 0);                          \
+            crc = byte__crc32(content, data_size, 0);                       \
             munit_assert_int(crc, ==, crc2);                                \
                                                                             \
             free(entries);                                                  \

@@ -30,10 +30,10 @@ struct fixture
     struct disconnection *disconnections;
 };
 
-static char *n[] = {"3", NULL};
+static char *cluster_n[] = {"3", NULL};
 
-static MunitParameterEnum params[] = {
-    {CLUSTER_N_PARAM, n},
+static MunitParameterEnum _params[] = {
+    {CLUSTER_N_PARAM, cluster_n},
     {NULL, NULL},
 };
 
@@ -127,7 +127,7 @@ static void apply_cb(struct raft_apply *req, int status)
 }
 
 /* The system makes progress even in case of network disruptions. */
-TEST_CASE(network, disconnect, params)
+TEST_CASE(network, disconnect, _params)
 {
     struct fixture *f = data;
     int i = 0;

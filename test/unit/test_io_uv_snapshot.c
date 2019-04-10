@@ -87,7 +87,7 @@ static void append_cb(void *data, int status)
         for (i = 0; i < N; i++) {                                       \
             struct raft_entry *entry = &entries[i];                     \
             entry->term = 1;                                            \
-            entry->type = RAFT_COMMAND;                             \
+            entry->type = RAFT_COMMAND;                                 \
             entry->buf.base = munit_malloc(8);                          \
             entry->buf.len = 8;                                         \
             entry->batch = NULL;                                        \
@@ -118,11 +118,11 @@ static void append_cb(void *data, int status)
     }
 
 /* Invoke the snapshot_put method and check that it returns the given code. */
-#define put__invoke(RV)                                                 \
-    {                                                                   \
-        int rv;                                                         \
-        rv = f->io.snapshot_put(&f->io, &f->req, &f->snapshot, put_cb); \
-        munit_assert_int(rv, ==, RV);                                   \
+#define put__invoke(RV)                                                  \
+    {                                                                    \
+        int rv2;                                                         \
+        rv2 = f->io.snapshot_put(&f->io, &f->req, &f->snapshot, put_cb); \
+        munit_assert_int(rv2, ==, RV);                                   \
     }
 
 #define put__wait_cb(STATUS) test_uv_run_until(&f->loop, f, put_cb_was_invoked);

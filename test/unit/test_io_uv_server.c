@@ -52,39 +52,39 @@ static void tear_down(void *data)
 #define recv__peer_connect test_tcp_connect(&f->tcp, 9000);
 #define recv__peer_handshake                                                 \
     {                                                                        \
-        void *cursor;                                                        \
-        cursor = f->peer.handshake;                                          \
-        byte__put64(&cursor, 1);  /* Protocol */                             \
-        byte__put64(&cursor, 2);  /* Server ID */                            \
-        byte__put64(&cursor, 16); /* Address size */                         \
-        strcpy(cursor, "127.0.0.1:66");                                      \
+        void *cursor2;                                                       \
+        cursor2 = f->peer.handshake;                                         \
+        byte__put64(&cursor2, 1);  /* Protocol */                            \
+        byte__put64(&cursor2, 2);  /* Server ID */                           \
+        byte__put64(&cursor2, 16); /* Address size */                        \
+        strcpy(cursor2, "127.0.0.1:66");                                     \
         test_tcp_send(&f->tcp, f->peer.handshake, sizeof f->peer.handshake); \
     }
 #define recv__set_message_type(TYPE) f->peer.message.type = TYPE;
 
 /* Send the first N buffers of f->peer.message. If N is 0, send the whole
  * message */
-#define recv__peer_send_bufs(N)                                       \
-    {                                                                 \
-        uv_buf_t *bufs;                                               \
-        unsigned n;                                                   \
-        unsigned n_bufs;                                              \
-        unsigned i;                                                   \
-        int rv;                                                       \
-        rv = io_uv__encode_message(&f->peer.message, &bufs, &n_bufs); \
-        munit_assert_int(rv, ==, 0);                                  \
-        if (N == 0) {                                                 \
-            n = n_bufs;                                               \
-        } else {                                                      \
-            n = N;                                                    \
-        }                                                             \
-        for (i = 0; i < n_bufs; i++) {                                \
-            if (i < n) {                                              \
-                test_tcp_send(&f->tcp, bufs[i].base, bufs[i].len);    \
-            }                                                         \
-            raft_free(bufs[i].base);                                  \
-        }                                                             \
-        raft_free(bufs);                                              \
+#define recv__peer_send_bufs(N)                                        \
+    {                                                                  \
+        uv_buf_t *bufs;                                                \
+        unsigned n;                                                    \
+        unsigned n_bufs;                                               \
+        unsigned i;                                                    \
+        int rv2;                                                       \
+        rv2 = io_uv__encode_message(&f->peer.message, &bufs, &n_bufs); \
+        munit_assert_int(rv2, ==, 0);                                  \
+        if (N == 0) {                                                  \
+            n = n_bufs;                                                \
+        } else {                                                       \
+            n = N;                                                     \
+        }                                                              \
+        for (i = 0; i < n_bufs; i++) {                                 \
+            if (i < n) {                                               \
+                test_tcp_send(&f->tcp, bufs[i].base, bufs[i].len);     \
+            }                                                          \
+            raft_free(bufs[i].base);                                   \
+        }                                                              \
+        raft_free(bufs);                                               \
     }
 #define recv__peer_send recv__peer_send_bufs(0)
 

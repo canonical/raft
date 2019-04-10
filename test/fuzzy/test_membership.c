@@ -14,10 +14,10 @@ struct fixture
     FIXTURE_CLUSTER;
 };
 
-static char *n[] = {"3", "4", "5", NULL};
+static char *cluster_n[] = {"3", "4", "5", NULL};
 
-static MunitParameterEnum params[] = {
-    {CLUSTER_N_PARAM, n},
+static MunitParameterEnum _params[] = {
+    {CLUSTER_N_PARAM, cluster_n},
     {NULL, NULL},
 };
 
@@ -49,7 +49,7 @@ TEST_SUITE(add);
 TEST_SETUP(add, setup);
 TEST_TEAR_DOWN(add, tear_down);
 
-TEST_CASE(add, non_voting, params)
+TEST_CASE(add, non_voting, _params)
 {
     struct fixture *f = data;
     const struct raft_server *server;
@@ -68,7 +68,7 @@ TEST_CASE(add, non_voting, params)
     return MUNIT_OK;
 }
 
-TEST_CASE(add, voting, params)
+TEST_CASE(add, voting, _params)
 {
     struct fixture *f = data;
     const struct raft_server *server;
@@ -96,7 +96,7 @@ TEST_SUITE(remove);
 TEST_SETUP(remove, setup);
 TEST_TEAR_DOWN(remove, tear_down);
 
-TEST_CASE(remove, voting, params)
+TEST_CASE(remove, voting, _params)
 {
     struct fixture *f = data;
     struct raft *raft;
