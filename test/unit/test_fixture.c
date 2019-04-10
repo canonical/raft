@@ -149,6 +149,23 @@ TEST_CASE(elect, change, NULL)
     return MUNIT_OK;
 }
 
+/* Trigger an election that re-elects the same node. */
+TEST_CASE(elect, again, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+    ELECT(0);
+    DEPOSE;
+    ASSERT_STATE(0, RAFT_FOLLOWER);
+    ASSERT_STATE(1, RAFT_FOLLOWER);
+    ASSERT_STATE(2, RAFT_FOLLOWER);
+    ELECT(0);
+    ASSERT_STATE(0, RAFT_LEADER);
+    ASSERT_STATE(1, RAFT_FOLLOWER);
+    ASSERT_STATE(2, RAFT_FOLLOWER);
+    return MUNIT_OK;
+}
+
 /******************************************************************************
  *
  * raft_fixture_step_until_applied

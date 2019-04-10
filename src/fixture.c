@@ -588,7 +588,7 @@ void raft_fixture_elect(struct raft_fixture *f, unsigned i)
      * elected, effectively preventing competition. */
     set_all_election_timeouts_except(f, ELECTION_TIMEOUT * 10, i);
 
-    raft_fixture_step_until_has_leader(f, ELECTION_TIMEOUT * 3);
+    raft_fixture_step_until_has_leader(f, ELECTION_TIMEOUT * 20);
     assert(f->leader_id == raft->id);
 
     set_all_election_timeouts_except(f, ELECTION_TIMEOUT, i);
