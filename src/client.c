@@ -30,7 +30,8 @@ int raft_apply(struct raft *r,
     /* Index of the first entry being appended. */
     index = log__last_index(&r->log) + 1;
 
-    debugf(r->io, "client request: apply %u entries starting at %lld", n, index);
+    debugf(r->io, "client request: apply %u entries starting at %lld", n,
+           index);
 
     req->index = index;
     req->cb = cb;
@@ -55,6 +56,53 @@ err_after_log_append:
     RAFT__QUEUE_REMOVE(&req->queue);
 err:
     assert(rv != 0);
+    return rv;
+}
+
+int raft_barrier(struct raft *r, struct raft_apply *req, raft_apply_cb cb)
+{
+    raft_index index;
+    struct raft_buffer buf;
+    int rv;
+
+    if (r->state != RAFT_LEADER) {
+        rv = RAFT_ERR_NOT_LEADER;
+        goto err;
+    }
+
+    /* TODO: use a completely empty buffer */
+    buf.len = 8;
+    buf.base = raft_malloc(buf.len);
+
+    if (buf.base == NULL) {
+        rv = RAFT_ENOMEM;
+        goto err;
+    }
+
+    index = log__last_index(&r->log) + 1;
+    req->index = index;
+    req->cb = cb;
+
+    rv = log__append(&r->log, r->current_term, RAFT_BARRIER, &buf, NULL);
+    if (rv != 0) {
+        goto err_after_buf_alloc;
+    }
+
+    RAFT__QUEUE_PUSH(&r->leader_state.apply_reqs, &req->queue);
+
+    rv = raft_replication__trigger(r, index);
+    if (rv != 0) {
+        goto err_after_log_append;
+    }
+
+    return 0;
+
+err_after_log_append:
+    log__discard(&r->log, index);
+    RAFT__QUEUE_REMOVE(&req->queue);
+err_after_buf_alloc:
+    raft_free(buf.base);
+err:
     return rv;
 }
 

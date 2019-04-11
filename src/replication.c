@@ -1196,22 +1196,11 @@ static void raft_replication__apply_configuration(struct raft *r,
     raft_watch__configuration_applied(r);
 }
 
-/**
- * Apply a RAFT_COMMAND entry that has been committed.
- */
-static int raft_replication__apply_command(struct raft *r,
-                                           const raft_index index,
-                                           const struct raft_buffer *buf)
+/* Fire the callback of the apply request associated with the given index */
+static void fire_apply_callback(struct raft *r, const raft_index index)
 {
-    int rv;
-    raft__queue *head;
-
-    rv = r->fsm->apply(r->fsm, buf);
-    if (rv != 0) {
-        return rv;
-    }
-
     if (r->state == RAFT_LEADER) {
+        raft__queue *head;
         struct raft_apply *req;
         RAFT__QUEUE_FOREACH(head, &r->leader_state.apply_reqs)
         {
@@ -1225,10 +1214,31 @@ static int raft_replication__apply_command(struct raft *r,
             }
         }
     }
+}
+
+/* Apply a RAFT_COMMAND entry that has been committed. */
+static int raft_replication__apply_command(struct raft *r,
+                                           const raft_index index,
+                                           const struct raft_buffer *buf)
+{
+    int rv;
+
+    rv = r->fsm->apply(r->fsm, buf);
+    if (rv != 0) {
+        return rv;
+    }
+
+    fire_apply_callback(r, index);
 
     raft_watch__command_applied(r, index);
 
     return 0;
+}
+
+static void raft_replication__apply_barrier(struct raft *r,
+                                            const raft_index index)
+{
+    fire_apply_callback(r, index);
 }
 
 static bool should_take_snapshot(struct raft *r)
@@ -1333,11 +1343,16 @@ int raft_replication__apply(struct raft *r)
         const struct raft_entry *entry = log__get(&r->log, index);
 
         assert(entry->type == RAFT_COMMAND ||
+	       entry->type == RAFT_BARRIER ||
                entry->type == RAFT_CONFIGURATION);
 
         switch (entry->type) {
             case RAFT_COMMAND:
                 rv = raft_replication__apply_command(r, index, &entry->buf);
+                break;
+            case RAFT_BARRIER:
+                raft_replication__apply_barrier(r, index);
+                rv = 0;
                 break;
             case RAFT_CONFIGURATION:
                 raft_replication__apply_configuration(r, index);

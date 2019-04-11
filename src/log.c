@@ -474,7 +474,8 @@ int log__append(struct raft_log *l,
 
     assert(l != NULL);
     assert(term > 0);
-    assert(type == RAFT_CONFIGURATION || type == RAFT_COMMAND);
+    assert(type == RAFT_CONFIGURATION || type == RAFT_BARRIER ||
+           type == RAFT_COMMAND);
     assert(buf != NULL);
 
     rv = ensure_capacity(l);
