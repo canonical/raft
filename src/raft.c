@@ -28,7 +28,6 @@ int raft_init(struct raft *r,
               const unsigned id,
               const char *address)
 {
-    int i;
     int rv;
 
     assert(r != NULL);
@@ -62,9 +61,6 @@ int raft_init(struct raft *r,
     r->snapshot.threshold = DEFAULT_SNAPSHOT_THRESHOLD;
     r->snapshot.trailing = DEFAULT_SNAPSHOT_TRAILING;
     r->snapshot.put.data = NULL;
-    for (i = 0; i < RAFT_EVENT_N; i++) {
-        r->watchers[i] = NULL;
-    }
     r->close_cb = NULL;
     rv = r->io->init(r->io, r->id, r->address);
     if (rv != 0) {
