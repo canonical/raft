@@ -60,8 +60,7 @@ libraft_la_SOURCES = \
   src/snapshot.c \
   src/start.c \
   src/state.c \
-  src/tick.c \
-  src/watch.c
+  src/tick.c
 if IO_UV
   libraft_la_SOURCES += \
   src/io_uv.c \

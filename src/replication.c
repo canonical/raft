@@ -12,7 +12,6 @@
 #include "replication.h"
 #include "snapshot.h"
 #include "state.h"
-#include "watch.h"
 
 /* Set to 1 to enable tracing. */
 #if 1
@@ -1192,8 +1191,6 @@ static void raft_replication__apply_configuration(struct raft *r,
         configuration__get(&r->configuration, r->id) == NULL) {
         convert__to_follower(r);
     }
-
-    raft_watch__configuration_applied(r);
 }
 
 /* Fire the callback of the apply request associated with the given index */
@@ -1229,8 +1226,6 @@ static int raft_replication__apply_command(struct raft *r,
     }
 
     fire_apply_callback(r, index);
-
-    raft_watch__command_applied(r, index);
 
     return 0;
 }

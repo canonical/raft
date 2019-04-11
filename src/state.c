@@ -4,7 +4,6 @@
 #include "election.h"
 #include "log.h"
 #include "queue.h"
-#include "watch.h"
 
 const char *raft_state_names[] = {"unavailable", "follower", "candidate",
                                   "leader"};

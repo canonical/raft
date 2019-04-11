@@ -7,7 +7,6 @@
 #include "logging.h"
 #include "progress.h"
 #include "heartbeat.h"
-#include "watch.h"
 
 /**
  * Number of milliseconds after which a server promotion will be aborted if the
@@ -178,8 +177,6 @@ static int leader_tick(struct raft *r, const unsigned msecs_since_last_tick)
             r->leader_state.round_index = 0;
             r->leader_state.round_number = 0;
             r->leader_state.round_duration = 0;
-
-            raft_watch__promotion_aborted(r, id);
         }
     }
 

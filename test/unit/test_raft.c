@@ -152,8 +152,6 @@ TEST_CASE(init, success, state, NULL)
 
     munit_assert_int(f->raft.election_elapsed, ==, 0);
 
-    munit_assert(f->raft.watchers[RAFT_EVENT_STATE_CHANGE] == NULL);
-
     return MUNIT_OK;
 }
 

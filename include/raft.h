@@ -562,52 +562,6 @@ struct raft_progress
 };
 
 /**
- * Event types IDs.
- */
-enum {
-    /**
-     * Fired when the server state changes.
-     *
-     * The event data is a pointer to an unsigned short integer holding the
-     * value of the previous state.
-     *
-     * The initial state is always RAFT_STATE_FOLLOWER.
-     */
-    RAFT_EVENT_STATE_CHANGE = 0,
-
-    /**
-     * Fired when a log command was committed and applied.
-     *
-     * The event data is a pointer to a @raft_index holding the index of the log
-     * entry that was applied.
-     */
-    RAFT_EVENT_COMMAND_APPLIED,
-
-    /**
-     * Fired when a new configuration was committed and applied.
-     *
-     * The event data is a pointer to the new @raft_configuration.
-     */
-    RAFT_EVENT_CONFIGURATION_APPLIED,
-
-    /**
-     * Fired after @raft_promote has been called, but the server to be promoted
-     * hasn't caught up with logs within a reasonable amount of time or if this
-     * server has lost leadership while waiting for the server to be promoted to
-     * catch up.
-     *
-     * The event data is a pointer to an unsigned int holding the ID of the
-     * server that was being promoted.
-     */
-    RAFT_EVENT_PROMOTION_ABORTED
-};
-
-/**
- * Number of available event types.
- */
-#define RAFT_EVENT_N (RAFT_EVENT_PROMOTION_ABORTED + 1)
-
-/**
  * Hold and drive the state of a single raft server in a cluster.
  */
 struct raft
@@ -787,11 +741,6 @@ struct raft
     } snapshot;
 
     /**
-     * Registered watchers.
-     */
-    void (*watchers[RAFT_EVENT_N])(void *, int, void *);
-
-    /**
      * Callback to invoke once a close request has completed.
      */
     void (*close_cb)(struct raft *r);
@@ -951,18 +900,6 @@ int raft_promote(struct raft *r, const unsigned id);
  * Remove the given server from the cluster configuration.
  */
 int raft_remove_server(struct raft *r, const unsigned id);
-
-/**
- * Register a callback to be fired upon the given event.
- *
- * The @cb callback will be invoked the next time the event with the given ID
- * occurs and will be passed back the @data pointer set on @r, the event ID and
- * a pointer to event-specific information.
- *
- * At most one callback can be registered for each event. Passing a NULL
- * callback disable notifications for that event.
- */
-void raft_watch(struct raft *r, int event, void (*cb)(void *, int, void *));
 
 /**
  * User-definable dynamic memory allocation functions.
