@@ -414,7 +414,7 @@ struct raft_io
                 raft_term *term,
                 unsigned *voted_for,
                 struct raft_snapshot **snapshot,
-		raft_index *start_index,
+                raft_index *start_index,
                 struct raft_entry *entries[],
                 size_t *n_entries);
 
@@ -874,7 +874,12 @@ const char *raft_state_name(struct raft *r);
 void raft_leader(struct raft *r, unsigned *id, const char **address);
 
 /**
- * Return the ID of the last entry that was applied to the local FSM.
+ * Return the index of the last entry that was appended to the local log.
+ */
+raft_index raft_last_index(struct raft *r);
+
+/**
+ * Return the index of the last entry that was applied to the local FSM.
  */
 raft_index raft_last_applied(struct raft *r);
 
