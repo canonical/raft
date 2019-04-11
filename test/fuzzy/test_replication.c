@@ -14,10 +14,10 @@ struct fixture
     FIXTURE_CLUSTER;
 };
 
-static char *n[] = {"3", "5", "7", NULL};
+static char *cluster_n[] = {"3", "5", "7", NULL};
 
-static MunitParameterEnum params[] = {
-    {CLUSTER_N_PARAM, n},
+static MunitParameterEnum _params[] = {
+    {CLUSTER_N_PARAM, cluster_n},
     {NULL, NULL},
 };
 
@@ -58,7 +58,7 @@ TEST_SETUP(entries, setup);
 TEST_TEAR_DOWN(entries, tear_down);
 
 /* New entries on the leader are eventually replicated to followers. */
-TEST_CASE(entries, append, params)
+TEST_CASE(entries, append, _params)
 {
     struct fixture *f = data;
     struct raft_apply *req = munit_malloc(sizeof *req);
@@ -71,7 +71,7 @@ TEST_CASE(entries, append, params)
 
 /* The cluster remains available even if the current leader dies and a new
  * leader gets elected. */
-TEST_CASE(entries, availability, params)
+TEST_CASE(entries, availability, _params)
 {
     struct fixture *f = data;
     struct raft_apply *req1 = munit_malloc(sizeof *req1);
@@ -102,7 +102,7 @@ static void apply_cb(struct raft_apply *req, int status)
 }
 
 /* If no quorum is available, entries don't get committed. */
-TEST_CASE(entries, no_quorum, params)
+TEST_CASE(entries, no_quorum, _params)
 {
     struct fixture *f = data;
     struct raft_apply *req = munit_malloc(sizeof *req);
@@ -123,7 +123,7 @@ TEST_CASE(entries, no_quorum, params)
 }
 
 /* If the cluster is partitioned, entries don't get committed. */
-TEST_CASE(entries, partitioned, params)
+TEST_CASE(entries, partitioned, _params)
 {
     struct fixture *f = data;
     struct raft_apply *req1 = munit_malloc(sizeof *req1);

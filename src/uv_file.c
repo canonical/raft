@@ -529,18 +529,20 @@ int uv__file_write(struct uv__file *f,
             case EOPNOTSUPP:
                 /* NOWAIT is not supported, fallback to sync mode */
                 f->async = false;
+                break;
             case EAGAIN:
-                /* Submitting the write would block, or NOWAIT is not
-                 * supported. Let's run this request in the threadpool. */
-                req->iocb.aio_flags &= ~IOCB_FLAG_RESFD;
-                req->iocb.aio_resfd = 0;
-                req->iocb.aio_rw_flags &= ~RWF_NOWAIT;
                 break;
             default:
                 /* Unexpected error */
                 rv = uv_translate_sys_error(errno);
                 goto err;
         }
+
+        /* Submitting the write would block, or NOWAIT is not
+         * supported. Let's run this request in the threadpool. */
+        req->iocb.aio_flags &= ~IOCB_FLAG_RESFD;
+        req->iocb.aio_resfd = 0;
+        req->iocb.aio_rw_flags &= ~RWF_NOWAIT;
     }
 #endif /* RWF_NOWAIT */
 

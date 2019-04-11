@@ -19,15 +19,15 @@
 #define SETUP_CLUSTER(N)                                  \
     SETUP_HEAP;                                           \
     {                                                     \
-        unsigned i;                                       \
+        unsigned i2;                                      \
         int rc2;                                          \
-        for (i = 0; i < N; i++) {                         \
-            test_fsm_setup(NULL, &f->fsms[i]);            \
+        for (i2 = 0; i2 < N; i2++) {                      \
+            test_fsm_setup(NULL, &f->fsms[i2]);           \
         }                                                 \
         rc2 = raft_fixture_init(&f->cluster, N, f->fsms); \
         munit_assert_int(rc2, ==, 0);                     \
-        for (i = 0; i < N; i++) {                         \
-            CLUSTER_SET_RANDOM(i, munit_rand_int_range);  \
+        for (i2 = 0; i2 < N; i2++) {                      \
+            CLUSTER_SET_RANDOM(i2, munit_rand_int_range); \
         }                                                 \
     }
 
@@ -194,17 +194,17 @@
 /**
  * Kill a majority of servers, except the leader (if there is one).
  */
-#define CLUSTER_KILL_MAJORITY                              \
-    {                                                      \
-        size_t i;                                          \
-        size_t n;                                          \
-        for (i = 0, n = 0; n < (CLUSTER_N / 2) + 1; i++) { \
-            if (i == CLUSTER_LEADER) {                     \
-                continue;                                  \
-            }                                              \
-            CLUSTER_KILL(i)                                \
-            n++;                                           \
-        }                                                  \
+#define CLUSTER_KILL_MAJORITY                                \
+    {                                                        \
+        size_t i2;                                           \
+        size_t n;                                            \
+        for (i2 = 0, n = 0; n < (CLUSTER_N / 2) + 1; i2++) { \
+            if (i2 == CLUSTER_LEADER) {                      \
+                continue;                                    \
+            }                                                \
+            CLUSTER_KILL(i2)                                 \
+            n++;                                             \
+        }                                                    \
     }
 
 /**
@@ -221,20 +221,20 @@
  * Add a new pristine server to the cluster, connected to all others. Then
  * submit a request to add it to the configuration as non-voting server.
  */
-#define CLUSTER_ADD                                                  \
-    {                                                                \
-        int rc;                                                      \
-        struct raft *raft;                                           \
-        test_fsm_setup(NULL, &f->fsms[CLUSTER_N]);                   \
-        CLUSTER_GROW;                                                \
-        rc = raft_start(CLUSTER_RAFT(CLUSTER_N - 1));                \
-        munit_assert_int(rc, ==, 0);                                 \
-        raft_fixture_set_random(&f->cluster, CLUSTER_N - 1,          \
-                                munit_rand_int_range);               \
-        raft = CLUSTER_RAFT(CLUSTER_N - 1);                          \
-        rc = raft_add_server(CLUSTER_RAFT(CLUSTER_LEADER), raft->id, \
-                             raft->address);                         \
-        munit_assert_int(rc, ==, 0);                                 \
+#define CLUSTER_ADD                                                      \
+    {                                                                    \
+        int rc;                                                          \
+        struct raft *new_raft;                                           \
+        test_fsm_setup(NULL, &f->fsms[CLUSTER_N]);                       \
+        CLUSTER_GROW;                                                    \
+        rc = raft_start(CLUSTER_RAFT(CLUSTER_N - 1));                    \
+        munit_assert_int(rc, ==, 0);                                     \
+        raft_fixture_set_random(&f->cluster, CLUSTER_N - 1,              \
+                                munit_rand_int_range);                   \
+        new_raft = CLUSTER_RAFT(CLUSTER_N - 1);                          \
+        rc = raft_add_server(CLUSTER_RAFT(CLUSTER_LEADER), new_raft->id, \
+                             new_raft->address);                         \
+        munit_assert_int(rc, ==, 0);                                     \
     }
 
 /**

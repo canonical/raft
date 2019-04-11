@@ -370,12 +370,12 @@ static void write_cb(struct uv__file_write *req, int status)
 }
 
 /* Invoke @uv__file_write and assert it returns the given code. */
-#define write__invoke(RV)                                                     \
-    {                                                                         \
-        int rv;                                                               \
-        rv = uv__file_write(&f->file, &f->req, f->bufs, f->n_bufs, f->offset, \
-                            write_cb);                                        \
-        munit_assert_int(rv, ==, RV);                                         \
+#define write__invoke(RV)                                                      \
+    {                                                                          \
+        int rv2;                                                               \
+        rv2 = uv__file_write(&f->file, &f->req, f->bufs, f->n_bufs, f->offset, \
+                             write_cb);                                        \
+        munit_assert_int(rv2, ==, RV);                                         \
     }
 
 /* Wait for a write callback to fire N times and check its last status. */

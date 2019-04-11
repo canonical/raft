@@ -14,10 +14,10 @@ struct fixture
     FIXTURE_CLUSTER;
 };
 
-static char *n[] = {"3", "5", "7", NULL};
+static char *cluster_n[] = {"3", "5", "7", NULL};
 
-static MunitParameterEnum params[] = {
-    {CLUSTER_N_PARAM, n},
+static MunitParameterEnum _params[] = {
+    {CLUSTER_N_PARAM, cluster_n},
     {NULL, NULL},
 };
 
@@ -49,7 +49,7 @@ TEST_SETUP(run, setup);
 TEST_TEAR_DOWN(run, tear_down);
 
 /* A leader is eventually elected */
-TEST_CASE(run, win, params)
+TEST_CASE(run, win, _params)
 {
     struct fixture *f = data;
     (void)params;
@@ -58,7 +58,7 @@ TEST_CASE(run, win, params)
 }
 
 /* A new leader is elected if the current one dies. */
-TEST_CASE(run, change, params)
+TEST_CASE(run, change, _params)
 {
     struct fixture *f = data;
     (void)params;
@@ -70,7 +70,7 @@ TEST_CASE(run, change, params)
 }
 
 /* If no majority of servers is online, no leader is elected. */
-TEST_CASE(run, no_quorum, params)
+TEST_CASE(run, no_quorum, _params)
 {
     struct fixture *f = data;
     (void)params;

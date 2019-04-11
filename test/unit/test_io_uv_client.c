@@ -46,11 +46,11 @@ static void send__send_cb(struct raft_io_send *req, int status)
     f->status = status;
 }
 
-#define send__invoke(RV)                                              \
-    {                                                                 \
-        int rv;                                                       \
-        rv = f->io.send(&f->io, &f->req, &f->message, send__send_cb); \
-        munit_assert_int(rv, ==, RV);                                 \
+#define send__invoke(RV)                                               \
+    {                                                                  \
+        int rv2;                                                       \
+        rv2 = f->io.send(&f->io, &f->req, &f->message, send__send_cb); \
+        munit_assert_int(rv2, ==, RV);                                 \
     }
 
 #define send__wait_cb(STATUS)                    \
@@ -325,7 +325,8 @@ TEST_CASE(error, queue, NULL)
     return MUNIT_OK;
 }
 
-static char *error_oom_heap_fault_delay[] = {"0", "1", "2", "3", "4", "5", NULL};
+static char *error_oom_heap_fault_delay[] = {"0", "1", "2", "3",
+                                             "4", "5", NULL};
 static char *error_oom_heap_fault_repeat[] = {"1", NULL};
 
 static MunitParameterEnum error_oom_params[] = {
@@ -432,4 +433,3 @@ TEST_CASE(close, connecting, NULL)
 
     return MUNIT_OK;
 }
-

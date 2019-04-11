@@ -363,6 +363,28 @@ TEST_CASE(propose, success, send_entries, NULL)
     return MUNIT_OK;
 }
 
+TEST_CASE(propose, success, barrier, NULL)
+{
+    struct propose__fixture *f = data;
+    struct raft_apply *req = munit_malloc(sizeof *req);
+    int rv;
+
+    (void)params;
+
+    test_bootstrap_and_start(&f->raft, 2, 1, 2);
+    test_become_leader(&f->raft);
+
+    req->data = f;
+
+    rv = raft_barrier(&f->raft, req, apply_cb);
+    munit_assert_int(rv, ==, 0);
+
+    /* A write log and an append entries requests has been submitted. */
+    __assert_io(f, 1, 1);
+
+    return MUNIT_OK;
+}
+
 /**
  * raft_add_server
  */

@@ -20,7 +20,7 @@
         if (alive) {                         \
             test_uv_stop(&f->loop);          \
         }                                    \
-        test_uv_tear_down(&f->loop);	     \
+        test_uv_tear_down(&f->loop);         \
     }
 
 void test_uv_setup(const MunitParameter params[], struct uv_loop_s *l);
@@ -44,16 +44,16 @@ int test_uv_run(struct uv_loop_s *l, unsigned n);
 #define test_uv_run_until(LOOP, DATA, F)                                    \
     {                                                                       \
         unsigned i;                                                         \
-        int rv;                                                             \
+        int rv2;                                                            \
         for (i = 0; i < TEST_UV_MAX_LOOP_RUN; i++) {                        \
             if (F(DATA)) {                                                  \
                 break;                                                      \
             }                                                               \
-            rv = uv_run(LOOP, UV_RUN_ONCE);                                 \
-            if (rv < 0) {                                                   \
-                munit_errorf("uv_run: %s (%d)", uv_strerror(rv), rv);       \
+            rv2 = uv_run(LOOP, UV_RUN_ONCE);                                \
+            if (rv2 < 0) {                                                  \
+                munit_errorf("uv_run: %s (%d)", uv_strerror(rv2), rv2);     \
             }                                                               \
-            if (rv == 0) {                                                  \
+            if (rv2 == 0) {                                                 \
                 if (F(DATA)) {                                              \
                     break;                                                  \
                 }                                                           \

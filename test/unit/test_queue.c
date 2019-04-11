@@ -45,11 +45,11 @@ struct __item
 #define __push(F, ITEMS)                               \
     {                                                  \
         int n = sizeof ITEMS / sizeof ITEMS[0];        \
-        int i;                                         \
+        int i2;                                        \
                                                        \
-        for (i = 0; i < n; i++) {                      \
-            struct __item *item = &items[i];           \
-            item->value = i + 1;                       \
+        for (i2 = 0; i2 < n; i2++) {                   \
+            struct __item *item = &items[i2];          \
+            item->value = i2 + 1;                      \
             RAFT__QUEUE_PUSH(&F->queue, &item->queue); \
         }                                              \
     }
@@ -314,9 +314,7 @@ TEST_CASE(foreach, zero, NULL)
 
     (void)params;
 
-    RAFT__QUEUE_FOREACH(head, &f->queue) {
-      count++;
-    }
+    RAFT__QUEUE_FOREACH(head, &f->queue) { count++; }
 
     munit_assert_int(count, ==, 0);
 
@@ -335,9 +333,7 @@ TEST_CASE(foreach, one, NULL)
 
     __push(f, items);
 
-    RAFT__QUEUE_FOREACH(head, &f->queue) {
-      count++;
-    }
+    RAFT__QUEUE_FOREACH(head, &f->queue) { count++; }
 
     munit_assert_int(count, ==, 1);
 
@@ -356,12 +352,9 @@ TEST_CASE(foreach, two, NULL)
 
     __push(f, items);
 
-    RAFT__QUEUE_FOREACH(head, &f->queue) {
-      count++;
-    }
+    RAFT__QUEUE_FOREACH(head, &f->queue) { count++; }
 
     munit_assert_int(count, ==, 2);
 
     return MUNIT_OK;
 }
-
