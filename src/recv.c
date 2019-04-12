@@ -17,7 +17,7 @@ static const char *message_descs[] = {"append entries", "append entries result",
 /* Dispatch a single RPC message to the appropriate handler. */
 static int recv(struct raft *r, struct raft_message *message)
 {
-    int rv;
+    int rv = 0;
 
     if (message->type < RAFT_IO_APPEND_ENTRIES ||
         message->type > RAFT_IO_INSTALL_SNAPSHOT) {
