@@ -378,7 +378,7 @@ TEST_CASE(connect, success, NULL)
 }
 
 /* The transport is closed immediately after a connect request as been
- * submitted. The request's callback is invoked with RAFT_ERR_IO_CANCELED. */
+ * submitted. The request's callback is invoked with RAFT_CANCELED. */
 TEST_CASE(connect, close, immediately, NULL)
 {
     struct connect_fixture *f = data;
@@ -387,7 +387,7 @@ TEST_CASE(connect, close, immediately, NULL)
 
     connect__invoke(0);
     connect__close;
-    connect__wait_cb(RAFT_ERR_IO_CANCELED);
+    connect__wait_cb(RAFT_CANCELED);
 
     return MUNIT_OK;
 }
@@ -402,7 +402,7 @@ TEST_CASE(connect, close, handshake, NULL)
     connect__invoke(0);
     connect__wait_connect_cb;
     connect__close;
-    connect__wait_cb(RAFT_ERR_IO_CANCELED);
+    connect__wait_cb(RAFT_CANCELED);
 
     return MUNIT_OK;
 }
@@ -417,7 +417,7 @@ TEST_CASE(connect, error, refused, NULL)
     connect__peer_shutdown(f);
 
     connect__invoke(0);
-    connect__wait_cb(RAFT_ERR_IO_CONNECT);
+    connect__wait_cb(RAFT_CANTCONNECT);
 
     return MUNIT_OK;
 }
@@ -440,7 +440,7 @@ TEST_CASE(connect, error, oom, connect_error_oom_params)
 
     test_heap_fault_enable(&f->heap);
 
-    connect__invoke(RAFT_ENOMEM);
+    connect__invoke(RAFT_NOMEM);
 
     return MUNIT_OK;
 }
@@ -465,7 +465,7 @@ TEST_CASE(connect, error, oom_async, connect_error_oom_async_params)
 
     test_heap_fault_enable(&f->heap);
 
-    connect__wait_cb(RAFT_ENOMEM);
+    connect__wait_cb(RAFT_NOMEM);
 
     return MUNIT_OK;
 }

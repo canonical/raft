@@ -2,8 +2,8 @@
 #include "../lib/runner.h"
 
 #include "../../src/byte.h"
-#include "../../src/io_uv.h"
 #include "../../src/io_uv_encoding.h"
+#include "../../src/uv.h"
 
 TEST_MODULE(io_uv__append);
 
@@ -484,12 +484,12 @@ TEST_TEAR_DOWN(error, tear_down);
 TEST_CASE(error, too_big, NULL)
 {
     struct fixture *f = data;
-    struct io_uv *uv = f->io.impl;
+    struct uv *uv = f->io.impl;
 
     (void)params;
 
     append_args(MAX_SEGMENT_BLOCKS, uv->block_size);
-    append_invoke(RAFT_ERR_IO_TOOBIG);
+    append_invoke(RAFT_TOOBIG);
 
     return MUNIT_OK;
 }
@@ -507,7 +507,7 @@ TEST_CASE(error, cancel, NULL)
 
     io_uv__close;
 
-    append_wait_cb(1, RAFT_ERR_IO_CANCELED);
+    append_wait_cb(1, RAFT_CANCELED);
 
     munit_assert_false(test_dir_has_file(f->dir, "open-1"));
 
@@ -527,7 +527,7 @@ TEST_CASE(error, write, NULL)
 
     test_aio_fill(&ctx, 0);
 
-    append_wait_cb(1, RAFT_ERR_IO);
+    append_wait_cb(1, RAFT_IOERR);
 
     test_aio_destroy(ctx);
 
@@ -554,7 +554,7 @@ TEST_CASE(error, oom, error_oom_params)
 
     test_heap_fault_enable(&f->heap);
 
-    append_invoke(RAFT_ENOMEM);
+    append_invoke(RAFT_NOMEM);
 
     return MUNIT_OK;
 }

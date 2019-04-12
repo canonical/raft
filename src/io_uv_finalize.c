@@ -1,13 +1,13 @@
 #include "assert.h"
-#include "io_uv.h"
+#include "logging.h"
 #include "os.h"
 #include "queue.h"
-#include "logging.h"
+#include "uv.h"
 
 struct segment
 {
-    struct io_uv *uv;
-    io_uv__counter counter; /* Segment counter */
+    struct uv *uv;
+    uvCounter counter; /* Segment counter */
     size_t used;            /* Number of used bytes */
     raft_index first_index; /* Index of first entry */
     raft_index last_index;  /* Index of last entry */
@@ -26,9 +26,9 @@ static void work_cb(uv_work_t *work);
 static void after_work_cb(uv_work_t *work, int status);
 
 /* Process pending requests to finalize open segments */
-static void process_requests(struct io_uv *uv);
+static void process_requests(struct uv *uv);
 
-int io_uv__finalize(struct io_uv *uv,
+int io_uv__finalize(struct uv *uv,
                     unsigned long long counter,
                     size_t used,
                     raft_index first_index,
@@ -36,7 +36,7 @@ int io_uv__finalize(struct io_uv *uv,
 {
     struct segment *segment;
 
-    assert(uv->state == IO_UV__ACTIVE || uv->state == IO_UV__CLOSING);
+    assert(uv->state == UV__ACTIVE || uv->state == UV__CLOSING);
 
     /* If the open segment is not empty, we expect its first index to be the
      * successor of the end index of the last segment we closed. */
@@ -48,7 +48,7 @@ int io_uv__finalize(struct io_uv *uv,
 
     segment = raft_malloc(sizeof *segment);
     if (segment == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
 
     segment->uv = uv;
@@ -69,7 +69,7 @@ int io_uv__finalize(struct io_uv *uv,
     return 0;
 }
 
-static void process_requests(struct io_uv *uv)
+static void process_requests(struct uv *uv)
 {
     struct segment *segment;
     raft__queue *head;
@@ -103,7 +103,7 @@ err:
 
 static int segment_close(struct segment *s)
 {
-    struct io_uv *uv = s->uv;
+    struct uv *uv = s->uv;
     int rv;
 
     assert(uv->finalize_work.data == NULL);
@@ -113,9 +113,9 @@ static int segment_close(struct segment *s)
 
     rv = uv_queue_work(uv->loop, &uv->finalize_work, work_cb, after_work_cb);
     if (rv != 0) {
-        errorf(uv->io, "start to truncate segment file %d: %s",
-                    s->counter, uv_strerror(rv));
-        return RAFT_ERR_IO;
+        errorf(uv->io, "start to truncate segment file %d: %s", s->counter,
+               uv_strerror(rv));
+        return RAFT_IOERR;
     }
 
     return 0;
@@ -124,7 +124,7 @@ static int segment_close(struct segment *s)
 static void work_cb(uv_work_t *work)
 {
     struct segment *s = work->data;
-    struct io_uv *uv = s->uv;
+    struct uv *uv = s->uv;
     osFilename filename1;
     osFilename filename2;
     int rv;
@@ -142,8 +142,8 @@ static void work_cb(uv_work_t *work)
     rv = osTruncate(uv->dir, filename1, s->used);
     if (rv != 0) {
         errorf(uv->io, "truncate segment file %s: %s", filename1,
-                    uv_strerror(rv));
-        rv = RAFT_ERR_IO;
+               uv_strerror(rv));
+        rv = RAFT_IOERR;
         goto abort;
     }
 
@@ -152,8 +152,8 @@ static void work_cb(uv_work_t *work)
     rv = osRename(uv->dir, filename1, filename2);
     if (rv != 0) {
         errorf(uv->io, "rename segment file %d: %s", s->counter,
-                    uv_strerror(rv));
-        rv = RAFT_ERR_IO;
+               uv_strerror(rv));
+        rv = RAFT_IOERR;
         goto abort;
     }
 
@@ -171,7 +171,7 @@ abort:
 static void after_work_cb(uv_work_t *work, int status)
 {
     struct segment *s = work->data;
-    struct io_uv *uv = s->uv;
+    struct uv *uv = s->uv;
 
     assert(status == 0); /* We don't cancel worker requests */
 

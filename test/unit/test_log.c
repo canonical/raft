@@ -678,7 +678,7 @@ TEST_CASE(append, error, oom, append_oom_params)
     buf.len = 0;
     test_heap_fault_enable(&f->heap);
     rv = log__append(&f->log, 1, RAFT_COMMAND, &buf, NULL);
-    munit_assert_int(rv, ==, RAFT_ENOMEM);
+    munit_assert_int(rv, ==, RAFT_NOMEM);
     return MUNIT_OK;
 }
 
@@ -699,7 +699,7 @@ TEST_CASE(append, error, oom_refs, NULL)
     buf.len = 0;
 
     rv = log__append(&f->log, 1, RAFT_COMMAND, &buf, NULL);
-    munit_assert_int(rv, ==, RAFT_ENOMEM);
+    munit_assert_int(rv, ==, RAFT_NOMEM);
 
     return MUNIT_OK;
 }
@@ -741,7 +741,7 @@ TEST_CASE(append_configuration, error, oom, append_configuration_oom_params)
     test_heap_fault_enable(&f->heap);
 
     rv = log__append_configuration(&f->log, 1, &configuration);
-    munit_assert_int(rv, ==, RAFT_ENOMEM);
+    munit_assert_int(rv, ==, RAFT_NOMEM);
 
     raft_configuration_close(&configuration);
 
@@ -937,7 +937,7 @@ TEST_CASE(acquire, error, oom, NULL)
     test_heap_fault_enable(&f->heap);
 
     rv = log__acquire(&f->log, 1, &entries, &n);
-    munit_assert_int(rv, ==, RAFT_ENOMEM);
+    munit_assert_int(rv, ==, RAFT_NOMEM);
 
     return MUNIT_OK;
 }
@@ -1194,7 +1194,7 @@ TEST_CASE(truncate, error, acquired_oom, truncate_acquired_oom_params)
     test_heap_fault_enable(&f->heap);
 
     rv = log__append(&f->log, 2, RAFT_COMMAND, &buf, NULL);
-    munit_assert_int(rv, ==, RAFT_ENOMEM);
+    munit_assert_int(rv, ==, RAFT_NOMEM);
 
     RELEASE(2);
 

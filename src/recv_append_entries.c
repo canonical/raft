@@ -137,7 +137,7 @@ reply:
 
     req = raft_malloc(sizeof *req);
     if (req == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
 
     debugf(r->io, "send append entries result (rejected=%llu last_index=%lld)",

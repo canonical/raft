@@ -114,7 +114,7 @@ TEST_CASE(init, error, oom, init_oom_params)
     test_heap_fault_enable(&f->heap);
 
     rv = raft_init(&raft, &io, &f->fsm, 1, "1");
-    munit_assert_int(rv, ==, RAFT_ENOMEM);
+    munit_assert_int(rv, ==, RAFT_NOMEM);
 
     raft_io_stub_close(&io);
 
@@ -176,7 +176,7 @@ TEST_CASE(start, error, io, NULL)
 
     raft_io_stub_fault(&f->io, 0, 1);
 
-    __assert_start_error(f, RAFT_ERR_IO);
+    __assert_start_error(f, RAFT_IOERR);
 
     return MUNIT_OK;
 }
@@ -194,7 +194,7 @@ TEST_CASE(start, error, self_elect_candidate_oom, NULL)
     test_heap_fault_config(&f->heap, 0, 1);
     test_heap_fault_enable(&f->heap);
 
-    __assert_start_error(f, RAFT_ENOMEM);
+    __assert_start_error(f, RAFT_NOMEM);
 
     return MUNIT_OK;
 }
@@ -212,7 +212,7 @@ TEST_CASE(start, error, self_elect_candidate_io_err, NULL)
     raft_io_stub_fault(&f->io, 0, 1);
     raft_io_stub_set_time(&f->io, 100);
 
-    __assert_start_error(f, RAFT_ERR_IO);
+    __assert_start_error(f, RAFT_IOERR);
 
     return MUNIT_OK;
 }
@@ -297,7 +297,7 @@ TEST_CASE(start, error, oom, start_oom_params)
 
     test_heap_fault_enable(&f->heap);
 
-    __assert_start_error(f, RAFT_ENOMEM);
+    __assert_start_error(f, RAFT_NOMEM);
 
     return MUNIT_OK;
 }
@@ -426,7 +426,7 @@ TEST_CASE(bootstrap, error, io, NULL)
     raft_io_stub_fault(&f->io, 0, 1);
 
     rv = raft_bootstrap(&f->raft, &configuration);
-    munit_assert_int(rv, ==, RAFT_ERR_IO);
+    munit_assert_int(rv, ==, RAFT_IOERR);
 
     raft_configuration_close(&configuration);
 

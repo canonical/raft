@@ -56,7 +56,7 @@ static int recv(struct raft *r, struct raft_message *message)
             break;
     };
 
-    if (rv != 0 && rv != RAFT_ERR_IO_CONNECT) {
+    if (rv != 0 && rv != RAFT_CANTCONNECT) {
         errorf(r->io, "recv: %s: %s", message_descs[message->type - 1],
                raft_strerror(rv));
         return rv;
@@ -167,7 +167,7 @@ int recv__update_leader(struct raft *r, unsigned id, const char *address)
         }
         copy_address(address, &r->follower_state.current_leader.address);
         if (r->follower_state.current_leader.address == NULL) {
-            return RAFT_ENOMEM;
+            return RAFT_NOMEM;
         }
     }
     return 0;

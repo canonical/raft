@@ -10,11 +10,11 @@
 #include "assert.h"
 #include "byte.h"
 #include "configuration.h"
-#include "io_uv.h"
+#include "entry.h"
 #include "io_uv_encoding.h"
-#include "os.h"
-#include "io_uv_load.h"
 #include "logging.h"
+#include "os.h"
+#include "uv.h"
 
 /* Retry to connect to peer servers every second.
  *
@@ -22,11 +22,38 @@
 #define IO_UV__CONNECT_RETRY_DELAY 1000
 
 /* Implementation of raft_io->init. */
-static int io_uv__init(struct raft_io *io, unsigned id, const char *address)
+static int uvInit(struct raft_io *io, unsigned id, const char *address)
 {
-    struct io_uv *uv;
+    struct uv *uv;
     int rv;
     uv = io->impl;
+
+    /* Ensure that the data directory exists and is accessible */
+    rv = osEnsureDir(uv->dir);
+    if (rv != 0) {
+        uvErrorf(uv, "data dir %s: %s", uv->dir, osStrError(rv));
+        rv = RAFT_IOERR;
+        goto err;
+    }
+
+    /* Load current metadata */
+    rv = uvMetadataLoad(uv, &uv->metadata);
+    if (rv != 0) {
+        goto err;
+    }
+
+    /* Detect the file system block size */
+    rv = osBlockSize(uv->dir, &uv->block_size);
+    if (rv != 0) {
+        uvErrorf(uv, "detect block size: %s", uv_strerror(rv));
+        rv = RAFT_IOERR;
+        goto err;
+    }
+
+    /* We expect the maximum segment size to be a multiple of the block size */
+    assert(UV__MAX_SEGMENT_SIZE % uv->block_size == 0);
+    uv->n_blocks = UV__MAX_SEGMENT_SIZE / uv->block_size;
+
     assert(uv->state == 0);
     uv->id = id;
     rv = uv->transport->init(uv->transport, id, address);
@@ -36,14 +63,19 @@ static int io_uv__init(struct raft_io *io, unsigned id, const char *address)
     rv = uv_timer_init(uv->loop, &uv->timer);
     assert(rv == 0); /* This should never fail */
     uv->timer.data = uv;
-    uv->state = IO_UV__ACTIVE;
+    uv->state = UV__ACTIVE;
+
     return 0;
+
+err:
+    assert(rv != 0);
+    return rv;
 }
 
 /* Periodic timer callback */
 static void timer_cb(uv_timer_t *timer)
 {
-    struct io_uv *uv;
+    struct uv *uv;
     uv = timer->data;
     if (uv->tick_cb != NULL) {
         uv->tick_cb(uv->io);
@@ -56,10 +88,10 @@ static int io_uv__start(struct raft_io *io,
                         raft_io_tick_cb tick_cb,
                         raft_io_recv_cb recv_cb)
 {
-    struct io_uv *uv;
+    struct uv *uv;
     int rv;
     uv = io->impl;
-    assert(uv->state == IO_UV__ACTIVE);
+    assert(uv->state == UV__ACTIVE);
     uv->tick_cb = tick_cb;
     uv->recv_cb = recv_cb;
     rv = io_uv__listen(uv);
@@ -71,7 +103,7 @@ static int io_uv__start(struct raft_io *io,
     return 0;
 }
 
-static bool has_pending_disk_io(struct io_uv *uv)
+static bool has_pending_disk_io(struct uv *uv)
 {
     return !RAFT__QUEUE_IS_EMPTY(&uv->append_segments) ||
            !RAFT__QUEUE_IS_EMPTY(&uv->finalize_reqs) ||
@@ -82,24 +114,24 @@ static bool has_pending_disk_io(struct io_uv *uv)
            !RAFT__QUEUE_IS_EMPTY(&uv->snapshot_get_reqs);
 }
 
-void io_uv__maybe_close(struct io_uv *uv)
+void io_uv__maybe_close(struct uv *uv)
 {
-    if (uv->state == IO_UV__ACTIVE) {
+    if (uv->state == UV__ACTIVE) {
         return;
     }
 
-    if (uv->state == IO_UV__CLOSED) {
+    if (uv->state == UV__CLOSED) {
         assert(!has_pending_disk_io(uv));
         return;
     }
 
-    assert(uv->state == IO_UV__CLOSING);
+    assert(uv->state == UV__CLOSING);
 
     if (has_pending_disk_io(uv)) {
         return;
     }
 
-    uv->state = IO_UV__CLOSED;
+    uv->state = UV__CLOSED;
     if (uv->close_cb != NULL) {
         uv->close_cb(uv->io);
     }
@@ -107,13 +139,13 @@ void io_uv__maybe_close(struct io_uv *uv)
 
 static void transport_close_cb(struct raft_uv_transport *t)
 {
-    struct io_uv *uv = t->data;
+    struct uv *uv = t->data;
     io_uv__maybe_close(uv);
 }
 
 static void timer_close_cb(uv_handle_t *handle)
 {
-    struct io_uv *uv = handle->data;
+    struct uv *uv = handle->data;
     io_uv__clients_stop(uv);
     io_uv__servers_stop(uv);
     io_uv__prepare_stop(uv);
@@ -125,12 +157,12 @@ static void timer_close_cb(uv_handle_t *handle)
 /* Implementation of raft_io->close. */
 static int io_uv__close(struct raft_io *io, void (*cb)(struct raft_io *io))
 {
-    struct io_uv *uv;
+    struct uv *uv;
     int rv;
     uv = io->impl;
-    assert(uv->state == IO_UV__ACTIVE);
+    assert(uv->state == UV__ACTIVE);
     uv->close_cb = cb;
-    uv->state = IO_UV__CLOSING;
+    uv->state = UV__CLOSING;
     rv = uv_timer_stop(&uv->timer);
     assert(rv == 0);
     /* Start the shutdown sequence by closing the timer handle. */
@@ -138,19 +170,108 @@ static int io_uv__close(struct raft_io *io, void (*cb)(struct raft_io *io))
     return 0;
 }
 
-/* Implementation of raft_io->load. */
-static int io_uv__load(struct raft_io *io,
-                       raft_term *term,
-                       unsigned *voted_for,
-                       struct raft_snapshot **snapshot,
-                       raft_index *start_index,
-                       struct raft_entry **entries,
-                       size_t *n_entries)
+/* Load the last snapshot (if any) and all entries contained in all segment
+ * files of the data directory. */
+static int loadSnapshotAndEntries(struct uv *uv,
+                                  struct raft_snapshot **snapshot,
+                                  raft_index *start_index,
+                                  struct raft_entry *entries[],
+                                  size_t *n)
 {
-    struct io_uv *uv;
+    struct uvSnapshotInfo *snapshots;
+    struct uvSegmentInfo *segments;
+    size_t n_snapshots;
+    size_t n_segments;
     raft_index last_index;
     int rv;
 
+    *snapshot = NULL;
+    *start_index = 1;
+    *entries = NULL;
+    *n = 0;
+
+    /* List available snapshots and segments. */
+    rv = uvList(uv, &snapshots, &n_snapshots, &segments, &n_segments);
+    if (rv != 0) {
+        goto err;
+    }
+
+    /* Load the most recent snapshot, if any. */
+    if (snapshots != NULL) {
+        *snapshot = raft_malloc(sizeof **snapshot);
+        if (*snapshot == NULL) {
+            rv = RAFT_NOMEM;
+            goto err;
+        }
+        rv = uvSnapshotLoad(uv, &snapshots[n_snapshots - 1], *snapshot);
+        if (rv != 0) {
+            goto err;
+        }
+        raft_free(snapshots);
+        snapshots = NULL;
+
+        last_index = (*snapshot)->index;
+        /* Update the start index. If there are closed segments on disk and the
+         * first index of the first closed segment is lower than the snapshot's
+         * last index, let's retain those entries. TODO: implement a trailing
+         * amount. */
+        if (segments != NULL && !segments[0].is_open &&
+            segments[0].first_index <= last_index) {
+            *start_index = segments[0].first_index;
+        } else {
+            *start_index = (*snapshot)->index + 1;
+        }
+    }
+
+    /* Read data from segments, closing any open segments. */
+    if (segments != NULL) {
+        rv = uvSegmentLoadAll(uv, *start_index, segments, n_segments, entries,
+                              n);
+        if (rv != 0) {
+            goto err;
+        }
+        raft_free(segments);
+        segments = NULL;
+    }
+
+    last_index = *start_index + *n - 1;
+    if (*snapshot != NULL && last_index < (*snapshot)->index) {
+        /* TODO: entries are behind the snapshot, we should delete them from
+         * disk. */
+        *start_index = (*snapshot)->index + 1;
+        entry_batches__destroy(*entries, *n);
+        *entries = NULL;
+        *n = 0;
+    }
+
+    return 0;
+
+err:
+    assert(rv != 0);
+    if (snapshots != NULL) {
+        raft_free(snapshots);
+    }
+    if (segments != NULL) {
+        raft_free(segments);
+    }
+    if (*snapshot != NULL) {
+        raft_free(*snapshot);
+    }
+    return rv;
+}
+
+/* Implementation of raft_io->load. */
+static int uvLoad(struct raft_io *io,
+                  raft_term *term,
+                  unsigned *voted_for,
+                  struct raft_snapshot **snapshot,
+                  raft_index *start_index,
+                  struct raft_entry **entries,
+                  size_t *n_entries)
+{
+    struct uv *uv;
+    raft_index last_index;
+    int rv;
     uv = io->impl;
     assert(uv->metadata.version > 0);
 
@@ -158,7 +279,7 @@ static int io_uv__load(struct raft_io *io,
     *voted_for = uv->metadata.voted_for;
     *snapshot = NULL;
 
-    rv = io_uv__load_all(uv, snapshot, start_index, entries, n_entries);
+    rv = loadSnapshotAndEntries(uv, snapshot, start_index, entries, n_entries);
     if (rv != 0) {
         return rv;
     }
@@ -180,14 +301,14 @@ static int io_uv__bootstrap(struct raft_io *io,
 /* Implementation of raft_io->set_term. */
 static int io_uv__set_term(struct raft_io *io, const raft_term term)
 {
-    struct io_uv *uv;
+    struct uv *uv;
     int rv;
     uv = io->impl;
     assert(uv->metadata.version > 0);
     uv->metadata.version++;
     uv->metadata.term = term;
     uv->metadata.voted_for = 0;
-    rv = uvMetadataStore(uv->io, uv->dir, &uv->metadata);
+    rv = uvMetadataStore(uv, &uv->metadata);
     if (rv != 0) {
         return rv;
     }
@@ -197,13 +318,13 @@ static int io_uv__set_term(struct raft_io *io, const raft_term term)
 /* Implementation of raft_io->set_term. */
 static int io_uv__set_vote(struct raft_io *io, const unsigned server_id)
 {
-    struct io_uv *uv;
+    struct uv *uv;
     int rv;
     uv = io->impl;
     assert(uv->metadata.version > 0);
     uv->metadata.version++;
     uv->metadata.voted_for = server_id;
-    rv = uvMetadataStore(uv->io, uv->dir, &uv->metadata);
+    rv = uvMetadataStore(uv, &uv->metadata);
     if (rv != 0) {
         return rv;
     }
@@ -213,7 +334,7 @@ static int io_uv__set_vote(struct raft_io *io, const unsigned server_id)
 /* Implementation of raft_io->time. */
 static raft_time io_uv__time(struct raft_io *io)
 {
-    struct io_uv *uv;
+    struct uv *uv;
     uv = io->impl;
     return uv_now(uv->loop);
 }
@@ -226,9 +347,9 @@ static int io_uv__random(struct raft_io *io, int min, int max)
 }
 
 /* Implementation of raft_io->emit. */
-static void io_uv__emit(struct raft_io *io, int level, const char *format, ...)
+static void uvEmit(struct raft_io *io, int level, const char *format, ...)
 {
-    struct io_uv *uv;
+    struct uv *uv;
     va_list args;
     uv = io->impl;
     va_start(args, format);
@@ -240,13 +361,13 @@ static void io_uv__emit(struct raft_io *io, int level, const char *format, ...)
  * Open and allocate the first closed segment, containing just one entry, and
  * return its file descriptor.
  */
-static int raft__io_uv_create_closed_1_1(struct io_uv *uv,
+static int raft__io_uv_create_closed_1_1(struct uv *uv,
                                          const struct raft_buffer *buf);
 
 /**
  * Write the first block of the first closed segment.
  */
-static int raft__io_uv_write_closed_1_1(struct io_uv *uv,
+static int raft__io_uv_write_closed_1_1(struct uv *uv,
                                         const int fd,
                                         const struct raft_buffer *buf);
 
@@ -255,23 +376,25 @@ int raft_uv_init(struct raft_io *io,
                  const char *dir,
                  struct raft_uv_transport *transport)
 {
-    struct io_uv *uv;
-    int rv;
+    struct uv *uv;
 
     assert(io != NULL);
     assert(loop != NULL);
     assert(dir != NULL);
 
+    /* Ensure that the given path doesn't exceed our static buffer limit */
+    if (strnlen(dir, OS_MAX_DIR_LEN + 1) > OS_MAX_DIR_LEN) {
+        return RAFT_NAMETOOLONG;
+    }
+
     /* Allocate the raft_io_uv object */
     uv = raft_malloc(sizeof *uv);
     if (uv == NULL) {
-        rv = RAFT_ENOMEM;
-        goto err;
+        return RAFT_NOMEM;
     }
 
     uv->io = io;
     uv->loop = loop;
-    /* TODO: check dir length */
     strcpy(uv->dir, dir);
     uv->transport = transport;
     uv->transport->data = uv;
@@ -301,42 +424,15 @@ int raft_uv_init(struct raft_io *io,
     RAFT__QUEUE_INIT(&uv->snapshot_put_reqs);
     RAFT__QUEUE_INIT(&uv->snapshot_get_reqs);
     uv->snapshot_put_work.data = NULL;
-
-    io->emit = io_uv__emit; /* Used below */
-    io->impl = uv;
-
-    /* Ensure that the data directory exists and is accessible */
-    rv = osEnsureDir(uv->dir);
-    if (rv != 0) {
-        goto err_after_uv_alloc;
-    }
-
-    /* Load current metadata */
-    rv = uvMetadataLoad(io, dir, &uv->metadata);
-    if (rv != 0) {
-        goto err_after_uv_alloc;
-    }
-
-    /* Detect the file system block size */
-    rv = uv__file_block_size(uv->dir, &uv->block_size);
-    if (rv != 0) {
-        errorf(io, "detect block size: %s", uv_strerror(rv));
-        rv = RAFT_ERR_IO;
-        goto err_after_uv_alloc;
-    }
-
-    /* We expect the maximum segment size to be a multiple of the block size */
-    assert(RAFT_UV_MAX_SEGMENT_SIZE % uv->block_size == 0);
-    uv->n_blocks = RAFT_UV_MAX_SEGMENT_SIZE / uv->block_size;
-
     uv->tick_cb = NULL;
     uv->close_cb = NULL;
 
     /* Set the raft_io implementation. */
-    io->init = io_uv__init;
+    io->impl = uv;
+    io->init = uvInit;
     io->start = io_uv__start;
     io->close = io_uv__close;
-    io->load = io_uv__load;
+    io->load = uvLoad;
     io->bootstrap = io_uv__bootstrap;
     io->set_term = io_uv__set_term;
     io->set_vote = io_uv__set_vote;
@@ -347,19 +443,14 @@ int raft_uv_init(struct raft_io *io,
     io->snapshot_get = io_uv__snapshot_get;
     io->time = io_uv__time;
     io->random = io_uv__random;
+    io->emit = uvEmit;
 
     return 0;
-
-err_after_uv_alloc:
-    raft_free(uv);
-err:
-    assert(rv != 0);
-    return rv;
 }
 
 void raft_uv_close(struct raft_io *io)
 {
-    struct io_uv *uv;
+    struct uv *uv;
     uv = io->impl;
     if (uv->clients != NULL) {
         raft_free(uv->clients);
@@ -373,7 +464,7 @@ void raft_uv_close(struct raft_io *io)
 static int io_uv__bootstrap(struct raft_io *io,
                             const struct raft_configuration *configuration)
 {
-    struct io_uv *uv;
+    struct uv *uv;
     struct raft_buffer buf;
     int rv;
 
@@ -381,7 +472,7 @@ static int io_uv__bootstrap(struct raft_io *io,
 
     /* We shouldn't have written anything else yet. */
     if (uv->metadata.term != 0) {
-        rv = RAFT_ERR_IO_NOTEMPTY;
+        rv = RAFT_NOTEMPTY;
         goto err;
     }
 
@@ -415,7 +506,7 @@ err:
     return rv;
 }
 
-static int raft__io_uv_create_closed_1_1(struct io_uv *uv,
+static int raft__io_uv_create_closed_1_1(struct uv *uv,
                                          const struct raft_buffer *buf)
 {
     osFilename filename;
@@ -428,7 +519,7 @@ static int raft__io_uv_create_closed_1_1(struct io_uv *uv,
     /* Open the file. */
     rv = osOpen(uv->dir, filename, O_WRONLY | O_CREAT | O_EXCL, &fd);
     if (rv != 0) {
-        return RAFT_ERR_IO;
+        return RAFT_IOERR;
     }
 
     /* Write the content */
@@ -447,7 +538,7 @@ static int raft__io_uv_create_closed_1_1(struct io_uv *uv,
     return 0;
 }
 
-static int raft__io_uv_write_closed_1_1(struct io_uv *uv,
+static int raft__io_uv_write_closed_1_1(struct uv *uv,
                                         const int fd,
                                         const struct raft_buffer *conf)
 {
@@ -468,19 +559,19 @@ static int raft__io_uv_write_closed_1_1(struct io_uv *uv,
           (sizeof(uint64_t) /* Format version */ +
            sizeof(uint64_t) /* Checksums */ + io_uv__sizeof_batch_header(1));
     if (conf->len > cap) {
-        return RAFT_ERR_IO_TOOBIG;
+        return RAFT_TOOBIG;
     }
 
     len = sizeof(uint64_t) * 2 + io_uv__sizeof_batch_header(1) + conf->len;
     buf = malloc(len);
     if (buf == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
     memset(buf, 0, len);
 
     cursor = buf;
 
-    byte__put64(&cursor, IO_UV__DISK_FORMAT); /* Format version */
+    byte__put64(&cursor, UV__DISK_FORMAT); /* Format version */
 
     crc1_p = cursor;
     byte__put32(&cursor, 0);
@@ -509,12 +600,12 @@ static int raft__io_uv_write_closed_1_1(struct io_uv *uv,
     if (rv == -1) {
         free(buf);
         errorf(uv->io, "write segment 1: %s", strerror(errno));
-        return RAFT_ERR_IO;
+        return RAFT_IOERR;
     }
     if (rv != (int)len) {
         free(buf);
         errorf(uv->io, "write segment 1: only %d bytes written", rv);
-        return RAFT_ERR_IO;
+        return RAFT_IOERR;
     }
 
     free(buf);
@@ -522,7 +613,7 @@ static int raft__io_uv_write_closed_1_1(struct io_uv *uv,
     rv = fsync(fd);
     if (rv == -1) {
         errorf(uv->io, "fsync segment 1: %s", strerror(errno));
-        return RAFT_ERR_IO;
+        return RAFT_IOERR;
     }
 
     return 0;

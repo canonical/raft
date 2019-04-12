@@ -3,9 +3,9 @@
 #include "../include/raft/uv.h"
 
 #include "assert.h"
-#include "io_uv.h"
 #include "io_uv_encoding.h"
 #include "logging.h"
+#include "uv.h"
 
 /* The happy path for an io_uv_send request is:
  *
@@ -50,24 +50,24 @@ enum {
 /* Maximum number of requests that can be buffered.  */
 #define QUEUE_SIZE 3
 
-struct io_uv__client
+struct uv__client
 {
-    struct io_uv *uv;                  /* libuv I/O implementation object */
-    struct uv_timer_s timer;           /* Schedule connection attempts */
+    struct uv *uv;                  /* libuv I/O implementation object */
+    struct uv_timer_s timer;        /* Schedule connection attempts */
     struct raft_uv_connect connect; /* Connection request */
-    struct uv_stream_s *stream;        /* Connection handle */
-    unsigned n_connect_attempt;        /* Consecutive connection attempts */
-    unsigned id;                       /* ID of the other server */
-    char *address;                     /* Address of the other server */
-    int state;                         /* Current client state */
-    raft__queue send_reqs;             /* Pending send message requests */
-    unsigned n_send_reqs;              /* Number of pending send requests */
+    struct uv_stream_s *stream;     /* Connection handle */
+    unsigned n_connect_attempt;     /* Consecutive connection attempts */
+    unsigned id;                    /* ID of the other server */
+    char *address;                  /* Address of the other server */
+    int state;                      /* Current client state */
+    raft__queue send_reqs;          /* Pending send message requests */
+    unsigned n_send_reqs;           /* Number of pending send requests */
 };
 
 /* Hold state for a single send RPC message request. */
 struct send
 {
-    struct io_uv__client *c;  /* Client connected to the target server */
+    struct uv__client *c;     /* Client connected to the target server */
     struct raft_io_send *req; /* Uer request */
     uv_buf_t *bufs;           /* Encoded raft RPC message to send */
     unsigned n_bufs;          /* Number of buffers */
@@ -96,8 +96,8 @@ static void copy_address(const char *address1, char **address2)
 }
 
 /* Initialize a new client associated with the given server. */
-static int client_init(struct io_uv__client *c,
-                       struct io_uv *uv,
+static int client_init(struct uv__client *c,
+                       struct uv *uv,
                        unsigned id,
                        const char *address)
 {
@@ -109,7 +109,7 @@ static int client_init(struct io_uv__client *c,
     c->id = id;
     copy_address(address, &c->address); /* Make a copy of the address string */
     if (c->address == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
     c->state = 0;
     RAFT__QUEUE_INIT(&c->send_reqs);
@@ -119,7 +119,7 @@ static int client_init(struct io_uv__client *c,
 }
 
 /* Release all memory used by a client object. */
-static void client_close(struct io_uv__client *c)
+static void client_close(struct uv__client *c)
 {
     assert(c->address != NULL);
     raft_free(c->address);
@@ -128,17 +128,17 @@ static void client_close(struct io_uv__client *c)
 /* Final callback in the close chain of an io_uv__client object */
 static void timer_close_cb(struct uv_handle_s *handle)
 {
-    struct io_uv__client *c = handle->data;
+    struct uv__client *c = handle->data;
     client_close(c);
     raft_free(c);
 }
 
 /* Invoked once an encoded RPC message has been written out. */
-static void client_connect(struct io_uv__client *c);
+static void client_connect(struct uv__client *c);
 static void client_write_cb(struct uv_write_s *write, const int status)
 {
     struct send *r = write->data;
-    struct io_uv__client *c = r->c;
+    struct uv__client *c = r->c;
     int cb_status = 0;
 
     tracef(c, "message write completed -> status %d", status);
@@ -147,7 +147,7 @@ static void client_write_cb(struct uv_write_s *write, const int status)
      * the stream handle, and trigger a new connection
      * attempt. */
     if (status != 0) {
-        cb_status = RAFT_ERR_IO;
+        cb_status = RAFT_IOERR;
         if (c->state == CONNECTED) {
             assert(status != UV_ECANCELED);
             assert(c->stream != NULL);
@@ -156,7 +156,7 @@ static void client_write_cb(struct uv_write_s *write, const int status)
             c->state = CONNECTING;
             client_connect(c); /* Trigger a new connection attempt. */
         } else if (status == UV_ECANCELED) {
-            cb_status = RAFT_ERR_IO_CANCELED;
+            cb_status = RAFT_CANCELED;
         }
     }
 
@@ -168,7 +168,7 @@ static void client_write_cb(struct uv_write_s *write, const int status)
     raft_free(r);
 }
 
-int io_uv__client_send(struct io_uv__client *c, struct send *r)
+int io_uv__client_send(struct uv__client *c, struct send *r)
 {
     int rv;
     assert(c->state == CONNECTED || c->state == DELAY ||
@@ -186,7 +186,7 @@ int io_uv__client_send(struct io_uv__client *c, struct send *r)
             head = RAFT__QUEUE_HEAD(&c->send_reqs);
             r2 = RAFT__QUEUE_DATA(head, struct send, queue);
             RAFT__QUEUE_REMOVE(head);
-            r2->req->cb(r2->req, RAFT_ERR_IO_CONNECT);
+            r2->req->cb(r2->req, RAFT_CANTCONNECT);
             send_close(r2);
             raft_free(r2);
             c->n_send_reqs--;
@@ -203,7 +203,7 @@ int io_uv__client_send(struct io_uv__client *c, struct send *r)
     if (rv != 0) {
         tracef(c, "write message failed -> rv %d", rv);
         /* UNTESTED: what are the error conditions? perhaps ENOMEM */
-        return RAFT_ERR_IO;
+        return RAFT_IOERR;
     }
     r->write.data = r;
 
@@ -212,7 +212,7 @@ int io_uv__client_send(struct io_uv__client *c, struct send *r)
 
 /* Try to execute all send requests that were blocked in the queue waiting for a
  * connection. */
-static void client_flush_queue(struct io_uv__client *c)
+static void client_flush_queue(struct uv__client *c)
 {
     int rv;
     assert(c->state == CONNECTED);
@@ -238,7 +238,7 @@ static void client_flush_queue(struct io_uv__client *c)
 
 static void client_timer_cb(uv_timer_t *timer)
 {
-    struct io_uv__client *c = timer->data;
+    struct uv__client *c = timer->data;
     assert(c->state == DELAY);
     assert(c->stream == NULL);
     tracef(c, "timer expired -> attempt to reconnect");
@@ -249,7 +249,7 @@ static void client_connect_cb(struct raft_uv_connect *req,
                               struct uv_stream_s *stream,
                               int status)
 {
-    struct io_uv__client *c = req->data;
+    struct uv__client *c = req->data;
     int level = RAFT_DEBUG;
     int rv;
 
@@ -260,7 +260,7 @@ static void client_connect_cb(struct raft_uv_connect *req,
 
     /* If the transport has been closed before the connection was fully setup,
      * it means that we're shutting down: let's bail out. */
-    if (status == RAFT_ERR_IO_CANCELED) {
+    if (status == RAFT_CANCELED) {
         /* We must be careful to not reference c->uv, since that io_uv object
          * might have been released already. */
         assert(stream == NULL);
@@ -299,7 +299,7 @@ static void client_connect_cb(struct raft_uv_connect *req,
 }
 
 /* Perform a single connection attempt, scheduling a retry if it fails. */
-static void client_connect(struct io_uv__client *c)
+static void client_connect(struct uv__client *c)
 {
     int rv;
     assert(c->stream == NULL);
@@ -320,7 +320,7 @@ static void client_connect(struct io_uv__client *c)
 }
 
 /* Start the client by making the first connection attempt. */
-static void client_start(struct io_uv__client *c)
+static void client_start(struct uv__client *c)
 {
     int rv;
     assert(c->state == 0);
@@ -330,12 +330,12 @@ static void client_start(struct io_uv__client *c)
     client_connect(c); /* Make a first connection attempt right away. */
 }
 
-static int client_get(struct io_uv *uv,
+static int client_get(struct uv *uv,
                       const unsigned id,
                       const char *address,
-                      struct io_uv__client **client)
+                      struct uv__client **client)
 {
-    struct io_uv__client **clients;
+    struct uv__client **clients;
     unsigned n_clients;
     unsigned i;
     int rv;
@@ -357,7 +357,7 @@ static int client_get(struct io_uv *uv,
     n_clients = uv->n_clients + 1;
     clients = raft_realloc(uv->clients, n_clients * sizeof *clients);
     if (clients == NULL) {
-        rv = RAFT_ENOMEM;
+        rv = RAFT_NOMEM;
         goto err;
     }
 
@@ -367,7 +367,7 @@ static int client_get(struct io_uv *uv,
     /* Initialize the new connection */
     *client = raft_malloc(sizeof **client);
     if (*client == NULL) {
-        rv = RAFT_ENOMEM;
+        rv = RAFT_NOMEM;
         goto err_after_clients_realloc;
     }
 
@@ -402,17 +402,17 @@ int io_uv__send(struct raft_io *io,
                 const struct raft_message *message,
                 raft_io_send_cb cb)
 {
-    struct io_uv *uv = io->impl;
+    struct uv *uv = io->impl;
     struct send *r;
-    struct io_uv__client *c;
+    struct uv__client *c;
     int rv;
 
-    assert(uv->state == IO_UV__ACTIVE);
+    assert(uv->state == UV__ACTIVE);
 
     /* Allocate a new request object. */
     r = raft_malloc(sizeof *r);
     if (r == NULL) {
-        rv = RAFT_ENOMEM;
+        rv = RAFT_NOMEM;
         goto err;
     }
 
@@ -452,12 +452,12 @@ err:
 
 static void stream_close_cb(struct uv_handle_s *handle)
 {
-    struct io_uv__client *c = handle->data;
+    struct uv__client *c = handle->data;
     raft_free(handle);
     uv_close((struct uv_handle_s *)&c->timer, timer_close_cb);
 }
 
-static void client_stop(struct io_uv__client *c)
+static void client_stop(struct uv__client *c)
 {
     int rv;
 
@@ -470,7 +470,7 @@ static void client_stop(struct io_uv__client *c)
         r = RAFT__QUEUE_DATA(head, struct send, queue);
         RAFT__QUEUE_REMOVE(head);
         if (r->req->cb != NULL) {
-            r->req->cb(r->req, RAFT_ERR_IO_CANCELED);
+            r->req->cb(r->req, RAFT_CANCELED);
         }
         send_close(r);
         raft_free(r);
@@ -506,7 +506,7 @@ out:
     c->state = CLOSING;
 }
 
-void io_uv__clients_stop(struct io_uv *uv)
+void io_uv__clients_stop(struct uv *uv)
 {
     unsigned i;
     for (i = 0; i < uv->n_clients; i++) {

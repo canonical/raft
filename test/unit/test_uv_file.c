@@ -3,6 +3,7 @@
 #include "../lib/uv.h"
 
 #include "../../src/aio.h"
+#include "../../src/os.h"
 #include "../../src/uv_file.h"
 
 TEST_MODULE(uv__file);
@@ -20,16 +21,16 @@ TEST_MODULE(uv__file);
     struct uv__file file; \
     bool closed;
 
-#define SETUP_FILE                                    \
-    int rv;                                           \
-    (void)user_data;                                  \
-    SETUP_DIR;                                        \
-    SETUP_UV;                                         \
-    rv = uv__file_block_size(f->dir, &f->block_size); \
-    munit_assert_int(rv, ==, 0);                      \
-    rv = uv__file_init(&f->file, &f->loop);           \
-    munit_assert_int(rv, ==, 0);                      \
-    f->file.data = f;                                 \
+#define SETUP_FILE                            \
+    int rv;                                   \
+    (void)user_data;                          \
+    SETUP_DIR;                                \
+    SETUP_UV;                                 \
+    rv = osBlockSize(f->dir, &f->block_size); \
+    munit_assert_int(rv, ==, 0);              \
+    rv = uv__file_init(&f->file, &f->loop);   \
+    munit_assert_int(rv, ==, 0);              \
+    f->file.data = f;                         \
     f->closed = false;
 
 #define TEAR_DOWN_FILE                  \
@@ -38,17 +39,6 @@ TEST_MODULE(uv__file);
     }                                   \
     TEAR_DOWN_UV;                       \
     TEAR_DOWN_DIR;
-
-/**
- * Invoke @uv__file_block_size and assert that it returns the given code.
- */
-#define BLOCK_SIZE__INVOKE(RV)                   \
-    {                                            \
-        size_t size;                             \
-        int rv;                                  \
-        rv = uv__file_block_size(f->dir, &size); \
-        munit_assert_int(rv, ==, RV);            \
-    }
 
 /**
  * Invoke @uv__file_create and assert that it returns the given code.
@@ -60,87 +50,6 @@ TEST_MODULE(uv__file);
                              f->max_n_writes, create__cb);        \
         munit_assert_int(rv, ==, RV);                             \
     }
-
-/******************************************************************************
- *
- * uv__file_block_size
- *
- *****************************************************************************/
-
-TEST_SUITE(block_size);
-
-struct block_size_fixture
-{
-    FIXTURE_DIR;
-    FIXTURE_UV;
-};
-
-TEST_SETUP(block_size)
-{
-    struct block_size_fixture *f = munit_malloc(sizeof *f);
-    (void)user_data;
-    SETUP_DIR;
-    SETUP_UV;
-    return f;
-}
-
-TEST_TEAR_DOWN(block_size)
-{
-    struct block_size_fixture *f = data;
-    TEAR_DOWN_UV;
-    TEAR_DOWN_DIR;
-    free(f);
-}
-
-TEST_GROUP(block_size, error)
-
-/* If the given path is not executable, the block size of the underlying file
- * system can't be determined and an error is returned. */
-#if defined(RWF_NOWAIT)
-TEST_CASE(block_size, error, no_access, NULL)
-{
-    struct block_size_fixture *f = data;
-
-    (void)params;
-
-    test_dir_unexecutable(f->dir);
-
-    BLOCK_SIZE__INVOKE(UV_EACCES);
-
-    return MUNIT_OK;
-}
-
-/* No space is left on the target device. */
-TEST_CASE(block_size, error, no_space, dir_fs_btrfs_params)
-{
-    struct block_size_fixture *f = data;
-
-    (void)params;
-
-    test_dir_fill(f->dir, 0);
-
-    BLOCK_SIZE__INVOKE(UV_ENOSPC);
-
-    return MUNIT_OK;
-}
-
-/* The io_setup() call fails with EAGAIN. */
-TEST_CASE(block_size, error, no_resources, dir_fs_btrfs_params)
-{
-    struct block_size_fixture *f = data;
-    aio_context_t ctx = 0;
-
-    (void)params;
-
-    test_aio_fill(&ctx, 0);
-
-    BLOCK_SIZE__INVOKE(UV_EAGAIN);
-
-    test_aio_destroy(ctx);
-
-    return MUNIT_OK;
-}
-#endif /* RWF_NOWAIT */
 
 /******************************************************************************
  *

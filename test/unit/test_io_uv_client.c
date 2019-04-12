@@ -3,7 +3,7 @@
 #include "../lib/io_uv.h"
 #include "../lib/runner.h"
 
-#include "../../src/io_uv.h"
+#include "../../src/uv.h"
 
 TEST_MODULE(io_uv_send);
 
@@ -71,7 +71,7 @@ static void send__send_cb(struct raft_io_send *req, int status)
 
 #define send__set_connect_retry_delay(MSECS) \
     {                                        \
-        struct io_uv *uv = f->io.impl;       \
+        struct uv *uv = f->io.impl;          \
         uv->connect_retry_delay = 1;         \
     }
 
@@ -276,7 +276,7 @@ TEST_CASE(error, bad_message, NULL)
 
     send__set_message_type(666);
 
-    send__invoke(RAFT_ERR_IO_MALFORMED);
+    send__invoke(RAFT_MALFORMED);
 
     return MUNIT_OK;
 }
@@ -297,7 +297,7 @@ TEST_CASE(error, reconnect, NULL)
     close(socket);
 
     send__invoke(0);
-    send__wait_cb(RAFT_ERR_IO);
+    send__wait_cb(RAFT_IOERR);
 
     send__invoke(0);
     send__wait_cb(0);
@@ -306,7 +306,7 @@ TEST_CASE(error, reconnect, NULL)
 }
 
 /* If there's no more space in the queue of pending requests, the oldest request
- * gets evicted and its callback fired with RAFT_ERR_IO_CONNECT. */
+ * gets evicted and its callback fired with RAFT_CANTCONNECT. */
 TEST_CASE(error, queue, NULL)
 {
     struct fixture *f = data;
@@ -320,7 +320,7 @@ TEST_CASE(error, queue, NULL)
     send__invoke(0);
     send__invoke(0);
 
-    send__wait_cb(RAFT_ERR_IO_CONNECT);
+    send__wait_cb(RAFT_CANTCONNECT);
 
     return MUNIT_OK;
 }
@@ -344,7 +344,7 @@ TEST_CASE(error, oom, error_oom_params)
 
     test_heap_fault_enable(&f->heap);
 
-    send__invoke(RAFT_ENOMEM);
+    send__invoke(RAFT_NOMEM);
 
     return MUNIT_OK;
 }
@@ -412,7 +412,7 @@ TEST_CASE(close, writing, NULL)
 
     io_uv__close;
 
-    send__wait_cb(RAFT_ERR_IO_CANCELED);
+    send__wait_cb(RAFT_CANCELED);
 
     raft_free(entry.buf.base);
 
@@ -429,7 +429,7 @@ TEST_CASE(close, connecting, NULL)
     send__invoke(0);
     io_uv__close;
 
-    send__wait_cb(RAFT_ERR_IO_CANCELED);
+    send__wait_cb(RAFT_CANCELED);
 
     return MUNIT_OK;
 }

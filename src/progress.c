@@ -36,7 +36,7 @@ int progress__build_array(struct raft *r)
     raft_index last_index = log__last_index(&r->log);
     p = raft_malloc(r->configuration.n * sizeof *p);
     if (p == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
     for (i = 0; i < r->configuration.n; i++) {
         init_progress(&p[i], last_index);
@@ -54,7 +54,7 @@ int progress__rebuild_array(struct raft *r,
 
     p = raft_malloc(configuration->n * sizeof *p);
     if (p == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
 
     /* First copy the progress information for the servers that exists both in

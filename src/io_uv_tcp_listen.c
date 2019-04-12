@@ -36,7 +36,7 @@ struct handshake
 /* Hold handshake data for a new connection being established. */
 struct conn
 {
-    struct io_uv__tcp *t;       /* Transport implementation */
+    struct uv__tcp *t;          /* Transport implementation */
     struct uv_tcp_s *tcp;       /* TCP connection socket handle */
     struct handshake handshake; /* Handshake data */
     raft__queue queue;          /* Pending accept queue */
@@ -61,12 +61,12 @@ static int decode_preamble(struct handshake *h)
     uint64_t protocol;
     protocol = byte__flip64(h->preamble[0]);
     if (protocol != TCP_TRANSPORT__HANDSHAKE_PROTOCOL) {
-        return RAFT_ERR_IO_MALFORMED;
+        return RAFT_MALFORMED;
     }
     h->address.len = byte__flip64(h->preamble[2]);
     h->address.base = raft_malloc(h->address.len);
     if (h->address.base == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
     h->nread = 0;
     return 0;
@@ -208,7 +208,7 @@ static int conn_start_handshake(struct conn *c)
 
     c->tcp = raft_malloc(sizeof *c->tcp);
     if (c->tcp == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
     c->tcp->data = c;
     rv = uv_tcp_init(c->t->loop, c->tcp);
@@ -217,7 +217,7 @@ static int conn_start_handshake(struct conn *c)
     rv = uv_accept((struct uv_stream_s *)&c->t->listener,
                    (struct uv_stream_s *)c->tcp);
     if (rv != 0) {
-        rv = RAFT_ERR_IO;
+        rv = RAFT_IOERR;
         goto err_after_client_init;
     }
 
@@ -237,20 +237,20 @@ err_after_client_init:
  * and start receiving handshake data. */
 static void listen_cb(struct uv_stream_s *stream, int status)
 {
-    struct io_uv__tcp *t = stream->data;
+    struct uv__tcp *t = stream->data;
     struct conn *c;
     int rv;
 
     assert(stream == (struct uv_stream_s *)&t->listener);
 
     if (status < 0) {
-        rv = RAFT_ERR_IO;
+        rv = RAFT_IOERR;
         goto err;
     }
 
     c = raft_malloc(sizeof *c);
     if (c == NULL) {
-        rv = RAFT_ENOMEM;
+        rv = RAFT_NOMEM;
         goto err;
     }
     c->t = t;
@@ -271,10 +271,9 @@ err:
     assert(rv != 0);
 }
 
-int io_uv__tcp_listen(struct raft_uv_transport *transport,
-                      raft_uv_accept_cb cb)
+int io_uv__tcp_listen(struct raft_uv_transport *transport, raft_uv_accept_cb cb)
 {
-    struct io_uv__tcp *t;
+    struct uv__tcp *t;
     struct sockaddr_in addr;
     int rv;
 
@@ -288,18 +287,18 @@ int io_uv__tcp_listen(struct raft_uv_transport *transport,
     rv = uv_tcp_bind(&t->listener, (const struct sockaddr *)&addr, 0);
     if (rv != 0) {
         /* UNTESTED: what are the error conditions? */
-        return RAFT_ERR_IO;
+        return RAFT_IOERR;
     }
     rv = uv_listen((uv_stream_t *)&t->listener, 1, listen_cb);
     if (rv != 0) {
         /* UNTESTED: what are the error conditions? */
-        return RAFT_ERR_IO;
+        return RAFT_IOERR;
     }
 
     return 0;
 }
 
-void io_uv__tcp_listen_stop(struct io_uv__tcp *t)
+void io_uv__tcp_listen_stop(struct uv__tcp *t)
 {
     /* Abort all connections currently being accepted */
     while (!RAFT__QUEUE_IS_EMPTY(&t->accept_conns)) {

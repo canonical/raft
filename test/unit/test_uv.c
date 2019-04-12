@@ -10,7 +10,7 @@
 #include "../lib/tcp.h"
 #include "../lib/uv.h"
 
-TEST_MODULE(io_uv);
+TEST_MODULE(uv);
 
 /**
  * Helpers
@@ -178,32 +178,6 @@ TEST_SUITE(init);
 TEST_SETUP(init, setup);
 TEST_TEAR_DOWN(init, tear_down);
 
-static char *init_oom_heap_fault_delay[] = {"0", NULL};
-static char *init_oom_heap_fault_repeat[] = {"1", NULL};
-
-static MunitParameterEnum init_oom_params[] = {
-    {TEST_HEAP_FAULT_DELAY, init_oom_heap_fault_delay},
-    {TEST_HEAP_FAULT_REPEAT, init_oom_heap_fault_repeat},
-    {NULL, NULL},
-};
-
-/* Out of memory conditions. */
-TEST_CASE(init, oom, init_oom_params)
-{
-    struct fixture *f = data;
-    struct raft_io io;
-    int rv;
-
-    (void)params;
-
-    test_heap_fault_enable(&f->heap);
-
-    rv = raft_uv_init(&io, &f->loop, f->dir, &f->transport);
-    munit_assert_int(rv, ==, RAFT_ENOMEM);
-
-    return MUNIT_OK;
-}
-
 /* The given path is not a directory. */
 TEST_CASE(init, not_a_dir, NULL)
 {
@@ -215,7 +189,7 @@ TEST_CASE(init, not_a_dir, NULL)
     (void)params;
 
     rv = raft_uv_init(&io, &f->loop, "/dev/null", &f->transport);
-    munit_assert_int(rv, ==, RAFT_ERR_IO);
+    munit_assert_int(rv, ==, RAFT_IOERR);
 
     return MUNIT_OK;
 }
@@ -236,7 +210,7 @@ TEST_CASE(init, dir_too_long, NULL)
     dir[sizeof dir - 1] = 0;
 
     rv = raft_uv_init(&io, &f->loop, dir, &transport);
-    munit_assert_int(rv, ==, ENAMETOOLONG);
+    munit_assert_int(rv, ==, RAFT_NAMETOOLONG);
 
     return MUNIT_OK;
 }
@@ -254,7 +228,12 @@ TEST_CASE(init, cant_create_dir, NULL)
     const char *dir = "/non/existing/path";
 
     rv = raft_uv_init(&io, &f->loop, dir, &transport);
-    munit_assert_int(rv, ==, ENOENT);
+    munit_assert_int(rv, ==, 0);
+
+    rv = io.init(&io, 1, "1");
+    munit_assert_int(rv, ==, RAFT_IOERR);
+
+    raft_uv_close(&io);
 
     return MUNIT_OK;
 }
@@ -272,7 +251,12 @@ TEST_CASE(init, access_error, NULL)
     const char *dir = "/root/foo";
 
     rv = raft_uv_init(&io, &f->loop, dir, &transport);
+    munit_assert_int(rv, ==, 0);
+
+    rv = io.init(&io, 1, "1");
     munit_assert_int(rv, ==, EACCES);
+
+    raft_uv_close(&io);
 
     return MUNIT_OK;
 }

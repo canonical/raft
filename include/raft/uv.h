@@ -5,8 +5,6 @@
 
 #include "../raft.h"
 
-#define RAFT_UV_MAX_SEGMENT_SIZE (8 * 1024 * 1024) /* 8 Megabytes */
-
 struct raft_uv_transport;
 
 /**
@@ -25,8 +23,7 @@ struct raft_uv_transport;
  * contiguous entries that are part of the log. Closed segments are never
  * written to again (but may be renamed and truncated if a suffix of the log is
  * truncated). Open segments are where newly appended entries go. Once an open
- * segment reaches #RAFT_UV_MAX_SEGMENT_SIZE, it is closed and a new one is
- * used.
+ * segment reaches the maximum allowed size, it is closed and a new one is used.
  *
  * Metadata files are named "metadata1" and "metadata2". The code alternates
  * between these so that there is always at least one readable metadata file.
@@ -39,7 +36,7 @@ struct raft_uv_transport;
  * [8 bytes] Current term.
  * [8 bytes] ID of server we voted for.
  *
- * Closed segments are named by the format string "%020lu-%020lu" with their
+ * Closed segments are named by the format string "%lu-%lu" with their
  * start and end indexes, both inclusive. Closed segments always contain at
  * least one entry; the end index is always at least as large as the start
  * index. Closed segment files may occasionally include data past their
@@ -173,7 +170,7 @@ struct raft_uv_transport
      *   must not be invoked anymore.
      *
      * - Abort all pending @connect requests. The callback of each pending
-     *   request must be invoked with #RAFT_ERR_IO_CANCELED.
+     *   request must be invoked with #RAFT_CANCELED.
      *
      * - Invoke the @cb callback passed to this method once it's safe to release
      *   the memory of the transport object.

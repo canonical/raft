@@ -1,7 +1,7 @@
 #include "../lib/io_uv.h"
 #include "../lib/runner.h"
 
-#include "../../src/io_uv.h"
+#include "../../src/uv.h"
 
 TEST_MODULE(io_uv__finalize);
 
@@ -12,7 +12,7 @@ TEST_MODULE(io_uv__finalize);
 struct fixture
 {
     IO_UV_FIXTURE;
-    io_uv__counter counter;
+    uvCounter counter;
     size_t used;
     raft_index first_index;
     raft_index last_index;
@@ -149,7 +149,7 @@ TEST_CASE(error, oom, error_oom_params)
 
     test_heap_fault_enable(&f->heap);
 
-    invoke(RAFT_ENOMEM);
+    invoke(RAFT_NOMEM);
 
     return MUNIT_OK;
 }

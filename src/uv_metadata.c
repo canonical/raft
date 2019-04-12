@@ -4,11 +4,7 @@
 
 #include "assert.h"
 #include "byte.h"
-#include "logging.h"
-#include "uv_metadata.h"
-
-/* Current on-disk format version. */
-#define FORMAT 1
+#include "uv.h"
 
 /* Format, version, term, vote */
 #define SIZE (8 * 4)
@@ -17,7 +13,7 @@
 static void encode(const struct uvMetadata *metadata, void *buf)
 {
     void *cursor = buf;
-    byte__put64(&cursor, FORMAT);
+    byte__put64(&cursor, UV__DISK_FORMAT);
     byte__put64(&cursor, metadata->version);
     byte__put64(&cursor, metadata->term);
     byte__put64(&cursor, metadata->voted_for);
@@ -29,8 +25,8 @@ static int decode(const void *buf, struct uvMetadata *metadata)
     const void *cursor = buf;
     unsigned format;
     format = byte__get64(&cursor);
-    if (format != FORMAT) {
-        return EPROTO;
+    if (format != UV__DISK_FORMAT) {
+        return RAFT_MALFORMED;
     }
     metadata->version = byte__get64(&cursor);
     metadata->term = byte__get64(&cursor);
@@ -46,8 +42,7 @@ static void filenameOf(const unsigned short n, osFilename filename)
 
 /* Read the n'th metadata file (with n equal to 1 or 2) and decode the content
  * of the file, populating the given metadata buffer accordingly. */
-static int loadFile(struct raft_io *io,
-                    const osDir dir,
+static int loadFile(struct uv *uv,
                     const unsigned short n,
                     struct uvMetadata *metadata)
 {
@@ -62,11 +57,11 @@ static int loadFile(struct raft_io *io,
     filenameOf(n, filename);
 
     /* Open the metadata file, if it exists. */
-    rv = osOpen(dir, filename, O_RDONLY, &fd);
+    rv = osOpen(uv->dir, filename, O_RDONLY, &fd);
     if (rv != 0) {
         if (rv != ENOENT) {
-            errorf(io, "load %s: %s", filename, osStrError(rv));
-            return rv;
+            uvErrorf(uv, "open %s: %s", filename, osStrError(rv));
+            return RAFT_IOERR;
         }
         /* The file does not exist, just return. */
         metadata->version = 0;
@@ -77,8 +72,8 @@ static int loadFile(struct raft_io *io,
     rv = osReadN(fd, buf, sizeof buf);
     if (rv != 0) {
         if (rv != ENODATA) {
-            errorf(io, "read %s: %s", filename, osStrError(rv));
-            return rv;
+            uvErrorf(uv, "read %s: %s", filename, osStrError(rv));
+            return RAFT_IOERR;
         }
         /* Assume that the server crashed while writing this metadata file, and
          * pretend it has not been written at all. */
@@ -92,15 +87,15 @@ static int loadFile(struct raft_io *io,
     /* Decode the content of the metadata file. */
     rv = decode(buf, metadata);
     if (rv != 0) {
-        assert(rv == EPROTO);
-        errorf(io, "decode %s: bad format version", filename);
+        assert(rv == RAFT_MALFORMED);
+        uvErrorf(uv, "load %s: bad format version", filename);
         return rv;
     }
 
     /* Sanity checks that values make sense */
     if (metadata->version == 0) {
-        errorf(io, "metadata %s: version is set to zero", filename);
-        return EPROTO;
+        uvErrorf(uv, "load %s: version is set to zero", filename);
+        return RAFT_CORRUPT;
     }
 
     return 0;
@@ -108,9 +103,7 @@ static int loadFile(struct raft_io *io,
 
 /* Update both metadata files using the given one as seed, so they are created
  * if they didn't exist. */
-static int ensure(struct raft_io *io,
-                  const char *dir,
-                  struct uvMetadata *metadata)
+static int ensure(struct uv *uv, struct uvMetadata *metadata)
 {
     int i;
     int rv;
@@ -119,17 +112,17 @@ static int ensure(struct raft_io *io,
      * exist. Also sync the data directory so the entries get created. */
     for (i = 0; i < 2; i++) {
         metadata->version++;
-        rv = uvMetadataStore(io, dir, metadata);
+        rv = uvMetadataStore(uv, metadata);
         if (rv != 0) {
             return rv;
         }
     }
 
     /* Also sync the data directory so the entries get created. */
-    rv = osSyncDir(dir);
+    rv = osSyncDir(uv->dir);
     if (rv != 0) {
-        errorf(io, "sync dir %s: %s", dir, osStrError(rv));
-        return rv;
+        uvErrorf(uv, "sync %s: %s", uv->dir, osStrError(rv));
+        return RAFT_IOERR;
     }
 
     return 0;
@@ -141,21 +134,19 @@ static int indexOf(int version)
     return version % 2 == 1 ? 1 : 2;
 }
 
-int uvMetadataLoad(struct raft_io *io,
-                   const osDir dir,
-                   struct uvMetadata *metadata)
+int uvMetadataLoad(struct uv *uv, struct uvMetadata *metadata)
 {
     struct uvMetadata metadata1;
     struct uvMetadata metadata2;
     int rv;
 
     /* Read the two metadata files (if available). */
-    rv = loadFile(io, dir, 1, &metadata1);
+    rv = loadFile(uv, 1, &metadata1);
     if (rv != 0) {
         return rv;
     }
 
-    rv = loadFile(io, dir, 2, &metadata2);
+    rv = loadFile(uv, 2, &metadata2);
     if (rv != 0) {
         return rv;
     }
@@ -168,9 +159,9 @@ int uvMetadataLoad(struct raft_io *io,
         metadata->voted_for = 0;
     } else if (metadata1.version == metadata2.version) {
         /* The two metadata files can't have the same version. */
-        errorf(io, "metadata1 and metadata2 are both at version %d",
-               metadata1.version);
-        return EPROTO;
+        uvErrorf(uv, "metadata1 and metadata2 are both at version %d",
+                 metadata1.version);
+        return RAFT_CORRUPT;
     } else {
         /* Pick the metadata with the grater version. */
         if (metadata1.version > metadata2.version) {
@@ -181,7 +172,7 @@ int uvMetadataLoad(struct raft_io *io,
     }
 
     /* Update the metadata files, so they are created if they did not exist. */
-    rv = ensure(io, dir, metadata);
+    rv = ensure(uv, metadata);
     if (rv != 0) {
         return rv;
     }
@@ -189,9 +180,7 @@ int uvMetadataLoad(struct raft_io *io,
     return 0;
 }
 
-int uvMetadataStore(struct raft_io *io,
-                    const osDir dir,
-                    const struct uvMetadata *metadata)
+int uvMetadataStore(struct uv *uv, const struct uvMetadata *metadata)
 {
     osFilename filename; /* Filename of the metadata file */
     uint8_t buf[SIZE];   /* Content of metadata file */
@@ -210,18 +199,17 @@ int uvMetadataStore(struct raft_io *io,
     filenameOf(n, filename);
 
     /* Write the metadata file, creating it if it does not exist. */
-    rv = osOpen(dir, filename, flags, &fd);
+    rv = osOpen(uv->dir, filename, flags, &fd);
     if (rv != 0) {
-        errorf(io, "open %s: %s", filename, osStrError(rv));
-        return rv;
+        uvErrorf(uv, "open %s: %s", filename, osStrError(rv));
+        return RAFT_IOERR;
     }
 
     rv = osWriteN(fd, buf, sizeof buf);
     close(fd);
-
     if (rv != 0) {
-        errorf(io, "write %s: %s", filename, osStrError(rv));
-        return rv;
+        uvErrorf(uv, "write %s: %s", filename, osStrError(rv));
+        return RAFT_IOERR;
     }
 
     return 0;

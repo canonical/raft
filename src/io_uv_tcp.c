@@ -13,7 +13,7 @@ static int tcp_init(struct raft_uv_transport *transport,
                     unsigned id,
                     const char *address)
 {
-    struct io_uv__tcp *t;
+    struct uv__tcp *t;
     int rv;
     t = transport->impl;
     t->id = id;
@@ -26,7 +26,7 @@ static int tcp_init(struct raft_uv_transport *transport,
 /* Close callback for io_uv__tcp->listener. */
 static void listener_close_cb(struct uv_handle_s *handle)
 {
-    struct io_uv__tcp *t = handle->data;
+    struct uv__tcp *t = handle->data;
     if (t->close_cb != NULL) {
         t->close_cb(t->transport);
     }
@@ -36,7 +36,7 @@ static void listener_close_cb(struct uv_handle_s *handle)
 static void tcp_close(struct raft_uv_transport *transport,
                       raft_uv_transport_close_cb cb)
 {
-    struct io_uv__tcp *t = transport->impl;
+    struct uv__tcp *t = transport->impl;
     t->close_cb = cb;
     io_uv__tcp_connect_stop(t);
     io_uv__tcp_listen_stop(t);
@@ -44,14 +44,14 @@ static void tcp_close(struct raft_uv_transport *transport,
 }
 
 int raft_uv_tcp_init(struct raft_uv_transport *transport,
-                        struct uv_loop_s *loop)
+                     struct uv_loop_s *loop)
 {
-    struct io_uv__tcp *t;
+    struct uv__tcp *t;
 
     t = raft_malloc(sizeof *t);
     if (t == NULL) {
         /* UNTESTED: not interesting */
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
     t->transport = transport;
     t->loop = loop;

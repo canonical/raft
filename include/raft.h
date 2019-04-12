@@ -9,54 +9,50 @@
  * Error codes.
  */
 enum {
-    RAFT_ENOMEM = 1,
+    RAFT_NOMEM = 1,
     RAFT_EBADID,
     RAFT_EDUPID,
     RAFT_EDUPADDR,
     RAFT_EALREADYVOTING,
-    RAFT_EMALFORMED,
+    RAFT_MALFORMED,
     RAFT_ERR_NO_SPACE,
     RAFT_ERR_BUSY,
     RAFT_ERR_NOT_LEADER,
     RAFT_ERR_LEADERSHIP_LOST,
     RAFT_ERR_SHUTDOWN,
     RAFT_ERR_CONFIGURATION_BUSY,
-    RAFT_ERR_IO,
-    RAFT_ERR_IO_CORRUPT,
-    RAFT_ERR_IO_CANCELED,
-    RAFT_ERR_IO_ABORTED,
-    RAFT_ERR_IO_NAMETOOLONG,
-    RAFT_ERR_IO_MALFORMED,
-    RAFT_ERR_IO_NOTEMPTY,
-    RAFT_ERR_IO_TOOBIG,
-    RAFT_ERR_IO_CONNECT
+    RAFT_IOERR,
+    RAFT_CORRUPT,
+    RAFT_CANCELED,
+    RAFT_NAMETOOLONG,
+    RAFT_NOTEMPTY,
+    RAFT_TOOBIG,
+    RAFT_CANTCONNECT
 };
 
 /**
  * Map error codes to error messages.
  */
 #define RAFT_ERRNO_MAP(X)                                                \
-    X(RAFT_ENOMEM, "out of memory")                                      \
+    X(RAFT_NOMEM, "out of memory")                                       \
     X(RAFT_EBADID, "server ID is not valid")                             \
     X(RAFT_EDUPID, "server ID already in use")                           \
     X(RAFT_EDUPADDR, "server address already in use")                    \
     X(RAFT_EALREADYVOTING, "server is already voting")                   \
-    X(RAFT_EMALFORMED, "encoded data is malformed")                      \
+    X(RAFT_MALFORMED, "encoded data is malformed")                       \
     X(RAFT_ERR_NO_SPACE, "no space left on device")                      \
     X(RAFT_ERR_BUSY, "an append entries request is already in progress") \
     X(RAFT_ERR_NOT_LEADER, "server is not the leader")                   \
     X(RAFT_ERR_LEADERSHIP_LOST, "server has lost leadership")            \
     X(RAFT_ERR_CONFIGURATION_BUSY,                                       \
       "a configuration change is already in progress")                   \
-    X(RAFT_ERR_IO, "I/O error")                                          \
-    X(RAFT_ERR_IO_CORRUPT, "persisted data is corrupted")                \
-    X(RAFT_ERR_IO_CANCELED, "operation canceled")                        \
-    X(RAFT_ERR_IO_ABORTED, "backend was stopped or has errored")         \
-    X(RAFT_ERR_IO_NAMETOOLONG, "data directory path is too long")        \
-    X(RAFT_ERR_IO_MALFORMED, "encoded data is malformed")                \
-    X(RAFT_ERR_IO_NOTEMPTY, "persisted log is not empty")                \
-    X(RAFT_ERR_IO_TOOBIG, "data is too big")                             \
-    X(RAFT_ERR_IO_CONNECT, "no connection to remote server available")
+    X(RAFT_IOERR, "I/O error")                                          \
+    X(RAFT_CORRUPT, "persisted data is corrupted")                       \
+    X(RAFT_CANCELED, "operation canceled")                        \
+    X(RAFT_NAMETOOLONG, "data directory path is too long")               \
+    X(RAFT_NOTEMPTY, "persisted log is not empty")                \
+    X(RAFT_TOOBIG, "data is too big")                             \
+    X(RAFT_CANTCONNECT, "no connection to remote server available")
 
 /**
  * Return the error message describing the given error code.

@@ -213,7 +213,7 @@ static int io_stub__start(struct raft_io *io,
     s = io->impl;
 
     if (io_stub__fault_tick(s)) {
-        return RAFT_ERR_IO;
+        return RAFT_IOERR;
     }
 
     s->tick_cb = tick_cb;
@@ -349,7 +349,7 @@ static int io_stub__load(struct raft_io *io,
     s = io->impl;
 
     if (io_stub__fault_tick(s)) {
-        return RAFT_ERR_IO;
+        return RAFT_IOERR;
     }
 
     *term = s->term;
@@ -367,7 +367,7 @@ static int io_stub__load(struct raft_io *io,
     *n_entries = s->n;
     *entries = raft_calloc(s->n, sizeof **entries);
     if (*entries == NULL) {
-        rv = RAFT_ENOMEM;
+        rv = RAFT_NOMEM;
         goto err;
     }
 
@@ -377,7 +377,7 @@ static int io_stub__load(struct raft_io *io,
 
     batch = raft_malloc(size);
     if (batch == NULL) {
-        rv = RAFT_ENOMEM;
+        rv = RAFT_NOMEM;
         goto err_after_entries_alloc;
     }
 
@@ -427,7 +427,7 @@ static int io_stub__bootstrap(struct raft_io *io,
     s = io->impl;
 
     if (io_stub__fault_tick(s)) {
-        return RAFT_ERR_IO;
+        return RAFT_IOERR;
     }
 
     if (s->term != 0) {
@@ -447,7 +447,7 @@ static int io_stub__bootstrap(struct raft_io *io,
 
     entries = raft_calloc(1, sizeof *s->entries);
     if (entries == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
 
     entries[0].term = 1;
@@ -470,7 +470,7 @@ static int io_stub__set_term(struct raft_io *io, const raft_term term)
     s = io->impl;
 
     if (io_stub__fault_tick(s)) {
-        return RAFT_ERR_IO;
+        return RAFT_IOERR;
     }
 
     s->term = term;
@@ -486,7 +486,7 @@ static int io_stub__set_vote(struct raft_io *io, const unsigned server_id)
     s = io->impl;
 
     if (io_stub__fault_tick(s)) {
-        return RAFT_ERR_IO;
+        return RAFT_IOERR;
     }
 
     s->voted_for = server_id;
@@ -506,7 +506,7 @@ static int io_stub__append(struct raft_io *io,
     s = io->impl;
 
     if (io_stub__fault_tick(s)) {
-        return RAFT_ERR_IO;
+        return RAFT_IOERR;
     }
 
     r = raft_malloc(sizeof *r);
@@ -542,7 +542,7 @@ static int io_stub__truncate(struct raft_io *io, raft_index index)
     assert(index >= start_index);
 
     if (io_stub__fault_tick(s)) {
-        return RAFT_ERR_IO;
+        return RAFT_IOERR;
     }
 
     n = index - 1; /* Number of entries left after truncation */
@@ -553,7 +553,7 @@ static int io_stub__truncate(struct raft_io *io, raft_index index)
         /* Create a new array of entries holding the non-truncated entries */
         entries = raft_malloc(n * sizeof *entries);
         if (entries == NULL) {
-            return RAFT_ENOMEM;
+            return RAFT_NOMEM;
         }
         memcpy(entries, s->entries, n * sizeof *s->entries);
 
@@ -675,7 +675,7 @@ static int io_stub__send(struct raft_io *io,
     s = io->impl;
 
     if (io_stub__fault_tick(s)) {
-        return RAFT_ERR_IO;
+        return RAFT_IOERR;
     }
 
     r = raft_malloc(sizeof *r);
@@ -706,7 +706,7 @@ int raft_io_stub_init(struct raft_io *io)
 
     s = raft_malloc(sizeof *s);
     if (s == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
 
     s->io = io;

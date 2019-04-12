@@ -2,10 +2,9 @@
 #include "../lib/runner.h"
 
 #include "../../src/byte.h"
-#include "../../src/io_uv.h"
-#include "../../src/io_uv_load.h"
 #include "../../src/queue.h"
 #include "../../src/snapshot.h"
+#include "../../src/uv.h"
 
 TEST_MODULE(io_uv__snapshot);
 
@@ -131,9 +130,9 @@ static void append_cb(void *data, int status)
 TEST_CASE(put, first, NULL)
 {
     struct put_fixture *f = data;
-    struct io_uv__snapshot_meta *snapshots;
+    struct uvSnapshotInfo *snapshots;
     size_t n_snapshots;
-    struct io_uv__segment_meta *segments;
+    struct uvSegmentInfo *segments;
     size_t n_segments;
     struct raft_snapshot snapshot;
     int rv;
@@ -145,15 +144,14 @@ TEST_CASE(put, first, NULL)
 
     munit_assert_true(RAFT__QUEUE_IS_EMPTY(&f->uv->snapshot_put_reqs));
 
-    rv = io_uv__load_list(f->uv, &snapshots, &n_snapshots, &segments,
-                          &n_segments);
+    rv = uvList(f->uv, &snapshots, &n_snapshots, &segments, &n_segments);
     munit_assert_int(rv, ==, 0);
 
     munit_assert_int(n_snapshots, ==, 1);
     munit_assert_int(snapshots[0].index, ==, 8);
     munit_assert_int(snapshots[0].term, ==, 3);
 
-    rv = io_uv__load_snapshot(f->uv, &snapshots[0], &snapshot);
+    rv = uvSnapshotLoad(f->uv, &snapshots[0], &snapshot);
     munit_assert_int(rv, ==, 0);
 
     snapshot__close(&snapshot);

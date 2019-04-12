@@ -39,7 +39,7 @@ int raft_init(struct raft *r,
     /* Make a copy of the address */
     r->address = raft_malloc(strlen(address) + 1);
     if (r->address == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
     strcpy(r->address, address);
     r->current_term = 0;

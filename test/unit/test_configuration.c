@@ -313,7 +313,7 @@ TEST_CASE(copy, error, oom, NULL)
     raft_configuration_init(&configuration);
 
     rv = configuration__copy(&f->configuration, &configuration);
-    munit_assert_int(rv, ==, RAFT_ENOMEM);
+    munit_assert_int(rv, ==, RAFT_NOMEM);
 
     return MUNIT_OK;
 }
@@ -420,7 +420,7 @@ TEST_CASE(add, error, oom, add_oom_params)
     test_heap_fault_enable(&f->heap);
 
     rv = raft_configuration_add(&f->configuration, 1, "127.0.0.1:666", true);
-    munit_assert_int(rv, ==, RAFT_ENOMEM);
+    munit_assert_int(rv, ==, RAFT_NOMEM);
 
     munit_assert_string_equal(raft_strerror(rv), "out of memory");
 
@@ -525,7 +525,7 @@ TEST_CASE(remove, error, oom, NULL)
     test_heap_fault_enable(&f->heap);
 
     rv = configuration__remove(&f->configuration, 2);
-    munit_assert_int(rv, ==, RAFT_ENOMEM);
+    munit_assert_int(rv, ==, RAFT_NOMEM);
 
     return MUNIT_OK;
 }
@@ -638,7 +638,7 @@ TEST_CASE(encode, error, oom, NULL)
     ADD(1, "127.0.0.1:666", true);
 
     rv = configuration__encode(&f->configuration, &buf);
-    munit_assert_int(rv, ==, RAFT_ENOMEM);
+    munit_assert_int(rv, ==, RAFT_NOMEM);
 
     return MUNIT_OK;
 }
@@ -737,7 +737,7 @@ TEST_CASE(decode, error, oom, NULL)
     buf.len = sizeof bytes;
 
     rv = configuration__decode(&buf, &f->configuration);
-    munit_assert_int(rv, ==, RAFT_ENOMEM);
+    munit_assert_int(rv, ==, RAFT_NOMEM);
 
     return MUNIT_OK;
 }
@@ -757,7 +757,7 @@ TEST_CASE(decode, error, bad_version, NULL)
     buf.len = 1;
 
     rv = configuration__decode(&buf, &f->configuration);
-    munit_assert_int(rv, ==, RAFT_EMALFORMED);
+    munit_assert_int(rv, ==, RAFT_MALFORMED);
 
     return MUNIT_OK;
 }
@@ -781,7 +781,7 @@ TEST_CASE(decode, error, bad_address, NULL)
     buf.len = sizeof bytes;
 
     rv = configuration__decode(&buf, &f->configuration);
-    munit_assert_int(rv, ==, RAFT_EMALFORMED);
+    munit_assert_int(rv, ==, RAFT_MALFORMED);
 
     return MUNIT_OK;
 }

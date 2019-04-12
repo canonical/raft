@@ -5,7 +5,6 @@
 
 #include "../../src/byte.h"
 #include "../../src/io_uv_encoding.h"
-#include "../../src/io_uv_load.h"
 
 #define WORD_SIZE sizeof(uint64_t)
 
@@ -21,9 +20,9 @@ TEST_GROUP(list, success);
 struct list__fixture
 {
     IO_UV_FIXTURE;
-    struct io_uv__snapshot_meta *snapshots;
+    struct uvSnapshotInfo *snapshots;
     size_t n_snapshots;
-    struct io_uv__segment_meta *segments;
+    struct uvSegmentInfo *segments;
     size_t n_segments;
 };
 
@@ -48,12 +47,12 @@ TEST_TEAR_DOWN(list)
     IO_UV_TEAR_DOWN;
 }
 
-#define list__invoke(RV)                                             \
-    {                                                                \
-        int rv;                                                      \
-        rv = io_uv__load_list(f->uv, &f->snapshots, &f->n_snapshots, \
-                              &f->segments, &f->n_segments);         \
-        munit_assert_int(rv, ==, RV);                                \
+#define list__invoke(RV)                                                 \
+    {                                                                    \
+        int rv;                                                          \
+        rv = uvList(f->uv, &f->snapshots, &f->n_snapshots, &f->segments, \
+                    &f->n_segments);                                     \
+        munit_assert_int(rv, ==, RV);                                    \
     }
 
 #define list__assert_snapshot(I, TERM, INDEX, TIMESTAMP) \
@@ -139,7 +138,7 @@ TEST_GROUP(load_snapshot, error);
 struct load_snapshot__fixture
 {
     IO_UV_FIXTURE;
-    struct io_uv__snapshot_meta meta;
+    struct uvSnapshotInfo meta;
     uint8_t data[8];
     struct raft_snapshot snapshot;
 };
@@ -168,11 +167,11 @@ TEST_TEAR_DOWN(load_snapshot)
     IO_UV_TEAR_DOWN;
 }
 
-#define load_snapshot__invoke(RV)                                 \
-    {                                                             \
-        int rv;                                                   \
-        rv = io_uv__load_snapshot(f->uv, &f->meta, &f->snapshot); \
-        munit_assert_int(rv, ==, RV);                             \
+#define load_snapshot__invoke(RV)                           \
+    {                                                       \
+        int rv;                                             \
+        rv = uvSnapshotLoad(f->uv, &f->meta, &f->snapshot); \
+        munit_assert_int(rv, ==, RV);                       \
     }
 
 #define load_snapshot_write_meta                                             \
@@ -218,7 +217,7 @@ TEST_CASE(load_snapshot, error, no_metadata, NULL)
 
     (void)params;
 
-    load_snapshot__invoke(RAFT_ERR_IO);
+    load_snapshot__invoke(RAFT_IOERR);
 
     return MUNIT_OK;
 }
@@ -232,7 +231,7 @@ TEST_CASE(load_snapshot, error, no_header, NULL)
     (void)params;
 
     test_dir_write_file(f->dir, f->meta.filename, buf, sizeof buf);
-    load_snapshot__invoke(RAFT_ERR_IO);
+    load_snapshot__invoke(RAFT_IOERR);
 
     return MUNIT_OK;
 }
@@ -250,7 +249,7 @@ TEST_CASE(load_snapshot, error, format, NULL)
     test_dir_overwrite_file(f->dir, f->meta.filename, &format, sizeof format,
                             0);
 
-    load_snapshot__invoke(RAFT_ERR_IO_CORRUPT);
+    load_snapshot__invoke(RAFT_MALFORMED);
 
     return MUNIT_OK;
 }
@@ -268,7 +267,7 @@ TEST_CASE(load_snapshot, error, configuration_too_big, NULL)
     test_dir_overwrite_file(f->dir, f->meta.filename, &size, sizeof size,
                             sizeof(uint64_t) * 3);
 
-    load_snapshot__invoke(RAFT_ERR_IO_CORRUPT);
+    load_snapshot__invoke(RAFT_CORRUPT);
 
     return MUNIT_OK;
 }
@@ -286,7 +285,7 @@ TEST_CASE(load_snapshot, error, no_configuration, NULL)
     test_dir_overwrite_file(f->dir, f->meta.filename, &size, sizeof size,
                             sizeof(uint64_t) * 3);
 
-    load_snapshot__invoke(RAFT_ERR_IO_CORRUPT);
+    load_snapshot__invoke(RAFT_CORRUPT);
 
     return MUNIT_OK;
 }
@@ -299,7 +298,7 @@ TEST_CASE(load_snapshot, error, no_data, NULL)
     (void)params;
 
     load_snapshot_write_meta;
-    load_snapshot__invoke(RAFT_ERR_IO);
+    load_snapshot__invoke(RAFT_IOERR);
 
     return MUNIT_OK;
 }
@@ -326,7 +325,7 @@ TEST_CASE(load_snapshot, error, oom, load_snapshot_error_oom_params)
 
     test_heap_fault_enable(&f->heap);
 
-    load_snapshot__invoke(RAFT_ENOMEM);
+    load_snapshot__invoke(RAFT_NOMEM);
 
     return MUNIT_OK;
 }
@@ -384,12 +383,14 @@ TEST_TEAR_DOWN(load_all)
     IO_UV_TEAR_DOWN;
 }
 
-#define __load_all_trigger(F, RV)                                  \
-    {                                                              \
-        int rv;                                                    \
-        rv = io_uv__load_all(F->uv, &F->snapshot, &F->start_index, \
-                             &F->entries, &F->n);                  \
-        munit_assert_int(rv, ==, RV);                              \
+#define __load_all_trigger(F, RV)                                \
+    {                                                            \
+        int rv;                                                  \
+        raft_term term;                                          \
+        unsigned voted_for;                                      \
+        rv = F->io.load(&F->io, &term, &voted_for, &F->snapshot, \
+                        &F->start_index, &F->entries, &F->n);    \
+        munit_assert_int(rv, ==, RV);                            \
     }
 
 TEST_CASE(load_all, success, ignore_unknown, NULL)
@@ -655,7 +656,7 @@ TEST_CASE(load_all, error, short_format, NULL)
 
     test_dir_write_file_with_zeros(f->dir, "open-1", WORD_SIZE / 2);
 
-    __load_all_trigger(f, RAFT_ERR_IO);
+    __load_all_trigger(f, RAFT_IOERR);
 
     return MUNIT_OK;
 }
@@ -673,7 +674,7 @@ TEST_CASE(load_all, error, short_preamble, NULL)
 
     test_dir_truncate_file(f->dir, "open-1", offset);
 
-    __load_all_trigger(f, RAFT_ERR_IO);
+    __load_all_trigger(f, RAFT_IOERR);
 
     return MUNIT_OK;
 }
@@ -693,7 +694,7 @@ TEST_CASE(load_all, error, short_header, NULL)
 
     test_dir_truncate_file(f->dir, "open-1", offset);
 
-    __load_all_trigger(f, RAFT_ERR_IO);
+    __load_all_trigger(f, RAFT_IOERR);
 
     return MUNIT_OK;
 }
@@ -715,7 +716,7 @@ TEST_CASE(load_all, error, short_data, NULL)
 
     test_dir_truncate_file(f->dir, "open-1", offset);
 
-    __load_all_trigger(f, RAFT_ERR_IO);
+    __load_all_trigger(f, RAFT_IOERR);
 
     return MUNIT_OK;
 }
@@ -737,7 +738,7 @@ TEST_CASE(load_all, error, corrupt_header, NULL)
 
     test_dir_overwrite_file(f->dir, "1-1", buf, sizeof buf, offset);
 
-    __load_all_trigger(f, RAFT_ERR_IO_CORRUPT);
+    __load_all_trigger(f, RAFT_CORRUPT);
 
     return MUNIT_OK;
 }
@@ -760,7 +761,7 @@ TEST_CASE(load_all, error, corrupt_data, NULL)
 
     test_dir_overwrite_file(f->dir, "1-1", buf, sizeof buf, offset);
 
-    __load_all_trigger(f, RAFT_ERR_IO_CORRUPT);
+    __load_all_trigger(f, RAFT_CORRUPT);
 
     return MUNIT_OK;
 }
@@ -775,7 +776,7 @@ TEST_CASE(load_all, error, closed_bad_index, NULL)
 
     test_io_uv_write_closed_segment_file(f->dir, 2, 1, 1);
 
-    __load_all_trigger(f, RAFT_ERR_IO_CORRUPT);
+    __load_all_trigger(f, RAFT_CORRUPT);
 
     return MUNIT_OK;
 }
@@ -789,7 +790,7 @@ TEST_CASE(load_all, error, closed_empty, NULL)
 
     test_dir_write_file(f->dir, "1-1", NULL, 0);
 
-    __load_all_trigger(f, RAFT_ERR_IO_CORRUPT);
+    __load_all_trigger(f, RAFT_CORRUPT);
 
     return MUNIT_OK;
 }
@@ -805,7 +806,7 @@ TEST_CASE(load_all, error, closed_bad_format, NULL)
 
     test_dir_write_file(f->dir, "1-1", buf, sizeof buf);
 
-    __load_all_trigger(f, RAFT_ERR_IO);
+    __load_all_trigger(f, RAFT_IOERR);
 
     return MUNIT_OK;
 }
@@ -821,7 +822,7 @@ TEST_CASE(load_all, error, open_no_access, NULL)
 
     test_dir_unreadable_file(f->dir, "open-1");
 
-    __load_all_trigger(f, RAFT_ERR_IO);
+    __load_all_trigger(f, RAFT_IOERR);
 
     return MUNIT_OK;
 }
@@ -842,7 +843,7 @@ TEST_CASE(load_all, error, open_zero_format, NULL)
 
     test_dir_overwrite_file(f->dir, "open-1", buf, sizeof buf, 0);
 
-    __load_all_trigger(f, RAFT_ERR_IO);
+    __load_all_trigger(f, RAFT_MALFORMED);
 
     return MUNIT_OK;
 }
@@ -862,7 +863,7 @@ TEST_CASE(load_all, error, open_bad_format, NULL)
 
     test_dir_overwrite_file(f->dir, "open-1", buf, sizeof buf, 0);
 
-    __load_all_trigger(f, RAFT_ERR_IO);
+    __load_all_trigger(f, RAFT_MALFORMED);
 
     return MUNIT_OK;
 }

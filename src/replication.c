@@ -164,7 +164,7 @@ static int send_snapshot(struct raft *r, size_t i)
 
     request = raft_malloc(sizeof *request);
     if (request == NULL) {
-        rv = RAFT_ENOMEM;
+        rv = RAFT_NOMEM;
         goto err;
     }
     request->raft = r;
@@ -244,7 +244,7 @@ static int send_append_entries(struct raft *r,
 
     request = raft_malloc(sizeof *request);
     if (request == NULL) {
-        rv = RAFT_ENOMEM;
+        rv = RAFT_NOMEM;
         goto err_after_entries_acquired;
     }
     request->raft = r;
@@ -445,7 +445,7 @@ static int raft_replication__leader_append(struct raft *r, unsigned index)
     /* Allocate a new request. */
     request = raft_malloc(sizeof *request);
     if (request == NULL) {
-        rv = RAFT_ENOMEM;
+        rv = RAFT_NOMEM;
         goto err_after_entries_acquired;
     }
 
@@ -504,7 +504,7 @@ int raft_replication__trigger(struct raft *r, const raft_index index)
             continue;
         }
         rv = replication__trigger(r, i);
-        if (rv != 0 && rv != RAFT_ERR_IO_CONNECT) {
+        if (rv != 0 && rv != RAFT_CANTCONNECT) {
             /* This is not a critical failure, let's just log it. */
             warnf(r->io, "failed to send append entries to server %ld: %s (%d)",
                   server->id, raft_strerror(rv), rv);
@@ -966,7 +966,7 @@ int raft_replication__append(struct raft *r,
 
     request = raft_malloc(sizeof *request);
     if (request == NULL) {
-        rv = RAFT_ENOMEM;
+        rv = RAFT_NOMEM;
         goto err;
     }
 
@@ -1122,7 +1122,7 @@ int raft_replication__install_snapshot(struct raft *r,
 
     request = raft_malloc(sizeof *request);
     if (request == NULL) {
-        rv = RAFT_ENOMEM;
+        rv = RAFT_NOMEM;
         goto err;
     }
     request->raft = r;
@@ -1135,7 +1135,7 @@ int raft_replication__install_snapshot(struct raft *r,
 
     snapshot->bufs = raft_malloc(sizeof *snapshot->bufs);
     if (snapshot->bufs == NULL) {
-        rv = RAFT_ENOMEM;
+        rv = RAFT_NOMEM;
         goto err_after_request_alloc;
     }
     snapshot->bufs[0] = args->data;

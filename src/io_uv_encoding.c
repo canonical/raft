@@ -165,7 +165,7 @@ int io_uv__encode_message(const struct raft_message *message,
                 raft_io_uv_sizeof__install_snapshot(&message->install_snapshot);
             break;
         default:
-            return RAFT_ERR_IO_MALFORMED;
+            return RAFT_MALFORMED;
     };
 
     header.base = raft_malloc(header.len);
@@ -241,7 +241,7 @@ oom_after_header_alloc:
     raft_free(header.base);
 
 oom:
-    return RAFT_ENOMEM;
+    return RAFT_NOMEM;
 }
 
 void io_uv__encode_batch_header(const struct raft_entry *entries,
@@ -313,7 +313,7 @@ int io_uv__decode_batch_header(const void *batch,
     *entries = raft_malloc(*n * sizeof **entries);
 
     if (*entries == NULL) {
-        rv = RAFT_ENOMEM;
+        rv = RAFT_NOMEM;
         goto err;
     }
 
@@ -323,8 +323,9 @@ int io_uv__decode_batch_header(const void *batch,
         entry->term = byte__get64(&cursor);
         entry->type = byte__get8(&cursor);
 
-        if (entry->type != RAFT_COMMAND && entry->type != RAFT_CONFIGURATION) {
-            rv = RAFT_EMALFORMED;
+        if (entry->type != RAFT_COMMAND && entry->type != RAFT_BARRIER &&
+            entry->type != RAFT_CONFIGURATION) {
+            rv = RAFT_MALFORMED;
             goto err_after_alloc;
         }
 
@@ -452,7 +453,7 @@ int io_uv__decode_message(unsigned type,
             *payload_len += message->install_snapshot.data.len;
             break;
         default:
-            rv = RAFT_ERR_IO;
+            rv = RAFT_IOERR;
             break;
     };
 

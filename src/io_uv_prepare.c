@@ -1,9 +1,9 @@
 #include <unistd.h>
 
 #include "assert.h"
-#include "io_uv.h"
-#include "os.h"
 #include "logging.h"
+#include "os.h"
+#include "uv.h"
 
 /* The happy path for a io_uv__prepare request is:
  *
@@ -36,7 +36,7 @@
 /* An open segment being prepared or sitting in the pool */
 struct segment
 {
-    struct io_uv *uv;              /* Open segment file */
+    struct uv *uv;                 /* Open segment file */
     struct uv__file *file;         /* Open segment file */
     struct uv__file_create create; /* Create file request */
     unsigned long long counter;    /* Segment counter */
@@ -48,27 +48,27 @@ struct segment
  *
  * If we have some segments in the pool, use them to complete some pending
  * requests. */
-static void process_requests(struct io_uv *uv);
+static void process_requests(struct uv *uv);
 
 /* Maintain the pool of prepared open segments.
  *
  * If the pool has less than TARGET_POOL_SIZE segments, and we're not already
  * creating a segment, start creating a new segment. */
-static void maintain_pool(struct io_uv *uv);
+static void maintain_pool(struct uv *uv);
 
 /* Start creating a new segment file. */
-static int create_segment(struct io_uv *uv);
+static int create_segment(struct uv *uv);
 static void create_segment_cb(struct uv__file_create *req, int status);
 
 /* Start removing a prepared open segment */
 static void remove_segment(struct segment *s);
 static void remove_segment_cb(struct uv__file *file);
 
-void io_uv__prepare(struct io_uv *uv,
-                    struct io_uv__prepare *req,
+void io_uv__prepare(struct uv *uv,
+                    struct uv__prepare *req,
                     io_uv__prepare_cb cb)
 {
-    assert(uv->state == IO_UV__ACTIVE);
+    assert(uv->state == UV__ACTIVE);
     req->cb = cb;
     RAFT__QUEUE_PUSH(&uv->prepare_reqs, &req->queue);
     process_requests(uv);
@@ -76,24 +76,24 @@ void io_uv__prepare(struct io_uv *uv,
 }
 
 /* Flush all pending requests with the given status. */
-static void flush_requests(struct io_uv *uv, int status)
+static void flush_requests(struct uv *uv, int status)
 {
     while (!RAFT__QUEUE_IS_EMPTY(&uv->prepare_reqs)) {
         raft__queue *head;
-        struct io_uv__prepare *r;
+        struct uv__prepare *r;
         head = RAFT__QUEUE_HEAD(&uv->prepare_reqs);
-        r = RAFT__QUEUE_DATA(head, struct io_uv__prepare, queue);
+        r = RAFT__QUEUE_DATA(head, struct uv__prepare, queue);
         RAFT__QUEUE_REMOVE(&r->queue);
         r->cb(r, NULL, 0, status);
     }
 }
 
-void io_uv__prepare_stop(struct io_uv *uv)
+void io_uv__prepare_stop(struct uv *uv)
 {
-    assert(uv->state == IO_UV__CLOSING);
+    assert(uv->state == UV__CLOSING);
 
     /* Cancel all pending prepare requests. */
-    flush_requests(uv, RAFT_ERR_IO_CANCELED);
+    flush_requests(uv, RAFT_CANCELED);
 
     /* Remove any unused prepared segment. */
     while (!RAFT__QUEUE_IS_EMPTY(&uv->prepare_pool)) {
@@ -112,14 +112,14 @@ void io_uv__prepare_stop(struct io_uv *uv)
     }
 }
 
-static void process_requests(struct io_uv *uv)
+static void process_requests(struct uv *uv)
 {
     raft__queue *head;
 
     /* We can finish the requests for which we have ready segments. */
     while (!RAFT__QUEUE_IS_EMPTY(&uv->prepare_reqs)) {
         struct segment *segment;
-        struct io_uv__prepare *req;
+        struct uv__prepare *req;
 
         /* If there's no prepared open segments available, let's bail out. */
         if (RAFT__QUEUE_IS_EMPTY(&uv->prepare_pool)) {
@@ -133,7 +133,7 @@ static void process_requests(struct io_uv *uv)
 
         /* Pop the head of the prepare requests queue. */
         head = RAFT__QUEUE_HEAD(&uv->prepare_reqs);
-        req = RAFT__QUEUE_DATA(head, struct io_uv__prepare, queue);
+        req = RAFT__QUEUE_DATA(head, struct uv__prepare, queue);
         RAFT__QUEUE_REMOVE(&req->queue);
 
         /* Finish the request */
@@ -142,7 +142,7 @@ static void process_requests(struct io_uv *uv)
     }
 }
 
-static void maintain_pool(struct io_uv *uv)
+static void maintain_pool(struct uv *uv)
 {
     raft__queue *head;
     unsigned n;
@@ -166,7 +166,7 @@ static void maintain_pool(struct io_uv *uv)
     }
 }
 
-static int create_segment(struct io_uv *uv)
+static int create_segment(struct uv *uv)
 {
     struct segment *s;
     osFilename filename;
@@ -174,7 +174,7 @@ static int create_segment(struct io_uv *uv)
 
     s = raft_malloc(sizeof *s);
     if (s == NULL) {
-        rv = RAFT_ENOMEM;
+        rv = RAFT_NOMEM;
         goto err;
     }
 
@@ -182,7 +182,7 @@ static int create_segment(struct io_uv *uv)
 
     s->file = raft_malloc(sizeof *s->file);
     if (s->file == NULL) {
-        rv = RAFT_ENOMEM;
+        rv = RAFT_NOMEM;
         goto err_after_segment_alloc;
     }
 
@@ -190,7 +190,7 @@ static int create_segment(struct io_uv *uv)
     if (rv != 0) {
         errorf(uv->io, "init open segment file %d: %s", s->counter,
                uv_strerror(rv));
-        rv = RAFT_ERR_IO;
+        rv = RAFT_IOERR;
         goto err_after_file_alloc;
     }
 
@@ -207,7 +207,7 @@ static int create_segment(struct io_uv *uv)
     if (rv != 0) {
         errorf(uv->io, "request creation of open segment %d: %s", s->counter,
                uv_strerror(rv));
-        rv = RAFT_ERR_IO;
+        rv = RAFT_IOERR;
         goto err_after_file_init;
     }
 
@@ -235,7 +235,7 @@ err:
 static void create_segment_cb(struct uv__file_create *req, int status)
 {
     struct segment *s;
-    struct io_uv *uv;
+    struct uv *uv;
 
     /* If we have been canceled, it means we are shutting down and the
      * request has been canceled (and its memory possibly freed). */
@@ -249,7 +249,7 @@ static void create_segment_cb(struct uv__file_create *req, int status)
     /* If the request has failed, simply close the file and mark this instance
      * as errored. */
     if (status != 0) {
-        flush_requests(uv, RAFT_ERR_IO);
+        flush_requests(uv, RAFT_IOERR);
         uv->preparing = NULL;
         uv->errored = true;
         errorf(uv->io, "create open segment %s: %s", s->path,

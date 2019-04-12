@@ -73,14 +73,14 @@ static int encode_snapshot(int x,
 
     *bufs = raft_malloc(sizeof **bufs);
     if (*bufs == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
 
     buf = &(*bufs)[0];
     buf->len = sizeof(uint64_t) * 2;
     buf->base = raft_malloc(buf->len);
     if (buf->base == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
 
     cursor = (*bufs)[0].base;

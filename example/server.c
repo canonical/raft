@@ -17,7 +17,7 @@ static int fsmApply(struct raft_fsm *fsm, const struct raft_buffer *buf)
 {
     struct fsm *f = fsm->data;
     if (buf->len != 8) {
-        return RAFT_EMALFORMED;
+        return RAFT_MALFORMED;
     }
     f->count += *(uint64_t *)buf->base;
     return 0;
@@ -31,12 +31,12 @@ static int fsmSnapshot(struct raft_fsm *fsm,
     *n_bufs = 1;
     *bufs = raft_malloc(sizeof **bufs);
     if (*bufs == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
     (*bufs)[0].len = sizeof(uint64_t);
     (*bufs)[0].base = raft_malloc((*bufs)[0].len);
     if ((*bufs)[0].base == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
     *(uint64_t *)(*bufs)[0].base = f->count;
     return 0;
@@ -46,7 +46,7 @@ static int fsmRestore(struct raft_fsm *fsm, struct raft_buffer *buf)
 {
     struct fsm *f = fsm->data;
     if (buf->len != sizeof(uint64_t)) {
-        return RAFT_EMALFORMED;
+        return RAFT_MALFORMED;
     }
     f->count = *(uint64_t *)buf->base;
     raft_free(buf->base);
@@ -57,7 +57,7 @@ static int fsmInit(struct raft_fsm *fsm)
 {
     struct fsm *f = raft_malloc(sizeof *fsm);
     if (f == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
     f->count = 0;
     fsm->version = 1;
@@ -186,7 +186,7 @@ static int serverInit(struct server *s, const char *dir, unsigned id)
         }
     }
     rv = s->io.bootstrap(&s->io, &configuration);
-    if (rv != 0 && rv != RAFT_ERR_IO_NOTEMPTY) {
+    if (rv != 0 && rv != RAFT_NOTEMPTY) {
         goto errAfterConfigurationInit;
     }
     raft_configuration_close(&configuration);

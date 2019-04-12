@@ -75,7 +75,7 @@ int raft_barrier(struct raft *r, struct raft_apply *req, raft_apply_cb cb)
     buf.base = raft_malloc(buf.len);
 
     if (buf.base == NULL) {
-        rv = RAFT_ENOMEM;
+        rv = RAFT_NOMEM;
         goto err;
     }
 
@@ -249,7 +249,7 @@ int raft_promote(struct raft *r, const unsigned id)
 
     /* Immediately initiate an AppendEntries request. */
     rv = replication__trigger(r, server_index);
-    if (rv != 0 && rv != RAFT_ERR_IO_CONNECT) {
+    if (rv != 0 && rv != RAFT_CANTCONNECT) {
         /* This error is not fatal. */
         warnf(r->io, "failed to send append entries to server %ld: %s (%d)",
               server->id, raft_strerror(rv), rv);

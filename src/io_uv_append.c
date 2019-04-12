@@ -5,10 +5,10 @@
 
 #include "assert.h"
 #include "byte.h"
-#include "io_uv.h"
 #include "io_uv_encoding.h"
-#include "queue.h"
 #include "logging.h"
+#include "queue.h"
+#include "uv.h"
 
 /* The happy path for an append request is:
  *
@@ -43,21 +43,21 @@
 
 struct segment
 {
-    struct io_uv *uv;              /* Our writer */
-    struct io_uv__prepare prepare; /* Prepare segment file request */
-    struct uv__file *file;         /* File to write to */
-    struct uv__file_write write;   /* Write request */
-    unsigned long long counter;    /* Open segment counter */
-    raft_index first_index;        /* Index of the first entry written */
-    raft_index last_index;         /* Index of the last entry written */
-    size_t size;                   /* Total number of bytes used */
-    unsigned next_block;           /* Next segment block to write */
-    uv_buf_t arena;                /* Memory for the write buffer */
-    uv_buf_t buf;                  /* Write buffer for current write */
-    size_t scheduled;              /* Number of bytes of the next write */
-    size_t written;                /* Number of bytes actually written */
-    raft__queue queue;             /* Segment queue */
-    bool finalize;                 /* Finalize the segment after writing */
+    struct uv *uv;               /* Our writer */
+    struct uv__prepare prepare;  /* Prepare segment file request */
+    struct uv__file *file;       /* File to write to */
+    struct uv__file_write write; /* Write request */
+    unsigned long long counter;  /* Open segment counter */
+    raft_index first_index;      /* Index of the first entry written */
+    raft_index last_index;       /* Index of the last entry written */
+    size_t size;                 /* Total number of bytes used */
+    unsigned next_block;         /* Next segment block to write */
+    uv_buf_t arena;              /* Memory for the write buffer */
+    uv_buf_t buf;                /* Write buffer for current write */
+    size_t scheduled;            /* Number of bytes of the next write */
+    size_t written;              /* Number of bytes actually written */
+    raft__queue queue;           /* Segment queue */
+    bool finalize;               /* Finalize the segment after writing */
 };
 
 struct append
@@ -135,7 +135,7 @@ static int ensure_segment_write_buf_is_large_enough(struct segment *s,
     len = s->uv->block_size * n;
     base = aligned_alloc(s->uv->block_size, len);
     if (base == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
     memset(base, 0, len);
 
@@ -189,7 +189,7 @@ static int encode_entries_to_segment_write_buf(struct segment *s,
     cursor = s->arena.base + s->scheduled;
 
     if (s->scheduled == 0 && s->next_block == 0) {
-        byte__put64(&cursor, IO_UV__DISK_FORMAT);
+        byte__put64(&cursor, UV__DISK_FORMAT);
     }
 
     /* Placeholder of the checksums */
@@ -231,7 +231,7 @@ static int encode_entries_to_segment_write_buf(struct segment *s,
 /* Submit a request to close the current open segment. */
 static void finalize_segment(struct segment *s)
 {
-    struct io_uv *uv = s->uv;
+    struct uv *uv = s->uv;
     int rv;
 
     rv = io_uv__finalize(uv, s->counter, s->written, s->first_index,
@@ -264,7 +264,7 @@ static void flush_append_requests(raft__queue *queue, int status)
         raft__queue *head;
         head = RAFT__QUEUE_HEAD(queue);
         RAFT__QUEUE_REMOVE(head);
-	RAFT__QUEUE_PUSH(&queue_copy, head);
+        RAFT__QUEUE_PUSH(&queue_copy, head);
     }
 
     while (!RAFT__QUEUE_IS_EMPTY(&queue_copy)) {
@@ -278,15 +278,15 @@ static void flush_append_requests(raft__queue *queue, int status)
     }
 }
 
-static void process_requests(struct io_uv *uv);
+static void process_requests(struct uv *uv);
 static void segment_write_cb(struct uv__file_write *write, const int status)
 {
     struct segment *s = write->data;
-    struct io_uv *uv = s->uv;
+    struct uv *uv = s->uv;
     unsigned n_blocks;
     int result = 0;
 
-    assert(uv->state != IO_UV__CLOSED);
+    assert(uv->state != UV__CLOSED);
 
     assert(s->buf.len % uv->block_size == 0);
     assert(s->buf.len >= uv->block_size);
@@ -299,7 +299,7 @@ static void segment_write_cb(struct uv__file_write *write, const int status)
         } else {
             errorf(uv->io, "only %d bytes written", status);
         }
-        result = RAFT_ERR_IO;
+        result = RAFT_IOERR;
         uv->errored = true;
     }
 
@@ -401,7 +401,7 @@ static int segment_write(struct segment *s)
 /* Process pending append requests.
  *
  * Submit the relevant write request if the target open segment is available. */
-static void process_requests(struct io_uv *uv)
+static void process_requests(struct uv *uv)
 {
     struct segment *segment;
     struct append *req;
@@ -493,16 +493,16 @@ err:
     uv->errored = true;
 }
 
-static void prepare_segment_cb(struct io_uv__prepare *req,
+static void prepare_segment_cb(struct uv__prepare *req,
                                struct uv__file *file,
                                unsigned long long counter,
                                int status)
 {
     struct segment *segment = req->data;
-    struct io_uv *uv = segment->uv;
+    struct uv *uv = segment->uv;
 
     /* If we have been closed, let's discard the segment. */
-    if (uv->state == IO_UV__CLOSING) {
+    if (uv->state == UV__CLOSING) {
         RAFT__QUEUE_REMOVE(&segment->queue);
 
         if (status == 0) {
@@ -521,7 +521,7 @@ static void prepare_segment_cb(struct io_uv__prepare *req,
         RAFT__QUEUE_REMOVE(&segment->queue);
         raft_free(segment);
         uv->errored = true;
-        flush_append_requests(&uv->append_writing_reqs, RAFT_ERR_IO);
+        flush_append_requests(&uv->append_writing_reqs, RAFT_IOERR);
         return;
     }
 
@@ -535,7 +535,7 @@ static void prepare_segment_cb(struct io_uv__prepare *req,
 }
 
 /* Initialize a new open segment object. */
-static void init_segment(struct segment *s, struct io_uv *uv)
+static void init_segment(struct segment *s, struct uv *uv)
 {
     s->uv = uv;
     s->prepare.data = s;
@@ -556,14 +556,14 @@ static void init_segment(struct segment *s, struct io_uv *uv)
 /* Submit a prepare request in order to get a new segment, since the append
  * request being submitted does not fit in the last segment we scheduled writes
  * for. */
-static int prepare_segment(struct io_uv *uv)
+static int prepare_segment(struct uv *uv)
 {
     struct segment *segment;
     int rv;
 
     segment = raft_malloc(sizeof *segment);
     if (segment == NULL) {
-        rv = RAFT_ENOMEM;
+        rv = RAFT_NOMEM;
         goto err;
     }
 
@@ -579,14 +579,14 @@ err:
 }
 
 /* Enqueue an append entries request */
-static int enqueue_append_request(struct io_uv *uv, struct append *req)
+static int enqueue_append_request(struct uv *uv, struct append *req)
 {
     struct segment *segment;
     raft__queue *tail;
     bool fits;
     int rv;
 
-    assert(uv->state == IO_UV__ACTIVE);
+    assert(uv->state == UV__ACTIVE);
 
     assert(req->entries != NULL);
     assert(req->n > 0);
@@ -595,7 +595,7 @@ static int enqueue_append_request(struct io_uv *uv, struct append *req)
     /* TODO: at the moment we don't allow a single batch to exceed the size of a
      * segment. */
     if (req->size > uv->block_size * uv->n_blocks + sizeof(uint64_t)) {
-        return RAFT_ERR_IO_TOOBIG;
+        return RAFT_TOOBIG;
     }
 
     /* If we have no segments yet, it means this is the very first append, and
@@ -649,7 +649,7 @@ int io_uv__append(struct raft_io *io,
                   void *data,
                   void (*cb)(void *data, int status))
 {
-    struct io_uv *uv;
+    struct uv *uv;
     struct append *req;
     int rv;
 
@@ -657,7 +657,7 @@ int io_uv__append(struct raft_io *io,
 
     req = raft_malloc(sizeof *req);
     if (req == NULL) {
-        rv = RAFT_ENOMEM;
+        rv = RAFT_NOMEM;
         goto err;
     }
 
@@ -678,7 +678,7 @@ err:
     return rv;
 }
 
-static void finalize_current_segment(struct io_uv *uv)
+static void finalize_current_segment(struct uv *uv)
 {
     struct segment *s;
     raft__queue *head;
@@ -718,7 +718,7 @@ static void finalize_current_segment(struct io_uv *uv)
     }
 }
 
-int io_uv__append_flush(struct io_uv *uv)
+int io_uv__append_flush(struct uv *uv)
 {
     int rv;
 
@@ -732,19 +732,19 @@ int io_uv__append_flush(struct io_uv *uv)
     return 0;
 }
 
-void io_uv__append_unblock(struct io_uv *uv)
+void io_uv__append_unblock(struct uv *uv)
 {
     if (!RAFT__QUEUE_IS_EMPTY(&uv->append_pending_reqs)) {
         process_requests(uv);
     }
 }
 
-void io_uv__append_stop(struct io_uv *uv)
+void io_uv__append_stop(struct uv *uv)
 {
     struct segment *s;
     raft__queue *tail;
 
-    flush_append_requests(&uv->append_pending_reqs, RAFT_ERR_IO_CANCELED);
+    flush_append_requests(&uv->append_pending_reqs, RAFT_CANCELED);
     finalize_current_segment(uv);
 
     /* Also finalize the segments that we didn't write at all and are just

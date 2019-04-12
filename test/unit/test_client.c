@@ -290,7 +290,7 @@ TEST_CASE(propose, error, oom, propose_oom_params)
     f->raft.io_queue.size = 0;*/
 
     rv = raft_apply(&f->raft, &req, &buf, 1, NULL);
-    munit_assert_int(rv, ==, RAFT_ENOMEM);
+    munit_assert_int(rv, ==, RAFT_NOMEM);
 
     raft_free(buf.base);
 
@@ -338,7 +338,7 @@ TEST_CASE(propose, error, io_err, NULL)
     raft_io_stub_fault(&f->io, 0, 1);
 
     rv = raft_apply(&f->raft, &req, &buf, 1, NULL);
-    munit_assert_int(rv, ==, RAFT_ERR_IO);
+    munit_assert_int(rv, ==, RAFT_IOERR);
 
     raft_free(buf.base);
 

@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <dirent.h>
 
 /* Maximum length of a file path. */
 #define OS_MAX_PATH_LEN 1024
@@ -54,6 +55,9 @@ int osRename(const osDir dir,
 /* Sync the given directory. */
 int osSyncDir(const osDir dir);
 
+/* Return all entries of the given directory, in alphabetically sorted order. */
+int osScanDir(const osDir dir, struct dirent ***entries, int *n_entries);
+
 /* Check whether the given file in the given directory is empty. */
 int osIsEmpty(const osDir dir, const osFilename filename, bool *empty);
 
@@ -69,6 +73,9 @@ int osWriteN(int fd, void *buf, size_t n);
 
 /* Check if the given file descriptor has reached the end of the file. */
 bool osIsAtEof(int fd);
+
+/* Get the logical block size of the file system rooted at @dir. */
+int osBlockSize(const osDir dir, size_t *size);
 
 /* Return a human-readable description of the given OS error */
 const char *osStrError(int rv);

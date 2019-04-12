@@ -1,7 +1,7 @@
 #include "../lib/io_uv.h"
 #include "../lib/runner.h"
 
-#include "../../src/io_uv.h"
+#include "../../src/uv.h"
 
 TEST_MODULE(io_uv__truncate);
 

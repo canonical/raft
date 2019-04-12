@@ -120,7 +120,7 @@ int convert__to_candidate(struct raft *r)
     /* Allocate the votes array. */
     r->candidate_state.votes = raft_malloc(n_voting * sizeof(bool));
     if (r->candidate_state.votes == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
 
     /* Start a new election round */

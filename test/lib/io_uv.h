@@ -8,7 +8,7 @@
 #include "../../include/raft.h"
 #include "../../include/raft/uv.h"
 
-#include "../../src/io_uv.h"
+#include "../../src/uv.h"
 
 #include "fs.h"
 #include "heap.h"
@@ -23,7 +23,7 @@
     char *dir;                          \
     struct raft_uv_transport transport; \
     struct raft_io io;                  \
-    struct io_uv *uv;                   \
+    struct uv *uv;                      \
     bool closed;
 
 #define IO_UV_SETUP                                             \

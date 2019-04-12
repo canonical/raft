@@ -3,22 +3,21 @@
 
 #include "assert.h"
 #include "byte.h"
-#include "io_uv.h"
 #include "io_uv_encoding.h"
-#include "io_uv_load.h"
 #include "logging.h"
+#include "uv.h"
 
 struct truncate
 {
-    struct io_uv *uv;
+    struct uv *uv;
     raft_index index;
     int status;
     raft__queue queue;
 };
 
 /* Truncate a segment that was already closed. */
-static int truncate_closed_segment(struct io_uv *uv,
-                                   struct io_uv__segment_meta *segment,
+static int truncate_closed_segment(struct uv *uv,
+                                   struct uvSegmentInfo *segment,
                                    raft_index index)
 {
     osFilename filename;
@@ -40,7 +39,7 @@ static int truncate_closed_segment(struct io_uv *uv,
     infof(uv->io, "truncate %u-%u at %u", segment->first_index,
           segment->end_index, index);
 
-    rv = io_uv__load_closed(uv, segment, &entries, &n);
+    rv = uvSegmentLoadClosed(uv, segment, &entries, &n);
     if (rv != 0) {
         goto out;
     }
@@ -68,13 +67,13 @@ static int truncate_closed_segment(struct io_uv *uv,
     buf.base = raft_malloc(buf.len);
 
     if (buf.base == NULL) {
-        rv = RAFT_ENOMEM;
+        rv = RAFT_NOMEM;
         goto out_after_open;
     }
 
     cursor = buf.base;
 
-    byte__put64(&cursor, IO_UV__DISK_FORMAT); /* Format version */
+    byte__put64(&cursor, UV__DISK_FORMAT); /* Format version */
 
     crc1_p = cursor;
     byte__put32(&cursor, 0);
@@ -112,12 +111,12 @@ static int truncate_closed_segment(struct io_uv *uv,
 
     if (rv == -1) {
         errorf(uv->io, "write %s: %s", filename, strerror(errno));
-        rv = RAFT_ERR_IO;
+        rv = RAFT_IOERR;
         goto out_after_open;
     }
     if (rv != (int)buf.len) {
         errorf(uv->io, "write %s: only %d bytes written", filename, rv);
-        rv = RAFT_ERR_IO;
+        rv = RAFT_IOERR;
         goto out_after_open;
     }
 
@@ -127,12 +126,12 @@ static int truncate_closed_segment(struct io_uv *uv,
         rv = write(fd, entry->buf.base, entry->buf.len);
         if (rv == -1) {
             errorf(uv->io, "write %s: %s", filename, strerror(errno));
-            rv = RAFT_ERR_IO;
+            rv = RAFT_IOERR;
             goto out_after_open;
         }
         if (rv != (int)entry->buf.len) {
             errorf(uv->io, "write %s: only %d bytes written", filename, rv);
-            rv = RAFT_ERR_IO;
+            rv = RAFT_IOERR;
             goto out_after_open;
         }
     }
@@ -140,7 +139,7 @@ static int truncate_closed_segment(struct io_uv *uv,
     rv = fsync(fd);
     if (rv == -1) {
         errorf(uv->io, "fsync %s: %s", filename, strerror(errno));
-        rv = RAFT_ERR_IO;
+        rv = RAFT_IOERR;
         goto out_after_open;
     }
 
@@ -167,10 +166,10 @@ out:
 static void work_cb(uv_work_t *work)
 {
     struct truncate *r = work->data;
-    struct io_uv *uv = r->uv;
-    struct io_uv__snapshot_meta *snapshots;
-    struct io_uv__segment_meta *segments;
-    struct io_uv__segment_meta *segment;
+    struct uv *uv = r->uv;
+    struct uvSnapshotInfo *snapshots;
+    struct uvSegmentInfo *segments;
+    struct uvSegmentInfo *segment;
     size_t n_snapshots;
     size_t n_segments;
     size_t i;
@@ -178,7 +177,7 @@ static void work_cb(uv_work_t *work)
     int rv;
 
     /* Load all segments on disk. */
-    rv = io_uv__load_list(uv, &snapshots, &n_snapshots, &segments, &n_segments);
+    rv = uvList(uv, &snapshots, &n_snapshots, &segments, &n_segments);
     if (rv != 0) {
         goto err;
     }
@@ -225,7 +224,7 @@ static void work_cb(uv_work_t *work)
         if (rv != 0) {
             errorf(uv->io, "unlink segment %s: %s", segment->filename,
                    uv_strerror(rv));
-            rv = RAFT_ERR_IO;
+            rv = RAFT_IOERR;
             goto err_after_list;
         }
     }
@@ -233,7 +232,7 @@ static void work_cb(uv_work_t *work)
     rv = osSyncDir(uv->dir);
     if (rv != 0) {
         errorf(uv->io, "sync data directory: %s", uv_strerror(rv));
-        rv = RAFT_ERR_IO;
+        rv = RAFT_IOERR;
         goto err_after_list;
     }
 
@@ -258,7 +257,7 @@ err:
 static void after_work_cb(uv_work_t *work, int status)
 {
     struct truncate *r = work->data;
-    struct io_uv *uv = r->uv;
+    struct uv *uv = r->uv;
 
     assert(status == 0);
 
@@ -282,7 +281,7 @@ static void after_work_cb(uv_work_t *work, int status)
 /* Start executing a truncate request. */
 static int truncate_start(struct truncate *r)
 {
-    struct io_uv *uv = r->uv;
+    struct uv *uv = r->uv;
     int rv;
 
     assert(uv->truncate_work.data == NULL);
@@ -292,14 +291,14 @@ static int truncate_start(struct truncate *r)
     if (rv != 0) {
         errorf(uv->io, "start to truncate log at index %lld: %s", r->index,
                uv_strerror(rv));
-        return RAFT_ERR_IO;
+        return RAFT_IOERR;
     }
 
     return 0;
 }
 
 /* Process pending truncate requests. */
-static void process_requests(struct io_uv *uv)
+static void process_requests(struct uv *uv)
 {
     struct truncate *r;
     raft__queue *head;
@@ -334,7 +333,7 @@ static void process_requests(struct io_uv *uv)
 
 int io_uv__truncate(struct raft_io *io, raft_index index)
 {
-    struct io_uv *uv;
+    struct uv *uv;
 
     uv = io->impl;
 
@@ -347,7 +346,7 @@ int io_uv__truncate(struct raft_io *io, raft_index index)
 
     req = raft_malloc(sizeof *req);
     if (req == NULL) {
-        rv = RAFT_ENOMEM;
+        rv = RAFT_NOMEM;
         goto err;
     }
     req->uv = uv;
@@ -377,12 +376,12 @@ err:
     return rv;
 }
 
-void io_uv__truncate_unblock(struct io_uv *uv)
+void io_uv__truncate_unblock(struct uv *uv)
 {
     process_requests(uv);
 }
 
-void io_uv__truncate_stop(struct io_uv *uv)
+void io_uv__truncate_stop(struct uv *uv)
 {
     while (!RAFT__QUEUE_IS_EMPTY(&uv->truncate_reqs)) {
         struct truncate *r;

@@ -1,7 +1,7 @@
 #include "../lib/io_uv.h"
 #include "../lib/runner.h"
 
-#include "../../src/io_uv.h"
+#include "../../src/uv.h"
 
 TEST_MODULE(io_uv__prepare);
 
@@ -12,7 +12,7 @@ TEST_MODULE(io_uv__prepare);
 struct fixture
 {
     IO_UV_FIXTURE;
-    struct io_uv__prepare req;
+    struct uv__prepare req;
     int invoked;                /* Number of times __get_cb was invoked */
     struct uv__file *file;      /* Last open segment passed to __get_cb */
     unsigned long long counter; /* Last counter passed to __get_cb */
@@ -40,7 +40,7 @@ static void tear_down(void *data)
     IO_UV_TEAR_DOWN;
 }
 
-static void prepare_cb(struct io_uv__prepare *req,
+static void prepare_cb(struct uv__prepare *req,
                        struct uv__file *file,
                        unsigned long long counter,
                        int status)
@@ -139,7 +139,7 @@ TEST_CASE(error, no_resources, NULL)
     test_aio_fill(&ctx, 0);
 
     prepare__invoke;
-    prepare__wait_cb(RAFT_ERR_IO);
+    prepare__wait_cb(RAFT_IOERR);
 
     test_aio_destroy(ctx);
 
@@ -150,14 +150,14 @@ TEST_CASE(error, no_resources, NULL)
 TEST_CASE(error, no_space, NULL)
 {
     struct fixture *f = data;
-    struct io_uv *uv = f->io.impl;
+    struct uv *uv = f->io.impl;
 
     (void)params;
 
     uv->n_blocks = 32768;
 
     prepare__invoke;
-    prepare__wait_cb(RAFT_ERR_IO);
+    prepare__wait_cb(RAFT_IOERR);
 
     return MUNIT_OK;
 }
@@ -181,7 +181,7 @@ TEST_CASE(error, oom, error_oom_params)
     test_heap_fault_enable(&f->heap);
 
     prepare__invoke;
-    prepare__wait_cb(RAFT_ENOMEM);
+    prepare__wait_cb(RAFT_NOMEM);
 
     return MUNIT_OK;
 }
@@ -217,7 +217,7 @@ TEST_CASE(close, cancel_requests, NULL)
 
     prepare__invoke;
     io_uv__close;
-    prepare__wait_cb(RAFT_ERR_IO_CANCELED);
+    prepare__wait_cb(RAFT_CANCELED);
 
     return MUNIT_OK;
 }

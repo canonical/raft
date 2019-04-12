@@ -45,11 +45,6 @@ typedef void (*uv__file_write_cb)(struct uv__file_write *req, int status);
 typedef void (*uv__file_close_cb)(struct uv__file *f);
 
 /**
- * Get the logical block size of the file system rooted at @dir.
- */
-int uv__file_block_size(const char *dir, size_t *size);
-
-/**
  * Initialize a file handle.
  */
 int uv__file_init(struct uv__file *f, struct uv_loop_s *loop);

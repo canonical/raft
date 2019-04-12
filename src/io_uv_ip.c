@@ -25,7 +25,7 @@ int raft__io_uv_ip_parse(const char *address, struct sockaddr_in *addr)
 
     rv = uv_ip4_addr(host, atoi(port), addr);
     if (rv != 0) {
-        return RAFT_ERR_IO_CONNECT;
+        return RAFT_CANTCONNECT;
     }
 
     return 0;
