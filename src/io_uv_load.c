@@ -2,16 +2,16 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "../include/raft/io_uv.h"
+#include "../include/raft/uv.h"
 
 #include "assert.h"
 #include "byte.h"
 #include "configuration.h"
+#include "entry.h"
 #include "io_uv.h"
 #include "io_uv_encoding.h"
 #include "io_uv_load.h"
 #include "logging.h"
-#include "entry.h"
 
 /* Template string for snapshot filenames: snapshot term, snapshot index,
  * creation timestamp (milliseconds since epoch). */
@@ -366,9 +366,9 @@ int io_uv__load_all(struct io_uv *uv,
         /* TODO: entries are behind the snapshot, we should delete them from
          * disk. */
         *start_index = (*snapshot)->index + 1;
-	entry_batches__destroy(*entries, *n);
-	*entries = NULL;
-	*n = 0;
+        entry_batches__destroy(*entries, *n);
+        *entries = NULL;
+        *n = 0;
     }
 
     return 0;
@@ -1106,7 +1106,7 @@ static int load_entries_batch_from_segment(struct raft_io *io,
      * expect. This is mainly a protection against allocating too much
      * memory. Each entry will consume at least 4 words (for term, type, size
      * and payload). */
-    max_n = RAFT_IO_UV_MAX_SEGMENT_SIZE / (sizeof(uint64_t) * 4);
+    max_n = RAFT_UV_MAX_SEGMENT_SIZE / (sizeof(uint64_t) * 4);
 
     if (n > max_n) {
         errorf(io, "batch has %u entries (preamble at %d)", n, pos);

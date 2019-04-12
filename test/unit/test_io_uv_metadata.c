@@ -5,10 +5,10 @@
 #include "../lib/io.h"
 #include "../lib/runner.h"
 
-#include "../../include/raft/io_uv.h"
+#include "../../include/raft/uv.h"
 
 #include "../../src/byte.h"
-#include "../../src/io_uv_metadata.h"
+#include "../../src/uv_metadata.h"
 
 TEST_MODULE(io_uv__metadata);
 
@@ -56,7 +56,7 @@ TEST_TEAR_DOWN(load, tear_down);
  * values. */
 #define load__write(N, FORMAT, VERSION, TERM, VOTED_FOR)        \
     {                                                           \
-        uint8_t buf[RAFT_IO_UV_METADATA_SIZE];                  \
+        uint8_t buf[RAFT_UV_METADATA_SIZE];                     \
         void *cursor = buf;                                     \
         char filename[strlen("metadataN") + 1];                 \
         sprintf(filename, "metadata%d", N);                     \
@@ -87,7 +87,7 @@ TEST_TEAR_DOWN(load, tear_down);
  * given values. */
 #define load__assert_file(N, VERSION, TERM, VOTED_FOR)           \
     {                                                            \
-        uint8_t buf2[RAFT_IO_UV_METADATA_SIZE];                  \
+        uint8_t buf2[RAFT_UV_METADATA_SIZE];                     \
         const void *cursor = buf2;                               \
         char filename[strlen("metadataN") + 1];                  \
         sprintf(filename, "metadata%d", N);                      \

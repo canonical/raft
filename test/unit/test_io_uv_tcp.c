@@ -4,7 +4,7 @@
 #include "../lib/uv.h"
 
 #include "../../include/raft.h"
-#include "../../include/raft/io_uv.h"
+#include "../../include/raft/uv.h"
 
 #include "../../src/byte.h"
 
@@ -14,11 +14,11 @@ TEST_MODULE(io_uv_tcp);
  * Helpers
  */
 
-#define FIXTURE                            \
-    struct raft_heap heap;                 \
-    struct test_tcp tcp;                   \
-    struct uv_loop_s loop;                 \
-    struct raft_io_uv_transport transport; \
+#define FIXTURE                         \
+    struct raft_heap heap;              \
+    struct test_tcp tcp;                \
+    struct uv_loop_s loop;              \
+    struct raft_uv_transport transport; \
     bool closed;
 
 #define SETUP                                                   \
@@ -27,7 +27,7 @@ TEST_MODULE(io_uv_tcp);
     test_heap_setup(params, &f->heap);                          \
     test_tcp_setup(params, &f->tcp);                            \
     test_uv_setup(params, &f->loop);                            \
-    raft_io_uv_tcp_init(&f->transport, &f->loop);               \
+    raft_uv_tcp_init(&f->transport, &f->loop);                  \
     rv = f->transport.init(&f->transport, 1, "127.0.0.1:9000"); \
     munit_assert_int(rv, ==, 0);                                \
     f->closed = false;
@@ -37,7 +37,7 @@ TEST_MODULE(io_uv_tcp);
         f->transport.close(&f->transport, NULL); \
     }                                            \
     test_uv_stop(&f->loop);                      \
-    raft_io_uv_tcp_close(&f->transport);         \
+    raft_uv_tcp_close(&f->transport);         \
     test_uv_tear_down(&f->loop);                 \
     test_tcp_tear_down(&f->tcp);                 \
     test_heap_tear_down(&f->heap);
@@ -68,7 +68,7 @@ struct listen_fixture
     } handshake;
 };
 
-static void listen__accept_cb(struct raft_io_uv_transport *t,
+static void listen__accept_cb(struct raft_uv_transport *t,
                               unsigned id,
                               const char *address,
                               struct uv_stream_s *stream)
@@ -299,7 +299,7 @@ TEST_GROUP(connect, error)
 struct connect_fixture
 {
     FIXTURE;
-    struct raft_io_uv_connect req;
+    struct raft_uv_connect req;
     int invoked;
     int status;
     struct uv_stream_s *stream;
@@ -322,7 +322,7 @@ TEST_TEAR_DOWN(connect)
     TEAR_DOWN;
 }
 
-static void connect__connect_cb(struct raft_io_uv_connect *req,
+static void connect__connect_cb(struct raft_uv_connect *req,
                                 struct uv_stream_s *stream,
                                 int status)
 {

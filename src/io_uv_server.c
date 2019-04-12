@@ -1,6 +1,6 @@
 #include <string.h>
 
-#include "../include/raft/io_uv.h"
+#include "../include/raft/uv.h"
 
 #include "assert.h"
 #include "byte.h"
@@ -402,7 +402,7 @@ err:
     return rv;
 }
 
-static void accept_cb(struct raft_io_uv_transport *transport,
+static void accept_cb(struct raft_uv_transport *transport,
                       unsigned id,
                       const char *address,
                       struct uv_stream_s *stream)

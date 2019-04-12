@@ -13,7 +13,7 @@ pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = raft.pc
 
 AM_CFLAGS += -I$(top_srcdir)/include -Wall
-if IO_UV
+if UV
   AM_CFLAGS += $(UV_CFLAGS)
 endif
 if DEBUG
@@ -31,7 +31,7 @@ endif
 
 lib_LTLIBRARIES += libraft.la
 libraft_la_LDFLAGS = -version-info 0:7:0
-if IO_UV
+if UV
   libraft_la_LDFLAGS += $(UV_LIBS)
 endif
 libraft_la_SOURCES = \
@@ -61,7 +61,7 @@ libraft_la_SOURCES = \
   src/start.c \
   src/state.c \
   src/tick.c
-if IO_UV
+if UV
   libraft_la_SOURCES += \
   src/io_uv.c \
   src/io_uv_append.c \
@@ -71,7 +71,7 @@ if IO_UV
   src/io_uv_fs.c \
   src/io_uv_ip.c \
   src/io_uv_load.c \
-  src/io_uv_metadata.c \
+  src/uv_metadata.c \
   src/io_uv_prepare.c \
   src/io_uv_server.c \
   src/io_uv_snapshot.c \
@@ -94,9 +94,9 @@ if FIXTURE
   include/raft/io_stub.h \
   include/raft/fixture.h
 endif
-if IO_UV
+if UV
   pkginclude_HEADERS += \
-  include/raft/io_uv.h
+  include/raft/uv.h
 endif
 
 check_PROGRAMS += \
@@ -112,7 +112,7 @@ test_lib_SOURCES = \
   test/lib/munit.c \
   test/lib/raft.c \
   test/lib/tcp.c
-if IO_UV
+if UV
 test_lib_SOURCES += \
   test/lib/io_uv.c \
   test/lib/uv.c
@@ -136,7 +136,7 @@ unit_test_SOURCES += \
   test/unit/test_snapshot.c \
   test/unit/test_start.c \
   test/unit/test_tick.c
-if IO_UV
+if UV
   unit_test_SOURCES += \
   test/unit/test_io_uv.c \
   test/unit/test_io_uv_append.c \
@@ -158,7 +158,7 @@ if FIXTURE
 endif
 unit_test_CFLAGS = $(AM_CFLAGS) -DRAFT_TEST -DMUNIT_TEST_NAME_LEN=60
 unit_test_LDFLAGS =
-if IO_UV
+if UV
   unit_test_LDFLAGS += $(UV_LIBS)
 endif
 
@@ -172,7 +172,7 @@ fuzzy_test_SOURCES += \
 fuzzy_test_CFLAGS = $(AM_CFLAGS)
 fuzzy_test_LDADD = libraft.la
 fuzzy_test_LDFLAGS =
-if IO_UV
+if UV
   fuzzy_test_LDFLAGS += $(UV_LIBS)
 endif
 

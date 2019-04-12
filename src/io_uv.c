@@ -5,7 +5,7 @@
 #include <unistd.h>
 
 #include "../include/raft.h"
-#include "../include/raft/io_uv.h"
+#include "../include/raft/uv.h"
 
 #include "assert.h"
 #include "byte.h"
@@ -105,7 +105,7 @@ void io_uv__maybe_close(struct io_uv *uv)
     }
 }
 
-static void transport_close_cb(struct raft_io_uv_transport *t)
+static void transport_close_cb(struct raft_uv_transport *t)
 {
     struct io_uv *uv = t->data;
     io_uv__maybe_close(uv);
@@ -264,10 +264,10 @@ static void copy_dir(const char *dir1, char **dir2)
     }
 }
 
-int raft_io_uv_init(struct raft_io *io,
-                    struct uv_loop_s *loop,
-                    const char *dir,
-                    struct raft_io_uv_transport *transport)
+int raft_uv_init(struct raft_io *io,
+                 struct uv_loop_s *loop,
+                 const char *dir,
+                 struct raft_uv_transport *transport)
 {
     struct io_uv *uv;
     int rv;
@@ -343,8 +343,8 @@ int raft_io_uv_init(struct raft_io *io,
     }
 
     /* We expect the maximum segment size to be a multiple of the block size */
-    assert(RAFT_IO_UV_MAX_SEGMENT_SIZE % uv->block_size == 0);
-    uv->n_blocks = RAFT_IO_UV_MAX_SEGMENT_SIZE / uv->block_size;
+    assert(RAFT_UV_MAX_SEGMENT_SIZE % uv->block_size == 0);
+    uv->n_blocks = RAFT_UV_MAX_SEGMENT_SIZE / uv->block_size;
 
     uv->tick_cb = NULL;
     uv->close_cb = NULL;
@@ -376,7 +376,7 @@ err:
     return rv;
 }
 
-void raft_io_uv_close(struct raft_io *io)
+void raft_uv_close(struct raft_io *io)
 {
     struct io_uv *uv;
     uv = io->impl;

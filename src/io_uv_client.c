@@ -1,6 +1,6 @@
 #include <string.h>
 
-#include "../include/raft/io_uv.h"
+#include "../include/raft/uv.h"
 
 #include "assert.h"
 #include "io_uv.h"
@@ -54,7 +54,7 @@ struct io_uv__client
 {
     struct io_uv *uv;                  /* libuv I/O implementation object */
     struct uv_timer_s timer;           /* Schedule connection attempts */
-    struct raft_io_uv_connect connect; /* Connection request */
+    struct raft_uv_connect connect; /* Connection request */
     struct uv_stream_s *stream;        /* Connection handle */
     unsigned n_connect_attempt;        /* Consecutive connection attempts */
     unsigned id;                       /* ID of the other server */
@@ -245,7 +245,7 @@ static void client_timer_cb(uv_timer_t *timer)
     client_connect(c); /* Retry to connect. */
 }
 
-static void client_connect_cb(struct raft_io_uv_connect *req,
+static void client_connect_cb(struct raft_uv_connect *req,
                               struct uv_stream_s *stream,
                               int status)
 {

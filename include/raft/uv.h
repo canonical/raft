@@ -3,18 +3,19 @@
 
 #include <uv.h>
 
-#define RAFT_IO_UV_METADATA_SIZE (8 * 4)              /* Four 64-bit words */
-#define RAFT_IO_UV_MAX_SEGMENT_SIZE (8 * 1024 * 1024) /* 8 Megabytes */
+#include "../raft.h"
 
-struct raft_io;
-struct raft_io_uv_transport;
+#define RAFT_UV_METADATA_SIZE (8 * 4)              /* Four 64-bit words */
+#define RAFT_UV_MAX_SEGMENT_SIZE (8 * 1024 * 1024) /* 8 Megabytes */
+
+struct raft_uv_transport;
 
 /**
  * Configure the given @raft_io instance to use a libuv-based I/O
  * implementation.
  *
- * The @dir path will be copied, and its memory can possibly be reased once this
- * function returns.
+ * The @dir path will be copied, and its memory can possibly be released once
+ * this function returns.
  *
  * The implementation of metadata and log persistency is virtually the same as
  * the one found in LogCabin [0].
@@ -25,7 +26,7 @@ struct raft_io_uv_transport;
  * contiguous entries that are part of the log. Closed segments are never
  * written to again (but may be renamed and truncated if a suffix of the log is
  * truncated). Open segments are where newly appended entries go. Once an open
- * segment reaches RAFT_IO_UV_MAX_SEGMENT_SIZE, it is closed and a new one is
+ * segment reaches #RAFT_UV_MAX_SEGMENT_SIZE, it is closed and a new one is
  * used.
  *
  * Metadata files are named "metadata1" and "metadata2". The code alternates
@@ -76,12 +77,12 @@ struct raft_io_uv_transport;
  *
  * [0] https://github.com/logcabin/logcabin/blob/master/Storage/SegmentedLog.h
  */
-int raft_io_uv_init(struct raft_io *io,
-                    struct uv_loop_s *loop,
-                    const char *dir,
-                    struct raft_io_uv_transport *transport);
+int raft_uv_init(struct raft_io *io,
+                 struct uv_loop_s *loop,
+                 const char *dir,
+                 struct raft_uv_transport *transport);
 
-void raft_io_uv_close(struct raft_io *io);
+void raft_uv_close(struct raft_io *io);
 
 /**
  * Callback invoked by the transport implementation when a new incoming
@@ -92,41 +93,41 @@ void raft_io_uv_close(struct raft_io *io);
  * Ownership of @stream is transfered to user code, which is responsible of
  * uv_close()'ing it and then releasing its memory.
  */
-typedef void (*raft_io_uv_accept_cb)(struct raft_io_uv_transport *t,
-                                     unsigned id,
-                                     const char *address,
-                                     struct uv_stream_s *stream);
+typedef void (*raft_uv_accept_cb)(struct raft_uv_transport *t,
+                                  unsigned id,
+                                  const char *address,
+                                  struct uv_stream_s *stream);
 
 /**
  * Callback invoked by the transport implementation after a connect request has
  * completed. If status is #0, then @stream will point to a valid handle, which
  * user code is then responsible to uv_close() and then release.
  */
-struct raft_io_uv_connect;
-typedef void (*raft_io_uv_connect_cb)(struct raft_io_uv_connect *req,
-                                      struct uv_stream_s *stream,
-                                      int status);
+struct raft_uv_connect;
+typedef void (*raft_uv_connect_cb)(struct raft_uv_connect *req,
+                                   struct uv_stream_s *stream,
+                                   int status);
 
 /**
  * Handle to a connect request.
  */
-struct raft_io_uv_connect
+struct raft_uv_connect
 {
-    void *data;               /* User data */
-    raft_io_uv_connect_cb cb; /* Callback */
+    void *data;            /* User data */
+    raft_uv_connect_cb cb; /* Callback */
 };
 
 /**
  * Callback invoked by the transport implementation after a close request is
  * completed.
  */
-typedef void (*raft_io_uv_transport_close_cb)(struct raft_io_uv_transport *t);
+typedef void (*raft_uv_transport_close_cb)(struct raft_uv_transport *t);
 
 /**
  * Interface to establish outgoing connections to other Raft servers and to
  * accept incoming connections from them.
  */
-struct raft_io_uv_transport
+struct raft_uv_transport
 {
     /**
      * User defined data.
@@ -141,9 +142,7 @@ struct raft_io_uv_transport
     /**
      * Initialize the transport with the given server's identity.
      */
-    int (*init)(struct raft_io_uv_transport *t,
-                unsigned id,
-                const char *address);
+    int (*init)(struct raft_uv_transport *t, unsigned id, const char *address);
 
     /**
      * Listen for incoming connections.
@@ -152,7 +151,7 @@ struct raft_io_uv_transport
      * initializer must be invoked with the relevant details of the connecting
      * Raft server.
      */
-    int (*listen)(struct raft_io_uv_transport *t, raft_io_uv_accept_cb cb);
+    int (*listen)(struct raft_uv_transport *t, raft_uv_accept_cb cb);
 
     /**
      * Connect to the server with the given ID and address.
@@ -161,11 +160,11 @@ struct raft_io_uv_transport
      * or the connection attempt has failed. The memory pointed by @req can be
      * released only after @cb has fired.
      */
-    int (*connect)(struct raft_io_uv_transport *t,
-                   struct raft_io_uv_connect *req,
+    int (*connect)(struct raft_uv_transport *t,
+                   struct raft_uv_connect *req,
                    unsigned id,
                    const char *address,
-                   raft_io_uv_connect_cb cb);
+                   raft_uv_connect_cb cb);
 
     /**
      * Close the transport.
@@ -181,15 +180,14 @@ struct raft_io_uv_transport
      * - Invoke the @cb callback passed to this method once it's safe to release
      *   the memory of the transport object.
      */
-    void (*close)(struct raft_io_uv_transport *t,
-                  raft_io_uv_transport_close_cb cb);
+    void (*close)(struct raft_uv_transport *t, raft_uv_transport_close_cb cb);
 };
 
 /**
  * Init a transport interface that uses TCP sockets.
  */
-int raft_io_uv_tcp_init(struct raft_io_uv_transport *t, struct uv_loop_s *loop);
+int raft_uv_tcp_init(struct raft_uv_transport *t, struct uv_loop_s *loop);
 
-void raft_io_uv_tcp_close(struct raft_io_uv_transport *t);
+void raft_uv_tcp_close(struct raft_uv_transport *t);
 
 #endif /* RAFT_IO_UV_H */

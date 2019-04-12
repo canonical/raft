@@ -2,8 +2,8 @@
  * Read and write Raft metadata state.
  */
 
-#ifndef RAFT_IO_UV_METADATA_H_
-#define RAFT_IO_UV_METADATA_H_
+#ifndef RAFT_UV_METADATA_H_
+#define RAFT_UV_METADATA_H_
 
 #include "../include/raft.h"
 
@@ -34,4 +34,4 @@ int io_uv__metadata_store(struct raft_io *io,
                           const char *dir,
                           const struct io_uv__metadata *metadata);
 
-#endif /* RAFT_IO_UV_METADATA_H */
+#endif /* RAFT_UV_METADATA_H */

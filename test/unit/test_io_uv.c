@@ -1,5 +1,5 @@
 #include "../../include/raft.h"
-#include "../../include/raft/io_uv.h"
+#include "../../include/raft/uv.h"
 
 #include "../../src/byte.h"
 #include "../../src/io_uv_encoding.h"
@@ -22,7 +22,7 @@ struct fixture
     struct test_tcp tcp;
     struct uv_loop_s loop;
     char *dir;
-    struct raft_io_uv_transport transport;
+    struct raft_uv_transport transport;
     struct raft_io io;
     struct raft_io_send req;
     struct
@@ -101,10 +101,10 @@ static void *setup(const MunitParameter params[], void *user_data)
 
     f->dir = test_dir_setup(params);
 
-    rv = raft_io_uv_tcp_init(&f->transport, &f->loop);
+    rv = raft_uv_tcp_init(&f->transport, &f->loop);
     munit_assert_int(rv, ==, 0);
 
-    rv = raft_io_uv_init(&f->io, &f->loop, f->dir, &f->transport);
+    rv = raft_uv_init(&f->io, &f->loop, f->dir, &f->transport);
     munit_assert_int(rv, ==, 0);
 
     rv = f->io.init(&f->io, 1, "127.0.0.1:9000");
@@ -141,8 +141,8 @@ static void tear_down(void *data)
 
     munit_assert_true(f->stop_cb.invoked);
 
-    raft_io_uv_close(&f->io);
-    raft_io_uv_tcp_close(&f->transport);
+    raft_uv_close(&f->io);
+    raft_uv_tcp_close(&f->transport);
 
     test_dir_tear_down(f->dir);
 
@@ -171,7 +171,7 @@ static void tear_down(void *data)
     }
 
 /**
- * raft_io_uv_init
+ * raft_uv_init
  */
 
 TEST_SUITE(init);
@@ -198,7 +198,7 @@ TEST_CASE(init, oom, init_oom_params)
 
     test_heap_fault_enable(&f->heap);
 
-    rv = raft_io_uv_init(&io, &f->loop, f->dir, &f->transport);
+    rv = raft_uv_init(&io, &f->loop, f->dir, &f->transport);
     munit_assert_int(rv, ==, RAFT_ENOMEM);
 
     return MUNIT_OK;
@@ -214,7 +214,7 @@ TEST_CASE(init, not_a_dir, NULL)
 
     (void)params;
 
-    rv = raft_io_uv_init(&io, &f->loop, "/dev/null", &f->transport);
+    rv = raft_uv_init(&io, &f->loop, "/dev/null", &f->transport);
     munit_assert_int(rv, ==, RAFT_ERR_IO);
 
     return MUNIT_OK;
@@ -224,7 +224,7 @@ TEST_CASE(init, not_a_dir, NULL)
 TEST_CASE(init, dir_too_long, NULL)
 {
     struct fixture *f = data;
-    struct raft_io_uv_transport transport;
+    struct raft_uv_transport transport;
     struct raft_io io;
     int rv;
 
@@ -235,7 +235,7 @@ TEST_CASE(init, dir_too_long, NULL)
     memset(dir, 'a', sizeof dir - 1);
     dir[sizeof dir - 1] = 0;
 
-    rv = raft_io_uv_init(&io, &f->loop, dir, &transport);
+    rv = raft_uv_init(&io, &f->loop, dir, &transport);
     munit_assert_int(rv, ==, RAFT_ERR_IO_NAMETOOLONG);
 
     return MUNIT_OK;
@@ -245,7 +245,7 @@ TEST_CASE(init, dir_too_long, NULL)
 TEST_CASE(init, cant_create_dir, NULL)
 {
     struct fixture *f = data;
-    struct raft_io_uv_transport transport;
+    struct raft_uv_transport transport;
     struct raft_io io;
     int rv;
 
@@ -253,7 +253,7 @@ TEST_CASE(init, cant_create_dir, NULL)
 
     const char *dir = "/non/existing/path";
 
-    rv = raft_io_uv_init(&io, &f->loop, dir, &transport);
+    rv = raft_uv_init(&io, &f->loop, dir, &transport);
     munit_assert_int(rv, ==, RAFT_ERR_IO);
 
     return MUNIT_OK;
@@ -264,14 +264,14 @@ TEST_CASE(init, access_error, NULL)
 {
     struct fixture *f = data;
     struct raft_io io;
-    struct raft_io_uv_transport transport;
+    struct raft_uv_transport transport;
     int rv;
 
     (void)params;
 
     const char *dir = "/root/foo";
 
-    rv = raft_io_uv_init(&io, &f->loop, dir, &transport);
+    rv = raft_uv_init(&io, &f->loop, dir, &transport);
     munit_assert_int(rv, ==, RAFT_ERR_IO);
 
     return MUNIT_OK;

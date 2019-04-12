@@ -1,6 +1,6 @@
 #include <string.h>
 
-#include "../include/raft/io_uv.h"
+#include "../include/raft/uv.h"
 
 #include "assert.h"
 #include "byte.h"
@@ -271,8 +271,8 @@ err:
     assert(rv != 0);
 }
 
-int io_uv__tcp_listen(struct raft_io_uv_transport *transport,
-                      raft_io_uv_accept_cb cb)
+int io_uv__tcp_listen(struct raft_uv_transport *transport,
+                      raft_uv_accept_cb cb)
 {
     struct io_uv__tcp *t;
     struct sockaddr_in addr;

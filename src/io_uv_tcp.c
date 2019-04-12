@@ -1,7 +1,7 @@
 #include <string.h>
 
 #include "../include/raft.h"
-#include "../include/raft/io_uv.h"
+#include "../include/raft/uv.h"
 
 #include "assert.h"
 #include "byte.h"
@@ -9,7 +9,7 @@
 #include "io_uv_tcp.h"
 
 /* Implementation of raft_io_uv_transport->init. */
-static int tcp_init(struct raft_io_uv_transport *transport,
+static int tcp_init(struct raft_uv_transport *transport,
                     unsigned id,
                     const char *address)
 {
@@ -33,8 +33,8 @@ static void listener_close_cb(struct uv_handle_s *handle)
 }
 
 /* Implementation of raft_io_uv_transport->close. */
-static void tcp_close(struct raft_io_uv_transport *transport,
-                      raft_io_uv_transport_close_cb cb)
+static void tcp_close(struct raft_uv_transport *transport,
+                      raft_uv_transport_close_cb cb)
 {
     struct io_uv__tcp *t = transport->impl;
     t->close_cb = cb;
@@ -43,7 +43,7 @@ static void tcp_close(struct raft_io_uv_transport *transport,
     uv_close((struct uv_handle_s *)&t->listener, listener_close_cb);
 }
 
-int raft_io_uv_tcp_init(struct raft_io_uv_transport *transport,
+int raft_uv_tcp_init(struct raft_uv_transport *transport,
                         struct uv_loop_s *loop)
 {
     struct io_uv__tcp *t;
@@ -72,7 +72,7 @@ int raft_io_uv_tcp_init(struct raft_io_uv_transport *transport,
     return 0;
 }
 
-void raft_io_uv_tcp_close(struct raft_io_uv_transport *transport)
+void raft_uv_tcp_close(struct raft_uv_transport *transport)
 {
     raft_free(transport->impl);
 }

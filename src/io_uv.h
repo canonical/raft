@@ -7,7 +7,7 @@
 
 #include "../include/raft.h"
 
-#include "io_uv_metadata.h"
+#include "uv_metadata.h"
 #include "uv_file.h"
 
 /**
@@ -30,38 +30,38 @@ typedef unsigned long long io_uv__counter;
  */
 struct io_uv
 {
-    struct raft_io *io;                     /* I/O object we're implementing */
-    struct uv_loop_s *loop;                 /* UV event loop */
-    char *dir;                              /* Data directory */
-    struct raft_io_uv_transport *transport; /* Network transport */
-    unsigned id;                            /* Server ID */
-    int state;                              /* Current state */
-    bool errored;                           /* If a disk I/O error was hit */
-    size_t block_size;                      /* Block size of the data dir */
-    unsigned n_blocks;                      /* N. of blocks in a segment */
-    struct io_uv__client **clients;         /* Outgoing connections */
-    unsigned n_clients;                     /* Length of the clients array */
-    struct io_uv__server **servers;         /* Incoming connections */
-    unsigned n_servers;                     /* Length of the servers array */
-    unsigned connect_retry_delay;           /* Client connection retry delay */
-    struct uv__file *preparing;             /* File segment being prepared */
-    raft__queue prepare_reqs;               /* Pending prepare requests. */
-    raft__queue prepare_pool;               /* Prepared open segments */
-    io_uv__counter prepare_next_counter;    /* Counter of next open segment */
-    raft_index append_next_index;           /* Index of next entry to append */
-    raft__queue append_segments;            /* Open segments in use. */
-    raft__queue append_pending_reqs;        /* Pending append requests. */
-    raft__queue append_writing_reqs;        /* Append requests in flight */
-    raft__queue finalize_reqs;              /* Segments waiting to be closed */
-    raft_index finalize_last_index;         /* Last index of last closed seg */
-    struct uv_work_s finalize_work;         /* Resize and rename segments */
-    raft__queue truncate_reqs;              /* Pending truncate requests */
-    struct uv_work_s truncate_work;         /* Execute truncate log requests */
-    raft__queue snapshot_put_reqs;          /* Inflight put snapshot requests */
-    raft__queue snapshot_get_reqs;          /* Inflight get snapshot requests */
-    struct uv_work_s snapshot_put_work;     /* Execute snapshot put requests */
-    struct io_uv__metadata metadata;        /* Cache of metadata on disk */
-    struct uv_timer_s timer;                /* Timer for periodic ticks */
+    struct raft_io *io;                  /* I/O object we're implementing */
+    struct uv_loop_s *loop;              /* UV event loop */
+    char *dir;                           /* Data directory */
+    struct raft_uv_transport *transport; /* Network transport */
+    unsigned id;                         /* Server ID */
+    int state;                           /* Current state */
+    bool errored;                        /* If a disk I/O error was hit */
+    size_t block_size;                   /* Block size of the data dir */
+    unsigned n_blocks;                   /* N. of blocks in a segment */
+    struct io_uv__client **clients;      /* Outgoing connections */
+    unsigned n_clients;                  /* Length of the clients array */
+    struct io_uv__server **servers;      /* Incoming connections */
+    unsigned n_servers;                  /* Length of the servers array */
+    unsigned connect_retry_delay;        /* Client connection retry delay */
+    struct uv__file *preparing;          /* File segment being prepared */
+    raft__queue prepare_reqs;            /* Pending prepare requests. */
+    raft__queue prepare_pool;            /* Prepared open segments */
+    io_uv__counter prepare_next_counter; /* Counter of next open segment */
+    raft_index append_next_index;        /* Index of next entry to append */
+    raft__queue append_segments;         /* Open segments in use. */
+    raft__queue append_pending_reqs;     /* Pending append requests. */
+    raft__queue append_writing_reqs;     /* Append requests in flight */
+    raft__queue finalize_reqs;           /* Segments waiting to be closed */
+    raft_index finalize_last_index;      /* Last index of last closed seg */
+    struct uv_work_s finalize_work;      /* Resize and rename segments */
+    raft__queue truncate_reqs;           /* Pending truncate requests */
+    struct uv_work_s truncate_work;      /* Execute truncate log requests */
+    raft__queue snapshot_put_reqs;       /* Inflight put snapshot requests */
+    raft__queue snapshot_get_reqs;       /* Inflight get snapshot requests */
+    struct uv_work_s snapshot_put_work;  /* Execute snapshot put requests */
+    struct io_uv__metadata metadata;     /* Cache of metadata on disk */
+    struct uv_timer_s timer;             /* Timer for periodic ticks */
     raft_io_tick_cb tick_cb;
     raft_io_recv_cb recv_cb;
     raft_io_close_cb close_cb;

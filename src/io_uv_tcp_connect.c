@@ -1,6 +1,6 @@
 #include <string.h>
 
-#include "../include/raft/io_uv.h"
+#include "../include/raft/uv.h"
 
 #include "assert.h"
 #include "byte.h"
@@ -33,7 +33,7 @@
 struct connect
 {
     struct io_uv__tcp *t;           /* Transport implementation */
-    struct raft_io_uv_connect *req; /* User request */
+    struct raft_uv_connect *req; /* User request */
     uv_buf_t handshake;             /* Handshake data */
     struct uv_tcp_s *tcp;           /* TCP connection socket handle */
     struct uv_connect_s connect;    /* TCP connectionr request */
@@ -201,11 +201,11 @@ err:
     return rv;
 }
 
-int io_uv__tcp_connect(struct raft_io_uv_transport *transport,
-                       struct raft_io_uv_connect *req,
+int io_uv__tcp_connect(struct raft_uv_transport *transport,
+                       struct raft_uv_connect *req,
                        unsigned id,
                        const char *address,
-                       raft_io_uv_connect_cb cb)
+                       raft_uv_connect_cb cb)
 {
     struct io_uv__tcp *t;
     struct connect *r;

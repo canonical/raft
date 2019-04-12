@@ -3,7 +3,7 @@
 #include <stdlib.h>
 
 #include "../include/raft.h"
-#include "../include/raft/io_uv.h"
+#include "../include/raft/uv.h"
 
 #define N_SERVERS 3 /* Number of servers in the example cluster */
 
@@ -76,16 +76,16 @@ static void fsmClose(struct raft_fsm *f)
 /* Example raft server. */
 struct server
 {
-    struct uv_loop_s loop;                 /* UV loop */
-    struct uv_signal_s sigint;             /* Catch SIGINT and exit */
-    struct uv_timer_s timer;               /* Apply new entry every second */
-    const char *dir;                       /* Data dir of UV I/O backend */
-    struct raft_io_uv_transport transport; /* UV I/O backend transport */
-    struct raft_io io;                     /* UV I/O backend */
-    struct raft_fsm fsm;                   /* Example FSM */
-    unsigned id;                           /* Raft instance ID */
-    char address[64];                      /* Raft instance address */
-    struct raft raft;                      /* Raft instance */
+    struct uv_loop_s loop;              /* UV loop */
+    struct uv_signal_s sigint;          /* Catch SIGINT and exit */
+    struct uv_timer_s timer;            /* Apply new entry every second */
+    const char *dir;                    /* Data dir of UV I/O backend */
+    struct raft_uv_transport transport; /* UV I/O backend transport */
+    struct raft_io io;                  /* UV I/O backend */
+    struct raft_fsm fsm;                /* Example FSM */
+    unsigned id;                        /* Raft instance ID */
+    char address[64];                   /* Raft instance address */
+    struct raft raft;                   /* Raft instance */
 };
 
 static void timerCloseCb(struct uv_handle_s *handle)
@@ -147,13 +147,13 @@ static int serverInit(struct server *s, const char *dir, unsigned id)
     s->timer.data = s;
 
     /* Initialize the TCP-based RPC transport */
-    rv = raft_io_uv_tcp_init(&s->transport, &s->loop);
+    rv = raft_uv_tcp_init(&s->transport, &s->loop);
     if (rv != 0) {
         goto errAfterTimerInit;
     }
 
     /* Initialize the libuv-based I/O backend */
-    rv = raft_io_uv_init(&s->io, &s->loop, dir, &s->transport);
+    rv = raft_uv_init(&s->io, &s->loop, dir, &s->transport);
     if (rv != 0) {
         goto errAfterTcpInit;
     }
@@ -203,9 +203,9 @@ errAfterRaftInit:
 errAfterFsmInit:
     fsmClose(&s->fsm);
 errAfterIoInit:
-    raft_io_uv_close(&s->io);
+    raft_uv_close(&s->io);
 errAfterTcpInit:
-    raft_io_uv_tcp_close(&s->transport);
+    raft_uv_tcp_close(&s->transport);
 errAfterTimerInit:
     uv_close((struct uv_handle_s *)&s->timer, NULL);
 errAfterSigintInit:
@@ -219,8 +219,8 @@ err:
 static void serverClose(struct server *s)
 {
     fsmClose(&s->fsm);
-    raft_io_uv_close(&s->io);
-    raft_io_uv_tcp_close(&s->transport);
+    raft_uv_close(&s->io);
+    raft_uv_tcp_close(&s->transport);
     uv_loop_close(&s->loop);
 }
 

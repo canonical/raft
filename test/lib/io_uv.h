@@ -6,7 +6,7 @@
 #define TEST_IO_UV_H
 
 #include "../../include/raft.h"
-#include "../../include/raft/io_uv.h"
+#include "../../include/raft/uv.h"
 
 #include "../../src/io_uv.h"
 
@@ -16,43 +16,43 @@
 #include "tcp.h"
 #include "uv.h"
 
-#define IO_UV_FIXTURE                      \
-    struct raft_heap heap;                 \
-    struct test_tcp tcp;                   \
-    struct uv_loop_s loop;                 \
-    char *dir;                             \
-    struct raft_io_uv_transport transport; \
-    struct raft_io io;                     \
-    struct io_uv *uv;                      \
+#define IO_UV_FIXTURE                   \
+    struct raft_heap heap;              \
+    struct test_tcp tcp;                \
+    struct uv_loop_s loop;              \
+    char *dir;                          \
+    struct raft_uv_transport transport; \
+    struct raft_io io;                  \
+    struct io_uv *uv;                   \
     bool closed;
 
-#define IO_UV_SETUP                                                \
-    int rv;                                                        \
-    (void)user_data;                                               \
-    test_heap_setup(params, &f->heap);                             \
-    test_tcp_setup(params, &f->tcp);                               \
-    test_uv_setup(params, &f->loop);                               \
-    f->dir = test_dir_setup(params);                               \
-    rv = raft_io_uv_tcp_init(&f->transport, &f->loop);             \
-    munit_assert_int(rv, ==, 0);                                   \
-    rv = raft_io_uv_init(&f->io, &f->loop, f->dir, &f->transport); \
-    munit_assert_int(rv, ==, 0);                                   \
-    f->io.data = f;                                                \
-    rv = f->io.init(&f->io, 1, "127.0.0.1:9000");                  \
-    munit_assert_int(rv, ==, 0);                                   \
-    f->uv = f->io.impl;                                            \
+#define IO_UV_SETUP                                             \
+    int rv;                                                     \
+    (void)user_data;                                            \
+    test_heap_setup(params, &f->heap);                          \
+    test_tcp_setup(params, &f->tcp);                            \
+    test_uv_setup(params, &f->loop);                            \
+    f->dir = test_dir_setup(params);                            \
+    rv = raft_uv_tcp_init(&f->transport, &f->loop);             \
+    munit_assert_int(rv, ==, 0);                                \
+    rv = raft_uv_init(&f->io, &f->loop, f->dir, &f->transport); \
+    munit_assert_int(rv, ==, 0);                                \
+    f->io.data = f;                                             \
+    rv = f->io.init(&f->io, 1, "127.0.0.1:9000");               \
+    munit_assert_int(rv, ==, 0);                                \
+    f->uv = f->io.impl;                                         \
     f->closed = false;
 
-#define IO_UV_TEAR_DOWN                  \
-    if (!f->closed) {                    \
-        io_uv__close;                    \
-    }                                    \
-    test_uv_stop(&f->loop);              \
-    raft_io_uv_close(&f->io);            \
-    raft_io_uv_tcp_close(&f->transport); \
-    test_dir_tear_down(f->dir);          \
-    test_uv_tear_down(&f->loop);         \
-    test_tcp_tear_down(&f->tcp);         \
+#define IO_UV_TEAR_DOWN               \
+    if (!f->closed) {                 \
+        io_uv__close;                 \
+    }                                 \
+    test_uv_stop(&f->loop);           \
+    raft_uv_close(&f->io);            \
+    raft_uv_tcp_close(&f->transport); \
+    test_dir_tear_down(f->dir);       \
+    test_uv_tear_down(&f->loop);      \
+    test_tcp_tear_down(&f->tcp);      \
     test_heap_tear_down(&f->heap);
 
 #define io_uv__close                    \

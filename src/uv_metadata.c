@@ -1,11 +1,11 @@
 #include <string.h>
 
-#include "../include/raft/io_uv.h"
+#include "../include/raft/uv.h"
 
 #include "assert.h"
 #include "byte.h"
 #include "io_uv_fs.h"
-#include "io_uv_metadata.h"
+#include "uv_metadata.h"
 #include "logging.h"
 
 /* Current on-disk format version. */
@@ -87,8 +87,8 @@ int io_uv__metadata_store(struct raft_io *io,
                           const char *dir,
                           const struct io_uv__metadata *metadata)
 {
-    io_uv__path path;                      /* Full path of metadata file */
-    uint8_t buf[RAFT_IO_UV_METADATA_SIZE]; /* Content of metadata file */
+    io_uv__path path;                   /* Full path of metadata file */
+    uint8_t buf[RAFT_UV_METADATA_SIZE]; /* Content of metadata file */
     unsigned short n;
     int fd;
     int rv;
@@ -163,8 +163,8 @@ static int load_n(struct raft_io *io,
                   const unsigned short n,
                   struct io_uv__metadata *metadata)
 {
-    io_uv__path path;                      /* Full path of metadata file */
-    uint8_t buf[RAFT_IO_UV_METADATA_SIZE]; /* Content of metadata file */
+    io_uv__path path;                   /* Full path of metadata file */
+    uint8_t buf[RAFT_UV_METADATA_SIZE]; /* Content of metadata file */
     int fd;
     int rv;
 
