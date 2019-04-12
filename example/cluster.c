@@ -9,27 +9,25 @@
 
 #define N_SERVERS 3 /* Number of servers in the example cluster */
 
-static void __fork_server(const char *top_dir, int i, int *pid)
+static void forkServer(const char *topLevelDir, int i, int *pid)
 {
     *pid = fork();
-
     if (*pid == 0) {
-        char *dir = malloc(strlen(top_dir) + strlen("/D") + 1);
+        char *dir = malloc(strlen(topLevelDir) + strlen("/D") + 1);
         char *id = malloc(2);
         char *argv[] = {"./example-server", dir, id, NULL};
         char *envp[] = {NULL};
-
-        sprintf(dir, "%s/%d", top_dir, i + 1);
+        sprintf(dir, "%s/%d", topLevelDir, i + 1);
         sprintf(id, "%d", i + 1);
-
         execve("./example-server", argv, envp);
     }
 }
 
 int main(int argc, char *argv[])
 {
-    const char *top_dir = "/tmp/raft";
-    struct stat sb;
+    const char *topLevelDir = "/tmp/raft";
+    struct timespec now;
+    struct stat statBuf;
     int pids[N_SERVERS];
     int i;
     int rv;
@@ -40,33 +38,37 @@ int main(int argc, char *argv[])
     }
 
     if (argc == 2) {
-        top_dir = argv[1];
+        topLevelDir = argv[1];
     }
 
     /* Make sure the top level directory exists. */
-    rv = stat(top_dir, &sb);
+    rv = stat(topLevelDir, &statBuf);
     if (rv != 0) {
         if (errno == ENOENT) {
-            rv = mkdir(top_dir, 0700);
+            rv = mkdir(topLevelDir, 0700);
             if (rv != 0) {
-                printf("error: create top level directory '%s': %s", top_dir,
+                printf("error: create top level directory '%s': %s", topLevelDir,
                        strerror(errno));
                 return 1;
             }
         } else {
-            printf("error: access top level directory '%s': %s", top_dir,
+            printf("error: access top level directory '%s': %s", topLevelDir,
                    strerror(errno));
             return 1;
         }
-    } else if ((sb.st_mode & S_IFMT) != S_IFDIR) {
-        printf("error: path '%s' is not a directory", top_dir);
+    } else if ((statBuf.st_mode & S_IFMT) != S_IFDIR) {
+        printf("error: path '%s' is not a directory", topLevelDir);
         return 1;
     }
 
     /* Spawn the cluster nodes */
     for (i = 0; i < N_SERVERS; i++) {
-        __fork_server(top_dir, i, &pids[i]);
+        forkServer(topLevelDir, i, &pids[i]);
     }
+
+    /* Seed the random generator */
+    timespec_get(&now, TIME_UTC);
+    srandom(now.tv_nsec ^ now.tv_sec);
 
     while (1) {
         struct timespec interval;
@@ -96,7 +98,7 @@ int main(int argc, char *argv[])
             printf("error: sleep: %s", strerror(errno));
         }
 
-        __fork_server(top_dir, i, &pids[i]);
+        forkServer(topLevelDir, i, &pids[i]);
     }
 
     return 0;
