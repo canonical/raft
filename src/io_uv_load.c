@@ -81,7 +81,7 @@ static int load_snapshot_data(struct io_uv *uv,
 
 /* Render the filename of the data file of a snapshot */
 static void snapshot_data_filename(struct io_uv__snapshot_meta *meta,
-                                   io_uv__filename filename);
+                                   osFilename filename);
 
 /* Compare two snapshots to decide which one is more recent. */
 static int compare_snapshots(const void *item1, const void *item2);
@@ -236,7 +236,7 @@ int io_uv__load_closed(struct io_uv *uv,
     int rv;
 
     /* If the segment is completely empty, just bail out. */
-    rv = raft__io_uv_fs_is_empty(uv->dir, segment->filename, &empty);
+    rv = osIsEmpty(uv->dir, segment->filename, &empty);
     if (rv != 0) {
         goto err;
     }
@@ -460,7 +460,7 @@ static int maybe_append_snapshot_meta(const char *dir,
     struct io_uv__snapshot_meta *tmp_snapshots;
     bool matched;
     struct stat sb;
-    io_uv__filename snapshot_filename;
+    osFilename snapshot_filename;
     int rv;
 
     /* Check if it's a snapshot metadata filename */
@@ -478,9 +478,9 @@ static int maybe_append_snapshot_meta(const char *dir,
      * there's none, it means that we aborted before finishing the snapshot, so
      * let's remove the metadata file. */
     snapshot_data_filename(&snapshot, snapshot_filename);
-    rv = raft__io_uv_fs_stat(dir, snapshot_filename, &sb);
-    if (rv == -1) {
-        if (errno == ENOENT) {
+    rv = osStat(dir, snapshot_filename, &sb);
+    if (rv != 0) {
+        if (rv == ENOENT) {
             unlink(filename);
             *appended = false;
             return 0;
@@ -568,16 +568,15 @@ static int load_snapshot_meta(struct io_uv *uv,
     snapshot->term = meta->term;
     snapshot->index = meta->index;
 
-    fd = raft__io_uv_fs_open(uv->dir, meta->filename, O_RDONLY);
-    if (fd == -1) {
-        errorf(uv->io, "open %s: %s", meta->filename, uv_strerror(-errno));
+    rv = osOpen(uv->dir, meta->filename, O_RDONLY, &fd);
+    if (rv != 0) {
         rv = RAFT_ERR_IO;
         goto err;
     }
 
-    rv = raft__io_uv_fs_read_n(fd, header, sizeof header);
+    rv = osReadN(fd, header, sizeof header);
     if (rv != 0) {
-        errorf(uv->io, "read %s: %s", meta->filename, uv_strerror(rv));
+        errorf(uv->io, "read %s: %s", meta->filename, osStrError(rv));
         rv = RAFT_ERR_IO;
         goto err_after_open;
     }
@@ -612,7 +611,7 @@ static int load_snapshot_meta(struct io_uv *uv,
         goto err_after_open;
     }
 
-    rv = raft__io_uv_fs_read_n(fd, buf.base, buf.len);
+    rv = osReadN(fd, buf.base, buf.len);
     if (rv != 0) {
         goto err_after_buf_malloc;
     }
@@ -653,23 +652,21 @@ static int load_snapshot_data(struct io_uv *uv,
                               struct raft_snapshot *snapshot)
 {
     struct stat sb;
-    io_uv__filename filename;
+    osFilename filename;
     struct raft_buffer buf;
     int fd;
     int rv;
 
     snapshot_data_filename(meta, filename);
 
-    rv = raft__io_uv_fs_stat(uv->dir, filename, &sb);
+    rv = osStat(uv->dir, filename, &sb);
     if (rv != 0) {
-        errorf(uv->io, "stat %s: %s", filename, uv_strerror(-errno));
         rv = RAFT_ERR_IO;
         goto err;
     }
 
-    fd = raft__io_uv_fs_open(uv->dir, filename, O_RDONLY);
-    if (fd == -1) {
-        errorf(uv->io, "open %s: %s", filename, uv_strerror(-errno));
+    rv = osOpen(uv->dir, filename, O_RDONLY, &fd);
+    if (rv != 0) {
         rv = RAFT_ERR_IO;
         goto err;
     }
@@ -681,7 +678,7 @@ static int load_snapshot_data(struct io_uv *uv,
         goto err_after_open;
     }
 
-    rv = raft__io_uv_fs_read_n(fd, buf.base, buf.len);
+    rv = osReadN(fd, buf.base, buf.len);
     if (rv != 0) {
         goto err_after_buf_alloc;
     }
@@ -711,7 +708,7 @@ err:
 }
 
 static void snapshot_data_filename(struct io_uv__snapshot_meta *meta,
-                                   io_uv__filename filename)
+                                   osFilename filename)
 {
     size_t len = strlen(meta->filename) - strlen(".meta");
     strncpy(filename, meta->filename, len);
@@ -805,7 +802,7 @@ static int load_entries_from_segments(struct io_uv *uv,
             /* If the entries in the segment are no longer needed, just remove
              * it. */
             if (segment->end_index < start_index) {
-                rv = raft__io_uv_fs_unlink(uv->dir, segment->filename);
+                rv = osUnlink(uv->dir, segment->filename);
                 if (rv != 0) {
                     goto err;
                 }
@@ -922,7 +919,7 @@ static int load_entries_from_open_segment(struct raft_io *io,
 
     first_index = *next_index;
 
-    rv = raft__io_uv_fs_is_empty(dir, segment->filename, &empty);
+    rv = osIsEmpty(dir, segment->filename, &empty);
     if (rv != 0) {
         goto err;
     }
@@ -942,7 +939,7 @@ static int load_entries_from_open_segment(struct raft_io *io,
      * the segment was allocated but never written. */
     if (format != IO_UV__DISK_FORMAT) {
         if (format == 0) {
-            rv = raft__io_uv_fs_is_all_zeros(fd, &all_zeros);
+            rv = osHasTrailingZeros(fd, &all_zeros);
             if (rv != 0) {
                 goto err_after_open;
             }
@@ -989,7 +986,7 @@ static int load_entries_from_open_segment(struct raft_io *io,
              * incomplete data. */
             lseek(fd, offset, SEEK_SET);
 
-            rv2 = raft__io_uv_fs_is_all_zeros(fd, &all_zeros);
+            rv2 = osHasTrailingZeros(fd, &all_zeros);
             if (rv2 != 0) {
                 rv = rv2;
                 goto err_after_open;
@@ -1031,19 +1028,19 @@ done:
     /* If the segment has no valid entries in it, we remove it. Otherwise we
      * rename it and keep it. */
     if (remove) {
-        rv = raft__io_uv_fs_unlink(dir, segment->filename);
+        rv = osUnlink(dir, segment->filename);
         if (rv != 0) {
             goto err_after_open;
         }
     } else {
-        io_uv__filename filename;
+        osFilename filename;
         raft_index end_index = *next_index - 1;
 
         /* At least one entry was loaded */
         assert(end_index >= first_index);
 
         closed_segment_filename(first_index, end_index, filename);
-        rv = raft__io_uv_fs_rename(dir, segment->filename, filename);
+        rv = osRename(dir, segment->filename, filename);
         if (rv != 0) {
             goto err_after_open;
         }
@@ -1089,7 +1086,7 @@ static int load_entries_batch_from_segment(struct raft_io *io,
      * data buffers and the first 8 bytes of the header buffer, which contains
      * the number of entries in the batch. */
     off_t pos = lseek(fd, 0, SEEK_CUR);
-    rv = raft__io_uv_fs_read_n(fd, preamble, sizeof preamble);
+    rv = osReadN(fd, preamble, sizeof preamble);
     if (rv != 0) {
         return RAFT_ERR_IO;
     }
@@ -1124,7 +1121,7 @@ static int load_entries_batch_from_segment(struct raft_io *io,
     }
     *(uint64_t *)header.base = preamble[1];
 
-    rv = raft__io_uv_fs_read_n(fd, header.base + sizeof(uint64_t),
+    rv = osReadN(fd, header.base + sizeof(uint64_t),
                                header.len - sizeof(uint64_t));
     if (rv != 0) {
         rv = RAFT_ERR_IO;
@@ -1158,7 +1155,7 @@ static int load_entries_batch_from_segment(struct raft_io *io,
         rv = RAFT_ENOMEM;
         goto err_after_header_decode;
     }
-    rv = raft__io_uv_fs_read_n(fd, data.base, data.len);
+    rv = osReadN(fd, data.base, data.len);
     if (rv != 0) {
         rv = RAFT_ERR_IO;
         goto err_after_data_alloc;
@@ -1177,7 +1174,7 @@ static int load_entries_batch_from_segment(struct raft_io *io,
 
     raft_free(header.base);
 
-    *last = raft__io_uv_fs_is_at_eof(fd);
+    *last = osIsAtEof(fd);
 
     return 0;
 
@@ -1212,13 +1209,13 @@ static int open_segment_meta(struct raft_io *io,
 {
     int rv;
 
-    *fd = raft__io_uv_fs_open(dir, filename, flags);
-    if (*fd == -1) {
-        errorf(io, "open %s: %s", filename, uv_strerror(-errno));
+    rv = osOpen(dir, filename, flags, fd);
+    if (rv != 0) {
+        errorf(io, "open %s: %s", filename, osStrError(rv));
         return RAFT_ERR_IO;
     }
 
-    rv = raft__io_uv_fs_read_n(*fd, format, sizeof *format);
+    rv = osReadN(*fd, format, sizeof *format);
     if (rv != 0) {
         close(*fd);
         return RAFT_ERR_IO;

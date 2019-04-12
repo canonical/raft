@@ -1,6 +1,6 @@
 #include "assert.h"
 #include "io_uv.h"
-#include "io_uv_fs.h"
+#include "os.h"
 #include "queue.h"
 #include "logging.h"
 
@@ -125,8 +125,8 @@ static void work_cb(uv_work_t *work)
 {
     struct segment *s = work->data;
     struct io_uv *uv = s->uv;
-    io_uv__filename filename1;
-    io_uv__filename filename2;
+    osFilename filename1;
+    osFilename filename2;
     int rv;
 
     sprintf(filename1, "open-%lld", s->counter);
@@ -134,12 +134,12 @@ static void work_cb(uv_work_t *work)
     /* If the segment hasn't actually been used (because the writer has been
      * closed or aborted before making any write), then let's just remove it. */
     if (s->used == 0) {
-        raft__io_uv_fs_unlink(uv->dir, filename1);
+        osUnlink(uv->dir, filename1);
         goto out;
     }
 
     /* Truncate and rename the segment */
-    rv = raft__io_uv_fs_truncate(uv->dir, filename1, s->used);
+    rv = osTruncate(uv->dir, filename1, s->used);
     if (rv != 0) {
         errorf(uv->io, "truncate segment file %s: %s", filename1,
                     uv_strerror(rv));
@@ -149,7 +149,7 @@ static void work_cb(uv_work_t *work)
 
     sprintf(filename2, "%llu-%llu", s->first_index, s->last_index);
 
-    rv = raft__io_uv_fs_rename(uv->dir, filename1, filename2);
+    rv = osRename(uv->dir, filename1, filename2);
     if (rv != 0) {
         errorf(uv->io, "rename segment file %d: %s", s->counter,
                     uv_strerror(rv));

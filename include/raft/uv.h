@@ -5,7 +5,6 @@
 
 #include "../raft.h"
 
-#define RAFT_UV_METADATA_SIZE (8 * 4)              /* Four 64-bit words */
 #define RAFT_UV_MAX_SEGMENT_SIZE (8 * 1024 * 1024) /* 8 Megabytes */
 
 struct raft_uv_transport;
@@ -39,7 +38,6 @@ struct raft_uv_transport;
  * [8 bytes] Incremental version number.
  * [8 bytes] Current term.
  * [8 bytes] ID of server we voted for.
- * [8 bytes] First index of the log.
  *
  * Closed segments are named by the format string "%020lu-%020lu" with their
  * start and end indexes, both inclusive. Closed segments always contain at

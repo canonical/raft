@@ -1,37 +1,31 @@
-/**
- * Read and write Raft metadata state.
- */
+/* Read and write Raft metadata state. */
 
-#ifndef RAFT_UV_METADATA_H_
-#define RAFT_UV_METADATA_H_
+#ifndef UV_METADATA_H_
+#define UV_METADATA_H_
 
 #include "../include/raft.h"
 
-/**
- * Information persisted in a single metadata file.
- */
-struct io_uv__metadata
+#include "os.h"
+
+/* Information persisted in a single metadata file. */
+struct uvMetadata
 {
     unsigned long long version; /* Monotonically increasing version */
     raft_term term;             /* Current term */
     unsigned voted_for;         /* Server ID of last vote, or 0 */
 };
 
-/**
- * Read Raft metadata from disk, choosing the most recent version (either the
- * metadata1 or metadata2 file).
- */
-int io_uv__metadata_load(struct raft_io *io,
-                         const char *dir,
-                         struct io_uv__metadata *metadata);
+/* Load Raft metadata from disk, choosing the most recent version (either the
+ * metadata1 or metadata2 file). */
+int uvMetadataLoad(struct raft_io *io,
+                   const osDir dir,
+                   struct uvMetadata *metadata);
 
-/**
- * Write the given metadata to disk, writing the appropriate metadata file
+/* Store the given metadata to disk, writing the appropriate metadata file
  * according to the metadata version (if the version is odd, write metadata1,
- * otherwise write metadata2).
- */
-int io_uv__metadata_store(struct raft_io *io,
-                          const char *dir,
-                          const struct io_uv__metadata *metadata);
+ * otherwise write metadata2). */
+int uvMetadataStore(struct raft_io *io,
+                    const osDir dir,
+                    const struct uvMetadata *metadata);
 
-#endif /* RAFT_UV_METADATA_H */
+#endif /* UV_METADATA_H_ */

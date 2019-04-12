@@ -21,7 +21,7 @@ static int truncate_closed_segment(struct io_uv *uv,
                                    struct io_uv__segment_meta *segment,
                                    raft_index index)
 {
-    io_uv__filename filename;
+    osFilename filename;
     struct raft_entry *entries;
     struct raft_buffer buf;
     void *cursor;
@@ -35,7 +35,7 @@ static int truncate_closed_segment(struct io_uv *uv,
     size_t m;
     size_t i;
     int fd;
-    int rv = 0;
+    int rv;
 
     infof(uv->io, "truncate %u-%u at %u", segment->first_index,
           segment->end_index, index);
@@ -57,9 +57,8 @@ static int truncate_closed_segment(struct io_uv *uv,
     sprintf(filename, "%llu-%llu", segment->first_index, index - 1);
 
     /* Open the file. */
-    fd = raft__io_uv_fs_open(uv->dir, filename, O_WRONLY | O_CREAT | O_EXCL);
-    if (fd == -1) {
-        errorf(uv->io, "open %s: %s", filename, strerror(errno));
+    rv = osOpen(uv->dir, filename, O_WRONLY | O_CREAT | O_EXCL, &fd);
+    if (rv != 0) {
         goto out_after_load;
     }
 
@@ -222,7 +221,7 @@ static void work_cb(uv_work_t *work)
             continue;
         }
 
-        rv = raft__io_uv_fs_unlink(uv->dir, segment->filename);
+        rv = osUnlink(uv->dir, segment->filename);
         if (rv != 0) {
             errorf(uv->io, "unlink segment %s: %s", segment->filename,
                    uv_strerror(rv));
@@ -231,7 +230,7 @@ static void work_cb(uv_work_t *work)
         }
     }
 
-    rv = raft__io_uv_fs_sync_dir(uv->dir);
+    rv = osSyncDir(uv->dir);
     if (rv != 0) {
         errorf(uv->io, "sync data directory: %s", uv_strerror(rv));
         rv = RAFT_ERR_IO;

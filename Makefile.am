@@ -68,7 +68,7 @@ if UV
   src/io_uv_client.c \
   src/io_uv_encoding.c \
   src/io_uv_finalize.c \
-  src/io_uv_fs.c \
+  src/os.c \
   src/io_uv_ip.c \
   src/io_uv_load.c \
   src/uv_metadata.c \

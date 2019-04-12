@@ -7,8 +7,9 @@
 
 #include "../include/raft.h"
 
-#include "uv_metadata.h"
+#include "os.h"
 #include "uv_file.h"
+#include "uv_metadata.h"
 
 /**
  * Current disk format version.
@@ -32,7 +33,7 @@ struct io_uv
 {
     struct raft_io *io;                  /* I/O object we're implementing */
     struct uv_loop_s *loop;              /* UV event loop */
-    char *dir;                           /* Data directory */
+    osDir dir;                           /* Data directory */
     struct raft_uv_transport *transport; /* Network transport */
     unsigned id;                         /* Server ID */
     int state;                           /* Current state */
@@ -60,7 +61,7 @@ struct io_uv
     raft__queue snapshot_put_reqs;       /* Inflight put snapshot requests */
     raft__queue snapshot_get_reqs;       /* Inflight get snapshot requests */
     struct uv_work_s snapshot_put_work;  /* Execute snapshot put requests */
-    struct io_uv__metadata metadata;     /* Cache of metadata on disk */
+    struct uvMetadata metadata;          /* Cache of metadata on disk */
     struct uv_timer_s timer;             /* Timer for periodic ticks */
     raft_io_tick_cb tick_cb;
     raft_io_recv_cb recv_cb;

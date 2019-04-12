@@ -18,10 +18,10 @@ TEST_MODULE(io_uv__metadata);
 
 struct fixture
 {
-    struct raft_heap heap;           /* Testable allocator */
-    struct raft_io io;               /* Test I/O */
-    char *dir;                       /* Data directory */
-    struct io_uv__metadata metadata; /* Metadata object */
+    struct raft_heap heap;      /* Testable allocator */
+    struct raft_io io;          /* Test I/O */
+    char *dir;                  /* Data directory */
+    struct uvMetadata metadata; /* Metadata object */
 };
 
 static void *setup(const MunitParameter params[], void *user_data)
@@ -44,7 +44,7 @@ static void tear_down(void *data)
 }
 
 /**
- * io_uv__metadata_load
+ * uvMetadataLoad
  */
 
 TEST_SUITE(load);
@@ -56,7 +56,7 @@ TEST_TEAR_DOWN(load, tear_down);
  * values. */
 #define load__write(N, FORMAT, VERSION, TERM, VOTED_FOR)        \
     {                                                           \
-        uint8_t buf[RAFT_UV_METADATA_SIZE];                     \
+        uint8_t buf[8 * 4];                                     \
         void *cursor = buf;                                     \
         char filename[strlen("metadataN") + 1];                 \
         sprintf(filename, "metadata%d", N);                     \
@@ -67,13 +67,13 @@ TEST_TEAR_DOWN(load, tear_down);
         test_dir_write_file(f->dir, filename, buf, sizeof buf); \
     }
 
-/* Assert that @io_uv__metadata_load returns the given code. */
-#define load__invoke(RV)                                         \
-    {                                                            \
-        int rv;                                                  \
-                                                                 \
-        rv = io_uv__metadata_load(&f->io, f->dir, &f->metadata); \
-        munit_assert_int(rv, ==, RV);                            \
+/* Assert that @uvMetadataLoad returns the given code. */
+#define load__invoke(RV)                                   \
+    {                                                      \
+        int rv;                                            \
+                                                           \
+        rv = uvMetadataLoad(&f->io, f->dir, &f->metadata); \
+        munit_assert_int(rv, ==, RV);                      \
     }
 
 /* Assert that the metadata of the last load request equals the given values. */
@@ -87,7 +87,7 @@ TEST_TEAR_DOWN(load, tear_down);
  * given values. */
 #define load__assert_file(N, VERSION, TERM, VOTED_FOR)           \
     {                                                            \
-        uint8_t buf2[RAFT_UV_METADATA_SIZE];                     \
+        uint8_t buf2[8 * 4];                                     \
         const void *cursor = buf2;                               \
         char filename[strlen("metadataN") + 1];                  \
         sprintf(filename, "metadata%d", N);                      \
@@ -250,7 +250,7 @@ TEST_CASE(load, bad_format, NULL)
                 1, /* Term                                 */
                 0 /* Voted for                            */);
 
-    load__invoke(RAFT_ERR_IO);
+    load__invoke(EPROTO);
 
     return MUNIT_OK;
 }
@@ -268,7 +268,7 @@ TEST_CASE(load, bad_version, NULL)
                 1, /* Term                                 */
                 0 /* Voted for                            */);
 
-    load__invoke(RAFT_ERR_IO);
+    load__invoke(EPROTO);
 
     return MUNIT_OK;
 }
@@ -282,7 +282,7 @@ TEST_CASE(load, no_space, NULL)
 
     test_dir_fill(f->dir, 4);
 
-    load__invoke(RAFT_ERR_IO);
+    load__invoke(ENOSPC);
 
     return MUNIT_OK;
 }
@@ -307,7 +307,7 @@ TEST_CASE(load, same_version, NULL)
                 2, /* Term                                 */
                 0 /* Voted for                            */);
 
-    load__invoke(RAFT_ERR_IO_CORRUPT);
+    load__invoke(EPROTO);
 
     return MUNIT_OK;
 }

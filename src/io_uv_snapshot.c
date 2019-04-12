@@ -5,7 +5,7 @@
 #include "byte.h"
 #include "configuration.h"
 #include "io_uv.h"
-#include "io_uv_fs.h"
+#include "os.h"
 #include "io_uv_load.h"
 #include "logging.h"
 
@@ -59,9 +59,8 @@ static int write_file(struct raft_io *io,
         size += bufs[i].len;
     }
 
-    fd = raft__io_uv_fs_open(dir, filename, flags);
-    if (fd == -1) {
-        errorf(io, "open %s: %s", filename, uv_strerror(-errno));
+    rv = osOpen(dir, filename, flags, &fd);
+    if (rv != 0) {
         return RAFT_ERR_IO;
     }
 
@@ -93,7 +92,7 @@ err:
 
 /* TODO: remove code duplication with io_uv_load.c */
 static void snapshot_data_filename(struct io_uv__snapshot_meta *meta,
-                                   io_uv__filename filename)
+                                   osFilename filename)
 {
     size_t len = strlen(meta->filename) - strlen(".meta");
     strncpy(filename, meta->filename, len);
@@ -123,13 +122,13 @@ static int remove_old_segments_and_snapshots(struct io_uv *uv,
     if (n_snapshots > 2) {
         for (i = 0; i < n_snapshots - 2; i++) {
             struct io_uv__snapshot_meta *s = &snapshots[i];
-            io_uv__filename filename;
-            rv = raft__io_uv_fs_unlink(uv->dir, s->filename);
+            osFilename filename;
+            rv = osUnlink(uv->dir, s->filename);
             if (rv != 0) {
                 goto out;
             }
             snapshot_data_filename(s, filename);
-            rv = raft__io_uv_fs_unlink(uv->dir, filename);
+            rv = osUnlink(uv->dir, filename);
             if (rv != 0) {
                 goto out;
             }
@@ -145,7 +144,7 @@ static int remove_old_segments_and_snapshots(struct io_uv *uv,
         }
 
         if (segment->end_index < last_index) {
-            rv = raft__io_uv_fs_unlink(uv->dir, segment->filename);
+            rv = osUnlink(uv->dir, segment->filename);
             if (rv != 0) {
                 goto out;
             }
@@ -167,7 +166,7 @@ static void put_work_cb(uv_work_t *work)
 {
     struct put *r = work->data;
     struct io_uv *uv = r->uv;
-    io_uv__filename filename;
+    osFilename filename;
     int rv;
 
     sprintf(filename, SNAPSHOT_META_TEMPLATE, r->snapshot->term,
@@ -189,7 +188,7 @@ static void put_work_cb(uv_work_t *work)
         return;
     }
 
-    rv = raft__io_uv_fs_sync_dir(uv->dir);
+    rv = osSyncDir(uv->dir);
     if (rv != 0) {
         r->status = rv;
         return;

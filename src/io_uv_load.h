@@ -7,7 +7,7 @@
 
 #include "../include/raft.h"
 
-#include "io_uv_fs.h"
+#include "os.h"
 
 struct io_uv;
 
@@ -19,7 +19,7 @@ struct io_uv__snapshot_meta
     raft_term term;
     raft_index index;
     unsigned long long timestamp;
-    io_uv__filename filename;
+    osFilename filename;
 };
 
 /**
@@ -39,7 +39,7 @@ struct io_uv__segment_meta
             unsigned long long counter; /* Open segment counter */
         };
     };
-    io_uv__filename filename; /* Segment filename */
+    osFilename filename; /* Segment filename */
 };
 
 /**

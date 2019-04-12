@@ -178,7 +178,7 @@ TEST_SUITE(init);
 TEST_SETUP(init, setup);
 TEST_TEAR_DOWN(init, tear_down);
 
-static char *init_oom_heap_fault_delay[] = {"0", "1", NULL};
+static char *init_oom_heap_fault_delay[] = {"0", NULL};
 static char *init_oom_heap_fault_repeat[] = {"1", NULL};
 
 static MunitParameterEnum init_oom_params[] = {
@@ -236,7 +236,7 @@ TEST_CASE(init, dir_too_long, NULL)
     dir[sizeof dir - 1] = 0;
 
     rv = raft_uv_init(&io, &f->loop, dir, &transport);
-    munit_assert_int(rv, ==, RAFT_ERR_IO_NAMETOOLONG);
+    munit_assert_int(rv, ==, ENAMETOOLONG);
 
     return MUNIT_OK;
 }
@@ -254,7 +254,7 @@ TEST_CASE(init, cant_create_dir, NULL)
     const char *dir = "/non/existing/path";
 
     rv = raft_uv_init(&io, &f->loop, dir, &transport);
-    munit_assert_int(rv, ==, RAFT_ERR_IO);
+    munit_assert_int(rv, ==, ENOENT);
 
     return MUNIT_OK;
 }
@@ -272,7 +272,7 @@ TEST_CASE(init, access_error, NULL)
     const char *dir = "/root/foo";
 
     rv = raft_uv_init(&io, &f->loop, dir, &transport);
-    munit_assert_int(rv, ==, RAFT_ERR_IO);
+    munit_assert_int(rv, ==, EACCES);
 
     return MUNIT_OK;
 }

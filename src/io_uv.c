@@ -12,7 +12,7 @@
 #include "configuration.h"
 #include "io_uv.h"
 #include "io_uv_encoding.h"
-#include "io_uv_fs.h"
+#include "os.h"
 #include "io_uv_load.h"
 #include "logging.h"
 
@@ -187,7 +187,7 @@ static int io_uv__set_term(struct raft_io *io, const raft_term term)
     uv->metadata.version++;
     uv->metadata.term = term;
     uv->metadata.voted_for = 0;
-    rv = io_uv__metadata_store(uv->io, uv->dir, &uv->metadata);
+    rv = uvMetadataStore(uv->io, uv->dir, &uv->metadata);
     if (rv != 0) {
         return rv;
     }
@@ -203,7 +203,7 @@ static int io_uv__set_vote(struct raft_io *io, const unsigned server_id)
     assert(uv->metadata.version > 0);
     uv->metadata.version++;
     uv->metadata.voted_for = server_id;
-    rv = io_uv__metadata_store(uv->io, uv->dir, &uv->metadata);
+    rv = uvMetadataStore(uv->io, uv->dir, &uv->metadata);
     if (rv != 0) {
         return rv;
     }
@@ -250,20 +250,6 @@ static int raft__io_uv_write_closed_1_1(struct io_uv *uv,
                                         const int fd,
                                         const struct raft_buffer *buf);
 
-/* Copy dir1 into dir2 and strip any trailing slash. */
-static void copy_dir(const char *dir1, char **dir2)
-{
-    *dir2 = raft_malloc(strlen(dir1) + 1);
-    if (*dir2 == NULL) {
-        return;
-    }
-    strcpy(*dir2, dir1);
-
-    if ((*dir2)[strlen(*dir2) - 1] == '/') {
-        (*dir2)[strlen(*dir2) - 1] = 0;
-    }
-}
-
 int raft_uv_init(struct raft_io *io,
                  struct uv_loop_s *loop,
                  const char *dir,
@@ -285,11 +271,8 @@ int raft_uv_init(struct raft_io *io,
 
     uv->io = io;
     uv->loop = loop;
-    copy_dir(dir, &uv->dir);
-    if (uv->dir == NULL) {
-        rv = RAFT_ENOMEM;
-        goto err_after_uv_alloc;
-    }
+    /* TODO: check dir length */
+    strcpy(uv->dir, dir);
     uv->transport = transport;
     uv->transport->data = uv;
     uv->id = 0;
@@ -323,15 +306,15 @@ int raft_uv_init(struct raft_io *io,
     io->impl = uv;
 
     /* Ensure that the data directory exists and is accessible */
-    rv = io_uv__ensure_dir(uv->io, uv->dir);
+    rv = osEnsureDir(uv->dir);
     if (rv != 0) {
-        goto err_after_dir_alloc;
+        goto err_after_uv_alloc;
     }
 
     /* Load current metadata */
-    rv = io_uv__metadata_load(io, dir, &uv->metadata);
+    rv = uvMetadataLoad(io, dir, &uv->metadata);
     if (rv != 0) {
-        goto err_after_dir_alloc;
+        goto err_after_uv_alloc;
     }
 
     /* Detect the file system block size */
@@ -339,7 +322,7 @@ int raft_uv_init(struct raft_io *io,
     if (rv != 0) {
         errorf(io, "detect block size: %s", uv_strerror(rv));
         rv = RAFT_ERR_IO;
-        goto err_after_dir_alloc;
+        goto err_after_uv_alloc;
     }
 
     /* We expect the maximum segment size to be a multiple of the block size */
@@ -367,8 +350,6 @@ int raft_uv_init(struct raft_io *io,
 
     return 0;
 
-err_after_dir_alloc:
-    raft_free(uv->dir);
 err_after_uv_alloc:
     raft_free(uv);
 err:
@@ -386,7 +367,6 @@ void raft_uv_close(struct raft_io *io)
     if (uv->servers != NULL) {
         raft_free(uv->servers);
     }
-    raft_free(uv->dir);
     raft_free(uv);
 }
 
@@ -438,7 +418,7 @@ err:
 static int raft__io_uv_create_closed_1_1(struct io_uv *uv,
                                          const struct raft_buffer *buf)
 {
-    io_uv__filename filename;
+    osFilename filename;
     int fd;
     int rv;
 
@@ -446,9 +426,8 @@ static int raft__io_uv_create_closed_1_1(struct io_uv *uv,
     sprintf(filename, "%u-%u", 1, 1);
 
     /* Open the file. */
-    fd = raft__io_uv_fs_open(uv->dir, filename, O_WRONLY | O_CREAT | O_EXCL);
-    if (fd == -1) {
-        errorf(uv->io, "open %s: %s", filename, strerror(errno));
+    rv = osOpen(uv->dir, filename, O_WRONLY | O_CREAT | O_EXCL, &fd);
+    if (rv != 0) {
         return RAFT_ERR_IO;
     }
 
@@ -460,7 +439,7 @@ static int raft__io_uv_create_closed_1_1(struct io_uv *uv,
 
     close(fd);
 
-    rv = raft__io_uv_fs_sync_dir(uv->dir);
+    rv = osSyncDir(uv->dir);
     if (rv != 0) {
         return rv;
     }

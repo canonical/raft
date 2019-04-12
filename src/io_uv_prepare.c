@@ -2,7 +2,7 @@
 
 #include "assert.h"
 #include "io_uv.h"
-#include "io_uv_fs.h"
+#include "os.h"
 #include "logging.h"
 
 /* The happy path for a io_uv__prepare request is:
@@ -40,7 +40,7 @@ struct segment
     struct uv__file *file;         /* Open segment file */
     struct uv__file_create create; /* Create file request */
     unsigned long long counter;    /* Segment counter */
-    io_uv__path path;              /* Path of the segment */
+    osPath path;                   /* Path of the segment */
     raft__queue queue;             /* Pool */
 };
 
@@ -169,7 +169,7 @@ static void maintain_pool(struct io_uv *uv)
 static int create_segment(struct io_uv *uv)
 {
     struct segment *s;
-    io_uv__filename filename;
+    osFilename filename;
     int rv;
 
     s = raft_malloc(sizeof *s);
@@ -199,7 +199,7 @@ static int create_segment(struct io_uv *uv)
     s->counter = uv->prepare_next_counter;
 
     sprintf(filename, "open-%lld", s->counter);
-    io_uv__join(uv->dir, filename, s->path);
+    osJoin(uv->dir, filename, s->path);
 
     rv = uv__file_create(s->file, &s->create, s->path,
                          uv->block_size * uv->n_blocks, MAX_CONCURRENT_WRITES,
