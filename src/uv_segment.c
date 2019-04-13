@@ -6,6 +6,7 @@
 #include "array.h"
 #include "assert.h"
 #include "byte.h"
+#include "configuration.h"
 #include "io_uv_encoding.h"
 #include "uv.h"
 
@@ -676,3 +677,132 @@ err:
 
     return rv;
 }
+
+/* Write the first closed segment */
+static int writeFirstClosed(struct uv *uv,
+                            const int fd,
+                            const struct raft_buffer *conf)
+{
+    void *buf;
+    size_t len;
+    size_t cap;
+    void *cursor;
+    void *header;
+    unsigned crc1; /* Header checksum */
+    unsigned crc2; /* Data checksum */
+    void *crc1_p;  /* Pointer to header checksum slot */
+    void *crc2_p;  /* Pointer to data checksum slot */
+    int rv;
+
+    /* Make sure that the given encoded configuration fits in the first
+     * block */
+    cap = uv->block_size -
+          (sizeof(uint64_t) /* Format version */ +
+           sizeof(uint64_t) /* Checksums */ + io_uv__sizeof_batch_header(1));
+    if (conf->len > cap) {
+        return RAFT_TOOBIG;
+    }
+
+    len = sizeof(uint64_t) * 2 + io_uv__sizeof_batch_header(1) + conf->len;
+    buf = malloc(len);
+    if (buf == NULL) {
+        return RAFT_NOMEM;
+    }
+    memset(buf, 0, len);
+
+    cursor = buf;
+
+    byte__put64(&cursor, UV__DISK_FORMAT); /* Format version */
+
+    crc1_p = cursor;
+    byte__put32(&cursor, 0);
+
+    crc2_p = cursor;
+    byte__put32(&cursor, 0);
+
+    header = cursor;
+    byte__put64(&cursor, 1);                 /* Number of entries */
+    byte__put64(&cursor, 1);                 /* Entry term */
+    byte__put8(&cursor, RAFT_CONFIGURATION); /* Entry type */
+    byte__put8(&cursor, 0);                  /* Unused */
+    byte__put8(&cursor, 0);                  /* Unused */
+    byte__put8(&cursor, 0);                  /* Unused */
+    byte__put32(&cursor, conf->len);         /* Size of entry data */
+
+    memcpy(cursor, conf->base, conf->len);
+
+    crc1 = byte__crc32(header, io_uv__sizeof_batch_header(1), 0);
+    byte__put32(&crc1_p, crc1);
+
+    crc2 = byte__crc32(conf->base, conf->len, 0);
+    byte__put32(&crc2_p, crc2);
+
+    rv = osWriteN(fd, buf, len);
+    if (rv != 0) {
+        free(buf);
+        uvErrorf(uv, "write segment 1: %s", osStrError(rv));
+        return RAFT_IOERR;
+    }
+
+    free(buf);
+
+    rv = fsync(fd);
+    if (rv == -1) {
+        uvErrorf(uv, "fsync segment 1: %s", osStrError(errno));
+        return RAFT_IOERR;
+    }
+
+    return 0;
+}
+
+int uvSegmentCreateFirstClosed(struct uv *uv,
+                               const struct raft_configuration *configuration)
+{
+    struct raft_buffer buf;
+    osFilename filename;
+    int fd;
+    int rv;
+
+    /* Render the path */
+    sprintf(filename, CLOSED_TEMPLATE, (raft_index)1, (raft_index)1);
+
+    /* Encode the given configuration. */
+    rv = configuration__encode(configuration, &buf);
+    if (rv != 0) {
+        goto err;
+    }
+
+    /* Open the file. */
+    rv = osOpen(uv->dir, filename, O_WRONLY | O_CREAT | O_EXCL, &fd);
+    if (rv != 0) {
+        uvErrorf(uv, "unlink %s: %s", filename, osStrError(rv));
+        rv = RAFT_IOERR;
+        goto err_after_configuration_encode;
+    }
+
+    /* Write the content */
+    rv = writeFirstClosed(uv, fd, &buf);
+    if (rv != 0) {
+        goto err_after_file_open;
+    }
+
+    close(fd);
+    raft_free(buf.base);
+
+    rv = osSyncDir(uv->dir);
+    if (rv != 0) {
+        uvErrorf(uv, "sync %s: %s", uv->dir, osStrError(rv));
+        return RAFT_IOERR;
+    }
+
+    return 0;
+
+err_after_file_open:
+    close(fd);
+err_after_configuration_encode:
+    raft_free(buf.base);
+err:
+    assert(rv != 0);
+    return rv;
+}
+

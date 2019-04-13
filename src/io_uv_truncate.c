@@ -275,7 +275,7 @@ static void after_work_cb(uv_work_t *work, int status)
 
     io_uv__append_unblock(uv);
     io_uv__snapshot_put_unblock(uv);
-    io_uv__maybe_close(uv);
+    uvMaybeClose(uv);
 }
 
 /* Start executing a truncate request. */

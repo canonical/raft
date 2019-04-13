@@ -504,7 +504,7 @@ static void put_after_work_cb(uv_work_t *work, int status)
     raft_free(r->meta.bufs[1].base);
     raft_free(r);
 
-    io_uv__maybe_close(uv);
+    uvMaybeClose(uv);
 }
 
 /* Process pending put requests. */
@@ -653,7 +653,7 @@ static void get_after_work_cb(uv_work_t *work, int status)
     r->req->cb(r->req, r->snapshot, r->status);
     raft_free(r);
 
-    io_uv__maybe_close(uv);
+    uvMaybeClose(uv);
 }
 
 int io_uv__snapshot_get(struct raft_io *io,

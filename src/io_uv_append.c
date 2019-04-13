@@ -250,7 +250,7 @@ static void finalize_segment(struct segment *s)
     RAFT__QUEUE_REMOVE(&s->queue);
 
     raft_free(s);
-    io_uv__maybe_close(uv);
+    uvMaybeClose(uv);
 }
 
 /* Flush the append requests in the given queue, firing their callbacks with the

@@ -127,6 +127,11 @@ int uvSegmentLoadAll(struct uv *uv,
                      struct raft_entry **entries,
                      size_t *n_entries);
 
+/* Write the first closed segment, containing just one entry for the given
+ * configuration. */
+int uvSegmentCreateFirstClosed(struct uv *uv,
+                               const struct raft_configuration *configuration);
+
 /* Info about a persisted snapshot stored in snapshot metadata file. */
 struct uvSnapshotInfo
 {
@@ -311,6 +316,6 @@ int io_uv__snapshot_get(struct raft_io *io,
                         struct raft_io_snapshot_get *req,
                         raft_io_snapshot_get_cb cb);
 
-void io_uv__maybe_close(struct uv *uv);
+void uvMaybeClose(struct uv *uv);
 
 #endif /* UV_H_ */

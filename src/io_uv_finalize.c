@@ -184,5 +184,5 @@ static void after_work_cb(uv_work_t *work, int status)
     raft_free(s);
     process_requests(uv);
     io_uv__truncate_unblock(uv);
-    io_uv__maybe_close(uv);
+    uvMaybeClose(uv);
 }
