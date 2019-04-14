@@ -4,7 +4,7 @@
 
 #include "assert.h"
 #include "byte.h"
-#include "io_uv_encoding.h"
+#include "uv_encoding.h"
 #include "logging.h"
 #include "uv.h"
 
@@ -261,7 +261,7 @@ static void read_cb(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
             type = byte__flip64(s->preamble[0]);
             assert(type > 0);
 
-            rv = io_uv__decode_message(type, &s->header, &s->message,
+            rv = uvDecodeMessage(type, &s->header, &s->message,
                                        &s->payload.len);
             if (rv != 0) {
                 warnf(s->uv->io, "decode message: %s", raft_strerror(rv));
@@ -286,7 +286,7 @@ static void read_cb(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
                 case RAFT_IO_APPEND_ENTRIES:
                     payload.base = s->payload.base;
                     payload.len = s->payload.len;
-                    io_uv__decode_entries_batch(
+                    uvDecodeEntriesBatch(
                         &payload, s->message.append_entries.entries,
                         s->message.append_entries.n_entries);
                     break;
@@ -410,9 +410,9 @@ static void accept_cb(struct raft_uv_transport *transport,
     struct uv *uv = transport->data;
     int rv;
 
-    assert(uv->state == UV__ACTIVE || uv->state == UV__CLOSING);
+    assert(uv->state == UV__ACTIVE || uv->closing);
 
-    if (uv->state == UV__CLOSING) {
+    if (uv->closing) {
         goto abort;
     }
 

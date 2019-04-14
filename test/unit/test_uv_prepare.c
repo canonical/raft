@@ -1,20 +1,22 @@
-#include "../lib/io_uv.h"
+#include "../lib/uv.h"
 #include "../lib/runner.h"
 
 #include "../../src/uv.h"
 
-TEST_MODULE(io_uv__prepare);
+TEST_MODULE(uv_prepare);
 
-/**
- * Helpers
- */
+/******************************************************************************
+ *
+ * Fixture
+ *
+ *****************************************************************************/
 
 struct fixture
 {
-    IO_UV_FIXTURE;
-    struct uv__prepare req;
+    FIXTURE_UV;
+    struct uvPrepare req;
     int invoked;                /* Number of times __get_cb was invoked */
-    struct uv__file *file;      /* Last open segment passed to __get_cb */
+    struct uvFile *file;        /* Last open segment passed to __get_cb */
     unsigned long long counter; /* Last counter passed to __get_cb */
     int status;                 /* Last status passed to __get_cb */
 };
@@ -22,7 +24,7 @@ struct fixture
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    IO_UV_SETUP;
+    SETUP_UV;
     f->req.data = f;
     f->invoked = 0;
     f->file = NULL;
@@ -35,15 +37,21 @@ static void tear_down(void *data)
 {
     struct fixture *f = data;
     if (f->file != NULL) {
-        uv__file_close(f->file, (uv__file_close_cb)raft_free);
+        uvFileClose(f->file, (uvFileCloseCb)raft_free);
     }
-    IO_UV_TEAR_DOWN;
+    TEAR_DOWN_UV;
 }
 
-static void prepare_cb(struct uv__prepare *req,
-                       struct uv__file *file,
-                       unsigned long long counter,
-                       int status)
+/******************************************************************************
+ *
+ * Helper macros
+ *
+ *****************************************************************************/
+
+static void prepareCb(struct uvPrepare *req,
+                      struct uvFile *file,
+                      unsigned long long counter,
+                      int status)
 {
     struct fixture *f = req->data;
 
@@ -53,18 +61,15 @@ static void prepare_cb(struct uv__prepare *req,
     f->status = status;
 }
 
-/* Invoke io_uv__prepare. */
-#define prepare__invoke                             \
-    {                                               \
-        io_uv__prepare(f->uv, &f->req, prepare_cb); \
-    }
+/* Invoke uvPrepare. */
+#define PREPARE uvPrepare(f->uv, &f->req, prepareCb);
 
 /* Wait for the get callback to fire and check its status. */
-#define prepare__wait_cb(STATUS)                 \
+#define WAIT_CB(STATUS)                          \
     {                                            \
         int i;                                   \
         for (i = 0; i < 5; i++) {                \
-            test_uv_run(&f->loop, 1);            \
+            LOOP_RUN(1);            \
             if (f->invoked == 1) {               \
                 break;                           \
             }                                    \
@@ -74,9 +79,11 @@ static void prepare_cb(struct uv__prepare *req,
         f->invoked = 0;                          \
     }
 
-/**
+/******************************************************************************
+ *
  * Success scenarios.
- */
+ *
+ *****************************************************************************/
 
 TEST_SUITE(success);
 
@@ -87,14 +94,10 @@ TEST_TEAR_DOWN(success, tear_down);
 TEST_CASE(success, first, NULL)
 {
     struct fixture *f = data;
-
     (void)params;
-
-    prepare__invoke;
-    prepare__wait_cb(0);
-
+    PREPARE;
+    WAIT_CB(0);
     munit_assert_true(test_dir_has_file(f->dir, "open-1"));
-
     return MUNIT_OK;
 }
 
@@ -102,26 +105,22 @@ TEST_CASE(success, first, NULL)
 TEST_CASE(success, second, NULL)
 {
     struct fixture *f = data;
-
     (void)params;
-
-    prepare__invoke;
-    prepare__wait_cb(0);
-
-    uv__file_close(f->file, (uv__file_close_cb)raft_free);
-
-    prepare__invoke;
-    prepare__wait_cb(0);
-
+    PREPARE;
+    WAIT_CB(0);
+    uvFileClose(f->file, (uvFileCloseCb)raft_free);
+    PREPARE;
+    WAIT_CB(0);
     munit_assert_true(test_dir_has_file(f->dir, "open-1"));
     munit_assert_true(test_dir_has_file(f->dir, "open-2"));
-
     return MUNIT_OK;
 }
 
-/**
+/******************************************************************************
+ *
  * Failure scenarios.
- */
+ *
+ *****************************************************************************/
 
 TEST_SUITE(error);
 
@@ -133,16 +132,11 @@ TEST_CASE(error, no_resources, NULL)
 {
     struct fixture *f = data;
     aio_context_t ctx = 0;
-
     (void)params;
-
     test_aio_fill(&ctx, 0);
-
-    prepare__invoke;
-    prepare__wait_cb(RAFT_IOERR);
-
+    PREPARE;
+    WAIT_CB(RAFT_IOERR);
     test_aio_destroy(ctx);
-
     return MUNIT_OK;
 }
 
@@ -151,14 +145,10 @@ TEST_CASE(error, no_space, NULL)
 {
     struct fixture *f = data;
     struct uv *uv = f->io.impl;
-
     (void)params;
-
     uv->n_blocks = 32768;
-
-    prepare__invoke;
-    prepare__wait_cb(RAFT_IOERR);
-
+    PREPARE;
+    WAIT_CB(RAFT_IOERR);
     return MUNIT_OK;
 }
 
@@ -175,20 +165,18 @@ static MunitParameterEnum error_oom_params[] = {
 TEST_CASE(error, oom, error_oom_params)
 {
     struct fixture *f = data;
-
     (void)params;
-
     test_heap_fault_enable(&f->heap);
-
-    prepare__invoke;
-    prepare__wait_cb(RAFT_NOMEM);
-
+    PREPARE;
+    WAIT_CB(RAFT_NOMEM);
     return MUNIT_OK;
 }
 
-/**
+/******************************************************************************
+ *
  * Close raft_io instance scenarios.
- */
+ *
+ *****************************************************************************/
 
 TEST_SUITE(close);
 
@@ -200,11 +188,8 @@ TEST_TEAR_DOWN(close, tear_down);
 TEST_CASE(close, noop, NULL)
 {
     struct fixture *f = data;
-
     (void)params;
-
-    io_uv__close;
-
+    UV_CLOSE;
     return MUNIT_OK;
 }
 
@@ -212,13 +197,10 @@ TEST_CASE(close, noop, NULL)
 TEST_CASE(close, cancel_requests, NULL)
 {
     struct fixture *f = data;
-
     (void)params;
-
-    prepare__invoke;
-    io_uv__close;
-    prepare__wait_cb(RAFT_CANCELED);
-
+    PREPARE;
+    UV_CLOSE;
+    WAIT_CB(RAFT_CANCELED);
     return MUNIT_OK;
 }
 
@@ -226,19 +208,13 @@ TEST_CASE(close, cancel_requests, NULL)
 TEST_CASE(close, remove_pool, NULL)
 {
     struct fixture *f = data;
-
     (void)params;
-
-    prepare__invoke;
-    prepare__wait_cb(0);
-
-    test_uv_run(&f->loop, 1);
+    PREPARE;
+    WAIT_CB(0);
+    LOOP_RUN(1);
     munit_assert_true(test_dir_has_file(f->dir, "open-2"));
-
-    io_uv__close;
-
-    test_uv_run(&f->loop, 2);
+    UV_CLOSE;
+    LOOP_RUN(2);
     munit_assert_false(test_dir_has_file(f->dir, "open-2"));
-
     return MUNIT_OK;
 }

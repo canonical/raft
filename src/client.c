@@ -42,7 +42,7 @@ int raft_apply(struct raft *r,
         goto err;
     }
 
-    RAFT__QUEUE_PUSH(&r->leader_state.apply_reqs, &req->queue);
+    QUEUE_PUSH(&r->leader_state.apply_reqs, &req->queue);
 
     rv = raft_replication__trigger(r, index);
     if (rv != 0) {
@@ -53,7 +53,7 @@ int raft_apply(struct raft *r,
 
 err_after_log_append:
     log__discard(&r->log, index);
-    RAFT__QUEUE_REMOVE(&req->queue);
+    QUEUE_REMOVE(&req->queue);
 err:
     assert(rv != 0);
     return rv;
@@ -88,7 +88,7 @@ int raft_barrier(struct raft *r, struct raft_apply *req, raft_apply_cb cb)
         goto err_after_buf_alloc;
     }
 
-    RAFT__QUEUE_PUSH(&r->leader_state.apply_reqs, &req->queue);
+    QUEUE_PUSH(&r->leader_state.apply_reqs, &req->queue);
 
     rv = raft_replication__trigger(r, index);
     if (rv != 0) {
@@ -99,7 +99,7 @@ int raft_barrier(struct raft *r, struct raft_apply *req, raft_apply_cb cb)
 
 err_after_log_append:
     log__discard(&r->log, index);
-    RAFT__QUEUE_REMOVE(&req->queue);
+    QUEUE_REMOVE(&req->queue);
 err_after_buf_alloc:
     raft_free(buf.base);
 err:

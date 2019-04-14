@@ -32,6 +32,9 @@ typedef char osDir[OS_MAX_DIR_LEN];
 /* Concatenate a directory and a file. */
 void osJoin(const osDir dir, const osFilename filename, osPath path);
 
+/* Extract the directory portion of the given path. */
+void osDirname(const osPath path, osDir dir);
+
 /* Check that the given directory exists, and try to create it if it doesn't. */
 int osEnsureDir(const osDir dir);
 
@@ -76,6 +79,11 @@ bool osIsAtEof(int fd);
 
 /* Get the logical block size of the file system rooted at @dir. */
 int osBlockSize(const osDir dir, size_t *size);
+
+/* Attempt to configure the given file descriptor for direct I/O. In case of
+ * failure, check if the file system is known to not support direct I/O and
+ * return ENOTSUP in that case. */
+int osSetDirectIO(int fd);
 
 /* Return a human-readable description of the given OS error */
 const char *osStrError(int rv);

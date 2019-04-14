@@ -1,7 +1,7 @@
 #include "../lib/fs.h"
 #include "../lib/heap.h"
+#include "../lib/loop.h"
 #include "../lib/runner.h"
-#include "../lib/uv.h"
 
 #include "../../include/raft/uv.h"
 
@@ -18,7 +18,7 @@ TEST_MODULE(uv_metadata);
 struct fixture
 {
     FIXTURE_HEAP;
-    FIXTURE_UV;
+    FIXTURE_LOOP;
     char *dir;
     struct raft_uv_transport transport;
     struct raft_io io;
@@ -30,7 +30,7 @@ static void *setup(const MunitParameter params[], void *user_data)
     int rv;
     (void)user_data;
     SETUP_HEAP;
-    SETUP_UV;
+    SETUP_LOOP;
     f->dir = test_dir_setup(params);
     rv = raft_uv_tcp_init(&f->transport, &f->loop);
     munit_assert_int(rv, ==, 0);
@@ -42,11 +42,11 @@ static void *setup(const MunitParameter params[], void *user_data)
 static void tear_down(void *data)
 {
     struct fixture *f = data;
-    test_uv_stop(&f->loop);
+    LOOP_STOP;
     raft_uv_close(&f->io);
     raft_uv_tcp_close(&f->transport);
     test_dir_tear_down(f->dir);
-    TEAR_DOWN_UV;
+    TEAR_DOWN_LOOP;
     TEAR_DOWN_HEAP;
     free(f);
 }

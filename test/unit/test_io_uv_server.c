@@ -1,8 +1,8 @@
-#include "../lib/io_uv.h"
+#include "../lib/uv.h"
 #include "../lib/runner.h"
 
 #include "../../src/byte.h"
-#include "../../src/io_uv_encoding.h"
+#include "../../src/uv_encoding.h"
 
 TEST_MODULE(io_uv_recv);
 
@@ -12,7 +12,7 @@ TEST_MODULE(io_uv_recv);
 
 struct fixture
 {
-    IO_UV_FIXTURE;
+    FIXTURE_UV;
     struct
     {
         char handshake[sizeof(uint64_t) * 3 /* Preamble */ + 16 /* Address */];
@@ -32,7 +32,8 @@ static void recv_cb(struct raft_io *io, struct raft_message *message)
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    IO_UV_SETUP;
+    int rv;
+    SETUP_UV;
     rv = f->io.start(&f->io, 10000, NULL, recv_cb);
     munit_assert_int(rv, ==, 0);
     f->peer.message.type = RAFT_IO_REQUEST_VOTE;
@@ -46,7 +47,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 static void tear_down(void *data)
 {
     struct fixture *f = data;
-    IO_UV_TEAR_DOWN;
+    TEAR_DOWN_UV;
 }
 
 #define recv__peer_connect test_tcp_connect(&f->tcp, 9000);
@@ -71,7 +72,7 @@ static void tear_down(void *data)
         unsigned n_bufs;                                               \
         unsigned i;                                                    \
         int rv2;                                                       \
-        rv2 = io_uv__encode_message(&f->peer.message, &bufs, &n_bufs); \
+        rv2 = uvEncodeMessage(&f->peer.message, &bufs, &n_bufs); \
         munit_assert_int(rv2, ==, 0);                                  \
         if (N == 0) {                                                  \
             n = n_bufs;                                                \
@@ -113,7 +114,7 @@ TEST_CASE(success, first, NULL)
     recv__peer_handshake;
     recv__peer_send;
 
-    test_uv_run(&f->loop, 2);
+    LOOP_RUN(2);
 
     munit_assert_int(f->invoked, ==, 1);
     munit_assert_ptr_not_null(f->message);
@@ -139,7 +140,7 @@ TEST_CASE(success, second, NULL)
     recv__peer_send;
     recv__peer_send;
 
-    test_uv_run(&f->loop, 2);
+    LOOP_RUN(2);
 
     return MUNIT_OK;
 }
@@ -159,7 +160,7 @@ TEST_CASE(success, request_vote_result, NULL)
     recv__peer_handshake;
     recv__peer_send;
 
-    test_uv_run(&f->loop, 2);
+    LOOP_RUN(2);
 
     munit_assert_int(f->message->type, ==, RAFT_IO_REQUEST_VOTE_RESULT);
     munit_assert_int(f->message->request_vote_result.term, ==, 3);
@@ -194,7 +195,7 @@ TEST_CASE(success, append_entries, NULL)
     recv__peer_handshake;
     recv__peer_send;
 
-    test_uv_run(&f->loop, 2);
+    LOOP_RUN(2);
 
     munit_assert_int(f->invoked, ==, 1);
     munit_assert_ptr_not_null(f->message);
@@ -228,7 +229,7 @@ TEST_CASE(success, heartbeat, NULL)
     recv__peer_handshake;
     recv__peer_send;
 
-    test_uv_run(&f->loop, 2);
+    LOOP_RUN(2);
 
     return MUNIT_OK;
 }
@@ -249,7 +250,7 @@ TEST_CASE(success, append_entries_result, NULL)
     recv__peer_handshake;
     recv__peer_send;
 
-    test_uv_run(&f->loop, 2);
+    LOOP_RUN(2);
 
     munit_assert_int(f->message->type, ==, RAFT_IO_APPEND_ENTRIES_RESULT);
 
@@ -282,7 +283,7 @@ TEST_CASE(success, install_snapshot, NULL)
     recv__peer_send;
     raft_configuration_close(&p->conf);
 
-    test_uv_run(&f->loop, 2);
+    LOOP_RUN(2);
 
     munit_assert_int(f->invoked, ==, 1);
     munit_assert_ptr_not_null(f->message);
@@ -328,7 +329,7 @@ TEST_CASE(error, bad_protocol, NULL)
 
     test_tcp_send(&f->tcp, f->peer.handshake, sizeof f->peer.handshake);
 
-    test_uv_run(&f->loop, 2);
+    LOOP_RUN(2);
 
     munit_assert_int(f->invoked, ==, 0);
 
@@ -352,7 +353,7 @@ TEST_CASE(error, bad_size, NULL)
 
     test_tcp_send(&f->tcp, buf, sizeof buf);
 
-    test_uv_run(&f->loop, 2);
+    LOOP_RUN(2);
 
     munit_assert_int(f->invoked, ==, 0);
 
@@ -376,7 +377,7 @@ TEST_CASE(error, bad_type, NULL)
 
     test_tcp_send(&f->tcp, buf, sizeof buf);
 
-    test_uv_run(&f->loop, 2);
+    LOOP_RUN(2);
 
     munit_assert_int(f->invoked, ==, 0);
 
@@ -433,9 +434,9 @@ TEST_CASE(close, accept, NULL)
     recv__peer_connect;
     recv__peer_handshake;
 
-    test_uv_run(&f->loop, 1);
+    LOOP_RUN(1);
 
-    io_uv__close;
+    UV_CLOSE;
 
     return MUNIT_OK;
 }
@@ -461,12 +462,12 @@ TEST_CASE(close, append_entries, NULL)
     recv__peer_handshake;
     recv__peer_send_bufs(1); /* Send only the message header */
 
-    test_uv_run(&f->loop, 2);
+    LOOP_RUN(2);
 
     munit_assert_int(f->invoked, ==, 0);
     munit_assert_ptr_null(f->message);
 
-    io_uv__close;
+    UV_CLOSE;
 
     return MUNIT_OK;
 }

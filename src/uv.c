@@ -11,10 +11,10 @@
 #include "byte.h"
 #include "configuration.h"
 #include "entry.h"
-#include "io_uv_encoding.h"
 #include "logging.h"
 #include "os.h"
 #include "uv.h"
+#include "uv_encoding.h"
 
 /* Retry to connect to peer servers every second.
  *
@@ -105,18 +105,18 @@ static int uvStart(struct raft_io *io,
 
 static bool hasPendingDiskIO(struct uv *uv)
 {
-    return !RAFT__QUEUE_IS_EMPTY(&uv->append_segments) ||
-           !RAFT__QUEUE_IS_EMPTY(&uv->finalize_reqs) ||
+    return !QUEUE_IS_EMPTY(&uv->append_segments) ||
+           !QUEUE_IS_EMPTY(&uv->finalize_reqs) ||
            uv->finalize_work.data != NULL ||
-           !RAFT__QUEUE_IS_EMPTY(&uv->truncate_reqs) ||
+           !QUEUE_IS_EMPTY(&uv->truncate_reqs) ||
            uv->truncate_work.data != NULL ||
-           !RAFT__QUEUE_IS_EMPTY(&uv->snapshot_put_reqs) ||
-           !RAFT__QUEUE_IS_EMPTY(&uv->snapshot_get_reqs);
+           !QUEUE_IS_EMPTY(&uv->snapshot_put_reqs) ||
+           !QUEUE_IS_EMPTY(&uv->snapshot_get_reqs);
 }
 
 void uvMaybeClose(struct uv *uv)
 {
-    if (uv->state == UV__ACTIVE) {
+    if (!uv->closing) {
         return;
     }
 
@@ -124,8 +124,6 @@ void uvMaybeClose(struct uv *uv)
         assert(!hasPendingDiskIO(uv));
         return;
     }
-
-    assert(uv->state == UV__CLOSING);
 
     if (hasPendingDiskIO(uv)) {
         return;
@@ -137,21 +135,16 @@ void uvMaybeClose(struct uv *uv)
     }
 }
 
-static void transportCloseCb(struct raft_uv_transport *t)
-{
-    struct uv *uv = t->data;
-    uvMaybeClose(uv);
-}
-
 static void timerCloseCb(uv_handle_t *handle)
 {
     struct uv *uv = handle->data;
-    io_uv__clients_stop(uv);
-    io_uv__servers_stop(uv);
-    io_uv__prepare_stop(uv);
-    io_uv__append_stop(uv);
-    io_uv__truncate_stop(uv);
-    uv->transport->close(uv->transport, transportCloseCb);
+    uvMaybeClose(uv);
+}
+
+static void transportCloseCb(struct raft_uv_transport *t)
+{
+    struct uv *uv = t->data;
+    uv_close((uv_handle_t *)&uv->timer, timerCloseCb);
 }
 
 /* Implementation of raft_io->close. */
@@ -162,12 +155,15 @@ static int uvClose(struct raft_io *io, void (*cb)(struct raft_io *io))
     uv = io->impl;
     assert(uv->state == UV__ACTIVE);
     uv->close_cb = cb;
-    uv->state = UV__CLOSING;
+    uv->closing = true;
     rv = uv_timer_stop(&uv->timer);
     assert(rv == 0);
-    /* Start the shutdown sequence by closing the timer handle. From now one the
-     * tick callback won't be invoked anymore. */
-    uv_close((uv_handle_t *)&uv->timer, timerCloseCb);
+    io_uv__clients_stop(uv);
+    io_uv__servers_stop(uv);
+    uvPrepareClose(uv);
+    uvAppendClose(uv);
+    io_uv__truncate_stop(uv);
+    uv->transport->close(uv->transport, transportCloseCb);
     return 0;
 }
 
@@ -421,23 +417,24 @@ int raft_uv_init(struct raft_io *io,
     uv->servers = NULL;
     uv->n_servers = 0;
     uv->connect_retry_delay = CONNECT_RETRY_DELAY;
-    uv->preparing = NULL;
-    RAFT__QUEUE_INIT(&uv->prepare_reqs);
-    RAFT__QUEUE_INIT(&uv->prepare_pool);
+    uv->prepare_file = NULL;
+    QUEUE_INIT(&uv->prepare_reqs);
+    QUEUE_INIT(&uv->prepare_pool);
     uv->prepare_next_counter = 1;
     uv->append_next_index = 1;
-    RAFT__QUEUE_INIT(&uv->append_segments);
-    RAFT__QUEUE_INIT(&uv->append_pending_reqs);
-    RAFT__QUEUE_INIT(&uv->append_writing_reqs);
-    RAFT__QUEUE_INIT(&uv->finalize_reqs);
+    QUEUE_INIT(&uv->append_segments);
+    QUEUE_INIT(&uv->append_pending_reqs);
+    QUEUE_INIT(&uv->append_writing_reqs);
+    QUEUE_INIT(&uv->finalize_reqs);
     uv->finalize_last_index = 0;
     uv->finalize_work.data = NULL;
-    RAFT__QUEUE_INIT(&uv->truncate_reqs);
+    QUEUE_INIT(&uv->truncate_reqs);
     uv->truncate_work.data = NULL;
-    RAFT__QUEUE_INIT(&uv->snapshot_put_reqs);
-    RAFT__QUEUE_INIT(&uv->snapshot_get_reqs);
+    QUEUE_INIT(&uv->snapshot_put_reqs);
+    QUEUE_INIT(&uv->snapshot_get_reqs);
     uv->snapshot_put_work.data = NULL;
     uv->tick_cb = NULL;
+    uv->closing = false;
     uv->close_cb = NULL;
 
     /* Set the raft_io implementation. */
@@ -449,7 +446,7 @@ int raft_uv_init(struct raft_io *io,
     io->bootstrap = uvBootstrap;
     io->set_term = uvSetTerm;
     io->set_vote = uvSetVote;
-    io->append = io_uv__append;
+    io->append = uvAppend;
     io->truncate = io_uv__truncate;
     io->send = io_uv__send;
     io->snapshot_put = io_uv__snapshot_put;

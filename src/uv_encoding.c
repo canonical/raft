@@ -5,7 +5,7 @@
 #include "assert.h"
 #include "byte.h"
 #include "configuration.h"
-#include "io_uv_encoding.h"
+#include "uv_encoding.h"
 
 /**
  * Size of the request preable.
@@ -61,7 +61,7 @@ static size_t raft_io_uv_sizeof__install_snapshot(
            sizeof(uint64_t);  /* Length of snapshot data */
 }
 
-size_t io_uv__sizeof_batch_header(size_t n)
+size_t uvSizeofBatchHeader(size_t n)
 {
     return 8 + /* Number of entries in the batch, little endian */
            16 * n /* One header per entry */;
@@ -102,7 +102,7 @@ static void raft_io_uv_encode__append_entries(
     byte__put64(&cursor, p->prev_log_term);  /* Previous term. */
     byte__put64(&cursor, p->leader_commit);  /* Commit index. */
 
-    io_uv__encode_batch_header(p->entries, p->n_entries, cursor);
+    uvEncodeBatchHeader(p->entries, p->n_entries, cursor);
 }
 
 static void raft_io_uv_encode__append_entries_result(
@@ -136,7 +136,7 @@ static void raft_io_uv_encode__install_snapshot(
     byte__put64(&cursor, p->data.len); /* Snapshot data size. */
 }
 
-int io_uv__encode_message(const struct raft_message *message,
+int uvEncodeMessage(const struct raft_message *message,
                           uv_buf_t **bufs,
                           unsigned *n_bufs)
 {
@@ -244,7 +244,7 @@ oom:
     return RAFT_NOMEM;
 }
 
-void io_uv__encode_batch_header(const struct raft_entry *entries,
+void uvEncodeBatchHeader(const struct raft_entry *entries,
                                 unsigned n,
                                 void *buf)
 {
@@ -295,7 +295,7 @@ static void raft_io_uv_decode__request_vote_result(
     p->vote_granted = byte__get64(&cursor);
 }
 
-int io_uv__decode_batch_header(const void *batch,
+int uvDecodeBatchHeader(const void *batch,
                                struct raft_entry **entries,
                                unsigned *n)
 {
@@ -363,7 +363,7 @@ static int raft_io_uv_decode__append_entries(const uv_buf_t *buf,
     args->prev_log_term = byte__get64(&cursor);
     args->leader_commit = byte__get64(&cursor);
 
-    rv = io_uv__decode_batch_header(cursor, &args->entries, &args->n_entries);
+    rv = uvDecodeBatchHeader(cursor, &args->entries, &args->n_entries);
     if (rv != 0) {
         return rv;
     }
@@ -415,7 +415,7 @@ static int raft_io_uv_decode__install_snapshot(
     return 0;
 }
 
-int io_uv__decode_message(unsigned type,
+int uvDecodeMessage(unsigned type,
                           const uv_buf_t *header,
                           struct raft_message *message,
                           size_t *payload_len)
@@ -460,7 +460,7 @@ int io_uv__decode_message(unsigned type,
     return rv;
 }
 
-void io_uv__decode_entries_batch(const struct raft_buffer *buf,
+void uvDecodeEntriesBatch(const struct raft_buffer *buf,
                                  struct raft_entry *entries,
                                  unsigned n)
 {

@@ -10,86 +10,343 @@
 
 #include "aio.h"
 #include "assert.h"
+#include "os.h"
 #include "uv_file.h"
 
-/**
- Handle flags
- */
-enum {
-    UV__FILE_CREATING = 0x0001,
-    UV__FILE_CLOSING = 0x0002,
-    UV__FILE_CLOSED = 0x0004
-};
+/* State codes */
+enum { CREATING = 1, READY, ERRORED, CLOSED };
 
-/**
- * Run blocking syscalls involved in file creation (e.g. posix_fallocate()).
+/* Run blocking syscalls involved in file creation (e.g. posix_fallocate()). */
+static void createWorkCb(uv_work_t *work)
+{
+    struct uvFileCreate *req; /* Create file request object */
+    struct uvFile *f;         /* File handle */
+    osDir dir;
+    int rv;
+
+    req = work->data;
+    f = req->file;
+
+    assert(f->state == CREATING);
+
+    /* Allocate the desired size. */
+    rv = posix_fallocate(f->fd, 0, req->size);
+    if (rv != 0) {
+        /* From the manual page:
+         *
+         *   posix_fallocate() returns zero on success, or an error number on
+         *   failure.  Note that errno is not set.
+         */
+        goto err;
+    }
+
+    /* Sync the file and its directory */
+    rv = fsync(f->fd);
+    if (rv == -1) {
+        /* UNTESTED: should fail only in case of disk errors */
+        rv = errno;
+        goto err;
+    }
+    osDirname(req->path, dir);
+    rv = osSyncDir(dir);
+    if (rv != 0) {
+        /* UNTESTED: should fail only in case of disk errors */
+        goto err;
+    }
+
+    /* Set direct I/O if possible. */
+    rv = osSetDirectIO(f->fd);
+    if (rv != 0) {
+        if (rv != ENOTSUP) {
+            goto err;
+        }
+        /* Direct I/O is not supported: io_submit will be blocking. */
+        f->async = false;
+    }
+
+    req->status = 0;
+    return;
+
+err:
+    req->status = uv_translate_sys_error(rv);
+}
+
+/* Run blocking syscalls involved in a file write request.
  *
- * This is called in UV's threadpool.
- */
-static void uv__file_create_work_cb(uv_work_t *work);
+ * Perform a KAIO write request and synchronously wait for it to complete. */
+static void writeWorkCb(uv_work_t *work)
+{
+    struct uvFileWrite *req; /* Write file request object */
+    aio_context_t ctx = 0;   /* KAIO handle */
+    struct iocb *iocbs;      /* Pointer to KAIO request object */
+    struct io_event event;   /* KAIO response object */
+    int rv;
 
-/**
- * Sync the directory where @path lives in. This is necessary in order to ensure
- * that the new entry is saved in the directory inode. Called in a thread as
- * part of file creation.
- */
-static int uv__file_create_work_sync_dir(const char *path);
+    req = work->data;
+    assert(req->file->state == READY);
 
-/**
- * Attempt to use direct I/O. If we can't, check if the file system does not
- * support direct I/O and ignore the error in that case. Called in a thread as
- * part of file creation.
- */
-static int uv__file_create_work_set_direct_io(struct uv__file *f);
+    iocbs = &req->iocb;
 
-/**
- * Main loop callback run after @uv__file_create_work_cb has returned. It
- * will normally start the eventfd poller to receive notification about
- * completed writes and invoke the create request callback.
- */
-static void uv__file_create_after_work_cb(uv_work_t *work, int status);
+    /* Perform the request using a dedicated context, to avoid synchronization
+     * issues between threads when multiple write requests are submitted in
+     * parallel. This is suboptimal but in real-world users should use file
+     * systems and kernels with proper async write support. */
 
-/**
- * Callback fired when the event fd associated with AIO write requests should be
- * ready for reading (i.e. when a write has completed).
- */
-static void uv__file_write_poll_cb(uv_poll_t *poller, int status, int events);
+    rv = io_setup(1 /* Maximum concurrent requests */, &ctx);
+    if (rv == -1) {
+        /* UNTESTED: should fail only with ENOMEM */
+        goto out;
+    }
 
-/**
- * Run blocking syscalls involved in a file write request.
- *
- * Perform a KAIO write request and synchronously wait for it to complete.
- */
-static void uv__file_write_work_cb(uv_work_t *work);
+    /* Submit the request */
+    rv = io_submit(ctx, 1, &iocbs);
+    if (rv == -1) {
+        /* UNTESTED: since we're not using NOWAIT and the parameters are valid,
+         * this shouldn't fail. */
+        goto out_after_io_setup;
+    }
 
-/**
- * Callback run after @uv__file_write_work_cb has returned. It normally
- * invokes the write request callback.
- */
-static void uv__file_write_after_work_cb(uv_work_t *work, int status);
+    /* Wait for the request to complete */
+    do {
+        rv = io_getevents(ctx, 1, 1, &event, NULL);
+    } while (rv == -1 && errno == EINTR);
+    assert(rv == 1);
 
-/**
- * Remove the request from the queue of inflight writes and invoke the request
- * callback if set.
- */
-static void uv__file_write_finish(struct uv__file_write *req);
+    rv = 0;
 
-/**
- * Close the poller if there's no infiglht create or write request.
- */
-static void uv__file_maybe_closed(struct uv__file *f);
+out_after_io_setup:
+    io_destroy(ctx);
 
-/**
- * Invoked at the end of the close sequence. It invokes the close callback.
- */
-static void uv__file_poll_close_cb(struct uv_handle_s *handle);
+out:
+    if (rv != 0) {
+        req->status = uv_translate_sys_error(errno);
+    } else {
+        req->status = event.res;
+    }
 
-int uv__file_init(struct uv__file *f, struct uv_loop_s *loop)
+    return;
+}
+
+/* Remove the request from the queue of inflight writes and invoke the request
+ * callback if set. */
+static void writeFinish(struct uvFileWrite *req)
+{
+    QUEUE_REMOVE(&req->queue);
+    req->cb(req, req->status);
+}
+
+/* Invoked at the end of the closing sequence. It invokes the close callback. */
+static void pollCloseCb(struct uv_handle_s *handle)
+{
+    struct uvFile *f = handle->data;
+    int rv;
+
+    assert(f->closing);
+    assert(f->state != CLOSED);
+    assert(QUEUE_IS_EMPTY(&f->write_queue));
+
+    rv = close(f->event_fd);
+    assert(rv == 0);
+    if (f->ctx != 0) {
+        rv = io_destroy(f->ctx);
+        assert(rv == 0);
+    }
+    free(f->events);
+
+    f->state = CLOSED;
+
+    if (f->close_cb != NULL) {
+        f->close_cb(f);
+    }
+}
+
+/* Close the poller if the closing flag is on and there's no infiglht create or
+   write request. */
+static void maybeClosed(struct uvFile *f)
+{
+    assert(f->state != CLOSED);
+
+    if (!f->closing) {
+        return;
+    }
+
+    /* If are creating the file we need to wait for the create to finish. */
+    if (f->state == CREATING) {
+        return;
+    }
+
+    /* If are writing we need to wait for the writes to finish. */
+    if (!QUEUE_IS_EMPTY(&f->write_queue)) {
+        return;
+    }
+
+    if (!uv_is_closing((struct uv_handle_s *)&f->event_poller)) {
+        uv_close((struct uv_handle_s *)&f->event_poller, pollCloseCb);
+    }
+}
+
+/* Callback run after writeWorkCb has returned. It normally invokes the write
+ * request callback. */
+static void writeAfterWorkCb(uv_work_t *work, int status)
+{
+    struct uvFileWrite *req; /* Write file request object */
+    struct uvFile *f;
+
+    assert(status == 0); /* We don't cancel worker requests */
+
+    req = work->data;
+    f = req->file;
+
+    assert(f->state == READY);
+
+    /* If we were closed, let's mark the request as canceled, regardless of the
+     * actual outcome. */
+    if (req->file->closing) {
+        req->status = UV_ECANCELED;
+    }
+
+    writeFinish(req);
+    maybeClosed(f);
+}
+
+/* Callback fired when the event fd associated with AIO write requests should be
+ * ready for reading (i.e. when a write has completed). */
+static void writePollCb(uv_poll_t *poller, int status, int events)
+{
+    struct uvFile *f = poller->data; /* File handle */
+    uint64_t completed;              /* True if the write is complete */
+    int rv;
+    unsigned i;
+
+    assert(f != NULL);
+    assert(f->event_fd >= 0);
+    assert(f->state == READY);
+
+    /* TODO: it's not clear when polling could fail. In this case we should
+     * probably mark all pending requests as failed. */
+    assert(status == 0);
+
+    assert(events & UV_READABLE);
+
+    /* Read the event file descriptor */
+    rv = read(f->event_fd, &completed, sizeof completed);
+    if (rv != sizeof completed) {
+        /* UNTESTED: According to eventfd(2) this is the only possible failure
+         * mode, meaning that epoll has indicated that the event FD is not yet
+         * ready. */
+        assert(errno == EAGAIN);
+        return;
+    }
+
+    /* TODO: this assertion fails in unit tests */
+    /* assert(completed == 1); */
+
+    /* Try to fetch the write responses.
+     *
+     * If we got here at least one write should have completed and io_events
+     * should return immediately without blocking. */
+    do {
+        rv = io_getevents(f->ctx, 1, f->n_events, f->events, NULL);
+    } while (rv == -1 && errno == EINTR);
+
+    assert(rv >= 1);
+
+    for (i = 0; i < (unsigned)rv; i++) {
+        struct io_event *event = &f->events[i];
+        struct uvFileWrite *req = (void *)event->data;
+
+        /* If we are closing, we mark the write as canceled, although
+         * technically it might have worked. */
+        if (f->closing) {
+            req->status = UV_ECANCELED;
+            goto finish;
+        }
+
+#if defined(RWF_NOWAIT)
+        /* If we got EAGAIN, it means it was not possible to perform the write
+         * asynchronously, so let's fall back to the threadpool. */
+        if (event->res == -EAGAIN) {
+            req->iocb.aio_flags &= ~IOCB_FLAG_RESFD;
+            req->iocb.aio_resfd = 0;
+            req->iocb.aio_rw_flags &= ~RWF_NOWAIT;
+            req->work.data = req;
+            rv = uv_queue_work(f->loop, &req->work, writeWorkCb,
+                               writeAfterWorkCb);
+            if (rv != 0) {
+                /* UNTESTED: with the current libuv implementation this should
+                 * never fail. */
+                req->status = rv;
+                goto finish;
+            }
+            return;
+        }
+#endif /* RWF_NOWAIT */
+
+        req->status = event->res;
+
+    finish:
+        writeFinish(req);
+    }
+
+    /* If we've been closed, let's see if we can stop the poller and fire the
+     * close callback. */
+    maybeClosed(f);
+}
+
+/** Main loop callback run after @createWorkCb has returned. It normally starts
+ * the eventfd poller to receive notifications about completed writes and invoke
+ * the create request callback. */
+static void createAfterWorkCb(uv_work_t *work, int status)
+{
+    struct uvFileCreate *req;
+    struct uvFile *f;
+    int rv;
+
+    assert(status == 0); /* We don't cancel worker requests */
+    req = work->data;
+    assert(req != NULL);
+    f = req->file;
+
+    /* If we were closed, abort here. */
+    if (f->closing) {
+        unlink(req->path);
+        req->status = UV_ECANCELED;
+        goto out;
+    }
+
+    /* If no error occurred, start polling the event file descriptor. */
+    if (req->status == 0) {
+        rv = uv_poll_start(&f->event_poller, UV_READABLE, writePollCb);
+        if (rv != 0) {
+            /* UNTESTED: the underlying libuv calls should never fail. */
+            req->status = rv;
+
+            io_destroy(f->ctx);
+            close(f->event_fd);
+            close(f->fd);
+            unlink(req->path);
+        }
+    }
+
+out:
+    if (req->status == 0) {
+        f->state = READY;
+    } else {
+        f->state = ERRORED;
+    }
+
+    if (req->cb != NULL) {
+        req->cb(req, req->status);
+    }
+
+    maybeClosed(f);
+}
+
+int uvFileInit(struct uvFile *f, struct uv_loop_s *loop)
 {
     int rv;
 
     f->loop = loop;
-    f->flags = 0;
     f->fd = -1;
     f->async = true;
     f->event_fd = -1;
@@ -114,37 +371,34 @@ int uv__file_init(struct uv__file *f, struct uv_loop_s *loop)
     f->ctx = 0;
     f->events = NULL;
     f->n_events = 0;
-
-    RAFT__QUEUE_INIT(&f->write_queue);
-
+    QUEUE_INIT(&f->write_queue);
     f->close_cb = NULL;
 
     return 0;
 
 err_after_event_fd:
     close(f->event_fd);
-
 err:
     assert(rv != 0);
-
     return rv;
 }
 
-int uv__file_create(struct uv__file *f,
-                    struct uv__file_create *req,
-                    const char *path,
-                    size_t size,
-                    unsigned max_n_writes,
-                    uv__file_create_cb cb)
+int uvFileCreate(struct uvFile *f,
+                 struct uvFileCreate *req,
+                 osPath path,
+                 size_t size,
+                 unsigned max_n_writes,
+                 uvFileCreateCb cb)
 {
     int flags = O_WRONLY | O_CREAT | O_EXCL; /* Common open flags */
     int rv;
 
     assert(path != NULL);
     assert(size > 0);
-    assert(!uv__file_is_closing(f));
+    assert(!f->closing);
+    assert(strnlen(path, OS_MAX_PATH_LEN + 1) <= OS_MAX_PATH_LEN);
 
-    f->flags |= UV__FILE_CREATING;
+    f->state = CREATING;
 
 #if !defined(RWF_DSYNC)
     /* If per-request synchronous I/O is not supported, open the file with the
@@ -180,13 +434,12 @@ int uv__file_create(struct uv__file *f,
 
     req->file = f;
     req->cb = cb;
-    req->path = path;
+    strcpy(req->path, path);
     req->size = size;
     req->status = 0;
     req->work.data = req;
 
-    rv = uv_queue_work(f->loop, &req->work, uv__file_create_work_cb,
-                       uv__file_create_after_work_cb);
+    rv = uv_queue_work(f->loop, &req->work, createWorkCb, createAfterWorkCb);
     if (rv != 0) {
         /* UNTESTED: with the current libuv implementation this can't fail. */
         goto err_after_open;
@@ -197,53 +450,46 @@ int uv__file_create(struct uv__file *f,
 err_after_io_setup:
     io_destroy(f->ctx);
     f->ctx = 0;
-
 err_after_open:
     close(f->fd);
     unlink(path);
     f->fd = -1;
-
 err:
     assert(rv != 0);
-
-    f->flags &= ~UV__FILE_CREATING;
-
+    f->state = 0;
     return rv;
 }
 
-int uv__file_write(struct uv__file *f,
-                   struct uv__file_write *req,
-                   const uv_buf_t bufs[],
-                   unsigned n,
-                   size_t offset,
-                   uv__file_write_cb cb)
+int uvFileWrite(struct uvFile *f,
+                struct uvFileWrite *req,
+                const uv_buf_t bufs[],
+                unsigned n,
+                size_t offset,
+                uvFileWriteCb cb)
 {
     int rv;
     struct iocb *iocbs = &req->iocb;
 
-    assert(!uv__file_is_closing(f));
+    assert(!f->closing);
+    assert(f->state == READY);
 
-    /* TODO: at the moment the io-uv-writer isn't actually supposed to leverage
-     *       the support for concurrent writes, so ensure that we're getting
-     *       write requests sequentially. */
+    /* TODO: at the moment we are not leveraging the support for concurrent
+     *       writes, so ensure that we're getting write requests
+     *       sequentially. */
     if (f->n_events == 1) {
-        assert(RAFT__QUEUE_IS_EMPTY(&f->write_queue));
+        assert(QUEUE_IS_EMPTY(&f->write_queue));
     }
 
     assert(f->fd >= 0);
     assert(f->event_fd >= 0);
     assert(f->ctx != 0);
-
     assert(req != NULL);
-
     assert(bufs != NULL);
     assert(n > 0);
 
     req->file = f;
     req->cb = cb;
-
     memset(&req->iocb, 0, sizeof req->iocb);
-
     req->iocb.aio_data = (uint64_t)req;
     req->iocb.aio_lio_opcode = IOCB_CMD_PWRITEV;
     req->iocb.aio_buf = (uint64_t)bufs;
@@ -252,7 +498,7 @@ int uv__file_write(struct uv__file *f,
     req->iocb.aio_fildes = f->fd;
     req->iocb.aio_reqprio = 0;
 
-    RAFT__QUEUE_PUSH(&f->write_queue, &req->queue);
+    QUEUE_PUSH(&f->write_queue, &req->queue);
 
 #if defined(RWF_HIPRI)
     /* High priority request, if possible */
@@ -267,6 +513,7 @@ int uv__file_write(struct uv__file *f,
 
 #if defined(RWF_NOWAIT)
     /* If io_submit can be run in a 100% non-blocking way, we'll try to write
+
      * without using the threadpool, unless we had previously detected that this
      * mode is not supported. */
     if (f->async) {
@@ -317,8 +564,7 @@ int uv__file_write(struct uv__file *f,
     /* If we got here it means we need to run io_submit in the threadpool. */
     req->work.data = req;
 
-    rv = uv_queue_work(f->loop, &req->work, uv__file_write_work_cb,
-                       uv__file_write_after_work_cb);
+    rv = uv_queue_work(f->loop, &req->work, writeWorkCb, writeAfterWorkCb);
     if (rv != 0) {
         /* UNTESTED: with the current libuv implementation this can't fail. */
         goto err;
@@ -329,19 +575,16 @@ done:
 
 err:
     assert(rv != 0);
-
-    RAFT__QUEUE_REMOVE(&req->queue);
-
+    QUEUE_REMOVE(&req->queue);
     return rv;
 }
 
-void uv__file_close(struct uv__file *f, uv__file_close_cb cb)
+void uvFileClose(struct uvFile *f, uvFileCloseCb cb)
 {
     int rv;
+    assert(!f->closing);
 
-    assert(!uv__file_is_closing(f));
-
-    f->flags |= UV__FILE_CLOSING;
+    f->closing = true;
     f->close_cb = cb;
 
     if (f->fd != -1) {
@@ -349,400 +592,5 @@ void uv__file_close(struct uv__file *f, uv__file_close_cb cb)
         assert(rv == 0);
     }
 
-    uv__file_maybe_closed(f);
-}
-
-bool uv__file_is_closing(struct uv__file *f)
-{
-    return (f->flags & (UV__FILE_CLOSING | UV__FILE_CLOSED)) != 0;
-}
-
-static void uv__file_create_work_cb(uv_work_t *work)
-{
-    struct uv__file_create *req; /* Create file request object */
-    struct uv__file *f;          /* File handle */
-    int rv;
-
-    req = work->data;
-    f = req->file;
-
-    assert(f->flags & UV__FILE_CREATING);
-
-    /* Allocate the desired size. */
-    rv = posix_fallocate(f->fd, 0, req->size);
-    if (rv != 0) {
-        /* From the manual page:
-         *
-         *   posix_fallocate() returns zero on success, or an error number on
-         *   failure.  Note that errno is not set.
-         */
-        errno = rv;
-        goto err;
-    }
-
-    /* Sync the file and its directory */
-    rv = fsync(f->fd);
-    if (rv == -1) {
-        /* UNTESTED: should fail only in case of disk errors */
-        goto err;
-    }
-    rv = uv__file_create_work_sync_dir(req->path);
-    if (rv == -1) {
-        /* UNTESTED: should fail only in case of disk errors */
-        goto err;
-    }
-
-    /* Set direct I/O if possible. */
-    rv = uv__file_create_work_set_direct_io(f);
-    if (rv == -1) {
-        goto err;
-    }
-
-    req->status = 0;
-
-    return;
-
-err:
-    req->status = uv_translate_sys_error(errno);
-}
-
-static int uv__file_create_work_sync_dir(const char *path)
-{
-    char *dir; /* The directory portion of path */
-    int fd;    /* Directory file descriptor */
-    int rv;
-
-    dir = malloc(strlen(path) + 1);
-    if (dir == NULL) {
-        errno = ENOMEM;
-        return -1;
-    }
-
-    strcpy(dir, path);
-    dirname(dir);
-
-    fd = open(dir, O_RDONLY | O_DIRECTORY);
-    free(dir);
-    if (fd == -1) {
-        /* UNTESTED: since the directory has been already accessed, this
-         * shouldn't fail */
-        return -1;
-    }
-
-    rv = fsync(fd);
-
-    close(fd);
-
-    return rv;
-}
-
-static int uv__file_create_work_set_direct_io(struct uv__file *f)
-{
-    int flags;             /* Current fcntl flags */
-    struct statfs fs_info; /* To check the file system type */
-    int rv;
-
-    flags = fcntl(f->fd, F_GETFL);
-    rv = fcntl(f->fd, F_SETFL, flags | O_DIRECT);
-
-    if (rv == -1) {
-        if (errno != EINVAL) {
-            /* UNTESTED: the parameters are ok, so this should never happen. */
-            return -1;
-        }
-
-        rv = fstatfs(f->fd, &fs_info);
-        if (rv == -1) {
-            /* UNTESTED: in practice ENOMEM should be the only failure mode */
-            return -1;
-        }
-
-        switch (fs_info.f_type) {
-            case 0x01021994: /* TMPFS_MAGIC */
-            case 0x2fc12fc1: /* ZFS magic */
-                /* If director I/O is not supported, then io_submit will be
-                 * blocking. */
-                f->async = false;
-                break;
-            default:
-                /* UNTESTED: this is an unsupported file system. */
-                errno = EINVAL;
-                return -1;
-        }
-    }
-
-    return 0;
-}
-
-static void uv__file_create_after_work_cb(uv_work_t *work, int status)
-{
-    struct uv__file_create *req;
-    struct uv__file *f;
-    int rv;
-
-    assert(work != NULL);
-
-    assert(status == 0); /* We don't cancel worker requests */
-
-    req = work->data;
-
-    f = req->file;
-
-    /* If we were closed, abort here. */
-    if (uv__file_is_closing(f)) {
-        unlink(req->path);
-        req->status = UV_ECANCELED;
-        goto out;
-    }
-
-    /* If no error occurred, start polling the event file descriptor. */
-    if (req->status == 0) {
-        rv = uv_poll_start(&f->event_poller, UV_READABLE,
-                           uv__file_write_poll_cb);
-        if (rv != 0) {
-            /* UNTESTED: the underlying libuv calls should never fail. */
-            req->status = rv;
-
-            io_destroy(f->ctx);
-            close(f->event_fd);
-            close(f->fd);
-            unlink(req->path);
-        }
-    }
-
-out:
-    if (req->cb != NULL) {
-        req->cb(req, req->status);
-    }
-
-    f->flags &= ~UV__FILE_CREATING;
-
-    if (uv__file_is_closing(f)) {
-        uv__file_maybe_closed(f);
-    }
-}
-
-static void uv__file_write_poll_cb(uv_poll_t *poller, int status, int events)
-{
-    struct uv__file *f = poller->data; /* File handle */
-    uint64_t completed;                /* True if the write is complete */
-    int rv;
-    unsigned i;
-
-    assert(f != NULL);
-    assert(f->event_fd >= 0);
-
-    /* TODO: it's not clear when polling could fail. In this case we should
-     * probably mark all pending requests as failed. */
-    assert(status == 0);
-
-    assert(events & UV_READABLE);
-
-    /* Read the event file descriptor */
-    rv = read(f->event_fd, &completed, sizeof completed);
-    if (rv != sizeof completed) {
-        /* UNTESTED: According to eventfd(2) this is the only possible failure
-         * mode, meaning that epoll has indicated that the event FD is not yet
-         * ready. */
-        assert(errno == EAGAIN);
-        return;
-    }
-
-    /* TODO: this assertion fails in unit tests */
-    /* assert(completed == 1); */
-
-    /* Try to fetch the write responses.
-     *
-     * If we got here a least one write should have completed and io_events
-     * should return immediately without blocking. */
-    do {
-        rv = io_getevents(f->ctx, 1, f->n_events, f->events, NULL);
-    } while (rv == -1 && errno == EINTR);
-
-    assert(rv >= 1);
-
-    for (i = 0; i < (unsigned)rv; i++) {
-        struct io_event *event = &f->events[i];
-        struct uv__file_write *req = (void *)event->data;
-
-        /* If we are closing, we mark the write as canceled, although
-         * technically it might have worked. */
-        if (uv__file_is_closing(f)) {
-            req->status = UV_ECANCELED;
-            goto finish;
-        }
-
-#if defined(RWF_NOWAIT)
-        /* If we got EAGAIN, it means it was not possible to perform the write
-         * asynchronously, so let's fall back to the threadpool. */
-        if (event->res == -EAGAIN) {
-            req->iocb.aio_flags &= ~IOCB_FLAG_RESFD;
-            req->iocb.aio_resfd = 0;
-            req->iocb.aio_rw_flags &= ~RWF_NOWAIT;
-
-            req->work.data = req;
-            rv = uv_queue_work(f->loop, &req->work, uv__file_write_work_cb,
-                               uv__file_write_after_work_cb);
-            if (rv != 0) {
-                /* UNTESTED: with the current libuv implementation this should
-                 * never fail. */
-                req->status = rv;
-                goto finish;
-            }
-
-            return;
-        }
-#endif /* RWF_NOWAIT */
-
-        req->status = event->res;
-
-    finish:
-
-        uv__file_write_finish(req);
-    }
-
-    /* If we've been closed, let's see if we can stop the poller and fire the
-     * close callback. */
-    if (uv__file_is_closing(f)) {
-        uv__file_maybe_closed(f);
-    }
-}
-
-static void uv__file_write_work_cb(uv_work_t *work)
-{
-    struct uv__file_write *req; /* Write file request object */
-    aio_context_t ctx = 0;      /* KAIO handle */
-    struct iocb *iocbs;         /* Pointer to KAIO request object */
-    struct io_event event;      /* KAIO response object */
-    int rv;
-
-    assert(work != NULL);
-    assert(work->data != NULL);
-
-    req = work->data;
-
-    /* If we detect that we've been closed, abort immediately. */
-    if (uv__file_is_closing(req->file)) {
-        rv = -1;
-        errno = ECANCELED;
-        goto out;
-    }
-
-    iocbs = &req->iocb;
-
-    /* Perform the request using a dedicated context, to avoid synchronization
-     * issues between threads when multiple write requests are submitted in
-     * parallel. This is suboptimal but in real-world users should use file
-     * systems and kernels with proper async write support. */
-
-    rv = io_setup(1 /* Maximum concurrent requests */, &ctx);
-    if (rv == -1) {
-        /* UNTESTED: should fail only with ENOMEM */
-        goto out;
-    }
-
-    /* Submit the request */
-    rv = io_submit(ctx, 1, &iocbs);
-    if (rv == -1) {
-        /* UNTESTED: since we're not using NOWAIT and the parameters are valid,
-         * this shouldn't fail. */
-        goto out_after_io_setup;
-    }
-
-    /* Wait for the request to complete */
-    do {
-        rv = io_getevents(ctx, 1, 1, &event, NULL);
-    } while (rv == -1 && errno == EINTR);
-
-    assert(rv == 1);
-    rv = 0;
-
-out_after_io_setup:
-    io_destroy(ctx);
-
-out:
-    if (rv != 0) {
-        req->status = uv_translate_sys_error(errno);
-    } else {
-        req->status = event.res;
-    }
-
-    return;
-}
-
-static void uv__file_write_after_work_cb(uv_work_t *work, int status)
-{
-    struct uv__file_write *req; /* Write file request object */
-    struct uv__file *f;
-
-    assert(work != NULL);
-
-    assert(status == 0); /* We don't cancel worker requests */
-
-    req = work->data;
-    f = req->file;
-
-    /* If we were closed, let's mark the request as canceled, regardless of the
-     * actual outcome. */
-    if (uv__file_is_closing(req->file)) {
-        req->status = UV_ECANCELED;
-    }
-
-    uv__file_write_finish(req);
-
-    if (uv__file_is_closing(f)) {
-        uv__file_maybe_closed(f);
-    }
-}
-
-static void uv__file_write_finish(struct uv__file_write *req)
-{
-    RAFT__QUEUE_REMOVE(&req->queue);
-
-    req->cb(req, req->status);
-}
-
-static void uv__file_maybe_closed(struct uv__file *f)
-{
-    assert((f->flags & UV__FILE_CLOSED) == 0);
-
-    /* If are creating the file we need to wait for the create to finish. */
-    if (f->flags & UV__FILE_CREATING) {
-        return;
-    }
-
-    /* If are writing we need to wait for the writes to finish. */
-    if (!RAFT__QUEUE_IS_EMPTY(&f->write_queue)) {
-        return;
-    }
-
-    if (!uv_is_closing((struct uv_handle_s *)&f->event_poller)) {
-        uv_close((struct uv_handle_s *)&f->event_poller,
-                 uv__file_poll_close_cb);
-    }
-}
-
-static void uv__file_poll_close_cb(struct uv_handle_s *handle)
-{
-    struct uv__file *f = handle->data;
-    int rv;
-
-    assert((f->flags & UV__FILE_CLOSED) == 0);
-    assert(RAFT__QUEUE_IS_EMPTY(&f->write_queue));
-
-    rv = close(f->event_fd);
-    assert(rv == 0);
-
-    if (f->ctx != 0) {
-        rv = io_destroy(f->ctx);
-        assert(rv == 0);
-    }
-
-    free(f->events);
-
-    f->flags |= UV__FILE_CLOSED;
-
-    if (f->close_cb != NULL) {
-        f->close_cb(f);
-    }
+    maybeClosed(f);
 }

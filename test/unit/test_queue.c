@@ -20,7 +20,7 @@ static void *setup(const MunitParameter params[], void *user_data)
     (void)params;
     (void)user_data;
 
-    RAFT__QUEUE_INIT(&f->queue);
+    QUEUE_INIT(&f->queue);
 
     return f;
 }
@@ -50,7 +50,7 @@ struct __item
         for (i2 = 0; i2 < n; i2++) {                   \
             struct __item *item = &items[i2];          \
             item->value = i2 + 1;                      \
-            RAFT__QUEUE_PUSH(&F->queue, &item->queue); \
+            QUEUE_PUSH(&F->queue, &item->queue); \
         }                                              \
     }
 
@@ -59,7 +59,7 @@ struct __item
  */
 #define __remove(ITEMS, I)                   \
     {                                        \
-        RAFT__QUEUE_REMOVE(&ITEMS[I].queue); \
+        QUEUE_REMOVE(&ITEMS[I].queue); \
     }
 
 /**
@@ -67,10 +67,10 @@ struct __item
  */
 #define __assert_head(F, VALUE)                              \
     {                                                        \
-        raft__queue *head = RAFT__QUEUE_HEAD(&F->queue);     \
+        queue *head = QUEUE_HEAD(&F->queue);     \
         struct __item *item;                                 \
                                                              \
-        item = RAFT__QUEUE_DATA(head, struct __item, queue); \
+        item = QUEUE_DATA(head, struct __item, queue); \
         munit_assert_int(item->value, ==, VALUE);            \
     }
 
@@ -79,10 +79,10 @@ struct __item
  */
 #define __assert_tail(F, VALUE)                              \
     {                                                        \
-        raft__queue *tail = RAFT__QUEUE_TAIL(&F->queue);     \
+        queue *tail = QUEUE_TAIL(&F->queue);     \
         struct __item *item;                                 \
                                                              \
-        item = RAFT__QUEUE_DATA(tail, struct __item, queue); \
+        item = QUEUE_DATA(tail, struct __item, queue); \
         munit_assert_int(item->value, ==, VALUE);            \
     }
 
@@ -91,7 +91,7 @@ struct __item
  */
 #define __assert_is_empty(F)                                \
     {                                                       \
-        munit_assert_true(RAFT__QUEUE_IS_EMPTY(&F->queue)); \
+        munit_assert_true(QUEUE_IS_EMPTY(&F->queue)); \
     }
 
 /**
@@ -99,11 +99,11 @@ struct __item
  */
 #define __assert_is_not_empty(F)                             \
     {                                                        \
-        munit_assert_false(RAFT__QUEUE_IS_EMPTY(&F->queue)); \
+        munit_assert_false(QUEUE_IS_EMPTY(&F->queue)); \
     }
 
 /**
- * RAFT__QUEUE_IS_EMPTY
+ * QUEUE_IS_EMPTY
  */
 
 TEST_SUITE(is_empty);
@@ -139,7 +139,7 @@ TEST_CASE(is_empty, success, no, NULL)
 }
 
 /**
- * RAFT__QUEUE_PUSH
+ * QUEUE_PUSH
  */
 
 TEST_SUITE(push);
@@ -185,7 +185,7 @@ TEST_CASE(push, success, two, NULL)
 }
 
 /**
- * RAFT__QUEUE_REMOVE
+ * QUEUE_REMOVE
  */
 
 TEST_SUITE(remove);
@@ -244,7 +244,7 @@ TEST_CASE(remove, success, third, NULL)
 }
 
 /**
- * RAFT__QUEUE_TAIL
+ * QUEUE_TAIL
  */
 
 TEST_SUITE(tail);
@@ -297,7 +297,7 @@ TEST_CASE(tail, success, three, NULL)
 }
 
 /**
- * RAFT__QUEUE_FOREACH
+ * QUEUE_FOREACH
  */
 
 TEST_SUITE(foreach);
@@ -309,12 +309,12 @@ TEST_TEAR_DOWN(foreach, tear_down);
 TEST_CASE(foreach, zero, NULL)
 {
     struct fixture *f = data;
-    raft__queue *head;
+    queue *head;
     int count = 0;
 
     (void)params;
 
-    RAFT__QUEUE_FOREACH(head, &f->queue) { count++; }
+    QUEUE_FOREACH(head, &f->queue) { count++; }
 
     munit_assert_int(count, ==, 0);
 
@@ -326,14 +326,14 @@ TEST_CASE(foreach, one, NULL)
 {
     struct fixture *f = data;
     struct __item items[1];
-    raft__queue *head;
+    queue *head;
     int count = 0;
 
     (void)params;
 
     __push(f, items);
 
-    RAFT__QUEUE_FOREACH(head, &f->queue) { count++; }
+    QUEUE_FOREACH(head, &f->queue) { count++; }
 
     munit_assert_int(count, ==, 1);
 
@@ -345,14 +345,14 @@ TEST_CASE(foreach, two, NULL)
 {
     struct fixture *f = data;
     struct __item items[2];
-    raft__queue *head;
+    queue *head;
     int count = 0;
 
     (void)params;
 
     __push(f, items);
 
-    RAFT__QUEUE_FOREACH(head, &f->queue) { count++; }
+    QUEUE_FOREACH(head, &f->queue) { count++; }
 
     munit_assert_int(count, ==, 2);
 

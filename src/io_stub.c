@@ -32,7 +32,7 @@ static const char *message_names[6] = {
 
 #define REQUEST \
     int type;   \
-    raft__queue queue
+    queue queue
 
 /* Request types. */
 enum { APPEND = 1, SEND, SNAPSHOT_PUT, SNAPSHOT_GET };
@@ -83,7 +83,7 @@ struct transmit
 {
     struct raft_message message; /* Message to deliver */
     int timer;                   /* Deliver after this n of msecs. */
-    raft__queue queue;
+    queue queue;
 };
 
 /* Information about a peer server. */
@@ -118,7 +118,7 @@ struct io_stub
 
     /* Queue of pending asynchronous requests, whose callbacks still haven't
      * been fired. */
-    raft__queue requests;
+    queue requests;
 
     unsigned n_append;       /* Number of pending append entries requests */
     unsigned n_send;         /* Number of pending send message requests */
@@ -127,7 +127,7 @@ struct io_stub
 
     /* Queue of messages that have been written to the network, i.e. the
      * callback of the associated raft_io->send() request has been fired. */
-    raft__queue transmit;
+    queue transmit;
     unsigned n_transmit;
 
     /* Peers connected to us. */
@@ -247,13 +247,13 @@ static void drop_transmit(struct io_stub *s, struct transmit *transmit)
 /* Drop all messages in the transmit queue. */
 static void drop_all_transmit(struct io_stub *s)
 {
-    while (!RAFT__QUEUE_IS_EMPTY(&s->transmit)) {
-        raft__queue *head;
+    while (!QUEUE_IS_EMPTY(&s->transmit)) {
+        queue *head;
         struct transmit *transmit;
 
-        head = RAFT__QUEUE_HEAD(&s->transmit);
-        RAFT__QUEUE_REMOVE(head);
-        transmit = RAFT__QUEUE_DATA(head, struct transmit, queue);
+        head = QUEUE_HEAD(&s->transmit);
+        QUEUE_REMOVE(head);
+        transmit = QUEUE_DATA(head, struct transmit, queue);
         drop_transmit(s, transmit);
     }
     assert(s->n_transmit == 0);
@@ -518,7 +518,7 @@ static int io_stub__append(struct raft_io *io,
     r->data = data;
     r->cb = cb;
 
-    RAFT__QUEUE_PUSH(&s->requests, &r->queue);
+    QUEUE_PUSH(&s->requests, &r->queue);
 
     s->n_append++;
 
@@ -602,7 +602,7 @@ static int io_stub__snapshot_put(struct raft_io *io,
     r->req->cb = cb;
     r->snapshot = snapshot;
 
-    RAFT__QUEUE_PUSH(&s->requests, &r->queue);
+    QUEUE_PUSH(&s->requests, &r->queue);
     s->n_snapshot_put++;
 
     return 0;
@@ -625,7 +625,7 @@ static int io_stub__snapshot_get(struct raft_io *io,
     r->req = req;
     r->req->cb = cb;
 
-    RAFT__QUEUE_PUSH(&s->requests, &r->queue);
+    QUEUE_PUSH(&s->requests, &r->queue);
     s->n_snapshot_get++;
 
     return 0;
@@ -686,7 +686,7 @@ static int io_stub__send(struct raft_io *io,
     r->message = *message;
     r->req->cb = cb;
 
-    RAFT__QUEUE_PUSH(&s->requests, &r->queue);
+    QUEUE_PUSH(&s->requests, &r->queue);
     s->n_send++;
 
     return 0;
@@ -717,14 +717,14 @@ int raft_io_stub_init(struct raft_io *io)
     s->entries = NULL;
     s->n = 0;
 
-    RAFT__QUEUE_INIT(&s->requests);
+    QUEUE_INIT(&s->requests);
 
     s->n_append = 0;
     s->n_send = 0;
     s->n_snapshot_put = 0;
     s->n_snapshot_get = 0;
 
-    RAFT__QUEUE_INIT(&s->transmit);
+    QUEUE_INIT(&s->transmit);
     s->n_transmit = 0;
 
     s->n_peers = 0;
@@ -801,36 +801,36 @@ static void deliver_transmit(struct io_stub *s, struct transmit *transmit)
 void raft_io_stub_advance(struct raft_io *io, unsigned msecs)
 {
     struct io_stub *s;
-    raft__queue queue;
+    queue q;
 
     s = io->impl;
     s->time += msecs;
     s->tick_cb(io);
 
     /* Deliver or messages whose timer expires */
-    RAFT__QUEUE_INIT(&queue);
-    while (!RAFT__QUEUE_IS_EMPTY(&s->transmit)) {
-        raft__queue *head;
+    QUEUE_INIT(&q);
+    while (!QUEUE_IS_EMPTY(&s->transmit)) {
+        queue *head;
         struct transmit *transmit;
 
-        head = RAFT__QUEUE_HEAD(&s->transmit);
-        RAFT__QUEUE_REMOVE(head);
-        transmit = RAFT__QUEUE_DATA(head, struct transmit, queue);
+        head = QUEUE_HEAD(&s->transmit);
+        QUEUE_REMOVE(head);
+        transmit = QUEUE_DATA(head, struct transmit, queue);
 
         transmit->timer -= msecs;
 
         if (transmit->timer <= 0) {
             deliver_transmit(s, transmit);
         } else {
-            RAFT__QUEUE_PUSH(&queue, &transmit->queue);
+            QUEUE_PUSH(&q, &transmit->queue);
         }
     }
 
-    while (!RAFT__QUEUE_IS_EMPTY(&queue)) {
-        raft__queue *head;
-        head = RAFT__QUEUE_HEAD(&queue);
-        RAFT__QUEUE_REMOVE(head);
-        RAFT__QUEUE_PUSH(&s->transmit, head);
+    while (!QUEUE_IS_EMPTY(&q)) {
+        queue *head;
+        head = QUEUE_HEAD(&q);
+        QUEUE_REMOVE(head);
+        QUEUE_PUSH(&s->transmit, head);
     }
 }
 
@@ -978,7 +978,7 @@ static void io_stub__flush_send(struct io_stub *s, struct send *send)
     src = &send->message;
     dst = &transmit->message;
 
-    RAFT__QUEUE_PUSH(&s->transmit, &transmit->queue);
+    QUEUE_PUSH(&s->transmit, &transmit->queue);
     s->n_transmit++;
 
     *dst = *src;
@@ -1048,14 +1048,14 @@ static void io_stub__flush_snapshot_get(struct io_stub *s,
 bool raft_io_stub_flush(struct raft_io *io)
 {
     struct io_stub *s;
-    raft__queue *head;
+    queue *head;
     struct request *r;
 
     s = io->impl;
 
-    head = RAFT__QUEUE_HEAD(&s->requests);
-    RAFT__QUEUE_REMOVE(head);
-    r = RAFT__QUEUE_DATA(head, struct request, queue);
+    head = QUEUE_HEAD(&s->requests);
+    QUEUE_REMOVE(head);
+    r = QUEUE_DATA(head, struct request, queue);
 
     switch (r->type) {
         case APPEND:
@@ -1072,7 +1072,7 @@ bool raft_io_stub_flush(struct raft_io *io)
             break;
     }
 
-    return !RAFT__QUEUE_IS_EMPTY(&s->requests);
+    return !QUEUE_IS_EMPTY(&s->requests);
 }
 
 void raft_io_stub_flush_all(struct raft_io *io)
@@ -1080,7 +1080,7 @@ void raft_io_stub_flush_all(struct raft_io *io)
     struct io_stub *s;
     s = io->impl;
 
-    while (!RAFT__QUEUE_IS_EMPTY(&s->requests)) {
+    while (!QUEUE_IS_EMPTY(&s->requests)) {
         raft_io_stub_flush(io);
     };
 
@@ -1102,12 +1102,12 @@ static struct request *raft_io_stub__pending(struct io_stub *s,
                                              unsigned i,
                                              int type)
 {
-    raft__queue *head;
+    queue *head;
     unsigned count = 0;
 
-    RAFT__QUEUE_FOREACH(head, &s->requests)
+    QUEUE_FOREACH(head, &s->requests)
     {
-        struct request *r = RAFT__QUEUE_DATA(head, struct request, queue);
+        struct request *r = QUEUE_DATA(head, struct request, queue);
         if (r->type != type) {
             continue;
         }
@@ -1167,11 +1167,11 @@ int raft_io_stub_next_deliver_timeout(struct raft_io *io)
 {
     struct io_stub *s;
     int lowest_timer = -1;
-    raft__queue *head;
+    queue *head;
     s = io->impl;
-    RAFT__QUEUE_FOREACH(head, &s->transmit)
+    QUEUE_FOREACH(head, &s->transmit)
     {
-        struct transmit *t = RAFT__QUEUE_DATA(head, struct transmit, queue);
+        struct transmit *t = QUEUE_DATA(head, struct transmit, queue);
         if (lowest_timer == -1) {
             lowest_timer = t->timer;
         } else if (t->timer < lowest_timer) {

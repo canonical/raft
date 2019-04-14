@@ -63,22 +63,22 @@ libraft_la_SOURCES = \
   src/tick.c
 if UV
   libraft_la_SOURCES += \
-  src/uv.c \
-  src/io_uv_append.c \
   src/io_uv_client.c \
-  src/io_uv_encoding.c \
   src/io_uv_finalize.c \
   src/io_uv_ip.c \
-  src/io_uv_prepare.c \
   src/io_uv_server.c \
   src/io_uv_tcp.c \
   src/io_uv_tcp_connect.c \
   src/io_uv_tcp_listen.c \
   src/io_uv_truncate.c \
   src/os.c \
+  src/uv.c \
+  src/uv_append.c \
+  src/uv_encoding.c \
   src/uv_file.c \
   src/uv_list.c \
   src/uv_metadata.c \
+  src/uv_prepare.c \
   src/uv_segment.c \
   src/uv_snapshot.c
 endif
@@ -115,8 +115,8 @@ test_lib_SOURCES = \
   test/lib/tcp.c
 if UV
 test_lib_SOURCES += \
-  test/lib/io_uv.c \
-  test/lib/uv.c
+  test/lib/uv.c \
+  test/lib/loop.c
 endif
 
 unit_test_SOURCES = $(libraft_la_SOURCES)
@@ -139,19 +139,19 @@ unit_test_SOURCES += \
   test/unit/test_tick.c
 if UV
   unit_test_SOURCES += \
-  test/unit/test_io_uv_append.c \
   test/unit/test_io_uv_client.c \
   test/unit/test_io_uv_finalize.c \
   test/unit/test_io_uv_load.c \
-  test/unit/test_io_uv_prepare.c \
   test/unit/test_io_uv_server.c \
   test/unit/test_io_uv_snapshot.c \
   test/unit/test_io_uv_tcp.c \
   test/unit/test_io_uv_truncate.c \
   test/unit/test_os.c \
   test/unit/test_uv.c \
+  test/unit/test_uv_append.c \
   test/unit/test_uv_file.c \
-  test/unit/test_uv_metadata.c
+  test/unit/test_uv_metadata.c \
+  test/unit/test_uv_prepare.c
 endif
 if FIXTURE
   unit_test_SOURCES += \

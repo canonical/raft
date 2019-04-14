@@ -315,7 +315,7 @@ struct put
         struct raft_buffer bufs[2]; /* Premable and configuration */
     } meta;
     int status;
-    raft__queue queue;
+    queue queue;
 };
 
 struct get
@@ -325,7 +325,7 @@ struct get
     struct raft_snapshot *snapshot;
     struct uv_work_s work;
     int status;
-    raft__queue queue;
+    queue queue;
 };
 
 static int write_file(struct raft_io *io,
@@ -496,7 +496,7 @@ static void put_after_work_cb(uv_work_t *work, int status)
     struct uv *uv = r->uv;
 
     assert(status == 0);
-    RAFT__QUEUE_REMOVE(&r->queue);
+    QUEUE_REMOVE(&r->queue);
     uv->snapshot_put_work.data = NULL;
 
     r->req->cb(r->req, r->status);
@@ -511,11 +511,11 @@ static void put_after_work_cb(uv_work_t *work, int status)
 static void process_put_requests(struct uv *uv)
 {
     struct put *r;
-    raft__queue *head;
+    queue *head;
     int rv;
 
     /* If there aren't pending snapshot put requests, there's nothing to do. */
-    if (RAFT__QUEUE_IS_EMPTY(&uv->snapshot_put_reqs)) {
+    if (QUEUE_IS_EMPTY(&uv->snapshot_put_reqs)) {
         return;
     }
 
@@ -527,13 +527,13 @@ static void process_put_requests(struct uv *uv)
     /* If there's a pending truncate request, let's wait. Typically the truncate
      * request is initiated by the InstallSnapshot RPC handler. */
     if (uv->truncate_work.data != NULL ||
-        !RAFT__QUEUE_IS_EMPTY(&uv->truncate_reqs)) {
+        !QUEUE_IS_EMPTY(&uv->truncate_reqs)) {
         return;
     }
 
     /* Get the head of the queue */
-    head = RAFT__QUEUE_HEAD(&uv->snapshot_put_reqs);
-    r = RAFT__QUEUE_DATA(head, struct put, queue);
+    head = QUEUE_HEAD(&uv->snapshot_put_reqs);
+    r = QUEUE_DATA(head, struct put, queue);
 
     uv->snapshot_put_work.data = r;
     rv = uv_queue_work(uv->loop, &uv->snapshot_put_work, put_work_cb,
@@ -591,7 +591,7 @@ int io_uv__snapshot_put(struct raft_io *io,
     cursor = &r->meta.header[1];
     byte__put64(&cursor, crc);
 
-    RAFT__QUEUE_PUSH(&uv->snapshot_put_reqs, &r->queue);
+    QUEUE_PUSH(&uv->snapshot_put_reqs, &r->queue);
     process_put_requests(uv);
 
     return 0;
@@ -648,7 +648,7 @@ static void get_after_work_cb(uv_work_t *work, int status)
     struct uv *uv = r->uv;
     assert(status == 0);
 
-    RAFT__QUEUE_REMOVE(&r->queue);
+    QUEUE_REMOVE(&r->queue);
 
     r->req->cb(r->req, r->snapshot, r->status);
     raft_free(r);
@@ -682,7 +682,7 @@ int io_uv__snapshot_get(struct raft_io *io,
     }
     r->work.data = r;
 
-    RAFT__QUEUE_PUSH(&uv->snapshot_get_reqs, &r->queue);
+    QUEUE_PUSH(&uv->snapshot_get_reqs, &r->queue);
     rv = uv_queue_work(uv->loop, &r->work, get_work_cb, get_after_work_cb);
     if (rv != 0) {
         errorf(uv->io, "get last snapshot: %s", uv_strerror(rv));

@@ -39,7 +39,7 @@ struct connect
     struct uv_connect_s connect; /* TCP connectionr request */
     struct uv_write_s write;     /* TCP handshake request */
     int status;                  /* Returned to the request callback */
-    raft__queue queue;           /* Pending connect queue */
+    queue queue;           /* Pending connect queue */
 };
 
 /* Encode an handshake message into the given buffer. */
@@ -101,7 +101,7 @@ static void write_cb(struct uv_write_s *write, int status)
 
     /* Regardless of whether we succeeded or not, the request has completed, so
      * we can remove it from the queue. */
-    RAFT__QUEUE_REMOVE(&r->queue);
+    QUEUE_REMOVE(&r->queue);
 
     if (status != 0) {
         rv = RAFT_CANTCONNECT;
@@ -156,7 +156,7 @@ err_after_encode_handshake:
 
 err:
     /* Remove the request from the queue, since we're aborting it */
-    RAFT__QUEUE_REMOVE(&r->queue);
+    QUEUE_REMOVE(&r->queue);
     r->status = rv;
     uv_close((struct uv_handle_s *)r->tcp, close_cb);
 }
@@ -234,25 +234,25 @@ int io_uv__tcp_connect(struct raft_uv_transport *transport,
     }
 
     /* Keep track of the pending request */
-    RAFT__QUEUE_PUSH(&t->connect_reqs, &r->queue);
+    QUEUE_PUSH(&t->connect_reqs, &r->queue);
 
     return 0;
 }
 
 static void tcp_connect__cancel(struct connect *r)
 {
-    RAFT__QUEUE_REMOVE(&r->queue);
+    QUEUE_REMOVE(&r->queue);
     r->status = RAFT_CANCELED;
     uv_close((struct uv_handle_s *)r->tcp, close_cb);
 }
 
 void io_uv__tcp_connect_stop(struct uv__tcp *t)
 {
-    while (!RAFT__QUEUE_IS_EMPTY(&t->connect_reqs)) {
-        raft__queue *head;
+    while (!QUEUE_IS_EMPTY(&t->connect_reqs)) {
+        queue *head;
         struct connect *r;
-        head = RAFT__QUEUE_HEAD(&t->connect_reqs);
-        r = RAFT__QUEUE_DATA(head, struct connect, queue);
+        head = QUEUE_HEAD(&t->connect_reqs);
+        r = QUEUE_DATA(head, struct connect, queue);
         tcp_connect__cancel(r);
     }
 }

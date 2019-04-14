@@ -2,13 +2,13 @@
 #include "../../include/raft/uv.h"
 
 #include "../../src/byte.h"
-#include "../../src/io_uv_encoding.h"
+#include "../../src/uv_encoding.h"
 
 #include "../lib/fs.h"
 #include "../lib/heap.h"
 #include "../lib/runner.h"
 #include "../lib/tcp.h"
-#include "../lib/uv.h"
+#include "../lib/loop.h"
 
 TEST_MODULE(uv);
 
@@ -97,7 +97,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 
     test_heap_setup(params, &f->heap);
     test_tcp_setup(params, &f->tcp);
-    test_uv_setup(params, &f->loop);
+    SETUP_LOOP;
 
     f->dir = test_dir_setup(params);
 
@@ -137,7 +137,7 @@ static void tear_down(void *data)
     rv = f->io.close(&f->io, __stop_cb);
     munit_assert_int(rv, ==, 0);
 
-    test_uv_stop(&f->loop);
+    LOOP_STOP;
 
     munit_assert_true(f->stop_cb.invoked);
 
@@ -146,7 +146,7 @@ static void tear_down(void *data)
 
     test_dir_tear_down(f->dir);
 
-    test_uv_tear_down(&f->loop);
+    TEAR_DOWN_LOOP;
     test_tcp_tear_down(&f->tcp);
     test_heap_tear_down(&f->heap);
 
@@ -278,7 +278,7 @@ TEST_CASE(start, tick, NULL)
     (void)params;
 
     /* Run the loop and check that the tick callback was called. */
-    test_uv_run(&f->loop, 1);
+    LOOP_RUN(1);
 
     munit_assert_true(f->tick_cb.invoked);
 
@@ -313,7 +313,7 @@ TEST_CASE(start, recv, NULL)
     message.server_id = 1;
     message.server_address = "127.0.0.1:9000";
 
-    rv = io_uv__encode_message(&message, &bufs, &n_bufs);
+    rv = uvEncodeMessage(&message, &bufs, &n_bufs);
     munit_assert_int(rv, ==, 0);
     munit_assert_int(n_bufs, ==, 1);
 
@@ -322,7 +322,7 @@ TEST_CASE(start, recv, NULL)
     raft_free(bufs);
 
     /* Run the loop and check that the tick callback was called. */
-    test_uv_run(&f->loop, 2);
+    LOOP_RUN(2);
 
     munit_assert_true(f->recv_cb.invoked);
     munit_assert_int(f->recv_cb.message->type, ==, RAFT_IO_REQUEST_VOTE);
@@ -481,7 +481,7 @@ TEST_CASE(append, pristine, NULL)
     rv = f->io.append(&f->io, &entry, 1, f, __append_cb);
     munit_assert_int(rv, ==, 0);
 
-    test_uv_run(&f->loop, 10);
+    LOOP_RUN(10);
 
     munit_assert_true(f->append_cb.invoked);
 
@@ -516,7 +516,7 @@ TEST_CASE(send, first, NULL)
     rv = f->io.send(&f->io, &f->req, &message, __send_cb);
     munit_assert_int(rv, ==, 0);
 
-    test_uv_run(&f->loop, 3);
+    LOOP_RUN(3);
 
     munit_assert_true(f->send_cb.invoked);
 

@@ -1,4 +1,4 @@
-#include "../lib/io_uv.h"
+#include "../lib/uv.h"
 #include "../lib/runner.h"
 
 #include "../../src/uv.h"
@@ -11,7 +11,7 @@ TEST_MODULE(io_uv__finalize);
 
 struct fixture
 {
-    IO_UV_FIXTURE;
+    FIXTURE_UV;
     uvCounter counter;
     size_t used;
     raft_index first_index;
@@ -21,7 +21,7 @@ struct fixture
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    IO_UV_SETUP;
+    SETUP_UV;
     f->counter = 1;
     f->used = 256;
     f->first_index = 1;
@@ -32,7 +32,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 static void tear_down(void *data)
 {
     struct fixture *f = data;
-    IO_UV_TEAR_DOWN;
+    TEAR_DOWN_UV;
 }
 
 #define write_open_segment(COUNTER) \
@@ -68,7 +68,7 @@ TEST_CASE(success, first, NULL)
 
     invoke(0);
 
-    test_uv_run(&f->loop, 1);
+    LOOP_RUN(1);
 
     munit_assert_true(test_dir_has_file(f->dir, "1-2"));
 
@@ -88,7 +88,7 @@ TEST_CASE(success, unused, NULL)
 
     invoke(0);
 
-    test_uv_run(&f->loop, 1);
+    LOOP_RUN(1);
 
     munit_assert_false(test_dir_has_file(f->dir, "open-1"));
 
@@ -113,8 +113,8 @@ TEST_CASE(success, wait, NULL)
     write_open_segment(2);
     invoke(0);
 
-    test_uv_run(&f->loop, 1);
-    test_uv_run(&f->loop, 1);
+    LOOP_RUN(1);
+    LOOP_RUN(1);
 
     munit_assert_true(test_dir_has_file(f->dir, "1-2"));
     munit_assert_true(test_dir_has_file(f->dir, "3-3"));

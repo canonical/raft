@@ -1,10 +1,10 @@
 #include "../lib/fs.h"
 #include "../lib/heap.h"
-#include "../lib/io_uv.h"
+#include "../lib/uv.h"
 #include "../lib/runner.h"
 
 #include "../../src/byte.h"
-#include "../../src/io_uv_encoding.h"
+#include "../../src/uv_encoding.h"
 
 #define WORD_SIZE sizeof(uint64_t)
 
@@ -19,7 +19,7 @@ TEST_GROUP(list, success);
 
 struct list__fixture
 {
-    IO_UV_FIXTURE;
+    FIXTURE_UV;
     struct uvSnapshotInfo *snapshots;
     size_t n_snapshots;
     struct uvSegmentInfo *segments;
@@ -29,7 +29,7 @@ struct list__fixture
 TEST_SETUP(list)
 {
     struct list__fixture *f = munit_malloc(sizeof *f);
-    IO_UV_SETUP;
+    SETUP_UV;
     f->snapshots = NULL;
     f->segments = NULL;
     return f;
@@ -44,7 +44,7 @@ TEST_TEAR_DOWN(list)
     if (f->segments != NULL) {
         raft_free(f->segments);
     }
-    IO_UV_TEAR_DOWN;
+    TEAR_DOWN_UV;
 }
 
 #define list__invoke(RV)                                                 \
@@ -137,7 +137,7 @@ TEST_GROUP(load_snapshot, error);
 
 struct load_snapshot__fixture
 {
-    IO_UV_FIXTURE;
+    FIXTURE_UV;
     struct uvSnapshotInfo meta;
     uint8_t data[8];
     struct raft_snapshot snapshot;
@@ -146,7 +146,7 @@ struct load_snapshot__fixture
 TEST_SETUP(load_snapshot)
 {
     struct load_snapshot__fixture *f = munit_malloc(sizeof *f);
-    IO_UV_SETUP;
+    SETUP_UV;
     f->meta.term = 1;
     f->meta.index = 5;
     f->meta.timestamp = 123;
@@ -164,7 +164,7 @@ TEST_TEAR_DOWN(load_snapshot)
         raft_free(f->snapshot.bufs[0].base);
         raft_free(f->snapshot.bufs);
     }
-    IO_UV_TEAR_DOWN;
+    TEAR_DOWN_UV;
 }
 
 #define load_snapshot__invoke(RV)                           \
@@ -340,7 +340,7 @@ TEST_GROUP(load_all, error);
 
 struct load_all__fixture
 {
-    IO_UV_FIXTURE;
+    FIXTURE_UV;
     struct raft_snapshot *snapshot;
     raft_index start_index;
     struct raft_entry *entries;
@@ -351,7 +351,7 @@ struct load_all__fixture
 TEST_SETUP(load_all)
 {
     struct load_all__fixture *f = munit_malloc(sizeof *f);
-    IO_UV_SETUP;
+    SETUP_UV;
     f->snapshot = NULL;
     f->entries = NULL;
     f->n = 0;
@@ -380,7 +380,7 @@ TEST_TEAR_DOWN(load_all)
         }
         raft_free(f->entries);
     }
-    IO_UV_TEAR_DOWN;
+    TEAR_DOWN_UV;
 }
 
 #define __load_all_trigger(F, RV)                                \

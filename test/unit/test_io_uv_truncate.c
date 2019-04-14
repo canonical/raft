@@ -1,4 +1,4 @@
-#include "../lib/io_uv.h"
+#include "../lib/uv.h"
 #include "../lib/runner.h"
 
 #include "../../src/uv.h"
@@ -11,14 +11,14 @@ TEST_MODULE(io_uv__truncate);
 
 struct fixture
 {
-    IO_UV_FIXTURE;
+    FIXTURE_UV;
     bool appended;
 };
 
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    IO_UV_SETUP;
+    SETUP_UV;
     f->appended = false;
     return f;
 }
@@ -26,7 +26,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 static void tear_down(void *data)
 {
     struct fixture *f = data;
-    IO_UV_TEAR_DOWN;
+    TEAR_DOWN_UV;
     free(f);
 }
 
@@ -55,7 +55,7 @@ static void append_cb(void *data, int status)
         munit_assert_int(rv, ==, 0);                                    \
                                                                         \
         for (i = 0; i < 5; i++) {                                       \
-            test_uv_run(&f->loop, 1);                                   \
+            LOOP_RUN(1);                                   \
             if (f->appended) {                                          \
                 break;                                                  \
             }                                                           \
@@ -97,7 +97,7 @@ TEST_CASE(success, whole_segment, NULL)
 
     append(3);
     invoke(1, 0);
-    test_uv_run(&f->loop, 3);
+    LOOP_RUN(3);
 
     munit_assert_false(test_dir_has_file(f->dir, "1-3"));
     munit_assert_false(test_dir_has_file(f->dir, "4-4"));
@@ -117,7 +117,7 @@ TEST_CASE(success, same_as_last_index, NULL)
 
     append(3);
     invoke(3, 0);
-    test_uv_run(&f->loop, 3);
+    LOOP_RUN(3);
 
     munit_assert_false(test_dir_has_file(f->dir, "1-3"));
     munit_assert_false(test_dir_has_file(f->dir, "4-4"));
@@ -140,7 +140,7 @@ TEST_CASE(success, partial_segment, NULL)
     append(3);
     append(1);
     invoke(2, 0);
-    test_uv_run(&f->loop, 3);
+    LOOP_RUN(3);
 
     munit_assert_false(test_dir_has_file(f->dir, "1-3"));
     munit_assert_false(test_dir_has_file(f->dir, "4-4"));

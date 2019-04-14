@@ -3,9 +3,9 @@
 #include "../include/raft/uv.h"
 
 #include "assert.h"
-#include "io_uv_encoding.h"
 #include "logging.h"
 #include "uv.h"
+#include "uv_encoding.h"
 
 /* The happy path for an io_uv_send request is:
  *
@@ -60,7 +60,7 @@ struct uv__client
     unsigned id;                    /* ID of the other server */
     char *address;                  /* Address of the other server */
     int state;                      /* Current client state */
-    raft__queue send_reqs;          /* Pending send message requests */
+    queue send_reqs;                /* Pending send message requests */
     unsigned n_send_reqs;           /* Number of pending send requests */
 };
 
@@ -72,7 +72,7 @@ struct send
     uv_buf_t *bufs;           /* Encoded raft RPC message to send */
     unsigned n_bufs;          /* Number of buffers */
     uv_write_t write;         /* Stream write request */
-    raft__queue queue;        /* Pending send requests queue */
+    queue queue;              /* Pending send requests queue */
 };
 
 /* Free all memory used by the given send request object. */
@@ -112,7 +112,7 @@ static int client_init(struct uv__client *c,
         return RAFT_NOMEM;
     }
     c->state = 0;
-    RAFT__QUEUE_INIT(&c->send_reqs);
+    QUEUE_INIT(&c->send_reqs);
     c->n_send_reqs = 0;
 
     return 0;
@@ -181,18 +181,18 @@ int io_uv__client_send(struct uv__client *c, struct send *r)
         if (c->n_send_reqs == QUEUE_SIZE) {
             /* Fail the last request */
             tracef(c, "queue full -> evict oldest message");
-            raft__queue *head;
+            queue *head;
             struct send *r2;
-            head = RAFT__QUEUE_HEAD(&c->send_reqs);
-            r2 = RAFT__QUEUE_DATA(head, struct send, queue);
-            RAFT__QUEUE_REMOVE(head);
+            head = QUEUE_HEAD(&c->send_reqs);
+            r2 = QUEUE_DATA(head, struct send, queue);
+            QUEUE_REMOVE(head);
             r2->req->cb(r2->req, RAFT_CANTCONNECT);
             send_close(r2);
             raft_free(r2);
             c->n_send_reqs--;
         }
         tracef(c, "no connection available -> enqueue message");
-        RAFT__QUEUE_PUSH(&c->send_reqs, &r->queue);
+        QUEUE_PUSH(&c->send_reqs, &r->queue);
         c->n_send_reqs++;
         return 0;
     }
@@ -218,12 +218,12 @@ static void client_flush_queue(struct uv__client *c)
     assert(c->state == CONNECTED);
     assert(c->stream != NULL);
     tracef(c, "flush pending messages");
-    while (!RAFT__QUEUE_IS_EMPTY(&c->send_reqs)) {
-        raft__queue *head;
+    while (!QUEUE_IS_EMPTY(&c->send_reqs)) {
+        queue *head;
         struct send *r;
-        head = RAFT__QUEUE_HEAD(&c->send_reqs);
-        r = RAFT__QUEUE_DATA(head, struct send, queue);
-        RAFT__QUEUE_REMOVE(head);
+        head = QUEUE_HEAD(&c->send_reqs);
+        r = QUEUE_DATA(head, struct send, queue);
+        QUEUE_REMOVE(head);
         rv = io_uv__client_send(c, r);
         if (rv != 0) {
             if (r->req->cb != NULL) {
@@ -419,7 +419,7 @@ int io_uv__send(struct raft_io *io,
     r->req = req;
     req->cb = cb;
 
-    rv = io_uv__encode_message(message, &r->bufs, &r->n_bufs);
+    rv = uvEncodeMessage(message, &r->bufs, &r->n_bufs);
     if (rv != 0) {
         goto err_after_request_alloc;
     }
@@ -463,12 +463,12 @@ static void client_stop(struct uv__client *c)
 
     assert(c->state == CONNECTED || c->state == DELAY ||
            c->state == CONNECTING);
-    while (!RAFT__QUEUE_IS_EMPTY(&c->send_reqs)) {
-        raft__queue *head;
+    while (!QUEUE_IS_EMPTY(&c->send_reqs)) {
+        queue *head;
         struct send *r;
-        head = RAFT__QUEUE_HEAD(&c->send_reqs);
-        r = RAFT__QUEUE_DATA(head, struct send, queue);
-        RAFT__QUEUE_REMOVE(head);
+        head = QUEUE_HEAD(&c->send_reqs);
+        r = QUEUE_DATA(head, struct send, queue);
+        QUEUE_REMOVE(head);
         if (r->req->cb != NULL) {
             r->req->cb(r->req, RAFT_CANCELED);
         }

@@ -7,8 +7,8 @@
 #include "assert.h"
 #include "byte.h"
 #include "configuration.h"
-#include "io_uv_encoding.h"
 #include "uv.h"
+#include "uv_encoding.h"
 
 /* Template string for closed segment filenames: start index (inclusive), end
  * index (inclusive). */
@@ -190,7 +190,7 @@ static int loadEntriesBatch(struct uv *uv,
 
     /* Read the batch header, excluding the first 8 bytes containing the number
      * of entries, which we have already read. */
-    header.len = io_uv__sizeof_batch_header(n);
+    header.len = uvSizeofBatchHeader(n);
     header.base = raft_malloc(header.len);
     if (header.base == NULL) {
         rv = RAFT_NOMEM;
@@ -216,7 +216,7 @@ static int loadEntriesBatch(struct uv *uv,
     }
 
     /* Decode the batch header, allocating the entries array. */
-    rv = io_uv__decode_batch_header(header.base, entries, n_entries);
+    rv = uvDecodeBatchHeader(header.base, entries, n_entries);
     if (rv != 0) {
         goto err_after_header_alloc;
     }
@@ -249,7 +249,7 @@ static int loadEntriesBatch(struct uv *uv,
         goto err_after_data_alloc;
     }
 
-    io_uv__decode_entries_batch(&data, *entries, *n_entries);
+    uvDecodeEntriesBatch(&data, *entries, *n_entries);
 
     raft_free(header.base);
 
@@ -545,6 +545,170 @@ err:
     return rv;
 }
 
+/* Ensure that the write buffer of the given segment is large enough to hold the
+ * the given number of bytes size. */
+static int ensureSegmentBufferIsLargeEnough(struct uvSegmentBuffer *b,
+                                            size_t size)
+{
+    unsigned n = (size / b->block_size);
+    void *base;
+    size_t len;
+
+    if (b->arena.len >= size) {
+        assert(b->arena.base != NULL);
+        return 0;
+    }
+
+    if (size % b->block_size != 0) {
+        n++;
+    }
+
+    len = b->block_size * n;
+    base = aligned_alloc(b->block_size, len);
+    if (base == NULL) {
+        return RAFT_NOMEM;
+    }
+    memset(base, 0, len);
+
+    /* If the current arena is initialized, we need to copy its content, since
+     * it might have data that we want to retain in the next write. */
+    if (b->arena.base != NULL) {
+        assert(b->arena.len >= b->block_size);
+        memcpy(base, b->arena.base, b->arena.len);
+        free(b->arena.base);
+    }
+
+    b->arena.base = base;
+    b->arena.len = len;
+
+    return 0;
+}
+
+void uvSegmentBufferInit(struct uvSegmentBuffer *b, size_t block_size)
+{
+    b->block_size = block_size;
+    b->arena.base = NULL;
+    b->arena.len = 0;
+    b->n = 0;
+}
+
+void uvSegmentBufferClose(struct uvSegmentBuffer *b)
+{
+    if (b->arena.base != NULL) {
+        free(b->arena.base);
+    }
+}
+
+int uvSegmentBufferFormat(struct uvSegmentBuffer *b)
+{
+    int rv;
+    void *cursor;
+    size_t n;
+    assert(b->n == 0);
+    n = sizeof(uint64_t);
+    rv = ensureSegmentBufferIsLargeEnough(b, n);
+    if (rv != 0) {
+        return rv;
+    }
+    b->n = n;
+    cursor = b->arena.base;
+    byte__put64(&cursor, UV__DISK_FORMAT);
+    return 0;
+}
+
+int uvSegmentBufferAppend(struct uvSegmentBuffer *b,
+                          const struct raft_entry entries[],
+                          unsigned n_entries)
+{
+    size_t size;   /* Total size of the batch */
+    unsigned crc1; /* Header checksum */
+    unsigned crc2; /* Data checksum */
+    void *crc1_p;  /* Pointer to header checksum slot */
+    void *crc2_p;  /* Pointer to data checksum slot */
+    void *header;  /* Pointer to the header section */
+    void *cursor;
+    unsigned i;
+    int rv;
+
+    size = sizeof(uint32_t) * 2;            /* CRC checksums */
+    size += uvSizeofBatchHeader(n_entries); /* Batch header */
+    for (i = 0; i < n_entries; i++) {       /* Entries data */
+        size += byte__pad64(entries[i].buf.len);
+    }
+
+    rv = ensureSegmentBufferIsLargeEnough(b, b->n + size);
+    if (rv != 0) {
+        return rv;
+    }
+    cursor = b->arena.base + b->n;
+
+    /* Placeholder of the checksums */
+    crc1_p = cursor;
+    byte__put32(&cursor, 0);
+    crc2_p = cursor;
+    byte__put32(&cursor, 0);
+
+    /* Batch header */
+    header = cursor;
+    uvEncodeBatchHeader(entries, n_entries, cursor);
+    crc1 = byte__crc32(header, uvSizeofBatchHeader(n_entries), 0);
+    cursor += uvSizeofBatchHeader(n_entries);
+
+    /* Batch data */
+    crc2 = 0;
+    for (i = 0; i < n_entries; i++) {
+        const struct raft_entry *entry = &entries[i];
+        /* TODO: enforce the requirment of 8-byte aligment also in the
+         * higher-level APIs. */
+        assert(entry->buf.len % sizeof(uint64_t) == 0);
+        memcpy(cursor, entry->buf.base, entry->buf.len);
+        crc2 = byte__crc32(cursor, entry->buf.len, crc2);
+        cursor += entry->buf.len;
+    }
+
+    byte__put32(&crc1_p, crc1);
+    byte__put32(&crc2_p, crc2);
+    b->n += size;
+
+    return 0;
+}
+
+void uvSegmentBufferFinalize(struct uvSegmentBuffer *b, uv_buf_t *out)
+{
+    unsigned n_blocks;
+    unsigned tail;
+
+    n_blocks = b->n / b->block_size;
+    if (b->n % b->block_size != 0) {
+        n_blocks++;
+    }
+
+    /* Set the remainder of the last block to 0 */
+    tail = b->n % b->block_size;
+    if (tail != 0) {
+        memset(b->arena.base + b->n, 0, b->block_size - tail);
+    }
+
+    out->base = b->arena.base;
+    out->len = n_blocks * b->block_size;
+}
+
+void uvSegmentBufferReset(struct uvSegmentBuffer *b, unsigned retain)
+{
+    assert(b->n > 0);
+    assert(b->arena.base != NULL);
+
+    if (retain == 0) {
+        b->n = 0;
+        memset(b->arena.base, 0, b->block_size);
+        return;
+    }
+
+    memcpy(b->arena.base, b->arena.base + retain * b->block_size,
+           b->block_size);
+    b->n = b->n % b->block_size;
+}
+
 int uvSegmentLoadAll(struct uv *uv,
                      const raft_index start_index,
                      struct uvSegmentInfo *infos,
@@ -683,68 +847,43 @@ static int writeFirstClosed(struct uv *uv,
                             const int fd,
                             const struct raft_buffer *conf)
 {
-    void *buf;
-    size_t len;
+    struct uvSegmentBuffer buf;
+    struct raft_entry entry;
     size_t cap;
-    void *cursor;
-    void *header;
-    unsigned crc1; /* Header checksum */
-    unsigned crc2; /* Data checksum */
-    void *crc1_p;  /* Pointer to header checksum slot */
-    void *crc2_p;  /* Pointer to data checksum slot */
     int rv;
 
     /* Make sure that the given encoded configuration fits in the first
      * block */
     cap = uv->block_size -
           (sizeof(uint64_t) /* Format version */ +
-           sizeof(uint64_t) /* Checksums */ + io_uv__sizeof_batch_header(1));
+           sizeof(uint64_t) /* Checksums */ + uvSizeofBatchHeader(1));
     if (conf->len > cap) {
         return RAFT_TOOBIG;
     }
 
-    len = sizeof(uint64_t) * 2 + io_uv__sizeof_batch_header(1) + conf->len;
-    buf = malloc(len);
-    if (buf == NULL) {
-        return RAFT_NOMEM;
-    }
-    memset(buf, 0, len);
+    uvSegmentBufferInit(&buf, uv->block_size);
 
-    cursor = buf;
-
-    byte__put64(&cursor, UV__DISK_FORMAT); /* Format version */
-
-    crc1_p = cursor;
-    byte__put32(&cursor, 0);
-
-    crc2_p = cursor;
-    byte__put32(&cursor, 0);
-
-    header = cursor;
-    byte__put64(&cursor, 1);                 /* Number of entries */
-    byte__put64(&cursor, 1);                 /* Entry term */
-    byte__put8(&cursor, RAFT_CONFIGURATION); /* Entry type */
-    byte__put8(&cursor, 0);                  /* Unused */
-    byte__put8(&cursor, 0);                  /* Unused */
-    byte__put8(&cursor, 0);                  /* Unused */
-    byte__put32(&cursor, conf->len);         /* Size of entry data */
-
-    memcpy(cursor, conf->base, conf->len);
-
-    crc1 = byte__crc32(header, io_uv__sizeof_batch_header(1), 0);
-    byte__put32(&crc1_p, crc1);
-
-    crc2 = byte__crc32(conf->base, conf->len, 0);
-    byte__put32(&crc2_p, crc2);
-
-    rv = osWriteN(fd, buf, len);
+    rv = uvSegmentBufferFormat(&buf);
     if (rv != 0) {
-        free(buf);
+        return rv;
+    }
+
+    entry.term = 1;
+    entry.type = RAFT_CONFIGURATION;
+    entry.buf = *conf;
+
+    rv = uvSegmentBufferAppend(&buf, &entry, 1);
+    if (rv != 0) {
+        uvSegmentBufferClose(&buf);
+        return rv;
+    }
+
+    rv = osWriteN(fd, buf.arena.base, buf.n);
+    uvSegmentBufferClose(&buf);
+    if (rv != 0) {
         uvErrorf(uv, "write segment 1: %s", osStrError(rv));
         return RAFT_IOERR;
     }
-
-    free(buf);
 
     rv = fsync(fd);
     if (rv == -1) {
@@ -805,4 +944,3 @@ err:
     assert(rv != 0);
     return rv;
 }
-

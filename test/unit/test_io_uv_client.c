@@ -1,6 +1,6 @@
 #include <unistd.h>
 
-#include "../lib/io_uv.h"
+#include "../lib/uv.h"
 #include "../lib/runner.h"
 
 #include "../../src/uv.h"
@@ -13,7 +13,7 @@ TEST_MODULE(io_uv_send);
 
 struct fixture
 {
-    IO_UV_FIXTURE
+    FIXTURE_UV
     struct raft_io_send req;
     struct raft_message message;
     int invoked;
@@ -23,7 +23,7 @@ struct fixture
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    IO_UV_SETUP;
+    SETUP_UV;
     f->message.type = RAFT_IO_REQUEST_VOTE;
     f->message.server_id = 1;
     f->message.server_address = f->tcp.server.address;
@@ -36,7 +36,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 static void tear_down(void *data)
 {
     struct fixture *f = data;
-    IO_UV_TEAR_DOWN;
+    TEAR_DOWN_UV;
 }
 
 static void send__send_cb(struct raft_io_send *req, int status)
@@ -60,7 +60,7 @@ static void send__send_cb(struct raft_io_send *req, int status)
             if (f->invoked > 0) {                \
                 break;                           \
             }                                    \
-            test_uv_run(&f->loop, 1);            \
+            LOOP_RUN(1);            \
         }                                        \
         munit_assert_int(f->invoked, ==, 1);     \
         munit_assert_int(f->status, ==, STATUS); \
@@ -240,7 +240,7 @@ TEST_CASE(error, connect, NULL)
     send__invoke(0);
 
     /* We keep retrying indefinitely */
-    test_uv_run(&f->loop, 2);
+    LOOP_RUN(2);
 
     munit_assert_int(f->invoked, ==, 0);
 
@@ -259,7 +259,7 @@ TEST_CASE(error, bad_address, NULL)
     send__invoke(0);
 
     /* The only active handle is the timer one, to retry the connection. */
-    test_uv_run(&f->loop, 1);
+    LOOP_RUN(1);
 
     /* The message hasn't been sent */
     munit_assert_int(f->invoked, ==, 0);
@@ -408,9 +408,9 @@ TEST_CASE(close, writing, NULL)
 
     /* Spin once so the connection attempt succeeds and we flush the pending
      * request, triggering the write. */
-    test_uv_run(&f->loop, 1);
+    LOOP_RUN(1);
 
-    io_uv__close;
+    UV_CLOSE;
 
     send__wait_cb(RAFT_CANCELED);
 
@@ -427,7 +427,7 @@ TEST_CASE(close, connecting, NULL)
     (void)params;
 
     send__invoke(0);
-    io_uv__close;
+    UV_CLOSE;
 
     send__wait_cb(RAFT_CANCELED);
 

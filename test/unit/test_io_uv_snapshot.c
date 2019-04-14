@@ -1,4 +1,4 @@
-#include "../lib/io_uv.h"
+#include "../lib/uv.h"
 #include "../lib/runner.h"
 
 #include "../../src/byte.h"
@@ -16,7 +16,7 @@ TEST_SUITE(put);
 
 struct put_fixture
 {
-    IO_UV_FIXTURE
+    FIXTURE_UV
     struct raft_snapshot snapshot;
     struct raft_io_snapshot_put req;
     struct raft_buffer bufs[2];
@@ -42,7 +42,8 @@ static bool put_cb_was_invoked(void *data)
 TEST_SETUP(put)
 {
     struct put_fixture *f = munit_malloc(sizeof *f);
-    IO_UV_SETUP;
+    int rv;
+    SETUP_UV;
     f->bufs[0].base = raft_malloc(8);
     f->bufs[1].base = raft_malloc(8);
     f->bufs[0].len = 8;
@@ -67,7 +68,7 @@ TEST_TEAR_DOWN(put)
     raft_configuration_close(&f->snapshot.configuration);
     raft_free(f->bufs[0].base);
     raft_free(f->bufs[1].base);
-    IO_UV_TEAR_DOWN;
+    TEAR_DOWN_UV;
 }
 
 static void append_cb(void *data, int status)
@@ -95,7 +96,7 @@ static void append_cb(void *data, int status)
         munit_assert_int(rv, ==, 0);                                    \
                                                                         \
         for (i = 0; i < 5; i++) {                                       \
-            test_uv_run(&f->loop, 1);                                   \
+            LOOP_RUN(1);                                   \
             if (f->appended) {                                          \
                 break;                                                  \
             }                                                           \
@@ -124,7 +125,7 @@ static void append_cb(void *data, int status)
         munit_assert_int(rv2, ==, RV);                                   \
     }
 
-#define put__wait_cb(STATUS) test_uv_run_until(&f->loop, f, put_cb_was_invoked);
+#define put__wait_cb(STATUS) LOOP_RUN_UNTIL(put_cb_was_invoked, f);
 
 /* Put the first snapshot. */
 TEST_CASE(put, first, NULL)
@@ -142,7 +143,7 @@ TEST_CASE(put, first, NULL)
     put__invoke(0);
     put__wait_cb(0);
 
-    munit_assert_true(RAFT__QUEUE_IS_EMPTY(&f->uv->snapshot_put_reqs));
+    munit_assert_true(QUEUE_IS_EMPTY(&f->uv->snapshot_put_reqs));
 
     rv = uvList(f->uv, &snapshots, &n_snapshots, &segments, &n_segments);
     munit_assert_int(rv, ==, 0);
@@ -174,7 +175,7 @@ TEST_CASE(put, after_truncate, NULL)
     put__invoke(0);
     put__wait_cb(0);
 
-    munit_assert_true(RAFT__QUEUE_IS_EMPTY(&f->uv->snapshot_put_reqs));
+    munit_assert_true(QUEUE_IS_EMPTY(&f->uv->snapshot_put_reqs));
 
     return MUNIT_OK;
 }
@@ -187,7 +188,7 @@ TEST_SUITE(get);
 
 struct get_fixture
 {
-    IO_UV_FIXTURE
+    FIXTURE_UV
     struct raft_io_snapshot_get req;
     bool invoked;
     int status;
@@ -213,7 +214,7 @@ static bool get_cb_was_invoked(void *data)
 TEST_SETUP(get)
 {
     struct get_fixture *f = munit_malloc(sizeof *f);
-    IO_UV_SETUP;
+    SETUP_UV;
     f->req.data = f;
     f->invoked = false;
     f->status = -1;
@@ -228,7 +229,7 @@ TEST_TEAR_DOWN(get)
         snapshot__close(f->snapshot);
         raft_free(f->snapshot);
     }
-    IO_UV_TEAR_DOWN;
+    TEAR_DOWN_UV;
 }
 
 /* Write a snapshot file */
@@ -247,7 +248,7 @@ TEST_TEAR_DOWN(get)
         munit_assert_int(rv, ==, RV);                     \
     }
 
-#define get__wait_cb(STATUS) test_uv_run_until(&f->loop, f, get_cb_was_invoked);
+#define get__wait_cb(STATUS) LOOP_RUN_UNTIL(get_cb_was_invoked, f);
 
 TEST_CASE(get, first, NULL)
 {
@@ -259,7 +260,7 @@ TEST_CASE(get, first, NULL)
     get__invoke(0);
     get__wait_cb(0);
 
-    munit_assert_true(RAFT__QUEUE_IS_EMPTY(&f->uv->snapshot_get_reqs));
+    munit_assert_true(QUEUE_IS_EMPTY(&f->uv->snapshot_get_reqs));
 
     munit_assert_ptr_not_null(f->snapshot);
     munit_assert_int(f->snapshot->term, ==, 3);

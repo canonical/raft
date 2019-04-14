@@ -39,7 +39,7 @@ struct conn
     struct uv__tcp *t;          /* Transport implementation */
     struct uv_tcp_s *tcp;       /* TCP connection socket handle */
     struct handshake handshake; /* Handshake data */
-    raft__queue queue;          /* Pending accept queue */
+    queue queue;          /* Pending accept queue */
 };
 
 /* Read the preamble of the handshake. */
@@ -91,7 +91,7 @@ static void close_cb(struct uv_handle_s *handle)
  * the handshake. */
 static void conn_stop(struct conn *c)
 {
-    RAFT__QUEUE_REMOVE(&c->queue);
+    QUEUE_REMOVE(&c->queue);
     /* After uv_close() returns we are guaranteed that no more alloc_cb or
      * read_cb will be called. */
     uv_close((struct uv_handle_s *)c->tcp, close_cb);
@@ -147,7 +147,7 @@ static void address_read_cb(uv_stream_t *stream,
     assert(rv == 0);
     id = byte__flip64(c->handshake.preamble[1]);
     address = c->handshake.address.base;
-    RAFT__QUEUE_REMOVE(&c->queue);
+    QUEUE_REMOVE(&c->queue);
     c->t->accept_cb(c->t->transport, id, address, (struct uv_stream_s *)c->tcp);
     raft_free(c->handshake.address.base);
     raft_free(c);
@@ -260,7 +260,7 @@ static void listen_cb(struct uv_stream_s *stream, int status)
         goto err_after_accept_alloc;
     }
 
-    RAFT__QUEUE_PUSH(&t->accept_conns, &c->queue);
+    QUEUE_PUSH(&t->accept_conns, &c->queue);
 
     return;
 
@@ -301,11 +301,11 @@ int io_uv__tcp_listen(struct raft_uv_transport *transport, raft_uv_accept_cb cb)
 void io_uv__tcp_listen_stop(struct uv__tcp *t)
 {
     /* Abort all connections currently being accepted */
-    while (!RAFT__QUEUE_IS_EMPTY(&t->accept_conns)) {
-        raft__queue *head;
+    while (!QUEUE_IS_EMPTY(&t->accept_conns)) {
+        queue *head;
         struct conn *r;
-        head = RAFT__QUEUE_HEAD(&t->accept_conns);
-        r = RAFT__QUEUE_DATA(head, struct conn, queue);
+        head = QUEUE_HEAD(&t->accept_conns);
+        r = QUEUE_DATA(head, struct conn, queue);
         conn_stop(r);
     }
 }

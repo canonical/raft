@@ -1,5 +1,6 @@
 #include <errno.h>
 #include <fcntl.h>
+#include <libgen.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
@@ -17,6 +18,12 @@ void osJoin(const osDir dir, const osFilename filename, osPath path)
     strcpy(path, dir);
     strcat(path, "/");
     strcat(path, filename);
+}
+
+void osDirname(const osPath path, osDir dir)
+{
+    strncpy(dir, path, OS_MAX_DIR_LEN);
+    dirname(dir);
 }
 
 int osEnsureDir(const osDir dir)
@@ -476,6 +483,39 @@ err:
     assert(rv != 0);
     return rv;
 #endif /* RWF_NOWAIT */
+}
+
+int osSetDirectIO(int fd)
+{
+    int flags;             /* Current fcntl flags */
+    struct statfs fs_info; /* To check the file system type */
+    int rv;
+
+    flags = fcntl(fd, F_GETFL);
+    rv = fcntl(fd, F_SETFL, flags | O_DIRECT);
+
+    if (rv == -1) {
+        if (errno != EINVAL) {
+            /* UNTESTED: the parameters are ok, so this should never happen. */
+            return errno;
+        }
+        rv = fstatfs(fd, &fs_info);
+        if (rv == -1) {
+            /* UNTESTED: in practice ENOMEM should be the only failure mode */
+            return errno;
+        }
+        switch (fs_info.f_type) {
+            case 0x01021994: /* TMPFS_MAGIC */
+            case 0x2fc12fc1: /* ZFS magic */
+                return ENOTSUP;
+                break;
+            default:
+                /* UNTESTED: this is an unsupported file system. */
+                return EINVAL;
+        }
+    }
+
+    return 0;
 }
 
 char strErrorBuf[2048];

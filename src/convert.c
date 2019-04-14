@@ -67,12 +67,12 @@ static void clear_leader(struct raft *r)
      */
 
     /* Fail all outstanding apply requests */
-    while (!RAFT__QUEUE_IS_EMPTY(&r->leader_state.apply_reqs)) {
+    while (!QUEUE_IS_EMPTY(&r->leader_state.apply_reqs)) {
         struct raft_apply *req;
-        raft__queue *head;
-        head = RAFT__QUEUE_HEAD(&r->leader_state.apply_reqs);
-        RAFT__QUEUE_REMOVE(head);
-        req = RAFT__QUEUE_DATA(head, struct raft_apply, queue);
+        queue *head;
+        head = QUEUE_HEAD(&r->leader_state.apply_reqs);
+        QUEUE_REMOVE(head);
+        req = QUEUE_DATA(head, struct raft_apply, queue);
         if (req->cb != NULL) {
             req->cb(req, RAFT_ERR_LEADERSHIP_LOST);
         }
@@ -145,7 +145,7 @@ int convert__to_leader(struct raft *r)
     r->election_elapsed = 0;
 
     /* Reset apply requests queue */
-    RAFT__QUEUE_INIT(&r->leader_state.apply_reqs);
+    QUEUE_INIT(&r->leader_state.apply_reqs);
 
     /* Allocate and initialize the progress array. */
     rv = progress__build_array(r);

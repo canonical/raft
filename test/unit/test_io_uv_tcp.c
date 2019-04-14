@@ -1,7 +1,7 @@
 #include "../lib/heap.h"
+#include "../lib/loop.h"
 #include "../lib/runner.h"
 #include "../lib/tcp.h"
-#include "../lib/uv.h"
 
 #include "../../include/raft.h"
 #include "../../include/raft/uv.h"
@@ -17,7 +17,7 @@ TEST_MODULE(io_uv_tcp);
 #define FIXTURE                         \
     struct raft_heap heap;              \
     struct test_tcp tcp;                \
-    struct uv_loop_s loop;              \
+    FIXTURE_LOOP;                       \
     struct raft_uv_transport transport; \
     bool closed;
 
@@ -26,7 +26,7 @@ TEST_MODULE(io_uv_tcp);
     (void)user_data;                                            \
     test_heap_setup(params, &f->heap);                          \
     test_tcp_setup(params, &f->tcp);                            \
-    test_uv_setup(params, &f->loop);                            \
+    SETUP_LOOP;                                                 \
     raft_uv_tcp_init(&f->transport, &f->loop);                  \
     rv = f->transport.init(&f->transport, 1, "127.0.0.1:9000"); \
     munit_assert_int(rv, ==, 0);                                \
@@ -36,9 +36,9 @@ TEST_MODULE(io_uv_tcp);
     if (!f->closed) {                            \
         f->transport.close(&f->transport, NULL); \
     }                                            \
-    test_uv_stop(&f->loop);                      \
-    raft_uv_tcp_close(&f->transport);         \
-    test_uv_tear_down(&f->loop);                 \
+    LOOP_STOP;                                   \
+    raft_uv_tcp_close(&f->transport);            \
+    TEAR_DOWN_LOOP;                              \
     test_tcp_tear_down(&f->tcp);                 \
     test_heap_tear_down(&f->heap);
 
@@ -131,15 +131,15 @@ TEST_TEAR_DOWN(listen)
 
 /* After a listen__peer_connect() call, spin the event loop until the connected
  * callbloathack of the listening TCP handle gets called. */
-#define listen__wait_connected_cb test_uv_run(&f->loop, 1);
+#define listen__wait_connected_cb LOOP_RUN(1);
 
 /* After a listen__peer_handshake() call, spin the event loop until the read
  * callback gets called. */
-#define listen__wait_read_cb test_uv_run(&f->loop, 1);
+#define listen__wait_read_cb LOOP_RUN(1);
 
 /* Spin the event loop until the accept callback gets eventually invoked. */
-#define listen__wait_cb                                        \
-    test_uv_run_until(&f->loop, f, listen__accept_cb_invoked); \
+#define listen__wait_cb                           \
+    LOOP_RUN_UNTIL(listen__accept_cb_invoked, f); \
     f->invoked = 0;
 
 /* If the handshake is successful, the accept callback is invoked. */

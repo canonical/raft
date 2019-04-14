@@ -18,8 +18,8 @@ struct uv__tcp
     struct uv_tcp_s listener;            /* Listening TCP socket handle */
     raft_uv_accept_cb accept_cb;         /* After accepting a connection */
     raft_uv_transport_close_cb close_cb; /* When it's safe to free us */
-    raft__queue accept_conns;            /* Connections being accepted */
-    raft__queue connect_reqs;            /* Pending connection requests */
+    queue accept_conns;            /* Connections being accepted */
+    queue connect_reqs;            /* Pending connection requests */
 };
 
 /**

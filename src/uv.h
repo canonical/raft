@@ -15,7 +15,7 @@
 #define UV__MAX_SEGMENT_SIZE (8 * 1024 * 1024)
 
 /* State codes. */
-enum { UV__ACTIVE = 1, UV__CLOSING, UV__CLOSED };
+enum { UV__ACTIVE = 1, UV__CLOSED };
 
 /* Open segment counter type */
 typedef unsigned long long uvCounter;
@@ -44,27 +44,28 @@ struct uv
     struct uv__server **servers;         /* Incoming connections */
     unsigned n_servers;                  /* Length of the servers array */
     unsigned connect_retry_delay;        /* Client connection retry delay */
-    struct uv__file *preparing;          /* File segment being prepared */
-    raft__queue prepare_reqs;            /* Pending prepare requests. */
-    raft__queue prepare_pool;            /* Prepared open segments */
+    struct uvFile *prepare_file;         /* File segment being prepared */
+    queue prepare_reqs;                  /* Pending prepare requests. */
+    queue prepare_pool;                  /* Prepared open segments */
     uvCounter prepare_next_counter;      /* Counter of next open segment */
     raft_index append_next_index;        /* Index of next entry to append */
-    raft__queue append_segments;         /* Open segments in use. */
-    raft__queue append_pending_reqs;     /* Pending append requests. */
-    raft__queue append_writing_reqs;     /* Append requests in flight */
-    raft__queue finalize_reqs;           /* Segments waiting to be closed */
+    queue append_segments;               /* Open segments in use. */
+    queue append_pending_reqs;           /* Pending append requests. */
+    queue append_writing_reqs;           /* Append requests in flight */
+    queue finalize_reqs;                 /* Segments waiting to be closed */
     raft_index finalize_last_index;      /* Last index of last closed seg */
     struct uv_work_s finalize_work;      /* Resize and rename segments */
-    raft__queue truncate_reqs;           /* Pending truncate requests */
+    queue truncate_reqs;                 /* Pending truncate requests */
     struct uv_work_s truncate_work;      /* Execute truncate log requests */
-    raft__queue snapshot_put_reqs;       /* Inflight put snapshot requests */
-    raft__queue snapshot_get_reqs;       /* Inflight get snapshot requests */
+    queue snapshot_put_reqs;             /* Inflight put snapshot requests */
+    queue snapshot_get_reqs;             /* Inflight get snapshot requests */
     struct uv_work_s snapshot_put_work;  /* Execute snapshot put requests */
     struct uvMetadata metadata;          /* Cache of metadata on disk */
     struct uv_timer_s timer;             /* Timer for periodic ticks */
-    raft_io_tick_cb tick_cb;
-    raft_io_recv_cb recv_cb;
-    raft_io_close_cb close_cb;
+    raft_io_tick_cb tick_cb;             /* Invoked when the timer expires */
+    raft_io_recv_cb recv_cb;             /* Invoked when upon RPC messages */
+    bool closing;                        /* True if we are closing */
+    raft_io_close_cb close_cb;           /* Invoked when finishing closing */
 };
 
 /* Emit a log message with a certain level. */
@@ -127,6 +128,47 @@ int uvSegmentLoadAll(struct uv *uv,
                      struct raft_entry **entries,
                      size_t *n_entries);
 
+/* A dynamically allocated buffer holding data to be written into a segment
+ * file.
+ *
+ * The memory is aligned at disk block boundary, to allow for direct I/O. */
+struct uvSegmentBuffer
+{
+    size_t block_size; /* Disk block size for direct I/O */
+    uv_buf_t arena;    /* Previously allocated memory that can be re-used */
+    size_t n;          /* Write offset */
+};
+
+/* Initialize an empty buffer. */
+void uvSegmentBufferInit(struct uvSegmentBuffer *b, size_t block_size);
+
+/* Release all memory used by the buffer. */
+void uvSegmentBufferClose(struct uvSegmentBuffer *b);
+
+/* Encode the format version at the very beginning of the buffer. This function
+ * must be called when the buffer is empty. */
+int uvSegmentBufferFormat(struct uvSegmentBuffer *b);
+
+/* Extend the segment's buffer by encoding the given entries.
+ *
+ * Previous data in the buffer will be retained, and data for these new entries
+ * will be appended. */
+int uvSegmentBufferAppend(struct uvSegmentBuffer *b,
+                          const struct raft_entry entries[],
+                          unsigned n_entries);
+
+/* After all entries to write have been encoded, finalize the buffer by zeroing
+ * the unused memory of the last block. The out parameter will point to the
+ * memory to write. */
+void uvSegmentBufferFinalize(struct uvSegmentBuffer *b, uv_buf_t *out);
+
+/* Reset the buffer preparing it for the next segment write.
+ *
+ * If the retain parameter is greater than zero, then the data of the retain'th
+ * block will be copied at the beginning of the buffer and the write offset will
+ * be set accordingly. */
+void uvSegmentBufferReset(struct uvSegmentBuffer *b, unsigned retain);
+
 /* Write the first closed segment, containing just one entry for the given
  * configuration. */
 int uvSegmentCreateFirstClosed(struct uv *uv,
@@ -171,68 +213,52 @@ int uvList(struct uv *uv,
 struct uv__client;
 struct uv__server;
 
-/**
- * Request to obtain a newly prepared open segment.
- */
-struct uv__prepare;
-typedef void (*io_uv__prepare_cb)(struct uv__prepare *req,
-                                  struct uv__file *file,
-                                  unsigned long long counter,
-                                  int status);
-struct uv__prepare
+/* Request to obtain a newly prepared open segment. */
+struct uvPrepare;
+typedef void (*uvPrepareCb)(struct uvPrepare *req,
+                            struct uvFile *file,
+                            unsigned long long counter,
+                            int status);
+struct uvPrepare
 {
-    void *data;           /* User data */
-    io_uv__prepare_cb cb; /* Completion callback */
-    raft__queue queue;    /* Links in uv_io->prepare_reqs */
+    void *data;     /* User data */
+    uvPrepareCb cb; /* Completion callback */
+    queue queue;    /* Links in uv_io->prepare_reqs */
 };
 
-/**
- * Submit a request to get a prepared open segment ready for writing.
- */
-void io_uv__prepare(struct uv *uv,
-                    struct uv__prepare *req,
-                    io_uv__prepare_cb cb);
+/* Submit a request to get a prepared open segment ready for writing. */
+void uvPrepare(struct uv *uv, struct uvPrepare *req, uvPrepareCb cb);
 
-/**
- * Cancel all pending prepare requests and remove all unused prepared open
- * segments. If a segment currently being created, wait for it to complete and
- * then remove it immediately.
- */
-void io_uv__prepare_stop(struct uv *uv);
+/* Cancel all pending prepare requests and start removing all unused prepared
+ * open segments. If a segment currently being created, wait for it to complete
+ * and then remove it immediately. */
+void uvPrepareClose(struct uv *uv);
 
-/**
- * Implementation of raft_io->append.
- */
-int io_uv__append(struct raft_io *io,
-                  const struct raft_entry entries[],
-                  unsigned n,
-                  void *data,
-                  void (*cb)(void *data, int status));
+/* Implementation of raft_io->append. */
+int uvAppend(struct raft_io *io,
+             const struct raft_entry entries[],
+             unsigned n,
+             void *data,
+             void (*cb)(void *data, int status));
 
-/**
- * Callback invoked after completing a truncate request. If there are append
+/* Callback invoked after completing a truncate request. If there are append
  * requests that have accumulated in while the truncate request was executed,
- * they will be processed now.
- */
-void io_uv__append_unblock(struct uv *uv);
+ * they will be processed now. */
+void uvAppendMaybeProcessRequests(struct uv *uv);
 
-/**
- * Cancel all pending write requests and request the current segment to be
- * finalized. Must be invoked at closing time.
- */
-void io_uv__append_stop(struct uv *uv);
+/* Cancel all pending write requests and request the current segment to be
+ * finalized. Must be invoked at closing time. */
+void uvAppendClose(struct uv *uv);
 
-/**
- * Tell the append implementation that the open segment currently being written
- * must be flushed. The implementation will:
+/* Tell the append implementation that the open segment currently being written
+ * must be finalized, even if it's not full yet. The implementation will:
  *
  * - Request a new prepared segment and target all newly submitted append
  *   requests to it.
  *
  * - Wait for any inflight write against the current segment to complete and
- *   then submit a request to finalize it.
- */
-int io_uv__append_flush(struct uv *uv);
+ *   then submit a request to finalize it. */
+int uvAppendForceFinalizingCurrentSegment(struct uv *uv);
 
 /**
  * Implementation of raft_io->send.

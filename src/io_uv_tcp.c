@@ -60,8 +60,8 @@ int raft_uv_tcp_init(struct raft_uv_transport *transport,
     t->listener.data = t;
     t->accept_cb = NULL;
     t->close_cb = NULL;
-    RAFT__QUEUE_INIT(&t->accept_conns);
-    RAFT__QUEUE_INIT(&t->connect_reqs);
+    QUEUE_INIT(&t->accept_conns);
+    QUEUE_INIT(&t->connect_reqs);
 
     transport->impl = t;
     transport->init = tcp_init;

@@ -12,7 +12,7 @@ struct segment
     raft_index first_index; /* Index of first entry */
     raft_index last_index;  /* Index of last entry */
     int status;             /* Status code of blocking syscalls */
-    raft__queue queue;      /* Link to finalize queue */
+    queue queue;      /* Link to finalize queue */
 };
 
 /* Schedule closing an open segment. */
@@ -36,7 +36,7 @@ int io_uv__finalize(struct uv *uv,
 {
     struct segment *segment;
 
-    assert(uv->state == UV__ACTIVE || uv->state == UV__CLOSING);
+    assert(uv->state == UV__ACTIVE || uv->closing);
 
     /* If the open segment is not empty, we expect its first index to be the
      * successor of the end index of the last segment we closed. */
@@ -57,8 +57,8 @@ int io_uv__finalize(struct uv *uv,
     segment->first_index = first_index;
     segment->last_index = last_index;
 
-    RAFT__QUEUE_INIT(&segment->queue);
-    RAFT__QUEUE_PUSH(&uv->finalize_reqs, &segment->queue);
+    QUEUE_INIT(&segment->queue);
+    QUEUE_PUSH(&uv->finalize_reqs, &segment->queue);
 
     if (used > 0) {
         uv->finalize_last_index = last_index;
@@ -72,7 +72,7 @@ int io_uv__finalize(struct uv *uv,
 static void process_requests(struct uv *uv)
 {
     struct segment *segment;
-    raft__queue *head;
+    queue *head;
     int rv;
 
     /* If we're already processing a segment, let's wait. */
@@ -81,13 +81,13 @@ static void process_requests(struct uv *uv)
     }
 
     /* If there's no pending request, we're done. */
-    if (RAFT__QUEUE_IS_EMPTY(&uv->finalize_reqs)) {
+    if (QUEUE_IS_EMPTY(&uv->finalize_reqs)) {
         return;
     }
 
-    head = RAFT__QUEUE_HEAD(&uv->finalize_reqs);
-    segment = RAFT__QUEUE_DATA(head, struct segment, queue);
-    RAFT__QUEUE_REMOVE(&segment->queue);
+    head = QUEUE_HEAD(&uv->finalize_reqs);
+    segment = QUEUE_DATA(head, struct segment, queue);
+    QUEUE_REMOVE(&segment->queue);
 
     rv = segment_close(segment);
     if (rv != 0) {

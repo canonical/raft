@@ -3,7 +3,7 @@
 
 #include "assert.h"
 #include "byte.h"
-#include "io_uv_encoding.h"
+#include "uv_encoding.h"
 #include "logging.h"
 #include "uv.h"
 
@@ -12,7 +12,7 @@ struct truncate
     struct uv *uv;
     raft_index index;
     int status;
-    raft__queue queue;
+    queue queue;
 };
 
 /* Truncate a segment that was already closed. */
@@ -63,7 +63,7 @@ static int truncate_closed_segment(struct uv *uv,
 
     buf.len = sizeof(uint64_t) +     /* Format version */
               sizeof(uint32_t) * 2 + /* CRC checksum */
-              io_uv__sizeof_batch_header(m) /* Batch header */;
+              uvSizeofBatchHeader(m) /* Batch header */;
     buf.base = raft_malloc(buf.len);
 
     if (buf.base == NULL) {
@@ -100,7 +100,7 @@ static int truncate_closed_segment(struct uv *uv,
         crc2 = byte__crc32(entry->buf.base, entry->buf.len, crc2);
     }
 
-    crc1 = byte__crc32(header, io_uv__sizeof_batch_header(m), 0);
+    crc1 = byte__crc32(header, uvSizeofBatchHeader(m), 0);
 
     byte__put32(&crc1_p, crc1);
     byte__put32(&crc2_p, crc2);
@@ -273,7 +273,7 @@ static void after_work_cb(uv_work_t *work, int status)
     uv->truncate_work.data = NULL;
     raft_free(r);
 
-    io_uv__append_unblock(uv);
+    uvAppendMaybeProcessRequests(uv);
     io_uv__snapshot_put_unblock(uv);
     uvMaybeClose(uv);
 }
@@ -301,29 +301,29 @@ static int truncate_start(struct truncate *r)
 static void process_requests(struct uv *uv)
 {
     struct truncate *r;
-    raft__queue *head;
+    queue *head;
     int rv;
 
     /* If there are no truncate requests, there's nothing to do. */
-    if (RAFT__QUEUE_IS_EMPTY(&uv->truncate_reqs)) {
+    if (QUEUE_IS_EMPTY(&uv->truncate_reqs)) {
         return;
     }
 
     /* If there are pending writes in progress, let's wait. */
-    if (!RAFT__QUEUE_IS_EMPTY(&uv->append_writing_reqs)) {
+    if (!QUEUE_IS_EMPTY(&uv->append_writing_reqs)) {
         return;
     }
 
     /* If there are segments being closed, let's wait. */
-    if (!RAFT__QUEUE_IS_EMPTY(&uv->finalize_reqs) ||
+    if (!QUEUE_IS_EMPTY(&uv->finalize_reqs) ||
         uv->finalize_work.data != NULL) {
         return;
     }
 
     /* Pop the head of the queue */
-    head = RAFT__QUEUE_HEAD(&uv->truncate_reqs);
-    r = RAFT__QUEUE_DATA(head, struct truncate, queue);
-    RAFT__QUEUE_REMOVE(&r->queue);
+    head = QUEUE_HEAD(&uv->truncate_reqs);
+    r = QUEUE_DATA(head, struct truncate, queue);
+    QUEUE_REMOVE(&r->queue);
 
     rv = truncate_start(r);
     if (rv != 0) {
@@ -357,12 +357,12 @@ int io_uv__truncate(struct raft_io *io, raft_index index)
 
     /* Make sure that we wait for any inflight writes to finish and then close
      * the current segment. */
-    rv = io_uv__append_flush(uv);
+    rv = uvAppendForceFinalizingCurrentSegment(uv);
     if (rv != 0) {
         goto err_after_req_alloc;
     }
 
-    RAFT__QUEUE_PUSH(&uv->truncate_reqs, &req->queue);
+    QUEUE_PUSH(&uv->truncate_reqs, &req->queue);
     process_requests(uv);
 
     return 0;
@@ -383,12 +383,12 @@ void io_uv__truncate_unblock(struct uv *uv)
 
 void io_uv__truncate_stop(struct uv *uv)
 {
-    while (!RAFT__QUEUE_IS_EMPTY(&uv->truncate_reqs)) {
+    while (!QUEUE_IS_EMPTY(&uv->truncate_reqs)) {
         struct truncate *r;
-        raft__queue *head;
-        head = RAFT__QUEUE_HEAD(&uv->truncate_reqs);
-        RAFT__QUEUE_REMOVE(head);
-        r = RAFT__QUEUE_DATA(head, struct truncate, queue);
+        queue *head;
+        head = QUEUE_HEAD(&uv->truncate_reqs);
+        QUEUE_REMOVE(head);
+        r = QUEUE_DATA(head, struct truncate, queue);
         raft_free(r);
     }
 }

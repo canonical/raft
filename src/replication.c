@@ -1197,13 +1197,13 @@ static void raft_replication__apply_configuration(struct raft *r,
 static void fire_apply_callback(struct raft *r, const raft_index index)
 {
     if (r->state == RAFT_LEADER) {
-        raft__queue *head;
+        queue *head;
         struct raft_apply *req;
-        RAFT__QUEUE_FOREACH(head, &r->leader_state.apply_reqs)
+        QUEUE_FOREACH(head, &r->leader_state.apply_reqs)
         {
-            req = RAFT__QUEUE_DATA(head, struct raft_apply, queue);
+            req = QUEUE_DATA(head, struct raft_apply, queue);
             if (req->index == index) {
-                RAFT__QUEUE_REMOVE(head);
+                QUEUE_REMOVE(head);
                 if (req->cb != NULL) {
                     req->cb(req, 0);
                 }
