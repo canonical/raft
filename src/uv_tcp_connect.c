@@ -4,7 +4,7 @@
 
 #include "assert.h"
 #include "byte.h"
-#include "io_uv_ip.h"
+#include "uv_ip.h"
 #include "uv_tcp.h"
 
 /* The happy path of a connection request is:
@@ -32,22 +32,21 @@
 /* Hold state for a single connection request. */
 struct connect
 {
-    struct uv__tcp *t;           /* Transport implementation */
+    struct uvTcp *t;             /* Transport implementation */
     struct raft_uv_connect *req; /* User request */
     uv_buf_t handshake;          /* Handshake data */
     struct uv_tcp_s *tcp;        /* TCP connection socket handle */
     struct uv_connect_s connect; /* TCP connectionr request */
     struct uv_write_s write;     /* TCP handshake request */
     int status;                  /* Returned to the request callback */
-    queue queue;           /* Pending connect queue */
+    queue queue;                 /* Pending connect queue */
 };
 
 /* Encode an handshake message into the given buffer. */
-static int encode_handshake(unsigned id, const char *address, uv_buf_t *buf)
+static int encodeHandshake(unsigned id, const char *address, uv_buf_t *buf)
 {
     void *cursor;
     size_t address_len = byte__pad64(strlen(address) + 1);
-
     buf->len = sizeof(uint64_t) + /* Protocol version. */
                sizeof(uint64_t) + /* Server ID. */
                sizeof(uint64_t) /* Size of the address buffer */;
@@ -56,36 +55,31 @@ static int encode_handshake(unsigned id, const char *address, uv_buf_t *buf)
     if (buf->base == NULL) {
         return RAFT_NOMEM;
     }
-
     cursor = buf->base;
-
-    byte__put64(&cursor, TCP_TRANSPORT__HANDSHAKE_PROTOCOL);
+    byte__put64(&cursor, UV__TCP_HANDSHAKE_PROTOCOL);
     byte__put64(&cursor, id);
     byte__put64(&cursor, address_len);
     strcpy(cursor, address);
-
     return 0;
 }
 
 /* The TCP connection handle has been closed in consequence of an error or
  * because the transport is closing. Fire the connect callback. */
-static void close_cb(struct uv_handle_s *handle)
+static void closeCb(struct uv_handle_s *handle)
 {
     struct connect *r = handle->data;
     /* We must be careful to not reference the r->t field of the connect request
-     * object, since that io_uv__tcp object might have been released in the
+     * object, since that uvTcp object might have been released in the
      * meantime. */
     assert((struct uv_tcp_s *)handle == r->tcp);
     assert(r->status != 0);
-
     r->req->cb(r->req, NULL, r->status);
-
     raft_free(handle);
     raft_free(r);
 }
 
 /* The handshake TCP write completes. Fire the connect callback. */
-static void write_cb(struct uv_write_s *write, int status)
+static void writeCb(struct uv_write_s *write, int status)
 {
     struct connect *r = write->data;
     int rv;
@@ -115,11 +109,11 @@ static void write_cb(struct uv_write_s *write, int status)
 
 err:
     r->status = rv;
-    uv_close((struct uv_handle_s *)r->tcp, close_cb);
+    uv_close((struct uv_handle_s *)r->tcp, closeCb);
 }
 
 /* The TCP connection is established. Write the handshake data. */
-static void connect_cb(struct uv_connect_s *connect, int status)
+static void connectCb(struct uv_connect_s *connect, int status)
 {
     struct connect *r = connect->data;
     int rv;
@@ -136,33 +130,33 @@ static void connect_cb(struct uv_connect_s *connect, int status)
     }
 
     /* Initialize the handshake buffer and write it out. */
-    rv = encode_handshake(r->t->id, r->t->address, &r->handshake);
+    rv = encodeHandshake(r->t->id, r->t->address, &r->handshake);
     if (rv != 0) {
         goto err;
     }
     rv = uv_write(&r->write, (struct uv_stream_s *)r->tcp, &r->handshake, 1,
-                  write_cb);
+                  writeCb);
     if (rv != 0) {
         /* UNTESTED: what are the error conditions? perhaps ENOMEM */
         rv = RAFT_IOERR;
-        goto err_after_encode_handshake;
+        goto err_after_encodeHandshake;
     }
     r->write.data = r;
 
     return;
 
-err_after_encode_handshake:
+err_after_encodeHandshake:
     raft_free(r->handshake.base);
 
 err:
     /* Remove the request from the queue, since we're aborting it */
     QUEUE_REMOVE(&r->queue);
     r->status = rv;
-    uv_close((struct uv_handle_s *)r->tcp, close_cb);
+    uv_close((struct uv_handle_s *)r->tcp, closeCb);
 }
 
 /* Create a new TCP handle and submit a connection request to the event loop. */
-static int tcp_connect__start(struct connect *r, const char *address)
+static int startConnecting(struct connect *r, const char *address)
 {
     struct sockaddr_in addr;
     int rv;
@@ -178,13 +172,13 @@ static int tcp_connect__start(struct connect *r, const char *address)
     assert(rv == 0);
     r->tcp->data = r;
 
-    rv = raft__io_uv_ip_parse(address, &addr);
+    rv = uvIpParse(address, &addr);
     if (rv != 0) {
         goto err_after_tcp_init;
     }
 
     rv = uv_tcp_connect(&r->connect, r->tcp, (struct sockaddr *)&addr,
-                        connect_cb);
+                        connectCb);
     if (rv != 0) {
         /* UNTESTED: since parsing succeed, this should fail only because of
          * lack of system resources */
@@ -201,13 +195,13 @@ err:
     return rv;
 }
 
-int io_uv__tcp_connect(struct raft_uv_transport *transport,
-                       struct raft_uv_connect *req,
-                       unsigned id,
-                       const char *address,
-                       raft_uv_connect_cb cb)
+int uvTcpConnect(struct raft_uv_transport *transport,
+                 struct raft_uv_connect *req,
+                 unsigned id,
+                 const char *address,
+                 raft_uv_connect_cb cb)
 {
-    struct uv__tcp *t;
+    struct uvTcp *t;
     struct connect *r;
     int rv;
 
@@ -227,7 +221,7 @@ int io_uv__tcp_connect(struct raft_uv_transport *transport,
     req->cb = cb;
 
     /* Start connecting */
-    rv = tcp_connect__start(r, address);
+    rv = startConnecting(r, address);
     if (rv != 0) {
         raft_free(r);
         return rv;
@@ -239,20 +233,21 @@ int io_uv__tcp_connect(struct raft_uv_transport *transport,
     return 0;
 }
 
-static void tcp_connect__cancel(struct connect *r)
+/* Abort a connection request. */
+static void abortConnection(struct connect *r)
 {
     QUEUE_REMOVE(&r->queue);
     r->status = RAFT_CANCELED;
-    uv_close((struct uv_handle_s *)r->tcp, close_cb);
+    uv_close((struct uv_handle_s *)r->tcp, closeCb);
 }
 
-void io_uv__tcp_connect_stop(struct uv__tcp *t)
+void uvTcpConnectClose(struct uvTcp *t)
 {
     while (!QUEUE_IS_EMPTY(&t->connect_reqs)) {
         queue *head;
         struct connect *r;
         head = QUEUE_HEAD(&t->connect_reqs);
         r = QUEUE_DATA(head, struct connect, queue);
-        tcp_connect__cancel(r);
+        abortConnection(r);
     }
 }

@@ -5,9 +5,9 @@
 
 #include "../include/raft.h"
 
-#include "io_uv_ip.h"
+#include "uv_ip.h"
 
-int raft__io_uv_ip_parse(const char *address, struct sockaddr_in *addr)
+int uvIpParse(const char *address, struct sockaddr_in *addr)
 {
     char buf[256];
     char *host;

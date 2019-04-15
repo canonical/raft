@@ -294,9 +294,7 @@ void uvTruncateClose(struct uv *uv);
  * segment is left. */
 void uvTruncateMaybeProcessRequests(struct uv *uv);
 
-/**
- * Implementation of raft_io->send.
- */
+/* Implementation of raft_io->send. */
 int io_uv__send(struct raft_io *io,
                 struct raft_io_send *req,
                 const struct raft_message *message,

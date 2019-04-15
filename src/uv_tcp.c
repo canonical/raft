@@ -4,16 +4,14 @@
 #include "../include/raft/uv.h"
 
 #include "assert.h"
-#include "byte.h"
-#include "io_uv_ip.h"
 #include "uv_tcp.h"
 
 /* Implementation of raft_io_uv_transport->init. */
-static int tcp_init(struct raft_uv_transport *transport,
-                    unsigned id,
-                    const char *address)
+static int uvTcpInit(struct raft_uv_transport *transport,
+                     unsigned id,
+                     const char *address)
 {
-    struct uv__tcp *t;
+    struct uvTcp *t;
     int rv;
     t = transport->impl;
     t->id = id;
@@ -23,30 +21,30 @@ static int tcp_init(struct raft_uv_transport *transport,
     return 0;
 }
 
-/* Close callback for io_uv__tcp->listener. */
-static void listener_close_cb(struct uv_handle_s *handle)
+/* Close callback for uvTcp->listener. */
+static void listenerCloseCb(struct uv_handle_s *handle)
 {
-    struct uv__tcp *t = handle->data;
+    struct uvTcp *t = handle->data;
     if (t->close_cb != NULL) {
         t->close_cb(t->transport);
     }
 }
 
 /* Implementation of raft_io_uv_transport->close. */
-static void tcp_close(struct raft_uv_transport *transport,
-                      raft_uv_transport_close_cb cb)
+static void uvTcpClose(struct raft_uv_transport *transport,
+                       raft_uv_transport_close_cb cb)
 {
-    struct uv__tcp *t = transport->impl;
+    struct uvTcp *t = transport->impl;
     t->close_cb = cb;
-    io_uv__tcp_connect_stop(t);
-    io_uv__tcp_listen_stop(t);
-    uv_close((struct uv_handle_s *)&t->listener, listener_close_cb);
+    uvTcpConnectClose(t);
+    uvTcpListenClose(t);
+    uv_close((struct uv_handle_s *)&t->listener, listenerCloseCb);
 }
 
 int raft_uv_tcp_init(struct raft_uv_transport *transport,
                      struct uv_loop_s *loop)
 {
-    struct uv__tcp *t;
+    struct uvTcp *t;
 
     t = raft_malloc(sizeof *t);
     if (t == NULL) {
@@ -64,10 +62,10 @@ int raft_uv_tcp_init(struct raft_uv_transport *transport,
     QUEUE_INIT(&t->connect_reqs);
 
     transport->impl = t;
-    transport->init = tcp_init;
-    transport->listen = io_uv__tcp_listen;
-    transport->connect = io_uv__tcp_connect;
-    transport->close = tcp_close;
+    transport->init = uvTcpInit;
+    transport->listen = uvTcpListen;
+    transport->connect = uvTcpConnect;
+    transport->close = uvTcpClose;
 
     return 0;
 }

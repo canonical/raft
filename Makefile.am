@@ -64,7 +64,6 @@ libraft_la_SOURCES = \
 if UV
   libraft_la_SOURCES += \
   src/io_uv_client.c \
-  src/io_uv_ip.c \
   src/io_uv_server.c \
   src/os.c \
   src/uv.c \
@@ -72,6 +71,7 @@ if UV
   src/uv_encoding.c \
   src/uv_file.c \
   src/uv_finalize.c \
+  src/uv_ip.c \
   src/uv_list.c \
   src/uv_metadata.c \
   src/uv_prepare.c \
@@ -150,7 +150,8 @@ if UV
   test/unit/test_uv_finalize.c \
   test/unit/test_uv_metadata.c \
   test/unit/test_uv_prepare.c \
-  test/unit/test_uv_tcp.c \
+  test/unit/test_uv_tcp_listen.c \
+  test/unit/test_uv_tcp_connect.c \
   test/unit/test_uv_truncate.c
 endif
 if FIXTURE
