@@ -46,51 +46,33 @@
 #define CLUSTER_N_PARAM_GET \
     (unsigned)atoi(munit_parameters_get(params, CLUSTER_N_PARAM))
 
-/**
- * Get the number of servers in the cluster.
- */
+/* Get the number of servers in the cluster. */
 #define CLUSTER_N raft_fixture_n(&f->cluster)
 
-/**
- * Index of the current leader, or CLUSTER_N if there's no leader.
- */
+/* Index of the current leader, or CLUSTER_N if there's no leader. */
 #define CLUSTER_LEADER raft_fixture_leader_index(&f->cluster)
 
-/**
- * True if the cluster has a leader.
- */
+/* True if the cluster has a leader. */
 #define CLUSTER_HAS_LEADER CLUSTER_LEADER < CLUSTER_N
 
-/**
- * Get the struct raft object of the I'th server.
- */
+/* Get the struct raft object of the I'th server. */
 #define CLUSTER_RAFT(I) raft_fixture_get(&f->cluster, I)
 
-/**
- * Get the state of the I'th server.
- */
+/* Get the state of the I'th server. */
 #define CLUSTER_STATE(I) raft_state(raft_fixture_get(&f->cluster, I))
 
-/**
- * Get the struct fsm object of the I'th server.
- */
+/* Get the struct fsm object of the I'th server. */
 #define CLUSTER_FSM(I) &f->fsms[I]
 
-/**
- * Return the last applied index on the I'th server.
- */
+/* Return the last applied index on the I'th server. */
 #define CLUSTER_LAST_APPLIED(I) \
     raft_last_applied(raft_fixture_get(&f->cluster, I))
 
-/**
- * Return the ID of the server the I'th server has voted for.
- */
+/* Return the ID of the server the I'th server has voted for. */
 #define CLUSTER_VOTED_FOR(I) raft_fixture_voted_for(&f->cluster, I)
 
-/**
- * Populate the given configuration with all servers in the fixture. All servers
- * will be voting.
- */
+/* Populate the given configuration with all servers in the fixture. All servers
+ * will be voting. */
 #define CLUSTER_CONFIGURATION(CONF)                                     \
     {                                                                   \
         int rc2;                                                        \
@@ -98,9 +80,7 @@
         munit_assert_int(rc2, ==, 0);                                   \
     }
 
-/**
- * Bootstrap all servers in the cluster. All servers will be voting.
- */
+/* Bootstrap all servers in the cluster. All servers will be voting. */
 #define CLUSTER_BOOTSTRAP                                         \
     {                                                             \
         int rc;                                                   \
@@ -111,9 +91,7 @@
         raft_configuration_close(&configuration);                 \
     }
 
-/**
- * Start all servers in the test cluster.
- */
+/* Start all servers in the test cluster. */
 #define CLUSTER_START                         \
     {                                         \
         int rc;                               \
@@ -121,20 +99,14 @@
         munit_assert_int(rc, ==, 0);          \
     }
 
-/**
- * Step the cluster.
- */
+/* Step the cluster. */
 #define CLUSTER_STEP raft_fixture_step(&f->cluster);
 
-/**
- * Step the cluster until a leader is elected or #MAX_MSECS have elapsed.
- */
+/* Step the cluster until a leader is elected or #MAX_MSECS have elapsed. */
 #define CLUSTER_STEP_UNTIL_ELAPSED(MSECS) \
     raft_fixture_step_until_elapsed(&f->cluster, MSECS)
 
-/**
- * Step the cluster until a leader is elected or #MAX_MSECS have elapsed.
- */
+/* Step the cluster until a leader is elected or #MAX_MSECS have elapsed. */
 #define CLUSTER_STEP_UNTIL_HAS_LEADER(MAX_MSECS)                           \
     {                                                                      \
         bool done;                                                         \
@@ -143,9 +115,7 @@
         munit_assert_true(CLUSTER_HAS_LEADER);                             \
     }
 
-/**
- * Step the cluster until there's no leader or #MAX_MSECS have elapsed.
- */
+/* Step the cluster until there's no leader or #MAX_MSECS have elapsed. */
 #define CLUSTER_STEP_UNTIL_HAS_NO_LEADER(MAX_MSECS)                           \
     {                                                                         \
         bool done;                                                            \
@@ -154,10 +124,8 @@
         munit_assert_false(CLUSTER_HAS_LEADER);                               \
     }
 
-/**
- * Step the cluster until the given index was applied by the given server (or
- * all if N) or #MAX_MSECS have elapsed.
- */
+/* Step the cluster until the given index was applied by the given server (or
+ * all if N) or #MAX_MSECS have elapsed. */
 #define CLUSTER_STEP_UNTIL_APPLIED(I, INDEX, MAX_MSECS)                        \
     {                                                                          \
         bool done;                                                             \
@@ -166,9 +134,7 @@
         munit_assert_true(done);                                               \
     }
 
-/**
- * Request to apply an FSM command to add the given value to x.
- */
+/* Request to apply an FSM command to add the given value to x. */
 #define CLUSTER_APPLY_ADD_X(REQ, VALUE, CB)                   \
     {                                                         \
         struct raft_buffer buf;                               \
@@ -181,19 +147,13 @@
         munit_assert_int(rc, ==, 0);                          \
     }
 
-/**
- * Kill the I'th server.
- */
+/* Kill the I'th server. */
 #define CLUSTER_KILL(I) raft_fixture_kill(&f->cluster, I);
 
-/**
- * Kill the leader.
- */
+/* Kill the leader. */
 #define CLUSTER_KILL_LEADER CLUSTER_KILL(CLUSTER_LEADER)
 
-/**
- * Kill a majority of servers, except the leader (if there is one).
- */
+/* Kill a majority of servers, except the leader (if there is one). */
 #define CLUSTER_KILL_MAJORITY                                \
     {                                                        \
         size_t i2;                                           \
@@ -207,9 +167,7 @@
         }                                                    \
     }
 
-/**
- * Grow the cluster adding one server.
- */
+/* Grow the cluster adding one server. */
 #define CLUSTER_GROW                                              \
     {                                                             \
         int rv;                                                   \
@@ -217,10 +175,8 @@
         munit_assert_int(rv, ==, 0);                              \
     }
 
-/**
- * Add a new pristine server to the cluster, connected to all others. Then
- * submit a request to add it to the configuration as non-voting server.
- */
+/* Add a new pristine server to the cluster, connected to all others. Then
+ * submit a request to add it to the configuration as non-voting server. */
 #define CLUSTER_ADD                                                      \
     {                                                                    \
         int rc;                                                          \
@@ -237,9 +193,7 @@
         munit_assert_int(rc, ==, 0);                                     \
     }
 
-/**
- * Promote the server that was added last.
- */
+/* Promote the server that was added last. */
 #define CLUSTER_PROMOTE                                      \
     {                                                        \
         unsigned id;                                         \
@@ -249,12 +203,10 @@
         munit_assert_int(rc, ==, 0);                         \
     }
 
-/**
- * Ensure that the cluster can make progress from the current state.
+/* Ensure that the cluster can make progress from the current state.
  *
  * - If no leader is present, wait for one to be elected.
- * - Submit a request to apply a new FSM command and wait for it to complete.
- */
+ * - Submit a request to apply a new FSM command and wait for it to complete. */
 #define CLUSTER_MAKE_PROGRESS                                               \
     {                                                                       \
         struct raft_apply *req = munit_malloc(sizeof *req);                 \
@@ -267,43 +219,30 @@
         free(req);                                                          \
     }
 
-/**
- * Elect the I'th server.
- */
+/* Elect the I'th server. */
 #define CLUSTER_ELECT(I) raft_fixture_elect(&f->cluster, I)
 
-/**
- * Disconnect two servers.
- */
+/* Disconnect two servers. */
 #define CLUSTER_DISCONNECT(I, J) raft_fixture_disconnect(&f->cluster, I, J)
 
-/**
- * Reconnect two servers.
- */
+/* Reconnect two servers. */
 #define CLUSTER_RECONNECT(I, J) raft_fixture_reconnect(&f->cluster, I, J)
 
-/**
- * Set the random function used by the I'th server.
- */
+/* Set the random function used by the I'th server. */
 #define CLUSTER_SET_RANDOM(I, RANDOM) \
     raft_fixture_set_random(&f->cluster, I, RANDOM)
 
-/**
- * Set the minimum and maximum network latency of outgoing messages of server I.
- */
+/* Set the minimum and maximum network latency of outgoing messages of server
+ * I. */
 #define CLUSTER_SET_LATENCY(I, MIN, MAX) \
     raft_fixture_set_latency(&f->cluster, I, MIN, MAX)
 
-/**
- * Set the term persisted on the I'th server. This must be called before
- * starting the cluster.
- */
+/* Set the term persisted on the I'th server. This must be called before
+ * starting the cluster. */
 #define CLUSTER_SET_TERM(I, TERM) raft_fixture_set_term(&f->cluster, I, TERM)
 
-/**
- * Set the snapshot persisted on the I'th server. This must be called before
- * starting the cluster.
- */
+/* Set the snapshot persisted on the I'th server. This must be called before
+ * starting the cluster. */
 #define CLUSTER_SET_SNAPSHOT(I, LAST_INDEX, LAST_TERM, CONF_INDEX, X, Y) \
     {                                                                    \
         struct raft_configuration configuration;                         \
@@ -315,9 +254,12 @@
         raft_fixture_set_snapshot(&f->cluster, I, snapshot);             \
     }
 
-/**
- * Make an I/O error occur on the I'th server after @DELAY operations.
- */
+/* Set the entries persisted on the I'th server. This must be called before
+ * starting the cluster. */
+#define CLUSTER_SET_ENTRIES(I, ENTRIES, N) \
+    raft_fixture_set_entries(&f->cluster, I, ENTRIES, N)
+
+/* Make an I/O error occur on the I'th server after @DELAY operations. */
 #define CLUSTER_IO_FAULT(I, DELAY, REPEAT) \
     raft_fixture_io_fault(&f->cluster, I, DELAY, REPEAT)
 

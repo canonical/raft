@@ -13,36 +13,28 @@
 
 TEST_MODULE(tick);
 
-/**
- * Helpers
- */
+/******************************************************************************
+ *
+ * Fixture
+ *
+ *****************************************************************************/
 
 struct fixture
 {
     RAFT_FIXTURE;
 };
 
-/**
- * Setup and tear down
- */
-
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-
-    (void)user_data;
-
     RAFT_SETUP(f);
-
     return f;
 }
 
 static void tear_down(void *data)
 {
     struct fixture *f = data;
-
     RAFT_TEAR_DOWN(f);
-
     free(f);
 }
 
