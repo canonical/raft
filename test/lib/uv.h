@@ -6,6 +6,7 @@
 #include "../../include/raft.h"
 #include "../../include/raft/uv.h"
 
+#include "../../src/byte.h"
 #include "../../src/uv.h"
 
 #include "fs.h"
@@ -63,6 +64,68 @@
         f->closed = true;                \
     }
 
+/* Create a valid closed segment file with FIRST_INDEX and N batches each
+ * containing one entry. DATA should be an integer that will be used as base
+ * value for the data of the firt entry, and will be incremented.. */
+#define UV_WRITE_CLOSED_SEGMENT(FIRST_INDEX, N, DATA)                         \
+    {                                                                         \
+        char filename_[strlen("N-N") + 20 * 2 + 1];                           \
+        raft_index end_index_ = FIRST_INDEX + N - 1;                          \
+        sprintf(filename_, "%llu-%llu", (raft_index)FIRST_INDEX, end_index_); \
+        UV__WRITE_SEGMENT(filename_, N, DATA, true);                          \
+    }
+
+/* Create a valid open segment file with the given COUNTER and N batches, each
+ * containing one entry. DATA should be an integer that will be used as base
+ * value for the data of the firt entry, and will be incremented. */
+#define UV_WRITE_OPEN_SEGMENT(COUNTER, N, DATA)              \
+    {                                                        \
+        char filename_[strlen("open-N") + 1];                \
+        sprintf(filename_, "open-%llu", (uvCounter)COUNTER); \
+        UV__WRITE_SEGMENT(filename_, N, DATA, false);        \
+    }
+
+#define UV__WRITE_SEGMENT(FILENAME, N, DATA, TRUNCATE)              \
+    {                                                               \
+        struct uvSegmentBuffer buf_;                                \
+        uv_buf_t out_;                                              \
+        struct raft_entry *entries_;                                \
+        unsigned i_;                                                \
+        int rv_;                                                    \
+                                                                    \
+        uvSegmentBufferInit(&buf_, 4096);                           \
+        rv_ = uvSegmentBufferFormat(&buf_);                         \
+        munit_assert_int(rv_, ==, 0);                               \
+                                                                    \
+        entries_ = munit_malloc(N * sizeof *entries_);              \
+        for (i_ = 0; i_ < (unsigned)N; i_++) {                      \
+            struct raft_entry *entry_ = &entries_[i_];              \
+            void *cursor_;                                          \
+            entry_->term = 1;                                       \
+            entry_->type = RAFT_COMMAND;                            \
+            entry_->buf.len = sizeof(uint64_t);                     \
+            entry_->buf.base = munit_malloc(entry_->buf.len);       \
+            cursor_ = entry_->buf.base;                             \
+            byte__put64(&cursor_, DATA + i_); /* Entry data */      \
+        }                                                           \
+                                                                    \
+        rv_ = uvSegmentBufferAppend(&buf_, entries_, N);            \
+        munit_assert_int(rv_, ==, 0);                               \
+                                                                    \
+        uvSegmentBufferFinalize(&buf_, &out_);                      \
+        if (TRUNCATE) {                                             \
+            out_.len = buf_.n;                                      \
+        }                                                           \
+        test_dir_write_file(f->dir, FILENAME, out_.base, out_.len); \
+                                                                    \
+        for (i_ = 0; i_ < (unsigned)N; i_++) {                      \
+            struct raft_entry *entry_ = &entries_[i_];              \
+            free(entry_->buf.base);                                 \
+        }                                                           \
+        free(entries_);                                             \
+        uvSegmentBufferClose(&buf_);                                \
+    }
+
 /**
  * Create a valid snapshot metadata file with the given @term, @index and
  * @timestamp. The snapshot configuration will contain @nconfiguration_n
@@ -85,27 +148,5 @@ size_t test_io_uv_write_snapshot_data_file(const char *dir,
                                            unsigned long long timestamp,
                                            void *buf,
                                            size_t size);
-
-/**
- * Create a valid open segment file with counter @counter with @n batches each
- * containing one entry. @data should be an integer that will be used as base
- * value for the data of the firt entry, and will be incremented. Return the
- * size of the created file.
- */
-size_t test_io_uv_write_open_segment_file(const char *dir,
-                                          unsigned long long counter,
-                                          int n,
-                                          int data);
-
-/**
- * Create a valid closed segment file with first index @first_index and @n
- * batches each containing one entry. @data should be an integer that will be
- * used as base value for the data of the firt entry, and will be incremented.
- * Return the size of the created file.
- */
-size_t test_io_uv_write_closed_segment_file(const char *dir,
-                                            raft_index first_index,
-                                            int n,
-                                            int data);
 
 #endif /* TEST_IO_UV_H */

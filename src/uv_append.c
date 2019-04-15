@@ -139,8 +139,7 @@ static void finalizeSegment(struct segment *s)
     struct uv *uv = s->uv;
     int rv;
 
-    rv = io_uv__finalize(uv, s->counter, s->written, s->first_index,
-                         s->last_index);
+    rv = uvFinalize(uv, s->counter, s->written, s->first_index, s->last_index);
     if (rv != 0) {
         uv->errored = true;
         /* We failed to submit the finalize request, but let's still close the
@@ -305,9 +304,9 @@ static void processRequests(struct uv *uv)
     if (uv->closing) {
         assert(QUEUE_IS_EMPTY(&uv->append_pending_reqs));
         assert(QUEUE_IS_EMPTY(&uv->append_writing_reqs));
-	segment = currentSegment(uv);
-	assert(segment != NULL);
-	assert(segment->finalize);
+        segment = currentSegment(uv);
+        assert(segment != NULL);
+        assert(segment->finalize);
     }
 
     /* If we are already writing, let's wait. */
@@ -401,7 +400,7 @@ static void prepareSegmentCb(struct uvPrepare *req,
         if (status == 0) {
             uvFileClose(file, (uvFileCloseCb)raft_free);
             /* Ignore errors, as there's nothing we can do about it. */
-            io_uv__finalize(uv, counter, 0, 0, 0);
+            uvFinalize(uv, counter, 0, 0, 0);
         }
         uvSegmentBufferClose(&segment->pending);
         raft_free(segment);

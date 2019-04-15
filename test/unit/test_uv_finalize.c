@@ -1,13 +1,15 @@
-#include "../lib/uv.h"
 #include "../lib/runner.h"
+#include "../lib/uv.h"
 
 #include "../../src/uv.h"
 
-TEST_MODULE(io_uv__finalize);
+TEST_MODULE(uv_finalize);
 
-/**
- * Helpers.
- */
+/******************************************************************************
+ *
+ * Fixture
+ *
+ *****************************************************************************/
 
 struct fixture
 {
@@ -35,22 +37,29 @@ static void tear_down(void *data)
     TEAR_DOWN_UV;
 }
 
-#define write_open_segment(COUNTER) \
-    test_io_uv_write_open_segment_file(f->dir, COUNTER, 1, 0);
+/******************************************************************************
+ *
+ * Helper macros
+ *
+ *****************************************************************************/
+
+#define WRITE_OPEN_SEGMENT(COUNTER) UV_WRITE_OPEN_SEGMENT(COUNTER, 1, 0);
 
 /* Invoke io_uv__finalize withe arguments in the fixture and assert that the
  * given result value is returned. */
-#define invoke(RV)                                                       \
-    {                                                                    \
-        int rv;                                                          \
-        rv = io_uv__finalize(f->uv, f->counter, f->used, f->first_index, \
-                             f->last_index);                             \
-        munit_assert_int(rv, ==, RV);                                    \
+#define FINALIZE(RV)                                                \
+    {                                                               \
+        int rv;                                                     \
+        rv = uvFinalize(f->uv, f->counter, f->used, f->first_index, \
+                        f->last_index);                             \
+        munit_assert_int(rv, ==, RV);                               \
     }
 
-/**
+/******************************************************************************
+ *
  * Success scenarios.
- */
+ *
+ *****************************************************************************/
 
 TEST_SUITE(success);
 
@@ -61,12 +70,11 @@ TEST_TEAR_DOWN(success, tear_down);
 TEST_CASE(success, first, NULL)
 {
     struct fixture *f = data;
-
     (void)params;
 
-    write_open_segment(1);
+    WRITE_OPEN_SEGMENT(1);
 
-    invoke(0);
+    FINALIZE(0);
 
     LOOP_RUN(1);
 
@@ -79,14 +87,12 @@ TEST_CASE(success, first, NULL)
 TEST_CASE(success, unused, NULL)
 {
     struct fixture *f = data;
-
     (void)params;
 
     test_dir_write_file_with_zeros(f->dir, "open-1", 256);
-
     f->used = 0;
 
-    invoke(0);
+    FINALIZE(0);
 
     LOOP_RUN(1);
 
@@ -100,18 +106,17 @@ TEST_CASE(success, unused, NULL)
 TEST_CASE(success, wait, NULL)
 {
     struct fixture *f = data;
-
     (void)params;
 
-    write_open_segment(1);
-    invoke(0);
+    WRITE_OPEN_SEGMENT(1);
+    FINALIZE(0);
 
     f->counter = 2;
     f->first_index = 3;
     f->last_index = 3;
 
-    write_open_segment(2);
-    invoke(0);
+    WRITE_OPEN_SEGMENT(2);
+    FINALIZE(0);
 
     LOOP_RUN(1);
     LOOP_RUN(1);
@@ -122,14 +127,15 @@ TEST_CASE(success, wait, NULL)
     return MUNIT_OK;
 }
 
-/**
+/******************************************************************************
+ *
  * Failure scenarios.
- */
+ *
+ *****************************************************************************/
 
 TEST_SUITE(error);
 TEST_SETUP(error, setup);
 TEST_TEAR_DOWN(error, tear_down);
-
 
 static char *error_oom_heap_fault_delay[] = {"0", NULL};
 static char *error_oom_heap_fault_repeat[] = {"1", NULL};
@@ -144,12 +150,8 @@ static MunitParameterEnum error_oom_params[] = {
 TEST_CASE(error, oom, error_oom_params)
 {
     struct fixture *f = data;
-
     (void)params;
-
     test_heap_fault_enable(&f->heap);
-
-    invoke(RAFT_NOMEM);
-
+    FINALIZE(RAFT_NOMEM);
     return MUNIT_OK;
 }

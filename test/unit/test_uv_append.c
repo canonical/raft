@@ -3,7 +3,6 @@
 
 #include "../../src/byte.h"
 #include "../../src/uv_encoding.h"
-#include "../../src/uv.h"
 
 TEST_MODULE(uv_append);
 

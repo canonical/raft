@@ -5,7 +5,7 @@
 #include "assert.h"
 #include "byte.h"
 #include "io_uv_ip.h"
-#include "io_uv_tcp.h"
+#include "uv_tcp.h"
 
 /* The happy path of an incoming connection is:
  *

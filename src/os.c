@@ -117,7 +117,6 @@ int osRename(const osDir dir,
 {
     osPath path1;
     osPath path2;
-    int fd;
     int rv;
     osJoin(dir, filename1, path1);
     osJoin(dir, filename2, path2);
@@ -126,14 +125,9 @@ int osRename(const osDir dir,
     if (rv == -1) {
         return errno;
     }
-    fd = open(dir, O_RDONLY | O_DIRECTORY);
-    if (fd == -1) {
-        return errno;
-    }
-    rv = fsync(fd);
-    close(fd);
-    if (rv == -1) {
-        return errno;
+    rv = osSyncDir(dir);
+    if (rv != 0) {
+        return rv;
     }
     return 0;
 }

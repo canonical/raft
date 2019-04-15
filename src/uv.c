@@ -162,7 +162,7 @@ static int uvClose(struct raft_io *io, void (*cb)(struct raft_io *io))
     io_uv__servers_stop(uv);
     uvPrepareClose(uv);
     uvAppendClose(uv);
-    io_uv__truncate_stop(uv);
+    uvTruncateClose(uv);
     uv->transport->close(uv->transport, transportCloseCb);
     return 0;
 }
@@ -447,7 +447,7 @@ int raft_uv_init(struct raft_io *io,
     io->set_term = uvSetTerm;
     io->set_vote = uvSetVote;
     io->append = uvAppend;
-    io->truncate = io_uv__truncate;
+    io->truncate = uvTruncate;
     io->send = io_uv__send;
     io->snapshot_put = io_uv__snapshot_put;
     io->snapshot_get = io_uv__snapshot_get;

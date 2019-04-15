@@ -432,7 +432,7 @@ TEST_CASE(load_all, success, closed_not_needed, NULL)
 
     test_io_uv_write_snapshot_meta_file(f->dir, 1, 2, 123, 1, 1);
     test_io_uv_write_snapshot_data_file(f->dir, 1, 2, 123, buf, sizeof buf);
-    test_io_uv_write_closed_segment_file(f->dir, 1, 1, 1);
+    UV_WRITE_CLOSED_SEGMENT(1, 1, 1);
 
     __load_all_trigger(f, 0);
 
@@ -449,9 +449,9 @@ TEST_CASE(load_all, success, closed, NULL)
 
     (void)params;
 
-    test_io_uv_write_closed_segment_file(f->dir, 1, 2, 1);
-    test_io_uv_write_closed_segment_file(f->dir, 3, 1, 1);
-    test_io_uv_write_open_segment_file(f->dir, 1, 1, 1);
+    UV_WRITE_CLOSED_SEGMENT(1, 2, 1);
+    UV_WRITE_CLOSED_SEGMENT(3, 1, 1);
+    UV_WRITE_OPEN_SEGMENT(1, 1, 1);
 
     __load_all_trigger(f, 0);
 
@@ -517,7 +517,7 @@ TEST_CASE(load_all, success, open_not_all_zeros, NULL)
     byte__put8(&cursor, 0);            /* Unused */
     byte__put32(&cursor, 8);           /* Size of entry data */
 
-    test_io_uv_write_open_segment_file(f->dir, 1, 1, 1);
+    UV_WRITE_OPEN_SEGMENT(1, 1, 1);
 
     test_dir_append_file(f->dir, "open-1", buf, sizeof buf);
 
@@ -542,7 +542,7 @@ TEST_CASE(load_all, success, open_truncate, NULL)
 
     (void)params;
 
-    test_io_uv_write_open_segment_file(f->dir, 1, 1, 1);
+    UV_WRITE_OPEN_SEGMENT(1, 1, 1);
 
     memset(buf, 0, sizeof buf);
 
@@ -571,7 +571,7 @@ TEST_CASE(load_all, success, open_partial_bach, NULL)
     byte__put64(&cursor, 0); /* Number of entries */
     byte__put64(&cursor, 0); /* Batch data */
 
-    test_io_uv_write_open_segment_file(f->dir, 1, 1, 1);
+    UV_WRITE_OPEN_SEGMENT(1, 1, 1);
 
     test_dir_overwrite_file(f->dir, "open-1", buf, sizeof buf, 0);
 
@@ -591,10 +591,10 @@ TEST_CASE(load_all, success, open_second, NULL)
     (void)params;
 
     /* First segment. */
-    test_io_uv_write_open_segment_file(f->dir, 1, 1, 1);
+    UV_WRITE_OPEN_SEGMENT(1, 1, 1);
 
     /* Second segment */
-    test_io_uv_write_open_segment_file(f->dir, 2, 1, 1);
+    UV_WRITE_OPEN_SEGMENT(2, 1, 1);
 
     __load_all_trigger(f, 0);
 
@@ -616,7 +616,7 @@ TEST_CASE(load_all, success, open_second_all_zeroes, NULL)
     (void)params;
 
     /* First segment. */
-    test_io_uv_write_open_segment_file(f->dir, 1, 1, 1);
+    UV_WRITE_OPEN_SEGMENT(1, 1, 1);
 
     /* Second segment */
     test_dir_write_file_with_zeros(f->dir, "open-2", 256);
@@ -640,7 +640,7 @@ TEST_CASE(load_all, success, open, NULL)
 
     (void)params;
 
-    test_io_uv_write_open_segment_file(f->dir, 1, 1, 1);
+    UV_WRITE_OPEN_SEGMENT(1, 1, 1);
 
     __load_all_trigger(f, 0);
 
@@ -670,7 +670,7 @@ TEST_CASE(load_all, error, short_preamble, NULL)
 
     (void)params;
 
-    test_io_uv_write_open_segment_file(f->dir, 1, 1, 1);
+    UV_WRITE_OPEN_SEGMENT(1, 1, 1);
 
     test_dir_truncate_file(f->dir, "open-1", offset);
 
@@ -690,7 +690,7 @@ TEST_CASE(load_all, error, short_header, NULL)
 
     (void)params;
 
-    test_io_uv_write_open_segment_file(f->dir, 1, 1, 1);
+    UV_WRITE_OPEN_SEGMENT(1, 1, 1);
 
     test_dir_truncate_file(f->dir, "open-1", offset);
 
@@ -712,7 +712,7 @@ TEST_CASE(load_all, error, short_data, NULL)
 
     (void)params;
 
-    test_io_uv_write_open_segment_file(f->dir, 1, 1, 1);
+    UV_WRITE_OPEN_SEGMENT(1, 1, 1);
 
     test_dir_truncate_file(f->dir, "open-1", offset);
 
@@ -734,7 +734,7 @@ TEST_CASE(load_all, error, corrupt_header, NULL)
     /* Render invalid checksums */
     byte__put64(&cursor, 123);
 
-    test_io_uv_write_closed_segment_file(f->dir, 1, 1, 1);
+    UV_WRITE_CLOSED_SEGMENT(1, 1, 1);
 
     test_dir_overwrite_file(f->dir, "1-1", buf, sizeof buf, offset);
 
@@ -757,7 +757,7 @@ TEST_CASE(load_all, error, corrupt_data, NULL)
     /* Render an invalid data checksum. */
     byte__put32(&cursor, 123456789);
 
-    test_io_uv_write_closed_segment_file(f->dir, 1, 1, 1);
+    UV_WRITE_CLOSED_SEGMENT(1, 1, 1);
 
     test_dir_overwrite_file(f->dir, "1-1", buf, sizeof buf, offset);
 
@@ -774,7 +774,7 @@ TEST_CASE(load_all, error, closed_bad_index, NULL)
 
     (void)params;
 
-    test_io_uv_write_closed_segment_file(f->dir, 2, 1, 1);
+    UV_WRITE_CLOSED_SEGMENT(2, 1, 1);
 
     __load_all_trigger(f, RAFT_CORRUPT);
 
@@ -818,7 +818,7 @@ TEST_CASE(load_all, error, open_no_access, NULL)
 
     (void)params;
 
-    test_io_uv_write_open_segment_file(f->dir, 1, 1, 1);
+    UV_WRITE_OPEN_SEGMENT(1, 1, 1);
 
     test_dir_unreadable_file(f->dir, "open-1");
 
@@ -839,7 +839,7 @@ TEST_CASE(load_all, error, open_zero_format, NULL)
 
     byte__put64(&cursor, 0); /* Format version */
 
-    test_io_uv_write_open_segment_file(f->dir, 1, 1, 1);
+    UV_WRITE_OPEN_SEGMENT(1, 1, 1);
 
     test_dir_overwrite_file(f->dir, "open-1", buf, sizeof buf, 0);
 
@@ -859,7 +859,7 @@ TEST_CASE(load_all, error, open_bad_format, NULL)
 
     byte__put64(&cursor, 2); /* Format version */
 
-    test_io_uv_write_open_segment_file(f->dir, 1, 1, 1);
+    UV_WRITE_OPEN_SEGMENT(1, 1, 1);
 
     test_dir_overwrite_file(f->dir, "open-1", buf, sizeof buf, 0);
 

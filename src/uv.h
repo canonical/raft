@@ -14,6 +14,13 @@
 /* 8 Megabytes */
 #define UV__MAX_SEGMENT_SIZE (8 * 1024 * 1024)
 
+/* Template string for closed segment filenames: start index (inclusive), end
+ * index (inclusive). */
+#define UV__CLOSED_TEMPLATE "%llu-%llu"
+
+/* Template string for open segment filenames: incrementing counter. */
+#define UV__OPEN_TEMPLATE "open-%llu"
+
 /* State codes. */
 enum { UV__ACTIVE = 1, UV__CLOSED };
 
@@ -174,6 +181,11 @@ void uvSegmentBufferReset(struct uvSegmentBuffer *b, unsigned retain);
 int uvSegmentCreateFirstClosed(struct uv *uv,
                                const struct raft_configuration *configuration);
 
+/* Truncate a segment that was already closed. */
+int uvSegmentTruncate(struct uv *uv,
+                      struct uvSegmentInfo *segment,
+                      raft_index index);
+
 /* Info about a persisted snapshot stored in snapshot metadata file. */
 struct uvSnapshotInfo
 {
@@ -260,6 +272,28 @@ void uvAppendClose(struct uv *uv);
  *   then submit a request to finalize it. */
 int uvAppendForceFinalizingCurrentSegment(struct uv *uv);
 
+/* Submit a request to finalize the open segment with the given counter.
+ *
+ * Requests are processed one at a time, to avoid ending up closing open segment
+ * N + 1 before closing open segment N. */
+int uvFinalize(struct uv *uv,
+               unsigned long long counter,
+               size_t used,
+               raft_index first_index,
+               raft_index last_index);
+
+/* Implementation of raft_io->truncate. */
+int uvTruncate(struct raft_io *io, raft_index index);
+
+/* Cancel all pending truncate requests. */
+void uvTruncateClose(struct uv *uv);
+
+/* Callback invoked after a segment has been finalized. It will check if there
+ * are pending truncate requests waiting for open segments to be finalized, and
+ * possibly start executing the oldest one of them if no unfinalized open
+ * segment is left. */
+void uvTruncateMaybeProcessRequests(struct uv *uv);
+
 /**
  * Implementation of raft_io->send.
  */
@@ -284,42 +318,6 @@ int io_uv__listen(struct uv *uv);
  * requests being received.
  */
 void io_uv__servers_stop(struct uv *uv);
-
-/**
- * Implementation of raft_io->truncate.
- */
-int io_uv__truncate(struct raft_io *io, raft_index index);
-
-/**
- * Cancel all pending truncate requests.
- */
-void io_uv__truncate_stop(struct uv *uv);
-
-/**
- * Callback invoked after a segment has been finalized. It will check if there
- * are pending truncate requests waiting for open segments to be finalized, and
- * possibly start executing the oldest one of them if no unfinalized open
- * segment is left.
- */
-void io_uv__truncate_unblock(struct uv *uv);
-
-/**
- * Submit a request to finalize the open segment with the given counter.
- *
- * Requests are processed one at a time, to avoid ending up closing open segment
- * N + 1 before closing open segment N.
- */
-int io_uv__finalize(struct uv *uv,
-                    unsigned long long counter,
-                    size_t used,
-                    raft_index first_index,
-                    raft_index last_index);
-
-/**
- * Callback that the segment finalize sub-system must invoke when it has
- * completed its pending tasks and.
- */
-void io_uv__finalize_stop_cb(struct uv *uv);
 
 /**
  * Implementation raft_io->snapshot_put.

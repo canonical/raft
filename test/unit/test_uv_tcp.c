@@ -8,11 +8,13 @@
 
 #include "../../src/byte.h"
 
-TEST_MODULE(io_uv_tcp);
+TEST_MODULE(uv_tcp);
 
-/**
- * Helpers
- */
+/******************************************************************************
+ *
+ * Fixture
+ *
+ *****************************************************************************/
 
 #define FIXTURE                         \
     struct raft_heap heap;              \
@@ -42,9 +44,32 @@ TEST_MODULE(io_uv_tcp);
     test_tcp_tear_down(&f->tcp);                 \
     test_heap_tear_down(&f->heap);
 
-/**
- * transport->listen
- */
+/******************************************************************************
+ *
+ * Helper macros
+ *
+ *****************************************************************************/
+
+/* Connect to the listening socket of the transport, creating a new connection
+ * that is waiting to be accepted. */
+#define PEER_CONNECT test_tcp_connect(&f->tcp, 9000);
+
+/* Make the connected client send handshake data. If N is greater than zero,
+ * only N bytes will be sent (starting from the offset of the last call). */
+#define PEER_HANDSHAKE(N)                                          \
+    {                                                                      \
+        size_t n = sizeof f->handshake.buf;                                \
+        if (N > 0) {                                                       \
+            n = N;                                                         \
+        }                                                                  \
+        test_tcp_send(&f->tcp, f->handshake.buf + f->handshake.offset, n); \
+    }
+
+/******************************************************************************
+ *
+ * raft_uv_transport->listen
+ *
+ *****************************************************************************/
 
 TEST_SUITE(listen);
 
@@ -114,31 +139,16 @@ TEST_TEAR_DOWN(listen)
     TEAR_DOWN;
 }
 
-/* Connect to the listening socket of the transport, creating a new connection
- * that is waiting to be accepted. */
-#define listen__peer_connect test_tcp_connect(&f->tcp, 9000);
-
-/* Make the connected client send handshake data. If N is greater than zero,
- * only N bytes will be sent (starting from the offset of the last call). */
-#define listen__peer_handshake(N)                                          \
-    {                                                                      \
-        size_t n = sizeof f->handshake.buf;                                \
-        if (N > 0) {                                                       \
-            n = N;                                                         \
-        }                                                                  \
-        test_tcp_send(&f->tcp, f->handshake.buf + f->handshake.offset, n); \
-    }
-
-/* After a listen__peer_connect() call, spin the event loop until the connected
+/* After a PEER_CONNECT() call, spin the event loop until the connected
  * callbloathack of the listening TCP handle gets called. */
-#define listen__wait_connected_cb LOOP_RUN(1);
+#define WAIT_CONNECTED_CB LOOP_RUN(1);
 
-/* After a listen__peer_handshake() call, spin the event loop until the read
+/* After a PEER_HANDSHAKE() call, spin the event loop until the read
  * callback gets called. */
 #define listen__wait_read_cb LOOP_RUN(1);
 
 /* Spin the event loop until the accept callback gets eventually invoked. */
-#define listen__wait_cb                           \
+#define WAIT_ACCEPTED_CB                           \
     LOOP_RUN_UNTIL(listen__accept_cb_invoked, f); \
     f->invoked = 0;
 
@@ -149,10 +159,10 @@ TEST_CASE(listen, success, NULL)
 
     (void)params;
 
-    listen__peer_connect;
-    listen__peer_handshake(0);
+    PEER_CONNECT;
+    PEER_HANDSHAKE(0);
 
-    listen__wait_cb;
+    WAIT_ACCEPTED_CB;
 
     munit_assert_int(f->id, ==, 2);
     munit_assert_string_equal(f->address, "127.0.0.1:666");
@@ -172,10 +182,10 @@ TEST_CASE(listen, error, bad_protocol, NULL)
 
     memset(f->handshake.buf, 999, sizeof(uint64_t));
 
-    listen__peer_connect;
-    listen__peer_handshake(0);
+    PEER_CONNECT;
+    PEER_HANDSHAKE(0);
 
-    listen__wait_connected_cb;
+    WAIT_CONNECTED_CB;
     listen__wait_read_cb;
 
     return MUNIT_OK;
@@ -195,10 +205,10 @@ TEST_CASE(listen, error, abort, listen_error_abort_params)
     struct listen_fixture *f = data;
     const char *n_param = munit_parameters_get(params, "n");
 
-    listen__peer_connect;
-    listen__peer_handshake(atoi(n_param));
+    PEER_CONNECT;
+    PEER_HANDSHAKE(atoi(n_param));
 
-    listen__wait_connected_cb;
+    WAIT_CONNECTED_CB;
     listen__wait_read_cb;
 
     test_tcp_close(&f->tcp);
@@ -226,8 +236,8 @@ TEST_CASE(listen, error, oom, listen_error_oom_params)
 
     (void)params;
 
-    listen__peer_connect;
-    listen__peer_handshake(0);
+    PEER_CONNECT;
+    PEER_HANDSHAKE(0);
 
     test_heap_fault_enable(&f->heap);
 
@@ -247,7 +257,7 @@ TEST_CASE(listen, close, pending, NULL)
 
     (void)params;
 
-    listen__peer_connect;
+    PEER_CONNECT;
 
     return MUNIT_OK;
 }
@@ -260,8 +270,8 @@ TEST_CASE(listen, close, connected, NULL)
 
     (void)params;
 
-    listen__peer_connect;
-    listen__wait_connected_cb;
+    PEER_CONNECT;
+    WAIT_CONNECTED_CB;
 
     return MUNIT_OK;
 }
@@ -278,18 +288,20 @@ TEST_CASE(listen, close, handshake, listen_close_handshake_params)
     struct listen_fixture *f = data;
     const char *n_param = munit_parameters_get(params, "n");
 
-    listen__peer_connect;
-    listen__peer_handshake(atoi(n_param));
+    PEER_CONNECT;
+    PEER_HANDSHAKE(atoi(n_param));
 
-    listen__wait_connected_cb;
+    WAIT_CONNECTED_CB;
     listen__wait_read_cb;
 
     return MUNIT_OK;
 }
 
-/**
- * raft__io_uv_tcp_connect
- */
+/******************************************************************************
+ *
+ * raft_uv_transport->connect
+ *
+ *****************************************************************************/
 
 TEST_SUITE(connect);
 
@@ -343,7 +355,7 @@ static void connect__connect_cb(struct raft_uv_connect *req,
 #define connect__wait_connect_cb uv_run(&f->loop, UV_RUN_NOWAIT);
 #define connect__wait_read_cb uv_run(&f->loop, UV_RUN_NOWAIT);
 
-#define connect__wait_cb(STATUS)                 \
+#define WAIT_CONNECT_CB(STATUS)                 \
     {                                            \
         int i;                                   \
         for (i = 0; i < 2; i++) {                \
@@ -369,7 +381,7 @@ TEST_CASE(connect, success, NULL)
     (void)params;
 
     connect__invoke(0);
-    connect__wait_cb(0);
+    WAIT_CONNECT_CB(0);
 
     munit_assert_ptr_not_null(f->stream);
     uv_close((struct uv_handle_s *)f->stream, (uv_close_cb)raft_free);
@@ -387,7 +399,7 @@ TEST_CASE(connect, close, immediately, NULL)
 
     connect__invoke(0);
     connect__close;
-    connect__wait_cb(RAFT_CANCELED);
+    WAIT_CONNECT_CB(RAFT_CANCELED);
 
     return MUNIT_OK;
 }
@@ -402,7 +414,7 @@ TEST_CASE(connect, close, handshake, NULL)
     connect__invoke(0);
     connect__wait_connect_cb;
     connect__close;
-    connect__wait_cb(RAFT_CANCELED);
+    WAIT_CONNECT_CB(RAFT_CANCELED);
 
     return MUNIT_OK;
 }
@@ -417,7 +429,7 @@ TEST_CASE(connect, error, refused, NULL)
     connect__peer_shutdown(f);
 
     connect__invoke(0);
-    connect__wait_cb(RAFT_CANTCONNECT);
+    WAIT_CONNECT_CB(RAFT_CANTCONNECT);
 
     return MUNIT_OK;
 }
@@ -465,7 +477,7 @@ TEST_CASE(connect, error, oom_async, connect_error_oom_async_params)
 
     test_heap_fault_enable(&f->heap);
 
-    connect__wait_cb(RAFT_NOMEM);
+    WAIT_CONNECT_CB(RAFT_NOMEM);
 
     return MUNIT_OK;
 }

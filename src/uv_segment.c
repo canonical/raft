@@ -9,13 +9,7 @@
 #include "configuration.h"
 #include "uv.h"
 #include "uv_encoding.h"
-
-/* Template string for closed segment filenames: start index (inclusive), end
- * index (inclusive). */
-#define CLOSED_TEMPLATE "%llu-%llu"
-
-/* Template string for open segment filenames: incrementing counter. */
-#define OPEN_TEMPLATE "open-%llu"
+#include "entry.h"
 
 /* Check if the given filename matches the one of a closed segment (xxx-yyy), or
  * of an open segment (open-xxx), and fill the given info structure if so.
@@ -31,14 +25,15 @@ static bool infoMatch(const char *filename, struct uvSegmentInfo *info)
         return false;
     }
 
-    matched = sscanf(filename, CLOSED_TEMPLATE "%n", &info->first_index,
+    matched = sscanf(filename, UV__CLOSED_TEMPLATE "%n", &info->first_index,
                      &info->end_index, &consumed);
     if (matched == 2 && consumed == filename_len) {
         info->is_open = false;
         goto match;
     }
 
-    matched = sscanf(filename, OPEN_TEMPLATE "%n", &info->counter, &consumed);
+    matched =
+        sscanf(filename, UV__OPEN_TEMPLATE "%n", &info->counter, &consumed);
     if (matched == 1 && consumed == filename_len) {
         info->is_open = true;
         goto match;
@@ -516,7 +511,7 @@ done:
         /* At least one entry was loaded */
         assert(end_index >= first_index);
 
-        sprintf(filename, CLOSED_TEMPLATE, first_index, end_index);
+        sprintf(filename, UV__CLOSED_TEMPLATE, first_index, end_index);
         rv = osRename(uv->dir, info->filename, filename);
         if (rv != 0) {
             uvErrorf(uv, "rename %s: %s", info->filename, osStrError(rv));
@@ -903,7 +898,7 @@ int uvSegmentCreateFirstClosed(struct uv *uv,
     int rv;
 
     /* Render the path */
-    sprintf(filename, CLOSED_TEMPLATE, (raft_index)1, (raft_index)1);
+    sprintf(filename, UV__CLOSED_TEMPLATE, (raft_index)1, (raft_index)1);
 
     /* Encode the given configuration. */
     rv = configuration__encode(configuration, &buf);
@@ -942,5 +937,80 @@ err_after_configuration_encode:
     raft_free(buf.base);
 err:
     assert(rv != 0);
+    return rv;
+}
+
+int uvSegmentTruncate(struct uv *uv,
+                      struct uvSegmentInfo *segment,
+                      raft_index index)
+{
+    osFilename filename;
+    struct raft_entry *entries;
+    struct uvSegmentBuffer buf;
+    size_t n;
+    size_t m;
+    int fd;
+    int rv;
+
+    assert(!segment->is_open);
+
+    uvInfof(uv, "truncate %u-%u at %u", segment->first_index,
+            segment->end_index, index);
+
+    rv = uvSegmentLoadClosed(uv, segment, &entries, &n);
+    if (rv != 0) {
+        goto out;
+    }
+
+    /* Discard all entries after the truncate index (included) */
+    assert(index - segment->first_index < n);
+    m = index - segment->first_index;
+
+    /* Render the path.
+     *
+     * TODO: we should use a temporary file name so in case of crash we don't
+     *      consider this segment as corrupted.
+     */
+    sprintf(filename, UV__CLOSED_TEMPLATE, segment->first_index, index - 1);
+
+    /* Open the file. */
+    rv = osOpen(uv->dir, filename, O_WRONLY | O_CREAT | O_EXCL, &fd);
+    if (rv != 0) {
+        goto out_after_load;
+    }
+
+    uvSegmentBufferInit(&buf, uv->block_size);
+
+    rv = uvSegmentBufferFormat(&buf);
+    if (rv != 0) {
+        goto out_after_buffer_init;
+    }
+
+    uvSegmentBufferAppend(&buf, entries, m);
+    if (rv != 0) {
+        goto out_after_buffer_init;
+    }
+
+    rv = osWriteN(fd, buf.arena.base, buf.n);
+    if (rv != 0) {
+        uvErrorf(uv, "write %s: %s", filename, osStrError(errno));
+        rv = RAFT_IOERR;
+        goto out_after_open;
+    }
+
+    rv = fsync(fd);
+    if (rv == -1) {
+        uvErrorf(uv, "fsync %s: %s", filename, strerror(errno));
+        rv = RAFT_IOERR;
+        goto out_after_open;
+    }
+
+out_after_buffer_init:
+    uvSegmentBufferClose(&buf);
+out_after_open:
+    close(fd);
+out_after_load:
+    entry_batches__destroy(entries, n);
+out:
     return rv;
 }

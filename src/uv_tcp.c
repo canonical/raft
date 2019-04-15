@@ -6,7 +6,7 @@
 #include "assert.h"
 #include "byte.h"
 #include "io_uv_ip.h"
-#include "io_uv_tcp.h"
+#include "uv_tcp.h"
 
 /* Implementation of raft_io_uv_transport->init. */
 static int tcp_init(struct raft_uv_transport *transport,
