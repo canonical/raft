@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
+#include <sys/uio.h>
 #include <sys/vfs.h>
 #include <unistd.h>
 
@@ -258,6 +259,46 @@ bool osIsAtEof(const int fd)
     size = lseek(fd, 0, SEEK_END);   /* Get file size */
     lseek(fd, offset, SEEK_SET);     /* Restore current offset */
     return offset == size;           /* Compare current offset and size */
+}
+
+int osCreateFile(const osDir dir,
+                 const osFilename filename,
+                 struct raft_buffer *bufs,
+                 unsigned n_bufs)
+{
+    int flags = O_WRONLY | O_CREAT | O_EXCL;
+    int fd;
+    int rv;
+    size_t size;
+    unsigned i;
+    size = 0;
+    for (i = 0; i < n_bufs; i++) {
+        size += bufs[i].len;
+    }
+    rv = osOpen(dir, filename, flags, &fd);
+    if (rv != 0) {
+        return RAFT_IOERR;
+    }
+    rv = writev(fd, (const struct iovec *)bufs, n_bufs);
+    if (rv != (int)(size)) {
+        rv = errno;
+        goto err_after_file_open;
+    }
+    rv = fsync(fd);
+    if (rv == -1) {
+        goto err_after_file_open;
+    }
+    rv = close(fd);
+    if (rv == -1) {
+        rv = errno;
+        goto err;
+    }
+    return 0;
+
+err_after_file_open:
+    close(fd);
+err:
+    return rv;
 }
 
 #if defined(RWF_NOWAIT)

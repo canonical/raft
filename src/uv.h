@@ -35,6 +35,9 @@ struct uvMetadata
     unsigned voted_for;         /* Server ID of last vote, or 0 */
 };
 
+struct uvClient;
+struct uvServer;
+
 struct uv
 {
     struct raft_io *io;                  /* I/O object we're implementing */
@@ -46,9 +49,9 @@ struct uv
     bool errored;                        /* If a disk I/O error was hit */
     size_t block_size;                   /* Block size of the data dir */
     unsigned n_blocks;                   /* N. of blocks in a segment */
-    struct uv__client **clients;         /* Outgoing connections */
+    struct uvClient **clients;           /* Outgoing connections */
     unsigned n_clients;                  /* Length of the clients array */
-    struct uv__server **servers;         /* Incoming connections */
+    struct uvServer **servers;           /* Incoming connections */
     unsigned n_servers;                  /* Length of the servers array */
     unsigned connect_retry_delay;        /* Client connection retry delay */
     struct uvFile *prepare_file;         /* File segment being prepared */
@@ -222,9 +225,6 @@ int uvList(struct uv *uv,
            struct uvSegmentInfo *segments[],
            size_t *n_segments);
 
-struct uv__client;
-struct uv__server;
-
 /* Request to obtain a newly prepared open segment. */
 struct uvPrepare;
 typedef void (*uvPrepareCb)(struct uvPrepare *req,
@@ -295,48 +295,36 @@ void uvTruncateClose(struct uv *uv);
 void uvTruncateMaybeProcessRequests(struct uv *uv);
 
 /* Implementation of raft_io->send. */
-int io_uv__send(struct raft_io *io,
-                struct raft_io_send *req,
-                const struct raft_message *message,
-                raft_io_send_cb cb);
+int uvSend(struct raft_io *io,
+           struct raft_io_send *req,
+           const struct raft_message *message,
+           raft_io_send_cb cb);
 
-/**
- * Stop all clients by closing the outbound stream handles and canceling all
- * pending send requests.
- */
-void io_uv__clients_stop(struct uv *uv);
+/* Stop all clients by closing the outbound stream handles and canceling all
+ * pending send requests.  */
+void uvSendClose(struct uv *uv);
 
-/**
- * Start listening for new incoming connections.
- */
-int io_uv__listen(struct uv *uv);
+/* Start receiving messages from new incoming connections. */
+int uvRecv(struct uv *uv);
 
-/**
- * Stop all servers by closing the inbound stream handles and aborting all
- * requests being received.
- */
-void io_uv__servers_stop(struct uv *uv);
+/* Stop all servers by closing the inbound stream handles and aborting all
+ * requests being received.  */
+void uvRecvClose(struct uv *uv);
 
-/**
- * Implementation raft_io->snapshot_put.
- */
-int io_uv__snapshot_put(struct raft_io *io,
-                        struct raft_io_snapshot_put *req,
-                        const struct raft_snapshot *snapshot,
-                        raft_io_snapshot_put_cb cb);
+/* Implementation raft_io->snapshot_put.  */
+int uvSnapshotPut(struct raft_io *io,
+                  struct raft_io_snapshot_put *req,
+                  const struct raft_snapshot *snapshot,
+                  raft_io_snapshot_put_cb cb);
 
-/**
- * Callback invoked after truncation has completed, possibly unblocking pending
- * snapshot put requests.
- */
-void io_uv__snapshot_put_unblock(struct uv *uv);
+/* Implementation of raft_io->snapshot_get. */
+int uvSnapshotGet(struct raft_io *io,
+                  struct raft_io_snapshot_get *req,
+                  raft_io_snapshot_get_cb cb);
 
-/**
- * Implementation of raft_io->snapshot_get.
- */
-int io_uv__snapshot_get(struct raft_io *io,
-                        struct raft_io_snapshot_get *req,
-                        raft_io_snapshot_get_cb cb);
+/* Callback invoked after truncation has completed, possibly unblocking pending
+ * snapshot put requests. */
+void uvSnapshotMaybeProcessRequests(struct uv *uv);
 
 void uvMaybeClose(struct uv *uv);
 

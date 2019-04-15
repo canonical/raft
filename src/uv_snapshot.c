@@ -328,69 +328,11 @@ struct get
     queue queue;
 };
 
-static int write_file(struct raft_io *io,
-                      const char *dir,
-                      const char *filename,
-                      struct raft_buffer *bufs,
-                      unsigned n_bufs)
-{
-    int flags = O_WRONLY | O_CREAT | O_EXCL;
-    int fd;
-    int rv;
-    size_t size;
-    unsigned i;
-
-    size = 0;
-    for (i = 0; i < n_bufs; i++) {
-        size += bufs[i].len;
-    }
-
-    rv = osOpen(dir, filename, flags, &fd);
-    if (rv != 0) {
-        return RAFT_IOERR;
-    }
-
-    rv = writev(fd, (const struct iovec *)bufs, n_bufs);
-    if (rv != (int)(size)) {
-        errorf(io, "write %s: %s", filename, uv_strerror(-errno));
-        goto err_after_file_open;
-    }
-
-    rv = fsync(fd);
-    if (rv == -1) {
-        errorf(io, "fsync %s: %s", filename, uv_strerror(-errno));
-        goto err_after_file_open;
-    }
-
-    rv = close(fd);
-    if (rv == -1) {
-        errorf(io, "close %s: %s", filename, uv_strerror(-errno));
-        goto err;
-    }
-
-    return 0;
-
-err_after_file_open:
-    close(fd);
-err:
-    return RAFT_IOERR;
-}
-
-/* TODO: remove code duplication with io_uv_load.c */
-static void snapshot_data_filename(struct uvSnapshotInfo *meta,
-                                   osFilename filename)
-{
-    size_t len = strlen(meta->filename) - strlen(".meta");
-    strncpy(filename, meta->filename, len);
-    filename[len] = 0;
-}
-
 /* Remove all segmens and snapshots that are not needed anymore, but ignore
  * errors.
  *
  * TODO: remove code duplication with io_uv_load.c */
-static int remove_old_segments_and_snapshots(struct uv *uv,
-                                             raft_index last_index)
+static int removeOldSegmentsAndSnapshots(struct uv *uv, raft_index last_index)
 {
     struct uvSnapshotInfo *snapshots;
     struct uvSegmentInfo *segments;
@@ -411,11 +353,15 @@ static int remove_old_segments_and_snapshots(struct uv *uv,
             osFilename filename;
             rv = osUnlink(uv->dir, s->filename);
             if (rv != 0) {
+                uvErrorf(uv, "unlink %s: %s", s->filename, osStrError(rv));
+                rv = RAFT_IOERR;
                 goto out;
             }
-            snapshot_data_filename(s, filename);
+            filenameOf(s, filename);
             rv = osUnlink(uv->dir, filename);
             if (rv != 0) {
+                uvErrorf(uv, "unlink %s: %s", filename, osStrError(rv));
+                rv = RAFT_IOERR;
                 goto out;
             }
         }
@@ -424,14 +370,15 @@ static int remove_old_segments_and_snapshots(struct uv *uv,
     /* Remove all unused closed segments */
     for (i = 0; i < n_segments; i++) {
         struct uvSegmentInfo *segment = &segments[i];
-
         if (segment->is_open) {
             continue;
         }
-
         if (segment->end_index < last_index) {
             rv = osUnlink(uv->dir, segment->filename);
             if (rv != 0) {
+                uvErrorf(uv, "unlink %s: %s", segment->filename,
+                         osStrError(rv));
+                rv = RAFT_IOERR;
                 goto out;
             }
         }
@@ -448,7 +395,7 @@ out:
     return rv;
 }
 
-static void put_work_cb(uv_work_t *work)
+static void putWorkCb(uv_work_t *work)
 {
     struct put *r = work->data;
     struct uv *uv = r->uv;
@@ -458,17 +405,25 @@ static void put_work_cb(uv_work_t *work)
     sprintf(filename, META_TEMPLATE, r->snapshot->term, r->snapshot->index,
             r->meta.timestamp);
 
-    rv = write_file(uv->io, uv->dir, filename, r->meta.bufs, 2);
+    rv = osCreateFile(uv->dir, filename, r->meta.bufs, 2);
     if (rv != 0) {
-        r->status = rv;
+        uvErrorf(uv, "write %s: %s", filename, osStrError(rv));
+        r->status = RAFT_IOERR;
         return;
     }
 
     sprintf(filename, TEMPLATE, r->snapshot->term, r->snapshot->index,
             r->meta.timestamp);
 
-    rv = write_file(uv->io, uv->dir, filename, r->snapshot->bufs,
-                    r->snapshot->n_bufs);
+    rv =
+        osCreateFile(uv->dir, filename, r->snapshot->bufs, r->snapshot->n_bufs);
+    if (rv != 0) {
+        uvErrorf(uv, "write %s: %s", filename, osStrError(rv));
+        r->status = RAFT_IOERR;
+        return;
+    }
+
+    rv = removeOldSegmentsAndSnapshots(uv, r->snapshot->index);
     if (rv != 0) {
         r->status = rv;
         return;
@@ -476,13 +431,9 @@ static void put_work_cb(uv_work_t *work)
 
     rv = osSyncDir(uv->dir);
     if (rv != 0) {
-        r->status = rv;
+        uvErrorf(uv, "sync %s: %s", uv->dir, osStrError(rv));
+        r->status = RAFT_IOERR;
         return;
-    }
-
-    rv = remove_old_segments_and_snapshots(uv, r->snapshot->index);
-    if (rv != 0) {
-        r->status = rv;
     }
 
     r->status = 0;
@@ -490,7 +441,7 @@ static void put_work_cb(uv_work_t *work)
     return;
 }
 
-static void put_after_work_cb(uv_work_t *work, int status)
+static void putAfterWorkCb(uv_work_t *work, int status)
 {
     struct put *r = work->data;
     struct uv *uv = r->uv;
@@ -508,16 +459,11 @@ static void put_after_work_cb(uv_work_t *work, int status)
 }
 
 /* Process pending put requests. */
-static void process_put_requests(struct uv *uv)
+static void processPutRequests(struct uv *uv)
 {
     struct put *r;
     queue *head;
     int rv;
-
-    /* If there aren't pending snapshot put requests, there's nothing to do. */
-    if (QUEUE_IS_EMPTY(&uv->snapshot_put_reqs)) {
-        return;
-    }
 
     /* If we're already writing a snapshot, let's wait. */
     if (uv->snapshot_put_work.data != NULL) {
@@ -526,8 +472,7 @@ static void process_put_requests(struct uv *uv)
 
     /* If there's a pending truncate request, let's wait. Typically the truncate
      * request is initiated by the InstallSnapshot RPC handler. */
-    if (uv->truncate_work.data != NULL ||
-        !QUEUE_IS_EMPTY(&uv->truncate_reqs)) {
+    if (uv->truncate_work.data != NULL || !QUEUE_IS_EMPTY(&uv->truncate_reqs)) {
         return;
     }
 
@@ -536,19 +481,19 @@ static void process_put_requests(struct uv *uv)
     r = QUEUE_DATA(head, struct put, queue);
 
     uv->snapshot_put_work.data = r;
-    rv = uv_queue_work(uv->loop, &uv->snapshot_put_work, put_work_cb,
-                       put_after_work_cb);
+    rv = uv_queue_work(uv->loop, &uv->snapshot_put_work, putWorkCb,
+                       putAfterWorkCb);
     if (rv != 0) {
-        errorf(uv->io, "store snapshot %lld: %s", r->snapshot->index,
-               uv_strerror(rv));
+        uvErrorf(uv, "store snapshot %lld: %s", r->snapshot->index,
+                 uv_strerror(rv));
         uv->errored = true;
     }
 }
 
-int io_uv__snapshot_put(struct raft_io *io,
-                        struct raft_io_snapshot_put *req,
-                        const struct raft_snapshot *snapshot,
-                        raft_io_snapshot_put_cb cb)
+int uvSnapshotPut(struct raft_io *io,
+                  struct raft_io_snapshot_put *req,
+                  const struct raft_snapshot *snapshot,
+                  raft_io_snapshot_put_cb cb)
 {
     struct uv *uv;
     struct put *r;
@@ -592,7 +537,7 @@ int io_uv__snapshot_put(struct raft_io *io,
     byte__put64(&cursor, crc);
 
     QUEUE_PUSH(&uv->snapshot_put_reqs, &r->queue);
-    process_put_requests(uv);
+    processPutRequests(uv);
 
     return 0;
 
@@ -603,12 +548,16 @@ err:
     return rv;
 }
 
-void io_uv__snapshot_put_unblock(struct uv *uv)
+void uvSnapshotMaybeProcessRequests(struct uv *uv)
 {
-    process_put_requests(uv);
+    /* If there aren't pending snapshot put requests, there's nothing to do. */
+    if (QUEUE_IS_EMPTY(&uv->snapshot_put_reqs)) {
+        return;
+    }
+    processPutRequests(uv);
 }
 
-static void get_work_cb(uv_work_t *work)
+static void getWorkCb(uv_work_t *work)
 {
     struct get *r = work->data;
     struct uv *uv = r->uv;
@@ -618,12 +567,13 @@ static void get_work_cb(uv_work_t *work)
     size_t n_segments;
     int rv;
 
+    r->status = 0;
+
     rv = uvList(uv, &snapshots, &n_snapshots, &segments, &n_segments);
     if (rv != 0) {
         r->status = rv;
         goto out;
     }
-
     if (snapshots != NULL) {
         rv = uvSnapshotLoad(uv, &snapshots[n_snapshots - 1], r->snapshot);
         if (rv != 0) {
@@ -631,34 +581,27 @@ static void get_work_cb(uv_work_t *work)
         }
         raft_free(snapshots);
     }
-
     if (segments != NULL) {
         raft_free(segments);
     }
-
-    r->status = 0;
-
 out:
     return;
 }
 
-static void get_after_work_cb(uv_work_t *work, int status)
+static void getAfterWorkCb(uv_work_t *work, int status)
 {
     struct get *r = work->data;
     struct uv *uv = r->uv;
     assert(status == 0);
-
     QUEUE_REMOVE(&r->queue);
-
     r->req->cb(r->req, r->snapshot, r->status);
     raft_free(r);
-
     uvMaybeClose(uv);
 }
 
-int io_uv__snapshot_get(struct raft_io *io,
-                        struct raft_io_snapshot_get *req,
-                        raft_io_snapshot_get_cb cb)
+int uvSnapshotGet(struct raft_io *io,
+                  struct raft_io_snapshot_get *req,
+                  raft_io_snapshot_get_cb cb)
 {
     struct uv *uv;
     struct get *r;
@@ -683,9 +626,9 @@ int io_uv__snapshot_get(struct raft_io *io,
     r->work.data = r;
 
     QUEUE_PUSH(&uv->snapshot_get_reqs, &r->queue);
-    rv = uv_queue_work(uv->loop, &r->work, get_work_cb, get_after_work_cb);
+    rv = uv_queue_work(uv->loop, &r->work, getWorkCb, getAfterWorkCb);
     if (rv != 0) {
-        errorf(uv->io, "get last snapshot: %s", uv_strerror(rv));
+        uvErrorf(uv, "get last snapshot: %s", uv_strerror(rv));
         rv = RAFT_IOERR;
         goto err_after_snapshot_alloc;
     }

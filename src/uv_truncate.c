@@ -125,7 +125,7 @@ static void afterWorkCb(uv_work_t *work, int status)
     raft_free(r);
 
     uvAppendMaybeProcessRequests(uv);
-    io_uv__snapshot_put_unblock(uv);
+    uvSnapshotMaybeProcessRequests(uv);
     uvMaybeClose(uv);
 }
 

@@ -3,10 +3,12 @@
 #ifndef OS_H_
 #define OS_H_
 
+#include <dirent.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <sys/stat.h>
-#include <dirent.h>
+
+#include "../include/raft.h"
 
 /* Maximum length of a file path. */
 #define OS_MAX_PATH_LEN 1024
@@ -76,6 +78,12 @@ int osWriteN(int fd, void *buf, size_t n);
 
 /* Check if the given file descriptor has reached the end of the file. */
 bool osIsAtEof(int fd);
+
+/* Create a file with the given content. */
+int osCreateFile(const osDir dir,
+                 const osFilename filename,
+                 struct raft_buffer *bufs,
+                 unsigned n_bufs);
 
 /* Get the logical block size of the file system rooted at @dir. */
 int osBlockSize(const osDir dir, size_t *size);

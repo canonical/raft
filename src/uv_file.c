@@ -372,6 +372,7 @@ int uvFileInit(struct uvFile *f, struct uv_loop_s *loop)
     f->events = NULL;
     f->n_events = 0;
     QUEUE_INIT(&f->write_queue);
+    f->closing = false;
     f->close_cb = NULL;
 
     return 0;

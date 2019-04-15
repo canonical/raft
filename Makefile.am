@@ -63,8 +63,6 @@ libraft_la_SOURCES = \
   src/tick.c
 if UV
   libraft_la_SOURCES += \
-  src/io_uv_client.c \
-  src/io_uv_server.c \
   src/os.c \
   src/uv.c \
   src/uv_append.c \
@@ -75,7 +73,9 @@ if UV
   src/uv_list.c \
   src/uv_metadata.c \
   src/uv_prepare.c \
+  src/uv_recv.c \
   src/uv_segment.c \
+  src/uv_send.c \
   src/uv_snapshot.c \
   src/uv_tcp.c \
   src/uv_tcp_connect.c \
@@ -139,17 +139,18 @@ unit_test_SOURCES += \
   test/unit/test_tick.c
 if UV
   unit_test_SOURCES += \
-  test/unit/test_io_uv_client.c \
-  test/unit/test_io_uv_load.c \
-  test/unit/test_io_uv_server.c \
-  test/unit/test_io_uv_snapshot.c \
   test/unit/test_os.c \
   test/unit/test_uv.c \
   test/unit/test_uv_append.c \
   test/unit/test_uv_file.c \
   test/unit/test_uv_finalize.c \
+  test/unit/test_uv_list.c \
+  test/unit/test_uv_load.c \
   test/unit/test_uv_metadata.c \
+  test/unit/test_uv_recv.c \
   test/unit/test_uv_prepare.c \
+  test/unit/test_uv_send.c \
+  test/unit/test_uv_snapshot.c \
   test/unit/test_uv_tcp_listen.c \
   test/unit/test_uv_tcp_connect.c \
   test/unit/test_uv_truncate.c

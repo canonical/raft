@@ -1,16 +1,229 @@
-#include "../lib/uv.h"
 #include "../lib/runner.h"
+#include "../lib/uv.h"
 
 #include "../../src/byte.h"
 #include "../../src/queue.h"
 #include "../../src/snapshot.h"
 #include "../../src/uv.h"
 
-TEST_MODULE(io_uv__snapshot);
+TEST_MODULE(uv_snapshot);
 
-/**
- * io_uv__snapshot_put
- */
+/******************************************************************************
+ *
+ * Helper macros
+ *
+ *****************************************************************************/
+
+#define LOAD(RV)                                            \
+    {                                                       \
+        int rv;                                             \
+        rv = uvSnapshotLoad(f->uv, &f->meta, &f->snapshot); \
+        munit_assert_int(rv, ==, RV);                       \
+    }
+
+#define WRITE_META                                                           \
+    test_io_uv_write_snapshot_meta_file(f->dir, f->meta.term, f->meta.index, \
+                                        f->meta.timestamp, 1, 1)
+
+#define WRITE_DATA                                                           \
+    test_io_uv_write_snapshot_data_file(f->dir, f->meta.term, f->meta.index, \
+                                        f->meta.timestamp, f->data,          \
+                                        sizeof f->data)
+
+/******************************************************************************
+ *
+ * uvSnapshotLoad
+ *
+ *****************************************************************************/
+
+TEST_SUITE(load);
+TEST_GROUP(load, success);
+TEST_GROUP(load, error);
+
+struct load__fixture
+{
+    FIXTURE_UV;
+    struct uvSnapshotInfo meta;
+    uint8_t data[8];
+    struct raft_snapshot snapshot;
+};
+
+TEST_SETUP(load)
+{
+    struct load__fixture *f = munit_malloc(sizeof *f);
+    SETUP_UV;
+    f->meta.term = 1;
+    f->meta.index = 5;
+    f->meta.timestamp = 123;
+    sprintf(f->meta.filename, "snapshot-%llu-%llu-%llu.meta", f->meta.term,
+            f->meta.index, f->meta.timestamp);
+    raft_configuration_init(&f->snapshot.configuration);
+    return f;
+}
+
+TEST_TEAR_DOWN(load)
+{
+    struct load__fixture *f = data;
+    raft_configuration_close(&f->snapshot.configuration);
+    if (f->snapshot.bufs != NULL) {
+        raft_free(f->snapshot.bufs[0].base);
+        raft_free(f->snapshot.bufs);
+    }
+    TEAR_DOWN_UV;
+}
+
+/* There are no snapshot metadata files */
+TEST_CASE(load, success, first, NULL)
+{
+    struct load__fixture *f = data;
+    (void)params;
+
+    *(uint64_t *)f->data = 123;
+
+    WRITE_META;
+    WRITE_DATA;
+    LOAD(0);
+
+    munit_assert_int(f->snapshot.term, ==, 1);
+    munit_assert_int(f->snapshot.index, ==, 5);
+    munit_assert_int(f->snapshot.configuration_index, ==, 1);
+    munit_assert_int(f->snapshot.configuration.n, ==, 1);
+    munit_assert_int(f->snapshot.configuration.servers[0].id, ==, 1);
+
+    munit_assert_string_equal(f->snapshot.configuration.servers[0].address,
+                              "1");
+
+    munit_assert_int(f->snapshot.n_bufs, ==, 1);
+    munit_assert_int(*(uint64_t *)f->snapshot.bufs[0].base, ==, 123);
+
+    return MUNIT_OK;
+}
+
+/* The snapshot metadata file is missing */
+TEST_CASE(load, error, no_metadata, NULL)
+{
+    struct load__fixture *f = data;
+
+    (void)params;
+
+    LOAD(RAFT_IOERR);
+
+    return MUNIT_OK;
+}
+
+/* The snapshot metadata file is shorter than the mandatory header size. */
+TEST_CASE(load, error, no_header, NULL)
+{
+    struct load__fixture *f = data;
+    uint8_t buf[16];
+
+    (void)params;
+
+    test_dir_write_file(f->dir, f->meta.filename, buf, sizeof buf);
+    LOAD(RAFT_IOERR);
+
+    return MUNIT_OK;
+}
+
+/* The snapshot metadata file has an unexpected format. */
+TEST_CASE(load, error, format, NULL)
+{
+    struct load__fixture *f = data;
+    uint64_t format = 666;
+
+    (void)params;
+
+    WRITE_META;
+
+    test_dir_overwrite_file(f->dir, f->meta.filename, &format, sizeof format,
+                            0);
+
+    LOAD(RAFT_MALFORMED);
+
+    return MUNIT_OK;
+}
+
+/* The snapshot metadata configuration size is too big. */
+TEST_CASE(load, error, configuration_too_big, NULL)
+{
+    struct load__fixture *f = data;
+    uint64_t size = byte__flip64(2 * 1024 * 1024);
+
+    (void)params;
+
+    WRITE_META;
+
+    test_dir_overwrite_file(f->dir, f->meta.filename, &size, sizeof size,
+                            sizeof(uint64_t) * 3);
+
+    LOAD(RAFT_CORRUPT);
+
+    return MUNIT_OK;
+}
+
+/* The snapshot metadata configuration size is zero. */
+TEST_CASE(load, error, no_configuration, NULL)
+{
+    struct load__fixture *f = data;
+    uint64_t size = 0;
+
+    (void)params;
+
+    WRITE_META;
+
+    test_dir_overwrite_file(f->dir, f->meta.filename, &size, sizeof size,
+                            sizeof(uint64_t) * 3);
+
+    LOAD(RAFT_CORRUPT);
+
+    return MUNIT_OK;
+}
+
+/* The snapshot data file is missing */
+TEST_CASE(load, error, no_data, NULL)
+{
+    struct load__fixture *f = data;
+
+    (void)params;
+
+    WRITE_META;
+    LOAD(RAFT_IOERR);
+
+    return MUNIT_OK;
+}
+
+static char *load_error_oom_heap_fault_delay[] = {"0", "1", "2",
+                                                  "3", "4", NULL};
+static char *load_error_oom_heap_fault_repeat[] = {"1", NULL};
+
+static MunitParameterEnum load_error_oom_params[] = {
+    {TEST_HEAP_FAULT_DELAY, load_error_oom_heap_fault_delay},
+    {TEST_HEAP_FAULT_REPEAT, load_error_oom_heap_fault_repeat},
+    {NULL, NULL},
+};
+
+/* Out of memory conditions. */
+TEST_CASE(load, error, oom, load_error_oom_params)
+{
+    struct load__fixture *f = data;
+
+    (void)params;
+
+    WRITE_META;
+    WRITE_DATA;
+
+    test_heap_fault_enable(&f->heap);
+
+    LOAD(RAFT_NOMEM);
+
+    return MUNIT_OK;
+}
+
+/******************************************************************************
+ *
+ * raft_io->snapshot_put
+ *
+ *****************************************************************************/
 
 TEST_SUITE(put);
 
@@ -96,7 +309,7 @@ static void append_cb(void *data, int status)
         munit_assert_int(rv, ==, 0);                                    \
                                                                         \
         for (i = 0; i < 5; i++) {                                       \
-            LOOP_RUN(1);                                   \
+            LOOP_RUN(1);                                                \
             if (f->appended) {                                          \
                 break;                                                  \
             }                                                           \
@@ -180,9 +393,11 @@ TEST_CASE(put, after_truncate, NULL)
     return MUNIT_OK;
 }
 
-/**
- * io_uv__snapshot_get
- */
+/******************************************************************************
+ *
+ * raft_io->snapshot_get
+ *
+ *****************************************************************************/
 
 TEST_SUITE(get);
 

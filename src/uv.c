@@ -94,7 +94,7 @@ static int uvStart(struct raft_io *io,
     assert(uv->state == UV__ACTIVE);
     uv->tick_cb = tick_cb;
     uv->recv_cb = recv_cb;
-    rv = io_uv__listen(uv);
+    rv = uvRecv(uv);
     if (rv != 0) {
         return rv;
     }
@@ -158,8 +158,8 @@ static int uvClose(struct raft_io *io, void (*cb)(struct raft_io *io))
     uv->closing = true;
     rv = uv_timer_stop(&uv->timer);
     assert(rv == 0);
-    io_uv__clients_stop(uv);
-    io_uv__servers_stop(uv);
+    uvSendClose(uv);
+    uvRecvClose(uv);
     uvPrepareClose(uv);
     uvAppendClose(uv);
     uvTruncateClose(uv);
@@ -448,9 +448,9 @@ int raft_uv_init(struct raft_io *io,
     io->set_vote = uvSetVote;
     io->append = uvAppend;
     io->truncate = uvTruncate;
-    io->send = io_uv__send;
-    io->snapshot_put = io_uv__snapshot_put;
-    io->snapshot_get = io_uv__snapshot_get;
+    io->send = uvSend;
+    io->snapshot_put = uvSnapshotPut;
+    io->snapshot_get = uvSnapshotGet;
     io->time = uvTime;
     io->random = uvRandom;
     io->emit = uvEmit;
