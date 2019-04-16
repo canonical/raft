@@ -649,6 +649,29 @@ bool raft_fixture_step_until_applied(struct raft_fixture *f,
     return raft_fixture_step_until(f, has_applied_index, &apply, max_msecs);
 }
 
+struct step_state
+{
+    unsigned i;
+    int state;
+};
+
+static bool has_become(struct raft_fixture *f, void *arg)
+{
+    struct step_state *target = (struct step_state *)arg;
+    struct raft *raft;
+    raft = raft_fixture_get(f, target->i);
+    return raft_state(raft) == target->state;
+}
+
+bool raft_fixture_step_until_state_is(struct raft_fixture *f,
+                                      unsigned i,
+                                      int state,
+                                      unsigned max_msecs)
+{
+    struct step_state target = {i, state};
+    return raft_fixture_step_until(f, has_become, &target, max_msecs);
+}
+
 void raft_fixture_disconnect(struct raft_fixture *f, unsigned i, unsigned j)
 {
     struct raft_io *io1 = &f->servers[i].io;
@@ -729,6 +752,13 @@ void raft_fixture_set_latency(struct raft_fixture *f,
 {
     struct raft_fixture_server *s = &f->servers[i];
     raft_io_stub_set_latency(&s->io, min, max);
+}
+
+void raft_fixture_set_disk_latency(struct raft_fixture *f,
+                                   unsigned i,
+                                   unsigned msecs) {
+    struct raft_fixture_server *s = &f->servers[i];
+    raft_io_stub_set_disk_latency(&s->io, msecs);
 }
 
 void raft_fixture_set_term(struct raft_fixture *f, unsigned i, raft_term term)

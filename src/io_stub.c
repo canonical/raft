@@ -51,6 +51,7 @@ struct append
     const struct raft_entry *entries;
     unsigned n;
     void *data;
+    unsigned start; /* Request timestamp. */
     void (*cb)(void *data, int status);
 };
 
@@ -140,6 +141,9 @@ struct io_stub
      * instantaneous. */
     unsigned min_latency;
     unsigned max_latency;
+
+    /* Fixed latency for disk I/p. The default is zero. */
+    unsigned disk_latency;
 
     int (*random)(int, int); /* Random integer generator */
 
@@ -401,7 +405,7 @@ snapshot:
         *snapshot = raft_malloc(sizeof **snapshot);
         assert(*snapshot != NULL);
         snapshot_copy(s->snapshot, *snapshot);
-	*start_index  = (*snapshot)->index + 1;
+        *start_index = (*snapshot)->index + 1;
     } else {
         *snapshot = NULL;
     }
@@ -517,6 +521,7 @@ static int io_stub__append(struct raft_io *io,
     r->n = n;
     r->data = data;
     r->cb = cb;
+    r->start = s->time;
 
     QUEUE_PUSH(&s->requests, &r->queue);
 
@@ -731,6 +736,7 @@ int raft_io_stub_init(struct raft_io *io)
 
     s->min_latency = 0;
     s->max_latency = 0;
+    s->disk_latency = 0;
 
     s->random = default_random;
 
@@ -859,6 +865,13 @@ void raft_io_stub_set_latency(struct raft_io *io, unsigned min, unsigned max)
     s->max_latency = max;
 }
 
+void raft_io_stub_set_disk_latency(struct raft_io *io, unsigned msecs)
+{
+    struct io_stub *s;
+    s = io->impl;
+    s->disk_latency = msecs;
+}
+
 void raft_io_stub_set_term(struct raft_io *io, raft_term term)
 {
     struct io_stub *s;
@@ -884,8 +897,7 @@ void raft_io_stub_set_entries(struct raft_io *io,
     s->n = n;
 }
 
-void raft_io_stub_add_entry(struct raft_io *io,
-                              struct raft_entry *entry)
+void raft_io_stub_add_entry(struct raft_io *io, struct raft_entry *entry)
 {
     struct io_stub *s;
     struct raft_entry *entries;
@@ -1058,21 +1070,23 @@ static void io_stub__flush_snapshot_get(struct io_stub *s,
     s->n_snapshot_get--;
 }
 
-bool raft_io_stub_flush(struct raft_io *io)
+static struct request *stubFlush(struct io_stub *s)
 {
-    struct io_stub *s;
     queue *head;
     struct request *r;
-
-    s = io->impl;
+    struct append *append;
 
     head = QUEUE_HEAD(&s->requests);
-    QUEUE_REMOVE(head);
     r = QUEUE_DATA(head, struct request, queue);
+    QUEUE_REMOVE(head);
 
     switch (r->type) {
         case APPEND:
-            io_stub__flush_append(s, (struct append *)r);
+            append = (struct append *)r;
+            if (s->time - append->start < s->disk_latency) {
+                return r;
+            }
+            io_stub__flush_append(s, append);
             break;
         case SEND:
             io_stub__flush_send(s, (struct send *)r);
@@ -1085,19 +1099,40 @@ bool raft_io_stub_flush(struct raft_io *io)
             break;
     }
 
+    return NULL;
+}
+
+bool raft_io_stub_flush(struct raft_io *io)
+{
+    struct io_stub *s;
+    s = io->impl;
+    stubFlush(s);
     return !QUEUE_IS_EMPTY(&s->requests);
 }
 
 void raft_io_stub_flush_all(struct raft_io *io)
 {
     struct io_stub *s;
+    struct request *r;
+    queue q;
     s = io->impl;
 
+    QUEUE_INIT(&q);
+
     while (!QUEUE_IS_EMPTY(&s->requests)) {
-        raft_io_stub_flush(io);
+        r = stubFlush(s);
+        if (r != NULL) {
+            QUEUE_PUSH(&q, &r->queue);
+        }
     };
 
-    assert(s->n_append == 0);
+    while (!QUEUE_IS_EMPTY(&q)) {
+        queue *head;
+        head = QUEUE_HEAD(&q);
+	QUEUE_REMOVE(head);
+        QUEUE_PUSH(&s->requests, head);
+    }
+
     assert(s->n_send == 0);
     assert(s->n_snapshot_put == 0);
     assert(s->n_snapshot_get == 0);

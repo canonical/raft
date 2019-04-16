@@ -42,6 +42,8 @@ void raft_io_stub_set_random(struct raft_io *io, int (*f)(int, int));
  */
 void raft_io_stub_set_latency(struct raft_io *io, unsigned min, unsigned max);
 
+void raft_io_stub_set_disk_latency(struct raft_io *io, unsigned msecs);
+
 /**
  * Set the initial term stored in this instance.
  */

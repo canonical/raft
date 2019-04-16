@@ -1,6 +1,5 @@
 #include "../lib/cluster.h"
 #include "../lib/runner.h"
-#include "../lib/snapshot.h"
 
 TEST_MODULE(start);
 
@@ -170,8 +169,9 @@ TEST_CASE(entries, two, NULL)
     CLUSTER_ELECT(0);
     CLUSTER_MAKE_PROGRESS;
 
+    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_N, 3, 3000);
+
     for (i = 0; i < CLUSTER_N; i++) {
-        CLUSTER_STEP_UNTIL_APPLIED(i, 3, 5000);
         fsm = CLUSTER_FSM(i);
         munit_assert_int(test_fsm_get_x(fsm), ==, 124);
     }

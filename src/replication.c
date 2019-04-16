@@ -367,7 +367,7 @@ static void raft_replication__leader_append_cb(void *data, int status)
     size_t server_index;
     int rv;
 
-    debugf(r->io, "completed write of %u entries starting at %lld: status %d",
+    debugf(r->io, "leader: written %u entries starting at %lld: status %d",
            request->n, request->index, status);
 
     update_last_stored(r, request->index, request->entries, request->n);

@@ -536,7 +536,7 @@ TEST_CASE(reject, not_granted, reject_not_granted_params)
     CLUSTER_DISCONNECT(0, 1);
 
     /* The fifth server eventually becomes candidate */
-    CLUSTER_ADVANCE(raft->randomized_election_timeout + 100);
+    CLUSTER_STEP_UNTIL_STATE_IS(4, RAFT_CANDIDATE, 10000);
     ASSERT_CANDIDATE(0);
     ASSERT_CANDIDATE(4);
 

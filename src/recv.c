@@ -1,6 +1,7 @@
 #include "recv.h"
 #include "assert.h"
 #include "convert.h"
+#include "entry.h"
 #include "log.h"
 #include "logging.h"
 #include "recv_append_entries.h"
@@ -33,6 +34,10 @@ static int recv(struct raft *r, struct raft_message *message)
             rv = recv__append_entries(r, message->server_id,
                                       message->server_address,
                                       &message->append_entries);
+            if (rv != 0) {
+                entry_batches__destroy(message->append_entries.entries,
+                                       message->append_entries.n_entries);
+            }
             break;
         case RAFT_IO_APPEND_ENTRIES_RESULT:
             rv = recv__append_entries_result(r, message->server_id,

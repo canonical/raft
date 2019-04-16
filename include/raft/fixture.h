@@ -207,6 +207,16 @@ bool raft_fixture_step_until_applied(struct raft_fixture *f,
                                      unsigned i,
                                      raft_index index,
                                      unsigned max_msecs);
+
+/**
+ * Step the cluster until the state of the @i'th server matches the given one,
+ * or @max_msecs have elapsed.
+ */
+bool raft_fixture_step_until_state_is(struct raft_fixture *f,
+                                      unsigned i,
+                                      int state,
+                                      unsigned max_msecs);
+
 /**
  * Return true if the servers with the given indexes are connected.
  */
@@ -251,6 +261,14 @@ void raft_fixture_set_latency(struct raft_fixture *f,
                               unsigned i,
                               unsigned min,
                               unsigned max);
+
+/**
+ * Set the disk I/O latency in milliseconds. Each append request will take this
+ * amount of milliseconds to complete. By default the disk latency is zero.
+ */
+void raft_fixture_set_disk_latency(struct raft_fixture *f,
+                                   unsigned i,
+                                   unsigned msecs);
 
 /**
  * Set the persisted term of the @i'th server.

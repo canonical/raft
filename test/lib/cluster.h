@@ -10,6 +10,7 @@
 #include "heap.h"
 #include "io.h"
 #include "munit.h"
+#include "snapshot.h"
 
 #define FIXTURE_CLUSTER                             \
     FIXTURE_HEAP;                                   \
@@ -77,6 +78,9 @@
 
 /* Get the state of the I'th server. */
 #define CLUSTER_STATE(I) raft_state(raft_fixture_get(&f->cluster, I))
+
+/* Get the current term of the I'th server. */
+#define CLUSTER_TERM(I) raft_fixture_get(&f->cluster, I)->current_term
 
 /* Get the struct fsm object of the I'th server. */
 #define CLUSTER_FSM(I) &f->fsms[I]
@@ -179,6 +183,16 @@
         munit_assert_true(done);                                               \
     }
 
+/* Step the cluster until the state of the server with the given index matches
+ * the given value, or #MAX_MSECS have elapsed. */
+#define CLUSTER_STEP_UNTIL_STATE_IS(I, STATE, MAX_MSECS)               \
+    {                                                                  \
+        bool done;                                                     \
+        done = raft_fixture_step_until_state_is(&f->cluster, I, STATE, \
+                                                MAX_MSECS);            \
+        munit_assert_true(done);                                       \
+    }
+
 /* Request to apply an FSM command to add the given value to x. */
 #define CLUSTER_APPLY_ADD_X(REQ, VALUE, CB)                   \
     {                                                         \
@@ -252,20 +266,22 @@
  *
  * - If no leader is present, wait for one to be elected.
  * - Submit a request to apply a new FSM command and wait for it to complete. */
-#define CLUSTER_MAKE_PROGRESS                                               \
-    {                                                                       \
-        struct raft_apply *req = munit_malloc(sizeof *req);                 \
-        if (!(CLUSTER_HAS_LEADER)) {                                        \
-            CLUSTER_STEP_UNTIL_HAS_LEADER(10000);                           \
-        }                                                                   \
-        CLUSTER_APPLY_ADD_X(req, 1, NULL);                                  \
-        CLUSTER_STEP_UNTIL_APPLIED(                                         \
-            CLUSTER_LEADER, CLUSTER_LAST_APPLIED(CLUSTER_LEADER) + 1, 500); \
-        free(req);                                                          \
+#define CLUSTER_MAKE_PROGRESS                                         \
+    {                                                                 \
+        struct raft_apply *req = munit_malloc(sizeof *req);           \
+        if (!(CLUSTER_HAS_LEADER)) {                                  \
+            CLUSTER_STEP_UNTIL_HAS_LEADER(10000);                     \
+        }                                                             \
+        CLUSTER_APPLY_ADD_X(req, 1, NULL);                            \
+        CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_LEADER, req->index, 1000); \
+        free(req);                                                    \
     }
 
 /* Elect the I'th server. */
 #define CLUSTER_ELECT(I) raft_fixture_elect(&f->cluster, I)
+
+/* Depose the current leader */
+#define CLUSTER_DEPOSE raft_fixture_depose(&f->cluster)
 
 /* Disconnect two servers. */
 #define CLUSTER_DISCONNECT(I, J) raft_fixture_disconnect(&f->cluster, I, J)
@@ -285,21 +301,25 @@
 #define CLUSTER_SET_LATENCY(I, MIN, MAX) \
     raft_fixture_set_latency(&f->cluster, I, MIN, MAX)
 
+/* Set the disk I/O latency of server I. */
+#define CLUSTER_SET_DISK_LATENCY(I, MSECS) \
+    raft_fixture_set_disk_latency(&f->cluster, I, MSECS)
+
 /* Set the term persisted on the I'th server. This must be called before
  * starting the cluster. */
 #define CLUSTER_SET_TERM(I, TERM) raft_fixture_set_term(&f->cluster, I, TERM)
 
 /* Set the snapshot persisted on the I'th server. This must be called before
  * starting the cluster. */
-#define CLUSTER_SET_SNAPSHOT(I, LAST_INDEX, LAST_TERM, CONF_INDEX, X, Y) \
-    {                                                                    \
-        struct raft_configuration configuration;                         \
-        struct raft_snapshot *snapshot;                                  \
-        CLUSTER_CONFIGURATION(&configuration);                           \
-        CREATE_SNAPSHOT(snapshot, LAST_INDEX, LAST_TERM, &configuration, \
-                        CONF_INDEX, X, Y);                               \
-        raft_configuration_close(&configuration);                        \
-        raft_fixture_set_snapshot(&f->cluster, I, snapshot);             \
+#define CLUSTER_SET_SNAPSHOT(I, LAST_INDEX, LAST_TERM, CONF_INDEX, X, Y)  \
+    {                                                                     \
+        struct raft_configuration configuration_;                         \
+        struct raft_snapshot *snapshot;                                   \
+        CLUSTER_CONFIGURATION(&configuration_);                           \
+        CREATE_SNAPSHOT(snapshot, LAST_INDEX, LAST_TERM, &configuration_, \
+                        CONF_INDEX, X, Y);                                \
+        raft_configuration_close(&configuration_);                        \
+        raft_fixture_set_snapshot(&f->cluster, I, snapshot);              \
     }
 
 /* Set the entries persisted on the I'th server. This must be called before
