@@ -85,7 +85,7 @@ int recv__append_entries(struct raft *r,
          * either rejected the request or stepped down to followers. */
         assert(match == 0);
         debugf(r->io, "discovered leader -> step down ");
-        convert__to_follower(r);
+        convertToFollower(r);
     }
 
     assert(r->state == RAFT_FOLLOWER);

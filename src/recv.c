@@ -71,7 +71,7 @@ void recv_cb(struct raft_io *io, struct raft_message *message)
     r = io->data;
     rv = recv(r, message);
     if (rv != 0) {
-        convert__to_unavailable(r);
+        convertToUnavailable(r);
     }
 }
 
@@ -137,7 +137,7 @@ int recv__ensure_matching_terms(struct raft *r, raft_term term, int *match)
         }
         if (r->state != RAFT_FOLLOWER) {
             /* Also convert to follower. */
-            convert__to_follower(r);
+            convertToFollower(r);
         }
         *match = 1;
     } else {

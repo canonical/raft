@@ -1,14 +1,11 @@
-/**
- * Convert from one state to another.
- */
+/* Convert from one state to another. */
 
-#ifndef RAFT_CONVERT_H_
-#define RAFT_CONVERT_H_
+#ifndef CONVERT_H_
+#define CONVERT_H_
 
 #include "../include/raft.h"
 
-/**
- * Convert from unavailable, or candidate or leader to follower.
+/* Convert from unavailable, or candidate or leader to follower.
  *
  * From Figure 3.1:
  *
@@ -16,21 +13,17 @@
  *   current leader or granting vote to candidate: convert to candidate.
  *
  * The above implies that we need to reset the election timer when converting to
- * follower.
- */
-void convert__to_follower(struct raft *r);
+ * follower. */
+void convertToFollower(struct raft *r);
 
-/**
- * Convert from follower to candidate, starting a new election.
+/* Convert from follower to candidate, starting a new election.
  *
  * From Figure 3.1:
  *
- *   On conversion to candidate, start election:
- */
-int convert__to_candidate(struct raft *r);
+ *   On conversion to candidate, start election */
+int convertToCandidate(struct raft *r);
 
-/**
- * Convert from candidate to leader.
+/* Convert from candidate to leader.
  *
  * From Figure 3.1:
  *
@@ -48,10 +41,9 @@ int convert__to_candidate(struct raft *r);
  *   The leader maintains a nextIndex for each follower, which is the index
  *   of the next log entry the leader will send to that follower. When a
  *   leader first comes to power, it initializes all nextIndex values to the
- *   index just after the last one in its log.
- */
-int convert__to_leader(struct raft *r);
+ *   index just after the last one in its log. */
+int convertToLeader(struct raft *r);
 
-void convert__to_unavailable(struct raft *r);
+void convertToUnavailable(struct raft *r);
 
-#endif /* RAFT_CONVERT_H_ */
+#endif /* CONVERT_H_ */

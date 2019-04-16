@@ -76,7 +76,7 @@ int recv__request_vote_result(struct raft *r,
     if (result->vote_granted) {
         if (electionTally(r, votes_index)) {
             infof(r->io, "votes quorum reached -> convert to leader");
-            rv = convert__to_leader(r);
+            rv = convertToLeader(r);
             if (rv != 0) {
                 return rv;
             }

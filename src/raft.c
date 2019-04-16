@@ -88,7 +88,7 @@ void raft_close(struct raft *r, void (*cb)(struct raft *r))
     assert(r != NULL);
     assert(r->close_cb == NULL);
     if (r->state != RAFT_UNAVAILABLE) {
-        convert__to_unavailable(r);
+        convertToUnavailable(r);
     }
     r->close_cb = cb;
     r->io->close(r->io, io_close_cb);

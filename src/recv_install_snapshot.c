@@ -46,7 +46,7 @@ int raft_rpc__recv_install_snapshot(struct raft *r,
     if (r->state == RAFT_CANDIDATE) {
         assert(match == 0);
         debugf(r->io, "discovered leader -> step down ");
-        convert__to_follower(r);
+        convertToFollower(r);
     }
 
     rv = recv__update_leader(r, id, address);

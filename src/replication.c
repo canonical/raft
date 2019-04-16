@@ -1189,7 +1189,7 @@ static void raft_replication__apply_configuration(struct raft *r,
      */
     if (r->state == RAFT_LEADER &&
         configuration__get(&r->configuration, r->id) == NULL) {
-        convert__to_follower(r);
+        convertToFollower(r);
     }
 }
 

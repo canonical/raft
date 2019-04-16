@@ -8,7 +8,7 @@
 
 /* Convenience for setting a new state value and asserting that the transition
  * is valid. */
-static void set_state(struct raft *r, int state)
+static void setState(struct raft *r, int state)
 {
     /* Check that the transition is legal, see Figure 3.3. Note that with
      * respect to the paper we have an additional "unavailable" state, which is
@@ -25,7 +25,7 @@ static void set_state(struct raft *r, int state)
 }
 
 /* Clear follower state. */
-static void clear_follower(struct raft *r)
+static void clearFollower(struct raft *r)
 {
     r->follower_state.current_leader.id = 0;
     if (r->follower_state.current_leader.address != NULL) {
@@ -35,7 +35,7 @@ static void clear_follower(struct raft *r)
 }
 
 /* Clear candidate state. */
-static void clear_candidate(struct raft *r)
+static void clearCandidate(struct raft *r)
 {
     if (r->candidate_state.votes != NULL) {
         raft_free(r->candidate_state.votes);
@@ -44,7 +44,7 @@ static void clear_candidate(struct raft *r)
 }
 
 /*Clear leader state. */
-static void clear_leader(struct raft *r)
+static void clearLeader(struct raft *r)
 {
     if (r->leader_state.progress != NULL) {
         raft_free(r->leader_state.progress);
@@ -86,21 +86,21 @@ static void clear(struct raft *r)
            r->state == RAFT_CANDIDATE || r->state == RAFT_LEADER);
     switch (r->state) {
         case RAFT_FOLLOWER:
-            clear_follower(r);
+            clearFollower(r);
             break;
         case RAFT_CANDIDATE:
-            clear_candidate(r);
+            clearCandidate(r);
             break;
         case RAFT_LEADER:
-            clear_leader(r);
+            clearLeader(r);
             break;
     }
 }
 
-void convert__to_follower(struct raft *r)
+void convertToFollower(struct raft *r)
 {
     clear(r);
-    set_state(r, RAFT_FOLLOWER);
+    setState(r, RAFT_FOLLOWER);
 
     /* Reset election timer. */
     electionResetTimer(r);
@@ -109,13 +109,13 @@ void convert__to_follower(struct raft *r)
     r->follower_state.current_leader.address = NULL;
 }
 
-int convert__to_candidate(struct raft *r)
+int convertToCandidate(struct raft *r)
 {
     size_t n_voting = configuration__n_voting(&r->configuration);
     int rv;
 
     clear(r);
-    set_state(r, RAFT_CANDIDATE);
+    setState(r, RAFT_CANDIDATE);
 
     /* Allocate the votes array. */
     r->candidate_state.votes = raft_malloc(n_voting * sizeof(bool));
@@ -133,12 +133,12 @@ int convert__to_candidate(struct raft *r)
     return 0;
 }
 
-int convert__to_leader(struct raft *r)
+int convertToLeader(struct raft *r)
 {
     int rv;
 
     clear(r);
-    set_state(r, RAFT_LEADER);
+    setState(r, RAFT_LEADER);
 
     /* Reset timers */
     r->leader_state.heartbeat_elapsed = 0;
@@ -162,8 +162,8 @@ int convert__to_leader(struct raft *r)
     return 0;
 }
 
-void convert__to_unavailable(struct raft *r)
+void convertToUnavailable(struct raft *r)
 {
     clear(r);
-    set_state(r, RAFT_UNAVAILABLE);
+    setState(r, RAFT_UNAVAILABLE);
 }

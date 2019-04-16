@@ -59,7 +59,7 @@ static int tickFollower(struct raft *r)
     if (r->election_elapsed > r->randomized_election_timeout &&
         server->voting) {
         infof(r->io, "convert to candidate and start new election");
-        rv = convert__to_candidate(r);
+        rv = convertToCandidate(r);
         if (rv != 0) {
             errorf(r->io, "convert to candidate: %s", raft_strerror(rv));
             return rv;
@@ -113,7 +113,7 @@ static int tickLeader(struct raft *r, const unsigned msecs_since_last_tick)
         if (!progress__check_quorum(r)) {
             warnf(r->io,
                   "tick: unable to contact majority of cluster -> step down");
-            convert__to_follower(r);
+            convertToFollower(r);
             return 0;
         }
         r->election_elapsed = 0;
@@ -221,6 +221,6 @@ void tick_cb(struct raft_io *io)
     r = io->data;
     rv = tick(r);
     if (rv != 0) {
-        convert__to_unavailable(r);
+        convertToUnavailable(r);
     }
 }

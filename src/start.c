@@ -89,11 +89,11 @@ static int maybe_self_elect(struct raft *r)
         return 0;
     }
     debugf(r->io, "self elect and convert to leader");
-    rc = convert__to_candidate(r);
+    rc = convertToCandidate(r);
     if (rc != 0) {
         return rc;
     }
-    rc = convert__to_leader(r);
+    rc = convertToLeader(r);
     if (rc != 0) {
         return rc;
     }
@@ -167,7 +167,7 @@ int raft_start(struct raft *r)
         return rc;
     }
 
-    convert__to_follower(r);
+    convertToFollower(r);
 
     /* If there's only one voting server, and that is us, it's safe to convert
      * to leader right away. If that is not us, we're either joining the cluster
