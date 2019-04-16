@@ -236,12 +236,9 @@ static unsigned lowest_raft_timeout(struct raft_fixture *f)
     return min_timeout;
 }
 
-/* Fire either a message delivery or a raft tick, depending on whose timer is
- * closest to expiration. */
-static void advance(struct raft_fixture *f, unsigned msecs)
+void raft_fixture_advance(struct raft_fixture *f, unsigned msecs)
 {
-    size_t i;
-
+    unsigned i;
     for (i = 0; i < f->n; i++) {
         struct raft_fixture_server *s = &f->servers[i];
         if (!s->alive) {
@@ -473,7 +470,7 @@ void raft_fixture_step(struct raft_fixture *f)
         timeout = raft_timeout;
     }
 
-    advance(f, timeout + 1);
+    raft_fixture_advance(f, timeout + 1);
 
     /* If the leader has not changed check the Leader Append-Only
      * guarantee. */

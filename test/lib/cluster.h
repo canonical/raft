@@ -75,20 +75,33 @@
  * will be voting. */
 #define CLUSTER_CONFIGURATION(CONF)                                     \
     {                                                                   \
-        int rc2;                                                        \
-        rc2 = raft_fixture_configuration(&f->cluster, CLUSTER_N, CONF); \
-        munit_assert_int(rc2, ==, 0);                                   \
+        int rv_;                                                        \
+        rv_ = raft_fixture_configuration(&f->cluster, CLUSTER_N, CONF); \
+        munit_assert_int(rv_, ==, 0);                                   \
     }
 
 /* Bootstrap all servers in the cluster. All servers will be voting. */
-#define CLUSTER_BOOTSTRAP                                         \
-    {                                                             \
-        int rc;                                                   \
-        struct raft_configuration configuration;                  \
-        CLUSTER_CONFIGURATION(&configuration);                    \
-        rc = raft_fixture_bootstrap(&f->cluster, &configuration); \
-        munit_assert_int(rc, ==, 0);                              \
-        raft_configuration_close(&configuration);                 \
+#define CLUSTER_BOOTSTRAP                                           \
+    {                                                               \
+        int rv__;                                                   \
+        struct raft_configuration configuration;                    \
+        CLUSTER_CONFIGURATION(&configuration);                      \
+        rv__ = raft_fixture_bootstrap(&f->cluster, &configuration); \
+        munit_assert_int(rv__, ==, 0);                              \
+        raft_configuration_close(&configuration);                   \
+    }
+
+/* Bootstrap all servers in the cluster. Only the first N servers will be
+ * voting. */
+#define CLUSTER_BOOTSTRAP_N_VOTING(N)                                     \
+    {                                                                     \
+        int rv_;                                                          \
+        struct raft_configuration configuration;                          \
+        rv_ = raft_fixture_configuration(&f->cluster, N, &configuration); \
+        munit_assert_int(rv_, ==, 0);                                     \
+        rv_ = raft_fixture_bootstrap(&f->cluster, &configuration);        \
+        munit_assert_int(rv_, ==, 0);                                     \
+        raft_configuration_close(&configuration);                         \
     }
 
 /* Start all servers in the test cluster. */

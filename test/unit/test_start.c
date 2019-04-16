@@ -185,20 +185,20 @@ TEST_CASE(entries, two, NULL)
 
 /******************************************************************************
  *
- * Start as single server cluster
+ * Cluster with single voting server.
  *
  *****************************************************************************/
 
-struct single_server_fixture
+struct single_voting_fixture
 {
     FIXTURE_CLUSTER;
 };
 
-TEST_SUITE(single_server);
+TEST_SUITE(single_voting);
 
-TEST_SETUP(single_server)
+TEST_SETUP(single_voting)
 {
-    struct single_server_fixture *f = munit_malloc(sizeof *f);
+    struct single_voting_fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
     SETUP_CLUSTER(1);
     CLUSTER_BOOTSTRAP;
@@ -206,17 +206,17 @@ TEST_SETUP(single_server)
     return f;
 }
 
-TEST_TEAR_DOWN(single_server)
+TEST_TEAR_DOWN(single_voting)
 {
-    struct single_server_fixture *f = data;
+    struct single_voting_fixture *f = data;
     TEAR_DOWN_CLUSTER;
     free(f);
 }
 
 /* The server immediately elects itself */
-TEST_CASE(single_server, self_elect, NULL)
+TEST_CASE(single_voting, self_elect, NULL)
 {
-    struct single_server_fixture *f = data;
+    struct single_voting_fixture *f = data;
     (void)params;
     munit_assert_int(CLUSTER_STATE(0), ==, RAFT_LEADER);
     CLUSTER_MAKE_PROGRESS;
@@ -225,53 +225,40 @@ TEST_CASE(single_server, self_elect, NULL)
 
 /******************************************************************************
  *
- * Cluster with single non voting server.
+ * Cluster with single voting server that is not us.
  *
  *****************************************************************************/
 
-struct single_non_voting_fixture
+struct single_voting_not_us_fixture
 {
     FIXTURE_CLUSTER;
 };
 
-TEST_SUITE(single_non_voting);
+TEST_SUITE(single_voting_not_us);
 
-TEST_SETUP(single_non_voting)
+TEST_SETUP(single_voting_not_us)
 {
-    struct single_non_voting_fixture *f = munit_malloc(sizeof *f);
-    struct raft_configuration configuration;
-    unsigned i;
-    int rv;
+    struct single_voting_not_us_fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
     SETUP_CLUSTER(2);
-    raft_configuration_init(&configuration);
-    rv = raft_configuration_add(&configuration, 1, "1", false);
-    munit_assert_int(rv, ==, 0);
-    rv = raft_configuration_add(&configuration, 2, "2", true);
-    munit_assert_int(rv, ==, 0);
-    for (i = 0; i < 2; i++) {
-        struct raft *raft = CLUSTER_RAFT(i);
-        rv = raft_bootstrap(raft, &configuration);
-        munit_assert_int(rv, ==, 0);
-    }
-    raft_configuration_close(&configuration);
+    CLUSTER_BOOTSTRAP_N_VOTING(1);
     CLUSTER_START;
     return f;
 }
 
-TEST_TEAR_DOWN(single_non_voting)
+TEST_TEAR_DOWN(single_voting_not_us)
 {
-    struct single_non_voting_fixture *f = data;
+    struct single_voting_not_us_fixture *f = data;
     TEAR_DOWN_CLUSTER;
     free(f);
 }
 
 /* The server immediately elects itself */
-TEST_CASE(single_non_voting, dont_self_elect, NULL)
+TEST_CASE(single_voting_not_us, dont_self_elect, NULL)
 {
-    struct single_non_voting_fixture *f = data;
+    struct single_voting_not_us_fixture *f = data;
     (void)params;
-    munit_assert_int(CLUSTER_STATE(0), ==, RAFT_FOLLOWER);
+    munit_assert_int(CLUSTER_STATE(1), ==, RAFT_FOLLOWER);
     CLUSTER_MAKE_PROGRESS;
     return MUNIT_OK;
 }

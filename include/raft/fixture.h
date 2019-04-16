@@ -281,4 +281,10 @@ void raft_fixture_io_fault(struct raft_fixture *f,
                            int delay,
                            int repeat);
 
+/**
+ * Advance the time of the cluster of @msecs milliseconds, possibly firing
+ * either message recv and/or tick callbacks.
+ */
+void raft_fixture_advance(struct raft_fixture *f, unsigned msecs);
+
 #endif /* RAFT_FIXTURE_H */
