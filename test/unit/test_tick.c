@@ -39,14 +39,6 @@ static void tear_down(void *data)
 
 /******************************************************************************
  *
- * Helper macros
- *
- *****************************************************************************/
-
-#define ADVANCE(MSECS) raft_fixture_advance(&f->cluster, MSECS);
-
-/******************************************************************************
- *
  * Assertions
  *
  *****************************************************************************/
@@ -60,51 +52,6 @@ static void tear_down(void *data)
 
 /* Assert the current state of the I'th raft instance.  */
 #define ASSERT_STATE(I, STATE) munit_assert_int(CLUSTER_STATE(I), ==, STATE);
-
-/**
- * Assert that a RequestVote RPC with the given parameters has been submitted.
- */
-#define __assert_request_vote(F, SERVER_ID, TERM, LAST_LOG_INDEX,   \
-                              LAST_LOG_TERM)                        \
-    {                                                               \
-        struct raft_message *message;                               \
-        struct raft_request_vote *args;                             \
-                                                                    \
-        munit_assert_int(raft_io_stub_n_sending(&F->io), ==, 1);    \
-                                                                    \
-        raft_io_stub_sending(&F->io, 0, &message);                  \
-        munit_assert_int(message->type, ==, RAFT_IO_REQUEST_VOTE);  \
-        munit_assert_int(message->server_id, ==, SERVER_ID);        \
-                                                                    \
-        args = &message->request_vote;                              \
-        munit_assert_int(args->term, ==, TERM);                     \
-        munit_assert_int(args->last_log_index, ==, LAST_LOG_INDEX); \
-        munit_assert_int(args->last_log_term, ==, LAST_LOG_TERM);   \
-    }
-
-/**
- * Assert that the test I/O implementation has received exactly one
- * AppendEntries RPC with the given parameters and no entries.
- */
-#define __assert_heartbeat(F, SERVER_ID, TERM, PREV_LOG_INDEX, PREV_LOG_TERM) \
-    {                                                                         \
-        struct raft_message *message;                                         \
-        struct raft_append_entries *args;                                     \
-                                                                              \
-        munit_assert_int(raft_io_stub_n_sending(&F->io), ==, 1);              \
-                                                                              \
-        raft_io_stub_sending(&F->io, 0, &message);                            \
-        munit_assert_int(message->type, ==, RAFT_IO_APPEND_ENTRIES);          \
-                                                                              \
-        args = &message->append_entries;                                      \
-                                                                              \
-        munit_assert_int(args->term, ==, TERM);                               \
-        munit_assert_int(args->prev_log_index, ==, PREV_LOG_INDEX);           \
-        munit_assert_int(args->prev_log_term, ==, PREV_LOG_TERM);             \
-                                                                              \
-        munit_assert_ptr_null(args->entries);                                 \
-        munit_assert_int(args->n_entries, ==, 0);                             \
-    }
 
 /******************************************************************************
  *
@@ -122,10 +69,10 @@ TEST_CASE(elapse, election_timer, NULL)
     struct fixture *f = data;
     (void)params;
 
-    ADVANCE(100);
+    CLUSTER_ADVANCE(100);
     ASSERT_ELECTION_TIMER(0, 100);
 
-    ADVANCE(100);
+    CLUSTER_ADVANCE(100);
     ASSERT_ELECTION_TIMER(0, 200);
 
     return MUNIT_OK;
@@ -143,7 +90,7 @@ TEST_CASE(elapse, candidate, NULL)
     /* Prevent the timer of the second server from expiring. */
     raft_set_election_timeout(CLUSTER_RAFT(1), 10000);
 
-    ADVANCE(raft->randomized_election_timeout + 100);
+    CLUSTER_ADVANCE(raft->randomized_election_timeout + 100);
 
     /* The term has been incremeted. */
     munit_assert_int(raft->current_term, ==, 2);
@@ -172,7 +119,7 @@ TEST_CASE(elapse, timer_not_expired, NULL)
     /* Prevent the timer of the second server from expiring. */
     raft_set_election_timeout(CLUSTER_RAFT(1), 10000);
 
-    ADVANCE(raft->randomized_election_timeout - 100);
+    CLUSTER_ADVANCE(raft->randomized_election_timeout - 100);
     ASSERT_STATE(0, RAFT_FOLLOWER);
 
     return MUNIT_OK;
@@ -195,7 +142,7 @@ TEST_CASE(elapse, not_voter, elapse_non_voter_params)
     /* Prevent the timer of the first server from expiring. */
     raft_set_election_timeout(CLUSTER_RAFT(0), 10000);
 
-    ADVANCE(raft->randomized_election_timeout + 100);
+    CLUSTER_ADVANCE(raft->randomized_election_timeout + 100);
     ASSERT_STATE(1, RAFT_FOLLOWER);
 
     return MUNIT_OK;
@@ -212,7 +159,7 @@ TEST_CASE(elapse, heartbeat, NULL)
     CLUSTER_ELECT(0);
 
     /* Expire the heartbeat timeout */
-    ADVANCE(raft->heartbeat_timeout + 100);
+    CLUSTER_ADVANCE(raft->heartbeat_timeout + 100);
 
     /* We have sent a heartbeat to our follower */
     //__assert_heartbeat(f, 2, 2, 1, 1);
@@ -230,12 +177,20 @@ TEST_CASE(elapse, no_heartbeat, NULL)
     CLUSTER_ELECT(0);
 
     /* Advance timer but not enough to expire the heartbeat timeout */
-    ADVANCE(raft->heartbeat_timeout - 100);
+    CLUSTER_ADVANCE(raft->heartbeat_timeout - 100);
 
     /* We have sent no heartbeats */
     // munit_assert_int(raft_io_stub_n_sending(&f->io), ==, 0);
 
     return MUNIT_OK;
+}
+
+static bool first_server_has_stepped_down(struct raft_fixture *cluster,
+                                          void *arg)
+{
+    struct fixture *f = arg;
+    (void)cluster;
+    return CLUSTER_STATE(0) == RAFT_FOLLOWER;
 }
 
 /* If we're leader election timeout elapses without hearing from a majority of
@@ -250,11 +205,9 @@ TEST_CASE(elapse, no_contact, NULL)
     CLUSTER_DISCONNECT(0, 1);
     CLUSTER_DISCONNECT(0, 2);
 
-    /* Advance timer past the election timeout */
-    ADVANCE(raft->election_timeout + 100);
-    ADVANCE(raft->election_timeout + 100);
-
-    /* We have stepped down. */
+    /* Wait for the leader to step down. */
+    raft_fixture_step_until(&f->cluster, first_server_has_stepped_down, f,
+                            raft->election_timeout * 2);
     ASSERT_STATE(0, RAFT_FOLLOWER);
 
     return MUNIT_OK;
@@ -274,12 +227,12 @@ TEST_CASE(elapse, new_election, NULL)
     CLUSTER_DISCONNECT(0, 2);
 
     /* Become candidate */
-    ADVANCE(raft->randomized_election_timeout + 100);
+    CLUSTER_ADVANCE(raft->randomized_election_timeout + 100);
 
     election_timeout = raft->randomized_election_timeout;
 
     /* Expire the election timeout */
-    ADVANCE(raft->randomized_election_timeout + 100);
+    CLUSTER_ADVANCE(raft->randomized_election_timeout + 100);
 
     /* The term has been incremeted and saved to stable store. */
     munit_assert_int(raft->current_term, ==, 3);
@@ -315,10 +268,10 @@ TEST_CASE(elapse, during_election, NULL)
     CLUSTER_DISCONNECT(0, 2);
 
     /* Become candidate */
-    ADVANCE(raft->randomized_election_timeout + 100);
+    CLUSTER_ADVANCE(raft->randomized_election_timeout + 100);
 
     /* Make some time elapse, but not enough to trigger the timeout */
-    ADVANCE(raft->randomized_election_timeout - 100);
+    CLUSTER_ADVANCE(raft->randomized_election_timeout - 100);
 
     /* We are still candidate */
     ASSERT_STATE(0, RAFT_CANDIDATE);
@@ -349,7 +302,7 @@ TEST_CASE(elapse,
     CLUSTER_DISCONNECT(0, 2);
 
     /* Become candidate */
-    ADVANCE(raft->randomized_election_timeout + 100);
+    CLUSTER_ADVANCE(raft->randomized_election_timeout + 100);
 
     /* We have sent vote requests only to the voting server */
     //__assert_request_vote(f, 2, 2, 1, 1);

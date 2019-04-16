@@ -273,6 +273,13 @@ void raft_fixture_set_entries(struct raft_fixture *f,
                               unsigned n);
 
 /**
+ * Add an entry to the persisted entries of the @i'th server.
+ */
+void raft_fixture_add_entry(struct raft_fixture *f,
+                            unsigned i,
+                            struct raft_entry *entry);
+
+/**
  * Inject an I/O failure that will be triggered on the @i'th server after @delay
  * I/O requests and occur @repeat times.
  */

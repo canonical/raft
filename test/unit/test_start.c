@@ -150,6 +150,7 @@ TEST_CASE(entries, two, NULL)
     struct entries_fixture *f = data;
     struct raft_entry *entries = raft_malloc(2 * sizeof *entries);
     struct raft_fsm *fsm;
+    unsigned i;
     int rv;
     (void)params;
 
@@ -169,16 +170,11 @@ TEST_CASE(entries, two, NULL)
     CLUSTER_ELECT(0);
     CLUSTER_MAKE_PROGRESS;
 
-    fsm = CLUSTER_FSM(0);
-    munit_assert_int(test_fsm_get_x(fsm), ==, 124);
-
-    CLUSTER_STEP_UNTIL_APPLIED(1, 3, 2000);
-    fsm = CLUSTER_FSM(1);
-    munit_assert_int(test_fsm_get_x(fsm), ==, 124);
-
-    CLUSTER_STEP_UNTIL_APPLIED(2, 3, 2000);
-    fsm = CLUSTER_FSM(2);
-    munit_assert_int(test_fsm_get_x(fsm), ==, 124);
+    for (i = 0; i < CLUSTER_N; i++) {
+        CLUSTER_STEP_UNTIL_APPLIED(i, 3, 5000);
+        fsm = CLUSTER_FSM(i);
+        munit_assert_int(test_fsm_get_x(fsm), ==, 124);
+    }
 
     return MUNIT_OK;
 }

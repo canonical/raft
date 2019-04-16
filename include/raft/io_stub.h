@@ -61,6 +61,11 @@ void raft_io_stub_set_entries(struct raft_io *io,
                               unsigned n);
 
 /**
+ * Add an entry to the initial entries stored in this instance.
+ */
+void raft_io_stub_add_entry(struct raft_io *io, struct raft_entry *entry);
+
+/**
  * Advance the stub time by the given number of milliseconds, and invoke the
  * tick callback accordingly. Also, update the timers of messages in the
  * transmit queue, and if any of them expires deliver it to the destination peer

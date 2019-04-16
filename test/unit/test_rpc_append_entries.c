@@ -157,26 +157,6 @@ TEST_TEAR_DOWN(request, tear_down);
 TEST_GROUP(request, success);
 TEST_GROUP(request, error);
 
-/* If the term in the request is stale, the server rejects it. */
-TEST_CASE(request, success, stale_term, NULL)
-{
-    struct fixture *f = data;
-
-    (void)params;
-
-    test_bootstrap_and_start(&f->raft, 2, 1, 2);
-
-    /* Become candidate, this will bump our term. */
-    test_become_candidate(&f->raft);
-
-    __recv_append_entries(f, 1, 2, 0, 0, NULL, 0, 1);
-
-    /* The request is unsuccessful */
-    __assert_append_entries_response(f, 2, 0, 1);
-
-    return MUNIT_OK;
-}
-
 /* Receive the same entry a second time, before the first has been persisted. */
 TEST_CASE(request, success, twice, NULL)
 {

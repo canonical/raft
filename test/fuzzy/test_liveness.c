@@ -78,7 +78,7 @@ static void *setup(const MunitParameter params[], void *user_data)
     int pairs;
     size_t i, j, k;
     (void)user_data;
-    SETUP_CLUSTER(CLUSTER_N_PARAM_GET);
+    SETUP_CLUSTER(CLUSTER_GET_N_PARAM);
     CLUSTER_BOOTSTRAP;
     CLUSTER_START;
 

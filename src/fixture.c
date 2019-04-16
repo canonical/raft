@@ -754,6 +754,13 @@ void raft_fixture_set_entries(struct raft_fixture *f,
     raft_io_stub_set_entries(&s->io, entries, n);
 }
 
+void raft_fixture_add_entry(struct raft_fixture *f,
+                            unsigned i,
+                            struct raft_entry *entry) {
+    struct raft_fixture_server *s = &f->servers[i];
+    raft_io_stub_add_entry(&s->io, entry);
+}
+
 void raft_fixture_io_fault(struct raft_fixture *f,
                            unsigned i,
                            int delay,

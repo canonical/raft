@@ -884,6 +884,19 @@ void raft_io_stub_set_entries(struct raft_io *io,
     s->n = n;
 }
 
+void raft_io_stub_add_entry(struct raft_io *io,
+                              struct raft_entry *entry)
+{
+    struct io_stub *s;
+    struct raft_entry *entries;
+    s = io->impl;
+    entries = raft_realloc(s->entries, (s->n + 1) * sizeof *entries);
+    assert(entries != NULL);
+    entries[s->n] = *entry;
+    s->entries = entries;
+    s->n++;
+}
+
 /**
  * Copy all entries in @src into @dst.
  */

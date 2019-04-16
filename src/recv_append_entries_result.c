@@ -61,6 +61,11 @@ int recv__append_entries_result(struct raft *r,
         return rv;
     }
 
+    /* We might not be leader anymore if we removed ouselves */
+    if (r->state != RAFT_LEADER) {
+        return 0;
+    }
+
     /* Commit entries if possible.
      *
      * TODO: trigger an heartbeat if the commit index was updated */

@@ -40,6 +40,9 @@ int progress__build_array(struct raft *r)
     }
     for (i = 0; i < r->configuration.n; i++) {
         init_progress(&p[i], last_index);
+        if (r->configuration.servers[i].id == r->id) {
+            p[i].match_index = r->last_stored;
+        }
     }
     r->leader_state.progress = p;
     return 0;
@@ -162,8 +165,8 @@ bool progress__maybe_decrement(struct raft *r,
 
     /* TODO: remove once we implement pipelining. See etcd/raft/progress.go */
     if (rejected <= p->match_index) {
-      tracef("match index is up to date -> ignore ");
-      return false;
+        tracef("match index is up to date -> ignore ");
+        return false;
     }
 
     /* The rejection must be stale or spurious (e.g. when the follower rejects

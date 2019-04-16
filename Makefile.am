@@ -133,7 +133,6 @@ unit_test_SOURCES += \
   test/unit/test_raft.c \
   test/unit/test_replication.c \
   test/unit/test_rpc_append_entries.c \
-  test/unit/test_rpc_request_vote.c \
   test/unit/test_snapshot.c \
   test/unit/test_start.c \
   test/unit/test_tick.c

@@ -98,15 +98,16 @@ TEST_TEAR_DOWN(success, tear_down);
 TEST_CASE(success, whole_segment, NULL)
 {
     struct fixture *f = data;
-    /* TODO: fix timeouts like
-     * https://travis-ci.org/CanonicalLtd/raft/jobs/503676478 */
-    return MUNIT_SKIP;
-
     (void)params;
 
     APPEND(3);
     TRUNCATE(1, 0);
-    LOOP_RUN(3);
+    LOOP_RUN(2);
+
+    if (test_dir_has_file(f->dir, "1-3")) {
+        /* Run one more iteration */
+        LOOP_RUN(1);
+    }
 
     munit_assert_false(test_dir_has_file(f->dir, "1-3"));
     munit_assert_false(test_dir_has_file(f->dir, "4-4"));
@@ -122,7 +123,12 @@ TEST_CASE(success, same_as_last_index, NULL)
 
     APPEND(3);
     TRUNCATE(3, 0);
-    LOOP_RUN(3);
+    LOOP_RUN(2);
+
+    if (test_dir_has_file(f->dir, "1-3")) {
+        /* Run one more iteration */
+        LOOP_RUN(1);
+    }
 
     munit_assert_false(test_dir_has_file(f->dir, "1-3"));
     munit_assert_false(test_dir_has_file(f->dir, "4-4"));

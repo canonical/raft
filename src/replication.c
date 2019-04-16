@@ -657,7 +657,15 @@ int replication__update(struct raft *r,
         }
     }
 
-    /* TODO: switch to pipeline replication mode. */
+    /* Check if we can commit some new entries. */
+    raft_replication__quorum(r, r->last_stored);
+
+    rv = raft_replication__apply(r);
+    if (rv != 0) {
+        /* TODO: just log the error? */
+    }
+
+    /* TODO: switch to pipeline replication */
 
     return 0;
 }
@@ -1337,8 +1345,7 @@ int raft_replication__apply(struct raft *r)
     for (index = r->last_applied + 1; index <= r->commit_index; index++) {
         const struct raft_entry *entry = log__get(&r->log, index);
 
-        assert(entry->type == RAFT_COMMAND ||
-	       entry->type == RAFT_BARRIER ||
+        assert(entry->type == RAFT_COMMAND || entry->type == RAFT_BARRIER ||
                entry->type == RAFT_CONFIGURATION);
 
         switch (entry->type) {
@@ -1380,9 +1387,13 @@ void raft_replication__quorum(struct raft *r, const raft_index index)
         return;
     }
 
-    if (log__term_of(&r->log, index) != r->current_term) {
+    /* TODO: fuzzy-test --seed 0x8db5fccc replication/entries/partitioned
+     * fails the assertion below. */
+    if (log__term_of(&r->log, index) == 0) {
         return;
     }
+    // assert(log__term_of(&r->log, index) > 0);
+    assert(log__term_of(&r->log, index) <= r->current_term);
 
     for (i = 0; i < r->configuration.n; i++) {
         struct raft_server *server = &r->configuration.servers[i];
