@@ -61,7 +61,7 @@ int recv__request_vote(struct raft *r,
      * would have rejected the request or bumped our term). */
     assert(r->current_term == args->term);
 
-    rv = election__vote(r, args, &result->vote_granted);
+    rv = electionVote(r, args, &result->vote_granted);
     if (rv != 0) {
         return rv;
     }

@@ -87,7 +87,7 @@ static int tickCandidate(struct raft *r)
      */
     if (r->election_elapsed > r->randomized_election_timeout) {
         infof(r->io, "tick: start new election");
-        return election__start(r);
+        return electionStart(r);
     }
 
     return 0;

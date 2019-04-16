@@ -103,7 +103,7 @@ void convert__to_follower(struct raft *r)
     set_state(r, RAFT_FOLLOWER);
 
     /* Reset election timer. */
-    election__reset_timer(r);
+    electionResetTimer(r);
 
     r->follower_state.current_leader.id = 0;
     r->follower_state.current_leader.address = NULL;
@@ -124,7 +124,7 @@ int convert__to_candidate(struct raft *r)
     }
 
     /* Start a new election round */
-    rv = election__start(r);
+    rv = electionStart(r);
     if (rv != 0) {
         r->state = RAFT_FOLLOWER;
         raft_free(r->candidate_state.votes);
