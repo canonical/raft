@@ -8,10 +8,8 @@
 #include "progress.h"
 #include "heartbeat.h"
 
-/**
- * Number of milliseconds after which a server promotion will be aborted if the
- * server hasn't caught up with the logs yet.
- */
+/* Number of milliseconds after which a server promotion will be aborted if the
+ * server hasn't caught up with the logs yet. */
 #define RAFT_MAX_CATCH_UP_DURATION (30 * 1000)
 
 unsigned raft_next_timeout(struct raft *r)
@@ -28,10 +26,8 @@ unsigned raft_next_timeout(struct raft *r)
     return timeout > elapsed ? timeout - elapsed : 0;
 }
 
-/**
- * Apply time-dependent rules for followers (Figure 3.1).
- */
-static int follower_tick(struct raft *r)
+/* Apply time-dependent rules for followers (Figure 3.1). */
+static int tickFollower(struct raft *r)
 {
     const struct raft_server *server;
     int rv;
@@ -73,10 +69,8 @@ static int follower_tick(struct raft *r)
     return 0;
 }
 
-/**
- * Apply time-dependent rules for candidates (Figure 3.1).
- */
-static int candidate_tick(struct raft *r)
+/* Apply time-dependent rules for candidates (Figure 3.1). */
+static int tickCandidate(struct raft *r)
 {
     assert(r != NULL);
     assert(r->state == RAFT_CANDIDATE);
@@ -100,7 +94,7 @@ static int candidate_tick(struct raft *r)
 }
 
 /* Apply time-dependent rules for leaders (Figure 3.1). */
-static int leader_tick(struct raft *r, const unsigned msecs_since_last_tick)
+static int tickLeader(struct raft *r, const unsigned msecs_since_last_tick)
 {
     assert(r != NULL);
     assert(r->state == RAFT_LEADER);
@@ -207,13 +201,13 @@ static int tick(struct raft *r)
 
     switch (r->state) {
         case RAFT_FOLLOWER:
-            rv = follower_tick(r);
+            rv = tickFollower(r);
             break;
         case RAFT_CANDIDATE:
-            rv = candidate_tick(r);
+            rv = tickCandidate(r);
             break;
         case RAFT_LEADER:
-            rv = leader_tick(r, msecs_since_last_tick);
+            rv = tickLeader(r, msecs_since_last_tick);
             break;
     }
 
