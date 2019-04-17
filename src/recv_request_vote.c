@@ -4,6 +4,13 @@
 #include "logging.h"
 #include "recv.h"
 
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(MSG, ...) debugf(r->io, MSG, ##__VA_ARGS__)
+#else
+#define tracef(MSG, ...)
+#endif
+
 static void send_cb(struct raft_io_send *req, int status)
 {
     (void)status;
@@ -37,7 +44,7 @@ int recv__request_vote(struct raft *r,
      *   leader, it does not update its term or grant its vote
      */
     if (r->state == RAFT_FOLLOWER && r->follower_state.current_leader.id != 0) {
-        debugf(r->io, "local server has a leader -> reject ");
+        tracef("local server has a leader -> reject ");
         goto reply;
     }
 
@@ -53,7 +60,7 @@ int recv__request_vote(struct raft *r,
      *
      */
     if (match < 0) {
-        debugf(r->io, "local term is higher -> reject ");
+        tracef("local term is higher -> reject ");
         goto reply;
     }
 

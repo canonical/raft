@@ -176,6 +176,7 @@ TEST_CASE(add_server, error, busy, NULL)
     ADD_SERVER(0 /*   I                                                     */,
                4 /*   ID                                                    */,
                RAFT_CANTCHANGE);
+    munit_log(MUNIT_LOG_INFO, "done");
     return MUNIT_OK;
 }
 
@@ -306,7 +307,6 @@ TEST_CASE(promote, new_round, NULL)
     /* Now that the catch-up round started, submit a new entry and set a very
      * high latency on the server being promoted, so it won't deliver
      * AppendEntry results within the round duration. */
-    CLUSTER_SET_LATENCY(2, election_timeout + 200, election_timeout + 300);
     CLUSTER_APPLY_ADD_X(0, req, 1, NULL);
     CLUSTER_STEP_UNTIL_ELAPSED(election_timeout + 100);
 
@@ -317,7 +317,6 @@ TEST_CASE(promote, new_round, NULL)
      * promotee, acknowledging all entries except the last one. The first round
      * has completes and a new one has starts. */
     CLUSTER_STEP_UNTIL(third_server_has_completed_first_round, NULL, 2000);
-    CLUSTER_SET_LATENCY(2, 25, 50);
 
     /* Eventually the server is promoted and everyone applies the entry. */
     CLUSTER_STEP_UNTIL_APPLIED(0, req->index, 5000);

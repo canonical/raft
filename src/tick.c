@@ -4,27 +4,13 @@
 #include "configuration.h"
 #include "convert.h"
 #include "election.h"
+#include "heartbeat.h"
 #include "logging.h"
 #include "progress.h"
-#include "heartbeat.h"
 
 /* Number of milliseconds after which a server promotion will be aborted if the
  * server hasn't caught up with the logs yet. */
 #define RAFT_MAX_CATCH_UP_DURATION (30 * 1000)
-
-unsigned raft_next_timeout(struct raft *r)
-{
-    unsigned timeout;
-    unsigned elapsed;
-    if (r->state == RAFT_LEADER) {
-        timeout = r->heartbeat_timeout;
-        elapsed = r->leader_state.heartbeat_elapsed;
-    } else {
-        timeout = r->randomized_election_timeout;
-        elapsed = r->election_elapsed;
-    }
-    return timeout > elapsed ? timeout - elapsed : 0;
-}
 
 /* Apply time-dependent rules for followers (Figure 3.1). */
 static int tickFollower(struct raft *r)
@@ -56,7 +42,7 @@ static int tickFollower(struct raft *r)
      *   If election timeout elapses without receiving AppendEntries RPC from
      *   current leader or granting vote to candidate, convert to candidate.
      */
-    if (r->election_elapsed > r->randomized_election_timeout &&
+    if (r->election_elapsed >= r->randomized_election_timeout &&
         server->voting) {
         infof(r->io, "convert to candidate and start new election");
         rv = convertToCandidate(r);
@@ -85,8 +71,8 @@ static int tickCandidate(struct raft *r)
      *   happens, each candidate will time out and start a new election by
      *   incrementing its term and initiating another round of RequestVote RPCs
      */
-    if (r->election_elapsed > r->randomized_election_timeout) {
-        infof(r->io, "tick: start new election");
+    if (r->election_elapsed >= r->randomized_election_timeout) {
+        infof(r->io, "start new election");
         return electionStart(r);
     }
 
@@ -111,8 +97,7 @@ static int tickLeader(struct raft *r, const unsigned msecs_since_last_tick)
      */
     if (r->election_elapsed > r->election_timeout) {
         if (!progress__check_quorum(r)) {
-            warnf(r->io,
-                  "tick: unable to contact majority of cluster -> step down");
+            warnf(r->io, "unable to contact majority of cluster -> step down");
             convertToFollower(r);
             return 0;
         }

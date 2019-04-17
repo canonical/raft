@@ -9,6 +9,13 @@
 #include "queue.h"
 #include "replication.h"
 
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(MSG, ...) debugf(r->io, "apply: " MSG, __VA_ARGS__)
+#else
+#define tracef(MSG, ...)
+#endif
+
 int raft_apply(struct raft *r,
                struct raft_apply *req,
                const struct raft_buffer bufs[],
@@ -30,8 +37,7 @@ int raft_apply(struct raft *r,
     /* Index of the first entry being appended. */
     index = log__last_index(&r->log) + 1;
 
-    debugf(r->io, "client request: apply %u entries starting at %lld", n,
-           index);
+    tracef("%u entries starting at %lld", n, index);
 
     req->index = index;
     req->cb = cb;
@@ -165,7 +171,7 @@ int raft_add_server(struct raft *r, const unsigned id, const char *address)
         return rv;
     }
 
-    debugf(r->io, "add server: id %d, address %s", id, address);
+    tracef("add server: id %d, address %s", id, address);
 
     /* Make a copy of the current configuration, and add the new server to
      * it. */

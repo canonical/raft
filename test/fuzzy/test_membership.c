@@ -27,6 +27,7 @@ static void *setup(const MunitParameter params[], void *user_data)
     (void)user_data;
     SETUP_CLUSTER(CLUSTER_GET_N_PARAM);
     CLUSTER_BOOTSTRAP;
+    CLUSTER_RANDOMIZE;
     CLUSTER_START;
     CLUSTER_STEP_UNTIL_HAS_LEADER(10000);
     return f;

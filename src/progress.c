@@ -5,7 +5,7 @@
 #include "logging.h"
 
 /* Set to 1 to enable tracing. */
-#if 1
+#if 0
 #define tracef(MSG, ...) debugf(r->io, "progress: " MSG, ##__VA_ARGS__)
 #else
 #define tracef(MSG, ...)
@@ -198,7 +198,7 @@ bool progress__maybe_update(struct raft *r,
         p->next_index = last_index + 1;
     }
     if (updated) {
-        debugf(r->io, "new match/next idx for server %ld: %ld/%ld", server->id,
+        tracef("new match/next idx for server %ld: %ld/%ld", server->id,
                p->match_index, p->next_index);
     }
     return updated;

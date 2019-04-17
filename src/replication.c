@@ -14,8 +14,8 @@
 #include "state.h"
 
 /* Set to 1 to enable tracing. */
-#if 1
-#define tracef(MSG, ...) debugf(r->io, "replication: " MSG, __VA_ARGS__)
+#if 0
+#define tracef(MSG, ...) debugf(r->io, "replication: " MSG, ##__VA_ARGS__)
 #else
 #define tracef(MSG, ...)
 #endif
@@ -321,7 +321,7 @@ int replication__trigger(struct raft *r, unsigned i)
         /* If the entry is not anymore in our log, send the last snapshot. */
         if (prev_term == 0) {
             assert(next_index - 1 < snapshot_index);
-            debugf(r->io, "missing entry at index %lld -> send snapshot",
+            tracef("missing entry at index %lld -> send snapshot",
                    next_index - 1);
             return send_snapshot(r, i);
         }
@@ -367,8 +367,8 @@ static void raft_replication__leader_append_cb(void *data, int status)
     size_t server_index;
     int rv;
 
-    debugf(r->io, "leader: written %u entries starting at %lld: status %d",
-           request->n, request->index, status);
+    tracef("leader: written %u entries starting at %lld: status %d", request->n,
+           request->index, status);
 
     update_last_stored(r, request->index, request->entries, request->n);
 
@@ -379,7 +379,7 @@ static void raft_replication__leader_append_cb(void *data, int status)
 
     /* If we are not leader anymore, just discard the result. */
     if (r->state != RAFT_LEADER) {
-        debugf(r->io, "local server is not leader -> ignore write log result");
+        tracef("local server is not leader -> ignore write log result");
         return;
     }
 
@@ -715,7 +715,7 @@ static void raft_replication__follower_append_cb(void *data, int status)
         goto out;
     }
 
-    debugf(r->io, "I/O completed on follower: status %d", status);
+    tracef("I/O completed on follower: status %d", status);
 
     assert(args->leader_id > 0);
     assert(args->entries != NULL);
@@ -725,7 +725,7 @@ static void raft_replication__follower_append_cb(void *data, int status)
 
     /* If we are not followers anymore, just discard the result. */
     if (r->state != RAFT_FOLLOWER) {
-        debugf(r->io, "local server is not follower -> ignore I/O result");
+        tracef("local server is not follower -> ignore I/O result");
         goto out;
     }
 
@@ -817,7 +817,7 @@ static int check_prev_log_entry(struct raft *r,
 
     local_prev_term = log__term_of(&r->log, args->prev_log_index);
     if (local_prev_term == 0) {
-        debugf(r->io, "no entry at index %llu -> reject", args->prev_log_index);
+        tracef("no entry at index %llu -> reject", args->prev_log_index);
         return 1;
     }
 
@@ -829,7 +829,7 @@ static int check_prev_log_entry(struct raft *r,
                    "committed entry -> shutdown");
             return -1;
         }
-        debugf(r->io, "previous term mismatch -> reject");
+        tracef("previous term mismatch -> reject");
         return 1;
     }
 
@@ -874,7 +874,7 @@ static int raft_replication__delete_conflicting_entries(
                 return RAFT_SHUTDOWN;
             }
 
-            debugf(r->io, "log mismatch -> truncate (%ld)", entry_index);
+            tracef("log mismatch -> truncate (%ld)", entry_index);
 
             /* Discard any uncommitted voting change. */
             rv = raft_membership__rollback(r);
@@ -953,10 +953,9 @@ int raft_replication__append(struct raft *r,
      */
     if (n == 0) {
         if (args->entries == NULL) {
-            debugf(r->io, "append entries is heartbeat -> succeed immediately");
+            tracef("append entries is heartbeat -> succeed immediately");
         } else {
-            debugf(r->io,
-                   "append entries has nothing new -> succeed immediately");
+            tracef("append entries has nothing new -> succeed immediately");
         }
         if (args->leader_commit > r->commit_index) {
             raft_index last_index = log__last_index(&r->log);

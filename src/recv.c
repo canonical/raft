@@ -15,6 +15,13 @@ static const char *message_descs[] = {"append entries", "append entries result",
                                       "request vote", "request vote result",
                                       "install snapshot"};
 
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(MSG, ...) debugf(r->io, "recv: " MSG, ##__VA_ARGS__)
+#else
+#define tracef(MSG, ...)
+#endif
+
 /* Dispatch a single RPC message to the appropriate handler. */
 static int recv(struct raft *r, struct raft_message *message)
 {
@@ -26,8 +33,8 @@ static int recv(struct raft *r, struct raft_message *message)
         return 0;
     }
 
-    debugf(r->io, "received %s from server %ld",
-           message_descs[message->type - 1], message->server_id);
+    tracef("%s from server %ld", message_descs[message->type - 1],
+           message->server_id);
 
     switch (message->type) {
         case RAFT_IO_APPEND_ENTRIES:
@@ -135,7 +142,7 @@ int recv__ensure_matching_terms(struct raft *r, raft_term term, int *match)
         if (r->state != RAFT_FOLLOWER) {
             strcat(msg, " and step down");
         }
-        infof(r->io, msg);
+        tracef("%s", msg);
         rv = bump_current_term(r, term);
         if (rv != 0) {
             return rv;

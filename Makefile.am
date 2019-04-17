@@ -103,6 +103,7 @@ check_PROGRAMS += \
   fuzzy-test
 
 test_lib_SOURCES = \
+  test/lib/cluster.c \
   test/lib/fault.c \
   test/lib/fsm.c \
   test/lib/heap.c \
@@ -111,8 +112,8 @@ test_lib_SOURCES = \
 if UV
 test_lib_SOURCES += \
   test/lib/fs.c \
-  test/lib/uv.c \
-  test/lib/loop.c
+  test/lib/loop.c \
+  test/lib/uv.c
 endif
 
 unit_test_SOURCES = $(libraft_la_SOURCES)
@@ -142,12 +143,12 @@ if UV
   test/unit/test_uv_list.c \
   test/unit/test_uv_load.c \
   test/unit/test_uv_metadata.c \
-  test/unit/test_uv_recv.c \
   test/unit/test_uv_prepare.c \
+  test/unit/test_uv_recv.c \
   test/unit/test_uv_send.c \
   test/unit/test_uv_snapshot.c \
-  test/unit/test_uv_tcp_listen.c \
   test/unit/test_uv_tcp_connect.c \
+  test/unit/test_uv_tcp_listen.c \
   test/unit/test_uv_truncate.c
 endif
 if FIXTURE

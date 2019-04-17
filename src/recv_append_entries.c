@@ -7,6 +7,13 @@
 #include "recv.h"
 #include "replication.h"
 
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(MSG, ...) debugf(r->io, MSG, ##__VA_ARGS__)
+#else
+#define tracef(MSG, ...)
+#endif
+
 static void send_cb(struct raft_io_send *req, int status)
 {
     (void)status;
@@ -44,7 +51,7 @@ int recv__append_entries(struct raft *r,
      *   currentTerm.
      */
     if (match < 0) {
-        debugf(r->io, "local term is higher -> reject ");
+        tracef("local term is higher -> reject ");
         goto reply;
     }
 
@@ -140,8 +147,6 @@ reply:
         return RAFT_NOMEM;
     }
 
-    debugf(r->io, "send append entries result (rejected=%llu last_index=%lld)",
-           result->rejected, result->last_log_index);
     rv = r->io->send(r->io, req, &message, send_cb);
     if (rv != 0) {
         raft_free(req);

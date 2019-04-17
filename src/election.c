@@ -6,16 +6,17 @@
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(MSG, ...) debugf(r->io, MSG, __VA_ARGS__)
+#define tracef(MSG, ...) debugf(r->io, MSG, ##__VA_ARGS__)
 #else
 #define tracef(MSG, ...)
 #endif
 
 void electionResetTimer(struct raft *r)
 {
-    assert(r != NULL);
     r->randomized_election_timeout =
         r->io->random(r->io, r->election_timeout, 2 * r->election_timeout);
+    assert(r->randomized_election_timeout >= r->election_timeout);
+    assert(r->randomized_election_timeout <= r->election_timeout * 2);
     r->election_elapsed = 0;
 }
 

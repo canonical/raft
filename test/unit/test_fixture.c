@@ -34,10 +34,6 @@ static void *setup(const MunitParameter params[], void *user_data)
     rc = raft_fixture_init(&f->fixture, N_SERVERS, f->fsms);
     munit_assert_int(rc, ==, 0);
 
-    for (i = 0; i < N_SERVERS; i++) {
-        raft_fixture_set_random(&f->fixture, i, munit_rand_int_range);
-    }
-
     rc = raft_fixture_configuration(&f->fixture, N_SERVERS, &configuration);
     munit_assert_int(rc, ==, 0);
 
@@ -70,6 +66,14 @@ static void tear_down(void *data)
  *****************************************************************************/
 
 #define GET(I) raft_fixture_get(&f->fixture, I)
+#define STEP raft_fixture_step(&f->fixture)
+#define STEP_N(N) raft_fixture_step_n(&f->fixture, N)
+#define STEP_UNTIL_STATE_IS(I, STATE)                                          \
+    {                                                                          \
+        bool done_;                                                            \
+        done_ = raft_fixture_step_until_state_is(&f->fixture, I, STATE, 2000); \
+        munit_assert_true(done_);                                              \
+    }
 #define STATE(I) raft_state(GET(I))
 #define ELECT(I) raft_fixture_elect(&f->fixture, I)
 #define DEPOSE raft_fixture_depose(&f->fixture)
@@ -90,6 +94,10 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
+/* Assert that the fixture time matches the given value */
+#define ASSERT_TIME(TIME) \
+    munit_assert_int(raft_fixture_time(&f->fixture), ==, TIME)
+
 /* Assert that the I'th server is in the given state. */
 #define ASSERT_STATE(I, S) munit_assert_int(STATE(I), ==, S)
 
@@ -97,6 +105,101 @@ static void tear_down(void *data)
  * value. */
 #define ASSERT_FSM_X(I, VALUE) \
     munit_assert_int(test_fsm_get_x(&f->fsms[I]), ==, VALUE)
+
+/******************************************************************************
+ *
+ * raft_fixture_step
+ *
+ *****************************************************************************/
+
+TEST_SUITE(step);
+TEST_SETUP(step, setup);
+TEST_TEAR_DOWN(step, tear_down);
+
+/* If there is no disk I/O in progress or network messages in flight, the tick
+ * callbacks are called. */
+TEST_CASE(step, tick, NULL)
+{
+    struct fixture *f = data;
+    struct raft_fixture_event *event;
+    (void)params;
+
+    ASSERT_TIME(0);
+
+    event = STEP;
+    munit_assert_int(event->server_index, ==, 0);
+    munit_assert_int(event->type, ==, RAFT_FIXTURE_TICK);
+    ASSERT_TIME(100);
+
+    event = STEP;
+    munit_assert_int(event->server_index, ==, 1);
+    munit_assert_int(event->type, ==, RAFT_FIXTURE_TICK);
+    ASSERT_TIME(100);
+
+    event = STEP;
+    munit_assert_int(event->server_index, ==, 2);
+    munit_assert_int(event->type, ==, RAFT_FIXTURE_TICK);
+    ASSERT_TIME(100);
+
+    event = STEP;
+    munit_assert_int(event->server_index, ==, 0);
+    munit_assert_int(event->type, ==, RAFT_FIXTURE_TICK);
+    ASSERT_TIME(200);
+
+    return MUNIT_OK;
+}
+
+/* By default the election timeout of server 0 is the first to expire . */
+TEST_CASE(step, election_timeout, NULL)
+{
+    struct fixture *f = data;
+    struct raft_fixture_event *event;
+    (void)params;
+    event = STEP_N(28);
+    munit_assert_int(event->server_index, ==, 0);
+    munit_assert_int(event->type, ==, RAFT_FIXTURE_TICK);
+    ASSERT_TIME(1000);
+    ASSERT_STATE(0, RAFT_CANDIDATE);
+    ASSERT_STATE(1, RAFT_FOLLOWER);
+    ASSERT_STATE(2, RAFT_FOLLOWER);
+    munit_log(MUNIT_LOG_INFO, "done");
+    return MUNIT_OK;
+}
+
+/* Send requests are flushed immediately. */
+TEST_CASE(step, flush_send, NULL)
+{
+    struct fixture *f = data;
+    struct raft_fixture_event *event;
+    (void)params;
+    STEP_UNTIL_STATE_IS(0, RAFT_CANDIDATE);
+    event = STEP;
+    munit_assert_int(event->server_index, ==, 0);
+    munit_assert_int(event->type, ==, RAFT_FIXTURE_NETWORK);
+    ASSERT_TIME(1000);
+    event = STEP;
+    munit_assert_int(event->server_index, ==, 0);
+    munit_assert_int(event->type, ==, RAFT_FIXTURE_NETWORK);
+    ASSERT_TIME(1000);
+    return MUNIT_OK;
+}
+
+/* Messages are delivered according to the current network latency. */
+TEST_CASE(step, deliver, NULL)
+{
+    struct fixture *f = data;
+    struct raft_fixture_event *event;
+    (void)params;
+    STEP_UNTIL_STATE_IS(0, RAFT_CANDIDATE); /* Server 0 starts election */
+    STEP_N(2);                              /* Server 0 sends 2 RequestVote */
+    STEP_N(2);                              /* Ticks for server 1 and 2 */
+    ASSERT_TIME(1000);
+    event = STEP;
+    munit_assert_int(event->server_index, ==, 0);
+    munit_assert_int(event->type, ==, RAFT_FIXTURE_NETWORK);
+    ASSERT_TIME(1015);
+    return MUNIT_OK;
+}
 
 /******************************************************************************
  *

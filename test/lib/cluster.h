@@ -33,9 +33,6 @@
         }                                                  \
         rv_ = raft_fixture_init(&f->cluster, n_, f->fsms); \
         munit_assert_int(rv_, ==, 0);                      \
-        for (i_ = 0; i_ < n_; i_++) {                      \
-            CLUSTER_SET_RANDOM(i_, munit_rand_int_range);  \
-        }                                                  \
     }
 
 #define TEAR_DOWN_CLUSTER                    \
@@ -65,6 +62,9 @@
 
 /* Get the number of servers in the cluster. */
 #define CLUSTER_N raft_fixture_n(&f->cluster)
+
+/* Get the cluster time. */
+#define CLUSTER_TIME raft_fixture_time(&f->cluster)
 
 /* Index of the current leader, or CLUSTER_N if there's no leader. */
 #define CLUSTER_LEADER raft_fixture_leader_index(&f->cluster)
@@ -200,6 +200,36 @@
         munit_assert_true(done);                                       \
     }
 
+/* Step the cluster until the term of the server with the given index matches
+ * the given value, or #MAX_MSECS have elapsed. */
+#define CLUSTER_STEP_UNTIL_TERM_IS(I, TERM, MAX_MSECS)                        \
+    {                                                                         \
+        bool done;                                                            \
+        done =                                                                \
+            raft_fixture_step_until_term_is(&f->cluster, I, TERM, MAX_MSECS); \
+        munit_assert_true(done);                                              \
+    }
+
+/* Step the cluster until server I has voted for server J, or #MAX_MSECS have
+ * elapsed. */
+#define CLUSTER_STEP_UNTIL_VOTED_FOR(I, J, MAX_MSECS)                        \
+    {                                                                        \
+        bool done;                                                           \
+        done =                                                               \
+            raft_fixture_step_until_voted_for(&f->cluster, I, J, MAX_MSECS); \
+        munit_assert_true(done);                                             \
+    }
+
+/* Step the cluster until all messages from server I to server J have been
+ * delivered, or #MAX_MSECS elapse. */
+#define CLUSTER_STEP_UNTIL_DELIVERED(I, J, MAX_MSECS)                        \
+    {                                                                        \
+        bool done;                                                           \
+        done =                                                               \
+            raft_fixture_step_until_delivered(&f->cluster, I, J, MAX_MSECS); \
+        munit_assert_true(done);                                             \
+    }
+
 /* Request to apply an FSM command to add the given value to x. */
 #define CLUSTER_APPLY_ADD_X(I, REQ, VALUE, CB)      \
     {                                               \
@@ -250,8 +280,6 @@
         CLUSTER_GROW;                                                    \
         rc = raft_start(CLUSTER_RAFT(CLUSTER_N - 1));                    \
         munit_assert_int(rc, ==, 0);                                     \
-        raft_fixture_set_random(&f->cluster, CLUSTER_N - 1,              \
-                                munit_rand_int_range);                   \
         new_raft = CLUSTER_RAFT(CLUSTER_N - 1);                          \
         rc = raft_add_server(CLUSTER_RAFT(CLUSTER_LEADER), new_raft->id, \
                              new_raft->address);                         \
@@ -279,7 +307,7 @@
             CLUSTER_STEP_UNTIL_HAS_LEADER(10000);                      \
         }                                                              \
         CLUSTER_APPLY_ADD_X(CLUSTER_LEADER, req_, 1, NULL);            \
-        CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_LEADER, req_->index, 1000); \
+        CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_LEADER, req_->index, 3000); \
         free(req_);                                                    \
     }
 
@@ -295,17 +323,9 @@
 /* Reconnect two servers. */
 #define CLUSTER_RECONNECT(I, J) raft_fixture_reconnect(&f->cluster, I, J)
 
-/* Advance the cluster time */
-#define CLUSTER_ADVANCE(MSECS) raft_fixture_advance(&f->cluster, MSECS);
-
-/* Set the random function used by the I'th server. */
-#define CLUSTER_SET_RANDOM(I, RANDOM) \
-    raft_fixture_set_random(&f->cluster, I, RANDOM)
-
-/* Set the minimum and maximum network latency of outgoing messages of server
- * I. */
-#define CLUSTER_SET_LATENCY(I, MIN, MAX) \
-    raft_fixture_set_latency(&f->cluster, I, MIN, MAX)
+/* Set the network latency of outgoing messages of server I. */
+#define CLUSTER_SET_NETWORK_LATENCY(I, MSECS) \
+    raft_fixture_set_network_latency(&f->cluster, I, MSECS)
 
 /* Set the disk I/O latency of server I. */
 #define CLUSTER_SET_DISK_LATENCY(I, MSECS) \
@@ -341,5 +361,15 @@
 /* Make an I/O error occur on the I'th server after @DELAY operations. */
 #define CLUSTER_IO_FAULT(I, DELAY, REPEAT) \
     raft_fixture_io_fault(&f->cluster, I, DELAY, REPEAT)
+
+/* Set a fixture hook that randomizes election timeouts, disk latency and
+ * network latency. */
+#define CLUSTER_RANDOMIZE                \
+    cluster_randomize_init(&f->cluster); \
+    raft_fixture_hook(&f->cluster, cluster_randomize)
+
+void cluster_randomize_init(struct raft_fixture *f);
+void cluster_randomize(struct raft_fixture *f,
+                       struct raft_fixture_event *event);
 
 #endif /* TEST_CLUSTER_H */

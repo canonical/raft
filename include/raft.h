@@ -825,13 +825,6 @@ raft_index raft_last_index(struct raft *r);
 raft_index raft_last_applied(struct raft *r);
 
 /**
- * Return the amount of milliseconds left before the next timeout triggers. If
- * the instance is in leader state this is the heartbeat timeout, otherwise it's
- * the election timeout.
- */
-unsigned raft_next_timeout(struct raft *r);
-
-/**
  * Asynchronous request to append a new command entry to the log and apply it to
  * the FSM when a quorum is reached.
  */
