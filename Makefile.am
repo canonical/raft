@@ -84,7 +84,6 @@ if UV
 endif
 if FIXTURE
   libraft_la_SOURCES += \
-  src/io_stub.c \
   src/fixture.c
 endif
 include_HEADERS += \
@@ -92,7 +91,6 @@ include_HEADERS += \
 pkginclude_HEADERS =
 if FIXTURE
   pkginclude_HEADERS += \
-  include/raft/io_stub.h \
   include/raft/fixture.h
 endif
 if UV
@@ -109,7 +107,6 @@ test_lib_SOURCES = \
   test/lib/fs.c \
   test/lib/fsm.c \
   test/lib/heap.c \
-  test/lib/io.c \
   test/lib/munit.c \
   test/lib/tcp.c
 if UV

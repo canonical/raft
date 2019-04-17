@@ -8,7 +8,6 @@
 
 #include "fsm.h"
 #include "heap.h"
-#include "io.h"
 #include "munit.h"
 #include "snapshot.h"
 
