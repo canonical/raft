@@ -374,7 +374,7 @@ TEST_CASE(add, error, dup_id, NULL)
     ADD(1, "127.0.0.1:666", true);
 
     rv = raft_configuration_add(&f->configuration, 1, "192.168.1.1:666", false);
-    munit_assert_int(rv, ==, RAFT_EDUPID);
+    munit_assert_int(rv, ==, RAFT_DUPLICATEID);
 
     munit_assert_string_equal(raft_strerror(rv), "server ID already in use");
 
@@ -392,7 +392,7 @@ TEST_CASE(add, error, dup_address, NULL)
     ADD(1, "127.0.0.1:666", true);
 
     rv = raft_configuration_add(&f->configuration, 2, "127.0.0.1:666", false);
-    munit_assert_int(rv, ==, RAFT_EDUPADDR);
+    munit_assert_int(rv, ==, RAFT_DUPLICATEADDRESS);
 
     munit_assert_string_equal(raft_strerror(rv),
                               "server address already in use");
@@ -503,7 +503,7 @@ TEST_CASE(remove, error, unknown, NULL)
     (void)params;
 
     rv = configuration__remove(&f->configuration, 1);
-    munit_assert_int(rv, ==, RAFT_EBADID);
+    munit_assert_int(rv, ==, RAFT_BADID);
 
     munit_assert_string_equal(raft_strerror(rv), "server ID is not valid");
 

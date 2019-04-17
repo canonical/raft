@@ -394,7 +394,7 @@ static void check_leader_append_only(struct raft_fixture *f)
         /* Check if the entry was snapshotted. */
         if (entry2 == NULL) {
             assert(raft->log.snapshot.last_index >= index);
-	    continue;
+            continue;
         }
 
         /* TODO: check other entry types too. */
@@ -756,7 +756,8 @@ void raft_fixture_set_latency(struct raft_fixture *f,
 
 void raft_fixture_set_disk_latency(struct raft_fixture *f,
                                    unsigned i,
-                                   unsigned msecs) {
+                                   unsigned msecs)
+{
     struct raft_fixture_server *s = &f->servers[i];
     raft_io_stub_set_disk_latency(&s->io, msecs);
 }
@@ -786,7 +787,8 @@ void raft_fixture_set_entries(struct raft_fixture *f,
 
 void raft_fixture_add_entry(struct raft_fixture *f,
                             unsigned i,
-                            struct raft_entry *entry) {
+                            struct raft_entry *entry)
+{
     struct raft_fixture_server *s = &f->servers[i];
     raft_io_stub_add_entry(&s->io, entry);
 }

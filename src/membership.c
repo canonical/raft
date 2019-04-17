@@ -10,17 +10,17 @@ int raft_membership__can_change_configuration(struct raft *r)
     int rv;
 
     if (r->state != RAFT_LEADER) {
-        rv = RAFT_ERR_NOT_LEADER;
+        rv = RAFT_NOTLEADER;
         return rv;
     }
 
     if (r->configuration_uncommitted_index != 0) {
-        rv = RAFT_ERR_CONFIGURATION_BUSY;
+        rv = RAFT_CANTCHANGE;
         return rv;
     }
 
     if (r->leader_state.promotee_id != 0) {
-        rv = RAFT_ERR_CONFIGURATION_BUSY;
+        rv = RAFT_CANTCHANGE;
         return rv;
     }
 

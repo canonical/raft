@@ -145,7 +145,7 @@ TEST_CASE(error, refused, NULL)
     (void)params;
     PEER_SHUTDOWN;
     CONNECT(0);
-    WAIT_CONNECT_CB(RAFT_CANTCONNECT);
+    WAIT_CONNECT_CB(RAFT_NOCONNECTION);
     return MUNIT_OK;
 }
 

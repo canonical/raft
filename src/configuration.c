@@ -131,10 +131,10 @@ int raft_configuration_add(struct raft_configuration *c,
     for (i = 0; i < c->n; i++) {
         server = &c->servers[i];
         if (server->id == id) {
-            return RAFT_EDUPID;
+            return RAFT_DUPLICATEID;
         }
         if (strcmp(server->address, address) == 0) {
-            return RAFT_EDUPADDR;
+            return RAFT_DUPLICATEADDRESS;
         }
     }
 
@@ -178,7 +178,7 @@ int configuration__remove(struct raft_configuration *c, const unsigned id)
 
     i = configuration__index_of(c, id);
     if (i == c->n) {
-        return RAFT_EBADID;
+        return RAFT_BADID;
     }
 
     assert(i < c->n);

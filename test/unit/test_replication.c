@@ -92,7 +92,7 @@ TEST_CASE(send, error, oom, send_oom_params)
 
     test_heap_fault_enable(&f->heap);
 
-    CLUSTER_APPLY_ADD_X(req, 1, apply_cb);
+    CLUSTER_APPLY_ADD_X(0, req, 1, apply_cb);
     CLUSTER_STEP;
 
     return MUNIT_OK;
@@ -108,7 +108,7 @@ TEST_CASE(send, error, io, NULL)
 
     CLUSTER_IO_FAULT(0, 1, 1);
 
-    CLUSTER_APPLY_ADD_X(req, 1, apply_cb);
+    CLUSTER_APPLY_ADD_X(0, req, 1, apply_cb);
     CLUSTER_STEP;
 
     return MUNIT_OK;
@@ -151,7 +151,7 @@ TEST_CASE(receive, stale_term, cluster_3_params)
 
     /* Eventually a new leader gets elected. */
     CLUSTER_STEP_UNTIL_HAS_NO_LEADER(5000);
-    CLUSTER_STEP_UNTIL_HAS_LEADER(5000);
+    CLUSTER_STEP_UNTIL_HAS_LEADER(10000);
     munit_assert_int(CLUSTER_LEADER, !=, 0);
 
     /* Reconnect the old leader to the current follower. */
@@ -179,7 +179,7 @@ TEST_CASE(receive, missing_entries, NULL) {
 
     /* The first server wins the election since it has a longer log. */
     CLUSTER_START;
-    CLUSTER_STEP_UNTIL_HAS_LEADER(3000);
+    CLUSTER_STEP_UNTIL_HAS_LEADER(5000);
     munit_assert_int(CLUSTER_LEADER, ==, 0);
 
     /* The first server replicates missing entries to the second. */
@@ -262,7 +262,7 @@ TEST_CASE(receive, skip, NULL)
     BOOTSTRAP_START_AND_ELECT;
 
     /* Submit an entry */
-    CLUSTER_APPLY_ADD_X(req, 1, NULL);
+    CLUSTER_APPLY_ADD_X(0, req, 1, NULL);
 
     /* The leader replicates the entry to the follower however it does not get
      * notified about the result, so it sends the entry again. */
@@ -505,6 +505,33 @@ TEST_CASE(result, higher_term, cluster_3_params)
      * replies with an AppendEntries result containing an higher term. */
     CLUSTER_RECONNECT(0, CLUSTER_LEADER == 1 ? 2 : 1);
     CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_FOLLOWER, 5000);
+
+    return MUNIT_OK;
+}
+
+/* If the response fails because a log mismatch, the nextIndex for the server is
+ * updated and the relevant older entries are resent. */
+TEST_CASE(result, retry, NULL)
+{
+    struct fixture *f = data;
+    struct raft_entry entry;
+    (void)params;
+    CLUSTER_BOOTSTRAP;
+
+    /* Add an additional entry to the first server that the second server does
+     * not have. */
+    entry.type = RAFT_COMMAND;
+    entry.term = 1;
+    test_fsm_encode_set_x(5, &entry.buf);
+    CLUSTER_ADD_ENTRY(0, &entry);
+
+    CLUSTER_START;
+    CLUSTER_ELECT(0);
+
+    /* The first server receives an AppendEntries result from the second server
+     * indicating that its log does not have the entry at index 2, so it will
+     * resend it. */
+    CLUSTER_STEP_UNTIL_APPLIED(1, 2, 2000);
 
     return MUNIT_OK;
 }

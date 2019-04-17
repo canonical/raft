@@ -320,7 +320,7 @@ static int uvBootstrap(struct raft_io *io,
 
     /* We shouldn't have written anything else yet. */
     if (uv->metadata.term != 0) {
-        return RAFT_NOTEMPTY;
+        return RAFT_CANTBOOTSTRAP;
     }
 
     /* Write the term */

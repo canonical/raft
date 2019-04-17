@@ -25,7 +25,7 @@ int uvIpParse(const char *address, struct sockaddr_in *addr)
 
     rv = uv_ip4_addr(host, atoi(port), addr);
     if (rv != 0) {
-        return RAFT_CANTCONNECT;
+        return RAFT_NOCONNECTION;
     }
 
     return 0;

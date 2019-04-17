@@ -435,7 +435,7 @@ static int io_stub__bootstrap(struct raft_io *io,
     }
 
     if (s->term != 0) {
-        return RAFT_ERR_BUSY;
+        return RAFT_CANTBOOTSTRAP;
     }
 
     assert(s->voted_for == 0);

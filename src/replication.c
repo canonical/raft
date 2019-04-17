@@ -504,7 +504,7 @@ int raft_replication__trigger(struct raft *r, const raft_index index)
             continue;
         }
         rv = replication__trigger(r, i);
-        if (rv != 0 && rv != RAFT_CANTCONNECT) {
+        if (rv != 0 && rv != RAFT_NOCONNECTION) {
             /* This is not a critical failure, let's just log it. */
             warnf(r->io, "failed to send append entries to server %ld: %s (%d)",
                   server->id, raft_strerror(rv), rv);
@@ -871,7 +871,7 @@ static int raft_replication__delete_conflicting_entries(
                        "new index conflicts with "
                        "committed entry -> shutdown");
 
-                return RAFT_ERR_SHUTDOWN;
+                return RAFT_SHUTDOWN;
             }
 
             debugf(r->io, "log mismatch -> truncate (%ld)", entry_index);
@@ -931,7 +931,7 @@ int raft_replication__append(struct raft *r,
     match = check_prev_log_entry(r, args);
     if (match != 0) {
         assert(match == 1 || match == -1);
-        return match == 1 ? 0 : RAFT_ERR_SHUTDOWN;
+        return match == 1 ? 0 : RAFT_SHUTDOWN;
     }
     rv = raft_replication__delete_conflicting_entries(r, args, &i);
     if (rv != 0) {

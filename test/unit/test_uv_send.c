@@ -306,7 +306,7 @@ TEST_CASE(error, reconnect, NULL)
 }
 
 /* If there's no more space in the queue of pending requests, the oldest request
- * gets evicted and its callback fired with RAFT_CANTCONNECT. */
+ * gets evicted and its callback fired with RAFT_NOCONNECTION. */
 TEST_CASE(error, queue, NULL)
 {
     struct fixture *f = data;
@@ -320,7 +320,7 @@ TEST_CASE(error, queue, NULL)
     send__invoke(0);
     send__invoke(0);
 
-    send__wait_cb(RAFT_CANTCONNECT);
+    send__wait_cb(RAFT_NOCONNECTION);
 
     return MUNIT_OK;
 }

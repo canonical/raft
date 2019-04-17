@@ -23,7 +23,7 @@ int raft_apply(struct raft *r,
     assert(n > 0);
 
     if (r->state != RAFT_LEADER) {
-        rv = RAFT_ERR_NOT_LEADER;
+        rv = RAFT_NOTLEADER;
         goto err;
     }
 
@@ -66,7 +66,7 @@ int raft_barrier(struct raft *r, struct raft_apply *req, raft_apply_cb cb)
     int rv;
 
     if (r->state != RAFT_LEADER) {
-        rv = RAFT_ERR_NOT_LEADER;
+        rv = RAFT_NOTLEADER;
         goto err;
     }
 
@@ -212,12 +212,12 @@ int raft_promote(struct raft *r, const unsigned id)
 
     server = configuration__get(&r->configuration, id);
     if (server == NULL) {
-        rv = RAFT_EBADID;
+        rv = RAFT_BADID;
         goto err;
     }
 
     if (server->voting) {
-        rv = RAFT_EALREADYVOTING;
+        rv = RAFT_ALREADYVOTING;
         goto err;
     }
 
@@ -249,7 +249,7 @@ int raft_promote(struct raft *r, const unsigned id)
 
     /* Immediately initiate an AppendEntries request. */
     rv = replication__trigger(r, server_index);
-    if (rv != 0 && rv != RAFT_CANTCONNECT) {
+    if (rv != 0 && rv != RAFT_NOCONNECTION) {
         /* This error is not fatal. */
         warnf(r->io, "failed to send append entries to server %ld: %s (%d)",
               server->id, raft_strerror(rv), rv);
@@ -276,7 +276,7 @@ int raft_remove_server(struct raft *r, const unsigned id)
 
     server = configuration__get(&r->configuration, id);
     if (server == NULL) {
-        rv = RAFT_EBADID;
+        rv = RAFT_BADID;
         goto err;
     }
 

@@ -74,7 +74,7 @@ static void clearLeader(struct raft *r)
         QUEUE_REMOVE(head);
         req = QUEUE_DATA(head, struct raft_apply, queue);
         if (req->cb != NULL) {
-            req->cb(req, RAFT_ERR_LEADERSHIP_LOST);
+            req->cb(req, RAFT_LEADERSHIPLOST);
         }
     }
 }

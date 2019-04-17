@@ -25,7 +25,7 @@ static void send_heartbeat(struct raft *r, unsigned i)
     }
 
     rc = replication__trigger(r, i);
-    if (rc != 0 && rc != RAFT_CANTCONNECT) {
+    if (rc != 0 && rc != RAFT_NOCONNECTION) {
         /* This is not a critical failure, let's just log it. */
         warnf(r->io, "send heartbeat to server %ld: %s", server->id,
               raft_strerror(rc));

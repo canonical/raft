@@ -98,7 +98,7 @@ static void writeCb(struct uv_write_s *write, int status)
     QUEUE_REMOVE(&r->queue);
 
     if (status != 0) {
-        rv = RAFT_CANTCONNECT;
+        rv = RAFT_NOCONNECTION;
         goto err;
     }
 
@@ -125,7 +125,7 @@ static void connectCb(struct uv_connect_s *connect, int status)
     }
 
     if (status != 0) {
-        rv = RAFT_CANTCONNECT;
+        rv = RAFT_NOCONNECTION;
         goto err;
     }
 
@@ -182,7 +182,7 @@ static int startConnecting(struct connect *r, const char *address)
     if (rv != 0) {
         /* UNTESTED: since parsing succeed, this should fail only because of
          * lack of system resources */
-        rv = RAFT_CANTCONNECT;
+        rv = RAFT_NOCONNECTION;
         goto err_after_tcp_init;
     }
     r->connect.data = r;

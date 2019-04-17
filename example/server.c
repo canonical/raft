@@ -186,7 +186,7 @@ static int serverInit(struct server *s, const char *dir, unsigned id)
         }
     }
     rv = s->io.bootstrap(&s->io, &configuration);
-    if (rv != 0 && rv != RAFT_NOTEMPTY) {
+    if (rv != 0 && rv != RAFT_CANTBOOTSTRAP) {
         goto errAfterConfigurationInit;
     }
     raft_configuration_close(&configuration);

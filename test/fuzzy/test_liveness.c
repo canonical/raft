@@ -140,7 +140,7 @@ TEST_CASE(network, disconnect, _params)
 
         if (CLUSTER_LEADER != CLUSTER_N) {
             struct raft_apply *req = munit_malloc(sizeof *req);
-            CLUSTER_APPLY_ADD_X(req, 1, apply_cb);
+            CLUSTER_APPLY_ADD_X(CLUSTER_LEADER, req, 1, apply_cb);
             if (CLUSTER_LAST_APPLIED(CLUSTER_LEADER) >= 2) {
                 break;
             }

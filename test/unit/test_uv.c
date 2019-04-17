@@ -254,7 +254,7 @@ TEST_CASE(init, access_error, NULL)
     munit_assert_int(rv, ==, 0);
 
     rv = io.init(&io, 1, "1");
-    munit_assert_int(rv, ==, EACCES);
+    munit_assert_int(rv, ==, RAFT_IOERR);
 
     raft_uv_close(&io);
 

@@ -179,7 +179,7 @@ int sendMessage(struct uvClient *c, struct send *r)
             head = QUEUE_HEAD(&c->send_reqs);
             r2 = QUEUE_DATA(head, struct send, queue);
             QUEUE_REMOVE(head);
-            r2->req->cb(r2->req, RAFT_CANTCONNECT);
+            r2->req->cb(r2->req, RAFT_NOCONNECTION);
             closeRequest(r2);
             raft_free(r2);
             c->n_send_reqs--;

@@ -124,15 +124,15 @@ unit_test_SOURCES += \
   $(test_lib_SOURCES)
 unit_test_SOURCES += \
   test/unit/main.c \
+  test/unit/test_apply.c \
+  test/unit/test_barrier.c \
   test/unit/test_byte.c \
-  test/unit/test_client.c \
   test/unit/test_configuration.c \
   test/unit/test_election.c \
   test/unit/test_log.c \
+  test/unit/test_membership.c \
   test/unit/test_queue.c \
-  test/unit/test_raft.c \
   test/unit/test_replication.c \
-  test/unit/test_rpc_append_entries.c \
   test/unit/test_snapshot.c \
   test/unit/test_start.c \
   test/unit/test_tick.c

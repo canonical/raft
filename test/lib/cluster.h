@@ -151,6 +151,14 @@
         }                                   \
     }
 
+/* Step until the given function becomes true. */
+#define CLUSTER_STEP_UNTIL(FUNC, ARG, MSECS)                            \
+    {                                                                   \
+        bool done_;                                                     \
+        done_ = raft_fixture_step_until(&f->cluster, FUNC, ARG, MSECS); \
+        munit_assert_true(done_);                                       \
+    }
+
 /* Step the cluster until a leader is elected or #MAX_MSECS have elapsed. */
 #define CLUSTER_STEP_UNTIL_ELAPSED(MSECS) \
     raft_fixture_step_until_elapsed(&f->cluster, MSECS)
@@ -194,16 +202,15 @@
     }
 
 /* Request to apply an FSM command to add the given value to x. */
-#define CLUSTER_APPLY_ADD_X(REQ, VALUE, CB)                   \
-    {                                                         \
-        struct raft_buffer buf;                               \
-        struct raft *raft;                                    \
-        int rc;                                               \
-        munit_assert_int(CLUSTER_LEADER, !=, CLUSTER_N);      \
-        test_fsm_encode_add_x(VALUE, &buf);                   \
-        raft = raft_fixture_get(&f->cluster, CLUSTER_LEADER); \
-        rc = raft_apply(raft, REQ, &buf, 1, CB);              \
-        munit_assert_int(rc, ==, 0);                          \
+#define CLUSTER_APPLY_ADD_X(I, REQ, VALUE, CB)      \
+    {                                               \
+        struct raft_buffer buf_;                    \
+        struct raft *raft_;                         \
+        int rv_;                                    \
+        test_fsm_encode_add_x(VALUE, &buf_);        \
+        raft_ = raft_fixture_get(&f->cluster, I);   \
+        rv_ = raft_apply(raft_, REQ, &buf_, 1, CB); \
+        munit_assert_int(rv_, ==, 0);               \
     }
 
 /* Kill the I'th server. */
@@ -227,11 +234,12 @@
     }
 
 /* Grow the cluster adding one server. */
-#define CLUSTER_GROW                                              \
-    {                                                             \
-        int rv;                                                   \
-        rv = raft_fixture_grow(&f->cluster, &f->fsms[CLUSTER_N]); \
-        munit_assert_int(rv, ==, 0);                              \
+#define CLUSTER_GROW                                               \
+    {                                                              \
+        int rv_;                                                   \
+        test_fsm_setup(NULL, &f->fsms[CLUSTER_N]);                 \
+        rv_ = raft_fixture_grow(&f->cluster, &f->fsms[CLUSTER_N]); \
+        munit_assert_int(rv_, ==, 0);                              \
     }
 
 /* Add a new pristine server to the cluster, connected to all others. Then
@@ -240,7 +248,6 @@
     {                                                                    \
         int rc;                                                          \
         struct raft *new_raft;                                           \
-        test_fsm_setup(NULL, &f->fsms[CLUSTER_N]);                       \
         CLUSTER_GROW;                                                    \
         rc = raft_start(CLUSTER_RAFT(CLUSTER_N - 1));                    \
         munit_assert_int(rc, ==, 0);                                     \
@@ -266,15 +273,15 @@
  *
  * - If no leader is present, wait for one to be elected.
  * - Submit a request to apply a new FSM command and wait for it to complete. */
-#define CLUSTER_MAKE_PROGRESS                                         \
-    {                                                                 \
-        struct raft_apply *req = munit_malloc(sizeof *req);           \
-        if (!(CLUSTER_HAS_LEADER)) {                                  \
-            CLUSTER_STEP_UNTIL_HAS_LEADER(10000);                     \
-        }                                                             \
-        CLUSTER_APPLY_ADD_X(req, 1, NULL);                            \
-        CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_LEADER, req->index, 1000); \
-        free(req);                                                    \
+#define CLUSTER_MAKE_PROGRESS                                          \
+    {                                                                  \
+        struct raft_apply *req_ = munit_malloc(sizeof *req_);          \
+        if (!(CLUSTER_HAS_LEADER)) {                                   \
+            CLUSTER_STEP_UNTIL_HAS_LEADER(10000);                      \
+        }                                                              \
+        CLUSTER_APPLY_ADD_X(CLUSTER_LEADER, req_, 1, NULL);            \
+        CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_LEADER, req_->index, 1000); \
+        free(req_);                                                    \
     }
 
 /* Elect the I'th server. */
