@@ -35,7 +35,6 @@ if UV
   libraft_la_LDFLAGS += $(UV_LIBS)
 endif
 libraft_la_SOURCES = \
-  src/aio.c \
   src/byte.c \
   src/client.c \
   src/configuration.c \
@@ -63,6 +62,7 @@ libraft_la_SOURCES = \
   src/tick.c
 if UV
   libraft_la_SOURCES += \
+  src/aio.c \
   src/os.c \
   src/uv.c \
   src/uv_append.c \
@@ -104,13 +104,13 @@ check_PROGRAMS += \
 
 test_lib_SOURCES = \
   test/lib/fault.c \
-  test/lib/fs.c \
   test/lib/fsm.c \
   test/lib/heap.c \
   test/lib/munit.c \
   test/lib/tcp.c
 if UV
 test_lib_SOURCES += \
+  test/lib/fs.c \
   test/lib/uv.c \
   test/lib/loop.c
 endif
