@@ -155,7 +155,6 @@ if UV
 endif
 if FIXTURE
   unit_test_SOURCES += \
-  test/unit/test_io_stub.c \
   test/unit/test_fixture.c
 endif
 unit_test_CFLAGS = $(AM_CFLAGS) -DRAFT_TEST -DMUNIT_TEST_NAME_LEN=60
