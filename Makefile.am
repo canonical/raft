@@ -111,7 +111,6 @@ test_lib_SOURCES = \
   test/lib/heap.c \
   test/lib/io.c \
   test/lib/munit.c \
-  test/lib/raft.c \
   test/lib/tcp.c
 if UV
 test_lib_SOURCES += \
