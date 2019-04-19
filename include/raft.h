@@ -906,11 +906,22 @@ int raft_apply(struct raft *r,
                raft_apply_cb cb);
 
 /**
+ * Asynchronous request to append a barrier entry.
+ */
+struct raft_barrier;
+typedef void (*raft_barrier_cb)(struct raft_barrier *req, int status);
+struct raft_barrier
+{
+    RAFT__REQUEST;
+    raft_barrier_cb cb;
+};
+
+/**
  * Propose to append a log entry of type #RAFT_BARRIER.
  *
  * This can be used to ensure that there are no unapplied commands.
  */
-int raft_barrier(struct raft *r, struct raft_apply *req, raft_apply_cb cb);
+int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb);
 
 /**
  * Asynchronous request to change the raft configuration.

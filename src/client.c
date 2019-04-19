@@ -67,7 +67,7 @@ err:
     return rv;
 }
 
-int raft_barrier(struct raft *r, struct raft_apply *req, raft_apply_cb cb)
+int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
 {
     raft_index index;
     struct raft_buffer buf;

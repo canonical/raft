@@ -1260,8 +1260,8 @@ static int raft_replication__apply_command(struct raft *r,
 static void raft_replication__apply_barrier(struct raft *r,
                                             const raft_index index)
 {
-    struct raft_apply *req;
-    req = (struct raft_apply *)getRequest(r, index, RAFT_BARRIER);
+    struct raft_barrier *req;
+    req = (struct raft_barrier *)getRequest(r, index, RAFT_BARRIER);
     if (req != NULL && req->cb != NULL) {
         req->cb(req, 0);
     }

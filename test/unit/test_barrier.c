@@ -13,7 +13,7 @@ struct fixture
 {
     FIXTURE_CLUSTER;
     struct raft_buffer buf;
-    struct raft_apply req;
+    struct raft_barrier req;
     bool invoked;
     int status;
 };
@@ -44,7 +44,7 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-static void barrier_cb(struct raft_apply *req, int status)
+static void barrier_cb(struct raft_barrier *req, int status)
 {
     struct fixture *f = req->data;
     f->invoked = true;
