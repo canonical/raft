@@ -73,16 +73,16 @@ int electionStart(struct raft *r)
     assert(r != NULL);
     assert(r->state == RAFT_CANDIDATE);
 
-    n_voting = configuration__n_voting(&r->configuration);
-    voting_index = configuration__index_of_voting(&r->configuration, r->id);
+    n_voting = configurationNumVoting(&r->configuration);
+    voting_index = configurationIndexOfVoting(&r->configuration, r->id);
 
     /* This function should not be invoked if we are not a voting server, hence
      * voting_index must be lower than the number of servers in the
      * configuration (meaning that we are a voting server). */
     assert(voting_index < r->configuration.n);
 
-    /* Sanity check that configuration__n_voting and
-     * configuration__index_of_voting have returned somethig that makes
+    /* Sanity check that configurationNumVoting and
+     * configurationIndexOfVoting have returned somethig that makes
      * sense. */
     assert(n_voting <= r->configuration.n);
     assert(voting_index < n_voting);
@@ -150,7 +150,7 @@ int electionVote(struct raft *r,
     assert(args != NULL);
     assert(granted != NULL);
 
-    local_server = configuration__get(&r->configuration, r->id);
+    local_server = configurationGet(&r->configuration, r->id);
 
     *granted = false;
 
@@ -223,7 +223,7 @@ grant_vote:
 
 bool electionTally(struct raft *r, size_t votes_index)
 {
-    size_t n_voting = configuration__n_voting(&r->configuration);
+    size_t n_voting = configurationNumVoting(&r->configuration);
     size_t votes = 0;
     size_t i;
     size_t half = n_voting / 2;

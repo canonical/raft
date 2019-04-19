@@ -50,7 +50,7 @@ static size_t raft_io_uv_sizeof__append_entries_result()
 static size_t raft_io_uv_sizeof__install_snapshot(
     const struct raft_install_snapshot *p)
 {
-    size_t conf_size = configuration__encoded_size(&p->conf);
+    size_t conf_size = configurationEncodedSize(&p->conf);
     return sizeof(uint64_t) + /* Leader's term. */
            sizeof(uint64_t) + /* Leader ID */
            sizeof(uint64_t) + /* Snapshot's last index */
@@ -121,7 +121,7 @@ static void raft_io_uv_encode__install_snapshot(
     void *buf)
 {
     void *cursor;
-    size_t conf_size = configuration__encoded_size(&p->conf);
+    size_t conf_size = configurationEncodedSize(&p->conf);
 
     cursor = buf;
 
@@ -131,7 +131,7 @@ static void raft_io_uv_encode__install_snapshot(
     bytePut64(&cursor, p->last_term);  /* Term of last index. */
     bytePut64(&cursor, p->conf_index); /* Configuration index. */
     bytePut64(&cursor, conf_size);     /* Configuration length. */
-    configuration__encode_to_buf(&p->conf, cursor);
+    configurationEncodeToBuf(&p->conf, cursor);
     cursor += conf_size;
     bytePut64(&cursor, p->data.len); /* Snapshot data size. */
 }
@@ -405,7 +405,7 @@ static int raft_io_uv_decode__install_snapshot(
     conf.len = byteGet64(&cursor);
     conf.base = (void *)cursor;
     raft_configuration_init(&args->conf);
-    rv = configuration__decode(&conf, &args->conf);
+    rv = configurationDecode(&conf, &args->conf);
     if (rv != 0) {
         return rv;
     }

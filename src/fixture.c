@@ -343,7 +343,7 @@ static void snapshot_copy(const struct raft_snapshot *s1,
     s2->term = s1->term;
     s2->index = s1->index;
 
-    rv = configuration__copy(&s1->configuration, &s2->configuration);
+    rv = configurationCopy(&s1->configuration, &s2->configuration);
     assert(rv == 0);
 
     size = 0;
@@ -427,7 +427,7 @@ static void ioFlushSend(struct io *io, struct send *send)
             break;
         case RAFT_IO_INSTALL_SNAPSHOT:
             raft_configuration_init(&dst->install_snapshot.conf);
-            rv = configuration__copy(&src->install_snapshot.conf,
+            rv = configurationCopy(&src->install_snapshot.conf,
                                      &dst->install_snapshot.conf);
             dst->install_snapshot.data.base =
                 raft_malloc(dst->install_snapshot.data.len);
@@ -620,7 +620,7 @@ static int ioMethodBootstrap(struct raft_io *io,
     assert(s->n == 0);
 
     /* Encode the given configuration. */
-    rv = configuration__encode(conf, &buf);
+    rv = configurationEncode(conf, &buf);
     if (rv != 0) {
         return rv;
     }
@@ -1625,7 +1625,7 @@ void raft_fixture_elect(struct raft_fixture *f, unsigned i)
     assert(f->leader_id == 0);
 
     /* Make sure that the given server is voting. */
-    assert(configuration__get(&raft->configuration, raft->id)->voting);
+    assert(configurationGet(&raft->configuration, raft->id)->voting);
 
     /* Make sure all servers are currently followers and their election timeout
      * is currently the default one. */

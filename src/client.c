@@ -189,7 +189,7 @@ int raft_add(struct raft *r,
      * it. */
     raft_configuration_init(&configuration);
 
-    rv = configuration__copy(&r->configuration, &configuration);
+    rv = configurationCopy(&r->configuration, &configuration);
     if (rv != 0) {
         goto err;
     }
@@ -233,7 +233,7 @@ int raft_promote(struct raft *r,
 
     debugf(r->io, "promote server: id %d", id);
 
-    server = configuration__get(&r->configuration, id);
+    server = configurationGet(&r->configuration, id);
     if (server == NULL) {
         rv = RAFT_BADID;
         goto err;
@@ -244,7 +244,7 @@ int raft_promote(struct raft *r,
         goto err;
     }
 
-    server_index = configuration__index_of(&r->configuration, id);
+    server_index = configurationIndexOf(&r->configuration, id);
     assert(server_index < r->configuration.n);
 
     last_index = log__last_index(&r->log);
@@ -302,7 +302,7 @@ int raft_remove(struct raft *r,
         return rv;
     }
 
-    server = configuration__get(&r->configuration, id);
+    server = configurationGet(&r->configuration, id);
     if (server == NULL) {
         rv = RAFT_BADID;
         goto err;
@@ -314,12 +314,12 @@ int raft_remove(struct raft *r,
      * from it. */
     raft_configuration_init(&configuration);
 
-    rv = configuration__copy(&r->configuration, &configuration);
+    rv = configurationCopy(&r->configuration, &configuration);
     if (rv != 0) {
         goto err;
     }
 
-    rv = configuration__remove(&configuration, id);
+    rv = configurationRemove(&configuration, id);
     if (rv != 0) {
         goto err_after_configuration_copy;
     }

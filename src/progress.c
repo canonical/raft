@@ -64,7 +64,7 @@ int progress__rebuild_array(struct raft *r,
      * the current and in the new configuration. */
     for (i = 0; i < r->configuration.n; i++) {
         unsigned id = r->configuration.servers[i].id;
-        size_t j = configuration__index_of(configuration, id);
+        size_t j = configurationIndexOf(configuration, id);
         if (j == configuration->n) {
             /* This server is not present in the new configuration, so we just
              * skip it. */
@@ -77,7 +77,7 @@ int progress__rebuild_array(struct raft *r,
      * configuration, but not in the current one. */
     for (i = 0; i < configuration->n; i++) {
         unsigned id = configuration->servers[i].id;
-        size_t j = configuration__index_of(&r->configuration, id);
+        size_t j = configurationIndexOf(&r->configuration, id);
         if (j < r->configuration.n) {
             /* This server is present both in the new and in the current
              * configuration, so we have already copied its next/match index
@@ -116,14 +116,14 @@ bool progress__check_quorum(struct raft *r)
         }
     }
 
-    return contacts > configuration__n_voting(&r->configuration) / 2;
+    return contacts > configurationNumVoting(&r->configuration) / 2;
 }
 
 static struct raft_progress *get(struct raft *r,
                                  const struct raft_server *server)
 {
     unsigned server_index;
-    server_index = configuration__index_of(&r->configuration, server->id);
+    server_index = configurationIndexOf(&r->configuration, server->id);
     assert(server_index < r->configuration.n);
     return &r->leader_state.progress[server_index];
 }

@@ -52,7 +52,7 @@ bool raft_membership__update_catch_up_round(struct raft *r)
     assert(r->leader_state.promotee_id != 0);
 
     server_index =
-        configuration__index_of(&r->configuration, r->leader_state.promotee_id);
+        configurationIndexOf(&r->configuration, r->leader_state.promotee_id);
     assert(server_index < r->configuration.n);
 
     match_index = r->leader_state.progress[server_index].match_index;
@@ -102,7 +102,7 @@ int raft_membership__apply(struct raft *r,
 
     raft_configuration_init(&configuration);
 
-    rv = configuration__decode(&entry->buf, &configuration);
+    rv = configurationDecode(&entry->buf, &configuration);
     if (rv != 0) {
         goto err;
     }
@@ -144,7 +144,7 @@ int raft_membership__rollback(struct raft *r)
     raft_configuration_close(&r->configuration);
     raft_configuration_init(&r->configuration);
 
-    rv = configuration__decode(&entry->buf, &r->configuration);
+    rv = configurationDecode(&entry->buf, &r->configuration);
     if (rv != 0) {
         return rv;
     }

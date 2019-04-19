@@ -25,7 +25,7 @@ static int restoreMostRecentConfiguration(struct raft *r,
     struct raft_configuration configuration;
     int rc;
     raft_configuration_init(&configuration);
-    rc = configuration__decode(&entry->buf, &configuration);
+    rc = configurationDecode(&entry->buf, &configuration);
     if (rc != 0) {
         raft_configuration_close(&configuration);
         return rc;
@@ -83,9 +83,9 @@ static int maybe_self_elect(struct raft *r)
 {
     const struct raft_server *server;
     int rc;
-    server = configuration__get(&r->configuration, r->id);
+    server = configurationGet(&r->configuration, r->id);
     if (server == NULL || !server->voting ||
-        configuration__n_voting(&r->configuration) > 1) {
+        configurationNumVoting(&r->configuration) > 1) {
         return 0;
     }
     debugf(r->io, "self elect and convert to leader");

@@ -82,7 +82,7 @@ static void send_install_snapshot_cb(struct raft_io_send *req, int status)
     struct raft *r = request->raft;
     const struct raft_server *server;
 
-    server = configuration__get(&r->configuration, request->server_id);
+    server = configurationGet(&r->configuration, request->server_id);
     if (status != 0) {
         errorf(r->io, "send install snapshot: %s", raft_strerror(status));
         if (r->state == RAFT_LEADER && server != NULL) {
@@ -106,7 +106,7 @@ static void send_snapshot_get_cb(struct raft_io_snapshot_get *req,
     const struct raft_server *server;
     int rv;
 
-    server = configuration__get(&r->configuration, request->server_id);
+    server = configurationGet(&r->configuration, request->server_id);
 
     if (status != 0) {
         errorf(r->io, "get snapshot %s", raft_strerror(status));
@@ -395,7 +395,7 @@ static void raft_replication__leader_append_cb(struct raft_io_append *req,
     }
 
     /* If Check if we have reached a quorum. */
-    server_index = configuration__index_of(&r->configuration, r->id);
+    server_index = configurationIndexOf(&r->configuration, r->id);
 
     /* Only update the next index if we are part of the current
      * configuration. The only case where this is not true is when we were
@@ -544,7 +544,7 @@ static int raft_replication__trigger_promotion(struct raft *r)
     assert(r->leader_state.promotee_id != 0);
 
     server_index =
-        configuration__index_of(&r->configuration, r->leader_state.promotee_id);
+        configurationIndexOf(&r->configuration, r->leader_state.promotee_id);
     assert(server_index < r->configuration.n);
 
     server = &r->configuration.servers[server_index];
@@ -595,7 +595,7 @@ int replication__update(struct raft *r,
 
     assert(r->state == RAFT_LEADER);
 
-    server_index = configuration__index_of(&r->configuration, server->id);
+    server_index = configurationIndexOf(&r->configuration, server->id);
     assert(server_index < r->configuration.n);
 
     progress__mark_recent_recv(r, server);
@@ -1228,7 +1228,7 @@ static void raft_replication__apply_configuration(struct raft *r,
      *   down once the Cnew entry is committed.
      */
     if (r->state == RAFT_LEADER &&
-        configuration__get(&r->configuration, r->id) == NULL) {
+        configurationGet(&r->configuration, r->id) == NULL) {
         convertToFollower(r);
     }
 
@@ -1317,7 +1317,7 @@ static int take_snapshot(struct raft *r)
     snapshot->term = log__term_of(&r->log, r->last_applied);
 
     raft_configuration_init(&snapshot->configuration);
-    rv = configuration__copy(&r->configuration, &snapshot->configuration);
+    rv = configurationCopy(&r->configuration, &snapshot->configuration);
     if (rv != 0) {
         goto err;
     }
@@ -1428,7 +1428,7 @@ void raft_replication__quorum(struct raft *r, const raft_index index)
         }
     }
 
-    if (votes > configuration__n_voting(&r->configuration) / 2) {
+    if (votes > configurationNumVoting(&r->configuration) / 2) {
         r->commit_index = index;
         tracef("new commit index %ld", r->commit_index);
     }

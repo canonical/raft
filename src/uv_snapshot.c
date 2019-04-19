@@ -202,7 +202,7 @@ static int loadMeta(struct uv *uv,
     }
 
     raft_configuration_init(&snapshot->configuration);
-    rv = configuration__decode(&buf, &snapshot->configuration);
+    rv = configurationDecode(&buf, &snapshot->configuration);
     if (rv != 0) {
         goto err_after_buf_malloc;
     }
@@ -519,7 +519,7 @@ int uvSnapshotPut(struct raft_io *io,
     r->meta.bufs[0].base = r->meta.header;
     r->meta.bufs[0].len = sizeof r->meta.header;
 
-    rv = configuration__encode(&snapshot->configuration, &r->meta.bufs[1]);
+    rv = configurationEncode(&snapshot->configuration, &r->meta.bufs[1]);
     if (rv != 0) {
         goto err_after_req_alloc;
     }

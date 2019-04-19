@@ -217,7 +217,7 @@ TEST_CASE(promote, up_to_date, NULL)
 
     /* Server 3 is being considered as voting, even though the configuration
      * change is not committed yet. */
-    server = configuration__get(&CLUSTER_RAFT(0)->configuration, 3);
+    server = configurationGet(&CLUSTER_RAFT(0)->configuration, 3);
     munit_assert_true(server->voting);
 
     /* The configuration change request eventually succeeds. */
@@ -249,7 +249,7 @@ TEST_CASE(promote, catch_up, NULL)
     PROMOTE(0, 3, 0);
 
     /* Server 3 is not being considered as voting, since its log is behind. */
-    server = configuration__get(&CLUSTER_RAFT(0)->configuration, 3);
+    server = configurationGet(&CLUSTER_RAFT(0)->configuration, 3);
     munit_assert_false(server->voting);
 
     /* Advance the match index of server 3, by acknowledging the AppendEntries
@@ -424,7 +424,7 @@ TEST_CASE(promote, error, leadership_lost, NULL)
      * change is not committed yet. */
     ASSERT_CATCH_UP_ROUND(0, 0, 0, 0);
     ASSERT_CONFIGURATION_INDEXES(0, 2, 3);
-    server = configuration__get(&CLUSTER_RAFT(0)->configuration, 3);
+    server = configurationGet(&CLUSTER_RAFT(0)->configuration, 3);
     munit_assert_true(server->voting);
 
     /* Lose leadership. */
@@ -435,7 +435,7 @@ TEST_CASE(promote, error, leadership_lost, NULL)
     CLUSTER_STEP_N(5);
 
     /* Server 3 is not being considered voting anymore. */
-    server = configuration__get(&CLUSTER_RAFT(0)->configuration, 3);
+    server = configurationGet(&CLUSTER_RAFT(0)->configuration, 3);
     munit_assert_false(server->voting);
 
     return MUNIT_OK;

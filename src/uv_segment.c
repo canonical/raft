@@ -901,7 +901,7 @@ int uvSegmentCreateFirstClosed(struct uv *uv,
     sprintf(filename, UV__CLOSED_TEMPLATE, (raft_index)1, (raft_index)1);
 
     /* Encode the given configuration. */
-    rv = configuration__encode(configuration, &buf);
+    rv = configurationEncode(configuration, &buf);
     if (rv != 0) {
         goto err;
     }

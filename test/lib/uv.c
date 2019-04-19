@@ -34,7 +34,7 @@ size_t test_io_uv_write_snapshot_meta_file(const char *dir,
         rv = raft_configuration_add(&configuration, id, address, true);
         munit_assert_int(rv, ==, 0);
     }
-    rv = configuration__encode(&configuration, &configuration_buf);
+    rv = configurationEncode(&configuration, &configuration_buf);
     munit_assert_int(rv, ==, 0);
     raft_configuration_close(&configuration);
 

@@ -42,11 +42,10 @@ static void tear_down(void *data)
  *****************************************************************************/
 
 /* Accessors */
-#define N_VOTING configuration__n_voting(&f->configuration)
-#define INDEX_OF(ID) configuration__index_of(&f->configuration, ID)
-#define INDEX_OF_VOTING(ID) \
-    configuration__index_of_voting(&f->configuration, ID)
-#define GET(ID) configuration__get(&f->configuration, ID)
+#define N_VOTING configurationNumVoting(&f->configuration)
+#define INDEX_OF(ID) configurationIndexOf(&f->configuration, ID)
+#define INDEX_OF_VOTING(ID) configurationIndexOfVoting(&f->configuration, ID)
+#define GET(ID) configurationGet(&f->configuration, ID)
 
 /* Add a server to the fixture's configuration. */
 #define ADD(ID, ADDRESS, VOTING)                                              \
@@ -57,11 +56,11 @@ static void tear_down(void *data)
     }
 
 /* Remove a server from the fixture's configuration */
-#define REMOVE(ID)                                          \
-    {                                                       \
-        int rv2;                                            \
-        rv2 = configuration__remove(&f->configuration, ID); \
-        munit_assert_int(rv2, ==, 0);                       \
+#define REMOVE(ID)                                        \
+    {                                                     \
+        int rv2;                                          \
+        rv2 = configurationRemove(&f->configuration, ID); \
+        munit_assert_int(rv2, ==, 0);                     \
     }
 
 /******************************************************************************
@@ -95,7 +94,7 @@ static void tear_down(void *data)
 
 /******************************************************************************
  *
- * configuration__n_voting
+ * configurationNumVoting
  *
  *****************************************************************************/
 
@@ -128,7 +127,7 @@ TEST_CASE(n_voting, filter, NULL)
 
 /******************************************************************************
  *
- * configuration__index_of
+ * configurationIndexOf
  *
  *****************************************************************************/
 
@@ -161,7 +160,7 @@ TEST_CASE(index_of, no_match, NULL)
 
 /******************************************************************************
  *
- * configuration__index_of_voting
+ * configurationIndexOfVoting
  *
  *****************************************************************************/
 
@@ -215,7 +214,7 @@ TEST_CASE(index_of_voting, non_voting, NULL)
 
 /******************************************************************************
  *
- * configuration__get
+ * configurationGet
  *
  *****************************************************************************/
 
@@ -259,7 +258,7 @@ TEST_CASE(get, no_match, NULL)
 
 /******************************************************************************
  *
- * configuration__copy
+ * configurationCopy
  *
  *****************************************************************************/
 
@@ -282,7 +281,7 @@ TEST_CASE(copy, two, NULL)
 
     raft_configuration_init(&configuration);
 
-    rv = configuration__copy(&f->configuration, &configuration);
+    rv = configurationCopy(&f->configuration, &configuration);
     munit_assert_int(rv, ==, 0);
 
     munit_assert_int(configuration.n, ==, 2);
@@ -312,7 +311,7 @@ TEST_CASE(copy, error, oom, NULL)
 
     raft_configuration_init(&configuration);
 
-    rv = configuration__copy(&f->configuration, &configuration);
+    rv = configurationCopy(&f->configuration, &configuration);
     munit_assert_int(rv, ==, RAFT_NOMEM);
 
     return MUNIT_OK;
@@ -429,7 +428,7 @@ TEST_CASE(add, error, oom, add_oom_params)
 
 /******************************************************************************
  *
- * configuration__remove
+ * configurationRemove
  *
  *****************************************************************************/
 
@@ -502,7 +501,7 @@ TEST_CASE(remove, error, unknown, NULL)
 
     (void)params;
 
-    rv = configuration__remove(&f->configuration, 1);
+    rv = configurationRemove(&f->configuration, 1);
     munit_assert_int(rv, ==, RAFT_BADID);
 
     munit_assert_string_equal(raft_strerror(rv), "server ID is not valid");
@@ -524,7 +523,7 @@ TEST_CASE(remove, error, oom, NULL)
     test_heap_fault_config(&f->heap, 0, 1);
     test_heap_fault_enable(&f->heap);
 
-    rv = configuration__remove(&f->configuration, 2);
+    rv = configurationRemove(&f->configuration, 2);
     munit_assert_int(rv, ==, RAFT_NOMEM);
 
     return MUNIT_OK;
@@ -532,7 +531,7 @@ TEST_CASE(remove, error, oom, NULL)
 
 /******************************************************************************
  *
- * configuration__encode
+ * configurationEncode
  *
  *****************************************************************************/
 
@@ -554,7 +553,7 @@ TEST_CASE(encode, one_server, NULL)
 
     ADD(1, "127.0.0.1:666", true);
 
-    rv = configuration__encode(&f->configuration, &buf);
+    rv = configurationEncode(&f->configuration, &buf);
     munit_assert_int(rv, ==, 0);
 
     bytes = buf.base;
@@ -590,7 +589,7 @@ TEST_CASE(encode, two_servers, NULL)
     ADD(1, "127.0.0.1:666", false);
     ADD(2, "192.168.1.1:666", true);
 
-    rv = configuration__encode(&f->configuration, &buf);
+    rv = configurationEncode(&f->configuration, &buf);
     munit_assert_int(rv, ==, 0);
 
     len = 1 + 8 +                                /* Version and n of servers */
@@ -637,7 +636,7 @@ TEST_CASE(encode, error, oom, NULL)
 
     ADD(1, "127.0.0.1:666", true);
 
-    rv = configuration__encode(&f->configuration, &buf);
+    rv = configurationEncode(&f->configuration, &buf);
     munit_assert_int(rv, ==, RAFT_NOMEM);
 
     return MUNIT_OK;
@@ -645,7 +644,7 @@ TEST_CASE(encode, error, oom, NULL)
 
 /******************************************************************************
  *
- * configuration__decode
+ * configurationDecode
  *
  *****************************************************************************/
 
@@ -672,7 +671,7 @@ TEST_CASE(decode, one_server, NULL)
     buf.base = bytes;
     buf.len = sizeof bytes;
 
-    rv = configuration__decode(&buf, &f->configuration);
+    rv = configurationDecode(&buf, &f->configuration);
     munit_assert_int(rv, ==, 0);
 
     ASSERT_N(1);
@@ -703,7 +702,7 @@ TEST_CASE(decode, two_servers, NULL)
     (void)data;
     (void)params;
 
-    rv = configuration__decode(&buf, &f->configuration);
+    rv = configurationDecode(&buf, &f->configuration);
     munit_assert_int(rv, ==, 0);
 
     ASSERT_N(2);
@@ -736,7 +735,7 @@ TEST_CASE(decode, error, oom, NULL)
     buf.base = bytes;
     buf.len = sizeof bytes;
 
-    rv = configuration__decode(&buf, &f->configuration);
+    rv = configurationDecode(&buf, &f->configuration);
     munit_assert_int(rv, ==, RAFT_NOMEM);
 
     return MUNIT_OK;
@@ -756,7 +755,7 @@ TEST_CASE(decode, error, bad_version, NULL)
     buf.base = &bytes;
     buf.len = 1;
 
-    rv = configuration__decode(&buf, &f->configuration);
+    rv = configurationDecode(&buf, &f->configuration);
     munit_assert_int(rv, ==, RAFT_MALFORMED);
 
     return MUNIT_OK;
@@ -780,7 +779,7 @@ TEST_CASE(decode, error, bad_address, NULL)
     buf.base = bytes;
     buf.len = sizeof bytes;
 
-    rv = configuration__decode(&buf, &f->configuration);
+    rv = configurationDecode(&buf, &f->configuration);
     munit_assert_int(rv, ==, RAFT_MALFORMED);
 
     return MUNIT_OK;

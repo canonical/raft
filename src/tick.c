@@ -21,7 +21,7 @@ static int tickFollower(struct raft *r)
     assert(r != NULL);
     assert(r->state == RAFT_FOLLOWER);
 
-    server = configuration__get(&r->configuration, r->id);
+    server = configurationGet(&r->configuration, r->id);
 
     /* If we have been removed from the configuration, or maybe we didn't
      * receive one yet, just stay follower. */
@@ -137,7 +137,7 @@ static int tickLeader(struct raft *r, const unsigned msecs_since_last_tick)
         /* If a promotion is in progress, we expect that our configuration
          * contains an entry for the server being promoted, and that the server
          * is not yet considered as voting. */
-        server_index = configuration__index_of(&r->configuration, id);
+        server_index = configurationIndexOf(&r->configuration, id);
         assert(server_index < r->configuration.n);
         assert(!r->configuration.servers[server_index].voting);
 

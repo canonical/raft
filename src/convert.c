@@ -111,7 +111,7 @@ void convertToFollower(struct raft *r)
 
 int convertToCandidate(struct raft *r)
 {
-    size_t n_voting = configuration__n_voting(&r->configuration);
+    size_t n_voting = configurationNumVoting(&r->configuration);
     int rv;
 
     clear(r);

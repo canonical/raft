@@ -28,7 +28,7 @@ int recv__request_vote_result(struct raft *r,
     assert(r != NULL);
     assert(id > 0);
 
-    votes_index = configuration__index_of_voting(&r->configuration, id);
+    votes_index = configurationIndexOfVoting(&r->configuration, id);
     if (votes_index == r->configuration.n) {
         infof(r->io, "non-voting or unknown server -> reject");
         return 0;
