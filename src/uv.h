@@ -248,10 +248,10 @@ void uvPrepareClose(struct uv *uv);
 
 /* Implementation of raft_io->append. */
 int uvAppend(struct raft_io *io,
+             struct raft_io_append *req,
              const struct raft_entry entries[],
              unsigned n,
-             void *data,
-             void (*cb)(void *data, int status));
+             raft_io_append_cb cb);
 
 /* Callback invoked after completing a truncate request. If there are append
  * requests that have accumulated in while the truncate request was executed,

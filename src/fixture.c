@@ -83,11 +83,10 @@ struct request
 struct append
 {
     REQUEST;
+    struct raft_io_append *req;
     const struct raft_entry *entries;
     unsigned n;
-    void *data;
     unsigned start; /* Request timestamp. */
-    void (*cb)(void *data, int status);
 };
 
 /* Pending request to send a message. */
@@ -283,8 +282,8 @@ static void ioFlushAppend(struct io *s, struct append *append)
     s->entries = entries;
     s->n += append->n;
 
-    if (append->cb != NULL) {
-        append->cb(append->data, 0);
+    if (append->req->cb != NULL) {
+        append->req->cb(append->req, 0);
     }
     free(append);
 }
@@ -673,10 +672,10 @@ static int ioMethodSetVote(struct raft_io *raft_io, const unsigned server_id)
 }
 
 static int ioMethodAppend(struct raft_io *raft_io,
+                          struct raft_io_append *req,
                           const struct raft_entry entries[],
                           unsigned n,
-                          void *data,
-                          void (*cb)(void *data, int status))
+                          raft_io_append_cb cb)
 {
     struct io *io;
     struct append *r;
@@ -692,10 +691,11 @@ static int ioMethodAppend(struct raft_io *raft_io,
 
     r->type = APPEND;
     r->completion_time = *io->time + io->disk_latency;
+    r->req = req;
     r->entries = entries;
     r->n = n;
-    r->data = data;
-    r->cb = cb;
+
+    req->cb = cb;
 
     QUEUE_PUSH(&io->requests, &r->queue);
 

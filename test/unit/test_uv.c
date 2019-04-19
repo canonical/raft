@@ -57,9 +57,9 @@ static void __tick_cb(struct raft_io *io)
     f->tick_cb.invoked = true;
 }
 
-static void __append_cb(void *data, const int status)
+static void __append_cb(struct raft_io_append *req, const int status)
 {
-    struct fixture *f = data;
+    struct fixture *f = req->data;
 
     f->append_cb.invoked = true;
     f->append_cb.status = status;
@@ -464,6 +464,7 @@ TEST_TEAR_DOWN(append, tear_down);
 TEST_CASE(append, pristine, NULL)
 {
     struct fixture *f = data;
+    struct raft_io_append req;
     struct raft_entry entry;
     int rv;
 
@@ -478,7 +479,8 @@ TEST_CASE(append, pristine, NULL)
 
     ((char *)entry.buf.base)[0] = 'x';
 
-    rv = f->io.append(&f->io, &entry, 1, f, __append_cb);
+    req.data = f;
+    rv = f->io.append(&f->io, &req, &entry, 1, __append_cb);
     munit_assert_int(rv, ==, 0);
 
     LOOP_RUN(10);

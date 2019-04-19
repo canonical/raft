@@ -36,9 +36,9 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-static void appendCb(void *data, int status)
+static void appendCb(struct raft_io_append *req, int status)
 {
-    struct fixture *f = data;
+    struct fixture *f = req->data;
     munit_assert_int(status, ==, 0);
     f->appended = true;
 }
@@ -46,8 +46,9 @@ static void appendCb(void *data, int status)
 /* Append N entries to the log. */
 #define APPEND(N)                                                         \
     {                                                                     \
-        int rv_;                                                          \
+        struct raft_io_append req_;                                       \
         int i;                                                            \
+        int rv_;                                                          \
         struct raft_entry *entries_ = munit_malloc(N * sizeof *entries_); \
         for (i = 0; i < N; i++) {                                         \
             struct raft_entry *entry = &entries_[i];                      \
@@ -58,7 +59,8 @@ static void appendCb(void *data, int status)
             *(uint64_t *)entry->buf.base = byte__flip64(i + 1);           \
             entry->batch = NULL;                                          \
         }                                                                 \
-        rv_ = f->io.append(&f->io, entries_, N, f, appendCb);             \
+        req_.data = f;                                                    \
+        rv_ = f->io.append(&f->io, &req_, entries_, N, appendCb);         \
         munit_assert_int(rv_, ==, 0);                                     \
                                                                           \
         for (i = 0; i < 5; i++) {                                         \

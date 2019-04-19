@@ -50,14 +50,15 @@ static void tear_down(void *data)
 
 struct append_req
 {
+    struct raft_io_append req;
     struct fixture *f;
     struct raft_entry *entries;
     unsigned n;
 };
 
-static void appendCb(void *data, int status)
+static void appendCb(struct raft_io_append *req, int status)
 {
-    struct append_req *r = data;
+    struct append_req *r = req->data;
     struct fixture *f = r->f;
     unsigned i;
     f->invoked++;
@@ -94,23 +95,24 @@ static void appendCb(void *data, int status)
     }
 
 /* Invoke raft_io->append() and assert that it returns the given code. */
-#define APPEND(RV)                                                 \
-    {                                                              \
-        unsigned i_;                                               \
-        struct append_req *r = munit_malloc(sizeof *r);            \
-        int rv_;                                                   \
-        r->f = f;                                                  \
-        r->entries = f->entries;                                   \
-        r->n = f->n;                                               \
-        rv_ = f->io.append(&f->io, f->entries, f->n, r, appendCb); \
-        munit_assert_int(rv_, ==, RV);                             \
-        if (rv_ != 0) {                                            \
-            for (i_ = 0; i_ < f->n; i_++) {                        \
-                raft_free(f->entries[i_].buf.base);                \
-            }                                                      \
-            raft_free(f->entries);                                 \
-            free(r);                                               \
-        }                                                          \
+#define APPEND(RV)                                                       \
+    {                                                                    \
+        unsigned i_;                                                     \
+        struct append_req *r = munit_malloc(sizeof *r);                  \
+        int rv_;                                                         \
+        r->f = f;                                                        \
+        r->entries = f->entries;                                         \
+        r->n = f->n;                                                     \
+        r->req.data = r;                                                 \
+        rv_ = f->io.append(&f->io, &r->req, f->entries, f->n, appendCb); \
+        munit_assert_int(rv_, ==, RV);                                   \
+        if (rv_ != 0) {                                                  \
+            for (i_ = 0; i_ < f->n; i_++) {                              \
+                raft_free(f->entries[i_].buf.base);                      \
+            }                                                            \
+            raft_free(f->entries);                                       \
+            free(r);                                                     \
+        }                                                                \
     }
 
 /* Wait for the given number of append request callbacks to fire and check the
@@ -182,7 +184,7 @@ static void appendCb(void *data, int status)
                 data_size += entry->buf.len;                                 \
             }                                                                \
                                                                              \
-            crc = byte__crc32(header, uvSizeofBatchHeader(n_), 0);    \
+            crc = byte__crc32(header, uvSizeofBatchHeader(n_), 0);           \
             munit_assert_int(crc, ==, crc1);                                 \
                                                                              \
             content = cursor;                                                \
@@ -258,8 +260,8 @@ TEST_CASE(success, match_block, NULL)
     (void)params;
 
     size = f->uv->block_size;
-    size -= sizeof(uint64_t) +             /* Format */
-            sizeof(uint64_t) +             /* Checksums */
+    size -= sizeof(uint64_t) +      /* Format */
+            sizeof(uint64_t) +      /* Checksums */
             uvSizeofBatchHeader(1); /* Header */
 
     CREATE_ENTRIES(1, size);
@@ -297,13 +299,13 @@ TEST_CASE(success, exceed_block, NULL)
     APPEND(0);
     WAIT_CB(1, 0);
 
-    written = sizeof(uint64_t) +              /* Format version */
-              2 * sizeof(uint32_t) +          /* CRC sums of first batch */
+    written = sizeof(uint64_t) +       /* Format version */
+              2 * sizeof(uint32_t) +   /* CRC sums of first batch */
               uvSizeofBatchHeader(1) + /* Header of first batch */
-              size1 +                         /* Size of first batch */
-              2 * sizeof(uint32_t) +          /* CRC of second batch */
+              size1 +                  /* Size of first batch */
+              2 * sizeof(uint32_t) +   /* CRC of second batch */
               uvSizeofBatchHeader(1) + /* Header of second batch */
-              64;                             /* Size of second batch */
+              64;                      /* Size of second batch */
 
     /* Write a third entry that fills the second block exactly */
     size2 = f->uv->block_size - (written % f->uv->block_size);

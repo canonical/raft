@@ -65,6 +65,7 @@ struct raft_replication__leader_append
     raft_index index;           /* Index of the first entry in the request. */
     struct raft_entry *entries; /* Entries referenced in the request. */
     unsigned n;                 /* Length of the entries array. */
+    struct raft_io_append req;
 };
 
 struct raft_replication__follower_append
@@ -72,6 +73,7 @@ struct raft_replication__follower_append
     struct raft *raft; /* Instance that has submitted the request */
     raft_index index;  /* Index of the first entry in the request. */
     struct raft_append_entries args;
+    struct raft_io_append req;
 };
 
 static void send_install_snapshot_cb(struct raft_io_send *req, int status)
@@ -361,9 +363,10 @@ static size_t update_last_stored(struct raft *r,
     return i;
 }
 
-static void raft_replication__leader_append_cb(void *data, int status)
+static void raft_replication__leader_append_cb(struct raft_io_append *req,
+                                               int status)
 {
-    struct raft_replication__leader_append *request = data;
+    struct raft_replication__leader_append *request = req->data;
     struct raft *r = request->raft;
     size_t server_index;
     int rv;
@@ -454,8 +457,9 @@ static int raft_replication__leader_append(struct raft *r, unsigned index)
     request->index = index;
     request->entries = entries;
     request->n = n;
+    request->req.data = request;
 
-    rv = r->io->append(r->io, entries, n, request,
+    rv = r->io->append(r->io, &request->req, entries, n,
                        raft_replication__leader_append_cb);
     if (rv != 0) {
         goto err_after_request_alloc;
@@ -701,9 +705,10 @@ static void send_append_entries_result(
     }
 }
 
-static void raft_replication__follower_append_cb(void *data, int status)
+static void raft_replication__follower_append_cb(struct raft_io_append *req,
+                                                 int status)
 {
-    struct raft_replication__follower_append *request = data;
+    struct raft_replication__follower_append *request = req->data;
     struct raft *r = request->raft;
     struct raft_append_entries *args = &request->args;
     struct raft_append_entries_result result;
@@ -1005,8 +1010,10 @@ int raft_replication__append(struct raft *r,
 
     assert(request->args.n_entries == n);
 
-    rv = r->io->append(r->io, request->args.entries, request->args.n_entries,
-                       request, raft_replication__follower_append_cb);
+    request->req.data = request;
+    rv = r->io->append(r->io, &request->req, request->args.entries,
+                       request->args.n_entries,
+                       raft_replication__follower_append_cb);
     if (rv != 0) {
         goto err_after_acquire_entries;
     }

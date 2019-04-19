@@ -59,34 +59,33 @@ struct segment
 
 struct append
 {
-    void *data;                       /* User data */
+    struct raft_io_append *req;       /* User request */
     const struct raft_entry *entries; /* Entries to write */
     unsigned n;                       /* Number of entries */
     size_t size;                      /* Size of this batch on disk */
     struct segment *segment;          /* Segment to write to */
     int status;
-    void (*cb)(void *data, int status);
     queue queue;
 };
 
 /* Initialize an append request object. In particular, calculate the number of
  * bytes needed to store this batch in on disk. */
 static void initRequest(struct append *r,
+                        struct raft_io_append *req,
                         const struct raft_entry entries[],
                         unsigned n,
-                        void *data,
-                        void (*cb)(void *data, int status))
+                        raft_io_append_cb cb)
 {
     unsigned i;
+    r->req = req;
     r->entries = entries;
     r->n = n;
-    r->data = data;
-    r->cb = cb;
     r->size = sizeof(uint32_t) * 2;       /* CRC checksums */
     r->size += uvSizeofBatchHeader(r->n); /* Batch header */
     for (i = 0; i < r->n; i++) {          /* Entries data */
         r->size += byte__pad64(r->entries[i].buf.len);
     }
+    req->cb = cb;
 }
 
 /* Return #true if the remaining capacity of the given segment is equal or
@@ -172,7 +171,7 @@ static void flushRequests(queue *q, int status)
         head = QUEUE_HEAD(&queue_copy);
         QUEUE_REMOVE(head);
         r = QUEUE_DATA(head, struct append, queue);
-        r->cb(r->data, status);
+        r->req->cb(r->req, status);
         raft_free(r);
     }
 }
@@ -527,26 +526,26 @@ err:
 }
 
 int uvAppend(struct raft_io *io,
+             struct raft_io_append *req,
              const struct raft_entry entries[],
              unsigned n,
-             void *data,
-             void (*cb)(void *data, int status))
+             raft_io_append_cb cb)
 {
     struct uv *uv;
-    struct append *req;
+    struct append *r;
     int rv;
 
     uv = io->impl;
     assert(uv->state == UV__ACTIVE);
 
-    req = raft_malloc(sizeof *req);
-    if (req == NULL) {
+    r = raft_malloc(sizeof *r);
+    if (r == NULL) {
         rv = RAFT_NOMEM;
         goto err;
     }
-    initRequest(req, entries, n, data, cb);
+    initRequest(r, req, entries, n, cb);
 
-    rv = enqueueRequest(uv, req);
+    rv = enqueueRequest(uv, r);
     if (rv != 0) {
         goto err_after_req_alloc;
     }
@@ -554,7 +553,7 @@ int uvAppend(struct raft_io *io,
     return 0;
 
 err_after_req_alloc:
-    raft_free(req);
+    raft_free(r);
 err:
     assert(rv != 0);
     return rv;

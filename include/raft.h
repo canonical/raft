@@ -337,6 +337,17 @@ struct raft_io_send
 };
 
 /**
+ * Asynchronous request to store new log entries.
+ */
+struct raft_io_append;
+typedef void (*raft_io_append_cb)(struct raft_io_append *req, int status);
+struct raft_io_append
+{
+    void *data;           /* User data */
+    raft_io_append_cb cb; /* Request callback */
+};
+
+/**
  * Asynchronous request to store a new snapshot.
  */
 struct raft_io_snapshot_put;
@@ -477,10 +488,10 @@ struct raft_io
      * entries will not be released until the @cb callback is invoked.
      */
     int (*append)(struct raft_io *io,
+                  struct raft_io_append *req,
                   const struct raft_entry entries[],
                   unsigned n,
-                  void *data,
-                  void (*cb)(void *data, int status));
+                  raft_io_append_cb cb);
 
     /**
      * Asynchronously truncate all log entries from the given index onwards.

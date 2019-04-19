@@ -284,9 +284,9 @@ TEST_TEAR_DOWN(put)
     TEAR_DOWN_UV;
 }
 
-static void append_cb(void *data, int status)
+static void append_cb(struct raft_io_append *req, int status)
 {
-    struct put_fixture *f = data;
+    struct put_fixture *f = req->data;
     munit_assert_int(status, ==, 0);
     f->appended = true;
 }
@@ -294,8 +294,9 @@ static void append_cb(void *data, int status)
 /* Append N entries to the log. */
 #define append(N)                                                       \
     {                                                                   \
-        int rv;                                                         \
+        struct raft_io_append req_;                                     \
         int i;                                                          \
+        int rv;                                                         \
         struct raft_entry *entries = munit_malloc(N * sizeof *entries); \
         for (i = 0; i < N; i++) {                                       \
             struct raft_entry *entry = &entries[i];                     \
@@ -305,7 +306,8 @@ static void append_cb(void *data, int status)
             entry->buf.len = 8;                                         \
             entry->batch = NULL;                                        \
         }                                                               \
-        rv = f->io.append(&f->io, entries, N, f, append_cb);            \
+        req_.data = f;                                                  \
+        rv = f->io.append(&f->io, &req_, entries, N, append_cb);        \
         munit_assert_int(rv, ==, 0);                                    \
                                                                         \
         for (i = 0; i < 5; i++) {                                       \
