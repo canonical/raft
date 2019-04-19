@@ -75,7 +75,7 @@ typedef unsigned long long raft_time;
  */
 struct raft_buffer
 {
-    void *base; /* Pointer to the buffer data */
+    void *base; /* Pointer to the buffer data. */
     size_t len; /* Length of the buffer. */
 };
 
@@ -127,21 +127,25 @@ int raft_configuration_add(struct raft_configuration *c,
 /**
  * Log entry types.
  */
-enum { RAFT_COMMAND = 1, RAFT_CONFIGURATION, RAFT_BARRIER };
+enum {
+    RAFT_COMMAND = 1, /* Command for the user FSM */
+    RAFT_BARRIER,     /* Wait for all previous commands to be applied */
+    RAFT_CHANGE       /* Raft configuration change */
+};
 
 /**
  * A single entry in the raft log.
  *
  * From Figure 3.1:
  *
- *   Each contains [either a] command for the state machine [or a configuration
- *   change], and term when entry was received by the leader.
+ *   Each entry contains [either a] command for the state machine [or a
+ *   configuration change], and term when entry was received by the leader.
  *
  * An entry that originated from this raft instance while it was the leader
  * (typically via client calls to raft_apply()) should normaly have a @buf
- * attribute that points directly to the memory that was originally allocated by
- * the client itself to contain the entry data, and the @batch attribute is set
- * to #NULL.
+ * attribute referencing directly the memory that was originally allocated by
+ * the client itself to contain the entry data, and the @batch attribute set to
+ * #NULL.
  *
  * An entry that was received from the network as part of an AppendEntries RPC
  * or that was loaded from disk at startup should normally have a @batch
@@ -155,13 +159,14 @@ enum { RAFT_COMMAND = 1, RAFT_CONFIGURATION, RAFT_BARRIER };
  * releasing that memory only once there are no more references to the
  * associated entries.
  *
- * This arrangement makes it possible to perform "zero copy" I/O in most cases.
+ * This arrangement makes it possible to minimize the amount of memory-copying
+ * when performing I/O.
  */
 struct raft_entry
 {
-    raft_term term;         /* Term in which the entry was created */
-    unsigned short type;    /* Entry type (FSM command or config change) */
-    struct raft_buffer buf; /* Entry data */
+    raft_term term;         /* Term in which the entry was created. */
+    unsigned short type;    /* Type (FSM command, barrier, config change). */
+    struct raft_buffer buf; /* Entry data. */
     void *batch;            /* Batch that buf's memory points to, if any. */
 };
 
@@ -180,10 +185,10 @@ struct raft_entry
  */
 struct raft_entry_ref
 {
-    raft_term term;              /* Term of the entry being ref-counted */
-    raft_index index;            /* Index of the entry being ref-counted */
-    unsigned short count;        /* Number of references */
-    struct raft_entry_ref *next; /* Next item in the bucket (for collisions) */
+    raft_term term;              /* Term of the entry being ref-counted. */
+    raft_index index;            /* Index of the entry being ref-counted. */
+    unsigned short count;        /* Number of references. */
+    struct raft_entry_ref *next; /* Next item in the bucket (for collisions). */
 };
 
 /**
@@ -195,16 +200,16 @@ struct raft_entry_ref
  */
 struct raft_log
 {
-    struct raft_entry *entries;  /* Buffer of log entries. */
-    size_t size;                 /* Number of available slots in the buffer */
+    struct raft_entry *entries;  /* Circular buffer of log entries. */
+    size_t size;                 /* Number of available slots in the buffer. */
     size_t front, back;          /* Indexes of used slots [front, back). */
     raft_index offset;           /* Index of first entry is offset+1. */
-    struct raft_entry_ref *refs; /* Log entries reference counts hash table */
-    size_t refs_size;            /* Size of the reference counts hash table */
-    struct
+    struct raft_entry_ref *refs; /* Log entries reference counts hash table. */
+    size_t refs_size;            /* Size of the reference counts hash table. */
+    struct                       /* Information about last snapshot, or zero. */
     {
-        raft_index last_index; /* A snapshot replaces all entries up to here */
-        raft_term last_term;   /* Term of last index */
+        raft_index last_index; /* Snapshot replaces all entries up to here. */
+        raft_term last_term;   /* Term of last index. */
     } snapshot;
 };
 
@@ -226,7 +231,7 @@ struct raft_request_vote
  */
 struct raft_request_vote_result
 {
-    raft_term term;    /* Receiver's current_term (candidate updates itself). */
+    raft_term term;    /* Receiver's current term (candidate updates itself). */
     bool vote_granted; /* True means candidate received vote. */
 };
 
@@ -242,7 +247,7 @@ struct raft_append_entries
     unsigned leader_id;         /* So follower can redirect clients. */
     raft_index prev_log_index;  /* Index of log entry preceeding new ones. */
     raft_term prev_log_term;    /* Term of entry at prev_log_index. */
-    raft_index leader_commit;   /* Leader's commit_index. */
+    raft_index leader_commit;   /* Leader's commit index. */
     struct raft_entry *entries; /* Log entries to append. */
     unsigned n_entries;         /* Size of the log entries array. */
 };
@@ -252,9 +257,9 @@ struct raft_append_entries
  */
 struct raft_append_entries_result
 {
-    raft_term term;            /* Receiver's current_term */
-    raft_index rejected;       /* If non-zero, the index that was rejected */
-    raft_index last_log_index; /* Receiver's last log entry index, as hint */
+    raft_term term;            /* Receiver's current_term. */
+    raft_index rejected;       /* If non-zero, the index that was rejected. */
+    raft_index last_log_index; /* Receiver's last log entry index, as hint. */
 };
 
 /**
@@ -262,13 +267,13 @@ struct raft_append_entries_result
  */
 struct raft_install_snapshot
 {
-    raft_term term;        /* Leader's term. */
-    unsigned leader_id;    /* So follower can redirect clients. */
-    raft_index last_index; /* Replace all entries up to this one (included) */
-    raft_term last_term;   /* Term of last_index */
-    struct raft_configuration conf; /* Config as of last_index */
-    raft_index conf_index;          /* Index of configuration */
-    struct raft_buffer data;        /* Raw snapshot data */
+    raft_term term;                 /* Leader's term. */
+    unsigned leader_id;             /* So follower can redirect clients. */
+    raft_index last_index;          /* Index of last entry in the snapshot. */
+    raft_term last_term;            /* Term of last_index. */
+    struct raft_configuration conf; /* Config as of last_index. */
+    raft_index conf_index;          /* Commit index of conf. */
+    struct raft_buffer data;        /* Raw snapshot data. */
 };
 
 /**
@@ -287,10 +292,10 @@ enum {
  */
 struct raft_message
 {
-    unsigned short type;        /* Type code */
-    unsigned server_id;         /* ID of sending or destination server */
-    const char *server_address; /* Address of sending or destination server */
-    union {
+    unsigned short type;        /* RPC type code. */
+    unsigned server_id;         /* ID of sending or destination server. */
+    const char *server_address; /* Address of sending or destination server. */
+    union {                     /* Type-specific data */
         struct raft_request_vote request_vote;
         struct raft_request_vote_result request_vote_result;
         struct raft_append_entries append_entries;
@@ -387,6 +392,9 @@ struct raft_io
      */
     void *impl;
 
+    /**
+     * Initialize the backend.
+     */
     int (*init)(struct raft_io *io, unsigned id, const char *address);
 
     /**
@@ -395,12 +403,8 @@ struct raft_io
      * The implementation must synchronously read the current state from
      * disk.
      *
-     * The entries array must be allocated with raft_malloc. Once the
-     * request is completed ownership of such memory is transfered to the
-     * raft instance.
-     *
-     * This request is guaranteed to be the very first function call issued
-     * agaist the backend. No further load request will be issued.
+     * The entries array must be allocated with @raft_malloc. Once the request
+     * is completed ownership of such memory is transfered to the raft instance.
      */
     int (*load)(struct raft_io *io,
                 raft_term *term,
@@ -437,7 +441,7 @@ struct raft_io
      * 1 and the vote to nil.
      *
      * If an attempt is made to bootstrap a server that has already some sate,
-     * then #RAFT_IO_CANTBOOTSTRAP must be returned.
+     * then #RAFT_CANTBOOTSTRAP must be returned.
      */
     int (*bootstrap)(struct raft_io *io, const struct raft_configuration *conf);
 
@@ -455,6 +459,12 @@ struct raft_io
      */
     int (*set_vote)(struct raft_io *io, unsigned server_id);
 
+    /**
+     * Asynchronously send an RPC message.
+     *
+     * The implementation is guaranteed that the memory referenced in the given
+     * message will not be released until the @cb callback is invoked.
+     */
     int (*send)(struct raft_io *io,
                 struct raft_io_send *req,
                 const struct raft_message *message,
@@ -477,11 +487,17 @@ struct raft_io
      */
     int (*truncate)(struct raft_io *io, raft_index index);
 
+    /**
+     * Asynchronously persist a new snapshot.
+     */
     int (*snapshot_put)(struct raft_io *io,
                         struct raft_io_snapshot_put *req,
                         const struct raft_snapshot *snapshot,
                         raft_io_snapshot_put_cb cb);
 
+    /**
+     * Asynchronously load the last snapshot.
+     */
     int (*snapshot_get)(struct raft_io *io,
                         struct raft_io_snapshot_get *req,
                         raft_io_snapshot_get_cb cb);

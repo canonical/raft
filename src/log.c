@@ -474,7 +474,7 @@ int log__append(struct raft_log *l,
 
     assert(l != NULL);
     assert(term > 0);
-    assert(type == RAFT_CONFIGURATION || type == RAFT_BARRIER ||
+    assert(type == RAFT_CHANGE || type == RAFT_BARRIER ||
            type == RAFT_COMMAND);
     assert(buf != NULL);
 
@@ -543,7 +543,7 @@ int log__append_configuration(struct raft_log *l,
     }
 
     /* Append the new entry to the log. */
-    rv = log__append(l, term, RAFT_CONFIGURATION, &buf, NULL);
+    rv = log__append(l, term, RAFT_CHANGE, &buf, NULL);
     if (rv != 0) {
         goto err_after_encode;
     }

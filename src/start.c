@@ -56,7 +56,7 @@ static int restoreEntries(struct raft *r,
             goto err;
         }
         r->last_stored++;
-        if (entry->type == RAFT_CONFIGURATION) {
+        if (entry->type == RAFT_CHANGE) {
             conf = entry;
             conf_index = r->last_stored;
         }
@@ -139,7 +139,7 @@ int raft_start(struct raft *r)
         /* If we don't have a snapshot and the on-disk log is not empty, then
          * the first entry must be a configuration entry. */
         assert(start_index == 1);
-        assert(entries[0].type == RAFT_CONFIGURATION);
+        assert(entries[0].type == RAFT_CHANGE);
 
         /* As a small optimization, bump the commit index to 1 since we require
          * the first entry to be the same on all servers. */

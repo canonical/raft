@@ -40,7 +40,7 @@ void uvDecodeEntriesBatch(const struct raft_buffer *buf,
  * An entry header is 16-byte long and has the following layout:
  *
  * [8 bytes] Term in which the entry was created, little endian.
- * [1 byte ] Message type (Either RAFT_COMMAND or RAFT_CONFIGURATION)
+ * [1 byte ] Message type (Either RAFT_COMMAND or RAFT_CHANGE)
  * [3 bytes] Currently unused.
  * [4 bytes] Size of the log entry data, little endian.
  *

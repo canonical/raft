@@ -864,7 +864,7 @@ static int writeFirstClosed(struct uv *uv,
     }
 
     entry.term = 1;
-    entry.type = RAFT_CONFIGURATION;
+    entry.type = RAFT_CHANGE;
     entry.buf = *conf;
 
     rv = uvSegmentBufferAppend(&buf, &entry, 1);

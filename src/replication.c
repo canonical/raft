@@ -408,7 +408,7 @@ static void raft_replication__leader_append_cb(void *data, int status)
         r->leader_state.progress[server_index].match_index = r->last_stored;
     } else {
         const struct raft_entry *entry = log__get(&r->log, r->last_stored);
-        assert(entry->type == RAFT_CONFIGURATION);
+        assert(entry->type == RAFT_CHANGE);
     }
 
     /* Check if we can commit some new entries. */
@@ -525,7 +525,7 @@ err:
  * requested via @raft_promote and that server has caught up with logs.
  *
  * This function changes the local configuration marking the server being
- * promoted as actually voting, appends the a RAFT_CONFIGURATION entry with
+ * promoted as actually voting, appends the a RAFT_CHANGE entry with
  * the new configuration to the local log and triggers its replication.
  */
 static int raft_replication__trigger_promotion(struct raft *r)
@@ -754,7 +754,7 @@ static void raft_replication__follower_append_cb(void *data, int status)
         /* If this is a configuration change entry, check if the change is about
          * promoting a non-voting server to voting, and in that case update our
          * configuration cache. */
-        if (entry->type == RAFT_CONFIGURATION) {
+        if (entry->type == RAFT_CHANGE) {
             rv = raft_membership__apply(r, index, entry);
             if (rv != 0) {
                 goto out;
@@ -1194,7 +1194,7 @@ static struct request *getRequest(struct raft *r,
 }
 
 /**
- * Apply a RAFT_CONFIGURATION entry that has been committed.
+ * Apply a RAFT_CHANGE entry that has been committed.
  */
 static void raft_replication__apply_configuration(struct raft *r,
                                                   const raft_index index)
@@ -1225,7 +1225,7 @@ static void raft_replication__apply_configuration(struct raft *r,
         convertToFollower(r);
     }
 
-    req = (struct raft_change *)getRequest(r, index, RAFT_CONFIGURATION);
+    req = (struct raft_change *)getRequest(r, index, RAFT_CHANGE);
     if (req != NULL && req->cb != NULL) {
         req->cb(req, 0);
     }
@@ -1361,7 +1361,7 @@ int raft_replication__apply(struct raft *r)
         const struct raft_entry *entry = log__get(&r->log, index);
 
         assert(entry->type == RAFT_COMMAND || entry->type == RAFT_BARRIER ||
-               entry->type == RAFT_CONFIGURATION);
+               entry->type == RAFT_CHANGE);
 
         switch (entry->type) {
             case RAFT_COMMAND:
@@ -1371,7 +1371,7 @@ int raft_replication__apply(struct raft *r)
                 raft_replication__apply_barrier(r, index);
                 rv = 0;
                 break;
-            case RAFT_CONFIGURATION:
+            case RAFT_CHANGE:
                 raft_replication__apply_configuration(r, index);
                 rv = 0;
                 break;

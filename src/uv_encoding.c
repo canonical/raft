@@ -260,7 +260,7 @@ void uvEncodeBatchHeader(const struct raft_entry *entries,
         /* Term in which the entry was created, little endian. */
         byte__put64(&cursor, entry->term);
 
-        /* Message type (Either RAFT_COMMAND or RAFT_CONFIGURATION) */
+        /* Message type (Either RAFT_COMMAND or RAFT_CHANGE) */
         byte__put8(&cursor, entry->type);
 
         cursor += 3; /* Unused */
@@ -324,7 +324,7 @@ int uvDecodeBatchHeader(const void *batch,
         entry->type = byte__get8(&cursor);
 
         if (entry->type != RAFT_COMMAND && entry->type != RAFT_BARRIER &&
-            entry->type != RAFT_CONFIGURATION) {
+            entry->type != RAFT_CHANGE) {
             rv = RAFT_MALFORMED;
             goto err_after_alloc;
         }

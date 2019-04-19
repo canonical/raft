@@ -338,7 +338,7 @@ static bool second_server_has_new_configuration(struct raft_fixture *f,
 }
 
 /* If a follower receives an AppendEntries RPC containing a
- * RAFT_CONFIGURATION entry which promotes a non-voting server, the
+ * RAFT_CHANGE entry which promotes a non-voting server, the
  * configuration change is immediately applied locally, even if the entry is not
  * yet committed. Once the entry is committed, the change becomes permanent.*/
 TEST_CASE(promote, change_is_immediate, NULL)

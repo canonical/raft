@@ -98,7 +98,7 @@ int raft_membership__apply(struct raft *r,
     assert(r != NULL);
     assert(r->state == RAFT_FOLLOWER);
     assert(entry != NULL);
-    assert(entry->type == RAFT_CONFIGURATION);
+    assert(entry->type == RAFT_CHANGE);
 
     raft_configuration_init(&configuration);
 

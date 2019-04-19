@@ -80,7 +80,7 @@ int log__append_commands(struct raft_log *l,
                          const unsigned n);
 
 /**
- * Convenience to encode and append a single #RAFT_CONFIGURATION entry.
+ * Convenience to encode and append a single #RAFT_CHANGE entry.
  */
 int log__append_configuration(struct raft_log *l,
                               const raft_term term,

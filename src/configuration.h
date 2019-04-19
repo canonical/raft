@@ -2,8 +2,8 @@
  * Modify and inspect @raft_configuration objects.
  */
 
-#ifndef RAFT_CONFIGURATION_H
-#define RAFT_CONFIGURATION_H
+#ifndef CONFIGURATION_H_
+#define CONFIGURATION_H_
 
 #include "../include/raft.h"
 
@@ -71,4 +71,4 @@ int configuration__encode(const struct raft_configuration *c,
 int configuration__decode(const struct raft_buffer *buf,
                           struct raft_configuration *c);
 
-#endif /* RAFT_CONFIGURATION_H */
+#endif /* CONFIGURATION_H_ */

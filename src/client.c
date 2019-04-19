@@ -146,7 +146,7 @@ static int changeConfiguration(
         r->configuration = *configuration;
     }
 
-    req->type = RAFT_CONFIGURATION;
+    req->type = RAFT_CHANGE;
     req->index = index;
     QUEUE_PUSH(&r->leader_state.requests, &req->queue);
 
