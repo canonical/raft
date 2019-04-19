@@ -7,9 +7,9 @@
 #include "assert.h"
 #include "byte.h"
 #include "configuration.h"
+#include "entry.h"
 #include "uv.h"
 #include "uv_encoding.h"
-#include "entry.h"
 
 /* Check if the given filename matches the one of a closed segment (xxx-yyy), or
  * of an open segment (open-xxx), and fill the given info structure if so.
@@ -1010,7 +1010,7 @@ out_after_buffer_init:
 out_after_open:
     close(fd);
 out_after_load:
-    entry_batches__destroy(entries, n);
+    entryBatchesDestroy(entries, n);
 out:
     return rv;
 }

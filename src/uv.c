@@ -236,7 +236,7 @@ static int loadSnapshotAndEntries(struct uv *uv,
         /* TODO: entries are behind the snapshot, we should delete them from
          * disk. */
         *start_index = (*snapshot)->index + 1;
-        entry_batches__destroy(*entries, *n);
+        entryBatchesDestroy(*entries, *n);
         *entries = NULL;
         *n = 0;
     }

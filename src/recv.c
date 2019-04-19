@@ -42,7 +42,7 @@ static int recv(struct raft *r, struct raft_message *message)
                                       message->server_address,
                                       &message->append_entries);
             if (rv != 0) {
-                entry_batches__destroy(message->append_entries.entries,
+                entryBatchesDestroy(message->append_entries.entries,
                                        message->append_entries.n_entries);
             }
             break;

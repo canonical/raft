@@ -130,7 +130,7 @@ int raft_start(struct raft *r)
         rc = snapshot__restore(r, snapshot);
         if (rc != 0) {
             snapshot__destroy(snapshot);
-            entry_batches__destroy(entries, n_entries);
+            entryBatchesDestroy(entries, n_entries);
             return rc;
         }
         logRestore(&r->log, snapshot->index, snapshot->term);
@@ -152,7 +152,7 @@ int raft_start(struct raft *r)
     tracef("restore %lu entries starting at %llu", n_entries, start_index);
     rc = restoreEntries(r, start_index, entries, n_entries);
     if (rc != 0) {
-        entry_batches__destroy(entries, n_entries);
+        entryBatchesDestroy(entries, n_entries);
         return rc;
     }
 
