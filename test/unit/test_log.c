@@ -40,22 +40,22 @@ static void tear_down(void *data)
  *****************************************************************************/
 
 /* Accessors */
-#define N_OUTSTANDING log__n_outstanding(&f->log)
-#define LAST_INDEX log__last_index(&f->log)
-#define TERM_OF(INDEX) log__term_of(&f->log, INDEX)
-#define LAST_TERM log__last_term(&f->log)
-#define GET(INDEX) log__get(&f->log, INDEX)
+#define N_OUTSTANDING logNumOutstanding(&f->log)
+#define LAST_INDEX logLastIndex(&f->log)
+#define TERM_OF(INDEX) logTermOf(&f->log, INDEX)
+#define LAST_TERM logLastTerm(&f->log)
+#define GET(INDEX) logGet(&f->log, INDEX)
 
 /* Append one command entry with the given term and a hard-coded payload. */
-#define APPEND(TERM)                                                 \
-    {                                                                \
-        struct raft_buffer buf2;                                     \
-        int rv2;                                                     \
-        buf2.base = raft_malloc(8);                                  \
-        buf2.len = 8;                                                \
-        strcpy(buf2.base, "hello");                                  \
-        rv2 = log__append(&f->log, TERM, RAFT_COMMAND, &buf2, NULL); \
-        munit_assert_int(rv2, ==, 0);                                \
+#define APPEND(TERM)                                               \
+    {                                                              \
+        struct raft_buffer buf2;                                   \
+        int rv2;                                                   \
+        buf2.base = raft_malloc(8);                                \
+        buf2.len = 8;                                              \
+        strcpy(buf2.base, "hello");                                \
+        rv2 = logAppend(&f->log, TERM, RAFT_COMMAND, &buf2, NULL); \
+        munit_assert_int(rv2, ==, 0);                              \
     }
 
 /* Same as APPEND, but repeated N times. */
@@ -69,38 +69,38 @@ static void tear_down(void *data)
 
 /* Append N entries all belonging to the same batch. Each entry will have 64-bit
  * payload set to i * 1000, where i is the index of the entry in the batch. */
-#define APPEND_BATCH(N)                                              \
-    {                                                                \
-        void *batch;                                                 \
-        size_t offset;                                               \
-        int i;                                                       \
-        batch = raft_malloc(8 * N);                                  \
-        munit_assert_ptr_not_null(batch);                            \
-        offset = 0;                                                  \
-        for (i = 0; i < N; i++) {                                    \
-            struct raft_buffer buf;                                  \
-            int rv;                                                  \
-            buf.base = batch + offset;                               \
-            buf.len = 8;                                             \
-            *(uint64_t *)buf.base = i * 1000;                        \
-            rv = log__append(&f->log, 1, RAFT_COMMAND, &buf, batch); \
-            munit_assert_int(rv, ==, 0);                             \
-            offset += 8;                                             \
-        }                                                            \
+#define APPEND_BATCH(N)                                            \
+    {                                                              \
+        void *batch;                                               \
+        size_t offset;                                             \
+        int i;                                                     \
+        batch = raft_malloc(8 * N);                                \
+        munit_assert_ptr_not_null(batch);                          \
+        offset = 0;                                                \
+        for (i = 0; i < N; i++) {                                  \
+            struct raft_buffer buf;                                \
+            int rv;                                                \
+            buf.base = batch + offset;                             \
+            buf.len = 8;                                           \
+            *(uint64_t *)buf.base = i * 1000;                      \
+            rv = logAppend(&f->log, 1, RAFT_COMMAND, &buf, batch); \
+            munit_assert_int(rv, ==, 0);                           \
+            offset += 8;                                           \
+        }                                                          \
     }
 
-#define ACQUIRE(INDEX)                                    \
-    {                                                     \
-        int rv2;                                          \
-        rv2 = log__acquire(&f->log, INDEX, &entries, &n); \
-        munit_assert_int(rv2, ==, 0);                     \
+#define ACQUIRE(INDEX)                                  \
+    {                                                   \
+        int rv2;                                        \
+        rv2 = logAcquire(&f->log, INDEX, &entries, &n); \
+        munit_assert_int(rv2, ==, 0);                   \
     }
 
-#define RELEASE(INDEX) log__release(&f->log, INDEX, entries, n);
+#define RELEASE(INDEX) logRelease(&f->log, INDEX, entries, n);
 
-#define TRUNCATE(N) log__truncate(&f->log, N)
-#define SNAPSHOT(INDEX, TRAILING) log__snapshot(&f->log, INDEX, TRAILING)
-#define RESTORE(INDEX, TERM) log__restore(&f->log, INDEX, TERM)
+#define TRUNCATE(N) logTruncate(&f->log, N)
+#define SNAPSHOT(INDEX, TRAILING) logSnapshot(&f->log, INDEX, TRAILING)
+#define RESTORE(INDEX, TERM) logRestore(&f->log, INDEX, TERM)
 
 /******************************************************************************
  *
@@ -115,7 +115,7 @@ static void tear_down(void *data)
     munit_assert_int(f->log.front, ==, FRONT);   \
     munit_assert_int(f->log.back, ==, BACK);     \
     munit_assert_int(f->log.offset, ==, OFFSET); \
-    munit_assert_int(log__n_outstanding(&f->log), ==, N)
+    munit_assert_int(logNumOutstanding(&f->log), ==, N)
 
 /* Assert the last index and term of the most recent snapshot. */
 #define ASSERT_SNAPSHOT(INDEX, TERM)                         \
@@ -126,7 +126,7 @@ static void tear_down(void *data)
 #define ASSERT_TERM_OF(INDEX, TERM)              \
     {                                            \
         const struct raft_entry *entry;          \
-        entry = log__get(&f->log, INDEX);        \
+        entry = logGet(&f->log, INDEX);          \
         munit_assert_ptr_not_null(entry);        \
         munit_assert_int(entry->term, ==, TERM); \
     }
@@ -151,7 +151,7 @@ static void tear_down(void *data)
 
 /******************************************************************************
  *
- * log__n_outstanding
+ * logNumOutstanding
  *
  *****************************************************************************/
 
@@ -215,7 +215,7 @@ TEST_CASE(n_outstanding, offset_not_empty, NULL)
 
 /******************************************************************************
  *
- * log__last_index
+ * logLastIndex
  *
  *****************************************************************************/
 
@@ -285,7 +285,7 @@ TEST_CASE(last_index, two_with_offset, NULL)
 
 /******************************************************************************
  *
- * log__last_term
+ * logLastTerm
  *
  *****************************************************************************/
 
@@ -317,7 +317,7 @@ TEST_CASE(last_term, snapshot, NULL)
 
 /******************************************************************************
  *
- * log__term_of
+ * logTermOf
  *
  *****************************************************************************/
 
@@ -410,7 +410,7 @@ TEST_CASE(term_of, snapshot_trailing, NULL)
 
 /******************************************************************************
  *
- * log__get
+ * logGet
  *
  *****************************************************************************/
 
@@ -495,7 +495,7 @@ TEST_CASE(get, two_with_offset, NULL)
 
 /******************************************************************************
  *
- * log__append
+ * logAppend
  *
  *****************************************************************************/
 
@@ -677,7 +677,7 @@ TEST_CASE(append, error, oom, append_oom_params)
     buf.base = NULL;
     buf.len = 0;
     test_heap_fault_enable(&f->heap);
-    rv = log__append(&f->log, 1, RAFT_COMMAND, &buf, NULL);
+    rv = logAppend(&f->log, 1, RAFT_COMMAND, &buf, NULL);
     munit_assert_int(rv, ==, RAFT_NOMEM);
     return MUNIT_OK;
 }
@@ -698,7 +698,7 @@ TEST_CASE(append, error, oom_refs, NULL)
     buf.base = NULL;
     buf.len = 0;
 
-    rv = log__append(&f->log, 1, RAFT_COMMAND, &buf, NULL);
+    rv = logAppend(&f->log, 1, RAFT_COMMAND, &buf, NULL);
     munit_assert_int(rv, ==, RAFT_NOMEM);
 
     return MUNIT_OK;
@@ -706,7 +706,7 @@ TEST_CASE(append, error, oom_refs, NULL)
 
 /******************************************************************************
  *
- * log__append_configuration
+ * logAppendConfiguration
  *
  *****************************************************************************/
 
@@ -740,7 +740,7 @@ TEST_CASE(append_configuration, error, oom, append_configuration_oom_params)
 
     test_heap_fault_enable(&f->heap);
 
-    rv = log__append_configuration(&f->log, 1, &configuration);
+    rv = logAppendConfiguration(&f->log, 1, &configuration);
     munit_assert_int(rv, ==, RAFT_NOMEM);
 
     raft_configuration_close(&configuration);
@@ -750,7 +750,7 @@ TEST_CASE(append_configuration, error, oom, append_configuration_oom_params)
 
 /******************************************************************************
  *
- * log__acquire
+ * logAcquire
  *
  *****************************************************************************/
 
@@ -936,7 +936,7 @@ TEST_CASE(acquire, error, oom, NULL)
     test_heap_fault_config(&f->heap, 0, 1);
     test_heap_fault_enable(&f->heap);
 
-    rv = log__acquire(&f->log, 1, &entries, &n);
+    rv = logAcquire(&f->log, 1, &entries, &n);
     munit_assert_int(rv, ==, RAFT_NOMEM);
 
     return MUNIT_OK;
@@ -944,7 +944,7 @@ TEST_CASE(acquire, error, oom, NULL)
 
 /******************************************************************************
  *
- * log__truncate
+ * logTruncate
  *
  *****************************************************************************/
 
@@ -1041,7 +1041,7 @@ TEST_CASE(truncate, wrap, NULL)
 }
 
 /* Truncate the last entry of a log with a single entry, which still has an
- * outstanding reference created by a call to log__acquire(). */
+ * outstanding reference created by a call to logAcquire(). */
 TEST_CASE(truncate, referenced, NULL)
 {
     struct fixture *f = data;
@@ -1193,7 +1193,7 @@ TEST_CASE(truncate, error, acquired_oom, truncate_acquired_oom_params)
 
     test_heap_fault_enable(&f->heap);
 
-    rv = log__append(&f->log, 2, RAFT_COMMAND, &buf, NULL);
+    rv = logAppend(&f->log, 2, RAFT_COMMAND, &buf, NULL);
     munit_assert_int(rv, ==, RAFT_NOMEM);
 
     RELEASE(2);
@@ -1203,7 +1203,7 @@ TEST_CASE(truncate, error, acquired_oom, truncate_acquired_oom_params)
 
 /******************************************************************************
  *
- * log__snapshot
+ * logSnapshot
  *
  *****************************************************************************/
 
@@ -1377,7 +1377,7 @@ TEST_CASE(snapshot, wrap, NULL)
 
 /******************************************************************************
  *
- * log__restore
+ * logRestore
  *
  *****************************************************************************/
 

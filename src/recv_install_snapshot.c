@@ -28,7 +28,7 @@ int raft_rpc__recv_install_snapshot(struct raft *r,
     assert(address != NULL);
 
     result->rejected = args->last_index;
-    result->last_log_index = log__last_index(&r->log);
+    result->last_log_index = logLastIndex(&r->log);
 
     rv = recv__ensure_matching_terms(r, args->term, &match);
     if (rv != 0) {

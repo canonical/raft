@@ -30,7 +30,7 @@ int raft_membership__can_change_configuration(struct raft *r)
 
     /* The index of the last committed configuration can't be greater than the
      * last log index. */
-    assert(log__last_index(&r->log) >= r->configuration_index);
+    assert(logLastIndex(&r->log) >= r->configuration_index);
 
     /* No catch-up round should be in progress. */
     assert(r->leader_state.round_number == 0);
@@ -63,7 +63,7 @@ bool raft_membership__update_catch_up_round(struct raft *r)
         return false;
     }
 
-    last_index = log__last_index(&r->log);
+    last_index = logLastIndex(&r->log);
 
     is_up_to_date = match_index == last_index;
     is_fast_enough = r->leader_state.round_duration < r->election_timeout;
@@ -136,7 +136,7 @@ int raft_membership__rollback(struct raft *r)
     /* Fetch the last committed configuration entry. */
     assert(r->configuration_index != 0);
 
-    entry = log__get(&r->log, r->configuration_index);
+    entry = logGet(&r->log, r->configuration_index);
 
     assert(entry != NULL);
 

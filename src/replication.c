@@ -174,7 +174,7 @@ static int send_snapshot(struct raft *r, size_t i)
     request->server_id = server->id;
     request->get.data = request;
 
-    progress__to_snapshot(r, server, log__snapshot_index(&r->log));
+    progress__to_snapshot(r, server, logSnapshotIndex(&r->log));
 
     rv = r->io->snapshot_get(r->io, &request->get, send_snapshot_get_cb);
     if (rv != 0) {
@@ -198,7 +198,7 @@ static void send_append_entries_cb(struct raft_io_send *req, int status)
     struct raft *r = request->raft;
     (void)status;
     /* Tell the log that we're done referencing these entries. */
-    log__release(&r->log, request->index, request->entries, request->n);
+    logRelease(&r->log, request->index, request->entries, request->n);
     raft_free(request);
 }
 
@@ -222,7 +222,7 @@ static int send_append_entries(struct raft *r,
     args->prev_log_term = prev_term;
 
     /* TODO: implement a limit to the total size of the entries being sent */
-    rv = log__acquire(&r->log, next_index, &args->entries, &args->n_entries);
+    rv = logAcquire(&r->log, next_index, &args->entries, &args->n_entries);
     if (rv != 0) {
         goto err;
     }
@@ -239,7 +239,7 @@ static int send_append_entries(struct raft *r,
 
     tracef("send %lu entries starting at %llu to server %lu (last index %llu)",
            args->n_entries, args->prev_log_index, server->id,
-           log__last_index(&r->log));
+           logLastIndex(&r->log));
 
     message.type = RAFT_IO_APPEND_ENTRIES;
     message.server_id = server->id;
@@ -266,7 +266,7 @@ static int send_append_entries(struct raft *r,
 err_after_request_alloc:
     raft_free(request);
 err_after_entries_acquired:
-    log__release(&r->log, next_index, args->entries, args->n_entries);
+    logRelease(&r->log, next_index, args->entries, args->n_entries);
 err:
     assert(rv != 0);
     return rv;
@@ -291,7 +291,7 @@ int replication__trigger(struct raft *r, unsigned i)
     }
 
     next_index = progress__next_index(r, server);
-    snapshot_index = log__snapshot_index(&r->log);
+    snapshot_index = logSnapshotIndex(&r->log);
 
     /* From Section §3.5:
      *
@@ -320,7 +320,7 @@ int replication__trigger(struct raft *r, unsigned i)
          * next_index - 1 */
         assert(next_index > 1);
         prev_index = next_index - 1;
-        prev_term = log__term_of(&r->log, next_index - 1);
+        prev_term = logTermOf(&r->log, next_index - 1);
         /* If the entry is not anymore in our log, send the last snapshot. */
         if (prev_term == 0) {
             assert(next_index - 1 < snapshot_index);
@@ -347,7 +347,7 @@ static size_t update_last_stored(struct raft *r,
     for (i = 0; i < n_entries; i++) {
         struct raft_entry *entry = &entries[i];
         raft_index index = first_index + i;
-        raft_term local_term = log__term_of(&r->log, index);
+        raft_term local_term = logTermOf(&r->log, index);
 
         /* If we have no entry at this index, or if the entry we have now has a
          * different term, it means that this entry got truncated, so let's stop
@@ -377,7 +377,7 @@ static void raft_replication__leader_append_cb(struct raft_io_append *req,
     update_last_stored(r, request->index, request->entries, request->n);
 
     /* Tell the log that we're done referencing these entries. */
-    log__release(&r->log, request->index, request->entries, request->n);
+    logRelease(&r->log, request->index, request->entries, request->n);
 
     raft_free(request);
 
@@ -410,7 +410,7 @@ static void raft_replication__leader_append_cb(struct raft_io_append *req,
     if (server_index < r->configuration.n) {
         r->leader_state.progress[server_index].match_index = r->last_stored;
     } else {
-        const struct raft_entry *entry = log__get(&r->log, r->last_stored);
+        const struct raft_entry *entry = logGet(&r->log, r->last_stored);
         assert(entry->type == RAFT_CHANGE);
     }
 
@@ -437,7 +437,7 @@ static int raft_replication__leader_append(struct raft *r, unsigned index)
     }
 
     /* Acquire all the entries from the given index onwards. */
-    rv = log__acquire(&r->log, index, &entries, &n);
+    rv = logAcquire(&r->log, index, &entries, &n);
     if (rv != 0) {
         goto err;
     }
@@ -471,7 +471,7 @@ err_after_request_alloc:
     raft_free(request);
 
 err_after_entries_acquired:
-    log__release(&r->log, index, entries, n);
+    logRelease(&r->log, index, entries, n);
 
 err:
     assert(rv != 0);
@@ -555,10 +555,10 @@ static int raft_replication__trigger_promotion(struct raft *r)
     server->voting = true;
 
     /* Index of the entry being appended. */
-    index = log__last_index(&r->log) + 1;
+    index = logLastIndex(&r->log) + 1;
 
     /* Encode the new configuration and append it to the log. */
-    rv = log__append_configuration(&r->log, term, &r->configuration);
+    rv = logAppendConfiguration(&r->log, term, &r->configuration);
     if (rv != 0) {
         goto err;
     }
@@ -570,12 +570,12 @@ static int raft_replication__trigger_promotion(struct raft *r)
     }
 
     r->leader_state.promotee_id = 0;
-    r->configuration_uncommitted_index = log__last_index(&r->log);
+    r->configuration_uncommitted_index = logLastIndex(&r->log);
 
     return 0;
 
 err_after_log_append:
-    log__truncate(&r->log, index);
+    logTruncate(&r->log, index);
 
 err:
     server->voting = false;
@@ -625,8 +625,8 @@ int replication__update(struct raft *r,
      * value of prevLogIndex + len(entriesToAppend). If it has a longer log, it
      * might be a leftover from previous terms. */
     last_index = result->last_log_index;
-    if (last_index > log__last_index(&r->log)) {
-        last_index = log__last_index(&r->log);
+    if (last_index > logLastIndex(&r->log)) {
+        last_index = logLastIndex(&r->log);
     }
 
     /* If the RPC succeeded, update our counters for this server.
@@ -752,7 +752,7 @@ static void raft_replication__follower_append_cb(struct raft_io_append *req,
     for (j = 0; j < i; j++) {
         struct raft_entry *entry = &args->entries[j];
         raft_index index = request->index + j;
-        raft_term local_term = log__term_of(&r->log, index);
+        raft_term local_term = logTermOf(&r->log, index);
 
         assert(local_term != 0 && local_term == entry->term);
 
@@ -788,7 +788,7 @@ respond:
     send_append_entries_result(r, &result);
 
 out:
-    log__release(&r->log, request->index, request->args.entries,
+    logRelease(&r->log, request->index, request->args.entries,
                  request->args.n_entries);
 
     raft_free(request);
@@ -821,7 +821,7 @@ static int check_prev_log_entry(struct raft *r,
         return 0;
     }
 
-    local_prev_term = log__term_of(&r->log, args->prev_log_index);
+    local_prev_term = logTermOf(&r->log, args->prev_log_index);
     if (local_prev_term == 0) {
         tracef("no entry at index %llu -> reject", args->prev_log_index);
         return 1;
@@ -868,7 +868,7 @@ static int raft_replication__delete_conflicting_entries(
     for (j = 0; j < args->n_entries; j++) {
         struct raft_entry *entry = &args->entries[j];
         raft_index entry_index = args->prev_log_index + 1 + j;
-        raft_term local_term = log__term_of(&r->log, entry_index);
+        raft_term local_term = logTermOf(&r->log, entry_index);
 
         if (local_term > 0 && local_term != entry->term) {
             if (entry_index <= r->commit_index) {
@@ -893,7 +893,7 @@ static int raft_replication__delete_conflicting_entries(
             if (rv != 0) {
                 return rv;
             }
-            log__truncate(&r->log, entry_index);
+            logTruncate(&r->log, entry_index);
             r->last_stored = entry_index - 1;
 
             /* We want to append all entries from here on, replacing anything
@@ -964,7 +964,7 @@ int raft_replication__append(struct raft *r,
             tracef("append entries has nothing new -> succeed immediately");
         }
         if (args->leader_commit > r->commit_index) {
-            raft_index last_index = log__last_index(&r->log);
+            raft_index last_index = logLastIndex(&r->log);
             r->commit_index = min(args->leader_commit, last_index);
             rv = raft_replication__apply(r);
             if (rv != 0) {
@@ -993,7 +993,7 @@ int raft_replication__append(struct raft *r,
     for (j = 0; j < n; j++) {
         struct raft_entry *entry = &args->entries[i + j];
 
-        rv = log__append(&r->log, entry->term, entry->type, &entry->buf,
+        rv = logAppend(&r->log, entry->term, entry->type, &entry->buf,
                          entry->batch);
         if (rv != 0) {
             /* TODO: we should revert any changes we made to the log */
@@ -1002,7 +1002,7 @@ int raft_replication__append(struct raft *r,
     }
 
     /* Acquire the relevant entries from the log. */
-    rv = log__acquire(&r->log, request->index, &request->args.entries,
+    rv = logAcquire(&r->log, request->index, &request->args.entries,
                       &request->args.n_entries);
     if (rv != 0) {
         goto err_after_request_alloc;
@@ -1025,7 +1025,7 @@ int raft_replication__append(struct raft *r,
     return 0;
 
 err_after_acquire_entries:
-    log__release(&r->log, request->index, request->args.entries,
+    logRelease(&r->log, request->index, request->args.entries,
                  request->args.n_entries);
 
 err_after_request_alloc:
@@ -1117,7 +1117,7 @@ int raft_replication__install_snapshot(struct raft *r,
     }
 
     /* If we already have all entries in the snapshot, this is a no-op */
-    local_term = log__term_of(&r->log, args->last_index);
+    local_term = logTermOf(&r->log, args->last_index);
     if (local_term != 0 && local_term >= args->last_term) {
         *rejected = 0;
         return 0;
@@ -1126,7 +1126,7 @@ int raft_replication__install_snapshot(struct raft *r,
     *async = true;
 
     /* Premptively update our in-memory state. */
-    log__restore(&r->log, args->last_index, args->last_term);
+    logRestore(&r->log, args->last_index, args->last_term);
 
     /* We need to truncate our entire log */
     rv = r->io->truncate(r->io, 1);
@@ -1297,7 +1297,7 @@ static void snapshot_put_cb(struct raft_io_snapshot_put *req, int status)
         goto out;
     }
 
-    log__snapshot(&r->log, snapshot->index, r->snapshot.trailing);
+    logSnapshot(&r->log, snapshot->index, r->snapshot.trailing);
 
 out:
     snapshot__close(&r->snapshot.pending);
@@ -1314,7 +1314,7 @@ static int take_snapshot(struct raft *r)
 
     snapshot = &r->snapshot.pending;
     snapshot->index = r->last_applied;
-    snapshot->term = log__term_of(&r->log, r->last_applied);
+    snapshot->term = logTermOf(&r->log, r->last_applied);
 
     raft_configuration_init(&snapshot->configuration);
     rv = configurationCopy(&r->configuration, &snapshot->configuration);
@@ -1366,7 +1366,7 @@ int raft_replication__apply(struct raft *r)
     }
 
     for (index = r->last_applied + 1; index <= r->commit_index; index++) {
-        const struct raft_entry *entry = log__get(&r->log, index);
+        const struct raft_entry *entry = logGet(&r->log, index);
 
         assert(entry->type == RAFT_COMMAND || entry->type == RAFT_BARRIER ||
                entry->type == RAFT_CHANGE);
@@ -1412,11 +1412,11 @@ void raft_replication__quorum(struct raft *r, const raft_index index)
 
     /* TODO: fuzzy-test --seed 0x8db5fccc replication/entries/partitioned
      * fails the assertion below. */
-    if (log__term_of(&r->log, index) == 0) {
+    if (logTermOf(&r->log, index) == 0) {
         return;
     }
-    // assert(log__term_of(&r->log, index) > 0);
-    assert(log__term_of(&r->log, index) <= r->current_term);
+    // assert(logTermOf(&r->log, index) > 0);
+    assert(logTermOf(&r->log, index) <= r->current_term);
 
     for (i = 0; i < r->configuration.n; i++) {
         struct raft_server *server = &r->configuration.servers[i];

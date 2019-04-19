@@ -38,7 +38,7 @@ int recv__append_entries(struct raft *r,
     assert(address != NULL);
 
     result->rejected = args->prev_log_index;
-    result->last_log_index = log__last_index(&r->log);
+    result->last_log_index = logLastIndex(&r->log);
 
     rv = recv__ensure_matching_terms(r, args->term, &match);
     if (rv != 0) {

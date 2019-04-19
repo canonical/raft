@@ -47,11 +47,11 @@ static int restoreEntries(struct raft *r,
     raft_index conf_index;
     size_t i;
     int rc;
-    log__seek(&r->log, start_index);
+    logSeek(&r->log, start_index);
     for (i = 0; i < n; i++) {
         struct raft_entry *entry = &entries[i];
-        rc = log__append(&r->log, entry->term, entry->type, &entry->buf,
-                         entry->batch);
+        rc = logAppend(&r->log, entry->term, entry->type, &entry->buf,
+                       entry->batch);
         if (rc != 0) {
             goto err;
         }
@@ -71,8 +71,8 @@ static int restoreEntries(struct raft *r,
     return 0;
 
 err:
-    if (log__n_outstanding(&r->log) > 0) {
-        log__discard(&r->log, r->log.offset + 1);
+    if (logNumOutstanding(&r->log) > 0) {
+        logDiscard(&r->log, r->log.offset + 1);
     }
     return rc;
 }
@@ -112,7 +112,7 @@ int raft_start(struct raft *r)
     assert(r->state == RAFT_UNAVAILABLE);
     assert(r->heartbeat_timeout != 0);
     assert(r->heartbeat_timeout < r->election_timeout);
-    assert(log__n_outstanding(&r->log) == 0);
+    assert(logNumOutstanding(&r->log) == 0);
     assert(r->last_stored == 0);
 
     infof(r->io, "starting");
@@ -133,7 +133,7 @@ int raft_start(struct raft *r)
             entry_batches__destroy(entries, n_entries);
             return rc;
         }
-        log__restore(&r->log, snapshot->index, snapshot->term);
+        logRestore(&r->log, snapshot->index, snapshot->term);
         raft_free(snapshot);
     } else if (n_entries > 0) {
         /* If we don't have a snapshot and the on-disk log is not empty, then

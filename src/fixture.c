@@ -1087,7 +1087,7 @@ int raft_fixture_init(struct raft_fixture *f, unsigned n, struct raft_fsm *fsms)
         serverConnectToAll(f, i);
     }
 
-    log__init(&f->log);
+    logInit(&f->log);
     f->commit_index = 0;
     f->hook = NULL;
 
@@ -1100,7 +1100,7 @@ void raft_fixture_close(struct raft_fixture *f)
     for (i = 0; i < f->n; i++) {
         serverClose(&f->servers[i]);
     }
-    log__close(&f->log);
+    logClose(&f->log);
 }
 
 int raft_fixture_configuration(struct raft_fixture *f,
@@ -1311,7 +1311,7 @@ static void checkLeaderAppendOnly(struct raft_fixture *f)
 {
     struct raft *raft;
     raft_index index;
-    raft_index last = log__last_index(&f->log);
+    raft_index last = logLastIndex(&f->log);
 
     /* If the cached log is empty it means there was no leader before. */
     if (last == 0) {
@@ -1324,14 +1324,14 @@ static void checkLeaderAppendOnly(struct raft_fixture *f)
     }
 
     raft = raft_fixture_get(f, f->leader_id - 1);
-    last = log__last_index(&f->log);
+    last = logLastIndex(&f->log);
 
     for (index = 1; index <= last; index++) {
         const struct raft_entry *entry1;
         const struct raft_entry *entry2;
 
-        entry1 = log__get(&f->log, index);
-        entry2 = log__get(&raft->log, index);
+        entry1 = logGet(&f->log, index);
+        entry2 = logGet(&raft->log, index);
 
         assert(entry1 != NULL);
 
@@ -1362,10 +1362,10 @@ static void copyLeaderLog(struct raft_fixture *f)
     size_t i;
     int rc;
 
-    log__close(&f->log);
-    log__init(&f->log);
+    logClose(&f->log);
+    logInit(&f->log);
 
-    rc = log__acquire(&raft->log, 1, &entries, &n);
+    rc = logAcquire(&raft->log, 1, &entries, &n);
     assert(rc == 0);
 
     for (i = 0; i < n; i++) {
@@ -1374,11 +1374,11 @@ static void copyLeaderLog(struct raft_fixture *f)
         buf.len = entry->buf.len;
         buf.base = raft_malloc(buf.len);
         memcpy(buf.base, entry->buf.base, buf.len);
-        rc = log__append(&f->log, entry->term, entry->type, &buf, NULL);
+        rc = logAppend(&f->log, entry->term, entry->type, &buf, NULL);
         assert(rc == 0);
     }
 
-    log__release(&raft->log, 1, entries, n);
+    logRelease(&raft->log, 1, entries, n);
 }
 
 /* Update the commit index to match the one from the current leader. */

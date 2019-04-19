@@ -33,7 +33,7 @@ int progress__build_array(struct raft *r)
 {
     struct raft_progress *p;
     unsigned i;
-    raft_index last_index = log__last_index(&r->log);
+    raft_index last_index = logLastIndex(&r->log);
     p = raft_malloc(r->configuration.n * sizeof *p);
     if (p == NULL) {
         return RAFT_NOMEM;
@@ -51,7 +51,7 @@ int progress__build_array(struct raft *r)
 int progress__rebuild_array(struct raft *r,
                             const struct raft_configuration *configuration)
 {
-    raft_index last_index = log__last_index(&r->log);
+    raft_index last_index = logLastIndex(&r->log);
     struct raft_progress *p;
     unsigned i;
 

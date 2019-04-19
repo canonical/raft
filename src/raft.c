@@ -44,7 +44,7 @@ int raft_init(struct raft *r,
     strcpy(r->address, address);
     r->current_term = 0;
     r->voted_for = 0;
-    log__init(&r->log);
+    logInit(&r->log);
     raft_configuration_init(&r->configuration);
     r->configuration_index = 0;
     r->configuration_uncommitted_index = 0;
@@ -75,7 +75,7 @@ static void io_close_cb(struct raft_io *io)
     infof(r->io, "stopped");
 
     raft_free(r->address);
-    log__close(&r->log);
+    logClose(&r->log);
     raft_configuration_close(&r->configuration);
 
     if (r->close_cb != NULL) {

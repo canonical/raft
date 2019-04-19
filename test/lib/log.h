@@ -8,7 +8,7 @@
 #include "../../src/log.h"
 
 #define FIXTURE_LOG struct raft_log log;
-#define SETUP_LOG log__init(&f->log)
-#define TEAR_DOWN_LOG log__close(&f->log)
+#define SETUP_LOG logInit(&f->log)
+#define TEAR_DOWN_LOG logClose(&f->log)
 
 #endif /* TEST_LOG_H */
