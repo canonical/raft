@@ -872,7 +872,7 @@ raft_index raft_last_applied(struct raft *r);
  * the FSM when a quorum is reached.
  */
 struct raft_apply;
-typedef void (*raft_apply_cb)(struct raft_apply *req, int status);
+typedef void (*raft_apply_cb)(struct raft_apply *req, int status, void *result);
 struct raft_apply
 {
     RAFT__REQUEST;

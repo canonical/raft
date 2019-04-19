@@ -96,9 +96,10 @@ TEST_CASE(entries, availability, _params)
     return MUNIT_OK;
 }
 
-static void apply_cb(struct raft_apply *req, int status)
+static void apply_cb(struct raft_apply *req, int status, void *result)
 {
     (void)status;
+    (void)result;
     free(req);
 }
 

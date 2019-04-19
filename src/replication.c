@@ -1252,7 +1252,7 @@ static int raft_replication__apply_command(struct raft *r,
     }
     req = (struct raft_apply *)getRequest(r, index, RAFT_COMMAND);
     if (req != NULL && req->cb != NULL) {
-        req->cb(req, 0);
+      req->cb(req, 0, result);
     }
     return 0;
 }

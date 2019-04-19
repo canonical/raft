@@ -86,9 +86,10 @@ static MunitParameterEnum send_oom_params[] = {
     {NULL, NULL},
 };
 
-static void apply_cb(struct raft_apply *req, int status)
+static void apply_cb(struct raft_apply *req, int status, void *result)
 {
     (void)status;
+    (void)result;
     free(req);
 }
 

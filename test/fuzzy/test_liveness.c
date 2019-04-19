@@ -121,9 +121,10 @@ TEST_SUITE(network);
 TEST_SETUP(network, setup);
 TEST_TEAR_DOWN(network, tear_down);
 
-static void apply_cb(struct raft_apply *req, int status)
+static void apply_cb(struct raft_apply *req, int status, void *result)
 {
     (void)status;
+    (void)result;
     free(req);
 }
 
@@ -148,7 +149,7 @@ TEST_CASE(network, disconnect, _params)
         }
     }
 
-    //munit_assert_int(CLUSTER_LAST_APPLIED(CLUSTER_LEADER), >=, 2);
+    // munit_assert_int(CLUSTER_LAST_APPLIED(CLUSTER_LEADER), >=, 2);
 
     return MUNIT_OK;
 }
