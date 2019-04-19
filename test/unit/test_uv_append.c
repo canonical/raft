@@ -89,7 +89,7 @@ static void appendCb(struct raft_io_append *req, int status)
             munit_assert_ptr_not_null(entry->buf.base);          \
             memset(entry->buf.base, 0, entry->buf.len);          \
             cursor = entry->buf.base;                            \
-            byte__put64(&cursor, f->count);                      \
+            bytePut64(&cursor, f->count);                      \
             f->count++;                                          \
         }                                                        \
     }
@@ -155,14 +155,14 @@ static void appendCb(struct raft_io_append *req, int status)
         test_dir_read_file(f->dir, filename, buf.base, buf.len);             \
                                                                              \
         cursor = buf.base;                                                   \
-        munit_assert_int(byte__get64(&cursor), ==, 1);                       \
+        munit_assert_int(byteGet64(&cursor), ==, 1);                       \
                                                                              \
         while (i_ < N) {                                                     \
-            unsigned crc1 = byte__get32(&cursor);                            \
-            unsigned crc2 = byte__get32(&cursor);                            \
+            unsigned crc1 = byteGet32(&cursor);                            \
+            unsigned crc2 = byteGet32(&cursor);                            \
             const void *header = cursor;                                     \
             const void *content;                                             \
-            unsigned n_ = byte__get64(&cursor);                              \
+            unsigned n_ = byteGet64(&cursor);                              \
             struct raft_entry *entries = munit_malloc(n_ * sizeof *entries); \
             unsigned j_;                                                     \
             unsigned crc;                                                    \
@@ -171,12 +171,12 @@ static void appendCb(struct raft_io_append *req, int status)
             for (j_ = 0; j_ < n_; j_++) {                                    \
                 struct raft_entry *entry = &entries[j_];                     \
                                                                              \
-                entry->term = byte__get64(&cursor);                          \
-                entry->type = byte__get8(&cursor);                           \
-                byte__get8(&cursor);                                         \
-                byte__get8(&cursor);                                         \
-                byte__get8(&cursor);                                         \
-                entry->buf.len = byte__get32(&cursor);                       \
+                entry->term = byteGet64(&cursor);                          \
+                entry->type = byteGet8(&cursor);                           \
+                byteGet8(&cursor);                                         \
+                byteGet8(&cursor);                                         \
+                byteGet8(&cursor);                                         \
+                entry->buf.len = byteGet32(&cursor);                       \
                                                                              \
                 munit_assert_int(entry->term, ==, 1);                        \
                 munit_assert_int(entry->type, ==, RAFT_COMMAND);             \
@@ -184,7 +184,7 @@ static void appendCb(struct raft_io_append *req, int status)
                 data_size += entry->buf.len;                                 \
             }                                                                \
                                                                              \
-            crc = byte__crc32(header, uvSizeofBatchHeader(n_), 0);           \
+            crc = byteCrc32(header, uvSizeofBatchHeader(n_), 0);           \
             munit_assert_int(crc, ==, crc1);                                 \
                                                                              \
             content = cursor;                                                \
@@ -192,13 +192,13 @@ static void appendCb(struct raft_io_append *req, int status)
             for (j_ = 0; j_ < n_; j_++) {                                    \
                 struct raft_entry *entry = &entries[j_];                     \
                 uint64_t value;                                              \
-                value = byte__flip64(*(uint64_t *)cursor);                   \
+                value = byteFlip64(*(uint64_t *)cursor);                   \
                 munit_assert_int(value, ==, i_);                             \
                 cursor += entry->buf.len;                                    \
                 i_++;                                                        \
             }                                                                \
                                                                              \
-            crc = byte__crc32(content, data_size, 0);                        \
+            crc = byteCrc32(content, data_size, 0);                        \
             munit_assert_int(crc, ==, crc2);                                 \
                                                                              \
             free(entries);                                                   \

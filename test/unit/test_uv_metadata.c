@@ -65,10 +65,10 @@ static void tear_down(void *data)
         void *cursor = buf;                                     \
         char filename[strlen("metadataN") + 1];                 \
         sprintf(filename, "metadata%d", N);                     \
-        byte__put64(&cursor, FORMAT);                           \
-        byte__put64(&cursor, VERSION);                          \
-        byte__put64(&cursor, TERM);                             \
-        byte__put64(&cursor, VOTED_FOR);                        \
+        bytePut64(&cursor, FORMAT);                           \
+        bytePut64(&cursor, VERSION);                          \
+        bytePut64(&cursor, TERM);                             \
+        bytePut64(&cursor, VOTED_FOR);                        \
         test_dir_write_file(f->dir, filename, buf, sizeof buf); \
     }
 
@@ -103,10 +103,10 @@ static void tear_down(void *data)
         char filename[strlen("metadataN") + 1];                  \
         sprintf(filename, "metadata%d", N);                      \
         test_dir_read_file(f->dir, filename, buf2, sizeof buf2); \
-        munit_assert_int(byte__get64(&cursor), ==, 1);           \
-        munit_assert_int(byte__get64(&cursor), ==, VERSION);     \
-        munit_assert_int(byte__get64(&cursor), ==, TERM);        \
-        munit_assert_int(byte__get64(&cursor), ==, VOTED_FOR);   \
+        munit_assert_int(byteGet64(&cursor), ==, 1);           \
+        munit_assert_int(byteGet64(&cursor), ==, VERSION);     \
+        munit_assert_int(byteGet64(&cursor), ==, TERM);        \
+        munit_assert_int(byteGet64(&cursor), ==, VOTED_FOR);   \
     }
 
 /******************************************************************************

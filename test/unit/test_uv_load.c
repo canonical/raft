@@ -203,14 +203,14 @@ TEST_CASE(success, open_not_all_zeros, NULL)
 
     (void)params;
 
-    byte__put64(&cursor, 123);         /* Invalid checksums */
-    byte__put64(&cursor, 1);           /* Number of entries */
-    byte__put64(&cursor, 1);           /* Entry term */
-    byte__put8(&cursor, RAFT_COMMAND); /* Entry type */
-    byte__put8(&cursor, 0);            /* Unused */
-    byte__put8(&cursor, 0);            /* Unused */
-    byte__put8(&cursor, 0);            /* Unused */
-    byte__put32(&cursor, 8);           /* Size of entry data */
+    bytePut64(&cursor, 123);         /* Invalid checksums */
+    bytePut64(&cursor, 1);           /* Number of entries */
+    bytePut64(&cursor, 1);           /* Entry term */
+    bytePut8(&cursor, RAFT_COMMAND); /* Entry type */
+    bytePut8(&cursor, 0);            /* Unused */
+    bytePut8(&cursor, 0);            /* Unused */
+    bytePut8(&cursor, 0);            /* Unused */
+    bytePut32(&cursor, 8);           /* Size of entry data */
 
     UV_WRITE_OPEN_SEGMENT(1, 1, 1);
 
@@ -261,10 +261,10 @@ TEST_CASE(success, open_partial_bach, NULL)
 
     (void)params;
 
-    byte__put64(&cursor, 1); /* Format version */
-    byte__put64(&cursor, 0); /* CRC32 checksum */
-    byte__put64(&cursor, 0); /* Number of entries */
-    byte__put64(&cursor, 0); /* Batch data */
+    bytePut64(&cursor, 1); /* Format version */
+    bytePut64(&cursor, 0); /* CRC32 checksum */
+    bytePut64(&cursor, 0); /* Number of entries */
+    bytePut64(&cursor, 0); /* Batch data */
 
     UV_WRITE_OPEN_SEGMENT(1, 1, 1);
 
@@ -437,7 +437,7 @@ TEST_CASE(error, corrupt_header, NULL)
     (void)params;
 
     /* Render invalid checksums */
-    byte__put64(&cursor, 123);
+    bytePut64(&cursor, 123);
 
     UV_WRITE_CLOSED_SEGMENT(1, 1, 1);
 
@@ -460,7 +460,7 @@ TEST_CASE(error, corrupt_data, NULL)
     (void)params;
 
     /* Render an invalid data checksum. */
-    byte__put32(&cursor, 123456789);
+    bytePut32(&cursor, 123456789);
 
     UV_WRITE_CLOSED_SEGMENT(1, 1, 1);
 
@@ -542,7 +542,7 @@ TEST_CASE(error, open_zero_format, NULL)
 
     (void)params;
 
-    byte__put64(&cursor, 0); /* Format version */
+    bytePut64(&cursor, 0); /* Format version */
 
     UV_WRITE_OPEN_SEGMENT(1, 1, 1);
 
@@ -561,7 +561,7 @@ TEST_CASE(error, open_bad_format, NULL)
     void *cursor = buf;
     (void)params;
 
-    byte__put64(&cursor, 2); /* Format version */
+    bytePut64(&cursor, 2); /* Format version */
 
     UV_WRITE_OPEN_SEGMENT(1, 1, 1);
 

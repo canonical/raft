@@ -302,9 +302,9 @@ TEST_CASE(start, recv, NULL)
     /* Connect to our test raft_io instance and send the handshake */
     test_tcp_connect(&f->tcp, 9000);
 
-    byte__put64(&cursor, 1);  /* Protocol */
-    byte__put64(&cursor, 2);  /* Server ID */
-    byte__put64(&cursor, 16); /* Address size */
+    bytePut64(&cursor, 1);  /* Protocol */
+    bytePut64(&cursor, 2);  /* Server ID */
+    bytePut64(&cursor, 16); /* Address size */
     strcpy(cursor, "127.0.0.1:66");
     test_tcp_send(&f->tcp, handshake, sizeof handshake);
 

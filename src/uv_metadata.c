@@ -13,10 +13,10 @@
 static void encode(const struct uvMetadata *metadata, void *buf)
 {
     void *cursor = buf;
-    byte__put64(&cursor, UV__DISK_FORMAT);
-    byte__put64(&cursor, metadata->version);
-    byte__put64(&cursor, metadata->term);
-    byte__put64(&cursor, metadata->voted_for);
+    bytePut64(&cursor, UV__DISK_FORMAT);
+    bytePut64(&cursor, metadata->version);
+    bytePut64(&cursor, metadata->term);
+    bytePut64(&cursor, metadata->voted_for);
 }
 
 /* Decode the content of a metadata file. */
@@ -24,13 +24,13 @@ static int decode(const void *buf, struct uvMetadata *metadata)
 {
     const void *cursor = buf;
     unsigned format;
-    format = byte__get64(&cursor);
+    format = byteGet64(&cursor);
     if (format != UV__DISK_FORMAT) {
         return RAFT_MALFORMED;
     }
-    metadata->version = byte__get64(&cursor);
-    metadata->term = byte__get64(&cursor);
-    metadata->voted_for = byte__get64(&cursor);
+    metadata->version = byteGet64(&cursor);
+    metadata->term = byteGet64(&cursor);
+    metadata->voted_for = byteGet64(&cursor);
     return 0;
 }
 

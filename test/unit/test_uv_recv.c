@@ -55,9 +55,9 @@ static void tear_down(void *data)
     {                                                                        \
         void *cursor2;                                                       \
         cursor2 = f->peer.handshake;                                         \
-        byte__put64(&cursor2, 1);  /* Protocol */                            \
-        byte__put64(&cursor2, 2);  /* Server ID */                           \
-        byte__put64(&cursor2, 16); /* Address size */                        \
+        bytePut64(&cursor2, 1);  /* Protocol */                            \
+        bytePut64(&cursor2, 2);  /* Server ID */                           \
+        bytePut64(&cursor2, 16); /* Address size */                        \
         strcpy(cursor2, "127.0.0.1:66");                                     \
         test_tcp_send(&f->tcp, f->peer.handshake, sizeof f->peer.handshake); \
     }
@@ -276,7 +276,7 @@ TEST_CASE(success, install_snapshot, NULL)
     munit_assert_int(rv, ==, 0);
     p->data.len = 8;
     p->data.base = raft_malloc(p->data.len);
-    *(uint64_t *)p->data.base = byte__flip64(666);
+    *(uint64_t *)p->data.base = byteFlip64(666);
 
     recv__peer_connect;
     recv__peer_handshake;
@@ -297,7 +297,7 @@ TEST_CASE(success, install_snapshot, NULL)
     raft_configuration_close(&f->message->install_snapshot.conf);
 
     munit_assert_int(
-        byte__flip64(*(uint64_t *)f->message->install_snapshot.data.base), ==,
+        byteFlip64(*(uint64_t *)f->message->install_snapshot.data.base), ==,
         666);
     raft_free(f->message->install_snapshot.data.base);
 
@@ -323,9 +323,9 @@ TEST_CASE(error, bad_protocol, NULL)
 
     recv__peer_connect;
 
-    byte__put64(&cursor, 666); /* Protocol */
-    byte__put64(&cursor, 1);   /* Server id */
-    byte__put64(&cursor, 2);   /* Address length */
+    bytePut64(&cursor, 666); /* Protocol */
+    bytePut64(&cursor, 1);   /* Server id */
+    bytePut64(&cursor, 2);   /* Address length */
 
     test_tcp_send(&f->tcp, f->peer.handshake, sizeof f->peer.handshake);
 
@@ -348,8 +348,8 @@ TEST_CASE(error, bad_size, NULL)
     recv__peer_connect;
     recv__peer_handshake;
 
-    byte__put64(&cursor, RAFT_IO_REQUEST_VOTE); /* Message type */
-    byte__put64(&cursor, 0);                    /* Message size */
+    bytePut64(&cursor, RAFT_IO_REQUEST_VOTE); /* Message type */
+    bytePut64(&cursor, 0);                    /* Message size */
 
     test_tcp_send(&f->tcp, buf, sizeof buf);
 
@@ -372,8 +372,8 @@ TEST_CASE(error, bad_type, NULL)
     recv__peer_connect;
     recv__peer_handshake;
 
-    byte__put64(&cursor, 666); /* Message type */
-    byte__put64(&cursor, 1);   /* Message size */
+    bytePut64(&cursor, 666); /* Message type */
+    bytePut64(&cursor, 1);   /* Message size */
 
     test_tcp_send(&f->tcp, buf, sizeof buf);
 

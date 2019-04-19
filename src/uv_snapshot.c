@@ -157,17 +157,17 @@ static int loadMeta(struct uv *uv,
         goto err_after_open;
     }
 
-    format = byte__flip64(header[0]);
+    format = byteFlip64(header[0]);
     if (format != UV__DISK_FORMAT) {
         uvErrorf(uv, "load %s: unsupported format %lu", info->filename, format);
         rv = RAFT_MALFORMED;
         goto err_after_open;
     }
 
-    crc1 = byte__flip64(header[1]);
+    crc1 = byteFlip64(header[1]);
 
-    snapshot->configuration_index = byte__flip64(header[2]);
-    buf.len = byte__flip64(header[3]);
+    snapshot->configuration_index = byteFlip64(header[2]);
+    buf.len = byteFlip64(header[3]);
     if (buf.len > META_MAX_CONFIGURATION_SIZE) {
         uvErrorf(uv, "load %s: configuration data too big (%ld)",
                  info->filename, buf.len);
@@ -192,8 +192,8 @@ static int loadMeta(struct uv *uv,
         goto err_after_buf_malloc;
     }
 
-    crc2 = byte__crc32(header + 2, sizeof header - sizeof(uint64_t) * 2, 0);
-    crc2 = byte__crc32(buf.base, buf.len, crc2);
+    crc2 = byteCrc32(header + 2, sizeof header - sizeof(uint64_t) * 2, 0);
+    crc2 = byteCrc32(buf.base, buf.len, crc2);
 
     if (crc1 != crc2) {
         uvErrorf(uv, "read %s: checksum mismatch", info->filename);
@@ -525,16 +525,16 @@ int uvSnapshotPut(struct raft_io *io,
     }
 
     cursor = r->meta.header;
-    byte__put64(&cursor, UV__DISK_FORMAT);
-    byte__put64(&cursor, 0);
-    byte__put64(&cursor, snapshot->configuration_index);
-    byte__put64(&cursor, r->meta.bufs[1].len);
+    bytePut64(&cursor, UV__DISK_FORMAT);
+    bytePut64(&cursor, 0);
+    bytePut64(&cursor, snapshot->configuration_index);
+    bytePut64(&cursor, r->meta.bufs[1].len);
 
-    crc = byte__crc32(&r->meta.header[2], sizeof(uint64_t) * 2, 0);
-    crc = byte__crc32(r->meta.bufs[1].base, r->meta.bufs[1].len, crc);
+    crc = byteCrc32(&r->meta.header[2], sizeof(uint64_t) * 2, 0);
+    crc = byteCrc32(r->meta.bufs[1].base, r->meta.bufs[1].len, crc);
 
     cursor = &r->meta.header[1];
-    byte__put64(&cursor, crc);
+    bytePut64(&cursor, crc);
 
     QUEUE_PUSH(&uv->snapshot_put_reqs, &r->queue);
     processPutRequests(uv);

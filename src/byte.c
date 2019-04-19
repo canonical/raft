@@ -49,7 +49,7 @@ static const unsigned crc32_table[] = {
     0x933eb0bb, 0x97ffad0c, 0xafb010b1, 0xab710d06, 0xa6322bdf, 0xa2f33668,
     0xbcb4666d, 0xb8757bda, 0xb5365d03, 0xb1f740b4};
 
-unsigned byte__crc32(const void *buf, const size_t size, const unsigned init)
+unsigned byteCrc32(const void *buf, const size_t size, const unsigned init)
 {
     unsigned crc = init;
     uint8_t *cursor = (uint8_t *)buf;

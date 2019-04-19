@@ -46,7 +46,7 @@ struct connect
 static int encodeHandshake(unsigned id, const char *address, uv_buf_t *buf)
 {
     void *cursor;
-    size_t address_len = byte__pad64(strlen(address) + 1);
+    size_t address_len = bytePad64(strlen(address) + 1);
     buf->len = sizeof(uint64_t) + /* Protocol version. */
                sizeof(uint64_t) + /* Server ID. */
                sizeof(uint64_t) /* Size of the address buffer */;
@@ -56,9 +56,9 @@ static int encodeHandshake(unsigned id, const char *address, uv_buf_t *buf)
         return RAFT_NOMEM;
     }
     cursor = buf->base;
-    byte__put64(&cursor, UV__TCP_HANDSHAKE_PROTOCOL);
-    byte__put64(&cursor, id);
-    byte__put64(&cursor, address_len);
+    bytePut64(&cursor, UV__TCP_HANDSHAKE_PROTOCOL);
+    bytePut64(&cursor, id);
+    bytePut64(&cursor, address_len);
     strcpy(cursor, address);
     return 0;
 }

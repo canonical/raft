@@ -241,7 +241,7 @@ size_t configuration__encoded_size(const struct raft_configuration *c)
         n++;                              /* Voting flag */
     };
 
-    n = byte__pad64(n);
+    n = bytePad64(n);
 
     return n;
 }
@@ -252,22 +252,22 @@ void configuration__encode_to_buf(const struct raft_configuration *c, void *buf)
     size_t i;
 
     /* Encoding format version */
-    byte__put8(&cursor, ENCODING_FORMAT);
+    bytePut8(&cursor, ENCODING_FORMAT);
 
     /* Number of servers */
-    byte__put64(&cursor, c->n);
+    bytePut64(&cursor, c->n);
 
     for (i = 0; i < c->n; i++) {
         struct raft_server *server = &c->servers[i];
 
         assert(server->address != NULL);
 
-        byte__put64(&cursor, server->id);
+        bytePut64(&cursor, server->id);
 
         strcpy((char *)cursor, server->address);
         cursor += strlen(server->address) + 1;
 
-        byte__put8(&cursor, server->voting);
+        bytePut8(&cursor, server->voting);
     };
 }
 
@@ -311,12 +311,12 @@ int configuration__decode(const struct raft_buffer *buf,
     cursor = buf->base;
 
     /* Check the encoding format version */
-    if (byte__get8(&cursor) != ENCODING_FORMAT) {
+    if (byteGet8(&cursor) != ENCODING_FORMAT) {
         return RAFT_MALFORMED;
     }
 
     /* Read the number of servers. */
-    n = byte__get64(&cursor);
+    n = byteGet64(&cursor);
 
     /* Decode the individual servers. */
     for (i = 0; i < n; i++) {
@@ -327,7 +327,7 @@ int configuration__decode(const struct raft_buffer *buf,
         int rv;
 
         /* Server ID. */
-        id = byte__get64(&cursor);
+        id = byteGet64(&cursor);
 
         /* Server Address. */
         while (cursor + address_len < buf->base + buf->len) {
@@ -343,7 +343,7 @@ int configuration__decode(const struct raft_buffer *buf,
         cursor += address_len + 1;
 
         /* Voting flag. */
-        voting = byte__get8(&cursor);
+        voting = byteGet8(&cursor);
 
         rv = raft_configuration_add(c, id, address, voting);
         if (rv != 0) {

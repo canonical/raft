@@ -83,7 +83,7 @@ static void initRequest(struct append *r,
     r->size = sizeof(uint32_t) * 2;       /* CRC checksums */
     r->size += uvSizeofBatchHeader(r->n); /* Batch header */
     for (i = 0; i < r->n; i++) {          /* Entries data */
-        r->size += byte__pad64(r->entries[i].buf.len);
+        r->size += bytePad64(r->entries[i].buf.len);
     }
     req->cb = cb;
 }

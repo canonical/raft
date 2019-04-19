@@ -564,9 +564,9 @@ TEST_CASE(encode, one_server, NULL)
                          8 + strlen("127.0.0.1:666") + 1 + 1); /* Server */
 
     munit_assert_int(bytes[0], ==, 1);
-    munit_assert_int(byte__flip64(*(uint64_t *)(bytes + 1)), ==, 1);
+    munit_assert_int(byteFlip64(*(uint64_t *)(bytes + 1)), ==, 1);
 
-    munit_assert_int(byte__flip64(*(uint64_t *)(bytes + 9)), ==, 1);
+    munit_assert_int(byteFlip64(*(uint64_t *)(bytes + 9)), ==, 1);
     munit_assert_string_equal((char *)(bytes + 17), "127.0.0.1:666");
     munit_assert_true(bytes[17 + strlen("127.0.0.1:666") + 1]);
 
@@ -596,23 +596,23 @@ TEST_CASE(encode, two_servers, NULL)
     len = 1 + 8 +                                /* Version and n of servers */
           8 + strlen("127.0.0.1:666") + 1 + 1 +  /* Server 1 */
           8 + strlen("192.168.1.1:666") + 1 + 1; /* Server 2 */
-    len = byte__pad64(len);
+    len = bytePad64(len);
 
     munit_assert_int(buf.len, ==, len);
 
     bytes = buf.base;
 
     munit_assert_int(bytes[0], ==, 1);
-    munit_assert_int(byte__flip64(*(uint64_t *)(bytes + 1)), ==, 2);
+    munit_assert_int(byteFlip64(*(uint64_t *)(bytes + 1)), ==, 2);
 
     bytes = buf.base + 9;
-    munit_assert_int(byte__flip64(*(uint64_t *)bytes), ==, 1);
+    munit_assert_int(byteFlip64(*(uint64_t *)bytes), ==, 1);
     munit_assert_string_equal((char *)(bytes + 8), "127.0.0.1:666");
     munit_assert_false(bytes[8 + strlen("127.0.0.1:666") + 1]);
 
     bytes = buf.base + 9 + 8 + strlen("127.0.0.1:666") + 1 + 1;
 
-    munit_assert_int(byte__flip64(*(uint64_t *)bytes), ==, 2);
+    munit_assert_int(byteFlip64(*(uint64_t *)bytes), ==, 2);
     munit_assert_string_equal((char *)(bytes + 8), "192.168.1.1:666");
     munit_assert_true(bytes[8 + strlen("192.168.1.1:666") + 1]);
 

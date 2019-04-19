@@ -59,11 +59,11 @@ static void preambleAllocCb(struct uv_handle_s *handle,
 static int decodePreamble(struct handshake *h)
 {
     uint64_t protocol;
-    protocol = byte__flip64(h->preamble[0]);
+    protocol = byteFlip64(h->preamble[0]);
     if (protocol != UV__TCP_HANDSHAKE_PROTOCOL) {
         return RAFT_MALFORMED;
     }
-    h->address.len = byte__flip64(h->preamble[2]);
+    h->address.len = byteFlip64(h->preamble[2]);
     h->address.base = raft_malloc(h->address.len);
     if (h->address.base == NULL) {
         return RAFT_NOMEM;
@@ -145,7 +145,7 @@ static void addressReadCb(uv_stream_t *stream,
     /* If we have completed reading the address, let's fire the callback. */
     rv = uv_read_stop(stream);
     assert(rv == 0);
-    id = byte__flip64(c->handshake.preamble[1]);
+    id = byteFlip64(c->handshake.preamble[1]);
     address = c->handshake.address.base;
     QUEUE_REMOVE(&c->queue);
     c->t->accept_cb(c->t->transport, id, address, (struct uv_stream_s *)c->tcp);

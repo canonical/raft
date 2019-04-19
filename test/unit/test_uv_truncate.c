@@ -56,7 +56,7 @@ static void appendCb(struct raft_io_append *req, int status)
             entry->type = RAFT_COMMAND;                                   \
             entry->buf.base = munit_malloc(8);                            \
             entry->buf.len = 8;                                           \
-            *(uint64_t *)entry->buf.base = byte__flip64(i + 1);           \
+            *(uint64_t *)entry->buf.base = byteFlip64(i + 1);           \
             entry->batch = NULL;                                          \
         }                                                                 \
         req_.data = f;                                                    \
@@ -168,7 +168,7 @@ TEST_CASE(success, partial_segment, NULL)
     munit_assert_int(rv, ==, 0);
 
     munit_assert_int(n, ==, 1);
-    munit_assert_int(byte__flip64(*(uint64_t *)entries[0].buf.base), ==, 1);
+    munit_assert_int(byteFlip64(*(uint64_t *)entries[0].buf.base), ==, 1);
 
     raft_free(entries[0].batch);
     raft_free(entries);

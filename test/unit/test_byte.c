@@ -5,7 +5,7 @@
 TEST_MODULE(checksum);
 
 /**
- * byte__crc32
+ * byteCrc32
  */
 
 TEST_SUITE(crc32);
@@ -25,8 +25,8 @@ TEST_CASE(crc32, valid, NULL)
     (void)data;
     (void)params;
 
-    crc1 = byte__crc32(buf1, size1, 0);
-    crc2 = byte__crc32(buf2, size2, 0);
+    crc1 = byteCrc32(buf1, size1, 0);
+    crc2 = byteCrc32(buf2, size2, 0);
 
     munit_assert_int(crc1, ==, crc2);
 
@@ -48,8 +48,8 @@ TEST_CASE(crc32, invalid, NULL)
     (void)data;
     (void)params;
 
-    crc1 = byte__crc32(buf1, size1, 0);
-    crc2 = byte__crc32(buf2, size2, 0);
+    crc1 = byteCrc32(buf1, size1, 0);
+    crc2 = byteCrc32(buf2, size2, 0);
 
     munit_assert_int(crc1, !=, crc2);
 

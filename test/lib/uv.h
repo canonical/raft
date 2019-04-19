@@ -106,7 +106,7 @@
             entry_->buf.len = sizeof(uint64_t);                     \
             entry_->buf.base = munit_malloc(entry_->buf.len);       \
             cursor_ = entry_->buf.base;                             \
-            byte__put64(&cursor_, DATA + i_); /* Entry data */      \
+            bytePut64(&cursor_, DATA + i_); /* Entry data */      \
         }                                                           \
                                                                     \
         rv_ = uvSegmentBufferAppend(&buf_, entries_, N);            \

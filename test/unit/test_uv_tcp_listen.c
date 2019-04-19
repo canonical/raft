@@ -66,9 +66,9 @@ static void *setup(const MunitParameter params[], void *user_data)
     f->handshake.offset = 0;
 
     cursor = f->handshake.buf;
-    byte__put64(&cursor, 1);
-    byte__put64(&cursor, 2);
-    byte__put64(&cursor, 16);
+    bytePut64(&cursor, 1);
+    bytePut64(&cursor, 2);
+    bytePut64(&cursor, 16);
     strcpy(cursor, "127.0.0.1:666");
 
     f->transport.data = f;

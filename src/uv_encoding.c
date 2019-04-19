@@ -72,10 +72,10 @@ static void raft_io_uv_encode__request_vote(const struct raft_request_vote *p,
 {
     void *cursor = buf;
 
-    byte__put64(&cursor, p->term);
-    byte__put64(&cursor, p->candidate_id);
-    byte__put64(&cursor, p->last_log_index);
-    byte__put64(&cursor, p->last_log_term);
+    bytePut64(&cursor, p->term);
+    bytePut64(&cursor, p->candidate_id);
+    bytePut64(&cursor, p->last_log_index);
+    bytePut64(&cursor, p->last_log_term);
 }
 
 static void raft_io_uv_encode__request_vote_result(
@@ -84,8 +84,8 @@ static void raft_io_uv_encode__request_vote_result(
 {
     void *cursor = buf;
 
-    byte__put64(&cursor, p->term);
-    byte__put64(&cursor, p->vote_granted);
+    bytePut64(&cursor, p->term);
+    bytePut64(&cursor, p->vote_granted);
 }
 
 static void raft_io_uv_encode__append_entries(
@@ -96,11 +96,11 @@ static void raft_io_uv_encode__append_entries(
 
     cursor = buf;
 
-    byte__put64(&cursor, p->term);           /* Leader's term. */
-    byte__put64(&cursor, p->leader_id);      /* Leader ID. */
-    byte__put64(&cursor, p->prev_log_index); /* Previous index. */
-    byte__put64(&cursor, p->prev_log_term);  /* Previous term. */
-    byte__put64(&cursor, p->leader_commit);  /* Commit index. */
+    bytePut64(&cursor, p->term);           /* Leader's term. */
+    bytePut64(&cursor, p->leader_id);      /* Leader ID. */
+    bytePut64(&cursor, p->prev_log_index); /* Previous index. */
+    bytePut64(&cursor, p->prev_log_term);  /* Previous term. */
+    bytePut64(&cursor, p->leader_commit);  /* Commit index. */
 
     uvEncodeBatchHeader(p->entries, p->n_entries, cursor);
 }
@@ -111,9 +111,9 @@ static void raft_io_uv_encode__append_entries_result(
 {
     void *cursor = buf;
 
-    byte__put64(&cursor, p->term);
-    byte__put64(&cursor, p->rejected);
-    byte__put64(&cursor, p->last_log_index);
+    bytePut64(&cursor, p->term);
+    bytePut64(&cursor, p->rejected);
+    bytePut64(&cursor, p->last_log_index);
 }
 
 static void raft_io_uv_encode__install_snapshot(
@@ -125,15 +125,15 @@ static void raft_io_uv_encode__install_snapshot(
 
     cursor = buf;
 
-    byte__put64(&cursor, p->term);       /* Leader's term. */
-    byte__put64(&cursor, p->leader_id);  /* Leader ID. */
-    byte__put64(&cursor, p->last_index); /* Snapshot last index. */
-    byte__put64(&cursor, p->last_term);  /* Term of last index. */
-    byte__put64(&cursor, p->conf_index); /* Configuration index. */
-    byte__put64(&cursor, conf_size);     /* Configuration length. */
+    bytePut64(&cursor, p->term);       /* Leader's term. */
+    bytePut64(&cursor, p->leader_id);  /* Leader ID. */
+    bytePut64(&cursor, p->last_index); /* Snapshot last index. */
+    bytePut64(&cursor, p->last_term);  /* Term of last index. */
+    bytePut64(&cursor, p->conf_index); /* Configuration index. */
+    bytePut64(&cursor, conf_size);     /* Configuration length. */
     configuration__encode_to_buf(&p->conf, cursor);
     cursor += conf_size;
-    byte__put64(&cursor, p->data.len); /* Snapshot data size. */
+    bytePut64(&cursor, p->data.len); /* Snapshot data size. */
 }
 
 int uvEncodeMessage(const struct raft_message *message,
@@ -176,8 +176,8 @@ int uvEncodeMessage(const struct raft_message *message,
     cursor = header.base;
 
     /* Encode the request preamble, with message type and message size. */
-    byte__put64(&cursor, message->type);
-    byte__put64(&cursor, header.len - RAFT_IO_UV__PREAMBLE_SIZE);
+    bytePut64(&cursor, message->type);
+    bytePut64(&cursor, header.len - RAFT_IO_UV__PREAMBLE_SIZE);
 
     /* Encode the request header. */
     switch (message->type) {
@@ -252,21 +252,21 @@ void uvEncodeBatchHeader(const struct raft_entry *entries,
     void *cursor = buf;
 
     /* Number of entries in the batch, little endian */
-    byte__put64(&cursor, n);
+    bytePut64(&cursor, n);
 
     for (i = 0; i < n; i++) {
         const struct raft_entry *entry = &entries[i];
 
         /* Term in which the entry was created, little endian. */
-        byte__put64(&cursor, entry->term);
+        bytePut64(&cursor, entry->term);
 
         /* Message type (Either RAFT_COMMAND or RAFT_CHANGE) */
-        byte__put8(&cursor, entry->type);
+        bytePut8(&cursor, entry->type);
 
         cursor += 3; /* Unused */
 
         /* Size of the log entry data, little endian. */
-        byte__put32(&cursor, entry->buf.len);
+        bytePut32(&cursor, entry->buf.len);
     }
 }
 
@@ -277,10 +277,10 @@ static void raft_io_uv_decode__request_vote(const uv_buf_t *buf,
 
     cursor = buf->base;
 
-    p->term = byte__get64(&cursor);
-    p->candidate_id = byte__get64(&cursor);
-    p->last_log_index = byte__get64(&cursor);
-    p->last_log_term = byte__get64(&cursor);
+    p->term = byteGet64(&cursor);
+    p->candidate_id = byteGet64(&cursor);
+    p->last_log_index = byteGet64(&cursor);
+    p->last_log_term = byteGet64(&cursor);
 }
 
 static void raft_io_uv_decode__request_vote_result(
@@ -291,8 +291,8 @@ static void raft_io_uv_decode__request_vote_result(
 
     cursor = buf->base;
 
-    p->term = byte__get64(&cursor);
-    p->vote_granted = byte__get64(&cursor);
+    p->term = byteGet64(&cursor);
+    p->vote_granted = byteGet64(&cursor);
 }
 
 int uvDecodeBatchHeader(const void *batch,
@@ -303,7 +303,7 @@ int uvDecodeBatchHeader(const void *batch,
     size_t i;
     int rv;
 
-    *n = byte__get64(&cursor);
+    *n = byteGet64(&cursor);
 
     if (*n == 0) {
         *entries = NULL;
@@ -320,8 +320,8 @@ int uvDecodeBatchHeader(const void *batch,
     for (i = 0; i < *n; i++) {
         struct raft_entry *entry = &(*entries)[i];
 
-        entry->term = byte__get64(&cursor);
-        entry->type = byte__get8(&cursor);
+        entry->term = byteGet64(&cursor);
+        entry->type = byteGet8(&cursor);
 
         if (entry->type != RAFT_COMMAND && entry->type != RAFT_BARRIER &&
             entry->type != RAFT_CHANGE) {
@@ -332,7 +332,7 @@ int uvDecodeBatchHeader(const void *batch,
         cursor += 3; /* Unused */
 
         /* Size of the log entry data, little endian. */
-        entry->buf.len = byte__get32(&cursor);
+        entry->buf.len = byteGet32(&cursor);
     }
 
     return 0;
@@ -357,11 +357,11 @@ static int raft_io_uv_decode__append_entries(const uv_buf_t *buf,
 
     cursor = buf->base;
 
-    args->term = byte__get64(&cursor);
-    args->leader_id = byte__get64(&cursor);
-    args->prev_log_index = byte__get64(&cursor);
-    args->prev_log_term = byte__get64(&cursor);
-    args->leader_commit = byte__get64(&cursor);
+    args->term = byteGet64(&cursor);
+    args->leader_id = byteGet64(&cursor);
+    args->prev_log_index = byteGet64(&cursor);
+    args->prev_log_term = byteGet64(&cursor);
+    args->leader_commit = byteGet64(&cursor);
 
     rv = uvDecodeBatchHeader(cursor, &args->entries, &args->n_entries);
     if (rv != 0) {
@@ -379,9 +379,9 @@ static void raft_io_uv_decode__append_entries_result(
 
     cursor = buf->base;
 
-    p->term = byte__get64(&cursor);
-    p->rejected = byte__get64(&cursor);
-    p->last_log_index = byte__get64(&cursor);
+    p->term = byteGet64(&cursor);
+    p->rejected = byteGet64(&cursor);
+    p->last_log_index = byteGet64(&cursor);
 }
 
 static int raft_io_uv_decode__install_snapshot(
@@ -397,12 +397,12 @@ static int raft_io_uv_decode__install_snapshot(
 
     cursor = buf->base;
 
-    args->term = byte__get64(&cursor);
-    args->leader_id = byte__get64(&cursor);
-    args->last_index = byte__get64(&cursor);
-    args->last_term = byte__get64(&cursor);
-    args->conf_index = byte__get64(&cursor);
-    conf.len = byte__get64(&cursor);
+    args->term = byteGet64(&cursor);
+    args->leader_id = byteGet64(&cursor);
+    args->last_index = byteGet64(&cursor);
+    args->last_term = byteGet64(&cursor);
+    args->conf_index = byteGet64(&cursor);
+    conf.len = byteGet64(&cursor);
     conf.base = (void *)cursor;
     raft_configuration_init(&args->conf);
     rv = configuration__decode(&conf, &args->conf);
@@ -410,7 +410,7 @@ static int raft_io_uv_decode__install_snapshot(
         return rv;
     }
     cursor += conf.len;
-    args->data.len = byte__get64(&cursor);
+    args->data.len = byteGet64(&cursor);
 
     return 0;
 }
