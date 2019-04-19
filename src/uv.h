@@ -246,13 +246,6 @@ void uvPrepare(struct uv *uv, struct uvPrepare *req, uvPrepareCb cb);
  * and then remove it immediately. */
 void uvPrepareClose(struct uv *uv);
 
-/* Implementation of raft_io->append. */
-int uvAppend(struct raft_io *io,
-             struct raft_io_append *req,
-             const struct raft_entry entries[],
-             unsigned n,
-             raft_io_append_cb cb);
-
 /* Callback invoked after completing a truncate request. If there are append
  * requests that have accumulated in while the truncate request was executed,
  * they will be processed now. */
@@ -282,9 +275,6 @@ int uvFinalize(struct uv *uv,
                raft_index first_index,
                raft_index last_index);
 
-/* Implementation of raft_io->truncate. */
-int uvTruncate(struct raft_io *io, raft_index index);
-
 /* Cancel all pending truncate requests. */
 void uvTruncateClose(struct uv *uv);
 
@@ -293,12 +283,6 @@ void uvTruncateClose(struct uv *uv);
  * possibly start executing the oldest one of them if no unfinalized open
  * segment is left. */
 void uvTruncateMaybeProcessRequests(struct uv *uv);
-
-/* Implementation of raft_io->send. */
-int uvSend(struct raft_io *io,
-           struct raft_io_send *req,
-           const struct raft_message *message,
-           raft_io_send_cb cb);
 
 /* Stop all clients by closing the outbound stream handles and canceling all
  * pending send requests.  */
@@ -310,17 +294,6 @@ int uvRecv(struct uv *uv);
 /* Stop all servers by closing the inbound stream handles and aborting all
  * requests being received.  */
 void uvRecvClose(struct uv *uv);
-
-/* Implementation raft_io->snapshot_put.  */
-int uvSnapshotPut(struct raft_io *io,
-                  struct raft_io_snapshot_put *req,
-                  const struct raft_snapshot *snapshot,
-                  raft_io_snapshot_put_cb cb);
-
-/* Implementation of raft_io->snapshot_get. */
-int uvSnapshotGet(struct raft_io *io,
-                  struct raft_io_snapshot_get *req,
-                  raft_io_snapshot_get_cb cb);
 
 /* Callback invoked after truncation has completed, possibly unblocking pending
  * snapshot put requests. */

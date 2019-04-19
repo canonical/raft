@@ -354,6 +354,33 @@ static int uvSetVote(struct raft_io *io, const unsigned server_id)
     return 0;
 }
 
+/* Implementation of raft_io->append (defined in uv_append.c).*/
+int uvAppend(struct raft_io *io,
+             struct raft_io_append *req,
+             const struct raft_entry entries[],
+             unsigned n,
+             raft_io_append_cb cb);
+
+/* Implementation of raft_io->truncate (defined in uv_truncate.c). */
+int uvTruncate(struct raft_io *io, raft_index index);
+
+/* Implementation of raft_io->send (defined in uv_send.c). */
+int uvSend(struct raft_io *io,
+           struct raft_io_send *req,
+           const struct raft_message *message,
+           raft_io_send_cb cb);
+
+/* Implementation raft_io->snapshot_put (defined in uv_snapshot.c). */
+int uvSnapshotPut(struct raft_io *io,
+                  struct raft_io_snapshot_put *req,
+                  const struct raft_snapshot *snapshot,
+                  raft_io_snapshot_put_cb cb);
+
+/* Implementation of raft_io->snapshot_get (defined in uv_snapshot.c). */
+int uvSnapshotGet(struct raft_io *io,
+                  struct raft_io_snapshot_get *req,
+                  raft_io_snapshot_get_cb cb);
+
 /* Implementation of raft_io->time. */
 static raft_time uvTime(struct raft_io *io)
 {
