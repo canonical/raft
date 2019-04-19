@@ -273,27 +273,27 @@
 
 /* Add a new pristine server to the cluster, connected to all others. Then
  * submit a request to add it to the configuration as non-voting server. */
-#define CLUSTER_ADD                                                      \
-    {                                                                    \
-        int rc;                                                          \
-        struct raft *new_raft;                                           \
-        CLUSTER_GROW;                                                    \
-        rc = raft_start(CLUSTER_RAFT(CLUSTER_N - 1));                    \
-        munit_assert_int(rc, ==, 0);                                     \
-        new_raft = CLUSTER_RAFT(CLUSTER_N - 1);                          \
-        rc = raft_add_server(CLUSTER_RAFT(CLUSTER_LEADER), new_raft->id, \
-                             new_raft->address);                         \
-        munit_assert_int(rc, ==, 0);                                     \
+#define CLUSTER_ADD(REQ)                                               \
+    {                                                                  \
+        int rc;                                                        \
+        struct raft *new_raft;                                         \
+        CLUSTER_GROW;                                                  \
+        rc = raft_start(CLUSTER_RAFT(CLUSTER_N - 1));                  \
+        munit_assert_int(rc, ==, 0);                                   \
+        new_raft = CLUSTER_RAFT(CLUSTER_N - 1);                        \
+        rc = raft_add(CLUSTER_RAFT(CLUSTER_LEADER), REQ, new_raft->id, \
+                      new_raft->address, NULL);                        \
+        munit_assert_int(rc, ==, 0);                                   \
     }
 
 /* Promote the server that was added last. */
-#define CLUSTER_PROMOTE                                      \
-    {                                                        \
-        unsigned id;                                         \
-        int rc;                                              \
-        id = CLUSTER_N; /* Last server that was added. */    \
-        rc = raft_promote(CLUSTER_RAFT(CLUSTER_LEADER), id); \
-        munit_assert_int(rc, ==, 0);                         \
+#define CLUSTER_PROMOTE(REQ)                                            \
+    {                                                                   \
+        unsigned id;                                                    \
+        int rc;                                                         \
+        id = CLUSTER_N; /* Last server that was added. */               \
+        rc = raft_promote(CLUSTER_RAFT(CLUSTER_LEADER), REQ, id, NULL); \
+        munit_assert_int(rc, ==, 0);                                    \
     }
 
 /* Ensure that the cluster can make progress from the current state.

@@ -23,7 +23,7 @@
 #define DISK_LATENCY 10
 
 /* Set to 1 to enable tracing. */
-#if 1
+#if 0
 static char messageDescription[1024];
 
 /* Return a human-readable description of the given message */

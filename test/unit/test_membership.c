@@ -16,6 +16,7 @@ TEST_MODULE(membership);
 struct fixture
 {
     FIXTURE_CLUSTER;
+    struct raft_change req;
 };
 
 static void *setup(const MunitParameter params[], void *user_data)
@@ -51,33 +52,33 @@ static void tear_down(void *data)
         munit_assert_int(rv__, ==, 0);      \
     }
 
-/* Invoke raft_add_server against the I'th node and assert it returns the given
+/* Invoke raft_add against the I'th node and assert it returns the given
  * value. */
-#define ADD_SERVER(I, ID, RV)                                 \
-    {                                                         \
-        int rv_;                                              \
-        char address_[16];                                    \
-        sprintf(address_, "%d", ID);                          \
-        rv_ = raft_add_server(CLUSTER_RAFT(I), ID, address_); \
-        munit_assert_int(rv_, ==, RV);                        \
+#define ADD(I, ID, RV)                                                \
+    {                                                                 \
+        int rv_;                                                      \
+        char address_[16];                                            \
+        sprintf(address_, "%d", ID);                                  \
+        rv_ = raft_add(CLUSTER_RAFT(I), &f->req, ID, address_, NULL); \
+        munit_assert_int(rv_, ==, RV);                                \
     }
 
 /* Invoke raft_promote against the I'th node and assert it returns the given
  * value. */
-#define PROMOTE(I, ID, RV)                       \
-    {                                            \
-        int rv_;                                 \
-        rv_ = raft_promote(CLUSTER_RAFT(I), ID); \
-        munit_assert_int(rv_, ==, RV);           \
+#define PROMOTE(I, ID, RV)                                      \
+    {                                                           \
+        int rv_;                                                \
+        rv_ = raft_promote(CLUSTER_RAFT(I), &f->req, ID, NULL); \
+        munit_assert_int(rv_, ==, RV);                          \
     }
 
 /* Invoke raft_remove against the I'th node and assert it returns the given
  * value. */
-#define REMOVE(I, ID, RV)                              \
-    {                                                  \
-        int rv_;                                       \
-        rv_ = raft_remove_server(CLUSTER_RAFT(I), ID); \
-        munit_assert_int(rv_, ==, RV);                 \
+#define REMOVE(I, ID, RV)                                      \
+    {                                                          \
+        int rv_;                                               \
+        rv_ = raft_remove(CLUSTER_RAFT(I), &f->req, ID, NULL); \
+        munit_assert_int(rv_, ==, RV);                         \
     }
 
 /******************************************************************************
@@ -108,25 +109,24 @@ static void tear_down(void *data)
 
 /******************************************************************************
  *
- * raft_add_server
+ * raft_add
  *
  *****************************************************************************/
 
-TEST_SUITE(add_server);
-TEST_SETUP(add_server, setup)
-TEST_TEAR_DOWN(add_server, tear_down)
+TEST_SUITE(add);
+TEST_SETUP(add, setup)
+TEST_TEAR_DOWN(add, tear_down)
 
 /* After a request to add a new non-voting server is committed, the new
  * configuration is not marked as uncommitted anymore */
-TEST_CASE(add_server, committed, NULL)
+TEST_CASE(add, committed, NULL)
 {
     struct fixture *f = data;
     struct raft *raft = CLUSTER_RAFT(0);
     const struct raft_server *server;
     (void)params;
-    ADD_SERVER(0 /*   I                                                     */,
-               3 /*   ID                                                    */,
-               0);
+    ADD(0 /*   I                                                     */,
+        3 /*   ID                                                    */, 0);
 
     /* The new configuration is already effective. */
     munit_assert_int(raft->configuration.n, ==, 3);
@@ -150,45 +150,44 @@ TEST_CASE(add_server, committed, NULL)
     return MUNIT_OK;
 }
 
-TEST_GROUP(add_server, error);
+TEST_GROUP(add, error);
 
 /* Trying to add a server on a node which is not the leader results in an
  * error. */
-TEST_CASE(add_server, error, not_leader, NULL)
+TEST_CASE(add, error, not_leader, NULL)
 {
     struct fixture *f = data;
     (void)params;
-    ADD_SERVER(1 /*   I                                                     */,
-               3 /*   ID                                                    */,
-               RAFT_NOTLEADER);
+    ADD(1 /*   I                                                     */,
+        3 /*   ID                                                    */,
+        RAFT_NOTLEADER);
     return MUNIT_OK;
 }
 
 /* Trying to add a server while a configuration change is already in progress
  * results in an error. */
-TEST_CASE(add_server, error, busy, NULL)
+TEST_CASE(add, error, busy, NULL)
 {
     struct fixture *f = data;
     (void)params;
-    ADD_SERVER(0 /*   I                                                     */,
-               3 /*   ID                                                    */,
-               0);
-    ADD_SERVER(0 /*   I                                                     */,
-               4 /*   ID                                                    */,
-               RAFT_CANTCHANGE);
+    ADD(0 /*   I                                                     */,
+        3 /*   ID                                                    */, 0);
+    ADD(0 /*   I                                                     */,
+        4 /*   ID                                                    */,
+        RAFT_CANTCHANGE);
     munit_log(MUNIT_LOG_INFO, "done");
     return MUNIT_OK;
 }
 
 /* Trying to add a server with an ID which is already in use results in an
  * error. */
-TEST_CASE(add_server, error, dup_id, NULL)
+TEST_CASE(add, error, dup_id, NULL)
 {
     struct fixture *f = data;
     (void)params;
-    ADD_SERVER(0 /*   I                                                     */,
-               2 /*   ID                                                    */,
-               RAFT_DUPLICATEID);
+    ADD(0 /*   I                                                     */,
+        2 /*   ID                                                    */,
+        RAFT_DUPLICATEID);
     return MUNIT_OK;
 }
 
@@ -210,7 +209,7 @@ TEST_CASE(promote, up_to_date, NULL)
     const struct raft_server *server;
     (void)params;
     GROW;
-    ADD_SERVER(0, 3, 0);
+    ADD(0, 3, 0);
     CLUSTER_STEP_UNTIL_APPLIED(2, 1, 2000);
     CLUSTER_STEP_N(2);
 
@@ -244,7 +243,7 @@ TEST_CASE(promote, catch_up, NULL)
     (void)params;
     CLUSTER_MAKE_PROGRESS;
     GROW;
-    ADD_SERVER(0, 3, 0);
+    ADD(0, 3, 0);
     CLUSTER_STEP_UNTIL_APPLIED(0, 3, 2000);
 
     PROMOTE(0, 3, 0);
@@ -298,7 +297,7 @@ TEST_CASE(promote, new_round, NULL)
     (void)params;
     CLUSTER_MAKE_PROGRESS;
     GROW;
-    ADD_SERVER(0, 3, 0);
+    ADD(0, 3, 0);
     CLUSTER_STEP_UNTIL_APPLIED(0, 3, 2000);
 
     PROMOTE(0, 3, 0);
@@ -311,7 +310,7 @@ TEST_CASE(promote, new_round, NULL)
     CLUSTER_STEP_UNTIL_ELAPSED(election_timeout + 100);
 
     // FIXME: unstable with 0xcf1f25b6
-    //ASSERT_CATCH_UP_ROUND(0, 3, 1, election_timeout + 100);
+    // ASSERT_CATCH_UP_ROUND(0, 3, 1, election_timeout + 100);
 
     /* The leader eventually receives the AppendEntries result from the
      * promotee, acknowledging all entries except the last one. The first round
@@ -348,7 +347,7 @@ TEST_CASE(promote, change_is_immediate, NULL)
     (void)params;
     GROW;
     CLUSTER_MAKE_PROGRESS;
-    ADD_SERVER(0, 3, 0);
+    ADD(0, 3, 0);
     CLUSTER_STEP_UNTIL_APPLIED(0, 3, 2000);
 
     PROMOTE(0, 3, 0);
@@ -395,7 +394,7 @@ TEST_CASE(promote, error, in_progress, NULL)
 {
     struct fixture *f = data;
     (void)params;
-    ADD_SERVER(0, 3, 0);
+    ADD(0, 3, 0);
     CLUSTER_STEP_UNTIL_APPLIED(0, 2, 2000);
 
     PROMOTE(0, 3, 0);
@@ -415,7 +414,7 @@ TEST_CASE(promote, error, leadership_lost, NULL)
     /* TODO: fix */
     return MUNIT_SKIP;
     GROW;
-    ADD_SERVER(0, 3, 0);
+    ADD(0, 3, 0);
     CLUSTER_STEP_UNTIL_APPLIED(2, 1, 2000);
     CLUSTER_STEP_N(2);
 
@@ -444,7 +443,7 @@ TEST_CASE(promote, error, leadership_lost, NULL)
 
 /******************************************************************************
  *
- * raft_remove_server
+ * raft_remove
  *
  *****************************************************************************/
 
@@ -459,7 +458,7 @@ TEST_CASE(remove, committed, NULL)
     struct fixture *f = data;
     (void)params;
     GROW;
-    ADD_SERVER(0, 3, 0);
+    ADD(0, 3, 0);
     CLUSTER_STEP_UNTIL_APPLIED(2, 1, 2000);
     REMOVE(0, 3, 0);
     ASSERT_CONFIGURATION_INDEXES(0, 2, 3);
@@ -478,7 +477,7 @@ TEST_CASE(remove, self, NULL)
     CLUSTER_STEP_UNTIL_APPLIED(0, 2, 2000);
     /* TODO: the second server does not get notified */
     return MUNIT_SKIP;
-    //CLUSTER_STEP_UNTIL_APPLIED(1, 2, 2000);
+    // CLUSTER_STEP_UNTIL_APPLIED(1, 2, 2000);
     return MUNIT_OK;
 }
 
@@ -502,7 +501,7 @@ TEST_CASE(remove, error, in_progress, NULL)
 {
     struct fixture *f = data;
     (void)params;
-    ADD_SERVER(0, 3, 0);
+    ADD(0, 3, 0);
     REMOVE(0, 3, RAFT_CANTCHANGE);
     return MUNIT_OK;
 }

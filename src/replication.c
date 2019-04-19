@@ -10,6 +10,7 @@
 #include "progress.h"
 #include "queue.h"
 #include "replication.h"
+#include "request.h"
 #include "snapshot.h"
 #include "state.h"
 
@@ -1169,12 +1170,37 @@ err:
     return rv;
 }
 
+/* Get the request matching the given index and type, if any. */
+static struct request *getRequest(struct raft *r,
+                                  const raft_index index,
+                                  int type)
+{
+    queue *head;
+    struct request *req;
+
+    if (r->state != RAFT_LEADER) {
+        return NULL;
+    }
+    QUEUE_FOREACH(head, &r->leader_state.requests)
+    {
+        req = QUEUE_DATA(head, struct request, queue);
+        if (req->index == index) {
+            assert(req->type == type);
+            QUEUE_REMOVE(head);
+            return req;
+        }
+    }
+    return NULL;
+}
+
 /**
  * Apply a RAFT_CONFIGURATION entry that has been committed.
  */
 static void raft_replication__apply_configuration(struct raft *r,
                                                   const raft_index index)
 {
+    struct raft_change *req;
+
     assert(index > 0);
 
     /* If this is an uncommitted configuration that we had already applied when
@@ -1198,25 +1224,10 @@ static void raft_replication__apply_configuration(struct raft *r,
         configuration__get(&r->configuration, r->id) == NULL) {
         convertToFollower(r);
     }
-}
 
-/* Fire the callback of the apply request associated with the given index */
-static void fire_apply_callback(struct raft *r, const raft_index index)
-{
-    if (r->state == RAFT_LEADER) {
-        queue *head;
-        struct raft_apply *req;
-        QUEUE_FOREACH(head, &r->leader_state.apply_reqs)
-        {
-            req = QUEUE_DATA(head, struct raft_apply, queue);
-            if (req->index == index) {
-                QUEUE_REMOVE(head);
-                if (req->cb != NULL) {
-                    req->cb(req, 0);
-                }
-                break;
-            }
-        }
+    req = (struct raft_change *)getRequest(r, index, RAFT_CONFIGURATION);
+    if (req != NULL && req->cb != NULL) {
+        req->cb(req, 0);
     }
 }
 
@@ -1225,22 +1236,27 @@ static int raft_replication__apply_command(struct raft *r,
                                            const raft_index index,
                                            const struct raft_buffer *buf)
 {
+    struct raft_apply *req;
     int rv;
-
     rv = r->fsm->apply(r->fsm, buf);
     if (rv != 0) {
         return rv;
     }
-
-    fire_apply_callback(r, index);
-
+    req = (struct raft_apply *)getRequest(r, index, RAFT_COMMAND);
+    if (req != NULL && req->cb != NULL) {
+        req->cb(req, 0);
+    }
     return 0;
 }
 
 static void raft_replication__apply_barrier(struct raft *r,
                                             const raft_index index)
 {
-    fire_apply_callback(r, index);
+    struct raft_apply *req;
+    req = (struct raft_apply *)getRequest(r, index, RAFT_BARRIER);
+    if (req != NULL && req->cb != NULL) {
+        req->cb(req, 0);
+    }
 }
 
 static bool should_take_snapshot(struct raft *r)

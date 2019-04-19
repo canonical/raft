@@ -690,7 +690,7 @@ struct raft
             raft_index round_index;         /* Target of the current round */
             unsigned round_duration;        /* Duration of the current round */
             unsigned heartbeat_elapsed;     /* Msecs since last heartbeat */
-            void *apply_reqs[2];            /* Queue of apply requests */
+            void *requests[2];              /* Outstanding client requests */
         } leader_state;
     };
 
@@ -824,6 +824,13 @@ raft_index raft_last_index(struct raft *r);
  */
 raft_index raft_last_applied(struct raft *r);
 
+/* Common fields across client request types. */
+#define RAFT__REQUEST \
+    void *data;       \
+    int type;         \
+    raft_index index; \
+    void *queue[2]
+
 /**
  * Asynchronous request to append a new command entry to the log and apply it to
  * the FSM when a quorum is reached.
@@ -832,10 +839,8 @@ struct raft_apply;
 typedef void (*raft_apply_cb)(struct raft_apply *req, int status);
 struct raft_apply
 {
-    void *data;
-    raft_index index;
+    RAFT__REQUEST;
     raft_apply_cb cb;
-    void *queue[2];
 };
 
 /**
@@ -872,19 +877,40 @@ int raft_apply(struct raft *r,
 int raft_barrier(struct raft *r, struct raft_apply *req, raft_apply_cb cb);
 
 /**
+ * Asynchronous request to change the raft configuration.
+ */
+struct raft_change;
+typedef void (*raft_change_cb)(struct raft_change *req, int status);
+struct raft_change
+{
+    RAFT__REQUEST;
+    raft_change_cb cb;
+};
+
+/**
  * Add a new non-voting server to the cluster configuration.
  */
-int raft_add_server(struct raft *r, const unsigned id, const char *address);
+int raft_add(struct raft *r,
+             struct raft_change *req,
+             unsigned id,
+             const char *address,
+             raft_change_cb cb);
 
 /**
  * Promote the given new non-voting server to be a voting one.
  */
-int raft_promote(struct raft *r, const unsigned id);
+int raft_promote(struct raft *r,
+                 struct raft_change *req,
+                 unsigned id,
+                 raft_change_cb cb);
 
 /**
  * Remove the given server from the cluster configuration.
  */
-int raft_remove_server(struct raft *r, const unsigned id);
+int raft_remove(struct raft *r,
+                struct raft_change *req,
+                unsigned id,
+                raft_change_cb cb);
 
 /**
  * User-definable dynamic memory allocation functions.
@@ -917,5 +943,7 @@ void raft_heap_set(struct raft_heap *heap);
  * custom allocator specified with @raft_heap_set.
  */
 void raft_heap_set_default();
+
+#undef RAFT__REQUEST
 
 #endif /* RAFT_H */

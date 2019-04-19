@@ -67,10 +67,10 @@ static void clearLeader(struct raft *r)
      */
 
     /* Fail all outstanding apply requests */
-    while (!QUEUE_IS_EMPTY(&r->leader_state.apply_reqs)) {
+    while (!QUEUE_IS_EMPTY(&r->leader_state.requests)) {
         struct raft_apply *req;
         queue *head;
-        head = QUEUE_HEAD(&r->leader_state.apply_reqs);
+        head = QUEUE_HEAD(&r->leader_state.requests);
         QUEUE_REMOVE(head);
         req = QUEUE_DATA(head, struct raft_apply, queue);
         if (req->cb != NULL) {
@@ -145,7 +145,7 @@ int convertToLeader(struct raft *r)
     r->election_elapsed = 0;
 
     /* Reset apply requests queue */
-    QUEUE_INIT(&r->leader_state.apply_reqs);
+    QUEUE_INIT(&r->leader_state.requests);
 
     /* Allocate and initialize the progress array. */
     rv = progress__build_array(r);

@@ -1,6 +1,7 @@
 #include "../include/raft.h"
 
 #include "assert.h"
+#include "request.h"
 #include "configuration.h"
 #include "log.h"
 #include "logging.h"
@@ -39,6 +40,7 @@ int raft_apply(struct raft *r,
 
     tracef("%u entries starting at %lld", n, index);
 
+    req->type = RAFT_COMMAND;
     req->index = index;
     req->cb = cb;
 
@@ -48,7 +50,7 @@ int raft_apply(struct raft *r,
         goto err;
     }
 
-    QUEUE_PUSH(&r->leader_state.apply_reqs, &req->queue);
+    QUEUE_PUSH(&r->leader_state.requests, &req->queue);
 
     rv = raft_replication__trigger(r, index);
     if (rv != 0) {
@@ -86,6 +88,7 @@ int raft_barrier(struct raft *r, struct raft_apply *req, raft_apply_cb cb)
     }
 
     index = log__last_index(&r->log) + 1;
+    req->type = RAFT_BARRIER;
     req->index = index;
     req->cb = cb;
 
@@ -94,7 +97,7 @@ int raft_barrier(struct raft *r, struct raft_apply *req, raft_apply_cb cb)
         goto err_after_buf_alloc;
     }
 
-    QUEUE_PUSH(&r->leader_state.apply_reqs, &req->queue);
+    QUEUE_PUSH(&r->leader_state.requests, &req->queue);
 
     rv = raft_replication__trigger(r, index);
     if (rv != 0) {
@@ -112,8 +115,9 @@ err:
     return rv;
 }
 
-static int raft_client__change_configuration(
+static int changeConfiguration(
     struct raft *r,
+    struct raft_change *req,
     const struct raft_configuration *configuration)
 {
     raft_index index;
@@ -142,6 +146,10 @@ static int raft_client__change_configuration(
         r->configuration = *configuration;
     }
 
+    req->type = RAFT_CONFIGURATION;
+    req->index = index;
+    QUEUE_PUSH(&r->leader_state.requests, &req->queue);
+
     /* Start writing the new log entry to disk and send it to the followers. */
     rv = raft_replication__trigger(r, index);
     if (rv != 0) {
@@ -161,7 +169,11 @@ err:
     return rv;
 }
 
-int raft_add_server(struct raft *r, const unsigned id, const char *address)
+int raft_add(struct raft *r,
+             struct raft_change *req,
+             unsigned id,
+             const char *address,
+             raft_change_cb cb)
 {
     struct raft_configuration configuration;
     int rv;
@@ -187,7 +199,9 @@ int raft_add_server(struct raft *r, const unsigned id, const char *address)
         goto err_after_configuration_copy;
     }
 
-    rv = raft_client__change_configuration(r, &configuration);
+    req->cb = cb;
+
+    rv = changeConfiguration(r, req, &configuration);
     if (rv != 0) {
         goto err_after_configuration_copy;
     }
@@ -202,7 +216,10 @@ err:
     return rv;
 }
 
-int raft_promote(struct raft *r, const unsigned id)
+int raft_promote(struct raft *r,
+                 struct raft_change *req,
+                 unsigned id,
+                 raft_change_cb cb)
 {
     const struct raft_server *server;
     size_t server_index;
@@ -232,12 +249,14 @@ int raft_promote(struct raft *r, const unsigned id)
 
     last_index = log__last_index(&r->log);
 
+    req->cb = cb;
+
     if (r->leader_state.progress[server_index].match_index == last_index) {
         /* The log of this non-voting server is already up-to-date, so we can
          * ask its promotion immediately. */
         r->configuration.servers[server_index].voting = true;
 
-        rv = raft_client__change_configuration(r, &r->configuration);
+        rv = changeConfiguration(r, req, &r->configuration);
         if (rv != 0) {
             r->configuration.servers[server_index].voting = false;
             return rv;
@@ -269,7 +288,10 @@ err:
     return rv;
 }
 
-int raft_remove_server(struct raft *r, const unsigned id)
+int raft_remove(struct raft *r,
+                struct raft_change *req,
+                unsigned id,
+                raft_change_cb cb)
 {
     const struct raft_server *server;
     struct raft_configuration configuration;
@@ -302,7 +324,9 @@ int raft_remove_server(struct raft *r, const unsigned id)
         goto err_after_configuration_copy;
     }
 
-    rv = raft_client__change_configuration(r, &configuration);
+    req->cb = cb;
+
+    rv = changeConfiguration(r, req, &configuration);
     if (rv != 0) {
         goto err_after_configuration_copy;
     }
