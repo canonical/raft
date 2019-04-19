@@ -43,7 +43,7 @@ static void clearCandidate(struct raft *r)
     }
 }
 
-/*Clear leader state. */
+/* Clear leader state. */
 static void clearLeader(struct raft *r)
 {
     if (r->leader_state.progress != NULL) {

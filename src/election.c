@@ -11,6 +11,14 @@
 #define tracef(MSG, ...)
 #endif
 
+/* Vote request context */
+struct request
+{
+    struct raft *raft;
+    struct raft_io_send send;
+    unsigned server_id;
+};
+
 void electionResetTimer(struct raft *r)
 {
     r->randomized_election_timeout =
@@ -20,9 +28,14 @@ void electionResetTimer(struct raft *r)
     r->election_elapsed = 0;
 }
 
-static void sendRequestVoteCb(struct raft_io_send *req, int status)
+static void sendRequestVoteCb(struct raft_io_send *send, int status)
 {
-    (void)status;
+    struct request *req = send->data;
+    struct raft *r = req->raft;
+    if (status != 0) {
+        warnf(r->io, "failed to send vote request to server %ld: %s",
+              req->server_id, raft_strerror(status));
+    }
     raft_free(req);
 }
 
@@ -30,13 +43,8 @@ static void sendRequestVoteCb(struct raft_io_send *req, int status)
 static int sendRequestVote(struct raft *r, const struct raft_server *server)
 {
     struct raft_message message;
-    struct raft_io_send *req;
+    struct request *req;
     int rv;
-
-    assert(r != NULL);
-    assert(r->state == RAFT_CANDIDATE);
-
-    assert(server != NULL);
     assert(server->id != r->id);
     assert(server->id != 0);
 
@@ -53,7 +61,11 @@ static int sendRequestVote(struct raft *r, const struct raft_server *server)
         return RAFT_NOMEM;
     }
 
-    rv = r->io->send(r->io, req, &message, sendRequestVoteCb);
+    req->raft = r;
+    req->send.data = req;
+    req->server_id = server->id;
+
+    rv = r->io->send(r->io, &req->send, &message, sendRequestVoteCb);
     if (rv != 0) {
         raft_free(req);
         return rv;
@@ -69,8 +81,6 @@ int electionStart(struct raft *r)
     size_t voting_index;
     size_t i;
     int rv;
-
-    assert(r != NULL);
     assert(r->state == RAFT_CANDIDATE);
 
     n_voting = configurationNumVoting(&r->configuration);
@@ -81,9 +91,8 @@ int electionStart(struct raft *r)
      * configuration (meaning that we are a voting server). */
     assert(voting_index < r->configuration.n);
 
-    /* Sanity check that configurationNumVoting and
-     * configurationIndexOfVoting have returned somethig that makes
-     * sense. */
+    /* Sanity check that configurationNumVoting and configurationIndexOfVoting
+     * have returned somethig that makes sense. */
     assert(n_voting <= r->configuration.n);
     assert(voting_index < n_voting);
 
@@ -125,8 +134,8 @@ int electionStart(struct raft *r)
         rv = sendRequestVote(r, server);
         if (rv != 0) {
             /* This is not a critical failure, let's just log it. */
-            warnf(r->io, "failed to send vote request to server %ld: %s (%d)",
-                  server->id, raft_strerror(rv), rv);
+            warnf(r->io, "failed to send vote request to server %ld: %s",
+                  server->id, raft_strerror(rv));
         }
     }
 
@@ -221,18 +230,17 @@ grant_vote:
     return 0;
 }
 
-bool electionTally(struct raft *r, size_t votes_index)
+bool electionTally(struct raft *r, size_t voter_index)
 {
     size_t n_voting = configurationNumVoting(&r->configuration);
     size_t votes = 0;
     size_t i;
     size_t half = n_voting / 2;
 
-    assert(r != NULL);
     assert(r->state == RAFT_CANDIDATE);
     assert(r->candidate_state.votes != NULL);
 
-    r->candidate_state.votes[votes_index] = true;
+    r->candidate_state.votes[voter_index] = true;
 
     for (i = 0; i < n_voting; i++) {
         if (r->candidate_state.votes[i]) {
