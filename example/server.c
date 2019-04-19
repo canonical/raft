@@ -13,13 +13,16 @@ struct fsm
     int count;
 };
 
-static int fsmApply(struct raft_fsm *fsm, const struct raft_buffer *buf)
+static int fsmApply(struct raft_fsm *fsm,
+                    const struct raft_buffer *buf,
+                    void **result)
 {
     struct fsm *f = fsm->data;
     if (buf->len != 8) {
         return RAFT_MALFORMED;
     }
     f->count += *(uint64_t *)buf->base;
+    *result = &f->count;
     return 0;
 }
 

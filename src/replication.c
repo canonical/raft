@@ -1244,8 +1244,9 @@ static int raft_replication__apply_command(struct raft *r,
                                            const struct raft_buffer *buf)
 {
     struct raft_apply *req;
+    void *result;
     int rv;
-    rv = r->fsm->apply(r->fsm, buf);
+    rv = r->fsm->apply(r->fsm, buf, &result);
     if (rv != 0) {
         return rv;
     }

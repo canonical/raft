@@ -13,7 +13,9 @@ struct test_fsm
 /* Command codes */
 enum { SET_X = 1, SET_Y, ADD_X, ADD_Y };
 
-static int test_fsm__apply(struct raft_fsm *fsm, const struct raft_buffer *buf)
+static int test_fsm__apply(struct raft_fsm *fsm,
+                           const struct raft_buffer *buf,
+                           void **result)
 {
     struct test_fsm *t = fsm->data;
     unsigned command;
@@ -42,6 +44,8 @@ static int test_fsm__apply(struct raft_fsm *fsm, const struct raft_buffer *buf)
         default:
             return -1;
     }
+
+    *result = NULL;
 
     return 0;
 }

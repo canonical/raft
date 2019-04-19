@@ -535,13 +535,22 @@ struct raft_io
  */
 struct raft_fsm
 {
-    int version; /* API version implemented by this instance. Currently 1. */
-    void *data;  /* Custom user data. */
+    /**
+     * API version implemented by this instance. Currently 1.
+     */
+    int version;
+
+    /**
+     * Custom user data.
+     */
+    void *data;
 
     /**
      * Apply a committed RAFT_COMMAND entry to the state machine.
      */
-    int (*apply)(struct raft_fsm *fsm, const struct raft_buffer *buf);
+    int (*apply)(struct raft_fsm *fsm,
+                 const struct raft_buffer *buf,
+                 void **result);
 
     /**
      * Take a snapshot of the state machine.
