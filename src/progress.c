@@ -5,7 +5,7 @@
 #include "logging.h"
 
 /* Set to 1 to enable tracing. */
-#if 1
+#if 0
 #define tracef(MSG, ...) debugf(r->io, "progress: " MSG, ##__VA_ARGS__)
 #else
 #define tracef(MSG, ...)
@@ -36,10 +36,13 @@ int progress__build_array(struct raft *r)
     raft_index last_index = log__last_index(&r->log);
     p = raft_malloc(r->configuration.n * sizeof *p);
     if (p == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
     for (i = 0; i < r->configuration.n; i++) {
         init_progress(&p[i], last_index);
+        if (r->configuration.servers[i].id == r->id) {
+            p[i].match_index = r->last_stored;
+        }
     }
     r->leader_state.progress = p;
     return 0;
@@ -54,7 +57,7 @@ int progress__rebuild_array(struct raft *r,
 
     p = raft_malloc(configuration->n * sizeof *p);
     if (p == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
 
     /* First copy the progress information for the servers that exists both in
@@ -162,8 +165,8 @@ bool progress__maybe_decrement(struct raft *r,
 
     /* TODO: remove once we implement pipelining. See etcd/raft/progress.go */
     if (rejected <= p->match_index) {
-      tracef("match index is up to date -> ignore ");
-      return false;
+        tracef("match index is up to date -> ignore ");
+        return false;
     }
 
     /* The rejection must be stale or spurious (e.g. when the follower rejects
@@ -195,7 +198,7 @@ bool progress__maybe_update(struct raft *r,
         p->next_index = last_index + 1;
     }
     if (updated) {
-        debugf(r->io, "new match/next idx for server %ld: %ld/%ld", server->id,
+        tracef("new match/next idx for server %ld: %ld/%ld", server->id,
                p->match_index, p->next_index);
     }
     return updated;

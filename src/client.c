@@ -1,6 +1,7 @@
 #include "../include/raft.h"
 
 #include "assert.h"
+#include "request.h"
 #include "configuration.h"
 #include "log.h"
 #include "logging.h"
@@ -8,6 +9,13 @@
 #include "progress.h"
 #include "queue.h"
 #include "replication.h"
+
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(MSG, ...) debugf(r->io, "apply: " MSG, __VA_ARGS__)
+#else
+#define tracef(MSG, ...)
+#endif
 
 int raft_apply(struct raft *r,
                struct raft_apply *req,
@@ -23,16 +31,16 @@ int raft_apply(struct raft *r,
     assert(n > 0);
 
     if (r->state != RAFT_LEADER) {
-        rv = RAFT_ERR_NOT_LEADER;
+        rv = RAFT_NOTLEADER;
         goto err;
     }
 
     /* Index of the first entry being appended. */
     index = log__last_index(&r->log) + 1;
 
-    debugf(r->io, "client request: apply %u entries starting at %lld", n,
-           index);
+    tracef("%u entries starting at %lld", n, index);
 
+    req->type = RAFT_COMMAND;
     req->index = index;
     req->cb = cb;
 
@@ -42,7 +50,7 @@ int raft_apply(struct raft *r,
         goto err;
     }
 
-    RAFT__QUEUE_PUSH(&r->leader_state.apply_reqs, &req->queue);
+    QUEUE_PUSH(&r->leader_state.requests, &req->queue);
 
     rv = raft_replication__trigger(r, index);
     if (rv != 0) {
@@ -53,7 +61,7 @@ int raft_apply(struct raft *r,
 
 err_after_log_append:
     log__discard(&r->log, index);
-    RAFT__QUEUE_REMOVE(&req->queue);
+    QUEUE_REMOVE(&req->queue);
 err:
     assert(rv != 0);
     return rv;
@@ -66,7 +74,7 @@ int raft_barrier(struct raft *r, struct raft_apply *req, raft_apply_cb cb)
     int rv;
 
     if (r->state != RAFT_LEADER) {
-        rv = RAFT_ERR_NOT_LEADER;
+        rv = RAFT_NOTLEADER;
         goto err;
     }
 
@@ -75,11 +83,12 @@ int raft_barrier(struct raft *r, struct raft_apply *req, raft_apply_cb cb)
     buf.base = raft_malloc(buf.len);
 
     if (buf.base == NULL) {
-        rv = RAFT_ENOMEM;
+        rv = RAFT_NOMEM;
         goto err;
     }
 
     index = log__last_index(&r->log) + 1;
+    req->type = RAFT_BARRIER;
     req->index = index;
     req->cb = cb;
 
@@ -88,7 +97,7 @@ int raft_barrier(struct raft *r, struct raft_apply *req, raft_apply_cb cb)
         goto err_after_buf_alloc;
     }
 
-    RAFT__QUEUE_PUSH(&r->leader_state.apply_reqs, &req->queue);
+    QUEUE_PUSH(&r->leader_state.requests, &req->queue);
 
     rv = raft_replication__trigger(r, index);
     if (rv != 0) {
@@ -99,15 +108,16 @@ int raft_barrier(struct raft *r, struct raft_apply *req, raft_apply_cb cb)
 
 err_after_log_append:
     log__discard(&r->log, index);
-    RAFT__QUEUE_REMOVE(&req->queue);
+    QUEUE_REMOVE(&req->queue);
 err_after_buf_alloc:
     raft_free(buf.base);
 err:
     return rv;
 }
 
-static int raft_client__change_configuration(
+static int changeConfiguration(
     struct raft *r,
+    struct raft_change *req,
     const struct raft_configuration *configuration)
 {
     raft_index index;
@@ -136,6 +146,10 @@ static int raft_client__change_configuration(
         r->configuration = *configuration;
     }
 
+    req->type = RAFT_CONFIGURATION;
+    req->index = index;
+    QUEUE_PUSH(&r->leader_state.requests, &req->queue);
+
     /* Start writing the new log entry to disk and send it to the followers. */
     rv = raft_replication__trigger(r, index);
     if (rv != 0) {
@@ -155,7 +169,11 @@ err:
     return rv;
 }
 
-int raft_add_server(struct raft *r, const unsigned id, const char *address)
+int raft_add(struct raft *r,
+             struct raft_change *req,
+             unsigned id,
+             const char *address,
+             raft_change_cb cb)
 {
     struct raft_configuration configuration;
     int rv;
@@ -165,7 +183,7 @@ int raft_add_server(struct raft *r, const unsigned id, const char *address)
         return rv;
     }
 
-    debugf(r->io, "add server: id %d, address %s", id, address);
+    tracef("add server: id %d, address %s", id, address);
 
     /* Make a copy of the current configuration, and add the new server to
      * it. */
@@ -181,7 +199,9 @@ int raft_add_server(struct raft *r, const unsigned id, const char *address)
         goto err_after_configuration_copy;
     }
 
-    rv = raft_client__change_configuration(r, &configuration);
+    req->cb = cb;
+
+    rv = changeConfiguration(r, req, &configuration);
     if (rv != 0) {
         goto err_after_configuration_copy;
     }
@@ -196,7 +216,10 @@ err:
     return rv;
 }
 
-int raft_promote(struct raft *r, const unsigned id)
+int raft_promote(struct raft *r,
+                 struct raft_change *req,
+                 unsigned id,
+                 raft_change_cb cb)
 {
     const struct raft_server *server;
     size_t server_index;
@@ -212,12 +235,12 @@ int raft_promote(struct raft *r, const unsigned id)
 
     server = configuration__get(&r->configuration, id);
     if (server == NULL) {
-        rv = RAFT_EBADID;
+        rv = RAFT_BADID;
         goto err;
     }
 
     if (server->voting) {
-        rv = RAFT_EALREADYVOTING;
+        rv = RAFT_ALREADYVOTING;
         goto err;
     }
 
@@ -226,12 +249,14 @@ int raft_promote(struct raft *r, const unsigned id)
 
     last_index = log__last_index(&r->log);
 
+    req->cb = cb;
+
     if (r->leader_state.progress[server_index].match_index == last_index) {
         /* The log of this non-voting server is already up-to-date, so we can
          * ask its promotion immediately. */
         r->configuration.servers[server_index].voting = true;
 
-        rv = raft_client__change_configuration(r, &r->configuration);
+        rv = changeConfiguration(r, req, &r->configuration);
         if (rv != 0) {
             r->configuration.servers[server_index].voting = false;
             return rv;
@@ -249,7 +274,7 @@ int raft_promote(struct raft *r, const unsigned id)
 
     /* Immediately initiate an AppendEntries request. */
     rv = replication__trigger(r, server_index);
-    if (rv != 0 && rv != RAFT_ERR_IO_CONNECT) {
+    if (rv != 0 && rv != RAFT_NOCONNECTION) {
         /* This error is not fatal. */
         warnf(r->io, "failed to send append entries to server %ld: %s (%d)",
               server->id, raft_strerror(rv), rv);
@@ -263,7 +288,10 @@ err:
     return rv;
 }
 
-int raft_remove_server(struct raft *r, const unsigned id)
+int raft_remove(struct raft *r,
+                struct raft_change *req,
+                unsigned id,
+                raft_change_cb cb)
 {
     const struct raft_server *server;
     struct raft_configuration configuration;
@@ -276,7 +304,7 @@ int raft_remove_server(struct raft *r, const unsigned id)
 
     server = configuration__get(&r->configuration, id);
     if (server == NULL) {
-        rv = RAFT_EBADID;
+        rv = RAFT_BADID;
         goto err;
     }
 
@@ -296,7 +324,9 @@ int raft_remove_server(struct raft *r, const unsigned id)
         goto err_after_configuration_copy;
     }
 
-    rv = raft_client__change_configuration(r, &configuration);
+    req->cb = cb;
+
+    rv = changeConfiguration(r, req, &configuration);
     if (rv != 0) {
         goto err_after_configuration_copy;
     }

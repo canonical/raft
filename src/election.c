@@ -6,27 +6,28 @@
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(MSG, ...) debugf(r->io, MSG, __VA_ARGS__)
+#define tracef(MSG, ...) debugf(r->io, MSG, ##__VA_ARGS__)
 #else
 #define tracef(MSG, ...)
 #endif
 
-void election__reset_timer(struct raft *r)
+void electionResetTimer(struct raft *r)
 {
-    assert(r != NULL);
     r->randomized_election_timeout =
         r->io->random(r->io, r->election_timeout, 2 * r->election_timeout);
+    assert(r->randomized_election_timeout >= r->election_timeout);
+    assert(r->randomized_election_timeout <= r->election_timeout * 2);
     r->election_elapsed = 0;
 }
 
-static void send_request_vote_cb(struct raft_io_send *req, int status)
+static void sendRequestVoteCb(struct raft_io_send *req, int status)
 {
     (void)status;
     raft_free(req);
 }
 
 /* Send a RequestVote RPC to the given server. */
-static int send_request_vote(struct raft *r, const struct raft_server *server)
+static int sendRequestVote(struct raft *r, const struct raft_server *server)
 {
     struct raft_message message;
     struct raft_io_send *req;
@@ -49,10 +50,10 @@ static int send_request_vote(struct raft *r, const struct raft_server *server)
 
     req = raft_malloc(sizeof *req);
     if (req == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
 
-    rv = r->io->send(r->io, req, &message, send_request_vote_cb);
+    rv = r->io->send(r->io, req, &message, sendRequestVoteCb);
     if (rv != 0) {
         raft_free(req);
         return rv;
@@ -61,7 +62,7 @@ static int send_request_vote(struct raft *r, const struct raft_server *server)
     return 0;
 }
 
-int election__start(struct raft *r)
+int electionStart(struct raft *r)
 {
     raft_term term;
     size_t n_voting;
@@ -104,7 +105,7 @@ int election__start(struct raft *r)
     r->voted_for = r->id;
 
     /* Reset election timer. */
-    election__reset_timer(r);
+    electionResetTimer(r);
 
     assert(r->candidate_state.votes != NULL);
 
@@ -121,7 +122,7 @@ int election__start(struct raft *r)
         if (server->id == r->id || !server->voting) {
             continue;
         }
-        rv = send_request_vote(r, server);
+        rv = sendRequestVote(r, server);
         if (rv != 0) {
             /* This is not a critical failure, let's just log it. */
             warnf(r->io, "failed to send vote request to server %ld: %s (%d)",
@@ -136,9 +137,9 @@ err:
     return rv;
 }
 
-int election__vote(struct raft *r,
-                   const struct raft_request_vote *args,
-                   bool *granted)
+int electionVote(struct raft *r,
+                 const struct raft_request_vote *args,
+                 bool *granted)
 {
     const struct raft_server *local_server;
     raft_index local_last_index;
@@ -220,7 +221,7 @@ grant_vote:
     return 0;
 }
 
-bool election__tally(struct raft *r, size_t votes_index)
+bool electionTally(struct raft *r, size_t votes_index)
 {
     size_t n_voting = configuration__n_voting(&r->configuration);
     size_t votes = 0;

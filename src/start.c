@@ -18,9 +18,9 @@
 #endif
 
 /* Restore the most recent configuration. */
-static int restore_most_recent_configuration(struct raft *r,
-                                             struct raft_entry *entry,
-                                             raft_index index)
+static int restoreMostRecentConfiguration(struct raft *r,
+                                          struct raft_entry *entry,
+                                          raft_index index)
 {
     struct raft_configuration configuration;
     int rc;
@@ -38,10 +38,10 @@ static int restore_most_recent_configuration(struct raft *r,
 
 /* Restore the entries that were loaded from persistent storage. The most recent
  * configuration entry will be restored as well, if any. */
-static int restore_entries(struct raft *r,
-                           raft_index start_index,
-                           struct raft_entry *entries,
-                           size_t n)
+static int restoreEntries(struct raft *r,
+                          raft_index start_index,
+                          struct raft_entry *entries,
+                          size_t n)
 {
     struct raft_entry *conf = NULL;
     raft_index conf_index;
@@ -62,7 +62,7 @@ static int restore_entries(struct raft *r,
         }
     }
     if (conf != NULL) {
-        rc = restore_most_recent_configuration(r, conf, conf_index);
+        rc = restoreMostRecentConfiguration(r, conf, conf_index);
         if (rc != 0) {
             goto err;
         }
@@ -89,11 +89,11 @@ static int maybe_self_elect(struct raft *r)
         return 0;
     }
     debugf(r->io, "self elect and convert to leader");
-    rc = convert__to_candidate(r);
+    rc = convertToCandidate(r);
     if (rc != 0) {
         return rc;
     }
-    rc = convert__to_leader(r);
+    rc = convertToLeader(r);
     if (rc != 0) {
         return rc;
     }
@@ -133,7 +133,7 @@ int raft_start(struct raft *r)
             entry_batches__destroy(entries, n_entries);
             return rc;
         }
-	log__restore(&r->log, snapshot->index, snapshot->term);
+        log__restore(&r->log, snapshot->index, snapshot->term);
         raft_free(snapshot);
     } else if (n_entries > 0) {
         /* If we don't have a snapshot and the on-disk log is not empty, then
@@ -150,7 +150,7 @@ int raft_start(struct raft *r)
     /* Append the entries to the log, possibly restoring the last
      * configuration. */
     tracef("restore %lu entries starting at %llu", n_entries, start_index);
-    rc = restore_entries(r, start_index, entries, n_entries);
+    rc = restoreEntries(r, start_index, entries, n_entries);
     if (rc != 0) {
         entry_batches__destroy(entries, n_entries);
         return rc;
@@ -167,7 +167,7 @@ int raft_start(struct raft *r)
         return rc;
     }
 
-    convert__to_follower(r);
+    convertToFollower(r);
 
     /* If there's only one voting server, and that is us, it's safe to convert
      * to leader right away. If that is not us, we're either joining the cluster

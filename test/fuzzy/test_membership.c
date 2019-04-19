@@ -12,6 +12,7 @@ TEST_MODULE(membership);
 struct fixture
 {
     FIXTURE_CLUSTER;
+    struct raft_change req;
 };
 
 static char *cluster_n[] = {"3", "4", "5", NULL};
@@ -25,8 +26,9 @@ static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
-    SETUP_CLUSTER(CLUSTER_N_PARAM_GET);
+    SETUP_CLUSTER(CLUSTER_GET_N_PARAM);
     CLUSTER_BOOTSTRAP;
+    CLUSTER_RANDOMIZE;
     CLUSTER_START;
     CLUSTER_STEP_UNTIL_HAS_LEADER(10000);
     return f;
@@ -57,7 +59,7 @@ TEST_CASE(add, non_voting, _params)
 
     (void)params;
 
-    CLUSTER_ADD;
+    CLUSTER_ADD(&f->req);
     CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_N, 2, 2000);
 
     raft = CLUSTER_RAFT(CLUSTER_LEADER);
@@ -76,11 +78,11 @@ TEST_CASE(add, voting, _params)
 
     (void)params;
 
-    CLUSTER_ADD;
+    CLUSTER_ADD(&f->req);
     CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_N, 2, 2000);
 
     /* Then promote it. */
-    CLUSTER_PROMOTE;
+    CLUSTER_PROMOTE(&f->req);
 
     CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_N, 3, 2000);
 
@@ -106,7 +108,7 @@ TEST_CASE(remove, voting, _params)
 
     raft = CLUSTER_RAFT(CLUSTER_LEADER);
 
-    rv = raft_remove_server(raft, CLUSTER_LEADER % CLUSTER_N + 1);
+    rv = raft_remove(raft, &f->req, CLUSTER_LEADER % CLUSTER_N + 1, NULL);
     munit_assert_int(rv, ==, 0);
 
     CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_LEADER, 2, 2000);

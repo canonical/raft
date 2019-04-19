@@ -22,20 +22,18 @@ AC_PROG_LN_S
 # AX_CHECK_COMPILE_FLAG([-Weverything], AM_CFLAGS+=" -Weverything")
 
 # Enable integration with libuv.
-AC_ARG_ENABLE(io-uv,
+AC_ARG_ENABLE(uv,
   AS_HELP_STRING(
-    [--enable-io-uv],
+    [--enable-uv],
     [enable integration with libuv, default: yes]),
   [case "${enableval}" in
-     yes) io_uv=true ;;
-     no)  io_uv=false ;;
-     *)   AC_MSG_ERROR([bad value ${enableval} for --enable-io-uv]) ;;
+     yes) uv=true ;;
+     no)  uv=false ;;
+     *)   AC_MSG_ERROR([bad value ${enableval} for --enable-uv]) ;;
    esac],
-  [io_uv=true])
-AM_CONDITIONAL(IO_UV, test x"$io_uv" = x"true")
-AM_COND_IF(IO_UV,
-  [PKG_CHECK_MODULES(UV, [libuv >= 1.8.0], [], [])
-   AC_DEFINE(RAFT_IO_UV)])
+  [uv=true])
+AM_CONDITIONAL(UV, test x"$uv" = x"true")
+AM_COND_IF(UV, [PKG_CHECK_MODULES(UV, [libuv >= 1.8.0], [], [])])
 
 # Enable the fake I/O implementation and associated fixture, for testing.
 AC_ARG_ENABLE(fixture,
@@ -63,7 +61,7 @@ AC_ARG_ENABLE(example,
   [example=true])
 AM_CONDITIONAL(EXAMPLE, test x"$example" = x"true")
 
-# Enable debugging output.
+# Enable debugging code.
 AC_ARG_ENABLE(debug,
   AS_HELP_STRING(
     [--enable-debug],

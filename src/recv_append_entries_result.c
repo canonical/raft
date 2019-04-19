@@ -5,6 +5,13 @@
 #include "recv.h"
 #include "replication.h"
 
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(MSG, ...) debugf(r->io, MSG, ##__VA_ARGS__)
+#else
+#define tracef(MSG, ...)
+#endif
+
 int recv__append_entries_result(struct raft *r,
                                 const unsigned id,
                                 const char *address,
@@ -20,7 +27,7 @@ int recv__append_entries_result(struct raft *r,
     assert(result != NULL);
 
     if (r->state != RAFT_LEADER) {
-        debugf(r->io, "local server is not leader -> ignore");
+        tracef("local server is not leader -> ignore");
         return 0;
     }
 
@@ -30,7 +37,7 @@ int recv__append_entries_result(struct raft *r,
     }
 
     if (match < 0) {
-        debugf(r->io, "local term is higher -> ignore ");
+        tracef("local term is higher -> ignore ");
         return 0;
     }
 
@@ -59,6 +66,11 @@ int recv__append_entries_result(struct raft *r,
     rv = replication__update(r, server, result);
     if (rv != 0) {
         return rv;
+    }
+
+    /* We might not be leader anymore if we removed ouselves */
+    if (r->state != RAFT_LEADER) {
+        return 0;
     }
 
     /* Commit entries if possible.

@@ -1,14 +1,11 @@
-/**
- * Election-related logic and helpers.
- */
+/* Election-related logic and helpers. */
 
-#ifndef RAFT_ELECTION_H
-#define RAFT_ELECTION_H
+#ifndef ELECTION_H_
+#define ELECTION_H_
 
 #include "../include/raft.h"
 
-/**
- * Reset the election_timer clock and set randomized_election_timeout to a random
+/* Reset the election_timer clock and set randomized_election_timeout to a random
  * value between election_timeout and 2 * election_timeout.
  *
  * From Section §3.4:
@@ -30,12 +27,10 @@
  *   five servers have failed, the average election takes about 650 ms (about 20
  *   times the one-way network latency), and 99.9% of elections complete in 3
  *   s. We believe these election times are more than adequate for most WAN
- *   deployments.
- */
-void election__reset_timer(struct raft *r);
+ *   deployments. */
+void electionResetTimer(struct raft *r);
 
-/**
- * Start a new election round.
+/* Start a new election round.
  *
  * From Figure 3.1:
  *
@@ -51,12 +46,11 @@ void election__reset_timer(struct raft *r);
  *
  *   To begin an election, a follower increments its current term and
  *   transitions to candidate state.  It then votes for itself and issues
- *   RequestVote RPCs in parallel to each of the other servers in the cluster.
- */
-int election__start(struct raft *r);
+ *   RequestVote RPCs in parallel to each of the other servers in the
+ *   cluster. */
+int electionStart(struct raft *r);
 
-/**
- * Decide whether our vote should be granted to the requesting server and update
+/* Decide whether our vote should be granted to the requesting server and update
  * our state accordingly.
  *
  * From Figure 3.1:
@@ -66,17 +60,14 @@ int election__start(struct raft *r);
  *   - If votedFor is null or candidateId, and candidate's log is at least as
  *     up-to-date as receiver's log, grant vote.
  *
- * The outcome of the decision is stored through the @granted pointer.
- */
-int election__vote(struct raft *r,
+ * The outcome of the decision is stored through the @granted pointer. */
+int electionVote(struct raft *r,
                    const struct raft_request_vote *args,
                    bool *granted);
 
-/**
- * Update the votes array by adding the vote from the server at the given
+/* Update the votes array by adding the vote from the server at the given
  * index. Return true if with this vote the server has reached the majority of
- * votes and won elections.
- */
-bool election__tally(struct raft *r, size_t votes_index);
+ * votes and won elections. */
+bool electionTally(struct raft *r, size_t votes_index);
 
-#endif /* RAFT_ELECTION_H */
+#endif /* ELECTION_H_ */

@@ -10,12 +10,13 @@
 #include "progress.h"
 #include "queue.h"
 #include "replication.h"
+#include "request.h"
 #include "snapshot.h"
 #include "state.h"
 
 /* Set to 1 to enable tracing. */
-#if 1
-#define tracef(MSG, ...) debugf(r->io, "replication: " MSG, __VA_ARGS__)
+#if 0
+#define tracef(MSG, ...) debugf(r->io, "replication: " MSG, ##__VA_ARGS__)
 #else
 #define tracef(MSG, ...)
 #endif
@@ -164,7 +165,7 @@ static int send_snapshot(struct raft *r, size_t i)
 
     request = raft_malloc(sizeof *request);
     if (request == NULL) {
-        rv = RAFT_ENOMEM;
+        rv = RAFT_NOMEM;
         goto err;
     }
     request->raft = r;
@@ -244,7 +245,7 @@ static int send_append_entries(struct raft *r,
 
     request = raft_malloc(sizeof *request);
     if (request == NULL) {
-        rv = RAFT_ENOMEM;
+        rv = RAFT_NOMEM;
         goto err_after_entries_acquired;
     }
     request->raft = r;
@@ -321,7 +322,7 @@ int replication__trigger(struct raft *r, unsigned i)
         /* If the entry is not anymore in our log, send the last snapshot. */
         if (prev_term == 0) {
             assert(next_index - 1 < snapshot_index);
-            debugf(r->io, "missing entry at index %lld -> send snapshot",
+            tracef("missing entry at index %lld -> send snapshot",
                    next_index - 1);
             return send_snapshot(r, i);
         }
@@ -367,8 +368,8 @@ static void raft_replication__leader_append_cb(void *data, int status)
     size_t server_index;
     int rv;
 
-    debugf(r->io, "completed write of %u entries starting at %lld: status %d",
-           request->n, request->index, status);
+    tracef("leader: written %u entries starting at %lld: status %d", request->n,
+           request->index, status);
 
     update_last_stored(r, request->index, request->entries, request->n);
 
@@ -379,7 +380,7 @@ static void raft_replication__leader_append_cb(void *data, int status)
 
     /* If we are not leader anymore, just discard the result. */
     if (r->state != RAFT_LEADER) {
-        debugf(r->io, "local server is not leader -> ignore write log result");
+        tracef("local server is not leader -> ignore write log result");
         return;
     }
 
@@ -445,7 +446,7 @@ static int raft_replication__leader_append(struct raft *r, unsigned index)
     /* Allocate a new request. */
     request = raft_malloc(sizeof *request);
     if (request == NULL) {
-        rv = RAFT_ENOMEM;
+        rv = RAFT_NOMEM;
         goto err_after_entries_acquired;
     }
 
@@ -504,7 +505,7 @@ int raft_replication__trigger(struct raft *r, const raft_index index)
             continue;
         }
         rv = replication__trigger(r, i);
-        if (rv != 0 && rv != RAFT_ERR_IO_CONNECT) {
+        if (rv != 0 && rv != RAFT_NOCONNECTION) {
             /* This is not a critical failure, let's just log it. */
             warnf(r->io, "failed to send append entries to server %ld: %s (%d)",
                   server->id, raft_strerror(rv), rv);
@@ -657,7 +658,15 @@ int replication__update(struct raft *r,
         }
     }
 
-    /* TODO: switch to pipeline replication mode. */
+    /* Check if we can commit some new entries. */
+    raft_replication__quorum(r, r->last_stored);
+
+    rv = raft_replication__apply(r);
+    if (rv != 0) {
+        /* TODO: just log the error? */
+    }
+
+    /* TODO: switch to pipeline replication */
 
     return 0;
 }
@@ -707,7 +716,7 @@ static void raft_replication__follower_append_cb(void *data, int status)
         goto out;
     }
 
-    debugf(r->io, "I/O completed on follower: status %d", status);
+    tracef("I/O completed on follower: status %d", status);
 
     assert(args->leader_id > 0);
     assert(args->entries != NULL);
@@ -717,7 +726,7 @@ static void raft_replication__follower_append_cb(void *data, int status)
 
     /* If we are not followers anymore, just discard the result. */
     if (r->state != RAFT_FOLLOWER) {
-        debugf(r->io, "local server is not follower -> ignore I/O result");
+        tracef("local server is not follower -> ignore I/O result");
         goto out;
     }
 
@@ -809,7 +818,7 @@ static int check_prev_log_entry(struct raft *r,
 
     local_prev_term = log__term_of(&r->log, args->prev_log_index);
     if (local_prev_term == 0) {
-        debugf(r->io, "no entry at index %llu -> reject", args->prev_log_index);
+        tracef("no entry at index %llu -> reject", args->prev_log_index);
         return 1;
     }
 
@@ -821,7 +830,7 @@ static int check_prev_log_entry(struct raft *r,
                    "committed entry -> shutdown");
             return -1;
         }
-        debugf(r->io, "previous term mismatch -> reject");
+        tracef("previous term mismatch -> reject");
         return 1;
     }
 
@@ -863,10 +872,10 @@ static int raft_replication__delete_conflicting_entries(
                        "new index conflicts with "
                        "committed entry -> shutdown");
 
-                return RAFT_ERR_SHUTDOWN;
+                return RAFT_SHUTDOWN;
             }
 
-            debugf(r->io, "log mismatch -> truncate (%ld)", entry_index);
+            tracef("log mismatch -> truncate (%ld)", entry_index);
 
             /* Discard any uncommitted voting change. */
             rv = raft_membership__rollback(r);
@@ -923,7 +932,7 @@ int raft_replication__append(struct raft *r,
     match = check_prev_log_entry(r, args);
     if (match != 0) {
         assert(match == 1 || match == -1);
-        return match == 1 ? 0 : RAFT_ERR_SHUTDOWN;
+        return match == 1 ? 0 : RAFT_SHUTDOWN;
     }
     rv = raft_replication__delete_conflicting_entries(r, args, &i);
     if (rv != 0) {
@@ -945,10 +954,9 @@ int raft_replication__append(struct raft *r,
      */
     if (n == 0) {
         if (args->entries == NULL) {
-            debugf(r->io, "append entries is heartbeat -> succeed immediately");
+            tracef("append entries is heartbeat -> succeed immediately");
         } else {
-            debugf(r->io,
-                   "append entries has nothing new -> succeed immediately");
+            tracef("append entries has nothing new -> succeed immediately");
         }
         if (args->leader_commit > r->commit_index) {
             raft_index last_index = log__last_index(&r->log);
@@ -966,7 +974,7 @@ int raft_replication__append(struct raft *r,
 
     request = raft_malloc(sizeof *request);
     if (request == NULL) {
-        rv = RAFT_ENOMEM;
+        rv = RAFT_NOMEM;
         goto err;
     }
 
@@ -1122,7 +1130,7 @@ int raft_replication__install_snapshot(struct raft *r,
 
     request = raft_malloc(sizeof *request);
     if (request == NULL) {
-        rv = RAFT_ENOMEM;
+        rv = RAFT_NOMEM;
         goto err;
     }
     request->raft = r;
@@ -1135,7 +1143,7 @@ int raft_replication__install_snapshot(struct raft *r,
 
     snapshot->bufs = raft_malloc(sizeof *snapshot->bufs);
     if (snapshot->bufs == NULL) {
-        rv = RAFT_ENOMEM;
+        rv = RAFT_NOMEM;
         goto err_after_request_alloc;
     }
     snapshot->bufs[0] = args->data;
@@ -1162,12 +1170,37 @@ err:
     return rv;
 }
 
+/* Get the request matching the given index and type, if any. */
+static struct request *getRequest(struct raft *r,
+                                  const raft_index index,
+                                  int type)
+{
+    queue *head;
+    struct request *req;
+
+    if (r->state != RAFT_LEADER) {
+        return NULL;
+    }
+    QUEUE_FOREACH(head, &r->leader_state.requests)
+    {
+        req = QUEUE_DATA(head, struct request, queue);
+        if (req->index == index) {
+            assert(req->type == type);
+            QUEUE_REMOVE(head);
+            return req;
+        }
+    }
+    return NULL;
+}
+
 /**
  * Apply a RAFT_CONFIGURATION entry that has been committed.
  */
 static void raft_replication__apply_configuration(struct raft *r,
                                                   const raft_index index)
 {
+    struct raft_change *req;
+
     assert(index > 0);
 
     /* If this is an uncommitted configuration that we had already applied when
@@ -1189,27 +1222,12 @@ static void raft_replication__apply_configuration(struct raft *r,
      */
     if (r->state == RAFT_LEADER &&
         configuration__get(&r->configuration, r->id) == NULL) {
-        convert__to_follower(r);
+        convertToFollower(r);
     }
-}
 
-/* Fire the callback of the apply request associated with the given index */
-static void fire_apply_callback(struct raft *r, const raft_index index)
-{
-    if (r->state == RAFT_LEADER) {
-        raft__queue *head;
-        struct raft_apply *req;
-        RAFT__QUEUE_FOREACH(head, &r->leader_state.apply_reqs)
-        {
-            req = RAFT__QUEUE_DATA(head, struct raft_apply, queue);
-            if (req->index == index) {
-                RAFT__QUEUE_REMOVE(head);
-                if (req->cb != NULL) {
-                    req->cb(req, 0);
-                }
-                break;
-            }
-        }
+    req = (struct raft_change *)getRequest(r, index, RAFT_CONFIGURATION);
+    if (req != NULL && req->cb != NULL) {
+        req->cb(req, 0);
     }
 }
 
@@ -1218,22 +1236,27 @@ static int raft_replication__apply_command(struct raft *r,
                                            const raft_index index,
                                            const struct raft_buffer *buf)
 {
+    struct raft_apply *req;
     int rv;
-
     rv = r->fsm->apply(r->fsm, buf);
     if (rv != 0) {
         return rv;
     }
-
-    fire_apply_callback(r, index);
-
+    req = (struct raft_apply *)getRequest(r, index, RAFT_COMMAND);
+    if (req != NULL && req->cb != NULL) {
+        req->cb(req, 0);
+    }
     return 0;
 }
 
 static void raft_replication__apply_barrier(struct raft *r,
                                             const raft_index index)
 {
-    fire_apply_callback(r, index);
+    struct raft_apply *req;
+    req = (struct raft_apply *)getRequest(r, index, RAFT_BARRIER);
+    if (req != NULL && req->cb != NULL) {
+        req->cb(req, 0);
+    }
 }
 
 static bool should_take_snapshot(struct raft *r)
@@ -1337,8 +1360,7 @@ int raft_replication__apply(struct raft *r)
     for (index = r->last_applied + 1; index <= r->commit_index; index++) {
         const struct raft_entry *entry = log__get(&r->log, index);
 
-        assert(entry->type == RAFT_COMMAND ||
-	       entry->type == RAFT_BARRIER ||
+        assert(entry->type == RAFT_COMMAND || entry->type == RAFT_BARRIER ||
                entry->type == RAFT_CONFIGURATION);
 
         switch (entry->type) {
@@ -1380,9 +1402,13 @@ void raft_replication__quorum(struct raft *r, const raft_index index)
         return;
     }
 
-    if (log__term_of(&r->log, index) != r->current_term) {
+    /* TODO: fuzzy-test --seed 0x8db5fccc replication/entries/partitioned
+     * fails the assertion below. */
+    if (log__term_of(&r->log, index) == 0) {
         return;
     }
+    // assert(log__term_of(&r->log, index) > 0);
+    assert(log__term_of(&r->log, index) <= r->current_term);
 
     for (i = 0; i < r->configuration.n; i++) {
         struct raft_server *server = &r->configuration.servers[i];

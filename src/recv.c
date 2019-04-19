@@ -1,6 +1,7 @@
 #include "recv.h"
 #include "assert.h"
 #include "convert.h"
+#include "entry.h"
 #include "log.h"
 #include "logging.h"
 #include "recv_append_entries.h"
@@ -14,10 +15,17 @@ static const char *message_descs[] = {"append entries", "append entries result",
                                       "request vote", "request vote result",
                                       "install snapshot"};
 
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(MSG, ...) debugf(r->io, "recv: " MSG, ##__VA_ARGS__)
+#else
+#define tracef(MSG, ...)
+#endif
+
 /* Dispatch a single RPC message to the appropriate handler. */
 static int recv(struct raft *r, struct raft_message *message)
 {
-    int rv;
+    int rv = 0;
 
     if (message->type < RAFT_IO_APPEND_ENTRIES ||
         message->type > RAFT_IO_INSTALL_SNAPSHOT) {
@@ -25,14 +33,18 @@ static int recv(struct raft *r, struct raft_message *message)
         return 0;
     }
 
-    debugf(r->io, "received %s from server %ld",
-           message_descs[message->type - 1], message->server_id);
+    tracef("%s from server %ld", message_descs[message->type - 1],
+           message->server_id);
 
     switch (message->type) {
         case RAFT_IO_APPEND_ENTRIES:
             rv = recv__append_entries(r, message->server_id,
                                       message->server_address,
                                       &message->append_entries);
+            if (rv != 0) {
+                entry_batches__destroy(message->append_entries.entries,
+                                       message->append_entries.n_entries);
+            }
             break;
         case RAFT_IO_APPEND_ENTRIES_RESULT:
             rv = recv__append_entries_result(r, message->server_id,
@@ -56,7 +68,7 @@ static int recv(struct raft *r, struct raft_message *message)
             break;
     };
 
-    if (rv != 0 && rv != RAFT_ERR_IO_CONNECT) {
+    if (rv != 0 && rv != RAFT_NOCONNECTION) {
         errorf(r->io, "recv: %s: %s", message_descs[message->type - 1],
                raft_strerror(rv));
         return rv;
@@ -71,7 +83,7 @@ void recv_cb(struct raft_io *io, struct raft_message *message)
     r = io->data;
     rv = recv(r, message);
     if (rv != 0) {
-        convert__to_unavailable(r);
+        convertToUnavailable(r);
     }
 }
 
@@ -130,14 +142,14 @@ int recv__ensure_matching_terms(struct raft *r, raft_term term, int *match)
         if (r->state != RAFT_FOLLOWER) {
             strcat(msg, " and step down");
         }
-        infof(r->io, msg);
+        tracef("%s", msg);
         rv = bump_current_term(r, term);
         if (rv != 0) {
             return rv;
         }
         if (r->state != RAFT_FOLLOWER) {
             /* Also convert to follower. */
-            convert__to_follower(r);
+            convertToFollower(r);
         }
         *match = 1;
     } else {
@@ -167,7 +179,7 @@ int recv__update_leader(struct raft *r, unsigned id, const char *address)
         }
         copy_address(address, &r->follower_state.current_leader.address);
         if (r->follower_state.current_leader.address == NULL) {
-            return RAFT_ENOMEM;
+            return RAFT_NOMEM;
         }
     }
     return 0;

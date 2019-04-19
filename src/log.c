@@ -98,7 +98,7 @@ static int refs_try_insert(struct raft_entry_ref *table,
 
     slot = raft_malloc(sizeof *slot);
     if (slot == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
 
     last_slot->next = slot;
@@ -182,7 +182,7 @@ static int refs_grow(struct raft_log *l)
 
     table = raft_calloc(size, sizeof *table);
     if (table == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
 
     /* Populate the new hash table, inserting all entries existing in the
@@ -228,7 +228,7 @@ static int refs_init(struct raft_log *l,
 
         l->refs = raft_calloc(l->refs_size, sizeof *l->refs);
         if (l->refs == NULL) {
-            return RAFT_ENOMEM;
+            return RAFT_NOMEM;
         }
     }
 
@@ -245,7 +245,7 @@ static int refs_init(struct raft_log *l,
 
         rc = refs_try_insert(l->refs, l->refs_size, term, index, 1, &collision);
         if (rc != 0) {
-            return RAFT_ENOMEM;
+            return RAFT_NOMEM;
         }
 
         if (!collision) {
@@ -258,7 +258,7 @@ static int refs_init(struct raft_log *l,
         }
     };
 
-    return RAFT_ENOMEM;
+    return RAFT_NOMEM;
 }
 
 /**
@@ -439,7 +439,7 @@ static int ensure_capacity(struct raft_log *l)
 
     entries = raft_calloc(size, sizeof *entries);
     if (entries == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
 
     /* Copy all active old entries to the beginning of the newly allocated
@@ -699,7 +699,7 @@ int log__acquire(struct raft_log *l,
 
     *entries = raft_calloc(*n, sizeof **entries);
     if (*entries == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
 
     for (j = 0; j < *n; j++) {

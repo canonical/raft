@@ -131,17 +131,17 @@ int raft_configuration_add(struct raft_configuration *c,
     for (i = 0; i < c->n; i++) {
         server = &c->servers[i];
         if (server->id == id) {
-            return RAFT_EDUPID;
+            return RAFT_DUPLICATEID;
         }
         if (strcmp(server->address, address) == 0) {
-            return RAFT_EDUPADDR;
+            return RAFT_DUPLICATEADDRESS;
         }
     }
 
     /* Grow the servers array */
     servers = raft_calloc(c->n + 1, sizeof *server);
     if (servers == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
     memcpy(servers, c->servers, c->n * sizeof *server);
 
@@ -153,7 +153,7 @@ int raft_configuration_add(struct raft_configuration *c,
     server->address = raft_malloc(strlen(address) + 1);
     if (server->address == NULL) {
         raft_free(servers);
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
     strcpy(server->address, address);
 
@@ -178,7 +178,7 @@ int configuration__remove(struct raft_configuration *c, const unsigned id)
 
     i = configuration__index_of(c, id);
     if (i == c->n) {
-        return RAFT_EBADID;
+        return RAFT_BADID;
     }
 
     assert(i < c->n);
@@ -195,7 +195,7 @@ int configuration__remove(struct raft_configuration *c, const unsigned id)
     /* Shrink the servers array. */
     servers = raft_calloc(c->n - 1, sizeof *servers);
     if (servers == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
 
     /* Copy the first part of the servers array into a new array, excluding the
@@ -283,7 +283,7 @@ int configuration__encode(const struct raft_configuration *c,
     buf->len = configuration__encoded_size(c);
     buf->base = raft_malloc(buf->len);
     if (buf->base == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
 
     configuration__encode_to_buf(c, buf->base);
@@ -312,7 +312,7 @@ int configuration__decode(const struct raft_buffer *buf,
 
     /* Check the encoding format version */
     if (byte__get8(&cursor) != ENCODING_FORMAT) {
-        return RAFT_EMALFORMED;
+        return RAFT_MALFORMED;
     }
 
     /* Read the number of servers. */
@@ -337,7 +337,7 @@ int configuration__decode(const struct raft_buffer *buf,
             address_len++;
         }
         if (cursor + address_len == buf->base + buf->len) {
-            return RAFT_EMALFORMED;
+            return RAFT_MALFORMED;
         }
         address = (const char *)cursor;
         cursor += address_len + 1;

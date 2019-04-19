@@ -9,54 +9,46 @@
  * Error codes.
  */
 enum {
-    RAFT_ENOMEM = 1,
-    RAFT_EBADID,
-    RAFT_EDUPID,
-    RAFT_EDUPADDR,
-    RAFT_EALREADYVOTING,
-    RAFT_EMALFORMED,
-    RAFT_ERR_NO_SPACE,
-    RAFT_ERR_BUSY,
-    RAFT_ERR_NOT_LEADER,
-    RAFT_ERR_LEADERSHIP_LOST,
-    RAFT_ERR_SHUTDOWN,
-    RAFT_ERR_CONFIGURATION_BUSY,
-    RAFT_ERR_IO,
-    RAFT_ERR_IO_CORRUPT,
-    RAFT_ERR_IO_CANCELED,
-    RAFT_ERR_IO_ABORTED,
-    RAFT_ERR_IO_NAMETOOLONG,
-    RAFT_ERR_IO_MALFORMED,
-    RAFT_ERR_IO_NOTEMPTY,
-    RAFT_ERR_IO_TOOBIG,
-    RAFT_ERR_IO_CONNECT
+    RAFT_NOMEM = 1,
+    RAFT_BADID,
+    RAFT_DUPLICATEID,
+    RAFT_DUPLICATEADDRESS,
+    RAFT_ALREADYVOTING,
+    RAFT_MALFORMED,
+    RAFT_NOTLEADER,
+    RAFT_LEADERSHIPLOST,
+    RAFT_SHUTDOWN,
+    RAFT_CANTBOOTSTRAP,
+    RAFT_CANTCHANGE,
+    RAFT_IOERR,
+    RAFT_CORRUPT,
+    RAFT_CANCELED,
+    RAFT_NAMETOOLONG,
+    RAFT_TOOBIG,
+    RAFT_NOCONNECTION
 };
 
 /**
  * Map error codes to error messages.
  */
-#define RAFT_ERRNO_MAP(X)                                                \
-    X(RAFT_ENOMEM, "out of memory")                                      \
-    X(RAFT_EBADID, "server ID is not valid")                             \
-    X(RAFT_EDUPID, "server ID already in use")                           \
-    X(RAFT_EDUPADDR, "server address already in use")                    \
-    X(RAFT_EALREADYVOTING, "server is already voting")                   \
-    X(RAFT_EMALFORMED, "encoded data is malformed")                      \
-    X(RAFT_ERR_NO_SPACE, "no space left on device")                      \
-    X(RAFT_ERR_BUSY, "an append entries request is already in progress") \
-    X(RAFT_ERR_NOT_LEADER, "server is not the leader")                   \
-    X(RAFT_ERR_LEADERSHIP_LOST, "server has lost leadership")            \
-    X(RAFT_ERR_CONFIGURATION_BUSY,                                       \
-      "a configuration change is already in progress")                   \
-    X(RAFT_ERR_IO, "I/O error")                                          \
-    X(RAFT_ERR_IO_CORRUPT, "persisted data is corrupted")                \
-    X(RAFT_ERR_IO_CANCELED, "operation canceled")                        \
-    X(RAFT_ERR_IO_ABORTED, "backend was stopped or has errored")         \
-    X(RAFT_ERR_IO_NAMETOOLONG, "data directory path is too long")        \
-    X(RAFT_ERR_IO_MALFORMED, "encoded data is malformed")                \
-    X(RAFT_ERR_IO_NOTEMPTY, "persisted log is not empty")                \
-    X(RAFT_ERR_IO_TOOBIG, "data is too big")                             \
-    X(RAFT_ERR_IO_CONNECT, "no connection to remote server available")
+#define RAFT_ERRNO_MAP(X)                                               \
+    X(RAFT_NOMEM, "out of memory")                                      \
+    X(RAFT_BADID, "server ID is not valid")                             \
+    X(RAFT_DUPLICATEID, "server ID already in use")                     \
+    X(RAFT_DUPLICATEADDRESS, "server address already in use")           \
+    X(RAFT_ALREADYVOTING, "server is already voting")                   \
+    X(RAFT_MALFORMED, "encoded data is malformed")                      \
+    X(RAFT_NOTLEADER, "server is not the leader")                       \
+    X(RAFT_LEADERSHIPLOST, "server has lost leadership")                \
+    X(RAFT_SHUTDOWN, "server is shutting down")                         \
+    X(RAFT_CANTBOOTSTRAP, "bootstrap only works on new clusters")       \
+    X(RAFT_CANTCHANGE, "a configuration change is already in progress") \
+    X(RAFT_IOERR, "I/O error")                                          \
+    X(RAFT_CORRUPT, "persisted data is corrupted")                      \
+    X(RAFT_CANCELED, "operation canceled")                              \
+    X(RAFT_NAMETOOLONG, "data directory path is too long")              \
+    X(RAFT_TOOBIG, "data is too big")                                   \
+    X(RAFT_NOCONNECTION, "no connection to remote server available")
 
 /**
  * Return the error message describing the given error code.
@@ -698,7 +690,7 @@ struct raft
             raft_index round_index;         /* Target of the current round */
             unsigned round_duration;        /* Duration of the current round */
             unsigned heartbeat_elapsed;     /* Msecs since last heartbeat */
-            void *apply_reqs[2];            /* Queue of apply requests */
+            void *requests[2];              /* Outstanding client requests */
         } leader_state;
     };
 
@@ -832,12 +824,12 @@ raft_index raft_last_index(struct raft *r);
  */
 raft_index raft_last_applied(struct raft *r);
 
-/**
- * Return the amount of milliseconds left before the next timeout triggers. If
- * the instance is in leader state this is the heartbeat timeout, otherwise it's
- * the election timeout.
- */
-unsigned raft_next_timeout(struct raft *r);
+/* Common fields across client request types. */
+#define RAFT__REQUEST \
+    void *data;       \
+    int type;         \
+    raft_index index; \
+    void *queue[2]
 
 /**
  * Asynchronous request to append a new command entry to the log and apply it to
@@ -847,10 +839,8 @@ struct raft_apply;
 typedef void (*raft_apply_cb)(struct raft_apply *req, int status);
 struct raft_apply
 {
-    void *data;
-    raft_index index;
+    RAFT__REQUEST;
     raft_apply_cb cb;
-    void *queue[2];
 };
 
 /**
@@ -887,19 +877,40 @@ int raft_apply(struct raft *r,
 int raft_barrier(struct raft *r, struct raft_apply *req, raft_apply_cb cb);
 
 /**
+ * Asynchronous request to change the raft configuration.
+ */
+struct raft_change;
+typedef void (*raft_change_cb)(struct raft_change *req, int status);
+struct raft_change
+{
+    RAFT__REQUEST;
+    raft_change_cb cb;
+};
+
+/**
  * Add a new non-voting server to the cluster configuration.
  */
-int raft_add_server(struct raft *r, const unsigned id, const char *address);
+int raft_add(struct raft *r,
+             struct raft_change *req,
+             unsigned id,
+             const char *address,
+             raft_change_cb cb);
 
 /**
  * Promote the given new non-voting server to be a voting one.
  */
-int raft_promote(struct raft *r, const unsigned id);
+int raft_promote(struct raft *r,
+                 struct raft_change *req,
+                 unsigned id,
+                 raft_change_cb cb);
 
 /**
  * Remove the given server from the cluster configuration.
  */
-int raft_remove_server(struct raft *r, const unsigned id);
+int raft_remove(struct raft *r,
+                struct raft_change *req,
+                unsigned id,
+                raft_change_cb cb);
 
 /**
  * User-definable dynamic memory allocation functions.
@@ -932,5 +943,7 @@ void raft_heap_set(struct raft_heap *heap);
  * custom allocator specified with @raft_heap_set.
  */
 void raft_heap_set_default();
+
+#undef RAFT__REQUEST
 
 #endif /* RAFT_H */

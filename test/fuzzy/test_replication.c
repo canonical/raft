@@ -25,8 +25,9 @@ static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
-    SETUP_CLUSTER(CLUSTER_N_PARAM_GET);
+    SETUP_CLUSTER(CLUSTER_GET_N_PARAM);
     CLUSTER_BOOTSTRAP;
+    CLUSTER_RANDOMIZE;
     CLUSTER_START;
     CLUSTER_STEP_UNTIL_HAS_LEADER(10000);
     return f;
@@ -45,7 +46,7 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-#define APPLY_ADD_ONE(REQ) CLUSTER_APPLY_ADD_X(REQ, 1, NULL);
+#define APPLY_ADD_ONE(REQ) CLUSTER_APPLY_ADD_X(CLUSTER_LEADER, REQ, 1, NULL)
 
 /******************************************************************************
  *
@@ -110,7 +111,7 @@ TEST_CASE(entries, no_quorum, _params)
 
     (void)params;
 
-    CLUSTER_APPLY_ADD_X(req, 1, apply_cb);
+    CLUSTER_APPLY_ADD_X(CLUSTER_LEADER, req, 1, apply_cb);
     CLUSTER_KILL_MAJORITY;
 
     CLUSTER_STEP_UNTIL_ELAPSED(10000);
@@ -148,7 +149,7 @@ TEST_CASE(entries, partitioned, _params)
     }
 
     /* Try to append a new entry using the disconnected leader. */
-    CLUSTER_APPLY_ADD_X(req1, 1, apply_cb);
+    CLUSTER_APPLY_ADD_X(CLUSTER_LEADER, req1, 1, apply_cb);
 
     /* The leader gets deposed. */
     CLUSTER_STEP_UNTIL_HAS_NO_LEADER(10000);
@@ -172,7 +173,7 @@ TEST_CASE(entries, partitioned, _params)
     CLUSTER_STEP_UNTIL_HAS_LEADER(10000);
 
     /* Re-try now to append the entry. */
-    CLUSTER_APPLY_ADD_X(req2, 1, apply_cb);
+    CLUSTER_APPLY_ADD_X(CLUSTER_LEADER, req2, 1, apply_cb);
     CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_LEADER, 2, 10000);
 
     return MUNIT_OK;

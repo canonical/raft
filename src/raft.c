@@ -39,7 +39,7 @@ int raft_init(struct raft *r,
     /* Make a copy of the address */
     r->address = raft_malloc(strlen(address) + 1);
     if (r->address == NULL) {
-        return RAFT_ENOMEM;
+        return RAFT_NOMEM;
     }
     strcpy(r->address, address);
     r->current_term = 0;
@@ -88,7 +88,7 @@ void raft_close(struct raft *r, void (*cb)(struct raft *r))
     assert(r != NULL);
     assert(r->close_cb == NULL);
     if (r->state != RAFT_UNAVAILABLE) {
-        convert__to_unavailable(r);
+        convertToUnavailable(r);
     }
     r->close_cb = cb;
     r->io->close(r->io, io_close_cb);
@@ -97,7 +97,7 @@ void raft_close(struct raft *r, void (*cb)(struct raft *r))
 void raft_set_election_timeout(struct raft *r, const unsigned msecs)
 {
     r->election_timeout = msecs;
-    election__reset_timer(r);
+    electionResetTimer(r);
 }
 
 void raft_set_heartbeat_timeout(struct raft *r, const unsigned msecs)

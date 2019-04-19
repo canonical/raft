@@ -13,7 +13,7 @@ pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = raft.pc
 
 AM_CFLAGS += -I$(top_srcdir)/include -Wall
-if IO_UV
+if UV
   AM_CFLAGS += $(UV_CFLAGS)
 endif
 if DEBUG
@@ -31,11 +31,10 @@ endif
 
 lib_LTLIBRARIES += libraft.la
 libraft_la_LDFLAGS = -version-info 0:7:0
-if IO_UV
+if UV
   libraft_la_LDFLAGS += $(UV_LIBS)
 endif
 libraft_la_SOURCES = \
-  src/aio.c \
   src/byte.c \
   src/client.c \
   src/configuration.c \
@@ -61,29 +60,30 @@ libraft_la_SOURCES = \
   src/start.c \
   src/state.c \
   src/tick.c
-if IO_UV
+if UV
   libraft_la_SOURCES += \
-  src/io_uv.c \
-  src/io_uv_append.c \
-  src/io_uv_client.c \
-  src/io_uv_encoding.c \
-  src/io_uv_finalize.c \
-  src/io_uv_fs.c \
-  src/io_uv_ip.c \
-  src/io_uv_load.c \
-  src/io_uv_metadata.c \
-  src/io_uv_prepare.c \
-  src/io_uv_server.c \
-  src/io_uv_snapshot.c \
-  src/io_uv_tcp.c \
-  src/io_uv_tcp_connect.c \
-  src/io_uv_tcp_listen.c \
-  src/io_uv_truncate.c \
-  src/uv_file.c
+  src/aio.c \
+  src/os.c \
+  src/uv.c \
+  src/uv_append.c \
+  src/uv_encoding.c \
+  src/uv_file.c \
+  src/uv_finalize.c \
+  src/uv_ip.c \
+  src/uv_list.c \
+  src/uv_metadata.c \
+  src/uv_prepare.c \
+  src/uv_recv.c \
+  src/uv_segment.c \
+  src/uv_send.c \
+  src/uv_snapshot.c \
+  src/uv_tcp.c \
+  src/uv_tcp_connect.c \
+  src/uv_tcp_listen.c \
+  src/uv_truncate.c
 endif
 if FIXTURE
   libraft_la_SOURCES += \
-  src/io_stub.c \
   src/fixture.c
 endif
 include_HEADERS += \
@@ -91,12 +91,11 @@ include_HEADERS += \
 pkginclude_HEADERS =
 if FIXTURE
   pkginclude_HEADERS += \
-  include/raft/io_stub.h \
   include/raft/fixture.h
 endif
-if IO_UV
+if UV
   pkginclude_HEADERS += \
-  include/raft/io_uv.h
+  include/raft/uv.h
 endif
 
 check_PROGRAMS += \
@@ -104,17 +103,16 @@ check_PROGRAMS += \
   fuzzy-test
 
 test_lib_SOURCES = \
+  test/lib/cluster.c \
   test/lib/fault.c \
-  test/lib/fs.c \
   test/lib/fsm.c \
   test/lib/heap.c \
-  test/lib/io.c \
   test/lib/munit.c \
-  test/lib/raft.c \
   test/lib/tcp.c
-if IO_UV
+if UV
 test_lib_SOURCES += \
-  test/lib/io_uv.c \
+  test/lib/fs.c \
+  test/lib/loop.c \
   test/lib/uv.c
 endif
 
@@ -123,42 +121,43 @@ unit_test_SOURCES += \
   $(test_lib_SOURCES)
 unit_test_SOURCES += \
   test/unit/main.c \
+  test/unit/test_apply.c \
+  test/unit/test_barrier.c \
   test/unit/test_byte.c \
-  test/unit/test_client.c \
   test/unit/test_configuration.c \
   test/unit/test_election.c \
   test/unit/test_log.c \
+  test/unit/test_membership.c \
   test/unit/test_queue.c \
-  test/unit/test_raft.c \
   test/unit/test_replication.c \
-  test/unit/test_rpc_append_entries.c \
-  test/unit/test_rpc_request_vote.c \
   test/unit/test_snapshot.c \
   test/unit/test_start.c \
   test/unit/test_tick.c
-if IO_UV
+if UV
   unit_test_SOURCES += \
-  test/unit/test_io_uv.c \
-  test/unit/test_io_uv_append.c \
-  test/unit/test_io_uv_client.c \
-  test/unit/test_io_uv_finalize.c \
-  test/unit/test_io_uv_load.c \
-  test/unit/test_io_uv_metadata.c \
-  test/unit/test_io_uv_prepare.c \
-  test/unit/test_io_uv_server.c \
-  test/unit/test_io_uv_snapshot.c \
-  test/unit/test_io_uv_tcp.c \
-  test/unit/test_io_uv_truncate.c \
-  test/unit/test_uv_file.c
+  test/unit/test_os.c \
+  test/unit/test_uv.c \
+  test/unit/test_uv_append.c \
+  test/unit/test_uv_file.c \
+  test/unit/test_uv_finalize.c \
+  test/unit/test_uv_list.c \
+  test/unit/test_uv_load.c \
+  test/unit/test_uv_metadata.c \
+  test/unit/test_uv_prepare.c \
+  test/unit/test_uv_recv.c \
+  test/unit/test_uv_send.c \
+  test/unit/test_uv_snapshot.c \
+  test/unit/test_uv_tcp_connect.c \
+  test/unit/test_uv_tcp_listen.c \
+  test/unit/test_uv_truncate.c
 endif
 if FIXTURE
   unit_test_SOURCES += \
-  test/unit/test_io_stub.c \
   test/unit/test_fixture.c
 endif
 unit_test_CFLAGS = $(AM_CFLAGS) -DRAFT_TEST -DMUNIT_TEST_NAME_LEN=60
 unit_test_LDFLAGS =
-if IO_UV
+if UV
   unit_test_LDFLAGS += $(UV_LIBS)
 endif
 
@@ -172,7 +171,7 @@ fuzzy_test_SOURCES += \
 fuzzy_test_CFLAGS = $(AM_CFLAGS)
 fuzzy_test_LDADD = libraft.la
 fuzzy_test_LDFLAGS =
-if IO_UV
+if UV
   fuzzy_test_LDFLAGS += $(UV_LIBS)
 endif
 
