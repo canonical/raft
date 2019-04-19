@@ -141,14 +141,13 @@ int convertToLeader(struct raft *r)
     setState(r, RAFT_LEADER);
 
     /* Reset timers */
-    r->leader_state.heartbeat_elapsed = 0;
-    r->election_elapsed = 0;
+    r->election_timer_start = r->io->time(r->io);
 
     /* Reset apply requests queue */
     QUEUE_INIT(&r->leader_state.requests);
 
     /* Allocate and initialize the progress array. */
-    rv = progress__build_array(r);
+    rv = progressBuildArray(r);
     if (rv != 0) {
         return rv;
     }
@@ -157,7 +156,7 @@ int convertToLeader(struct raft *r)
     r->leader_state.promotee_id = 0;
     r->leader_state.round_number = 0;
     r->leader_state.round_index = 0;
-    r->leader_state.round_duration = 0;
+    r->leader_state.round_start = 0;
 
     return 0;
 }

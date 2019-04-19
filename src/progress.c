@@ -19,65 +19,68 @@
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
-static void init_progress(struct raft_progress *p, raft_index last_index)
+/* Initialize a single progress object. */
+static void initProgress(struct raft_progress *p, raft_index last_index)
 {
     p->next_index = last_index + 1;
     p->match_index = 0;
     p->snapshot_index = 0;
-    p->recent_send = false;
+    p->last_send = 0;
     p->recent_recv = false;
     p->state = PROGRESS__PROBE;
 }
 
-int progress__build_array(struct raft *r)
+int progressBuildArray(struct raft *r)
 {
-    struct raft_progress *p;
+    struct raft_progress *progress;
     unsigned i;
     raft_index last_index = logLastIndex(&r->log);
-    p = raft_malloc(r->configuration.n * sizeof *p);
-    if (p == NULL) {
+    progress = raft_malloc(r->configuration.n * sizeof *progress);
+    if (progress == NULL) {
         return RAFT_NOMEM;
     }
     for (i = 0; i < r->configuration.n; i++) {
-        init_progress(&p[i], last_index);
+        initProgress(&progress[i], last_index);
         if (r->configuration.servers[i].id == r->id) {
-            p[i].match_index = r->last_stored;
+            progress[i].match_index = r->last_stored;
         }
     }
-    r->leader_state.progress = p;
+    r->leader_state.progress = progress;
     return 0;
 }
 
-int progress__rebuild_array(struct raft *r,
-                            const struct raft_configuration *configuration)
+int progressRebuildArray(struct raft *r,
+                         const struct raft_configuration *configuration)
 {
     raft_index last_index = logLastIndex(&r->log);
-    struct raft_progress *p;
+    struct raft_progress *progress;
     unsigned i;
+    unsigned j;
+    unsigned id;
 
-    p = raft_malloc(configuration->n * sizeof *p);
-    if (p == NULL) {
+    progress = raft_malloc(configuration->n * sizeof *progress);
+    if (progress == NULL) {
         return RAFT_NOMEM;
     }
 
     /* First copy the progress information for the servers that exists both in
      * the current and in the new configuration. */
     for (i = 0; i < r->configuration.n; i++) {
-        unsigned id = r->configuration.servers[i].id;
-        size_t j = configurationIndexOf(configuration, id);
+        id = r->configuration.servers[i].id;
+        j = configurationIndexOf(configuration, id);
         if (j == configuration->n) {
             /* This server is not present in the new configuration, so we just
              * skip it. */
             continue;
         }
-        p[j] = r->leader_state.progress[i];
+        progress[j] = r->leader_state.progress[i];
     }
 
     /* Then reset the replication state for servers that are present in the new
      * configuration, but not in the current one. */
     for (i = 0; i < configuration->n; i++) {
-        unsigned id = configuration->servers[i].id;
-        size_t j = configurationIndexOf(&r->configuration, id);
+        id = configuration->servers[i].id;
+        j = configurationIndexOf(&r->configuration, id);
         if (j < r->configuration.n) {
             /* This server is present both in the new and in the current
              * configuration, so we have already copied its next/match index
@@ -85,81 +88,124 @@ int progress__rebuild_array(struct raft *r,
             continue;
         }
         assert(j == r->configuration.n);
-        init_progress(&p[i], last_index);
+        initProgress(&progress[i], last_index);
     }
 
     raft_free(r->leader_state.progress);
-    r->leader_state.progress = p;
+    r->leader_state.progress = progress;
 
     return 0;
 }
 
-bool progress__check_quorum(struct raft *r)
+bool progressShouldReplicate(struct raft *r, unsigned i)
 {
-    unsigned i;
-    unsigned contacts = 0;
+    struct raft_progress *p = &r->leader_state.progress[i];
+    raft_time now = r->io->time(r->io);
+    bool needs_heartbeat = now - p->last_send >= r->heartbeat_timeout;
+    raft_index last_index = logLastIndex(&r->log);
+    bool is_up_to_date = p->next_index == last_index + 1;
+    bool result;
 
-    for (i = 0; i < r->configuration.n; i++) {
-        struct raft_server *server = &r->configuration.servers[i];
-        struct raft_progress *progress = &r->leader_state.progress[i];
-        bool recent_recv = progress->recent_recv;
-        progress->recent_recv = false;
-        if (!server->voting) {
-            continue;
-        }
-        if (server->id == r->id) {
-            contacts++;
-            continue;
-        }
-        if (recent_recv) {
-            contacts++;
-        }
+    assert(p->state == PROGRESS__PROBE || p->state == PROGRESS__PIPELINE ||
+           p->state == PROGRESS__SNAPSHOT);
+    assert(p->next_index <= last_index + 1);
+
+    switch (p->state) {
+        case PROGRESS__SNAPSHOT:
+            /* If we have already sent a snapshot, don't send any further entry
+             * and let's wait for the target server to reply.
+             *
+             * TODO: rollback to probe if we don't hear anything for a while. */
+            result = false;
+            break;
+        case PROGRESS__PROBE:
+            /* We send at most one message per heatbeat interval. */
+            result = needs_heartbeat;
+            break;
+        case PROGRESS__PIPELINE:
+            /* In replication mode we send empty append entries messages only if
+             * haven't sent anything in the last heartbeat interval. */
+            result = !is_up_to_date || needs_heartbeat;
+            break;
     }
-
-    return contacts > configurationNumVoting(&r->configuration) / 2;
+    return result;
 }
 
-static struct raft_progress *get(struct raft *r,
-                                 const struct raft_server *server)
+raft_index progressNextIndex(struct raft *r, unsigned i)
 {
-    unsigned server_index;
-    server_index = configurationIndexOf(&r->configuration, server->id);
-    assert(server_index < r->configuration.n);
-    return &r->leader_state.progress[server_index];
+    return r->leader_state.progress[i].next_index;
 }
 
-int progress__state(struct raft *r, const struct raft_server *server)
+void progressUpdateLastSend(struct raft *r, unsigned i)
 {
-    struct raft_progress *p = get(r, server);
+    r->leader_state.progress[i].last_send = r->io->time(r->io);
+}
+
+bool progressResetRecentRecv(struct raft *r, const unsigned i)
+{
+    bool prev = r->leader_state.progress[i].recent_recv;
+    r->leader_state.progress[i].recent_recv = false;
+    return prev;
+}
+
+void progressMarkRecentRecv(struct raft *r, const unsigned i)
+{
+    r->leader_state.progress[i].recent_recv = true;
+}
+
+void progressToSnapshot(struct raft *r, unsigned i)
+{
+    struct raft_progress *p = &r->leader_state.progress[i];
+    p->state = PROGRESS__SNAPSHOT;
+    p->snapshot_index = logSnapshotIndex(&r->log);
+}
+
+void progressAbortSnapshot(struct raft *r, const unsigned i)
+{
+    struct raft_progress *p = &r->leader_state.progress[i];
+    p->snapshot_index = 0;
+    p->state = PROGRESS__PROBE;
+}
+
+int progressState(struct raft *r, const unsigned i)
+{
+    struct raft_progress *p = &r->leader_state.progress[i];
     return p->state;
-}
-
-raft_index progress__next_index(struct raft *r,
-                                const struct raft_server *server)
-{
-    struct raft_progress *p = get(r, server);
-    return p->next_index;
 }
 
 /* Return false if the given rejected index comes from an out of order
  * message. Otherwise it decreases the progress next index to min(rejected,
  * last) and returns true. */
-bool progress__maybe_decrement(struct raft *r,
-                               const struct raft_server *server,
-                               raft_index rejected,
-                               raft_index last_index)
+bool progressMaybeDecrement(struct raft *r,
+                            const unsigned i,
+                            raft_index rejected,
+                            raft_index last_index)
 {
-    struct raft_progress *p = get(r, server);
+    struct raft_progress *p = &r->leader_state.progress[i];
+
+    assert(p->state == PROGRESS__PROBE || p->state == PROGRESS__PIPELINE ||
+           p->state == PROGRESS__SNAPSHOT);
+
+    if (p->state == PROGRESS__SNAPSHOT) {
+        /* The rejection must be stale or spurious if the rejected index does
+         * not match the last snapshot index. */
+        if (rejected != p->snapshot_index) {
+            return false;
+        }
+        progressAbortSnapshot(r, i);
+        return true;
+    }
 
     if (p->state == PROGRESS__PIPELINE) {
-        /* The rejection must be stale if the rejected index is smaller than the
-         * matched one. */
+        /* The rejection must be stale if the rejected index is smaller than
+         * the matched one. */
         if (rejected <= p->match_index) {
             tracef("match index is up to date -> ignore ");
             return false;
         }
         /* Directly decrease next to match + 1 */
-        p->next_index = p->match_index + 1;
+        p->next_index = min(rejected, p->match_index + 1);
+        progressToProbe(r, i);
         return true;
     }
 
@@ -169,9 +215,8 @@ bool progress__maybe_decrement(struct raft *r,
         return false;
     }
 
-    /* The rejection must be stale or spurious (e.g. when the follower rejects
-     * heartbeats sent concurrently with a snapshot) if the rejected index does
-     * not match the next index minus one. */
+    /* The rejection must be stale or spurious if the rejected index does not
+     * match the next index minus one. */
     if (rejected != p->next_index - 1) {
         tracef("rejected index %llu different from next index %lld -> ignore ",
                rejected, p->next_index);
@@ -184,11 +229,9 @@ bool progress__maybe_decrement(struct raft *r,
     return true;
 }
 
-bool progress__maybe_update(struct raft *r,
-                            const struct raft_server *server,
-                            const raft_index last_index)
+bool progressMaybeUpdate(struct raft *r, unsigned i, raft_index last_index)
 {
-    struct raft_progress *p = get(r, server);
+    struct raft_progress *p = &r->leader_state.progress[i];
     bool updated = false;
     if (p->match_index < last_index) {
         p->match_index = last_index;
@@ -204,23 +247,9 @@ bool progress__maybe_update(struct raft *r,
     return updated;
 }
 
-void progress__mark_recent_recv(struct raft *r,
-                                const struct raft_server *server)
+void progressToProbe(struct raft *r, const unsigned i)
 {
-    struct raft_progress *p = get(r, server);
-    p->recent_recv = true;
-}
-
-void progress__mark_recent_send(struct raft *r,
-                                const struct raft_server *server)
-{
-    struct raft_progress *p = get(r, server);
-    p->recent_send = true;
-}
-
-void progress__to_probe(struct raft *r, const struct raft_server *server)
-{
-    struct raft_progress *p = get(r, server);
+    struct raft_progress *p = &r->leader_state.progress[i];
 
     /* If the current state is snapshot, we know that the pending snapshot has
      * been sent to this peer successfully, so we probe from snapshot_index +
@@ -235,25 +264,14 @@ void progress__to_probe(struct raft *r, const struct raft_server *server)
     p->state = PROGRESS__PROBE;
 }
 
-void progress__to_snapshot(struct raft *r,
-                           const struct raft_server *server,
-                           raft_index last_index)
-{
-    struct raft_progress *p = get(r, server);
-    p->state = PROGRESS__SNAPSHOT;
-    p->snapshot_index = last_index;
+void progressToPipeline(struct raft *r, const unsigned i) {
+    struct raft_progress *p = &r->leader_state.progress[i];
+    p->state = PROGRESS__PIPELINE;
 }
 
-void progress__abort_snapshot(struct raft *r, const struct raft_server *server)
+bool progressSnapshotDone(struct raft *r, const unsigned i)
 {
-    struct raft_progress *p = get(r, server);
-    p->snapshot_index = 0;
-    p->state = PROGRESS__PROBE;
-}
-
-bool progress__snapshot_done(struct raft *r, const struct raft_server *server)
-{
-    struct raft_progress *p = get(r, server);
+    struct raft_progress *p = &r->leader_state.progress[i];
     assert(p->state == PROGRESS__SNAPSHOT);
     return p->match_index >= p->snapshot_index;
 }

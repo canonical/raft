@@ -134,7 +134,7 @@ static int changeConfiguration(
     }
 
     if (configuration->n != r->configuration.n) {
-        rv = progress__rebuild_array(r, configuration);
+        rv = progressRebuildArray(r, configuration);
         if (rv != 0) {
             goto err;
         }
@@ -270,7 +270,7 @@ int raft_promote(struct raft *r,
     /* Initialize the first catch-up round. */
     r->leader_state.round_number = 1;
     r->leader_state.round_index = last_index;
-    r->leader_state.round_duration = 0;
+    r->leader_state.round_start = r->io->time(r->io);
 
     /* Immediately initiate an AppendEntries request. */
     rv = replication__trigger(r, server_index);

@@ -579,7 +579,7 @@ struct raft_progress
     raft_index next_index;     /* Next entry to send */
     raft_index match_index;    /* Highest applied idx */
     raft_index snapshot_index; /* Last index of most recent snapshot sent */
-    bool recent_send;          /* A msg was sent within heartbeat timeout */
+    raft_time last_send;       /* Timestamp of last AppendEntries RPC */
     bool recent_recv;          /* A msg was received within election timeout */
 };
 
@@ -690,9 +690,10 @@ struct raft
      */
     unsigned short state;
     union {
-        struct
+        struct /* Follower */
         {
-            struct
+            unsigned randomized_election_timeout; /* Timer expiration. */
+            struct                                /* Current leader info. */
             {
                 unsigned id;
                 char *address;
@@ -700,7 +701,8 @@ struct raft
         } follower_state;
         struct
         {
-            bool *votes; /* For each server, whether vote was granted */
+            unsigned randomized_election_timeout; /* Timer expiration. */
+            bool *votes;                          /* Vote results. */
         } candidate_state;
         struct
         {
@@ -708,41 +710,20 @@ struct raft
             unsigned promotee_id;           /* ID of server being promoted */
             unsigned short round_number;    /* Current sync round */
             raft_index round_index;         /* Target of the current round */
-            unsigned round_duration;        /* Duration of the current round */
-            unsigned heartbeat_elapsed;     /* Msecs since last heartbeat */
+            raft_time round_start;          /* Start of current round */
             void *requests[2];              /* Outstanding client requests */
         } leader_state;
     };
 
-    /*
-     * Current election timeout.
+    /* Election timer start.
      *
-     * Randomized number between electiontimeout and 2 * electiontimeout - 1. It
-     * gets reset when raft changes its state to follower or candidate.
-     *
-     * From §9.3:
-     *
-     *   We recommend using a timeout range that is ten times the one-way
-     *   network latency (even if the true network latency is five times greater
-     *   than anticipated, most clusters would still be able to elect a leader
-     *   in a timely manner).
-     */
-    unsigned randomized_election_timeout;
-
-    /*
-     * Timestamp of the last call to the tick callback passed to raft_io. This
-     * is used to calculate the time elapsed between subsequent tick calls and
-     * update the timer field below.
-     */
-    raft_time last_tick;
-
-    /*
-     * Number of milliseconds since we last reached election_timeout when it is
-     * leader or candidate. Number of milliseconds since we last reached
-     * election_timeout or received a valid message from current leader when it
-     * is a follower.
-     */
-    unsigned election_elapsed;
+     * This timer has different purposes depending on the state. Followers
+     * convert to candidate after the randomized election timeout has elapsed
+     * without leader contact. Candidates start a new election after the
+     * randomized election timeout has elapsed without a winner. Leaders step
+     * down after the election timeout has elapsed without contacting a majority
+     * of voting servers. */
+    raft_time election_timer_start;
 
     /*
      * Information about the last snapshot that was taken (if any).

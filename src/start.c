@@ -156,9 +156,6 @@ int raft_start(struct raft *r)
         return rc;
     }
 
-    /* Initialize the tick timestamp. */
-    r->last_tick = r->io->time(r->io);
-
     /* Start the I/O backend. The tick callback is expected to fire every
      * r->heartbeat_timeout milliseconds and the recv callback whenever an RPC
      * is received. */

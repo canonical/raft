@@ -19,13 +19,44 @@ struct request
     unsigned server_id;
 };
 
+/* Common fields between follower and candidate state.
+ *
+ * The follower_state and candidate_state structs in raft.h must be kept
+ * consistent with this definition. */
+struct followerOrCandidateState
+{
+    unsigned randomized_election_timeout;
+};
+
+/* Return a pointer to either the follower or candidate state. */
+struct followerOrCandidateState *getFollowerOrCandidateState(struct raft *r)
+{
+    struct followerOrCandidateState *state;
+    assert(r->state == RAFT_FOLLOWER || r->state == RAFT_CANDIDATE);
+    if (r->state == RAFT_FOLLOWER) {
+        state = (struct followerOrCandidateState *)&r->follower_state;
+    } else {
+        state = (struct followerOrCandidateState *)&r->candidate_state;
+    }
+    return state;
+}
+
 void electionResetTimer(struct raft *r)
 {
-    r->randomized_election_timeout =
+    struct followerOrCandidateState *state = getFollowerOrCandidateState(r);
+    unsigned timeout =
         r->io->random(r->io, r->election_timeout, 2 * r->election_timeout);
-    assert(r->randomized_election_timeout >= r->election_timeout);
-    assert(r->randomized_election_timeout <= r->election_timeout * 2);
-    r->election_elapsed = 0;
+    assert(timeout >= r->election_timeout);
+    assert(timeout <= r->election_timeout * 2);
+    state->randomized_election_timeout = timeout;
+    r->election_timer_start = r->io->time(r->io);
+}
+
+bool electionTimerExpired(struct raft *r)
+{
+    struct followerOrCandidateState *state = getFollowerOrCandidateState(r);
+    raft_time now = r->io->time(r->io);
+    return now - r->election_timer_start >= state->randomized_election_timeout;
 }
 
 static void sendRequestVoteCb(struct raft_io_send *send, int status)
@@ -225,7 +256,7 @@ grant_vote:
     r->voted_for = args->candidate_id;
 
     /* Reset the election timer. */
-    r->election_elapsed = 0;
+    r->election_timer_start = r->io->time(r->io);
 
     return 0;
 }

@@ -23,7 +23,7 @@
 #define DISK_LATENCY 10
 
 /* Set to 1 to enable tracing. */
-#if 0
+#if 1
 static char messageDescription[1024];
 
 /* Return a human-readable description of the given message */
@@ -428,7 +428,7 @@ static void ioFlushSend(struct io *io, struct send *send)
         case RAFT_IO_INSTALL_SNAPSHOT:
             raft_configuration_init(&dst->install_snapshot.conf);
             rv = configurationCopy(&src->install_snapshot.conf,
-                                     &dst->install_snapshot.conf);
+                                   &dst->install_snapshot.conf);
             dst->install_snapshot.data.base =
                 raft_malloc(dst->install_snapshot.data.len);
             assert(dst->install_snapshot.data.base != NULL);
@@ -439,7 +439,7 @@ static void ioFlushSend(struct io *io, struct send *send)
             break;
     }
 
-    tracef("io: flush: %s", describeMessage(&send->message));
+    /* tracef("io: flush: %s", describeMessage(&send->message)); */
 
     if (send->req->cb != NULL) {
         send->req->cb(send->req, 0);
@@ -811,13 +811,13 @@ static raft_time ioMethodTime(struct raft_io *io)
     return *s->time;
 }
 
-static int ioMethodRandom(struct raft_io *io, int min, int max)
+static int ioMethodRandom(struct raft_io *raft_io, int min, int max)
 {
-    struct io *i;
+    struct io *io;
     (void)min;
     (void)max;
-    i = io->impl;
-    return i->randomized_election_timeout;
+    io = raft_io->impl;
+    return io->randomized_election_timeout;
 }
 
 static void ioMethodEmit(struct raft_io *io, int level, const char *format, ...)
@@ -870,7 +870,8 @@ static int ioMethodSend(struct raft_io *raft_io,
 
 static void ioReceive(struct io *io, struct raft_message *message)
 {
-    tracef("io: recv: %s from server %d", describeMessage(message));
+    tracef("io: recv: %s from server %d", describeMessage(message),
+           message->server_id);
     io->recv_cb(io->io, message);
 }
 
@@ -978,43 +979,44 @@ void ioDrop(struct io *io, int type, bool flag)
     io->drop[type - 1] = flag;
 }
 
-static int ioInit(struct raft_io *io, unsigned index, raft_time *time)
+static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
 {
-    struct io *i;
-    i = raft_malloc(sizeof *i);
-    assert(i != NULL);
-    i->io = io;
-    i->time = time;
-    i->term = 0;
-    i->voted_for = 0;
-    i->snapshot = NULL;
-    i->entries = NULL;
-    i->n = 0;
-    QUEUE_INIT(&i->requests);
-    i->n_peers = 0;
-    i->randomized_election_timeout = ELECTION_TIMEOUT + index * 100;
-    i->network_latency = NETWORK_LATENCY;
-    i->disk_latency = DISK_LATENCY;
-    i->fault.countdown = -1;
-    i->fault.n = -1;
-    memset(i->drop, 0, sizeof i->drop);
+    struct io *io;
+    io = raft_malloc(sizeof *io);
+    assert(io != NULL);
+    io->io = raft_io;
+    io->index = index;
+    io->time = time;
+    io->term = 0;
+    io->voted_for = 0;
+    io->snapshot = NULL;
+    io->entries = NULL;
+    io->n = 0;
+    QUEUE_INIT(&io->requests);
+    io->n_peers = 0;
+    io->randomized_election_timeout = ELECTION_TIMEOUT + index * 100;
+    io->network_latency = NETWORK_LATENCY;
+    io->disk_latency = DISK_LATENCY;
+    io->fault.countdown = -1;
+    io->fault.n = -1;
+    memset(io->drop, 0, sizeof io->drop);
 
-    io->impl = i;
-    io->init = ioMethodInit;
-    io->start = ioMethodStart;
-    io->close = ioMethodClose;
-    io->load = ioMethodLoad;
-    io->bootstrap = ioMethodBootstrap;
-    io->set_term = ioMethodSetTerm;
-    io->set_vote = ioMethodSetVote;
-    io->append = ioMethodAppend;
-    io->truncate = ioMethodTruncate;
-    io->send = ioMethodSend;
-    io->snapshot_put = ioMethodSnapshotPut;
-    io->snapshot_get = ioMethodSnapshotGet;
-    io->time = ioMethodTime;
-    io->random = ioMethodRandom;
-    io->emit = ioMethodEmit;
+    raft_io->impl = io;
+    raft_io->init = ioMethodInit;
+    raft_io->start = ioMethodStart;
+    raft_io->close = ioMethodClose;
+    raft_io->load = ioMethodLoad;
+    raft_io->bootstrap = ioMethodBootstrap;
+    raft_io->set_term = ioMethodSetTerm;
+    raft_io->set_vote = ioMethodSetVote;
+    raft_io->append = ioMethodAppend;
+    raft_io->truncate = ioMethodTruncate;
+    raft_io->send = ioMethodSend;
+    raft_io->snapshot_put = ioMethodSnapshotPut;
+    raft_io->snapshot_get = ioMethodSnapshotGet;
+    raft_io->time = ioMethodTime;
+    raft_io->random = ioMethodRandom;
+    raft_io->emit = ioMethodEmit;
 
     return 0;
 }
@@ -1595,19 +1597,39 @@ static void dropAllExcept(struct raft_fixture *f,
     }
 }
 
-/* Set the election timeout to the given on all servers except the given one. */
-static void setAllElectionTimeoutsExcept(struct raft_fixture *f,
-                                         unsigned msecs,
-                                         unsigned i)
+/* Set the randomized election timeout of the given server to the minimum value
+ * compatible with its current state and timers. */
+static void minimizeRandomizedElectionTimeout(struct raft_fixture *f,
+                                              unsigned i)
+{
+    struct raft *raft = &f->servers[i].raft;
+    raft_time now = raft->io->time(raft->io);
+    unsigned timeout = raft->election_timeout;
+    assert(raft->state == RAFT_FOLLOWER);
+
+    /* If the minimum election timeout value would make the timer expire in the
+     * past, cap it. */
+    if (now - raft->election_timer_start > timeout) {
+        timeout = now - raft->election_timer_start;
+    }
+
+    raft->follower_state.randomized_election_timeout = timeout;
+}
+
+/* Set the randomized election timeout to the maximum value on all servers
+ * except the given one. */
+static void maximizeAllRandomizedElectionTimeoutsExcept(struct raft_fixture *f,
+                                                        unsigned i)
 {
     unsigned j;
     for (j = 0; j < f->n; j++) {
         struct raft *raft = &f->servers[j].raft;
+        unsigned timeout = raft->election_timeout * 2;
         if (j == i) {
             continue;
         }
-        raft_fixture_set_randomized_election_timeout(f, j, msecs + j * 100);
-        raft_set_election_timeout(raft, msecs);
+        assert(raft->state == RAFT_FOLLOWER);
+        raft->follower_state.randomized_election_timeout = timeout;
     }
 }
 
@@ -1627,21 +1649,19 @@ void raft_fixture_elect(struct raft_fixture *f, unsigned i)
     /* Make sure that the given server is voting. */
     assert(configurationGet(&raft->configuration, raft->id)->voting);
 
-    /* Make sure all servers are currently followers and their election timeout
-     * is currently the default one. */
+    /* Make sure all servers are currently followers. */
     for (j = 0; j < f->n; j++) {
         assert(raft_state(&f->servers[j].raft) == RAFT_FOLLOWER);
-        assert(f->servers[j].raft.election_timeout == ELECTION_TIMEOUT);
     }
 
-    /* Set a very large election timeout on all servers, except the one being
-     * elected, effectively preventing competition. */
-    setAllElectionTimeoutsExcept(f, ELECTION_TIMEOUT * 10, i);
+    /* Pretend that the last randomized election timeout was set at the maximum
+     * value on all server expect the one to be elected, which is instead set to
+     * the minimum possible value compatible with its current state. */
+    minimizeRandomizedElectionTimeout(f, i);
+    maximizeAllRandomizedElectionTimeoutsExcept(f, i);
 
     raft_fixture_step_until_has_leader(f, ELECTION_TIMEOUT * 20);
     assert(f->leader_id == raft->id);
-
-    setAllElectionTimeoutsExcept(f, ELECTION_TIMEOUT, i);
 }
 
 void raft_fixture_depose(struct raft_fixture *f)
@@ -1661,7 +1681,7 @@ void raft_fixture_depose(struct raft_fixture *f)
 
     /* Set a very large election timeout on all followers, to prevent them from
      * starting an election. */
-    setAllElectionTimeoutsExcept(f, ELECTION_TIMEOUT * 10, leader_i);
+    maximizeAllRandomizedElectionTimeoutsExcept(f, leader_i);
 
     /* Prevent all servers from sending append entries results, so the leader
      * will eventually step down. */
@@ -1671,7 +1691,6 @@ void raft_fixture_depose(struct raft_fixture *f)
     assert(f->leader_id == 0);
 
     dropAllExcept(f, RAFT_IO_APPEND_ENTRIES_RESULT, false, leader_i);
-    setAllElectionTimeoutsExcept(f, ELECTION_TIMEOUT, leader_i);
 }
 
 struct step_apply

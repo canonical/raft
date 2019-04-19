@@ -35,7 +35,7 @@ int raft_membership__can_change_configuration(struct raft *r)
     /* No catch-up round should be in progress. */
     assert(r->leader_state.round_number == 0);
     assert(r->leader_state.round_index == 0);
-    assert(r->leader_state.round_duration == 0);
+    assert(r->leader_state.round_start == 0);
 
     return 0;
 }
@@ -45,6 +45,8 @@ bool raft_membership__update_catch_up_round(struct raft *r)
     size_t server_index;
     raft_index match_index;
     raft_index last_index;
+    raft_time now = r->io->time(r->io);
+    unsigned round_duration;
     bool is_up_to_date;
     bool is_fast_enough;
 
@@ -64,16 +66,17 @@ bool raft_membership__update_catch_up_round(struct raft *r)
     }
 
     last_index = logLastIndex(&r->log);
+    round_duration = now - r->leader_state.round_start;
 
     is_up_to_date = match_index == last_index;
-    is_fast_enough = r->leader_state.round_duration < r->election_timeout;
+    is_fast_enough = round_duration < r->election_timeout;
 
     /* If the server's log is fully up-to-date or the round that just terminated
      * was fast enough, then the server as caught up. */
     if (is_up_to_date || is_fast_enough) {
         r->leader_state.round_number = 0;
         r->leader_state.round_index = 0;
-        r->leader_state.round_duration = 0;
+        r->leader_state.round_start = 0;
 
         return true;
     }
@@ -83,7 +86,7 @@ bool raft_membership__update_catch_up_round(struct raft *r)
      * new round. */
     r->leader_state.round_number++;
     r->leader_state.round_index = last_index;
-    r->leader_state.round_duration = 0;
+    r->leader_state.round_start = now;
 
     return false;
 }

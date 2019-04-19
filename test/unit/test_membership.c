@@ -99,12 +99,14 @@ static void tear_down(void *data)
 
 /* Assert that the state of the current catch up round matches the given
  * values. */
-#define ASSERT_CATCH_UP_ROUND(I, PROMOTEED_ID, NUMBER, DURATION)             \
-    {                                                                        \
-        struct raft *raft_ = CLUSTER_RAFT(I);                                \
-        munit_assert_int(raft_->leader_state.promotee_id, ==, PROMOTEED_ID); \
-        munit_assert_int(raft_->leader_state.round_number, ==, NUMBER);      \
-        munit_assert_int(raft_->leader_state.round_duration, >=, DURATION);  \
+#define ASSERT_CATCH_UP_ROUND(I, PROMOTEED_ID, NUMBER, DURATION)              \
+    {                                                                         \
+        struct raft *raft_ = CLUSTER_RAFT(I);                                 \
+        munit_assert_int(raft_->leader_state.promotee_id, ==, PROMOTEED_ID);  \
+        munit_assert_int(raft_->leader_state.round_number, ==, NUMBER);       \
+        munit_assert_int(                                                     \
+            raft_->io->time(raft_->io) - raft_->leader_state.round_start, >=, \
+            DURATION);                                                        \
     }
 
 /******************************************************************************
@@ -211,7 +213,7 @@ TEST_CASE(promote, up_to_date, NULL)
     GROW;
     ADD(0, 3, 0);
     CLUSTER_STEP_UNTIL_APPLIED(2, 1, 2000);
-    CLUSTER_STEP_N(2);
+    CLUSTER_STEP_N(3);
 
     PROMOTE(0, 3, 0);
 
@@ -337,10 +339,10 @@ static bool second_server_has_new_configuration(struct raft_fixture *f,
     return raft->configuration.servers[2].voting;
 }
 
-/* If a follower receives an AppendEntries RPC containing a
- * RAFT_CHANGE entry which promotes a non-voting server, the
- * configuration change is immediately applied locally, even if the entry is not
- * yet committed. Once the entry is committed, the change becomes permanent.*/
+/* If a follower receives an AppendEntries RPC containing a RAFT_CHANGE entry
+ * which promotes a non-voting server, the configuration change is immediately
+ * applied locally, even if the entry is not yet committed. Once the entry is
+ * committed, the change becomes permanent.*/
 TEST_CASE(promote, change_is_immediate, NULL)
 {
     struct fixture *f = data;
@@ -349,6 +351,7 @@ TEST_CASE(promote, change_is_immediate, NULL)
     CLUSTER_MAKE_PROGRESS;
     ADD(0, 3, 0);
     CLUSTER_STEP_UNTIL_APPLIED(0, 3, 2000);
+    CLUSTER_STEP_UNTIL_APPLIED(1, 3, 2000);
 
     PROMOTE(0, 3, 0);
     CLUSTER_STEP_UNTIL(second_server_has_new_configuration, NULL, 3000);
@@ -460,6 +463,7 @@ TEST_CASE(remove, committed, NULL)
     GROW;
     ADD(0, 3, 0);
     CLUSTER_STEP_UNTIL_APPLIED(2, 1, 2000);
+    CLUSTER_STEP_N(2);
     REMOVE(0, 3, 0);
     ASSERT_CONFIGURATION_INDEXES(0, 2, 3);
     CLUSTER_STEP_UNTIL_APPLIED(0, 3, 2000);

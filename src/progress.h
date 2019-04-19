@@ -1,104 +1,86 @@
-/**
- * Track replication progress on followers.
- */
+/* Track replication progress on followers. */
 
-#ifndef RAFT_PROGRESS_H_
-#define RAFT_PROGRESS_H_
+#ifndef PROGRESS_H_
+#define PROGRESS_H_
 
 #include "../include/raft.h"
 
-/**
- * Possible values for the state field of struct raft_progress.
- */
+/* Possible values for the state field of struct raft_progress. */
 enum {
     PROGRESS__PROBE = 0, /* At most one AppendEntries per heartbeat interval */
     PROGRESS__PIPELINE,  /* Optimistically stream AppendEntries */
     PROGRESS__SNAPSHOT   /* Sending a snapshot */
 };
 
-/**
- * Create and initialize the array of progress objects used by the leader to
- * track followers. The match index will be set to zero, and the current last
- * index plus 1.
- */
-int progress__build_array(struct raft *r);
+/* Create and initialize the array of progress objects used by the leader to *
+ * track followers. The match index will be set to zero, and the next index to
+ * the current last index plus 1. */
+int progressBuildArray(struct raft *r);
 
-/**
- * Re-build the progress array against a new configuration.
- */
-int progress__rebuild_array(struct raft *r,
-                            const struct raft_configuration *configuration);
+/* Re-build the progress array against a new configuration.
+ *
+ * Progress information for servers existing both in the new and in the current
+ * configuration will remain unchanged.
+ *
+ * Progress information for servers existing only in the new configuration will
+ * be initialized as in progressBuildArray().*/
+int progressRebuildArray(struct raft *r,
+                         const struct raft_configuration *configuration);
 
-/**
- * Return true if a majority of voting servers have made_contact with us since
- * the last check, i.e. the recent_recv flag of the associated progress
- * object is true, and then reset the flag as well.
- */
-bool progress__check_quorum(struct raft *r);
+/* Whether a new AppendEntries or InstallSnapshot message should be sent to the
+ * i'th server at this time. */
+bool progressShouldReplicate(struct raft *r, unsigned i);
 
-/**
- * Return the progress state code.
- */
-int progress__state(struct raft *r, const struct raft_server *server);
+/* Return the index of the next entry that should be sent to the i'th server. */
+raft_index progressNextIndex(struct raft *r, unsigned i);
 
-/**
- * Return the progress next index.
- */
-raft_index progress__next_index(struct raft *r,
-                                const struct raft_server *server);
+/* Update the last_send timestamp after an AppendEntries request has been
+ * sent. */
+void progressUpdateLastSend(struct raft *r, unsigned i);
 
-/**
- * Returns #false if the given @index comes from an outdated message. Otherwise
- * update the progress and returns #true. To be called when receiving a
- * successful AppendEntries RPC response.
- */
-bool progress__maybe_update(struct raft *r,
-                            const struct raft_server *server,
+/* Reset to false the recent_recv flag of the server at the given index,
+ * returning the previous value.
+ *
+ * To be called once every election_timeout milliseconds. */
+bool progressResetRecentRecv(struct raft *r, unsigned i);
+
+/* Set to true the recent_recv flag of the server at the given index.
+ *
+ * To be called whenever we receive an AppendEntries RPC result */
+void progressMarkRecentRecv(struct raft *r, unsigned i);
+
+/* Convert to the i'th server to snapshot mode. */
+void progressToSnapshot(struct raft *r, unsigned i);
+
+/* Convert to probe mode. */
+void progressToProbe(struct raft *r, unsigned i);
+
+/* Convert to pipeline mode. */
+void progressToPipeline(struct raft *r, unsigned i);
+
+/* Abort snapshot mode and switch to back to probe.
+ *
+ * Called after sending the snapshot has failed or timed out. */
+void progressAbortSnapshot(struct raft *r, unsigned i);
+
+/* Return the progress mode code for the i'th server. */
+int progressState(struct raft *r, unsigned i);
+
+/* Return false if the given @index comes from an outdated message. Otherwise
+ * update the progress and returns true. To be called when receiving a
+ * successful AppendEntries RPC response. */
+bool progressMaybeUpdate(struct raft *r, unsigned i, raft_index last_index);
+
+/* Return false if the given rejected index comes from an out of order
+ * message. Otherwise decrease the progress next index to min(rejected,
+ * last_index) and returns true. To be called when receiving an unsuccessful
+ * AppendEntries RPC response. */
+bool progressMaybeDecrement(struct raft *r,
+                            unsigned i,
+                            raft_index rejected,
                             raft_index last_index);
 
-/**
- * Return #false if the given @rejected index comes from an out of order
- * message. Otherwise decrease the progress next index to min(rejected,
- * last_index) and returns #true. To be called when receiving an unsuccessful
- * AppendEntries RPC response.
- */
-bool progress__maybe_decrement(struct raft *r,
-                               const struct raft_server *server,
-                               raft_index rejected,
-                               raft_index last_index);
+/* Return true if match_index is equal or higher than the snapshot_index. */
+bool progressSnapshotDone(struct raft *r, unsigned i);
 
-/**
- * Set the recent send flag for the given server.
- */
-void progress__mark_recent_send(struct raft *r,
-                                const struct raft_server *server);
-
-/**
- * Set the recent receive flag for the given server.
- */
-void progress__mark_recent_recv(struct raft *r,
-                                const struct raft_server *server);
-
-/**
- * Convert to probe mode.
- */
-void progress__to_probe(struct raft *r, const struct raft_server *server);
-
-/**
- * Convert to snapshot mode.
- */
-void progress__to_snapshot(struct raft *r,
-                           const struct raft_server *server,
-                           raft_index last_index);
-
-/**
- * Abort snapshot mode because the sending has failed.
- */
-void progress__abort_snapshot(struct raft *r, const struct raft_server *server);
-
-/**
- * Return #true if match_index is equal or higher than the snapshot_index.
- */
-bool progress__snapshot_done(struct raft *r, const struct raft_server *server);
-
-#endif /* RAFT_PROGRESS_H_ */
+#endif /* PROGRESS_H_ */

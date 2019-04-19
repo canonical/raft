@@ -54,9 +54,6 @@ int raft_init(struct raft *r,
     r->last_applied = 0;
     r->last_stored = 0;
     r->state = RAFT_UNAVAILABLE;
-    r->randomized_election_timeout = 0;
-    r->last_tick = 0;
-    r->election_elapsed = 0;
     r->snapshot.pending.term = 0;
     r->snapshot.threshold = DEFAULT_SNAPSHOT_THRESHOLD;
     r->snapshot.trailing = DEFAULT_SNAPSHOT_TRAILING;
@@ -97,7 +94,6 @@ void raft_close(struct raft *r, void (*cb)(struct raft *r))
 void raft_set_election_timeout(struct raft *r, const unsigned msecs)
 {
     r->election_timeout = msecs;
-    electionResetTimer(r);
 }
 
 void raft_set_heartbeat_timeout(struct raft *r, const unsigned msecs)

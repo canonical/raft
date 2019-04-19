@@ -3,7 +3,7 @@
 #include "configuration.h"
 #include "convert.h"
 #include "election.h"
-#include "heartbeat.h"
+#include "replication.h"
 #include "logging.h"
 #include "recv.h"
 
@@ -81,7 +81,7 @@ int recv__request_vote_result(struct raft *r,
                 return rv;
             }
             /* Send initial heartbeat. */
-            heartbeat__send(r);
+            raft_replication__trigger(r, 0);
         } else {
             tracef("votes quorum not reached");
         }
