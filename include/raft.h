@@ -584,44 +584,34 @@ struct raft_progress
 };
 
 /**
+ * Close callback.
+ *
+ * It's safe to release the memory of a raft instance only after this callback
+ * has fired.
+ */
+struct raft;
+typedef void (*raft_close_cb)(struct raft *raft);
+
+/**
  * Hold and drive the state of a single raft server in a cluster.
  */
 struct raft
 {
-    /**
-     * Custom user data.
-     */
-    void *data;
+    void *data;           /* Custom user data. */
+    struct raft_io *io;   /* Disk and network I/O implementation. */
+    struct raft_fsm *fsm; /* User-defined FSM to apply command to. */
+    unsigned id;          /* Server ID of this raft instance. */
+    char *address;        /* Server address of this raft instance. */
 
-    /**
-     * User-defined disk and network I/O interface implementation.
-     */
-    struct raft_io *io;
-
-    /**
-     * User-defined finite state machine to apply command to.
-     */
-    struct raft_fsm *fsm;
-
-    /**
-     * Server ID of this raft instance.
-     */
-    unsigned id;
-
-    /**
-     * Server address of this raft instance.
-     */
-    char *address;
-
-    /**
-     * The fields below are a cache of the server's persistent state, updated on
-     * stable storage before responding to RPCs (Figure 3.1).
+    /*
+     * Cache of the server's persistent state, updated on stable storage before
+     * responding to RPCs (Figure 3.1).
      */
     raft_term current_term; /* Latest term server has seen. */
     unsigned voted_for;     /* Candidate that received vote in current term. */
     struct raft_log log;    /* Log entries. */
 
-    /**
+    /*
      * Current membership configuration (Chapter 4).
      *
      * At any given moment the current configuration can be committed or
@@ -650,7 +640,7 @@ struct raft
     raft_index configuration_index;
     raft_index configuration_uncommitted_index;
 
-    /**
+    /*
      * Election timeout in milliseconds (default 1000).
      *
      * From 3.4:
@@ -671,7 +661,7 @@ struct raft
      */
     unsigned election_timeout;
 
-    /**
+    /*
      * Heartbeat timeout in milliseconds (default 100). This is relevant only
      * for when the raft instance is in leader state: empty AppendEntries RPCs
      * will be sent if this amount of milliseconds elapses without any
@@ -684,17 +674,17 @@ struct raft
      */
     unsigned heartbeat_timeout;
 
-    /**
-     * The fields below hold the part of the server's volatile state which
-     * is always applicable regardless of the whether the server is
-     * follower, candidate or leader (Figure 3.1). This state is rebuilt
-     * automatically after a server restart.
+    /*
+     * The fields below hold the part of the server's volatile state which is
+     * always applicable regardless of the whether the server is follower,
+     * candidate or leader (Figure 3.1). This state is rebuilt automatically
+     * after a server restart.
      */
     raft_index commit_index; /* Highest log entry known to be committed */
     raft_index last_applied; /* Highest log entry applied to the FSM */
     raft_index last_stored;  /* Highest log entry persisted on disk */
 
-    /**
+    /*
      * Current server state of this raft instance, along with a union defining
      * state-specific values.
      */
@@ -724,7 +714,7 @@ struct raft
         } leader_state;
     };
 
-    /**
+    /*
      * Current election timeout.
      *
      * Randomized number between electiontimeout and 2 * electiontimeout - 1. It
@@ -739,14 +729,14 @@ struct raft
      */
     unsigned randomized_election_timeout;
 
-    /**
+    /*
      * Timestamp of the last call to the tick callback passed to raft_io. This
      * is used to calculate the time elapsed between subsequent tick calls and
      * update the timer field below.
      */
     raft_time last_tick;
 
-    /**
+    /*
      * Number of milliseconds since we last reached election_timeout when it is
      * leader or candidate. Number of milliseconds since we last reached
      * election_timeout or received a valid message from current leader when it
@@ -754,6 +744,9 @@ struct raft
      */
     unsigned election_elapsed;
 
+    /*
+     * Information about the last snapshot that was taken (if any).
+     */
     struct
     {
         unsigned threshold;              /* N. of entries before snapshot */
@@ -762,10 +755,10 @@ struct raft
         struct raft_io_snapshot_put put; /* Store snapshot request */
     } snapshot;
 
-    /**
+    /*
      * Callback to invoke once a close request has completed.
      */
-    void (*close_cb)(struct raft *r);
+    raft_close_cb close_cb;
 };
 
 /**
@@ -780,7 +773,7 @@ int raft_init(struct raft *r,
 /**
  * Close a raft instance, deallocating all used resources.
  */
-void raft_close(struct raft *r, void (*cb)(struct raft *r));
+void raft_close(struct raft *r, raft_close_cb cb);
 
 /**
  * Bootstrap this raft instance using the given configuration. The instance must
