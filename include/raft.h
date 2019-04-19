@@ -571,12 +571,6 @@ struct raft_fsm
 enum { RAFT_UNAVAILABLE, RAFT_FOLLOWER, RAFT_CANDIDATE, RAFT_LEADER };
 
 /**
- * Server state names ('unavailable', 'follower', 'candidate', 'leader'),
- * indexed by state code.
- */
-extern const char *raft_state_names[];
-
-/**
  * Used by leaders to keep track of replication progress for each server.
  */
 struct raft_progress
@@ -839,11 +833,6 @@ void raft_set_snapshot_trailing(struct raft *r, unsigned n);
  * Return the code of the current raft state.
  */
 int raft_state(struct raft *r);
-
-/**
- * Human readable version of the current state.
- */
-const char *raft_state_name(struct raft *r);
 
 /**
  * Return the ID and address of the current known leader, if any.
