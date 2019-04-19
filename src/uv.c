@@ -403,7 +403,7 @@ static void uvEmit(struct raft_io *io, int level, const char *format, ...)
     va_list args;
     uv = io->impl;
     va_start(args, format);
-    emit_to_stream(stderr, uv->id, uv_now(uv->loop), level, format, args);
+    emitToStream(stderr, uv->id, uv_now(uv->loop), level, format, args);
     va_end(args);
 }
 

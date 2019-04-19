@@ -826,7 +826,7 @@ static void ioMethodEmit(struct raft_io *io, int level, const char *format, ...)
     va_list args;
     va_start(args, format);
     s = io->impl;
-    emit_to_stream(stderr, s->id, *s->time, level, format, args);
+    emitToStream(stderr, s->id, *s->time, level, format, args);
     va_end(args);
 }
 
