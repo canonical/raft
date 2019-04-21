@@ -22,6 +22,9 @@
 #define NETWORK_LATENCY 15
 #define DISK_LATENCY 10
 
+/* To keep in sync with raft.h */
+#define N_MESSAGE_TYPES 5
+
 /* Set to 1 to enable tracing. */
 #if 1
 static char messageDescription[1024];
@@ -171,6 +174,11 @@ struct io
     } fault;
 
     bool drop[5];
+
+    /* Counters of events that happened so far. */
+    unsigned n_send[N_MESSAGE_TYPES];
+    unsigned n_recv[N_MESSAGE_TYPES];
+    unsigned n_append;
 };
 
 /* Advance the fault counters and return @true if an error should occurr. */
@@ -440,6 +448,7 @@ static void ioFlushSend(struct io *io, struct send *send)
     }
 
     /* tracef("io: flush: %s", describeMessage(&send->message)); */
+    io->n_send[send->message.type]++;
 
     if (send->req->cb != NULL) {
         send->req->cb(send->req, 0);
@@ -873,6 +882,7 @@ static void ioReceive(struct io *io, struct raft_message *message)
     tracef("io: recv: %s from server %d", describeMessage(message),
            message->server_id);
     io->recv_cb(io->io, message);
+    io->n_recv[message->type]++;
 }
 
 static void ioDeliverTransmit(struct io *io, struct transmit *transmit)
@@ -1000,6 +1010,9 @@ static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
     io->fault.countdown = -1;
     io->fault.n = -1;
     memset(io->drop, 0, sizeof io->drop);
+    memset(io->n_send, 0, sizeof io->n_send);
+    memset(io->n_recv, 0, sizeof io->n_recv);
+    io->n_append = 0;
 
     raft_io->impl = io;
     raft_io->init = ioMethodInit;
@@ -1974,4 +1987,14 @@ void raft_fixture_io_fault(struct raft_fixture *f,
     struct io *io = f->servers[i].io.impl;
     io->fault.countdown = delay;
     io->fault.n = repeat;
+}
+
+unsigned raft_fixture_n_send(struct raft_fixture *f, unsigned i, int type) {
+    struct io *io = f->servers[i].io.impl;
+    return io->n_send[type];
+}
+
+unsigned raft_fixture_n_recv(struct raft_fixture *f, unsigned i, int type) {
+    struct io *io = f->servers[i].io.impl;
+    return io->n_recv[type];
 }

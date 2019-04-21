@@ -384,4 +384,16 @@ void raft_fixture_io_fault(struct raft_fixture *f,
                            int delay,
                            int repeat);
 
+/**
+ * Return the number of messages of the given type that the @i'th server has
+ * successfully sent so far.
+ */
+unsigned raft_fixture_n_send(struct raft_fixture *f, unsigned i, int type);
+
+/**
+ * Return the number of messages of the given type that the @i'th server has
+ * received so far.
+ */
+unsigned raft_fixture_n_recv(struct raft_fixture *f, unsigned i, int type);
+
 #endif /* RAFT_FIXTURE_H */

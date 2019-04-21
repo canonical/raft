@@ -362,6 +362,12 @@
 #define CLUSTER_IO_FAULT(I, DELAY, REPEAT) \
     raft_fixture_io_fault(&f->cluster, I, DELAY, REPEAT)
 
+/* Return the number of messages sent by the given server. */
+#define CLUSTER_N_SEND(I, TYPE) raft_fixture_n_send(&f->cluster, I, TYPE)
+
+/* Return the number of messages sent by the given server. */
+#define CLUSTER_N_RECV(I, TYPE) raft_fixture_n_recv(&f->cluster, I, TYPE)
+
 /* Set a fixture hook that randomizes election timeouts, disk latency and
  * network latency. */
 #define CLUSTER_RANDOMIZE                \

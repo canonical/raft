@@ -117,6 +117,9 @@ TEST_CASE(send, heartbeat, initial, NULL)
     CLUSTER_STEP_N(2);
     munit_assert_int(raft->election_timer_start, ==, 1045);
 
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_APPEND_ENTRIES), ==, 1);
+    munit_assert_int(CLUSTER_N_RECV(1, RAFT_IO_APPEND_ENTRIES), ==, 1);
+
     return MUNIT_OK;
 }
 
@@ -152,8 +155,52 @@ TEST_CASE(send, heartbeat, repeat, NULL) {
     CLUSTER_STEP_N(7);
     munit_assert_int(raft->election_timer_start, ==, 1415);
 
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_APPEND_ENTRIES), ==, 4);
+    munit_assert_int(CLUSTER_N_RECV(0, RAFT_IO_APPEND_ENTRIES_RESULT), ==, 4);
+    munit_assert_int(CLUSTER_N_RECV(1, RAFT_IO_APPEND_ENTRIES), ==, 4);
+    munit_assert_int(CLUSTER_N_SEND(1, RAFT_IO_APPEND_ENTRIES_RESULT), ==, 4);
+
     return MUNIT_OK;
 }
+
+/* If a leader replicates some entries during a given heartbeat interval, it
+ * skips sending the heartbeat for that interval. */
+TEST_CASE(send, heartbeat, skip, NULL)
+{
+    struct fixture *f = data;
+    struct raft *raft;
+    struct raft_apply req;
+    (void)params;
+    CLUSTER_BOOTSTRAP;
+    CLUSTER_START;
+
+    raft = CLUSTER_RAFT(0);
+
+    /* Server 0 becomes leader and sends the first two heartbeats. */
+    CLUSTER_STEP_UNTIL_ELAPSED(1215);
+    ASSERT_LEADER(0);
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_APPEND_ENTRIES), ==, 2);
+    munit_assert_int(CLUSTER_N_RECV(1, RAFT_IO_APPEND_ENTRIES), ==, 2);
+
+    /* Server 0 starts replicating a new entry after 15 milliseconds. */
+    CLUSTER_STEP_UNTIL_ELAPSED(15);
+    ASSERT_TIME(1230);
+    CLUSTER_APPLY_ADD_X(0, &req, 1, NULL);
+    CLUSTER_STEP_N(1);
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_APPEND_ENTRIES), ==, 3);
+    munit_assert_int(raft->leader_state.progress[1].last_send, ==, 1230);
+
+    /* When the heartbeat timeout expires, server 0 does not send an empty
+     * append entries. */
+    CLUSTER_STEP_UNTIL_ELAPSED(70);
+    ASSERT_TIME(1300);
+    CLUSTER_STEP_N(1);
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_APPEND_ENTRIES), ==, 3);
+    munit_assert_int(raft->leader_state.progress[1].last_send, ==, 1230);
+
+    return MUNIT_OK;
+}
+
 
 TEST_GROUP(send, error);
 
