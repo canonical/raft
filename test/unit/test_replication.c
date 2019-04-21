@@ -201,6 +201,100 @@ TEST_CASE(send, heartbeat, skip, NULL)
     return MUNIT_OK;
 }
 
+TEST_GROUP(send, mode);
+
+/* A follower remains in probe mode until the leader receives a successful
+ * AppendEntries response. */
+TEST_CASE(send, mode, probe, NULL)
+{
+    struct fixture *f = data;
+    struct raft_apply req1;
+    struct raft_apply req2;
+    (void)params;
+    CLUSTER_BOOTSTRAP;
+    CLUSTER_START;
+
+    /* Server 0 becomes leader and sends the initial heartbeat. */
+    CLUSTER_STEP_N(25);
+    ASSERT_LEADER(0);
+    ASSERT_TIME(1030);
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_APPEND_ENTRIES), ==, 1);
+
+    /* Set a very high network latency for server 1, so server 0 will send a
+     * second probe AppendEntries without transitioning to pipeline mode. */
+    munit_assert_int(CLUSTER_N_RECV(1, RAFT_IO_APPEND_ENTRIES), ==, 0);
+    CLUSTER_SET_NETWORK_LATENCY(1, 250);
+
+    /* Server 0 receives a new entry after 15 milliseconds. Since the follower
+     * is still in probe mode and since an AppendEntries message was already
+     * sent recently, it does not send the new entry immediately. */
+    CLUSTER_STEP_UNTIL_ELAPSED(15);
+    CLUSTER_APPLY_ADD_X(0, &req1, 1, NULL);
+    CLUSTER_STEP;
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_APPEND_ENTRIES), ==, 1);
+
+    /* A heartbeat timeout elapses without receiving a response, so server 0
+     * sends an new AppendEntries to server 1. */
+    CLUSTER_STEP_UNTIL_ELAPSED(85);
+    CLUSTER_STEP;
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_APPEND_ENTRIES), ==, 2);
+
+    /* Server 0 receives a second entry after 15 milliseconds. Since the
+     * follower is still in probe mode and since an AppendEntries message was
+     * already sent recently, it does not send the new entry immediately. */
+    CLUSTER_STEP_UNTIL_ELAPSED(15);
+    CLUSTER_APPLY_ADD_X(0, &req2, 1, NULL);
+    CLUSTER_STEP;
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_APPEND_ENTRIES), ==, 2);
+
+    /* Eventually server 0 receives AppendEntries results for both entries. */
+    CLUSTER_STEP_UNTIL_APPLIED(0, 3, 1000);
+
+    return MUNIT_OK;
+}
+
+/* A follower transitions to pipeline mode after the leader receives a
+ * successful AppendEntries response from it. */
+TEST_CASE(send, mode, pipeline, NULL) {
+    struct fixture *f = data;
+    struct raft *raft;
+    struct raft_apply req1;
+    struct raft_apply req2;
+    (void)params;
+    CLUSTER_BOOTSTRAP;
+    CLUSTER_START;
+
+    raft = CLUSTER_RAFT(0);
+
+    /* Server 0 becomes leader and sends the initial heartbeat, receiving a
+     * successful response. */
+    CLUSTER_STEP_UNTIL_ELAPSED(1060);
+    ASSERT_LEADER(0);
+    ASSERT_TIME(1060);
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_APPEND_ENTRIES), ==, 1);
+
+    /* Server 0 receives a new entry after 15 milliseconds. Since the follower
+     * has transitioned to pipeline mode the new entry is sent immediately and
+     * the next index is optimistically increased. */
+    CLUSTER_STEP_UNTIL_ELAPSED(15);
+    CLUSTER_APPLY_ADD_X(0, &req1, 1, NULL);
+    CLUSTER_STEP;
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_APPEND_ENTRIES), ==, 2);
+    munit_assert_int(raft->leader_state.progress[1].next_index, ==, 3);
+
+    /* After another 15 milliseconds server 0 receives a second apply request,
+     * which is also sent out immediately */
+    CLUSTER_STEP_UNTIL_ELAPSED(15);
+    CLUSTER_APPLY_ADD_X(0, &req2, 1, NULL);
+    CLUSTER_STEP;
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_APPEND_ENTRIES), ==, 3);
+    munit_assert_int(raft->leader_state.progress[1].next_index, ==, 4);
+
+    /* Eventually server 0 receives AppendEntries results for both entries. */
+    CLUSTER_STEP_UNTIL_APPLIED(0, 3, 1000);
+
+    return MUNIT_OK;
+}
 
 TEST_GROUP(send, error);
 
