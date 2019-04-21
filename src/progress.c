@@ -229,6 +229,14 @@ bool progressMaybeDecrement(struct raft *r,
     return true;
 }
 
+void progressOptimisticNextIndex(struct raft *r,
+                                 unsigned i,
+                                 raft_index next_index)
+{
+    struct raft_progress *p = &r->leader_state.progress[i];
+    p->next_index = next_index;
+}
+
 bool progressMaybeUpdate(struct raft *r, unsigned i, raft_index last_index)
 {
     struct raft_progress *p = &r->leader_state.progress[i];
@@ -264,7 +272,8 @@ void progressToProbe(struct raft *r, const unsigned i)
     p->state = PROGRESS__PROBE;
 }
 
-void progressToPipeline(struct raft *r, const unsigned i) {
+void progressToPipeline(struct raft *r, const unsigned i)
+{
     struct raft_progress *p = &r->leader_state.progress[i];
     p->state = PROGRESS__PIPELINE;
 }

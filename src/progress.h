@@ -66,6 +66,13 @@ void progressAbortSnapshot(struct raft *r, unsigned i);
 /* Return the progress mode code for the i'th server. */
 int progressState(struct raft *r, unsigned i);
 
+/* Optimistically update the next index of the given server.
+ *
+ * Called in pipeline mode after sending new entries. */
+void progressOptimisticNextIndex(struct raft *r,
+                                 unsigned i,
+                                 raft_index next_index);
+
 /* Return false if the given @index comes from an outdated message. Otherwise
  * update the progress and returns true. To be called when receiving a
  * successful AppendEntries RPC response. */

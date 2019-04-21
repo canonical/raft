@@ -155,14 +155,14 @@ TEST_CASE(win, dupe_vote, NULL)
 
     /* Disconnect the second server, so the first server does not receive the
      * result and eventually starts a new election round. */
-    CLUSTER_DISCONNECT(0, 1);
+    CLUSTER_SATURATE_BOTHWAYS(0, 1);
     CLUSTER_STEP_UNTIL_TERM_IS(0, 3, 2000);
     ASSERT_CANDIDATE(0);
     ASSERT_TIME(2000);
 
     /* Reconnecting the two servers eventually makes the first server win the
      * election. */
-    CLUSTER_RECONNECT(0, 1);
+    CLUSTER_DESATURATE_BOTHWAYS(0, 1);
     STEP_UNTIL_LEADER(0);
     ASSERT_TIME(2030);
 
@@ -314,7 +314,7 @@ TEST_CASE(reject, has_leader, cluster_3_params)
     STEP_UNTIL_LEADER(0);
 
     /* Server 2 gets disconnected and becomes candidate. */
-    CLUSTER_DISCONNECT(0, 2);
+    CLUSTER_SATURATE_BOTHWAYS(0, 2);
     STEP_UNTIL_CANDIDATE(2);
 
     /* Server 2 stays candidate since its requests get rejected. */
@@ -334,7 +334,7 @@ TEST_CASE(reject, already_voted, cluster_3_params)
      * timeout to match the one of server 0. This way server 1 will convert to
      * candidate but not receive vote requests. */
     raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 1000);
-    CLUSTER_DISCONNECT(0, 1);
+    CLUSTER_SATURATE_BOTHWAYS(0, 1);
 
     CLUSTER_START;
 
@@ -458,7 +458,7 @@ TEST_CASE(reject, non_voting, reject_not_voting_params)
 
     /* Disconnect server 0 from server 1, so server 0 can't win the elections
      * (since there are only 2 voting servers). */
-    CLUSTER_DISCONNECT(0, 1);
+    CLUSTER_SATURATE_BOTHWAYS(0, 1);
 
     CLUSTER_START;
 
@@ -487,14 +487,14 @@ TEST_CASE(reject, not_granted, cluster_5_params)
     raft_fixture_set_randomized_election_timeout(&f->cluster, 4, 1020);
 
     /* Disconnect server 0 from all others except server 1. */
-    CLUSTER_DISCONNECT(0, 2);
-    CLUSTER_DISCONNECT(0, 3);
-    CLUSTER_DISCONNECT(0, 4);
+    CLUSTER_SATURATE_BOTHWAYS(0, 2);
+    CLUSTER_SATURATE_BOTHWAYS(0, 3);
+    CLUSTER_SATURATE_BOTHWAYS(0, 4);
 
     /* Disconnect server 4 from all others except the server 1. */
-    CLUSTER_DISCONNECT(4, 0);
-    CLUSTER_DISCONNECT(4, 2);
-    CLUSTER_DISCONNECT(4, 3);
+    CLUSTER_SATURATE_BOTHWAYS(4, 0);
+    CLUSTER_SATURATE_BOTHWAYS(4, 2);
+    CLUSTER_SATURATE_BOTHWAYS(4, 3);
 
     CLUSTER_START;
 
@@ -512,7 +512,7 @@ TEST_CASE(reject, not_granted, cluster_5_params)
 
     /* Disconnect server 0 from server 1, so it doesn't receive further
      * messages. */
-    CLUSTER_DISCONNECT(0, 1);
+    CLUSTER_SATURATE_BOTHWAYS(0, 1);
 
     /* Server 4 server eventually becomes candidate */
     STEP_UNTIL_CANDIDATE(4);

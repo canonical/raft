@@ -26,7 +26,7 @@
 #define N_MESSAGE_TYPES 5
 
 /* Set to 1 to enable tracing. */
-#if 1
+#if 0
 static char messageDescription[1024];
 
 /* Return a human-readable description of the given message */
@@ -41,7 +41,10 @@ static char *describeMessage(const struct raft_message *m)
             sprintf(d, "request vote result");
             break;
         case RAFT_IO_APPEND_ENTRIES:
-            sprintf(d, "append entries (n %u)", m->append_entries.n_entries);
+            sprintf(d, "append entries (n %u prev %llu/%llu)",
+                    m->append_entries.n_entries,
+                    m->append_entries.prev_log_index,
+                    m->append_entries.prev_log_term);
             break;
         case RAFT_IO_APPEND_ENTRIES_RESULT:
             sprintf(d, "append entries result");
@@ -127,8 +130,9 @@ struct transmit
 /* Information about a peer server. */
 struct peer
 {
-    struct io *io;
-    bool connected;
+    struct io *io;  /* The peer's I/O backend. */
+    bool connected; /* Whether a connection is established. */
+    bool saturated; /* Whether the established connection is saturated. */
 };
 
 /* Stub I/O implementation implementing all operations in-memory. */
@@ -404,14 +408,36 @@ static void ioFlushSnapshotGet(struct io *s, struct snapshot_get *r)
     raft_free(r);
 }
 
+/* Search for the peer with the given ID. */
+static struct peer *ioGetPeer(struct io *io, unsigned id)
+{
+    unsigned i;
+    for (i = 0; i < io->n_peers; i++) {
+        struct peer *peer = &io->peers[i];
+        if (peer->io->id == id) {
+            return peer;
+        }
+    }
+    return NULL;
+}
+
 /* Flush a raft_io_send request, copying the message content into a new struct
  * transmit object and invoking the user callback. */
 static void ioFlushSend(struct io *io, struct send *send)
 {
+    struct peer *peer;
     struct transmit *transmit;
     struct raft_message *src;
     struct raft_message *dst;
+    int status;
     int rv;
+
+    /* If the peer doesn't exist or was disconnected, fail the request. */
+    peer = ioGetPeer(io, send->message.server_id);
+    if (peer == NULL || !peer->connected) {
+        status = RAFT_NOCONNECTION;
+        goto out;
+    }
 
     transmit = raft_malloc(sizeof *transmit);
     assert(transmit != NULL);
@@ -449,9 +475,11 @@ static void ioFlushSend(struct io *io, struct send *send)
 
     /* tracef("io: flush: %s", describeMessage(&send->message)); */
     io->n_send[send->message.type]++;
+    status = 0;
 
+out:
     if (send->req->cb != NULL) {
-        send->req->cb(send->req, 0);
+        send->req->cb(send->req, status);
     }
 
     raft_free(send);
@@ -496,8 +524,6 @@ static int ioMethodClose(struct raft_io *io, void (*cb)(struct raft_io *io))
     size_t i;
 
     s = io->impl;
-
-    ioDropAllRequests(s);
 
     for (i = 0; i < s->n; i++) {
         struct raft_entry *entry = &s->entries[i];
@@ -889,7 +915,6 @@ static void ioDeliverTransmit(struct io *io, struct transmit *transmit)
 {
     struct raft_message *message = &transmit->message;
     struct peer *peer; /* Destination peer */
-    unsigned i;
 
     /* If this message type is in the drop list, let's discard it */
     if (io->drop[message->type - 1]) {
@@ -897,17 +922,11 @@ static void ioDeliverTransmit(struct io *io, struct transmit *transmit)
         return;
     }
 
-    /* Search for the destination server. */
-    for (i = 0; i < io->n_peers; i++) {
-        peer = &io->peers[i];
-        if (peer->io->id == message->server_id) {
-            break;
-        }
-    }
+    peer = ioGetPeer(io, message->server_id);
 
-    /* We don't have any peer with this ID or if the peers is disconnect, let's
-     * drop the message */
-    if (i == io->n_peers || !peer->connected) {
+    /* We don't have any peer with this ID or it's disconnected or if the
+     * connection is saturated, let's drop the message */
+    if (peer == NULL || !peer->connected || peer->saturated) {
         ioDropTransmit(io, transmit);
         return;
     }
@@ -931,22 +950,12 @@ static void ioConnect(struct raft_io *io, struct raft_io *other)
     assert(s->n_peers < MAX_PEERS);
     s->peers[s->n_peers].io = s_other;
     s->peers[s->n_peers].connected = true;
+    s->peers[s->n_peers].saturated = false;
     s->n_peers++;
 }
 
-static struct peer *ioGetPeer(struct io *s, unsigned id)
-{
-    unsigned i;
-    for (i = 0; i < s->n_peers; i++) {
-        struct peer *peer = &s->peers[i];
-        if (peer->io->id == id) {
-            return peer;
-        }
-    }
-    return NULL;
-}
-
-static bool ioConnected(struct raft_io *io, struct raft_io *other)
+/* Return whether the connection with the given peer is saturated. */
+static bool ioSaturated(struct raft_io *io, struct raft_io *other)
 {
     struct io *s;
     struct io *s_other;
@@ -954,11 +963,11 @@ static bool ioConnected(struct raft_io *io, struct raft_io *other)
     s = io->impl;
     s_other = other->impl;
     peer = ioGetPeer(s, s_other->id);
-    return peer != NULL && peer->connected;
+    return peer != NULL && peer->saturated;
 }
 
-/* Diconnect @io from @other, disabling delivery of messages sent from @io to
- * @other. */
+/* Disconnect @io and @other, causing calls to @io->send() to fail
+ * asynchronously when sending messages to @other. */
 static void ioDisconnect(struct raft_io *io, struct raft_io *other)
 {
     struct io *s;
@@ -967,11 +976,11 @@ static void ioDisconnect(struct raft_io *io, struct raft_io *other)
     s = io->impl;
     s_other = other->impl;
     peer = ioGetPeer(s, s_other->id);
+    assert(peer != NULL);
     peer->connected = false;
 }
 
-/* Reconnect @io to @other, re-enabling delivery of messages sent from @io to
- * @other. */
+/* Reconnect @io and @other. */
 static void ioReconnect(struct raft_io *io, struct raft_io *other)
 {
     struct io *s;
@@ -980,7 +989,36 @@ static void ioReconnect(struct raft_io *io, struct raft_io *other)
     s = io->impl;
     s_other = other->impl;
     peer = ioGetPeer(s, s_other->id);
+    assert(peer != NULL);
     peer->connected = true;
+}
+
+/* Saturate the connection from @io to @other, causing messages sent from @io to
+ * @other to be dropped. */
+static void ioSaturate(struct raft_io *io, struct raft_io *other)
+{
+    struct io *s;
+    struct io *s_other;
+    struct peer *peer;
+    s = io->impl;
+    s_other = other->impl;
+    peer = ioGetPeer(s, s_other->id);
+    assert(peer != NULL && peer->connected);
+    peer->saturated = true;
+}
+
+/* Desaturate the connection from @io to @other, re-enabling delivery of
+ * messages sent from @io to @other. */
+static void ioDesaturate(struct raft_io *io, struct raft_io *other)
+{
+    struct io *s;
+    struct io *s_other;
+    struct peer *peer;
+    s = io->impl;
+    s_other = other->impl;
+    peer = ioGetPeer(s, s_other->id);
+    assert(peer != NULL && peer->connected);
+    peer->saturated = false;
 }
 
 /* Enable or disable silently dropping all outgoing messages of type @type. */
@@ -1112,6 +1150,10 @@ int raft_fixture_init(struct raft_fixture *f, unsigned n, struct raft_fsm *fsms)
 void raft_fixture_close(struct raft_fixture *f)
 {
     unsigned i;
+    for (i = 0; i < f->n; i++) {
+        struct io *io = f->servers[i].io.impl;
+        ioDropAllRequests(io);
+    }
     for (i = 0; i < f->n; i++) {
         serverClose(&f->servers[i]);
     }
@@ -1275,7 +1317,7 @@ static bool updateLeader(struct raft_fixture *f)
                 continue;
             }
             if (!raft_fixture_alive(f, i) ||
-                !raft_fixture_connected(f, leader_i, i)) {
+                raft_fixture_saturated(f, leader_i, i)) {
                 /* This server is not alive or not connected to the leader, so
                  * don't count it in for stability. */
                 continue;
@@ -1860,38 +1902,50 @@ void raft_fixture_disconnect(struct raft_fixture *f, unsigned i, unsigned j)
     struct raft_io *io1 = &f->servers[i].io;
     struct raft_io *io2 = &f->servers[j].io;
     ioDisconnect(io1, io2);
-    ioDisconnect(io2, io1);
 }
 
-static void disconnect_from_all(struct raft_fixture *f, unsigned i)
+void raft_fixture_reconnect(struct raft_fixture *f, unsigned i, unsigned j) {
+    struct raft_io *io1 = &f->servers[i].io;
+    struct raft_io *io2 = &f->servers[j].io;
+    ioReconnect(io1, io2);
+}
+
+void raft_fixture_saturate(struct raft_fixture *f, unsigned i, unsigned j)
+{
+    struct raft_io *io1 = &f->servers[i].io;
+    struct raft_io *io2 = &f->servers[j].io;
+    ioSaturate(io1, io2);
+}
+
+static void disconnectFromAll(struct raft_fixture *f, unsigned i)
 {
     unsigned j;
     for (j = 0; j < f->n; j++) {
         if (j == i) {
             continue;
         }
-        raft_fixture_disconnect(f, i, j);
+        raft_fixture_saturate(f, i, j);
+        raft_fixture_saturate(f, j, i);
     }
 }
 
-bool raft_fixture_connected(struct raft_fixture *f, unsigned i, unsigned j)
+bool raft_fixture_saturated(struct raft_fixture *f, unsigned i, unsigned j)
 {
     struct raft_io *io1 = &f->servers[i].io;
     struct raft_io *io2 = &f->servers[j].io;
-    return ioConnected(io1, io2) && ioConnected(io2, io1);
+    return ioSaturated(io1, io2);
 }
 
-void raft_fixture_reconnect(struct raft_fixture *f, unsigned i, unsigned j)
+void raft_fixture_desaturate(struct raft_fixture *f, unsigned i, unsigned j)
 {
     struct raft_io *io1 = &f->servers[i].io;
     struct raft_io *io2 = &f->servers[j].io;
-    ioReconnect(io1, io2);
-    ioReconnect(io2, io1);
+    ioDesaturate(io1, io2);
 }
 
 void raft_fixture_kill(struct raft_fixture *f, unsigned i)
 {
-    disconnect_from_all(f, i);
+    disconnectFromAll(f, i);
     f->servers[i].alive = false;
 }
 
@@ -1989,12 +2043,14 @@ void raft_fixture_io_fault(struct raft_fixture *f,
     io->fault.n = repeat;
 }
 
-unsigned raft_fixture_n_send(struct raft_fixture *f, unsigned i, int type) {
+unsigned raft_fixture_n_send(struct raft_fixture *f, unsigned i, int type)
+{
     struct io *io = f->servers[i].io.impl;
     return io->n_send[type];
 }
 
-unsigned raft_fixture_n_recv(struct raft_fixture *f, unsigned i, int type) {
+unsigned raft_fixture_n_recv(struct raft_fixture *f, unsigned i, int type)
+{
     struct io *io = f->servers[i].io.impl;
     return io->n_recv[type];
 }

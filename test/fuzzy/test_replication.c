@@ -145,7 +145,8 @@ TEST_CASE(entries, partitioned, _params)
         if (raft->id == leader_id) {
             continue;
         }
-        raft_fixture_disconnect(&f->cluster, leader_id - 1, raft->id - 1);
+        raft_fixture_saturate(&f->cluster, leader_id - 1, raft->id - 1);
+        raft_fixture_saturate(&f->cluster, raft->id - 1, leader_id - 1);
         n++;
     }
 
@@ -164,14 +165,10 @@ TEST_CASE(entries, partitioned, _params)
         if (raft->id == leader_id) {
             continue;
         }
-        raft_fixture_reconnect(&f->cluster, leader_id - 1, raft->id - 1);
+        raft_fixture_desaturate(&f->cluster, leader_id - 1, raft->id - 1);
     }
 
-    /* FIXME: wait a bit more otherwise test_cluster_has_leader would return
-     * immediately. */
-    CLUSTER_STEP_UNTIL_ELAPSED(100);
-
-    CLUSTER_STEP_UNTIL_HAS_LEADER(10000);
+    CLUSTER_STEP_UNTIL_HAS_LEADER(30000);
 
     /* Re-try now to append the entry. */
     CLUSTER_APPLY_ADD_X(CLUSTER_LEADER, req2, 1, apply_cb);

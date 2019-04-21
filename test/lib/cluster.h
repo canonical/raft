@@ -317,11 +317,27 @@
 /* Depose the current leader */
 #define CLUSTER_DEPOSE raft_fixture_depose(&f->cluster)
 
-/* Disconnect two servers. */
+/* Disconnect I from J. */
 #define CLUSTER_DISCONNECT(I, J) raft_fixture_disconnect(&f->cluster, I, J)
 
-/* Reconnect two servers. */
+/* Reconnect I to J. */
 #define CLUSTER_RECONNECT(I, J) raft_fixture_reconnect(&f->cluster, I, J)
+
+/* Saturate the connection from I to J. */
+#define CLUSTER_SATURATE(I, J) raft_fixture_saturate(&f->cluster, I, J)
+
+/* Saturate the connection from I to J and from J to I, in both directions. */
+#define CLUSTER_SATURATE_BOTHWAYS(I, J) \
+    CLUSTER_SATURATE(I, J);             \
+    CLUSTER_SATURATE(J, I)
+
+/* Desaturate the connection between I and J, making messages flow again. */
+#define CLUSTER_DESATURATE(I, J) raft_fixture_desaturate(&f->cluster, I, J)
+
+/* Reconnect two servers. */
+#define CLUSTER_DESATURATE_BOTHWAYS(I, J) \
+    CLUSTER_DESATURATE(I, J);   \
+    CLUSTER_DESATURATE(J, I)
 
 /* Set the network latency of outgoing messages of server I. */
 #define CLUSTER_SET_NETWORK_LATENCY(I, MSECS) \

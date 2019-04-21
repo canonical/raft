@@ -259,7 +259,7 @@ TEST_CASE(promote, catch_up, NULL)
     CLUSTER_STEP_UNTIL_APPLIED(2, 2, 2000);
 
     /* Disconnect the second server, so it doesn't participate in the quorum */
-    CLUSTER_DISCONNECT(0, 1);
+    CLUSTER_SATURATE_BOTHWAYS(0, 1);
 
     /* Eventually the leader notices that the third server has caught. */
     CLUSTER_STEP_UNTIL(third_server_has_caught_up, NULL, 2000);

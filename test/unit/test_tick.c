@@ -162,8 +162,8 @@ TEST_CASE(elapse, no_contact, NULL)
     (void)params;
 
     CLUSTER_ELECT(0);
-    CLUSTER_DISCONNECT(0, 1);
-    CLUSTER_DISCONNECT(0, 2);
+    CLUSTER_SATURATE_BOTHWAYS(0, 1);
+    CLUSTER_SATURATE_BOTHWAYS(0, 2);
 
     /* Wait for the leader to step down. */
     CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_FOLLOWER, 2000);
@@ -180,8 +180,8 @@ TEST_CASE(elapse, new_election, NULL)
 
     (void)params;
 
-    CLUSTER_DISCONNECT(0, 1);
-    CLUSTER_DISCONNECT(0, 2);
+    CLUSTER_SATURATE_BOTHWAYS(0, 1);
+    CLUSTER_SATURATE_BOTHWAYS(0, 2);
 
     /* Become candidate */
     CLUSTER_STEP_UNTIL_ELAPSED(
@@ -215,8 +215,8 @@ TEST_CASE(elapse, during_election, NULL)
     struct raft *raft = CLUSTER_RAFT(0);
     (void)params;
 
-    CLUSTER_DISCONNECT(0, 1);
-    CLUSTER_DISCONNECT(0, 2);
+    CLUSTER_SATURATE_BOTHWAYS(0, 1);
+    CLUSTER_SATURATE_BOTHWAYS(0, 2);
 
     /* Become candidate */
     CLUSTER_STEP_UNTIL_ELAPSED(
@@ -249,8 +249,8 @@ TEST_CASE(elapse,
     struct raft *raft = CLUSTER_RAFT(0);
     (void)params;
 
-    CLUSTER_DISCONNECT(0, 1);
-    CLUSTER_DISCONNECT(0, 2);
+    CLUSTER_SATURATE_BOTHWAYS(0, 1);
+    CLUSTER_SATURATE_BOTHWAYS(0, 2);
 
     /* Become candidate */
     CLUSTER_STEP_UNTIL_ELAPSED(

@@ -131,7 +131,7 @@ static int sendAppendEntries(struct raft *r,
         /* Optimitiscally update progress.
          *
          * TODO: should we invoke this in sendAppendEntriesCb instead? */
-        progressMaybeUpdate(r, i, req->index + req->n - 1);
+        progressOptimisticNextIndex(r, i, req->index + req->n);
     }
 
     return 0;
@@ -866,8 +866,10 @@ static int check_prev_log_entry(struct raft *r,
         if (args->prev_log_index <= r->commit_index) {
             /* Should never happen; something is seriously wrong! */
             errorf(r->io,
-                   "previous index conflicts with "
-                   "committed entry -> shutdown");
+                   "conflicting terms %llu and %llu for entry %llu (commit "
+                   "index %llu) -> shutdown",
+                   local_prev_term, args->prev_log_term, args->prev_log_index,
+                   r->commit_index);
             return -1;
         }
         tracef("previous term mismatch -> reject");

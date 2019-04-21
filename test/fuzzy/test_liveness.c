@@ -60,12 +60,14 @@ static void __update_connectivity(struct fixture *f, int i)
                 disconnection->start = i;
                 disconnection->duration =
                     munit_rand_int_range(50, MAX_DISCONNECT);
-                raft_fixture_disconnect(&f->cluster, id1 - 1, id2 - 1);
+                raft_fixture_saturate(&f->cluster, id1 - 1, id2 - 1);
+                raft_fixture_saturate(&f->cluster, id2 - 1, id1 - 1);
             }
         } else {
             /* Decide whether to reconnect this pair. */
             if (i - disconnection->start > disconnection->duration) {
-                raft_fixture_reconnect(&f->cluster, id1 - 1, id2 - 1);
+                raft_fixture_desaturate(&f->cluster, id1 - 1, id2 - 1);
+                raft_fixture_desaturate(&f->cluster, id2 - 1, id1 - 1);
                 disconnection->start = 0;
             }
         }

@@ -298,6 +298,76 @@ TEST_CASE(send, mode, pipeline, NULL) {
 
 TEST_GROUP(send, error);
 
+/* A follower disconnects while in probe mode. */
+TEST_CASE(send, error, disconnect, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+    CLUSTER_BOOTSTRAP;
+    CLUSTER_START;
+
+    /* Server 0 becomes leader and sends the initial heartbeat, however they
+     * fail because server 1 has disconnected. */
+    CLUSTER_STEP_N(24);
+    ASSERT_LEADER(0);
+    CLUSTER_DISCONNECT(0, 1);
+    CLUSTER_STEP;
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_APPEND_ENTRIES), ==, 0);
+
+    /* After the heartbeat timeout server 0 retries, but still fails. */
+    CLUSTER_STEP_UNTIL_ELAPSED(100);
+    CLUSTER_STEP;
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_APPEND_ENTRIES), ==, 0);
+
+    /* After another heartbeat timeout server 0 retries and this time
+     * succeeds. */
+    CLUSTER_STEP_UNTIL_ELAPSED(100);
+    CLUSTER_RECONNECT(0, 1);
+    CLUSTER_STEP;
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_APPEND_ENTRIES), ==, 1);
+
+    return MUNIT_OK;
+}
+
+/* A follower disconnects while in pipeline mode. */
+TEST_CASE(send, error, disconnect_pipeline, NULL)
+{
+    struct fixture *f = data;
+    struct raft_apply req1;
+    struct raft_apply req2;
+    (void)params;
+    CLUSTER_BOOTSTRAP;
+    CLUSTER_START;
+
+    /* Server 0 becomes leader and sends a couple of heartbeats. */
+    CLUSTER_STEP_UNTIL_ELAPSED(1215);
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_APPEND_ENTRIES), ==, 2);
+
+    /* It then starts to replicate a few entries, however the follower
+     * disconnects before delivering results. */
+    CLUSTER_APPLY_ADD_X(0, &req1, 1, NULL);
+    CLUSTER_STEP;
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_APPEND_ENTRIES), ==, 3);
+    CLUSTER_APPLY_ADD_X(0, &req2, 1, NULL);
+    CLUSTER_STEP;
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_APPEND_ENTRIES), ==, 4);
+
+    CLUSTER_DISCONNECT(0, 1);
+
+    /* The next heartbeat fails, transitioning the follower back to probe
+     * mode. */
+    CLUSTER_STEP_UNTIL_ELAPSED(115);
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_APPEND_ENTRIES), ==, 4);
+
+    /* After reconnection the follower eventually replicates the entries and
+     * reports back. */
+    CLUSTER_RECONNECT(0, 1);
+
+    CLUSTER_STEP_UNTIL_APPLIED(0, 3, 1000);
+
+    return MUNIT_OK;
+}
+
 static char *send_oom_heap_fault_delay[] = {"5", NULL};
 static char *send_oom_heap_fault_repeat[] = {"1", NULL};
 
@@ -389,8 +459,8 @@ TEST_CASE(receive, stale_term, cluster_3_params)
      * keep sending heartbeats. */
     raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 5000);
     raft_set_election_timeout(CLUSTER_RAFT(0), 5000);
-    CLUSTER_DISCONNECT(0, 1);
-    CLUSTER_DISCONNECT(0, 2);
+    CLUSTER_SATURATE_BOTHWAYS(0, 1);
+    CLUSTER_SATURATE_BOTHWAYS(0, 2);
 
     /* Eventually a new leader gets elected. */
     CLUSTER_STEP_UNTIL_HAS_NO_LEADER(5000);
@@ -398,7 +468,7 @@ TEST_CASE(receive, stale_term, cluster_3_params)
     munit_assert_int(CLUSTER_LEADER, ==, 1);
 
     /* Reconnect the old leader to the current follower. */
-    CLUSTER_RECONNECT(0, 2);
+    CLUSTER_DESATURATE_BOTHWAYS(0, 2);
 
     /* Step a few times, so the old leader sends heartbeats to the follower,
      * which rejects them. */
@@ -511,12 +581,12 @@ TEST_CASE(receive, skip, NULL)
     /* The leader replicates the entry to the follower however it does not get
      * notified about the result, so it sends the entry again. */
     CLUSTER_STEP;
-    CLUSTER_DISCONNECT(0, 1);
+    CLUSTER_SATURATE_BOTHWAYS(0, 1);
     CLUSTER_STEP_UNTIL_ELAPSED(150);
 
     /* The follower reconnects and receives again the same entry. This time the
      * leader receives the notification. */
-    CLUSTER_RECONNECT(0, 1);
+    CLUSTER_DESATURATE_BOTHWAYS(0, 1);
     CLUSTER_STEP_UNTIL_APPLIED(0, req->index, 2000);
 
     free(req);
@@ -577,8 +647,8 @@ TEST_CASE(receive, candidate, same_term, cluster_3_params)
 
     /* Disconnect server 2 from the other two and set a low election timeout on
      * it, so it will immediately start an election. */
-    CLUSTER_DISCONNECT(2, 0);
-    CLUSTER_DISCONNECT(2, 1);
+    CLUSTER_SATURATE_BOTHWAYS(2, 0);
+    CLUSTER_SATURATE_BOTHWAYS(2, 1);
     raft_fixture_set_randomized_election_timeout(&f->cluster, 2, 800);
     raft_set_election_timeout(CLUSTER_RAFT(2), 800);
 
@@ -598,8 +668,8 @@ TEST_CASE(receive, candidate, same_term, cluster_3_params)
      * replicates the entry. */
     munit_assert_int(CLUSTER_STATE(2), ==, RAFT_CANDIDATE);
     munit_assert_int(CLUSTER_TERM(2), ==, 2);
-    CLUSTER_RECONNECT(2, 0);
-    CLUSTER_RECONNECT(2, 1);
+    CLUSTER_DESATURATE_BOTHWAYS(2, 0);
+    CLUSTER_DESATURATE_BOTHWAYS(2, 1);
     CLUSTER_STEP_UNTIL_STATE_IS(2, RAFT_FOLLOWER, 2000);
     CLUSTER_STEP_UNTIL_APPLIED(2, 2, 2000);
 
@@ -619,15 +689,15 @@ TEST_CASE(receive, candidate, higher_term, cluster_3_params)
     raft_set_election_timeout(CLUSTER_RAFT(1), 2000);
 
     /* Disconnect server 2 from the other two. */
-    CLUSTER_DISCONNECT(2, 0);
-    CLUSTER_DISCONNECT(2, 1);
+    CLUSTER_SATURATE_BOTHWAYS(2, 0);
+    CLUSTER_SATURATE_BOTHWAYS(2, 1);
 
     /* Set a low election timeout on server 0, and disconnect it from server 1,
      * so by the time it wins the second round, server 2 will have turned
      * candidate */
     raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 800);
     raft_set_election_timeout(CLUSTER_RAFT(0), 800);
-    CLUSTER_DISCONNECT(0, 1);
+    CLUSTER_SATURATE_BOTHWAYS(0, 1);
 
     CLUSTER_START;
 
@@ -644,7 +714,7 @@ TEST_CASE(receive, candidate, higher_term, cluster_3_params)
 
     /* Reconnect the first and second server and let the election succeed and
      * replicate an entry. */
-    CLUSTER_RECONNECT(0, 1);
+    CLUSTER_DESATURATE_BOTHWAYS(0, 1);
     CLUSTER_STEP_UNTIL_HAS_LEADER(1000);
     CLUSTER_MAKE_PROGRESS;
 
@@ -652,8 +722,8 @@ TEST_CASE(receive, candidate, higher_term, cluster_3_params)
      * replicates the entry. */
     munit_assert_int(CLUSTER_STATE(2), ==, RAFT_CANDIDATE);
     munit_assert_int(CLUSTER_TERM(2), ==, 2);
-    CLUSTER_RECONNECT(2, 0);
-    CLUSTER_RECONNECT(2, 1);
+    CLUSTER_DESATURATE_BOTHWAYS(2, 0);
+    CLUSTER_DESATURATE_BOTHWAYS(2, 1);
     CLUSTER_STEP_UNTIL_STATE_IS(2, RAFT_FOLLOWER, 2000);
     CLUSTER_STEP_UNTIL_APPLIED(2, 2, 2000);
 
@@ -716,13 +786,13 @@ TEST_CASE(result, lower_term, cluster_3_params)
 
     /* Disconnect server 0 and set a low election timeout on it so it will step
      * down very soon. */
-    CLUSTER_DISCONNECT(0, 2);
+    CLUSTER_SATURATE_BOTHWAYS(0, 2);
     raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 200);
     raft_set_election_timeout(CLUSTER_RAFT(0), 200);
     CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_FOLLOWER, 2000);
 
     /* Make server 0 become leader again. */
-    CLUSTER_RECONNECT(0, 2);
+    CLUSTER_DESATURATE_BOTHWAYS(0, 2);
     CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 4000);
 
     /* Eventually deliver the result message. */
@@ -744,8 +814,8 @@ TEST_CASE(result, higher_term, cluster_3_params)
     raft_set_election_timeout(CLUSTER_RAFT(0), 5000);
 
     /* Disconnect the server 0 from the rest of the cluster. */
-    CLUSTER_DISCONNECT(0, 1);
-    CLUSTER_DISCONNECT(0, 2);
+    CLUSTER_SATURATE_BOTHWAYS(0, 1);
+    CLUSTER_SATURATE_BOTHWAYS(0, 2);
 
     /* Eventually a new leader gets electected */
     CLUSTER_STEP_UNTIL_HAS_NO_LEADER(2000);
@@ -754,7 +824,7 @@ TEST_CASE(result, higher_term, cluster_3_params)
 
     /* Reconnect the old leader to the current follower, which eventually
      * replies with an AppendEntries result containing an higher term. */
-    CLUSTER_RECONNECT(0, 2);
+    CLUSTER_DESATURATE_BOTHWAYS(0, 2);
     CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_FOLLOWER, 2000);
 
     return MUNIT_OK;
