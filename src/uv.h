@@ -251,6 +251,10 @@ void uvPrepareClose(struct uv *uv);
  * they will be processed now. */
 void uvAppendMaybeProcessRequests(struct uv *uv);
 
+/* Fix the first index of the last segment that we requested to prepare, to
+ * reflect that we're restoring a snapshot. */
+void uvAppendFixPreparedSegmentFirstIndex(struct uv *uv);
+
 /* Cancel all pending write requests and request the current segment to be
  * finalized. Must be invoked at closing time. */
 void uvAppendClose(struct uv *uv);

@@ -524,6 +524,18 @@ int uvSnapshotPut(struct raft_io *io,
         goto err_after_req_alloc;
     }
 
+    /* If the next append index is set to 1, it means that we're restoring a
+     * snapshot after having trucated the log. Set the next append index to the
+     * snapshot's last index + 1. */
+    if (uv->append_next_index == 1) {
+        uv->append_next_index = snapshot->index + 1;
+        /* We expect that a new prepared segment has just been requested, we
+         * need to update its first index too.
+         *
+         * TODO: this should be cleaned up. */
+        uvAppendFixPreparedSegmentFirstIndex(uv);
+    }
+
     cursor = r->meta.header;
     bytePut64(&cursor, UV__DISK_FORMAT);
     bytePut64(&cursor, 0);
