@@ -1,10 +1,8 @@
-/**
- * Declaration of the kernel AIO APIs that we use. This avoids having to depend
- * on libaio.
- */
+/* Declaration of the kernel AIO APIs that we use. This avoids having to depend
+ * on libaio. */
 
-#ifndef RAFT_AIO_H
-#define RAFT_AIO_H
+#ifndef AIO_H_
+#define AIO_H_
 
 #include <linux/aio_abi.h>
 #include <time.h>
@@ -21,4 +19,4 @@ int io_getevents(aio_context_t ctx,
                  struct io_event *events,
                  struct timespec *timeout);
 
-#endif /* RAFT_AIO_H */
+#endif /* AIO_H_ */

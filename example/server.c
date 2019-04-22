@@ -13,13 +13,16 @@ struct fsm
     int count;
 };
 
-static int fsmApply(struct raft_fsm *fsm, const struct raft_buffer *buf)
+static int fsmApply(struct raft_fsm *fsm,
+                    const struct raft_buffer *buf,
+                    void **result)
 {
     struct fsm *f = fsm->data;
     if (buf->len != 8) {
         return RAFT_MALFORMED;
     }
     f->count += *(uint64_t *)buf->base;
+    *result = &f->count;
     return 0;
 }
 
@@ -224,18 +227,19 @@ static void serverClose(struct server *s)
     uv_loop_close(&s->loop);
 }
 
-static void applyCb(struct raft_apply *req, int status)
+static void applyCb(struct raft_apply *req, int status, void *result)
 {
     struct server *s = req->data;
-    struct fsm *fsm = s->fsm.data;
+    int count;
     raft_free(req);
     if (status != 0) {
         s->io.emit(&s->io, RAFT_WARN, "fsm: apply error: %s",
                    raft_strerror(status));
         return;
     }
-    if (fsm->count % 50 == 0) {
-        s->io.emit(&s->io, RAFT_INFO, "fsm: count %d", fsm->count);
+    count = *(int*)result;
+    if (count % 50 == 0) {
+        s->io.emit(&s->io, RAFT_INFO, "fsm: count %d", count);
     }
 }
 

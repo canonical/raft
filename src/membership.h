@@ -28,7 +28,7 @@ bool raft_membership__update_catch_up_round(struct raft *r);
 
 /**
  * Update the local configuration replacing it with the content of the given
- * RAFT_CONFIGURATION entry, which has just been received in as part of an
+ * RAFT_CHANGE entry, which has just been received in as part of an
  * AppendEntries RPC request. The uncommitted configuration index will be
  * updated accordingly.
  *

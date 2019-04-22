@@ -34,7 +34,7 @@ size_t test_io_uv_write_snapshot_meta_file(const char *dir,
         rv = raft_configuration_add(&configuration, id, address, true);
         munit_assert_int(rv, ==, 0);
     }
-    rv = configuration__encode(&configuration, &configuration_buf);
+    rv = configurationEncode(&configuration, &configuration_buf);
     munit_assert_int(rv, ==, 0);
     raft_configuration_close(&configuration);
 
@@ -45,17 +45,17 @@ size_t test_io_uv_write_snapshot_meta_file(const char *dir,
     buf = munit_malloc(size);
     cursor = buf;
 
-    byte__put64(&cursor, 1);                     /* Format version */
-    byte__put64(&cursor, 0);                     /* CRC sums placeholder */
-    byte__put64(&cursor, configuration_index);   /* Configuration index */
-    byte__put64(&cursor, configuration_buf.len); /* Encoded configuration */
+    bytePut64(&cursor, 1);                     /* Format version */
+    bytePut64(&cursor, 0);                     /* CRC sums placeholder */
+    bytePut64(&cursor, configuration_index);   /* Configuration index */
+    bytePut64(&cursor, configuration_buf.len); /* Encoded configuration */
     memcpy(cursor, configuration_buf.base, configuration_buf.len);
 
     sprintf(filename, "snapshot-%llu-%llu-%llu.meta", term, index, timestamp);
 
-    crc = byte__crc32(buf + (__WORD_SIZE * 2), size - (__WORD_SIZE * 2), 0);
+    crc = byteCrc32(buf + (__WORD_SIZE * 2), size - (__WORD_SIZE * 2), 0);
     cursor = buf + __WORD_SIZE;
-    byte__put64(&cursor, crc);
+    bytePut64(&cursor, crc);
 
     test_dir_write_file(dir, filename, buf, size);
 

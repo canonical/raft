@@ -1,6 +1,5 @@
 #include "recv_append_entries.h"
 #include "assert.h"
-#include "configuration.h"
 #include "convert.h"
 #include "log.h"
 #include "logging.h"
@@ -38,7 +37,7 @@ int recv__append_entries(struct raft *r,
     assert(address != NULL);
 
     result->rejected = args->prev_log_index;
-    result->last_log_index = log__last_index(&r->log);
+    result->last_log_index = logLastIndex(&r->log);
 
     rv = recv__ensure_matching_terms(r, args->term, &match);
     if (rv != 0) {
@@ -105,7 +104,7 @@ int recv__append_entries(struct raft *r,
     }
 
     /* Reset the election timer. */
-    r->election_elapsed = 0;
+    r->election_timer_start = r->io->time(r->io);
 
     /* If we are installing a snapshot, ignore these entries. TODO: we should do
      * something smarter, e.g. buffering the entries in the I/O backend, which

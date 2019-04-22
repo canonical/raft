@@ -22,6 +22,9 @@
 #define NETWORK_LATENCY 15
 #define DISK_LATENCY 10
 
+/* To keep in sync with raft.h */
+#define N_MESSAGE_TYPES 5
+
 /* Set to 1 to enable tracing. */
 #if 0
 static char messageDescription[1024];
@@ -38,7 +41,10 @@ static char *describeMessage(const struct raft_message *m)
             sprintf(d, "request vote result");
             break;
         case RAFT_IO_APPEND_ENTRIES:
-            sprintf(d, "append entries (n %u)", m->append_entries.n_entries);
+            sprintf(d, "append entries (n %u prev %llu/%llu)",
+                    m->append_entries.n_entries,
+                    m->append_entries.prev_log_index,
+                    m->append_entries.prev_log_term);
             break;
         case RAFT_IO_APPEND_ENTRIES_RESULT:
             sprintf(d, "append entries result");
@@ -83,11 +89,10 @@ struct request
 struct append
 {
     REQUEST;
+    struct raft_io_append *req;
     const struct raft_entry *entries;
     unsigned n;
-    void *data;
     unsigned start; /* Request timestamp. */
-    void (*cb)(void *data, int status);
 };
 
 /* Pending request to send a message. */
@@ -125,8 +130,9 @@ struct transmit
 /* Information about a peer server. */
 struct peer
 {
-    struct io *io;
-    bool connected;
+    struct io *io;  /* The peer's I/O backend. */
+    bool connected; /* Whether a connection is established. */
+    bool saturated; /* Whether the established connection is saturated. */
 };
 
 /* Stub I/O implementation implementing all operations in-memory. */
@@ -172,6 +178,11 @@ struct io
     } fault;
 
     bool drop[5];
+
+    /* Counters of events that happened so far. */
+    unsigned n_send[N_MESSAGE_TYPES];
+    unsigned n_recv[N_MESSAGE_TYPES];
+    unsigned n_append;
 };
 
 /* Advance the fault counters and return @true if an error should occurr. */
@@ -283,8 +294,8 @@ static void ioFlushAppend(struct io *s, struct append *append)
     s->entries = entries;
     s->n += append->n;
 
-    if (append->cb != NULL) {
-        append->cb(append->data, 0);
+    if (append->req->cb != NULL) {
+        append->req->cb(append->req, 0);
     }
     free(append);
 }
@@ -344,7 +355,7 @@ static void snapshot_copy(const struct raft_snapshot *s1,
     s2->term = s1->term;
     s2->index = s1->index;
 
-    rv = configuration__copy(&s1->configuration, &s2->configuration);
+    rv = configurationCopy(&s1->configuration, &s2->configuration);
     assert(rv == 0);
 
     size = 0;
@@ -397,14 +408,36 @@ static void ioFlushSnapshotGet(struct io *s, struct snapshot_get *r)
     raft_free(r);
 }
 
+/* Search for the peer with the given ID. */
+static struct peer *ioGetPeer(struct io *io, unsigned id)
+{
+    unsigned i;
+    for (i = 0; i < io->n_peers; i++) {
+        struct peer *peer = &io->peers[i];
+        if (peer->io->id == id) {
+            return peer;
+        }
+    }
+    return NULL;
+}
+
 /* Flush a raft_io_send request, copying the message content into a new struct
  * transmit object and invoking the user callback. */
 static void ioFlushSend(struct io *io, struct send *send)
 {
+    struct peer *peer;
     struct transmit *transmit;
     struct raft_message *src;
     struct raft_message *dst;
+    int status;
     int rv;
+
+    /* If the peer doesn't exist or was disconnected, fail the request. */
+    peer = ioGetPeer(io, send->message.server_id);
+    if (peer == NULL || !peer->connected) {
+        status = RAFT_NOCONNECTION;
+        goto out;
+    }
 
     transmit = raft_malloc(sizeof *transmit);
     assert(transmit != NULL);
@@ -428,8 +461,8 @@ static void ioFlushSend(struct io *io, struct send *send)
             break;
         case RAFT_IO_INSTALL_SNAPSHOT:
             raft_configuration_init(&dst->install_snapshot.conf);
-            rv = configuration__copy(&src->install_snapshot.conf,
-                                     &dst->install_snapshot.conf);
+            rv = configurationCopy(&src->install_snapshot.conf,
+                                   &dst->install_snapshot.conf);
             dst->install_snapshot.data.base =
                 raft_malloc(dst->install_snapshot.data.len);
             assert(dst->install_snapshot.data.base != NULL);
@@ -440,10 +473,13 @@ static void ioFlushSend(struct io *io, struct send *send)
             break;
     }
 
-    tracef("io: flush: %s", describeMessage(&send->message));
+    /* tracef("io: flush: %s", describeMessage(&send->message)); */
+    io->n_send[send->message.type]++;
+    status = 0;
 
+out:
     if (send->req->cb != NULL) {
-        send->req->cb(send->req, 0);
+        send->req->cb(send->req, status);
     }
 
     raft_free(send);
@@ -488,8 +524,6 @@ static int ioMethodClose(struct raft_io *io, void (*cb)(struct raft_io *io))
     size_t i;
 
     s = io->impl;
-
-    ioDropAllRequests(s);
 
     for (i = 0; i < s->n; i++) {
         struct raft_entry *entry = &s->entries[i];
@@ -621,7 +655,7 @@ static int ioMethodBootstrap(struct raft_io *io,
     assert(s->n == 0);
 
     /* Encode the given configuration. */
-    rv = configuration__encode(conf, &buf);
+    rv = configurationEncode(conf, &buf);
     if (rv != 0) {
         return rv;
     }
@@ -632,7 +666,7 @@ static int ioMethodBootstrap(struct raft_io *io,
     }
 
     entries[0].term = 1;
-    entries[0].type = RAFT_CONFIGURATION;
+    entries[0].type = RAFT_CHANGE;
     entries[0].buf = buf;
 
     s->term = 1;
@@ -673,10 +707,10 @@ static int ioMethodSetVote(struct raft_io *raft_io, const unsigned server_id)
 }
 
 static int ioMethodAppend(struct raft_io *raft_io,
+                          struct raft_io_append *req,
                           const struct raft_entry entries[],
                           unsigned n,
-                          void *data,
-                          void (*cb)(void *data, int status))
+                          raft_io_append_cb cb)
 {
     struct io *io;
     struct append *r;
@@ -692,10 +726,11 @@ static int ioMethodAppend(struct raft_io *raft_io,
 
     r->type = APPEND;
     r->completion_time = *io->time + io->disk_latency;
+    r->req = req;
     r->entries = entries;
     r->n = n;
-    r->data = data;
-    r->cb = cb;
+
+    req->cb = cb;
 
     QUEUE_PUSH(&io->requests, &r->queue);
 
@@ -811,13 +846,13 @@ static raft_time ioMethodTime(struct raft_io *io)
     return *s->time;
 }
 
-static int ioMethodRandom(struct raft_io *io, int min, int max)
+static int ioMethodRandom(struct raft_io *raft_io, int min, int max)
 {
-    struct io *i;
+    struct io *io;
     (void)min;
     (void)max;
-    i = io->impl;
-    return i->randomized_election_timeout;
+    io = raft_io->impl;
+    return io->randomized_election_timeout;
 }
 
 static void ioMethodEmit(struct raft_io *io, int level, const char *format, ...)
@@ -826,7 +861,7 @@ static void ioMethodEmit(struct raft_io *io, int level, const char *format, ...)
     va_list args;
     va_start(args, format);
     s = io->impl;
-    emit_to_stream(stderr, s->id, *s->time, level, format, args);
+    emitToStream(stderr, s->id, *s->time, level, format, args);
     va_end(args);
 }
 
@@ -870,15 +905,16 @@ static int ioMethodSend(struct raft_io *raft_io,
 
 static void ioReceive(struct io *io, struct raft_message *message)
 {
-    tracef("io: recv: %s from server %d", describeMessage(message));
+    tracef("io: recv: %s from server %d", describeMessage(message),
+           message->server_id);
     io->recv_cb(io->io, message);
+    io->n_recv[message->type]++;
 }
 
 static void ioDeliverTransmit(struct io *io, struct transmit *transmit)
 {
     struct raft_message *message = &transmit->message;
     struct peer *peer; /* Destination peer */
-    unsigned i;
 
     /* If this message type is in the drop list, let's discard it */
     if (io->drop[message->type - 1]) {
@@ -886,17 +922,11 @@ static void ioDeliverTransmit(struct io *io, struct transmit *transmit)
         return;
     }
 
-    /* Search for the destination server. */
-    for (i = 0; i < io->n_peers; i++) {
-        peer = &io->peers[i];
-        if (peer->io->id == message->server_id) {
-            break;
-        }
-    }
+    peer = ioGetPeer(io, message->server_id);
 
-    /* We don't have any peer with this ID or if the peers is disconnect, let's
-     * drop the message */
-    if (i == io->n_peers || !peer->connected) {
+    /* We don't have any peer with this ID or it's disconnected or if the
+     * connection is saturated, let's drop the message */
+    if (peer == NULL || !peer->connected || peer->saturated) {
         ioDropTransmit(io, transmit);
         return;
     }
@@ -920,22 +950,12 @@ static void ioConnect(struct raft_io *io, struct raft_io *other)
     assert(s->n_peers < MAX_PEERS);
     s->peers[s->n_peers].io = s_other;
     s->peers[s->n_peers].connected = true;
+    s->peers[s->n_peers].saturated = false;
     s->n_peers++;
 }
 
-static struct peer *ioGetPeer(struct io *s, unsigned id)
-{
-    unsigned i;
-    for (i = 0; i < s->n_peers; i++) {
-        struct peer *peer = &s->peers[i];
-        if (peer->io->id == id) {
-            return peer;
-        }
-    }
-    return NULL;
-}
-
-static bool ioConnected(struct raft_io *io, struct raft_io *other)
+/* Return whether the connection with the given peer is saturated. */
+static bool ioSaturated(struct raft_io *io, struct raft_io *other)
 {
     struct io *s;
     struct io *s_other;
@@ -943,11 +963,11 @@ static bool ioConnected(struct raft_io *io, struct raft_io *other)
     s = io->impl;
     s_other = other->impl;
     peer = ioGetPeer(s, s_other->id);
-    return peer != NULL && peer->connected;
+    return peer != NULL && peer->saturated;
 }
 
-/* Diconnect @io from @other, disabling delivery of messages sent from @io to
- * @other. */
+/* Disconnect @io and @other, causing calls to @io->send() to fail
+ * asynchronously when sending messages to @other. */
 static void ioDisconnect(struct raft_io *io, struct raft_io *other)
 {
     struct io *s;
@@ -956,11 +976,11 @@ static void ioDisconnect(struct raft_io *io, struct raft_io *other)
     s = io->impl;
     s_other = other->impl;
     peer = ioGetPeer(s, s_other->id);
+    assert(peer != NULL);
     peer->connected = false;
 }
 
-/* Reconnect @io to @other, re-enabling delivery of messages sent from @io to
- * @other. */
+/* Reconnect @io and @other. */
 static void ioReconnect(struct raft_io *io, struct raft_io *other)
 {
     struct io *s;
@@ -969,7 +989,36 @@ static void ioReconnect(struct raft_io *io, struct raft_io *other)
     s = io->impl;
     s_other = other->impl;
     peer = ioGetPeer(s, s_other->id);
+    assert(peer != NULL);
     peer->connected = true;
+}
+
+/* Saturate the connection from @io to @other, causing messages sent from @io to
+ * @other to be dropped. */
+static void ioSaturate(struct raft_io *io, struct raft_io *other)
+{
+    struct io *s;
+    struct io *s_other;
+    struct peer *peer;
+    s = io->impl;
+    s_other = other->impl;
+    peer = ioGetPeer(s, s_other->id);
+    assert(peer != NULL && peer->connected);
+    peer->saturated = true;
+}
+
+/* Desaturate the connection from @io to @other, re-enabling delivery of
+ * messages sent from @io to @other. */
+static void ioDesaturate(struct raft_io *io, struct raft_io *other)
+{
+    struct io *s;
+    struct io *s_other;
+    struct peer *peer;
+    s = io->impl;
+    s_other = other->impl;
+    peer = ioGetPeer(s, s_other->id);
+    assert(peer != NULL && peer->connected);
+    peer->saturated = false;
 }
 
 /* Enable or disable silently dropping all outgoing messages of type @type. */
@@ -978,43 +1027,47 @@ void ioDrop(struct io *io, int type, bool flag)
     io->drop[type - 1] = flag;
 }
 
-static int ioInit(struct raft_io *io, unsigned index, raft_time *time)
+static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
 {
-    struct io *i;
-    i = raft_malloc(sizeof *i);
-    assert(i != NULL);
-    i->io = io;
-    i->time = time;
-    i->term = 0;
-    i->voted_for = 0;
-    i->snapshot = NULL;
-    i->entries = NULL;
-    i->n = 0;
-    QUEUE_INIT(&i->requests);
-    i->n_peers = 0;
-    i->randomized_election_timeout = ELECTION_TIMEOUT + index * 100;
-    i->network_latency = NETWORK_LATENCY;
-    i->disk_latency = DISK_LATENCY;
-    i->fault.countdown = -1;
-    i->fault.n = -1;
-    memset(i->drop, 0, sizeof i->drop);
+    struct io *io;
+    io = raft_malloc(sizeof *io);
+    assert(io != NULL);
+    io->io = raft_io;
+    io->index = index;
+    io->time = time;
+    io->term = 0;
+    io->voted_for = 0;
+    io->snapshot = NULL;
+    io->entries = NULL;
+    io->n = 0;
+    QUEUE_INIT(&io->requests);
+    io->n_peers = 0;
+    io->randomized_election_timeout = ELECTION_TIMEOUT + index * 100;
+    io->network_latency = NETWORK_LATENCY;
+    io->disk_latency = DISK_LATENCY;
+    io->fault.countdown = -1;
+    io->fault.n = -1;
+    memset(io->drop, 0, sizeof io->drop);
+    memset(io->n_send, 0, sizeof io->n_send);
+    memset(io->n_recv, 0, sizeof io->n_recv);
+    io->n_append = 0;
 
-    io->impl = i;
-    io->init = ioMethodInit;
-    io->start = ioMethodStart;
-    io->close = ioMethodClose;
-    io->load = ioMethodLoad;
-    io->bootstrap = ioMethodBootstrap;
-    io->set_term = ioMethodSetTerm;
-    io->set_vote = ioMethodSetVote;
-    io->append = ioMethodAppend;
-    io->truncate = ioMethodTruncate;
-    io->send = ioMethodSend;
-    io->snapshot_put = ioMethodSnapshotPut;
-    io->snapshot_get = ioMethodSnapshotGet;
-    io->time = ioMethodTime;
-    io->random = ioMethodRandom;
-    io->emit = ioMethodEmit;
+    raft_io->impl = io;
+    raft_io->init = ioMethodInit;
+    raft_io->start = ioMethodStart;
+    raft_io->close = ioMethodClose;
+    raft_io->load = ioMethodLoad;
+    raft_io->bootstrap = ioMethodBootstrap;
+    raft_io->set_term = ioMethodSetTerm;
+    raft_io->set_vote = ioMethodSetVote;
+    raft_io->append = ioMethodAppend;
+    raft_io->truncate = ioMethodTruncate;
+    raft_io->send = ioMethodSend;
+    raft_io->snapshot_put = ioMethodSnapshotPut;
+    raft_io->snapshot_get = ioMethodSnapshotGet;
+    raft_io->time = ioMethodTime;
+    raft_io->random = ioMethodRandom;
+    raft_io->emit = ioMethodEmit;
 
     return 0;
 }
@@ -1087,7 +1140,7 @@ int raft_fixture_init(struct raft_fixture *f, unsigned n, struct raft_fsm *fsms)
         serverConnectToAll(f, i);
     }
 
-    log__init(&f->log);
+    logInit(&f->log);
     f->commit_index = 0;
     f->hook = NULL;
 
@@ -1098,9 +1151,13 @@ void raft_fixture_close(struct raft_fixture *f)
 {
     unsigned i;
     for (i = 0; i < f->n; i++) {
+        struct io *io = f->servers[i].io.impl;
+        ioDropAllRequests(io);
+    }
+    for (i = 0; i < f->n; i++) {
         serverClose(&f->servers[i]);
     }
-    log__close(&f->log);
+    logClose(&f->log);
 }
 
 int raft_fixture_configuration(struct raft_fixture *f,
@@ -1260,7 +1317,7 @@ static bool updateLeader(struct raft_fixture *f)
                 continue;
             }
             if (!raft_fixture_alive(f, i) ||
-                !raft_fixture_connected(f, leader_i, i)) {
+                raft_fixture_saturated(f, leader_i, i)) {
                 /* This server is not alive or not connected to the leader, so
                  * don't count it in for stability. */
                 continue;
@@ -1311,7 +1368,7 @@ static void checkLeaderAppendOnly(struct raft_fixture *f)
 {
     struct raft *raft;
     raft_index index;
-    raft_index last = log__last_index(&f->log);
+    raft_index last = logLastIndex(&f->log);
 
     /* If the cached log is empty it means there was no leader before. */
     if (last == 0) {
@@ -1324,14 +1381,14 @@ static void checkLeaderAppendOnly(struct raft_fixture *f)
     }
 
     raft = raft_fixture_get(f, f->leader_id - 1);
-    last = log__last_index(&f->log);
+    last = logLastIndex(&f->log);
 
     for (index = 1; index <= last; index++) {
         const struct raft_entry *entry1;
         const struct raft_entry *entry2;
 
-        entry1 = log__get(&f->log, index);
-        entry2 = log__get(&raft->log, index);
+        entry1 = logGet(&f->log, index);
+        entry2 = logGet(&raft->log, index);
 
         assert(entry1 != NULL);
 
@@ -1362,10 +1419,10 @@ static void copyLeaderLog(struct raft_fixture *f)
     size_t i;
     int rc;
 
-    log__close(&f->log);
-    log__init(&f->log);
+    logClose(&f->log);
+    logInit(&f->log);
 
-    rc = log__acquire(&raft->log, 1, &entries, &n);
+    rc = logAcquire(&raft->log, 1, &entries, &n);
     assert(rc == 0);
 
     for (i = 0; i < n; i++) {
@@ -1374,11 +1431,11 @@ static void copyLeaderLog(struct raft_fixture *f)
         buf.len = entry->buf.len;
         buf.base = raft_malloc(buf.len);
         memcpy(buf.base, entry->buf.base, buf.len);
-        rc = log__append(&f->log, entry->term, entry->type, &buf, NULL);
+        rc = logAppend(&f->log, entry->term, entry->type, &buf, NULL);
         assert(rc == 0);
     }
 
-    log__release(&raft->log, 1, entries, n);
+    logRelease(&raft->log, 1, entries, n);
 }
 
 /* Update the commit index to match the one from the current leader. */
@@ -1595,19 +1652,39 @@ static void dropAllExcept(struct raft_fixture *f,
     }
 }
 
-/* Set the election timeout to the given on all servers except the given one. */
-static void setAllElectionTimeoutsExcept(struct raft_fixture *f,
-                                         unsigned msecs,
-                                         unsigned i)
+/* Set the randomized election timeout of the given server to the minimum value
+ * compatible with its current state and timers. */
+static void minimizeRandomizedElectionTimeout(struct raft_fixture *f,
+                                              unsigned i)
+{
+    struct raft *raft = &f->servers[i].raft;
+    raft_time now = raft->io->time(raft->io);
+    unsigned timeout = raft->election_timeout;
+    assert(raft->state == RAFT_FOLLOWER);
+
+    /* If the minimum election timeout value would make the timer expire in the
+     * past, cap it. */
+    if (now - raft->election_timer_start > timeout) {
+        timeout = now - raft->election_timer_start;
+    }
+
+    raft->follower_state.randomized_election_timeout = timeout;
+}
+
+/* Set the randomized election timeout to the maximum value on all servers
+ * except the given one. */
+static void maximizeAllRandomizedElectionTimeoutsExcept(struct raft_fixture *f,
+                                                        unsigned i)
 {
     unsigned j;
     for (j = 0; j < f->n; j++) {
         struct raft *raft = &f->servers[j].raft;
+        unsigned timeout = raft->election_timeout * 2;
         if (j == i) {
             continue;
         }
-        raft_fixture_set_randomized_election_timeout(f, j, msecs + j * 100);
-        raft_set_election_timeout(raft, msecs);
+        assert(raft->state == RAFT_FOLLOWER);
+        raft->follower_state.randomized_election_timeout = timeout;
     }
 }
 
@@ -1625,23 +1702,21 @@ void raft_fixture_elect(struct raft_fixture *f, unsigned i)
     assert(f->leader_id == 0);
 
     /* Make sure that the given server is voting. */
-    assert(configuration__get(&raft->configuration, raft->id)->voting);
+    assert(configurationGet(&raft->configuration, raft->id)->voting);
 
-    /* Make sure all servers are currently followers and their election timeout
-     * is currently the default one. */
+    /* Make sure all servers are currently followers. */
     for (j = 0; j < f->n; j++) {
         assert(raft_state(&f->servers[j].raft) == RAFT_FOLLOWER);
-        assert(f->servers[j].raft.election_timeout == ELECTION_TIMEOUT);
     }
 
-    /* Set a very large election timeout on all servers, except the one being
-     * elected, effectively preventing competition. */
-    setAllElectionTimeoutsExcept(f, ELECTION_TIMEOUT * 10, i);
+    /* Pretend that the last randomized election timeout was set at the maximum
+     * value on all server expect the one to be elected, which is instead set to
+     * the minimum possible value compatible with its current state. */
+    minimizeRandomizedElectionTimeout(f, i);
+    maximizeAllRandomizedElectionTimeoutsExcept(f, i);
 
     raft_fixture_step_until_has_leader(f, ELECTION_TIMEOUT * 20);
     assert(f->leader_id == raft->id);
-
-    setAllElectionTimeoutsExcept(f, ELECTION_TIMEOUT, i);
 }
 
 void raft_fixture_depose(struct raft_fixture *f)
@@ -1661,7 +1736,7 @@ void raft_fixture_depose(struct raft_fixture *f)
 
     /* Set a very large election timeout on all followers, to prevent them from
      * starting an election. */
-    setAllElectionTimeoutsExcept(f, ELECTION_TIMEOUT * 10, leader_i);
+    maximizeAllRandomizedElectionTimeoutsExcept(f, leader_i);
 
     /* Prevent all servers from sending append entries results, so the leader
      * will eventually step down. */
@@ -1671,7 +1746,6 @@ void raft_fixture_depose(struct raft_fixture *f)
     assert(f->leader_id == 0);
 
     dropAllExcept(f, RAFT_IO_APPEND_ENTRIES_RESULT, false, leader_i);
-    setAllElectionTimeoutsExcept(f, ELECTION_TIMEOUT, leader_i);
 }
 
 struct step_apply
@@ -1828,38 +1902,50 @@ void raft_fixture_disconnect(struct raft_fixture *f, unsigned i, unsigned j)
     struct raft_io *io1 = &f->servers[i].io;
     struct raft_io *io2 = &f->servers[j].io;
     ioDisconnect(io1, io2);
-    ioDisconnect(io2, io1);
 }
 
-static void disconnect_from_all(struct raft_fixture *f, unsigned i)
+void raft_fixture_reconnect(struct raft_fixture *f, unsigned i, unsigned j) {
+    struct raft_io *io1 = &f->servers[i].io;
+    struct raft_io *io2 = &f->servers[j].io;
+    ioReconnect(io1, io2);
+}
+
+void raft_fixture_saturate(struct raft_fixture *f, unsigned i, unsigned j)
+{
+    struct raft_io *io1 = &f->servers[i].io;
+    struct raft_io *io2 = &f->servers[j].io;
+    ioSaturate(io1, io2);
+}
+
+static void disconnectFromAll(struct raft_fixture *f, unsigned i)
 {
     unsigned j;
     for (j = 0; j < f->n; j++) {
         if (j == i) {
             continue;
         }
-        raft_fixture_disconnect(f, i, j);
+        raft_fixture_saturate(f, i, j);
+        raft_fixture_saturate(f, j, i);
     }
 }
 
-bool raft_fixture_connected(struct raft_fixture *f, unsigned i, unsigned j)
+bool raft_fixture_saturated(struct raft_fixture *f, unsigned i, unsigned j)
 {
     struct raft_io *io1 = &f->servers[i].io;
     struct raft_io *io2 = &f->servers[j].io;
-    return ioConnected(io1, io2) && ioConnected(io2, io1);
+    return ioSaturated(io1, io2);
 }
 
-void raft_fixture_reconnect(struct raft_fixture *f, unsigned i, unsigned j)
+void raft_fixture_desaturate(struct raft_fixture *f, unsigned i, unsigned j)
 {
     struct raft_io *io1 = &f->servers[i].io;
     struct raft_io *io2 = &f->servers[j].io;
-    ioReconnect(io1, io2);
-    ioReconnect(io2, io1);
+    ioDesaturate(io1, io2);
 }
 
 void raft_fixture_kill(struct raft_fixture *f, unsigned i)
 {
-    disconnect_from_all(f, i);
+    disconnectFromAll(f, i);
     f->servers[i].alive = false;
 }
 
@@ -1955,4 +2041,16 @@ void raft_fixture_io_fault(struct raft_fixture *f,
     struct io *io = f->servers[i].io.impl;
     io->fault.countdown = delay;
     io->fault.n = repeat;
+}
+
+unsigned raft_fixture_n_send(struct raft_fixture *f, unsigned i, int type)
+{
+    struct io *io = f->servers[i].io.impl;
+    return io->n_send[type];
+}
+
+unsigned raft_fixture_n_recv(struct raft_fixture *f, unsigned i, int type)
+{
+    struct io *io = f->servers[i].io.impl;
+    return io->n_recv[type];
 }

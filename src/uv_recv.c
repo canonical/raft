@@ -244,7 +244,7 @@ static void readCb(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
              * completed reading the preamble. */
             assert(s->header.base == NULL);
 
-            s->header.len = byte__flip64(s->preamble[1]);
+            s->header.len = byteFlip64(s->preamble[1]);
 
             /* The length of the header must be greater than zero. */
             if (s->header.len == 0) {
@@ -258,7 +258,7 @@ static void readCb(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
 
             assert(s->header.base != NULL);
 
-            type = byte__flip64(s->preamble[0]);
+            type = byteFlip64(s->preamble[0]);
             assert(type > 0);
 
             rv =

@@ -56,7 +56,7 @@ int recv__append_entries_result(struct raft *r,
     assert(result->term == r->current_term);
 
     /* Ignore responses from servers that have been removed */
-    server = configuration__get(&r->configuration, id);
+    server = configurationGet(&r->configuration, id);
     if (server == NULL) {
         warnf(r->io, "unknown server -> ignore");
         return 0;

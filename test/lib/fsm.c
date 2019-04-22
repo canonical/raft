@@ -13,7 +13,9 @@ struct test_fsm
 /* Command codes */
 enum { SET_X = 1, SET_Y, ADD_X, ADD_Y };
 
-static int test_fsm__apply(struct raft_fsm *fsm, const struct raft_buffer *buf)
+static int test_fsm__apply(struct raft_fsm *fsm,
+                           const struct raft_buffer *buf,
+                           void **result)
 {
     struct test_fsm *t = fsm->data;
     unsigned command;
@@ -43,6 +45,8 @@ static int test_fsm__apply(struct raft_fsm *fsm, const struct raft_buffer *buf)
             return -1;
     }
 
+    *result = NULL;
+
     return 0;
 }
 
@@ -53,8 +57,8 @@ static int test_fsm__restore(struct raft_fsm *fsm, struct raft_buffer *buf)
 
     munit_assert_int(buf->len, ==, sizeof(uint64_t) * 2);
 
-    t->x = byte__get64(&cursor);
-    t->y = byte__get64(&cursor);
+    t->x = byteGet64(&cursor);
+    t->y = byteGet64(&cursor);
 
     raft_free(buf->base);
 
@@ -85,8 +89,8 @@ static int encode_snapshot(int x,
 
     cursor = (*bufs)[0].base;
 
-    byte__put64(&cursor, x);
-    byte__put64(&cursor, y);
+    bytePut64(&cursor, x);
+    bytePut64(&cursor, y);
 
     return 0;
 }

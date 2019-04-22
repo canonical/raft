@@ -157,17 +157,17 @@ static int loadMeta(struct uv *uv,
         goto err_after_open;
     }
 
-    format = byte__flip64(header[0]);
+    format = byteFlip64(header[0]);
     if (format != UV__DISK_FORMAT) {
         uvErrorf(uv, "load %s: unsupported format %lu", info->filename, format);
         rv = RAFT_MALFORMED;
         goto err_after_open;
     }
 
-    crc1 = byte__flip64(header[1]);
+    crc1 = byteFlip64(header[1]);
 
-    snapshot->configuration_index = byte__flip64(header[2]);
-    buf.len = byte__flip64(header[3]);
+    snapshot->configuration_index = byteFlip64(header[2]);
+    buf.len = byteFlip64(header[3]);
     if (buf.len > META_MAX_CONFIGURATION_SIZE) {
         uvErrorf(uv, "load %s: configuration data too big (%ld)",
                  info->filename, buf.len);
@@ -192,8 +192,8 @@ static int loadMeta(struct uv *uv,
         goto err_after_buf_malloc;
     }
 
-    crc2 = byte__crc32(header + 2, sizeof header - sizeof(uint64_t) * 2, 0);
-    crc2 = byte__crc32(buf.base, buf.len, crc2);
+    crc2 = byteCrc32(header + 2, sizeof header - sizeof(uint64_t) * 2, 0);
+    crc2 = byteCrc32(buf.base, buf.len, crc2);
 
     if (crc1 != crc2) {
         uvErrorf(uv, "read %s: checksum mismatch", info->filename);
@@ -202,7 +202,7 @@ static int loadMeta(struct uv *uv,
     }
 
     raft_configuration_init(&snapshot->configuration);
-    rv = configuration__decode(&buf, &snapshot->configuration);
+    rv = configurationDecode(&buf, &snapshot->configuration);
     if (rv != 0) {
         goto err_after_buf_malloc;
     }
@@ -480,6 +480,16 @@ static void processPutRequests(struct uv *uv)
     head = QUEUE_HEAD(&uv->snapshot_put_reqs);
     r = QUEUE_DATA(head, struct put, queue);
 
+    /* Detect if we're being run just after a truncate request in order to
+     * restore a snaphost, in that case we want to adjust the finalize last
+     * index accordingly.
+     *
+     * TODO: this doesn't work in all cases. Reason about exact sequence of
+     * events, make logic more elegant and robust.  */
+    if (uv->finalize_last_index == 0) {
+        uv->finalize_last_index = r->snapshot->index;
+    }
+
     uv->snapshot_put_work.data = r;
     rv = uv_queue_work(uv->loop, &uv->snapshot_put_work, putWorkCb,
                        putAfterWorkCb);
@@ -519,22 +529,34 @@ int uvSnapshotPut(struct raft_io *io,
     r->meta.bufs[0].base = r->meta.header;
     r->meta.bufs[0].len = sizeof r->meta.header;
 
-    rv = configuration__encode(&snapshot->configuration, &r->meta.bufs[1]);
+    rv = configurationEncode(&snapshot->configuration, &r->meta.bufs[1]);
     if (rv != 0) {
         goto err_after_req_alloc;
     }
 
-    cursor = r->meta.header;
-    byte__put64(&cursor, UV__DISK_FORMAT);
-    byte__put64(&cursor, 0);
-    byte__put64(&cursor, snapshot->configuration_index);
-    byte__put64(&cursor, r->meta.bufs[1].len);
+    /* If the next append index is set to 1, it means that we're restoring a
+     * snapshot after having trucated the log. Set the next append index to the
+     * snapshot's last index + 1. */
+    if (uv->append_next_index == 1) {
+        uv->append_next_index = snapshot->index + 1;
+        /* We expect that a new prepared segment has just been requested, we
+         * need to update its first index too.
+         *
+         * TODO: this should be cleaned up. */
+        uvAppendFixPreparedSegmentFirstIndex(uv);
+    }
 
-    crc = byte__crc32(&r->meta.header[2], sizeof(uint64_t) * 2, 0);
-    crc = byte__crc32(r->meta.bufs[1].base, r->meta.bufs[1].len, crc);
+    cursor = r->meta.header;
+    bytePut64(&cursor, UV__DISK_FORMAT);
+    bytePut64(&cursor, 0);
+    bytePut64(&cursor, snapshot->configuration_index);
+    bytePut64(&cursor, r->meta.bufs[1].len);
+
+    crc = byteCrc32(&r->meta.header[2], sizeof(uint64_t) * 2, 0);
+    crc = byteCrc32(r->meta.bufs[1].base, r->meta.bufs[1].len, crc);
 
     cursor = &r->meta.header[1];
-    byte__put64(&cursor, crc);
+    bytePut64(&cursor, crc);
 
     QUEUE_PUSH(&uv->snapshot_put_reqs, &r->queue);
     processPutRequests(uv);

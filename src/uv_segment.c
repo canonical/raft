@@ -7,9 +7,9 @@
 #include "assert.h"
 #include "byte.h"
 #include "configuration.h"
+#include "entry.h"
 #include "uv.h"
 #include "uv_encoding.h"
-#include "entry.h"
 
 /* Check if the given filename matches the one of a closed segment (xxx-yyy), or
  * of an open segment (open-xxx), and fill the given info structure if so.
@@ -128,7 +128,7 @@ static int openSegment(struct uv *uv,
         close(*fd);
         return RAFT_IOERR;
     }
-    *format = byte__flip64(*format);
+    *format = byteFlip64(*format);
     return 0;
 }
 
@@ -164,7 +164,7 @@ static int loadEntriesBatch(struct uv *uv,
         return RAFT_IOERR;
     }
 
-    n = byte__flip64(preamble[1]);
+    n = byteFlip64(preamble[1]);
     if (n == 0) {
         uvErrorf(uv, "batch has zero entries");
         rv = RAFT_CORRUPT;
@@ -202,8 +202,8 @@ static int loadEntriesBatch(struct uv *uv,
     }
 
     /* Check batch header integrity. */
-    crc1 = byte__flip32(*(uint64_t *)preamble);
-    crc2 = byte__crc32(header.base, header.len, 0);
+    crc1 = byteFlip32(*(uint64_t *)preamble);
+    crc2 = byteCrc32(header.base, header.len, 0);
     if (crc1 != crc2) {
         uvErrorf(uv, "corrupted batch header");
         rv = RAFT_CORRUPT;
@@ -236,8 +236,8 @@ static int loadEntriesBatch(struct uv *uv,
     }
 
     /* Check batch data integrity. */
-    crc1 = byte__flip32(*((uint32_t *)preamble + 1));
-    crc2 = byte__crc32(data.base, data.len, 0);
+    crc1 = byteFlip32(*((uint32_t *)preamble + 1));
+    crc2 = byteCrc32(data.base, data.len, 0);
     if (crc1 != crc2) {
         uvErrorf(uv, "corrupted batch data");
         rv = RAFT_CORRUPT;
@@ -607,7 +607,7 @@ int uvSegmentBufferFormat(struct uvSegmentBuffer *b)
     }
     b->n = n;
     cursor = b->arena.base;
-    byte__put64(&cursor, UV__DISK_FORMAT);
+    bytePut64(&cursor, UV__DISK_FORMAT);
     return 0;
 }
 
@@ -628,7 +628,7 @@ int uvSegmentBufferAppend(struct uvSegmentBuffer *b,
     size = sizeof(uint32_t) * 2;            /* CRC checksums */
     size += uvSizeofBatchHeader(n_entries); /* Batch header */
     for (i = 0; i < n_entries; i++) {       /* Entries data */
-        size += byte__pad64(entries[i].buf.len);
+        size += bytePad64(entries[i].buf.len);
     }
 
     rv = ensureSegmentBufferIsLargeEnough(b, b->n + size);
@@ -639,14 +639,14 @@ int uvSegmentBufferAppend(struct uvSegmentBuffer *b,
 
     /* Placeholder of the checksums */
     crc1_p = cursor;
-    byte__put32(&cursor, 0);
+    bytePut32(&cursor, 0);
     crc2_p = cursor;
-    byte__put32(&cursor, 0);
+    bytePut32(&cursor, 0);
 
     /* Batch header */
     header = cursor;
     uvEncodeBatchHeader(entries, n_entries, cursor);
-    crc1 = byte__crc32(header, uvSizeofBatchHeader(n_entries), 0);
+    crc1 = byteCrc32(header, uvSizeofBatchHeader(n_entries), 0);
     cursor += uvSizeofBatchHeader(n_entries);
 
     /* Batch data */
@@ -657,12 +657,12 @@ int uvSegmentBufferAppend(struct uvSegmentBuffer *b,
          * higher-level APIs. */
         assert(entry->buf.len % sizeof(uint64_t) == 0);
         memcpy(cursor, entry->buf.base, entry->buf.len);
-        crc2 = byte__crc32(cursor, entry->buf.len, crc2);
+        crc2 = byteCrc32(cursor, entry->buf.len, crc2);
         cursor += entry->buf.len;
     }
 
-    byte__put32(&crc1_p, crc1);
-    byte__put32(&crc2_p, crc2);
+    bytePut32(&crc1_p, crc1);
+    bytePut32(&crc2_p, crc2);
     b->n += size;
 
     return 0;
@@ -864,7 +864,7 @@ static int writeFirstClosed(struct uv *uv,
     }
 
     entry.term = 1;
-    entry.type = RAFT_CONFIGURATION;
+    entry.type = RAFT_CHANGE;
     entry.buf = *conf;
 
     rv = uvSegmentBufferAppend(&buf, &entry, 1);
@@ -901,7 +901,7 @@ int uvSegmentCreateFirstClosed(struct uv *uv,
     sprintf(filename, UV__CLOSED_TEMPLATE, (raft_index)1, (raft_index)1);
 
     /* Encode the given configuration. */
-    rv = configuration__encode(configuration, &buf);
+    rv = configurationEncode(configuration, &buf);
     if (rv != 0) {
         goto err;
     }
@@ -1010,7 +1010,7 @@ out_after_buffer_init:
 out_after_open:
     close(fd);
 out_after_load:
-    entry_batches__destroy(entries, n);
+    entryBatchesDestroy(entries, n);
 out:
     return rv;
 }

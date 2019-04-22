@@ -44,7 +44,7 @@ int raft_init(struct raft *r,
     strcpy(r->address, address);
     r->current_term = 0;
     r->voted_for = 0;
-    log__init(&r->log);
+    logInit(&r->log);
     raft_configuration_init(&r->configuration);
     r->configuration_index = 0;
     r->configuration_uncommitted_index = 0;
@@ -54,9 +54,6 @@ int raft_init(struct raft *r,
     r->last_applied = 0;
     r->last_stored = 0;
     r->state = RAFT_UNAVAILABLE;
-    r->randomized_election_timeout = 0;
-    r->last_tick = 0;
-    r->election_elapsed = 0;
     r->snapshot.pending.term = 0;
     r->snapshot.threshold = DEFAULT_SNAPSHOT_THRESHOLD;
     r->snapshot.trailing = DEFAULT_SNAPSHOT_TRAILING;
@@ -75,7 +72,7 @@ static void io_close_cb(struct raft_io *io)
     infof(r->io, "stopped");
 
     raft_free(r->address);
-    log__close(&r->log);
+    logClose(&r->log);
     raft_configuration_close(&r->configuration);
 
     if (r->close_cb != NULL) {
@@ -97,7 +94,6 @@ void raft_close(struct raft *r, void (*cb)(struct raft *r))
 void raft_set_election_timeout(struct raft *r, const unsigned msecs)
 {
     r->election_timeout = msecs;
-    electionResetTimer(r);
 }
 
 void raft_set_heartbeat_timeout(struct raft *r, const unsigned msecs)
@@ -113,11 +109,6 @@ void raft_set_snapshot_threshold(struct raft *r, unsigned n)
 void raft_set_snapshot_trailing(struct raft *r, unsigned n)
 {
     r->snapshot.trailing = n;
-}
-
-const char *raft_state_name(struct raft *r)
-{
-    return raft_state_names[r->state];
 }
 
 int raft_bootstrap(struct raft *r, const struct raft_configuration *conf)

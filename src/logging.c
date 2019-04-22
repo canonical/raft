@@ -5,7 +5,7 @@
 
 #define EMIT_BUF_LEN 1024
 
-void emit_to_stream(FILE *stream,
+void emitToStream(FILE *stream,
                     unsigned server_id,
                     raft_time time,
                     int level,

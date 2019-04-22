@@ -296,19 +296,34 @@ bool raft_fixture_step_until_delivered(struct raft_fixture *f,
 void raft_fixture_hook(struct raft_fixture *f, raft_fixture_event_cb hook);
 
 /**
- * Return true if the servers with the given indexes are connected.
- */
-bool raft_fixture_connected(struct raft_fixture *f, unsigned i, unsigned j);
-
-/**
- * Disconnect the servers with the given indexes from one another.
+ * Disconnect the @i'th and the @j'th servers, so attempts to send a message
+ * from @i to @j will fail with #RAFT_NOCONNECTION.
  */
 void raft_fixture_disconnect(struct raft_fixture *f, unsigned i, unsigned j);
 
 /**
- * Reconnect the servers with given indexes to one another.
+ * Reconnect the @i'th and the @j'th servers, so attempts to send a message
+ * from @i to @j will succeed again.
  */
 void raft_fixture_reconnect(struct raft_fixture *f, unsigned i, unsigned j);
+
+/**
+ * Saturate the connection between the @i'th and the @j'th servers, so messages
+ * sent by @i to @j will be silently dropped.
+ */
+void raft_fixture_saturate(struct raft_fixture *f, unsigned i, unsigned j);
+
+/**
+ * Return true if the connection from the @i'th to the @j'th server has been set
+ * as saturated.
+ */
+bool raft_fixture_saturated(struct raft_fixture *f, unsigned i, unsigned j);
+
+/**
+ * Desaturate the connection between the @i'th and the @j'th servers, so
+ * messages sent by @i to @j will start being delivered again.
+ */
+void raft_fixture_desaturate(struct raft_fixture *f, unsigned i, unsigned j);
 
 /**
  * Kill the server with the given index. The server won't receive any message
@@ -383,5 +398,17 @@ void raft_fixture_io_fault(struct raft_fixture *f,
                            unsigned i,
                            int delay,
                            int repeat);
+
+/**
+ * Return the number of messages of the given type that the @i'th server has
+ * successfully sent so far.
+ */
+unsigned raft_fixture_n_send(struct raft_fixture *f, unsigned i, int type);
+
+/**
+ * Return the number of messages of the given type that the @i'th server has
+ * received so far.
+ */
+unsigned raft_fixture_n_recv(struct raft_fixture *f, unsigned i, int type);
 
 #endif /* RAFT_FIXTURE_H */

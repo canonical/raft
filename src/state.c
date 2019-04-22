@@ -5,9 +5,6 @@
 #include "log.h"
 #include "queue.h"
 
-const char *raft_state_names[] = {"unavailable", "follower", "candidate",
-                                  "leader"};
-
 int raft_state(struct raft *r)
 {
     return r->state;
@@ -34,7 +31,7 @@ void raft_leader(struct raft *r, unsigned *id, const char **address)
 
 raft_index raft_last_index(struct raft *r)
 {
-    return log__last_index(&r->log);
+    return logLastIndex(&r->log);
 }
 
 raft_index raft_last_applied(struct raft *r)

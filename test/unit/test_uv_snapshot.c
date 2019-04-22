@@ -147,7 +147,7 @@ TEST_CASE(load, error, format, NULL)
 TEST_CASE(load, error, configuration_too_big, NULL)
 {
     struct load__fixture *f = data;
-    uint64_t size = byte__flip64(2 * 1024 * 1024);
+    uint64_t size = byteFlip64(2 * 1024 * 1024);
 
     (void)params;
 
@@ -284,9 +284,9 @@ TEST_TEAR_DOWN(put)
     TEAR_DOWN_UV;
 }
 
-static void append_cb(void *data, int status)
+static void append_cb(struct raft_io_append *req, int status)
 {
-    struct put_fixture *f = data;
+    struct put_fixture *f = req->data;
     munit_assert_int(status, ==, 0);
     f->appended = true;
 }
@@ -294,8 +294,9 @@ static void append_cb(void *data, int status)
 /* Append N entries to the log. */
 #define append(N)                                                       \
     {                                                                   \
-        int rv;                                                         \
+        struct raft_io_append req_;                                     \
         int i;                                                          \
+        int rv;                                                         \
         struct raft_entry *entries = munit_malloc(N * sizeof *entries); \
         for (i = 0; i < N; i++) {                                       \
             struct raft_entry *entry = &entries[i];                     \
@@ -305,7 +306,8 @@ static void append_cb(void *data, int status)
             entry->buf.len = 8;                                         \
             entry->batch = NULL;                                        \
         }                                                               \
-        rv = f->io.append(&f->io, entries, N, f, append_cb);            \
+        req_.data = f;                                                  \
+        rv = f->io.append(&f->io, &req_, entries, N, append_cb);        \
         munit_assert_int(rv, ==, 0);                                    \
                                                                         \
         for (i = 0; i < 5; i++) {                                       \
@@ -451,7 +453,7 @@ TEST_TEAR_DOWN(get)
 #define get__write_snapshot                                       \
     uint8_t buf[8];                                               \
     void *cursor = buf;                                           \
-    byte__put64(&cursor, 666);                                    \
+    bytePut64(&cursor, 666);                                    \
     test_io_uv_write_snapshot_meta_file(f->dir, 3, 8, 123, 1, 1); \
     test_io_uv_write_snapshot_data_file(f->dir, 3, 8, 123, buf, sizeof buf)
 
@@ -481,7 +483,7 @@ TEST_CASE(get, first, NULL)
     munit_assert_int(f->snapshot->term, ==, 3);
     munit_assert_int(f->snapshot->index, ==, 8);
     munit_assert_int(f->snapshot->n_bufs, ==, 1);
-    munit_assert_int(byte__flip64(*(uint64_t *)f->snapshot->bufs[0].base), ==,
+    munit_assert_int(byteFlip64(*(uint64_t *)f->snapshot->bufs[0].base), ==,
                      666);
 
     return MUNIT_OK;

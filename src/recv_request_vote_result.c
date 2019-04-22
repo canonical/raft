@@ -3,7 +3,7 @@
 #include "configuration.h"
 #include "convert.h"
 #include "election.h"
-#include "heartbeat.h"
+#include "replication.h"
 #include "logging.h"
 #include "recv.h"
 
@@ -28,7 +28,7 @@ int recv__request_vote_result(struct raft *r,
     assert(r != NULL);
     assert(id > 0);
 
-    votes_index = configuration__index_of_voting(&r->configuration, id);
+    votes_index = configurationIndexOfVoting(&r->configuration, id);
     if (votes_index == r->configuration.n) {
         infof(r->io, "non-voting or unknown server -> reject");
         return 0;
@@ -81,7 +81,7 @@ int recv__request_vote_result(struct raft *r,
                 return rv;
             }
             /* Send initial heartbeat. */
-            heartbeat__send(r);
+            raft_replication__trigger(r, 0);
         } else {
             tracef("votes quorum not reached");
         }

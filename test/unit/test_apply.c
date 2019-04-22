@@ -44,9 +44,10 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-static void apply_cb(struct raft_apply *req, int status)
+static void apply_cb(struct raft_apply *req, int status, void *result)
 {
     struct fixture *f = req->data;
+    (void)result;
     f->invoked = true;
     f->status = status;
 }

@@ -1,9 +1,7 @@
-/**
- * Define the assert() macro, either as the standard one or the test one.
- */
+/* Define the assert() macro, either as the standard one or the test one. */
 
-#ifndef RAFT_ASSERT_H
-#define RAFT_ASSERT_H
+#ifndef ASSERT_H_
+#define ASSERT_H_
 
 #if defined(RAFT_TEST)
   #include "../test/lib/munit.h"
@@ -12,4 +10,4 @@
   #include <assert.h>
 #endif
 
-#endif /* RAFT_ASSERT_H */
+#endif /* ASSERT_H_ */

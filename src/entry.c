@@ -1,7 +1,7 @@
 #include "entry.h"
 #include "assert.h"
 
-void entry_batches__destroy(struct raft_entry *entries, unsigned n)
+void entryBatchesDestroy(struct raft_entry *entries, unsigned n)
 {
     void *batch = NULL;
     unsigned i;

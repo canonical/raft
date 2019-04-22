@@ -60,12 +60,14 @@ static void __update_connectivity(struct fixture *f, int i)
                 disconnection->start = i;
                 disconnection->duration =
                     munit_rand_int_range(50, MAX_DISCONNECT);
-                raft_fixture_disconnect(&f->cluster, id1 - 1, id2 - 1);
+                raft_fixture_saturate(&f->cluster, id1 - 1, id2 - 1);
+                raft_fixture_saturate(&f->cluster, id2 - 1, id1 - 1);
             }
         } else {
             /* Decide whether to reconnect this pair. */
             if (i - disconnection->start > disconnection->duration) {
-                raft_fixture_reconnect(&f->cluster, id1 - 1, id2 - 1);
+                raft_fixture_desaturate(&f->cluster, id1 - 1, id2 - 1);
+                raft_fixture_desaturate(&f->cluster, id2 - 1, id1 - 1);
                 disconnection->start = 0;
             }
         }
@@ -121,9 +123,10 @@ TEST_SUITE(network);
 TEST_SETUP(network, setup);
 TEST_TEAR_DOWN(network, tear_down);
 
-static void apply_cb(struct raft_apply *req, int status)
+static void apply_cb(struct raft_apply *req, int status, void *result)
 {
     (void)status;
+    (void)result;
     free(req);
 }
 
@@ -148,7 +151,7 @@ TEST_CASE(network, disconnect, _params)
         }
     }
 
-    //munit_assert_int(CLUSTER_LAST_APPLIED(CLUSTER_LEADER), >=, 2);
+    // munit_assert_int(CLUSTER_LAST_APPLIED(CLUSTER_LEADER), >=, 2);
 
     return MUNIT_OK;
 }

@@ -172,7 +172,7 @@ int sendMessage(struct uvClient *c, struct send *r)
     if (c->state == DELAY || c->state == CONNECTING) {
         assert(c->stream == NULL);
         if (c->n_send_reqs == QUEUE_SIZE) {
-            /* Fail the last request */
+            /* Fail the oldest request */
             tracef(c, "queue full -> evict oldest message");
             queue *head;
             struct send *r2;

@@ -7,13 +7,13 @@ static void randomize(struct raft_fixture *f, unsigned i, int what)
         case RAFT_FIXTURE_TICK:
             /* TODO: provide an API to inspect how much time has elapsed since
              * the last election timer reset */
-            if (raft->election_elapsed == 0) {
+            if (raft->election_timer_start == raft->io->time(raft->io)) {
                 raft_fixture_set_randomized_election_timeout(
                     f, i,
                     munit_rand_int_range(raft->election_timeout,
                                          raft->election_timeout * 2));
             }
-	    break;
+            break;
         case RAFT_FIXTURE_DISK:
             raft_fixture_set_disk_latency(f, i, munit_rand_int_range(10, 25));
             break;

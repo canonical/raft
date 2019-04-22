@@ -42,8 +42,8 @@ static int recv(struct raft *r, struct raft_message *message)
                                       message->server_address,
                                       &message->append_entries);
             if (rv != 0) {
-                entry_batches__destroy(message->append_entries.entries,
-                                       message->append_entries.n_entries);
+                entryBatchesDestroy(message->append_entries.entries,
+                                    message->append_entries.n_entries);
             }
             break;
         case RAFT_IO_APPEND_ENTRIES_RESULT:
@@ -81,6 +81,9 @@ void recv_cb(struct raft_io *io, struct raft_message *message)
     struct raft *r;
     int rv;
     r = io->data;
+    if (r->state == RAFT_UNAVAILABLE) {
+        return;
+    }
     rv = recv(r, message);
     if (rv != 0) {
         convertToUnavailable(r);

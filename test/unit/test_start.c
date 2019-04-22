@@ -153,9 +153,9 @@ TEST_CASE(entries, two, NULL)
     int rv;
     (void)params;
 
-    entries[0].type = RAFT_CONFIGURATION;
+    entries[0].type = RAFT_CHANGE;
     entries[0].term = 1;
-    rv = configuration__encode(&f->configuration, &entries[0].buf);
+    rv = configurationEncode(&f->configuration, &entries[0].buf);
     munit_assert_int(rv, ==, 0);
 
     entries[1].type = RAFT_COMMAND;

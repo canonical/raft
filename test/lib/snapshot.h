@@ -21,7 +21,7 @@
     SNAPSHOT->index = LAST_INDEX;                                             \
     SNAPSHOT->term = LAST_TERM;                                               \
     raft_configuration_init(&SNAPSHOT->configuration);                        \
-    configuration__copy(CONF, &SNAPSHOT->configuration);                      \
+    configurationCopy(CONF, &SNAPSHOT->configuration);                      \
     SNAPSHOT->configuration_index = CONF_INDEX;                               \
     test_fsm_encode_snapshot(X, Y, &SNAPSHOT->bufs, &SNAPSHOT->n_bufs)
 

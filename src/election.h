@@ -27,8 +27,15 @@
  *   five servers have failed, the average election takes about 650 ms (about 20
  *   times the one-way network latency), and 99.9% of elections complete in 3
  *   s. We believe these election times are more than adequate for most WAN
- *   deployments. */
+ *   deployments.
+ *
+ * Must be called in follower or candidate state. */
 void electionResetTimer(struct raft *r);
+
+/* Return true if the election timer has expired.
+ *
+ * Must be called in follower or candidate state. */
+bool electionTimerExpired(struct raft *r);
 
 /* Start a new election round.
  *
@@ -68,6 +75,6 @@ int electionVote(struct raft *r,
 /* Update the votes array by adding the vote from the server at the given
  * index. Return true if with this vote the server has reached the majority of
  * votes and won elections. */
-bool electionTally(struct raft *r, size_t votes_index);
+bool electionTally(struct raft *r, size_t voter_index);
 
 #endif /* ELECTION_H_ */

@@ -36,7 +36,7 @@ int raft_apply(struct raft *r,
     }
 
     /* Index of the first entry being appended. */
-    index = log__last_index(&r->log) + 1;
+    index = logLastIndex(&r->log) + 1;
 
     tracef("%u entries starting at %lld", n, index);
 
@@ -45,7 +45,7 @@ int raft_apply(struct raft *r,
     req->cb = cb;
 
     /* Append the new entries to the log. */
-    rv = log__append_commands(&r->log, r->current_term, bufs, n);
+    rv = logAppendCommands(&r->log, r->current_term, bufs, n);
     if (rv != 0) {
         goto err;
     }
@@ -60,14 +60,14 @@ int raft_apply(struct raft *r,
     return 0;
 
 err_after_log_append:
-    log__discard(&r->log, index);
+    logDiscard(&r->log, index);
     QUEUE_REMOVE(&req->queue);
 err:
     assert(rv != 0);
     return rv;
 }
 
-int raft_barrier(struct raft *r, struct raft_apply *req, raft_apply_cb cb)
+int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
 {
     raft_index index;
     struct raft_buffer buf;
@@ -87,12 +87,12 @@ int raft_barrier(struct raft *r, struct raft_apply *req, raft_apply_cb cb)
         goto err;
     }
 
-    index = log__last_index(&r->log) + 1;
+    index = logLastIndex(&r->log) + 1;
     req->type = RAFT_BARRIER;
     req->index = index;
     req->cb = cb;
 
-    rv = log__append(&r->log, r->current_term, RAFT_BARRIER, &buf, NULL);
+    rv = logAppend(&r->log, r->current_term, RAFT_BARRIER, &buf, NULL);
     if (rv != 0) {
         goto err_after_buf_alloc;
     }
@@ -107,7 +107,7 @@ int raft_barrier(struct raft *r, struct raft_apply *req, raft_apply_cb cb)
     return 0;
 
 err_after_log_append:
-    log__discard(&r->log, index);
+    logDiscard(&r->log, index);
     QUEUE_REMOVE(&req->queue);
 err_after_buf_alloc:
     raft_free(buf.base);
@@ -125,16 +125,16 @@ static int changeConfiguration(
     int rv;
 
     /* Index of the entry being appended. */
-    index = log__last_index(&r->log) + 1;
+    index = logLastIndex(&r->log) + 1;
 
     /* Encode the new configuration and append it to the log. */
-    rv = log__append_configuration(&r->log, term, configuration);
+    rv = logAppendConfiguration(&r->log, term, configuration);
     if (rv != 0) {
         goto err;
     }
 
     if (configuration->n != r->configuration.n) {
-        rv = progress__rebuild_array(r, configuration);
+        rv = progressRebuildArray(r, configuration);
         if (rv != 0) {
             goto err;
         }
@@ -146,7 +146,7 @@ static int changeConfiguration(
         r->configuration = *configuration;
     }
 
-    req->type = RAFT_CONFIGURATION;
+    req->type = RAFT_CHANGE;
     req->index = index;
     QUEUE_PUSH(&r->leader_state.requests, &req->queue);
 
@@ -162,7 +162,7 @@ static int changeConfiguration(
     return 0;
 
 err_after_log_append:
-    log__truncate(&r->log, index);
+    logTruncate(&r->log, index);
 
 err:
     assert(rv != 0);
@@ -189,7 +189,7 @@ int raft_add(struct raft *r,
      * it. */
     raft_configuration_init(&configuration);
 
-    rv = configuration__copy(&r->configuration, &configuration);
+    rv = configurationCopy(&r->configuration, &configuration);
     if (rv != 0) {
         goto err;
     }
@@ -233,7 +233,7 @@ int raft_promote(struct raft *r,
 
     debugf(r->io, "promote server: id %d", id);
 
-    server = configuration__get(&r->configuration, id);
+    server = configurationGet(&r->configuration, id);
     if (server == NULL) {
         rv = RAFT_BADID;
         goto err;
@@ -244,10 +244,10 @@ int raft_promote(struct raft *r,
         goto err;
     }
 
-    server_index = configuration__index_of(&r->configuration, id);
+    server_index = configurationIndexOf(&r->configuration, id);
     assert(server_index < r->configuration.n);
 
-    last_index = log__last_index(&r->log);
+    last_index = logLastIndex(&r->log);
 
     req->cb = cb;
 
@@ -270,7 +270,7 @@ int raft_promote(struct raft *r,
     /* Initialize the first catch-up round. */
     r->leader_state.round_number = 1;
     r->leader_state.round_index = last_index;
-    r->leader_state.round_duration = 0;
+    r->leader_state.round_start = r->io->time(r->io);
 
     /* Immediately initiate an AppendEntries request. */
     rv = replication__trigger(r, server_index);
@@ -302,7 +302,7 @@ int raft_remove(struct raft *r,
         return rv;
     }
 
-    server = configuration__get(&r->configuration, id);
+    server = configurationGet(&r->configuration, id);
     if (server == NULL) {
         rv = RAFT_BADID;
         goto err;
@@ -314,12 +314,12 @@ int raft_remove(struct raft *r,
      * from it. */
     raft_configuration_init(&configuration);
 
-    rv = configuration__copy(&r->configuration, &configuration);
+    rv = configurationCopy(&r->configuration, &configuration);
     if (rv != 0) {
         goto err;
     }
 
-    rv = configuration__remove(&configuration, id);
+    rv = configurationRemove(&configuration, id);
     if (rv != 0) {
         goto err_after_configuration_copy;
     }

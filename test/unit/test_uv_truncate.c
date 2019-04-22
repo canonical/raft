@@ -36,9 +36,9 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-static void appendCb(void *data, int status)
+static void appendCb(struct raft_io_append *req, int status)
 {
-    struct fixture *f = data;
+    struct fixture *f = req->data;
     munit_assert_int(status, ==, 0);
     f->appended = true;
 }
@@ -46,8 +46,9 @@ static void appendCb(void *data, int status)
 /* Append N entries to the log. */
 #define APPEND(N)                                                         \
     {                                                                     \
-        int rv_;                                                          \
+        struct raft_io_append req_;                                       \
         int i;                                                            \
+        int rv_;                                                          \
         struct raft_entry *entries_ = munit_malloc(N * sizeof *entries_); \
         for (i = 0; i < N; i++) {                                         \
             struct raft_entry *entry = &entries_[i];                      \
@@ -55,10 +56,11 @@ static void appendCb(void *data, int status)
             entry->type = RAFT_COMMAND;                                   \
             entry->buf.base = munit_malloc(8);                            \
             entry->buf.len = 8;                                           \
-            *(uint64_t *)entry->buf.base = byte__flip64(i + 1);           \
+            *(uint64_t *)entry->buf.base = byteFlip64(i + 1);           \
             entry->batch = NULL;                                          \
         }                                                                 \
-        rv_ = f->io.append(&f->io, entries_, N, f, appendCb);             \
+        req_.data = f;                                                    \
+        rv_ = f->io.append(&f->io, &req_, entries_, N, appendCb);         \
         munit_assert_int(rv_, ==, 0);                                     \
                                                                           \
         for (i = 0; i < 5; i++) {                                         \
@@ -166,7 +168,7 @@ TEST_CASE(success, partial_segment, NULL)
     munit_assert_int(rv, ==, 0);
 
     munit_assert_int(n, ==, 1);
-    munit_assert_int(byte__flip64(*(uint64_t *)entries[0].buf.base), ==, 1);
+    munit_assert_int(byteFlip64(*(uint64_t *)entries[0].buf.base), ==, 1);
 
     raft_free(entries[0].batch);
     raft_free(entries);

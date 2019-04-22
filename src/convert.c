@@ -43,7 +43,7 @@ static void clearCandidate(struct raft *r)
     }
 }
 
-/*Clear leader state. */
+/* Clear leader state. */
 static void clearLeader(struct raft *r)
 {
     if (r->leader_state.progress != NULL) {
@@ -74,7 +74,7 @@ static void clearLeader(struct raft *r)
         QUEUE_REMOVE(head);
         req = QUEUE_DATA(head, struct raft_apply, queue);
         if (req->cb != NULL) {
-            req->cb(req, RAFT_LEADERSHIPLOST);
+	  req->cb(req, RAFT_LEADERSHIPLOST, NULL);
         }
     }
 }
@@ -111,7 +111,7 @@ void convertToFollower(struct raft *r)
 
 int convertToCandidate(struct raft *r)
 {
-    size_t n_voting = configuration__n_voting(&r->configuration);
+    size_t n_voting = configurationNumVoting(&r->configuration);
     int rv;
 
     clear(r);
@@ -141,14 +141,13 @@ int convertToLeader(struct raft *r)
     setState(r, RAFT_LEADER);
 
     /* Reset timers */
-    r->leader_state.heartbeat_elapsed = 0;
-    r->election_elapsed = 0;
+    r->election_timer_start = r->io->time(r->io);
 
     /* Reset apply requests queue */
     QUEUE_INIT(&r->leader_state.requests);
 
     /* Allocate and initialize the progress array. */
-    rv = progress__build_array(r);
+    rv = progressBuildArray(r);
     if (rv != 0) {
         return rv;
     }
@@ -157,7 +156,7 @@ int convertToLeader(struct raft *r)
     r->leader_state.promotee_id = 0;
     r->leader_state.round_number = 0;
     r->leader_state.round_index = 0;
-    r->leader_state.round_duration = 0;
+    r->leader_state.round_start = 0;
 
     return 0;
 }

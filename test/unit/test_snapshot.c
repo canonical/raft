@@ -76,7 +76,7 @@ TEST_CASE(install, one, NULL)
     /* Set very low threshold and trailing entries number */
     SET_SNAPSHOT_THRESHOLD(3);
     SET_SNAPSHOT_TRAILING(1);
-    CLUSTER_DISCONNECT(0, 2);
+    CLUSTER_SATURATE_BOTHWAYS(0, 2);
 
     /* Apply a few of entries, to force a snapshot to be taken. */
     CLUSTER_MAKE_PROGRESS;
@@ -84,7 +84,7 @@ TEST_CASE(install, one, NULL)
     CLUSTER_MAKE_PROGRESS;
 
     /* Reconnect the follower and wait for it to catch up */
-    CLUSTER_RECONNECT(0, 2);
+    CLUSTER_DESATURATE_BOTHWAYS(0, 2);
     CLUSTER_STEP_UNTIL_APPLIED(2, 4, 5000);
 
     return MUNIT_OK;

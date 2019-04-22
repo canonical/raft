@@ -26,8 +26,8 @@ void raft_configuration_close(struct raft_configuration *c)
     }
 }
 
-size_t configuration__index_of(const struct raft_configuration *c,
-                               const unsigned id)
+size_t configurationIndexOf(const struct raft_configuration *c,
+                            const unsigned id)
 {
     size_t i;
     assert(c != NULL);
@@ -39,8 +39,8 @@ size_t configuration__index_of(const struct raft_configuration *c,
     return c->n;
 }
 
-size_t configuration__index_of_voting(const struct raft_configuration *c,
-                                      const unsigned id)
+size_t configurationIndexOfVoting(const struct raft_configuration *c,
+                                  const unsigned id)
 {
     size_t i;
     size_t j = 0;
@@ -61,15 +61,15 @@ size_t configuration__index_of_voting(const struct raft_configuration *c,
     return c->n;
 }
 
-const struct raft_server *configuration__get(const struct raft_configuration *c,
-                                             const unsigned id)
+const struct raft_server *configurationGet(const struct raft_configuration *c,
+                                           const unsigned id)
 {
     size_t i;
     assert(c != NULL);
     assert(id > 0);
 
     /* Grab the index of the server with the given ID */
-    i = configuration__index_of(c, id);
+    i = configurationIndexOf(c, id);
 
     if (i == c->n) {
         /* No server with matching ID. */
@@ -81,7 +81,7 @@ const struct raft_server *configuration__get(const struct raft_configuration *c,
     return &c->servers[i];
 }
 
-size_t configuration__n_voting(const struct raft_configuration *c)
+size_t configurationNumVoting(const struct raft_configuration *c)
 {
     size_t i;
     size_t n = 0;
@@ -96,8 +96,8 @@ size_t configuration__n_voting(const struct raft_configuration *c)
     return n;
 }
 
-int configuration__copy(const struct raft_configuration *c1,
-                        struct raft_configuration *c2)
+int configurationCopy(const struct raft_configuration *c1,
+                      struct raft_configuration *c2)
 {
     size_t i;
     int rv;
@@ -169,14 +169,14 @@ int raft_configuration_add(struct raft_configuration *c,
     return 0;
 }
 
-int configuration__remove(struct raft_configuration *c, const unsigned id)
+int configurationRemove(struct raft_configuration *c, const unsigned id)
 {
     size_t i;
     size_t j;
     struct raft_server *servers;
     assert(c != NULL);
 
-    i = configuration__index_of(c, id);
+    i = configurationIndexOf(c, id);
     if (i == c->n) {
         return RAFT_BADID;
     }
@@ -221,7 +221,7 @@ int configuration__remove(struct raft_configuration *c, const unsigned id)
     return 0;
 }
 
-size_t configuration__encoded_size(const struct raft_configuration *c)
+size_t configurationEncodedSize(const struct raft_configuration *c)
 {
     size_t n = 0;
     size_t i;
@@ -241,38 +241,38 @@ size_t configuration__encoded_size(const struct raft_configuration *c)
         n++;                              /* Voting flag */
     };
 
-    n = byte__pad64(n);
+    n = bytePad64(n);
 
     return n;
 }
 
-void configuration__encode_to_buf(const struct raft_configuration *c, void *buf)
+void configurationEncodeToBuf(const struct raft_configuration *c, void *buf)
 {
     void *cursor = buf;
     size_t i;
 
     /* Encoding format version */
-    byte__put8(&cursor, ENCODING_FORMAT);
+    bytePut8(&cursor, ENCODING_FORMAT);
 
     /* Number of servers */
-    byte__put64(&cursor, c->n);
+    bytePut64(&cursor, c->n);
 
     for (i = 0; i < c->n; i++) {
         struct raft_server *server = &c->servers[i];
 
         assert(server->address != NULL);
 
-        byte__put64(&cursor, server->id);
+        bytePut64(&cursor, server->id);
 
         strcpy((char *)cursor, server->address);
         cursor += strlen(server->address) + 1;
 
-        byte__put8(&cursor, server->voting);
+        bytePut8(&cursor, server->voting);
     };
 }
 
-int configuration__encode(const struct raft_configuration *c,
-                          struct raft_buffer *buf)
+int configurationEncode(const struct raft_configuration *c,
+                        struct raft_buffer *buf)
 {
     assert(c != NULL);
     assert(buf != NULL);
@@ -280,19 +280,19 @@ int configuration__encode(const struct raft_configuration *c,
     /* The configuration can't be empty. */
     assert(c->n > 0);
 
-    buf->len = configuration__encoded_size(c);
+    buf->len = configurationEncodedSize(c);
     buf->base = raft_malloc(buf->len);
     if (buf->base == NULL) {
         return RAFT_NOMEM;
     }
 
-    configuration__encode_to_buf(c, buf->base);
+    configurationEncodeToBuf(c, buf->base);
 
     return 0;
 }
 
-int configuration__decode(const struct raft_buffer *buf,
-                          struct raft_configuration *c)
+int configurationDecode(const struct raft_buffer *buf,
+                        struct raft_configuration *c)
 {
     const void *cursor;
     size_t i;
@@ -311,12 +311,12 @@ int configuration__decode(const struct raft_buffer *buf,
     cursor = buf->base;
 
     /* Check the encoding format version */
-    if (byte__get8(&cursor) != ENCODING_FORMAT) {
+    if (byteGet8(&cursor) != ENCODING_FORMAT) {
         return RAFT_MALFORMED;
     }
 
     /* Read the number of servers. */
-    n = byte__get64(&cursor);
+    n = byteGet64(&cursor);
 
     /* Decode the individual servers. */
     for (i = 0; i < n; i++) {
@@ -327,7 +327,7 @@ int configuration__decode(const struct raft_buffer *buf,
         int rv;
 
         /* Server ID. */
-        id = byte__get64(&cursor);
+        id = byteGet64(&cursor);
 
         /* Server Address. */
         while (cursor + address_len < buf->base + buf->len) {
@@ -343,7 +343,7 @@ int configuration__decode(const struct raft_buffer *buf,
         cursor += address_len + 1;
 
         /* Voting flag. */
-        voting = byte__get8(&cursor);
+        voting = byteGet8(&cursor);
 
         rv = raft_configuration_add(c, id, address, voting);
         if (rv != 0) {

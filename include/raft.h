@@ -75,7 +75,7 @@ typedef unsigned long long raft_time;
  */
 struct raft_buffer
 {
-    void *base; /* Pointer to the buffer data */
+    void *base; /* Pointer to the buffer data. */
     size_t len; /* Length of the buffer. */
 };
 
@@ -127,21 +127,25 @@ int raft_configuration_add(struct raft_configuration *c,
 /**
  * Log entry types.
  */
-enum { RAFT_COMMAND = 1, RAFT_CONFIGURATION, RAFT_BARRIER };
+enum {
+    RAFT_COMMAND = 1, /* Command for the user FSM */
+    RAFT_BARRIER,     /* Wait for all previous commands to be applied */
+    RAFT_CHANGE       /* Raft configuration change */
+};
 
 /**
  * A single entry in the raft log.
  *
  * From Figure 3.1:
  *
- *   Each contains [either a] command for the state machine [or a configuration
- *   change], and term when entry was received by the leader.
+ *   Each entry contains [either a] command for the state machine [or a
+ *   configuration change], and term when entry was received by the leader.
  *
  * An entry that originated from this raft instance while it was the leader
  * (typically via client calls to raft_apply()) should normaly have a @buf
- * attribute that points directly to the memory that was originally allocated by
- * the client itself to contain the entry data, and the @batch attribute is set
- * to #NULL.
+ * attribute referencing directly the memory that was originally allocated by
+ * the client itself to contain the entry data, and the @batch attribute set to
+ * #NULL.
  *
  * An entry that was received from the network as part of an AppendEntries RPC
  * or that was loaded from disk at startup should normally have a @batch
@@ -155,13 +159,14 @@ enum { RAFT_COMMAND = 1, RAFT_CONFIGURATION, RAFT_BARRIER };
  * releasing that memory only once there are no more references to the
  * associated entries.
  *
- * This arrangement makes it possible to perform "zero copy" I/O in most cases.
+ * This arrangement makes it possible to minimize the amount of memory-copying
+ * when performing I/O.
  */
 struct raft_entry
 {
-    raft_term term;         /* Term in which the entry was created */
-    unsigned short type;    /* Entry type (FSM command or config change) */
-    struct raft_buffer buf; /* Entry data */
+    raft_term term;         /* Term in which the entry was created. */
+    unsigned short type;    /* Type (FSM command, barrier, config change). */
+    struct raft_buffer buf; /* Entry data. */
     void *batch;            /* Batch that buf's memory points to, if any. */
 };
 
@@ -180,10 +185,10 @@ struct raft_entry
  */
 struct raft_entry_ref
 {
-    raft_term term;              /* Term of the entry being ref-counted */
-    raft_index index;            /* Index of the entry being ref-counted */
-    unsigned short count;        /* Number of references */
-    struct raft_entry_ref *next; /* Next item in the bucket (for collisions) */
+    raft_term term;              /* Term of the entry being ref-counted. */
+    raft_index index;            /* Index of the entry being ref-counted. */
+    unsigned short count;        /* Number of references. */
+    struct raft_entry_ref *next; /* Next item in the bucket (for collisions). */
 };
 
 /**
@@ -195,16 +200,16 @@ struct raft_entry_ref
  */
 struct raft_log
 {
-    struct raft_entry *entries;  /* Buffer of log entries. */
-    size_t size;                 /* Number of available slots in the buffer */
+    struct raft_entry *entries;  /* Circular buffer of log entries. */
+    size_t size;                 /* Number of available slots in the buffer. */
     size_t front, back;          /* Indexes of used slots [front, back). */
     raft_index offset;           /* Index of first entry is offset+1. */
-    struct raft_entry_ref *refs; /* Log entries reference counts hash table */
-    size_t refs_size;            /* Size of the reference counts hash table */
-    struct
+    struct raft_entry_ref *refs; /* Log entries reference counts hash table. */
+    size_t refs_size;            /* Size of the reference counts hash table. */
+    struct                       /* Information about last snapshot, or zero. */
     {
-        raft_index last_index; /* A snapshot replaces all entries up to here */
-        raft_term last_term;   /* Term of last index */
+        raft_index last_index; /* Snapshot replaces all entries up to here. */
+        raft_term last_term;   /* Term of last index. */
     } snapshot;
 };
 
@@ -226,7 +231,7 @@ struct raft_request_vote
  */
 struct raft_request_vote_result
 {
-    raft_term term;    /* Receiver's current_term (candidate updates itself). */
+    raft_term term;    /* Receiver's current term (candidate updates itself). */
     bool vote_granted; /* True means candidate received vote. */
 };
 
@@ -242,7 +247,7 @@ struct raft_append_entries
     unsigned leader_id;         /* So follower can redirect clients. */
     raft_index prev_log_index;  /* Index of log entry preceeding new ones. */
     raft_term prev_log_term;    /* Term of entry at prev_log_index. */
-    raft_index leader_commit;   /* Leader's commit_index. */
+    raft_index leader_commit;   /* Leader's commit index. */
     struct raft_entry *entries; /* Log entries to append. */
     unsigned n_entries;         /* Size of the log entries array. */
 };
@@ -252,9 +257,9 @@ struct raft_append_entries
  */
 struct raft_append_entries_result
 {
-    raft_term term;            /* Receiver's current_term */
-    raft_index rejected;       /* If non-zero, the index that was rejected */
-    raft_index last_log_index; /* Receiver's last log entry index, as hint */
+    raft_term term;            /* Receiver's current_term. */
+    raft_index rejected;       /* If non-zero, the index that was rejected. */
+    raft_index last_log_index; /* Receiver's last log entry index, as hint. */
 };
 
 /**
@@ -262,13 +267,13 @@ struct raft_append_entries_result
  */
 struct raft_install_snapshot
 {
-    raft_term term;        /* Leader's term. */
-    unsigned leader_id;    /* So follower can redirect clients. */
-    raft_index last_index; /* Replace all entries up to this one (included) */
-    raft_term last_term;   /* Term of last_index */
-    struct raft_configuration conf; /* Config as of last_index */
-    raft_index conf_index;          /* Index of configuration */
-    struct raft_buffer data;        /* Raw snapshot data */
+    raft_term term;                 /* Leader's term. */
+    unsigned leader_id;             /* So follower can redirect clients. */
+    raft_index last_index;          /* Index of last entry in the snapshot. */
+    raft_term last_term;            /* Term of last_index. */
+    struct raft_configuration conf; /* Config as of last_index. */
+    raft_index conf_index;          /* Commit index of conf. */
+    struct raft_buffer data;        /* Raw snapshot data. */
 };
 
 /**
@@ -287,10 +292,10 @@ enum {
  */
 struct raft_message
 {
-    unsigned short type;        /* Type code */
-    unsigned server_id;         /* ID of sending or destination server */
-    const char *server_address; /* Address of sending or destination server */
-    union {
+    unsigned short type;        /* RPC type code. */
+    unsigned server_id;         /* ID of sending or destination server. */
+    const char *server_address; /* Address of sending or destination server. */
+    union {                     /* Type-specific data */
         struct raft_request_vote request_vote;
         struct raft_request_vote_result request_vote_result;
         struct raft_append_entries append_entries;
@@ -329,6 +334,17 @@ struct raft_io_send
 {
     void *data;         /* User data */
     raft_io_send_cb cb; /* Request callback */
+};
+
+/**
+ * Asynchronous request to store new log entries.
+ */
+struct raft_io_append;
+typedef void (*raft_io_append_cb)(struct raft_io_append *req, int status);
+struct raft_io_append
+{
+    void *data;           /* User data */
+    raft_io_append_cb cb; /* Request callback */
 };
 
 /**
@@ -387,6 +403,9 @@ struct raft_io
      */
     void *impl;
 
+    /**
+     * Initialize the backend.
+     */
     int (*init)(struct raft_io *io, unsigned id, const char *address);
 
     /**
@@ -395,12 +414,8 @@ struct raft_io
      * The implementation must synchronously read the current state from
      * disk.
      *
-     * The entries array must be allocated with raft_malloc. Once the
-     * request is completed ownership of such memory is transfered to the
-     * raft instance.
-     *
-     * This request is guaranteed to be the very first function call issued
-     * agaist the backend. No further load request will be issued.
+     * The entries array must be allocated with @raft_malloc. Once the request
+     * is completed ownership of such memory is transfered to the raft instance.
      */
     int (*load)(struct raft_io *io,
                 raft_term *term,
@@ -437,7 +452,7 @@ struct raft_io
      * 1 and the vote to nil.
      *
      * If an attempt is made to bootstrap a server that has already some sate,
-     * then #RAFT_IO_CANTBOOTSTRAP must be returned.
+     * then #RAFT_CANTBOOTSTRAP must be returned.
      */
     int (*bootstrap)(struct raft_io *io, const struct raft_configuration *conf);
 
@@ -455,6 +470,12 @@ struct raft_io
      */
     int (*set_vote)(struct raft_io *io, unsigned server_id);
 
+    /**
+     * Asynchronously send an RPC message.
+     *
+     * The implementation is guaranteed that the memory referenced in the given
+     * message will not be released until the @cb callback is invoked.
+     */
     int (*send)(struct raft_io *io,
                 struct raft_io_send *req,
                 const struct raft_message *message,
@@ -467,21 +488,27 @@ struct raft_io
      * entries will not be released until the @cb callback is invoked.
      */
     int (*append)(struct raft_io *io,
+                  struct raft_io_append *req,
                   const struct raft_entry entries[],
                   unsigned n,
-                  void *data,
-                  void (*cb)(void *data, int status));
+                  raft_io_append_cb cb);
 
     /**
      * Asynchronously truncate all log entries from the given index onwards.
      */
     int (*truncate)(struct raft_io *io, raft_index index);
 
+    /**
+     * Asynchronously persist a new snapshot.
+     */
     int (*snapshot_put)(struct raft_io *io,
                         struct raft_io_snapshot_put *req,
                         const struct raft_snapshot *snapshot,
                         raft_io_snapshot_put_cb cb);
 
+    /**
+     * Asynchronously load the last snapshot.
+     */
     int (*snapshot_get)(struct raft_io *io,
                         struct raft_io_snapshot_get *req,
                         raft_io_snapshot_get_cb cb);
@@ -508,13 +535,22 @@ struct raft_io
  */
 struct raft_fsm
 {
-    int version; /* API version implemented by this instance. Currently 1. */
-    void *data;  /* Custom user data. */
+    /**
+     * API version implemented by this instance. Currently 1.
+     */
+    int version;
+
+    /**
+     * Custom user data.
+     */
+    void *data;
 
     /**
      * Apply a committed RAFT_COMMAND entry to the state machine.
      */
-    int (*apply)(struct raft_fsm *fsm, const struct raft_buffer *buf);
+    int (*apply)(struct raft_fsm *fsm,
+                 const struct raft_buffer *buf,
+                 void **result);
 
     /**
      * Take a snapshot of the state machine.
@@ -535,12 +571,6 @@ struct raft_fsm
 enum { RAFT_UNAVAILABLE, RAFT_FOLLOWER, RAFT_CANDIDATE, RAFT_LEADER };
 
 /**
- * Server state names ('unavailable', 'follower', 'candidate', 'leader'),
- * indexed by state code.
- */
-extern const char *raft_state_names[];
-
-/**
  * Used by leaders to keep track of replication progress for each server.
  */
 struct raft_progress
@@ -549,49 +579,39 @@ struct raft_progress
     raft_index next_index;     /* Next entry to send */
     raft_index match_index;    /* Highest applied idx */
     raft_index snapshot_index; /* Last index of most recent snapshot sent */
-    bool recent_send;          /* A msg was sent within heartbeat timeout */
+    raft_time last_send;       /* Timestamp of last AppendEntries RPC */
     bool recent_recv;          /* A msg was received within election timeout */
 };
+
+/**
+ * Close callback.
+ *
+ * It's safe to release the memory of a raft instance only after this callback
+ * has fired.
+ */
+struct raft;
+typedef void (*raft_close_cb)(struct raft *raft);
 
 /**
  * Hold and drive the state of a single raft server in a cluster.
  */
 struct raft
 {
-    /**
-     * Custom user data.
-     */
-    void *data;
+    void *data;           /* Custom user data. */
+    struct raft_io *io;   /* Disk and network I/O implementation. */
+    struct raft_fsm *fsm; /* User-defined FSM to apply command to. */
+    unsigned id;          /* Server ID of this raft instance. */
+    char *address;        /* Server address of this raft instance. */
 
-    /**
-     * User-defined disk and network I/O interface implementation.
-     */
-    struct raft_io *io;
-
-    /**
-     * User-defined finite state machine to apply command to.
-     */
-    struct raft_fsm *fsm;
-
-    /**
-     * Server ID of this raft instance.
-     */
-    unsigned id;
-
-    /**
-     * Server address of this raft instance.
-     */
-    char *address;
-
-    /**
-     * The fields below are a cache of the server's persistent state, updated on
-     * stable storage before responding to RPCs (Figure 3.1).
+    /*
+     * Cache of the server's persistent state, updated on stable storage before
+     * responding to RPCs (Figure 3.1).
      */
     raft_term current_term; /* Latest term server has seen. */
     unsigned voted_for;     /* Candidate that received vote in current term. */
     struct raft_log log;    /* Log entries. */
 
-    /**
+    /*
      * Current membership configuration (Chapter 4).
      *
      * At any given moment the current configuration can be committed or
@@ -620,7 +640,7 @@ struct raft
     raft_index configuration_index;
     raft_index configuration_uncommitted_index;
 
-    /**
+    /*
      * Election timeout in milliseconds (default 1000).
      *
      * From 3.4:
@@ -641,7 +661,7 @@ struct raft
      */
     unsigned election_timeout;
 
-    /**
+    /*
      * Heartbeat timeout in milliseconds (default 100). This is relevant only
      * for when the raft instance is in leader state: empty AppendEntries RPCs
      * will be sent if this amount of milliseconds elapses without any
@@ -654,25 +674,26 @@ struct raft
      */
     unsigned heartbeat_timeout;
 
-    /**
-     * The fields below hold the part of the server's volatile state which
-     * is always applicable regardless of the whether the server is
-     * follower, candidate or leader (Figure 3.1). This state is rebuilt
-     * automatically after a server restart.
+    /*
+     * The fields below hold the part of the server's volatile state which is
+     * always applicable regardless of the whether the server is follower,
+     * candidate or leader (Figure 3.1). This state is rebuilt automatically
+     * after a server restart.
      */
     raft_index commit_index; /* Highest log entry known to be committed */
     raft_index last_applied; /* Highest log entry applied to the FSM */
     raft_index last_stored;  /* Highest log entry persisted on disk */
 
-    /**
+    /*
      * Current server state of this raft instance, along with a union defining
      * state-specific values.
      */
     unsigned short state;
     union {
-        struct
+        struct /* Follower */
         {
-            struct
+            unsigned randomized_election_timeout; /* Timer expiration. */
+            struct                                /* Current leader info. */
             {
                 unsigned id;
                 char *address;
@@ -680,7 +701,8 @@ struct raft
         } follower_state;
         struct
         {
-            bool *votes; /* For each server, whether vote was granted */
+            unsigned randomized_election_timeout; /* Timer expiration. */
+            bool *votes;                          /* Vote results. */
         } candidate_state;
         struct
         {
@@ -688,42 +710,24 @@ struct raft
             unsigned promotee_id;           /* ID of server being promoted */
             unsigned short round_number;    /* Current sync round */
             raft_index round_index;         /* Target of the current round */
-            unsigned round_duration;        /* Duration of the current round */
-            unsigned heartbeat_elapsed;     /* Msecs since last heartbeat */
+            raft_time round_start;          /* Start of current round */
             void *requests[2];              /* Outstanding client requests */
         } leader_state;
     };
 
-    /**
-     * Current election timeout.
+    /* Election timer start.
      *
-     * Randomized number between electiontimeout and 2 * electiontimeout - 1. It
-     * gets reset when raft changes its state to follower or candidate.
-     *
-     * From §9.3:
-     *
-     *   We recommend using a timeout range that is ten times the one-way
-     *   network latency (even if the true network latency is five times greater
-     *   than anticipated, most clusters would still be able to elect a leader
-     *   in a timely manner).
-     */
-    unsigned randomized_election_timeout;
+     * This timer has different purposes depending on the state. Followers
+     * convert to candidate after the randomized election timeout has elapsed
+     * without leader contact. Candidates start a new election after the
+     * randomized election timeout has elapsed without a winner. Leaders step
+     * down after the election timeout has elapsed without contacting a majority
+     * of voting servers. */
+    raft_time election_timer_start;
 
-    /**
-     * Timestamp of the last call to the tick callback passed to raft_io. This
-     * is used to calculate the time elapsed between subsequent tick calls and
-     * update the timer field below.
+    /*
+     * Information about the last snapshot that was taken (if any).
      */
-    raft_time last_tick;
-
-    /**
-     * Number of milliseconds since we last reached election_timeout when it is
-     * leader or candidate. Number of milliseconds since we last reached
-     * election_timeout or received a valid message from current leader when it
-     * is a follower.
-     */
-    unsigned election_elapsed;
-
     struct
     {
         unsigned threshold;              /* N. of entries before snapshot */
@@ -732,10 +736,10 @@ struct raft
         struct raft_io_snapshot_put put; /* Store snapshot request */
     } snapshot;
 
-    /**
+    /*
      * Callback to invoke once a close request has completed.
      */
-    void (*close_cb)(struct raft *r);
+    raft_close_cb close_cb;
 };
 
 /**
@@ -750,7 +754,7 @@ int raft_init(struct raft *r,
 /**
  * Close a raft instance, deallocating all used resources.
  */
-void raft_close(struct raft *r, void (*cb)(struct raft *r));
+void raft_close(struct raft *r, raft_close_cb cb);
 
 /**
  * Bootstrap this raft instance using the given configuration. The instance must
@@ -805,11 +809,6 @@ void raft_set_snapshot_trailing(struct raft *r, unsigned n);
 int raft_state(struct raft *r);
 
 /**
- * Human readable version of the current state.
- */
-const char *raft_state_name(struct raft *r);
-
-/**
  * Return the ID and address of the current known leader, if any.
  */
 void raft_leader(struct raft *r, unsigned *id, const char **address);
@@ -836,7 +835,7 @@ raft_index raft_last_applied(struct raft *r);
  * the FSM when a quorum is reached.
  */
 struct raft_apply;
-typedef void (*raft_apply_cb)(struct raft_apply *req, int status);
+typedef void (*raft_apply_cb)(struct raft_apply *req, int status, void *result);
 struct raft_apply
 {
     RAFT__REQUEST;
@@ -870,11 +869,22 @@ int raft_apply(struct raft *r,
                raft_apply_cb cb);
 
 /**
+ * Asynchronous request to append a barrier entry.
+ */
+struct raft_barrier;
+typedef void (*raft_barrier_cb)(struct raft_barrier *req, int status);
+struct raft_barrier
+{
+    RAFT__REQUEST;
+    raft_barrier_cb cb;
+};
+
+/**
  * Propose to append a log entry of type #RAFT_BARRIER.
  *
  * This can be used to ensure that there are no unapplied commands.
  */
-int raft_barrier(struct raft *r, struct raft_apply *req, raft_apply_cb cb);
+int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb);
 
 /**
  * Asynchronous request to change the raft configuration.
