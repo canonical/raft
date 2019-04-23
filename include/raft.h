@@ -25,7 +25,8 @@ enum {
     RAFT_CANCELED,
     RAFT_NAMETOOLONG,
     RAFT_TOOBIG,
-    RAFT_NOCONNECTION
+    RAFT_NOCONNECTION,
+    RAFT_BUSY
 };
 
 /**
@@ -48,7 +49,8 @@ enum {
     X(RAFT_CANCELED, "operation canceled")                              \
     X(RAFT_NAMETOOLONG, "data directory path is too long")              \
     X(RAFT_TOOBIG, "data is too big")                                   \
-    X(RAFT_NOCONNECTION, "no connection to remote server available")
+    X(RAFT_NOCONNECTION, "no connection to remote server available") \
+    X(RAFT_BUSY, "operation can't be performed at this time")
 
 /**
  * Return the error message describing the given error code.
