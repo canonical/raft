@@ -1362,14 +1362,18 @@ static int take_snapshot(struct raft *r)
     raft_configuration_init(&snapshot->configuration);
     rv = configurationCopy(&r->configuration, &snapshot->configuration);
     if (rv != 0) {
-        goto err;
+        goto abort;
     }
 
     snapshot->configuration_index = r->configuration_index;
 
     rv = r->fsm->snapshot(r->fsm, &snapshot->bufs, &snapshot->n_bufs);
     if (rv != 0) {
-        goto err_after_config_copy;
+        /* Ignore transient errors. We'll retry next time. */
+        if (rv == RAFT_BUSY) {
+            rv = 0;
+        }
+        goto abort_after_config_copy;
     }
 
     assert(r->snapshot.put.data == NULL);
@@ -1377,21 +1381,20 @@ static int take_snapshot(struct raft *r)
     rv =
         r->io->snapshot_put(r->io, &r->snapshot.put, snapshot, snapshot_put_cb);
     if (rv != 0) {
-        goto err_after_fsm_snapshot;
+        goto abort_after_fsm_snapshot;
     }
 
     return 0;
 
-err_after_fsm_snapshot:
+abort_after_fsm_snapshot:
     for (i = 0; i < snapshot->n_bufs; i++) {
         raft_free(snapshot->bufs[i].base);
     }
     raft_free(snapshot->bufs);
-err_after_config_copy:
+abort_after_config_copy:
     raft_configuration_close(&snapshot->configuration);
-err:
+abort:
     r->snapshot.pending.term = 0;
-    assert(rv);
     return rv;
 }
 
