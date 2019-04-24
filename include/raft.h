@@ -49,7 +49,7 @@ enum {
     X(RAFT_CANCELED, "operation canceled")                              \
     X(RAFT_NAMETOOLONG, "data directory path is too long")              \
     X(RAFT_TOOBIG, "data is too big")                                   \
-    X(RAFT_NOCONNECTION, "no connection to remote server available") \
+    X(RAFT_NOCONNECTION, "no connection to remote server available")    \
     X(RAFT_BUSY, "operation can't be performed at this time")
 
 /**
@@ -708,12 +708,13 @@ struct raft
         } candidate_state;
         struct
         {
-            struct raft_progress *progress; /* Per-server replication state */
-            unsigned promotee_id;           /* ID of server being promoted */
-            unsigned short round_number;    /* Current sync round */
-            raft_index round_index;         /* Target of the current round */
-            raft_time round_start;          /* Start of current round */
-            void *requests[2];              /* Outstanding client requests */
+            struct raft_progress *progress; /* Per-server replication state. */
+            struct raft_change *change;     /* Pending membership change. */
+            unsigned promotee_id;           /* ID of server being promoted. */
+            unsigned short round_number;    /* Current sync round. */
+            raft_index round_index;         /* Target of the current round. */
+            raft_time round_start;          /* Start of current round. */
+            void *requests[2];              /* Outstanding client requests. */
         } leader_state;
     };
 

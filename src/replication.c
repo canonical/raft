@@ -559,6 +559,7 @@ static int raft_replication__trigger_promotion(struct raft *r)
     raft_term term = r->current_term;
     size_t server_index;
     struct raft_server *server;
+    struct raft_change *req;
     int rv;
 
     assert(r->state == RAFT_LEADER);
@@ -583,6 +584,13 @@ static int raft_replication__trigger_promotion(struct raft *r)
     if (rv != 0) {
         goto err;
     }
+
+    req = r->leader_state.change;
+    assert(req != NULL);
+
+    req->type = RAFT_CHANGE;
+    req->index = index;
+    QUEUE_PUSH(&r->leader_state.requests, &req->queue);
 
     /* Start writing the new log entry to disk and send it to the followers. */
     rv = raft_replication__trigger(r, index);
@@ -1273,11 +1281,13 @@ static void raft_replication__apply_configuration(struct raft *r,
     if (r->state == RAFT_LEADER &&
         configurationGet(&r->configuration, r->id) == NULL) {
         convertToFollower(r);
-    }
-
-    req = (struct raft_change *)getRequest(r, index, RAFT_CHANGE);
-    if (req != NULL && req->cb != NULL) {
-        req->cb(req, 0);
+    } else if (r->state == RAFT_LEADER) {
+        req = (struct raft_change *)getRequest(r, index, RAFT_CHANGE);
+        assert(r->leader_state.change == req);
+        r->leader_state.change = NULL;
+        if (req != NULL && req->cb != NULL) {
+            req->cb(req, 0);
+        }
     }
 }
 
