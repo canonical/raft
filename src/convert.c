@@ -5,6 +5,7 @@
 #include "log.h"
 #include "progress.h"
 #include "queue.h"
+#include "request.h"
 
 /* Convenience for setting a new state value and asserting that the transition
  * is valid. */
@@ -43,6 +44,27 @@ static void clearCandidate(struct raft *r)
     }
 }
 
+static void failApply(struct raft_apply *req)
+{
+    if (req != NULL && req->cb != NULL) {
+        req->cb(req, RAFT_LEADERSHIPLOST, NULL);
+    }
+}
+
+static void failBarrier(struct raft_barrier *req)
+{
+    if (req != NULL && req->cb != NULL) {
+        req->cb(req, RAFT_LEADERSHIPLOST);
+    }
+}
+
+static void failChange(struct raft_change *req)
+{
+    if (req != NULL && req->cb != NULL) {
+        req->cb(req, RAFT_LEADERSHIPLOST);
+    }
+}
+
 /* Clear leader state. */
 static void clearLeader(struct raft *r)
 {
@@ -51,31 +73,33 @@ static void clearLeader(struct raft *r)
         r->leader_state.progress = NULL;
     }
 
-    /* If a promotion request is in progress and we are waiting for the server
-     * to be promoted to catch up with logs, then we need to abort the
-     * promotion, because having lost leadership we're not in the position to
-     * submit any raft entry.
-     *
-     * Note that if a promotion request is in progress but we're not waiting for
-     * the server to be promoted to catch up with logs, then it means that the
-     * server was up to date at some point and we submitted the configuration
-     * change to turn it into a voting server. Even if we lost leadership, it
-     * could be that the entry still gets committed, so we don't abort the
-     * promotion just yet.
-     *
-     * TODO: create a request object for promotion requests.
-     */
-
-    /* Fail all outstanding apply requests */
+    /* Fail all outstanding requests */
     while (!QUEUE_IS_EMPTY(&r->leader_state.requests)) {
-        struct raft_apply *req;
+        struct request *req;
         queue *head;
         head = QUEUE_HEAD(&r->leader_state.requests);
         QUEUE_REMOVE(head);
-        req = QUEUE_DATA(head, struct raft_apply, queue);
-        if (req->cb != NULL) {
-	  req->cb(req, RAFT_LEADERSHIPLOST, NULL);
-        }
+        req = QUEUE_DATA(head, struct request, queue);
+        switch (req->type) {
+            case RAFT_COMMAND:
+                failApply((struct raft_apply *)req);
+                break;
+            case RAFT_BARRIER:
+                failBarrier((struct raft_barrier *)req);
+                break;
+            case RAFT_CHANGE:
+                failChange((struct raft_change *)req);
+                assert(r->leader_state.change == (struct raft_change *)req);
+                r->leader_state.change = NULL;
+                break;
+        };
+    }
+
+    /* Fail any promote request that is still outstanding because the server is
+     * still catching up and no entry was submitted. */
+    if (r->leader_state.change != NULL) {
+        failChange(r->leader_state.change);
+        r->leader_state.change = NULL;
     }
 }
 
@@ -151,6 +175,8 @@ int convertToLeader(struct raft *r)
     if (rv != 0) {
         return rv;
     }
+
+    r->leader_state.change = NULL;
 
     /* Reset promotion state. */
     r->leader_state.promotee_id = 0;

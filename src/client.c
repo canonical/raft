@@ -206,11 +206,13 @@ int raft_add(struct raft *r,
         goto err_after_configuration_copy;
     }
 
+    assert(r->leader_state.change == NULL);
+    r->leader_state.change = req;
+
     return 0;
 
 err_after_configuration_copy:
     raft_configuration_close(&configuration);
-
 err:
     assert(rv != 0);
     return rv;
@@ -250,6 +252,9 @@ int raft_promote(struct raft *r,
     last_index = logLastIndex(&r->log);
 
     req->cb = cb;
+
+    assert(r->leader_state.change == NULL);
+    r->leader_state.change = req;
 
     if (r->leader_state.progress[server_index].match_index == last_index) {
         /* The log of this non-voting server is already up-to-date, so we can
@@ -330,6 +335,9 @@ int raft_remove(struct raft *r,
     if (rv != 0) {
         goto err_after_configuration_copy;
     }
+
+    assert(r->leader_state.change == NULL);
+    r->leader_state.change = req;
 
     return 0;
 
