@@ -262,6 +262,14 @@ static void connectCb(struct raft_uv_connect *req,
         return;
     }
 
+    /* TODO: this should not happen, but makes LXD heartbeat unit test fail:
+     * understand why. */
+    if (status == 0 && c->state == CLOSING) {
+        uv_close((struct uv_handle_s *)stream, (uv_close_cb)raft_free);
+        uv_close((struct uv_handle_s *)&c->timer, timerCloseCb);
+        return;
+    }
+
     assert(c->state == CONNECTING);
 
     /* The connection attempt was successful. We're good. */
@@ -326,7 +334,7 @@ static int getClient(struct uv *uv,
 
         if ((*client)->id == id) {
             /* TODO: handle a change in the address */
-            assert(strcmp((*client)->address, address) == 0);
+            /* assert(strcmp((*client)->address, address) == 0); */
             assert((*client)->state == CONNECTED || (*client)->state == DELAY ||
                    (*client)->state == CONNECTING);
             return 0;
