@@ -955,7 +955,7 @@ void raft_heap_set(struct raft_heap *heap);
  * Use the default dynamic memory allocator (from the stdlib). This clears any
  * custom allocator specified with @raft_heap_set.
  */
-void raft_heap_set_default();
+void raft_heap_set_default(void);
 
 #undef RAFT__REQUEST
 

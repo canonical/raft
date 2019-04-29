@@ -380,6 +380,7 @@ static int probeBlockSize(int fd, size_t size, bool *ok)
 
 int osBlockSize(const osDir dir, size_t *size)
 {
+#if defined(RWF_NOWAIT)
     struct statfs fs_info; /* To get the type code of the underlying fs */
     struct stat info;      /* To get the block size reported by the fs */
     osFilename filename;   /* Filename of the probe file */
@@ -387,6 +388,7 @@ int osBlockSize(const osDir dir, size_t *size)
     int fd;                /* File descriptor of the probe file */
     int flags;             /* To hold the current fcntl flags */
     int rv;
+#endif
 
     assert(dir != NULL);
     assert(size != NULL);
