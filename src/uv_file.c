@@ -469,7 +469,9 @@ int uvFileWrite(struct uvFile *f,
                 uvFileWriteCb cb)
 {
     int rv;
+#if defined(RWF_NOWAIT)
     struct iocb *iocbs = &req->iocb;
+#endif /* RWF_NOWAIT */
 
     assert(!f->closing);
     assert(f->state == READY);
@@ -571,7 +573,9 @@ int uvFileWrite(struct uvFile *f,
         goto err;
     }
 
+#if defined(RWF_NOWAIT)
 done:
+#endif /* RWF_NOWAIT */
     return 0;
 
 err:

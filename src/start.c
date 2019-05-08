@@ -48,6 +48,7 @@ static int restoreEntries(struct raft *r,
     size_t i;
     int rc;
     logSeek(&r->log, start_index);
+    r->last_stored = start_index - 1;
     for (i = 0; i < n; i++) {
         struct raft_entry *entry = &entries[i];
         rc = logAppend(&r->log, entry->term, entry->type, &entry->buf,
