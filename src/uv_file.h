@@ -32,7 +32,10 @@ typedef void (*uvFileWriteCb)(struct uvFileWrite *req, int status);
 typedef void (*uvFileCloseCb)(struct uvFile *f);
 
 /* Initialize a file handle. */
-int uvFileInit(struct uvFile *f, struct uv_loop_s *loop);
+int uvFileInit(struct uvFile *f,
+               struct uv_loop_s *loop,
+               bool direct /* Whether to use direct I/O */,
+               bool async /* Whether async I/O is available */);
 
 /* Create the given file for subsequent non-blocking writing. The file must not
  * exist yet. */
@@ -61,6 +64,7 @@ struct uvFile
     struct uv_loop_s *loop;        /* Event loop */
     int state;                     /* Current state code */
     int fd;                        /* Operating system file descriptor */
+    bool direct;                   /* Whether direct I/O is supported */
     bool async;                    /* Whether fully async I/O is supported */
     int event_fd;                  /* Poll'ed to check if write is finished */
     struct uv_poll_s event_poller; /* To make the loop poll for event_fd */

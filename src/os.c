@@ -8,8 +8,6 @@
 #include <sys/vfs.h>
 #include <unistd.h>
 
-#include <xfs/xfs.h>
-
 #include "aio.h"
 #include "assert.h"
 #include "os.h"
@@ -301,11 +299,68 @@ err:
     return rv;
 }
 
-#if defined(RWF_NOWAIT)
+/* Check if direct I/O is possible on the given fd. */
+static int probeDirectIO(int fd, size_t *size)
+{
+    int flags;             /* Current fcntl flags. */
+    struct statfs fs_info; /* To check the file system type. */
+    void *buf;             /* Buffer to use for the probe write. */
+    int rv;
 
-/* Try to write @fd using a memory-aligned buffer of size @size. If the write is
- * successful, @ok will be set to #true. */
-static int probeBlockSize(int fd, size_t size, bool *ok)
+    flags = fcntl(fd, F_GETFL);
+    rv = fcntl(fd, F_SETFL, flags | O_DIRECT);
+
+    if (rv == -1) {
+        if (errno != EINVAL) {
+            /* UNTESTED: the parameters are ok, so this should never happen. */
+            return errno;
+        }
+        rv = fstatfs(fd, &fs_info);
+        if (rv == -1) {
+            /* UNTESTED: in practice ENOMEM should be the only failure mode */
+            return errno;
+        }
+        switch (fs_info.f_type) {
+            case 0x01021994: /* TMPFS_MAGIC */
+            case 0x2fc12fc1: /* ZFS magic */
+                *size = 0;
+                return 0;
+            default:
+                /* UNTESTED: this is an unsupported file system. */
+                return EINVAL;
+        }
+    }
+
+    /* Try to peform direct I/O, using various buffer size. */
+    *size = 4096;
+    while (*size >= 512) {
+        buf = aligned_alloc(*size, *size);
+        if (buf == NULL) {
+            /* UNTESTED: define a configurable allocator that can fail? */
+            return ENOMEM;
+        }
+        memset(buf, 0, *size);
+        rv = write(fd, buf, *size);
+        free(buf);
+        if (rv > 0) {
+            assert(rv == (int)(*size));
+            return 0;
+        }
+        if (rv != EIO && rv != EOPNOTSUPP) {
+            /* UNTESTED: this should basically fail only because of disk errors,
+             * since we allocated the file with posix_fallocate. */
+            return errno;
+        }
+        *size = *size / 2;
+    }
+
+    *size = 0;
+    return 0;
+}
+
+#if defined(RWF_NOWAIT)
+/* Check if async I/O is possible on the given fd. */
+static int probeAsyncIO(int fd, size_t size, bool *ok)
 {
     void *buf;                  /* Buffer to use for the probe write */
     aio_context_t ctx = 0;      /* KAIO context handle */
@@ -361,154 +416,64 @@ static int probeBlockSize(int fd, size_t size, bool *ok)
     /* Release the KAIO context handle. */
     io_destroy(ctx);
 
-    /* We expect the write to either succeed or fail with EAGAIN (which means
-     * this is not the correct block size). */
     if (event.res > 0) {
+        assert(event.res == (int)size);
         *ok = true;
     } else {
-        if (event.res != -EAGAIN) {
-            /* UNTESTED: this should basically fail only because of disk errors,
-             * since we allocated the file with posix_fallocate. */
-            return -event.res;
-        }
+        /* UNTESTED: this should basically fail only because of disk errors,
+         * since we allocated the file with posix_fallocate and the block size
+         * is supposed to be correct. */
+        assert(event.res != EAGAIN);
         *ok = false;
     }
 
     return 0;
 }
-#endif
+#endif /* RWF_NOWAIT */
 
-int osBlockSize(const osDir dir, size_t *size)
+int osProbeIO(const osDir dir, size_t *direct, bool *async)
 {
-#if defined(RWF_NOWAIT)
-    struct statfs fs_info; /* To get the type code of the underlying fs */
-    struct stat info;      /* To get the block size reported by the fs */
-    osFilename filename;   /* Filename of the probe file */
-    osPath path;           /* Full path of the probe file */
-    int fd;                /* File descriptor of the probe file */
-    int flags;             /* To hold the current fcntl flags */
+    osFilename filename; /* Filename of the probe file */
+    osPath path;         /* Full path of the probe file */
+    int fd;              /* File descriptor of the probe file */
     int rv;
-#endif
-
-    assert(dir != NULL);
-    assert(size != NULL);
-
-#if !defined(RWF_NOWAIT)
-    /* If NOWAIT is not supported, just return 4096. In practice it should
-     * always work fine. */
-    *size = 4096;
-    return 0;
-#else
-
-    strcpy(filename, ".probe-XXXXXX");
-    osJoin(dir, filename, path);
 
     /* Create a temporary probe file. */
-    sprintf(path, "%s/%s", dir, filename);
-
+    strcpy(filename, ".probe-XXXXXX");
+    osJoin(dir, filename, path);
     fd = mkstemp(path);
     if (fd == -1) {
         rv = errno;
         goto err;
     }
-
-    unlink(path);
-
-    /* For XFS, we can use the dedicated API to figure out the optimal block
-     * size */
-    if (platform_test_xfs_fd(fd)) {
-        struct dioattr attr;
-
-        rv = xfsctl(path, fd, XFS_IOC_DIOINFO, &attr);
-
-        if (rv != 0) {
-            /* UNTESTED: since the path and fd are valid, can this ever fail? */
-            rv = errno;
-            goto err_after_file_open;
-        }
-
-        /* TODO: this was taken from seastar's code which has this comment:
-         *
-         *   xfs wants at least the block size for writes
-         *   FIXME: really read the block size
-         *
-         * We should check with the xfs folks what's going on here and possibly
-         * how to figure the device block size.
-         */
-        *size = attr.d_miniosz > 4096 ? attr.d_miniosz : 4096;
-
-        goto out;
-    }
-
-    /* Get the file system type */
-    rv = fstatfs(fd, &fs_info);
-    if (rv == -1) {
-        /* UNTESTED: in practice ENOMEM should be the only failure mode */
-        rv = errno;
-        goto err_after_file_open;
-    }
-
-    /* Special-case the file systems that do not support O_DIRECT/NOWAIT */
-    switch (fs_info.f_type) {
-        case 0x01021994: /* tmpfs */
-            /* 4096 is ok. */
-            *size = 4096;
-            goto out;
-
-        case 0x2fc12fc1: /* ZFS */
-            /* Let's use whatever stat() returns. */
-            rv = fstat(fd, &info);
-            if (rv != 0) {
-                /* UNTESTED: ENOMEM should be the only failure mode */
-                rv = errno;
-                goto err_after_file_open;
-            }
-            /* TODO: The block size indicated in the ZFS case seems way to
-             * high. Reducing it to 4096 seems safe since at the moment ZFS does
-             * not support async writes. We might want to change this once ZFS
-             * async support is released. */
-            *size = info.st_blksize > 4096 ? 4096 : info.st_blksize;
-            goto out;
-    }
-
-    /* For all other file systems, we try to probe the correct size by trial and
-     * error. */
     rv = posix_fallocate(fd, 0, 4096);
     if (rv != 0) {
         goto err_after_file_open;
     }
+    unlink(path);
 
-    flags = fcntl(fd, F_GETFL);
-    rv = fcntl(fd, F_SETFL, flags | O_DIRECT);
-    if (rv == -1) {
-        /* UNTESTED: this should actually never fail, for the file systems we
-         * currently support. */
-        rv = errno;
+    /* Check if we can use direct I/O. */
+    rv = probeDirectIO(fd, direct);
+    if (rv != 0) {
         goto err_after_file_open;
     }
 
-    *size = 4096;
-    while (*size >= 512) {
-        bool ok = false;
-
-        rv = probeBlockSize(fd, *size, &ok);
-        if (rv != 0) {
-            /* UNTESTED: all syscalls performed by underlying code should fail
-             * at most with ENOMEM. */
-            goto err_after_file_open;
-        }
-
-        if (ok) {
-            goto out;
-        }
-
-        *size = *size / 2;
+#if !defined(RWF_NOWAIT)
+    /* We can't have fully async I/O, since io_submit might potentially block.
+     */
+    *async = false;
+#else
+    /* If direct I/O is not possible, we can't perform fully asynchronous
+     * I/O, because io_submit might potentially block. */
+    if (*direct == 0) {
+        *async = false;
+        goto out;
     }
-
-    /* UNTESTED: at least one of the probed block sizes should work for the file
-     * systems we currently support. */
-    rv = EINVAL;
-    goto err_after_file_open;
+    rv = probeAsyncIO(fd, *direct, async);
+    if (rv != 0) {
+        goto err_after_file_open;
+    }
+#endif /* RWF_NOWAIT */
 
 out:
     close(fd);
@@ -519,39 +484,17 @@ err_after_file_open:
 err:
     assert(rv != 0);
     return rv;
-#endif /* RWF_NOWAIT */
 }
 
 int osSetDirectIO(int fd)
 {
-    int flags;             /* Current fcntl flags */
-    struct statfs fs_info; /* To check the file system type */
+    int flags; /* Current fcntl flags */
     int rv;
-
     flags = fcntl(fd, F_GETFL);
     rv = fcntl(fd, F_SETFL, flags | O_DIRECT);
-
     if (rv == -1) {
-        if (errno != EINVAL) {
-            /* UNTESTED: the parameters are ok, so this should never happen. */
-            return errno;
-        }
-        rv = fstatfs(fd, &fs_info);
-        if (rv == -1) {
-            /* UNTESTED: in practice ENOMEM should be the only failure mode */
-            return errno;
-        }
-        switch (fs_info.f_type) {
-            case 0x01021994: /* TMPFS_MAGIC */
-            case 0x2fc12fc1: /* ZFS magic */
-                return ENOTSUP;
-                break;
-            default:
-                /* UNTESTED: this is an unsupported file system. */
-                return EINVAL;
-        }
+        return errno;
     }
-
     return 0;
 }
 

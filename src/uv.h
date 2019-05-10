@@ -47,6 +47,8 @@ struct uv
     unsigned id;                         /* Server ID */
     int state;                           /* Current state */
     bool errored;                        /* If a disk I/O error was hit */
+    bool direct_io;                      /* Whether direct I/O is supported */
+    bool async_io;                       /* Whether async I/O is supported */
     size_t block_size;                   /* Block size of the data dir */
     unsigned n_blocks;                   /* N. of blocks in a segment */
     struct uvClient **clients;           /* Outgoing connections */
