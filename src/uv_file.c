@@ -250,7 +250,7 @@ static void writePollCb(uv_poll_t *poller, int status, int events)
 
     for (i = 0; i < (unsigned)rv; i++) {
         struct io_event *event = &f->events[i];
-        struct uvFileWrite *req = (void *)event->data;
+        struct uvFileWrite *req = *((void**)&event->data);
 
         /* If we are closing, we mark the write as canceled, although
          * technically it might have worked. */
@@ -494,13 +494,13 @@ int uvFileWrite(struct uvFile *f,
     req->file = f;
     req->cb = cb;
     memset(&req->iocb, 0, sizeof req->iocb);
-    req->iocb.aio_data = (uint64_t)req;
+    req->iocb.aio_fildes = f->fd;
     req->iocb.aio_lio_opcode = IOCB_CMD_PWRITEV;
-    req->iocb.aio_buf = (uint64_t)bufs;
+    req->iocb.aio_reqprio = 0;
+    *((void**)(&req->iocb.aio_buf)) = (void*)bufs;
     req->iocb.aio_nbytes = n;
     req->iocb.aio_offset = offset;
-    req->iocb.aio_fildes = f->fd;
-    req->iocb.aio_reqprio = 0;
+    *((void**)(&req->iocb.aio_data)) = (void*)req;
 
     QUEUE_PUSH(&f->write_queue, &req->queue);
 
