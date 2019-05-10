@@ -85,12 +85,24 @@ int osCreateFile(const osDir dir,
                  struct raft_buffer *bufs,
                  unsigned n_bufs);
 
-/* Get the logical block size of the file system rooted at @dir. */
-int osBlockSize(const osDir dir, size_t *size);
+struct osFileSystemInfo
+{
+    size_t block_size; /* Block size to use when writing. */
+    bool direct_io;    /* Whether direct I/O is supported. */
+    bool async_io;     /* Whether fully asynchronous I/O is supported. */
+};
 
-/* Attempt to configure the given file descriptor for direct I/O. In case of
- * failure, check if the file system is known to not support direct I/O and
- * return ENOTSUP in that case. */
+/* Return information about the I/O capabilities of the underlying file
+ * system.
+ *
+ * The @direct parameter will be set to zero if direct I/O is not possible, or
+ * to the block size to use for direct I/O otherwise.
+ *
+ * The @async parameter will be set to true if fully asynchronous I/O is
+ * possible using the KAIO API. */
+int osProbeIO(const osDir dir, size_t *direct, bool *async);
+
+/* Configure the given file descriptor for direct I/O. */
 int osSetDirectIO(int fd);
 
 /* Return a human-readable description of the given OS error */

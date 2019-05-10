@@ -25,6 +25,7 @@
 static int uvInit(struct raft_io *io, unsigned id, const char *address)
 {
     struct uv *uv;
+    size_t direct_io;
     int rv;
     uv = io->impl;
 
@@ -42,13 +43,15 @@ static int uvInit(struct raft_io *io, unsigned id, const char *address)
         goto err;
     }
 
-    /* Detect the file system block size */
-    rv = osBlockSize(uv->dir, &uv->block_size);
+    /* Detect the I/O capabilities of the underlying file system. */
+    rv = osProbeIO(uv->dir, &direct_io, &uv->async_io);
     if (rv != 0) {
-        uvErrorf(uv, "detect block size: %s", uv_strerror(rv));
+        uvErrorf(uv, "probe I/O capabilities: %s", uv_strerror(rv));
         rv = RAFT_IOERR;
         goto err;
     }
+    uv->direct_io = direct_io != 0;
+    uv->block_size = direct_io != 0 ? direct_io : 4096;
 
     /* We expect the maximum segment size to be a multiple of the block size */
     assert(UV__MAX_SEGMENT_SIZE % uv->block_size == 0);

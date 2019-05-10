@@ -4,7 +4,6 @@
 #include <sys/eventfd.h>
 #include <sys/vfs.h>
 #include <unistd.h>
-#include <xfs/xfs.h>
 
 #include <uv.h>
 
@@ -54,14 +53,12 @@ static void createWorkCb(uv_work_t *work)
         goto err;
     }
 
-    /* Set direct I/O if possible. */
-    rv = osSetDirectIO(f->fd);
-    if (rv != 0) {
-        if (rv != ENOTSUP) {
+    /* Set direct I/O if available. */
+    if (f->direct) {
+        rv = osSetDirectIO(f->fd);
+        if (rv != 0) {
             goto err;
         }
-        /* Direct I/O is not supported: io_submit will be blocking. */
-        f->async = false;
     }
 
     req->status = 0;
@@ -342,13 +339,17 @@ out:
     maybeClosed(f);
 }
 
-int uvFileInit(struct uvFile *f, struct uv_loop_s *loop)
+int uvFileInit(struct uvFile *f,
+               struct uv_loop_s *loop,
+               bool direct,
+               bool async)
 {
     int rv;
 
     f->loop = loop;
     f->fd = -1;
-    f->async = true;
+    f->direct = direct;
+    f->async = async;
     f->event_fd = -1;
 
     /* Create an event file descriptor to get notified when a write has
@@ -516,9 +517,7 @@ int uvFileWrite(struct uvFile *f,
 
 #if defined(RWF_NOWAIT)
     /* If io_submit can be run in a 100% non-blocking way, we'll try to write
-
-     * without using the threadpool, unless we had previously detected that this
-     * mode is not supported. */
+     * without using the threadpool. */
     if (f->async) {
         req->iocb.aio_flags |= IOCB_FLAG_RESFD;
         req->iocb.aio_resfd = f->event_fd;
@@ -527,7 +526,7 @@ int uvFileWrite(struct uvFile *f,
 #else
     /* Since there's no support for NOWAIT, io_submit might occasionally block
      * and we need to run it in the threadpool. */
-    f->async = false;
+    assert(f->async == false);
 #endif /* RWF_NOWAIT */
 
 #if defined(RWF_NOWAIT)
@@ -545,8 +544,9 @@ int uvFileWrite(struct uvFile *f,
         /* Check the reason of the error. */
         switch (errno) {
             case EOPNOTSUPP:
-                /* NOWAIT is not supported, fallback to sync mode */
-                f->async = false;
+                /* NOWAIT is not supported, this should occur because we checked
+                 * it in osProbeIO. */
+                assert(0);
                 break;
             case EAGAIN:
                 break;
