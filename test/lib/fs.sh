@@ -20,6 +20,11 @@ if [ "${#}" -lt 1 ]; then
 fi
 
 cmd="${1}"
+shift
+
+if [ "${#}" -gt 0 ]; then
+    types="${@}"
+fi
 
 if [ "${cmd}" = "setup" ]; then
     mkdir ./tmp
