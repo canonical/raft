@@ -13,7 +13,6 @@ zfs
 if [ "$1" = "setup" ]; then
     mkdir ./tmp
 
-    i=0
     for type in $types; do
 	echo -n "Creating $type loop device mount..."
 
@@ -26,23 +25,22 @@ if [ "$1" = "setup" ]; then
 	else
 	    # Create a loopback disk device
 	    dd if=/dev/zero of="./tmp/.${type}" bs=4096 count=28672 > /dev/null 2>&1
-	    sudo losetup "/dev/loop${i}" "./tmp/.${type}"
+	    loop=$(sudo losetup -f)
+	    sudo losetup "${loop}" "./tmp/.${type}"
 
 	    # Initialize the file system
 	    if [ "$type" = "zfs" ]; then
-		sudo zpool create raft "/dev/loop${i}"
+		sudo zpool create raft "${loop}"
 		sudo zfs create -o mountpoint=$(pwd)/tmp/zfs raft/zfs
 	    else
-		sudo mkfs.${type} "/dev/loop${i}" > /dev/null 2>&1
-		sudo mount "/dev/loop${i}" "./tmp/${type}"
+		sudo mkfs.${type} "${loop}" > /dev/null 2>&1
+		sudo mount "${loop}" "./tmp/${type}"
 	    fi
 	fi
 
 	sudo chown $USER "./tmp/${type}"
 
 	echo " done"
-
-	i=$(expr $i + 1)
     done
 
     exit 0
@@ -50,7 +48,6 @@ fi
 
 if [ "$1" = "teardown" ]; then
 
-    i=0
     for type in $types; do
 	echo -n "Deleting $type loop device mount..."
 
@@ -64,11 +61,10 @@ if [ "$1" = "teardown" ]; then
 	    fi
 
 	    # For regular file systems, remove the loopback disk device.
-	    sudo losetup -d "/dev/loop${i}"
+	    loop=$(sudo losetup -a | grep ".${type}" | cut -f 1 -d :)
+	    sudo losetup -d "${loop}"
 	    rm "./tmp/.${type}"
 	fi
-
-	i=$(expr $i + 1)
 
 	echo " done"
     done
