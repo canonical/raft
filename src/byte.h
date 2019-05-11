@@ -73,7 +73,7 @@ RAFT_INLINE void bytePut8(void **cursor, uint8_t value)
 
 RAFT_INLINE void bytePut32(void **cursor, uint32_t value)
 {
-    *(uint32_t *)(*cursor) = value;
+    *(uint32_t *)(*cursor) = byteFlip32(value);
     *cursor += sizeof(uint32_t);
 }
 
