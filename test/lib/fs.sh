@@ -3,6 +3,10 @@
 # Setup loopback disk devices to test the raft I/O implementation against
 # various file systems.
 
+usage() {
+    echo "usage: $0 setup|teardown [types]"
+}
+
 types="tmpfs
 ext4
 xfs
@@ -10,7 +14,14 @@ btrfs
 zfs
 "
 
-if [ "$1" = "setup" ]; then
+if [ "${#}" -lt 1 ]; then
+    usage
+    exit 1
+fi
+
+cmd="${1}"
+
+if [ "${cmd}" = "setup" ]; then
     mkdir ./tmp
 
     for type in $types; do
@@ -46,7 +57,7 @@ if [ "$1" = "setup" ]; then
     exit 0
 fi
 
-if [ "$1" = "teardown" ]; then
+if [ "${cmd}" = "teardown" ]; then
 
     for type in $types; do
 	echo -n "Deleting $type loop device mount..."
@@ -74,6 +85,6 @@ if [ "$1" = "teardown" ]; then
     exit 0
 fi
 
-echo "usage: $0 setup|teardown"
+usage
 
 exit 1
