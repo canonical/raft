@@ -1,9 +1,7 @@
-/**
- * Encoding routines for the the libuv-based @raft_io backend.
- */
+/* Encoding routines for the the libuv-based @raft_io backend. */
 
-#ifndef UV_ENCODING_H
-#define UV_ENCODING_H
+#ifndef UV_ENCODING_H_
+#define UV_ENCODING_H_
 
 #include <uv.h>
 
@@ -54,4 +52,4 @@ void uvEncodeBatchHeader(const struct raft_entry *entries,
                          unsigned n,
                          void *buf);
 
-#endif /* UV_ENCODING_H */
+#endif /* UV_ENCODING_H_ */

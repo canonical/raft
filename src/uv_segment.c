@@ -147,8 +147,8 @@ static int loadEntriesBatch(struct uv *uv,
     unsigned i;                /* Iterate through the entries */
     struct raft_buffer header; /* Batch header */
     struct raft_buffer data;   /* Batch data */
-    unsigned crc1;             /* Target checksum */
-    unsigned crc2;             /* Actual checksum */
+    uint32_t crc1;             /* Target checksum */
+    uint32_t crc2;             /* Actual checksum */
     off_t offset;              /* Current segment file offset */
     int rv;
 
@@ -202,7 +202,7 @@ static int loadEntriesBatch(struct uv *uv,
     }
 
     /* Check batch header integrity. */
-    crc1 = byteFlip32(*(uint64_t *)preamble);
+    crc1 = byteFlip32(*(uint32_t *)preamble);
     crc2 = byteCrc32(header.base, header.len, 0);
     if (crc1 != crc2) {
         uvErrorf(uv, "corrupted batch header");
@@ -616,8 +616,8 @@ int uvSegmentBufferAppend(struct uvSegmentBuffer *b,
                           unsigned n_entries)
 {
     size_t size;   /* Total size of the batch */
-    unsigned crc1; /* Header checksum */
-    unsigned crc2; /* Data checksum */
+    uint32_t crc1; /* Header checksum */
+    uint32_t crc2; /* Data checksum */
     void *crc1_p;  /* Pointer to header checksum slot */
     void *crc2_p;  /* Pointer to data checksum slot */
     void *header;  /* Pointer to the header section */
