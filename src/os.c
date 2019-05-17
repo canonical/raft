@@ -303,7 +303,8 @@ err:
     return rv;
 }
 
-/* Check if direct I/O is possible on the given fd. */
+/* Check if direct I/O is possible on the given fd. Return the appropriate
+ * buffer size in that case, or 0 if direct I/O is not supported. */
 static int probeDirectIO(int fd, size_t *size)
 {
     int flags;             /* Current fcntl flags. */
