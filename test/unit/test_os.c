@@ -44,9 +44,9 @@ static void tear_down(void *data)
     {                                                   \
         size_t direct_io;                               \
         bool async_io;                                  \
-        int rv2;                                        \
-        rv2 = osProbeIO(f->dir, &direct_io, &async_io); \
-        munit_assert_int(rv2, ==, RV);                  \
+        int rv_;                                        \
+        rv_ = osProbeIO(f->dir, &direct_io, &async_io); \
+        munit_assert_int(rv_, ==, RV);                  \
     }
 
 /******************************************************************************
