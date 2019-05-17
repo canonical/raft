@@ -279,7 +279,7 @@ int osCreateFile(const osDir dir,
     }
     rv = osOpen(dir, filename, flags, &fd);
     if (rv != 0) {
-        return RAFT_IOERR;
+        goto err;
     }
     rv = writev(fd, (const struct iovec *)bufs, n_bufs);
     if (rv != (int)(size)) {
