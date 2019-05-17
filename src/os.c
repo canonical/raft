@@ -207,6 +207,7 @@ int osHasTrailingZeros(const int fd, bool *flag)
 
     rv = osReadN(fd, data, size);
     if (rv != 0) {
+        free(data);
         return rv;
     }
 
@@ -221,7 +222,6 @@ int osHasTrailingZeros(const int fd, bool *flag)
 
 done:
     free(data);
-
     return 0;
 }
 
