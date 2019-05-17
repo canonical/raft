@@ -30,9 +30,6 @@ int osEnsureDir(const osDir dir)
     struct stat sb;
     int rv;
 
-    /* Check that the given path doesn't exceed our static buffer limit */
-    assert(strnlen(dir, OS_MAX_DIR_LEN + 1) <= OS_MAX_DIR_LEN);
-
     /* Make sure we have a directory we can write into. */
     rv = stat(dir, &sb);
     if (rv == -1) {

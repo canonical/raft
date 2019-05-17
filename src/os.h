@@ -85,13 +85,6 @@ int osCreateFile(const osDir dir,
                  struct raft_buffer *bufs,
                  unsigned n_bufs);
 
-struct osFileSystemInfo
-{
-    size_t block_size; /* Block size to use when writing. */
-    bool direct_io;    /* Whether direct I/O is supported. */
-    bool async_io;     /* Whether fully asynchronous I/O is supported. */
-};
-
 /* Return information about the I/O capabilities of the underlying file
  * system.
  *
