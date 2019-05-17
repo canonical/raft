@@ -44,6 +44,7 @@ int convertToCandidate(struct raft *r);
  *   index just after the last one in its log. */
 int convertToLeader(struct raft *r);
 
+/* Used in case of errors or when shutting down. */
 void convertToUnavailable(struct raft *r);
 
 #endif /* CONVERT_H_ */

@@ -46,21 +46,21 @@ static void clearCandidate(struct raft *r)
 
 static void failApply(struct raft_apply *req)
 {
-    if (req != NULL && req->cb != NULL) {
+    if (req->cb != NULL) {
         req->cb(req, RAFT_LEADERSHIPLOST, NULL);
     }
 }
 
 static void failBarrier(struct raft_barrier *req)
 {
-    if (req != NULL && req->cb != NULL) {
+    if (req->cb != NULL) {
         req->cb(req, RAFT_LEADERSHIPLOST);
     }
 }
 
 static void failChange(struct raft_change *req)
 {
-    if (req != NULL && req->cb != NULL) {
+    if (req->cb != NULL) {
         req->cb(req, RAFT_LEADERSHIPLOST);
     }
 }
