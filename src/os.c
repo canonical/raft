@@ -111,12 +111,19 @@ int osRename(const osDir dir,
              const osFilename filename1,
              const osFilename filename2)
 {
+    struct stat sb;
     osPath path1;
     osPath path2;
     int rv;
     osJoin(dir, filename1, path1);
     osJoin(dir, filename2, path2);
-    /* TODO: double check that filename2 does not exist. */
+    /* Check that filename2 does not exist. */
+    rv = stat(path2, &sb);
+    if (rv == 0) {
+        return EEXIST;
+    } else if (errno != ENOENT) {
+        return errno;
+    }
     rv = rename(path1, path2);
     if (rv == -1) {
         return errno;
