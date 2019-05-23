@@ -12,10 +12,6 @@
 #include "queue.h"
 #include "snapshot.h"
 
-/* Maximum number of cluster steps to perform when waiting for a certain state
- * to be reached. */
-#define MAX_STEPS 100
-
 /* Defaults */
 #define HEARTBEAT_TIMEOUT 100
 #define ELECTION_TIMEOUT 1000
@@ -61,10 +57,6 @@ static char *describeMessage(const struct raft_message *m)
 #else
 #define tracef(MSG, ...)
 #endif
-
-/* Maximum number of messages inflight on the network. This should be enough for
- * testing purposes. */
-#define MAX_TRANSMIT 64
 
 /* Maximum number of peer stub instances connected to a certain stub
  * instance. This should be enough for testing purposes. */
