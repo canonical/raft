@@ -475,7 +475,9 @@ int osProbeIO(const osDir dir, size_t *direct, bool *async)
     }
 #endif /* RWF_NOWAIT */
 
+#if defined(RWF_NOWAIT)
 out:
+#endif /* RWF_NOWAIT */
     close(fd);
     return 0;
 
