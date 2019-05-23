@@ -1168,10 +1168,10 @@ int raft_fixture_bootstrap(struct raft_fixture *f,
     unsigned i;
     for (i = 0; i < f->n; i++) {
         struct raft *raft = raft_fixture_get(f, i);
-        int rc;
-        rc = raft_bootstrap(raft, configuration);
-        if (rc != 0) {
-            return rc;
+        int rv;
+        rv = raft_bootstrap(raft, configuration);
+        if (rv != 0) {
+            return rv;
         }
     }
     return 0;
@@ -1180,12 +1180,12 @@ int raft_fixture_bootstrap(struct raft_fixture *f,
 int raft_fixture_start(struct raft_fixture *f)
 {
     unsigned i;
-    int rc;
+    int rv;
     for (i = 0; i < f->n; i++) {
         struct raft_fixture_server *s = &f->servers[i];
-        rc = raft_start(&s->raft);
-        if (rc != 0) {
-            return rc;
+        rv = raft_start(&s->raft);
+        if (rv != 0) {
+            return rv;
         }
     }
     return 0;
@@ -1249,35 +1249,32 @@ static bool updateLeader(struct raft_fixture *f)
         struct raft *raft = raft_fixture_get(f, i);
         unsigned j;
 
-        if (!raft_fixture_alive(f, i)) {
+        /* If the server is not alive or is not the leader, skip to the next
+         * server. */
+        if (!raft_fixture_alive(f, i) || raft_state(raft) != RAFT_LEADER) {
             continue;
         }
 
-        if (raft_state(raft) == RAFT_LEADER) {
-            /* No other server is leader for this term. */
-            for (j = 0; j < f->n; j++) {
-                struct raft *other = raft_fixture_get(f, j);
+        /* Check that no other server is leader for this term. */
+        for (j = 0; j < f->n; j++) {
+            struct raft *other = raft_fixture_get(f, j);
 
-                if (other->id == raft->id) {
-                    continue;
-                }
-
-                if (other->state == RAFT_LEADER) {
-                    if (other->current_term == raft->current_term) {
-                        fprintf(
-                            stderr,
-                            "server %u and %u are both leaders in term %llu",
-                            raft->id, other->id, raft->current_term);
-                        abort();
-                    }
-                }
+            if (other->id == raft->id || other->state != RAFT_LEADER) {
+                continue;
             }
 
-            if (raft->current_term > leader_term) {
-                leader_id = raft->id;
-                leader_i = i;
-                leader_term = raft->current_term;
+            if (other->current_term == raft->current_term) {
+                fprintf(stderr,
+                        "server %u and %u are both leaders in term %llu",
+                        raft->id, other->id, raft->current_term);
+                abort();
             }
+        }
+
+        if (raft->current_term > leader_term) {
+            leader_id = raft->id;
+            leader_i = i;
+            leader_term = raft->current_term;
         }
     }
 
@@ -1290,13 +1287,12 @@ static bool updateLeader(struct raft_fixture *f)
 
         for (i = 0; i < f->n; i++) {
             struct raft *raft = raft_fixture_get(f, i);
-            if (i == leader_i) {
-                continue;
-            }
-            if (!raft_fixture_alive(f, i) ||
+
+            /* If this server is itself the leader, or it's not alive or it's
+             * not connected to the leader, then don't count it in for
+             * stability. */
+            if (i == leader_i || !raft_fixture_alive(f, i) ||
                 raft_fixture_saturated(f, leader_i, i)) {
-                /* This server is not alive or not connected to the leader, so
-                 * don't count it in for stability. */
                 continue;
             }
 
