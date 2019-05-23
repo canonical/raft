@@ -579,7 +579,7 @@ TEST_CASE(encode, two_servers, NULL)
 {
     struct fixture *f = data;
     struct raft_buffer buf;
-    uint8_t *bytes;
+    void *bytes;
     size_t len;
     int rv;
 
@@ -601,19 +601,19 @@ TEST_CASE(encode, two_servers, NULL)
 
     bytes = buf.base;
 
-    munit_assert_int(bytes[0], ==, 1);
+    munit_assert_int(*((uint8_t*)bytes), ==, 1);
     munit_assert_int(byteFlip64(*(uint64_t *)(bytes + 1)), ==, 2);
 
     bytes = buf.base + 9;
     munit_assert_int(byteFlip64(*(uint64_t *)bytes), ==, 1);
     munit_assert_string_equal((char *)(bytes + 8), "127.0.0.1:666");
-    munit_assert_false(bytes[8 + strlen("127.0.0.1:666") + 1]);
+    munit_assert_false(*(uint8_t*)(bytes + 8 + strlen("127.0.0.1:666") + 1));
 
     bytes = buf.base + 9 + 8 + strlen("127.0.0.1:666") + 1 + 1;
 
     munit_assert_int(byteFlip64(*(uint64_t *)bytes), ==, 2);
     munit_assert_string_equal((char *)(bytes + 8), "192.168.1.1:666");
-    munit_assert_true(bytes[8 + strlen("192.168.1.1:666") + 1]);
+    munit_assert_true(*(uint8_t*)(bytes + 8 + strlen("192.168.1.1:666") + 1));
 
     raft_free(buf.base);
 
