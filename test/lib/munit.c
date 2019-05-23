@@ -1220,12 +1220,8 @@ munit_test_runner_exec(MunitTestRunner* runner, const MunitTest* test, const Mun
     psnip_clock_get_time(PSNIP_CLOCK_TYPE_CPU, &cpu_clock_end);
 #endif
 
-    if (test->tear_down != NULL) {
-#if defined(MUNIT_THREAD_LOCAL) && defined(MUNIT_ALWAYS_TEAR_DOWN)
-      munit_tear_down_jmp_buf_valid = false;
-#endif
+    if (test->tear_down != NULL)
       test->tear_down(data);
-    }
 
     if (MUNIT_LIKELY(result == MUNIT_OK)) {
       report->successful++;
@@ -1321,7 +1317,6 @@ munit_test_runner_run_test_with_params(MunitTestRunner* runner, const MunitTest*
 #if !defined(MUNIT_NO_FORK)
   int pipefd[2];
   pid_t fork_pid;
-  int orig_stderr;
   ssize_t bytes_written = 0;
   ssize_t write_res;
   ssize_t bytes_read = 0;
@@ -1375,6 +1370,8 @@ munit_test_runner_run_test_with_params(MunitTestRunner* runner, const MunitTest*
 
     fork_pid = fork();
     if (fork_pid == 0) {
+      int orig_stderr;
+
       close(pipefd[0]);
 
       orig_stderr = munit_replace_stderr(stderr_buf);
