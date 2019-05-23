@@ -7,6 +7,8 @@
 
 TEST_MODULE(os);
 
+#if defined(RWF_NOWAIT)
+
 /******************************************************************************
  *
  * Helpers
@@ -63,7 +65,6 @@ TEST_GROUP(probe_io, error)
 
 /* If the given path is not executable, the block size of the underlying file
  * system can't be determined and an error is returned. */
-#if defined(RWF_NOWAIT)
 TEST_CASE(probe_io, error, no_access, NULL)
 {
     struct fixture *f = data;
@@ -94,4 +95,5 @@ TEST_CASE(probe_io, error, no_resources, dir_fs_btrfs_params)
     test_aio_destroy(ctx);
     return MUNIT_OK;
 }
+
 #endif /* RWF_NOWAIT */

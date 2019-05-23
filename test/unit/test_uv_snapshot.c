@@ -27,7 +27,7 @@ TEST_MODULE(uv_snapshot);
 
 #define WRITE_DATA                                                           \
     test_io_uv_write_snapshot_data_file(f->dir, f->meta.term, f->meta.index, \
-                                        f->meta.timestamp, f->data,          \
+                                        f->meta.timestamp, &f->data,         \
                                         sizeof f->data)
 
 /******************************************************************************
@@ -44,7 +44,7 @@ struct load__fixture
 {
     FIXTURE_UV;
     struct uvSnapshotInfo meta;
-    uint8_t data[8];
+    uint64_t data;
     struct raft_snapshot snapshot;
 };
 
@@ -78,7 +78,7 @@ TEST_CASE(load, success, first, NULL)
     struct load__fixture *f = data;
     (void)params;
 
-    *(uint64_t *)f->data = 123;
+    f->data = 123;
 
     WRITE_META;
     WRITE_DATA;
@@ -453,7 +453,7 @@ TEST_TEAR_DOWN(get)
 #define get__write_snapshot                                       \
     uint8_t buf[8];                                               \
     void *cursor = buf;                                           \
-    bytePut64(&cursor, 666);                                    \
+    bytePut64(&cursor, 666);                                      \
     test_io_uv_write_snapshot_meta_file(f->dir, 3, 8, 123, 1, 1); \
     test_io_uv_write_snapshot_data_file(f->dir, 3, 8, 123, buf, sizeof buf)
 

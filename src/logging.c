@@ -6,11 +6,11 @@
 #define EMIT_BUF_LEN 1024
 
 void emitToStream(FILE *stream,
-                    unsigned server_id,
-                    raft_time time,
-                    int level,
-                    const char *format,
-                    va_list args)
+                  unsigned server_id,
+                  raft_time time,
+                  int level,
+                  const char *format,
+                  va_list args)
 {
     char buf[EMIT_BUF_LEN];
     char *cursor = buf;
