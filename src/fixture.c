@@ -179,66 +179,59 @@ struct io
 };
 
 /* Advance the fault counters and return @true if an error should occurr. */
-static bool ioFaultTick(struct io *s)
+static bool ioFaultTick(struct io *io)
 {
-    if (s->fault.countdown < 0) {
+    if (io->fault.countdown < 0) {
         return false;
     }
 
-    if (s->fault.countdown > 0) {
-        s->fault.countdown--;
+    if (io->fault.countdown > 0) {
+        io->fault.countdown--;
         return false;
     }
 
-    assert(s->fault.countdown == 0);
+    assert(io->fault.countdown == 0);
 
-    if (s->fault.n < 0) {
+    if (io->fault.n < 0) {
         /* Trigger the fault forever. */
         return true;
     }
 
-    if (s->fault.n > 0) {
+    if (io->fault.n > 0) {
         /* Trigger the fault at least this time. */
-        s->fault.n--;
+        io->fault.n--;
         return true;
     }
 
-    assert(s->fault.n == 0);
+    assert(io->fault.n == 0);
 
     /* We reached 'repeat' ticks, let's stop triggering the fault. */
-    s->fault.countdown--;
+    io->fault.countdown--;
 
     return false;
 }
 
-static int ioMethodInit(struct raft_io *io, unsigned id, const char *address)
+static int ioMethodInit(struct raft_io *raft_io, unsigned id, const char *address)
 {
-    struct io *s;
-
-    s = io->impl;
-
-    s->id = id;
-    s->address = address;
-
+    struct io *io = raft_io->impl;
+    io->id = id;
+    io->address = address;
     return 0;
 }
 
-static int ioMethodStart(struct raft_io *io,
+static int ioMethodStart(struct raft_io *raft_io,
                          unsigned msecs,
                          raft_io_tick_cb tick_cb,
                          raft_io_recv_cb recv_cb)
 {
-    struct io *s;
-    (void)msecs;
-    assert(io != NULL);
-    s = io->impl;
-    if (ioFaultTick(s)) {
+    struct io *io = raft_io->impl;
+    if (ioFaultTick(io)) {
         return RAFT_IOERR;
     }
-    s->tick_interval = msecs;
-    s->tick_cb = tick_cb;
-    s->recv_cb = recv_cb;
-    s->next_tick = *s->time + s->tick_interval;
+    io->tick_interval = msecs;
+    io->tick_cb = tick_cb;
+    io->recv_cb = recv_cb;
+    io->next_tick = *io->time + io->tick_interval;
     return 0;
 }
 
@@ -517,29 +510,27 @@ static void ioFlushAll(struct io *io)
     }
 }
 
-static int ioMethodClose(struct raft_io *io, void (*cb)(struct raft_io *io))
+static int ioMethodClose(struct raft_io *raft_io, void (*cb)(struct raft_io *io))
 {
-    struct io *s;
+    struct io *io = raft_io->impl;
     size_t i;
 
-    s = io->impl;
-
-    for (i = 0; i < s->n; i++) {
-        struct raft_entry *entry = &s->entries[i];
+    for (i = 0; i < io->n; i++) {
+        struct raft_entry *entry = &io->entries[i];
         raft_free(entry->buf.base);
     }
 
-    if (s->entries != NULL) {
-        raft_free(s->entries);
+    if (io->entries != NULL) {
+        raft_free(io->entries);
     }
 
-    if (s->snapshot != NULL) {
-        snapshot__close(s->snapshot);
-        raft_free(s->snapshot);
+    if (io->snapshot != NULL) {
+        snapshot__close(io->snapshot);
+        raft_free(io->snapshot);
     }
 
     if (cb != NULL) {
-        cb(io);
+        cb(raft_io);
     }
 
     return 0;
@@ -630,28 +621,26 @@ err:
     return rv;
 }
 
-static int ioMethodBootstrap(struct raft_io *io,
+static int ioMethodBootstrap(struct raft_io *raft_io,
                              const struct raft_configuration *conf)
 {
-    struct io *s;
+    struct io *io = raft_io->impl;
     struct raft_buffer buf;
     struct raft_entry *entries;
     int rv;
 
-    s = io->impl;
-
-    if (ioFaultTick(s)) {
+    if (ioFaultTick(io)) {
         return RAFT_IOERR;
     }
 
-    if (s->term != 0) {
+    if (io->term != 0) {
         return RAFT_CANTBOOTSTRAP;
     }
 
-    assert(s->voted_for == 0);
-    assert(s->snapshot == NULL);
-    assert(s->entries == NULL);
-    assert(s->n == 0);
+    assert(io->voted_for == 0);
+    assert(io->snapshot == NULL);
+    assert(io->entries == NULL);
+    assert(io->n == 0);
 
     /* Encode the given configuration. */
     rv = configurationEncode(conf, &buf);
@@ -659,7 +648,7 @@ static int ioMethodBootstrap(struct raft_io *io,
         return rv;
     }
 
-    entries = raft_calloc(1, sizeof *s->entries);
+    entries = raft_calloc(1, sizeof *io->entries);
     if (entries == NULL) {
         return RAFT_NOMEM;
     }
@@ -668,40 +657,40 @@ static int ioMethodBootstrap(struct raft_io *io,
     entries[0].type = RAFT_CHANGE;
     entries[0].buf = buf;
 
-    s->term = 1;
-    s->voted_for = 0;
-    s->snapshot = NULL;
-    s->entries = entries;
-    s->n = 1;
+    io->term = 1;
+    io->voted_for = 0;
+    io->snapshot = NULL;
+    io->entries = entries;
+    io->n = 1;
 
     return 0;
 }
 
-static int ioMethodSetTerm(struct raft_io *io, const raft_term term)
+static int ioMethodSetTerm(struct raft_io *raft_io, const raft_term term)
 {
-    struct io *s;
+    struct io *io = raft_io->impl;
 
-    s = io->impl;
-
-    if (ioFaultTick(s)) {
+    if (ioFaultTick(io)) {
         return RAFT_IOERR;
     }
 
-    s->term = term;
-    s->voted_for = 0;
+    io->term = term;
+    io->voted_for = 0;
 
     return 0;
 }
 
 static int ioMethodSetVote(struct raft_io *raft_io, const unsigned server_id)
 {
-    struct io *io;
-    io = raft_io->impl;
+    struct io *io = raft_io->impl;
+
     if (ioFaultTick(io)) {
         return RAFT_IOERR;
     }
+
     io->voted_for = server_id;
     tracef("io: set vote: %d %d", server_id, io->index);
+
     return 0;
 }
 
@@ -711,10 +700,8 @@ static int ioMethodAppend(struct raft_io *raft_io,
                           unsigned n,
                           raft_io_append_cb cb)
 {
-    struct io *io;
+    struct io *io = raft_io->impl;
     struct append *r;
-
-    io = raft_io->impl;
 
     if (ioFaultTick(io)) {
         return RAFT_IOERR;
@@ -736,23 +723,21 @@ static int ioMethodAppend(struct raft_io *raft_io,
     return 0;
 }
 
-static int ioMethodTruncate(struct raft_io *io, raft_index index)
+static int ioMethodTruncate(struct raft_io *raft_io, raft_index index)
 {
-    struct io *s;
+    struct io *io = raft_io->impl;
     size_t n;
     raft_index start_index;
 
-    s = io->impl;
-
-    if (s->snapshot == NULL) {
+    if (io->snapshot == NULL) {
         start_index = 1;
     } else {
-        start_index = s->snapshot->index;
+        start_index = io->snapshot->index;
     }
 
     assert(index >= start_index);
 
-    if (ioFaultTick(s)) {
+    if (ioFaultTick(io)) {
         return RAFT_IOERR;
     }
 
@@ -766,30 +751,30 @@ static int ioMethodTruncate(struct raft_io *io, raft_index index)
         if (entries == NULL) {
             return RAFT_NOMEM;
         }
-        memcpy(entries, s->entries, n * sizeof *s->entries);
+        memcpy(entries, io->entries, n * sizeof *io->entries);
 
         /* Release any truncated entry */
-        if (s->entries != NULL) {
+        if (io->entries != NULL) {
             size_t i;
-            for (i = n; i < s->n; i++) {
-                raft_free(s->entries[i].buf.base);
+            for (i = n; i < io->n; i++) {
+                raft_free(io->entries[i].buf.base);
             }
-            raft_free(s->entries);
+            raft_free(io->entries);
         }
-        s->entries = entries;
+        io->entries = entries;
     } else {
         /* Release everything we have */
-        if (s->entries != NULL) {
+        if (io->entries != NULL) {
             size_t i;
-            for (i = 0; i < s->n; i++) {
-                raft_free(s->entries[i].buf.base);
+            for (i = 0; i < io->n; i++) {
+                raft_free(io->entries[i].buf.base);
             }
-            raft_free(s->entries);
-            s->entries = NULL;
+            raft_free(io->entries);
+            io->entries = NULL;
         }
     }
 
-    s->n = n;
+    io->n = n;
 
     return 0;
 }
@@ -799,9 +784,8 @@ static int ioMethodSnapshotPut(struct raft_io *raft_io,
                                const struct raft_snapshot *snapshot,
                                raft_io_snapshot_put_cb cb)
 {
-    struct io *io;
+    struct io *io = raft_io->impl;
     struct snapshot_put *r;
-    io = raft_io->impl;
 
     r = raft_malloc(sizeof *r);
     assert(r != NULL);
@@ -821,9 +805,8 @@ static int ioMethodSnapshotGet(struct raft_io *raft_io,
                                struct raft_io_snapshot_get *req,
                                raft_io_snapshot_get_cb cb)
 {
-    struct io *io;
+    struct io *io = raft_io->impl;
     struct snapshot_get *r;
-    io = raft_io->impl;
 
     r = raft_malloc(sizeof *r);
     assert(r != NULL);
@@ -838,11 +821,10 @@ static int ioMethodSnapshotGet(struct raft_io *raft_io,
     return 0;
 }
 
-static raft_time ioMethodTime(struct raft_io *io)
+static raft_time ioMethodTime(struct raft_io *raft_io)
 {
-    struct io *s;
-    s = io->impl;
-    return *s->time;
+    struct io *io = raft_io->impl;
+    return *io->time;
 }
 
 static int ioMethodRandom(struct raft_io *raft_io, int min, int max)
@@ -854,29 +836,24 @@ static int ioMethodRandom(struct raft_io *raft_io, int min, int max)
     return io->randomized_election_timeout;
 }
 
-static void ioMethodEmit(struct raft_io *io, int level, const char *format, ...)
+static void ioMethodEmit(struct raft_io *raft_io, int level, const char *format, ...)
 {
-    struct io *s;
+    struct io *io = raft_io->impl;
     va_list args;
     va_start(args, format);
-    s = io->impl;
-    emitToStream(stderr, s->id, *s->time, level, format, args);
+    emitToStream(stderr, io->id, *io->time, level, format, args);
     va_end(args);
 }
 
-/**
- * Queue up a request which will be processed later, when io_stub_flush()
- * is invoked.
- */
+/* Queue up a request which will be processed later, when io_stub_flush()
+ * is invoked. */
 static int ioMethodSend(struct raft_io *raft_io,
                         struct raft_io_send *req,
                         const struct raft_message *message,
                         raft_io_send_cb cb)
 {
-    struct io *io;
+    struct io *io = raft_io->impl;
     struct send *r;
-
-    io = raft_io->impl;
 
     tracef("io: send: %s to server %d", describeMessage(message),
            message->server_id);
@@ -938,56 +915,49 @@ static void ioDeliverTransmit(struct io *io, struct transmit *transmit)
     raft_free(transmit);
 }
 
-/* Connect @io to @other, enabling delivery of messages sent from @io to @other.
+/* Connect @raft_io to @other, enabling delivery of messages sent from @io to
+ * @other.
  */
-static void ioConnect(struct raft_io *io, struct raft_io *other)
+static void ioConnect(struct raft_io *raft_io, struct raft_io *other)
 {
-    struct io *s;
-    struct io *s_other;
-    s = io->impl;
-    s_other = other->impl;
-    assert(s->n_peers < MAX_PEERS);
-    s->peers[s->n_peers].io = s_other;
-    s->peers[s->n_peers].connected = true;
-    s->peers[s->n_peers].saturated = false;
-    s->n_peers++;
+    struct io *io = raft_io->impl;
+    struct io *io_other = other->impl;
+    assert(io->n_peers < MAX_PEERS);
+    io->peers[io->n_peers].io = io_other;
+    io->peers[io->n_peers].connected = true;
+    io->peers[io->n_peers].saturated = false;
+    io->n_peers++;
 }
 
 /* Return whether the connection with the given peer is saturated. */
-static bool ioSaturated(struct raft_io *io, struct raft_io *other)
+static bool ioSaturated(struct raft_io *raft_io, struct raft_io *other)
 {
-    struct io *s;
-    struct io *s_other;
+    struct io *io = raft_io->impl;
+    struct io *io_other = other->impl;
     struct peer *peer;
-    s = io->impl;
-    s_other = other->impl;
-    peer = ioGetPeer(s, s_other->id);
+    peer = ioGetPeer(io, io_other->id);
     return peer != NULL && peer->saturated;
 }
 
-/* Disconnect @io and @other, causing calls to @io->send() to fail
+/* Disconnect @raft_io and @other, causing calls to @io->send() to fail
  * asynchronously when sending messages to @other. */
-static void ioDisconnect(struct raft_io *io, struct raft_io *other)
+static void ioDisconnect(struct raft_io *raft_io, struct raft_io *other)
 {
-    struct io *s;
-    struct io *s_other;
+    struct io *io = raft_io->impl;
+    struct io *io_other = other->impl;
     struct peer *peer;
-    s = io->impl;
-    s_other = other->impl;
-    peer = ioGetPeer(s, s_other->id);
+    peer = ioGetPeer(io, io_other->id);
     assert(peer != NULL);
     peer->connected = false;
 }
 
-/* Reconnect @io and @other. */
-static void ioReconnect(struct raft_io *io, struct raft_io *other)
+/* Reconnect @raft_io and @other. */
+static void ioReconnect(struct raft_io *raft_io, struct raft_io *other)
 {
-    struct io *s;
-    struct io *s_other;
+    struct io *io = raft_io->impl;
+    struct io *io_other = other->impl;
     struct peer *peer;
-    s = io->impl;
-    s_other = other->impl;
-    peer = ioGetPeer(s, s_other->id);
+    peer = ioGetPeer(io, io_other->id);
     assert(peer != NULL);
     peer->connected = true;
 }
@@ -1006,16 +976,14 @@ static void ioSaturate(struct raft_io *io, struct raft_io *other)
     peer->saturated = true;
 }
 
-/* Desaturate the connection from @io to @other, re-enabling delivery of
- * messages sent from @io to @other. */
-static void ioDesaturate(struct raft_io *io, struct raft_io *other)
+/* Desaturate the connection from @raft_io to @other, re-enabling delivery of
+ * messages sent from @raft_io to @other. */
+static void ioDesaturate(struct raft_io *raft_io, struct raft_io *other)
 {
-    struct io *s;
-    struct io *s_other;
+    struct io *io = raft_io->impl;
+    struct io *io_other = other->impl;
     struct peer *peer;
-    s = io->impl;
-    s_other = other->impl;
-    peer = ioGetPeer(s, s_other->id);
+    peer = ioGetPeer(io, io_other->id);
     assert(peer != NULL && peer->connected);
     peer->saturated = false;
 }
