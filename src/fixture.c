@@ -211,7 +211,9 @@ static bool ioFaultTick(struct io *io)
     return false;
 }
 
-static int ioMethodInit(struct raft_io *raft_io, unsigned id, const char *address)
+static int ioMethodInit(struct raft_io *raft_io,
+                        unsigned id,
+                        const char *address)
 {
     struct io *io = raft_io->impl;
     io->id = id;
@@ -510,7 +512,8 @@ static void ioFlushAll(struct io *io)
     }
 }
 
-static int ioMethodClose(struct raft_io *raft_io, void (*cb)(struct raft_io *io))
+static int ioMethodClose(struct raft_io *raft_io,
+                         void (*cb)(struct raft_io *io))
 {
     struct io *io = raft_io->impl;
     size_t i;
@@ -836,7 +839,10 @@ static int ioMethodRandom(struct raft_io *raft_io, int min, int max)
     return io->randomized_election_timeout;
 }
 
-static void ioMethodEmit(struct raft_io *raft_io, int level, const char *format, ...)
+static void ioMethodEmit(struct raft_io *raft_io,
+                         int level,
+                         const char *format,
+                         ...)
 {
     struct io *io = raft_io->impl;
     va_list args;
@@ -1871,7 +1877,8 @@ void raft_fixture_disconnect(struct raft_fixture *f, unsigned i, unsigned j)
     ioDisconnect(io1, io2);
 }
 
-void raft_fixture_reconnect(struct raft_fixture *f, unsigned i, unsigned j) {
+void raft_fixture_reconnect(struct raft_fixture *f, unsigned i, unsigned j)
+{
     struct raft_io *io1 = &f->servers[i].io;
     struct raft_io *io2 = &f->servers[j].io;
     ioReconnect(io1, io2);
