@@ -63,10 +63,10 @@ static char *describeMessage(const struct raft_message *m)
 #define MAX_PEERS 8
 
 /* Fields common across all request types. */
-#define REQUEST                \
-    int type;                  \
-    raft_time completion_time; \
-    queue queue
+#define REQUEST                                                            \
+    int type;                  /* Request code type. */                    \
+    raft_time completion_time; /* When the request should be fulfilled. */ \
+    queue queue                /* Link the I/O pending requests queue. */
 
 /* Request type codes. */
 enum { APPEND = 1, SEND, TRANSMIT, SNAPSHOT_PUT, SNAPSHOT_GET };
@@ -170,7 +170,8 @@ struct io
         int n;         /* Repeat the fault this many times. Default is -1. */
     } fault;
 
-    bool drop[5];
+    /* If flag i is true, messages of type i will be silently dropped. */
+    bool drop[N_MESSAGE_TYPES];
 
     /* Counters of events that happened so far. */
     unsigned n_send[N_MESSAGE_TYPES];
@@ -178,13 +179,16 @@ struct io
     unsigned n_append;
 };
 
-/* Advance the fault counters and return @true if an error should occurr. */
+/* Advance the fault counters and return @true if an error should occur. */
 static bool ioFaultTick(struct io *io)
 {
+    /* If the countdown is negative, faults are disabled. */
     if (io->fault.countdown < 0) {
         return false;
     }
 
+    /* If the countdown didn't reach zero, it's still not come the time to
+     * trigger faults. */
     if (io->fault.countdown > 0) {
         io->fault.countdown--;
         return false;
@@ -192,20 +196,20 @@ static bool ioFaultTick(struct io *io)
 
     assert(io->fault.countdown == 0);
 
+    /* If n is negative we keep triggering the fault forever. */
     if (io->fault.n < 0) {
-        /* Trigger the fault forever. */
         return true;
     }
 
+    /* If n is positive we need to trigger the fault at least this time. */
     if (io->fault.n > 0) {
-        /* Trigger the fault at least this time. */
         io->fault.n--;
         return true;
     }
 
     assert(io->fault.n == 0);
 
-    /* We reached 'repeat' ticks, let's stop triggering the fault. */
+    /* We reached 'n', let's disable faults. */
     io->fault.countdown--;
 
     return false;
@@ -260,8 +264,8 @@ static void ioDropTransmit(struct io *io, struct transmit *transmit)
     raft_free(transmit);
 }
 
-/* Flush an append entries request, appending its entries in the local in-memory
-   log. */
+/* Flush an append entries request, appending its entries to the local in-memory
+ * log. */
 static void ioFlushAppend(struct io *s, struct append *append)
 {
     struct raft_entry *entries;
@@ -691,8 +695,8 @@ static int ioMethodSetVote(struct raft_io *raft_io, const unsigned server_id)
         return RAFT_IOERR;
     }
 
-    io->voted_for = server_id;
     tracef("io: set vote: %d %d", server_id, io->index);
+    io->voted_for = server_id;
 
     return 0;
 }
@@ -861,12 +865,12 @@ static int ioMethodSend(struct raft_io *raft_io,
     struct io *io = raft_io->impl;
     struct send *r;
 
-    tracef("io: send: %s to server %d", describeMessage(message),
-           message->server_id);
-
     if (ioFaultTick(io)) {
         return RAFT_IOERR;
     }
+
+    tracef("io: send: %s to server %d", describeMessage(message),
+           message->server_id);
 
     r = raft_malloc(sizeof *r);
     assert(r != NULL);
