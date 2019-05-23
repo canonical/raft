@@ -1237,7 +1237,7 @@ unsigned raft_fixture_voted_for(struct raft_fixture *f, unsigned i)
  * Return true if the current leader turns out to be different from the one at
  * the time this function was called.
  */
-static bool updateLeader(struct raft_fixture *f)
+static bool updateLeaderAndCheckElectionSafety(struct raft_fixture *f)
 {
     unsigned leader_id = 0;
     unsigned leader_i = 0;
@@ -1359,6 +1359,7 @@ static void checkLeaderAppendOnly(struct raft_fixture *f)
     for (index = 1; index <= last; index++) {
         const struct raft_entry *entry1;
         const struct raft_entry *entry2;
+        size_t i;
 
         entry1 = logGet(&f->log, index);
         entry2 = logGet(&raft->log, index);
@@ -1371,14 +1372,13 @@ static void checkLeaderAppendOnly(struct raft_fixture *f)
             continue;
         }
 
-        /* TODO: check other entry types too. */
-        if (entry1->type != RAFT_COMMAND) {
-            continue;
-        }
-
-        /* Entry was not overwritten. TODO: check all content. */
+        /* Entry was not overwritten. */
+        assert(entry1->type == entry2->type);
         assert(entry1->term == entry2->term);
-        assert(*(uint32_t *)entry1->buf.base == *(uint32_t *)entry2->buf.base);
+        for (i = 0; i < entry1->buf.len; i++) {
+            assert(((uint8_t *)entry1->buf.base)[i] ==
+                   ((uint8_t *)entry2->buf.base)[i]);
+        }
     }
 }
 
@@ -1532,7 +1532,7 @@ struct raft_fixture_event *raft_fixture_step(struct raft_fixture *f)
 
     /* If the leader has not changed check the Leader Append-Only
      * guarantee. */
-    if (!updateLeader(f)) {
+    if (!updateLeaderAndCheckElectionSafety(f)) {
         checkLeaderAppendOnly(f);
     }
 
