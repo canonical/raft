@@ -14,14 +14,36 @@
 
 #define TEST_DIR_TEMPLATE "./tmp/%s/raft-test-XXXXXX"
 
-char *test_dir_fs_type_supported[] = {"btrfs", "ext4", "tmpfs",
-                                      "xfs",   "zfs",  NULL};
+char *test_dir_fs_type_supported[] = {"tmpfs", "ext4",
+#if defined(RAFT_ENABLE_BTRFS_TESTS)
+                                      "btrfs",
+#endif
+#if defined(RAFT_ENABLE_XFS_TESTS)
+                                      "xfs",
+#endif
+#if defined(RAFT_ENABLE_ZFS_TESTS)
+                                      "zfs",
+#endif
+                                      NULL};
 
 char *test_dir_fs_type_btrfs[] = {"btrfs", NULL};
 
-char *test_dir_fs_type_aio[] = {"btrfs", "ext4", "xfs", NULL};
+char *test_dir_fs_type_aio[] = {
+#if defined(RAFT_ENABLE_BTRFS_TESTS)
+    "btrfs",
+#endif
+    "ext4",
+#if defined(RAFT_ENABLE_XFS_TESTS)
+    "xfs",
+#endif
+    NULL};
 
-char *test_dir_fs_type_no_aio[] = {"tmpfs", "zfs", NULL};
+char *test_dir_fs_type_no_aio[] = {"tmpfs",
+#if defined(RAFT_ENABLE_ZFS_TESTS)
+
+                                   "zfs",
+#endif
+                                   NULL};
 
 MunitParameterEnum dir_fs_btrfs_params[] = {
     {TEST_DIR_FS_TYPE, test_dir_fs_type_btrfs},
