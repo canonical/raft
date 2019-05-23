@@ -1152,11 +1152,11 @@ int raft_fixture_configuration(struct raft_fixture *f,
     for (i = 0; i < f->n; i++) {
         struct raft_fixture_server *s;
         bool voting = i < n_voting;
-        int rc;
+        int rv;
         s = &f->servers[i];
-        rc = raft_configuration_add(configuration, s->id, s->address, voting);
-        if (rc != 0) {
-            return rc;
+        rv = raft_configuration_add(configuration, s->id, s->address, voting);
+        if (rv != 0) {
+            return rv;
         }
     }
     return 0;
@@ -1394,13 +1394,13 @@ static void copyLeaderLog(struct raft_fixture *f)
     struct raft_entry *entries;
     unsigned n;
     size_t i;
-    int rc;
+    int rv;
 
     logClose(&f->log);
     logInit(&f->log);
 
-    rc = logAcquire(&raft->log, 1, &entries, &n);
-    assert(rc == 0);
+    rv = logAcquire(&raft->log, 1, &entries, &n);
+    assert(rv == 0);
 
     for (i = 0; i < n; i++) {
         struct raft_entry *entry = &entries[i];
@@ -1408,8 +1408,8 @@ static void copyLeaderLog(struct raft_fixture *f)
         buf.len = entry->buf.len;
         buf.base = raft_malloc(buf.len);
         memcpy(buf.base, entry->buf.base, buf.len);
-        rc = logAppend(&f->log, entry->term, entry->type, &buf, NULL);
-        assert(rc == 0);
+        rv = logAppend(&f->log, entry->term, entry->type, &buf, NULL);
+        assert(rv == 0);
     }
 
     logRelease(&raft->log, 1, entries, n);
