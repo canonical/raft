@@ -122,6 +122,21 @@ AC_SUBST([AM_CFLAGS])
 # Checks for header files.
 AC_CHECK_HEADERS([stdlib.h string.h stdio.h assert.h unistd.h])
 
+# Check if btrfs is available (for enabling btrfs-related tests).
+AC_CHECK_PROG(btrfs, btrfs, yes, no)
+AM_CONDITIONAL(BTRFS, test x"$btrfs" = x"yes")
+AM_COND_IF(BTRFS, AC_DEFINE(RAFT_ENABLE_BTRFS_TESTS))
+
+# Check if xfs is available (for enabling xfs-related tests).
+AC_CHECK_PROG(xfs, xfs, yes, no)
+AM_CONDITIONAL(XFS, test x"$xfs" = x"yes")
+AM_COND_IF(XFS, AC_DEFINE(RAFT_ENABLE_XFS_TESTS))
+
+# Check if zfs is available (for enabling zfs-related tests).
+AC_CHECK_PROG(zfs, zfs, yes, no)
+AM_CONDITIONAL(ZFS, test x"$zfs" = x"yes")
+AM_COND_IF(ZFS, AC_DEFINE(RAFT_ENABLE_ZFS_TESTS))
+
 # Checks for typedefs, structures, and compiler characteristics.
 AC_TYPE_SIZE_T
 AC_TYPE_SSIZE_T

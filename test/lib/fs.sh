@@ -7,12 +7,19 @@ usage() {
     echo "usage: $0 setup|teardown [types]"
 }
 
-types="tmpfs
-ext4
-xfs
-btrfs
-zfs
-"
+types="tmpfs ext4"
+
+if [ "$(which mkfs.btrfs)" != "" ]; then
+    types="$types btrfs"
+fi
+
+if [ "$(which mkfs.xfs)" != "" ]; then
+    types="$types xfs"
+fi
+
+if [ "$(which zfs)" != "" ]; then
+    types="$types zfs"
+fi
 
 if [ "${#}" -lt 1 ]; then
     usage

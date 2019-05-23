@@ -74,6 +74,8 @@ TEST_CASE(probe_io, error, no_access, NULL)
     return MUNIT_OK;
 }
 
+#if defined(RAFT_ENABLE_BTRFS_TESTS)
+
 /* No space is left on the target device. */
 TEST_CASE(probe_io, error, no_space, dir_fs_btrfs_params)
 {
@@ -95,5 +97,7 @@ TEST_CASE(probe_io, error, no_resources, dir_fs_btrfs_params)
     test_aio_destroy(ctx);
     return MUNIT_OK;
 }
+
+#endif
 
 #endif /* RWF_NOWAIT */
