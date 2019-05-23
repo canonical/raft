@@ -62,15 +62,16 @@ static char *describeMessage(const struct raft_message *m)
  * instance. This should be enough for testing purposes. */
 #define MAX_PEERS 8
 
+/* Fields common across all request types. */
 #define REQUEST                \
     int type;                  \
     raft_time completion_time; \
     queue queue
 
-/* Request types. */
+/* Request type codes. */
 enum { APPEND = 1, SEND, TRANSMIT, SNAPSHOT_PUT, SNAPSHOT_GET };
 
-/* Base type for an asynchronous request submitted to the stub I/o
+/* Abstract base type for an asynchronous request submitted to the stub I/o
  * implementation. */
 struct request
 {
@@ -111,7 +112,7 @@ struct snapshot_get
 };
 
 /* Message that has been written to the network and is waiting to be delivered
- * (or discarded) */
+ * (or discarded). */
 struct transmit
 {
     REQUEST;
@@ -130,10 +131,10 @@ struct peer
 /* Stub I/O implementation implementing all operations in-memory. */
 struct io
 {
-    struct raft_io *io;  /* I/O object we're implementing */
-    unsigned index;      /* Fixture server index */
-    raft_time *time;     /* Cluster time. */
-    raft_time next_tick; /* Time of next tick */
+    struct raft_io *io;  /* I/O object we're implementing. */
+    unsigned index;      /* Fixture server index. */
+    raft_time *time;     /* Global cluster time. */
+    raft_time next_tick; /* Time the next tick should occurs. */
 
     /* Term and vote */
     raft_term term;
@@ -241,6 +242,7 @@ static int ioMethodStart(struct raft_io *io,
     return 0;
 }
 
+/* Release the memory used by the given message tramsmit object. */
 static void ioDropTransmit(struct io *io, struct transmit *transmit)
 {
     struct raft_message *message;
@@ -263,6 +265,8 @@ static void ioDropTransmit(struct io *io, struct transmit *transmit)
     raft_free(transmit);
 }
 
+/* Flush an append entries request, appending its entries in the local in-memory
+   log. */
 static void ioFlushAppend(struct io *s, struct append *append)
 {
     struct raft_entry *entries;
@@ -374,6 +378,7 @@ static void snapshot_copy(const struct raft_snapshot *s1,
     return;
 }
 
+/* Flush a snapshot put request, copying the snapshot data. */
 static void ioFlushSnapshotPut(struct io *s, struct snapshot_put *r)
 {
     if (s->snapshot == NULL) {
@@ -391,6 +396,8 @@ static void ioFlushSnapshotPut(struct io *s, struct snapshot_put *r)
     raft_free(r);
 }
 
+/* Flush a snapshot get request, returning to the client a copy of the local
+   snapshot (if any). */
 static void ioFlushSnapshotGet(struct io *s, struct snapshot_get *r)
 {
     struct raft_snapshot *snapshot = raft_malloc(sizeof *snapshot);
@@ -477,8 +484,8 @@ out:
     raft_free(send);
 }
 
-/* Drop all requests in the queue. */
-static void ioDropAllRequests(struct io *io)
+/* Flush all requests in the queue. */
+static void ioFlushAll(struct io *io)
 {
     while (!QUEUE_IS_EMPTY(&io->requests)) {
         queue *head;
@@ -1144,7 +1151,7 @@ void raft_fixture_close(struct raft_fixture *f)
     unsigned i;
     for (i = 0; i < f->n; i++) {
         struct io *io = f->servers[i].io.impl;
-        ioDropAllRequests(io);
+        ioFlushAll(io);
     }
     for (i = 0; i < f->n; i++) {
         serverClose(&f->servers[i]);
