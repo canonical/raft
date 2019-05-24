@@ -241,29 +241,6 @@ static int ioMethodStart(struct raft_io *raft_io,
     return 0;
 }
 
-/* Release the memory used by the given message tramsmit object. */
-static void ioDropTransmit(struct io *io, struct transmit *transmit)
-{
-    struct raft_message *message;
-    (void)io;
-    message = &transmit->message;
-
-    switch (message->type) {
-        case RAFT_IO_APPEND_ENTRIES:
-            if (message->append_entries.entries != NULL) {
-                raft_free(message->append_entries.entries[0].batch);
-                raft_free(message->append_entries.entries);
-            }
-            break;
-        case RAFT_IO_INSTALL_SNAPSHOT:
-            raft_configuration_close(&message->install_snapshot.conf);
-            raft_free(message->install_snapshot.data.base);
-            break;
-    }
-
-    raft_free(transmit);
-}
-
 /* Flush an append entries request, appending its entries to the local in-memory
  * log. */
 static void ioFlushAppend(struct io *s, struct append *append)
@@ -483,6 +460,26 @@ out:
     raft_free(send);
 }
 
+/* Release the memory used by the given message tramsmit object. */
+static void ioDestroyTransmit(struct transmit *transmit)
+{
+    struct raft_message *message;
+    message = &transmit->message;
+    switch (message->type) {
+        case RAFT_IO_APPEND_ENTRIES:
+            if (message->append_entries.entries != NULL) {
+                raft_free(message->append_entries.entries[0].batch);
+                raft_free(message->append_entries.entries);
+            }
+            break;
+        case RAFT_IO_INSTALL_SNAPSHOT:
+            raft_configuration_close(&message->install_snapshot.conf);
+            raft_free(message->install_snapshot.data.base);
+            break;
+    }
+    raft_free(transmit);
+}
+
 /* Flush all requests in the queue. */
 static void ioFlushAll(struct io *io)
 {
@@ -502,7 +499,7 @@ static void ioFlushAll(struct io *io)
                 ioFlushSend(io, (struct send *)r);
                 break;
             case TRANSMIT:
-                ioDropTransmit(io, (struct transmit *)r);
+                ioDestroyTransmit((struct transmit *)r);
                 break;
             case SNAPSHOT_PUT:
                 ioFlushSnapshotPut(io, (struct snapshot_put *)r);
@@ -904,7 +901,7 @@ static void ioDeliverTransmit(struct io *io, struct transmit *transmit)
 
     /* If this message type is in the drop list, let's discard it */
     if (io->drop[message->type - 1]) {
-        ioDropTransmit(io, transmit);
+        ioDestroyTransmit(transmit);
         return;
     }
 
@@ -913,7 +910,7 @@ static void ioDeliverTransmit(struct io *io, struct transmit *transmit)
     /* We don't have any peer with this ID or it's disconnected or if the
      * connection is saturated, let's drop the message */
     if (peer == NULL || !peer->connected || peer->saturated) {
-        ioDropTransmit(io, transmit);
+        ioDestroyTransmit(transmit);
         return;
     }
 
