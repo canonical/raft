@@ -89,14 +89,19 @@ void logDiscard(struct raft_log *l, const raft_index index);
  * @last_index - @trailing, then no entry will be deleted. */
 void logSnapshot(struct raft_log *l, raft_index last_index, unsigned trailing);
 
-/* To be called when restoring a new snapshot. * The log can be in any
- * state. All outstanding entries will be discarded, the last index and last
- * term of the most recent snapshot will be set to the given values, and the
- * offset adjusted accordingly. */
+/* To be called when restoring a snapshot.
+ *
+ * The log can be in any state. All outstanding entries will be discarded, the
+ * last index and last term of the most recent snapshot will be set to the given
+ * values, and the offset adjusted accordingly. */
 void logRestore(struct raft_log *l, raft_index last_index, raft_term last_term);
 
-/* Change the current offset of outstanding entries. This is called at startup *
- * when populating the log with entries loaded from disk. */
+/* Change the current offset of outstanding entries.
+ *
+ * This is called at startup when populating the log with entries loaded from
+ * disk. In case logRestore() was called and we also have trailing entries
+ * preceeding the last index of the restored snapshot, we need to shift the
+ * current offset back to start_index. */
 void logSeek(struct raft_log *l, raft_index start_index);
 
 #endif /* RAFT_LOG_H */

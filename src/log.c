@@ -918,6 +918,8 @@ void logSnapshot(struct raft_log *l, raft_index last_index, unsigned trailing)
 void logRestore(struct raft_log *l, raft_index last_index, raft_term last_term)
 {
     size_t n = logNumOutstanding(l);
+    assert(last_index > 0);
+    assert(last_term > 0);
     if (n > 0) {
         logTruncate(l, logLastIndex(l) - n + 1);
     }

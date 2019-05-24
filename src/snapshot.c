@@ -24,15 +24,15 @@ void snapshotDestroy(struct raft_snapshot *s)
 
 int snapshotRestore(struct raft *r, struct raft_snapshot *snapshot)
 {
-    int rc;
+    int rv;
 
     assert(snapshot->n_bufs == 1);
 
-    rc = r->fsm->restore(r->fsm, &snapshot->bufs[0]);
-    if (rc != 0) {
+    rv = r->fsm->restore(r->fsm, &snapshot->bufs[0]);
+    if (rv != 0) {
         errorf(r->io, "restore snapshot %d: %s", snapshot->index,
-               raft_strerror(rc));
-        return rc;
+               raft_strerror(rv));
+        return rv;
     }
 
     raft_configuration_close(&r->configuration);

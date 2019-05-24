@@ -436,8 +436,8 @@ struct raft_io
      */
     int (*start)(struct raft_io *io,
                  unsigned msecs,
-                 raft_io_tick_cb tick,
-                 raft_io_recv_cb recv);
+                 raft_io_tick_cb tick_cb,
+                 raft_io_recv_cb recv_cb);
 
     /**
      * Stop calling the @tick and @recv callbacks, and complete or cancel any
@@ -766,7 +766,12 @@ void raft_close(struct raft *r, raft_close_cb cb);
 int raft_bootstrap(struct raft *r, const struct raft_configuration *conf);
 
 /**
- * Start this raft instance.
+ * Start the given raft instance.
+ *
+ * The initial term, vote, snapshot and entries will be loaded from disk using
+ * the raft_io->load method. The instance will start as #RAFT_FOLLOWER, unless
+ * it's the only voting server in the cluster, in which case it will
+ * automatically elect itself and become #RAFT_LEADER.
  */
 int raft_start(struct raft *r);
 
