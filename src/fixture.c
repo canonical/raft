@@ -318,6 +318,28 @@ static struct peer *ioGetPeer(struct io *io, unsigned id)
     return NULL;
 }
 
+/* Copy the dynamically allocated memory of an AppendEntries message. */
+static void copyAppendEntries(const struct raft_append_entries *src,
+                              struct raft_append_entries *dst)
+{
+    int rv;
+    rv = entryBatchCopy(src->entries, &dst->entries, src->n_entries);
+    assert(rv == 0);
+    dst->n_entries = src->n_entries;
+}
+
+/* Copy the dynamically allocated memory of an InstallSnapshot message. */
+static void copyInstallSnapshot(const struct raft_install_snapshot *src,
+                                struct raft_install_snapshot *dst)
+{
+    int rv;
+    rv = configurationCopy(&src->conf, &dst->conf);
+    assert(rv == 0);
+    dst->data.base = raft_malloc(dst->data.len);
+    assert(dst->data.base != NULL);
+    memcpy(dst->data.base, src->data.base, src->data.len);
+}
+
 /* Flush a raft_io_send request, copying the message content into a new struct
  * transmit object and invoking the user callback. */
 static void ioFlushSend(struct io *io, struct send *send)
@@ -327,7 +349,6 @@ static void ioFlushSend(struct io *io, struct send *send)
     struct raft_message *src;
     struct raft_message *dst;
     int status;
-    int rv;
 
     /* If the peer doesn't exist or was disconnected, fail the request. */
     peer = ioGetPeer(io, send->message.server_id);
@@ -351,21 +372,10 @@ static void ioFlushSend(struct io *io, struct send *send)
     switch (dst->type) {
         case RAFT_IO_APPEND_ENTRIES:
             /* Make a copy of the entries being sent */
-            entryBatchCopy(src->append_entries.entries,
-                           &dst->append_entries.entries,
-                           src->append_entries.n_entries);
-            dst->append_entries.n_entries = src->append_entries.n_entries;
+            copyAppendEntries(&src->append_entries, &dst->append_entries);
             break;
         case RAFT_IO_INSTALL_SNAPSHOT:
-            rv = configurationCopy(&src->install_snapshot.conf,
-                                   &dst->install_snapshot.conf);
-            dst->install_snapshot.data.base =
-                raft_malloc(dst->install_snapshot.data.len);
-            assert(dst->install_snapshot.data.base != NULL);
-            assert(rv == 0);
-            memcpy(dst->install_snapshot.data.base,
-                   src->install_snapshot.data.base,
-                   src->install_snapshot.data.len);
+            copyInstallSnapshot(&src->install_snapshot, &dst->install_snapshot);
             break;
     }
 
@@ -531,7 +541,7 @@ snapshot:
         *snapshot = raft_malloc(sizeof **snapshot);
         assert(*snapshot != NULL);
         rv = snapshotCopy(s->snapshot, *snapshot);
-	assert(rv == 0);
+        assert(rv == 0);
         *start_index = (*snapshot)->index + 1;
     } else {
         *snapshot = NULL;
