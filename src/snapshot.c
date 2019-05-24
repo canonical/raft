@@ -57,8 +57,6 @@ int snapshotCopy(const struct raft_snapshot *src, struct raft_snapshot *dst)
     size_t size;
     void *cursor;
 
-    raft_configuration_init(&dst->configuration);
-
     dst->term = src->term;
     dst->index = src->index;
 

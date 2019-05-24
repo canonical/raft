@@ -187,8 +187,6 @@ int raft_add(struct raft *r,
 
     /* Make a copy of the current configuration, and add the new server to
      * it. */
-    raft_configuration_init(&configuration);
-
     rv = configurationCopy(&r->configuration, &configuration);
     if (rv != 0) {
         goto err;
@@ -317,8 +315,6 @@ int raft_remove(struct raft *r,
 
     /* Make a copy of the current configuration, and remove the given server
      * from it. */
-    raft_configuration_init(&configuration);
-
     rv = configurationCopy(&r->configuration, &configuration);
     if (rv != 0) {
         goto err;

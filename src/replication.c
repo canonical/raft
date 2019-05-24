@@ -1369,7 +1369,6 @@ static int take_snapshot(struct raft *r)
     snapshot->index = r->last_applied;
     snapshot->term = logTermOf(&r->log, r->last_applied);
 
-    raft_configuration_init(&snapshot->configuration);
     rv = configurationCopy(&r->configuration, &snapshot->configuration);
     if (rv != 0) {
         goto abort;

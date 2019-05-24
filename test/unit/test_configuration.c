@@ -279,8 +279,6 @@ TEST_CASE(copy, two, NULL)
     ADD(1, "192.168.1.1:666", false);
     ADD(2, "192.168.1.2:666", true);
 
-    raft_configuration_init(&configuration);
-
     rv = configurationCopy(&f->configuration, &configuration);
     munit_assert_int(rv, ==, 0);
 
@@ -308,8 +306,6 @@ TEST_CASE(copy, error, oom, NULL)
 
     test_heap_fault_config(&f->heap, 0, 1);
     test_heap_fault_enable(&f->heap);
-
-    raft_configuration_init(&configuration);
 
     rv = configurationCopy(&f->configuration, &configuration);
     munit_assert_int(rv, ==, RAFT_NOMEM);

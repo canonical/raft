@@ -357,7 +357,6 @@ static void ioFlushSend(struct io *io, struct send *send)
             dst->append_entries.n_entries = src->append_entries.n_entries;
             break;
         case RAFT_IO_INSTALL_SNAPSHOT:
-            raft_configuration_init(&dst->install_snapshot.conf);
             rv = configurationCopy(&src->install_snapshot.conf,
                                    &dst->install_snapshot.conf);
             dst->install_snapshot.data.base =
