@@ -20,4 +20,10 @@ void snapshotDestroy(struct raft_snapshot *s);
  * If no error occurs, the snapshot object gets released. */
 int snapshotRestore(struct raft *r, struct raft_snapshot *snapshot);
 
+/* Make a full deep copy of a snapshot object.
+ *
+ * All data buffers in the source snapshot will be compacted in a single buffer
+ * in the destination snapshot. */
+int snapshotCopy(const struct raft_snapshot *src, struct raft_snapshot *dst);
+
 #endif /* RAFT_SNAPSHOT_H */

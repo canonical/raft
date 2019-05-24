@@ -270,49 +270,11 @@ static void ioFlushAppend(struct io *s, struct append *append)
     free(append);
 }
 
-static void snapshot_copy(const struct raft_snapshot *s1,
-                          struct raft_snapshot *s2)
-{
-    int rv;
-    unsigned i;
-    size_t size;
-    void *cursor;
-
-    raft_configuration_init(&s2->configuration);
-
-    s2->term = s1->term;
-    s2->index = s1->index;
-
-    rv = configurationCopy(&s1->configuration, &s2->configuration);
-    assert(rv == 0);
-
-    size = 0;
-    for (i = 0; i < s1->n_bufs; i++) {
-        size += s1->bufs[i].len;
-    }
-
-    s2->bufs = raft_malloc(sizeof *s2->bufs);
-    assert(s2->bufs != NULL);
-
-    s2->bufs[0].base = raft_malloc(size);
-    s2->bufs[0].len = size;
-    assert(s2->bufs[0].base != NULL);
-
-    cursor = s2->bufs[0].base;
-
-    for (i = 0; i < s1->n_bufs; i++) {
-        memcpy(cursor, s1->bufs[i].base, s1->bufs[i].len);
-        cursor += s1->bufs[i].len;
-    }
-
-    s2->n_bufs = 1;
-
-    return;
-}
-
 /* Flush a snapshot put request, copying the snapshot data. */
 static void ioFlushSnapshotPut(struct io *s, struct snapshot_put *r)
 {
+    int rv;
+
     if (s->snapshot == NULL) {
         s->snapshot = raft_malloc(sizeof *s->snapshot);
         assert(s->snapshot != NULL);
@@ -320,7 +282,8 @@ static void ioFlushSnapshotPut(struct io *s, struct snapshot_put *r)
         snapshotClose(s->snapshot);
     }
 
-    snapshot_copy(r->snapshot, s->snapshot);
+    rv = snapshotCopy(r->snapshot, s->snapshot);
+    assert(rv == 0);
 
     if (r->req->cb != NULL) {
         r->req->cb(r->req, 0);
@@ -332,9 +295,12 @@ static void ioFlushSnapshotPut(struct io *s, struct snapshot_put *r)
  * snapshot (if any). */
 static void ioFlushSnapshotGet(struct io *s, struct snapshot_get *r)
 {
-    struct raft_snapshot *snapshot = raft_malloc(sizeof *snapshot);
+    struct raft_snapshot *snapshot;
+    int rv;
+    snapshot = raft_malloc(sizeof *snapshot);
     assert(snapshot != NULL);
-    snapshot_copy(s->snapshot, snapshot);
+    rv = snapshotCopy(s->snapshot, snapshot);
+    assert(rv == 0);
     r->req->cb(r->req, snapshot, 0);
     raft_free(r);
 }
@@ -386,8 +352,8 @@ static void ioFlushSend(struct io *io, struct send *send)
         case RAFT_IO_APPEND_ENTRIES:
             /* Make a copy of the entries being sent */
             entryBatchCopy(src->append_entries.entries,
-                                  &dst->append_entries.entries,
-                                  src->append_entries.n_entries);
+                           &dst->append_entries.entries,
+                           src->append_entries.n_entries);
             dst->append_entries.n_entries = src->append_entries.n_entries;
             break;
         case RAFT_IO_INSTALL_SNAPSHOT:
@@ -565,7 +531,8 @@ snapshot:
     if (s->snapshot != NULL) {
         *snapshot = raft_malloc(sizeof **snapshot);
         assert(*snapshot != NULL);
-        snapshot_copy(s->snapshot, *snapshot);
+        rv = snapshotCopy(s->snapshot, *snapshot);
+	assert(rv == 0);
         *start_index = (*snapshot)->index + 1;
     } else {
         *snapshot = NULL;
