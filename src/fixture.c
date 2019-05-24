@@ -7,6 +7,7 @@
 
 #include "assert.h"
 #include "configuration.h"
+#include "entry.h"
 #include "log.h"
 #include "logging.h"
 #include "queue.h"
@@ -253,14 +254,11 @@ static void ioFlushAppend(struct io *s, struct append *append)
     assert(entries != NULL);
 
     /* Copy new entries into the new array. */
-    memcpy(entries + s->n, append->entries, append->n * sizeof *entries);
     for (i = 0; i < append->n; i++) {
-        struct raft_entry *entry = &entries[s->n + i];
-
-        /* Make a copy of the actual entry data. */
-        entry->buf.base = raft_malloc(entry->buf.len);
-        assert(entry->buf.base != NULL);
-        memcpy(entry->buf.base, append->entries[i].buf.base, entry->buf.len);
+        const struct raft_entry *src = &append->entries[i];
+        struct raft_entry *dst = &entries[s->n + i];
+        int rv = entryCopy(src, dst);
+        assert(rv == 0);
     }
 
     s->entries = entries;
