@@ -449,25 +449,20 @@ static int ioMethodClose(struct raft_io *raft_io,
 {
     struct io *io = raft_io->impl;
     size_t i;
-
     for (i = 0; i < io->n; i++) {
         struct raft_entry *entry = &io->entries[i];
         raft_free(entry->buf.base);
     }
-
     if (io->entries != NULL) {
         raft_free(io->entries);
     }
-
     if (io->snapshot != NULL) {
         snapshotClose(io->snapshot);
         raft_free(io->snapshot);
     }
-
     if (cb != NULL) {
         cb(raft_io);
     }
-
     return 0;
 }
 
@@ -480,10 +475,6 @@ static int ioMethodLoad(struct raft_io *io,
                         size_t *n_entries)
 {
     struct io *s;
-    size_t i;
-    void *batch;
-    void *cursor;
-    size_t size = 0; /* Size of the batch */
     int rv;
 
     s = io->impl;
@@ -496,47 +487,13 @@ static int ioMethodLoad(struct raft_io *io,
     *voted_for = s->voted_for;
     *start_index = 1;
 
-    if (s->n == 0) {
-        *entries = NULL;
-        *n_entries = 0;
-        goto snapshot;
-    }
+    *n_entries = s->n;
 
     /* Make a copy of the persisted entries, storing their data into a single
      * batch. */
-    *n_entries = s->n;
-    *entries = raft_calloc(s->n, sizeof **entries);
-    if (*entries == NULL) {
-        rv = RAFT_NOMEM;
-        goto err;
-    }
+    rv = entryBatchCopy(s->entries, entries, s->n);
+    assert(rv == 0);
 
-    for (i = 0; i < s->n; i++) {
-        size += s->entries[i].buf.len;
-    }
-
-    batch = raft_malloc(size);
-    if (batch == NULL) {
-        rv = RAFT_NOMEM;
-        goto err_after_entries_alloc;
-    }
-
-    cursor = batch;
-
-    for (i = 0; i < s->n; i++) {
-        struct raft_entry *entry = &(*entries)[i];
-        memcpy(cursor, s->entries[i].buf.base, s->entries[i].buf.len);
-
-        entry->term = s->entries[i].term;
-        entry->type = s->entries[i].type;
-        entry->buf.base = cursor;
-        entry->buf.len = s->entries[i].buf.len;
-        entry->batch = batch;
-
-        cursor += entry->buf.len;
-    }
-
-snapshot:
     if (s->snapshot != NULL) {
         *snapshot = raft_malloc(sizeof **snapshot);
         assert(*snapshot != NULL);
@@ -548,13 +505,6 @@ snapshot:
     }
 
     return 0;
-
-err_after_entries_alloc:
-    raft_free(*entries);
-
-err:
-    assert(rv != 0);
-    return rv;
 }
 
 static int ioMethodBootstrap(struct raft_io *raft_io,
