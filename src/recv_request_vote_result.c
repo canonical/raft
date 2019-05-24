@@ -3,9 +3,9 @@
 #include "configuration.h"
 #include "convert.h"
 #include "election.h"
-#include "replication.h"
 #include "logging.h"
 #include "recv.h"
+#include "replication.h"
 
 /* Set to 1 to enable tracing. */
 #if 0
@@ -40,7 +40,7 @@ int recv__request_vote_result(struct raft *r,
         return 0;
     }
 
-    rv = recv__ensure_matching_terms(r, result->term, &match);
+    rv = recvEnsureMatchingTerms(r, result->term, &match);
     if (rv != 0) {
         return rv;
     }

@@ -160,7 +160,7 @@ int raft_start(struct raft *r)
     /* Start the I/O backend. The tick callback is expected to fire every
      * r->heartbeat_timeout milliseconds and the recv callback whenever an RPC
      * is received. */
-    rc = r->io->start(r->io, r->heartbeat_timeout, tick_cb, recv_cb);
+    rc = r->io->start(r->io, r->heartbeat_timeout, tick_cb, recvCb);
     if (rc != 0) {
         return rc;
     }

@@ -1595,7 +1595,7 @@ struct step_apply
     raft_index index;
 };
 
-static bool has_applied_index(struct raft_fixture *f, void *arg)
+static bool hasAppliedIndex(struct raft_fixture *f, void *arg)
 {
     struct step_apply *apply = (struct step_apply *)arg;
     struct raft *raft;
@@ -1622,7 +1622,7 @@ bool raft_fixture_step_until_applied(struct raft_fixture *f,
                                      unsigned max_msecs)
 {
     struct step_apply apply = {i, index};
-    return raft_fixture_step_until(f, has_applied_index, &apply, max_msecs);
+    return raft_fixture_step_until(f, hasAppliedIndex, &apply, max_msecs);
 }
 
 struct step_state
@@ -1631,7 +1631,7 @@ struct step_state
     int state;
 };
 
-static bool has_state(struct raft_fixture *f, void *arg)
+static bool hasState(struct raft_fixture *f, void *arg)
 {
     struct step_state *target = (struct step_state *)arg;
     struct raft *raft;
@@ -1645,7 +1645,7 @@ bool raft_fixture_step_until_state_is(struct raft_fixture *f,
                                       unsigned max_msecs)
 {
     struct step_state target = {i, state};
-    return raft_fixture_step_until(f, has_state, &target, max_msecs);
+    return raft_fixture_step_until(f, hasState, &target, max_msecs);
 }
 
 struct step_term
@@ -1654,7 +1654,7 @@ struct step_term
     raft_term term;
 };
 
-static bool has_term(struct raft_fixture *f, void *arg)
+static bool hasTerm(struct raft_fixture *f, void *arg)
 {
     struct step_term *target = (struct step_term *)arg;
     struct raft *raft;
@@ -1668,7 +1668,7 @@ bool raft_fixture_step_until_term_is(struct raft_fixture *f,
                                      unsigned max_msecs)
 {
     struct step_term target = {i, term};
-    return raft_fixture_step_until(f, has_term, &target, max_msecs);
+    return raft_fixture_step_until(f, hasTerm, &target, max_msecs);
 }
 
 struct step_vote
@@ -1677,7 +1677,7 @@ struct step_vote
     unsigned j;
 };
 
-static bool has_voted_for(struct raft_fixture *f, void *arg)
+static bool hasVotedFor(struct raft_fixture *f, void *arg)
 {
     struct step_vote *target = (struct step_vote *)arg;
     struct raft *raft;
@@ -1691,7 +1691,7 @@ bool raft_fixture_step_until_voted_for(struct raft_fixture *f,
                                        unsigned max_msecs)
 {
     struct step_vote target = {i, j};
-    return raft_fixture_step_until(f, has_voted_for, &target, max_msecs);
+    return raft_fixture_step_until(f, hasVotedFor, &target, max_msecs);
 }
 
 struct step_deliver
@@ -1700,15 +1700,15 @@ struct step_deliver
     unsigned j;
 };
 
-static bool has_delivered(struct raft_fixture *f, void *arg)
+static bool hasDelivered(struct raft_fixture *f, void *arg)
 {
     struct step_deliver *target = (struct step_deliver *)arg;
     struct raft *raft;
     struct io *io;
     struct raft_message *message;
+    queue *head;
     raft = raft_fixture_get(f, target->i);
     io = raft->io->impl;
-    queue *head;
     QUEUE_FOREACH(head, &io->requests)
     {
         struct request *r;
@@ -1735,7 +1735,7 @@ bool raft_fixture_step_until_delivered(struct raft_fixture *f,
                                        unsigned max_msecs)
 {
     struct step_deliver target = {i, j};
-    return raft_fixture_step_until(f, has_delivered, &target, max_msecs);
+    return raft_fixture_step_until(f, hasDelivered, &target, max_msecs);
 }
 
 void raft_fixture_disconnect(struct raft_fixture *f, unsigned i, unsigned j)
