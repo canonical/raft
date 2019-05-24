@@ -10,4 +10,10 @@ void entryBatchesDestroy(struct raft_entry *entries, unsigned n);
 /* Create a copy of a log entry, including its data. */
 int entryCopy(const struct raft_entry *src, struct raft_entry *dst);
 
+/* Create a single batch of entries containing a copy of the given entries,
+ * including their data. */
+int entryBatchCopy(const struct raft_entry *src,
+                   struct raft_entry **dst,
+                   unsigned n);
+
 #endif /* ENTRY_H */

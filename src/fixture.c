@@ -270,48 +270,6 @@ static void ioFlushAppend(struct io *s, struct append *append)
     free(append);
 }
 
-/* Copy all entries in @src into @dst. */
-static void io_stub__copy_entries(const struct raft_entry *src,
-                                  struct raft_entry **dst,
-                                  unsigned n)
-{
-    size_t size = 0;
-    void *batch;
-    void *cursor;
-    unsigned i;
-
-    if (n == 0) {
-        *dst = NULL;
-        return;
-    }
-
-    /* Calculate the total size of the entries content and allocate the
-     * batch. */
-    for (i = 0; i < n; i++) {
-        size += src[i].buf.len;
-    }
-
-    batch = raft_malloc(size);
-    assert(batch != NULL);
-
-    /* Copy the entries. */
-    *dst = raft_malloc(n * sizeof **dst);
-    assert(*dst != NULL);
-
-    cursor = batch;
-
-    for (i = 0; i < n; i++) {
-        (*dst)[i] = src[i];
-
-        (*dst)[i].buf.base = cursor;
-        memcpy((*dst)[i].buf.base, src[i].buf.base, src[i].buf.len);
-
-        (*dst)[i].batch = batch;
-
-        cursor += src[i].buf.len;
-    }
-}
-
 static void snapshot_copy(const struct raft_snapshot *s1,
                           struct raft_snapshot *s2)
 {
@@ -427,7 +385,7 @@ static void ioFlushSend(struct io *io, struct send *send)
     switch (dst->type) {
         case RAFT_IO_APPEND_ENTRIES:
             /* Make a copy of the entries being sent */
-            io_stub__copy_entries(src->append_entries.entries,
+            entryBatchCopy(src->append_entries.entries,
                                   &dst->append_entries.entries,
                                   src->append_entries.n_entries);
             dst->append_entries.n_entries = src->append_entries.n_entries;
