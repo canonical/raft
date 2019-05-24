@@ -1021,13 +1021,10 @@ int raft_fixture_configuration(struct raft_fixture *f,
                                struct raft_configuration *configuration)
 {
     unsigned i;
-
     assert(f->n > 0);
     assert(n_voting > 0);
     assert(n_voting <= f->n);
-
     raft_configuration_init(configuration);
-
     for (i = 0; i < f->n; i++) {
         struct raft_fixture_server *s;
         bool voting = i < n_voting;
@@ -1270,13 +1267,10 @@ static void copyLeaderLog(struct raft_fixture *f)
     unsigned n;
     size_t i;
     int rv;
-
     logClose(&f->log);
     logInit(&f->log);
-
     rv = logAcquire(&raft->log, 1, &entries, &n);
     assert(rv == 0);
-
     for (i = 0; i < n; i++) {
         struct raft_entry *entry = &entries[i];
         struct raft_buffer buf;
@@ -1286,7 +1280,6 @@ static void copyLeaderLog(struct raft_fixture *f)
         rv = logAppend(&f->log, entry->term, entry->type, &buf, NULL);
         assert(rv == 0);
     }
-
     logRelease(&raft->log, 1, entries, n);
 }
 
@@ -1451,6 +1444,8 @@ bool raft_fixture_step_until(struct raft_fixture *f,
     return f->time - start < max_msecs;
 }
 
+/* A step function which return always false, forcing raft_fixture_step_n to
+ * advance time at each iteration. */
 static bool spin(struct raft_fixture *f, void *arg)
 {
     (void)f;
@@ -1574,17 +1569,11 @@ void raft_fixture_elect(struct raft_fixture *f, unsigned i)
 void raft_fixture_depose(struct raft_fixture *f)
 {
     unsigned leader_i;
-    unsigned i;
 
     /* Make sure there's a leader. */
     assert(f->leader_id != 0);
     leader_i = f->leader_id - 1;
     assert(raft_state(&f->servers[leader_i].raft) == RAFT_LEADER);
-
-    /* Make sure all server have a default election timeout. */
-    for (i = 0; i < f->n; i++) {
-        assert(f->servers[i].raft.election_timeout == ELECTION_TIMEOUT);
-    }
 
     /* Set a very large election timeout on all followers, to prevent them from
      * starting an election. */
