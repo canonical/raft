@@ -3,7 +3,7 @@
 #include "log.h"
 #include "logging.h"
 
-void snapshot__close(struct raft_snapshot *s)
+void snapshotClose(struct raft_snapshot *s)
 {
     unsigned i;
     raft_configuration_close(&s->configuration);
@@ -13,13 +13,13 @@ void snapshot__close(struct raft_snapshot *s)
     raft_free(s->bufs);
 }
 
-void snapshot__destroy(struct raft_snapshot *s)
+void snapshotDestroy(struct raft_snapshot *s)
 {
-    snapshot__close(s);
+    snapshotClose(s);
     raft_free(s);
 }
 
-int snapshot__restore(struct raft *r, struct raft_snapshot *snapshot)
+int snapshotRestore(struct raft *r, struct raft_snapshot *snapshot)
 {
     int rc;
 

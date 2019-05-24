@@ -128,9 +128,9 @@ int raft_start(struct raft *r)
     if (snapshot != NULL) {
         tracef("restore snapshot with last index %llu and last term %llu",
                snapshot->index, snapshot->term);
-        rc = snapshot__restore(r, snapshot);
+        rc = snapshotRestore(r, snapshot);
         if (rc != 0) {
-            snapshot__destroy(snapshot);
+            snapshotDestroy(snapshot);
             entryBatchesDestroy(entries, n_entries);
             return rc;
         }

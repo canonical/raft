@@ -173,7 +173,7 @@ static void sendInstallSnapshotCb(struct raft_io_send *send, int status)
         }
     }
 
-    snapshot__close(req->snapshot);
+    snapshotClose(req->snapshot);
     raft_free(req->snapshot);
     raft_free(req);
 }
@@ -238,7 +238,7 @@ static void sendSnapshotGetCb(struct raft_io_snapshot_get *get,
     return;
 
 abort_with_snapshot:
-    snapshot__close(snapshot);
+    snapshotClose(snapshot);
     raft_free(snapshot);
 abort:
     if (r->state == RAFT_LEADER && server != NULL &&
@@ -1112,7 +1112,7 @@ static void put_snapshot_cb(struct raft_io_snapshot_put *req, int status)
      *   8. Reset state machine using snapshot contents (and load lastConfig
      *      as cluster configuration).
      */
-    rv = snapshot__restore(r, snapshot);
+    rv = snapshotRestore(r, snapshot);
     if (rv != 0) {
         result.rejected = snapshot->index;
         errorf(r->io, "restore snapshot %d: %s", snapshot->index,
@@ -1353,7 +1353,7 @@ static void snapshot_put_cb(struct raft_io_snapshot_put *req, int status)
     logSnapshot(&r->log, snapshot->index, r->snapshot.trailing);
 
 out:
-    snapshot__close(&r->snapshot.pending);
+    snapshotClose(&r->snapshot.pending);
     r->snapshot.pending.term = 0;
 }
 

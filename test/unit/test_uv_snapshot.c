@@ -370,7 +370,7 @@ TEST_CASE(put, first, NULL)
     rv = uvSnapshotLoad(f->uv, &snapshots[0], &snapshot);
     munit_assert_int(rv, ==, 0);
 
-    snapshot__close(&snapshot);
+    snapshotClose(&snapshot);
 
     raft_free(snapshots);
 
@@ -443,7 +443,7 @@ TEST_TEAR_DOWN(get)
 {
     struct get_fixture *f = data;
     if (f->snapshot != NULL) {
-        snapshot__close(f->snapshot);
+        snapshotClose(f->snapshot);
         raft_free(f->snapshot);
     }
     TEAR_DOWN_UV;

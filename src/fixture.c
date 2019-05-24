@@ -317,7 +317,7 @@ static void ioFlushSnapshotPut(struct io *s, struct snapshot_put *r)
         s->snapshot = raft_malloc(sizeof *s->snapshot);
         assert(s->snapshot != NULL);
     } else {
-        snapshot__close(s->snapshot);
+        snapshotClose(s->snapshot);
     }
 
     snapshot_copy(r->snapshot, s->snapshot);
@@ -329,7 +329,7 @@ static void ioFlushSnapshotPut(struct io *s, struct snapshot_put *r)
 }
 
 /* Flush a snapshot get request, returning to the client a copy of the local
-   snapshot (if any). */
+ * snapshot (if any). */
 static void ioFlushSnapshotGet(struct io *s, struct snapshot_get *r)
 {
     struct raft_snapshot *snapshot = raft_malloc(sizeof *snapshot);
@@ -485,7 +485,7 @@ static int ioMethodClose(struct raft_io *raft_io,
     }
 
     if (io->snapshot != NULL) {
-        snapshot__close(io->snapshot);
+        snapshotClose(io->snapshot);
         raft_free(io->snapshot);
     }
 
