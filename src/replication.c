@@ -29,45 +29,7 @@
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
-/* Possibly trigger I/O requests for newly appended log entries or heartbeats.
- *
- * This function loops through all followers and triggers replication on them.
- *
- * If the index is 0, no entry are written to disk, and a heartbeat
- * AppendEntries RPC with no entries (or missing entries for followers whose log
- * is behind) is sent.
- *
- * It must be called only by leaders. */
-static int triggerAll(struct raft *r)
-{
-    size_t i;
-    int rv;
-
-    assert(r->state == RAFT_LEADER);
-
-    /* Trigger replication for servers we didn't hear from recently. */
-    for (i = 0; i < r->configuration.n; i++) {
-        struct raft_server *server = &r->configuration.servers[i];
-        if (server->id == r->id) {
-            continue;
-        }
-        rv = replicationTrigger(r, i);
-        if (rv != 0 && rv != RAFT_NOCONNECTION) {
-            /* This is not a critical failure, let's just log it. */
-            warnf(r->io, "failed to send append entries to server %ld: %s (%d)",
-                  server->id, raft_strerror(rv), rv);
-        }
-    }
-
-    return 0;
-}
-
-int replicationHeartbeat(struct raft *r)
-{
-    return triggerAll(r);
-}
-
-/* Context of a #RAFT_IO_APPEND_ENTRIES request that was submitted with
+/* Context of a RAFT_IO_APPEND_ENTRIES request that was submitted with
  * raft_io_>send(). */
 struct sendAppendEntries
 {
@@ -84,10 +46,30 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
 {
     struct sendAppendEntries *req = send->data;
     struct raft *r = req->raft;
+    unsigned i = configurationIndexOf(&r->configuration, req->server_id);
+
     if (status != 0) {
         warnf(r->io, "failed to send append entries to server %ld: %s",
               req->server_id, raft_strerror(status));
+    } else if (r->state == RAFT_LEADER && i < r->configuration.n) {
+        /* Update the last_send timestamp: for a heartbeat_timeout milliseconds
+         * we'll be good and we won't need to contact followers again, since
+         * this was not an idle period.
+         *
+         * From Figure 3.1:
+         *
+         *   [Rules for Servers] Leaders: Upon election: send initial empty
+         *   AppendEntries RPCs (heartbeat) to each server; repeat during idle
+         *   periods to prevent election timeouts
+         */
+        progressUpdateLastSend(r, i);
+
+        if (progressState(r, i) == PROGRESS__PIPELINE) {
+            /* Optimitiscally update progress. */
+            progressOptimisticNextIndex(r, i, req->index + req->n);
+        }
     }
+
     /* Tell the log that we're done referencing these entries. */
     logRelease(&r->log, req->index, req->entries, req->n);
     raft_free(req);
@@ -153,25 +135,6 @@ static int sendAppendEntries(struct raft *r,
         goto err_after_req_alloc;
     }
 
-    /* Update the last_send timestamp: for a heartbeat_timeout milliseconds
-     * we'll be good and we won't need to contact followers again, since this
-     * was not an idle period.
-     *
-     * From Figure 3.1:
-     *
-     *   [Rules for Servers] Leaders: Upon election: send initial empty
-     *   AppendEntries RPCs (heartbeat) to each server; repeat during idle
-     *   periods to prevent election timeouts
-     */
-    progressUpdateLastSend(r, i);
-
-    if (progressState(r, i) == PROGRESS__PIPELINE) {
-        /* Optimitiscally update progress.
-         *
-         * TODO: should we invoke this in sendAppendEntriesCb instead? */
-        progressOptimisticNextIndex(r, i, req->index + req->n);
-    }
-
     return 0;
 
 err_after_req_alloc:
@@ -183,7 +146,7 @@ err:
     return rv;
 }
 
-/* Context of a #RAFT_IO_INSTALL_SNAPSHOT request that was submitted with
+/* Context of a RAFT_IO_INSTALL_SNAPSHOT request that was submitted with
  * raft_io_>send(). */
 struct sendInstallSnapshot
 {
@@ -225,10 +188,9 @@ static void sendSnapshotGetCb(struct raft_io_snapshot_get *get,
     struct raft_message message;
     struct raft_install_snapshot *args = &message.install_snapshot;
     const struct raft_server *server;
+    bool progress_state_is_snapshot;
     unsigned i;
     int rv;
-
-    server = configurationGet(&r->configuration, req->server_id);
 
     if (status != 0) {
         errorf(r->io, "get snapshot %s", raft_strerror(status));
@@ -237,13 +199,18 @@ static void sendSnapshotGetCb(struct raft_io_snapshot_get *get,
     if (r->state != RAFT_LEADER) {
         goto abort_with_snapshot;
     }
+
+    server = configurationGet(&r->configuration, req->server_id);
+
     if (server == NULL) {
         /* Probably the server was removed in the meantime. */
         goto abort_with_snapshot;
     }
 
     i = configurationIndexOf(&r->configuration, req->server_id);
-    if (progressState(r, i) != PROGRESS__SNAPSHOT) {
+    progress_state_is_snapshot = progressState(r, i) == PROGRESS__SNAPSHOT;
+
+    if (!progress_state_is_snapshot) {
         /* Something happened in the meantime. */
         goto abort_with_snapshot;
     }
@@ -280,7 +247,7 @@ abort_with_snapshot:
     raft_free(snapshot);
 abort:
     if (r->state == RAFT_LEADER && server != NULL &&
-        progressState(r, i) == PROGRESS__SNAPSHOT) {
+        progress_state_is_snapshot) {
         progressAbortSnapshot(r, i);
     }
     raft_free(req);
@@ -293,6 +260,8 @@ static int sendSnapshot(struct raft *r, const unsigned i)
     struct raft_server *server = &r->configuration.servers[i];
     struct sendInstallSnapshot *request;
     int rv;
+
+    progressToSnapshot(r, i);
 
     request = raft_malloc(sizeof *request);
     if (request == NULL) {
@@ -311,14 +280,12 @@ static int sendSnapshot(struct raft *r, const unsigned i)
         goto err_after_req_alloc;
     }
 
-    progressToSnapshot(r, i);
-
     return 0;
 
 err_after_req_alloc:
-    progressAbortSnapshot(r, i);
     raft_free(request);
 err:
+    progressAbortSnapshot(r, i);
     assert(rv != 0);
     return rv;
 }
@@ -326,7 +293,7 @@ err:
 int replicationTrigger(struct raft *r, unsigned i)
 {
     struct raft_server *server = &r->configuration.servers[i];
-    raft_index snapshot_index;
+    raft_index snapshot_index = logSnapshotIndex(&r->log);
     raft_index last_index = logLastIndex(&r->log);
     raft_index next_index = progressNextIndex(r, i);
     raft_index prev_index;
@@ -334,12 +301,11 @@ int replicationTrigger(struct raft *r, unsigned i)
 
     assert(r->state == RAFT_LEADER);
     assert(server->id != r->id);
+    assert(next_index >= 1);
 
     if (!progressShouldReplicate(r, i)) {
         return 0;
     }
-
-    snapshot_index = logSnapshotIndex(&r->log); /* Last snapshotted index */
 
     /* From Section §3.5:
      *
@@ -366,8 +332,7 @@ int replicationTrigger(struct raft *r, unsigned i)
         prev_term = 0;
     } else {
         /* Set prevIndex and prevTerm to the index and term of the entry at
-         * next_index - 1 */
-        assert(next_index > 1);
+         * next_index - 1. */
         prev_index = next_index - 1;
         prev_term = logTermOf(&r->log, prev_index);
         /* If the entry is not anymore in our log, send the last snapshot. */
@@ -382,6 +347,44 @@ int replicationTrigger(struct raft *r, unsigned i)
 
 send_snapshot:
     return sendSnapshot(r, i);
+}
+
+/* Possibly trigger I/O requests for newly appended log entries or heartbeats.
+ *
+ * This function loops through all followers and triggers replication on them.
+ *
+ * If the index is 0, no entry are written to disk, and a heartbeat
+ * AppendEntries RPC with no entries (or missing entries for followers whose log
+ * is behind) is sent.
+ *
+ * It must be called only by leaders. */
+static int triggerAll(struct raft *r)
+{
+    size_t i;
+    int rv;
+
+    assert(r->state == RAFT_LEADER);
+
+    /* Trigger replication for servers we didn't hear from recently. */
+    for (i = 0; i < r->configuration.n; i++) {
+        struct raft_server *server = &r->configuration.servers[i];
+        if (server->id == r->id) {
+            continue;
+        }
+        rv = replicationTrigger(r, i);
+        if (rv != 0 && rv != RAFT_NOCONNECTION) {
+            /* This is not a critical failure, let's just log it. */
+            warnf(r->io, "failed to send append entries to server %ld: %s (%d)",
+                  server->id, raft_strerror(rv), rv);
+        }
+    }
+
+    return 0;
+}
+
+int replicationHeartbeat(struct raft *r)
+{
+    return triggerAll(r);
 }
 
 /**

@@ -104,7 +104,7 @@ TEST_CASE(send, heartbeat, initial, NULL)
 
     /* Server 0 receives the vote result, becomes leader and sends
      * heartbeats. */
-    CLUSTER_STEP_N(5);
+    CLUSTER_STEP_N(6);
     ASSERT_LEADER(0);
     ASSERT_TIME(1030);
     raft = CLUSTER_RAFT(0);

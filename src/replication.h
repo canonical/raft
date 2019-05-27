@@ -9,8 +9,9 @@
  * was sent in the last heartbeat interval. */
 int replicationHeartbeat(struct raft *r);
 
-/* Trigger a local disk write for entries that have not been persisted yet, and
- * concurrently send AppendEntries RPC messages with outstanding log entries. */
+/* Start a local disk write for entries that have not been persisted yet, and
+ * trigger replication against all followers, typically sending AppendEntries
+ * RPC messages with outstanding log entries. */
 int replicationAppend(struct raft *r);
 
 /* Possibly send an AppendEntries or an InstallSnapshot RPC message to the
