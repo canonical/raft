@@ -15,16 +15,14 @@ int replicationHeartbeat(struct raft *r);
  * concurrently send AppendEntries RPC messages with outstanding log entries. */
 int replicationAppend(struct raft *r);
 
-/**
- * Trigger an AppendEntries or an InstallSnapshot RPC to the server with the
- * given index.
+/* Trigger an AppendEntries or an InstallSnapshot RPC request against the server
+ * with the given index.
  *
  * The RPC will contain all entries in our log from the server's next_index
  * onward, or a snapshot if we don't have anymore the needed log suffix.
  *
- * It must be called only by leaders.
- */
-int replication__trigger(struct raft *r, unsigned i);
+ * It must be called only by leaders. */
+int replicationTrigger(struct raft *r, unsigned i);
 
 /**
  * Update the replication state (match and next indexes) for the given server

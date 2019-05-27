@@ -29,18 +29,16 @@
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
-/* Possibly trigger I/O requests for newly appended log entries or heartbeat.
+/* Possibly trigger I/O requests for newly appended log entries or heartbeats.
  *
- * This function will start writing to disk all entries in the log from the
- * given index onwards, and trigger AppendEntries RPCs requests to all follower
- * servers.
+ * This function loops through all followers and triggers replication on them.
  *
  * If the index is 0, no entry are written to disk, and a heartbeat
  * AppendEntries RPC with no entries (or missing entries for followers whose log
  * is behind) is sent.
  *
  * It must be called only by leaders. */
-static int triggerAll(struct raft *r, const raft_index index)
+static int triggerAll(struct raft *r)
 {
     size_t i;
     int rv;
@@ -53,7 +51,7 @@ static int triggerAll(struct raft *r, const raft_index index)
         if (server->id == r->id) {
             continue;
         }
-        rv = replication__trigger(r, i);
+        rv = replicationTrigger(r, i);
         if (rv != 0 && rv != RAFT_NOCONNECTION) {
             /* This is not a critical failure, let's just log it. */
             warnf(r->io, "failed to send append entries to server %ld: %s (%d)",
@@ -66,7 +64,7 @@ static int triggerAll(struct raft *r, const raft_index index)
 
 int replicationHeartbeat(struct raft *r)
 {
-    return triggerAll(r, 0);
+    return triggerAll(r);
 }
 
 /* Context of a #RAFT_IO_APPEND_ENTRIES request that was submitted with
@@ -325,7 +323,7 @@ err:
     return rv;
 }
 
-int replication__trigger(struct raft *r, unsigned i)
+int replicationTrigger(struct raft *r, unsigned i)
 {
     struct raft_server *server = &r->configuration.servers[i];
     raft_index snapshot_index;
@@ -563,7 +561,7 @@ int replicationAppend(struct raft *r)
         return rv;
     }
 
-    return triggerAll(r, index);
+    return triggerAll(r);
 }
 
 /**
@@ -666,7 +664,7 @@ int replication__update(struct raft *r,
         if (retry) {
             /* Retry, ignoring errors. */
             tracef("log mismatch -> send old entries to %u", server->id);
-            replication__trigger(r, i);
+            replicationTrigger(r, i);
         }
         return 0;
     }
@@ -732,7 +730,7 @@ int replication__update(struct raft *r,
         i = configurationIndexOf(&r->configuration, server->id);
         if (i < r->configuration.n &&
             progressState(r, i) == PROGRESS__PIPELINE) {
-            replication__trigger(r, i);
+            replicationTrigger(r, i);
         }
     }
 

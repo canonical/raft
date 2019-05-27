@@ -276,7 +276,7 @@ int raft_promote(struct raft *r,
     r->leader_state.round_start = r->io->time(r->io);
 
     /* Immediately initiate an AppendEntries request. */
-    rv = replication__trigger(r, server_index);
+    rv = replicationTrigger(r, server_index);
     if (rv != 0 && rv != RAFT_NOCONNECTION) {
         /* This error is not fatal. */
         warnf(r->io, "failed to send append entries to server %ld: %s (%d)",
