@@ -205,7 +205,7 @@ static int tick(struct raft *r)
     return rv;
 }
 
-void tick_cb(struct raft_io *io)
+void tickCb(struct raft_io *io)
 {
     struct raft *r;
     int rv;

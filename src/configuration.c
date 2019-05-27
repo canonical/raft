@@ -96,23 +96,20 @@ size_t configurationNumVoting(const struct raft_configuration *c)
     return n;
 }
 
-int configurationCopy(const struct raft_configuration *c1,
-                      struct raft_configuration *c2)
+int configurationCopy(const struct raft_configuration *src,
+                      struct raft_configuration *dst)
 {
     size_t i;
     int rv;
-    assert(c1 != NULL);
-    assert(c2 != NULL);
-
-    for (i = 0; i < c1->n; i++) {
-        struct raft_server *server = &c1->servers[i];
-        rv = raft_configuration_add(c2, server->id, server->address,
+    raft_configuration_init(dst);
+    for (i = 0; i < src->n; i++) {
+        struct raft_server *server = &src->servers[i];
+        rv = raft_configuration_add(dst, server->id, server->address,
                                     server->voting);
         if (rv != 0) {
             return rv;
         }
     }
-
     return 0;
 }
 

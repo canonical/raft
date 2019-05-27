@@ -23,12 +23,12 @@ static int restoreMostRecentConfiguration(struct raft *r,
                                           raft_index index)
 {
     struct raft_configuration configuration;
-    int rc;
+    int rv;
     raft_configuration_init(&configuration);
-    rc = configurationDecode(&entry->buf, &configuration);
-    if (rc != 0) {
+    rv = configurationDecode(&entry->buf, &configuration);
+    if (rv != 0) {
         raft_configuration_close(&configuration);
-        return rc;
+        return rv;
     }
     raft_configuration_close(&r->configuration);
     r->configuration = configuration;
@@ -46,14 +46,14 @@ static int restoreEntries(struct raft *r,
     struct raft_entry *conf = NULL;
     raft_index conf_index;
     size_t i;
-    int rc;
+    int rv;
     logSeek(&r->log, start_index);
     r->last_stored = start_index - 1;
     for (i = 0; i < n; i++) {
         struct raft_entry *entry = &entries[i];
-        rc = logAppend(&r->log, entry->term, entry->type, &entry->buf,
+        rv = logAppend(&r->log, entry->term, entry->type, &entry->buf,
                        entry->batch);
-        if (rc != 0) {
+        if (rv != 0) {
             goto err;
         }
         r->last_stored++;
@@ -63,8 +63,8 @@ static int restoreEntries(struct raft *r,
         }
     }
     if (conf != NULL) {
-        rc = restoreMostRecentConfiguration(r, conf, conf_index);
-        if (rc != 0) {
+        rv = restoreMostRecentConfiguration(r, conf, conf_index);
+        if (rv != 0) {
             goto err;
         }
     }
@@ -75,64 +75,65 @@ err:
     if (logNumOutstanding(&r->log) > 0) {
         logDiscard(&r->log, r->log.offset + 1);
     }
-    return rc;
+    return rv;
 }
 
 /* Automatically self-elect ourselves and convert to leader if we're the only
  * voting server in the configuration. */
-static int maybe_self_elect(struct raft *r)
+static int maybeSelfElect(struct raft *r)
 {
     const struct raft_server *server;
-    int rc;
+    int rv;
     server = configurationGet(&r->configuration, r->id);
     if (server == NULL || !server->voting ||
         configurationNumVoting(&r->configuration) > 1) {
         return 0;
     }
     debugf(r->io, "self elect and convert to leader");
-    rc = convertToCandidate(r);
-    if (rc != 0) {
-        return rc;
+    rv = convertToCandidate(r);
+    if (rv != 0) {
+        return rv;
     }
-    rc = convertToLeader(r);
-    if (rc != 0) {
-        return rc;
+    rv = convertToLeader(r);
+    if (rv != 0) {
+        return rv;
     }
     return 0;
 }
 
 int raft_start(struct raft *r)
 {
-    int rc;
     struct raft_snapshot *snapshot;
     raft_index start_index;
     struct raft_entry *entries;
     size_t n_entries;
+    int rv;
 
     assert(r != NULL);
     assert(r->state == RAFT_UNAVAILABLE);
     assert(r->heartbeat_timeout != 0);
     assert(r->heartbeat_timeout < r->election_timeout);
     assert(logNumOutstanding(&r->log) == 0);
+    assert(logSnapshotIndex(&r->log) == 0);
     assert(r->last_stored == 0);
 
     infof(r->io, "starting");
-    rc = r->io->load(r->io, &r->current_term, &r->voted_for, &snapshot,
+    rv = r->io->load(r->io, &r->current_term, &r->voted_for, &snapshot,
                      &start_index, &entries, &n_entries);
-    if (rc != 0) {
-        return rc;
+    if (rv != 0) {
+        return rv;
     }
     assert(start_index >= 1);
 
-    /* If we have a snapshot, let's restore it, updating the start index. */
+    /* If we have a snapshot, let's restore it. */
     if (snapshot != NULL) {
         tracef("restore snapshot with last index %llu and last term %llu",
                snapshot->index, snapshot->term);
-        rc = snapshot__restore(r, snapshot);
-        if (rc != 0) {
-            snapshot__destroy(snapshot);
+        rv = snapshotRestore(r, snapshot);
+        if (rv != 0) {
+            snapshotDestroy(snapshot);
             entryBatchesDestroy(entries, n_entries);
-            return rc;
+            return rv;
         }
         logRestore(&r->log, snapshot->index, snapshot->term);
         raft_free(snapshot);
@@ -151,18 +152,18 @@ int raft_start(struct raft *r)
     /* Append the entries to the log, possibly restoring the last
      * configuration. */
     tracef("restore %lu entries starting at %llu", n_entries, start_index);
-    rc = restoreEntries(r, start_index, entries, n_entries);
-    if (rc != 0) {
+    rv = restoreEntries(r, start_index, entries, n_entries);
+    if (rv != 0) {
         entryBatchesDestroy(entries, n_entries);
-        return rc;
+        return rv;
     }
 
-    /* Start the I/O backend. The tick callback is expected to fire every
-     * r->heartbeat_timeout milliseconds and the recv callback whenever an RPC
-     * is received. */
-    rc = r->io->start(r->io, r->heartbeat_timeout, tick_cb, recv_cb);
-    if (rc != 0) {
-        return rc;
+    /* Start the I/O backend. The tickCb function is expected to fire every
+     * r->heartbeat_timeout milliseconds and recvCb whenever an RPC is
+     * received. */
+    rv = r->io->start(r->io, r->heartbeat_timeout, tickCb, recvCb);
+    if (rv != 0) {
+        return rv;
     }
 
     convertToFollower(r);
@@ -170,9 +171,9 @@ int raft_start(struct raft *r)
     /* If there's only one voting server, and that is us, it's safe to convert
      * to leader right away. If that is not us, we're either joining the cluster
      * or we're simply configured as non-voter, and we'll stay follower. */
-    rc = maybe_self_elect(r);
-    if (rc != 0) {
-        return rc;
+    rv = maybeSelfElect(r);
+    if (rv != 0) {
+        return rv;
     }
 
     return 0;

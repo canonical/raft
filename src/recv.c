@@ -76,11 +76,10 @@ static int recv(struct raft *r, struct raft_message *message)
     return 0;
 }
 
-void recv_cb(struct raft_io *io, struct raft_message *message)
+void recvCb(struct raft_io *io, struct raft_message *message)
 {
-    struct raft *r;
+    struct raft *r = io->data;
     int rv;
-    r = io->data;
     if (r->state == RAFT_UNAVAILABLE) {
         return;
     }
@@ -92,7 +91,7 @@ void recv_cb(struct raft_io *io, struct raft_message *message)
 
 /* Bump the current term to the given value and reset our vote, persiting the
  * change to disk. */
-static int bump_current_term(struct raft *r, raft_term term)
+static int bumpCurrentTerm(struct raft *r, raft_term term)
 {
     int rv;
 
@@ -112,7 +111,7 @@ static int bump_current_term(struct raft *r, raft_term term)
     return 0;
 }
 
-int recv__ensure_matching_terms(struct raft *r, raft_term term, int *match)
+int recvEnsureMatchingTerms(struct raft *r, raft_term term, int *match)
 {
     int rv;
 
@@ -146,7 +145,7 @@ int recv__ensure_matching_terms(struct raft *r, raft_term term, int *match)
             strcat(msg, " and step down");
         }
         tracef("%s", msg);
-        rv = bump_current_term(r, term);
+        rv = bumpCurrentTerm(r, term);
         if (rv != 0) {
             return rv;
         }
@@ -162,7 +161,7 @@ int recv__ensure_matching_terms(struct raft *r, raft_term term, int *match)
     return 0;
 }
 
-static void copy_address(const char *address1, char **address2)
+static void copyAddress(const char *address1, char **address2)
 {
     *address2 = raft_malloc(strlen(address1) + 1);
     if (*address2 == NULL) {
@@ -171,7 +170,7 @@ static void copy_address(const char *address1, char **address2)
     strcpy(*address2, address1);
 }
 
-int recv__update_leader(struct raft *r, unsigned id, const char *address)
+int recvUpdateLeader(struct raft *r, unsigned id, const char *address)
 {
     assert(r->state == RAFT_FOLLOWER);
     r->follower_state.current_leader.id = id;
@@ -180,7 +179,7 @@ int recv__update_leader(struct raft *r, unsigned id, const char *address)
         if (r->follower_state.current_leader.address != NULL) {
             raft_free(r->follower_state.current_leader.address);
         }
-        copy_address(address, &r->follower_state.current_leader.address);
+        copyAddress(address, &r->follower_state.current_leader.address);
         if (r->follower_state.current_leader.address == NULL) {
             return RAFT_NOMEM;
         }

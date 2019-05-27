@@ -48,7 +48,7 @@ int recv__request_vote(struct raft *r,
         goto reply;
     }
 
-    rv = recv__ensure_matching_terms(r, args->term, &match);
+    rv = recvEnsureMatchingTerms(r, args->term, &match);
     if (rv != 0) {
         return rv;
     }

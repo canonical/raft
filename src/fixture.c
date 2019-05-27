@@ -7,6 +7,7 @@
 
 #include "assert.h"
 #include "configuration.h"
+#include "entry.h"
 #include "log.h"
 #include "logging.h"
 #include "queue.h"
@@ -63,10 +64,10 @@ static char *describeMessage(const struct raft_message *m)
 #define MAX_PEERS 8
 
 /* Fields common across all request types. */
-#define REQUEST                \
-    int type;                  \
-    raft_time completion_time; \
-    queue queue
+#define REQUEST                                                            \
+    int type;                  /* Request code type. */                    \
+    raft_time completion_time; /* When the request should be fulfilled. */ \
+    queue queue                /* Link the I/O pending requests queue. */
 
 /* Request type codes. */
 enum { APPEND = 1, SEND, TRANSMIT, SNAPSHOT_PUT, SNAPSHOT_GET };
@@ -170,7 +171,8 @@ struct io
         int n;         /* Repeat the fault this many times. Default is -1. */
     } fault;
 
-    bool drop[5];
+    /* If flag i is true, messages of type i will be silently dropped. */
+    bool drop[N_MESSAGE_TYPES];
 
     /* Counters of events that happened so far. */
     unsigned n_send[N_MESSAGE_TYPES];
@@ -178,13 +180,16 @@ struct io
     unsigned n_append;
 };
 
-/* Advance the fault counters and return @true if an error should occurr. */
+/* Advance the fault counters and return @true if an error should occur. */
 static bool ioFaultTick(struct io *io)
 {
+    /* If the countdown is negative, faults are disabled. */
     if (io->fault.countdown < 0) {
         return false;
     }
 
+    /* If the countdown didn't reach zero, it's still not come the time to
+     * trigger faults. */
     if (io->fault.countdown > 0) {
         io->fault.countdown--;
         return false;
@@ -192,20 +197,20 @@ static bool ioFaultTick(struct io *io)
 
     assert(io->fault.countdown == 0);
 
+    /* If n is negative we keep triggering the fault forever. */
     if (io->fault.n < 0) {
-        /* Trigger the fault forever. */
         return true;
     }
 
+    /* If n is positive we need to trigger the fault at least this time. */
     if (io->fault.n > 0) {
-        /* Trigger the fault at least this time. */
         io->fault.n--;
         return true;
     }
 
     assert(io->fault.n == 0);
 
-    /* We reached 'repeat' ticks, let's stop triggering the fault. */
+    /* We reached 'n', let's disable faults. */
     io->fault.countdown--;
 
     return false;
@@ -237,31 +242,8 @@ static int ioMethodStart(struct raft_io *raft_io,
     return 0;
 }
 
-/* Release the memory used by the given message tramsmit object. */
-static void ioDropTransmit(struct io *io, struct transmit *transmit)
-{
-    struct raft_message *message;
-    (void)io;
-    message = &transmit->message;
-
-    switch (message->type) {
-        case RAFT_IO_APPEND_ENTRIES:
-            if (message->append_entries.entries != NULL) {
-                raft_free(message->append_entries.entries[0].batch);
-                raft_free(message->append_entries.entries);
-            }
-            break;
-        case RAFT_IO_INSTALL_SNAPSHOT:
-            raft_configuration_close(&message->install_snapshot.conf);
-            raft_free(message->install_snapshot.data.base);
-            break;
-    }
-
-    raft_free(transmit);
-}
-
-/* Flush an append entries request, appending its entries in the local in-memory
-   log. */
+/* Flush an append entries request, appending its entries to the local in-memory
+ * log. */
 static void ioFlushAppend(struct io *s, struct append *append)
 {
     struct raft_entry *entries;
@@ -272,14 +254,11 @@ static void ioFlushAppend(struct io *s, struct append *append)
     assert(entries != NULL);
 
     /* Copy new entries into the new array. */
-    memcpy(entries + s->n, append->entries, append->n * sizeof *entries);
     for (i = 0; i < append->n; i++) {
-        struct raft_entry *entry = &entries[s->n + i];
-
-        /* Make a copy of the actual entry data. */
-        entry->buf.base = raft_malloc(entry->buf.len);
-        assert(entry->buf.base != NULL);
-        memcpy(entry->buf.base, append->entries[i].buf.base, entry->buf.len);
+        const struct raft_entry *src = &append->entries[i];
+        struct raft_entry *dst = &entries[s->n + i];
+        int rv = entryCopy(src, dst);
+        assert(rv == 0);
     }
 
     s->entries = entries;
@@ -291,99 +270,20 @@ static void ioFlushAppend(struct io *s, struct append *append)
     free(append);
 }
 
-/* Copy all entries in @src into @dst. */
-static void io_stub__copy_entries(const struct raft_entry *src,
-                                  struct raft_entry **dst,
-                                  unsigned n)
-{
-    size_t size = 0;
-    void *batch;
-    void *cursor;
-    unsigned i;
-
-    if (n == 0) {
-        *dst = NULL;
-        return;
-    }
-
-    /* Calculate the total size of the entries content and allocate the
-     * batch. */
-    for (i = 0; i < n; i++) {
-        size += src[i].buf.len;
-    }
-
-    batch = raft_malloc(size);
-    assert(batch != NULL);
-
-    /* Copy the entries. */
-    *dst = raft_malloc(n * sizeof **dst);
-    assert(*dst != NULL);
-
-    cursor = batch;
-
-    for (i = 0; i < n; i++) {
-        (*dst)[i] = src[i];
-
-        (*dst)[i].buf.base = cursor;
-        memcpy((*dst)[i].buf.base, src[i].buf.base, src[i].buf.len);
-
-        (*dst)[i].batch = batch;
-
-        cursor += src[i].buf.len;
-    }
-}
-
-static void snapshot_copy(const struct raft_snapshot *s1,
-                          struct raft_snapshot *s2)
-{
-    int rv;
-    unsigned i;
-    size_t size;
-    void *cursor;
-
-    raft_configuration_init(&s2->configuration);
-
-    s2->term = s1->term;
-    s2->index = s1->index;
-
-    rv = configurationCopy(&s1->configuration, &s2->configuration);
-    assert(rv == 0);
-
-    size = 0;
-    for (i = 0; i < s1->n_bufs; i++) {
-        size += s1->bufs[i].len;
-    }
-
-    s2->bufs = raft_malloc(sizeof *s2->bufs);
-    assert(s2->bufs != NULL);
-
-    s2->bufs[0].base = raft_malloc(size);
-    s2->bufs[0].len = size;
-    assert(s2->bufs[0].base != NULL);
-
-    cursor = s2->bufs[0].base;
-
-    for (i = 0; i < s1->n_bufs; i++) {
-        memcpy(cursor, s1->bufs[i].base, s1->bufs[i].len);
-        cursor += s1->bufs[i].len;
-    }
-
-    s2->n_bufs = 1;
-
-    return;
-}
-
 /* Flush a snapshot put request, copying the snapshot data. */
 static void ioFlushSnapshotPut(struct io *s, struct snapshot_put *r)
 {
+    int rv;
+
     if (s->snapshot == NULL) {
         s->snapshot = raft_malloc(sizeof *s->snapshot);
         assert(s->snapshot != NULL);
     } else {
-        snapshot__close(s->snapshot);
+        snapshotClose(s->snapshot);
     }
 
-    snapshot_copy(r->snapshot, s->snapshot);
+    rv = snapshotCopy(r->snapshot, s->snapshot);
+    assert(rv == 0);
 
     if (r->req->cb != NULL) {
         r->req->cb(r->req, 0);
@@ -392,12 +292,15 @@ static void ioFlushSnapshotPut(struct io *s, struct snapshot_put *r)
 }
 
 /* Flush a snapshot get request, returning to the client a copy of the local
-   snapshot (if any). */
+ * snapshot (if any). */
 static void ioFlushSnapshotGet(struct io *s, struct snapshot_get *r)
 {
-    struct raft_snapshot *snapshot = raft_malloc(sizeof *snapshot);
+    struct raft_snapshot *snapshot;
+    int rv;
+    snapshot = raft_malloc(sizeof *snapshot);
     assert(snapshot != NULL);
-    snapshot_copy(s->snapshot, snapshot);
+    rv = snapshotCopy(s->snapshot, snapshot);
+    assert(rv == 0);
     r->req->cb(r->req, snapshot, 0);
     raft_free(r);
 }
@@ -415,6 +318,28 @@ static struct peer *ioGetPeer(struct io *io, unsigned id)
     return NULL;
 }
 
+/* Copy the dynamically allocated memory of an AppendEntries message. */
+static void copyAppendEntries(const struct raft_append_entries *src,
+                              struct raft_append_entries *dst)
+{
+    int rv;
+    rv = entryBatchCopy(src->entries, &dst->entries, src->n_entries);
+    assert(rv == 0);
+    dst->n_entries = src->n_entries;
+}
+
+/* Copy the dynamically allocated memory of an InstallSnapshot message. */
+static void copyInstallSnapshot(const struct raft_install_snapshot *src,
+                                struct raft_install_snapshot *dst)
+{
+    int rv;
+    rv = configurationCopy(&src->conf, &dst->conf);
+    assert(rv == 0);
+    dst->data.base = raft_malloc(dst->data.len);
+    assert(dst->data.base != NULL);
+    memcpy(dst->data.base, src->data.base, src->data.len);
+}
+
 /* Flush a raft_io_send request, copying the message content into a new struct
  * transmit object and invoking the user callback. */
 static void ioFlushSend(struct io *io, struct send *send)
@@ -424,7 +349,6 @@ static void ioFlushSend(struct io *io, struct send *send)
     struct raft_message *src;
     struct raft_message *dst;
     int status;
-    int rv;
 
     /* If the peer doesn't exist or was disconnected, fail the request. */
     peer = ioGetPeer(io, send->message.server_id);
@@ -448,22 +372,10 @@ static void ioFlushSend(struct io *io, struct send *send)
     switch (dst->type) {
         case RAFT_IO_APPEND_ENTRIES:
             /* Make a copy of the entries being sent */
-            io_stub__copy_entries(src->append_entries.entries,
-                                  &dst->append_entries.entries,
-                                  src->append_entries.n_entries);
-            dst->append_entries.n_entries = src->append_entries.n_entries;
+            copyAppendEntries(&src->append_entries, &dst->append_entries);
             break;
         case RAFT_IO_INSTALL_SNAPSHOT:
-            raft_configuration_init(&dst->install_snapshot.conf);
-            rv = configurationCopy(&src->install_snapshot.conf,
-                                   &dst->install_snapshot.conf);
-            dst->install_snapshot.data.base =
-                raft_malloc(dst->install_snapshot.data.len);
-            assert(dst->install_snapshot.data.base != NULL);
-            assert(rv == 0);
-            memcpy(dst->install_snapshot.data.base,
-                   src->install_snapshot.data.base,
-                   src->install_snapshot.data.len);
+            copyInstallSnapshot(&src->install_snapshot, &dst->install_snapshot);
             break;
     }
 
@@ -477,6 +389,26 @@ out:
     }
 
     raft_free(send);
+}
+
+/* Release the memory used by the given message tramsmit object. */
+static void ioDestroyTransmit(struct transmit *transmit)
+{
+    struct raft_message *message;
+    message = &transmit->message;
+    switch (message->type) {
+        case RAFT_IO_APPEND_ENTRIES:
+            if (message->append_entries.entries != NULL) {
+                raft_free(message->append_entries.entries[0].batch);
+                raft_free(message->append_entries.entries);
+            }
+            break;
+        case RAFT_IO_INSTALL_SNAPSHOT:
+            raft_configuration_close(&message->install_snapshot.conf);
+            raft_free(message->install_snapshot.data.base);
+            break;
+    }
+    raft_free(transmit);
 }
 
 /* Flush all requests in the queue. */
@@ -498,7 +430,7 @@ static void ioFlushAll(struct io *io)
                 ioFlushSend(io, (struct send *)r);
                 break;
             case TRANSMIT:
-                ioDropTransmit(io, (struct transmit *)r);
+                ioDestroyTransmit((struct transmit *)r);
                 break;
             case SNAPSHOT_PUT:
                 ioFlushSnapshotPut(io, (struct snapshot_put *)r);
@@ -517,25 +449,20 @@ static int ioMethodClose(struct raft_io *raft_io,
 {
     struct io *io = raft_io->impl;
     size_t i;
-
     for (i = 0; i < io->n; i++) {
         struct raft_entry *entry = &io->entries[i];
         raft_free(entry->buf.base);
     }
-
     if (io->entries != NULL) {
         raft_free(io->entries);
     }
-
     if (io->snapshot != NULL) {
-        snapshot__close(io->snapshot);
+        snapshotClose(io->snapshot);
         raft_free(io->snapshot);
     }
-
     if (cb != NULL) {
         cb(raft_io);
     }
-
     return 0;
 }
 
@@ -548,10 +475,6 @@ static int ioMethodLoad(struct raft_io *io,
                         size_t *n_entries)
 {
     struct io *s;
-    size_t i;
-    void *batch;
-    void *cursor;
-    size_t size = 0; /* Size of the batch */
     int rv;
 
     s = io->impl;
@@ -564,64 +487,24 @@ static int ioMethodLoad(struct raft_io *io,
     *voted_for = s->voted_for;
     *start_index = 1;
 
-    if (s->n == 0) {
-        *entries = NULL;
-        *n_entries = 0;
-        goto snapshot;
-    }
+    *n_entries = s->n;
 
     /* Make a copy of the persisted entries, storing their data into a single
      * batch. */
-    *n_entries = s->n;
-    *entries = raft_calloc(s->n, sizeof **entries);
-    if (*entries == NULL) {
-        rv = RAFT_NOMEM;
-        goto err;
-    }
+    rv = entryBatchCopy(s->entries, entries, s->n);
+    assert(rv == 0);
 
-    for (i = 0; i < s->n; i++) {
-        size += s->entries[i].buf.len;
-    }
-
-    batch = raft_malloc(size);
-    if (batch == NULL) {
-        rv = RAFT_NOMEM;
-        goto err_after_entries_alloc;
-    }
-
-    cursor = batch;
-
-    for (i = 0; i < s->n; i++) {
-        struct raft_entry *entry = &(*entries)[i];
-        memcpy(cursor, s->entries[i].buf.base, s->entries[i].buf.len);
-
-        entry->term = s->entries[i].term;
-        entry->type = s->entries[i].type;
-        entry->buf.base = cursor;
-        entry->buf.len = s->entries[i].buf.len;
-        entry->batch = batch;
-
-        cursor += entry->buf.len;
-    }
-
-snapshot:
     if (s->snapshot != NULL) {
         *snapshot = raft_malloc(sizeof **snapshot);
         assert(*snapshot != NULL);
-        snapshot_copy(s->snapshot, *snapshot);
+        rv = snapshotCopy(s->snapshot, *snapshot);
+        assert(rv == 0);
         *start_index = (*snapshot)->index + 1;
     } else {
         *snapshot = NULL;
     }
 
     return 0;
-
-err_after_entries_alloc:
-    raft_free(*entries);
-
-err:
-    assert(rv != 0);
-    return rv;
 }
 
 static int ioMethodBootstrap(struct raft_io *raft_io,
@@ -691,8 +574,8 @@ static int ioMethodSetVote(struct raft_io *raft_io, const unsigned server_id)
         return RAFT_IOERR;
     }
 
-    io->voted_for = server_id;
     tracef("io: set vote: %d %d", server_id, io->index);
+    io->voted_for = server_id;
 
     return 0;
 }
@@ -861,12 +744,12 @@ static int ioMethodSend(struct raft_io *raft_io,
     struct io *io = raft_io->impl;
     struct send *r;
 
-    tracef("io: send: %s to server %d", describeMessage(message),
-           message->server_id);
-
     if (ioFaultTick(io)) {
         return RAFT_IOERR;
     }
+
+    tracef("io: send: %s to server %d", describeMessage(message),
+           message->server_id);
 
     r = raft_malloc(sizeof *r);
     assert(r != NULL);
@@ -900,7 +783,7 @@ static void ioDeliverTransmit(struct io *io, struct transmit *transmit)
 
     /* If this message type is in the drop list, let's discard it */
     if (io->drop[message->type - 1]) {
-        ioDropTransmit(io, transmit);
+        ioDestroyTransmit(transmit);
         return;
     }
 
@@ -909,7 +792,7 @@ static void ioDeliverTransmit(struct io *io, struct transmit *transmit)
     /* We don't have any peer with this ID or it's disconnected or if the
      * connection is saturated, let's drop the message */
     if (peer == NULL || !peer->connected || peer->saturated) {
-        ioDropTransmit(io, transmit);
+        ioDestroyTransmit(transmit);
         return;
     }
 
@@ -1138,21 +1021,18 @@ int raft_fixture_configuration(struct raft_fixture *f,
                                struct raft_configuration *configuration)
 {
     unsigned i;
-
     assert(f->n > 0);
     assert(n_voting > 0);
     assert(n_voting <= f->n);
-
     raft_configuration_init(configuration);
-
     for (i = 0; i < f->n; i++) {
         struct raft_fixture_server *s;
         bool voting = i < n_voting;
-        int rc;
+        int rv;
         s = &f->servers[i];
-        rc = raft_configuration_add(configuration, s->id, s->address, voting);
-        if (rc != 0) {
-            return rc;
+        rv = raft_configuration_add(configuration, s->id, s->address, voting);
+        if (rv != 0) {
+            return rv;
         }
     }
     return 0;
@@ -1164,10 +1044,10 @@ int raft_fixture_bootstrap(struct raft_fixture *f,
     unsigned i;
     for (i = 0; i < f->n; i++) {
         struct raft *raft = raft_fixture_get(f, i);
-        int rc;
-        rc = raft_bootstrap(raft, configuration);
-        if (rc != 0) {
-            return rc;
+        int rv;
+        rv = raft_bootstrap(raft, configuration);
+        if (rv != 0) {
+            return rv;
         }
     }
     return 0;
@@ -1176,12 +1056,12 @@ int raft_fixture_bootstrap(struct raft_fixture *f,
 int raft_fixture_start(struct raft_fixture *f)
 {
     unsigned i;
-    int rc;
+    int rv;
     for (i = 0; i < f->n; i++) {
         struct raft_fixture_server *s = &f->servers[i];
-        rc = raft_start(&s->raft);
-        if (rc != 0) {
-            return rc;
+        rv = raft_start(&s->raft);
+        if (rv != 0) {
+            return rv;
         }
     }
     return 0;
@@ -1233,7 +1113,7 @@ unsigned raft_fixture_voted_for(struct raft_fixture *f, unsigned i)
  * Return true if the current leader turns out to be different from the one at
  * the time this function was called.
  */
-static bool updateLeader(struct raft_fixture *f)
+static bool updateLeaderAndCheckElectionSafety(struct raft_fixture *f)
 {
     unsigned leader_id = 0;
     unsigned leader_i = 0;
@@ -1245,35 +1125,32 @@ static bool updateLeader(struct raft_fixture *f)
         struct raft *raft = raft_fixture_get(f, i);
         unsigned j;
 
-        if (!raft_fixture_alive(f, i)) {
+        /* If the server is not alive or is not the leader, skip to the next
+         * server. */
+        if (!raft_fixture_alive(f, i) || raft_state(raft) != RAFT_LEADER) {
             continue;
         }
 
-        if (raft_state(raft) == RAFT_LEADER) {
-            /* No other server is leader for this term. */
-            for (j = 0; j < f->n; j++) {
-                struct raft *other = raft_fixture_get(f, j);
+        /* Check that no other server is leader for this term. */
+        for (j = 0; j < f->n; j++) {
+            struct raft *other = raft_fixture_get(f, j);
 
-                if (other->id == raft->id) {
-                    continue;
-                }
-
-                if (other->state == RAFT_LEADER) {
-                    if (other->current_term == raft->current_term) {
-                        fprintf(
-                            stderr,
-                            "server %u and %u are both leaders in term %llu",
-                            raft->id, other->id, raft->current_term);
-                        abort();
-                    }
-                }
+            if (other->id == raft->id || other->state != RAFT_LEADER) {
+                continue;
             }
 
-            if (raft->current_term > leader_term) {
-                leader_id = raft->id;
-                leader_i = i;
-                leader_term = raft->current_term;
+            if (other->current_term == raft->current_term) {
+                fprintf(stderr,
+                        "server %u and %u are both leaders in term %llu",
+                        raft->id, other->id, raft->current_term);
+                abort();
             }
+        }
+
+        if (raft->current_term > leader_term) {
+            leader_id = raft->id;
+            leader_i = i;
+            leader_term = raft->current_term;
         }
     }
 
@@ -1286,13 +1163,12 @@ static bool updateLeader(struct raft_fixture *f)
 
         for (i = 0; i < f->n; i++) {
             struct raft *raft = raft_fixture_get(f, i);
-            if (i == leader_i) {
-                continue;
-            }
-            if (!raft_fixture_alive(f, i) ||
+
+            /* If this server is itself the leader, or it's not alive or it's
+             * not connected to the leader, then don't count it in for
+             * stability. */
+            if (i == leader_i || !raft_fixture_alive(f, i) ||
                 raft_fixture_saturated(f, leader_i, i)) {
-                /* This server is not alive or not connected to the leader, so
-                 * don't count it in for stability. */
                 continue;
             }
 
@@ -1359,6 +1235,7 @@ static void checkLeaderAppendOnly(struct raft_fixture *f)
     for (index = 1; index <= last; index++) {
         const struct raft_entry *entry1;
         const struct raft_entry *entry2;
+        size_t i;
 
         entry1 = logGet(&f->log, index);
         entry2 = logGet(&raft->log, index);
@@ -1371,14 +1248,13 @@ static void checkLeaderAppendOnly(struct raft_fixture *f)
             continue;
         }
 
-        /* TODO: check other entry types too. */
-        if (entry1->type != RAFT_COMMAND) {
-            continue;
-        }
-
-        /* Entry was not overwritten. TODO: check all content. */
+        /* Entry was not overwritten. */
+        assert(entry1->type == entry2->type);
         assert(entry1->term == entry2->term);
-        assert(*(uint32_t *)entry1->buf.base == *(uint32_t *)entry2->buf.base);
+        for (i = 0; i < entry1->buf.len; i++) {
+            assert(((uint8_t *)entry1->buf.base)[i] ==
+                   ((uint8_t *)entry2->buf.base)[i]);
+        }
     }
 }
 
@@ -1390,24 +1266,20 @@ static void copyLeaderLog(struct raft_fixture *f)
     struct raft_entry *entries;
     unsigned n;
     size_t i;
-    int rc;
-
+    int rv;
     logClose(&f->log);
     logInit(&f->log);
-
-    rc = logAcquire(&raft->log, 1, &entries, &n);
-    assert(rc == 0);
-
+    rv = logAcquire(&raft->log, 1, &entries, &n);
+    assert(rv == 0);
     for (i = 0; i < n; i++) {
         struct raft_entry *entry = &entries[i];
         struct raft_buffer buf;
         buf.len = entry->buf.len;
         buf.base = raft_malloc(buf.len);
         memcpy(buf.base, entry->buf.base, buf.len);
-        rc = logAppend(&f->log, entry->term, entry->type, &buf, NULL);
-        assert(rc == 0);
+        rv = logAppend(&f->log, entry->term, entry->type, &buf, NULL);
+        assert(rv == 0);
     }
-
     logRelease(&raft->log, 1, entries, n);
 }
 
@@ -1532,7 +1404,7 @@ struct raft_fixture_event *raft_fixture_step(struct raft_fixture *f)
 
     /* If the leader has not changed check the Leader Append-Only
      * guarantee. */
-    if (!updateLeader(f)) {
+    if (!updateLeaderAndCheckElectionSafety(f)) {
         checkLeaderAppendOnly(f);
     }
 
@@ -1572,6 +1444,8 @@ bool raft_fixture_step_until(struct raft_fixture *f,
     return f->time - start < max_msecs;
 }
 
+/* A step function which return always false, forcing raft_fixture_step_n to
+ * advance time at each iteration. */
 static bool spin(struct raft_fixture *f, void *arg)
 {
     (void)f;
@@ -1695,17 +1569,11 @@ void raft_fixture_elect(struct raft_fixture *f, unsigned i)
 void raft_fixture_depose(struct raft_fixture *f)
 {
     unsigned leader_i;
-    unsigned i;
 
     /* Make sure there's a leader. */
     assert(f->leader_id != 0);
     leader_i = f->leader_id - 1;
     assert(raft_state(&f->servers[leader_i].raft) == RAFT_LEADER);
-
-    /* Make sure all server have a default election timeout. */
-    for (i = 0; i < f->n; i++) {
-        assert(f->servers[i].raft.election_timeout == ELECTION_TIMEOUT);
-    }
 
     /* Set a very large election timeout on all followers, to prevent them from
      * starting an election. */
@@ -1727,7 +1595,7 @@ struct step_apply
     raft_index index;
 };
 
-static bool has_applied_index(struct raft_fixture *f, void *arg)
+static bool hasAppliedIndex(struct raft_fixture *f, void *arg)
 {
     struct step_apply *apply = (struct step_apply *)arg;
     struct raft *raft;
@@ -1754,7 +1622,7 @@ bool raft_fixture_step_until_applied(struct raft_fixture *f,
                                      unsigned max_msecs)
 {
     struct step_apply apply = {i, index};
-    return raft_fixture_step_until(f, has_applied_index, &apply, max_msecs);
+    return raft_fixture_step_until(f, hasAppliedIndex, &apply, max_msecs);
 }
 
 struct step_state
@@ -1763,7 +1631,7 @@ struct step_state
     int state;
 };
 
-static bool has_state(struct raft_fixture *f, void *arg)
+static bool hasState(struct raft_fixture *f, void *arg)
 {
     struct step_state *target = (struct step_state *)arg;
     struct raft *raft;
@@ -1777,7 +1645,7 @@ bool raft_fixture_step_until_state_is(struct raft_fixture *f,
                                       unsigned max_msecs)
 {
     struct step_state target = {i, state};
-    return raft_fixture_step_until(f, has_state, &target, max_msecs);
+    return raft_fixture_step_until(f, hasState, &target, max_msecs);
 }
 
 struct step_term
@@ -1786,7 +1654,7 @@ struct step_term
     raft_term term;
 };
 
-static bool has_term(struct raft_fixture *f, void *arg)
+static bool hasTerm(struct raft_fixture *f, void *arg)
 {
     struct step_term *target = (struct step_term *)arg;
     struct raft *raft;
@@ -1800,7 +1668,7 @@ bool raft_fixture_step_until_term_is(struct raft_fixture *f,
                                      unsigned max_msecs)
 {
     struct step_term target = {i, term};
-    return raft_fixture_step_until(f, has_term, &target, max_msecs);
+    return raft_fixture_step_until(f, hasTerm, &target, max_msecs);
 }
 
 struct step_vote
@@ -1809,7 +1677,7 @@ struct step_vote
     unsigned j;
 };
 
-static bool has_voted_for(struct raft_fixture *f, void *arg)
+static bool hasVotedFor(struct raft_fixture *f, void *arg)
 {
     struct step_vote *target = (struct step_vote *)arg;
     struct raft *raft;
@@ -1823,7 +1691,7 @@ bool raft_fixture_step_until_voted_for(struct raft_fixture *f,
                                        unsigned max_msecs)
 {
     struct step_vote target = {i, j};
-    return raft_fixture_step_until(f, has_voted_for, &target, max_msecs);
+    return raft_fixture_step_until(f, hasVotedFor, &target, max_msecs);
 }
 
 struct step_deliver
@@ -1832,15 +1700,15 @@ struct step_deliver
     unsigned j;
 };
 
-static bool has_delivered(struct raft_fixture *f, void *arg)
+static bool hasDelivered(struct raft_fixture *f, void *arg)
 {
     struct step_deliver *target = (struct step_deliver *)arg;
     struct raft *raft;
     struct io *io;
     struct raft_message *message;
+    queue *head;
     raft = raft_fixture_get(f, target->i);
     io = raft->io->impl;
-    queue *head;
     QUEUE_FOREACH(head, &io->requests)
     {
         struct request *r;
@@ -1867,7 +1735,7 @@ bool raft_fixture_step_until_delivered(struct raft_fixture *f,
                                        unsigned max_msecs)
 {
     struct step_deliver target = {i, j};
-    return raft_fixture_step_until(f, has_delivered, &target, max_msecs);
+    return raft_fixture_step_until(f, hasDelivered, &target, max_msecs);
 }
 
 void raft_fixture_disconnect(struct raft_fixture *f, unsigned i, unsigned j)

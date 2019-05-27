@@ -29,8 +29,8 @@ const struct raft_server *configurationGet(const struct raft_configuration *c,
 int configurationRemove(struct raft_configuration *c, const unsigned id);
 
 /* Add all servers in c1 to c2 (which must be empty). */
-int configurationCopy(const struct raft_configuration *c1,
-                      struct raft_configuration *c2);
+int configurationCopy(const struct raft_configuration *src,
+                      struct raft_configuration *dst);
 
 /* Number of bytes needed to encode the given configuration object. */
 size_t configurationEncodedSize(const struct raft_configuration *c);

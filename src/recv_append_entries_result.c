@@ -31,7 +31,7 @@ int recv__append_entries_result(struct raft *r,
         return 0;
     }
 
-    rv = recv__ensure_matching_terms(r, result->term, &match);
+    rv = recvEnsureMatchingTerms(r, result->term, &match);
     if (rv != 0) {
         return rv;
     }
