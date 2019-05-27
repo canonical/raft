@@ -1,9 +1,7 @@
-/**
- * Log replication logic and helpers.
- */
+/* Log replication logic and helpers. */
 
-#ifndef RAFT_REPLICATION_H
-#define RAFT_REPLICATION_H
+#ifndef REPLICATION_H_
+#define REPLICATION_H_
 
 #include "../include/raft.h"
 
@@ -15,13 +13,31 @@ int replicationHeartbeat(struct raft *r);
  * concurrently send AppendEntries RPC messages with outstanding log entries. */
 int replicationAppend(struct raft *r);
 
-/* Trigger an AppendEntries or an InstallSnapshot RPC request against the server
- * with the given index.
+/* Possibly send an AppendEntries or an InstallSnapshot RPC message to the
+ * server with the given index.
  *
- * The RPC will contain all entries in our log from the server's next_index
- * onward, or a snapshot if we don't have anymore the needed log suffix.
+ * The rules to decide whether or not to send a message are:
  *
- * It must be called only by leaders. */
+ * - If we have sent an InstallSnapshot RPC recently and we haven't yet received
+ *   a response, then don't send any new message.
+ *
+ * - If we are probing the follower (i.e. we haven't received a successful
+ *   response during the last heartbeat interval), then send a message only if
+ *   haven't sent any during the last heartbeat interval.
+ *
+ * - If we are pipelining entries to the follower, then send any new entries
+ *   haven't yet sent.
+ *
+ * If message should be sent, the rules to decide what type of message to send
+ * and what it should contain are:
+ *
+ * - If we don't have anymore the first entry that should be sent to the
+ *   follower, then send an InstallSnapshot RPC with the last snapshot.
+ *
+ * - If we still have the first entry to send, then send all entries from that
+     index onward (possibly zero).
+ *
+ * This function must be called only by leaders. */
 int replicationTrigger(struct raft *r, unsigned i);
 
 /**
@@ -82,4 +98,4 @@ int raft_replication__apply(struct raft *r);
  */
 void raft_replication__quorum(struct raft *r, const raft_index index);
 
-#endif /* RAFT_REPLICATION_H */
+#endif /* REPLICATION_H_ */

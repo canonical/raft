@@ -106,8 +106,12 @@ bool progressShouldReplicate(struct raft *r, unsigned i)
     bool is_up_to_date = p->next_index == last_index + 1;
     bool result;
 
+    /* We must be in a valid state. */
     assert(p->state == PROGRESS__PROBE || p->state == PROGRESS__PIPELINE ||
            p->state == PROGRESS__SNAPSHOT);
+
+    /* The next index to send must be lower than the highest index in our
+     * log. */
     assert(p->next_index <= last_index + 1);
 
     switch (p->state) {
