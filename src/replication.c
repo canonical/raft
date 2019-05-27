@@ -29,6 +29,46 @@
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
+/* Possibly trigger I/O requests for newly appended log entries or heartbeat.
+ *
+ * This function will start writing to disk all entries in the log from the
+ * given index onwards, and trigger AppendEntries RPCs requests to all follower
+ * servers.
+ *
+ * If the index is 0, no entry are written to disk, and a heartbeat
+ * AppendEntries RPC with no entries (or missing entries for followers whose log
+ * is behind) is sent.
+ *
+ * It must be called only by leaders. */
+static int triggerAll(struct raft *r, const raft_index index)
+{
+    size_t i;
+    int rv;
+
+    assert(r->state == RAFT_LEADER);
+
+    /* Trigger replication for servers we didn't hear from recently. */
+    for (i = 0; i < r->configuration.n; i++) {
+        struct raft_server *server = &r->configuration.servers[i];
+        if (server->id == r->id) {
+            continue;
+        }
+        rv = replication__trigger(r, i);
+        if (rv != 0 && rv != RAFT_NOCONNECTION) {
+            /* This is not a critical failure, let's just log it. */
+            warnf(r->io, "failed to send append entries to server %ld: %s (%d)",
+                  server->id, raft_strerror(rv), rv);
+        }
+    }
+
+    return 0;
+}
+
+int replicationHeartbeat(struct raft *r)
+{
+    return triggerAll(r, 0);
+}
+
 /* Context of a #RAFT_IO_APPEND_ENTRIES request that was submitted with
  * raft_io_>send(). */
 struct sendAppendEntries
@@ -511,38 +551,19 @@ err:
     return rv;
 }
 
-int raft_replication__trigger(struct raft *r, const raft_index index)
+int replicationAppend(struct raft *r)
 {
-    size_t i;
+    raft_index index;
     int rv;
 
-    assert(r->state == RAFT_LEADER);
+    index = logLastIndex(&r->log);
 
     rv = raft_replication__leader_append(r, index);
     if (rv != 0) {
-        goto err;
+        return rv;
     }
 
-    /* Trigger replication for servers we didn't hear from recently. */
-    for (i = 0; i < r->configuration.n; i++) {
-        struct raft_server *server = &r->configuration.servers[i];
-        if (server->id == r->id) {
-            continue;
-        }
-        rv = replication__trigger(r, i);
-        if (rv != 0 && rv != RAFT_NOCONNECTION) {
-            /* This is not a critical failure, let's just log it. */
-            warnf(r->io, "failed to send append entries to server %ld: %s (%d)",
-                  server->id, raft_strerror(rv), rv);
-        }
-    }
-
-    return 0;
-
-err:
-    assert(rv != 0);
-
-    return rv;
+    return triggerAll(r, index);
 }
 
 /**
@@ -593,7 +614,7 @@ static int raft_replication__trigger_promotion(struct raft *r)
     QUEUE_PUSH(&r->leader_state.requests, &req->queue);
 
     /* Start writing the new log entry to disk and send it to the followers. */
-    rv = raft_replication__trigger(r, index);
+    rv = replicationAppend(r);
     if (rv != 0) {
         goto err_after_log_append;
     }

@@ -7,6 +7,14 @@
 
 #include "../include/raft.h"
 
+/* Send AppendEntries RPC messages to all followers to which no AppendEntries
+ * was sent in the last heartbeat interval. */
+int replicationHeartbeat(struct raft *r);
+
+/* Trigger a local disk write for entries that have not been persisted yet, and
+ * concurrently send AppendEntries RPC messages with outstanding log entries. */
+int replicationAppend(struct raft *r);
+
 /**
  * Trigger an AppendEntries or an InstallSnapshot RPC to the server with the
  * given index.
@@ -17,21 +25,6 @@
  * It must be called only by leaders.
  */
 int replication__trigger(struct raft *r, unsigned i);
-
-/**
- * Helper triggering I/O requests for newly appended log entries or heartbeat.
- *
- * This function will start writing to disk all entries in the log from the
- * given index onwards, and trigger AppendEntries RPCs requests to all follower
- * servers.
- *
- * If the index is 0, no entry are written to disk, and a heartbeat
- * AppendEntries RPC with no entries (or missing entries for followers whose log
- * is behind) is sent.
- *
- * It must be called only by leaders.
- */
-int raft_replication__trigger(struct raft *r, const raft_index index);
 
 /**
  * Update the replication state (match and next indexes) for the given server

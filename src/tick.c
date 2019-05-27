@@ -132,7 +132,7 @@ static int tickLeader(struct raft *r)
      *   Send empty AppendEntries RPC during idle periods to prevent election
      *   timeouts.
      */
-    raft_replication__trigger(r, 0);
+    replicationHeartbeat(r);
 
     /* If a server is being promoted, increment the timer of the current
      * round or abort the promotion.

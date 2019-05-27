@@ -1,16 +1,12 @@
-/**
- * Logic to be invoked periodically.
- */
+/* Logic to be invoked periodically. */
 
-#ifndef RAFT_TICK_H
-#define RAFT_TICK_H
+#ifndef TICK_H_
+#define TICK_H_
 
 #include "../include/raft.h"
 
-/**
- * Callback to be passed to the @raft_io implementation. It notifies us that a
- * certain amount of time has elapsed and will be invoked periodically.
- */
+/* Callback to be passed to the @raft_io implementation. It notifies us that a
+ * certain amount of time has elapsed and will be invoked periodically. */
 void tickCb(struct raft_io *io);
 
-#endif /* RAFT_TICK_H */
+#endif /* TICK_H_ */

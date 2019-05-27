@@ -21,15 +21,15 @@ TEST_SETUP(snapshot)
     struct snapshot_fixture *f = munit_malloc(sizeof *f);
     struct raft_configuration configuration;
     struct raft *raft;
-    int rc;
+    int rv;
     (void)user_data;
     SETUP_CLUSTER(2);
 
-    /* Bootstrap the second server */
+    /* Bootstrap the second server. */
     CLUSTER_CONFIGURATION(&configuration);
     raft = CLUSTER_RAFT(1);
-    rc = raft_bootstrap(raft, &configuration);
-    munit_assert_int(rc, ==, 0);
+    rv = raft_bootstrap(raft, &configuration);
+    munit_assert_int(rv, ==, 0);
     raft_configuration_close(&configuration);
 
     return f;
@@ -47,7 +47,7 @@ TEST_CASE(snapshot, no_entries, NULL)
 {
     struct snapshot_fixture *f = data;
     (void)params;
-    CLUSTER_SET_SNAPSHOT(0 /*                                               */,
+    CLUSTER_SET_SNAPSHOT(0 /* server index                                  */,
                          6 /* last index                                    */,
                          2 /* last term                                     */,
                          1 /* conf index                                    */,
