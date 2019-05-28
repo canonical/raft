@@ -81,7 +81,7 @@ int recv__request_vote_result(struct raft *r,
                 return rv;
             }
             /* Send initial heartbeat. */
-            raft_replication__trigger(r, 0);
+            replicationHeartbeat(r);
         } else {
             tracef("votes quorum not reached");
         }

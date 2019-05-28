@@ -52,7 +52,7 @@ int raft_apply(struct raft *r,
 
     QUEUE_PUSH(&r->leader_state.requests, &req->queue);
 
-    rv = raft_replication__trigger(r, index);
+    rv = replicationAppend(r);
     if (rv != 0) {
         goto err_after_log_append;
     }
@@ -99,7 +99,7 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
 
     QUEUE_PUSH(&r->leader_state.requests, &req->queue);
 
-    rv = raft_replication__trigger(r, index);
+    rv = replicationAppend(r);
     if (rv != 0) {
         goto err_after_log_append;
     }
@@ -151,7 +151,7 @@ static int changeConfiguration(
     QUEUE_PUSH(&r->leader_state.requests, &req->queue);
 
     /* Start writing the new log entry to disk and send it to the followers. */
-    rv = raft_replication__trigger(r, index);
+    rv = replicationAppend(r);
     if (rv != 0) {
         /* TODO: restore the old next/match indexes and configuration. */
         goto err_after_log_append;
@@ -276,7 +276,7 @@ int raft_promote(struct raft *r,
     r->leader_state.round_start = r->io->time(r->io);
 
     /* Immediately initiate an AppendEntries request. */
-    rv = replication__trigger(r, server_index);
+    rv = replicationTrigger(r, server_index);
     if (rv != 0 && rv != RAFT_NOCONNECTION) {
         /* This error is not fatal. */
         warnf(r->io, "failed to send append entries to server %ld: %s (%d)",

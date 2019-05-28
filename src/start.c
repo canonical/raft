@@ -166,6 +166,7 @@ int raft_start(struct raft *r)
         return rv;
     }
 
+    /* By default we start as followers. */
     convertToFollower(r);
 
     /* If there's only one voting server, and that is us, it's safe to convert

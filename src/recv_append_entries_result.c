@@ -63,7 +63,7 @@ int recv__append_entries_result(struct raft *r,
     }
 
     /* Update the progress of this server, possibly sending further entries. */
-    rv = replication__update(r, server, result);
+    rv = replicationUpdate(r, server, result);
     if (rv != 0) {
         return rv;
     }
