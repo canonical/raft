@@ -13,7 +13,7 @@
 #define tracef(MSG, ...)
 #endif
 
-static void send_cb(struct raft_io_send *req, int status)
+static void sendCb(struct raft_io_send *req, int status)
 {
     (void)status;
     raft_free(req);
@@ -113,7 +113,7 @@ int recvAppendEntries(struct raft *r,
         return 0;
     }
 
-    rv = raft_replication__append(r, args, &result->rejected, &async);
+    rv = replicationAppend(r, args, &result->rejected, &async);
     if (rv != 0) {
         return rv;
     }
@@ -146,7 +146,7 @@ reply:
         return RAFT_NOMEM;
     }
 
-    rv = r->io->send(r->io, req, &message, send_cb);
+    rv = r->io->send(r->io, req, &message, sendCb);
     if (rv != 0) {
         raft_free(req);
         return rv;

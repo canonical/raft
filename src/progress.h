@@ -30,7 +30,7 @@ int progressRebuildArray(struct raft *r,
 /* Whether a new AppendEntries or InstallSnapshot message should be sent to the
  * i'th server at this time.
  *
- * See the docstring of replicationTrigger() for details about how the decision
+ * See the docstring of replicationProgress() for details about how the decision
  * is taken. */
 bool progressShouldReplicate(struct raft *r, unsigned i);
 

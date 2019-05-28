@@ -290,7 +290,7 @@ err:
     return rv;
 }
 
-int replicationTrigger(struct raft *r, unsigned i)
+int replicationProgress(struct raft *r, unsigned i)
 {
     struct raft_server *server = &r->configuration.servers[i];
     raft_index snapshot_index = logSnapshotIndex(&r->log);
@@ -371,7 +371,7 @@ static int triggerAll(struct raft *r)
         if (server->id == r->id) {
             continue;
         }
-        rv = replicationTrigger(r, i);
+        rv = replicationProgress(r, i);
         if (rv != 0 && rv != RAFT_NOCONNECTION) {
             /* This is not a critical failure, let's just log it. */
             warnf(r->io, "failed to send append entries to server %ld: %s (%d)",
@@ -540,7 +540,7 @@ err:
     return rv;
 }
 
-int replicationAppend(struct raft *r)
+int replicationTrigger(struct raft *r)
 {
     raft_index index;
     int rv;
@@ -601,7 +601,7 @@ static int triggerActualPromotion(struct raft *r)
     QUEUE_PUSH(&r->leader_state.requests, &req->queue);
 
     /* Start writing the new log entry to disk and send it to the followers. */
-    rv = replicationAppend(r);
+    rv = replicationTrigger(r);
     if (rv != 0) {
         goto err_after_log_append;
     }
@@ -653,7 +653,7 @@ int replicationUpdate(struct raft *r,
         if (retry) {
             /* Retry, ignoring errors. */
             tracef("log mismatch -> send old entries to %u", server->id);
-            replicationTrigger(r, i);
+            replicationProgress(r, i);
         }
         return 0;
     }
@@ -719,7 +719,7 @@ int replicationUpdate(struct raft *r,
         i = configurationIndexOf(&r->configuration, server->id);
         if (i < r->configuration.n &&
             progressState(r, i) == PROGRESS__PIPELINE) {
-            replicationTrigger(r, i);
+            replicationProgress(r, i);
         }
     }
 
@@ -972,10 +972,10 @@ static int raft_replication__delete_conflicting_entries(
     return 0;
 }
 
-int raft_replication__append(struct raft *r,
-                             const struct raft_append_entries *args,
-                             raft_index *rejected,
-                             bool *async)
+int replicationAppend(struct raft *r,
+                      const struct raft_append_entries *args,
+                      raft_index *rejected,
+                      bool *async)
 {
     struct appendFollower *request;
     int match;

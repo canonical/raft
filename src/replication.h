@@ -10,9 +10,9 @@
 int replicationHeartbeat(struct raft *r);
 
 /* Start a local disk write for entries that have not been persisted yet, and
- * trigger replication against all followers, typically sending AppendEntries
- * RPC messages with outstanding log entries. */
-int replicationAppend(struct raft *r);
+ * immediately send AppendEntries RPC messages with outstanding log entries to
+ * all followers that are up-to-date. */
+int replicationTrigger(struct raft *r);
 
 /* Possibly send an AppendEntries or an InstallSnapshot RPC message to the
  * server with the given index.
@@ -39,7 +39,7 @@ int replicationAppend(struct raft *r);
      index onward (possibly zero).
  *
  * This function must be called only by leaders. */
-int replicationTrigger(struct raft *r, unsigned i);
+int replicationProgress(struct raft *r, unsigned i);
 
 /* Update the replication state (match and next indexes) for the given server
  * using the given AppendEntries RPC result.
@@ -53,8 +53,7 @@ int replicationUpdate(struct raft *r,
                       const struct raft_server *server,
                       const struct raft_append_entries_result *result);
 
-/**
- * Append the log entries in the given request if the Log Matching Property is
+/* Append the log entries in the given request if the Log Matching Property is
  * satisfied.
  *
  * The #success output parameter will be set to true if the Log Matching
@@ -65,12 +64,11 @@ int replicationUpdate(struct raft *r,
  * them to disk. The entries will be appended to our log only once the disk
  * write completes and the I/O callback is invoked.
  *
- * It must be called only by followers.
- */
-int raft_replication__append(struct raft *r,
-                             const struct raft_append_entries *args,
-                             raft_index *rejected,
-                             bool *async);
+ * It must be called only by followers. */
+int replicationAppend(struct raft *r,
+                      const struct raft_append_entries *args,
+                      raft_index *rejected,
+                      bool *async);
 
 int raft_replication__install_snapshot(struct raft *r,
                                        const struct raft_install_snapshot *args,
