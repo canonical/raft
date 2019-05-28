@@ -48,7 +48,7 @@ static MunitParameterEnum cluster_3_params[] = {
  *
  *****************************************************************************/
 
-/* Standard startup sequence, bootstrappin the cluster and electing server 0 */
+/* Standard startup sequence, bootstrapping the cluster and electing server 0 */
 #define BOOTSTRAP_START_AND_ELECT \
     CLUSTER_BOOTSTRAP;            \
     CLUSTER_START;                \
@@ -125,7 +125,8 @@ TEST_CASE(send, heartbeat, initial, NULL)
 
 /* A leader keeps sending heartbeat messages at regular intervals to
  * maintain leadership. */
-TEST_CASE(send, heartbeat, repeat, NULL) {
+TEST_CASE(send, heartbeat, repeat, NULL)
+{
     struct fixture *f = data;
     struct raft *raft;
     (void)params;
@@ -255,7 +256,8 @@ TEST_CASE(send, mode, probe, NULL)
 
 /* A follower transitions to pipeline mode after the leader receives a
  * successful AppendEntries response from it. */
-TEST_CASE(send, mode, pipeline, NULL) {
+TEST_CASE(send, mode, pipeline, NULL)
+{
     struct fixture *f = data;
     struct raft *raft;
     struct raft_apply req1;

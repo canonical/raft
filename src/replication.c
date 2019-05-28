@@ -387,10 +387,8 @@ int replicationHeartbeat(struct raft *r)
     return triggerAll(r);
 }
 
-/**
- * Hold context for an append request that was submitted by a leader.
- */
-struct raft_replication__leader_append
+/* Context for a write log entries request that was submitted by a leader. */
+struct appendLeader
 {
     struct raft *raft;          /* Instance that has submitted the request */
     raft_index index;           /* Index of the first entry in the request. */
@@ -399,21 +397,13 @@ struct raft_replication__leader_append
     struct raft_io_append req;
 };
 
-struct raft_replication__follower_append
-{
-    struct raft *raft; /* Instance that has submitted the request */
-    raft_index index;  /* Index of the first entry in the request. */
-    struct raft_append_entries args;
-    struct raft_io_append req;
-};
-
 /* Called after a successful append entries I/O request to update the index of
  * the last entry stored on disk. Return how many new entries that are still
  * present in our in-memory log were stored. */
-static size_t update_last_stored(struct raft *r,
-                                 raft_index first_index,
-                                 struct raft_entry *entries,
-                                 size_t n_entries)
+static size_t updateLastStored(struct raft *r,
+                               raft_index first_index,
+                               struct raft_entry *entries,
+                               size_t n_entries)
 {
     size_t i;
 
@@ -430,6 +420,8 @@ static size_t update_last_stored(struct raft *r,
             break;
         }
 
+        /* If we do have an entry at this index, its term must match the one of
+         * the entry we wrote on disk. */
         assert(local_term != 0 && local_term == entry->term);
     }
 
@@ -437,10 +429,10 @@ static size_t update_last_stored(struct raft *r,
     return i;
 }
 
-static void raft_replication__leader_append_cb(struct raft_io_append *req,
-                                               int status)
+/* Invoked once a disk write request for new entries has been completed. */
+static void appendLeaderCb(struct raft_io_append *req, int status)
 {
-    struct raft_replication__leader_append *request = req->data;
+    struct appendLeader *request = req->data;
     struct raft *r = request->raft;
     size_t server_index;
     int rv;
@@ -448,24 +440,19 @@ static void raft_replication__leader_append_cb(struct raft_io_append *req,
     tracef("leader: written %u entries starting at %lld: status %d", request->n,
            request->index, status);
 
-    update_last_stored(r, request->index, request->entries, request->n);
-
-    /* Tell the log that we're done referencing these entries. */
-    logRelease(&r->log, request->index, request->entries, request->n);
-
-    raft_free(request);
-
-    /* If we are not leader anymore, just discard the result. */
-    if (r->state != RAFT_LEADER) {
-        tracef("local server is not leader -> ignore write log result");
-        return;
-    }
-
     /* TODO: in case this is a failed disk write and we were the leader creating
      * these entries in the first place, should we truncate our log too? since
      * we have appended these entries to it. */
     if (status != 0) {
-        return;
+        goto out;
+    }
+
+    updateLastStored(r, request->index, request->entries, request->n);
+
+    /* If we are not leader anymore, just discard the result. */
+    if (r->state != RAFT_LEADER) {
+        tracef("local server is not leader -> ignore write log result");
+        goto out;
     }
 
     /* If Check if we have reached a quorum. */
@@ -495,20 +482,24 @@ static void raft_replication__leader_append_cb(struct raft_io_append *req,
     if (rv != 0) {
         /* TODO: just log the error? */
     }
+
+out:
+    /* Tell the log that we're done referencing these entries. */
+    logRelease(&r->log, request->index, request->entries, request->n);
+    raft_free(request);
 }
 
-static int raft_replication__leader_append(struct raft *r, unsigned index)
+/* Submit a disk write for all entries from the given index onward. */
+static int appendLeader(struct raft *r, unsigned index)
 {
     struct raft_entry *entries;
     unsigned n;
-    struct raft_replication__leader_append *request;
+    struct appendLeader *request;
     int rv;
 
     assert(r->state == RAFT_LEADER);
-
-    if (index == 0) {
-        return 0;
-    }
+    assert(index > 0);
+    assert(index > r->last_stored);
 
     /* Acquire all the entries from the given index onwards. */
     rv = logAcquire(&r->log, index, &entries, &n);
@@ -533,8 +524,7 @@ static int raft_replication__leader_append(struct raft *r, unsigned index)
     request->n = n;
     request->req.data = request;
 
-    rv = r->io->append(r->io, &request->req, entries, n,
-                       raft_replication__leader_append_cb);
+    rv = r->io->append(r->io, &request->req, entries, n, appendLeaderCb);
     if (rv != 0) {
         goto err_after_request_alloc;
     }
@@ -543,10 +533,8 @@ static int raft_replication__leader_append(struct raft *r, unsigned index)
 
 err_after_request_alloc:
     raft_free(request);
-
 err_after_entries_acquired:
     logRelease(&r->log, index, entries, n);
-
 err:
     assert(rv != 0);
     return rv;
@@ -559,7 +547,7 @@ int replicationAppend(struct raft *r)
 
     index = logLastIndex(&r->log);
 
-    rv = raft_replication__leader_append(r, index);
+    rv = appendLeader(r, index);
     if (rv != 0) {
         return rv;
     }
@@ -567,15 +555,13 @@ int replicationAppend(struct raft *r)
     return triggerAll(r);
 }
 
-/**
- * Helper to be invoked after a promotion of a non-voting server has been
+/* Helper to be invoked after a promotion of a non-voting server has been
  * requested via @raft_promote and that server has caught up with logs.
  *
  * This function changes the local configuration marking the server being
- * promoted as actually voting, appends the a RAFT_CHANGE entry with
- * the new configuration to the local log and triggers its replication.
- */
-static int raft_replication__trigger_promotion(struct raft *r)
+ * promoted as actually voting, appends the a RAFT_CHANGE entry with the new
+ * configuration to the local log and triggers its replication. */
+static int triggerActualPromotion(struct raft *r)
 {
     raft_index index;
     raft_term term = r->current_term;
@@ -635,9 +621,9 @@ err:
     return rv;
 }
 
-int replication__update(struct raft *r,
-                        const struct raft_server *server,
-                        const struct raft_append_entries_result *result)
+int replicationUpdate(struct raft *r,
+                      const struct raft_server *server,
+                      const struct raft_append_entries_result *result)
 {
     bool is_being_promoted;
     raft_index last_index;
@@ -712,7 +698,7 @@ int replication__update(struct raft *r,
     if (is_being_promoted) {
         int is_up_to_date = raft_membership__update_catch_up_round(r);
         if (is_up_to_date) {
-            rv = raft_replication__trigger_promotion(r);
+            rv = triggerActualPromotion(r);
             if (rv != 0) {
                 return rv;
             }
@@ -770,10 +756,18 @@ static void send_append_entries_result(
     }
 }
 
-static void raft_replication__follower_append_cb(struct raft_io_append *req,
-                                                 int status)
+/* Context for a write log entries request that was submitted by a follower. */
+struct appendFollower
 {
-    struct raft_replication__follower_append *request = req->data;
+    struct raft *raft; /* Instance that has submitted the request */
+    raft_index index;  /* Index of the first entry in the request. */
+    struct raft_append_entries args;
+    struct raft_io_append req;
+};
+
+static void appendFollower_cb(struct raft_io_append *req, int status)
+{
+    struct appendFollower *request = req->data;
     struct raft *r = request->raft;
     struct raft_append_entries *args = &request->args;
     struct raft_append_entries_result result;
@@ -792,7 +786,7 @@ static void raft_replication__follower_append_cb(struct raft_io_append *req,
     assert(args->entries != NULL);
     assert(args->n_entries > 0);
 
-    i = update_last_stored(r, request->index, args->entries, args->n_entries);
+    i = updateLastStored(r, request->index, args->entries, args->n_entries);
 
     /* If we are not followers anymore, just discard the result. */
     if (r->state != RAFT_FOLLOWER) {
@@ -983,7 +977,7 @@ int raft_replication__append(struct raft *r,
                              raft_index *rejected,
                              bool *async)
 {
-    struct raft_replication__follower_append *request;
+    struct appendFollower *request;
     int match;
     size_t n;
     size_t i;
@@ -1079,8 +1073,7 @@ int raft_replication__append(struct raft *r,
 
     request->req.data = request;
     rv = r->io->append(r->io, &request->req, request->args.entries,
-                       request->args.n_entries,
-                       raft_replication__follower_append_cb);
+                       request->args.n_entries, appendFollower_cb);
     if (rv != 0) {
         goto err_after_acquire_entries;
     }

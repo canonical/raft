@@ -1,3 +1,5 @@
+/* Setup and drive a test raft cluster. */
+
 #ifndef TEST_CLUSTER_H
 #define TEST_CLUSTER_H
 
@@ -18,21 +20,22 @@
 
 /* N is the default number of servers, but can be tweaked with the cluster-n
  * parameter. */
-#define SETUP_CLUSTER(N)                                   \
-    SETUP_HEAP;                                            \
-    {                                                      \
-        unsigned n_;                                       \
-        unsigned i_;                                       \
-        int rv_;                                           \
-        n_ = N;                                            \
-        if (CLUSTER_HAS_N_PARAM) {                         \
-            n_ = CLUSTER_GET_N_PARAM;                      \
-        }                                                  \
-        for (i_ = 0; i_ < n_; i_++) {                      \
-            test_fsm_setup(NULL, &f->fsms[i_]);            \
-        }                                                  \
-        rv_ = raft_fixture_init(&f->cluster, n_, f->fsms); \
-        munit_assert_int(rv_, ==, 0);                      \
+#define SETUP_CLUSTER(N)                                              \
+    SETUP_HEAP;                                                       \
+    {                                                                 \
+        unsigned n_;                                                  \
+        unsigned i_;                                                  \
+        int rv_;                                                      \
+        n_ = N;                                                       \
+        if (munit_parameters_get(params, CLUSTER_N_PARAM) != NULL) {  \
+            n_ = atoi(munit_parameters_get(params, CLUSTER_N_PARAM)); \
+        }                                                             \
+        munit_assert_int(n_, >, 0);                                   \
+        for (i_ = 0; i_ < n_; i_++) {                                 \
+            test_fsm_setup(NULL, &f->fsms[i_]);                       \
+        }                                                             \
+        rv_ = raft_fixture_init(&f->cluster, n_, f->fsms);            \
+        munit_assert_int(rv_, ==, 0);                                 \
     }
 
 #define TEAR_DOWN_CLUSTER                    \
@@ -48,17 +51,9 @@
 
 /* Munit parameter for setting the number of servers */
 #define CLUSTER_N_PARAM "cluster-n"
-#define CLUSTER_HAS_N_PARAM \
-    munit_parameters_get(params, CLUSTER_N_PARAM) != NULL
-#define CLUSTER_GET_N_PARAM \
-    (unsigned)atoi(munit_parameters_get(params, CLUSTER_N_PARAM))
 
 /* Munit parameter for setting the number of voting servers */
 #define CLUSTER_N_VOTING_PARAM "cluster-n-voting"
-#define CLUSTER_HAS_N_VOTING_PARAM \
-    munit_parameters_get(params, CLUSTER_N_VOTING_PARAM) != NULL
-#define CLUSTER_GET_N_VOTING_PARAM \
-    (unsigned)atoi(munit_parameters_get(params, CLUSTER_N_VOTING_PARAM))
 
 /* Get the number of servers in the cluster. */
 #define CLUSTER_N raft_fixture_n(&f->cluster)
@@ -102,19 +97,19 @@
 
 /* Bootstrap all servers in the cluster. All servers will be voting, unless the
  * cluster-n-voting parameter is used. */
-#define CLUSTER_BOOTSTRAP                                                  \
-    {                                                                      \
-        unsigned n_ = CLUSTER_N;                                           \
-        int rv_;                                                           \
-        struct raft_configuration configuration;                           \
-        if (CLUSTER_HAS_N_VOTING_PARAM) {                                  \
-            n_ = CLUSTER_GET_N_VOTING_PARAM;                               \
-        }                                                                  \
-        rv_ = raft_fixture_configuration(&f->cluster, n_, &configuration); \
-        munit_assert_int(rv_, ==, 0);                                      \
-        rv_ = raft_fixture_bootstrap(&f->cluster, &configuration);         \
-        munit_assert_int(rv_, ==, 0);                                      \
-        raft_configuration_close(&configuration);                          \
+#define CLUSTER_BOOTSTRAP                                                    \
+    {                                                                        \
+        unsigned n_ = CLUSTER_N;                                             \
+        int rv_;                                                             \
+        struct raft_configuration configuration;                             \
+        if (munit_parameters_get(params, CLUSTER_N_VOTING_PARAM) != NULL) {  \
+            n_ = atoi(munit_parameters_get(params, CLUSTER_N_VOTING_PARAM)); \
+        }                                                                    \
+        rv_ = raft_fixture_configuration(&f->cluster, n_, &configuration);   \
+        munit_assert_int(rv_, ==, 0);                                        \
+        rv_ = raft_fixture_bootstrap(&f->cluster, &configuration);           \
+        munit_assert_int(rv_, ==, 0);                                        \
+        raft_configuration_close(&configuration);                            \
     }
 
 /* Bootstrap all servers in the cluster. Only the first N servers will be
@@ -336,7 +331,7 @@
 
 /* Reconnect two servers. */
 #define CLUSTER_DESATURATE_BOTHWAYS(I, J) \
-    CLUSTER_DESATURATE(I, J);   \
+    CLUSTER_DESATURATE(I, J);             \
     CLUSTER_DESATURATE(J, I)
 
 /* Set the network latency of outgoing messages of server I. */

@@ -41,19 +41,17 @@ int replicationAppend(struct raft *r);
  * This function must be called only by leaders. */
 int replicationTrigger(struct raft *r, unsigned i);
 
-/**
- * Update the replication state (match and next indexes) for the given server
+/* Update the replication state (match and next indexes) for the given server
  * using the given AppendEntries RPC result.
  *
  * Possibly send to the server a new set of entries or a snapshot if the result
  * was unsuccessful because of missing entries or if new entries were added to
  * our log in the meantime.
  *
- * It must be called only by leaders.
- */
-int replication__update(struct raft *r,
-                        const struct raft_server *server,
-                        const struct raft_append_entries_result *result);
+ * It must be called only by leaders. */
+int replicationUpdate(struct raft *r,
+                      const struct raft_server *server,
+                      const struct raft_append_entries_result *result);
 
 /**
  * Append the log entries in the given request if the Log Matching Property is
