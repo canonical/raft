@@ -19,10 +19,10 @@ static void send_cb(struct raft_io_send *req, int status)
     raft_free(req);
 }
 
-int recv__append_entries(struct raft *r,
-                         const unsigned id,
-                         const char *address,
-                         const struct raft_append_entries *args)
+int recvAppendEntries(struct raft *r,
+                      const unsigned id,
+                      const char *address,
+                      const struct raft_append_entries *args)
 {
     struct raft_io_send *req;
     struct raft_message message;

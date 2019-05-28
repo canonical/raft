@@ -5,7 +5,7 @@
 
 #include "../include/raft.h"
 
-/* Callback to be passed to the @raft_io implementation. It will be invoked upon
+/* Callback to be passed to the raft_io implementation. It will be invoked upon
  * receiving an RPC message. */
 void recvCb(struct raft_io *io, struct raft_message *message);
 
@@ -19,15 +19,15 @@ void recvCb(struct raft_io *io, struct raft_message *message);
  *   immediately reverts to follower state. If a server receives a request with
  *   a stale term number, it rejects the request.
  *
- * The @match output parameter will be set to 0 if the local term matches the
+ * The match output parameter will be set to 0 if the local term matches the
  * request's term, to -1 if the request's term is lower, and to 1 if the
  * request's term was higher but we have successfully bumped the local one to
  * match it (and stepped down to follower in that case, if we were not
- * already). */
+ * follower already). */
 int recvEnsureMatchingTerms(struct raft *r, raft_term term, int *match);
 
 /* If different from the current one, update information about the current
- * leader. Must be called only on follower, */
+ * leader. Must be called only by followers. */
 int recvUpdateLeader(struct raft *r, unsigned id, const char *address);
 
 #endif /* RECV_H_ */

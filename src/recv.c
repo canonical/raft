@@ -38,9 +38,9 @@ static int recv(struct raft *r, struct raft_message *message)
 
     switch (message->type) {
         case RAFT_IO_APPEND_ENTRIES:
-            rv = recv__append_entries(r, message->server_id,
-                                      message->server_address,
-                                      &message->append_entries);
+            rv = recvAppendEntries(r, message->server_id,
+                                   message->server_address,
+                                   &message->append_entries);
             if (rv != 0) {
                 entryBatchesDestroy(message->append_entries.entries,
                                     message->append_entries.n_entries);
