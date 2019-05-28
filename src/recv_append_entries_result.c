@@ -12,10 +12,10 @@
 #define tracef(MSG, ...)
 #endif
 
-int recv__append_entries_result(struct raft *r,
-                                const unsigned id,
-                                const char *address,
-                                const struct raft_append_entries_result *result)
+int recvAppendEntriesResult(struct raft *r,
+                            const unsigned id,
+                            const char *address,
+                            const struct raft_append_entries_result *result)
 {
     int match;
     const struct raft_server *server;
