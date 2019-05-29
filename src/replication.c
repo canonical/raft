@@ -765,7 +765,7 @@ struct appendFollower
     struct raft_io_append req;
 };
 
-static void appendFollower_cb(struct raft_io_append *req, int status)
+static void appendFollowerCb(struct raft_io_append *req, int status)
 {
     struct appendFollower *request = req->data;
     struct raft *r = request->raft;
@@ -775,18 +775,11 @@ static void appendFollower_cb(struct raft_io_append *req, int status)
     size_t j;
     int rv;
 
-    /* Abort here if we're not followers anymore (e.g. we're shutting down) */
-    if (r->state != RAFT_FOLLOWER) {
-        goto out;
-    }
-
     tracef("I/O completed on follower: status %d", status);
 
     assert(args->leader_id > 0);
     assert(args->entries != NULL);
     assert(args->n_entries > 0);
-
-    i = updateLastStored(r, request->index, args->entries, args->n_entries);
 
     /* If we are not followers anymore, just discard the result. */
     if (r->state != RAFT_FOLLOWER) {
@@ -799,6 +792,8 @@ static void appendFollower_cb(struct raft_io_append *req, int status)
         result.rejected = args->prev_log_index + 1;
         goto respond;
     }
+
+    i = updateLastStored(r, request->index, args->entries, args->n_entries);
 
     /* If none of the entries that we persisted is present anymore in our
      * in-memory log, there's nothing to report or to do. We just discard
@@ -1070,7 +1065,7 @@ int replicationAppend(struct raft *r,
 
     request->req.data = request;
     rv = r->io->append(r->io, &request->req, request->args.entries,
-                       request->args.n_entries, appendFollower_cb);
+                       request->args.n_entries, appendFollowerCb);
     if (rv != 0) {
         goto err_after_acquire_entries;
     }
