@@ -1309,20 +1309,22 @@ static void applyChange(struct raft *r, const raft_index index)
 
     r->configuration_index = index;
 
-    /* If we are leader but not part of this new configuration, step down.
-     *
-     * From Section 4.2.2:
-     *
-     *   In this approach, a leader that is removed from the configuration steps
-     *   down once the Cnew entry is committed.
-     */
-    if (r->state == RAFT_LEADER &&
-        configurationGet(&r->configuration, r->id) == NULL) {
-        convertToFollower(r);
-    } else if (r->state == RAFT_LEADER) {
+    if (r->state == RAFT_LEADER) {
         req = (struct raft_change *)getRequest(r, index, RAFT_CHANGE);
         assert(r->leader_state.change == req);
         r->leader_state.change = NULL;
+
+        /* If we are leader but not part of this new configuration, step down.
+         *
+         * From Section 4.2.2:
+         *
+         *   In this approach, a leader that is removed from the configuration
+         * steps down once the Cnew entry is committed.
+         */
+        if (configurationGet(&r->configuration, r->id) == NULL) {
+            convertToFollower(r);
+        }
+
         if (req != NULL && req->cb != NULL) {
             req->cb(req, 0);
         }
