@@ -853,9 +853,7 @@ out:
     raft_free(request);
 }
 
-/**
- * Check that the log matching property against an incoming AppendEntries
- * request.
+/* Check the log matching property against an incoming AppendEntries request.
  *
  * From Figure 3.1:
  *
@@ -868,10 +866,9 @@ out:
  *
  * Return 1 if the check did not pass and the request needs to be rejected.
  *
- * Return -1 if there's a conflict and we need to shutdown.
- */
-static int check_prev_log_entry(struct raft *r,
-                                const struct raft_append_entries *args)
+ * Return -1 if there's a conflict and we need to shutdown. */
+static int checkLogMatchingProperty(struct raft *r,
+                                    const struct raft_append_entries *args)
 {
     raft_term local_prev_term;
 
@@ -903,8 +900,7 @@ static int check_prev_log_entry(struct raft *r,
     return 0;
 }
 
-/**
- * Delete from our log all entries that conflict with the ones in the given
+/* Delete from our log all entries that conflict with the ones in the given
  * AppendEntries request.
  *
  * From Figure 3.1:
@@ -916,12 +912,10 @@ static int check_prev_log_entry(struct raft *r,
  *
  * The @i parameter will be set to the array index of the first new log entry
  * that we don't have yet in our log, among the ones included in the given
- * AppendEntries request.
- */
-static int raft_replication__delete_conflicting_entries(
-    struct raft *r,
-    const struct raft_append_entries *args,
-    size_t *i)
+ * AppendEntries request. */
+static int deleteConflictingEntries(struct raft *r,
+                                    const struct raft_append_entries *args,
+                                    size_t *i)
 {
     size_t j;
     int rv;
@@ -944,7 +938,7 @@ static int raft_replication__delete_conflicting_entries(
             tracef("log mismatch -> truncate (%ld)", entry_index);
 
             /* Discard any uncommitted voting change. */
-            rv = raft_membership__rollback(r);
+            rv = membershipRollback(r);
             if (rv != 0) {
                 return rv;
             }
@@ -995,12 +989,14 @@ int replicationAppend(struct raft *r,
     *async = false;
 
     /* Check the log matching property. */
-    match = check_prev_log_entry(r, args);
+    match = checkLogMatchingProperty(r, args);
     if (match != 0) {
         assert(match == 1 || match == -1);
         return match == 1 ? 0 : RAFT_SHUTDOWN;
     }
-    rv = raft_replication__delete_conflicting_entries(r, args, &i);
+
+    /* Delete conflicting entries. */
+    rv = deleteConflictingEntries(r, args, &i);
     if (rv != 0) {
         return rv;
     }

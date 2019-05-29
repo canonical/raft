@@ -122,7 +122,7 @@ err:
     return rv;
 }
 
-int raft_membership__rollback(struct raft *r)
+int membershipRollback(struct raft *r)
 {
     const struct raft_entry *entry;
     int rv;
