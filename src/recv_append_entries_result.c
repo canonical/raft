@@ -78,7 +78,7 @@ int recvAppendEntriesResult(struct raft *r,
      * TODO: trigger an heartbeat if the commit index was updated */
     raft_replication__quorum(r, result->last_log_index);
 
-    rv = raft_replication__apply(r);
+    rv = replicationApply(r);
     if (rv != 0) {
         return rv;
     }

@@ -75,12 +75,10 @@ int raft_replication__install_snapshot(struct raft *r,
                                        raft_index *rejected,
                                        bool *async);
 
-/**
- * Apply any committed entry that was not applied yet.
+/* Apply any committed entry that was not applied yet.
  *
- * It must be called by leaders or followers.
- */
-int raft_replication__apply(struct raft *r);
+ * It must be called by leaders or followers. */
+int replicationApply(struct raft *r);
 
 /**
  * Check if a quorum has been reached for the given log index, and update commit

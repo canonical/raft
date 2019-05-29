@@ -478,7 +478,7 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
     /* Check if we can commit some new entries. */
     raft_replication__quorum(r, r->last_stored);
 
-    rv = raft_replication__apply(r);
+    rv = replicationApply(r);
     if (rv != 0) {
         /* TODO: just log the error? */
     }
@@ -708,7 +708,7 @@ int replicationUpdate(struct raft *r,
     /* Check if we can commit some new entries. */
     raft_replication__quorum(r, r->last_stored);
 
-    rv = raft_replication__apply(r);
+    rv = replicationApply(r);
     if (rv != 0) {
         /* TODO: just log the error? */
     }
@@ -834,7 +834,7 @@ static void appendFollower_cb(struct raft_io_append *req, int status)
      */
     if (args->leader_commit > r->commit_index) {
         r->commit_index = min(args->leader_commit, r->last_stored);
-        rv = raft_replication__apply(r);
+        rv = replicationApply(r);
         if (rv != 0) {
             goto out;
         }
@@ -952,8 +952,8 @@ static int deleteConflictingEntries(struct raft *r,
             }
             logTruncate(&r->log, entry_index);
 
-	    /* Drop information about previously stored entries that have just
-	     * been discarded. */
+            /* Drop information about previously stored entries that have just
+             * been discarded. */
             if (r->last_stored >= entry_index) {
                 r->last_stored = entry_index - 1;
             }
@@ -1024,7 +1024,7 @@ int replicationAppend(struct raft *r,
     if (n == 0) {
         if (args->leader_commit > r->commit_index) {
             r->commit_index = min(args->leader_commit, logLastIndex(&r->log));
-            rv = raft_replication__apply(r);
+            rv = replicationApply(r);
             if (rv != 0) {
                 return rv;
             }
@@ -1263,11 +1263,37 @@ static struct request *getRequest(struct raft *r,
     return NULL;
 }
 
-/**
- * Apply a RAFT_CHANGE entry that has been committed.
- */
-static void raft_replication__apply_configuration(struct raft *r,
-                                                  const raft_index index)
+/* Apply a RAFT_COMMAND entry that has been committed. */
+static int applyCommand(struct raft *r,
+                        const raft_index index,
+                        const struct raft_buffer *buf)
+{
+    struct raft_apply *req;
+    void *result;
+    int rv;
+    rv = r->fsm->apply(r->fsm, buf, &result);
+    if (rv != 0) {
+        return rv;
+    }
+    req = (struct raft_apply *)getRequest(r, index, RAFT_COMMAND);
+    if (req != NULL && req->cb != NULL) {
+        req->cb(req, 0, result);
+    }
+    return 0;
+}
+
+/* Fire the callback of a barrier request whose entry has been committed. */
+static void applyBarrier(struct raft *r, const raft_index index)
+{
+    struct raft_barrier *req;
+    req = (struct raft_barrier *)getRequest(r, index, RAFT_BARRIER);
+    if (req != NULL && req->cb != NULL) {
+        req->cb(req, 0);
+    }
+}
+
+/* Apply a RAFT_CHANGE entry that has been committed. */
+static void applyChange(struct raft *r, const raft_index index)
 {
     struct raft_change *req;
 
@@ -1303,36 +1329,7 @@ static void raft_replication__apply_configuration(struct raft *r,
     }
 }
 
-/* Apply a RAFT_COMMAND entry that has been committed. */
-static int raft_replication__apply_command(struct raft *r,
-                                           const raft_index index,
-                                           const struct raft_buffer *buf)
-{
-    struct raft_apply *req;
-    void *result;
-    int rv;
-    rv = r->fsm->apply(r->fsm, buf, &result);
-    if (rv != 0) {
-        return rv;
-    }
-    req = (struct raft_apply *)getRequest(r, index, RAFT_COMMAND);
-    if (req != NULL && req->cb != NULL) {
-        req->cb(req, 0, result);
-    }
-    return 0;
-}
-
-static void raft_replication__apply_barrier(struct raft *r,
-                                            const raft_index index)
-{
-    struct raft_barrier *req;
-    req = (struct raft_barrier *)getRequest(r, index, RAFT_BARRIER);
-    if (req != NULL && req->cb != NULL) {
-        req->cb(req, 0);
-    }
-}
-
-static bool should_take_snapshot(struct raft *r)
+static bool shouldTakeSnapshot(struct raft *r)
 {
     /* If a snapshot is already in progress, we don't want to start another
      *  one. */
@@ -1369,7 +1366,7 @@ out:
     r->snapshot.pending.term = 0;
 }
 
-static int take_snapshot(struct raft *r)
+static int takeSnapshot(struct raft *r)
 {
     struct raft_snapshot *snapshot;
     unsigned i;
@@ -1419,7 +1416,7 @@ abort:
     return rv;
 }
 
-int raft_replication__apply(struct raft *r)
+int replicationApply(struct raft *r)
 {
     raft_index index;
     int rv;
@@ -1440,14 +1437,14 @@ int raft_replication__apply(struct raft *r)
 
         switch (entry->type) {
             case RAFT_COMMAND:
-                rv = raft_replication__apply_command(r, index, &entry->buf);
+                rv = applyCommand(r, index, &entry->buf);
                 break;
             case RAFT_BARRIER:
-                raft_replication__apply_barrier(r, index);
+                applyBarrier(r, index);
                 rv = 0;
                 break;
             case RAFT_CHANGE:
-                raft_replication__apply_configuration(r, index);
+                applyChange(r, index);
                 rv = 0;
                 break;
         }
@@ -1459,8 +1456,8 @@ int raft_replication__apply(struct raft *r)
         r->last_applied = index;
     }
 
-    if (should_take_snapshot(r)) {
-        rv = take_snapshot(r);
+    if (shouldTakeSnapshot(r)) {
+        rv = takeSnapshot(r);
     }
 
     return rv;
