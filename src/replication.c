@@ -1022,14 +1022,8 @@ int replicationAppend(struct raft *r,
      *   entry).
      */
     if (n == 0) {
-        if (args->entries == NULL) {
-            tracef("append entries is heartbeat -> succeed immediately");
-        } else {
-            tracef("append entries has nothing new -> succeed immediately");
-        }
         if (args->leader_commit > r->commit_index) {
-            raft_index last_index = logLastIndex(&r->log);
-            r->commit_index = min(args->leader_commit, last_index);
+            r->commit_index = min(args->leader_commit, logLastIndex(&r->log));
             rv = raft_replication__apply(r);
             if (rv != 0) {
                 return rv;
