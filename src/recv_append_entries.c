@@ -13,16 +13,16 @@
 #define tracef(MSG, ...)
 #endif
 
-static void send_cb(struct raft_io_send *req, int status)
+static void sendCb(struct raft_io_send *req, int status)
 {
     (void)status;
     raft_free(req);
 }
 
-int recv__append_entries(struct raft *r,
-                         const unsigned id,
-                         const char *address,
-                         const struct raft_append_entries *args)
+int recvAppendEntries(struct raft *r,
+                      const unsigned id,
+                      const char *address,
+                      const struct raft_append_entries *args)
 {
     struct raft_io_send *req;
     struct raft_message message;
@@ -113,7 +113,7 @@ int recv__append_entries(struct raft *r,
         return 0;
     }
 
-    rv = raft_replication__append(r, args, &result->rejected, &async);
+    rv = replicationAppend(r, args, &result->rejected, &async);
     if (rv != 0) {
         return rv;
     }
@@ -146,7 +146,7 @@ reply:
         return RAFT_NOMEM;
     }
 
-    rv = r->io->send(r->io, req, &message, send_cb);
+    rv = r->io->send(r->io, req, &message, sendCb);
     if (rv != 0) {
         raft_free(req);
         return rv;

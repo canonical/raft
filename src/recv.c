@@ -38,18 +38,18 @@ static int recv(struct raft *r, struct raft_message *message)
 
     switch (message->type) {
         case RAFT_IO_APPEND_ENTRIES:
-            rv = recv__append_entries(r, message->server_id,
-                                      message->server_address,
-                                      &message->append_entries);
+            rv = recvAppendEntries(r, message->server_id,
+                                   message->server_address,
+                                   &message->append_entries);
             if (rv != 0) {
                 entryBatchesDestroy(message->append_entries.entries,
                                     message->append_entries.n_entries);
             }
             break;
         case RAFT_IO_APPEND_ENTRIES_RESULT:
-            rv = recv__append_entries_result(r, message->server_id,
-                                             message->server_address,
-                                             &message->append_entries_result);
+            rv = recvAppendEntriesResult(r, message->server_id,
+                                         message->server_address,
+                                         &message->append_entries_result);
             break;
         case RAFT_IO_REQUEST_VOTE:
             rv = recv__request_vote(r, message->server_id,

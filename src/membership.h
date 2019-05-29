@@ -38,12 +38,10 @@ int raft_membership__apply(struct raft *r,
                            const raft_index index,
                            const struct raft_entry *entry);
 
-/**
- * Rollback any promotion configuration change that was applied locally, but
+/* Rollback any promotion configuration change that was applied locally, but
  * failed to be committed. It must be called by followers after they receive an
  * AppendEntries RPC request that instructs them to evict the uncomitted entry
- * from their log.
- */
-int raft_membership__rollback(struct raft *r);
+ * from their log. */
+int membershipRollback(struct raft *r);
 
 #endif /* RAFT_MEMBERSHIP_H */

@@ -122,19 +122,14 @@ err:
     return rv;
 }
 
-int raft_membership__rollback(struct raft *r)
+int membershipRollback(struct raft *r)
 {
     const struct raft_entry *entry;
     int rv;
 
     assert(r != NULL);
     assert(r->state == RAFT_FOLLOWER);
-
-    /* If no configuration change is in progress, there's nothing to
-     * rollback. */
-    if (r->configuration_uncommitted_index == 0) {
-        return 0;
-    }
+    assert(r->configuration_uncommitted_index > 0);
 
     /* Fetch the last committed configuration entry. */
     assert(r->configuration_index != 0);
