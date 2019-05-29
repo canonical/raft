@@ -937,10 +937,12 @@ static int deleteConflictingEntries(struct raft *r,
 
             tracef("log mismatch -> truncate (%ld)", entry_index);
 
-            /* Discard any uncommitted voting change. */
-            rv = membershipRollback(r);
-            if (rv != 0) {
-                return rv;
+            /* Possibly discard uncommitted configuration changes. */
+            if (r->configuration_uncommitted_index >= entry_index) {
+                rv = membershipRollback(r);
+                if (rv != 0) {
+                    return rv;
+                }
             }
 
             /* Delete all entries from this index on because they don't match */
@@ -949,7 +951,12 @@ static int deleteConflictingEntries(struct raft *r,
                 return rv;
             }
             logTruncate(&r->log, entry_index);
-            r->last_stored = entry_index - 1;
+
+	    /* Drop information about previously stored entries that have just
+	     * been discarded. */
+            if (r->last_stored >= entry_index) {
+                r->last_stored = entry_index - 1;
+            }
 
             /* We want to append all entries from here on, replacing anything
              * that we had before. */
