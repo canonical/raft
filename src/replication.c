@@ -1088,7 +1088,7 @@ err:
     return rv;
 }
 
-struct recv_install_snapshot
+struct recvInstallSnapshot
 {
     struct raft *raft;
     struct raft_snapshot snapshot;
@@ -1096,7 +1096,7 @@ struct recv_install_snapshot
 
 static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
 {
-    struct recv_install_snapshot *request = req->data;
+    struct recvInstallSnapshot *request = req->data;
     struct raft *r = request->raft;
     struct raft_snapshot *snapshot = &request->snapshot;
     struct raft_append_entries_result result;
@@ -1150,7 +1150,7 @@ int replicationInstallSnapshot(struct raft *r,
                                raft_index *rejected,
                                bool *async)
 {
-    struct recv_install_snapshot *request;
+    struct recvInstallSnapshot *request;
     struct raft_snapshot *snapshot;
     raft_term local_term;
     int rv;
