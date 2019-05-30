@@ -11,16 +11,16 @@
 #define tracef(MSG, ...)
 #endif
 
-static void send_cb(struct raft_io_send *req, int status)
+static void sendCb(struct raft_io_send *req, int status)
 {
     (void)status;
     raft_free(req);
 }
 
-int recv__request_vote(struct raft *r,
-                       const unsigned id,
-                       const char *address,
-                       const struct raft_request_vote *args)
+int recvRequestVote(struct raft *r,
+                    const unsigned id,
+                    const char *address,
+                    const struct raft_request_vote *args)
 {
     struct raft_io_send *req;
     struct raft_message message;
@@ -85,7 +85,7 @@ reply:
         return RAFT_NOMEM;
     }
 
-    rv = r->io->send(r->io, req, &message, send_cb);
+    rv = r->io->send(r->io, req, &message, sendCb);
     if (rv != 0) {
         raft_free(req);
         return rv;

@@ -52,9 +52,8 @@ static int recv(struct raft *r, struct raft_message *message)
                                          &message->append_entries_result);
             break;
         case RAFT_IO_REQUEST_VOTE:
-            rv = recv__request_vote(r, message->server_id,
-                                    message->server_address,
-                                    &message->request_vote);
+            rv = recvRequestVote(r, message->server_id, message->server_address,
+                                 &message->request_vote);
             break;
         case RAFT_IO_REQUEST_VOTE_RESULT:
             rv = recv__request_vote_result(r, message->server_id,
