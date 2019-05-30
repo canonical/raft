@@ -476,7 +476,7 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
     }
 
     /* Check if we can commit some new entries. */
-    raft_replication__quorum(r, r->last_stored);
+    replicationQuorum(r, r->last_stored);
 
     rv = replicationApply(r);
     if (rv != 0) {
@@ -706,7 +706,7 @@ int replicationUpdate(struct raft *r,
     }
 
     /* Check if we can commit some new entries. */
-    raft_replication__quorum(r, r->last_stored);
+    replicationQuorum(r, r->last_stored);
 
     rv = replicationApply(r);
     if (rv != 0) {
@@ -1460,7 +1460,7 @@ int replicationApply(struct raft *r)
     return rv;
 }
 
-void raft_replication__quorum(struct raft *r, const raft_index index)
+void replicationQuorum(struct raft *r, const raft_index index)
 {
     size_t votes = 0;
     size_t i;

@@ -80,17 +80,15 @@ int raft_replication__install_snapshot(struct raft *r,
  * It must be called by leaders or followers. */
 int replicationApply(struct raft *r);
 
-/**
- * Check if a quorum has been reached for the given log index, and update commit
- * index accordingly if so.
+/* Check if a quorum has been reached for the given log index, and update the
+ * commit index accordingly if so.
  *
  * From Figure 3.1:
  *
  *   [Rules for servers] Leaders:
  *
  *   If there exists an N such that N > commitIndex, a majority of
- *   matchIndex[i] >= N, and log[N].term == currentTerm: set commitIndex = N
- */
-void raft_replication__quorum(struct raft *r, const raft_index index);
+ *   matchIndex[i] >= N, and log[N].term == currentTerm: set commitIndex = N */
+void replicationQuorum(struct raft *r, const raft_index index);
 
 #endif /* REPLICATION_H_ */
