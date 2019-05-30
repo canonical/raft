@@ -1094,7 +1094,7 @@ struct recv_install_snapshot
     struct raft_snapshot snapshot;
 };
 
-static void put_snapshot_cb(struct raft_io_snapshot_put *req, int status)
+static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
 {
     struct recv_install_snapshot *request = req->data;
     struct raft *r = request->raft;
@@ -1145,10 +1145,10 @@ respond:
     raft_free(request);
 }
 
-int raft_replication__install_snapshot(struct raft *r,
-                                       const struct raft_install_snapshot *args,
-                                       raft_index *rejected,
-                                       bool *async)
+int replicationInstallSnapshot(struct raft *r,
+                               const struct raft_install_snapshot *args,
+                               raft_index *rejected,
+                               bool *async)
 {
     struct recv_install_snapshot *request;
     struct raft_snapshot *snapshot;
@@ -1217,8 +1217,8 @@ int raft_replication__install_snapshot(struct raft *r,
     /* TODO: we should truncate the in-memory log immediately */
     assert(r->snapshot.put.data == NULL);
     r->snapshot.put.data = request;
-    rv =
-        r->io->snapshot_put(r->io, &r->snapshot.put, snapshot, put_snapshot_cb);
+    rv = r->io->snapshot_put(r->io, &r->snapshot.put, snapshot,
+                             installSnapshotCb);
     if (rv != 0) {
         goto err_after_bufs_alloc;
     }
@@ -1342,7 +1342,7 @@ static bool shouldTakeSnapshot(struct raft *r)
     return true;
 }
 
-static void snapshot_put_cb(struct raft_io_snapshot_put *req, int status)
+static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
 {
     struct raft *r = req->data;
     struct raft_snapshot *snapshot;
@@ -1393,8 +1393,7 @@ static int takeSnapshot(struct raft *r)
 
     assert(r->snapshot.put.data == NULL);
     r->snapshot.put.data = r;
-    rv =
-        r->io->snapshot_put(r->io, &r->snapshot.put, snapshot, snapshot_put_cb);
+    rv = r->io->snapshot_put(r->io, &r->snapshot.put, snapshot, takeSnapshotCb);
     if (rv != 0) {
         goto abort_after_fsm_snapshot;
     }

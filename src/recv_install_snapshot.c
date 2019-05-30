@@ -55,7 +55,7 @@ int raft_rpc__recv_install_snapshot(struct raft *r,
     }
     r->election_timer_start = r->io->time(r->io);
 
-    rv = raft_replication__install_snapshot(r, args, &result->rejected, &async);
+    rv = replicationInstallSnapshot(r, args, &result->rejected, &async);
     if (rv != 0) {
         return rv;
     }

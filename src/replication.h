@@ -70,10 +70,10 @@ int replicationAppend(struct raft *r,
                       raft_index *rejected,
                       bool *async);
 
-int raft_replication__install_snapshot(struct raft *r,
-                                       const struct raft_install_snapshot *args,
-                                       raft_index *rejected,
-                                       bool *async);
+int replicationInstallSnapshot(struct raft *r,
+                               const struct raft_install_snapshot *args,
+                               raft_index *rejected,
+                               bool *async);
 
 /* Apply any committed entry that was not applied yet.
  *
