@@ -61,9 +61,9 @@ static int recv(struct raft *r, struct raft_message *message)
                                            &message->request_vote_result);
             break;
         case RAFT_IO_INSTALL_SNAPSHOT:
-            rv = raft_rpc__recv_install_snapshot(r, message->server_id,
-                                                 message->server_address,
-                                                 &message->install_snapshot);
+            rv = rpcRecvInstallSnapshot(r, message->server_id,
+                                        message->server_address,
+                                        &message->install_snapshot);
             break;
     };
 

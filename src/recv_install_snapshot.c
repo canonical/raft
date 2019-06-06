@@ -3,20 +3,20 @@
 #include "convert.h"
 #include "log.h"
 #include "logging.h"
-#include "replication.h"
 #include "recv.h"
+#include "replication.h"
 #include "state.h"
 
-static void send_append_entries_result_cb(struct raft_io_send *req, int status)
+static void sendCb(struct raft_io_send *req, int status)
 {
     (void)status;
     raft_free(req);
 }
 
-int raft_rpc__recv_install_snapshot(struct raft *r,
-                                    const unsigned id,
-                                    const char *address,
-                                    struct raft_install_snapshot *args)
+int rpcRecvInstallSnapshot(struct raft *r,
+                           const unsigned id,
+                           const char *address,
+                           struct raft_install_snapshot *args)
 {
     struct raft_io_send *req;
     struct raft_message message;
@@ -85,7 +85,7 @@ reply:
         return RAFT_NOMEM;
     }
 
-    rv = r->io->send(r->io, req, &message, send_append_entries_result_cb);
+    rv = r->io->send(r->io, req, &message, sendCb);
     if (rv != 0) {
         raft_free(req);
         return rv;
