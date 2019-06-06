@@ -1,4 +1,3 @@
-#include "state.h"
 #include "assert.h"
 #include "configuration.h"
 #include "election.h"

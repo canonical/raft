@@ -5,7 +5,6 @@
 #include "logging.h"
 #include "recv.h"
 #include "replication.h"
-#include "state.h"
 
 static void sendCb(struct raft_io_send *req, int status)
 {

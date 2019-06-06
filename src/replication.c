@@ -12,7 +12,6 @@
 #include "replication.h"
 #include "request.h"
 #include "snapshot.h"
-#include "state.h"
 
 /* Set to 1 to enable tracing. */
 #if 0

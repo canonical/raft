@@ -177,9 +177,6 @@ int progressState(struct raft *r, const unsigned i)
     return p->state;
 }
 
-/* Return false if the given rejected index comes from an out of order
- * message. Otherwise it decreases the progress next index to min(rejected,
- * last) and returns true. */
 bool progressMaybeDecrement(struct raft *r,
                             const unsigned i,
                             raft_index rejected,
