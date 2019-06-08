@@ -210,12 +210,6 @@ bool progressMaybeDecrement(struct raft *r,
         return true;
     }
 
-    /* TODO: remove once we implement pipelining. See etcd/raft/progress.go */
-    if (rejected <= p->match_index) {
-        tracef("match index is up to date -> ignore ");
-        return false;
-    }
-
     /* The rejection must be stale or spurious if the rejected index does not
      * match the next index minus one. */
     if (rejected != p->next_index - 1) {
