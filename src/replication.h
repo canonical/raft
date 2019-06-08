@@ -56,13 +56,14 @@ int replicationUpdate(struct raft *r,
 /* Append the log entries in the given request if the Log Matching Property is
  * satisfied.
  *
- * The #success output parameter will be set to true if the Log Matching
- * Property was satisfied.
+ * The rejected output parameter will be set to 0 if the Log Matching Property
+ * was satisfied, or to args->prev_log_index if not.
  *
- * The #async output parameter will be set to true if some of the entries in the
+ * The async output parameter will be set to true if some of the entries in the
  * request were not present in our log, and a disk write was started to persist
- * them to disk. The entries will be appended to our log only once the disk
- * write completes and the I/O callback is invoked.
+ * them to disk. The entries will still be appended immediately to our in-memory
+ * copy of the log, but an AppendEntries result message will be sent only once
+ * the disk write completes and the I/O callback is invoked.
  *
  * It must be called only by followers. */
 int replicationAppend(struct raft *r,

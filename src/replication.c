@@ -725,19 +725,19 @@ int replicationUpdate(struct raft *r,
     return 0;
 }
 
-static void send_append_entries_result_cb(struct raft_io_send *req, int status)
+static void sendAppendEntriesResultCb(struct raft_io_send *req, int status)
 {
     (void)status;
     raft_free(req);
 }
 
-static void send_append_entries_result(
+static void sendAppendEntriesResult(
     struct raft *r,
     const struct raft_append_entries_result *result)
 {
     struct raft_message message;
     struct raft_io_send *req;
-    int rc;
+    int rv;
 
     message.type = RAFT_IO_APPEND_ENTRIES_RESULT;
     message.server_id = r->follower_state.current_leader.id;
@@ -749,8 +749,8 @@ static void send_append_entries_result(
         return;
     }
 
-    rc = r->io->send(r->io, req, &message, send_append_entries_result_cb);
-    if (rc != 0) {
+    rv = r->io->send(r->io, req, &message, sendAppendEntriesResultCb);
+    if (rv != 0) {
         raft_free(req);
     }
 }
@@ -780,14 +780,12 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
     assert(args->entries != NULL);
     assert(args->n_entries > 0);
 
-    /* If we are not followers anymore, just discard the result. */
-    if (r->state != RAFT_FOLLOWER) {
-        tracef("local server is not follower -> ignore I/O result");
-        goto out;
-    }
-
     result.term = r->current_term;
     if (status != 0) {
+        if (r->state != RAFT_FOLLOWER) {
+            tracef("local server is not follower -> ignore I/O failure");
+            goto out;
+        }
         result.rejected = args->prev_log_index + 1;
         goto respond;
     }
@@ -834,11 +832,16 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
         }
     }
 
+    if (r->state != RAFT_FOLLOWER) {
+        tracef("local server is not follower -> don't send result");
+        goto out;
+    }
+
     result.rejected = 0;
 
 respond:
     result.last_log_index = r->last_stored;
-    send_append_entries_result(r, &result);
+    sendAppendEntriesResult(r, &result);
 
 out:
     logRelease(&r->log, request->index, request->args.entries,
@@ -904,8 +907,8 @@ static int checkLogMatchingProperty(struct raft *r,
  *   3. If an existing entry conflicts with a new one (same index but
  *   different terms), delete the existing entry and all that follow it.
  *
- * The @i parameter will be set to the array index of the first new log entry
- * that we don't have yet in our log, among the ones included in the given
+ * The i output parameter will be set to the array index of the first new log
+ * entry that we don't have yet in our log, among the ones included in the given
  * AppendEntries request. */
 static int deleteConflictingEntries(struct raft *r,
                                     const struct raft_append_entries *args,
@@ -939,7 +942,8 @@ static int deleteConflictingEntries(struct raft *r,
                 }
             }
 
-            /* Delete all entries from this index on because they don't match */
+            /* Delete all entries from this index on because they don't
+             * match. */
             rv = r->io->truncate(r->io, entry_index);
             if (rv != 0) {
                 return rv;
@@ -1006,7 +1010,7 @@ int replicationAppend(struct raft *r,
 
     n = args->n_entries - i; /* Number of new entries */
 
-    /* This is an empty AppendEntries, there's nothing to write. However we
+    /* If this is an empty AppendEntries, there's nothing to write. However we
      * still want to check if we can commit some entry.
      *
      * From Figure 3.1:
@@ -1068,8 +1072,6 @@ int replicationAppend(struct raft *r,
     if (rv != 0) {
         goto err_after_acquire_entries;
     }
-
-    *rejected = 0;
 
     raft_free(args->entries);
 
@@ -1140,7 +1142,7 @@ err:
 
 respond:
     result.last_log_index = r->last_stored;
-    send_append_entries_result(r, &result);
+    sendAppendEntriesResult(r, &result);
     raft_free(request);
 }
 
