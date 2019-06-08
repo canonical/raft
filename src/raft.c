@@ -8,7 +8,6 @@
 #include "election.h"
 #include "log.h"
 #include "logging.h"
-#include "state.h"
 
 #define DEFAULT_ELECTION_TIMEOUT 1000 /* One second */
 #define DEFAULT_HEARTBEAT_TIMEOUT 100 /* One tenth of a second */

@@ -14,10 +14,10 @@
 #define tracef(MSG, ...)
 #endif
 
-int recv__request_vote_result(struct raft *r,
-                              unsigned id,
-                              const char *address,
-                              const struct raft_request_vote_result *result)
+int recvRequestVoteResult(struct raft *r,
+                          unsigned id,
+                          const char *address,
+                          const struct raft_request_vote_result *result)
 {
     size_t votes_index;
     int match;

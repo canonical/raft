@@ -12,7 +12,6 @@
 #include "replication.h"
 #include "request.h"
 #include "snapshot.h"
-#include "state.h"
 
 /* Set to 1 to enable tracing. */
 #if 0
@@ -48,25 +47,24 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
     struct raft *r = req->raft;
     unsigned i = configurationIndexOf(&r->configuration, req->server_id);
 
-    if (status != 0) {
-        warnf(r->io, "failed to send append entries to server %ld: %s",
-              req->server_id, raft_strerror(status));
-    } else if (r->state == RAFT_LEADER && i < r->configuration.n) {
-        /* Update the last_send timestamp: for a heartbeat_timeout milliseconds
-         * we'll be good and we won't need to contact followers again, since
-         * this was not an idle period.
-         *
-         * From Figure 3.1:
-         *
-         *   [Rules for Servers] Leaders: Upon election: send initial empty
-         *   AppendEntries RPCs (heartbeat) to each server; repeat during idle
-         *   periods to prevent election timeouts
-         */
-        progressUpdateLastSend(r, i);
-
-        if (progressState(r, i) == PROGRESS__PIPELINE) {
-            /* Optimitiscally update progress. */
-            progressOptimisticNextIndex(r, i, req->index + req->n);
+    if (r->state == RAFT_LEADER && i < r->configuration.n) {
+        if (status != 0) {
+            warnf(r->io, "failed to send append entries to server %ld: %s",
+                  req->server_id, raft_strerror(status));
+            /* Go back to probe mode. */
+            progressToProbe(r, i);
+        } else {
+            /* Update the last_send timestamp: for a heartbeat_timeout
+             * milliseconds we'll be good and we won't need to contact followers
+             * again, since this was not an idle period.
+             *
+             * From Figure 3.1:
+             *
+             *   [Rules for Servers] Leaders: Upon election: send initial empty
+             *   AppendEntries RPCs (heartbeat) to each server; repeat during
+             * idle periods to prevent election timeouts
+             */
+            progressUpdateLastSend(r, i);
         }
     }
 
@@ -133,6 +131,11 @@ static int sendAppendEntries(struct raft *r,
     rv = r->io->send(r->io, &req->send, &message, sendAppendEntriesCb);
     if (rv != 0) {
         goto err_after_req_alloc;
+    }
+
+    if (progressState(r, i) == PROGRESS__PIPELINE) {
+        /* Optimitiscally update progress. */
+        progressOptimisticNextIndex(r, i, req->index + req->n);
     }
 
     return 0;
@@ -476,7 +479,7 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
     }
 
     /* Check if we can commit some new entries. */
-    raft_replication__quorum(r, r->last_stored);
+    replicationQuorum(r, r->last_stored);
 
     rv = replicationApply(r);
     if (rv != 0) {
@@ -706,7 +709,7 @@ int replicationUpdate(struct raft *r,
     }
 
     /* Check if we can commit some new entries. */
-    raft_replication__quorum(r, r->last_stored);
+    replicationQuorum(r, r->last_stored);
 
     rv = replicationApply(r);
     if (rv != 0) {
@@ -726,19 +729,19 @@ int replicationUpdate(struct raft *r,
     return 0;
 }
 
-static void send_append_entries_result_cb(struct raft_io_send *req, int status)
+static void sendAppendEntriesResultCb(struct raft_io_send *req, int status)
 {
     (void)status;
     raft_free(req);
 }
 
-static void send_append_entries_result(
+static void sendAppendEntriesResult(
     struct raft *r,
     const struct raft_append_entries_result *result)
 {
     struct raft_message message;
     struct raft_io_send *req;
-    int rc;
+    int rv;
 
     message.type = RAFT_IO_APPEND_ENTRIES_RESULT;
     message.server_id = r->follower_state.current_leader.id;
@@ -750,8 +753,8 @@ static void send_append_entries_result(
         return;
     }
 
-    rc = r->io->send(r->io, req, &message, send_append_entries_result_cb);
-    if (rc != 0) {
+    rv = r->io->send(r->io, req, &message, sendAppendEntriesResultCb);
+    if (rv != 0) {
         raft_free(req);
     }
 }
@@ -781,14 +784,12 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
     assert(args->entries != NULL);
     assert(args->n_entries > 0);
 
-    /* If we are not followers anymore, just discard the result. */
-    if (r->state != RAFT_FOLLOWER) {
-        tracef("local server is not follower -> ignore I/O result");
-        goto out;
-    }
-
     result.term = r->current_term;
     if (status != 0) {
+        if (r->state != RAFT_FOLLOWER) {
+            tracef("local server is not follower -> ignore I/O failure");
+            goto out;
+        }
         result.rejected = args->prev_log_index + 1;
         goto respond;
     }
@@ -835,11 +836,16 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
         }
     }
 
+    if (r->state != RAFT_FOLLOWER) {
+        tracef("local server is not follower -> don't send result");
+        goto out;
+    }
+
     result.rejected = 0;
 
 respond:
     result.last_log_index = r->last_stored;
-    send_append_entries_result(r, &result);
+    sendAppendEntriesResult(r, &result);
 
 out:
     logRelease(&r->log, request->index, request->args.entries,
@@ -905,8 +911,8 @@ static int checkLogMatchingProperty(struct raft *r,
  *   3. If an existing entry conflicts with a new one (same index but
  *   different terms), delete the existing entry and all that follow it.
  *
- * The @i parameter will be set to the array index of the first new log entry
- * that we don't have yet in our log, among the ones included in the given
+ * The i output parameter will be set to the array index of the first new log
+ * entry that we don't have yet in our log, among the ones included in the given
  * AppendEntries request. */
 static int deleteConflictingEntries(struct raft *r,
                                     const struct raft_append_entries *args,
@@ -940,7 +946,8 @@ static int deleteConflictingEntries(struct raft *r,
                 }
             }
 
-            /* Delete all entries from this index on because they don't match */
+            /* Delete all entries from this index on because they don't
+             * match. */
             rv = r->io->truncate(r->io, entry_index);
             if (rv != 0) {
                 return rv;
@@ -1007,7 +1014,7 @@ int replicationAppend(struct raft *r,
 
     n = args->n_entries - i; /* Number of new entries */
 
-    /* This is an empty AppendEntries, there's nothing to write. However we
+    /* If this is an empty AppendEntries, there's nothing to write. However we
      * still want to check if we can commit some entry.
      *
      * From Figure 3.1:
@@ -1070,8 +1077,6 @@ int replicationAppend(struct raft *r,
         goto err_after_acquire_entries;
     }
 
-    *rejected = 0;
-
     raft_free(args->entries);
 
     return 0;
@@ -1088,15 +1093,15 @@ err:
     return rv;
 }
 
-struct recv_install_snapshot
+struct recvInstallSnapshot
 {
     struct raft *raft;
     struct raft_snapshot snapshot;
 };
 
-static void put_snapshot_cb(struct raft_io_snapshot_put *req, int status)
+static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
 {
-    struct recv_install_snapshot *request = req->data;
+    struct recvInstallSnapshot *request = req->data;
     struct raft *r = request->raft;
     struct raft_snapshot *snapshot = &request->snapshot;
     struct raft_append_entries_result result;
@@ -1105,6 +1110,8 @@ static void put_snapshot_cb(struct raft_io_snapshot_put *req, int status)
     r->snapshot.put.data = NULL;
 
     result.term = r->current_term;
+
+    /* TODO: check the current state to see if we are still followers */
 
     if (status != 0) {
         result.rejected = snapshot->index;
@@ -1141,16 +1148,16 @@ err:
 
 respond:
     result.last_log_index = r->last_stored;
-    send_append_entries_result(r, &result);
+    sendAppendEntriesResult(r, &result);
     raft_free(request);
 }
 
-int raft_replication__install_snapshot(struct raft *r,
-                                       const struct raft_install_snapshot *args,
-                                       raft_index *rejected,
-                                       bool *async)
+int replicationInstallSnapshot(struct raft *r,
+                               const struct raft_install_snapshot *args,
+                               raft_index *rejected,
+                               bool *async)
 {
-    struct recv_install_snapshot *request;
+    struct recvInstallSnapshot *request;
     struct raft_snapshot *snapshot;
     raft_term local_term;
     int rv;
@@ -1177,7 +1184,7 @@ int raft_replication__install_snapshot(struct raft *r,
     /* If we already have all entries in the snapshot, this is a no-op */
     local_term = logTermOf(&r->log, args->last_index);
     if (local_term != 0 && local_term >= args->last_term) {
-        *rejected = 0;
+        *rejected= 0;
         return 0;
     }
 
@@ -1214,11 +1221,10 @@ int raft_replication__install_snapshot(struct raft *r,
     snapshot->bufs[0] = args->data;
     snapshot->n_bufs = 1;
 
-    /* TODO: we should truncate the in-memory log immediately */
     assert(r->snapshot.put.data == NULL);
     r->snapshot.put.data = request;
-    rv =
-        r->io->snapshot_put(r->io, &r->snapshot.put, snapshot, put_snapshot_cb);
+    rv = r->io->snapshot_put(r->io, &r->snapshot.put, snapshot,
+                             installSnapshotCb);
     if (rv != 0) {
         goto err_after_bufs_alloc;
     }
@@ -1342,7 +1348,7 @@ static bool shouldTakeSnapshot(struct raft *r)
     return true;
 }
 
-static void snapshot_put_cb(struct raft_io_snapshot_put *req, int status)
+static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
 {
     struct raft *r = req->data;
     struct raft_snapshot *snapshot;
@@ -1393,8 +1399,7 @@ static int takeSnapshot(struct raft *r)
 
     assert(r->snapshot.put.data == NULL);
     r->snapshot.put.data = r;
-    rv =
-        r->io->snapshot_put(r->io, &r->snapshot.put, snapshot, snapshot_put_cb);
+    rv = r->io->snapshot_put(r->io, &r->snapshot.put, snapshot, takeSnapshotCb);
     if (rv != 0) {
         goto abort_after_fsm_snapshot;
     }
@@ -1460,7 +1465,7 @@ int replicationApply(struct raft *r)
     return rv;
 }
 
-void raft_replication__quorum(struct raft *r, const raft_index index)
+void replicationQuorum(struct raft *r, const raft_index index)
 {
     size_t votes = 0;
     size_t i;

@@ -177,9 +177,6 @@ int progressState(struct raft *r, const unsigned i)
     return p->state;
 }
 
-/* Return false if the given rejected index comes from an out of order
- * message. Otherwise it decreases the progress next index to min(rejected,
- * last) and returns true. */
 bool progressMaybeDecrement(struct raft *r,
                             const unsigned i,
                             raft_index rejected,
@@ -211,12 +208,6 @@ bool progressMaybeDecrement(struct raft *r,
         p->next_index = min(rejected, p->match_index + 1);
         progressToProbe(r, i);
         return true;
-    }
-
-    /* TODO: remove once we implement pipelining. See etcd/raft/progress.go */
-    if (rejected <= p->match_index) {
-        tracef("match index is up to date -> ignore ");
-        return false;
     }
 
     /* The rejection must be stale or spurious if the rejected index does not

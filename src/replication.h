@@ -29,7 +29,7 @@ int replicationTrigger(struct raft *r);
  * - If we are pipelining entries to the follower, then send any new entries
  *   haven't yet sent.
  *
- * If message should be sent, the rules to decide what type of message to send
+ * If a message should be sent, the rules to decide what type of message to send
  * and what it should contain are:
  *
  * - If we don't have anymore the first entry that should be sent to the
@@ -56,13 +56,14 @@ int replicationUpdate(struct raft *r,
 /* Append the log entries in the given request if the Log Matching Property is
  * satisfied.
  *
- * The #success output parameter will be set to true if the Log Matching
- * Property was satisfied.
+ * The rejected output parameter will be set to 0 if the Log Matching Property
+ * was satisfied, or to args->prev_log_index if not.
  *
- * The #async output parameter will be set to true if some of the entries in the
+ * The async output parameter will be set to true if some of the entries in the
  * request were not present in our log, and a disk write was started to persist
- * them to disk. The entries will be appended to our log only once the disk
- * write completes and the I/O callback is invoked.
+ * them to disk. The entries will still be appended immediately to our in-memory
+ * copy of the log, but an AppendEntries result message will be sent only once
+ * the disk write completes and the I/O callback is invoked.
  *
  * It must be called only by followers. */
 int replicationAppend(struct raft *r,
@@ -70,27 +71,25 @@ int replicationAppend(struct raft *r,
                       raft_index *rejected,
                       bool *async);
 
-int raft_replication__install_snapshot(struct raft *r,
-                                       const struct raft_install_snapshot *args,
-                                       raft_index *rejected,
-                                       bool *async);
+int replicationInstallSnapshot(struct raft *r,
+                               const struct raft_install_snapshot *args,
+                               raft_index *rejected,
+                               bool *async);
 
 /* Apply any committed entry that was not applied yet.
  *
  * It must be called by leaders or followers. */
 int replicationApply(struct raft *r);
 
-/**
- * Check if a quorum has been reached for the given log index, and update commit
- * index accordingly if so.
+/* Check if a quorum has been reached for the given log index, and update the
+ * commit index accordingly if so.
  *
  * From Figure 3.1:
  *
  *   [Rules for servers] Leaders:
  *
  *   If there exists an N such that N > commitIndex, a majority of
- *   matchIndex[i] >= N, and log[N].term == currentTerm: set commitIndex = N
- */
-void raft_replication__quorum(struct raft *r, const raft_index index);
+ *   matchIndex[i] >= N, and log[N].term == currentTerm: set commitIndex = N */
+void replicationQuorum(struct raft *r, const raft_index index);
 
 #endif /* REPLICATION_H_ */
