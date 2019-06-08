@@ -29,7 +29,7 @@ int replicationTrigger(struct raft *r);
  * - If we are pipelining entries to the follower, then send any new entries
  *   haven't yet sent.
  *
- * If message should be sent, the rules to decide what type of message to send
+ * If a message should be sent, the rules to decide what type of message to send
  * and what it should contain are:
  *
  * - If we don't have anymore the first entry that should be sent to the

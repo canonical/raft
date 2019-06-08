@@ -47,25 +47,24 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
     struct raft *r = req->raft;
     unsigned i = configurationIndexOf(&r->configuration, req->server_id);
 
-    if (status != 0) {
-        warnf(r->io, "failed to send append entries to server %ld: %s",
-              req->server_id, raft_strerror(status));
-    } else if (r->state == RAFT_LEADER && i < r->configuration.n) {
-        /* Update the last_send timestamp: for a heartbeat_timeout milliseconds
-         * we'll be good and we won't need to contact followers again, since
-         * this was not an idle period.
-         *
-         * From Figure 3.1:
-         *
-         *   [Rules for Servers] Leaders: Upon election: send initial empty
-         *   AppendEntries RPCs (heartbeat) to each server; repeat during idle
-         *   periods to prevent election timeouts
-         */
-        progressUpdateLastSend(r, i);
-
-        if (progressState(r, i) == PROGRESS__PIPELINE) {
-            /* Optimitiscally update progress. */
-            progressOptimisticNextIndex(r, i, req->index + req->n);
+    if (r->state == RAFT_LEADER && i < r->configuration.n) {
+        if (status != 0) {
+            warnf(r->io, "failed to send append entries to server %ld: %s",
+                  req->server_id, raft_strerror(status));
+            /* Go back to probe mode. */
+            progressToProbe(r, i);
+        } else {
+            /* Update the last_send timestamp: for a heartbeat_timeout
+             * milliseconds we'll be good and we won't need to contact followers
+             * again, since this was not an idle period.
+             *
+             * From Figure 3.1:
+             *
+             *   [Rules for Servers] Leaders: Upon election: send initial empty
+             *   AppendEntries RPCs (heartbeat) to each server; repeat during
+             * idle periods to prevent election timeouts
+             */
+            progressUpdateLastSend(r, i);
         }
     }
 
@@ -132,6 +131,11 @@ static int sendAppendEntries(struct raft *r,
     rv = r->io->send(r->io, &req->send, &message, sendAppendEntriesCb);
     if (rv != 0) {
         goto err_after_req_alloc;
+    }
+
+    if (progressState(r, i) == PROGRESS__PIPELINE) {
+        /* Optimitiscally update progress. */
+        progressOptimisticNextIndex(r, i, req->index + req->n);
     }
 
     return 0;
@@ -1107,6 +1111,8 @@ static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
 
     result.term = r->current_term;
 
+    /* TODO: check the current state to see if we are still followers */
+
     if (status != 0) {
         result.rejected = snapshot->index;
         errorf(r->io, "save snapshot %d: %s", snapshot->index,
@@ -1178,7 +1184,7 @@ int replicationInstallSnapshot(struct raft *r,
     /* If we already have all entries in the snapshot, this is a no-op */
     local_term = logTermOf(&r->log, args->last_index);
     if (local_term != 0 && local_term >= args->last_term) {
-        *rejected = 0;
+        *rejected= 0;
         return 0;
     }
 
@@ -1215,7 +1221,6 @@ int replicationInstallSnapshot(struct raft *r,
     snapshot->bufs[0] = args->data;
     snapshot->n_bufs = 1;
 
-    /* TODO: we should truncate the in-memory log immediately */
     assert(r->snapshot.put.data == NULL);
     r->snapshot.put.data = request;
     rv = r->io->snapshot_put(r->io, &r->snapshot.put, snapshot,
