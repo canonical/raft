@@ -16,6 +16,23 @@ I/O. Patches are welcome to add support for more platforms.
 
 See [raft.h](https://github.com/CanonicalLtd/raft/blob/master/include/raft.h) for full documentation.
 
+Features
+--------
+
+This implementation includes all the basic features described in the Raft
+dissertation:
+
+- Leader election
+- Log replication
+- Log compaction
+- Membership changes
+
+It also includes a few optional enhancements:
+
+- Optimistic pipelining to reduce log replication latency
+- Writing to leader's disk in parallel
+- Automatic stepping down when the leader loses quorum
+
 Building
 --------
 
