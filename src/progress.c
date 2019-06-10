@@ -140,6 +140,11 @@ raft_index progressNextIndex(struct raft *r, unsigned i)
     return r->leader_state.progress[i].next_index;
 }
 
+raft_index progressMatchIndex(struct raft *r, unsigned i)
+{
+    return r->leader_state.progress[i].match_index;
+}
+
 void progressUpdateLastSend(struct raft *r, unsigned i)
 {
     r->leader_state.progress[i].last_send = r->io->time(r->io);

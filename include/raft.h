@@ -851,20 +851,20 @@ struct raft_apply
 };
 
 /**
- * Propose to append a new command to the log and apply it to the FSM once
+ * Propose to append commands to the log and apply them to the FSM once
  * committed.
  *
  * If this server is the leader, it will create @n new log entries of type
- * #RAFT_COMMAND using the given buffers as their payloads, append them to
- * its own log and attempt to replicate them on other servers by sending
+ * #RAFT_COMMAND using the given buffers as their payloads, append them to its
+ * own log and attempt to replicate them on other servers by sending
  * AppendEntries RPCs.
  *
  * The memory pointed at by the @base attribute of each #raft_buffer in the
  * given array must have been allocated with raft_malloc() or a compatible
  * allocator. If this function returns 0, the ownership of this memory is
- * implicitely transferred to the raft library, which will take care of
- * releasing it when appropriate. Any further client access to such memory leads
- * to undefined behavior.
+ * implicitly transferred to the raft library, which will take care of releasing
+ * it when appropriate. Any further client access to such memory leads to
+ * undefined behavior.
  *
  * The ownership of the memory of the @bufs array itself is not transferred to
  * the raft library, and, if allocated dynamically, must be deallocated by the

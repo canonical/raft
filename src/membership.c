@@ -4,8 +4,9 @@
 #include "configuration.h"
 #include "log.h"
 #include "membership.h"
+#include "progress.h"
 
-int raft_membership__can_change_configuration(struct raft *r)
+int membershipCanChangeConfiguration(struct raft *r)
 {
     int rv;
 
@@ -40,7 +41,7 @@ int raft_membership__can_change_configuration(struct raft *r)
     return 0;
 }
 
-bool raft_membership__update_catch_up_round(struct raft *r)
+bool membershipUpdateCatchUpRound(struct raft *r)
 {
     size_t server_index;
     raft_index match_index;
@@ -57,7 +58,7 @@ bool raft_membership__update_catch_up_round(struct raft *r)
         configurationIndexOf(&r->configuration, r->leader_state.promotee_id);
     assert(server_index < r->configuration.n);
 
-    match_index = r->leader_state.progress[server_index].match_index;
+    match_index = progressMatchIndex(r, server_index);
 
     /* If the server did not reach the target index for this round, it did not
      * catch up. */
@@ -91,9 +92,9 @@ bool raft_membership__update_catch_up_round(struct raft *r)
     return false;
 }
 
-int raft_membership__apply(struct raft *r,
-                           const raft_index index,
-                           const struct raft_entry *entry)
+int membershipUncommittedChange(struct raft *r,
+                                const raft_index index,
+                                const struct raft_entry *entry)
 {
     struct raft_configuration configuration;
     int rv;

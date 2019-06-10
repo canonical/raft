@@ -493,7 +493,7 @@ out:
 }
 
 /* Submit a disk write for all entries from the given index onward. */
-static int appendLeader(struct raft *r, unsigned index)
+static int appendLeader(struct raft *r, raft_index index)
 {
     struct raft_entry *entries;
     unsigned n;
@@ -543,12 +543,9 @@ err:
     return rv;
 }
 
-int replicationTrigger(struct raft *r)
+int replicationTrigger(struct raft *r, raft_index index)
 {
-    raft_index index;
     int rv;
-
-    index = logLastIndex(&r->log);
 
     rv = appendLeader(r, index);
     if (rv != 0) {
@@ -604,7 +601,7 @@ static int triggerActualPromotion(struct raft *r)
     QUEUE_PUSH(&r->leader_state.requests, &req->queue);
 
     /* Start writing the new log entry to disk and send it to the followers. */
-    rv = replicationTrigger(r);
+    rv = replicationTrigger(r, index);
     if (rv != 0) {
         goto err_after_log_append;
     }
@@ -699,7 +696,7 @@ int replicationUpdate(struct raft *r,
     is_being_promoted = r->leader_state.promotee_id != 0 &&
                         r->leader_state.promotee_id == server->id;
     if (is_being_promoted) {
-        int is_up_to_date = raft_membership__update_catch_up_round(r);
+        bool is_up_to_date = membershipUpdateCatchUpRound(r);
         if (is_up_to_date) {
             rv = triggerActualPromotion(r);
             if (rv != 0) {
@@ -803,7 +800,7 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
         goto out;
     }
 
-    /* Possibly apply configuration changes. */
+    /* Possibly apply configuration changes as uncommitted. */
     for (j = 0; j < i; j++) {
         struct raft_entry *entry = &args->entries[j];
         raft_index index = request->index + j;
@@ -811,11 +808,8 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
 
         assert(local_term != 0 && local_term == entry->term);
 
-        /* If this is a configuration change entry, check if the change is about
-         * promoting a non-voting server to voting, and in that case update our
-         * configuration cache. */
         if (entry->type == RAFT_CHANGE) {
-            rv = raft_membership__apply(r, index, entry);
+            rv = membershipUncommittedChange(r, index, entry);
             if (rv != 0) {
                 goto out;
             }
@@ -1184,7 +1178,7 @@ int replicationInstallSnapshot(struct raft *r,
     /* If we already have all entries in the snapshot, this is a no-op */
     local_term = logTermOf(&r->log, args->last_index);
     if (local_term != 0 && local_term >= args->last_term) {
-        *rejected= 0;
+        *rejected = 0;
         return 0;
     }
 

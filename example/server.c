@@ -91,12 +91,15 @@ struct server
     struct raft raft;                   /* Raft instance */
 };
 
+/* Final callback in the shutdown sequence, invoked after the timer handle has
+ * been closed. */
 static void timerCloseCb(struct uv_handle_s *handle)
 {
     struct server *s = handle->data;
     raft_close(&s->raft, NULL);
 }
 
+/* Invoked after the signal handle has been closed. */
 static void sigintCloseCb(struct uv_handle_s *handle)
 {
     struct server *s = handle->data;
@@ -194,7 +197,7 @@ static int serverInit(struct server *s, const char *dir, unsigned id)
     }
     raft_configuration_close(&configuration);
 
-    raft_set_snapshot_threshold(&s->raft, 15);
+    raft_set_snapshot_threshold(&s->raft, 50);
     raft_set_snapshot_trailing(&s->raft, 10);
 
     return 0;
@@ -238,7 +241,7 @@ static void applyCb(struct raft_apply *req, int status, void *result)
         return;
     }
     count = *(int*)result;
-    if (count % 50 == 0) {
+    if (count % 100 == 0) {
         s->io.emit(&s->io, RAFT_INFO, "fsm: count %d", count);
     }
 }
@@ -289,7 +292,7 @@ static int serverStart(struct server *s)
     if (rv != 0) {
         goto errAfterRaftStart;
     }
-    rv = uv_timer_start(&s->timer, timerCb, 0, 225);
+    rv = uv_timer_start(&s->timer, timerCb, 0, 125);
     if (rv != 0) {
         goto errAfterSigintStart;
     }
