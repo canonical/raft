@@ -493,7 +493,7 @@ out:
 }
 
 /* Submit a disk write for all entries from the given index onward. */
-static int appendLeader(struct raft *r, unsigned index)
+static int appendLeader(struct raft *r, raft_index index)
 {
     struct raft_entry *entries;
     unsigned n;
@@ -543,12 +543,9 @@ err:
     return rv;
 }
 
-int replicationTrigger(struct raft *r)
+int replicationTrigger(struct raft *r, raft_index index)
 {
-    raft_index index;
     int rv;
-
-    index = logLastIndex(&r->log);
 
     rv = appendLeader(r, index);
     if (rv != 0) {
@@ -604,7 +601,7 @@ static int triggerActualPromotion(struct raft *r)
     QUEUE_PUSH(&r->leader_state.requests, &req->queue);
 
     /* Start writing the new log entry to disk and send it to the followers. */
-    rv = replicationTrigger(r);
+    rv = replicationTrigger(r, index);
     if (rv != 0) {
         goto err_after_log_append;
     }

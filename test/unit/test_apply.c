@@ -68,6 +68,27 @@ static void apply_cb(struct raft_apply *req, int status, void *result)
 
 /******************************************************************************
  *
+ * Success scenarios
+ *
+ *****************************************************************************/
+
+TEST_SUITE(success);
+TEST_SETUP(success, setup);
+TEST_TEAR_DOWN(success, tear_down);
+
+/* Append the very first command entry. */
+TEST_CASE(success, first, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+    APPLY(0, 0);
+    CLUSTER_STEP_UNTIL_APPLIED(0, 2, 1000);
+    munit_assert_int(test_fsm_get_x(CLUSTER_FSM(0)), ==, 123);
+    return MUNIT_OK;
+}
+
+/******************************************************************************
+ *
  * Failure scenarios
  *
  *****************************************************************************/

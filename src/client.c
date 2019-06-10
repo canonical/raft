@@ -52,7 +52,7 @@ int raft_apply(struct raft *r,
 
     QUEUE_PUSH(&r->leader_state.requests, &req->queue);
 
-    rv = replicationTrigger(r);
+    rv = replicationTrigger(r, index);
     if (rv != 0) {
         goto err_after_log_append;
     }
@@ -99,7 +99,7 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
 
     QUEUE_PUSH(&r->leader_state.requests, &req->queue);
 
-    rv = replicationTrigger(r);
+    rv = replicationTrigger(r, index);
     if (rv != 0) {
         goto err_after_log_append;
     }
@@ -151,7 +151,7 @@ static int changeConfiguration(
     QUEUE_PUSH(&r->leader_state.requests, &req->queue);
 
     /* Start writing the new log entry to disk and send it to the followers. */
-    rv = replicationTrigger(r);
+    rv = replicationTrigger(r, index);
     if (rv != 0) {
         /* TODO: restore the old next/match indexes and configuration. */
         goto err_after_log_append;
