@@ -20,17 +20,15 @@ int membershipCanChangeConfiguration(struct raft *r);
  * has been submitted. */
 bool membershipUpdateCatchUpRound(struct raft *r);
 
-/**
- * Update the local configuration replacing it with the content of the given
+/* Update the local configuration replacing it with the content of the given
  * RAFT_CHANGE entry, which has just been received in as part of an
  * AppendEntries RPC request. The uncommitted configuration index will be
  * updated accordingly.
  *
- * It must be called only by followers.
- */
-int raft_membership__apply(struct raft *r,
-                           const raft_index index,
-                           const struct raft_entry *entry);
+ * It must be called only by followers. */
+int membershipUncommittedChange(struct raft *r,
+                                const raft_index index,
+                                const struct raft_entry *entry);
 
 /* Rollback any promotion configuration change that was applied locally, but
  * failed to be committed. It must be called by followers after they receive an

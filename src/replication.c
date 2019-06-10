@@ -800,7 +800,7 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
         goto out;
     }
 
-    /* Possibly apply configuration changes. */
+    /* Possibly apply configuration changes as uncommitted. */
     for (j = 0; j < i; j++) {
         struct raft_entry *entry = &args->entries[j];
         raft_index index = request->index + j;
@@ -808,11 +808,8 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
 
         assert(local_term != 0 && local_term == entry->term);
 
-        /* If this is a configuration change entry, check if the change is about
-         * promoting a non-voting server to voting, and in that case update our
-         * configuration cache. */
         if (entry->type == RAFT_CHANGE) {
-            rv = raft_membership__apply(r, index, entry);
+            rv = membershipUncommittedChange(r, index, entry);
             if (rv != 0) {
                 goto out;
             }
@@ -1181,7 +1178,7 @@ int replicationInstallSnapshot(struct raft *r,
     /* If we already have all entries in the snapshot, this is a no-op */
     local_term = logTermOf(&r->log, args->last_index);
     if (local_term != 0 && local_term >= args->last_term) {
-        *rejected= 0;
+        *rejected = 0;
         return 0;
     }
 

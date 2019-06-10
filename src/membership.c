@@ -4,6 +4,7 @@
 #include "configuration.h"
 #include "log.h"
 #include "membership.h"
+#include "progress.h"
 
 int membershipCanChangeConfiguration(struct raft *r)
 {
@@ -91,9 +92,9 @@ bool membershipUpdateCatchUpRound(struct raft *r)
     return false;
 }
 
-int raft_membership__apply(struct raft *r,
-                           const raft_index index,
-                           const struct raft_entry *entry)
+int membershipUncommittedChange(struct raft *r,
+                                const raft_index index,
+                                const struct raft_entry *entry)
 {
     struct raft_configuration configuration;
     int rv;
