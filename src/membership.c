@@ -5,7 +5,7 @@
 #include "log.h"
 #include "membership.h"
 
-int raft_membership__can_change_configuration(struct raft *r)
+int membershipCanChangeConfiguration(struct raft *r)
 {
     int rv;
 

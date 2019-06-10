@@ -1,18 +1,14 @@
-/**
- * Membership-related APIs.
- */
+/* Membership-related APIs. */
 
-#ifndef RAFT_MEMBERSHIP_H
-#define RAFT_MEMBERSHIP_H
+#ifndef MEMBERSHIP_H_
+#define MEMBERSHIP_H_
 
 #include "../include/raft.h"
 
-/**
- * Helper returning an error if the configuration can't be changed, either
+/* Helper returning an error if the configuration can't be changed, either
  * because this node is not the leader or because a configuration change is
- * already in progress.
- */
-int raft_membership__can_change_configuration(struct raft *r);
+ * already in progress. */
+int membershipCanChangeConfiguration(struct raft *r);
 
 /**
  * Update the information about the progress that the non-voting server
@@ -44,4 +40,4 @@ int raft_membership__apply(struct raft *r,
  * from their log. */
 int membershipRollback(struct raft *r);
 
-#endif /* RAFT_MEMBERSHIP_H */
+#endif /* MEMBERSHIP_H_ */
