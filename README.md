@@ -109,7 +109,7 @@ one, since you can grow your cluster at a later point using ```raft_add``` and
 struct raft_configuration configuration;
 raft_configuration_init(&configuration);
 raft_configuration_add(&configuration, 1, "192.168.1.1:9999", true);
-io.bootstrap(&io, &configuration);
+raft_bootstrap(&raft, &configuration);
 ```
 
 Start the raft server:
@@ -137,3 +137,17 @@ Notable users
 -------------
 
 - [dqlite](https://github.com/CanonicalLtd/dqlite)
+
+Credits
+-------
+
+Of course the biggest thanks goes to Diego Ongaro :) (the original author of the
+Raft dissertation)
+
+A lot of ideas and inspiration was taken from other Raft implementations such
+as:
+
+- CoreOS' Go implementation for [etcd](https://github.com/etcd-io/etcd/tree/master/raft)
+- Hashicorp's Go [raft](https://github.com/hashicorp/raft)
+- Willem's [C implementation](https://github.com/willemt/raft)
+- LogCabin's [C++ implementation](https://github.com/logcabin/logcabin)

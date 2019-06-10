@@ -92,7 +92,7 @@ struct raft_server
 };
 
 /**
- * Hold information about all servers part of the cluster.
+ * Hold information about all servers currently part of the cluster.
  */
 struct raft_configuration
 {
@@ -130,18 +130,13 @@ int raft_configuration_add(struct raft_configuration *c,
  * Log entry types.
  */
 enum {
-    RAFT_COMMAND = 1, /* Command for the user FSM */
-    RAFT_BARRIER,     /* Wait for all previous commands to be applied */
-    RAFT_CHANGE       /* Raft configuration change */
+    RAFT_COMMAND = 1, /* Command for the application FSM. */
+    RAFT_BARRIER,     /* Wait for all previous commands to be applied. */
+    RAFT_CHANGE       /* Raft configuration change. */
 };
 
 /**
  * A single entry in the raft log.
- *
- * From Figure 3.1:
- *
- *   Each entry contains [either a] command for the state machine [or a
- *   configuration change], and term when entry was received by the leader.
  *
  * An entry that originated from this raft instance while it was the leader
  * (typically via client calls to raft_apply()) should normaly have a @buf
@@ -151,11 +146,11 @@ enum {
  *
  * An entry that was received from the network as part of an AppendEntries RPC
  * or that was loaded from disk at startup should normally have a @batch
- * attribute that points to a contiguous chunk of memory containing the data of
- * the entry itself plus possibly the data for other entries that were received
- * or loaded with it at the same time. In this case the @buf pointer will be
- * equal to the @batch pointer plus an offset, that locates the position of the
- * entry's data within the batch.
+ * attribute that points to a contiguous chunk of memory that contains the data
+ * of the entry itself plus possibly the data for other entries that were
+ * received or loaded with it at the same time. In this case the @buf pointer
+ * will be equal to the @batch pointer plus an offset, that locates the position
+ * of the entry's data within the batch.
  *
  * When the @batch attribute is not #NULL the raft library will take care of
  * releasing that memory only once there are no more references to the
@@ -173,17 +168,18 @@ struct raft_entry
 };
 
 /**
- * Counter for outstanding references to a log entry. When an entry is first
- * appended to the log, its refcount is set to one (the log itself is the only
- * one referencing the entry). Whenever an entry is included in an I/O request
- * (write entries to disk or send entries to other servers) its refcount is
- * increased by one. Whenever an entry gets deleted from the log its refcount is
- * decreased by one. Likewise, whenever an I/O request is completed the refcount
- * of the relevant entries is decreased by one. When the refcount drops to zero
- * the memory that its @buf attribute points to gets released, or, if the @batch
- * attribute is non-NULL, a check is made to see if all other entries of the
- * same batch also have a zero refcount, and the memory that @batch points to
- * gets released if that's the case.
+ * Counter for outstanding references to a log entry.
+ *
+ * When an entry is first appended to the log, its refcount is set to one (the
+ * log itself is the only one referencing the entry). Whenever an entry is
+ * included in an I/O request (to write it to disk or to send it to other
+ * servers) its refcount is increased by one. Whenever an entry gets deleted
+ * from the log its refcount is decreased by one. Likewise, whenever an I/O
+ * request is completed the refcount of the relevant entries is decreased by
+ * one. When the refcount drops to zero the memory that its @buf attribute
+ * points to gets released, or, if the @batch attribute is non-NULL, a check is
+ * made to see if all other entries of the same batch also have a zero refcount,
+ * and the memory that @batch points to gets released if that's the case.
  */
 struct raft_entry_ref
 {
@@ -216,9 +212,9 @@ struct raft_log
 };
 
 /**
- * Hold the arguments of a RequestVote RPC (figure 3.1).
+ * Hold the arguments of a RequestVote RPC.
  *
- * The RequestVote RPC is invoked by candidates to gather votes (figure 3.1).
+ * The RequestVote RPC is invoked by candidates to gather votes.
  */
 struct raft_request_vote
 {
@@ -229,7 +225,7 @@ struct raft_request_vote
 };
 
 /**
- * Hold the result of a RequestVote RPC (figure 3.1).
+ * Hold the result of a RequestVote RPC.
  */
 struct raft_request_vote_result
 {
@@ -246,7 +242,6 @@ struct raft_request_vote_result
 struct raft_append_entries
 {
     raft_term term;             /* Leader's term. */
-    unsigned leader_id;         /* So follower can redirect clients. */
     raft_index prev_log_index;  /* Index of log entry preceeding new ones. */
     raft_term prev_log_term;    /* Term of entry at prev_log_index. */
     raft_index leader_commit;   /* Leader's commit index. */
@@ -270,7 +265,6 @@ struct raft_append_entries_result
 struct raft_install_snapshot
 {
     raft_term term;                 /* Leader's term. */
-    unsigned leader_id;             /* So follower can redirect clients. */
     raft_index last_index;          /* Index of last entry in the snapshot. */
     raft_term last_term;            /* Term of last_index. */
     struct raft_configuration conf; /* Config as of last_index. */
@@ -379,15 +373,28 @@ struct raft_io_snapshot_get
  */
 enum { RAFT_DEBUG, RAFT_INFO, RAFT_WARN, RAFT_ERROR };
 
+struct raft_io; /* Forward declaration. */
+
+/**
+ * Callback invoked by the I/O implementation at regular intervals.
+ */
+typedef void (*raft_io_tick_cb)(struct raft_io *io);
+
+/**
+ * Callback invoked by the I/O implementation when an RPC message is received.
+ */
+typedef void (*raft_io_recv_cb)(struct raft_io *io, struct raft_message *msg);
+
+/**
+ * Callback invoked by the I/O implementation when the memory of the @io object
+ * can be safely released.
+ */
+typedef void (*raft_io_close_cb)(struct raft_io *io);
+
 /**
  * I/O backend interface implementing periodic ticks, log store read/writes
  * and send/receive of network RPCs.
  */
-struct raft_io;
-typedef void (*raft_io_tick_cb)(struct raft_io *io);
-typedef void (*raft_io_recv_cb)(struct raft_io *io, struct raft_message *msg);
-typedef void (*raft_io_close_cb)(struct raft_io *io);
-
 struct raft_io
 {
     /**
@@ -526,7 +533,7 @@ struct raft_io
     int (*random)(struct raft_io *io, int min, int max);
 
     /**
-     * Emit a log message.
+     * Emit a log message at the given level.
      */
     void (*emit)(struct raft_io *io, int level, const char *format, ...);
 };
@@ -577,12 +584,12 @@ enum { RAFT_UNAVAILABLE, RAFT_FOLLOWER, RAFT_CANDIDATE, RAFT_LEADER };
  */
 struct raft_progress
 {
-    unsigned short state;      /* Probe, pipeline or snapshot */
-    raft_index next_index;     /* Next entry to send */
-    raft_index match_index;    /* Highest applied idx */
-    raft_index snapshot_index; /* Last index of most recent snapshot sent */
-    raft_time last_send;       /* Timestamp of last AppendEntries RPC */
-    bool recent_recv;          /* A msg was received within election timeout */
+    unsigned short state;      /* Probe, pipeline or snapshot. */
+    raft_index next_index;     /* Next entry to send. */
+    raft_index match_index;    /* Highest index reported as replicated. */
+    raft_index snapshot_index; /* Last index of most recent snapshot sent. */
+    raft_time last_send;       /* Timestamp of last AppendEntries RPC. */
+    bool recent_recv;          /* A msg was received within election timeout. */
 };
 
 /**
@@ -601,7 +608,7 @@ struct raft
 {
     void *data;           /* Custom user data. */
     struct raft_io *io;   /* Disk and network I/O implementation. */
-    struct raft_fsm *fsm; /* User-defined FSM to apply command to. */
+    struct raft_fsm *fsm; /* User-defined FSM to apply commands to. */
     unsigned id;          /* Server ID of this raft instance. */
     char *address;        /* Server address of this raft instance. */
 
@@ -755,13 +762,17 @@ int raft_init(struct raft *r,
               const char *address);
 
 /**
- * Close a raft instance, deallocating all used resources.
+ * Close a raft instance, releasing all used resources.
+ *
+ * The memory of instance itself can be released only once the given callback
+ * has been invoked.
  */
 void raft_close(struct raft *r, raft_close_cb cb);
 
 /**
  * Bootstrap this raft instance using the given configuration. The instance must
- * not have been started yet and must be completely pristine.
+ * not have been started yet and must be completely pristine, otherwise an error
+ * is returned.
  */
 int raft_bootstrap(struct raft *r, const struct raft_configuration *conf);
 
@@ -820,11 +831,6 @@ int raft_state(struct raft *r);
  * Return the ID and address of the current known leader, if any.
  */
 void raft_leader(struct raft *r, unsigned *id, const char **address);
-
-/**
- * Return the index of the last entry that was appended to the local log.
- */
-raft_index raft_last_index(struct raft *r);
 
 /**
  * Return the index of the last entry that was applied to the local FSM.

@@ -88,7 +88,6 @@ static int sendAppendEntries(struct raft *r,
     int rv;
 
     args->term = r->current_term;
-    args->leader_id = r->id;
     args->prev_log_index = prev_index;
     args->prev_log_term = prev_term;
 
@@ -225,7 +224,6 @@ static void sendSnapshotGetCb(struct raft_io_snapshot_get *get,
     message.server_address = server->address;
 
     args->term = r->current_term;
-    args->leader_id = r->id;
     args->last_index = snapshot->index;
     args->last_term = snapshot->term;
     args->conf_index = snapshot->configuration_index;
@@ -777,7 +775,6 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
 
     tracef("I/O completed on follower: status %d", status);
 
-    assert(args->leader_id > 0);
     assert(args->entries != NULL);
     assert(args->n_entries > 0);
 
@@ -789,6 +786,12 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
         }
         result.rejected = args->prev_log_index + 1;
         goto respond;
+    }
+
+    /* If we're shutting down or have errored, ignore the result. */
+    if (r->state == RAFT_UNAVAILABLE) {
+            tracef("local server is unavailable -> ignore I/O result");
+            goto out;
     }
 
     i = updateLastStored(r, request->index, args->entries, args->n_entries);
