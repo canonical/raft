@@ -10,17 +10,15 @@
  * already in progress. */
 int membershipCanChangeConfiguration(struct raft *r);
 
-/**
- * Update the information about the progress that the non-voting server
+/* Update the information about the progress that the non-voting server
  * currently being promoted is making in catching with logs.
  *
  * Return false if the server being promoted did not yet catch-up with logs, and
  * true if it did.
  *
  * This function must be called only by leaders after a @raft_promote request
- * has been submitted.
- */
-bool raft_membership__update_catch_up_round(struct raft *r);
+ * has been submitted. */
+bool membershipUpdateCatchUpRound(struct raft *r);
 
 /**
  * Update the local configuration replacing it with the content of the given

@@ -696,7 +696,7 @@ int replicationUpdate(struct raft *r,
     is_being_promoted = r->leader_state.promotee_id != 0 &&
                         r->leader_state.promotee_id == server->id;
     if (is_being_promoted) {
-        int is_up_to_date = raft_membership__update_catch_up_round(r);
+        bool is_up_to_date = membershipUpdateCatchUpRound(r);
         if (is_up_to_date) {
             rv = triggerActualPromotion(r);
             if (rv != 0) {

@@ -1,7 +1,6 @@
 #include "../include/raft.h"
 
 #include "assert.h"
-#include "request.h"
 #include "configuration.h"
 #include "log.h"
 #include "logging.h"
@@ -9,6 +8,7 @@
 #include "progress.h"
 #include "queue.h"
 #include "replication.h"
+#include "request.h"
 
 /* Set to 1 to enable tracing. */
 #if 0
@@ -115,10 +115,9 @@ err:
     return rv;
 }
 
-static int changeConfiguration(
-    struct raft *r,
-    struct raft_change *req,
-    const struct raft_configuration *configuration)
+static int changeConfiguration(struct raft *r,
+                               struct raft_change *req,
+                               const struct raft_configuration *configuration)
 {
     raft_index index;
     raft_term term = r->current_term;
@@ -254,9 +253,9 @@ int raft_promote(struct raft *r,
     assert(r->leader_state.change == NULL);
     r->leader_state.change = req;
 
-    if (r->leader_state.progress[server_index].match_index == last_index) {
-        /* The log of this non-voting server is already up-to-date, so we can
-         * ask its promotion immediately. */
+    /* If the log of this non-voting server is already up-to-date, we can ask
+     * its promotion immediately. */
+    if (progressMatchIndex(r, server_index) == last_index) {
         r->configuration.servers[server_index].voting = true;
 
         rv = changeConfiguration(r, req, &r->configuration);

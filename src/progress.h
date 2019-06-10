@@ -37,6 +37,10 @@ bool progressShouldReplicate(struct raft *r, unsigned i);
 /* Return the index of the next entry that should be sent to the i'th server. */
 raft_index progressNextIndex(struct raft *r, unsigned i);
 
+/* Return the index of the most recent entry that the i'th server has reported
+ * as replicated. */
+raft_index progressMatchIndex(struct raft *r, unsigned i);
+
 /* Update the last_send timestamp after an AppendEntries request has been
  * sent. */
 void progressUpdateLastSend(struct raft *r, unsigned i);
