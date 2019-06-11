@@ -119,7 +119,6 @@ TEST_CASE(success, first, NULL)
     munit_assert_int(f->invoked, ==, 1);
     munit_assert_ptr_not_null(f->message);
 
-    munit_assert_int(f->message->type, ==, RAFT_IO_REQUEST_VOTE);
     munit_assert_int(f->message->request_vote.term, ==, 3);
     munit_assert_int(f->message->request_vote.candidate_id, ==, 2);
     munit_assert_int(f->message->request_vote.last_log_index, ==, 123);
@@ -162,7 +161,6 @@ TEST_CASE(success, request_vote_result, NULL)
 
     LOOP_RUN(2);
 
-    munit_assert_int(f->message->type, ==, RAFT_IO_REQUEST_VOTE_RESULT);
     munit_assert_int(f->message->request_vote_result.term, ==, 3);
     munit_assert_true(f->message->request_vote_result.vote_granted);
 
@@ -200,7 +198,6 @@ TEST_CASE(success, append_entries, NULL)
     munit_assert_int(f->invoked, ==, 1);
     munit_assert_ptr_not_null(f->message);
 
-    munit_assert_int(f->message->type, ==, RAFT_IO_APPEND_ENTRIES);
     munit_assert_int(f->message->append_entries.n_entries, ==, 2);
 
     munit_assert_string_equal(f->message->append_entries.entries[0].buf.base,
@@ -252,8 +249,6 @@ TEST_CASE(success, append_entries_result, NULL)
 
     LOOP_RUN(2);
 
-    munit_assert_int(f->message->type, ==, RAFT_IO_APPEND_ENTRIES_RESULT);
-
     munit_assert_int(f->message->append_entries_result.term, ==, 3);
     munit_assert_int(f->message->append_entries_result.rejected, ==, 0);
     munit_assert_int(f->message->append_entries_result.last_log_index, ==, 123);
@@ -288,7 +283,6 @@ TEST_CASE(success, install_snapshot, NULL)
     munit_assert_int(f->invoked, ==, 1);
     munit_assert_ptr_not_null(f->message);
 
-    munit_assert_int(f->message->type, ==, RAFT_IO_INSTALL_SNAPSHOT);
     munit_assert_int(f->message->install_snapshot.conf.n, ==, 1);
     munit_assert_int(f->message->install_snapshot.conf.servers[0].id, ==, 1);
     munit_assert_string_equal(

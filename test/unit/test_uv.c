@@ -325,7 +325,6 @@ TEST_CASE(start, recv, NULL)
     LOOP_RUN(2);
 
     munit_assert_true(f->recv_cb.invoked);
-    munit_assert_int(f->recv_cb.message->type, ==, RAFT_IO_REQUEST_VOTE);
     munit_assert_int(f->recv_cb.message->server_id, ==, 2);
     munit_assert_string_equal(f->recv_cb.message->server_address,
                               "127.0.0.1:66");

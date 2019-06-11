@@ -80,6 +80,7 @@ static int initServer(struct uvServer *s,
     s->preamble[1] = 0;
     s->header.base = NULL;
     s->header.len = 0;
+    s->message.type = 0;
     s->payload.base = NULL;
     s->payload.len = 0;
     return 0;
@@ -90,9 +91,6 @@ static void closeServer(struct uvServer *s)
     if (s->header.base != NULL) {
         /* This means we were interrupted while reading the header. */
         raft_free(s->header.base);
-    }
-    if (s->payload.base != NULL) {
-        /* This means we were interrupted while reading the payload. */
         switch (s->message.type) {
             case RAFT_IO_APPEND_ENTRIES:
                 raft_free(s->message.append_entries.entries);
@@ -101,6 +99,9 @@ static void closeServer(struct uvServer *s)
                 raft_configuration_close(&s->message.install_snapshot.conf);
                 break;
         }
+    }
+    if (s->payload.base != NULL) {
+        /* This means we were interrupted while reading the payload. */
         raft_free(s->payload.base);
     }
     raft_free(s->address);
@@ -207,6 +208,7 @@ static void recvMessage(struct uvServer *s)
      * user. */
     memset(s->preamble, 0, sizeof s->preamble);
     raft_free(s->header.base);
+    s->message.type = 0;
     s->header.base = NULL;
     s->header.len = 0;
     s->payload.base = NULL;
