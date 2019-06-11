@@ -61,10 +61,10 @@ static void copyAddress(const char *address1, char **address2)
 /* Initialize a new server object for reading requests from an incoming
  * connection. */
 static int initServer(struct uvServer *s,
-                       struct uv *uv,
-                       const unsigned id,
-                       const char *address,
-                       struct uv_stream_s *stream)
+                      struct uv *uv,
+                      const unsigned id,
+                      const char *address,
+                      struct uv_stream_s *stream)
 {
     s->uv = uv;
     s->id = id;
@@ -323,7 +323,9 @@ static void readCb(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
      * with a goto and never reach this point. */
     assert(nread < 0);
 
-    warnf(s->uv->io, "receive data: %s", uv_strerror(nread));
+    if (nread != UV_EOF) {
+        warnf(s->uv->io, "receive data: %s", uv_strerror(nread));
+    }
 
 abort:
     removeServer(s);
@@ -345,9 +347,9 @@ static int startServer(struct uvServer *s)
 }
 
 static int addServer(struct uv *uv,
-                      unsigned id,
-                      const char *address,
-                      struct uv_stream_s *stream)
+                     unsigned id,
+                     const char *address,
+                     struct uv_stream_s *stream)
 {
     struct uvServer **servers;
     struct uvServer *s;

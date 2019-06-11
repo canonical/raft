@@ -204,7 +204,7 @@ static int serverInit(struct server *s, const char *dir, unsigned id)
             goto errAfterRaftInit;
         }
     }
-    rv = s->io.bootstrap(&s->io, &configuration);
+    rv = raft_bootstrap(&s->raft, &configuration);
     if (rv != 0 && rv != RAFT_CANTBOOTSTRAP) {
         goto errAfterConfigurationInit;
     }
@@ -252,8 +252,10 @@ static void applyCb(struct raft_apply *req, int status, void *result)
     int count;
     raft_free(req);
     if (status != 0) {
-        s->io.emit(&s->io, RAFT_WARN, "fsm: apply error: %s",
-                   raft_strerror(status));
+        if (status != RAFT_LEADERSHIPLOST) {
+            s->io.emit(&s->io, RAFT_WARN, "fsm: apply error: %s",
+                       raft_strerror(status));
+        }
         return;
     }
     count = *(int *)result;

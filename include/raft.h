@@ -536,6 +536,11 @@ struct raft_io
      * Emit a log message at the given level.
      */
     void (*emit)(struct raft_io *io, int level, const char *format, ...);
+
+    /**
+     * Set the logging level.
+     */
+    void (*set_level)(struct raft_io *io, int level);
 };
 
 /**
@@ -821,6 +826,12 @@ void raft_set_snapshot_threshold(struct raft *r, unsigned n);
  * few entries. The default is 128.
  */
 void raft_set_snapshot_trailing(struct raft *r, unsigned n);
+
+/**
+ * Set the logging level. Only messages with at this level or above will be
+ * emitted.
+ */
+void raft_set_log_level(struct raft *r, unsigned level);
 
 /**
  * Return the code of the current raft state.

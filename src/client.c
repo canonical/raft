@@ -278,8 +278,8 @@ int raft_promote(struct raft *r,
     rv = replicationProgress(r, server_index);
     if (rv != 0 && rv != RAFT_NOCONNECTION) {
         /* This error is not fatal. */
-        warnf(r->io, "failed to send append entries to server %ld: %s (%d)",
-              server->id, raft_strerror(rv), rv);
+        debugf(r->io, "failed to send append entries to server %ld: %s (%d)",
+               server->id, raft_strerror(rv), rv);
     }
 
     return 0;

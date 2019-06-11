@@ -49,8 +49,8 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
 
     if (r->state == RAFT_LEADER && i < r->configuration.n) {
         if (status != 0) {
-            warnf(r->io, "failed to send append entries to server %ld: %s",
-                  req->server_id, raft_strerror(status));
+            debugf(r->io, "failed to send append entries to server %ld: %s",
+                   req->server_id, raft_strerror(status));
             /* Go back to probe mode. */
             progressToProbe(r, i);
         } else {
@@ -168,7 +168,7 @@ static void sendInstallSnapshotCb(struct raft_io_send *send, int status)
     server = configurationGet(&r->configuration, req->server_id);
 
     if (status != 0) {
-        errorf(r->io, "send install snapshot: %s", raft_strerror(status));
+        debugf(r->io, "send install snapshot: %s", raft_strerror(status));
         if (r->state == RAFT_LEADER && server != NULL) {
             unsigned i;
             i = configurationIndexOf(&r->configuration, req->server_id);
@@ -233,8 +233,8 @@ static void sendSnapshotGetCb(struct raft_io_snapshot_get *get,
     req->snapshot = snapshot;
     req->send.data = req;
 
-    infof(r->io, "sending snapshot with last index %ld to %ld", snapshot->index,
-          server->id);
+    debugf(r->io, "sending snapshot with last index %ld to %ld",
+           snapshot->index, server->id);
 
     rv = r->io->send(r->io, &req->send, &message, sendInstallSnapshotCb);
     if (rv != 0) {
@@ -375,8 +375,9 @@ static int triggerAll(struct raft *r)
         rv = replicationProgress(r, i);
         if (rv != 0 && rv != RAFT_NOCONNECTION) {
             /* This is not a critical failure, let's just log it. */
-            warnf(r->io, "failed to send append entries to server %ld: %s (%d)",
-                  server->id, raft_strerror(rv), rv);
+            debugf(r->io,
+                   "failed to send append entries to server %ld: %s (%d)",
+                   server->id, raft_strerror(rv), rv);
         }
     }
 
@@ -790,8 +791,8 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
 
     /* If we're shutting down or have errored, ignore the result. */
     if (r->state == RAFT_UNAVAILABLE) {
-            tracef("local server is unavailable -> ignore I/O result");
-            goto out;
+        tracef("local server is unavailable -> ignore I/O result");
+        goto out;
     }
 
     i = updateLastStored(r, request->index, args->entries, args->n_entries);
