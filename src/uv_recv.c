@@ -250,7 +250,7 @@ static void readCb(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
 
             /* The length of the header must be greater than zero. */
             if (s->header.len == 0) {
-                warnf(s->uv->io, "message has zero length");
+                uvWarnf(s->uv, "message has zero length");
                 goto abort;
             }
         } else if (s->payload.len == 0) {
@@ -266,7 +266,7 @@ static void readCb(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
             rv =
                 uvDecodeMessage(type, &s->header, &s->message, &s->payload.len);
             if (rv != 0) {
-                warnf(s->uv->io, "decode message: %s", raft_strerror(rv));
+                uvWarnf(s->uv, "decode message: %s", raft_strerror(rv));
                 goto abort;
             }
 
@@ -326,7 +326,7 @@ static void readCb(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
     assert(nread < 0);
 
     if (nread != UV_EOF) {
-        warnf(s->uv->io, "receive data: %s", uv_strerror(nread));
+        uvWarnf(s->uv, "receive data: %s", uv_strerror(nread));
     }
 
 abort:
@@ -341,7 +341,7 @@ static int startServer(struct uvServer *s)
 
     rv = uv_read_start(s->stream, allocCb, readCb);
     if (rv != 0) {
-        warnf(s->uv->io, "start reading: %s", uv_strerror(rv));
+        uvWarnf(s->uv, "start reading: %s", uv_strerror(rv));
         return RAFT_IOERR;
     }
 
@@ -417,7 +417,7 @@ static void acceptCb(struct raft_uv_transport *transport,
 
     rv = addServer(uv, id, address, stream);
     if (rv != 0) {
-        warnf(uv->io, "add server: %s", raft_strerror(rv));
+        uvWarnf(uv, "add server: %s", raft_strerror(rv));
         goto abort;
     }
 
