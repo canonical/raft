@@ -939,21 +939,23 @@ void ioClose(struct raft_io *io)
 
 static int serverInit(struct raft_fixture *f, unsigned i, struct raft_fsm *fsm)
 {
-    int rc;
+    int rv;
     struct raft_fixture_server *s = &f->servers[i];
     s->alive = true;
     s->id = i + 1;
     sprintf(s->address, "%u", s->id);
-    rc = ioInit(&s->io, i, &f->time);
-    if (rc != 0) {
-        return rc;
+    rv = ioInit(&s->io, i, &f->time);
+    if (rv != 0) {
+        return rv;
     }
-    rc = raft_init(&s->raft, &s->io, fsm, NULL, s->id, s->address);
-    if (rc != 0) {
-        return rc;
+    rv = raft_init(&s->raft, &s->io, fsm, &s->logger, s->id, s->address);
+    if (rv != 0) {
+        return rv;
     }
     raft_set_election_timeout(&s->raft, ELECTION_TIMEOUT);
     raft_set_heartbeat_timeout(&s->raft, HEARTBEAT_TIMEOUT);
+    rv = raft_default_logger_init(&s->logger);
+    assert(rv == 0);
     return 0;
 }
 
