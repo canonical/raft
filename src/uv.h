@@ -44,6 +44,7 @@ struct uv
     struct uv_loop_s *loop;              /* UV event loop */
     osDir dir;                           /* Data directory */
     struct raft_uv_transport *transport; /* Network transport */
+    struct raft_logger *logger;          /* Logger implementation */
     unsigned id;                         /* Server ID */
     int state;                           /* Current state */
     bool errored;                        /* If a disk I/O error was hit */

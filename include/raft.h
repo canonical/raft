@@ -447,7 +447,10 @@ struct raft_io
     /**
      * Initialize the backend.
      */
-    int (*init)(struct raft_io *io, unsigned id, const char *address);
+    int (*init)(struct raft_io *io,
+                struct raft_logger *logger,
+                unsigned id,
+                const char *address);
 
     /**
      * Read persisted state from storage.

@@ -20,6 +20,7 @@
     struct test_tcp tcp;                \
     struct uv_loop_s loop;              \
     char *dir;                          \
+    struct raft_logger logger;          \
     struct raft_uv_transport transport; \
     struct raft_io io;                  \
     struct uv *uv;                      \
@@ -38,7 +39,9 @@
         rv__ = raft_uv_init(&f->io, &f->loop, f->dir, &f->transport); \
         munit_assert_int(rv__, ==, 0);                                \
         f->io.data = f;                                               \
-        rv__ = f->io.init(&f->io, 1, "127.0.0.1:9000");               \
+        rv__ = raft_default_logger_init(&f->logger);                  \
+        munit_assert_int(rv__, ==, 0);                                \
+        rv__ = f->io.init(&f->io, &f->logger, 1, "127.0.0.1:9000");   \
         munit_assert_int(rv__, ==, 0);                                \
         f->uv = f->io.impl;                                           \
         f->closed = false;                                            \
@@ -106,7 +109,7 @@
             entry_->buf.len = sizeof(uint64_t);                     \
             entry_->buf.base = munit_malloc(entry_->buf.len);       \
             cursor_ = entry_->buf.base;                             \
-            bytePut64(&cursor_, DATA + i_); /* Entry data */      \
+            bytePut64(&cursor_, DATA + i_); /* Entry data */        \
         }                                                           \
                                                                     \
         rv_ = uvSegmentBufferAppend(&buf_, entries_, N);            \

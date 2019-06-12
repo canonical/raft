@@ -60,7 +60,7 @@ int raft_init(struct raft *r,
     r->snapshot.trailing = DEFAULT_SNAPSHOT_TRAILING;
     r->snapshot.put.data = NULL;
     r->close_cb = NULL;
-    rv = r->io->init(r->io, r->id, r->address);
+    rv = r->io->init(r->io, r->logger, r->id, r->address);
     if (rv != 0) {
         return rv;
     }

@@ -22,12 +22,18 @@
 #define CONNECT_RETRY_DELAY 1000
 
 /* Implementation of raft_io->init. */
-static int uvInit(struct raft_io *io, unsigned id, const char *address)
+static int uvInit(struct raft_io *io,
+                  struct raft_logger *logger,
+                  unsigned id,
+                  const char *address)
 {
     struct uv *uv;
     size_t direct_io;
     int rv;
+
     uv = io->impl;
+
+    uv->logger = logger;
 
     /* Ensure that the data directory exists and is accessible */
     rv = osEnsureDir(uv->dir);

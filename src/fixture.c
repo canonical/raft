@@ -217,10 +217,12 @@ static bool ioFaultTick(struct io *io)
 }
 
 static int ioMethodInit(struct raft_io *raft_io,
+			struct raft_logger *logger,
                         unsigned id,
                         const char *address)
 {
     struct io *io = raft_io->impl;
+    (void)logger;
     io->id = id;
     io->address = address;
     return 0;
