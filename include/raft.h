@@ -865,7 +865,7 @@ void raft_set_snapshot_trailing(struct raft *r, unsigned n);
  * Set the logging level. Only messages with at this level or above will be
  * emitted.
  */
-void raft_set_log_level(struct raft *r, unsigned level);
+void raft_set_logger_level(struct raft *r, unsigned level);
 
 /**
  * Return the code of the current raft state.
