@@ -104,6 +104,11 @@ struct server
     struct raft raft;                   /* Raft instance. */
 };
 
+/* Convenience to emit a message. */
+#define emitf(S, LEVEL, FORMAT, ...)                                     \
+    S->logger.emit(&S->logger, LEVEL, S->id, S->io.time(&S->io), FORMAT, \
+                   ##__VA_ARGS__);
+
 /* Final callback in the shutdown sequence, invoked after the timer handle has
  * been closed. */
 static void timerCloseCb(struct uv_handle_s *handle)
@@ -125,7 +130,7 @@ static void sigintCb(struct uv_signal_s *handle, int signum)
 {
     struct server *s = handle->data;
     assert(signum == SIGINT);
-    s->io.emit(&s->io, RAFT_INFO, "server: stopping");
+    emitf(s, RAFT_INFO, "server: stopping");
     uv_signal_stop(handle);
     uv_close((uv_handle_t *)handle, sigintCloseCb);
 }
@@ -186,6 +191,9 @@ static int serverInit(struct server *s, const char *dir, unsigned id)
 
     /* Initialize the default logger. */
     raft_default_logger_init(&s->logger);
+
+    /* Save the server ID. */
+    s->id = id;
 
     /* Render the address. */
     sprintf(s->address, "127.0.0.1:900%d", id);
@@ -257,14 +265,13 @@ static void applyCb(struct raft_apply *req, int status, void *result)
     raft_free(req);
     if (status != 0) {
         if (status != RAFT_LEADERSHIPLOST) {
-            s->io.emit(&s->io, RAFT_WARN, "fsm: apply error: %s",
-                       raft_strerror(status));
+            emitf(s, RAFT_WARN, "fsm: apply error: %s", raft_strerror(status));
         }
         return;
     }
     count = *(int *)result;
     if (count % 100 == 0) {
-        s->io.emit(&s->io, RAFT_INFO, "fsm: count %d", count);
+        emitf(s, RAFT_INFO, "fsm: count %d", count);
     }
 }
 
@@ -283,7 +290,7 @@ static void timerCb(uv_timer_t *timer)
     buf.len = sizeof(uint64_t);
     buf.base = raft_malloc(buf.len);
     if (buf.base == NULL) {
-        s->io.emit(&s->io, RAFT_ERROR, "fsm: out of memory");
+        emitf(s, RAFT_ERROR, "fsm: out of memory");
         return;
     }
 
@@ -291,14 +298,14 @@ static void timerCb(uv_timer_t *timer)
 
     req = raft_malloc(sizeof *req);
     if (req == NULL) {
-        s->io.emit(&s->io, RAFT_ERROR, "fsm: out of memory");
+        emitf(s, RAFT_ERROR, "fsm: out of memory");
         return;
     }
     req->data = s;
 
     rv = raft_apply(&s->raft, req, &buf, 1, applyCb);
     if (rv != 0) {
-        s->io.emit(&s->io, RAFT_ERROR, "fsm: apply: %s", raft_strerror(rv));
+        emitf(s, RAFT_ERROR, "fsm: apply: %s", raft_strerror(rv));
         return;
     }
 }
