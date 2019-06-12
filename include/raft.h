@@ -571,11 +571,6 @@ struct raft_io
      * Emit a log message at the given level.
      */
     void (*emit)(struct raft_io *io, int level, const char *format, ...);
-
-    /**
-     * Set the logging level.
-     */
-    void (*set_level)(struct raft_io *io, int level);
 };
 
 /**

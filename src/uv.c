@@ -420,14 +420,6 @@ static void uvEmit(struct raft_io *io, int level, const char *format, ...)
     va_end(args);
 }
 
-/* Implementation of raft_io->set_level. */
-static void uvSetLevel(struct raft_io *io, int level)
-{
-    struct uv *uv;
-    uv = io->impl;
-    uv->log_level = level;
-}
-
 int raft_uv_init(struct raft_io *io,
                  struct uv_loop_s *loop,
                  const char *dir,
@@ -502,7 +494,6 @@ int raft_uv_init(struct raft_io *io,
     io->time = uvTime;
     io->random = uvRandom;
     io->emit = uvEmit;
-    io->set_level = uvSetLevel;
 
     return 0;
 }

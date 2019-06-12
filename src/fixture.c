@@ -736,8 +736,6 @@ static void ioMethodEmit(struct raft_io *raft_io,
     va_end(args);
 }
 
-static void ioMethodSetLevel(struct raft_io *raft_io, int level) {}
-
 /* Queue up a request which will be processed later, when io_stub_flush()
  * is invoked. */
 static int ioMethodSend(struct raft_io *raft_io,
@@ -928,7 +926,6 @@ static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
     raft_io->time = ioMethodTime;
     raft_io->random = ioMethodRandom;
     raft_io->emit = ioMethodEmit;
-    raft_io->set_level = ioMethodSetLevel;
 
     return 0;
 }
