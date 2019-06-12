@@ -24,6 +24,7 @@ struct raft_fixture_server
     bool alive;
     unsigned id;
     char address[8];
+    struct raft_logger logger;
     struct raft_io io;
     struct raft raft;
 };

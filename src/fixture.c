@@ -217,10 +217,12 @@ static bool ioFaultTick(struct io *io)
 }
 
 static int ioMethodInit(struct raft_io *raft_io,
+			struct raft_logger *logger,
                         unsigned id,
                         const char *address)
 {
     struct io *io = raft_io->impl;
+    (void)logger;
     io->id = id;
     io->address = address;
     return 0;
@@ -722,20 +724,6 @@ static int ioMethodRandom(struct raft_io *raft_io, int min, int max)
     return io->randomized_election_timeout;
 }
 
-static void ioMethodEmit(struct raft_io *raft_io,
-                         int level,
-                         const char *format,
-                         ...)
-{
-    struct io *io = raft_io->impl;
-    va_list args;
-    va_start(args, format);
-    emitToStream(stderr, io->id, *io->time, level, format, args);
-    va_end(args);
-}
-
-static void ioMethodSetLevel(struct raft_io *raft_io, int level) {}
-
 /* Queue up a request which will be processed later, when io_stub_flush()
  * is invoked. */
 static int ioMethodSend(struct raft_io *raft_io,
@@ -925,8 +913,6 @@ static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
     raft_io->snapshot_get = ioMethodSnapshotGet;
     raft_io->time = ioMethodTime;
     raft_io->random = ioMethodRandom;
-    raft_io->emit = ioMethodEmit;
-    raft_io->set_level = ioMethodSetLevel;
 
     return 0;
 }
@@ -939,21 +925,23 @@ void ioClose(struct raft_io *io)
 
 static int serverInit(struct raft_fixture *f, unsigned i, struct raft_fsm *fsm)
 {
-    int rc;
+    int rv;
     struct raft_fixture_server *s = &f->servers[i];
     s->alive = true;
     s->id = i + 1;
     sprintf(s->address, "%u", s->id);
-    rc = ioInit(&s->io, i, &f->time);
-    if (rc != 0) {
-        return rc;
+    rv = ioInit(&s->io, i, &f->time);
+    if (rv != 0) {
+        return rv;
     }
-    rc = raft_init(&s->raft, &s->io, fsm, s->id, s->address);
-    if (rc != 0) {
-        return rc;
+    rv = raft_init(&s->raft, &s->io, fsm, &s->logger, s->id, s->address);
+    if (rv != 0) {
+        return rv;
     }
     raft_set_election_timeout(&s->raft, ELECTION_TIMEOUT);
     raft_set_heartbeat_timeout(&s->raft, HEARTBEAT_TIMEOUT);
+    rv = raft_default_logger_init(&s->logger);
+    assert(rv == 0);
     return 0;
 }
 

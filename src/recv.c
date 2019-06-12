@@ -17,7 +17,7 @@ static const char *message_descs[] = {"append entries", "append entries result",
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(MSG, ...) debugf(r->io, "recv: " MSG, ##__VA_ARGS__)
+#define tracef(MSG, ...) debugf(r, "recv: " MSG, ##__VA_ARGS__)
 #else
 #define tracef(MSG, ...)
 #endif
@@ -29,7 +29,7 @@ static int recv(struct raft *r, struct raft_message *message)
 
     if (message->type < RAFT_IO_APPEND_ENTRIES ||
         message->type > RAFT_IO_INSTALL_SNAPSHOT) {
-        warnf(r->io, "received unknown message type type: %d", message->type);
+        warnf(r, "received unknown message type type: %d", message->type);
         return 0;
     }
 
@@ -68,7 +68,7 @@ static int recv(struct raft *r, struct raft_message *message)
     };
 
     if (rv != 0 && rv != RAFT_NOCONNECTION) {
-        errorf(r->io, "recv: %s: %s", message_descs[message->type - 1],
+        errorf(r, "recv: %s: %s", message_descs[message->type - 1],
                raft_strerror(rv));
         return rv;
     }

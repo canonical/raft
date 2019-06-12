@@ -5,6 +5,32 @@
 
 #define EMIT_BUF_LEN 1024
 
+static void defaultEmit(struct raft_logger *l,
+                        int level,
+                        unsigned server_id,
+                        raft_time time,
+                        const char *format,
+                        ...)
+{
+    va_list args;
+
+    if (level < l->level) {
+        return;
+    }
+
+    va_start(args, format);
+    emitToStream(stderr, server_id, time, level, format, args);
+    va_end(args);
+}
+
+int raft_default_logger_init(struct raft_logger *l)
+{
+    l->impl = NULL;
+    l->level = RAFT_INFO;
+    l->emit = defaultEmit;
+    return 0;
+}
+
 void emitToStream(FILE *stream,
                   unsigned server_id,
                   raft_time time,

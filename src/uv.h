@@ -44,6 +44,7 @@ struct uv
     struct uv_loop_s *loop;              /* UV event loop */
     osDir dir;                           /* Data directory */
     struct raft_uv_transport *transport; /* Network transport */
+    struct raft_logger *logger;          /* Logger implementation */
     unsigned id;                         /* Server ID */
     int state;                           /* Current state */
     bool errored;                        /* If a disk I/O error was hit */
@@ -82,10 +83,13 @@ struct uv
 };
 
 /* Emit a log message with a certain level. */
-#define uvDebugf(UV, F, ...) UV->io->emit(UV->io, RAFT_DEBUG, F, ##__VA_ARGS__);
-#define uvInfof(UV, F, ...) UV->io->emit(UV->io, RAFT_INFO, F, ##__VA_ARGS__);
-#define uvWarnf(UV, F, ...) UV->io->emit(UV->io, RAFT_WARN, F, ##__VA_ARGS__);
-#define uvErrorf(UV, F, ...) UV->io->emit(UV->io, RAFT_ERROR, F, ##__VA_ARGS__);
+#define uvEmitf(UV, LEVEL, FORMAT, ...)                                       \
+    UV->logger->emit(UV->logger, LEVEL, UV->id, UV->io->time(UV->io), FORMAT, \
+                     ##__VA_ARGS__);
+#define uvDebugf(UV, F, ...) uvEmitf(UV, RAFT_DEBUG, F, ##__VA_ARGS__);
+#define uvInfof(UV, F, ...) uvEmitf(UV, RAFT_DEBUG, F, ##__VA_ARGS__);
+#define uvWarnf(UV, F, ...) uvEmitf(UV, RAFT_WARN, F, ##__VA_ARGS__);
+#define uvErrorf(UV, F, ...) uvEmitf(UV, RAFT_ERROR, F, ##__VA_ARGS__);
 
 /* Load Raft metadata from disk, choosing the most recent version (either the
  * metadata1 or metadata2 file). */

@@ -30,7 +30,7 @@ int snapshotRestore(struct raft *r, struct raft_snapshot *snapshot)
 
     rv = r->fsm->restore(r->fsm, &snapshot->bufs[0]);
     if (rv != 0) {
-        errorf(r->io, "restore snapshot %d: %s", snapshot->index,
+        errorf(r, "restore snapshot %d: %s", snapshot->index,
                raft_strerror(rv));
         return rv;
     }

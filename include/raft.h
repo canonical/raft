@@ -369,6 +369,38 @@ struct raft_io_snapshot_get
 };
 
 /**
+ * Logger interface.
+ */
+struct raft_logger
+{
+    /**
+     * Implementation-defined state object.
+     */
+    void *impl;
+
+    /**
+     * Emit only messages at this level or above.
+     */
+    int level;
+
+    /**
+     * Emit a single message at the given level. The implementation should honor
+     * the level set on the logger.
+     */
+    void (*emit)(struct raft_logger *l,
+                 int level,
+                 unsigned server_id,
+                 raft_time time,
+                 const char *format,
+                 ...);
+};
+
+/**
+ * Default implementation of the logger interface, emitting messages to stdout.
+ */
+int raft_default_logger_init(struct raft_logger *l);
+
+/**
  * Logging levels.
  */
 enum { RAFT_DEBUG, RAFT_INFO, RAFT_WARN, RAFT_ERROR };
@@ -415,7 +447,10 @@ struct raft_io
     /**
      * Initialize the backend.
      */
-    int (*init)(struct raft_io *io, unsigned id, const char *address);
+    int (*init)(struct raft_io *io,
+                struct raft_logger *logger,
+                unsigned id,
+                const char *address);
 
     /**
      * Read persisted state from storage.
@@ -531,16 +566,6 @@ struct raft_io
      * Generate a random integer between min and max.
      */
     int (*random)(struct raft_io *io, int min, int max);
-
-    /**
-     * Emit a log message at the given level.
-     */
-    void (*emit)(struct raft_io *io, int level, const char *format, ...);
-
-    /**
-     * Set the logging level.
-     */
-    void (*set_level)(struct raft_io *io, int level);
 };
 
 /**
@@ -611,11 +636,12 @@ typedef void (*raft_close_cb)(struct raft *raft);
  */
 struct raft
 {
-    void *data;           /* Custom user data. */
-    struct raft_io *io;   /* Disk and network I/O implementation. */
-    struct raft_fsm *fsm; /* User-defined FSM to apply commands to. */
-    unsigned id;          /* Server ID of this raft instance. */
-    char *address;        /* Server address of this raft instance. */
+    void *data;                 /* Custom user data. */
+    struct raft_logger *logger; /* Logging implementation. */
+    struct raft_io *io;         /* Disk and network I/O implementation. */
+    struct raft_fsm *fsm;       /* User-defined FSM to apply commands to. */
+    unsigned id;                /* Server ID of this raft instance. */
+    char *address;              /* Server address of this raft instance. */
 
     /*
      * Cache of the server's persistent state, updated on stable storage before
@@ -763,6 +789,7 @@ struct raft
 int raft_init(struct raft *r,
               struct raft_io *io,
               struct raft_fsm *fsm,
+              struct raft_logger *logger,
               unsigned id,
               const char *address);
 
@@ -831,7 +858,7 @@ void raft_set_snapshot_trailing(struct raft *r, unsigned n);
  * Set the logging level. Only messages with at this level or above will be
  * emitted.
  */
-void raft_set_log_level(struct raft *r, unsigned level);
+void raft_set_logger_level(struct raft *r, unsigned level);
 
 /**
  * Return the code of the current raft state.

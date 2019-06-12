@@ -6,7 +6,7 @@
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(MSG, ...) debugf(r->io, MSG, ##__VA_ARGS__)
+#define tracef(MSG, ...) debugf(r, MSG, ##__VA_ARGS__)
 #else
 #define tracef(MSG, ...)
 #endif
@@ -64,7 +64,7 @@ static void sendRequestVoteCb(struct raft_io_send *send, int status)
     struct request *req = send->data;
     struct raft *r = req->raft;
     if (status != 0) {
-        warnf(r->io, "failed to send vote request to server %ld: %s",
+        warnf(r, "failed to send vote request to server %ld: %s",
               req->server_id, raft_strerror(status));
     }
     raft_free(req);
@@ -165,7 +165,7 @@ int electionStart(struct raft *r)
         rv = sendRequestVote(r, server);
         if (rv != 0) {
             /* This is not a critical failure, let's just log it. */
-            warnf(r->io, "failed to send vote request to server %ld: %s",
+            warnf(r, "failed to send vote request to server %ld: %s",
                   server->id, raft_strerror(rv));
         }
     }

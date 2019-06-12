@@ -12,7 +12,7 @@
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(MSG, ...) debugf(r->io, "start: " MSG, ##__VA_ARGS__)
+#define tracef(MSG, ...) debugf(r, "start: " MSG, ##__VA_ARGS__)
 #else
 #define tracef(MSG, ...)
 #endif
@@ -89,7 +89,7 @@ static int maybeSelfElect(struct raft *r)
         configurationNumVoting(&r->configuration) > 1) {
         return 0;
     }
-    debugf(r->io, "self elect and convert to leader");
+    debugf(r, "self elect and convert to leader");
     rv = convertToCandidate(r);
     if (rv != 0) {
         return rv;
@@ -117,7 +117,7 @@ int raft_start(struct raft *r)
     assert(logSnapshotIndex(&r->log) == 0);
     assert(r->last_stored == 0);
 
-    infof(r->io, "starting");
+    infof(r, "starting");
     rv = r->io->load(r->io, &r->current_term, &r->voted_for, &snapshot,
                      &start_index, &entries, &n_entries);
     if (rv != 0) {

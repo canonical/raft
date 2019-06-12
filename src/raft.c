@@ -16,7 +16,7 @@
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(MSG, ...) debugf(r->io, MSG, ##__VA_ARGS__)
+#define tracef(MSG, ...) debugf(r, MSG, ##__VA_ARGS__)
 #else
 #define tracef(MSG, ...)
 #endif
@@ -24,6 +24,7 @@
 int raft_init(struct raft *r,
               struct raft_io *io,
               struct raft_fsm *fsm,
+              struct raft_logger *logger,
               const unsigned id,
               const char *address)
 {
@@ -34,6 +35,7 @@ int raft_init(struct raft *r,
     r->io = io;
     r->io->data = r;
     r->fsm = fsm;
+    r->logger = logger;
     r->id = id;
     /* Make a copy of the address */
     r->address = raft_malloc(strlen(address) + 1);
@@ -58,7 +60,7 @@ int raft_init(struct raft *r,
     r->snapshot.trailing = DEFAULT_SNAPSHOT_TRAILING;
     r->snapshot.put.data = NULL;
     r->close_cb = NULL;
-    rv = r->io->init(r->io, r->id, r->address);
+    rv = r->io->init(r->io, r->logger, r->id, r->address);
     if (rv != 0) {
         return rv;
     }
@@ -68,7 +70,7 @@ int raft_init(struct raft *r,
 static void io_close_cb(struct raft_io *io)
 {
     struct raft *r = io->data;
-    infof(r->io, "stopped");
+    infof(r, "stopped");
 
     raft_free(r->address);
     logClose(&r->log);

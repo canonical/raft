@@ -22,12 +22,18 @@
 #define CONNECT_RETRY_DELAY 1000
 
 /* Implementation of raft_io->init. */
-static int uvInit(struct raft_io *io, unsigned id, const char *address)
+static int uvInit(struct raft_io *io,
+                  struct raft_logger *logger,
+                  unsigned id,
+                  const char *address)
 {
     struct uv *uv;
     size_t direct_io;
     int rv;
+
     uv = io->impl;
+
+    uv->logger = logger;
 
     /* Ensure that the data directory exists and is accessible */
     rv = osEnsureDir(uv->dir);
@@ -400,28 +406,6 @@ static int uvRandom(struct raft_io *io, int min, int max)
     return min + (abs(rand()) % (max - min));
 }
 
-/* Implementation of raft_io->emit. */
-static void uvEmit(struct raft_io *io, int level, const char *format, ...)
-{
-    struct uv *uv;
-    va_list args;
-    uv = io->impl;
-    if (level < uv->log_level) {
-        return;
-    }
-    va_start(args, format);
-    emitToStream(stderr, uv->id, uv_now(uv->loop), level, format, args);
-    va_end(args);
-}
-
-/* Implementation of raft_io->set_level. */
-static void uvSetLevel(struct raft_io *io, int level)
-{
-    struct uv *uv;
-    uv = io->impl;
-    uv->log_level = level;
-}
-
 int raft_uv_init(struct raft_io *io,
                  struct uv_loop_s *loop,
                  const char *dir,
@@ -495,8 +479,6 @@ int raft_uv_init(struct raft_io *io,
     io->snapshot_get = uvSnapshotGet;
     io->time = uvTime;
     io->random = uvRandom;
-    io->emit = uvEmit;
-    io->set_level = uvSetLevel;
 
     return 0;
 }

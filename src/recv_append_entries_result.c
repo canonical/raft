@@ -7,7 +7,7 @@
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(MSG, ...) debugf(r->io, MSG, ##__VA_ARGS__)
+#define tracef(MSG, ...) debugf(r, MSG, ##__VA_ARGS__)
 #else
 #define tracef(MSG, ...)
 #endif
@@ -58,7 +58,7 @@ int recvAppendEntriesResult(struct raft *r,
     /* Ignore responses from servers that have been removed */
     server = configurationGet(&r->configuration, id);
     if (server == NULL) {
-        warnf(r->io, "unknown server -> ignore");
+        warnf(r, "unknown server -> ignore");
         return 0;
     }
 

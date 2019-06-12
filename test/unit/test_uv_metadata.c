@@ -20,6 +20,7 @@ struct fixture
     FIXTURE_HEAP;
     FIXTURE_LOOP;
     char *dir;
+    struct raft_logger logger;
     struct raft_uv_transport transport;
     struct raft_io io;
 };
@@ -32,6 +33,7 @@ static void *setup(const MunitParameter params[], void *user_data)
     SETUP_HEAP;
     SETUP_LOOP;
     f->dir = test_dir_setup(params);
+    raft_default_logger_init(&f->logger);
     rv = raft_uv_tcp_init(&f->transport, &f->loop);
     munit_assert_int(rv, ==, 0);
     rv = raft_uv_init(&f->io, &f->loop, f->dir, &f->transport);
@@ -65,19 +67,19 @@ static void tear_down(void *data)
         void *cursor = buf;                                     \
         char filename[strlen("metadataN") + 1];                 \
         sprintf(filename, "metadata%d", N);                     \
-        bytePut64(&cursor, FORMAT);                           \
-        bytePut64(&cursor, VERSION);                          \
-        bytePut64(&cursor, TERM);                             \
-        bytePut64(&cursor, VOTED_FOR);                        \
+        bytePut64(&cursor, FORMAT);                             \
+        bytePut64(&cursor, VERSION);                            \
+        bytePut64(&cursor, TERM);                               \
+        bytePut64(&cursor, VOTED_FOR);                          \
         test_dir_write_file(f->dir, filename, buf, sizeof buf); \
     }
 
 /* Invoke io->init() and assert that it returns the given value */
-#define INIT(RV)                          \
-    {                                     \
-        int rv2;                          \
-        rv2 = f->io.init(&f->io, 1, "1"); \
-        munit_assert_int(rv2, ==, RV);    \
+#define INIT(RV)                                      \
+    {                                                 \
+        int rv2;                                      \
+        rv2 = f->io.init(&f->io, &f->logger, 1, "1"); \
+        munit_assert_int(rv2, ==, RV);                \
     }
 
 /* Invoke io->close() */
@@ -103,10 +105,10 @@ static void tear_down(void *data)
         char filename[strlen("metadataN") + 1];                  \
         sprintf(filename, "metadata%d", N);                      \
         test_dir_read_file(f->dir, filename, buf2, sizeof buf2); \
-        munit_assert_int(byteGet64(&cursor), ==, 1);           \
-        munit_assert_int(byteGet64(&cursor), ==, VERSION);     \
-        munit_assert_int(byteGet64(&cursor), ==, TERM);        \
-        munit_assert_int(byteGet64(&cursor), ==, VOTED_FOR);   \
+        munit_assert_int(byteGet64(&cursor), ==, 1);             \
+        munit_assert_int(byteGet64(&cursor), ==, VERSION);       \
+        munit_assert_int(byteGet64(&cursor), ==, TERM);          \
+        munit_assert_int(byteGet64(&cursor), ==, VOTED_FOR);     \
     }
 
 /******************************************************************************

@@ -43,10 +43,10 @@ static int tickFollower(struct raft *r)
      *   current leader or granting vote to candidate, convert to candidate.
      */
     if (electionTimerExpired(r) && server->voting) {
-        infof(r->io, "convert to candidate and start new election");
+        infof(r, "convert to candidate and start new election");
         rv = convertToCandidate(r);
         if (rv != 0) {
-            errorf(r->io, "convert to candidate: %s", raft_strerror(rv));
+            errorf(r, "convert to candidate: %s", raft_strerror(rv));
             return rv;
         }
     }
@@ -71,7 +71,7 @@ static int tickCandidate(struct raft *r)
      *   incrementing its term and initiating another round of RequestVote RPCs
      */
     if (electionTimerExpired(r)) {
-        infof(r->io, "start new election");
+        infof(r, "start new election");
         return electionStart(r);
     }
 
@@ -118,7 +118,7 @@ static int tickLeader(struct raft *r)
      */
     if (now - r->election_timer_start >= r->election_timeout) {
         if (!checkContactQuorum(r)) {
-            warnf(r->io, "unable to contact majority of cluster -> step down");
+            warnf(r, "unable to contact majority of cluster -> step down");
             convertToFollower(r);
             return 0;
         }

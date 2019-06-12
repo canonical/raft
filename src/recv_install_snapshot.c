@@ -35,7 +35,7 @@ int rpcRecvInstallSnapshot(struct raft *r,
     }
 
     if (match < 0) {
-        debugf(r->io, "local term is higher -> reject ");
+        debugf(r, "local term is higher -> reject ");
         goto reply;
     }
 
@@ -44,7 +44,7 @@ int rpcRecvInstallSnapshot(struct raft *r,
     assert(r->current_term == args->term);
     if (r->state == RAFT_CANDIDATE) {
         assert(match == 0);
-        debugf(r->io, "discovered leader -> step down ");
+        debugf(r, "discovered leader -> step down ");
         convertToFollower(r);
     }
 

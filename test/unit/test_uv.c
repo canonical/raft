@@ -4,11 +4,8 @@
 #include "../../src/byte.h"
 #include "../../src/uv_encoding.h"
 
-#include "../lib/fs.h"
-#include "../lib/heap.h"
 #include "../lib/runner.h"
-#include "../lib/tcp.h"
-#include "../lib/loop.h"
+#include "../lib/uv.h"
 
 TEST_MODULE(uv);
 
@@ -18,12 +15,7 @@ TEST_MODULE(uv);
 
 struct fixture
 {
-    struct raft_heap heap;
-    struct test_tcp tcp;
-    struct uv_loop_s loop;
-    char *dir;
-    struct raft_uv_transport transport;
-    struct raft_io io;
+    FIXTURE_UV;
     struct raft_io_send req;
     struct
     {
@@ -44,10 +36,6 @@ struct fixture
         bool invoked;
         struct raft_message *message;
     } recv_cb;
-    struct
-    {
-        bool invoked;
-    } stop_cb;
 };
 
 static void __tick_cb(struct raft_io *io)
@@ -81,34 +69,13 @@ static void __recv_cb(struct raft_io *io, struct raft_message *message)
     f->recv_cb.message = message;
 }
 
-static void __stop_cb(struct raft_io *io)
-{
-    struct fixture *f = io->data;
-
-    f->stop_cb.invoked = true;
-}
-
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     int rv;
-
     (void)user_data;
 
-    test_heap_setup(params, &f->heap);
-    test_tcp_setup(params, &f->tcp);
-    SETUP_LOOP;
-
-    f->dir = test_dir_setup(params);
-
-    rv = raft_uv_tcp_init(&f->transport, &f->loop);
-    munit_assert_int(rv, ==, 0);
-
-    rv = raft_uv_init(&f->io, &f->loop, f->dir, &f->transport);
-    munit_assert_int(rv, ==, 0);
-
-    rv = f->io.init(&f->io, 1, "127.0.0.1:9000");
-    munit_assert_int(rv, ==, 0);
+    SETUP_UV;
 
     rv = f->io.start(&f->io, 50, __tick_cb, __recv_cb);
     munit_assert_int(rv, ==, 0);
@@ -124,32 +91,13 @@ static void *setup(const MunitParameter params[], void *user_data)
     f->send_cb.invoked = false;
     f->send_cb.status = -1;
 
-    f->stop_cb.invoked = false;
-
     return f;
 }
 
 static void tear_down(void *data)
 {
     struct fixture *f = data;
-    int rv;
-
-    rv = f->io.close(&f->io, __stop_cb);
-    munit_assert_int(rv, ==, 0);
-
-    LOOP_STOP;
-
-    munit_assert_true(f->stop_cb.invoked);
-
-    raft_uv_close(&f->io);
-    raft_uv_tcp_close(&f->transport);
-
-    test_dir_tear_down(f->dir);
-
-    TEAR_DOWN_LOOP;
-    test_tcp_tear_down(&f->tcp);
-    test_heap_tear_down(&f->heap);
-
+    TEAR_DOWN_UV;
     free(f);
 }
 
@@ -230,7 +178,7 @@ TEST_CASE(init, cant_create_dir, NULL)
     rv = raft_uv_init(&io, &f->loop, dir, &transport);
     munit_assert_int(rv, ==, 0);
 
-    rv = io.init(&io, 1, "1");
+    rv = io.init(&io, &f->logger, 1, "1");
     munit_assert_int(rv, ==, RAFT_IOERR);
 
     raft_uv_close(&io);
@@ -253,7 +201,7 @@ TEST_CASE(init, access_error, NULL)
     rv = raft_uv_init(&io, &f->loop, dir, &transport);
     munit_assert_int(rv, ==, 0);
 
-    rv = io.init(&io, 1, "1");
+    rv = io.init(&io, &f->logger, 1, "1");
     munit_assert_int(rv, ==, RAFT_IOERR);
 
     raft_uv_close(&io);
