@@ -118,7 +118,7 @@ static int tickLeader(struct raft *r)
      */
     if (now - r->election_timer_start >= r->election_timeout) {
         if (!checkContactQuorum(r)) {
-            warnf(r->io, "unable to contact majority of cluster -> step down");
+            warnf(r, "unable to contact majority of cluster -> step down");
             convertToFollower(r);
             return 0;
         }

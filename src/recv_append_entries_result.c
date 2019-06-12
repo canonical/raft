@@ -58,7 +58,7 @@ int recvAppendEntriesResult(struct raft *r,
     /* Ignore responses from servers that have been removed */
     server = configurationGet(&r->configuration, id);
     if (server == NULL) {
-        warnf(r->io, "unknown server -> ignore");
+        warnf(r, "unknown server -> ignore");
         return 0;
     }
 

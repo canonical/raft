@@ -29,7 +29,7 @@ static int recv(struct raft *r, struct raft_message *message)
 
     if (message->type < RAFT_IO_APPEND_ENTRIES ||
         message->type > RAFT_IO_INSTALL_SNAPSHOT) {
-        warnf(r->io, "received unknown message type type: %d", message->type);
+        warnf(r, "received unknown message type type: %d", message->type);
         return 0;
     }
 
