@@ -406,20 +406,6 @@ static int uvRandom(struct raft_io *io, int min, int max)
     return min + (abs(rand()) % (max - min));
 }
 
-/* Implementation of raft_io->emit. */
-static void uvEmit(struct raft_io *io, int level, const char *format, ...)
-{
-    struct uv *uv;
-    va_list args;
-    uv = io->impl;
-    if (level < uv->log_level) {
-        return;
-    }
-    va_start(args, format);
-    emitToStream(stderr, uv->id, uv_now(uv->loop), level, format, args);
-    va_end(args);
-}
-
 int raft_uv_init(struct raft_io *io,
                  struct uv_loop_s *loop,
                  const char *dir,
@@ -493,7 +479,6 @@ int raft_uv_init(struct raft_io *io,
     io->snapshot_get = uvSnapshotGet;
     io->time = uvTime;
     io->random = uvRandom;
-    io->emit = uvEmit;
 
     return 0;
 }

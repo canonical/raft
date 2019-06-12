@@ -566,11 +566,6 @@ struct raft_io
      * Generate a random integer between min and max.
      */
     int (*random)(struct raft_io *io, int min, int max);
-
-    /**
-     * Emit a log message at the given level.
-     */
-    void (*emit)(struct raft_io *io, int level, const char *format, ...);
 };
 
 /**

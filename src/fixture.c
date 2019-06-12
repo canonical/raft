@@ -724,18 +724,6 @@ static int ioMethodRandom(struct raft_io *raft_io, int min, int max)
     return io->randomized_election_timeout;
 }
 
-static void ioMethodEmit(struct raft_io *raft_io,
-                         int level,
-                         const char *format,
-                         ...)
-{
-    struct io *io = raft_io->impl;
-    va_list args;
-    va_start(args, format);
-    emitToStream(stderr, io->id, *io->time, level, format, args);
-    va_end(args);
-}
-
 /* Queue up a request which will be processed later, when io_stub_flush()
  * is invoked. */
 static int ioMethodSend(struct raft_io *raft_io,
@@ -925,7 +913,6 @@ static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
     raft_io->snapshot_get = ioMethodSnapshotGet;
     raft_io->time = ioMethodTime;
     raft_io->random = ioMethodRandom;
-    raft_io->emit = ioMethodEmit;
 
     return 0;
 }
