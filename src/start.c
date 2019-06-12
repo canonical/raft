@@ -117,7 +117,7 @@ int raft_start(struct raft *r)
     assert(logSnapshotIndex(&r->log) == 0);
     assert(r->last_stored == 0);
 
-    infof(r->io, "starting");
+    infof(r, "starting");
     rv = r->io->load(r->io, &r->current_term, &r->voted_for, &snapshot,
                      &start_index, &entries, &n_entries);
     if (rv != 0) {

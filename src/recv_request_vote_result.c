@@ -30,7 +30,7 @@ int recvRequestVoteResult(struct raft *r,
 
     votes_index = configurationIndexOfVoting(&r->configuration, id);
     if (votes_index == r->configuration.n) {
-        infof(r->io, "non-voting or unknown server -> reject");
+        infof(r, "non-voting or unknown server -> reject");
         return 0;
     }
 
@@ -75,7 +75,7 @@ int recvRequestVoteResult(struct raft *r,
      */
     if (result->vote_granted) {
         if (electionTally(r, votes_index)) {
-            infof(r->io, "votes quorum reached -> convert to leader");
+            infof(r, "votes quorum reached -> convert to leader");
             rv = convertToLeader(r);
             if (rv != 0) {
                 return rv;

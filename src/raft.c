@@ -70,7 +70,7 @@ int raft_init(struct raft *r,
 static void io_close_cb(struct raft_io *io)
 {
     struct raft *r = io->data;
-    infof(r->io, "stopped");
+    infof(r, "stopped");
 
     raft_free(r->address);
     logClose(&r->log);
