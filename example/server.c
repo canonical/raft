@@ -5,9 +5,15 @@
 #include "../include/raft.h"
 #include "../include/raft/uv.h"
 
-#define N_SERVERS 3 /* Number of servers in the example cluster */
+#define N_SERVERS 3    /* Number of servers in the example cluster */
+#define APPLY_RATE 125 /* Apply a new entry every 125 milliseconds */
 
-/* Simple finite state machine that just increases a counter. */
+/********************************************************************
+ *
+ * Sample application FSM that just increases a counter.
+ *
+ ********************************************************************/
+
 struct fsm
 {
     int count;
@@ -76,19 +82,25 @@ static void fsmClose(struct raft_fsm *f)
     raft_free(f->data);
 }
 
-/* Example raft server. */
+/********************************************************************
+ *
+ * Example struct holding a single raft server instance and all its
+ * dependencies.
+ *
+ ********************************************************************/
+
 struct server
 {
-    struct uv_loop_s loop;              /* UV loop */
-    struct uv_signal_s sigint;          /* Catch SIGINT and exit */
-    struct uv_timer_s timer;            /* Apply new entry every second */
-    const char *dir;                    /* Data dir of UV I/O backend */
-    struct raft_uv_transport transport; /* UV I/O backend transport */
-    struct raft_io io;                  /* UV I/O backend */
-    struct raft_fsm fsm;                /* Example FSM */
-    unsigned id;                        /* Raft instance ID */
-    char address[64];                   /* Raft instance address */
-    struct raft raft;                   /* Raft instance */
+    struct uv_loop_s loop;              /* UV loop. */
+    struct uv_signal_s sigint;          /* To catch SIGINT and exit. */
+    struct uv_timer_s timer;            /* To periodically apply a new entry. */
+    const char *dir;                    /* Data dir of UV I/O backend. */
+    struct raft_uv_transport transport; /* UV I/O backend transport. */
+    struct raft_io io;                  /* UV I/O backend. */
+    struct raft_fsm fsm;                /* Sample application FSM. */
+    unsigned id;                        /* Raft instance ID. */
+    char address[64];                   /* Raft instance address. */
+    struct raft raft;                   /* Raft instance. */
 };
 
 /* Final callback in the shutdown sequence, invoked after the timer handle has
@@ -117,6 +129,7 @@ static void sigintCb(struct uv_signal_s *handle, int signum)
     uv_close((uv_handle_t *)handle, sigintCloseCb);
 }
 
+/* Initialize the example server struct, without starting it yet. */
 static int serverInit(struct server *s, const char *dir, unsigned id)
 {
     struct raft_configuration configuration;
@@ -138,27 +151,27 @@ static int serverInit(struct server *s, const char *dir, unsigned id)
     }
     s->loop.data = s;
 
-    /* Add a signal handler to stop the Raft engine upon SIGINT */
+    /* Add a signal handler to stop the Raft engine upon SIGINT. */
     rv = uv_signal_init(&s->loop, &s->sigint);
     if (rv != 0) {
         goto errAfterLoopInit;
     }
     s->sigint.data = s;
 
-    /* Add a timer to periodically try to propose a new entry */
+    /* Add a timer to periodically try to propose a new entry. */
     rv = uv_timer_init(&s->loop, &s->timer);
     if (rv != 0) {
         goto errAfterSigintInit;
     }
     s->timer.data = s;
 
-    /* Initialize the TCP-based RPC transport */
+    /* Initialize the TCP-based RPC transport. */
     rv = raft_uv_tcp_init(&s->transport, &s->loop);
     if (rv != 0) {
         goto errAfterTimerInit;
     }
 
-    /* Initialize the libuv-based I/O backend */
+    /* Initialize the libuv-based I/O backend. */
     rv = raft_uv_init(&s->io, &s->loop, dir, &s->transport);
     if (rv != 0) {
         goto errAfterTcpInit;
@@ -170,7 +183,7 @@ static int serverInit(struct server *s, const char *dir, unsigned id)
         goto errAfterIoInit;
     }
 
-    /* Render the address */
+    /* Render the address. */
     sprintf(s->address, "127.0.0.1:900%d", id);
 
     /* Initialize and start the engine, using the libuv-based I/O backend. */
@@ -191,7 +204,7 @@ static int serverInit(struct server *s, const char *dir, unsigned id)
             goto errAfterRaftInit;
         }
     }
-    rv = s->io.bootstrap(&s->io, &configuration);
+    rv = raft_bootstrap(&s->raft, &configuration);
     if (rv != 0 && rv != RAFT_CANTBOOTSTRAP) {
         goto errAfterConfigurationInit;
     }
@@ -222,6 +235,7 @@ err:
     return rv;
 }
 
+/* Release the memory the raft instance and all its dependencies. */
 static void serverClose(struct server *s)
 {
     fsmClose(&s->fsm);
@@ -230,22 +244,27 @@ static void serverClose(struct server *s)
     uv_loop_close(&s->loop);
 }
 
+/* Called after a request to apply a new command to the FSM has been
+ * completed. */
 static void applyCb(struct raft_apply *req, int status, void *result)
 {
     struct server *s = req->data;
     int count;
     raft_free(req);
     if (status != 0) {
-        s->io.emit(&s->io, RAFT_WARN, "fsm: apply error: %s",
-                   raft_strerror(status));
+        if (status != RAFT_LEADERSHIPLOST) {
+            s->io.emit(&s->io, RAFT_WARN, "fsm: apply error: %s",
+                       raft_strerror(status));
+        }
         return;
     }
-    count = *(int*)result;
+    count = *(int *)result;
     if (count % 100 == 0) {
         s->io.emit(&s->io, RAFT_INFO, "fsm: count %d", count);
     }
 }
 
+/* Called periodically every APPLY_RATE milliseconds. */
 static void timerCb(uv_timer_t *timer)
 {
     struct server *s = timer->data;
@@ -280,6 +299,7 @@ static void timerCb(uv_timer_t *timer)
     }
 }
 
+/* Start the example server. */
 static int serverStart(struct server *s)
 {
     int rv;

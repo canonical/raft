@@ -28,12 +28,12 @@ void raft_leader(struct raft *r, unsigned *id, const char **address)
     }
 }
 
-raft_index raft_last_index(struct raft *r)
-{
-    return logLastIndex(&r->log);
-}
-
 raft_index raft_last_applied(struct raft *r)
 {
     return r->last_applied;
+}
+
+void raft_set_log_level(struct raft *r, unsigned level)
+{
+    r->io->set_level(r->io, level);
 }

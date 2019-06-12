@@ -67,6 +67,7 @@ static int uvInit(struct raft_io *io, unsigned id, const char *address)
     assert(rv == 0); /* This should never fail */
     uv->timer.data = uv;
     uv->state = UV__ACTIVE;
+    uv->log_level = RAFT_INFO;
 
     return 0;
 
@@ -405,9 +406,20 @@ static void uvEmit(struct raft_io *io, int level, const char *format, ...)
     struct uv *uv;
     va_list args;
     uv = io->impl;
+    if (level < uv->log_level) {
+        return;
+    }
     va_start(args, format);
     emitToStream(stderr, uv->id, uv_now(uv->loop), level, format, args);
     va_end(args);
+}
+
+/* Implementation of raft_io->set_level. */
+static void uvSetLevel(struct raft_io *io, int level)
+{
+    struct uv *uv;
+    uv = io->impl;
+    uv->log_level = level;
 }
 
 int raft_uv_init(struct raft_io *io,
@@ -484,6 +496,7 @@ int raft_uv_init(struct raft_io *io,
     io->time = uvTime;
     io->random = uvRandom;
     io->emit = uvEmit;
+    io->set_level = uvSetLevel;
 
     return 0;
 }

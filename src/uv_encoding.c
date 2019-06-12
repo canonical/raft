@@ -91,7 +91,6 @@ static void encodeAppendEntries(const struct raft_append_entries *p, void *buf)
     cursor = buf;
 
     bytePut64(&cursor, p->term);           /* Leader's term. */
-    bytePut64(&cursor, p->leader_id);      /* Leader ID. */
     bytePut64(&cursor, p->prev_log_index); /* Previous index. */
     bytePut64(&cursor, p->prev_log_term);  /* Previous term. */
     bytePut64(&cursor, p->leader_commit);  /* Commit index. */
@@ -119,7 +118,6 @@ static void encodeInstallSnapshot(const struct raft_install_snapshot *p,
     cursor = buf;
 
     bytePut64(&cursor, p->term);       /* Leader's term. */
-    bytePut64(&cursor, p->leader_id);  /* Leader ID. */
     bytePut64(&cursor, p->last_index); /* Snapshot last index. */
     bytePut64(&cursor, p->last_term);  /* Term of last index. */
     bytePut64(&cursor, p->conf_index); /* Configuration index. */
@@ -344,7 +342,6 @@ static int decodeAppendEntries(const uv_buf_t *buf,
     cursor = buf->base;
 
     args->term = byteGet64(&cursor);
-    args->leader_id = byteGet64(&cursor);
     args->prev_log_index = byteGet64(&cursor);
     args->prev_log_term = byteGet64(&cursor);
     args->leader_commit = byteGet64(&cursor);
@@ -382,7 +379,6 @@ static int decodeInstallSnapshot(const uv_buf_t *buf,
     cursor = buf->base;
 
     args->term = byteGet64(&cursor);
-    args->leader_id = byteGet64(&cursor);
     args->last_index = byteGet64(&cursor);
     args->last_term = byteGet64(&cursor);
     args->conf_index = byteGet64(&cursor);

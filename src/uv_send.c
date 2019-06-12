@@ -284,8 +284,8 @@ static void connectCb(struct raft_uv_connect *req,
     }
 
     /* Use debug level for logging the first few attempts, then switch to
-     * warn. */
-    if (c->n_connect_attempt >= 10) {
+     * warn, but not too agressively. */
+    if (c->n_connect_attempt >= 100 && c->n_connect_attempt % 30 == 0) {
         level = RAFT_WARN;
     }
 

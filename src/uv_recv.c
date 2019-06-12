@@ -61,10 +61,10 @@ static void copyAddress(const char *address1, char **address2)
 /* Initialize a new server object for reading requests from an incoming
  * connection. */
 static int initServer(struct uvServer *s,
-                       struct uv *uv,
-                       const unsigned id,
-                       const char *address,
-                       struct uv_stream_s *stream)
+                      struct uv *uv,
+                      const unsigned id,
+                      const char *address,
+                      struct uv_stream_s *stream)
 {
     s->uv = uv;
     s->id = id;
@@ -80,6 +80,7 @@ static int initServer(struct uvServer *s,
     s->preamble[1] = 0;
     s->header.base = NULL;
     s->header.len = 0;
+    s->message.type = 0;
     s->payload.base = NULL;
     s->payload.len = 0;
     return 0;
@@ -90,9 +91,6 @@ static void closeServer(struct uvServer *s)
     if (s->header.base != NULL) {
         /* This means we were interrupted while reading the header. */
         raft_free(s->header.base);
-    }
-    if (s->payload.base != NULL) {
-        /* This means we were interrupted while reading the payload. */
         switch (s->message.type) {
             case RAFT_IO_APPEND_ENTRIES:
                 raft_free(s->message.append_entries.entries);
@@ -101,6 +99,9 @@ static void closeServer(struct uvServer *s)
                 raft_configuration_close(&s->message.install_snapshot.conf);
                 break;
         }
+    }
+    if (s->payload.base != NULL) {
+        /* This means we were interrupted while reading the payload. */
         raft_free(s->payload.base);
     }
     raft_free(s->address);
@@ -207,6 +208,7 @@ static void recvMessage(struct uvServer *s)
      * user. */
     memset(s->preamble, 0, sizeof s->preamble);
     raft_free(s->header.base);
+    s->message.type = 0;
     s->header.base = NULL;
     s->header.len = 0;
     s->payload.base = NULL;
@@ -323,7 +325,9 @@ static void readCb(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
      * with a goto and never reach this point. */
     assert(nread < 0);
 
-    warnf(s->uv->io, "receive data: %s", uv_strerror(nread));
+    if (nread != UV_EOF) {
+        warnf(s->uv->io, "receive data: %s", uv_strerror(nread));
+    }
 
 abort:
     removeServer(s);
@@ -345,9 +349,9 @@ static int startServer(struct uvServer *s)
 }
 
 static int addServer(struct uv *uv,
-                      unsigned id,
-                      const char *address,
-                      struct uv_stream_s *stream)
+                     unsigned id,
+                     const char *address,
+                     struct uv_stream_s *stream)
 {
     struct uvServer **servers;
     struct uvServer *s;
