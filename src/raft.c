@@ -24,6 +24,7 @@
 int raft_init(struct raft *r,
               struct raft_io *io,
               struct raft_fsm *fsm,
+              struct raft_logger *logger,
               const unsigned id,
               const char *address)
 {
@@ -34,6 +35,7 @@ int raft_init(struct raft *r,
     r->io = io;
     r->io->data = r;
     r->fsm = fsm;
+    r->logger = logger;
     r->id = id;
     /* Make a copy of the address */
     r->address = raft_malloc(strlen(address) + 1);

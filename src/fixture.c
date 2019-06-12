@@ -948,7 +948,7 @@ static int serverInit(struct raft_fixture *f, unsigned i, struct raft_fsm *fsm)
     if (rc != 0) {
         return rc;
     }
-    rc = raft_init(&s->raft, &s->io, fsm, s->id, s->address);
+    rc = raft_init(&s->raft, &s->io, fsm, NULL, s->id, s->address);
     if (rc != 0) {
         return rc;
     }
