@@ -98,6 +98,7 @@ struct server
     struct raft_uv_transport transport; /* UV I/O backend transport. */
     struct raft_io io;                  /* UV I/O backend. */
     struct raft_fsm fsm;                /* Sample application FSM. */
+    struct raft_logger logger;          /* Default logger. */
     unsigned id;                        /* Raft instance ID. */
     char address[64];                   /* Raft instance address. */
     struct raft raft;                   /* Raft instance. */
@@ -183,11 +184,14 @@ static int serverInit(struct server *s, const char *dir, unsigned id)
         goto errAfterIoInit;
     }
 
+    /* Initialize the default logger. */
+    raft_default_logger_init(&s->logger);
+
     /* Render the address. */
     sprintf(s->address, "127.0.0.1:900%d", id);
 
     /* Initialize and start the engine, using the libuv-based I/O backend. */
-    rv = raft_init(&s->raft, &s->io, &s->fsm, NULL, id, s->address);
+    rv = raft_init(&s->raft, &s->io, &s->fsm, &s->logger, id, s->address);
     if (rv != 0) {
         goto errAfterFsmInit;
     }
