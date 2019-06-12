@@ -6,7 +6,7 @@
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(MSG, ...) debugf(r->io, MSG, ##__VA_ARGS__)
+#define tracef(MSG, ...) debugf(r, MSG, ##__VA_ARGS__)
 #else
 #define tracef(MSG, ...)
 #endif

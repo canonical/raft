@@ -17,7 +17,7 @@ static const char *message_descs[] = {"append entries", "append entries result",
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(MSG, ...) debugf(r->io, "recv: " MSG, ##__VA_ARGS__)
+#define tracef(MSG, ...) debugf(r, "recv: " MSG, ##__VA_ARGS__)
 #else
 #define tracef(MSG, ...)
 #endif

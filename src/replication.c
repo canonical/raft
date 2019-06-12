@@ -15,7 +15,7 @@
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(MSG, ...) debugf(r->io, "replication: " MSG, ##__VA_ARGS__)
+#define tracef(MSG, ...) debugf(r, "replication: " MSG, ##__VA_ARGS__)
 #else
 #define tracef(MSG, ...)
 #endif
@@ -49,7 +49,7 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
 
     if (r->state == RAFT_LEADER && i < r->configuration.n) {
         if (status != 0) {
-            debugf(r->io, "failed to send append entries to server %ld: %s",
+            debugf(r, "failed to send append entries to server %ld: %s",
                    req->server_id, raft_strerror(status));
             /* Go back to probe mode. */
             progressToProbe(r, i);
@@ -168,7 +168,7 @@ static void sendInstallSnapshotCb(struct raft_io_send *send, int status)
     server = configurationGet(&r->configuration, req->server_id);
 
     if (status != 0) {
-        debugf(r->io, "send install snapshot: %s", raft_strerror(status));
+        debugf(r, "send install snapshot: %s", raft_strerror(status));
         if (r->state == RAFT_LEADER && server != NULL) {
             unsigned i;
             i = configurationIndexOf(&r->configuration, req->server_id);
@@ -233,7 +233,7 @@ static void sendSnapshotGetCb(struct raft_io_snapshot_get *get,
     req->snapshot = snapshot;
     req->send.data = req;
 
-    debugf(r->io, "sending snapshot with last index %ld to %ld",
+    debugf(r, "sending snapshot with last index %ld to %ld",
            snapshot->index, server->id);
 
     rv = r->io->send(r->io, &req->send, &message, sendInstallSnapshotCb);
@@ -375,7 +375,7 @@ static int triggerAll(struct raft *r)
         rv = replicationProgress(r, i);
         if (rv != 0 && rv != RAFT_NOCONNECTION) {
             /* This is not a critical failure, let's just log it. */
-            debugf(r->io,
+            debugf(r,
                    "failed to send append entries to server %ld: %s (%d)",
                    server->id, raft_strerror(rv), rv);
         }
@@ -1132,7 +1132,7 @@ static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
         goto err;
     }
 
-    debugf(r->io, "restored snapshot with last index %llu", snapshot->index);
+    debugf(r, "restored snapshot with last index %llu", snapshot->index);
 
     result.rejected = 0;
 
@@ -1355,7 +1355,7 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
     snapshot = &r->snapshot.pending;
 
     if (status != 0) {
-        debugf(r->io, "snapshot %lld at term %lld: %s", snapshot->index,
+        debugf(r, "snapshot %lld at term %lld: %s", snapshot->index,
                snapshot->term, raft_strerror(status));
         goto out;
     }
@@ -1373,7 +1373,7 @@ static int takeSnapshot(struct raft *r)
     unsigned i;
     int rv;
 
-    debugf(r->io, "take snapshot at %lld", r->last_applied);
+    debugf(r, "take snapshot at %lld", r->last_applied);
 
     snapshot = &r->snapshot.pending;
     snapshot->index = r->last_applied;
