@@ -68,7 +68,7 @@ static int recv(struct raft *r, struct raft_message *message)
     };
 
     if (rv != 0 && rv != RAFT_NOCONNECTION) {
-        errorf(r->io, "recv: %s: %s", message_descs[message->type - 1],
+        errorf(r, "recv: %s: %s", message_descs[message->type - 1],
                raft_strerror(rv));
         return rv;
     }

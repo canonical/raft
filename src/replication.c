@@ -195,7 +195,7 @@ static void sendSnapshotGetCb(struct raft_io_snapshot_get *get,
     int rv;
 
     if (status != 0) {
-        errorf(r->io, "get snapshot %s", raft_strerror(status));
+        errorf(r, "get snapshot %s", raft_strerror(status));
         goto abort;
     }
     if (r->state != RAFT_LEADER) {
@@ -885,7 +885,7 @@ static int checkLogMatchingProperty(struct raft *r,
     if (local_prev_term != args->prev_log_term) {
         if (args->prev_log_index <= r->commit_index) {
             /* Should never happen; something is seriously wrong! */
-            errorf(r->io,
+            errorf(r,
                    "conflicting terms %llu and %llu for entry %llu (commit "
                    "index %llu) -> shutdown",
                    local_prev_term, args->prev_log_term, args->prev_log_index,
@@ -927,7 +927,7 @@ static int deleteConflictingEntries(struct raft *r,
         if (local_term > 0 && local_term != entry->term) {
             if (entry_index <= r->commit_index) {
                 /* Should never happen; something is seriously wrong! */
-                errorf(r->io,
+                errorf(r,
                        "new index conflicts with "
                        "committed entry -> shutdown");
 
@@ -1113,7 +1113,7 @@ static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
 
     if (status != 0) {
         result.rejected = snapshot->index;
-        errorf(r->io, "save snapshot %d: %s", snapshot->index,
+        errorf(r, "save snapshot %d: %s", snapshot->index,
                raft_strerror(status));
         goto err;
     }
@@ -1127,7 +1127,7 @@ static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
     rv = snapshotRestore(r, snapshot);
     if (rv != 0) {
         result.rejected = snapshot->index;
-        errorf(r->io, "restore snapshot %d: %s", snapshot->index,
+        errorf(r, "restore snapshot %d: %s", snapshot->index,
                raft_strerror(status));
         goto err;
     }
