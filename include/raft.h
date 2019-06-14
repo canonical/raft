@@ -871,6 +871,11 @@ int raft_state(struct raft *r);
 void raft_leader(struct raft *r, unsigned *id, const char **address);
 
 /**
+ * Return the index of the last entry that was appended to the local log.
+ */
+raft_index raft_last_index(struct raft *r);
+
+/**
  * Return the index of the last entry that was applied to the local FSM.
  */
 raft_index raft_last_applied(struct raft *r);
