@@ -6,13 +6,10 @@
 #include <stdint.h>
 #include <unistd.h>
 
-#if RAFT_COVERAGE
-#define RAFT_INLINE static inline
-#elif defined(__cplusplus) || \
-    (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L)
+#if defined(__cplusplus)
 #define RAFT_INLINE inline
 #else
-#define RAFT_INLINE static
+#define RAFT_INLINE static inline
 #endif
 
 /* Flip a 32-bit number to network byte order (little endian) */
