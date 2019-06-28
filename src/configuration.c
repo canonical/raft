@@ -7,6 +7,13 @@
 /* Current encoding format version. */
 #define ENCODING_FORMAT 1
 
+/* XXX: workaround reading/writing non-aligned 64-bit words when serializing
+ * configuration objects. */
+#if (defined(__ARMEL__) && (__ARMEL__ == 1)) && \
+    (defined(__GNUC__) && (__GNUC__ < 7))
+#define WORKAROUND_ARMHF_ALIGNMENT
+#endif
+
 void raft_configuration_init(struct raft_configuration *c)
 {
     c->servers = NULL;
@@ -243,6 +250,16 @@ size_t configurationEncodedSize(const struct raft_configuration *c)
     return n;
 }
 
+#if defined(WORKAROUND_ARMHF_ALIGNMENT)
+static inline void put64Unaligned(void **cursor, uint64_t value)
+{
+    unsigned i;
+    for (i = 0; i < sizeof(uint64_t); i++) {
+        bytePut8(cursor, *((uint8_t *)(&value) + i));
+    }
+}
+#endif
+
 void configurationEncodeToBuf(const struct raft_configuration *c, void *buf)
 {
     void *cursor = buf;
@@ -251,15 +268,23 @@ void configurationEncodeToBuf(const struct raft_configuration *c, void *buf)
     /* Encoding format version */
     bytePut8(&cursor, ENCODING_FORMAT);
 
-    /* Number of servers */
+    /* Number of servers. */
+#if defined(WORKAROUND_ARMHF_ALIGNMENT)
+    put64Unaligned(&cursor, c->n);
+#else
     bytePut64(&cursor, c->n);
+#endif
 
     for (i = 0; i < c->n; i++) {
         struct raft_server *server = &c->servers[i];
 
         assert(server->address != NULL);
 
+#if defined(WORKAROUND_ARMHF_ALIGNMENT)
+        put64Unaligned(&cursor, server->id);
+#else
         bytePut64(&cursor, server->id);
+#endif
 
         strcpy((char *)cursor, server->address);
         cursor += strlen(server->address) + 1;

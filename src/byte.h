@@ -15,7 +15,8 @@
 /* Flip a 32-bit number to network byte order (little endian) */
 RAFT_INLINE uint32_t byteFlip32(uint32_t v)
 {
-#if defined(__BYTE_ORDER) && (__BYTE_ORDER == __LITTLE_ENDIAN)
+#if (defined(__BYTE_ORDER) && (__BYTE_ORDER == __LITTLE_ENDIAN)) || \
+    (defined(__ARMEL__) && (__ARMEL__ == 1))
     return v;
 #elif defined(__BYTE_ORDER) && (__BYTE_ORDER == __BIG_ENDIAN) && \
     defined(__GNUC__) && __GNUC__ >= 4 && __GNUC_MINOR__ >= 8
@@ -38,7 +39,8 @@ RAFT_INLINE uint32_t byteFlip32(uint32_t v)
 /* Flip a 64-bit number to network byte order (little endian) */
 RAFT_INLINE uint64_t byteFlip64(uint64_t v)
 {
-#if defined(__BYTE_ORDER) && (__BYTE_ORDER == __LITTLE_ENDIAN)
+#if (defined(__BYTE_ORDER) && (__BYTE_ORDER == __LITTLE_ENDIAN)) || \
+    (defined(__ARMEL__) && (__ARMEL__ == 1))
     return v;
 #elif defined(__BYTE_ORDER) && (__BYTE_ORDER == __BIG_ENDIAN) && \
     defined(__GNUC__) && __GNUC__ >= 4 && __GNUC_MINOR__ >= 8
