@@ -343,12 +343,24 @@ static int probeDirectIO(int fd, size_t *size)
         rv = write(fd, buf, *size);
         free(buf);
         if (rv > 0) {
+            /* Since we fallocate'ed the file, we should never fail because of
+             * lack of disk space, and all bytes should have been written. */
             assert(rv == (int)(*size));
             return 0;
         }
-        if (rv != EIO && rv != EOPNOTSUPP) {
+        assert(rv == -1);
+        if (errno != EIO && errno != EOPNOTSUPP) {
             /* UNTESTED: this should basically fail only because of disk errors,
              * since we allocated the file with posix_fallocate. */
+
+            /* FIXME: this is a workaround because shiftfs doesn't return EINVAL
+             * in the fnctl call above, for example when the underlying fs is
+             * ZFS. */
+            if (errno == EINVAL && *size == 4096) {
+                *size = 0;
+                return 0;
+            }
+
             return errno;
         }
         *size = *size / 2;
