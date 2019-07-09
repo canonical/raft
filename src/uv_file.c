@@ -82,25 +82,32 @@ err:
 static void writeWorkCb(uv_work_t *work)
 {
     struct uvFileWrite *req; /* Write file request object */
-    aio_context_t ctx = 0;   /* KAIO handle */
+    struct uvFile *f;        /* File object */
+    aio_context_t ctx;       /* KAIO handle */
     struct iocb *iocbs;      /* Pointer to KAIO request object */
     struct io_event event;   /* KAIO response object */
     int rv;
 
     req = work->data;
-    assert(req->file->state == READY);
+    f = req->file;
+    assert(f->state == READY);
 
     iocbs = &req->iocb;
 
-    /* Perform the request using a dedicated context, to avoid synchronization
-     * issues between threads when multiple write requests are submitted in
-     * parallel. This is suboptimal but in real-world users should use file
-     * systems and kernels with proper async write support. */
-
-    rv = io_setup(1 /* Maximum concurrent requests */, &ctx);
-    if (rv == -1) {
-        /* UNTESTED: should fail only with ENOMEM */
-        goto out;
+    /* If more than one write in parallel is allowed, submit the AIO request
+     * using a dedicated context, to avoid synchronization issues between
+     * threads when multiple writes are submitted in parallel. This is
+     * suboptimal but in real-world users should use file systems and kernels
+     * with proper async write support. */
+    if (f->n_events > 1) {
+        ctx = 0;
+        rv = io_setup(1 /* Maximum concurrent requests */, &ctx);
+        if (rv == -1) {
+            /* UNTESTED: should fail only with ENOMEM */
+            goto out;
+        }
+    } else {
+        ctx = f->ctx;
     }
 
     /* Submit the request */
@@ -120,7 +127,9 @@ static void writeWorkCb(uv_work_t *work)
     rv = 0;
 
 out_after_io_setup:
-    io_destroy(ctx);
+    if (f->n_events > 1) {
+        io_destroy(ctx);
+    }
 
 out:
     if (rv != 0) {
