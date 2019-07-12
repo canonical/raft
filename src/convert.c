@@ -8,21 +8,25 @@
 #include "request.h"
 
 /* Convenience for setting a new state value and asserting that the transition
- * is valid. */
-static void setState(struct raft *r, int state)
+ * is valid. Return the old state. */
+static int setState(struct raft *r, int new_state)
 {
+    int old_state = r->state;
+
     /* Check that the transition is legal, see Figure 3.3. Note that with
      * respect to the paper we have an additional "unavailable" state, which is
      * the initial or final state. */
-    assert((r->state == RAFT_UNAVAILABLE && state == RAFT_FOLLOWER) ||
-           (r->state == RAFT_FOLLOWER && state == RAFT_CANDIDATE) ||
-           (r->state == RAFT_CANDIDATE && state == RAFT_FOLLOWER) ||
-           (r->state == RAFT_CANDIDATE && state == RAFT_LEADER) ||
-           (r->state == RAFT_LEADER && state == RAFT_FOLLOWER) ||
-           (r->state == RAFT_FOLLOWER && state == RAFT_UNAVAILABLE) ||
-           (r->state == RAFT_CANDIDATE && state == RAFT_UNAVAILABLE) ||
-           (r->state == RAFT_LEADER && state == RAFT_UNAVAILABLE));
-    r->state = state;
+    assert((old_state == RAFT_UNAVAILABLE && new_state == RAFT_FOLLOWER) ||
+           (old_state == RAFT_FOLLOWER && new_state == RAFT_CANDIDATE) ||
+           (old_state == RAFT_CANDIDATE && new_state == RAFT_FOLLOWER) ||
+           (old_state == RAFT_CANDIDATE && new_state == RAFT_LEADER) ||
+           (old_state == RAFT_LEADER && new_state == RAFT_FOLLOWER) ||
+           (old_state == RAFT_FOLLOWER && new_state == RAFT_UNAVAILABLE) ||
+           (old_state == RAFT_CANDIDATE && new_state == RAFT_UNAVAILABLE) ||
+           (old_state == RAFT_LEADER && new_state == RAFT_UNAVAILABLE));
+    r->state = new_state;
+
+    return old_state;
 }
 
 /* Clear follower state. */
@@ -121,25 +125,38 @@ static void clear(struct raft *r)
     }
 }
 
+/* Possibly trigger the watch callback if set. */
+static void triggerWatchCb(struct raft *r, int old_state)
+{
+    if (r->watch_cb != NULL) {
+        r->watch_cb(r, old_state);
+    }
+}
+
 void convertToFollower(struct raft *r)
 {
+    int old_state;
+
     clear(r);
-    setState(r, RAFT_FOLLOWER);
+    old_state = setState(r, RAFT_FOLLOWER);
 
     /* Reset election timer. */
     electionResetTimer(r);
 
     r->follower_state.current_leader.id = 0;
     r->follower_state.current_leader.address = NULL;
+
+    triggerWatchCb(r, old_state);
 }
 
 int convertToCandidate(struct raft *r)
 {
     size_t n_voting = configurationNumVoting(&r->configuration);
+    int old_state;
     int rv;
 
     clear(r);
-    setState(r, RAFT_CANDIDATE);
+    old_state = setState(r, RAFT_CANDIDATE);
 
     /* Allocate the votes array. */
     r->candidate_state.votes = raft_malloc(n_voting * sizeof(bool));
@@ -154,15 +171,19 @@ int convertToCandidate(struct raft *r)
         raft_free(r->candidate_state.votes);
         return rv;
     }
+
+    triggerWatchCb(r, old_state);
+
     return 0;
 }
 
 int convertToLeader(struct raft *r)
 {
+    int old_state;
     int rv;
 
     clear(r);
-    setState(r, RAFT_LEADER);
+    old_state = setState(r, RAFT_LEADER);
 
     /* Reset timers */
     r->election_timer_start = r->io->time(r->io);
@@ -184,11 +205,15 @@ int convertToLeader(struct raft *r)
     r->leader_state.round_index = 0;
     r->leader_state.round_start = 0;
 
+    triggerWatchCb(r, old_state);
+
     return 0;
 }
 
 void convertToUnavailable(struct raft *r)
 {
+    int old_state;
     clear(r);
-    setState(r, RAFT_UNAVAILABLE);
+    old_state = setState(r, RAFT_UNAVAILABLE);
+    triggerWatchCb(r, old_state);
 }

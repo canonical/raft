@@ -14,14 +14,34 @@ TEST_MODULE(election);
 struct fixture
 {
     FIXTURE_CLUSTER;
+    struct /* Capture information about last watch cb invokation */
+    {
+        struct raft *raft;
+        int old_state;
+    } watch_cb;
 };
+
+static void watchCb(struct raft *r, int old_state)
+{
+    struct fixture *f = r->data;
+    f->watch_cb.raft = r;
+    f->watch_cb.old_state = old_state;
+}
 
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
+    unsigned i;
     (void)user_data;
+    f->watch_cb.raft = NULL;
+    f->watch_cb.old_state = 0;
     SETUP_CLUSTER(2);
     CLUSTER_BOOTSTRAP;
+    for (i = 0; i < CLUSTER_N; i++) {
+        struct raft *raft = CLUSTER_RAFT(i);
+        raft->data = f;
+    }
+    CLUSTER_WATCH(watchCb);
     return f;
 }
 
@@ -98,6 +118,14 @@ static MunitParameterEnum cluster_3_params[] = {
 /* Assert that the fixture time matches the given value */
 #define ASSERT_TIME(TIME) munit_assert_int(CLUSTER_TIME, ==, TIME)
 
+/* Assert that the last watch callback invokation was passed the given
+ * values. */
+#define ASSERT_WATCH(I, OLD_STATE)                                 \
+    {                                                              \
+        munit_assert_ptr_equal(f->watch_cb.raft, CLUSTER_RAFT(I)); \
+        munit_assert_int(f->watch_cb.old_state, ==, OLD_STATE);    \
+    }
+
 /******************************************************************************
  *
  * Successful election round
@@ -132,6 +160,7 @@ TEST_CASE(win, two_voters, NULL)
     CLUSTER_STEP; /* Server 1 receives RequestVote RPC result */
     ASSERT_LEADER(0);
     ASSERT_TIME(1030);
+    ASSERT_WATCH(0, RAFT_CANDIDATE);
 
     return MUNIT_OK;
 }
