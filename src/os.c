@@ -399,7 +399,7 @@ static int probeAsyncIO(int fd, size_t size, bool *ok)
     /* Prepare the KAIO request object */
     memset(&iocb, 0, sizeof iocb);
     iocb.aio_lio_opcode = IOCB_CMD_PWRITE;
-    *((void**)(&iocb.aio_buf)) = buf;
+    *((void **)(&iocb.aio_buf)) = buf;
     iocb.aio_nbytes = size;
     iocb.aio_offset = 0;
     iocb.aio_fildes = fd;
@@ -412,6 +412,11 @@ static int probeAsyncIO(int fd, size_t size, bool *ok)
         /* UNTESTED: in practice this should fail only with ENOMEM */
         free(buf);
         io_destroy(ctx);
+        /* On ZFS 0.8 this is not properly supported yet. */
+        if (errno == EOPNOTSUPP) {
+            *ok = false;
+            return 0;
+        }
         return errno;
     }
 
