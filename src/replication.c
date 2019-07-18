@@ -3,6 +3,9 @@
 #include "assert.h"
 #include "configuration.h"
 #include "convert.h"
+#ifdef __GLIBC__
+#include "error.h"
+#endif
 #include "error.h"
 #include "log.h"
 #include "logging.h"
