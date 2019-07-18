@@ -236,8 +236,8 @@ static void sendSnapshotGetCb(struct raft_io_snapshot_get *get,
     req->snapshot = snapshot;
     req->send.data = req;
 
-    debugf(r, "sending snapshot with last index %ld to %ld",
-           snapshot->index, server->id);
+    debugf(r, "sending snapshot with last index %ld to %ld", snapshot->index,
+           server->id);
 
     rv = r->io->send(r->io, &req->send, &message, sendInstallSnapshotCb);
     if (rv != 0) {
@@ -378,8 +378,7 @@ static int triggerAll(struct raft *r)
         rv = replicationProgress(r, i);
         if (rv != 0 && rv != RAFT_NOCONNECTION) {
             /* This is not a critical failure, let's just log it. */
-            debugf(r,
-                   "failed to send append entries to server %ld: %s (%d)",
+            debugf(r, "failed to send append entries to server %ld: %s (%d)",
                    server->id, raft_strerror(rv), rv);
         }
     }
