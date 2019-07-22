@@ -764,11 +764,22 @@ int uvSegmentLoadAll(struct uv *uv,
              * loaded, and it must be the first segment we're loading. */
             if (info->first_index < next_index) {
                 if (*n_entries != 0) {
-                    uvErrorf(uv,
+                    /* TODO: understand why this happens at LXD
+                     * upgrade. Re-enable this after 3.15 has been out for
+                     * reasonably long. */
+                    rv = osUnlink(uv->dir, info->filename);
+                    if (rv != 0) {
+                        uvErrorf(uv, "unlink %s: %s", info->filename,
+                                 osStrError(rv));
+                        rv = RAFT_IOERR;
+                        goto err;
+                    }
+                    continue;
+                    /*uvErrorf(uv,
                              "load %s: expected first segment at %lld or lower",
                              info->filename, next_index);
                     rv = RAFT_CORRUPT;
-                    goto err;
+                    goto err;*/
                 }
                 prefix = next_index - info->first_index;
             }
