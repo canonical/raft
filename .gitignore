@@ -20,9 +20,9 @@ stamp-h1
 .dirstamp
 .deps/
 .libs/
-unit-test
-integration-test
-fuzzy-test
+unit-test*
+integration-test*
+fuzzy-test*
 test-suite.log
 tests/main_test.c
 coverage/

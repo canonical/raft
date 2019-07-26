@@ -1,27 +1,23 @@
-dist: trusty
-sudo: required
+dist: xenial
 language: c
-before_install:
-  - sudo add-apt-repository ppa:dqlite-maintainers/master -y
-  - sudo apt-add-repository ppa:zfs-native/stable -y
-  - sudo apt-get update -q
-  - sudo apt-get install xfslibs-dev -y
-  - sudo apt-get install libuv1-dev -y
-  - sudo apt-get install linux-headers-$(uname -r) -y
-  - sudo apt-get install ubuntu-zfs -y
-  - sudo modprobe zfs
+addons:
+  apt:
+    packages:
+    - lcov
+    - linux-libc-dev
+    - libuv1-dev
+    - xfsprogs
+    - zfsutils-linux
 compiler:
   - clang
   - gcc
 script:
   - autoreconf -i
-  - ./configure --enable-debug --enable-coverage
-  - make
-  - make ./unit-test
-  - make ./fuzzy-test
+  - ./configure --disable-uv --enable-debug --enable-code-coverage --enable-sanitize
   - ./test/lib/fs.sh setup
-  - ./unit-test
-  - ./fuzzy-test
+  - make
+  - make check || cat ./test-suite.log
+  - make code-coverage-capture
   - ./test/lib/fs.sh teardown
 after_success:
   - bash <(curl -s https://codecov.io/bash) -G "./src*"
