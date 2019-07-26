@@ -5,6 +5,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#define RAFT_API __attribute__((visibility("default")))
+
 /**
  * Error codes.
  */
@@ -55,7 +57,7 @@ enum {
 /**
  * Return the error message describing the given error code.
  */
-const char *raft_strerror(int errnum);
+RAFT_API const char *raft_strerror(int errnum);
 
 /**
  * Hold the value of a raft term. Guaranteed to be at least 64-bit long.
@@ -103,12 +105,12 @@ struct raft_configuration
 /**
  * Initialize an empty raft configuration.
  */
-void raft_configuration_init(struct raft_configuration *c);
+RAFT_API void raft_configuration_init(struct raft_configuration *c);
 
 /**
  * Release all memory used by the given configuration object.
  */
-void raft_configuration_close(struct raft_configuration *c);
+RAFT_API void raft_configuration_close(struct raft_configuration *c);
 
 /**
  * Add a server to a raft configuration.
@@ -121,10 +123,10 @@ void raft_configuration_close(struct raft_configuration *c);
  * The @address string will be copied and can be released after this function
  * returns.
  */
-int raft_configuration_add(struct raft_configuration *c,
-                           const unsigned id,
-                           const char *address,
-                           const bool voting);
+RAFT_API int raft_configuration_add(struct raft_configuration *c,
+                                    const unsigned id,
+                                    const char *address,
+                                    const bool voting);
 
 /**
  * Log entry types.
@@ -398,7 +400,7 @@ struct raft_logger
 /**
  * Default implementation of the logger interface, emitting messages to stdout.
  */
-int raft_default_logger_init(struct raft_logger *l);
+RAFT_API int raft_default_logger_init(struct raft_logger *l);
 
 /**
  * Logging levels.
@@ -797,12 +799,12 @@ struct raft
 /**
  * Initialize a raft server object.
  */
-int raft_init(struct raft *r,
-              struct raft_io *io,
-              struct raft_fsm *fsm,
-              struct raft_logger *logger,
-              unsigned id,
-              const char *address);
+RAFT_API int raft_init(struct raft *r,
+                       struct raft_io *io,
+                       struct raft_fsm *fsm,
+                       struct raft_logger *logger,
+                       unsigned id,
+                       const char *address);
 
 /**
  * Close a raft instance, releasing all used resources.
@@ -810,14 +812,15 @@ int raft_init(struct raft *r,
  * The memory of instance itself can be released only once the given callback
  * has been invoked.
  */
-void raft_close(struct raft *r, raft_close_cb cb);
+RAFT_API void raft_close(struct raft *r, raft_close_cb cb);
 
 /**
  * Bootstrap this raft instance using the given configuration. The instance must
  * not have been started yet and must be completely pristine, otherwise an error
  * is returned.
  */
-int raft_bootstrap(struct raft *r, const struct raft_configuration *conf);
+RAFT_API int raft_bootstrap(struct raft *r,
+                            const struct raft_configuration *conf);
 
 /**
  * Start the given raft instance.
@@ -827,7 +830,7 @@ int raft_bootstrap(struct raft *r, const struct raft_configuration *conf);
  * it's the only voting server in the cluster, in which case it will
  * automatically elect itself and become #RAFT_LEADER.
  */
-int raft_start(struct raft *r);
+RAFT_API int raft_start(struct raft *r);
 
 /**
  * Set the election timeout.
@@ -845,56 +848,56 @@ int raft_start(struct raft *r);
  * Note that the current random election timer will be reset and a new one timer
  * will be generated.
  */
-void raft_set_election_timeout(struct raft *r, unsigned msecs);
+RAFT_API void raft_set_election_timeout(struct raft *r, unsigned msecs);
 
 /**
  * Set the heartbeat timeout.
  */
-void raft_set_heartbeat_timeout(struct raft *r, unsigned msecs);
+RAFT_API void raft_set_heartbeat_timeout(struct raft *r, unsigned msecs);
 
 /**
  * Number of outstanding log entries before starting a new snapshot. The default
  * is 1024.
  */
-void raft_set_snapshot_threshold(struct raft *r, unsigned n);
+RAFT_API void raft_set_snapshot_threshold(struct raft *r, unsigned n);
 
 /**
  * Number of outstanding log entries to keep in the log after a snapshot has
  * been taken. This avoids sending snapshots when a follower is behind by just a
  * few entries. The default is 128.
  */
-void raft_set_snapshot_trailing(struct raft *r, unsigned n);
+RAFT_API void raft_set_snapshot_trailing(struct raft *r, unsigned n);
 
 /**
  * Set the logging level. Only messages with at this level or above will be
  * emitted.
  */
-void raft_set_logger_level(struct raft *r, unsigned level);
+RAFT_API void raft_set_logger_level(struct raft *r, unsigned level);
 
 /**
  * Return the code of the current raft state.
  */
-int raft_state(struct raft *r);
+RAFT_API int raft_state(struct raft *r);
 
 /**
  * Invoke the given watch callback whenever the current raft state changes.
  */
-void raft_watch(struct raft *r, raft_watch_cb cb);
+RAFT_API void raft_watch(struct raft *r, raft_watch_cb cb);
 
 /**
  * Return the ID and address of the current known leader, if any.
  */
-void raft_leader(struct raft *r, unsigned *id, const char **address);
+RAFT_API void raft_leader(struct raft *r, unsigned *id, const char **address);
 
 /**
  * Return the index of the last entry that was appended to the local log.
  */
-raft_index raft_last_index(struct raft *r);
+RAFT_API raft_index raft_last_index(struct raft *r);
 
 /**
  * Return the index of the last entry that was applied to the local FSM.
  */
-raft_index raft_last_applied(struct raft *r);
+RAFT_API raft_index raft_last_applied(struct raft *r);
 
 /* Common fields across client request types. */
 #define RAFT__REQUEST \
@@ -935,11 +938,11 @@ struct raft_apply
  * the raft library, and, if allocated dynamically, must be deallocated by the
  * caller.
  */
-int raft_apply(struct raft *r,
-               struct raft_apply *req,
-               const struct raft_buffer bufs[],
-               const unsigned n,
-               raft_apply_cb cb);
+RAFT_API int raft_apply(struct raft *r,
+                        struct raft_apply *req,
+                        const struct raft_buffer bufs[],
+                        const unsigned n,
+                        raft_apply_cb cb);
 
 /**
  * Asynchronous request to append a barrier entry.
@@ -957,7 +960,9 @@ struct raft_barrier
  *
  * This can be used to ensure that there are no unapplied commands.
  */
-int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb);
+RAFT_API int raft_barrier(struct raft *r,
+                          struct raft_barrier *req,
+                          raft_barrier_cb cb);
 
 /**
  * Asynchronous request to change the raft configuration.
@@ -973,27 +978,27 @@ struct raft_change
 /**
  * Add a new non-voting server to the cluster configuration.
  */
-int raft_add(struct raft *r,
-             struct raft_change *req,
-             unsigned id,
-             const char *address,
-             raft_change_cb cb);
+RAFT_API int raft_add(struct raft *r,
+                      struct raft_change *req,
+                      unsigned id,
+                      const char *address,
+                      raft_change_cb cb);
 
 /**
  * Promote the given new non-voting server to be a voting one.
  */
-int raft_promote(struct raft *r,
-                 struct raft_change *req,
-                 unsigned id,
-                 raft_change_cb cb);
+RAFT_API int raft_promote(struct raft *r,
+                          struct raft_change *req,
+                          unsigned id,
+                          raft_change_cb cb);
 
 /**
  * Remove the given server from the cluster configuration.
  */
-int raft_remove(struct raft *r,
-                struct raft_change *req,
-                unsigned id,
-                raft_change_cb cb);
+RAFT_API int raft_remove(struct raft *r,
+                         struct raft_change *req,
+                         unsigned id,
+                         raft_change_cb cb);
 
 /**
  * User-definable dynamic memory allocation functions.
@@ -1010,22 +1015,22 @@ struct raft_heap
     void *(*aligned_alloc)(void *data, size_t alignment, size_t size);
 };
 
-void *raft_malloc(size_t size);
-void raft_free(void *ptr);
-void *raft_calloc(size_t nmemb, size_t size);
-void *raft_realloc(void *ptr, size_t size);
-void *raft_aligned_alloc(size_t alignment, size_t size);
+RAFT_API void *raft_malloc(size_t size);
+RAFT_API void raft_free(void *ptr);
+RAFT_API void *raft_calloc(size_t nmemb, size_t size);
+RAFT_API void *raft_realloc(void *ptr, size_t size);
+RAFT_API void *raft_aligned_alloc(size_t alignment, size_t size);
 
 /**
  * Use a custom dynamic memory allocator.
  */
-void raft_heap_set(struct raft_heap *heap);
+RAFT_API void raft_heap_set(struct raft_heap *heap);
 
 /**
  * Use the default dynamic memory allocator (from the stdlib). This clears any
  * custom allocator specified with @raft_heap_set.
  */
-void raft_heap_set_default(void);
+RAFT_API void raft_heap_set_default(void);
 
 #undef RAFT__REQUEST
 

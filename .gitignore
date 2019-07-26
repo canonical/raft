@@ -4,6 +4,7 @@
 *~
 Makefile.in
 aclocal.m4
+aminclude_static.am
 autom4te.cache/
 config.h.in
 configure
@@ -19,11 +20,13 @@ stamp-h1
 .dirstamp
 .deps/
 .libs/
-unit-test*
-fuzzy-test*
+unit-test
+integration-test
+fuzzy-test
 test-suite.log
 tests/main_test.c
 coverage/
+coverage.info
 TAGS
 example-server
 example-cluster

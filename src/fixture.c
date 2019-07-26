@@ -1843,16 +1843,6 @@ void raft_fixture_set_snapshot(struct raft_fixture *f,
     io->snapshot = snapshot;
 }
 
-void raft_fixture_set_entries(struct raft_fixture *f,
-                              unsigned i,
-                              struct raft_entry *entries,
-                              unsigned n)
-{
-    struct io *io = f->servers[i].io.impl;
-    io->entries = entries;
-    io->n = n;
-}
-
 void raft_fixture_add_entry(struct raft_fixture *f,
                             unsigned i,
                             struct raft_entry *entry)

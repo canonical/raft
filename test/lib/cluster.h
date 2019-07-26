@@ -351,18 +351,17 @@
 #define CLUSTER_SET_SNAPSHOT(I, LAST_INDEX, LAST_TERM, CONF_INDEX, X, Y)  \
     {                                                                     \
         struct raft_configuration configuration_;                         \
-        struct raft_snapshot *snapshot;                                   \
+        struct raft_snapshot *snapshot_;                                  \
         CLUSTER_CONFIGURATION(&configuration_);                           \
-        CREATE_SNAPSHOT(snapshot, LAST_INDEX, LAST_TERM, &configuration_, \
+        CREATE_SNAPSHOT(snapshot_, LAST_INDEX, LAST_TERM, configuration_, \
                         CONF_INDEX, X, Y);                                \
-        raft_configuration_close(&configuration_);                        \
-        raft_fixture_set_snapshot(&f->cluster, I, snapshot);              \
+        raft_fixture_set_snapshot(&f->cluster, I, snapshot_);             \
     }
 
-/* Set the entries persisted on the I'th server. This must be called before
+/* Add a persisted entry to the I'th server. This must be called before
  * starting the cluster. */
-#define CLUSTER_SET_ENTRIES(I, ENTRIES, N) \
-    raft_fixture_set_entries(&f->cluster, I, ENTRIES, N)
+#define CLUSTER_ADD_ENTRY(I, ENTRY) \
+    raft_fixture_add_entry(&f->cluster, I, ENTRY)
 
 /* Add an entry to the ones persisted on the I'th server. This must be called
  * before starting the cluster. */

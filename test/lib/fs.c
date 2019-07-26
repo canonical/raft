@@ -1,7 +1,9 @@
+#define _GNU_SOURCE
 #include <errno.h>
 #include <fcntl.h>
 #include <ftw.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
@@ -15,13 +17,13 @@
 #define TEST_DIR_TEMPLATE "./tmp/%s/raft-test-XXXXXX"
 
 char *test_dir_fs_type_supported[] = {"tmpfs", "ext4",
-#if defined(RAFT_ENABLE_BTRFS_TESTS)
+#if defined(RAFT_HAVE_BTRFS)
                                       "btrfs",
 #endif
-#if defined(RAFT_ENABLE_XFS_TESTS)
+#if defined(RAFT_HAVE_XFS)
                                       "xfs",
 #endif
-#if defined(RAFT_ENABLE_ZFS_TESTS)
+#if defined(RAFT_HAVE_ZFS)
                                       "zfs",
 #endif
                                       NULL};
@@ -29,17 +31,17 @@ char *test_dir_fs_type_supported[] = {"tmpfs", "ext4",
 char *test_dir_fs_type_btrfs[] = {"btrfs", NULL};
 
 char *test_dir_fs_type_aio[] = {
-#if defined(RAFT_ENABLE_BTRFS_TESTS)
+#if defined(RAFT_HAVE_BTRFS)
     "btrfs",
 #endif
     "ext4",
-#if defined(RAFT_ENABLE_XFS_TESTS)
+#if defined(RAFT_HAVE_XFS)
     "xfs",
 #endif
     NULL};
 
 char *test_dir_fs_type_no_aio[] = {"tmpfs",
-#if defined(RAFT_ENABLE_ZFS_TESTS)
+#if defined(RAFT_HAVE_ZFS)
 
                                    "zfs",
 #endif
