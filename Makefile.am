@@ -1,10 +1,6 @@
 ACLOCAL_AMFLAGS = -I m4
 AM_CFLAGS = -I$(top_srcdir)/include -Wall
 
-if SANITIZE_ENABLED
-  AM_CFLAGS += -fsanitize=address
-endif
-
 include_HEADERS = include/raft.h
 
 raftincludedir = $(includedir)/raft
@@ -55,17 +51,10 @@ unit_test_SOURCES = $(test_lib_SOURCES)
 unit_test_SOURCES += $(libraft_la_SOURCES)
 unit_test_SOURCES += \
   test/unit/main.c \
-  test/unit/test_apply.c \
-  test/unit/test_barrier.c \
   test/unit/test_byte.c \
   test/unit/test_configuration.c \
-  test/unit/test_election.c \
   test/unit/test_log.c \
-  test/unit/test_membership.c \
-  test/unit/test_queue.c \
-  test/unit/test_replication.c \
-  test/unit/test_snapshot.c \
-  test/unit/test_tick.c
+  test/unit/test_queue.c
 unit_test_CFLAGS = $(CODE_COVERAGE_CFLAGS) $(test_CFLAGS)
 unit_test_LDADD =
 unit_test_LDFLAGS =
@@ -73,6 +62,13 @@ unit_test_LDFLAGS =
 integration_test_SOURCES = $(test_lib_SOURCES)
 integration_test_SOURCES += \
   test/integration/main.c \
+  test/integration/test_apply.c \
+  test/integration/test_barrier.c \
+  test/integration/test_election.c \
+  test/integration/test_membership.c \
+  test/integration/test_replication.c \
+  test/integration/test_snapshot.c \
+  test/integration/test_tick.c \
   test/integration/test_start.c
 integration_test_CFLAGS = $(test_CFLAGS)
 integration_test_LDADD = libraft.la
@@ -168,6 +164,14 @@ example_cluster_LDFLAGS = $(UV_LIBS)
 
 endif # EXAMPLE_ENABLED
 
+if SANITIZE_ENABLED
+  AM_CFLAGS += -fsanitize=address
+endif
+
+if CODE_COVERAGE_ENABLED
+
+include $(top_srcdir)/aminclude_static.am
+
 CODE_COVERAGE_DIRECTORY=./src
 CODE_COVERAGE_OUTPUT_DIRECTORY=coverage
 CODE_COVERAGE_OUTPUT_FILE=coverage.info
@@ -175,10 +179,10 @@ CODE_COVERAGE_IGNORE_PATTERN=/usr/include
 CODE_COVERAGE_BRANCH_COVERAGE=1
 CODE_COVERAGE_LCOV_OPTIONS=$(CODE_COVERAGE_LCOV_OPTIONS_DEFAULT) --rc lcov_excl_br_line="assert\("
 
-include $(top_srcdir)/aminclude_static.am
-
 clean-local: code-coverage-clean
 distclean-local: code-coverage-dist-clean
+
+endif # CODE_COVERAGE_ENABLED
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = @PACKAGE_NAME@.pc

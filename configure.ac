@@ -23,7 +23,7 @@ AM_CONDITIONAL(UV_ENABLED, test "x$have_uv" = "xyes")
 AC_ARG_ENABLE(fixture, AS_HELP_STRING([--disable-fixture], [do not build the raft_fixture test helper]))
 AM_CONDITIONAL(FIXTURE_ENABLED, test "x$enable_fixture" != "xno")
 
-# Whether to build the example program.
+# The example program is optional.
 AC_ARG_ENABLE(example, AS_HELP_STRING([--enable-example[=ARG]], [build the example program [default=no]]))
 AS_IF([test "x$enable_example" = "xyes" -a "x$have_uv" = "xno"], [AC_MSG_ERROR([example program requires libuv])], [])
 AM_CONDITIONAL(EXAMPLE_ENABLED, test "x$enable_example" = "xyes")
@@ -32,9 +32,12 @@ AM_CONDITIONAL(EXAMPLE_ENABLED, test "x$enable_example" = "xyes")
 AC_ARG_ENABLE(debug, AS_HELP_STRING([--enable-debug[=ARG]], [enable debugging [default=no]]))
 AM_CONDITIONAL(DEBUG_ENABLED, test "x$enable_debug" = "xyes")
 
-# Enable memory sanitizer.
+# Whether to enable memory sanitizer.
 AC_ARG_ENABLE(sanitize, AS_HELP_STRING([--enable-sanitize[=ARG]], [enable code sanitizers [default=no]]))
 AM_CONDITIONAL(SANITIZE_ENABLED, test x"$enable_sanitize" = x"yes")
+
+# Whether to enable code coverage.
+AX_CODE_COVERAGE
 
 # Checks for header files.
 AC_CHECK_HEADERS([stdlib.h string.h stdio.h assert.h unistd.h])
@@ -93,8 +96,6 @@ AX_CHECK_COMPILE_FLAG([-Wnested-externs], [AM_CFLAGS="$AM_CFLAGS -Wnested-extern
 AX_CHECK_COMPILE_FLAG([-fasynchronous-unwind-tables], [AM_CFLAGS="$AM_CFLAGS -fasynchronous-unwind-tables"])
 AX_CHECK_COMPILE_FLAG([-pipe], [AM_CFLAGS="$AM_CFLAGS -pipe"])
 AX_CHECK_COMPILE_FLAG([-fexceptions], [AM_CFLAGS="$AM_CFLAGS -fexceptions"])
-
-AX_CODE_COVERAGE
 
 AC_CONFIG_FILES([raft.pc Makefile])
 AC_OUTPUT

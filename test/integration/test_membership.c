@@ -208,6 +208,7 @@ TEST_TEAR_DOWN(promote, tear_down)
 TEST_CASE(promote, up_to_date, NULL)
 {
     struct fixture *f = data;
+    struct raft *raft;
     const struct raft_server *server;
     (void)params;
     GROW;
@@ -219,7 +220,8 @@ TEST_CASE(promote, up_to_date, NULL)
 
     /* Server 3 is being considered as voting, even though the configuration
      * change is not committed yet. */
-    server = configurationGet(&CLUSTER_RAFT(0)->configuration, 3);
+    raft = CLUSTER_RAFT(0);
+    server = &raft->configuration.servers[2];
     munit_assert_true(server->voting);
 
     /* The configuration change request eventually succeeds. */
@@ -241,6 +243,7 @@ static bool third_server_has_caught_up(struct raft_fixture *f, void *arg)
 TEST_CASE(promote, catch_up, NULL)
 {
     struct fixture *f = data;
+    struct raft *raft;
     const struct raft_server *server;
     (void)params;
     CLUSTER_MAKE_PROGRESS;
@@ -251,7 +254,8 @@ TEST_CASE(promote, catch_up, NULL)
     PROMOTE(0, 3, 0);
 
     /* Server 3 is not being considered as voting, since its log is behind. */
-    server = configurationGet(&CLUSTER_RAFT(0)->configuration, 3);
+    raft = CLUSTER_RAFT(0);
+    server = &raft->configuration.servers[2];
     munit_assert_false(server->voting);
 
     /* Advance the match index of server 3, by acknowledging the AppendEntries
