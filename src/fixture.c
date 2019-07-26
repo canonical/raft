@@ -217,7 +217,7 @@ static bool ioFaultTick(struct io *io)
 }
 
 static int ioMethodInit(struct raft_io *raft_io,
-			struct raft_logger *logger,
+                        struct raft_logger *logger,
                         unsigned id,
                         const char *address)
 {
@@ -1380,11 +1380,13 @@ struct raft_fixture_event *raft_fixture_step(struct raft_fixture *f)
 {
     raft_time tick_time;
     raft_time completion_time;
-    unsigned i;
-    unsigned j;
+    unsigned i = f->n;
+    unsigned j = f->n;
 
     getLowestTickTime(f, &tick_time, &i);
     getLowestRequestCompletionTime(f, &completion_time, &j);
+
+    assert(i < f->n || j < f->n);
 
     if (tick_time < completion_time ||
         (tick_time == completion_time && i <= j)) {

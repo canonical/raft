@@ -26,7 +26,7 @@
  * Return true if the filename matched, false otherwise. */
 static bool infoMatch(const char *filename, struct uvSnapshotInfo *info)
 {
-    unsigned consumed;
+    unsigned consumed = 0;
     int matched;
     size_t filename_len = strnlen(filename, OS_MAX_FILENAME_LEN + 1);
 
