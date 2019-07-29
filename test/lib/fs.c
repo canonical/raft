@@ -10,7 +10,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "../../src/aio.h"
+#include "../../src/os.h"
 
 #include "fs.h"
 

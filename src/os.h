@@ -4,9 +4,11 @@
 #define OS_H_
 
 #include <dirent.h>
+#include <linux/aio_abi.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <time.h>
 
 #include "../include/raft.h"
 
@@ -16,7 +18,7 @@
 /* Maximum length of a filename. */
 #define OS_MAX_FILENAME_LEN 128
 
-/* Length of path separator */
+/* Length of path separator. */
 #define OS_SEP_LEN 1 /* strlen("/") */
 
 /* Maximum length of a directory path. */
@@ -107,5 +109,19 @@ int osSetDirectIO(int fd);
 
 /* Return a human-readable description of the given OS error */
 const char *osStrError(int rv);
+
+/* Declaration of the kernel AIO APIs that we use. This avoids having to depend
+ * on libaio. */
+int io_setup(unsigned n, aio_context_t *ctx);
+
+int io_destroy(aio_context_t ctx);
+
+int io_submit(aio_context_t ctx, long n, struct iocb **iocbs);
+
+int io_getevents(aio_context_t ctx,
+                 long min_nr,
+                 long max_nr,
+                 struct io_event *events,
+                 struct timespec *timeout);
 
 #endif /* OS_H_ */

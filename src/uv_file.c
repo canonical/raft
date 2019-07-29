@@ -7,7 +7,6 @@
 
 #include <uv.h>
 
-#include "aio.h"
 #include "assert.h"
 #include "os.h"
 #include "uv_file.h"

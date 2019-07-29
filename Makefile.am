@@ -88,7 +88,6 @@ fuzzy_test_LDFLAGS =
 if UV_ENABLED
 
 libraft_la_SOURCES += \
-  src/aio.c \
   src/os.c \
   src/uv.c \
   src/uv_append.c \
@@ -111,8 +110,29 @@ libraft_la_LDFLAGS += $(UV_LIBS)
 
 raftinclude_HEADERS += include/raft/uv.h
 
+check_PROGRAMS += os-test uv-test
+
 test_lib_SOURCES += \
   test/lib/loop.c
+
+os_test_SOURCES = \
+  src/os.c \
+  test/lib/munit.c \
+  test/lib/fs.c \
+  test/os/main.c \
+  test/os/test_os.c
+os_test_CFLAGS = $(CODE_COVERAGE_CFLAGS) $(test_CFLAGS)
+
+uv_test_SOURCES = $(test_lib_SOURCES)
+uv_test_SOURCES += $(libraft_la_SOURCES)
+uv_test_SOURCES += \
+  test/lib/fs.c \
+  test/lib/uv.c \
+  test/uv/main.c \
+  test/uv/test_uv_file.c
+uv_test_CFLAGS = $(CODE_COVERAGE_CFLAGS) $(test_CFLAGS)
+uv_test_LDADD =
+uv_test_LDFLAGS = $(UV_LIBS)
 
 unit_test_SOURCES += \
   test/lib/fs.c \
