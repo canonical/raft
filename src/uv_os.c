@@ -78,6 +78,29 @@ int uvScanDir(const uvDir dir, struct dirent ***entries, int *n_entries)
     return 0;
 }
 
+int uvOpen(const uvDir dir, const uvFilename filename, int flags, int *fd)
+{
+    uvPath path;
+    uvJoin(dir, filename, path);
+    *fd = open(path, flags, S_IRUSR | S_IWUSR);
+    if (*fd == -1) {
+        return errno;
+    }
+    return 0;
+}
+
+int uvStat(const uvDir dir, const uvFilename filename, struct stat *sb)
+{
+    uvPath path;
+    int rv;
+    uvJoin(dir, filename, path);
+    rv = stat(path, sb);
+    if (rv == -1) {
+        return errno;
+    }
+    return 0;
+}
+
 int uvCreate(const uvDir dir,
              const uvFilename filename,
              struct raft_buffer *bufs,
@@ -116,29 +139,6 @@ err_after_file_open:
     close(fd);
 err:
     return rv;
-}
-
-int uvOpen(const uvDir dir, const uvFilename filename, int flags, int *fd)
-{
-    uvPath path;
-    uvJoin(dir, filename, path);
-    *fd = open(path, flags, S_IRUSR | S_IWUSR);
-    if (*fd == -1) {
-        return errno;
-    }
-    return 0;
-}
-
-int uvStat(const uvDir dir, const uvFilename filename, struct stat *sb)
-{
-    uvPath path;
-    int rv;
-    uvJoin(dir, filename, path);
-    rv = stat(path, sb);
-    if (rv == -1) {
-        return errno;
-    }
-    return 0;
 }
 
 int uvUnlink(const char *dir, const char *filename)
@@ -448,7 +448,7 @@ static int probeAsyncIO(int fd, size_t size, bool *ok)
 }
 #endif /* RWF_NOWAIT */
 
-int osProbeIO(const uvDir dir, size_t *direct, bool *async)
+int uvProbeIO(const uvDir dir, size_t *direct, bool *async)
 {
     uvFilename filename; /* Filename of the probe file */
     uvPath path;         /* Full path of the probe file */

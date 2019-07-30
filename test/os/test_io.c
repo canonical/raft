@@ -41,19 +41,19 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-/* Invoke @osProbeIO assert that it returns the given code. */
+/* Invoke @uvProbeIO assert that it returns the given code. */
 #define ASSERT_PROBE_IO(RV)                             \
     {                                                   \
         size_t direct_io;                               \
         bool async_io;                                  \
         int rv2;                                        \
-        rv2 = osProbeIO(f->dir, &direct_io, &async_io); \
+        rv2 = uvProbeIO(f->dir, &direct_io, &async_io); \
         munit_assert_int(rv2, ==, RV);                  \
     }
 
 /******************************************************************************
  *
- * osProbeIO
+ * uvProbeIO
  *
  *****************************************************************************/
 

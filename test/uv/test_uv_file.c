@@ -27,7 +27,7 @@ TEST_MODULE(uv_file);
     (void)user_data;                                                     \
     SETUP_DIR;                                                           \
     SETUP_LOOP;                                                          \
-    rv = osProbeIO(f->dir, &f->direct_io, &f->async_io);                 \
+    rv = uvProbeIO(f->dir, &f->direct_io, &f->async_io);                 \
     munit_assert_int(rv, ==, 0);                                         \
     f->block_size = f->direct_io != 0 ? f->direct_io : 4096;             \
     rv = uvFileInit(&f->file, &f->loop, f->direct_io != 0, f->async_io); \

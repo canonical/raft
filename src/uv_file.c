@@ -561,7 +561,7 @@ int uvFileWrite(struct uvFile *f,
         switch (errno) {
             case EOPNOTSUPP:
                 /* NOWAIT is not supported, this should occur because we checked
-                 * it in osProbeIO. */
+                 * it in uvProbeIO. */
                 assert(0);
                 break;
             case EAGAIN:

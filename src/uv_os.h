@@ -48,17 +48,17 @@ int uvSyncDir(const uvDir dir);
 /* Return all entries of the given directory, in alphabetically sorted order. */
 int uvScanDir(const uvDir dir, struct dirent ***entries, int *n_entries);
 
-/* Create a file with the given content. */
-int uvCreate(const uvDir dir,
-             const uvFilename filename,
-             struct raft_buffer *bufs,
-             unsigned n_bufs);
-
 /* Open a file in a directory. */
 int uvOpen(const uvDir dir, const uvFilename filename, int flags, int *fd);
 
 /* Stat a file in a directory. */
 int uvStat(const uvDir dir, const uvFilename filename, struct stat *sb);
+
+/* Create a file with the given content. */
+int uvCreate(const uvDir dir,
+             const uvFilename filename,
+             struct raft_buffer *bufs,
+             unsigned n_bufs);
 
 /* Delete a file in a directory. */
 int uvUnlink(const uvDir dir, const uvFilename filename);
@@ -102,7 +102,7 @@ struct osFileSystemInfo
  *
  * The @async parameter will be set to true if fully asynchronous I/O is
  * possible using the KAIO API. */
-int osProbeIO(const uvDir dir, size_t *direct, bool *async);
+int uvProbeIO(const uvDir dir, size_t *direct, bool *async);
 
 /* Configure the given file descriptor for direct I/O. */
 int osSetDirectIO(int fd);

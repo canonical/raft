@@ -50,7 +50,7 @@ static int uvInit(struct raft_io *io,
     }
 
     /* Detect the I/O capabilities of the underlying file system. */
-    rv = osProbeIO(uv->dir, &direct_io, &uv->async_io);
+    rv = uvProbeIO(uv->dir, &direct_io, &uv->async_io);
     if (rv != 0) {
         uvErrorf(uv, "probe I/O capabilities: %s", uv_strerror(rv));
         rv = RAFT_IOERR;
