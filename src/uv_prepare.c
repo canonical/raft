@@ -39,7 +39,7 @@ struct segment
     struct uvFile *file;        /* Open segment file */
     struct uvFileCreate create; /* Create file request */
     unsigned long long counter; /* Segment counter */
-    osPath path;                /* Path of the segment */
+    uvPath path;                /* Path of the segment */
     queue queue;                /* Pool */
 };
 

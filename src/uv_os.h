@@ -13,7 +13,7 @@
 #include "../include/raft.h"
 
 /* Maximum length of a file path. */
-#define OS_MAX_PATH_LEN 1024
+#define UV__PATH_MAX_LEN 1024
 
 /* Maximum length of a filename. */
 #define OS_MAX_FILENAME_LEN 128
@@ -22,10 +22,10 @@
 #define OS_SEP_LEN 1 /* strlen("/") */
 
 /* Maximum length of a directory path. */
-#define OS_MAX_DIR_LEN (OS_MAX_PATH_LEN - OS_SEP_LEN - OS_MAX_FILENAME_LEN)
+#define OS_MAX_DIR_LEN (UV__PATH_MAX_LEN - OS_SEP_LEN - OS_MAX_FILENAME_LEN)
 
 /* Fixed length string that can hold a complete file system path. */
-typedef char osPath[OS_MAX_PATH_LEN];
+typedef char uvPath[UV__PATH_MAX_LEN];
 
 /* Fixed length string that can hold a file name. */
 typedef char osFilename[OS_MAX_FILENAME_LEN];
@@ -34,10 +34,10 @@ typedef char osFilename[OS_MAX_FILENAME_LEN];
 typedef char osDir[OS_MAX_DIR_LEN];
 
 /* Concatenate a directory and a file. */
-void osJoin(const osDir dir, const osFilename filename, osPath path);
+void osJoin(const osDir dir, const osFilename filename, uvPath path);
 
 /* Extract the directory portion of the given path. */
-void osDirname(const osPath path, osDir dir);
+void osDirname(const uvPath path, osDir dir);
 
 /* Check that the given directory exists, and try to create it if it doesn't. */
 int osEnsureDir(const osDir dir);

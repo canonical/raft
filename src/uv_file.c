@@ -403,7 +403,7 @@ err:
 
 int uvFileCreate(struct uvFile *f,
                  struct uvFileCreate *req,
-                 osPath path,
+                 uvPath path,
                  size_t size,
                  unsigned max_n_writes,
                  uvFileCreateCb cb)
@@ -414,7 +414,7 @@ int uvFileCreate(struct uvFile *f,
     assert(path != NULL);
     assert(size > 0);
     assert(!f->closing);
-    assert(strnlen(path, OS_MAX_PATH_LEN + 1) <= OS_MAX_PATH_LEN);
+    assert(strnlen(path, UV__PATH_MAX_LEN + 1) <= UV__PATH_MAX_LEN);
 
     f->state = CREATING;
 

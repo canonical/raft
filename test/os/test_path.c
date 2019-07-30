@@ -9,7 +9,7 @@ TEST_CASE(join, NULL)
 {
     const osDir dir = "/foo";
     const osFilename filename = "bar";
-    osPath path;
+    uvPath path;
     (void)data;
     (void)params;
     osJoin(dir, filename, path);
@@ -19,7 +19,7 @@ TEST_CASE(join, NULL)
 
 /* Extract the directory name from a full path. */
 TEST_CASE(dirname, NULL) {
-    const osPath path = "/foo/bar";
+    const uvPath path = "/foo/bar";
     osDir dir;
     (void)data;
     (void)params;
