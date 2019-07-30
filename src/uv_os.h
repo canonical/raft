@@ -51,8 +51,8 @@ int uvStat(const uvDir dir, const uvFilename filename, struct stat *sb);
 /* Delete a file in a directory. */
 int uvUnlink(const uvDir dir, const uvFilename filename);
 
-/* Truncate a file in a directory. */
-int osTruncate(const uvDir dir, const uvFilename filename, size_t offset);
+/* Shrink the size of a file in a directory. */
+int uvShrink(const uvDir dir, const uvFilename filename, size_t offset);
 
 /* Rename a file in a directory. */
 int osRename(const uvDir dir,

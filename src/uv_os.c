@@ -86,7 +86,7 @@ int uvUnlink(const char *dir, const char *filename)
     return 0;
 }
 
-int osTruncate(const uvDir dir, const uvFilename filename, size_t offset)
+int uvShrink(const uvDir dir, const uvFilename filename, size_t offset)
 {
     uvPath path;
     int fd;
