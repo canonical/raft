@@ -110,7 +110,7 @@ int uvShrink(const uvDir dir, const uvFilename filename, size_t offset)
     return 0;
 }
 
-int osRename(const uvDir dir,
+int uvRename(const uvDir dir,
              const uvFilename filename1,
              const uvFilename filename2)
 {

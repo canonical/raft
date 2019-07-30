@@ -45,7 +45,7 @@ static void workCb(uv_work_t *work)
 
     sprintf(filename2, UV__CLOSED_TEMPLATE, s->first_index, s->last_index);
 
-    rv = osRename(uv->dir, filename1, filename2);
+    rv = uvRename(uv->dir, filename1, filename2);
     if (rv != 0) {
         uvErrorf(uv, "rename segment %d: %s", s->counter, osStrError(rv));
         rv = RAFT_IOERR;

@@ -512,7 +512,7 @@ done:
         assert(end_index >= first_index);
 
         sprintf(filename, UV__CLOSED_TEMPLATE, first_index, end_index);
-        rv = osRename(uv->dir, info->filename, filename);
+        rv = uvRename(uv->dir, info->filename, filename);
         if (rv != 0) {
             uvErrorf(uv, "rename %s: %s", info->filename, osStrError(rv));
             rv = RAFT_IOERR;

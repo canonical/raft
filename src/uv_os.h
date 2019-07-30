@@ -55,7 +55,7 @@ int uvUnlink(const uvDir dir, const uvFilename filename);
 int uvShrink(const uvDir dir, const uvFilename filename, size_t offset);
 
 /* Rename a file in a directory. */
-int osRename(const uvDir dir,
+int uvRename(const uvDir dir,
              const uvFilename filename1,
              const uvFilename filename2);
 
