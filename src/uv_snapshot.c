@@ -144,7 +144,7 @@ static int loadMeta(struct uv *uv,
     snapshot->term = info->term;
     snapshot->index = info->index;
 
-    rv = osOpen(uv->dir, info->filename, O_RDONLY, &fd);
+    rv = uvOpen(uv->dir, info->filename, O_RDONLY, &fd);
     if (rv != 0) {
         uvErrorf(uv, "open %s: %s", info->filename, osStrError(rv));
         rv = RAFT_IOERR;
@@ -243,7 +243,7 @@ static int loadData(struct uv *uv,
         goto err;
     }
 
-    rv = osOpen(uv->dir, filename, O_RDONLY, &fd);
+    rv = uvOpen(uv->dir, filename, O_RDONLY, &fd);
     if (rv != 0) {
         uvErrorf(uv, "open %s: %s", filename, osStrError(rv));
         rv = RAFT_IOERR;

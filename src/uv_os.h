@@ -43,7 +43,7 @@ void uvDirname(const uvPath path, uvDir dir);
 int uvEnsureDir(const uvDir dir);
 
 /* Open a file in a directory. */
-int osOpen(const uvDir dir, const uvFilename filename, int flags, int *fd);
+int uvOpen(const uvDir dir, const uvFilename filename, int flags, int *fd);
 
 /* Stat a file in a directory. */
 int osStat(const uvDir dir, const uvFilename filename, struct stat *sb);

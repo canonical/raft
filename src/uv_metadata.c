@@ -57,7 +57,7 @@ static int loadFile(struct uv *uv,
     filenameOf(n, filename);
 
     /* Open the metadata file, if it exists. */
-    rv = osOpen(uv->dir, filename, O_RDONLY, &fd);
+    rv = uvOpen(uv->dir, filename, O_RDONLY, &fd);
     if (rv != 0) {
         if (rv != ENOENT) {
             uvErrorf(uv, "open %s: %s", filename, osStrError(rv));
@@ -199,7 +199,7 @@ int uvMetadataStore(struct uv *uv, const struct uvMetadata *metadata)
     filenameOf(n, filename);
 
     /* Write the metadata file, creating it if it does not exist. */
-    rv = osOpen(uv->dir, filename, flags, &fd);
+    rv = uvOpen(uv->dir, filename, flags, &fd);
     if (rv != 0) {
         uvErrorf(uv, "open %s: %s", filename, osStrError(rv));
         return RAFT_IOERR;

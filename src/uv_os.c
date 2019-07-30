@@ -51,7 +51,7 @@ int uvEnsureDir(const uvDir dir)
     return 0;
 }
 
-int osOpen(const uvDir dir, const uvFilename filename, int flags, int *fd)
+int uvOpen(const uvDir dir, const uvFilename filename, int flags, int *fd)
 {
     uvPath path;
     uvJoin(dir, filename, path);
@@ -273,7 +273,7 @@ int osCreateFile(const uvDir dir,
     for (i = 0; i < n_bufs; i++) {
         size += bufs[i].len;
     }
-    rv = osOpen(dir, filename, flags, &fd);
+    rv = uvOpen(dir, filename, flags, &fd);
     if (rv != 0) {
         return RAFT_IOERR;
     }

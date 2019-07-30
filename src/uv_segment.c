@@ -117,7 +117,7 @@ static int openSegment(struct uv *uv,
                        uint64_t *format)
 {
     int rv;
-    rv = osOpen(uv->dir, filename, flags, fd);
+    rv = uvOpen(uv->dir, filename, flags, fd);
     if (rv != 0) {
         uvErrorf(uv, "open %s: %s", filename, osStrError(rv));
         return RAFT_IOERR;
@@ -918,7 +918,7 @@ int uvSegmentCreateFirstClosed(struct uv *uv,
     }
 
     /* Open the file. */
-    rv = osOpen(uv->dir, filename, O_WRONLY | O_CREAT | O_EXCL, &fd);
+    rv = uvOpen(uv->dir, filename, O_WRONLY | O_CREAT | O_EXCL, &fd);
     if (rv != 0) {
         uvErrorf(uv, "unlink %s: %s", filename, osStrError(rv));
         rv = RAFT_IOERR;
@@ -985,7 +985,7 @@ int uvSegmentTruncate(struct uv *uv,
     sprintf(filename, UV__CLOSED_TEMPLATE, segment->first_index, index - 1);
 
     /* Open the file. */
-    rv = osOpen(uv->dir, filename, O_WRONLY | O_CREAT | O_EXCL, &fd);
+    rv = uvOpen(uv->dir, filename, O_WRONLY | O_CREAT | O_EXCL, &fd);
     if (rv != 0) {
         goto out_after_load;
     }
