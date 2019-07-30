@@ -1,7 +1,7 @@
 #include <unistd.h>
 
 #include "assert.h"
-#include "os.h"
+#include "uv_os.h"
 #include "uv.h"
 
 /* The happy path for a uvPrepare request is:

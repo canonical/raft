@@ -5,7 +5,7 @@
 
 #include "../include/raft.h"
 
-#include "os.h"
+#include "uv_os.h"
 #include "uv_file.h"
 
 /* Current disk format version. */
@@ -35,9 +35,13 @@ struct uvMetadata
     unsigned voted_for;         /* Server ID of last vote, or 0 */
 };
 
+/* Hold state associated with an outbound connection. */
 struct uvClient;
+
+/* Hold state associated with an inbound connection. */
 struct uvServer;
 
+/* Hold state of a libuv-based raft_io implementation. */
 struct uv
 {
     struct raft_io *io;                  /* I/O object we're implementing */
@@ -52,9 +56,9 @@ struct uv
     bool async_io;                       /* Whether async I/O is supported */
     size_t block_size;                   /* Block size of the data dir */
     unsigned n_blocks;                   /* N. of blocks in a segment */
-    struct uvClient **clients;           /* Outgoing connections */
+    struct uvClient **clients;           /* Outbound connections */
     unsigned n_clients;                  /* Length of the clients array */
-    struct uvServer **servers;           /* Incoming connections */
+    struct uvServer **servers;           /* Inbound connections */
     unsigned n_servers;                  /* Length of the servers array */
     unsigned connect_retry_delay;        /* Client connection retry delay */
     struct uvFile *prepare_file;         /* File segment being prepared */

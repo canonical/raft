@@ -2,7 +2,7 @@
 #include "../lib/loop.h"
 #include "../lib/runner.h"
 
-#include "../../src/os.h"
+#include "../../src/uv_os.h"
 #include "../../src/uv_file.h"
 
 TEST_MODULE(uv_file);

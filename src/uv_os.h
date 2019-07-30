@@ -1,7 +1,7 @@
 /* Operating system related utilities. */
 
-#ifndef OS_H_
-#define OS_H_
+#ifndef UV_OS_H_
+#define UV_OS_H_
 
 #include <dirent.h>
 #include <linux/aio_abi.h>
@@ -124,4 +124,4 @@ int osIoGetevents(aio_context_t ctx,
                   struct io_event *events,
                   struct timespec *timeout);
 
-#endif /* OS_H_ */
+#endif /* UV_OS_H_ */

@@ -12,9 +12,9 @@
 #include "configuration.h"
 #include "entry.h"
 #include "logging.h"
-#include "os.h"
 #include "uv.h"
 #include "uv_encoding.h"
+#include "uv_os.h"
 
 /* Retry to connect to peer servers every second.
  *

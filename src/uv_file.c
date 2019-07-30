@@ -8,7 +8,7 @@
 #include <uv.h>
 
 #include "assert.h"
-#include "os.h"
+#include "uv_os.h"
 #include "uv_file.h"
 
 /* Support the version of libuv in Ubuntu 18.04 */

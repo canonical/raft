@@ -4,7 +4,7 @@
 #include "../lib/dir.h"
 #include "../lib/runner.h"
 
-#include "../../src/os.h"
+#include "../../src/uv_os.h"
 
 TEST_MODULE(fs);
 

@@ -99,7 +99,6 @@ fuzzy_test_LDFLAGS =
 if UV_ENABLED
 
 libraft_la_SOURCES += \
-  src/os.c \
   src/uv.c \
   src/uv_append.c \
   src/uv_encoding.c \
@@ -108,6 +107,7 @@ libraft_la_SOURCES += \
   src/uv_ip.c \
   src/uv_list.c \
   src/uv_metadata.c \
+  src/uv_os.c \
   src/uv_prepare.c \
   src/uv_recv.c \
   src/uv_segment.c \
@@ -134,7 +134,7 @@ os_test_SOURCES = \
   test/os/test_fs.c \
   test/os/test_io.c \
   test/os/test_path.c \
-  src/os.c
+  src/uv_os.c
 os_test_CFLAGS = $(CODE_COVERAGE_CFLAGS) $(test_CFLAGS)
 os_test_LDADD = libtest.la
 

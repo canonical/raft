@@ -6,8 +6,8 @@
 #include "byte.h"
 #include "configuration.h"
 #include "logging.h"
-#include "os.h"
 #include "uv.h"
+#include "uv_os.h"
 
 /* Template string for snapshot filenames: snapshot term, snapshot index,
  * creation timestamp (milliseconds since epoch). */

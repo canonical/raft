@@ -9,8 +9,8 @@
 
 #include <uv.h>
 
-#include "os.h"
 #include "queue.h"
+#include "uv_os.h"
 
 /* Handle to an open file. */
 struct uvFile;

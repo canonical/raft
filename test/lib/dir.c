@@ -9,7 +9,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "../../src/os.h"
+#include "../../src/uv_os.h"
 
 #include "dir.h"
 

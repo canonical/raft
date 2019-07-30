@@ -10,7 +10,7 @@
 #include <unistd.h>
 
 #include "assert.h"
-#include "os.h"
+#include "uv_os.h"
 
 void osJoin(const osDir dir, const osFilename filename, osPath path)
 {
