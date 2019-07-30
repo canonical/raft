@@ -22,8 +22,8 @@ static void workCb(uv_work_t *work)
 {
     struct segment *s = work->data;
     struct uv *uv = s->uv;
-    osFilename filename1;
-    osFilename filename2;
+    uvFilename filename1;
+    uvFilename filename2;
     int rv;
 
     sprintf(filename1, UV__OPEN_TEMPLATE, s->counter);

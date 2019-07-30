@@ -19,9 +19,9 @@ static bool infoMatch(const char *filename, struct uvSegmentInfo *info)
 {
     unsigned consumed;
     int matched;
-    size_t filename_len = strnlen(filename, OS_MAX_FILENAME_LEN + 1);
+    size_t filename_len = strnlen(filename, UV__FILENAME_MAX_LEN + 1);
 
-    if (filename_len > OS_MAX_FILENAME_LEN) {
+    if (filename_len > UV__FILENAME_MAX_LEN) {
         return false;
     }
 
@@ -111,7 +111,7 @@ void uvSegmentSort(struct uvSegmentInfo *infos, size_t n_infos)
 
 /* Open a segment file and read its format version. */
 static int openSegment(struct uv *uv,
-                       const osFilename filename,
+                       const uvFilename filename,
                        const int flags,
                        int *fd,
                        uint64_t *format)
@@ -505,7 +505,7 @@ done:
             goto err_after_open;
         }
     } else {
-        osFilename filename;
+        uvFilename filename;
         raft_index end_index = *next_index - 1;
 
         /* At least one entry was loaded */
@@ -904,7 +904,7 @@ int uvSegmentCreateFirstClosed(struct uv *uv,
                                const struct raft_configuration *configuration)
 {
     struct raft_buffer buf;
-    osFilename filename;
+    uvFilename filename;
     int fd;
     int rv;
 
@@ -955,7 +955,7 @@ int uvSegmentTruncate(struct uv *uv,
                       struct uvSegmentInfo *segment,
                       raft_index index)
 {
-    osFilename filename;
+    uvFilename filename;
     struct raft_entry *entries;
     struct uvSegmentBuffer buf;
     size_t n;

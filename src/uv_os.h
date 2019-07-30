@@ -16,25 +16,25 @@
 #define UV__PATH_MAX_LEN 1024
 
 /* Maximum length of a filename. */
-#define OS_MAX_FILENAME_LEN 128
+#define UV__FILENAME_MAX_LEN 128
 
 /* Length of path separator. */
 #define OS_SEP_LEN 1 /* strlen("/") */
 
 /* Maximum length of a directory path. */
-#define OS_MAX_DIR_LEN (UV__PATH_MAX_LEN - OS_SEP_LEN - OS_MAX_FILENAME_LEN)
+#define OS_MAX_DIR_LEN (UV__PATH_MAX_LEN - OS_SEP_LEN - UV__FILENAME_MAX_LEN)
 
 /* Fixed length string that can hold a complete file system path. */
 typedef char uvPath[UV__PATH_MAX_LEN];
 
 /* Fixed length string that can hold a file name. */
-typedef char osFilename[OS_MAX_FILENAME_LEN];
+typedef char uvFilename[UV__FILENAME_MAX_LEN];
 
 /* Fixed length string that can hold a directory path. */
 typedef char osDir[OS_MAX_DIR_LEN];
 
 /* Concatenate a directory and a file. */
-void osJoin(const osDir dir, const osFilename filename, uvPath path);
+void osJoin(const osDir dir, const uvFilename filename, uvPath path);
 
 /* Extract the directory portion of the given path. */
 void osDirname(const uvPath path, osDir dir);
@@ -43,21 +43,21 @@ void osDirname(const uvPath path, osDir dir);
 int osEnsureDir(const osDir dir);
 
 /* Open a file in a directory. */
-int osOpen(const osDir dir, const osFilename filename, int flags, int *fd);
+int osOpen(const osDir dir, const uvFilename filename, int flags, int *fd);
 
 /* Stat a file in a directory. */
-int osStat(const osDir dir, const osFilename filename, struct stat *sb);
+int osStat(const osDir dir, const uvFilename filename, struct stat *sb);
 
 /* Delete a file in a directory. */
-int osUnlink(const osDir dir, const osFilename filename);
+int osUnlink(const osDir dir, const uvFilename filename);
 
 /* Truncate a file in a directory. */
-int osTruncate(const osDir dir, const osFilename filename, size_t offset);
+int osTruncate(const osDir dir, const uvFilename filename, size_t offset);
 
 /* Rename a file in a directory. */
 int osRename(const osDir dir,
-             const osFilename filename1,
-             const osFilename filename2);
+             const uvFilename filename1,
+             const uvFilename filename2);
 
 /* Sync the given directory. */
 int osSyncDir(const osDir dir);
@@ -66,7 +66,7 @@ int osSyncDir(const osDir dir);
 int osScanDir(const osDir dir, struct dirent ***entries, int *n_entries);
 
 /* Check whether the given file in the given directory is empty. */
-int osIsEmpty(const osDir dir, const osFilename filename, bool *empty);
+int osIsEmpty(const osDir dir, const uvFilename filename, bool *empty);
 
 /* Check if the content of the file associated with the given file descriptor
  * contains all zeros from the current offset onward. */
@@ -83,7 +83,7 @@ bool osIsAtEof(int fd);
 
 /* Create a file with the given content. */
 int osCreateFile(const osDir dir,
-                 const osFilename filename,
+                 const uvFilename filename,
                  struct raft_buffer *bufs,
                  unsigned n_bufs);
 

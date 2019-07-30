@@ -35,7 +35,7 @@ static int decode(const void *buf, struct uvMetadata *metadata)
 }
 
 /* Render the filename of the metadata file with index @n. */
-static void filenameOf(const unsigned short n, osFilename filename)
+static void filenameOf(const unsigned short n, uvFilename filename)
 {
     sprintf(filename, "metadata%d", n);
 }
@@ -46,7 +46,7 @@ static int loadFile(struct uv *uv,
                     const unsigned short n,
                     struct uvMetadata *metadata)
 {
-    osFilename filename; /* Filename of the metadata file */
+    uvFilename filename; /* Filename of the metadata file */
     uint8_t buf[SIZE];   /* Content of metadata file */
     int fd;
     int rv;
@@ -182,7 +182,7 @@ int uvMetadataLoad(struct uv *uv, struct uvMetadata *metadata)
 
 int uvMetadataStore(struct uv *uv, const struct uvMetadata *metadata)
 {
-    osFilename filename; /* Filename of the metadata file */
+    uvFilename filename; /* Filename of the metadata file */
     uint8_t buf[SIZE];   /* Content of metadata file */
     const int flags = O_WRONLY | O_CREAT | O_SYNC | O_TRUNC;
     unsigned short n;

@@ -12,7 +12,7 @@
 #include "assert.h"
 #include "uv_os.h"
 
-void osJoin(const osDir dir, const osFilename filename, uvPath path)
+void osJoin(const osDir dir, const uvFilename filename, uvPath path)
 {
     strcpy(path, dir);
     strcat(path, "/");
@@ -51,7 +51,7 @@ int osEnsureDir(const osDir dir)
     return 0;
 }
 
-int osOpen(const osDir dir, const osFilename filename, int flags, int *fd)
+int osOpen(const osDir dir, const uvFilename filename, int flags, int *fd)
 {
     uvPath path;
     osJoin(dir, filename, path);
@@ -62,7 +62,7 @@ int osOpen(const osDir dir, const osFilename filename, int flags, int *fd)
     return 0;
 }
 
-int osStat(const osDir dir, const osFilename filename, struct stat *sb)
+int osStat(const osDir dir, const uvFilename filename, struct stat *sb)
 {
     uvPath path;
     int rv;
@@ -86,7 +86,7 @@ int osUnlink(const char *dir, const char *filename)
     return 0;
 }
 
-int osTruncate(const osDir dir, const osFilename filename, size_t offset)
+int osTruncate(const osDir dir, const uvFilename filename, size_t offset)
 {
     uvPath path;
     int fd;
@@ -111,8 +111,8 @@ int osTruncate(const osDir dir, const osFilename filename, size_t offset)
 }
 
 int osRename(const osDir dir,
-             const osFilename filename1,
-             const osFilename filename2)
+             const uvFilename filename1,
+             const uvFilename filename2)
 {
     uvPath path1;
     uvPath path2;
@@ -158,7 +158,7 @@ int osScanDir(const osDir dir, struct dirent ***entries, int *n_entries)
     return 0;
 }
 
-int osIsEmpty(const osDir dir, const osFilename filename, bool *empty)
+int osIsEmpty(const osDir dir, const uvFilename filename, bool *empty)
 {
     uvPath path;
     struct stat sb;
@@ -260,7 +260,7 @@ bool osIsAtEof(const int fd)
 }
 
 int osCreateFile(const osDir dir,
-                 const osFilename filename,
+                 const uvFilename filename,
                  struct raft_buffer *bufs,
                  unsigned n_bufs)
 {
@@ -450,7 +450,7 @@ static int probeAsyncIO(int fd, size_t size, bool *ok)
 
 int osProbeIO(const osDir dir, size_t *direct, bool *async)
 {
-    osFilename filename; /* Filename of the probe file */
+    uvFilename filename; /* Filename of the probe file */
     uvPath path;         /* Full path of the probe file */
     int fd;              /* File descriptor of the probe file */
     int rv;

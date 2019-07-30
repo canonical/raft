@@ -119,7 +119,7 @@ struct uvSegmentInfo
             unsigned long long counter; /* Open segment counter */
         };
     };
-    osFilename filename; /* Segment filename */
+    uvFilename filename; /* Segment filename */
 };
 
 /* Append a new item to the given segment info list if the given filename
@@ -206,7 +206,7 @@ struct uvSnapshotInfo
     raft_term term;
     raft_index index;
     unsigned long long timestamp;
-    osFilename filename;
+    uvFilename filename;
 };
 
 /* Append a new item to the given snapshot info list if the given filename

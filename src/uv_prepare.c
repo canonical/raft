@@ -174,7 +174,7 @@ static void prepareSegmentFileCreateCb(struct uvFileCreate *req, int status)
 static int prepareSegment(struct uv *uv)
 {
     struct segment *s;
-    osFilename filename;
+    uvFilename filename;
     int rv;
 
     s = raft_malloc(sizeof *s);

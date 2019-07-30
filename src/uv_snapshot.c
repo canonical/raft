@@ -28,9 +28,9 @@ static bool infoMatch(const char *filename, struct uvSnapshotInfo *info)
 {
     unsigned consumed = 0;
     int matched;
-    size_t filename_len = strnlen(filename, OS_MAX_FILENAME_LEN + 1);
+    size_t filename_len = strnlen(filename, UV__FILENAME_MAX_LEN + 1);
 
-    if (filename_len > OS_MAX_FILENAME_LEN) {
+    if (filename_len > UV__FILENAME_MAX_LEN) {
         return false;
     }
 
@@ -45,10 +45,10 @@ static bool infoMatch(const char *filename, struct uvSnapshotInfo *info)
 }
 
 /* Render the filename of the data file of a snapshot */
-static void filenameOf(struct uvSnapshotInfo *info, osFilename filename)
+static void filenameOf(struct uvSnapshotInfo *info, uvFilename filename)
 {
     size_t len = strlen(info->filename) - strlen(".meta");
-    assert(len < OS_MAX_FILENAME_LEN);
+    assert(len < UV__FILENAME_MAX_LEN);
     strncpy(filename, info->filename, len);
     filename[len] = 0;
 }
@@ -62,7 +62,7 @@ int uvSnapshotInfoAppendIfMatch(struct uv *uv,
     struct uvSnapshotInfo info;
     bool matched;
     struct stat sb;
-    osFilename snapshot_filename;
+    uvFilename snapshot_filename;
     int rv;
 
     /* Check if it's a snapshot metadata filename */
@@ -229,7 +229,7 @@ static int loadData(struct uv *uv,
                     struct raft_snapshot *snapshot)
 {
     struct stat sb;
-    osFilename filename;
+    uvFilename filename;
     struct raft_buffer buf;
     int fd;
     int rv;
@@ -350,7 +350,7 @@ static int removeOldSegmentsAndSnapshots(struct uv *uv, raft_index last_index)
     if (n_snapshots > 2) {
         for (i = 0; i < n_snapshots - 2; i++) {
             struct uvSnapshotInfo *s = &snapshots[i];
-            osFilename filename;
+            uvFilename filename;
             rv = osUnlink(uv->dir, s->filename);
             if (rv != 0) {
                 uvErrorf(uv, "unlink %s: %s", s->filename, osStrError(rv));
@@ -399,7 +399,7 @@ static void putWorkCb(uv_work_t *work)
 {
     struct put *r = work->data;
     struct uv *uv = r->uv;
-    osFilename filename;
+    uvFilename filename;
     int rv;
 
     sprintf(filename, META_TEMPLATE, r->snapshot->term, r->snapshot->index,

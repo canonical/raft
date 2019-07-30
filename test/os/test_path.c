@@ -8,7 +8,7 @@ TEST_MODULE(path);
 TEST_CASE(join, NULL)
 {
     const osDir dir = "/foo";
-    const osFilename filename = "bar";
+    const uvFilename filename = "bar";
     uvPath path;
     (void)data;
     (void)params;
