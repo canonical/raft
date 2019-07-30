@@ -62,7 +62,7 @@ static void createWorkCb(uv_work_t *work)
 
     /* Set direct I/O if available. */
     if (f->direct) {
-        rv = osSetDirectIO(f->fd);
+        rv = uvSetDirectIO(f->fd);
         if (rv != 0) {
             goto err;
         }

@@ -505,7 +505,7 @@ err:
     return rv;
 }
 
-int osSetDirectIO(int fd)
+int uvSetDirectIO(int fd)
 {
     int flags; /* Current fcntl flags */
     int rv;

@@ -87,13 +87,6 @@ int uvWriteN(int fd, void *buf, size_t n);
 /* Check if the given file descriptor has reached the end of the file. */
 bool uvIsAtEof(int fd);
 
-struct osFileSystemInfo
-{
-    size_t block_size; /* Block size to use when writing. */
-    bool direct_io;    /* Whether direct I/O is supported. */
-    bool async_io;     /* Whether fully asynchronous I/O is supported. */
-};
-
 /* Return information about the I/O capabilities of the underlying file
  * system.
  *
@@ -105,7 +98,7 @@ struct osFileSystemInfo
 int uvProbeIO(const uvDir dir, size_t *direct, bool *async);
 
 /* Configure the given file descriptor for direct I/O. */
-int osSetDirectIO(int fd);
+int uvSetDirectIO(int fd);
 
 /* Return a human-readable description of the given OS error */
 const char *osStrError(int rv);
