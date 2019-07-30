@@ -78,6 +78,46 @@ int uvScanDir(const uvDir dir, struct dirent ***entries, int *n_entries)
     return 0;
 }
 
+int uvCreate(const uvDir dir,
+             const uvFilename filename,
+             struct raft_buffer *bufs,
+             unsigned n_bufs)
+{
+    int flags = O_WRONLY | O_CREAT | O_EXCL;
+    int fd;
+    int rv;
+    size_t size;
+    unsigned i;
+    size = 0;
+    for (i = 0; i < n_bufs; i++) {
+        size += bufs[i].len;
+    }
+    rv = uvOpen(dir, filename, flags, &fd);
+    if (rv != 0) {
+        return RAFT_IOERR;
+    }
+    rv = writev(fd, (const struct iovec *)bufs, n_bufs);
+    if (rv != (int)(size)) {
+        rv = errno;
+        goto err_after_file_open;
+    }
+    rv = fsync(fd);
+    if (rv == -1) {
+        goto err_after_file_open;
+    }
+    rv = close(fd);
+    if (rv == -1) {
+        rv = errno;
+        goto err;
+    }
+    return 0;
+
+err_after_file_open:
+    close(fd);
+err:
+    return rv;
+}
+
 int uvOpen(const uvDir dir, const uvFilename filename, int flags, int *fd)
 {
     uvPath path;
@@ -249,7 +289,7 @@ int uvWriteN(const int fd, void *buf, const size_t n)
     return 0;
 }
 
-bool osIsAtEof(const int fd)
+bool uvIsAtEof(const int fd)
 {
     off_t offset;
     off_t size;
@@ -257,46 +297,6 @@ bool osIsAtEof(const int fd)
     size = lseek(fd, 0, SEEK_END);   /* Get file size */
     lseek(fd, offset, SEEK_SET);     /* Restore current offset */
     return offset == size;           /* Compare current offset and size */
-}
-
-int osCreateFile(const uvDir dir,
-                 const uvFilename filename,
-                 struct raft_buffer *bufs,
-                 unsigned n_bufs)
-{
-    int flags = O_WRONLY | O_CREAT | O_EXCL;
-    int fd;
-    int rv;
-    size_t size;
-    unsigned i;
-    size = 0;
-    for (i = 0; i < n_bufs; i++) {
-        size += bufs[i].len;
-    }
-    rv = uvOpen(dir, filename, flags, &fd);
-    if (rv != 0) {
-        return RAFT_IOERR;
-    }
-    rv = writev(fd, (const struct iovec *)bufs, n_bufs);
-    if (rv != (int)(size)) {
-        rv = errno;
-        goto err_after_file_open;
-    }
-    rv = fsync(fd);
-    if (rv == -1) {
-        goto err_after_file_open;
-    }
-    rv = close(fd);
-    if (rv == -1) {
-        rv = errno;
-        goto err;
-    }
-    return 0;
-
-err_after_file_open:
-    close(fd);
-err:
-    return rv;
 }
 
 /* Check if direct I/O is possible on the given fd. */

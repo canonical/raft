@@ -248,7 +248,7 @@ static int loadEntriesBatch(struct uv *uv,
 
     raft_free(header.base);
 
-    *last = osIsAtEof(fd);
+    *last = uvIsAtEof(fd);
 
     return 0;
 

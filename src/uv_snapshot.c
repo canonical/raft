@@ -405,7 +405,7 @@ static void putWorkCb(uv_work_t *work)
     sprintf(filename, META_TEMPLATE, r->snapshot->term, r->snapshot->index,
             r->meta.timestamp);
 
-    rv = osCreateFile(uv->dir, filename, r->meta.bufs, 2);
+    rv = uvCreate(uv->dir, filename, r->meta.bufs, 2);
     if (rv != 0) {
         uvErrorf(uv, "write %s: %s", filename, osStrError(rv));
         r->status = RAFT_IOERR;
@@ -415,8 +415,7 @@ static void putWorkCb(uv_work_t *work)
     sprintf(filename, TEMPLATE, r->snapshot->term, r->snapshot->index,
             r->meta.timestamp);
 
-    rv =
-        osCreateFile(uv->dir, filename, r->snapshot->bufs, r->snapshot->n_bufs);
+    rv = uvCreate(uv->dir, filename, r->snapshot->bufs, r->snapshot->n_bufs);
     if (rv != 0) {
         uvErrorf(uv, "write %s: %s", filename, osStrError(rv));
         r->status = RAFT_IOERR;

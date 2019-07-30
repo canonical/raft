@@ -48,6 +48,12 @@ int uvSyncDir(const uvDir dir);
 /* Return all entries of the given directory, in alphabetically sorted order. */
 int uvScanDir(const uvDir dir, struct dirent ***entries, int *n_entries);
 
+/* Create a file with the given content. */
+int uvCreate(const uvDir dir,
+             const uvFilename filename,
+             struct raft_buffer *bufs,
+             unsigned n_bufs);
+
 /* Open a file in a directory. */
 int uvOpen(const uvDir dir, const uvFilename filename, int flags, int *fd);
 
@@ -79,13 +85,7 @@ int uvReadN(int fd, void *buf, size_t n);
 int uvWriteN(int fd, void *buf, size_t n);
 
 /* Check if the given file descriptor has reached the end of the file. */
-bool osIsAtEof(int fd);
-
-/* Create a file with the given content. */
-int osCreateFile(const uvDir dir,
-                 const uvFilename filename,
-                 struct raft_buffer *bufs,
-                 unsigned n_bufs);
+bool uvIsAtEof(int fd);
 
 struct osFileSystemInfo
 {
