@@ -30,7 +30,7 @@ int uvList(struct uv *uv,
     int i;
     int rv;
 
-    rv = osScanDir(uv->dir, &dirents, &n_dirents);
+    rv = uvScanDir(uv->dir, &dirents, &n_dirents);
     if (rv != 0) {
         uvErrorf(uv, "scan %s: %s", uv->dir, osStrError(rv));
         return RAFT_IOERR;

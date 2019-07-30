@@ -46,7 +46,7 @@ int uvEnsureDir(const uvDir dir);
 int uvSyncDir(const uvDir dir);
 
 /* Return all entries of the given directory, in alphabetically sorted order. */
-int osScanDir(const uvDir dir, struct dirent ***entries, int *n_entries);
+int uvScanDir(const uvDir dir, struct dirent ***entries, int *n_entries);
 
 /* Open a file in a directory. */
 int uvOpen(const uvDir dir, const uvFilename filename, int flags, int *fd);
