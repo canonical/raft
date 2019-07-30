@@ -46,7 +46,7 @@ int uvEnsureDir(const uvDir dir);
 int uvOpen(const uvDir dir, const uvFilename filename, int flags, int *fd);
 
 /* Stat a file in a directory. */
-int osStat(const uvDir dir, const uvFilename filename, struct stat *sb);
+int uvStat(const uvDir dir, const uvFilename filename, struct stat *sb);
 
 /* Delete a file in a directory. */
 int osUnlink(const uvDir dir, const uvFilename filename);

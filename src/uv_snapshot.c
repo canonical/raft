@@ -76,7 +76,7 @@ int uvSnapshotInfoAppendIfMatch(struct uv *uv,
      * there's none, it means that we aborted before finishing the snapshot, so
      * let's remove the metadata file. */
     filenameOf(&info, snapshot_filename);
-    rv = osStat(uv->dir, snapshot_filename, &sb);
+    rv = uvStat(uv->dir, snapshot_filename, &sb);
     if (rv != 0) {
         if (rv == ENOENT) {
             osUnlink(uv->dir, filename); /* Ignore errors */
@@ -236,7 +236,7 @@ static int loadData(struct uv *uv,
 
     filenameOf(info, filename);
 
-    rv = osStat(uv->dir, filename, &sb);
+    rv = uvStat(uv->dir, filename, &sb);
     if (rv != 0) {
         uvErrorf(uv, "stat %s: %s", filename, osStrError(rv));
         rv = RAFT_IOERR;

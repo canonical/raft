@@ -62,7 +62,7 @@ int uvOpen(const uvDir dir, const uvFilename filename, int flags, int *fd)
     return 0;
 }
 
-int osStat(const uvDir dir, const uvFilename filename, struct stat *sb)
+int uvStat(const uvDir dir, const uvFilename filename, struct stat *sb)
 {
     uvPath path;
     int rv;
