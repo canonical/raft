@@ -71,7 +71,7 @@ static void workCb(uv_work_t *work)
             continue;
         }
 
-        rv = osUnlink(uv->dir, segment->filename);
+        rv = uvUnlink(uv->dir, segment->filename);
         if (rv != 0) {
             uvErrorf(uv, "unlink segment %s: %s", segment->filename,
                      uv_strerror(rv));

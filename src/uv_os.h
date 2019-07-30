@@ -49,7 +49,7 @@ int uvOpen(const uvDir dir, const uvFilename filename, int flags, int *fd);
 int uvStat(const uvDir dir, const uvFilename filename, struct stat *sb);
 
 /* Delete a file in a directory. */
-int osUnlink(const uvDir dir, const uvFilename filename);
+int uvUnlink(const uvDir dir, const uvFilename filename);
 
 /* Truncate a file in a directory. */
 int osTruncate(const uvDir dir, const uvFilename filename, size_t offset);

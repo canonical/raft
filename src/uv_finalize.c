@@ -31,7 +31,7 @@ static void workCb(uv_work_t *work)
     /* If the segment hasn't actually been used (because the writer has been
      * closed or aborted before making any write), then let's just remove it. */
     if (s->used == 0) {
-        osUnlink(uv->dir, filename1);
+        uvUnlink(uv->dir, filename1);
         goto out;
     }
 

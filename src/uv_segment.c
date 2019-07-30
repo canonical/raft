@@ -498,7 +498,7 @@ done:
     /* If the segment has no valid entries in it, we remove it. Otherwise we
      * rename it and keep it. */
     if (remove) {
-        rv = osUnlink(uv->dir, info->filename);
+        rv = uvUnlink(uv->dir, info->filename);
         if (rv != 0) {
             uvErrorf(uv, "unlink %s: %s", info->filename, osStrError(rv));
             rv = RAFT_IOERR;
@@ -740,7 +740,7 @@ int uvSegmentLoadAll(struct uv *uv,
             /* If the entries in the segment are no longer needed, just remove
              * it. */
             if (info->end_index < start_index) {
-                rv = osUnlink(uv->dir, info->filename);
+                rv = uvUnlink(uv->dir, info->filename);
                 if (rv != 0) {
                     uvErrorf(uv, "unlink %s: %s", info->filename,
                              osStrError(rv));
@@ -767,7 +767,7 @@ int uvSegmentLoadAll(struct uv *uv,
                     /* TODO: understand why this happens at LXD
                      * upgrade. Re-enable this after 3.15 has been out for
                      * reasonably long. */
-                    rv = osUnlink(uv->dir, info->filename);
+                    rv = uvUnlink(uv->dir, info->filename);
                     if (rv != 0) {
                         uvErrorf(uv, "unlink %s: %s", info->filename,
                                  osStrError(rv));

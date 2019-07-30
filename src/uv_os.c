@@ -74,7 +74,7 @@ int uvStat(const uvDir dir, const uvFilename filename, struct stat *sb)
     return 0;
 }
 
-int osUnlink(const char *dir, const char *filename)
+int uvUnlink(const char *dir, const char *filename)
 {
     uvPath path;
     int rv;

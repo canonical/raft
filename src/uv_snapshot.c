@@ -79,7 +79,7 @@ int uvSnapshotInfoAppendIfMatch(struct uv *uv,
     rv = uvStat(uv->dir, snapshot_filename, &sb);
     if (rv != 0) {
         if (rv == ENOENT) {
-            osUnlink(uv->dir, filename); /* Ignore errors */
+            uvUnlink(uv->dir, filename); /* Ignore errors */
             *appended = false;
             return 0;
         }
@@ -351,14 +351,14 @@ static int removeOldSegmentsAndSnapshots(struct uv *uv, raft_index last_index)
         for (i = 0; i < n_snapshots - 2; i++) {
             struct uvSnapshotInfo *s = &snapshots[i];
             uvFilename filename;
-            rv = osUnlink(uv->dir, s->filename);
+            rv = uvUnlink(uv->dir, s->filename);
             if (rv != 0) {
                 uvErrorf(uv, "unlink %s: %s", s->filename, osStrError(rv));
                 rv = RAFT_IOERR;
                 goto out;
             }
             filenameOf(s, filename);
-            rv = osUnlink(uv->dir, filename);
+            rv = uvUnlink(uv->dir, filename);
             if (rv != 0) {
                 uvErrorf(uv, "unlink %s: %s", filename, osStrError(rv));
                 rv = RAFT_IOERR;
@@ -374,7 +374,7 @@ static int removeOldSegmentsAndSnapshots(struct uv *uv, raft_index last_index)
             continue;
         }
         if (segment->end_index < last_index) {
-            rv = osUnlink(uv->dir, segment->filename);
+            rv = uvUnlink(uv->dir, segment->filename);
             if (rv != 0) {
                 uvErrorf(uv, "unlink %s: %s", segment->filename,
                          osStrError(rv));
