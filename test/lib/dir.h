@@ -104,6 +104,9 @@ void test_dir_read_file(const char *dir,
                         void *buf,
                         const size_t n);
 
+/* Return true if the given directory exists. */
+bool test_dir_exists(const char *dir);
+
 /* Make the given directory not executable, so files can't be open. */
 void test_dir_unexecutable(const char *dir);
 

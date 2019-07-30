@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include <errno.h>
 #include <fcntl.h>
 #include <ftw.h>
@@ -69,16 +68,16 @@ MunitParameterEnum dir_no_aio_params[] = {
 
 char *test_dir_setup(const MunitParameter params[])
 {
-    const char *fs_type = munit_parameters_get(params, TEST_DIR_FS);
+    const char *fs = munit_parameters_get(params, TEST_DIR_FS);
     char *dir;
 
-    if (fs_type == NULL) {
-        fs_type = "tmpfs";
+    if (fs == NULL) {
+        fs = "tmpfs";
     }
 
-    dir = munit_malloc(strlen(TEST_DIR_TEMPLATE) + strlen(fs_type) + 1);
+    dir = munit_malloc(strlen(TEST_DIR_TEMPLATE) + strlen(fs) + 1);
 
-    sprintf(dir, TEST_DIR_TEMPLATE, fs_type);
+    sprintf(dir, TEST_DIR_TEMPLATE, fs);
 
     if (mkdtemp(dir) == NULL) {
         munit_error(strerror(errno));
@@ -87,10 +86,11 @@ char *test_dir_setup(const MunitParameter params[])
     return dir;
 }
 
-static int test_dir__remove(const char *path,
-                            const struct stat *sbuf,
-                            int type,
-                            struct FTW *ftwb)
+/* Wrapper around remove(), compatible with ntfw. */
+static int removeFn(const char *path,
+                    const struct stat *sbuf,
+                    int type,
+                    struct FTW *ftwb)
 {
     (void)sbuf;
     (void)type;
@@ -106,16 +106,14 @@ void test_dir_tear_down(char *dir)
     rv = chmod(dir, 0755);
     munit_assert_int(rv, ==, 0);
 
-    rv = nftw(dir, test_dir__remove, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS);
+    rv = nftw(dir, removeFn, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS);
     munit_assert_int(rv, ==, 0);
 
     free(dir);
 }
 
-/**
- * Join the given @dir and @filename into @path.
- */
-static void test_dir__join(const char *dir, const char *filename, char *path)
+/* Join the given @dir and @filename into @path. */
+static void joinPath(const char *dir, const char *filename, char *path)
 {
     strcpy(path, dir);
     strcat(path, "/");
@@ -131,7 +129,7 @@ void test_dir_write_file(const char *dir,
     int fd;
     int rv;
 
-    test_dir__join(dir, filename, path);
+    joinPath(dir, filename, path);
 
     fd = open(path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
     munit_assert_int(fd, !=, -1);
@@ -162,7 +160,7 @@ void test_dir_append_file(const char *dir,
     int fd;
     int rv;
 
-    test_dir__join(dir, filename, path);
+    joinPath(dir, filename, path);
 
     fd = open(path, O_APPEND | O_RDWR, S_IRUSR | S_IWUSR);
 
@@ -185,7 +183,7 @@ void test_dir_overwrite_file(const char *dir,
     int rv;
     off_t size;
 
-    test_dir__join(dir, filename, path);
+    joinPath(dir, filename, path);
 
     fd = open(path, O_RDWR, S_IRUSR | S_IWUSR);
 
@@ -236,7 +234,7 @@ void test_dir_truncate_file(const char *dir,
     int fd;
     int rv;
 
-    test_dir__join(dir, filename, path);
+    joinPath(dir, filename, path);
 
     fd = open(path, O_RDWR, S_IRUSR | S_IWUSR);
 
@@ -257,7 +255,7 @@ void test_dir_read_file(const char *dir,
     int fd;
     int rv;
 
-    test_dir__join(dir, filename, path);
+    joinPath(dir, filename, path);
 
     fd = open(path, O_RDONLY);
     if (fd == -1) {
@@ -269,6 +267,20 @@ void test_dir_read_file(const char *dir,
     munit_assert_int(rv, ==, n);
 
     close(fd);
+}
+
+bool test_dir_exists(const char *dir)
+{
+    struct stat sb;
+    int rv;
+
+    rv = stat(dir, &sb);
+    if (rv == -1) {
+        munit_assert_int(errno, ==, ENOENT);
+        return false;
+    }
+
+    return true;
 }
 
 void test_dir_unexecutable(const char *dir)
@@ -284,7 +296,7 @@ void test_dir_unreadable_file(const char *dir, const char *filename)
     char path[256];
     int rv;
 
-    test_dir__join(dir, filename, path);
+    joinPath(dir, filename, path);
 
     rv = chmod(path, 0);
     munit_assert_int(rv, ==, 0);
@@ -295,7 +307,7 @@ bool test_dir_has_file(const char *dir, const char *filename)
     char path[256];
     int fd;
 
-    test_dir__join(dir, filename, path);
+    joinPath(dir, filename, path);
 
     fd = open(path, O_RDONLY);
     if (fd == -1) {
@@ -326,7 +338,7 @@ void test_dir_fill(const char *dir, const size_t n)
         munit_assert_int(size, >=, n);
     }
 
-    test_dir__join(dir, filename, path);
+    joinPath(dir, filename, path);
 
     fd = open(path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
     munit_assert_int(fd, !=, -1);

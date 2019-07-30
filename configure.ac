@@ -6,6 +6,7 @@ AC_CONFIG_AUX_DIR([ac])
 
 AM_INIT_AUTOMAKE([subdir-objects -Wall -Wno-portability foreign])
 AM_SILENT_RULES([yes])
+AC_USE_SYSTEM_EXTENSIONS # Defines _GNU_SOURCE and similar
 
 LT_INIT
 
