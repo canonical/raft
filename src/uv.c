@@ -418,7 +418,7 @@ int raft_uv_init(struct raft_io *io,
     assert(dir != NULL);
 
     /* Ensure that the given path doesn't exceed our static buffer limit */
-    if (strnlen(dir, OS_MAX_DIR_LEN + 1) > OS_MAX_DIR_LEN) {
+    if (strnlen(dir, UV__DIR_MAX_LEN + 1) > UV__DIR_MAX_LEN) {
         return RAFT_NAMETOOLONG;
     }
 

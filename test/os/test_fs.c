@@ -17,7 +17,7 @@ TEST_MODULE(fs);
 struct fixture
 {
     FIXTURE_DIR;
-    osDir tmpdir; /* Path to a temp directory, defaults to f->dir */
+    uvDir tmpdir; /* Path to a temp directory, defaults to f->dir */
 };
 
 static void *setup(const MunitParameter params[], void *user_data)

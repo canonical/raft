@@ -27,7 +27,7 @@ static void createWorkCb(uv_work_t *work)
 {
     struct uvFileCreate *req; /* Create file request object */
     struct uvFile *f;         /* File handle */
-    osDir dir;
+    uvDir dir;
     int rv;
 
     req = work->data;
@@ -53,7 +53,7 @@ static void createWorkCb(uv_work_t *work)
         rv = errno;
         goto err;
     }
-    osDirname(req->path, dir);
+    uvDirname(req->path, dir);
     rv = osSyncDir(dir);
     if (rv != 0) {
         /* UNTESTED: should fail only in case of disk errors */

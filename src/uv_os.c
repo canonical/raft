@@ -12,26 +12,26 @@
 #include "assert.h"
 #include "uv_os.h"
 
-void osJoin(const osDir dir, const uvFilename filename, uvPath path)
+void osJoin(const uvDir dir, const uvFilename filename, uvPath path)
 {
     strcpy(path, dir);
     strcat(path, "/");
     strcat(path, filename);
 }
 
-void osDirname(const uvPath path, osDir dir)
+void uvDirname(const uvPath path, uvDir dir)
 {
-    strncpy(dir, path, OS_MAX_DIR_LEN);
+    strncpy(dir, path, UV__DIR_MAX_LEN);
     dirname(dir);
 }
 
-int osEnsureDir(const osDir dir)
+int osEnsureDir(const uvDir dir)
 {
     struct stat sb;
     int rv;
 
     /* Check that the given path doesn't exceed our static buffer limit */
-    assert(strnlen(dir, OS_MAX_DIR_LEN + 1) <= OS_MAX_DIR_LEN);
+    assert(strnlen(dir, UV__DIR_MAX_LEN + 1) <= UV__DIR_MAX_LEN);
 
     /* Make sure we have a directory we can write into. */
     rv = stat(dir, &sb);
@@ -51,7 +51,7 @@ int osEnsureDir(const osDir dir)
     return 0;
 }
 
-int osOpen(const osDir dir, const uvFilename filename, int flags, int *fd)
+int osOpen(const uvDir dir, const uvFilename filename, int flags, int *fd)
 {
     uvPath path;
     osJoin(dir, filename, path);
@@ -62,7 +62,7 @@ int osOpen(const osDir dir, const uvFilename filename, int flags, int *fd)
     return 0;
 }
 
-int osStat(const osDir dir, const uvFilename filename, struct stat *sb)
+int osStat(const uvDir dir, const uvFilename filename, struct stat *sb)
 {
     uvPath path;
     int rv;
@@ -86,7 +86,7 @@ int osUnlink(const char *dir, const char *filename)
     return 0;
 }
 
-int osTruncate(const osDir dir, const uvFilename filename, size_t offset)
+int osTruncate(const uvDir dir, const uvFilename filename, size_t offset)
 {
     uvPath path;
     int fd;
@@ -110,7 +110,7 @@ int osTruncate(const osDir dir, const uvFilename filename, size_t offset)
     return 0;
 }
 
-int osRename(const osDir dir,
+int osRename(const uvDir dir,
              const uvFilename filename1,
              const uvFilename filename2)
 {
@@ -131,7 +131,7 @@ int osRename(const osDir dir,
     return 0;
 }
 
-int osSyncDir(const osDir dir)
+int osSyncDir(const uvDir dir)
 {
     int fd;
     int rv;
@@ -147,7 +147,7 @@ int osSyncDir(const osDir dir)
     return 0;
 }
 
-int osScanDir(const osDir dir, struct dirent ***entries, int *n_entries)
+int osScanDir(const uvDir dir, struct dirent ***entries, int *n_entries)
 {
     int rv;
     rv = scandir(dir, entries, NULL, alphasort);
@@ -158,7 +158,7 @@ int osScanDir(const osDir dir, struct dirent ***entries, int *n_entries)
     return 0;
 }
 
-int osIsEmpty(const osDir dir, const uvFilename filename, bool *empty)
+int osIsEmpty(const uvDir dir, const uvFilename filename, bool *empty)
 {
     uvPath path;
     struct stat sb;
@@ -259,7 +259,7 @@ bool osIsAtEof(const int fd)
     return offset == size;           /* Compare current offset and size */
 }
 
-int osCreateFile(const osDir dir,
+int osCreateFile(const uvDir dir,
                  const uvFilename filename,
                  struct raft_buffer *bufs,
                  unsigned n_bufs)
@@ -448,7 +448,7 @@ static int probeAsyncIO(int fd, size_t size, bool *ok)
 }
 #endif /* RWF_NOWAIT */
 
-int osProbeIO(const osDir dir, size_t *direct, bool *async)
+int osProbeIO(const uvDir dir, size_t *direct, bool *async)
 {
     uvFilename filename; /* Filename of the probe file */
     uvPath path;         /* Full path of the probe file */

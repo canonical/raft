@@ -19,10 +19,10 @@
 #define UV__FILENAME_MAX_LEN 128
 
 /* Length of path separator. */
-#define OS_SEP_LEN 1 /* strlen("/") */
+#define UV__SEP_LEN 1 /* strlen("/") */
 
 /* Maximum length of a directory path. */
-#define OS_MAX_DIR_LEN (UV__PATH_MAX_LEN - OS_SEP_LEN - UV__FILENAME_MAX_LEN)
+#define UV__DIR_MAX_LEN (UV__PATH_MAX_LEN - UV__SEP_LEN - UV__FILENAME_MAX_LEN)
 
 /* Fixed length string that can hold a complete file system path. */
 typedef char uvPath[UV__PATH_MAX_LEN];
@@ -31,42 +31,42 @@ typedef char uvPath[UV__PATH_MAX_LEN];
 typedef char uvFilename[UV__FILENAME_MAX_LEN];
 
 /* Fixed length string that can hold a directory path. */
-typedef char osDir[OS_MAX_DIR_LEN];
+typedef char uvDir[UV__DIR_MAX_LEN];
 
 /* Concatenate a directory and a file. */
-void osJoin(const osDir dir, const uvFilename filename, uvPath path);
+void osJoin(const uvDir dir, const uvFilename filename, uvPath path);
 
 /* Extract the directory portion of the given path. */
-void osDirname(const uvPath path, osDir dir);
+void uvDirname(const uvPath path, uvDir dir);
 
 /* Check that the given directory exists, and try to create it if it doesn't. */
-int osEnsureDir(const osDir dir);
+int osEnsureDir(const uvDir dir);
 
 /* Open a file in a directory. */
-int osOpen(const osDir dir, const uvFilename filename, int flags, int *fd);
+int osOpen(const uvDir dir, const uvFilename filename, int flags, int *fd);
 
 /* Stat a file in a directory. */
-int osStat(const osDir dir, const uvFilename filename, struct stat *sb);
+int osStat(const uvDir dir, const uvFilename filename, struct stat *sb);
 
 /* Delete a file in a directory. */
-int osUnlink(const osDir dir, const uvFilename filename);
+int osUnlink(const uvDir dir, const uvFilename filename);
 
 /* Truncate a file in a directory. */
-int osTruncate(const osDir dir, const uvFilename filename, size_t offset);
+int osTruncate(const uvDir dir, const uvFilename filename, size_t offset);
 
 /* Rename a file in a directory. */
-int osRename(const osDir dir,
+int osRename(const uvDir dir,
              const uvFilename filename1,
              const uvFilename filename2);
 
 /* Sync the given directory. */
-int osSyncDir(const osDir dir);
+int osSyncDir(const uvDir dir);
 
 /* Return all entries of the given directory, in alphabetically sorted order. */
-int osScanDir(const osDir dir, struct dirent ***entries, int *n_entries);
+int osScanDir(const uvDir dir, struct dirent ***entries, int *n_entries);
 
 /* Check whether the given file in the given directory is empty. */
-int osIsEmpty(const osDir dir, const uvFilename filename, bool *empty);
+int osIsEmpty(const uvDir dir, const uvFilename filename, bool *empty);
 
 /* Check if the content of the file associated with the given file descriptor
  * contains all zeros from the current offset onward. */
@@ -82,7 +82,7 @@ int osWriteN(int fd, void *buf, size_t n);
 bool osIsAtEof(int fd);
 
 /* Create a file with the given content. */
-int osCreateFile(const osDir dir,
+int osCreateFile(const uvDir dir,
                  const uvFilename filename,
                  struct raft_buffer *bufs,
                  unsigned n_bufs);
@@ -102,7 +102,7 @@ struct osFileSystemInfo
  *
  * The @async parameter will be set to true if fully asynchronous I/O is
  * possible using the KAIO API. */
-int osProbeIO(const osDir dir, size_t *direct, bool *async);
+int osProbeIO(const uvDir dir, size_t *direct, bool *async);
 
 /* Configure the given file descriptor for direct I/O. */
 int osSetDirectIO(int fd);
