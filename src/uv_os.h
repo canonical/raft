@@ -42,6 +42,12 @@ void uvDirname(const uvPath path, uvDir dir);
 /* Check that the given directory exists, and try to create it if it doesn't. */
 int uvEnsureDir(const uvDir dir);
 
+/* Sync the given directory. */
+int uvSyncDir(const uvDir dir);
+
+/* Return all entries of the given directory, in alphabetically sorted order. */
+int osScanDir(const uvDir dir, struct dirent ***entries, int *n_entries);
+
 /* Open a file in a directory. */
 int uvOpen(const uvDir dir, const uvFilename filename, int flags, int *fd);
 
@@ -58,12 +64,6 @@ int uvShrink(const uvDir dir, const uvFilename filename, size_t offset);
 int uvRename(const uvDir dir,
              const uvFilename filename1,
              const uvFilename filename2);
-
-/* Sync the given directory. */
-int osSyncDir(const uvDir dir);
-
-/* Return all entries of the given directory, in alphabetically sorted order. */
-int osScanDir(const uvDir dir, struct dirent ***entries, int *n_entries);
 
 /* Check whether the given file in the given directory is empty. */
 int osIsEmpty(const uvDir dir, const uvFilename filename, bool *empty);

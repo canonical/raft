@@ -80,7 +80,7 @@ static void workCb(uv_work_t *work)
         }
     }
 
-    rv = osSyncDir(uv->dir);
+    rv = uvSyncDir(uv->dir);
     if (rv != 0) {
         uvErrorf(uv, "sync data directory: %s", uv_strerror(rv));
         rv = RAFT_IOERR;

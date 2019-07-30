@@ -54,7 +54,7 @@ static void createWorkCb(uv_work_t *work)
         goto err;
     }
     uvDirname(req->path, dir);
-    rv = osSyncDir(dir);
+    rv = uvSyncDir(dir);
     if (rv != 0) {
         /* UNTESTED: should fail only in case of disk errors */
         goto err;

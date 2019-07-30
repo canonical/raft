@@ -51,6 +51,33 @@ int uvEnsureDir(const uvDir dir)
     return 0;
 }
 
+int uvSyncDir(const uvDir dir)
+{
+    int fd;
+    int rv;
+    fd = open(dir, O_RDONLY | O_DIRECTORY);
+    if (fd == -1) {
+        return errno;
+    }
+    rv = fsync(fd);
+    close(fd);
+    if (rv == -1) {
+        return errno;
+    }
+    return 0;
+}
+
+int osScanDir(const uvDir dir, struct dirent ***entries, int *n_entries)
+{
+    int rv;
+    rv = scandir(dir, entries, NULL, alphasort);
+    if (rv == -1) {
+        return errno;
+    }
+    *n_entries = rv;
+    return 0;
+}
+
 int uvOpen(const uvDir dir, const uvFilename filename, int flags, int *fd)
 {
     uvPath path;
@@ -124,37 +151,10 @@ int uvRename(const uvDir dir,
     if (rv == -1) {
         return errno;
     }
-    rv = osSyncDir(dir);
+    rv = uvSyncDir(dir);
     if (rv != 0) {
         return rv;
     }
-    return 0;
-}
-
-int osSyncDir(const uvDir dir)
-{
-    int fd;
-    int rv;
-    fd = open(dir, O_RDONLY | O_DIRECTORY);
-    if (fd == -1) {
-        return errno;
-    }
-    rv = fsync(fd);
-    close(fd);
-    if (rv == -1) {
-        return errno;
-    }
-    return 0;
-}
-
-int osScanDir(const uvDir dir, struct dirent ***entries, int *n_entries)
-{
-    int rv;
-    rv = scandir(dir, entries, NULL, alphasort);
-    if (rv == -1) {
-        return errno;
-    }
-    *n_entries = rv;
     return 0;
 }
 

@@ -934,7 +934,7 @@ int uvSegmentCreateFirstClosed(struct uv *uv,
     close(fd);
     raft_free(buf.base);
 
-    rv = osSyncDir(uv->dir);
+    rv = uvSyncDir(uv->dir);
     if (rv != 0) {
         uvErrorf(uv, "sync %s: %s", uv->dir, osStrError(rv));
         return RAFT_IOERR;

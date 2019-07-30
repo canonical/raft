@@ -119,7 +119,7 @@ static int ensure(struct uv *uv, struct uvMetadata *metadata)
     }
 
     /* Also sync the data directory so the entries get created. */
-    rv = osSyncDir(uv->dir);
+    rv = uvSyncDir(uv->dir);
     if (rv != 0) {
         uvErrorf(uv, "sync %s: %s", uv->dir, osStrError(rv));
         return RAFT_IOERR;

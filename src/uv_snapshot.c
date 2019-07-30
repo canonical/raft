@@ -429,7 +429,7 @@ static void putWorkCb(uv_work_t *work)
         return;
     }
 
-    rv = osSyncDir(uv->dir);
+    rv = uvSyncDir(uv->dir);
     if (rv != 0) {
         uvErrorf(uv, "sync %s: %s", uv->dir, osStrError(rv));
         r->status = RAFT_IOERR;
