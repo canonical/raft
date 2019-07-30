@@ -884,7 +884,7 @@ static int writeFirstClosed(struct uv *uv,
         return rv;
     }
 
-    rv = osWriteN(fd, buf.arena.base, buf.n);
+    rv = uvWriteN(fd, buf.arena.base, buf.n);
     uvSegmentBufferClose(&buf);
     if (rv != 0) {
         uvErrorf(uv, "write segment 1: %s", osStrError(rv));
@@ -1002,7 +1002,7 @@ int uvSegmentTruncate(struct uv *uv,
         goto out_after_buffer_init;
     }
 
-    rv = osWriteN(fd, buf.arena.base, buf.n);
+    rv = uvWriteN(fd, buf.arena.base, buf.n);
     if (rv != 0) {
         uvErrorf(uv, "write %s: %s", filename, osStrError(errno));
         rv = RAFT_IOERR;

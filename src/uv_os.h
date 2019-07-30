@@ -76,7 +76,7 @@ int uvHasTrailingZeros(int fd, bool *flag);
 int uvReadN(int fd, void *buf, size_t n);
 
 /* Write exactly @n bytes to the given file descriptor. */
-int osWriteN(int fd, void *buf, size_t n);
+int uvWriteN(int fd, void *buf, size_t n);
 
 /* Check if the given file descriptor has reached the end of the file. */
 bool osIsAtEof(int fd);

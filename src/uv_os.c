@@ -235,7 +235,7 @@ int uvReadN(const int fd, void *buf, const size_t n)
     return 0;
 }
 
-int osWriteN(const int fd, void *buf, const size_t n)
+int uvWriteN(const int fd, void *buf, const size_t n)
 {
     int rv;
     rv = write(fd, buf, n);

@@ -205,7 +205,7 @@ int uvMetadataStore(struct uv *uv, const struct uvMetadata *metadata)
         return RAFT_IOERR;
     }
 
-    rv = osWriteN(fd, buf, sizeof buf);
+    rv = uvWriteN(fd, buf, sizeof buf);
     close(fd);
     if (rv != 0) {
         uvErrorf(uv, "write %s: %s", filename, osStrError(rv));
