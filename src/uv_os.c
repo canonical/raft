@@ -12,7 +12,7 @@
 #include "assert.h"
 #include "uv_os.h"
 
-void osJoin(const uvDir dir, const uvFilename filename, uvPath path)
+void uvJoin(const uvDir dir, const uvFilename filename, uvPath path)
 {
     strcpy(path, dir);
     strcat(path, "/");
@@ -25,7 +25,7 @@ void uvDirname(const uvPath path, uvDir dir)
     dirname(dir);
 }
 
-int osEnsureDir(const uvDir dir)
+int uvEnsureDir(const uvDir dir)
 {
     struct stat sb;
     int rv;

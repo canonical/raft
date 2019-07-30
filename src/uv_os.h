@@ -40,7 +40,7 @@ void uvJoin(const uvDir dir, const uvFilename filename, uvPath path);
 void uvDirname(const uvPath path, uvDir dir);
 
 /* Check that the given directory exists, and try to create it if it doesn't. */
-int osEnsureDir(const uvDir dir);
+int uvEnsureDir(const uvDir dir);
 
 /* Open a file in a directory. */
 int osOpen(const uvDir dir, const uvFilename filename, int flags, int *fd);

@@ -42,17 +42,17 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-/* Invoke @osEnsureDir and assert that it returns the given code. */
+/* Invoke @uvEnsureDir and assert that it returns the given code. */
 #define ENSURE_DIR(RV)                 \
     {                                  \
         int rv_;                       \
-        rv_ = osEnsureDir(f->tmpdir);  \
+        rv_ = uvEnsureDir(f->tmpdir);  \
         munit_assert_int(rv_, ==, RV); \
     }
 
 /******************************************************************************
  *
- * osEnsureDir
+ * uvEnsureDir
  *
  *****************************************************************************/
 
