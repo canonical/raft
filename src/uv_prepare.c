@@ -201,7 +201,7 @@ static int prepareSegment(struct uv *uv)
     s->counter = uv->prepare_next_counter;
 
     sprintf(filename, UV__OPEN_TEMPLATE, s->counter);
-    osJoin(uv->dir, filename, s->path);
+    uvJoin(uv->dir, filename, s->path);
 
     rv = uvFileCreate(s->file, &s->create, s->path,
                       uv->block_size * uv->n_blocks, MAX_CONCURRENT_WRITES,

@@ -34,7 +34,7 @@ typedef char uvFilename[UV__FILENAME_MAX_LEN];
 typedef char uvDir[UV__DIR_MAX_LEN];
 
 /* Concatenate a directory and a file. */
-void osJoin(const uvDir dir, const uvFilename filename, uvPath path);
+void uvJoin(const uvDir dir, const uvFilename filename, uvPath path);
 
 /* Extract the directory portion of the given path. */
 void uvDirname(const uvPath path, uvDir dir);

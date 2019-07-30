@@ -54,7 +54,7 @@ int osEnsureDir(const uvDir dir)
 int osOpen(const uvDir dir, const uvFilename filename, int flags, int *fd)
 {
     uvPath path;
-    osJoin(dir, filename, path);
+    uvJoin(dir, filename, path);
     *fd = open(path, flags, S_IRUSR | S_IWUSR);
     if (*fd == -1) {
         return errno;
@@ -66,7 +66,7 @@ int osStat(const uvDir dir, const uvFilename filename, struct stat *sb)
 {
     uvPath path;
     int rv;
-    osJoin(dir, filename, path);
+    uvJoin(dir, filename, path);
     rv = stat(path, sb);
     if (rv == -1) {
         return errno;
@@ -78,7 +78,7 @@ int osUnlink(const char *dir, const char *filename)
 {
     uvPath path;
     int rv;
-    osJoin(dir, filename, path);
+    uvJoin(dir, filename, path);
     rv = unlink(path);
     if (rv == -1) {
         return errno;
@@ -91,7 +91,7 @@ int osTruncate(const uvDir dir, const uvFilename filename, size_t offset)
     uvPath path;
     int fd;
     int rv;
-    osJoin(dir, filename, path);
+    uvJoin(dir, filename, path);
     fd = open(path, O_RDWR);
     if (fd == -1) {
         return errno;
@@ -117,8 +117,8 @@ int osRename(const uvDir dir,
     uvPath path1;
     uvPath path2;
     int rv;
-    osJoin(dir, filename1, path1);
-    osJoin(dir, filename2, path2);
+    uvJoin(dir, filename1, path1);
+    uvJoin(dir, filename2, path2);
     /* TODO: double check that filename2 does not exist. */
     rv = rename(path1, path2);
     if (rv == -1) {
@@ -163,7 +163,7 @@ int osIsEmpty(const uvDir dir, const uvFilename filename, bool *empty)
     uvPath path;
     struct stat sb;
     int rv;
-    osJoin(dir, filename, path);
+    uvJoin(dir, filename, path);
     rv = stat(path, &sb);
     if (rv == -1) {
         return errno;
@@ -457,7 +457,7 @@ int osProbeIO(const uvDir dir, size_t *direct, bool *async)
 
     /* Create a temporary probe file. */
     strcpy(filename, ".probe-XXXXXX");
-    osJoin(dir, filename, path);
+    uvJoin(dir, filename, path);
     fd = mkstemp(path);
     if (fd == -1) {
         rv = errno;

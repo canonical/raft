@@ -12,7 +12,7 @@ TEST_CASE(join, NULL)
     uvPath path;
     (void)data;
     (void)params;
-    osJoin(dir, filename, path);
+    uvJoin(dir, filename, path);
     munit_assert_string_equal(path, "/foo/bar");
     return MUNIT_OK;
 }
