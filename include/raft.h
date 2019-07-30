@@ -398,6 +398,26 @@ struct raft_logger
 };
 
 /**
+ * Circular buffer for collecting messages.
+ */
+struct raft_tracer
+{
+    void *entries; /* Memory where messages and their metadata are collected. */
+    void *head;    /* Points to the beginning of the first message, or NULL. */
+    void *tail;    /* Points to the beginning of the last message, or NULL. */
+};
+
+/**
+ * Create a new message tracer, with a buffer of the given @size.
+ */
+RAFT_API int raft_tracer_init(struct raft_tracer *t, size_t size);
+
+/**
+ * Close a message tracer, releasing all its memory.
+ */
+RAFT_API void raft_tracer_close(struct raft_tracer *t);
+
+/**
  * Default implementation of the logger interface, emitting messages to stdout.
  */
 RAFT_API int raft_default_logger_init(struct raft_logger *l);

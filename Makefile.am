@@ -33,7 +33,8 @@ libraft_la_SOURCES = \
   src/snapshot.c \
   src/start.c \
   src/state.c \
-  src/tick.c
+  src/tick.c \
+  src/tracer.c
 
 check_PROGRAMS = unit-test integration-test fuzzy-test
 TESTS = $(check_PROGRAMS)
@@ -63,7 +64,8 @@ unit_test_SOURCES += \
   test/unit/test_byte.c \
   test/unit/test_configuration.c \
   test/unit/test_log.c \
-  test/unit/test_queue.c
+  test/unit/test_queue.c \
+  test/unit/test_tracer.c
 unit_test_CFLAGS = $(CODE_COVERAGE_CFLAGS) $(test_CFLAGS)
 unit_test_LDADD =
 unit_test_LDFLAGS =
