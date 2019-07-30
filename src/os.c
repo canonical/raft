@@ -383,7 +383,7 @@ static int probeAsyncIO(int fd, size_t size, bool *ok)
     int rv;
 
     /* Setup the KAIO context handle */
-    rv = io_setup(1, &ctx);
+    rv = osIoSetup(1, &ctx);
     if (rv == -1) {
         /* UNTESTED: in practice this should fail only with ENOMEM */
         return errno;
@@ -408,11 +408,11 @@ static int probeAsyncIO(int fd, size_t size, bool *ok)
     iocb.aio_rw_flags |= RWF_NOWAIT | RWF_DSYNC;
 
     /* Submit the KAIO request */
-    rv = io_submit(ctx, 1, &iocbs);
+    rv = osIoSubmit(ctx, 1, &iocbs);
     if (rv == -1) {
         /* UNTESTED: in practice this should fail only with ENOMEM */
         free(buf);
-        io_destroy(ctx);
+        osIoDestroy(ctx);
         /* On ZFS 0.8 this is not properly supported yet. */
         if (errno == EOPNOTSUPP) {
             *ok = false;
@@ -423,7 +423,7 @@ static int probeAsyncIO(int fd, size_t size, bool *ok)
 
     /* Fetch the response: will block until done. */
     do {
-        rv = io_getevents(ctx, 1, 1, &event, NULL);
+        rv = osIoGetevents(ctx, 1, 1, &event, NULL);
     } while (rv == -1 && errno == EINTR);
 
     assert(rv == 1);
@@ -432,7 +432,7 @@ static int probeAsyncIO(int fd, size_t size, bool *ok)
     free(buf);
 
     /* Release the KAIO context handle. */
-    io_destroy(ctx);
+    osIoDestroy(ctx);
 
     if (event.res > 0) {
         assert(event.res == (int)size);
@@ -525,26 +525,26 @@ const char *osStrError(int rv)
     return strerror_r(rv, strErrorBuf, sizeof strErrorBuf);
 }
 
-int io_setup(unsigned nr, aio_context_t *ctxp)
+int osIoSetup(unsigned nr, aio_context_t *ctxp)
 {
     return syscall(__NR_io_setup, nr, ctxp);
 }
 
-int io_destroy(aio_context_t ctx)
+int osIoDestroy(aio_context_t ctx)
 {
     return syscall(__NR_io_destroy, ctx);
 }
 
-int io_submit(aio_context_t ctx, long nr, struct iocb **iocbpp)
+int osIoSubmit(aio_context_t ctx, long nr, struct iocb **iocbpp)
 {
     return syscall(__NR_io_submit, ctx, nr, iocbpp);
 }
 
-int io_getevents(aio_context_t ctx,
-                 long min_nr,
-                 long max_nr,
-                 struct io_event *events,
-                 struct timespec *timeout)
+int osIoGetevents(aio_context_t ctx,
+                  long min_nr,
+                  long max_nr,
+                  struct io_event *events,
+                  struct timespec *timeout)
 {
     return syscall(__NR_io_getevents, ctx, min_nr, max_nr, events, timeout);
 }

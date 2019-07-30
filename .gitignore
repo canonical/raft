@@ -33,3 +33,4 @@ TAGS
 example-server
 example-cluster
 tmp
+conftest*

@@ -100,7 +100,7 @@ static void writeWorkCb(uv_work_t *work)
      * with proper async write support. */
     if (f->n_events > 1) {
         ctx = 0;
-        rv = io_setup(1 /* Maximum concurrent requests */, &ctx);
+        rv = osIoSetup(1 /* Maximum concurrent requests */, &ctx);
         if (rv == -1) {
             /* UNTESTED: should fail only with ENOMEM */
             goto out;
@@ -110,7 +110,7 @@ static void writeWorkCb(uv_work_t *work)
     }
 
     /* Submit the request */
-    rv = io_submit(ctx, 1, &iocbs);
+    rv = osIoSubmit(ctx, 1, &iocbs);
     if (rv == -1) {
         /* UNTESTED: since we're not using NOWAIT and the parameters are valid,
          * this shouldn't fail. */
@@ -119,7 +119,7 @@ static void writeWorkCb(uv_work_t *work)
 
     /* Wait for the request to complete */
     do {
-        rv = io_getevents(ctx, 1, 1, &event, NULL);
+        rv = osIoGetevents(ctx, 1, 1, &event, NULL);
     } while (rv == -1 && errno == EINTR);
     assert(rv == 1);
 
@@ -127,7 +127,7 @@ static void writeWorkCb(uv_work_t *work)
 
 out_after_io_setup:
     if (f->n_events > 1) {
-        io_destroy(ctx);
+        osIoDestroy(ctx);
     }
 
 out:
@@ -161,7 +161,7 @@ static void pollCloseCb(struct uv_handle_s *handle)
     rv = close(f->event_fd);
     assert(rv == 0);
     if (f->ctx != 0) {
-        rv = io_destroy(f->ctx);
+        rv = osIoDestroy(f->ctx);
         assert(rv == 0);
     }
     free(f->events);
@@ -259,7 +259,7 @@ static void writePollCb(uv_poll_t *poller, int status, int events)
      * If we got here at least one write should have completed and io_events
      * should return immediately without blocking. */
     do {
-        rv = io_getevents(f->ctx, 1, f->n_events, f->events, NULL);
+        rv = osIoGetevents(f->ctx, 1, f->n_events, f->events, NULL);
     } while (rv == -1 && errno == EINTR);
 
     assert(rv >= 1);
@@ -334,7 +334,7 @@ static void createAfterWorkCb(uv_work_t *work, int status)
             /* UNTESTED: the underlying libuv calls should never fail. */
             req->status = rv;
 
-            io_destroy(f->ctx);
+            osIoDestroy(f->ctx);
             close(f->event_fd);
             close(f->fd);
             unlink(req->path);
@@ -435,7 +435,7 @@ int uvFileCreate(struct uvFile *f,
     }
 
     /* Setup the AIO context. */
-    rv = io_setup(f->n_events /* Maximum concurrent requests */, &f->ctx);
+    rv = osIoSetup(f->n_events /* Maximum concurrent requests */, &f->ctx);
     if (rv == -1) {
         /* UNTESTED: should fail only with ENOMEM */
         rv = uv_translate_sys_error(errno);
@@ -466,7 +466,7 @@ int uvFileCreate(struct uvFile *f,
     return 0;
 
 err_after_io_setup:
-    io_destroy(f->ctx);
+    osIoDestroy(f->ctx);
     f->ctx = 0;
 err_after_open:
     close(f->fd);
@@ -548,7 +548,7 @@ int uvFileWrite(struct uvFile *f,
 #if defined(RWF_NOWAIT)
     /* Try to submit the write request asynchronously */
     if (f->async) {
-        rv = io_submit(f->ctx, 1, &iocbs);
+        rv = osIoSubmit(f->ctx, 1, &iocbs);
 
         /* If no error occurred, we're done, the write request was
          * submitted. */

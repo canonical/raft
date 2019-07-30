@@ -38,6 +38,15 @@ libraft_la_SOURCES = \
 check_PROGRAMS = unit-test integration-test fuzzy-test
 TESTS = $(check_PROGRAMS)
 
+check_LTLIBRARIES = libtest.la
+
+libtest_la_CFLAGS =
+libtest_la_LDFLAGS =
+libtest_la_SOURCES = \
+  test/lib/fault.c \
+  test/lib/heap.c \
+  test/lib/munit.c
+
 test_CFLAGS = $(AM_CFLAGS) -DRAFT_TEST -DMUNIT_TEST_NAME_LEN=60
 test_lib_SOURCES = \
   test/lib/cluster.c \
@@ -112,16 +121,20 @@ raftinclude_HEADERS += include/raft/uv.h
 
 check_PROGRAMS += os-test uv-test
 
+libtest_la_SOURCES += \
+  test/lib/fs.c
+
 test_lib_SOURCES += \
   test/lib/loop.c
 
 os_test_SOURCES = \
-  src/os.c \
-  test/lib/munit.c \
-  test/lib/fs.c \
   test/os/main.c \
-  test/os/test_os.c
+  test/os/test_fs.c \
+  test/os/test_io.c \
+  test/os/test_path.c \
+  src/os.c
 os_test_CFLAGS = $(CODE_COVERAGE_CFLAGS) $(test_CFLAGS)
+os_test_LDADD = libtest.la
 
 uv_test_SOURCES = $(test_lib_SOURCES)
 uv_test_SOURCES += $(libraft_la_SOURCES)
@@ -137,10 +150,8 @@ uv_test_LDFLAGS = $(UV_LIBS)
 unit_test_SOURCES += \
   test/lib/fs.c \
   test/lib/uv.c \
-  test/unit/test_os.c \
   test/unit/test_uv.c \
   test/unit/test_uv_append.c \
-  test/unit/test_uv_file.c \
   test/unit/test_uv_finalize.c \
   test/unit/test_uv_list.c \
   test/unit/test_uv_load.c \

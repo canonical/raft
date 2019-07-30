@@ -16,21 +16,21 @@
 
 #define TEST_DIR_TEMPLATE "./tmp/%s/raft-test-XXXXXX"
 
-char *test_dir_fs_type_supported[] = {"tmpfs", "ext4",
+char *test_dir_all[] = {"tmpfs", "ext4",
 #if defined(RAFT_HAVE_BTRFS)
-                                      "btrfs",
+                        "btrfs",
 #endif
 #if defined(RAFT_HAVE_XFS)
-                                      "xfs",
+                        "xfs",
 #endif
 #if defined(RAFT_HAVE_ZFS)
-                                      "zfs",
+                        "zfs",
 #endif
-                                      NULL};
+                        NULL};
 
-char *test_dir_fs_type_btrfs[] = {"btrfs", NULL};
+char *test_dir_btrfs[] = {"btrfs", NULL};
 
-char *test_dir_fs_type_aio[] = {
+char *test_dir_aio[] = {
 #if defined(RAFT_HAVE_BTRFS)
     "btrfs",
 #endif
@@ -40,36 +40,36 @@ char *test_dir_fs_type_aio[] = {
 #endif
     NULL};
 
-char *test_dir_fs_type_no_aio[] = {"tmpfs",
+char *test_dir_no_aio[] = {"tmpfs",
 #if defined(RAFT_HAVE_ZFS)
 
-                                   "zfs",
+                           "zfs",
 #endif
-                                   NULL};
+                           NULL};
 
-MunitParameterEnum dir_fs_btrfs_params[] = {
-    {TEST_DIR_FS_TYPE, test_dir_fs_type_btrfs},
+MunitParameterEnum dir_btrfs_params[] = {
+    {TEST_DIR_FS, test_dir_btrfs},
     {NULL, NULL},
 };
 
-MunitParameterEnum dir_fs_supported_params[] = {
-    {TEST_DIR_FS_TYPE, test_dir_fs_type_supported},
+MunitParameterEnum dir_all_params[] = {
+    {TEST_DIR_FS, test_dir_all},
     {NULL, NULL},
 };
 
-MunitParameterEnum dir_fs_aio_params[] = {
-    {TEST_DIR_FS_TYPE, test_dir_fs_type_aio},
+MunitParameterEnum dir_aio_params[] = {
+    {TEST_DIR_FS, test_dir_aio},
     {NULL, NULL},
 };
 
-MunitParameterEnum dir_fs_no_aio_params[] = {
-    {TEST_DIR_FS_TYPE, test_dir_fs_type_no_aio},
+MunitParameterEnum dir_no_aio_params[] = {
+    {TEST_DIR_FS, test_dir_no_aio},
     {NULL, NULL},
 };
 
 char *test_dir_setup(const MunitParameter params[])
 {
-    const char *fs_type = munit_parameters_get(params, TEST_DIR_FS_TYPE);
+    const char *fs_type = munit_parameters_get(params, TEST_DIR_FS);
     char *dir;
 
     if (fs_type == NULL) {
@@ -386,7 +386,7 @@ void test_aio_fill(aio_context_t *ctx, unsigned n)
 
     used = atoi(buf);
 
-    rv = io_setup(limit - used - n, ctx);
+    rv = osIoSetup(limit - used - n, ctx);
     munit_assert_int(rv, ==, 0);
 }
 
@@ -394,6 +394,6 @@ void test_aio_destroy(aio_context_t ctx)
 {
     int rv;
 
-    rv = io_destroy(ctx);
+    rv = osIoDestroy(ctx);
     munit_assert_int(rv, ==, 0);
 }

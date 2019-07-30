@@ -2,7 +2,6 @@
 #include "../lib/loop.h"
 #include "../lib/runner.h"
 
-#include "../../src/aio.h"
 #include "../../src/os.h"
 #include "../../src/uv_file.h"
 
@@ -122,7 +121,7 @@ static void create__cb(struct uvFileCreate *req, int status)
     }
 
 /* If the given path is valid, the file gets opened. */
-TEST_CASE(create, success, dir_fs_supported_params)
+TEST_CASE(create, success, dir_all_params)
 {
     struct create_fixture *f = data;
 
@@ -343,7 +342,7 @@ static void write_cb(struct uvFileWrite *req, int status)
     }
 
 /* Write a single buffer. */
-TEST_CASE(write, success, one, dir_fs_supported_params)
+TEST_CASE(write, success, one, dir_all_params)
 {
     struct write_fixture *f = data;
     (void)params;
@@ -355,7 +354,7 @@ TEST_CASE(write, success, one, dir_fs_supported_params)
 }
 
 /* Write two buffers, one after the other. */
-TEST_CASE(write, success, two, dir_fs_supported_params)
+TEST_CASE(write, success, two, dir_all_params)
 {
     struct write_fixture *f = data;
 
@@ -375,7 +374,7 @@ TEST_CASE(write, success, two, dir_fs_supported_params)
 }
 
 /* Write the same block twice. */
-TEST_CASE(write, success, twice, dir_fs_supported_params)
+TEST_CASE(write, success, twice, dir_all_params)
 {
     struct write_fixture *f = data;
 
@@ -395,7 +394,7 @@ TEST_CASE(write, success, twice, dir_fs_supported_params)
 }
 
 /* Write a vector of buffers. */
-TEST_CASE(write, success, vec, dir_fs_supported_params)
+TEST_CASE(write, success, vec, dir_all_params)
 {
     struct write_fixture *f = data;
 
@@ -410,7 +409,7 @@ TEST_CASE(write, success, vec, dir_fs_supported_params)
 }
 
 /* Write a vector of buffers twice. */
-TEST_CASE(write, success, vec_twice, dir_fs_supported_params)
+TEST_CASE(write, success, vec_twice, dir_all_params)
 {
     struct write_fixture *f = data;
 
@@ -426,7 +425,7 @@ TEST_CASE(write, success, vec_twice, dir_fs_supported_params)
 }
 
 /* Write two different blocks concurrently. */
-TEST_CASE(write, success, concurrent, dir_fs_supported_params)
+TEST_CASE(write, success, concurrent, dir_all_params)
 {
     struct write_fixture *f = data;
     struct uvFileWrite req;
@@ -449,7 +448,7 @@ TEST_CASE(write, success, concurrent, dir_fs_supported_params)
 }
 
 /* Write the same block concurrently. */
-TEST_CASE(write, success, concurrent_twice, dir_fs_supported_params)
+TEST_CASE(write, success, concurrent_twice, dir_all_params)
 {
     struct write_fixture *f = data;
     struct uvFileWrite req;
@@ -475,7 +474,7 @@ TEST_CASE(write, success, concurrent_twice, dir_fs_supported_params)
 
 /* There are not enough resources to create an AIO context to perform the
  * write. */
-TEST_CASE(write, error, no_resources, dir_fs_no_aio_params)
+TEST_CASE(write, error, no_resources, dir_no_aio_params)
 {
     struct write_fixture *f = data;
     aio_context_t ctx = 0;
@@ -493,7 +492,7 @@ TEST_CASE(write, error, no_resources, dir_fs_no_aio_params)
 }
 
 /* Cancel an inflight write. */
-TEST_CASE(write, error, cancel, dir_fs_supported_params)
+TEST_CASE(write, error, cancel, dir_all_params)
 {
     struct write_fixture *f = data;
 

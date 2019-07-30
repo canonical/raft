@@ -5,7 +5,7 @@
 
 #include "../../src/os.h"
 
-TEST_MODULE(os);
+TEST_MODULE(io);
 
 #if defined(RWF_NOWAIT)
 
@@ -57,15 +57,15 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-TEST_SUITE(probe_io);
-TEST_SETUP(probe_io, setup);
-TEST_TEAR_DOWN(probe_io, tear_down);
+TEST_SUITE(probe);
+TEST_SETUP(probe, setup);
+TEST_TEAR_DOWN(probe, tear_down);
 
-TEST_GROUP(probe_io, error)
+TEST_GROUP(probe, error)
 
 /* If the given path is not executable, the block size of the underlying file
  * system can't be determined and an error is returned. */
-TEST_CASE(probe_io, error, no_access, NULL)
+TEST_CASE(probe, error, no_access, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -77,7 +77,7 @@ TEST_CASE(probe_io, error, no_access, NULL)
 #if defined(RAFT_HAVE_BTRFS)
 
 /* No space is left on the target device. */
-TEST_CASE(probe_io, error, no_space, dir_fs_btrfs_params)
+TEST_CASE(probe, error, no_space, dir_btrfs_params)
 {
     struct fixture *f = data;
     (void)params;
@@ -86,8 +86,8 @@ TEST_CASE(probe_io, error, no_space, dir_fs_btrfs_params)
     return MUNIT_OK;
 }
 
-/* The io_setup() call fails with EAGAIN. */
-TEST_CASE(probe_io, error, no_resources, dir_fs_btrfs_params)
+/* The osIoSetup() call fails with EAGAIN. */
+TEST_CASE(probe, error, no_resources, dir_btrfs_params)
 {
     struct fixture *f = data;
     aio_context_t ctx = 0;
