@@ -66,7 +66,7 @@ int uvRename(const uvDir dir,
              const uvFilename filename2);
 
 /* Check whether the given file in the given directory is empty. */
-int osIsEmpty(const uvDir dir, const uvFilename filename, bool *empty);
+int uvIsEmpty(const uvDir dir, const uvFilename filename, bool *empty);
 
 /* Check if the content of the file associated with the given file descriptor
  * contains all zeros from the current offset onward. */

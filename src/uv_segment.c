@@ -303,7 +303,7 @@ int uvSegmentLoadClosed(struct uv *uv,
     int rv;
 
     /* If the segment is completely empty, just bail out. */
-    rv = osIsEmpty(uv->dir, info->filename, &empty);
+    rv = uvIsEmpty(uv->dir, info->filename, &empty);
     if (rv != 0) {
         uvErrorf(uv, "stat %s: %s", info->filename, osStrError(rv));
         rv = RAFT_IOERR;
@@ -385,7 +385,7 @@ static int loadOpen(struct uv *uv,
 
     first_index = *next_index;
 
-    rv = osIsEmpty(uv->dir, info->filename, &empty);
+    rv = uvIsEmpty(uv->dir, info->filename, &empty);
     if (rv != 0) {
         uvErrorf(uv, "stat %s: %s", info->filename, osStrError(rv));
         rv = RAFT_IOERR;

@@ -67,7 +67,7 @@ int uvSyncDir(const uvDir dir)
     return 0;
 }
 
-int osScanDir(const uvDir dir, struct dirent ***entries, int *n_entries)
+int uvScanDir(const uvDir dir, struct dirent ***entries, int *n_entries)
 {
     int rv;
     rv = scandir(dir, entries, NULL, alphasort);
@@ -158,7 +158,7 @@ int uvRename(const uvDir dir,
     return 0;
 }
 
-int osIsEmpty(const uvDir dir, const uvFilename filename, bool *empty)
+int uvIsEmpty(const uvDir dir, const uvFilename filename, bool *empty)
 {
     uvPath path;
     struct stat sb;
