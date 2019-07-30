@@ -70,10 +70,10 @@ int uvIsEmpty(const uvDir dir, const uvFilename filename, bool *empty);
 
 /* Check if the content of the file associated with the given file descriptor
  * contains all zeros from the current offset onward. */
-int osHasTrailingZeros(int fd, bool *flag);
+int uvHasTrailingZeros(int fd, bool *flag);
 
 /* Read exactly @n bytes from the given file descriptor. */
-int osReadN(int fd, void *buf, size_t n);
+int uvReadN(int fd, void *buf, size_t n);
 
 /* Write exactly @n bytes to the given file descriptor. */
 int osWriteN(int fd, void *buf, size_t n);

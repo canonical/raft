@@ -69,7 +69,7 @@ static int loadFile(struct uv *uv,
     }
 
     /* Read the content of the metadata file. */
-    rv = osReadN(fd, buf, sizeof buf);
+    rv = uvReadN(fd, buf, sizeof buf);
     if (rv != 0) {
         if (rv != ENODATA) {
             uvErrorf(uv, "read %s: %s", filename, osStrError(rv));

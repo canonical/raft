@@ -172,7 +172,7 @@ int uvIsEmpty(const uvDir dir, const uvFilename filename, bool *empty)
     return 0;
 }
 
-int osHasTrailingZeros(const int fd, bool *flag)
+int uvHasTrailingZeros(const int fd, bool *flag)
 {
     off_t size;
     off_t offset;
@@ -201,7 +201,7 @@ int osHasTrailingZeros(const int fd, bool *flag)
         return ENOMEM;
     }
 
-    rv = osReadN(fd, data, size);
+    rv = uvReadN(fd, data, size);
     if (rv != 0) {
         return rv;
     }
@@ -221,7 +221,7 @@ done:
     return 0;
 }
 
-int osReadN(const int fd, void *buf, const size_t n)
+int uvReadN(const int fd, void *buf, const size_t n)
 {
     int rv;
     rv = read(fd, buf, n);

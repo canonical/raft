@@ -122,7 +122,7 @@ static int openSegment(struct uv *uv,
         uvErrorf(uv, "open %s: %s", filename, osStrError(rv));
         return RAFT_IOERR;
     }
-    rv = osReadN(*fd, format, sizeof *format);
+    rv = uvReadN(*fd, format, sizeof *format);
     if (rv != 0) {
         uvErrorf(uv, "read %s: %s", filename, osStrError(rv));
         close(*fd);
@@ -158,7 +158,7 @@ static int loadEntriesBatch(struct uv *uv,
     /* Read the preamble, consisting of the checksums for the batch header and
      * data buffers and the first 8 bytes of the header buffer, which contains
      * the number of entries in the batch. */
-    rv = osReadN(fd, preamble, sizeof preamble);
+    rv = uvReadN(fd, preamble, sizeof preamble);
     if (rv != 0) {
         uvErrorf(uv, "read: %s", osStrError(rv));
         return RAFT_IOERR;
@@ -193,7 +193,7 @@ static int loadEntriesBatch(struct uv *uv,
     }
     *(uint64_t *)header.base = preamble[1];
 
-    rv = osReadN(fd, header.base + sizeof(uint64_t),
+    rv = uvReadN(fd, header.base + sizeof(uint64_t),
                  header.len - sizeof(uint64_t));
     if (rv != 0) {
         uvErrorf(uv, "read: %s", osStrError(rv));
@@ -228,7 +228,7 @@ static int loadEntriesBatch(struct uv *uv,
         rv = RAFT_NOMEM;
         goto err_after_header_decode;
     }
-    rv = osReadN(fd, data.base, data.len);
+    rv = uvReadN(fd, data.base, data.len);
     if (rv != 0) {
         uvErrorf(uv, "read: %s", osStrError(rv));
         rv = RAFT_IOERR;
@@ -407,7 +407,7 @@ static int loadOpen(struct uv *uv,
      * the segment was allocated but never written. */
     if (format != UV__DISK_FORMAT) {
         if (format == 0) {
-            rv = osHasTrailingZeros(fd, &all_zeros);
+            rv = uvHasTrailingZeros(fd, &all_zeros);
             if (rv != 0) {
                 uvErrorf(uv, "check %s: %s", info->filename, osStrError(rv));
                 rv = RAFT_IOERR;
@@ -452,7 +452,7 @@ static int loadOpen(struct uv *uv,
              * incomplete data. */
             lseek(fd, offset, SEEK_SET);
 
-            rv2 = osHasTrailingZeros(fd, &all_zeros);
+            rv2 = uvHasTrailingZeros(fd, &all_zeros);
             if (rv2 != 0) {
                 uvErrorf(uv, "check %s: %s", info->filename, i,
                          osStrError(rv2));

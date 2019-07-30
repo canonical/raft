@@ -150,7 +150,7 @@ static int loadMeta(struct uv *uv,
         rv = RAFT_IOERR;
         goto err;
     }
-    rv = osReadN(fd, header, sizeof header);
+    rv = uvReadN(fd, header, sizeof header);
     if (rv != 0) {
         uvErrorf(uv, "read %s: %s", info->filename, osStrError(rv));
         rv = RAFT_IOERR;
@@ -185,7 +185,7 @@ static int loadMeta(struct uv *uv,
         goto err_after_open;
     }
 
-    rv = osReadN(fd, buf.base, buf.len);
+    rv = uvReadN(fd, buf.base, buf.len);
     if (rv != 0) {
         uvErrorf(uv, "read %s: %s", info->filename, osStrError(rv));
         rv = RAFT_IOERR;
@@ -257,7 +257,7 @@ static int loadData(struct uv *uv,
         goto err_after_open;
     }
 
-    rv = osReadN(fd, buf.base, buf.len);
+    rv = uvReadN(fd, buf.base, buf.len);
     if (rv != 0) {
         uvErrorf(uv, "read %s: %s", filename, osStrError(rv));
         goto err_after_buf_alloc;
