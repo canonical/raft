@@ -122,7 +122,7 @@ raftinclude_HEADERS += include/raft/uv.h
 check_PROGRAMS += os-test uv-test
 
 libtest_la_SOURCES += \
-  test/lib/fs.c
+  test/lib/dir.c
 
 test_lib_SOURCES += \
   test/lib/loop.c
@@ -139,7 +139,7 @@ os_test_LDADD = libtest.la
 uv_test_SOURCES = $(test_lib_SOURCES)
 uv_test_SOURCES += $(libraft_la_SOURCES)
 uv_test_SOURCES += \
-  test/lib/fs.c \
+  test/lib/dir.c \
   test/lib/uv.c \
   test/uv/main.c \
   test/uv/test_uv_file.c
@@ -148,7 +148,7 @@ uv_test_LDADD =
 uv_test_LDFLAGS = $(UV_LIBS)
 
 unit_test_SOURCES += \
-  test/lib/fs.c \
+  test/lib/dir.c \
   test/lib/uv.c \
   test/unit/test_uv.c \
   test/unit/test_uv_append.c \

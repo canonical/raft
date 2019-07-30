@@ -12,7 +12,7 @@
 
 #include "../../src/os.h"
 
-#include "fs.h"
+#include "dir.h"
 
 #define TEST_DIR_TEMPLATE "./tmp/%s/raft-test-XXXXXX"
 

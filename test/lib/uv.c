@@ -4,7 +4,6 @@
 #include "../../src/configuration.h"
 #include "../../src/uv_encoding.h"
 
-#include "fs.h"
 #include "uv.h"
 
 #define __WORD_SIZE sizeof(uint64_t)

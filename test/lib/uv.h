@@ -9,7 +9,7 @@
 #include "../../src/byte.h"
 #include "../../src/uv.h"
 
-#include "fs.h"
+#include "dir.h"
 #include "heap.h"
 #include "loop.h"
 #include "munit.h"

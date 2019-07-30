@@ -1,6 +1,6 @@
 #include <errno.h>
 
-#include "../lib/fs.h"
+#include "../lib/dir.h"
 #include "../lib/runner.h"
 
 #include "../../src/os.h"

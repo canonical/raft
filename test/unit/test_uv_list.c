@@ -1,4 +1,4 @@
-#include "../lib/fs.h"
+#include "../lib/dir.h"
 #include "../lib/heap.h"
 #include "../lib/uv.h"
 #include "../lib/runner.h"
