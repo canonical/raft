@@ -127,7 +127,7 @@ TEST_SUITE(error);
 TEST_SETUP(error, setup);
 TEST_TEAR_DOWN(error, tear_down);
 
-/* The creation of the first segment fails because osIoSetup() returns EAGAIN. */
+/* The creation of the first segment fails because uvIoSetup() returns EAGAIN. */
 TEST_CASE(error, no_resources, NULL)
 {
     struct fixture *f = data;

@@ -382,7 +382,7 @@ static int probeAsyncIO(int fd, size_t size, bool *ok)
     int rv;
 
     /* Setup the KAIO context handle */
-    rv = osIoSetup(1, &ctx);
+    rv = uvIoSetup(1, &ctx);
     if (rv == -1) {
         /* UNTESTED: in practice this should fail only with ENOMEM */
         return errno;
@@ -407,11 +407,11 @@ static int probeAsyncIO(int fd, size_t size, bool *ok)
     iocb.aio_rw_flags |= RWF_NOWAIT | RWF_DSYNC;
 
     /* Submit the KAIO request */
-    rv = osIoSubmit(ctx, 1, &iocbs);
+    rv = uvIoSubmit(ctx, 1, &iocbs);
     if (rv == -1) {
         /* UNTESTED: in practice this should fail only with ENOMEM */
         free(buf);
-        osIoDestroy(ctx);
+        uvIoDestroy(ctx);
         /* On ZFS 0.8 this is not properly supported yet. */
         if (errno == EOPNOTSUPP) {
             *ok = false;
@@ -422,7 +422,7 @@ static int probeAsyncIO(int fd, size_t size, bool *ok)
 
     /* Fetch the response: will block until done. */
     do {
-        rv = osIoGetevents(ctx, 1, 1, &event, NULL);
+        rv = uvIoGetevents(ctx, 1, 1, &event, NULL);
     } while (rv == -1 && errno == EINTR);
 
     assert(rv == 1);
@@ -431,7 +431,7 @@ static int probeAsyncIO(int fd, size_t size, bool *ok)
     free(buf);
 
     /* Release the KAIO context handle. */
-    osIoDestroy(ctx);
+    uvIoDestroy(ctx);
 
     if (event.res > 0) {
         assert(event.res == (int)size);
@@ -524,22 +524,22 @@ const char *osStrError(int rv)
     return strerror_r(rv, strErrorBuf, sizeof strErrorBuf);
 }
 
-int osIoSetup(unsigned nr, aio_context_t *ctxp)
+int uvIoSetup(unsigned nr, aio_context_t *ctxp)
 {
     return syscall(__NR_io_setup, nr, ctxp);
 }
 
-int osIoDestroy(aio_context_t ctx)
+int uvIoDestroy(aio_context_t ctx)
 {
     return syscall(__NR_io_destroy, ctx);
 }
 
-int osIoSubmit(aio_context_t ctx, long nr, struct iocb **iocbpp)
+int uvIoSubmit(aio_context_t ctx, long nr, struct iocb **iocbpp)
 {
     return syscall(__NR_io_submit, ctx, nr, iocbpp);
 }
 
-int osIoGetevents(aio_context_t ctx,
+int uvIoGetevents(aio_context_t ctx,
                   long min_nr,
                   long max_nr,
                   struct io_event *events,

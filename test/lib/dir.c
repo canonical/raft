@@ -398,7 +398,7 @@ void test_aio_fill(aio_context_t *ctx, unsigned n)
 
     used = atoi(buf);
 
-    rv = osIoSetup(limit - used - n, ctx);
+    rv = uvIoSetup(limit - used - n, ctx);
     munit_assert_int(rv, ==, 0);
 }
 
@@ -406,6 +406,6 @@ void test_aio_destroy(aio_context_t ctx)
 {
     int rv;
 
-    rv = osIoDestroy(ctx);
+    rv = uvIoDestroy(ctx);
     munit_assert_int(rv, ==, 0);
 }

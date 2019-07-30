@@ -86,7 +86,7 @@ TEST_CASE(probe, error, no_space, dir_btrfs_params)
     return MUNIT_OK;
 }
 
-/* The osIoSetup() call fails with EAGAIN. */
+/* The uvIoSetup() call fails with EAGAIN. */
 TEST_CASE(probe, error, no_resources, dir_btrfs_params)
 {
     struct fixture *f = data;

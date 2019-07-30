@@ -105,13 +105,13 @@ const char *osStrError(int rv);
 
 /* Declaration of the kernel AIO APIs that we use. This avoids having to depend
  * on libaio. */
-int osIoSetup(unsigned n, aio_context_t *ctx);
+int uvIoSetup(unsigned n, aio_context_t *ctx);
 
-int osIoDestroy(aio_context_t ctx);
+int uvIoDestroy(aio_context_t ctx);
 
-int osIoSubmit(aio_context_t ctx, long n, struct iocb **iocbs);
+int uvIoSubmit(aio_context_t ctx, long n, struct iocb **iocbs);
 
-int osIoGetevents(aio_context_t ctx,
+int uvIoGetevents(aio_context_t ctx,
                   long min_nr,
                   long max_nr,
                   struct io_event *events,
