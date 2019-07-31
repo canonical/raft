@@ -48,20 +48,15 @@ static void tear_down(void *data)
 #define GET(ID) configurationGet(&f->configuration, ID)
 
 /* Add a server to the fixture's configuration. */
-#define ADD(ID, ADDRESS, VOTING)                                              \
-    {                                                                         \
-        int rv2;                                                              \
-        rv2 = raft_configuration_add(&f->configuration, ID, ADDRESS, VOTING); \
-        munit_assert_int(rv2, ==, 0);                                         \
-    }
+#define ADD_RV(ID, ADDRESS, VOTING) \
+    raft_configuration_add(&f->configuration, ID, ADDRESS, VOTING)
+#define ADD(...) munit_assert_int(ADD_RV(__VA_ARGS__), ==, 0)
+#define ADD_ERROR(RV, ...) munit_assert_int(ADD_RV(__VA_ARGS__), ==, RV)
 
 /* Remove a server from the fixture's configuration */
-#define REMOVE(ID)                                        \
-    {                                                     \
-        int rv2;                                          \
-        rv2 = configurationRemove(&f->configuration, ID); \
-        munit_assert_int(rv2, ==, 0);                     \
-    }
+#define REMOVE_RV(ID) configurationRemove(&f->configuration, ID)
+#define REMOVE(...) munit_assert_int(REMOVE_RV(__VA_ARGS__), ==, 0)
+#define REMOVE_ERROR(RV, ...) munit_assert_int(REMOVE_RV(__VA_ARGS__), ==, RV)
 
 /******************************************************************************
  *
@@ -328,14 +323,10 @@ TEST_TEAR_DOWN(add, tear_down);
 TEST_CASE(add, one, NULL)
 {
     struct fixture *f = data;
-
     (void)params;
-
     ADD(1, "127.0.0.1:666", true);
-
     ASSERT_N(1);
     ASSERT_SERVER(0, 1, "127.0.0.1:666", true);
-
     return MUNIT_OK;
 }
 
@@ -343,16 +334,12 @@ TEST_CASE(add, one, NULL)
 TEST_CASE(add, two, NULL)
 {
     struct fixture *f = data;
-
     (void)params;
-
     ADD(1, "127.0.0.1:666", true);
     ADD(2, "192.168.1.1:666", false);
-
     ASSERT_N(2);
     ASSERT_SERVER(0, 1, "127.0.0.1:666", true);
     ASSERT_SERVER(1, 2, "192.168.1.1:666", false);
-
     return MUNIT_OK;
 }
 
@@ -362,17 +349,9 @@ TEST_GROUP(add, error);
 TEST_CASE(add, error, dup_id, NULL)
 {
     struct fixture *f = data;
-    int rv;
-
     (void)params;
-
     ADD(1, "127.0.0.1:666", true);
-
-    rv = raft_configuration_add(&f->configuration, 1, "192.168.1.1:666", false);
-    munit_assert_int(rv, ==, RAFT_DUPLICATEID);
-
-    munit_assert_string_equal(raft_strerror(rv), "server ID already in use");
-
+    ADD_ERROR(RAFT_DUPLICATEID, 1, "192.168.1.1:666", false);
     return MUNIT_OK;
 }
 
@@ -380,18 +359,9 @@ TEST_CASE(add, error, dup_id, NULL)
 TEST_CASE(add, error, dup_address, NULL)
 {
     struct fixture *f = data;
-    int rv;
-
     (void)params;
-
     ADD(1, "127.0.0.1:666", true);
-
-    rv = raft_configuration_add(&f->configuration, 2, "127.0.0.1:666", false);
-    munit_assert_int(rv, ==, RAFT_DUPLICATEADDRESS);
-
-    munit_assert_string_equal(raft_strerror(rv),
-                              "server address already in use");
-
+    ADD_ERROR(RAFT_DUPLICATEADDRESS, 2, "127.0.0.1:666", false);
     return MUNIT_OK;
 }
 
@@ -408,17 +378,9 @@ static MunitParameterEnum add_oom_params[] = {
 TEST_CASE(add, error, oom, add_oom_params)
 {
     struct fixture *f = data;
-    int rv;
-
     (void)params;
-
     test_heap_fault_enable(&f->heap);
-
-    rv = raft_configuration_add(&f->configuration, 1, "127.0.0.1:666", true);
-    munit_assert_int(rv, ==, RAFT_NOMEM);
-
-    munit_assert_string_equal(raft_strerror(rv), "out of memory");
-
+    ADD_ERROR(RAFT_NOMEM, 1, "127.0.0.1:666", true);
     return MUNIT_OK;
 }
 
@@ -437,15 +399,10 @@ TEST_TEAR_DOWN(remove, tear_down);
 TEST_CASE(remove, last, NULL)
 {
     struct fixture *f = data;
-
     (void)params;
-
     ADD(1, "127.0.0.1:666", true);
-
     REMOVE(1);
-
     ASSERT_N(0);
-
     return MUNIT_OK;
 }
 
@@ -453,17 +410,12 @@ TEST_CASE(remove, last, NULL)
 TEST_CASE(remove, first, NULL)
 {
     struct fixture *f = data;
-
     (void)params;
-
     ADD(1, "127.0.0.1:666", true);
     ADD(2, "192.168.1.1:666", false);
-
     REMOVE(1);
-
     ASSERT_N(1);
     ASSERT_SERVER(0, 2, "192.168.1.1:666", false);
-
     return MUNIT_OK;
 }
 
@@ -471,19 +423,14 @@ TEST_CASE(remove, first, NULL)
 TEST_CASE(remove, middle, NULL)
 {
     struct fixture *f = data;
-
     (void)params;
-
     ADD(1, "127.0.0.1:666", true);
     ADD(2, "192.168.1.1:666", false);
     ADD(3, "10.0.1.1:666", true);
-
     REMOVE(2);
-
     ASSERT_N(2);
     ASSERT_SERVER(0, 1, "127.0.0.1:666", true);
     ASSERT_SERVER(1, 3, "10.0.1.1:666", true);
-
     return MUNIT_OK;
 }
 
@@ -493,15 +440,8 @@ TEST_GROUP(remove, error);
 TEST_CASE(remove, error, unknown, NULL)
 {
     struct fixture *f = data;
-    int rv;
-
     (void)params;
-
-    rv = configurationRemove(&f->configuration, 1);
-    munit_assert_int(rv, ==, RAFT_BADID);
-
-    munit_assert_string_equal(raft_strerror(rv), "server ID is not valid");
-
+    REMOVE_ERROR(RAFT_BADID, 1);
     return MUNIT_OK;
 }
 
@@ -509,19 +449,12 @@ TEST_CASE(remove, error, unknown, NULL)
 TEST_CASE(remove, error, oom, NULL)
 {
     struct fixture *f = data;
-    int rv;
-
     (void)params;
-
     ADD(1, "127.0.0.1:666", true);
     ADD(2, "192.168.1.1:666", false);
-
     test_heap_fault_config(&f->heap, 0, 1);
     test_heap_fault_enable(&f->heap);
-
-    rv = configurationRemove(&f->configuration, 2);
-    munit_assert_int(rv, ==, RAFT_NOMEM);
-
+    REMOVE_ERROR(RAFT_NOMEM, 1);
     return MUNIT_OK;
 }
 
@@ -558,12 +491,12 @@ TEST_CASE(encode, one_server, NULL)
                      1 + 8 + /* Version and n of servers */
                          8 + strlen("127.0.0.1:666") + 1 + 1); /* Server */
 
-    munit_assert_int(((char*)bytes)[0], ==, 1);
+    munit_assert_int(((char *)bytes)[0], ==, 1);
     munit_assert_int(byteFlip64(*(uint64_t *)(bytes + 1)), ==, 1);
 
     munit_assert_int(byteFlip64(*(uint64_t *)(bytes + 9)), ==, 1);
     munit_assert_string_equal((char *)(bytes + 17), "127.0.0.1:666");
-    munit_assert_true(((char*)bytes)[17 + strlen("127.0.0.1:666") + 1]);
+    munit_assert_true(((char *)bytes)[17 + strlen("127.0.0.1:666") + 1]);
 
     raft_free(buf.base);
 
@@ -597,19 +530,19 @@ TEST_CASE(encode, two_servers, NULL)
 
     bytes = buf.base;
 
-    munit_assert_int(*((uint8_t*)bytes), ==, 1);
+    munit_assert_int(*((uint8_t *)bytes), ==, 1);
     munit_assert_int(byteFlip64(*(uint64_t *)(bytes + 1)), ==, 2);
 
     bytes = buf.base + 9;
     munit_assert_int(byteFlip64(*(uint64_t *)bytes), ==, 1);
     munit_assert_string_equal((char *)(bytes + 8), "127.0.0.1:666");
-    munit_assert_false(*(uint8_t*)(bytes + 8 + strlen("127.0.0.1:666") + 1));
+    munit_assert_false(*(uint8_t *)(bytes + 8 + strlen("127.0.0.1:666") + 1));
 
     bytes = buf.base + 9 + 8 + strlen("127.0.0.1:666") + 1 + 1;
 
     munit_assert_int(byteFlip64(*(uint64_t *)bytes), ==, 2);
     munit_assert_string_equal((char *)(bytes + 8), "192.168.1.1:666");
-    munit_assert_true(*(uint8_t*)(bytes + 8 + strlen("192.168.1.1:666") + 1));
+    munit_assert_true(*(uint8_t *)(bytes + 8 + strlen("192.168.1.1:666") + 1));
 
     raft_free(buf.base);
 
