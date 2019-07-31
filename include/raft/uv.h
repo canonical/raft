@@ -72,12 +72,12 @@ struct raft_uv_transport;
  *
  * [0] https://github.com/logcabin/logcabin/blob/master/Storage/SegmentedLog.h
  */
-int raft_uv_init(struct raft_io *io,
-                 struct uv_loop_s *loop,
-                 const char *dir,
-                 struct raft_uv_transport *transport);
+RAFT_API int raft_uv_init(struct raft_io *io,
+                          struct uv_loop_s *loop,
+                          const char *dir,
+                          struct raft_uv_transport *transport);
 
-void raft_uv_close(struct raft_io *io);
+RAFT_API void raft_uv_close(struct raft_io *io);
 
 /**
  * Callback invoked by the transport implementation when a new incoming
@@ -181,8 +181,9 @@ struct raft_uv_transport
 /**
  * Init a transport interface that uses TCP sockets.
  */
-int raft_uv_tcp_init(struct raft_uv_transport *t, struct uv_loop_s *loop);
+RAFT_API int raft_uv_tcp_init(struct raft_uv_transport *t,
+                              struct uv_loop_s *loop);
 
-void raft_uv_tcp_close(struct raft_uv_transport *t);
+RAFT_API void raft_uv_tcp_close(struct raft_uv_transport *t);
 
 #endif /* RAFT_IO_UV_H */
