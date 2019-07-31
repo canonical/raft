@@ -137,6 +137,23 @@ RAFT__INLINE__ uint64_t byteGet64Unaligned(const void **cursor)
     return byteFlip64(value);
 }
 
+RAFT__INLINE__ const char *byteGetString(const void **cursor, size_t max_len)
+{
+    const char *value = *cursor;
+    size_t len = 0;
+    while (len < max_len) {
+        if (*(char *)(*cursor + len) == 0) {
+            break;
+        }
+        len++;
+    }
+    if (len == max_len) {
+        return NULL;
+    }
+    *cursor += len + 1;
+    return value;
+}
+
 /* Add padding to size if it's not a multiple of 8. */
 RAFT__INLINE__ size_t bytePad64(size_t size)
 {

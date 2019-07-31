@@ -77,3 +77,33 @@ TEST_CASE(flip, 64, NULL)
     }
     return MUNIT_OK;
 }
+
+/******************************************************************************
+ *
+ * byteGetString
+ *
+ *****************************************************************************/
+
+TEST_SUITE(get_string);
+
+TEST_CASE(get_string, success, NULL)
+{
+    uint8_t buf[] = {'h', 'e', 'l', 'l', 'o', 0};
+    const void *cursor = buf;
+    (void)data;
+    (void)params;
+    munit_assert_string_equal(byteGetString(&cursor, sizeof buf), "hello");
+    munit_assert_ptr_equal(cursor, buf + sizeof buf);
+    return MUNIT_OK;
+}
+
+TEST_CASE(get_string, malformed, NULL)
+{
+    uint8_t buf[] = {'h', 'e', 'l', 'l', 'o', 'w'};
+    const void *cursor = buf;
+    (void)data;
+    (void)params;
+    munit_assert_ptr_equal(byteGetString(&cursor, sizeof buf), NULL);
+    munit_assert_ptr_equal(cursor, buf);
+    return MUNIT_OK;
+}

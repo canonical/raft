@@ -298,7 +298,6 @@ int configurationDecode(const struct raft_buffer *buf,
     /* Decode the individual servers. */
     for (i = 0; i < n; i++) {
         unsigned id;
-        size_t address_len = 0;
         const char *address;
         bool voting;
         int rv;
@@ -307,17 +306,10 @@ int configurationDecode(const struct raft_buffer *buf,
         id = byteGet64Unaligned(&cursor);
 
         /* Server Address. */
-        while (cursor + address_len < buf->base + buf->len) {
-            if (*(char *)(cursor + address_len) == 0) {
-                break;
-            }
-            address_len++;
-        }
-        if (cursor + address_len == buf->base + buf->len) {
+        address = byteGetString(&cursor, buf->len - (cursor - buf->base));
+        if (address == NULL) {
             return RAFT_MALFORMED;
         }
-        address = (const char *)cursor;
-        cursor += address_len + 1;
 
         /* Voting flag. */
         voting = byteGet8(&cursor);
