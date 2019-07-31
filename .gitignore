@@ -30,7 +30,7 @@ tests/main_test.c
 coverage/
 coverage.info
 TAGS
-example-server
-example-cluster
+example/server
+example/cluster
 tmp
 conftest*

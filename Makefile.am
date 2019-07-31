@@ -172,8 +172,8 @@ endif
 if EXAMPLE_ENABLED
 
 bin_PROGRAMS = \
- example-server \
- example-cluster
+ example/server \
+ example/cluster
 
 example_server_SOURCES = example/server.c
 example_server_CFLAGS = $(AM_CFLAGS)
