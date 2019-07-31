@@ -26,7 +26,7 @@ const struct raft_server *configurationGet(const struct raft_configuration *c,
 
 /* Remove a server from a raft configuration. The given ID must match the one of
  * an existing server in the configuration. */
-int configurationRemove(struct raft_configuration *c, const unsigned id);
+int configurationRemove(struct raft_configuration *c, unsigned id);
 
 /* Add all servers in c1 to c2 (which must be empty). */
 int configurationCopy(const struct raft_configuration *src,
@@ -35,13 +35,13 @@ int configurationCopy(const struct raft_configuration *src,
 /* Number of bytes needed to encode the given configuration object. */
 size_t configurationEncodedSize(const struct raft_configuration *c);
 
-/* Encode to the given pre-allocated buffer. */
+/* Encode the given configuration object to the given pre-allocated buffer,
+ * which is assumed to be at least configurationEncodedSize(c) bytes. */
 void configurationEncodeToBuf(const struct raft_configuration *c, void *buf);
 
-/* Encode a raft configuration object. * The memory of the returned buffer is
+/* Encode the given configuration object. The memory of the returned buffer is
  * allocated using raft_malloc(), and client code is responsible for releasing
- * it when no longer needed. The raft library makes no use of that memory after
- * this function returns. */
+ * it when no longer needed. */
 int configurationEncode(const struct raft_configuration *c,
                         struct raft_buffer *buf);
 

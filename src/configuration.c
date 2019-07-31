@@ -45,6 +45,7 @@ size_t configurationIndexOfVoting(const struct raft_configuration *c,
     size_t i;
     size_t j = 0;
     assert(c != NULL);
+    assert(id > 0);
 
     for (i = 0; i < c->n; i++) {
         if (c->servers[i].id == id) {
@@ -75,7 +76,6 @@ const struct raft_server *configurationGet(const struct raft_configuration *c,
         /* No server with matching ID. */
         return NULL;
     }
-
     assert(i < c->n);
 
     return &c->servers[i];
@@ -86,13 +86,11 @@ size_t configurationNumVoting(const struct raft_configuration *c)
     size_t i;
     size_t n = 0;
     assert(c != NULL);
-
     for (i = 0; i < c->n; i++) {
         if (c->servers[i].voting) {
             n++;
         }
     }
-
     return n;
 }
 
@@ -135,33 +133,24 @@ int raft_configuration_add(struct raft_configuration *c,
         }
     }
 
-    /* Grow the servers array */
-    servers = raft_calloc(c->n + 1, sizeof *server);
+    /* Grow the servers array.. */
+    servers = raft_realloc(c->servers, (c->n + 1) * sizeof *server);
     if (servers == NULL) {
         return RAFT_NOMEM;
     }
-    memcpy(servers, c->servers, c->n * sizeof *server);
+    c->servers = servers;
 
     /* Fill the newly allocated slot (the last one) with the given details. */
     server = &servers[c->n];
-
     server->id = id;
-
     server->address = raft_malloc(strlen(address) + 1);
     if (server->address == NULL) {
-        raft_free(servers);
         return RAFT_NOMEM;
     }
     strcpy(server->address, address);
-
     server->voting = voting;
 
-    if (c->servers != NULL) {
-        raft_free(c->servers);
-    }
-
     c->n++;
-    c->servers = servers;
 
     return 0;
 }
@@ -189,7 +178,7 @@ int configurationRemove(struct raft_configuration *c, const unsigned id)
         return 0;
     }
 
-    /* Shrink the servers array. */
+    /* Create a new servers array. */
     servers = raft_calloc(c->n - 1, sizeof *servers);
     if (servers == NULL) {
         return RAFT_NOMEM;
@@ -234,13 +223,11 @@ size_t configurationEncodedSize(const struct raft_configuration *c)
         struct raft_server *server = &c->servers[i];
         assert(server->address != NULL);
         n += sizeof(uint64_t);            /* Server ID */
-        n += strlen(server->address) + 1; /* Address length */
+        n += strlen(server->address) + 1; /* Address */
         n++;                              /* Voting flag */
     };
 
-    n = bytePad64(n);
-
-    return n;
+    return bytePad64(n);
 }
 
 void configurationEncodeToBuf(const struct raft_configuration *c, void *buf)
