@@ -91,6 +91,14 @@ RAFT__INLINE__ void bytePut64(void **cursor, uint64_t value)
     *cursor += sizeof(uint64_t);
 }
 
+RAFT__INLINE__ void bytePut64Unaligned(void **cursor, uint64_t value)
+{
+    unsigned i;
+    for (i = 0; i < sizeof(uint64_t); i++) {
+        bytePut8(cursor, *((uint8_t *)(&value) + i));
+    }
+}
+
 RAFT__INLINE__ uint8_t byteGet8(const void **cursor)
 {
     uint8_t value = *(uint8_t *)(*cursor);
@@ -110,6 +118,16 @@ RAFT__INLINE__ uint64_t byteGet64(const void **cursor)
     uint64_t value = byteFlip64(*(uint64_t *)(*cursor));
     *cursor += sizeof(uint64_t);
     return value;
+}
+
+RAFT__INLINE__ uint64_t byteGet64Unaligned(const void **cursor)
+{
+    uint64_t value = 0;
+    unsigned i;
+    for (i = 0; i < sizeof(uint64_t); i++) {
+        *((uint8_t *)(&value) + i) = byteGet8(cursor);
+    }
+    return byteFlip64(value);
 }
 
 /* Add padding to size if it's not a multiple of 8. */
