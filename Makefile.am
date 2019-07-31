@@ -208,8 +208,6 @@ CODE_COVERAGE_IGNORE_PATTERN="/usr/include/*"
 CODE_COVERAGE_BRANCH_COVERAGE=1
 CODE_COVERAGE_LCOV_OPTIONS=$(CODE_COVERAGE_LCOV_OPTIONS_DEFAULT) --rc lcov_excl_br_line="assert\("
 
-AM_CFLAGS += -O0
-
 clean-local: code-coverage-clean
 distclean-local: code-coverage-dist-clean
 
