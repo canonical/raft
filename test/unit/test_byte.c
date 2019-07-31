@@ -2,7 +2,7 @@
 
 #include "../lib/runner.h"
 
-TEST_MODULE(checksum);
+TEST_MODULE(byte);
 
 /**
  * byteCrc32

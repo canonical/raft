@@ -36,19 +36,36 @@ libraft_la_SOURCES = \
   src/tick.c \
   src/tracer.c
 
-check_PROGRAMS = unit-test integration-test fuzzy-test
+check_PROGRAMS = test/unit/core integration-test fuzzy-test
 TESTS = $(check_PROGRAMS)
 
 check_LTLIBRARIES = libtest.la
 
-libtest_la_CFLAGS =
+libtest_la_CFLAGS = -DMUNIT_TEST_NAME_LEN=60
 libtest_la_LDFLAGS =
 libtest_la_SOURCES = \
   test/lib/fault.c \
   test/lib/heap.c \
   test/lib/munit.c
 
-test_CFLAGS = $(AM_CFLAGS) -DRAFT_TEST -DMUNIT_TEST_NAME_LEN=60
+test_CFLAGS = $(AM_CFLAGS) -DRAFT_TEST
+
+test_unit_core_SOURCES = \
+  src/byte.c \
+  src/configuration.c \
+  src/error.c \
+  src/heap.c \
+  src/log.c \
+  src/tracer.c \
+  test/unit/core.c \
+  test/unit/test_byte.c \
+  test/unit/test_configuration.c \
+  test/unit/test_log.c \
+  test/unit/test_queue.c \
+  test/unit/test_tracer.c
+test_unit_core_CFLAGS = $(CODE_COVERAGE_CFLAGS) $(test_CFLAGS)
+test_unit_core_LDADD = libtest.la
+
 test_lib_SOURCES = \
   test/lib/cluster.c \
   test/lib/fault.c \
@@ -56,19 +73,6 @@ test_lib_SOURCES = \
   test/lib/heap.c \
   test/lib/munit.c \
   test/lib/tcp.c
-
-unit_test_SOURCES = $(test_lib_SOURCES)
-unit_test_SOURCES += $(libraft_la_SOURCES)
-unit_test_SOURCES += \
-  test/unit/main.c \
-  test/unit/test_byte.c \
-  test/unit/test_configuration.c \
-  test/unit/test_log.c \
-  test/unit/test_queue.c \
-  test/unit/test_tracer.c
-unit_test_CFLAGS = $(CODE_COVERAGE_CFLAGS) $(test_CFLAGS)
-unit_test_LDADD =
-unit_test_LDFLAGS =
 
 integration_test_SOURCES = $(test_lib_SOURCES)
 integration_test_SOURCES += \
@@ -140,24 +144,24 @@ uv_test_CFLAGS = $(CODE_COVERAGE_CFLAGS) $(test_CFLAGS)
 uv_test_LDADD =
 uv_test_LDFLAGS = $(UV_LIBS)
 
-unit_test_SOURCES += \
-  test/lib/dir.c \
-  test/lib/uv.c \
-  test/unit/test_uv.c \
-  test/unit/test_uv_append.c \
-  test/unit/test_uv_finalize.c \
-  test/unit/test_uv_list.c \
-  test/unit/test_uv_load.c \
-  test/unit/test_uv_metadata.c \
-  test/unit/test_uv_os.c \
-  test/unit/test_uv_prepare.c \
-  test/unit/test_uv_recv.c \
-  test/unit/test_uv_send.c \
-  test/unit/test_uv_snapshot.c \
-  test/unit/test_uv_tcp_connect.c \
-  test/unit/test_uv_tcp_listen.c \
-  test/unit/test_uv_truncate.c
-unit_test_LDFLAGS += $(UV_LIBS)
+# unit_test_SOURCES += \
+#   test/lib/dir.c \
+#   test/lib/uv.c \
+#   test/unit/test_uv.c \
+#   test/unit/test_uv_append.c \
+#   test/unit/test_uv_finalize.c \
+#   test/unit/test_uv_list.c \
+#   test/unit/test_uv_load.c \
+#   test/unit/test_uv_metadata.c \
+#   test/unit/test_uv_os.c \
+#   test/unit/test_uv_prepare.c \
+#   test/unit/test_uv_recv.c \
+#   test/unit/test_uv_send.c \
+#   test/unit/test_uv_snapshot.c \
+#   test/unit/test_uv_tcp_connect.c \
+#   test/unit/test_uv_tcp_listen.c \
+#   test/unit/test_uv_truncate.c
+# unit_test_LDFLAGS += $(UV_LIBS)
 
 AM_CFLAGS += $(UV_CFLAGS)
 
@@ -166,7 +170,7 @@ endif # UV_ENABLED
 if FIXTURE_ENABLED
 libraft_la_SOURCES += src/fixture.c
 raftinclude_HEADERS += include/raft/fixture.h
-unit_test_SOURCES += test/unit/test_fixture.c
+#unit_test_SOURCES += test/unit/test_fixture.c
 endif
 
 if EXAMPLE_ENABLED

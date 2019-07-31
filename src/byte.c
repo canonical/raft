@@ -1,5 +1,3 @@
-#include <stdint.h>
-
 #include "byte.h"
 
 /* Taken from https://github.com/gcc-mirror/gcc/blob/master/libiberty/crc32.c */

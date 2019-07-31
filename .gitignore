@@ -20,13 +20,13 @@ stamp-h1
 .dirstamp
 .deps/
 .libs/
+test/unit/core
 unit-test*
 integration-test*
 fuzzy-test*
 os-test*
 uv-test*
 test-suite.log
-tests/main_test.c
 coverage/
 coverage.info
 TAGS
