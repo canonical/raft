@@ -1,5 +1,3 @@
-#include <string.h>
-
 #include "assert.h"
 #include "byte.h"
 #include "configuration.h"
@@ -243,14 +241,9 @@ void configurationEncodeToBuf(const struct raft_configuration *c, void *buf)
 
     for (i = 0; i < c->n; i++) {
         struct raft_server *server = &c->servers[i];
-
         assert(server->address != NULL);
-
         bytePut64Unaligned(&cursor, server->id); /* might not be aligned */
-
-        strcpy((char *)cursor, server->address);
-        cursor += strlen(server->address) + 1;
-
+	bytePutString(&cursor, server->address);
         bytePut8(&cursor, server->voting);
     };
 }

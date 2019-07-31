@@ -4,6 +4,7 @@
 #define BYTE_H_
 
 #include <stdint.h>
+#include <string.h>
 #include <unistd.h>
 
 #if defined(__cplusplus)
@@ -97,6 +98,12 @@ RAFT__INLINE__ void bytePut64Unaligned(void **cursor, uint64_t value)
     for (i = 0; i < sizeof(uint64_t); i++) {
         bytePut8(cursor, *((uint8_t *)(&value) + i));
     }
+}
+
+RAFT__INLINE__ void bytePutString(void **cursor, const char *value)
+{
+    strcpy((char *)(*cursor), value);
+    *cursor += strlen(value) + 1;
 }
 
 RAFT__INLINE__ uint8_t byteGet8(const void **cursor)
