@@ -62,7 +62,7 @@ static void createWorkCb(uv_work_t *work)
 
     /* Set direct I/O if available. */
     if (f->direct) {
-        rv = uvSetDirectIO(f->fd);
+        rv = uvSetDirectIo(f->fd);
         if (rv != 0) {
             goto err;
         }
@@ -561,7 +561,7 @@ int uvFileWrite(struct uvFile *f,
         switch (errno) {
             case EOPNOTSUPP:
                 /* NOWAIT is not supported, this should occur because we checked
-                 * it in uvProbeIO. */
+                 * it in uvProbeIoCapabilities. */
                 assert(0);
                 break;
             case EAGAIN:

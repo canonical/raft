@@ -6,7 +6,7 @@
 
 #include "../../src/uv_os.h"
 
-TEST_MODULE(os);
+TEST_MODULE(uv_os);
 
 /******************************************************************************
  *
@@ -50,13 +50,13 @@ static void tear_down(void *data)
         munit_assert_int(rv_, ==, RV); \
     }
 
-/* Invoke @uvProbeIO assert that it returns the given code. */
+/* Invoke @uvProbeIoCapabilities assert that it returns the given code. */
 #define ASSERT_PROBE_IO(RV)                             \
     {                                                   \
         size_t direct_io;                               \
         bool async_io;                                  \
         int rv2;                                        \
-        rv2 = uvProbeIO(f->dir, &direct_io, &async_io); \
+        rv2 = uvProbeIoCapabilities(f->dir, &direct_io, &async_io); \
         munit_assert_int(rv2, ==, RV);                  \
     }
 
@@ -154,7 +154,7 @@ TEST_CASE(ensure_dir, error, not_a_dir, NULL)
 
 /******************************************************************************
  *
- * uvProbeIO
+ * uvProbeIoCapabilities
  *
  *****************************************************************************/
 

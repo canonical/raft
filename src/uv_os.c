@@ -78,7 +78,7 @@ int uvScanDir(const uvDir dir, struct dirent ***entries, int *n_entries)
     return 0;
 }
 
-int uvOpen(const uvDir dir, const uvFilename filename, int flags, int *fd)
+int uvOpenFile(const uvDir dir, const uvFilename filename, int flags, int *fd)
 {
     uvPath path;
     uvJoin(dir, filename, path);
@@ -89,7 +89,7 @@ int uvOpen(const uvDir dir, const uvFilename filename, int flags, int *fd)
     return 0;
 }
 
-int uvStat(const uvDir dir, const uvFilename filename, struct stat *sb)
+int uvStatFile(const uvDir dir, const uvFilename filename, struct stat *sb)
 {
     uvPath path;
     int rv;
@@ -101,10 +101,10 @@ int uvStat(const uvDir dir, const uvFilename filename, struct stat *sb)
     return 0;
 }
 
-int uvCreate(const uvDir dir,
-             const uvFilename filename,
-             struct raft_buffer *bufs,
-             unsigned n_bufs)
+int uvMakeFile(const uvDir dir,
+               const uvFilename filename,
+               struct raft_buffer *bufs,
+               unsigned n_bufs)
 {
     int flags = O_WRONLY | O_CREAT | O_EXCL;
     int fd;
@@ -115,7 +115,7 @@ int uvCreate(const uvDir dir,
     for (i = 0; i < n_bufs; i++) {
         size += bufs[i].len;
     }
-    rv = uvOpen(dir, filename, flags, &fd);
+    rv = uvOpenFile(dir, filename, flags, &fd);
     if (rv != 0) {
         return RAFT_IOERR;
     }
@@ -141,7 +141,7 @@ err:
     return rv;
 }
 
-int uvUnlink(const char *dir, const char *filename)
+int uvUnlinkFile(const char *dir, const char *filename)
 {
     uvPath path;
     int rv;
@@ -153,7 +153,7 @@ int uvUnlink(const char *dir, const char *filename)
     return 0;
 }
 
-int uvShrink(const uvDir dir, const uvFilename filename, size_t offset)
+int uvTruncateFile(const uvDir dir, const uvFilename filename, size_t offset)
 {
     uvPath path;
     int fd;
@@ -177,9 +177,9 @@ int uvShrink(const uvDir dir, const uvFilename filename, size_t offset)
     return 0;
 }
 
-int uvRename(const uvDir dir,
-             const uvFilename filename1,
-             const uvFilename filename2)
+int uvRenameFile(const uvDir dir,
+                 const uvFilename filename1,
+                 const uvFilename filename2)
 {
     uvPath path1;
     uvPath path2;
@@ -198,7 +198,7 @@ int uvRename(const uvDir dir,
     return 0;
 }
 
-int uvIsEmpty(const uvDir dir, const uvFilename filename, bool *empty)
+int uvIsEmptyFile(const uvDir dir, const uvFilename filename, bool *empty)
 {
     uvPath path;
     struct stat sb;
@@ -212,7 +212,35 @@ int uvIsEmpty(const uvDir dir, const uvFilename filename, bool *empty)
     return 0;
 }
 
-int uvHasTrailingZeros(const int fd, bool *flag)
+int uvReadFully(const int fd, void *buf, const size_t n)
+{
+    int rv;
+    rv = read(fd, buf, n);
+    if (rv == -1) {
+        return errno;
+    }
+    assert(rv >= 0);
+    if ((size_t)rv < n) {
+        return ENODATA;
+    }
+    return 0;
+}
+
+int uvWriteFully(const int fd, void *buf, const size_t n)
+{
+    int rv;
+    rv = write(fd, buf, n);
+    if (rv == -1) {
+        return errno;
+    }
+    assert(rv >= 0);
+    if ((size_t)rv < n) {
+        return ENODATA;
+    }
+    return 0;
+}
+
+int uvIsFilledWithTrailingZeros(const int fd, bool *flag)
 {
     off_t size;
     off_t offset;
@@ -241,7 +269,7 @@ int uvHasTrailingZeros(const int fd, bool *flag)
         return ENOMEM;
     }
 
-    rv = uvReadN(fd, data, size);
+    rv = uvReadFully(fd, data, size);
     if (rv != 0) {
         return rv;
     }
@@ -258,34 +286,6 @@ int uvHasTrailingZeros(const int fd, bool *flag)
 done:
     free(data);
 
-    return 0;
-}
-
-int uvReadN(const int fd, void *buf, const size_t n)
-{
-    int rv;
-    rv = read(fd, buf, n);
-    if (rv == -1) {
-        return errno;
-    }
-    assert(rv >= 0);
-    if ((size_t)rv < n) {
-        return ENODATA;
-    }
-    return 0;
-}
-
-int uvWriteN(const int fd, void *buf, const size_t n)
-{
-    int rv;
-    rv = write(fd, buf, n);
-    if (rv == -1) {
-        return errno;
-    }
-    assert(rv >= 0);
-    if ((size_t)rv < n) {
-        return ENODATA;
-    }
     return 0;
 }
 
@@ -448,7 +448,7 @@ static int probeAsyncIO(int fd, size_t size, bool *ok)
 }
 #endif /* RWF_NOWAIT */
 
-int uvProbeIO(const uvDir dir, size_t *direct, bool *async)
+int uvProbeIoCapabilities(const uvDir dir, size_t *direct, bool *async)
 {
     uvFilename filename; /* Filename of the probe file */
     uvPath path;         /* Full path of the probe file */
@@ -505,7 +505,7 @@ err:
     return rv;
 }
 
-int uvSetDirectIO(int fd)
+int uvSetDirectIo(int fd)
 {
     int flags; /* Current fcntl flags */
     int rv;

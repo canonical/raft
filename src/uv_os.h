@@ -49,40 +49,40 @@ int uvSyncDir(const uvDir dir);
 int uvScanDir(const uvDir dir, struct dirent ***entries, int *n_entries);
 
 /* Open a file in a directory. */
-int uvOpen(const uvDir dir, const uvFilename filename, int flags, int *fd);
+int uvOpenFile(const uvDir dir, const uvFilename filename, int flags, int *fd);
 
 /* Stat a file in a directory. */
-int uvStat(const uvDir dir, const uvFilename filename, struct stat *sb);
+int uvStatFile(const uvDir dir, const uvFilename filename, struct stat *sb);
 
-/* Create a file with the given content. */
-int uvCreate(const uvDir dir,
-             const uvFilename filename,
-             struct raft_buffer *bufs,
-             unsigned n_bufs);
+/* Create a file and write the given content into it. */
+int uvMakeFile(const uvDir dir,
+               const uvFilename filename,
+               struct raft_buffer *bufs,
+               unsigned n_bufs);
 
 /* Delete a file in a directory. */
-int uvUnlink(const uvDir dir, const uvFilename filename);
+int uvUnlinkFile(const uvDir dir, const uvFilename filename);
 
-/* Shrink the size of a file in a directory. */
-int uvShrink(const uvDir dir, const uvFilename filename, size_t offset);
+/* Truncate a file in a directory. */
+int uvTruncateFile(const uvDir dir, const uvFilename filename, size_t offset);
 
 /* Rename a file in a directory. */
-int uvRename(const uvDir dir,
-             const uvFilename filename1,
-             const uvFilename filename2);
+int uvRenameFile(const uvDir dir,
+                 const uvFilename filename1,
+                 const uvFilename filename2);
 
 /* Check whether the given file in the given directory is empty. */
-int uvIsEmpty(const uvDir dir, const uvFilename filename, bool *empty);
+int uvIsEmptyFile(const uvDir dir, const uvFilename filename, bool *empty);
+
+/* Read exactly @n bytes from the given file descriptor. */
+int uvReadFully(int fd, void *buf, size_t n);
+
+/* Write exactly @n bytes to the given file descriptor. */
+int uvWriteFully(int fd, void *buf, size_t n);
 
 /* Check if the content of the file associated with the given file descriptor
  * contains all zeros from the current offset onward. */
-int uvHasTrailingZeros(int fd, bool *flag);
-
-/* Read exactly @n bytes from the given file descriptor. */
-int uvReadN(int fd, void *buf, size_t n);
-
-/* Write exactly @n bytes to the given file descriptor. */
-int uvWriteN(int fd, void *buf, size_t n);
+int uvIsFilledWithTrailingZeros(int fd, bool *flag);
 
 /* Check if the given file descriptor has reached the end of the file. */
 bool uvIsAtEof(int fd);
@@ -95,10 +95,10 @@ bool uvIsAtEof(int fd);
  *
  * The @async parameter will be set to true if fully asynchronous I/O is
  * possible using the KAIO API. */
-int uvProbeIO(const uvDir dir, size_t *direct, bool *async);
+int uvProbeIoCapabilities(const uvDir dir, size_t *direct, bool *async);
 
 /* Configure the given file descriptor for direct I/O. */
-int uvSetDirectIO(int fd);
+int uvSetDirectIo(int fd);
 
 /* Return a human-readable description of the given OS error */
 const char *osStrError(int rv);

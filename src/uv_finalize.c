@@ -31,12 +31,12 @@ static void workCb(uv_work_t *work)
     /* If the segment hasn't actually been used (because the writer has been
      * closed or aborted before making any write), then let's just remove it. */
     if (s->used == 0) {
-        uvUnlink(uv->dir, filename1);
+        uvUnlinkFile(uv->dir, filename1);
         goto out;
     }
 
     /* Truncate and rename the segment */
-    rv = uvShrink(uv->dir, filename1, s->used);
+    rv = uvTruncateFile(uv->dir, filename1, s->used);
     if (rv != 0) {
         uvErrorf(uv, "truncate segment %s: %s", filename1, osStrError(rv));
         rv = RAFT_IOERR;
@@ -45,7 +45,7 @@ static void workCb(uv_work_t *work)
 
     sprintf(filename2, UV__CLOSED_TEMPLATE, s->first_index, s->last_index);
 
-    rv = uvRename(uv->dir, filename1, filename2);
+    rv = uvRenameFile(uv->dir, filename1, filename2);
     if (rv != 0) {
         uvErrorf(uv, "rename segment %d: %s", s->counter, osStrError(rv));
         rv = RAFT_IOERR;

@@ -135,7 +135,6 @@ uv_test_SOURCES += \
   test/lib/dir.c \
   test/lib/uv.c \
   test/uv/main.c \
-  test/uv/test_os.c \
   test/uv/test_uv_file.c
 uv_test_CFLAGS = $(CODE_COVERAGE_CFLAGS) $(test_CFLAGS)
 uv_test_LDADD =
@@ -150,6 +149,7 @@ unit_test_SOURCES += \
   test/unit/test_uv_list.c \
   test/unit/test_uv_load.c \
   test/unit/test_uv_metadata.c \
+  test/unit/test_uv_os.c \
   test/unit/test_uv_prepare.c \
   test/unit/test_uv_recv.c \
   test/unit/test_uv_send.c \

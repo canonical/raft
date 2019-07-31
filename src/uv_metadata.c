@@ -57,7 +57,7 @@ static int loadFile(struct uv *uv,
     filenameOf(n, filename);
 
     /* Open the metadata file, if it exists. */
-    rv = uvOpen(uv->dir, filename, O_RDONLY, &fd);
+    rv = uvOpenFile(uv->dir, filename, O_RDONLY, &fd);
     if (rv != 0) {
         if (rv != ENOENT) {
             uvErrorf(uv, "open %s: %s", filename, osStrError(rv));
@@ -69,7 +69,7 @@ static int loadFile(struct uv *uv,
     }
 
     /* Read the content of the metadata file. */
-    rv = uvReadN(fd, buf, sizeof buf);
+    rv = uvReadFully(fd, buf, sizeof buf);
     if (rv != 0) {
         if (rv != ENODATA) {
             uvErrorf(uv, "read %s: %s", filename, osStrError(rv));
@@ -199,13 +199,13 @@ int uvMetadataStore(struct uv *uv, const struct uvMetadata *metadata)
     filenameOf(n, filename);
 
     /* Write the metadata file, creating it if it does not exist. */
-    rv = uvOpen(uv->dir, filename, flags, &fd);
+    rv = uvOpenFile(uv->dir, filename, flags, &fd);
     if (rv != 0) {
         uvErrorf(uv, "open %s: %s", filename, osStrError(rv));
         return RAFT_IOERR;
     }
 
-    rv = uvWriteN(fd, buf, sizeof buf);
+    rv = uvWriteFully(fd, buf, sizeof buf);
     close(fd);
     if (rv != 0) {
         uvErrorf(uv, "write %s: %s", filename, osStrError(rv));
