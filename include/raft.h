@@ -398,13 +398,19 @@ struct raft_logger
 };
 
 /**
- * Circular buffer for collecting messages.
+ * Circular buffer for collecting trace entries.
+ *
+ * Each entry consists of a text message plus following metadata:
+ *
+ * - Time at which the entry was created.
+ * - Entry type (integer code).
  */
 struct raft_tracer
 {
-    void *entries; /* Memory where messages and their metadata are collected. */
-    void *head;    /* Points to the beginning of the first message, or NULL. */
-    void *tail;    /* Points to the beginning of the last message, or NULL. */
+    void *buf;   /* Memory where entries are collected. */
+    size_t size; /* Size of buf. */
+    size_t head; /* First entry starts at this offset. */
+    size_t tail; /* Last entry starts at this offset. */
 };
 
 /**
@@ -425,7 +431,7 @@ RAFT_API int raft_default_logger_init(struct raft_logger *l);
 /**
  * Logging levels.
  */
-enum { RAFT_DEBUG, RAFT_INFO, RAFT_WARN, RAFT_ERROR };
+enum { RAFT_DEBUG = 1, RAFT_INFO, RAFT_WARN, RAFT_ERROR };
 
 struct raft_io; /* Forward declaration. */
 
