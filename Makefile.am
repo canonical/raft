@@ -57,7 +57,7 @@ test_unit_core_SOURCES = \
   src/heap.c \
   src/log.c \
   src/tracer.c \
-  test/unit/core.c \
+  test/unit/main_core.c \
   test/unit/test_byte.c \
   test/unit/test_configuration.c \
   test/unit/test_log.c \
