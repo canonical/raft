@@ -15,6 +15,7 @@ script:
   - autoreconf -i
   - ./configure --disable-uv --enable-debug --enable-code-coverage --enable-sanitize
   - ./test/lib/fs.sh setup
+  - CFLAGS=-O0
   - make
   - make check || cat ./test-suite.log
   - if [ $TRAVIS_COMPILER = gcc ]; then make code-coverage-capture; fi
