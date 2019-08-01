@@ -60,6 +60,7 @@ test_unit_core_SOURCES = \
   test/unit/main_core.c \
   test/unit/test_byte.c \
   test/unit/test_configuration.c \
+  test/unit/test_heap.c \
   test/unit/test_error.c \
   test/unit/test_log.c \
   test/unit/test_queue.c \
