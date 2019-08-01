@@ -1,7 +1,7 @@
 /* In-memory cache of the persistent raft log stored on disk. */
 
-#ifndef RAFT_LOG_H
-#define RAFT_LOG_H
+#ifndef RAFT_LOG_H_
+#define RAFT_LOG_H_
 
 #include "../include/raft.h"
 
@@ -102,4 +102,4 @@ void logRestore(struct raft_log *l, raft_index last_index, raft_term last_term);
  * current offset back to start_index. */
 void logSeek(struct raft_log *l, raft_index start_index);
 
-#endif /* RAFT_LOG_H */
+#endif /* RAFT_LOG_H_ */
