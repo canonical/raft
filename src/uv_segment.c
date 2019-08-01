@@ -559,7 +559,7 @@ static int ensureSegmentBufferIsLargeEnough(struct uvSegmentBuffer *b,
     }
 
     len = b->block_size * n;
-    base = aligned_alloc(b->block_size, len);
+    base = raft_aligned_alloc(b->block_size, len);
     if (base == NULL) {
         return RAFT_NOMEM;
     }
@@ -570,7 +570,7 @@ static int ensureSegmentBufferIsLargeEnough(struct uvSegmentBuffer *b,
     if (b->arena.base != NULL) {
         assert(b->arena.len >= b->block_size);
         memcpy(base, b->arena.base, b->arena.len);
-        free(b->arena.base);
+        raft_free(b->arena.base);
     }
 
     b->arena.base = base;
@@ -590,7 +590,7 @@ void uvSegmentBufferInit(struct uvSegmentBuffer *b, size_t block_size)
 void uvSegmentBufferClose(struct uvSegmentBuffer *b)
 {
     if (b->arena.base != NULL) {
-        free(b->arena.base);
+        raft_free(b->arena.base);
     }
 }
 
