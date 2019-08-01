@@ -40,7 +40,7 @@ static void tear_down(void *data)
  *****************************************************************************/
 
 /* Accessors */
-#define N_OUTSTANDING logNumOutstanding(&f->log)
+#define N_ENTRIES logNumEntries(&f->log)
 #define LAST_INDEX logLastIndex(&f->log)
 #define TERM_OF(INDEX) logTermOf(&f->log, INDEX)
 #define LAST_TERM logLastTerm(&f->log)
@@ -115,7 +115,7 @@ static void tear_down(void *data)
     munit_assert_int(f->log.front, ==, FRONT);   \
     munit_assert_int(f->log.back, ==, BACK);     \
     munit_assert_int(f->log.offset, ==, OFFSET); \
-    munit_assert_int(logNumOutstanding(&f->log), ==, N)
+    munit_assert_int(logNumEntries(&f->log), ==, N)
 
 /* Assert the last index and term of the most recent snapshot. */
 #define ASSERT_SNAPSHOT(INDEX, TERM)                         \
@@ -151,7 +151,7 @@ static void tear_down(void *data)
 
 /******************************************************************************
  *
- * logNumOutstanding
+ * logNumEntries
  *
  *****************************************************************************/
 
@@ -165,7 +165,7 @@ TEST_CASE(n_outstanding, empty, NULL)
 {
     struct fixture *f = data;
     (void)params;
-    munit_assert_int(N_OUTSTANDING, ==, 0);
+    munit_assert_int(N_ENTRIES, ==, 0);
     return MUNIT_OK;
 }
 
@@ -175,7 +175,7 @@ TEST_CASE(n_outstanding, not_wrapped, NULL)
     struct fixture *f = data;
     (void)params;
     APPEND(1 /* term */);
-    munit_assert_int(N_OUTSTANDING, ==, 1);
+    munit_assert_int(N_ENTRIES, ==, 1);
     return MUNIT_OK;
 }
 
@@ -187,7 +187,7 @@ TEST_CASE(n_outstanding, wrapped, NULL)
     APPEND_MANY(1 /* term */, 5 /* n entries */);
     SNAPSHOT(4, 1);
     APPEND_MANY(1 /* term */, 2 /* n entries */);
-    munit_assert_int(N_OUTSTANDING, ==, 4);
+    munit_assert_int(N_ENTRIES, ==, 4);
     return MUNIT_OK;
 }
 
@@ -198,7 +198,7 @@ TEST_CASE(n_outstanding, offset, NULL)
     (void)params;
     APPEND_MANY(1 /* term */, 5 /* n entries */);
     SNAPSHOT(5, 0);
-    munit_assert_int(N_OUTSTANDING, ==, 0);
+    munit_assert_int(N_ENTRIES, ==, 0);
     return MUNIT_OK;
 }
 
@@ -209,7 +209,7 @@ TEST_CASE(n_outstanding, offset_not_empty, NULL)
     (void)params;
     APPEND_MANY(1 /* term */, 5 /* n entries */);
     SNAPSHOT(4, 2);
-    munit_assert_int(N_OUTSTANDING, ==, 3);
+    munit_assert_int(N_ENTRIES, ==, 3);
     return MUNIT_OK;
 }
 
@@ -1232,7 +1232,7 @@ TEST_CASE(snapshot, trailing, NULL)
 
     ASSERT_SNAPSHOT(3 /* index */, 2 /* term */);
 
-    munit_assert_int(N_OUTSTANDING, ==, 2);
+    munit_assert_int(N_ENTRIES, ==, 2);
     munit_assert_int(LAST_INDEX, ==, 3);
 
     return MUNIT_OK;
@@ -1263,7 +1263,7 @@ TEST_CASE(snapshot, trailing_higher_than_outstanding, NULL)
 
     ASSERT_SNAPSHOT(4 /* index */, 2 /* term */);
 
-    munit_assert_int(N_OUTSTANDING, ==, 2);
+    munit_assert_int(N_ENTRIES, ==, 2);
     munit_assert_int(LAST_INDEX, ==, 4);
 
     return MUNIT_OK;
@@ -1293,7 +1293,7 @@ TEST_CASE(snapshot, trailing_matches_outstanding, NULL)
 
     ASSERT_SNAPSHOT(4 /* index */, 2 /* term */);
 
-    munit_assert_int(N_OUTSTANDING, ==, 2);
+    munit_assert_int(N_ENTRIES, ==, 2);
     munit_assert_int(LAST_INDEX, ==, 4);
 
     return MUNIT_OK;
@@ -1317,7 +1317,7 @@ TEST_CASE(snapshot, less_than_highest_index, NULL)
 
     ASSERT_SNAPSHOT(4 /* index */, 1 /* term */);
 
-    munit_assert_int(N_OUTSTANDING, ==, 3);
+    munit_assert_int(N_ENTRIES, ==, 3);
     munit_assert_int(LAST_INDEX, ==, 5);
 
     return MUNIT_OK;

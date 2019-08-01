@@ -72,7 +72,7 @@ static int restoreEntries(struct raft *r,
     return 0;
 
 err:
-    if (logNumOutstanding(&r->log) > 0) {
+    if (logNumEntries(&r->log) > 0) {
         logDiscard(&r->log, r->log.offset + 1);
     }
     return rv;
@@ -113,7 +113,7 @@ int raft_start(struct raft *r)
     assert(r->state == RAFT_UNAVAILABLE);
     assert(r->heartbeat_timeout != 0);
     assert(r->heartbeat_timeout < r->election_timeout);
-    assert(logNumOutstanding(&r->log) == 0);
+    assert(logNumEntries(&r->log) == 0);
     assert(logSnapshotIndex(&r->log) == 0);
     assert(r->last_stored == 0);
 
