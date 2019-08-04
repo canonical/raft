@@ -95,7 +95,7 @@ static void walkCb(void *data,
         }                                \
     }
 
-#define WALK tracerWalk(&f->tracer, walkCb, f);
+#define WALK raft_tracer_walk(&f->tracer, walkCb, f);
 
 /******************************************************************************
  *

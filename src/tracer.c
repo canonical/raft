@@ -241,7 +241,9 @@ put:
     t->tail = offset;
 }
 
-void tracerWalk(const struct raft_tracer *t, tracerWalkCb cb, void *data)
+void raft_tracer_walk(const struct raft_tracer *t,
+                      raft_tracer_walk_cb cb,
+                      void *data)
 {
     size_t offset = t->head;
 

@@ -1,6 +1,4 @@
-/**
- * Raft servers configuration test helpers.
- */
+/* Raft servers configuration test helpers. */
 
 #ifndef TEST_CONFIGURATION_H
 #define TEST_CONFIGURATION_H
@@ -11,10 +9,8 @@
 #define SETUP_CONFIGURATION raft_configuration_init(&f->configuration)
 #define TEAR_DOWN_CONFIGURATION raft_configuration_close(&f->configuration)
 
-/**
- * Add @N servers to the given @CONFIGURATION pointer. The will be @N_VOTING
- * voting servers.
- */
+/* Add @N servers to the given @CONFIGURATION pointer. The will be @N_VOTING
+ * voting servers. */
 #define CONFIGURATION_ADD_N
 
 #endif /* TEST_CONFIGURATION_H */

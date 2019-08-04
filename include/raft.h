@@ -424,6 +424,23 @@ RAFT_API int raft_tracer_init(struct raft_tracer *t, size_t size);
 RAFT_API void raft_tracer_close(struct raft_tracer *t);
 
 /**
+ * Callback invoked by raft_tracer_walk() when iterating through tracer entries.
+ */
+typedef void (*raft_tracer_walk_cb)(void *data,
+                                    raft_time time,
+                                    unsigned type,
+                                    const char *message);
+
+/**
+ * Iterate through all entries in the tracer, calling the given hook each
+ * time. The @data argument will be passed back as first argument of the
+ * callback.
+ */
+void raft_tracer_walk(const struct raft_tracer *t,
+                      raft_tracer_walk_cb cb,
+                      void *data);
+
+/**
  * Default implementation of the logger interface, emitting messages to stdout.
  */
 RAFT_API int raft_default_logger_init(struct raft_logger *l);
