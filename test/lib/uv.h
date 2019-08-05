@@ -14,12 +14,14 @@
 #include "loop.h"
 #include "munit.h"
 #include "tcp.h"
+#include "tracer.h"
 
 #define FIXTURE_UV                      \
-    struct raft_heap heap;              \
-    struct test_tcp tcp;                \
-    struct uv_loop_s loop;              \
-    char *dir;                          \
+    FIXTURE_HEAP;                       \
+    FIXTURE_TCP;                        \
+    FIXTURE_LOOP;                       \
+    FIXTURE_DIR;                        \
+    FIXTURE_TRACER;                     \
     struct raft_logger logger;          \
     struct raft_uv_transport transport; \
     struct raft_io io;                  \
@@ -30,10 +32,11 @@
     (void)user_data;                                                  \
     {                                                                 \
         int rv__;                                                     \
-        test_heap_setup(params, &f->heap);                            \
-        test_tcp_setup(params, &f->tcp);                              \
+        HEAP_SETUP;                                                   \
+        TCP_SETUP;                                                    \
         SETUP_LOOP;                                                   \
-        f->dir = test_dir_setup(params);                              \
+        DIR_SETUP;                                                    \
+        TRACER_SETUP;                                                 \
         rv__ = raft_uv_tcp_init(&f->transport, &f->loop);             \
         munit_assert_int(rv__, ==, 0);                                \
         rv__ = raft_uv_init(&f->io, &f->loop, f->dir, &f->transport); \
@@ -54,10 +57,11 @@
     LOOP_STOP;                        \
     raft_uv_close(&f->io);            \
     raft_uv_tcp_close(&f->transport); \
-    test_dir_tear_down(f->dir);       \
+    TRACER_TEAR_DOWN;                 \
+    DIR_TEAR_DOWN;                    \
     TEAR_DOWN_LOOP;                   \
-    test_tcp_tear_down(&f->tcp);      \
-    test_heap_tear_down(&f->heap);
+    TCP_TEAR_DOWN;                    \
+    HEAP_TEAR_DOWN;
 
 #define UV_CLOSE                         \
     {                                    \

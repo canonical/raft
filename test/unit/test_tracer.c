@@ -77,7 +77,7 @@ static void walkCb(void *data,
 
     f->n_entries++;
 
-    f->entries = reallocarray(f->entries, f->n_entries, sizeof *f->entries);
+    f->entries = realloc(f->entries, f->n_entries * sizeof *f->entries);
     munit_assert_ptr_not_null(f->entries);
 
     entry = &f->entries[f->n_entries - 1];
@@ -109,7 +109,7 @@ static void walkCb(void *data,
 /* Assert that the I'th entry emitted matches the given parameters. */
 #define ASSERT_ENTRY(I, TIME, MESSAGE)                      \
     {                                                       \
-        struct entry *entry = &f->entries[I];                \
+        struct entry *entry = &f->entries[I];               \
         munit_assert_int(entry->time, ==, TIME);            \
         munit_assert_string_equal(entry->message, MESSAGE); \
     }
@@ -182,7 +182,9 @@ TEST_CASE(emit, wrap_twice, NULL)
 TEST_CASE(emit, overflow, NULL)
 {
     struct fixture *f = data;
-    const char *message = "very long message that can't fit in trailing bytes, so the all the messages are wiped";
+    const char *message =
+        "very long message that can't fit in trailing bytes, so the all the "
+        "messages are wiped";
     (void)params;
     EMIT("first");
     EMIT_N(81, "middle");
@@ -205,7 +207,8 @@ TEST_CASE(emit, dummy, NULL)
 }
 
 /* A message is too long and gets truncated. */
-TEST_CASE(emit, truncate, NULL) {
+TEST_CASE(emit, truncate, NULL)
+{
     struct fixture *f = data;
     char message[300];
     (void)params;

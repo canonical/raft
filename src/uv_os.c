@@ -11,6 +11,7 @@
 
 #include "assert.h"
 #include "uv_os.h"
+#include "tracer.h"
 
 void uvJoin(const uvDir dir, const uvFilename filename, uvPath path)
 {
@@ -25,7 +26,7 @@ void uvDirname(const uvPath path, uvDir dir)
     dirname(dir);
 }
 
-int uvEnsureDir(const uvDir dir)
+int uvEnsureDir(struct raft_tracer *tracer, const uvDir dir)
 {
     struct stat sb;
     int rv;

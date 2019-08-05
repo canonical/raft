@@ -128,24 +128,30 @@ libraft_la_LDFLAGS += $(UV_LIBS)
 
 raftinclude_HEADERS += include/raft/uv.h
 
-check_PROGRAMS += uv-test
+check_PROGRAMS += test/unit/uv
 
 libtest_la_SOURCES += \
-  test/lib/dir.c
+  test/lib/dir.c \
+  test/lib/tcp.c \
+  test/lib/loop.c \
+  test/lib/uv.c
 
 test_lib_SOURCES += \
   test/lib/loop.c
 
-uv_test_SOURCES = $(test_lib_SOURCES)
-uv_test_SOURCES += $(libraft_la_SOURCES)
-uv_test_SOURCES += \
-  test/lib/dir.c \
-  test/lib/uv.c \
-  test/uv/main.c \
-  test/uv/test_uv_file.c
-uv_test_CFLAGS = $(CODE_COVERAGE_CFLAGS) $(test_CFLAGS)
-uv_test_LDADD =
-uv_test_LDFLAGS = $(UV_LIBS)
+test_unit_uv_SOURCES = \
+  src/byte.c \
+  src/configuration.c \
+  src/error.c \
+  src/heap.c \
+  src/tracer.c \
+  src/uv_os.c \
+  src/uv_file.c \
+  test/unit/main_uv.c \
+  test/unit/test_uv_os.c
+test_unit_uv_CFLAGS = $(CODE_COVERAGE_CFLAGS) $(test_CFLAGS)
+test_unit_uv_LDADD = libtest.la
+test_unit_uv_LDFLAGS = $(UV_LIBS)
 
 # unit_test_SOURCES += \
 #   test/lib/dir.c \

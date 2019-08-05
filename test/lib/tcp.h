@@ -24,6 +24,11 @@ struct test_tcp
     } client;
 };
 
+/* Fixture helpers. */
+#define FIXTURE_TCP struct test_tcp tcp;
+#define SETUP_TCP test_tcp_setup(params, &f->tcp)
+#define TEAR_DOWN_TCP test_tcp_down(&f->tcp)
+
 /**
  * Bind the server socket of the given test TCP host to localhost and start
  * listening to it.

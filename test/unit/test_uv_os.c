@@ -1,7 +1,7 @@
-#include <stdio.h>
 #include <errno.h>
+#include <stdio.h>
 
-#include "../lib/dir.h"
+#include "../lib/uv.h"
 #include "../lib/runner.h"
 
 #include "../../src/uv_os.h"
@@ -16,6 +16,7 @@ TEST_MODULE(uv_os);
 
 struct fixture
 {
+    FIXTURE_TRACER;
     FIXTURE_DIR;
     uvDir tmpdir; /* Path to a temp directory, defaults to f->dir */
 };
@@ -24,6 +25,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
+    SETUP_TRACER;
     SETUP_DIR;
     strcpy(f->tmpdir, f->dir);
     return f;
@@ -33,6 +35,7 @@ static void tear_down(void *data)
 {
     struct fixture *f = data;
     TEAR_DOWN_DIR;
+    TEAR_DOWN_TRACER;
     free(f);
 }
 
@@ -43,21 +46,21 @@ static void tear_down(void *data)
  *****************************************************************************/
 
 /* Invoke @uvEnsureDir and assert that it returns the given code. */
-#define ENSURE_DIR(RV)                 \
-    {                                  \
-        int rv_;                       \
-        rv_ = uvEnsureDir(f->tmpdir);  \
-        munit_assert_int(rv_, ==, RV); \
+#define ENSURE_DIR(RV)                            \
+    {                                             \
+        int rv_;                                  \
+        rv_ = uvEnsureDir(&f->tracer, f->tmpdir); \
+        munit_assert_int(rv_, ==, RV);            \
     }
 
 /* Invoke @uvProbeIoCapabilities assert that it returns the given code. */
-#define ASSERT_PROBE_IO(RV)                             \
-    {                                                   \
-        size_t direct_io;                               \
-        bool async_io;                                  \
-        int rv2;                                        \
+#define ASSERT_PROBE_IO(RV)                                         \
+    {                                                               \
+        size_t direct_io;                                           \
+        bool async_io;                                              \
+        int rv2;                                                    \
         rv2 = uvProbeIoCapabilities(f->dir, &direct_io, &async_io); \
-        munit_assert_int(rv2, ==, RV);                  \
+        munit_assert_int(rv2, ==, RV);                              \
     }
 
 /******************************************************************************
@@ -80,7 +83,8 @@ TEST_CASE(join, NULL)
 }
 
 /* Extract the directory name from a full path. */
-TEST_CASE(dirname, NULL) {
+TEST_CASE(dirname, NULL)
+{
     const uvPath path = "/foo/bar";
     uvDir dir;
     (void)data;
@@ -177,7 +181,7 @@ TEST_CASE(probe, error, no_access, NULL)
     return MUNIT_OK;
 }
 
-#if defined(RAFT_HAVE_BTRFS)
+#    if defined(RAFT_HAVE_BTRFS)
 
 /* No space is left on the target device. */
 TEST_CASE(probe, error, no_space, dir_btrfs_params)
@@ -201,6 +205,6 @@ TEST_CASE(probe, error, no_resources, dir_btrfs_params)
     return MUNIT_OK;
 }
 
-#endif /* RAFT_HAVE_BTRFS */
+#    endif /* RAFT_HAVE_BTRFS */
 
 #endif /* RWF_NOWAIT */

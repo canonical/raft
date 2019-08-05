@@ -5,8 +5,8 @@
 
 #include "../include/raft.h"
 
-#include "uv_os.h"
 #include "uv_file.h"
+#include "uv_os.h"
 
 /* Current disk format version. */
 #define UV__DISK_FORMAT 1
@@ -45,6 +45,7 @@ struct uvServer;
 struct uv
 {
     struct raft_io *io;                  /* I/O object we're implementing */
+    struct raft_tracer *tracer;          /* Message tracer */
     struct uv_loop_s *loop;              /* UV event loop */
     uvDir dir;                           /* Data directory */
     struct raft_uv_transport *transport; /* Network transport */

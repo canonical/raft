@@ -21,11 +21,11 @@ stamp-h1
 .deps/
 .libs/
 test/unit/core
+test/unit/uv
 unit-test*
 integration-test*
 fuzzy-test*
 os-test*
-uv-test*
 test-suite.log
 coverage/
 coverage.info
