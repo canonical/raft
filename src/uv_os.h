@@ -124,18 +124,19 @@ int uvSetDirectIo(int fd);
 /* Return a human-readable description of the given OS error */
 const char *osStrError(int rv);
 
-/* Declaration of the kernel AIO APIs that we use. This avoids having to depend
- * on libaio. */
+/* Wrappers around the kernel AIO APIs that we use.. */
 int uvIoSetup(unsigned n, aio_context_t *ctx, char *errmsg);
 
-int uvIoDestroy(aio_context_t ctx);
+int uvIoDestroy(aio_context_t ctx, char *errmsg);
 
-int uvIoSubmit(aio_context_t ctx, long n, struct iocb **iocbs);
+int uvIoSubmit(aio_context_t ctx, long n, struct iocb **iocbs, char *errmsg);
 
 int uvIoGetevents(aio_context_t ctx,
                   long min_nr,
                   long max_nr,
                   struct io_event *events,
-                  struct timespec *timeout);
+                  struct timespec *timeout,
+		  int *nr,
+                  char *errmsg);
 
 #endif /* UV_OS_H_ */

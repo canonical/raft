@@ -22,13 +22,15 @@ enum {
     RAFT_SHUTDOWN,
     RAFT_CANTBOOTSTRAP,
     RAFT_CANTCHANGE,
-    RAFT_IOERR,
     RAFT_CORRUPT,
     RAFT_CANCELED,
     RAFT_NAMETOOLONG,
     RAFT_TOOBIG,
     RAFT_NOCONNECTION,
-    RAFT_BUSY
+    RAFT_BUSY,
+    RAFT_IOERR,
+    RAFT_IOERR_NOTSUPP,
+    RAFT_IOERR_AGAIN
 };
 
 /**
@@ -46,13 +48,15 @@ enum {
     X(RAFT_SHUTDOWN, "server is shutting down")                         \
     X(RAFT_CANTBOOTSTRAP, "bootstrap only works on new clusters")       \
     X(RAFT_CANTCHANGE, "a configuration change is already in progress") \
-    X(RAFT_IOERR, "I/O error")                                          \
     X(RAFT_CORRUPT, "persisted data is corrupted")                      \
     X(RAFT_CANCELED, "operation canceled")                              \
     X(RAFT_NAMETOOLONG, "data directory path is too long")              \
     X(RAFT_TOOBIG, "data is too big")                                   \
     X(RAFT_NOCONNECTION, "no connection to remote server available")    \
-    X(RAFT_BUSY, "operation can't be performed at this time")
+    X(RAFT_BUSY, "operation can't be performed at this time")           \
+    X(RAFT_IOERR, "I/O error")                                          \
+    X(RAFT_IOERR_NOTSUPP, "operation not supported")                    \
+    X(RAFT_IOERR_AGAIN, "resource temporarily unavailable")
 
 /**
  * Return the error message describing the given error code.

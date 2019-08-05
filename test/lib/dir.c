@@ -405,8 +405,9 @@ void test_aio_fill(aio_context_t *ctx, unsigned n)
 
 void test_aio_destroy(aio_context_t ctx)
 {
+    char errmsg[2048];
     int rv;
 
-    rv = uvIoDestroy(ctx);
+    rv = uvIoDestroy(ctx, errmsg);
     munit_assert_int(rv, ==, 0);
 }

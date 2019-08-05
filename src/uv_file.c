@@ -8,8 +8,8 @@
 #include <uv.h>
 
 #include "assert.h"
-#include "uv_os.h"
 #include "uv_file.h"
+#include "uv_os.h"
 
 /* Support the version of libuv in Ubuntu 18.04 */
 #if !defined(uv_translate_sys_error)
@@ -87,6 +87,7 @@ static void writeWorkCb(uv_work_t *work)
     struct iocb *iocbs;      /* Pointer to KAIO request object */
     struct io_event event;   /* KAIO response object */
     char errmsg[2048];
+    int n_events;
     int rv;
 
     req = work->data;
@@ -112,24 +113,21 @@ static void writeWorkCb(uv_work_t *work)
     }
 
     /* Submit the request */
-    rv = uvIoSubmit(ctx, 1, &iocbs);
-    if (rv == -1) {
+    rv = uvIoSubmit(ctx, 1, &iocbs, errmsg);
+    if (rv != 0) {
         /* UNTESTED: since we're not using NOWAIT and the parameters are valid,
          * this shouldn't fail. */
         goto out_after_io_setup;
     }
 
     /* Wait for the request to complete */
-    do {
-        rv = uvIoGetevents(ctx, 1, 1, &event, NULL);
-    } while (rv == -1 && errno == EINTR);
-    assert(rv == 1);
-
-    rv = 0;
+    rv = uvIoGetevents(ctx, 1, 1, &event, NULL, &n_events, errmsg);
+    assert(n_events == 1);
+    assert(rv == 0);
 
 out_after_io_setup:
     if (f->n_events > 1) {
-        uvIoDestroy(ctx);
+        uvIoDestroy(ctx, errmsg);
     }
 
 out:
@@ -154,6 +152,7 @@ static void writeFinish(struct uvFileWrite *req)
 static void pollCloseCb(struct uv_handle_s *handle)
 {
     struct uvFile *f = handle->data;
+    char errmsg[2048];
     int rv;
 
     assert(f->closing);
@@ -163,7 +162,7 @@ static void pollCloseCb(struct uv_handle_s *handle)
     rv = close(f->event_fd);
     assert(rv == 0);
     if (f->ctx != 0) {
-        rv = uvIoDestroy(f->ctx);
+        rv = uvIoDestroy(f->ctx, errmsg);
         assert(rv == 0);
     }
     free(f->events);
@@ -230,8 +229,10 @@ static void writePollCb(uv_poll_t *poller, int status, int events)
 {
     struct uvFile *f = poller->data; /* File handle */
     uint64_t completed;              /* True if the write is complete */
-    int rv;
+    char errmsg[2048];
     unsigned i;
+    int n_events;
+    int rv;
 
     assert(f != NULL);
     assert(f->event_fd >= 0);
@@ -260,13 +261,10 @@ static void writePollCb(uv_poll_t *poller, int status, int events)
      *
      * If we got here at least one write should have completed and io_events
      * should return immediately without blocking. */
-    do {
-        rv = uvIoGetevents(f->ctx, 1, f->n_events, f->events, NULL);
-    } while (rv == -1 && errno == EINTR);
+    rv = uvIoGetevents(f->ctx, 1, f->n_events, f->events, NULL, &n_events, errmsg);
+    assert(rv == 0);
 
-    assert(rv >= 1);
-
-    for (i = 0; i < (unsigned)rv; i++) {
+    for (i = 0; i < (unsigned)n_events; i++) {
         struct io_event *event = &f->events[i];
         struct uvFileWrite *req = *((void **)&event->data);
 
@@ -315,6 +313,7 @@ static void createAfterWorkCb(uv_work_t *work, int status)
 {
     struct uvFileCreate *req;
     struct uvFile *f;
+    char errmsg[2048];
     int rv;
 
     assert(status == 0); /* We don't cancel worker requests */
@@ -336,7 +335,7 @@ static void createAfterWorkCb(uv_work_t *work, int status)
             /* UNTESTED: the underlying libuv calls should never fail. */
             req->status = rv;
 
-            uvIoDestroy(f->ctx);
+            uvIoDestroy(f->ctx, errmsg);
             close(f->event_fd);
             close(f->fd);
             unlink(req->path);
@@ -438,10 +437,10 @@ int uvFileCreate(struct uvFile *f,
     }
 
     /* Setup the AIO context. */
-    rv = uvIoSetup(f->n_events /* Maximum concurrent requests */, &f->ctx, errmsg);
-    if (rv == -1) {
+    rv = uvIoSetup(f->n_events /* Maximum concurrent requests */, &f->ctx,
+                   errmsg);
+    if (rv != 0) {
         /* UNTESTED: should fail only with ENOMEM */
-        rv = uv_translate_sys_error(errno);
         goto err_after_open;
     }
 
@@ -469,7 +468,7 @@ int uvFileCreate(struct uvFile *f,
     return 0;
 
 err_after_io_setup:
-    uvIoDestroy(f->ctx);
+    uvIoDestroy(f->ctx, errmsg);
     f->ctx = 0;
 err_after_open:
     close(f->fd);
@@ -488,6 +487,7 @@ int uvFileWrite(struct uvFile *f,
                 size_t offset,
                 uvFileWriteCb cb)
 {
+    char errmsg[2048];
     int rv;
 #if defined(RWF_NOWAIT)
     struct iocb *iocbs = &req->iocb;
@@ -551,27 +551,25 @@ int uvFileWrite(struct uvFile *f,
 #if defined(RWF_NOWAIT)
     /* Try to submit the write request asynchronously */
     if (f->async) {
-        rv = uvIoSubmit(f->ctx, 1, &iocbs);
+        rv = uvIoSubmit(f->ctx, 1, &iocbs, errmsg);
 
         /* If no error occurred, we're done, the write request was
          * submitted. */
-        if (rv != -1) {
-            assert(rv == 1); /* TODO: can 0 be returned? */
+        if (rv == 0) {
             goto done;
         }
 
         /* Check the reason of the error. */
-        switch (errno) {
-            case EOPNOTSUPP:
-                /* NOWAIT is not supported, this should occur because we checked
-                 * it in uvProbeIoCapabilities. */
+        switch (rv) {
+            case RAFT_IOERR_NOTSUPP:
+                /* NOWAIT is not supported, this should not occur because we
+                 * checked it in uvProbeIoCapabilities. */
                 assert(0);
                 break;
-            case EAGAIN:
+            case RAFT_IOERR_AGAIN:
                 break;
             default:
                 /* Unexpected error */
-                rv = uv_translate_sys_error(errno);
                 goto err;
         }
 
@@ -588,6 +586,7 @@ int uvFileWrite(struct uvFile *f,
 
     rv = uv_queue_work(f->loop, &req->work, writeWorkCb, writeAfterWorkCb);
     if (rv != 0) {
+        rv = RAFT_IOERR;
         /* UNTESTED: with the current libuv implementation this can't fail. */
         goto err;
     }

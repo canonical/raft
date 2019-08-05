@@ -432,13 +432,14 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
     struct iocb iocb;           /* KAIO request object */
     struct iocb *iocbs = &iocb; /* Because the io_submit() API sucks */
     struct io_event event;      /* KAIO response object */
+    int n_events;
     int rv;
 
     /* Setup the KAIO context handle */
     rv = uvIoSetup(1, &ctx, errmsg);
-    if (rv == -1) {
+    if (rv != 0) {
         /* UNTESTED: in practice this should fail only with ENOMEM */
-        return RAFT_IOERR;
+        return rv;
     }
 
     /* Allocate the write buffer */
@@ -461,31 +462,29 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
     iocb.aio_rw_flags |= RWF_NOWAIT | RWF_DSYNC;
 
     /* Submit the KAIO request */
-    rv = uvIoSubmit(ctx, 1, &iocbs);
-    if (rv == -1) {
+    rv = uvIoSubmit(ctx, 1, &iocbs, errmsg);
+    if (rv != 0) {
         /* UNTESTED: in practice this should fail only with ENOMEM */
         free(buf);
-        uvIoDestroy(ctx);
+        uvIoDestroy(ctx, errmsg);
         /* On ZFS 0.8 this is not properly supported yet. */
         if (errno == EOPNOTSUPP) {
             *ok = false;
             return 0;
         }
-        return errno;
+        return rv;
     }
 
     /* Fetch the response: will block until done. */
-    do {
-        rv = uvIoGetevents(ctx, 1, 1, &event, NULL);
-    } while (rv == -1 && errno == EINTR);
-
-    assert(rv == 1);
+    rv = uvIoGetevents(ctx, 1, 1, &event, NULL, &n_events, errmsg);
+    assert(rv == 0);
+    assert(n_events == 0);
 
     /* Release the write buffer. */
     free(buf);
 
     /* Release the KAIO context handle. */
-    uvIoDestroy(ctx);
+    uvIoDestroy(ctx, errmsg);
 
     if (event.res > 0) {
         assert(event.res == (int)size);
@@ -586,27 +585,57 @@ int uvIoSetup(unsigned nr, aio_context_t *ctxp, char *errmsg)
     int rv;
     rv = syscall(__NR_io_setup, nr, ctxp);
     if (rv == -1) {
-        SYSCALL_ERRMSG(io_setup);
+        SYSCALL_ERRMSG(NAME);
         return RAFT_IOERR;
     }
     return 0;
 }
 
-int uvIoDestroy(aio_context_t ctx)
+int uvIoDestroy(aio_context_t ctx, char *errmsg)
 {
-    return syscall(__NR_io_destroy, ctx);
+    int rv;
+    rv = syscall(__NR_io_destroy, ctx);
+    if (rv == -1) {
+        SYSCALL_ERRMSG(NAME);
+        return RAFT_IOERR;
+    }
+    return 0;
 }
 
-int uvIoSubmit(aio_context_t ctx, long nr, struct iocb **iocbpp)
+int uvIoSubmit(aio_context_t ctx, long nr, struct iocb **iocbpp, char *errmsg)
 {
-    return syscall(__NR_io_submit, ctx, nr, iocbpp);
+    int rv;
+    rv = syscall(__NR_io_submit, ctx, nr, iocbpp);
+    if (rv == -1) {
+        SYSCALL_ERRMSG(NAME);
+        if (errno == EOPNOTSUPP) {
+            return RAFT_IOERR_NOTSUPP;
+        }
+        return RAFT_IOERR;
+    }
+    assert(rv == nr); /* TODO: can something else be returned? */
+    return 0;
 }
 
 int uvIoGetevents(aio_context_t ctx,
                   long min_nr,
                   long max_nr,
                   struct io_event *events,
-                  struct timespec *timeout)
+                  struct timespec *timeout,
+                  int *nr,
+                  char *errmsg)
 {
-    return syscall(__NR_io_getevents, ctx, min_nr, max_nr, events, timeout);
+    int rv;
+    do {
+        rv = syscall(__NR_io_getevents, ctx, min_nr, max_nr, events, timeout);
+    } while (rv == -1 && errno == EINTR);
+
+    if (rv == -1) {
+        SYSCALL_ERRMSG(NAME);
+        return RAFT_IOERR;
+    }
+    assert(rv >= min_nr);
+    assert(rv >= max_nr);
+    *nr = rv;
+    return 0;
 }
