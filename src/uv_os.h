@@ -43,46 +43,64 @@ void uvDirname(const uvPath path, uvDir dir);
 int uvEnsureDir(const uvDir dir, char *errmsg);
 
 /* Sync the given directory. */
-int uvSyncDir(const uvDir dir);
+int uvSyncDir(const uvDir dir, char *errmsg);
 
 /* Return all entries of the given directory, in alphabetically sorted order. */
-int uvScanDir(const uvDir dir, struct dirent ***entries, int *n_entries);
+int uvScanDir(const uvDir dir,
+              struct dirent ***entries,
+              int *n_entries,
+              char *errmsg);
 
 /* Open a file in a directory. */
-int uvOpenFile(const uvDir dir, const uvFilename filename, int flags, int *fd);
+int uvOpenFile(const uvDir dir,
+               const uvFilename filename,
+               int flags,
+               int *fd,
+               char *errmsg);
 
 /* Stat a file in a directory. */
-int uvStatFile(const uvDir dir, const uvFilename filename, struct stat *sb);
+int uvStatFile(const uvDir dir,
+               const uvFilename filename,
+               struct stat *sb,
+               char *errmsg);
 
 /* Create a file and write the given content into it. */
 int uvMakeFile(const uvDir dir,
                const uvFilename filename,
                struct raft_buffer *bufs,
-               unsigned n_bufs);
+               unsigned n_bufs,
+               char *errmsg);
 
 /* Delete a file in a directory. */
-int uvUnlinkFile(const uvDir dir, const uvFilename filename);
+int uvUnlinkFile(const uvDir dir, const uvFilename filename, char *errmsg);
 
 /* Truncate a file in a directory. */
-int uvTruncateFile(const uvDir dir, const uvFilename filename, size_t offset);
+int uvTruncateFile(const uvDir dir,
+                   const uvFilename filename,
+                   size_t offset,
+                   char *errmsg);
 
 /* Rename a file in a directory. */
 int uvRenameFile(const uvDir dir,
                  const uvFilename filename1,
-                 const uvFilename filename2);
+                 const uvFilename filename2,
+                 char *errmsg);
 
 /* Check whether the given file in the given directory is empty. */
-int uvIsEmptyFile(const uvDir dir, const uvFilename filename, bool *empty);
+int uvIsEmptyFile(const uvDir dir,
+                  const uvFilename filename,
+                  bool *empty,
+                  char *errmsg);
 
 /* Read exactly @n bytes from the given file descriptor. */
-int uvReadFully(int fd, void *buf, size_t n);
+int uvReadFully(int fd, void *buf, size_t n, char *errmsg);
 
 /* Write exactly @n bytes to the given file descriptor. */
-int uvWriteFully(int fd, void *buf, size_t n);
+int uvWriteFully(int fd, void *buf, size_t n, char *errmsg);
 
 /* Check if the content of the file associated with the given file descriptor
  * contains all zeros from the current offset onward. */
-int uvIsFilledWithTrailingZeros(int fd, bool *flag);
+int uvIsFilledWithTrailingZeros(int fd, bool *flag, char *errmsg);
 
 /* Check if the given file descriptor has reached the end of the file. */
 bool uvIsAtEof(int fd);
@@ -95,7 +113,10 @@ bool uvIsAtEof(int fd);
  *
  * The @async parameter will be set to true if fully asynchronous I/O is
  * possible using the KAIO API. */
-int uvProbeIoCapabilities(const uvDir dir, size_t *direct, bool *async);
+int uvProbeIoCapabilities(const uvDir dir,
+                          size_t *direct,
+                          bool *async,
+                          char *errmsg);
 
 /* Configure the given file descriptor for direct I/O. */
 int uvSetDirectIo(int fd);
@@ -105,7 +126,7 @@ const char *osStrError(int rv);
 
 /* Declaration of the kernel AIO APIs that we use. This avoids having to depend
  * on libaio. */
-int uvIoSetup(unsigned n, aio_context_t *ctx);
+int uvIoSetup(unsigned n, aio_context_t *ctx, char *errmsg);
 
 int uvIoDestroy(aio_context_t ctx);
 

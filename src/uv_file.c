@@ -28,6 +28,7 @@ static void createWorkCb(uv_work_t *work)
     struct uvFileCreate *req; /* Create file request object */
     struct uvFile *f;         /* File handle */
     uvDir dir;
+    char errmsg[2048];
     int rv;
 
     req = work->data;
@@ -54,7 +55,7 @@ static void createWorkCb(uv_work_t *work)
         goto err;
     }
     uvDirname(req->path, dir);
-    rv = uvSyncDir(dir);
+    rv = uvSyncDir(dir, errmsg);
     if (rv != 0) {
         /* UNTESTED: should fail only in case of disk errors */
         goto err;
@@ -85,6 +86,7 @@ static void writeWorkCb(uv_work_t *work)
     aio_context_t ctx;       /* KAIO handle */
     struct iocb *iocbs;      /* Pointer to KAIO request object */
     struct io_event event;   /* KAIO response object */
+    char errmsg[2048];
     int rv;
 
     req = work->data;
@@ -100,8 +102,8 @@ static void writeWorkCb(uv_work_t *work)
      * with proper async write support. */
     if (f->n_events > 1) {
         ctx = 0;
-        rv = uvIoSetup(1 /* Maximum concurrent requests */, &ctx);
-        if (rv == -1) {
+        rv = uvIoSetup(1 /* Maximum concurrent requests */, &ctx, errmsg);
+        if (rv != 0) {
             /* UNTESTED: should fail only with ENOMEM */
             goto out;
         }
@@ -132,7 +134,7 @@ out_after_io_setup:
 
 out:
     if (rv != 0) {
-        req->status = uv_translate_sys_error(errno);
+        req->status = rv;
     } else {
         req->status = event.res;
     }
@@ -409,6 +411,7 @@ int uvFileCreate(struct uvFile *f,
                  uvFileCreateCb cb)
 {
     int flags = O_WRONLY | O_CREAT | O_EXCL; /* Common open flags */
+    char errmsg[2048];
     int rv;
 
     assert(path != NULL);
@@ -435,7 +438,7 @@ int uvFileCreate(struct uvFile *f,
     }
 
     /* Setup the AIO context. */
-    rv = uvIoSetup(f->n_events /* Maximum concurrent requests */, &f->ctx);
+    rv = uvIoSetup(f->n_events /* Maximum concurrent requests */, &f->ctx, errmsg);
     if (rv == -1) {
         /* UNTESTED: should fail only with ENOMEM */
         rv = uv_translate_sys_error(errno);

@@ -28,9 +28,10 @@ int uvList(struct uv *uv,
     struct dirent **dirents;
     int n_dirents;
     int i;
+    char errmsg[2048];
     int rv;
 
-    rv = uvScanDir(uv->dir, &dirents, &n_dirents);
+    rv = uvScanDir(uv->dir, &dirents, &n_dirents, errmsg);
     if (rv != 0) {
         uvErrorf(uv, "scan %s: %s", uv->dir, osStrError(rv));
         return RAFT_IOERR;

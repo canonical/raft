@@ -116,13 +116,14 @@ static int openSegment(struct uv *uv,
                        int *fd,
                        uint64_t *format)
 {
+    char errmsg[2048];
     int rv;
-    rv = uvOpenFile(uv->dir, filename, flags, fd);
+    rv = uvOpenFile(uv->dir, filename, flags, fd, errmsg);
     if (rv != 0) {
         uvErrorf(uv, "open %s: %s", filename, osStrError(rv));
         return RAFT_IOERR;
     }
-    rv = uvReadFully(*fd, format, sizeof *format);
+    rv = uvReadFully(*fd, format, sizeof *format, errmsg);
     if (rv != 0) {
         uvErrorf(uv, "read %s: %s", filename, osStrError(rv));
         close(*fd);
@@ -150,6 +151,7 @@ static int loadEntriesBatch(struct uv *uv,
     uint32_t crc1;             /* Target checksum */
     uint32_t crc2;             /* Actual checksum */
     off_t offset;              /* Current segment file offset */
+    char errmsg[2048];
     int rv;
 
     /* Save the current offset, to provide more information when logging. */
@@ -158,7 +160,7 @@ static int loadEntriesBatch(struct uv *uv,
     /* Read the preamble, consisting of the checksums for the batch header and
      * data buffers and the first 8 bytes of the header buffer, which contains
      * the number of entries in the batch. */
-    rv = uvReadFully(fd, preamble, sizeof preamble);
+    rv = uvReadFully(fd, preamble, sizeof preamble, errmsg);
     if (rv != 0) {
         uvErrorf(uv, "read: %s", osStrError(rv));
         return RAFT_IOERR;
@@ -194,7 +196,7 @@ static int loadEntriesBatch(struct uv *uv,
     *(uint64_t *)header.base = preamble[1];
 
     rv = uvReadFully(fd, header.base + sizeof(uint64_t),
-                 header.len - sizeof(uint64_t));
+                     header.len - sizeof(uint64_t), errmsg);
     if (rv != 0) {
         uvErrorf(uv, "read: %s", osStrError(rv));
         rv = RAFT_IOERR;
@@ -228,7 +230,7 @@ static int loadEntriesBatch(struct uv *uv,
         rv = RAFT_NOMEM;
         goto err_after_header_decode;
     }
-    rv = uvReadFully(fd, data.base, data.len);
+    rv = uvReadFully(fd, data.base, data.len, errmsg);
     if (rv != 0) {
         uvErrorf(uv, "read: %s", osStrError(rv));
         rv = RAFT_IOERR;
@@ -300,10 +302,11 @@ int uvSegmentLoadClosed(struct uv *uv,
     struct raft_entry *tmp_entries; /* Entries in current batch */
     unsigned tmp_n;                 /* Number of entries in current batch */
     int i;
+    char errmsg[2048];
     int rv;
 
     /* If the segment is completely empty, just bail out. */
-    rv = uvIsEmptyFile(uv->dir, info->filename, &empty);
+    rv = uvIsEmptyFile(uv->dir, info->filename, &empty, errmsg);
     if (rv != 0) {
         uvErrorf(uv, "stat %s: %s", info->filename, osStrError(rv));
         rv = RAFT_IOERR;
@@ -381,11 +384,12 @@ static int loadOpen(struct uv *uv,
     struct raft_entry *tmp_entries; /* Entries in current batch */
     unsigned tmp_n_entries;         /* Number of entries in current batch */
     int i;
+    char errmsg[2048];
     int rv;
 
     first_index = *next_index;
 
-    rv = uvIsEmptyFile(uv->dir, info->filename, &empty);
+    rv = uvIsEmptyFile(uv->dir, info->filename, &empty, errmsg);
     if (rv != 0) {
         uvErrorf(uv, "stat %s: %s", info->filename, osStrError(rv));
         rv = RAFT_IOERR;
@@ -407,7 +411,7 @@ static int loadOpen(struct uv *uv,
      * the segment was allocated but never written. */
     if (format != UV__DISK_FORMAT) {
         if (format == 0) {
-            rv = uvIsFilledWithTrailingZeros(fd, &all_zeros);
+            rv = uvIsFilledWithTrailingZeros(fd, &all_zeros, errmsg);
             if (rv != 0) {
                 uvErrorf(uv, "check %s: %s", info->filename, osStrError(rv));
                 rv = RAFT_IOERR;
@@ -452,7 +456,7 @@ static int loadOpen(struct uv *uv,
              * incomplete data. */
             lseek(fd, offset, SEEK_SET);
 
-            rv2 = uvIsFilledWithTrailingZeros(fd, &all_zeros);
+            rv2 = uvIsFilledWithTrailingZeros(fd, &all_zeros, errmsg);
             if (rv2 != 0) {
                 uvErrorf(uv, "check %s: %s", info->filename, i,
                          osStrError(rv2));
@@ -498,7 +502,7 @@ done:
     /* If the segment has no valid entries in it, we remove it. Otherwise we
      * rename it and keep it. */
     if (remove) {
-        rv = uvUnlinkFile(uv->dir, info->filename);
+        rv = uvUnlinkFile(uv->dir, info->filename, errmsg);
         if (rv != 0) {
             uvErrorf(uv, "unlink %s: %s", info->filename, osStrError(rv));
             rv = RAFT_IOERR;
@@ -512,7 +516,7 @@ done:
         assert(end_index >= first_index);
 
         sprintf(filename, UV__CLOSED_TEMPLATE, first_index, end_index);
-        rv = uvRenameFile(uv->dir, info->filename, filename);
+        rv = uvRenameFile(uv->dir, info->filename, filename, errmsg);
         if (rv != 0) {
             uvErrorf(uv, "rename %s: %s", info->filename, osStrError(rv));
             rv = RAFT_IOERR;
@@ -715,6 +719,7 @@ int uvSegmentLoadAll(struct uv *uv,
     struct raft_entry *tmp_entries; /* Entries in current segment */
     size_t tmp_n;                   /* Number of entries in current segment */
     size_t i;
+    char errmsg[2048];
     int rv;
     assert(start_index >= 1);
     assert(n_infos > 0);
@@ -740,7 +745,7 @@ int uvSegmentLoadAll(struct uv *uv,
             /* If the entries in the segment are no longer needed, just remove
              * it. */
             if (info->end_index < start_index) {
-                rv = uvUnlinkFile(uv->dir, info->filename);
+                rv = uvUnlinkFile(uv->dir, info->filename, errmsg);
                 if (rv != 0) {
                     uvErrorf(uv, "unlink %s: %s", info->filename,
                              osStrError(rv));
@@ -767,7 +772,7 @@ int uvSegmentLoadAll(struct uv *uv,
                     /* TODO: understand why this happens at LXD
                      * upgrade. Re-enable this after 3.15 has been out for
                      * reasonably long. */
-                    rv = uvUnlinkFile(uv->dir, info->filename);
+                    rv = uvUnlinkFile(uv->dir, info->filename, errmsg);
                     if (rv != 0) {
                         uvErrorf(uv, "unlink %s: %s", info->filename,
                                  osStrError(rv));
@@ -856,6 +861,7 @@ static int writeFirstClosed(struct uv *uv,
     struct uvSegmentBuffer buf;
     struct raft_entry entry;
     size_t cap;
+    char errmsg[2048];
     int rv;
 
     /* Make sure that the given encoded configuration fits in the first
@@ -884,7 +890,7 @@ static int writeFirstClosed(struct uv *uv,
         return rv;
     }
 
-    rv = uvWriteFully(fd, buf.arena.base, buf.n);
+    rv = uvWriteFully(fd, buf.arena.base, buf.n, errmsg);
     uvSegmentBufferClose(&buf);
     if (rv != 0) {
         uvErrorf(uv, "write segment 1: %s", osStrError(rv));
@@ -905,6 +911,7 @@ int uvSegmentCreateFirstClosed(struct uv *uv,
 {
     struct raft_buffer buf;
     uvFilename filename;
+    char errmsg[2048];
     int fd;
     int rv;
 
@@ -918,7 +925,8 @@ int uvSegmentCreateFirstClosed(struct uv *uv,
     }
 
     /* Open the file. */
-    rv = uvOpenFile(uv->dir, filename, O_WRONLY | O_CREAT | O_EXCL, &fd);
+    rv =
+        uvOpenFile(uv->dir, filename, O_WRONLY | O_CREAT | O_EXCL, &fd, errmsg);
     if (rv != 0) {
         uvErrorf(uv, "unlink %s: %s", filename, osStrError(rv));
         rv = RAFT_IOERR;
@@ -934,7 +942,7 @@ int uvSegmentCreateFirstClosed(struct uv *uv,
     close(fd);
     raft_free(buf.base);
 
-    rv = uvSyncDir(uv->dir);
+    rv = uvSyncDir(uv->dir, errmsg);
     if (rv != 0) {
         uvErrorf(uv, "sync %s: %s", uv->dir, osStrError(rv));
         return RAFT_IOERR;
@@ -961,6 +969,7 @@ int uvSegmentTruncate(struct uv *uv,
     size_t n;
     size_t m;
     int fd;
+    char errmsg[2048];
     int rv;
 
     assert(!segment->is_open);
@@ -985,7 +994,8 @@ int uvSegmentTruncate(struct uv *uv,
     sprintf(filename, UV__CLOSED_TEMPLATE, segment->first_index, index - 1);
 
     /* Open the file. */
-    rv = uvOpenFile(uv->dir, filename, O_WRONLY | O_CREAT | O_EXCL, &fd);
+    rv =
+        uvOpenFile(uv->dir, filename, O_WRONLY | O_CREAT | O_EXCL, &fd, errmsg);
     if (rv != 0) {
         goto out_after_load;
     }
@@ -1002,7 +1012,7 @@ int uvSegmentTruncate(struct uv *uv,
         goto out_after_buffer_init;
     }
 
-    rv = uvWriteFully(fd, buf.arena.base, buf.n);
+    rv = uvWriteFully(fd, buf.arena.base, buf.n, errmsg);
     if (rv != 0) {
         uvErrorf(uv, "write %s: %s", filename, osStrError(errno));
         rv = RAFT_IOERR;

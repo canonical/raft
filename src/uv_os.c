@@ -13,11 +13,13 @@
 #include "tracer.h"
 #include "uv_os.h"
 
-#define SYSCALL_ERROR(SYSCALL)                                              \
+#define SYSCALL_ERRMSG_ERRNO(SYSCALL, ERRNO)                                \
     {                                                                       \
         char e_[1024];                                                      \
-        sprintf(errmsg, #SYSCALL ": %s", strerror_r(errno, e_, sizeof e_)); \
+        sprintf(errmsg, #SYSCALL ": %s", strerror_r(ERRNO, e_, sizeof e_)); \
     }
+
+#define SYSCALL_ERRMSG(SYSCALL) SYSCALL_ERRMSG_ERRNO(SYSCALL, errno)
 
 void uvJoin(const uvDir dir, const uvFilename filename, uvPath path)
 {
@@ -46,11 +48,11 @@ int uvEnsureDir(const uvDir dir, char *errmsg)
         if (errno == ENOENT) {
             rv = mkdir(dir, 0700);
             if (rv != 0) {
-                SYSCALL_ERROR(mkdir);
+                SYSCALL_ERRMSG(mkdir);
                 return RAFT_IOERR;
             }
         } else {
-            SYSCALL_ERROR(stat);
+            SYSCALL_ERRMSG(stat);
             return RAFT_IOERR;
         }
     } else if ((sb.st_mode & S_IFMT) != S_IFDIR) {
@@ -61,52 +63,67 @@ int uvEnsureDir(const uvDir dir, char *errmsg)
     return 0;
 }
 
-int uvSyncDir(const uvDir dir)
+int uvSyncDir(const uvDir dir, char *errmsg)
 {
     int fd;
     int rv;
     fd = open(dir, O_RDONLY | O_DIRECTORY);
     if (fd == -1) {
-        return errno;
+        SYSCALL_ERRMSG(open);
+        return RAFT_IOERR;
     }
     rv = fsync(fd);
     close(fd);
     if (rv == -1) {
-        return errno;
+        SYSCALL_ERRMSG(fsync);
+        return RAFT_IOERR;
     }
     return 0;
 }
 
-int uvScanDir(const uvDir dir, struct dirent ***entries, int *n_entries)
+int uvScanDir(const uvDir dir,
+              struct dirent ***entries,
+              int *n_entries,
+              char *errmsg)
 {
     int rv;
     rv = scandir(dir, entries, NULL, alphasort);
     if (rv == -1) {
+        SYSCALL_ERRMSG(scandir);
         return errno;
     }
     *n_entries = rv;
     return 0;
 }
 
-int uvOpenFile(const uvDir dir, const uvFilename filename, int flags, int *fd)
+int uvOpenFile(const uvDir dir,
+               const uvFilename filename,
+               int flags,
+               int *fd,
+               char *errmsg)
 {
     uvPath path;
     uvJoin(dir, filename, path);
     *fd = open(path, flags, S_IRUSR | S_IWUSR);
     if (*fd == -1) {
-        return errno;
+        SYSCALL_ERRMSG(open);
+        return RAFT_IOERR;
     }
     return 0;
 }
 
-int uvStatFile(const uvDir dir, const uvFilename filename, struct stat *sb)
+int uvStatFile(const uvDir dir,
+               const uvFilename filename,
+               struct stat *sb,
+               char *errmsg)
 {
     uvPath path;
     int rv;
     uvJoin(dir, filename, path);
     rv = stat(path, sb);
     if (rv == -1) {
-        return errno;
+        SYSCALL_ERRMSG(stat);
+        return RAFT_IOERR;
     }
     return 0;
 }
@@ -114,7 +131,8 @@ int uvStatFile(const uvDir dir, const uvFilename filename, struct stat *sb)
 int uvMakeFile(const uvDir dir,
                const uvFilename filename,
                struct raft_buffer *bufs,
-               unsigned n_bufs)
+               unsigned n_bufs,
+               char *errmsg)
 {
     int flags = O_WRONLY | O_CREAT | O_EXCL;
     int fd;
@@ -125,22 +143,23 @@ int uvMakeFile(const uvDir dir,
     for (i = 0; i < n_bufs; i++) {
         size += bufs[i].len;
     }
-    rv = uvOpenFile(dir, filename, flags, &fd);
+    rv = uvOpenFile(dir, filename, flags, &fd, errmsg);
     if (rv != 0) {
         return RAFT_IOERR;
     }
     rv = writev(fd, (const struct iovec *)bufs, n_bufs);
     if (rv != (int)(size)) {
-        rv = errno;
+        SYSCALL_ERRMSG(writev);
         goto err_after_file_open;
     }
     rv = fsync(fd);
     if (rv == -1) {
+        SYSCALL_ERRMSG(fsync);
         goto err_after_file_open;
     }
     rv = close(fd);
     if (rv == -1) {
-        rv = errno;
+        SYSCALL_ERRMSG(close);
         goto err;
     }
     return 0;
@@ -148,22 +167,26 @@ int uvMakeFile(const uvDir dir,
 err_after_file_open:
     close(fd);
 err:
-    return rv;
+    return RAFT_IOERR;
 }
 
-int uvUnlinkFile(const char *dir, const char *filename)
+int uvUnlinkFile(const char *dir, const char *filename, char *errmsg)
 {
     uvPath path;
     int rv;
     uvJoin(dir, filename, path);
     rv = unlink(path);
     if (rv == -1) {
-        return errno;
+        SYSCALL_ERRMSG(unlink);
+        return RAFT_IOERR;
     }
     return 0;
 }
 
-int uvTruncateFile(const uvDir dir, const uvFilename filename, size_t offset)
+int uvTruncateFile(const uvDir dir,
+                   const uvFilename filename,
+                   size_t offset,
+                   char *errmsg)
 {
     uvPath path;
     int fd;
@@ -171,25 +194,32 @@ int uvTruncateFile(const uvDir dir, const uvFilename filename, size_t offset)
     uvJoin(dir, filename, path);
     fd = open(path, O_RDWR);
     if (fd == -1) {
-        return errno;
+        SYSCALL_ERRMSG(open);
+        goto err;
     }
     rv = ftruncate(fd, offset);
     if (rv == -1) {
-        close(fd);
-        return errno;
+        SYSCALL_ERRMSG(ftruncate);
+        goto err_after_open;
     }
     rv = fsync(fd);
     if (rv == -1) {
-        close(fd);
-        return errno;
+        SYSCALL_ERRMSG(fsync);
+        goto err_after_open;
     }
     close(fd);
     return 0;
+
+err_after_open:
+    close(fd);
+err:
+    return RAFT_IOERR;
 }
 
 int uvRenameFile(const uvDir dir,
                  const uvFilename filename1,
-                 const uvFilename filename2)
+                 const uvFilename filename2,
+                 char *errmsg)
 {
     uvPath path1;
     uvPath path2;
@@ -201,14 +231,17 @@ int uvRenameFile(const uvDir dir,
     if (rv == -1) {
         return errno;
     }
-    rv = uvSyncDir(dir);
+    rv = uvSyncDir(dir, errmsg);
     if (rv != 0) {
         return rv;
     }
     return 0;
 }
 
-int uvIsEmptyFile(const uvDir dir, const uvFilename filename, bool *empty)
+int uvIsEmptyFile(const uvDir dir,
+                  const uvFilename filename,
+                  bool *empty,
+                  char *errmsg)
 {
     uvPath path;
     struct stat sb;
@@ -216,41 +249,46 @@ int uvIsEmptyFile(const uvDir dir, const uvFilename filename, bool *empty)
     uvJoin(dir, filename, path);
     rv = stat(path, &sb);
     if (rv == -1) {
-        return errno;
+        SYSCALL_ERRMSG(stat);
+        return RAFT_IOERR;
     }
     *empty = sb.st_size == 0 ? true : false;
     return 0;
 }
 
-int uvReadFully(const int fd, void *buf, const size_t n)
+int uvReadFully(const int fd, void *buf, const size_t n, char *errmsg)
 {
     int rv;
     rv = read(fd, buf, n);
     if (rv == -1) {
-        return errno;
+        SYSCALL_ERRMSG(read);
+        return RAFT_IOERR;
     }
     assert(rv >= 0);
     if ((size_t)rv < n) {
-        return ENODATA;
+        sprintf(errmsg, "short read: %d bytes instead of %ld", rv, n);
+        return RAFT_IOERR;
     }
     return 0;
 }
 
-int uvWriteFully(const int fd, void *buf, const size_t n)
+int uvWriteFully(const int fd, void *buf, const size_t n, char *errmsg)
 {
     int rv;
     rv = write(fd, buf, n);
     if (rv == -1) {
-        return errno;
+        SYSCALL_ERRMSG(write);
+        return RAFT_IOERR;
     }
     assert(rv >= 0);
     if ((size_t)rv < n) {
-        return ENODATA;
+        sprintf(errmsg, "short write: %d bytes instead of %ld", rv, n);
+        return RAFT_IOERR;
     }
     return 0;
 }
 
-int uvIsFilledWithTrailingZeros(const int fd, bool *flag)
+int uvIsFilledWithTrailingZeros(const int fd, bool *flag, char *errmsg)
 {
     off_t size;
     off_t offset;
@@ -279,7 +317,7 @@ int uvIsFilledWithTrailingZeros(const int fd, bool *flag)
         return ENOMEM;
     }
 
-    rv = uvReadFully(fd, data, size);
+    rv = uvReadFully(fd, data, size, errmsg);
     if (rv != 0) {
         return rv;
     }
@@ -310,7 +348,7 @@ bool uvIsAtEof(const int fd)
 }
 
 /* Check if direct I/O is possible on the given fd. */
-static int probeDirectIO(int fd, size_t *size)
+static int probeDirectIO(int fd, size_t *size, char *errmsg)
 {
     int flags;             /* Current fcntl flags. */
     struct statfs fs_info; /* To check the file system type. */
@@ -323,12 +361,14 @@ static int probeDirectIO(int fd, size_t *size)
     if (rv == -1) {
         if (errno != EINVAL) {
             /* UNTESTED: the parameters are ok, so this should never happen. */
-            return errno;
+            SYSCALL_ERRMSG(fnctl);
+            return RAFT_IOERR;
         }
         rv = fstatfs(fd, &fs_info);
         if (rv == -1) {
             /* UNTESTED: in practice ENOMEM should be the only failure mode */
-            return errno;
+            SYSCALL_ERRMSG(fstatfs);
+            return RAFT_IOERR;
         }
         switch (fs_info.f_type) {
             case 0x01021994: /* TMPFS_MAGIC */
@@ -337,7 +377,8 @@ static int probeDirectIO(int fd, size_t *size)
                 return 0;
             default:
                 /* UNTESTED: this is an unsupported file system. */
-                return EINVAL;
+                sprintf(errmsg, "unsupported file system: %lx", fs_info.f_type);
+                return RAFT_IOERR;
         }
     }
 
@@ -347,7 +388,8 @@ static int probeDirectIO(int fd, size_t *size)
         buf = aligned_alloc(*size, *size);
         if (buf == NULL) {
             /* UNTESTED: define a configurable allocator that can fail? */
-            return ENOMEM;
+            sprintf(errmsg, "out of memory");
+            return RAFT_NOMEM;
         }
         memset(buf, 0, *size);
         rv = write(fd, buf, *size);
@@ -371,7 +413,8 @@ static int probeDirectIO(int fd, size_t *size)
                 return 0;
             }
 
-            return errno;
+            SYSCALL_ERRMSG(write);
+            return RAFT_IOERR;
         }
         *size = *size / 2;
     }
@@ -382,7 +425,7 @@ static int probeDirectIO(int fd, size_t *size)
 
 #if defined(RWF_NOWAIT)
 /* Check if async I/O is possible on the given fd. */
-static int probeAsyncIO(int fd, size_t size, bool *ok)
+static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
 {
     void *buf;                  /* Buffer to use for the probe write */
     aio_context_t ctx = 0;      /* KAIO context handle */
@@ -392,17 +435,18 @@ static int probeAsyncIO(int fd, size_t size, bool *ok)
     int rv;
 
     /* Setup the KAIO context handle */
-    rv = uvIoSetup(1, &ctx);
+    rv = uvIoSetup(1, &ctx, errmsg);
     if (rv == -1) {
         /* UNTESTED: in practice this should fail only with ENOMEM */
-        return errno;
+        return RAFT_IOERR;
     }
 
     /* Allocate the write buffer */
     buf = aligned_alloc(size, size);
     if (buf == NULL) {
         /* UNTESTED: define a configurable allocator that can fail? */
-        return ENOMEM;
+        sprintf(errmsg, "out of memory");
+        return RAFT_NOMEM;
     }
     memset(buf, 0, size);
 
@@ -458,7 +502,10 @@ static int probeAsyncIO(int fd, size_t size, bool *ok)
 }
 #endif /* RWF_NOWAIT */
 
-int uvProbeIoCapabilities(const uvDir dir, size_t *direct, bool *async)
+int uvProbeIoCapabilities(const uvDir dir,
+                          size_t *direct,
+                          bool *async,
+                          char *errmsg)
 {
     uvFilename filename; /* Filename of the probe file */
     uvPath path;         /* Full path of the probe file */
@@ -470,17 +517,18 @@ int uvProbeIoCapabilities(const uvDir dir, size_t *direct, bool *async)
     uvJoin(dir, filename, path);
     fd = mkstemp(path);
     if (fd == -1) {
-        rv = errno;
+        SYSCALL_ERRMSG(mkstemp);
         goto err;
     }
     rv = posix_fallocate(fd, 0, 4096);
     if (rv != 0) {
+        SYSCALL_ERRMSG_ERRNO(posix_fallocate, rv);
         goto err_after_file_open;
     }
     unlink(path);
 
     /* Check if we can use direct I/O. */
-    rv = probeDirectIO(fd, direct);
+    rv = probeDirectIO(fd, direct, errmsg);
     if (rv != 0) {
         goto err_after_file_open;
     }
@@ -496,7 +544,7 @@ int uvProbeIoCapabilities(const uvDir dir, size_t *direct, bool *async)
         *async = false;
         goto out;
     }
-    rv = probeAsyncIO(fd, *direct, async);
+    rv = probeAsyncIO(fd, *direct, async, errmsg);
     if (rv != 0) {
         goto err_after_file_open;
     }
@@ -511,8 +559,7 @@ out:
 err_after_file_open:
     close(fd);
 err:
-    assert(rv != 0);
-    return rv;
+    return RAFT_IOERR;
 }
 
 int uvSetDirectIo(int fd)
@@ -534,9 +581,15 @@ const char *osStrError(int rv)
     return strerror_r(rv, strErrorBuf, sizeof strErrorBuf);
 }
 
-int uvIoSetup(unsigned nr, aio_context_t *ctxp)
+int uvIoSetup(unsigned nr, aio_context_t *ctxp, char *errmsg)
 {
-    return syscall(__NR_io_setup, nr, ctxp);
+    int rv;
+    rv = syscall(__NR_io_setup, nr, ctxp);
+    if (rv == -1) {
+        SYSCALL_ERRMSG(io_setup);
+        return RAFT_IOERR;
+    }
+    return 0;
 }
 
 int uvIoDestroy(aio_context_t ctx)

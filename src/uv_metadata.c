@@ -49,6 +49,7 @@ static int loadFile(struct uv *uv,
     uvFilename filename; /* Filename of the metadata file */
     uint8_t buf[SIZE];   /* Content of metadata file */
     int fd;
+    char errmsg[2048];
     int rv;
 
     assert(n == 1 || n == 2);
@@ -57,7 +58,7 @@ static int loadFile(struct uv *uv,
     filenameOf(n, filename);
 
     /* Open the metadata file, if it exists. */
-    rv = uvOpenFile(uv->dir, filename, O_RDONLY, &fd);
+    rv = uvOpenFile(uv->dir, filename, O_RDONLY, &fd, errmsg);
     if (rv != 0) {
         if (rv != ENOENT) {
             uvErrorf(uv, "open %s: %s", filename, osStrError(rv));
@@ -69,7 +70,7 @@ static int loadFile(struct uv *uv,
     }
 
     /* Read the content of the metadata file. */
-    rv = uvReadFully(fd, buf, sizeof buf);
+    rv = uvReadFully(fd, buf, sizeof buf, errmsg);
     if (rv != 0) {
         if (rv != ENODATA) {
             uvErrorf(uv, "read %s: %s", filename, osStrError(rv));
@@ -106,6 +107,7 @@ static int loadFile(struct uv *uv,
 static int ensure(struct uv *uv, struct uvMetadata *metadata)
 {
     int i;
+    char errmsg[2048];
     int rv;
 
     /* Update both metadata files, so they are created if they didn't
@@ -119,7 +121,7 @@ static int ensure(struct uv *uv, struct uvMetadata *metadata)
     }
 
     /* Also sync the data directory so the entries get created. */
-    rv = uvSyncDir(uv->dir);
+    rv = uvSyncDir(uv->dir, errmsg);
     if (rv != 0) {
         uvErrorf(uv, "sync %s: %s", uv->dir, osStrError(rv));
         return RAFT_IOERR;
@@ -187,6 +189,7 @@ int uvMetadataStore(struct uv *uv, const struct uvMetadata *metadata)
     const int flags = O_WRONLY | O_CREAT | O_SYNC | O_TRUNC;
     unsigned short n;
     int fd;
+    char errmsg[2048];
     int rv;
 
     assert(metadata->version > 0);
@@ -199,13 +202,13 @@ int uvMetadataStore(struct uv *uv, const struct uvMetadata *metadata)
     filenameOf(n, filename);
 
     /* Write the metadata file, creating it if it does not exist. */
-    rv = uvOpenFile(uv->dir, filename, flags, &fd);
+    rv = uvOpenFile(uv->dir, filename, flags, &fd, errmsg);
     if (rv != 0) {
         uvErrorf(uv, "open %s: %s", filename, osStrError(rv));
         return RAFT_IOERR;
     }
 
-    rv = uvWriteFully(fd, buf, sizeof buf);
+    rv = uvWriteFully(fd, buf, sizeof buf, errmsg);
     close(fd);
     if (rv != 0) {
         uvErrorf(uv, "write %s: %s", filename, osStrError(rv));

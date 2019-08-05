@@ -213,6 +213,7 @@ TEST_CASE(emit, truncate, NULL)
     char message[300];
     (void)params;
     memset(message, 'a', sizeof message - 1);
+    message[sizeof message - 1] = 0;
     EMIT(message);
     WALK;
     ASSERT_N(1);

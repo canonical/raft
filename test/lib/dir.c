@@ -375,6 +375,7 @@ void test_aio_fill(aio_context_t *ctx, unsigned n)
     int rv;
     int limit;
     int used;
+    char errmsg[2048];
 
     /* Figure out how many events are available. */
     fd = open("/proc/sys/fs/aio-max-nr", O_RDONLY);
@@ -398,7 +399,7 @@ void test_aio_fill(aio_context_t *ctx, unsigned n)
 
     used = atoi(buf);
 
-    rv = uvIoSetup(limit - used - n, ctx);
+    rv = uvIoSetup(limit - used - n, ctx, errmsg);
     munit_assert_int(rv, ==, 0);
 }
 
