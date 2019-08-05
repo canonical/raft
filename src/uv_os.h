@@ -40,7 +40,7 @@ void uvJoin(const uvDir dir, const uvFilename filename, uvPath path);
 void uvDirname(const uvPath path, uvDir dir);
 
 /* Check that the given directory exists, and try to create it if it doesn't. */
-int uvEnsureDir(struct raft_tracer *tracer, const uvDir dir);
+int uvEnsureDir(const uvDir dir, char *errmsg);
 
 /* Sync the given directory. */
 int uvSyncDir(const uvDir dir);

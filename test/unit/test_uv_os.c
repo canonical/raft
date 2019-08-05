@@ -1,7 +1,7 @@
 #include <errno.h>
 #include <stdio.h>
 
-#include "../lib/uv.h"
+#include "../lib/dir.h"
 #include "../lib/runner.h"
 
 #include "../../src/uv_os.h"
@@ -16,16 +16,15 @@ TEST_MODULE(uv_os);
 
 struct fixture
 {
-    FIXTURE_TRACER;
     FIXTURE_DIR;
     uvDir tmpdir; /* Path to a temp directory, defaults to f->dir */
+    char errmsg[2048];
 };
 
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
-    SETUP_TRACER;
     SETUP_DIR;
     strcpy(f->tmpdir, f->dir);
     return f;
@@ -35,7 +34,6 @@ static void tear_down(void *data)
 {
     struct fixture *f = data;
     TEAR_DOWN_DIR;
-    TEAR_DOWN_TRACER;
     free(f);
 }
 
@@ -45,13 +43,10 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-/* Invoke @uvEnsureDir and assert that it returns the given code. */
-#define ENSURE_DIR(RV)                            \
-    {                                             \
-        int rv_;                                  \
-        rv_ = uvEnsureDir(&f->tracer, f->tmpdir); \
-        munit_assert_int(rv_, ==, RV);            \
-    }
+/* Invoke uvEnsureDir passing it the fixture's tmpdir. */
+#define ENSURE_DIR_RV uvEnsureDir(f->tmpdir, f->errmsg)
+#define ENSURE_DIR munit_assert_int(ENSURE_DIR_RV, ==, 0)
+#define ENSURE_DIR_ERROR(RV) munit_assert_int(ENSURE_DIR_RV, ==, RV)
 
 /* Invoke @uvProbeIoCapabilities assert that it returns the given code. */
 #define ASSERT_PROBE_IO(RV)                                         \
@@ -62,6 +57,15 @@ static void tear_down(void *data)
         rv2 = uvProbeIoCapabilities(f->dir, &direct_io, &async_io); \
         munit_assert_int(rv2, ==, RV);                              \
     }
+
+/******************************************************************************
+ *
+ * Assertions
+ *
+ *****************************************************************************/
+
+/* Assert that the fixture's errmsg string matches the given value. */
+#define ASSERT_ERRMSG(MSG) munit_assert_string_equal(f->errmsg, MSG)
 
 /******************************************************************************
  *
@@ -110,7 +114,7 @@ TEST_CASE(ensure_dir, does_not_exists, NULL)
     struct fixture *f = data;
     (void)params;
     sprintf(f->tmpdir, "%s/sub", f->dir);
-    ENSURE_DIR(0);
+    ENSURE_DIR;
     munit_assert_true(test_dir_exists(f->tmpdir));
     return MUNIT_OK;
 }
@@ -120,7 +124,7 @@ TEST_CASE(ensure_dir, exists, NULL)
 {
     struct fixture *f = data;
     (void)params;
-    ENSURE_DIR(0);
+    ENSURE_DIR;
     return MUNIT_OK;
 }
 
@@ -132,7 +136,8 @@ TEST_CASE(ensure_dir, error, cant_create, NULL)
     struct fixture *f = data;
     (void)params;
     strcpy(f->tmpdir, "/foobarbazegg");
-    ENSURE_DIR(EACCES);
+    ENSURE_DIR_ERROR(RAFT_IOERR);
+    ASSERT_ERRMSG("mkdir: Permission denied");
     return MUNIT_OK;
 }
 
@@ -142,7 +147,8 @@ TEST_CASE(ensure_dir, error, cant_probe, NULL)
     struct fixture *f = data;
     (void)params;
     strcpy(f->tmpdir, "/proc/1/root");
-    ENSURE_DIR(EACCES);
+    ENSURE_DIR_ERROR(RAFT_IOERR);
+    ASSERT_ERRMSG("stat: Permission denied");
     return MUNIT_OK;
 }
 
@@ -152,7 +158,8 @@ TEST_CASE(ensure_dir, error, not_a_dir, NULL)
     struct fixture *f = data;
     (void)params;
     strcpy(f->tmpdir, "/proc/1/cmdline");
-    ENSURE_DIR(ENOTDIR);
+    ENSURE_DIR_ERROR(RAFT_IOERR);
+    ASSERT_ERRMSG("not a directory");
     return MUNIT_OK;
 }
 

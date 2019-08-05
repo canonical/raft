@@ -10,8 +10,14 @@
 #include <unistd.h>
 
 #include "assert.h"
-#include "uv_os.h"
 #include "tracer.h"
+#include "uv_os.h"
+
+#define SYSCALL_ERROR(SYSCALL)                                              \
+    {                                                                       \
+        char e_[1024];                                                      \
+        sprintf(errmsg, #SYSCALL ": %s", strerror_r(errno, e_, sizeof e_)); \
+    }
 
 void uvJoin(const uvDir dir, const uvFilename filename, uvPath path)
 {
@@ -26,7 +32,7 @@ void uvDirname(const uvPath path, uvDir dir)
     dirname(dir);
 }
 
-int uvEnsureDir(struct raft_tracer *tracer, const uvDir dir)
+int uvEnsureDir(const uvDir dir, char *errmsg)
 {
     struct stat sb;
     int rv;
@@ -40,13 +46,16 @@ int uvEnsureDir(struct raft_tracer *tracer, const uvDir dir)
         if (errno == ENOENT) {
             rv = mkdir(dir, 0700);
             if (rv != 0) {
-                return errno;
+                SYSCALL_ERROR(mkdir);
+                return RAFT_IOERR;
             }
         } else {
-            return errno;
+            SYSCALL_ERROR(stat);
+            return RAFT_IOERR;
         }
     } else if ((sb.st_mode & S_IFMT) != S_IFDIR) {
-        return ENOTDIR;
+        sprintf(errmsg, "not a directory");
+        return RAFT_IOERR;
     }
 
     return 0;

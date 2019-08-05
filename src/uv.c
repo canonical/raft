@@ -29,6 +29,7 @@ static int uvInit(struct raft_io *io,
 {
     struct uv *uv;
     size_t direct_io;
+    char errmsg[2048];
     int rv;
 
     uv = io->impl;
@@ -36,7 +37,7 @@ static int uvInit(struct raft_io *io,
     uv->logger = logger;
 
     /* Ensure that the data directory exists and is accessible */
-    rv = uvEnsureDir(uv->tracer, uv->dir);
+    rv = uvEnsureDir(uv->dir, errmsg);
     if (rv != 0) {
         uvErrorf(uv, "data dir %s: %s", uv->dir, osStrError(rv));
         rv = RAFT_IOERR;
