@@ -147,12 +147,13 @@ void tracerEmit(struct raft_tracer *t,
                 raft_time time,
                 unsigned type,
                 const char *format,
-                va_list args)
+                ...)
 {
     struct metadata metadata;      /* Entry's metadata. */
     char message[MAX_MESSAGE_LEN]; /* Buffer holding the entry's message. */
     size_t size;                   /* Entry size. */
     size_t offset;                 /* Position of the new entry. */
+    va_list args;
 
     /* The entry type 0 is reserved for the dummy entry. */
     assert(type > 0);
@@ -162,7 +163,10 @@ void tracerEmit(struct raft_tracer *t,
 
     metadata.time = time;
     metadata.type = type;
+
+    va_start(args, format);
     metadata.len = vsnprintf(message, sizeof message, format, args);
+    va_end(args);
 
     /* If the message was truncated, adjust the actual length accordingly. */
     if (metadata.len >= MAX_MESSAGE_LEN) {

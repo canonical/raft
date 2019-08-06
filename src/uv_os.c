@@ -107,7 +107,7 @@ int uvOpenFile(const uvDir dir,
     *fd = open(path, flags, S_IRUSR | S_IWUSR);
     if (*fd == -1) {
         SYSCALL_ERRMSG(open);
-        return RAFT_IOERR;
+        return errno == ENOENT ? RAFT_IOERR_NOENT : RAFT_IOERR;
     }
     return 0;
 }
@@ -267,7 +267,7 @@ int uvReadFully(const int fd, void *buf, const size_t n, char *errmsg)
     assert(rv >= 0);
     if ((size_t)rv < n) {
         sprintf(errmsg, "short read: %d bytes instead of %ld", rv, n);
-        return RAFT_IOERR;
+        return RAFT_IOERR_NODATA;
     }
     return 0;
 }
@@ -561,14 +561,15 @@ err:
     return RAFT_IOERR;
 }
 
-int uvSetDirectIo(int fd)
+int uvSetDirectIo(int fd, char *errmsg)
 {
     int flags; /* Current fcntl flags */
     int rv;
     flags = fcntl(fd, F_GETFL);
     rv = fcntl(fd, F_SETFL, flags | O_DIRECT);
     if (rv == -1) {
-        return errno;
+        SYSCALL_ERRMSG(fnctl);
+        return RAFT_IOERR;
     }
     return 0;
 }

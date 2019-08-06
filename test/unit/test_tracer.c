@@ -58,15 +58,6 @@ static void tear_down(void *data)
 
 static raft_time clock = 0; /* Increased after each call to EMIT */
 
-static void emit(struct fixture *f, const char *format, ...)
-{
-    va_list args;
-    clock++;
-    va_start(args, format);
-    tracerEmit(&f->tracer, clock, RAFT_DEBUG, format, args);
-    va_end(args);
-}
-
 static void walkCb(void *data,
                    raft_time time,
                    unsigned type,
@@ -86,7 +77,12 @@ static void walkCb(void *data,
     entry->message = message;
 }
 
-#define EMIT(FORMAT, ...) emit(f, FORMAT, ##__VA_ARGS__)
+#define EMIT(FORMAT, ...)                                                 \
+    {                                                                     \
+        clock++;                                                          \
+        tracerEmit(&f->tracer, clock, RAFT_DEBUG, FORMAT, ##__VA_ARGS__); \
+    }
+
 #define EMIT_N(N, FORMAT, ...)           \
     {                                    \
         int i_;                          \

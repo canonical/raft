@@ -105,7 +105,7 @@ fuzzy_test_LDFLAGS =
 
 if UV_ENABLED
 
-libraft_la_SOURCES += \
+raft_uv_SOURCES = \
   src/uv.c \
   src/uv_append.c \
   src/uv_encoding.c \
@@ -124,6 +124,8 @@ libraft_la_SOURCES += \
   src/uv_tcp_connect.c \
   src/uv_tcp_listen.c \
   src/uv_truncate.c
+
+libraft_la_SOURCES += $(raft_uv_SOURCES)
 libraft_la_LDFLAGS += $(UV_LIBS)
 
 raftinclude_HEADERS += include/raft/uv.h
@@ -139,16 +141,19 @@ libtest_la_SOURCES += \
 test_lib_SOURCES += \
   test/lib/loop.c
 
-test_unit_uv_SOURCES = \
+test_unit_uv_SOURCES = $(raft_uv_SOURCES)
+test_unit_uv_SOURCES += \
   src/byte.c \
   src/configuration.c \
+  src/logging.c \
+  src/entry.c \
   src/error.c \
   src/heap.c \
+  src/snapshot.c \
   src/tracer.c \
-  src/uv_os.c \
-  src/uv_file.c \
   test/unit/main_uv.c \
   test/unit/test_uv_file.c \
+  test/unit/test_uv_metadata.c \
   test/unit/test_uv_os.c
 test_unit_uv_CFLAGS = $(CODE_COVERAGE_CFLAGS) $(test_CFLAGS)
 test_unit_uv_LDADD = libtest.la

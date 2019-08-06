@@ -29,7 +29,9 @@ enum {
     RAFT_NOCONNECTION,
     RAFT_BUSY,
     RAFT_IOERR,
+    RAFT_IOERR_NODATA,
     RAFT_IOERR_NOTSUPP,
+    RAFT_IOERR_NOENT,
     RAFT_IOERR_AGAIN
 };
 
@@ -55,7 +57,9 @@ enum {
     X(RAFT_NOCONNECTION, "no connection to remote server available")    \
     X(RAFT_BUSY, "operation can't be performed at this time")           \
     X(RAFT_IOERR, "I/O error")                                          \
+    X(RAFT_IOERR_NODATA, "no data available")                           \
     X(RAFT_IOERR_NOTSUPP, "operation not supported")                    \
+    X(RAFT_IOERR_NOENT, "no such file or directory")                    \
     X(RAFT_IOERR_AGAIN, "resource temporarily unavailable")
 
 /**

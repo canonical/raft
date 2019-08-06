@@ -175,6 +175,7 @@ static int prepareSegment(struct uv *uv)
 {
     struct segment *s;
     uvFilename filename;
+    char errmsg[2048];
     int rv;
 
     s = raft_malloc(sizeof *s);
@@ -189,7 +190,7 @@ static int prepareSegment(struct uv *uv)
         goto err_after_segment_alloc;
     }
 
-    rv = uvFileInit(s->file, uv->loop, uv->direct_io, uv->async_io);
+    rv = uvFileInit(s->file, uv->loop, uv->direct_io, uv->async_io, errmsg);
     if (rv != 0) {
         uvErrorf(uv, "init segment file %d: %s", s->counter, uv_strerror(rv));
         rv = RAFT_IOERR;
@@ -203,9 +204,9 @@ static int prepareSegment(struct uv *uv)
     sprintf(filename, UV__OPEN_TEMPLATE, s->counter);
     uvJoin(uv->dir, filename, s->path);
 
-    rv = uvFileCreate(s->file, &s->create, s->path,
+    rv = uvFileCreate(s->file, &s->create, uv->dir, filename,
                       uv->block_size * uv->n_blocks, MAX_CONCURRENT_WRITES,
-                      prepareSegmentFileCreateCb);
+                      prepareSegmentFileCreateCb, errmsg);
     if (rv != 0) {
         uvErrorf(uv, "create segment file %d: %s", s->counter, uv_strerror(rv));
         rv = RAFT_IOERR;

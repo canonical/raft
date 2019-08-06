@@ -262,12 +262,13 @@ static void writeSegmentCb(struct uvFileWrite *write, const int status)
  * of the given segment. */
 static int writeSegment(struct segment *s)
 {
+    char errmsg[2048];
     int rv;
     assert(s->file != NULL);
     assert(s->pending.n > 0);
     uvSegmentBufferFinalize(&s->pending, &s->buf);
     rv = uvFileWrite(s->file, &s->write, &s->buf, 1,
-                     s->next_block * s->uv->block_size, writeSegmentCb);
+                     s->next_block * s->uv->block_size, writeSegmentCb, errmsg);
     if (rv != 0) {
         return rv;
     }

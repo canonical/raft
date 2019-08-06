@@ -218,7 +218,7 @@ TEST_CASE(open_file, error, open, NULL)
     struct fixture *f = data;
     int fd;
     (void)params;
-    OPEN_FILE_ERROR(RAFT_IOERR, "foo", O_RDONLY, &fd);
+    OPEN_FILE_ERROR(RAFT_IOERR_NOENT, "foo", O_RDONLY, &fd);
     ASSERT_ERRMSG("open: No such file or directory");
     return MUNIT_OK;
 }

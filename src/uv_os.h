@@ -119,7 +119,7 @@ int uvProbeIoCapabilities(const uvDir dir,
                           char *errmsg);
 
 /* Configure the given file descriptor for direct I/O. */
-int uvSetDirectIo(int fd);
+int uvSetDirectIo(int fd, char *errmsg);
 
 /* Return a human-readable description of the given OS error */
 const char *osStrError(int rv);

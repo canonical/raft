@@ -10,6 +10,7 @@
 #include <uv.h>
 
 #include "queue.h"
+#include "uv_error.h"
 #include "uv_os.h"
 
 /* Handle to an open file. */
@@ -35,16 +36,19 @@ typedef void (*uvFileCloseCb)(struct uvFile *f);
 int uvFileInit(struct uvFile *f,
                struct uv_loop_s *loop,
                bool direct /* Whether to use direct I/O */,
-               bool async /* Whether async I/O is available */);
+               bool async /* Whether async I/O is available */,
+               char *errmsg);
 
-/* Create the given file for subsequent non-blocking writing. The file must not
- * exist yet. */
+/* Create the given file in the given directory for subsequent non-blocking
+ * writing. The file must not exist yet. */
 int uvFileCreate(struct uvFile *f,
                  struct uvFileCreate *req,
-                 uvPath path,
+                 uvDir dir,
+                 uvFilename filename,
                  size_t size,
                  unsigned max_concurrent_writes,
-                 uvFileCreateCb cb);
+                 uvFileCreateCb cb,
+                 char *errmsg);
 
 /* Asynchronously write data to the file associated with the given handle. */
 int uvFileWrite(struct uvFile *f,
@@ -52,7 +56,8 @@ int uvFileWrite(struct uvFile *f,
                 const uv_buf_t bufs[],
                 unsigned n_bufs,
                 size_t offset,
-                uvFileWriteCb cb);
+                uvFileWriteCb cb,
+                char *errmsg);
 
 /* Close the given file and release all associated resources. There must be no
  * request in progress. */
@@ -81,9 +86,11 @@ struct uvFileCreate
     void *data;            /* User data */
     struct uvFile *file;   /* File handle */
     int status;            /* Request result code */
+    uvErrMsg errmsg;       /* Error message (for status != 0) */
     struct uv_work_s work; /* To execute logic in the threadpool */
     uvFileCreateCb cb;     /* Callback to invoke upon request completion */
-    uvPath path;           /* File path */
+    uvDir dir;             /* File directory */
+    uvFilename filename;   /* File name */
     size_t size;           /* File size */
 };
 
@@ -92,6 +99,7 @@ struct uvFileWrite
     void *data;            /* User data */
     struct uvFile *file;   /* File handle */
     int status;            /* Request result code */
+    uvErrMsg errmsg;       /* Error message (for status != 0) */
     struct uv_work_s work; /* To execute logic in the threadpool */
     uvFileWriteCb cb;      /* Callback to invoke upon request completion */
     struct iocb iocb;      /* KAIO request (for writing) */

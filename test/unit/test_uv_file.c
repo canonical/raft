@@ -1,6 +1,7 @@
 #include "../lib/dir.h"
 #include "../lib/loop.h"
 #include "../lib/runner.h"
+#include "../lib/tracer.h"
 
 #include "../../src/uv_file.h"
 #include "../../src/uv_os.h"
@@ -16,6 +17,7 @@ TEST_MODULE(uv_file);
 #define FIXTURE_FILE    \
     FIXTURE_DIR;        \
     FIXTURE_LOOP;       \
+    FIXTURE_TRACER;     \
     size_t block_size;  \
     size_t direct_io;   \
     bool async_io;      \
@@ -28,10 +30,12 @@ TEST_MODULE(uv_file);
     (void)user_data;                                                         \
     SETUP_DIR;                                                               \
     SETUP_LOOP;                                                              \
+    SETUP_TRACER;                                                            \
     rv = uvProbeIoCapabilities(f->dir, &f->direct_io, &f->async_io, errmsg); \
     munit_assert_int(rv, ==, 0);                                             \
     f->block_size = f->direct_io != 0 ? f->direct_io : 4096;                 \
-    rv = uvFileInit(&f->file, &f->loop, f->direct_io != 0, f->async_io);     \
+    rv = uvFileInit(&f->file, &f->loop, f->direct_io != 0, f->async_io,      \
+                    errmsg);                                                 \
     munit_assert_int(rv, ==, 0);                                             \
     f->file.data = f;                                                        \
     f->closed = false;
@@ -40,18 +44,20 @@ TEST_MODULE(uv_file);
     if (!f->closed) {                \
         uvFileClose(&f->file, NULL); \
     }                                \
+    TEAR_DOWN_TRACER;                \
     TEAR_DOWN_LOOP;                  \
     TEAR_DOWN_DIR;
 
 /**
  * Invoke @uvFileCreate and assert that it returns the given code.
  */
-#define CREATE__INVOKE(RV)                                     \
-    {                                                          \
-        int rv;                                                \
-        rv = uvFileCreate(&f->file, &f->req, f->path, f->size, \
-                          f->max_n_writes, create__cb);        \
-        munit_assert_int(rv, ==, RV);                          \
+#define CREATE__INVOKE(RV)                                                 \
+    {                                                                      \
+        char errmsg[2048];                                                 \
+        int rv;                                                            \
+        rv = uvFileCreate(&f->file, &f->req, f->dir, f->filename, f->size, \
+                          f->max_n_writes, create__cb, errmsg);            \
+        munit_assert_int(rv, ==, RV);                                      \
     }
 
 /******************************************************************************
@@ -66,7 +72,7 @@ struct create_fixture
 {
     FIXTURE_FILE;
     struct uvFileCreate req;
-    char path[64];         /* Path of the file to create */
+    uvFilename filename;   /* Name of the file to create */
     size_t size;           /* Size of the file to create */
     unsigned max_n_writes; /* Max n of writes of the file to create */
     bool invoked;
@@ -78,7 +84,7 @@ TEST_SETUP(create)
     struct create_fixture *f = munit_malloc(sizeof *f);
     SETUP_FILE;
     f->req.data = f;
-    sprintf(f->path, "%s/foo", f->dir);
+    strcpy(f->filename, "foo");
     f->size = 4096;
     f->max_n_writes = 1;
     f->invoked = 0;
@@ -141,11 +147,11 @@ TEST_CASE(create, error, no_entry, NULL)
 {
     struct create_fixture *f = data;
 
-    sprintf(f->path, "/non/existing/dir/foo");
+    sprintf(f->filename, "non/existing/dir/foo");
 
     (void)params;
 
-    CREATE__INVOKE(UV_ENOENT);
+    CREATE__INVOKE(RAFT_IOERR_NOENT);
 
     return MUNIT_OK;
 }
@@ -160,7 +166,7 @@ TEST_CASE(create, error, already_exists, NULL)
 
     test_dir_write_file(f->dir, "foo", buf, sizeof buf);
 
-    CREATE__INVOKE(UV_EEXIST);
+    CREATE__INVOKE(RAFT_IOERR);
 
     return MUNIT_OK;
 }
@@ -175,7 +181,7 @@ TEST_CASE(create, error, no_space, NULL)
     f->size = 4096 * 32768;
 
     CREATE__INVOKE(0);
-    CREATE__WAIT_CB(UV_ENOSPC);
+    CREATE__WAIT_CB(RAFT_IOERR);
 
     return MUNIT_OK;
 }
@@ -207,7 +213,7 @@ TEST_CASE(create, error, cancel, NULL)
     CREATE__INVOKE(0);
     CREATE__CLOSE;
 
-    CREATE__WAIT_CB(UV_ECANCELED);
+    CREATE__WAIT_CB(RAFT_CANCELED);
 
     munit_assert_false(test_dir_has_file(f->dir, "foo"));
 
@@ -241,11 +247,11 @@ TEST_SETUP(write)
     struct write_fixture *f = munit_malloc(sizeof *f);
     struct uvFileCreate req;
     int i;
-    char path[64];
+    uvFilename filename;
     size_t size = 4096;
     SETUP_FILE;
-    sprintf(path, "%s/foo", f->dir);
-    rv = uvFileCreate(&f->file, &req, path, size, 2, NULL);
+    strcpy(filename, "foo");
+    rv = uvFileCreate(&f->file, &req, f->dir, filename, size, 2, NULL, errmsg);
     munit_assert_int(rv, ==, 0);
     LOOP_RUN(1);
     for (i = 0; i < 2; i++) {
@@ -284,10 +290,11 @@ static void write_cb(struct uvFileWrite *req, int status)
 /* Invoke @uvFileWrite and assert it returns the given code. */
 #define write__invoke(RV)                                                   \
     {                                                                       \
-        int rv2;                                                            \
-        rv2 = uvFileWrite(&f->file, &f->req, f->bufs, f->n_bufs, f->offset, \
-                          write_cb);                                        \
-        munit_assert_int(rv2, ==, RV);                                      \
+        char errmsg_[2048];                                                 \
+        int rv_;                                                            \
+        rv_ = uvFileWrite(&f->file, &f->req, f->bufs, f->n_bufs, f->offset, \
+                          write_cb, errmsg_);                               \
+        munit_assert_int(rv_, ==, RV);                                      \
     }
 
 /* Wait for a write callback to fire N times and check its last status. */
@@ -430,6 +437,7 @@ TEST_CASE(write, success, concurrent, dir_all_params)
 {
     struct write_fixture *f = data;
     struct uvFileWrite req;
+    char errmsg[2048];
     int rv;
     (void)params;
     return MUNIT_SKIP; /* TODO: tests hang */
@@ -438,7 +446,7 @@ TEST_CASE(write, success, concurrent, dir_all_params)
 
     write__invoke(0);
 
-    rv = uvFileWrite(&f->file, &req, &f->bufs[1], 1, f->block_size, write_cb);
+    rv = uvFileWrite(&f->file, &req, &f->bufs[1], 1, f->block_size, write_cb, errmsg);
     munit_assert_int(rv, ==, 0);
 
     write__wait_cb(2, f->block_size);
@@ -453,6 +461,7 @@ TEST_CASE(write, success, concurrent_twice, dir_all_params)
 {
     struct write_fixture *f = data;
     struct uvFileWrite req;
+    char errmsg[2048];
     int rv;
     (void)params;
     return MUNIT_SKIP; /* TODO: tests hang */
@@ -463,7 +472,7 @@ TEST_CASE(write, success, concurrent_twice, dir_all_params)
 
     write__invoke(0);
 
-    rv = uvFileWrite(&f->file, &req, &f->bufs[1], 1, 0, write_cb);
+    rv = uvFileWrite(&f->file, &req, &f->bufs[1], 1, 0, write_cb, errmsg);
     munit_assert_int(rv, ==, 0);
 
     write__wait_cb(2, f->block_size);
@@ -503,7 +512,7 @@ TEST_CASE(write, error, cancel, dir_all_params)
 
     write__close;
 
-    write__wait_cb(1, UV_ECANCELED);
+    write__wait_cb(1, RAFT_CANCELED);
 
     return MUNIT_OK;
 }
