@@ -25,8 +25,14 @@
 /* List of all supported file system types. */
 extern char *test_dir_all[];
 
+/* List containing only the tmpfs type. */
+extern char *test_dir_tmpfs[];
+
 /* List containing only the btrfs fs type. */
 extern char *test_dir_btrfs[];
+
+/* List containing only the zfs fs type. */
+extern char *test_dir_zfs[];
 
 /* List containing all fs types that properly support AIO (i.e. truly async AIO
  * that never blocks). */
@@ -39,8 +45,14 @@ extern char *test_dir_no_aio[];
  * types. */
 extern MunitParameterEnum dir_all_params[];
 
+/* Contain a single TEST_DIR_FS parameter set to tmpfs. */
+extern MunitParameterEnum dir_tmpfs_params[];
+
 /* Contain a single TEST_DIR_FS parameter set to btrfs. */
 extern MunitParameterEnum dir_btrfs_params[];
+
+/* Contain a single TEST_DIR_FS parameter set to zfs. */
+extern MunitParameterEnum dir_zfs_params[];
 
 /* Contain a single TEST_DIR_FS parameter set to all file systems with
  * proper AIO support (i.e. NOWAIT works). */

@@ -2,8 +2,8 @@
 #include "../lib/loop.h"
 #include "../lib/runner.h"
 
-#include "../../src/uv_os.h"
 #include "../../src/uv_file.h"
+#include "../../src/uv_os.h"
 
 TEST_MODULE(uv_file);
 
@@ -22,17 +22,18 @@ TEST_MODULE(uv_file);
     struct uvFile file; \
     bool closed;
 
-#define SETUP_FILE                                                       \
-    int rv;                                                              \
-    (void)user_data;                                                     \
-    SETUP_DIR;                                                           \
-    SETUP_LOOP;                                                          \
-    rv = uvProbeIoCapabilities(f->dir, &f->direct_io, &f->async_io);                 \
-    munit_assert_int(rv, ==, 0);                                         \
-    f->block_size = f->direct_io != 0 ? f->direct_io : 4096;             \
-    rv = uvFileInit(&f->file, &f->loop, f->direct_io != 0, f->async_io); \
-    munit_assert_int(rv, ==, 0);                                         \
-    f->file.data = f;                                                    \
+#define SETUP_FILE                                                           \
+    char errmsg[2048];                                                       \
+    int rv;                                                                  \
+    (void)user_data;                                                         \
+    SETUP_DIR;                                                               \
+    SETUP_LOOP;                                                              \
+    rv = uvProbeIoCapabilities(f->dir, &f->direct_io, &f->async_io, errmsg); \
+    munit_assert_int(rv, ==, 0);                                             \
+    f->block_size = f->direct_io != 0 ? f->direct_io : 4096;                 \
+    rv = uvFileInit(&f->file, &f->loop, f->direct_io != 0, f->async_io);     \
+    munit_assert_int(rv, ==, 0);                                             \
+    f->file.data = f;                                                        \
     f->closed = false;
 
 #define TEAR_DOWN_FILE               \
@@ -189,7 +190,7 @@ TEST_CASE(create, error, no_resources, NULL)
 
     test_aio_fill(&ctx, 0);
 
-    CREATE__INVOKE(UV_EAGAIN);
+    CREATE__INVOKE(RAFT_IOERR);
 
     test_aio_destroy(ctx);
 
@@ -484,7 +485,7 @@ TEST_CASE(write, error, no_resources, dir_no_aio_params)
     test_aio_fill(&ctx, 0);
 
     write__invoke(0);
-    write__wait_cb(1, UV_EAGAIN);
+    write__wait_cb(1, RAFT_IOERR);
 
     test_aio_destroy(ctx);
 

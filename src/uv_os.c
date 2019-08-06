@@ -424,7 +424,7 @@ static int probeDirectIO(int fd, size_t *size, char *errmsg)
 }
 
 #if defined(RWF_NOWAIT)
-/* Check if async I/O is possible on the given fd. */
+/* Check if fully non-blocking async I/O is possible on the given fd. */
 static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
 {
     void *buf;                  /* Buffer to use for the probe write */
@@ -478,7 +478,7 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
     /* Fetch the response: will block until done. */
     rv = uvIoGetevents(ctx, 1, 1, &event, NULL, &n_events, errmsg);
     assert(rv == 0);
-    assert(n_events == 0);
+    assert(n_events == 1);
 
     /* Release the write buffer. */
     free(buf);
@@ -635,7 +635,7 @@ int uvIoGetevents(aio_context_t ctx,
         return RAFT_IOERR;
     }
     assert(rv >= min_nr);
-    assert(rv >= max_nr);
+    assert(rv <= max_nr);
     *nr = rv;
     return 0;
 }

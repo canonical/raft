@@ -53,7 +53,12 @@ AS_IF([test x"$have_xfs" = x"yes"], [AC_DEFINE(RAFT_HAVE_XFS)], [])
 
 # Check if zfs is available (for enabling zfs-related tests).
 AC_CHECK_PROG(have_zfs, zfs, yes)
-AS_IF([test x"$have_xfs" = x"yes"], [AC_DEFINE(RAFT_HAVE_ZFS)], [])
+AS_IF([test x"$have_zfs" = x"yes"],
+   [AC_DEFINE(RAFT_HAVE_ZFS)
+    AX_COMPARE_VERSION($(zfs version | cut -f 2 -d - | head -1), [ge], [0.8.0],
+       [AC_DEFINE(RAFT_HAVE_ZFS_WITH_DIRECT_IO)], [])
+   ],
+   [])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_TYPE_SIZE_T
