@@ -392,6 +392,8 @@ struct raft_logger
     void (*emit)(struct raft_logger *l,
                  int level,
                  raft_time time,
+		 const char *file,
+		 int line,
                  const char *format,
                  ...);
 };

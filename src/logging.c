@@ -6,10 +6,12 @@
 #define EMIT_BUF_LEN 1024
 
 static void emitToStream(FILE *stream,
-                  raft_time time,
-                  int level,
-                  const char *format,
-                  va_list args)
+                         raft_time time,
+                         int level,
+                         const char *file,
+                         int line,
+                         const char *format,
+                         va_list args)
 {
     char buf[EMIT_BUF_LEN];
     char *cursor = buf;
@@ -49,6 +51,9 @@ static void emitToStream(FILE *stream,
 
     cursor = buf + strlen(buf);
 
+    sprintf(cursor, "%s:%d -> ", file, line);
+    cursor = buf + strlen(buf);
+
     /* Then render the message, possibly truncating it. */
     n = EMIT_BUF_LEN - strlen(buf) - 1;
     vsnprintf(cursor, n, format, args);
@@ -59,6 +64,8 @@ static void emitToStream(FILE *stream,
 static void defaultEmit(struct raft_logger *l,
                         int level,
                         raft_time time,
+                        const char *file,
+                        int line,
                         const char *format,
                         ...)
 {
@@ -69,7 +76,7 @@ static void defaultEmit(struct raft_logger *l,
     }
 
     va_start(args, format);
-    emitToStream(stderr, time, level, format, args);
+    emitToStream(stderr, time, level, file, line, format, args);
     va_end(args);
 }
 
