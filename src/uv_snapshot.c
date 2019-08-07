@@ -79,7 +79,7 @@ int uvSnapshotInfoAppendIfMatch(struct uv *uv,
     filenameOf(&info, snapshot_filename);
     rv = uvStatFile(uv->dir, snapshot_filename, &sb, errmsg);
     if (rv != 0) {
-        if (rv == ENOENT) {
+        if (rv == UV__NOENT) {
             uvUnlinkFile(uv->dir, filename, errmsg); /* Ignore errors */
             *appended = false;
             return 0;

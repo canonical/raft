@@ -564,7 +564,7 @@ raft_index logLastIndex(struct raft_log *l)
     /* If there are no entries in the log, but there is a snapshot available
      * check that it's last index is consistent with the offset. */
     if (logNumEntries(l) == 0 && l->snapshot.last_index != 0) {
-        assert(l->offset == l->snapshot.last_index);
+        assert(l->offset <= l->snapshot.last_index);
     }
     return l->offset + logNumEntries(l);
 }

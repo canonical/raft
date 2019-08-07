@@ -11,27 +11,17 @@
 
 #include "assert.h"
 #include "tracer.h"
+#include "uv_error.h"
 #include "uv_os.h"
 
-#define SYSCALL_ERRMSG_ERRNO(SYSCALL, ERRNO)                                \
-    {                                                                       \
-        char e_[1024];                                                      \
-        sprintf(errmsg, #SYSCALL ": %s", strerror_r(ERRNO, e_, sizeof e_)); \
-    }
-
-#define SYSCALL_ERRMSG(SYSCALL) SYSCALL_ERRMSG_ERRNO(SYSCALL, errno)
+/* Default permissions when creating a directory. */
+#define DEFAULT_DIR_PERM 0700
 
 void uvJoin(const uvDir dir, const uvFilename filename, uvPath path)
 {
     strcpy(path, dir);
     strcat(path, "/");
     strcat(path, filename);
-}
-
-void uvDirname(const uvPath path, uvDir dir)
-{
-    strncpy(dir, path, UV__DIR_MAX_LEN);
-    dirname(dir);
 }
 
 int uvEnsureDir(const uvDir dir, char *errmsg)
@@ -46,18 +36,18 @@ int uvEnsureDir(const uvDir dir, char *errmsg)
     rv = stat(dir, &sb);
     if (rv == -1) {
         if (errno == ENOENT) {
-            rv = mkdir(dir, 0700);
+            rv = mkdir(dir, DEFAULT_DIR_PERM);
             if (rv != 0) {
-                SYSCALL_ERRMSG(mkdir);
-                return RAFT_IOERR;
+                uvErrMsgSys(errmsg, mkdir, errno);
+                return UV__ERROR;
             }
         } else {
-            SYSCALL_ERRMSG(stat);
-            return RAFT_IOERR;
+            uvErrMsgSys(errmsg, stat, errno);
+            return UV__ERROR;
         }
     } else if ((sb.st_mode & S_IFMT) != S_IFDIR) {
-        sprintf(errmsg, "not a directory");
-        return RAFT_IOERR;
+        uvErrMsgPrintf(errmsg, "not a directory");
+        return UV__ERROR;
     }
 
     return 0;
@@ -69,14 +59,14 @@ int uvSyncDir(const uvDir dir, char *errmsg)
     int rv;
     fd = open(dir, O_RDONLY | O_DIRECTORY);
     if (fd == -1) {
-        SYSCALL_ERRMSG(open);
-        return RAFT_IOERR;
+        uvErrMsgSys(errmsg, open, errno);
+        return UV__ERROR;
     }
     rv = fsync(fd);
     close(fd);
     if (rv == -1) {
-        SYSCALL_ERRMSG(fsync);
-        return RAFT_IOERR;
+        uvErrMsgSys(errmsg, fsync, errno);
+        return UV__ERROR;
     }
     return 0;
 }
@@ -89,8 +79,8 @@ int uvScanDir(const uvDir dir,
     int rv;
     rv = scandir(dir, entries, NULL, alphasort);
     if (rv == -1) {
-        SYSCALL_ERRMSG(scandir);
-        return errno;
+        uvErrMsgSys(errmsg, scandir, errno);
+        return UV__ERROR;
     }
     *n_entries = rv;
     return 0;
@@ -106,8 +96,8 @@ int uvOpenFile(const uvDir dir,
     uvJoin(dir, filename, path);
     *fd = open(path, flags, S_IRUSR | S_IWUSR);
     if (*fd == -1) {
-        SYSCALL_ERRMSG(open);
-        return errno == ENOENT ? RAFT_IOERR_NOENT : RAFT_IOERR;
+        uvErrMsgSys(errmsg, open, errno);
+        return errno == ENOENT ? UV__NOENT : UV__ERROR;
     }
     return 0;
 }
@@ -122,8 +112,8 @@ int uvStatFile(const uvDir dir,
     uvJoin(dir, filename, path);
     rv = stat(path, sb);
     if (rv == -1) {
-        SYSCALL_ERRMSG(stat);
-        return RAFT_IOERR;
+        uvErrMsgSys(errmsg, stat, errno);
+        return errno == ENOENT ? UV__NOENT : UV__ERROR;
     }
     return 0;
 }
@@ -145,21 +135,26 @@ int uvMakeFile(const uvDir dir,
     }
     rv = uvOpenFile(dir, filename, flags, &fd, errmsg);
     if (rv != 0) {
-        return RAFT_IOERR;
+        return rv;
     }
     rv = writev(fd, (const struct iovec *)bufs, n_bufs);
     if (rv != (int)(size)) {
-        SYSCALL_ERRMSG(writev);
+        if (rv == -1) {
+            uvErrMsgSys(errmsg, writev, errno);
+        } else {
+            assert(rv >= 0);
+            uvErrMsgPrintf(errmsg, "short write: %d only bytes written", rv);
+        }
         goto err_after_file_open;
     }
     rv = fsync(fd);
     if (rv == -1) {
-        SYSCALL_ERRMSG(fsync);
+        uvErrMsgSys(errmsg, fsync, errno);
         goto err_after_file_open;
     }
     rv = close(fd);
     if (rv == -1) {
-        SYSCALL_ERRMSG(close);
+        uvErrMsgSys(errmsg, close, errno);
         goto err;
     }
     return 0;
@@ -167,7 +162,7 @@ int uvMakeFile(const uvDir dir,
 err_after_file_open:
     close(fd);
 err:
-    return RAFT_IOERR;
+    return UV__ERROR;
 }
 
 int uvUnlinkFile(const char *dir, const char *filename, char *errmsg)
@@ -177,10 +172,16 @@ int uvUnlinkFile(const char *dir, const char *filename, char *errmsg)
     uvJoin(dir, filename, path);
     rv = unlink(path);
     if (rv == -1) {
-        SYSCALL_ERRMSG(unlink);
-        return RAFT_IOERR;
+        uvErrMsgSys(errmsg, unlink, errno);
+        return UV__ERROR;
     }
     return 0;
+}
+
+void uvTryUnlinkFile(const char *dir, const char *filename)
+{
+    uvErrMsg errmsg;
+    uvUnlinkFile(dir, filename, errmsg);
 }
 
 int uvTruncateFile(const uvDir dir,
@@ -192,19 +193,18 @@ int uvTruncateFile(const uvDir dir,
     int fd;
     int rv;
     uvJoin(dir, filename, path);
-    fd = open(path, O_RDWR);
-    if (fd == -1) {
-        SYSCALL_ERRMSG(open);
+    rv = uvOpenFile(dir, filename, O_RDWR, &fd, errmsg);
+    if (rv != 0) {
         goto err;
     }
     rv = ftruncate(fd, offset);
     if (rv == -1) {
-        SYSCALL_ERRMSG(ftruncate);
+        uvErrMsgSys(errmsg, ftruncate, errno);
         goto err_after_open;
     }
     rv = fsync(fd);
     if (rv == -1) {
-        SYSCALL_ERRMSG(fsync);
+        uvErrMsgSys(errmsg, fsync, errno);
         goto err_after_open;
     }
     close(fd);
@@ -213,7 +213,7 @@ int uvTruncateFile(const uvDir dir,
 err_after_open:
     close(fd);
 err:
-    return RAFT_IOERR;
+    return UV__ERROR;
 }
 
 int uvRenameFile(const uvDir dir,
@@ -229,7 +229,8 @@ int uvRenameFile(const uvDir dir,
     /* TODO: double check that filename2 does not exist. */
     rv = rename(path1, path2);
     if (rv == -1) {
-        return errno;
+        uvErrMsgSys(errmsg, rename, errno);
+        return UV__ERROR;
     }
     rv = uvSyncDir(dir, errmsg);
     if (rv != 0) {
@@ -243,14 +244,11 @@ int uvIsEmptyFile(const uvDir dir,
                   bool *empty,
                   char *errmsg)
 {
-    uvPath path;
     struct stat sb;
     int rv;
-    uvJoin(dir, filename, path);
-    rv = stat(path, &sb);
-    if (rv == -1) {
-        SYSCALL_ERRMSG(stat);
-        return RAFT_IOERR;
+    rv = uvStatFile(dir, filename, &sb, errmsg);
+    if (rv != 0) {
+        return rv;
     }
     *empty = sb.st_size == 0 ? true : false;
     return 0;
@@ -261,13 +259,13 @@ int uvReadFully(const int fd, void *buf, const size_t n, char *errmsg)
     int rv;
     rv = read(fd, buf, n);
     if (rv == -1) {
-        SYSCALL_ERRMSG(read);
-        return RAFT_IOERR;
+        uvErrMsgSys(errmsg, read, errno);
+        return UV__ERROR;
     }
     assert(rv >= 0);
     if ((size_t)rv < n) {
-        sprintf(errmsg, "short read: %d bytes instead of %ld", rv, n);
-        return RAFT_IOERR_NODATA;
+        uvErrMsgPrintf(errmsg, "short read: %d bytes instead of %ld", rv, n);
+        return UV__NODATA;
     }
     return 0;
 }
@@ -277,13 +275,13 @@ int uvWriteFully(const int fd, void *buf, const size_t n, char *errmsg)
     int rv;
     rv = write(fd, buf, n);
     if (rv == -1) {
-        SYSCALL_ERRMSG(write);
-        return RAFT_IOERR;
+        uvErrMsgSys(errmsg, write, errno);
+        return UV__ERROR;
     }
     assert(rv >= 0);
     if ((size_t)rv < n) {
-        sprintf(errmsg, "short write: %d bytes instead of %ld", rv, n);
-        return RAFT_IOERR;
+        uvErrMsgPrintf(errmsg, "short write: %d bytes instead of %ld", rv, n);
+        return UV__ERROR;
     }
     return 0;
 }
@@ -302,19 +300,22 @@ int uvIsFilledWithTrailingZeros(const int fd, bool *flag, char *errmsg)
     /* Figure the size of the rest of the file. */
     size = lseek(fd, 0, SEEK_END);
     if (size == -1) {
-        return errno;
+        uvErrMsgSys(errmsg, lseek, errno);
+        return UV__ERROR;
     }
     size -= offset;
 
     /* Reposition the file descriptor offset to the original offset. */
     offset = lseek(fd, offset, SEEK_SET);
     if (offset == -1) {
-        return errno;
+        uvErrMsgSys(errmsg, lseek, errno);
+        return UV__ERROR;
     }
 
-    data = malloc(size);
+    data = raft_malloc(size);
     if (data == NULL) {
-        return ENOMEM;
+        uvErrMsgPrintf(errmsg, "can't allocate read buffer");
+        return UV__ERROR;
     }
 
     rv = uvReadFully(fd, data, size, errmsg);
@@ -332,7 +333,7 @@ int uvIsFilledWithTrailingZeros(const int fd, bool *flag, char *errmsg)
     *flag = true;
 
 done:
-    free(data);
+    raft_free(data);
 
     return 0;
 }
@@ -361,14 +362,14 @@ static int probeDirectIO(int fd, size_t *size, char *errmsg)
     if (rv == -1) {
         if (errno != EINVAL) {
             /* UNTESTED: the parameters are ok, so this should never happen. */
-            SYSCALL_ERRMSG(fnctl);
-            return RAFT_IOERR;
+            uvErrMsgSys(errmsg, fnctl, errno);
+            return UV__ERROR;
         }
         rv = fstatfs(fd, &fs_info);
         if (rv == -1) {
             /* UNTESTED: in practice ENOMEM should be the only failure mode */
-            SYSCALL_ERRMSG(fstatfs);
-            return RAFT_IOERR;
+            uvErrMsgSys(errmsg, fstatfs, errno);
+            return UV__ERROR;
         }
         switch (fs_info.f_type) {
             case 0x01021994: /* TMPFS_MAGIC */
@@ -377,23 +378,24 @@ static int probeDirectIO(int fd, size_t *size, char *errmsg)
                 return 0;
             default:
                 /* UNTESTED: this is an unsupported file system. */
-                sprintf(errmsg, "unsupported file system: %lx", fs_info.f_type);
-                return RAFT_IOERR;
+                uvErrMsgPrintf(errmsg, "unsupported file system: %lx",
+                               fs_info.f_type);
+                return UV__ERROR;
         }
     }
 
     /* Try to peform direct I/O, using various buffer size. */
     *size = 4096;
     while (*size >= 512) {
-        buf = aligned_alloc(*size, *size);
+        buf = raft_aligned_alloc(*size, *size);
         if (buf == NULL) {
-            /* UNTESTED: define a configurable allocator that can fail? */
-            sprintf(errmsg, "out of memory");
-            return RAFT_NOMEM;
+            /* UNTESTED: TODO */
+            uvErrMsgPrintf(errmsg, "can't allocate write buffer");
+            return UV__ERROR;
         }
         memset(buf, 0, *size);
         rv = write(fd, buf, *size);
-        free(buf);
+        raft_free(buf);
         if (rv > 0) {
             /* Since we fallocate'ed the file, we should never fail because of
              * lack of disk space, and all bytes should have been written. */
@@ -413,8 +415,8 @@ static int probeDirectIO(int fd, size_t *size, char *errmsg)
                 return 0;
             }
 
-            SYSCALL_ERRMSG(write);
-            return RAFT_IOERR;
+            uvErrMsgSys(errmsg, write, errno);
+            return UV__ERROR;
         }
         *size = *size / 2;
     }
@@ -443,11 +445,11 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
     }
 
     /* Allocate the write buffer */
-    buf = aligned_alloc(size, size);
+    buf = raft_aligned_alloc(size, size);
     if (buf == NULL) {
         /* UNTESTED: define a configurable allocator that can fail? */
-        sprintf(errmsg, "out of memory");
-        return RAFT_NOMEM;
+        uvErrMsgPrintf(errmsg, "can't allocate write buffer");
+        return UV__ERROR;
     }
     memset(buf, 0, size);
 
@@ -465,8 +467,8 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
     rv = uvIoSubmit(ctx, 1, &iocbs, errmsg);
     if (rv != 0) {
         /* UNTESTED: in practice this should fail only with ENOMEM */
-        free(buf);
-        uvIoDestroy(ctx, errmsg);
+        raft_free(buf);
+        uvTryIoDestroy(ctx);
         /* On ZFS 0.8 this is not properly supported yet. */
         if (errno == EOPNOTSUPP) {
             *ok = false;
@@ -481,10 +483,13 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
     assert(n_events == 1);
 
     /* Release the write buffer. */
-    free(buf);
+    raft_free(buf);
 
     /* Release the KAIO context handle. */
-    uvIoDestroy(ctx, errmsg);
+    rv = uvIoDestroy(ctx, errmsg);
+    if (rv != 0) {
+        return rv;
+    }
 
     if (event.res > 0) {
         assert(event.res == (int)size);
@@ -516,12 +521,12 @@ int uvProbeIoCapabilities(const uvDir dir,
     uvJoin(dir, filename, path);
     fd = mkstemp(path);
     if (fd == -1) {
-        SYSCALL_ERRMSG(mkstemp);
+        uvErrMsgSys(errmsg, mkstemp, errno);
         goto err;
     }
     rv = posix_fallocate(fd, 0, 4096);
     if (rv != 0) {
-        SYSCALL_ERRMSG_ERRNO(posix_fallocate, rv);
+        uvErrMsgSys(errmsg, posix_fallocate, rv);
         goto err_after_file_open;
     }
     unlink(path);
@@ -558,7 +563,7 @@ out:
 err_after_file_open:
     close(fd);
 err:
-    return RAFT_IOERR;
+    return UV__ERROR;
 }
 
 int uvSetDirectIo(int fd, char *errmsg)
@@ -568,8 +573,8 @@ int uvSetDirectIo(int fd, char *errmsg)
     flags = fcntl(fd, F_GETFL);
     rv = fcntl(fd, F_SETFL, flags | O_DIRECT);
     if (rv == -1) {
-        SYSCALL_ERRMSG(fnctl);
-        return RAFT_IOERR;
+        uvErrMsgSys(errmsg, fnctl, errno);
+        return UV__ERROR;
     }
     return 0;
 }
@@ -586,8 +591,8 @@ int uvIoSetup(unsigned nr, aio_context_t *ctxp, char *errmsg)
     int rv;
     rv = syscall(__NR_io_setup, nr, ctxp);
     if (rv == -1) {
-        SYSCALL_ERRMSG(NAME);
-        return RAFT_IOERR;
+        uvErrMsgSys(errmsg, io_setup, errno);
+        return UV__ERROR;
     }
     return 0;
 }
@@ -597,10 +602,16 @@ int uvIoDestroy(aio_context_t ctx, char *errmsg)
     int rv;
     rv = syscall(__NR_io_destroy, ctx);
     if (rv == -1) {
-        SYSCALL_ERRMSG(NAME);
-        return RAFT_IOERR;
+        uvErrMsgSys(errmsg, io_destroy, errno);
+        return UV__ERROR;
     }
     return 0;
+}
+
+void uvTryIoDestroy(aio_context_t ctx)
+{
+    uvErrMsg errmsg;
+    uvIoDestroy(ctx, errmsg);
 }
 
 int uvIoSubmit(aio_context_t ctx, long nr, struct iocb **iocbpp, char *errmsg)
@@ -608,11 +619,15 @@ int uvIoSubmit(aio_context_t ctx, long nr, struct iocb **iocbpp, char *errmsg)
     int rv;
     rv = syscall(__NR_io_submit, ctx, nr, iocbpp);
     if (rv == -1) {
-        SYSCALL_ERRMSG(NAME);
-        if (errno == EOPNOTSUPP) {
-            return RAFT_IOERR_NOTSUPP;
+        uvErrMsgSys(errmsg, io_submit, errno);
+        switch (errno) {
+            case EOPNOTSUPP:
+                return UV__NOTSUPP;
+            case EAGAIN:
+                return UV__AGAIN;
+            default:
+                return UV__ERROR;
         }
-        return RAFT_IOERR;
     }
     assert(rv == nr); /* TODO: can something else be returned? */
     return 0;
@@ -632,8 +647,8 @@ int uvIoGetevents(aio_context_t ctx,
     } while (rv == -1 && errno == EINTR);
 
     if (rv == -1) {
-        SYSCALL_ERRMSG(NAME);
-        return RAFT_IOERR;
+        uvErrMsgSys(errmsg, io_getevents, errno);
+        return UV__ERROR;
     }
     assert(rv >= min_nr);
     assert(rv <= max_nr);

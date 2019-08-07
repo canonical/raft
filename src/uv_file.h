@@ -23,10 +23,14 @@ struct uvFileCreate;
 struct uvFileWrite;
 
 /* Callback called after a create file request has been completed. */
-typedef void (*uvFileCreateCb)(struct uvFileCreate *req, int status);
+typedef void (*uvFileCreateCb)(struct uvFileCreate *req,
+                               int status,
+                               const char *errmsg);
 
 /* Callback called after a write file request has been completed. */
-typedef void (*uvFileWriteCb)(struct uvFileWrite *req, int status);
+typedef void (*uvFileWriteCb)(struct uvFileWrite *req,
+                              int status,
+                              const char *errmsg);
 
 /* Callback called after the memory associated with a file handle can be
  * released. */
@@ -98,6 +102,7 @@ struct uvFileWrite
 {
     void *data;            /* User data */
     struct uvFile *file;   /* File handle */
+    size_t len;            /* Total number of bytes to write */
     int status;            /* Request result code */
     uvErrMsg errmsg;       /* Error message (for status != 0) */
     struct uv_work_s work; /* To execute logic in the threadpool */

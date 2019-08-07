@@ -36,9 +36,6 @@ typedef char uvDir[UV__DIR_MAX_LEN];
 /* Concatenate a directory and a file. */
 void uvJoin(const uvDir dir, const uvFilename filename, uvPath path);
 
-/* Extract the directory portion of the given path. */
-void uvDirname(const uvPath path, uvDir dir);
-
 /* Check that the given directory exists, and try to create it if it doesn't. */
 int uvEnsureDir(const uvDir dir, char *errmsg);
 
@@ -73,6 +70,9 @@ int uvMakeFile(const uvDir dir,
 
 /* Delete a file in a directory. */
 int uvUnlinkFile(const uvDir dir, const uvFilename filename, char *errmsg);
+
+/* Like uvUnlinkFile, but ignoring errors. */
+void uvTryUnlinkFile(const uvDir dir, const uvFilename filename);
 
 /* Truncate a file in a directory. */
 int uvTruncateFile(const uvDir dir,
@@ -128,6 +128,8 @@ const char *osStrError(int rv);
 int uvIoSetup(unsigned n, aio_context_t *ctx, char *errmsg);
 
 int uvIoDestroy(aio_context_t ctx, char *errmsg);
+
+void uvTryIoDestroy(aio_context_t ctx);
 
 int uvIoSubmit(aio_context_t ctx, long n, struct iocb **iocbs, char *errmsg);
 

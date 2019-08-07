@@ -1,8 +1,8 @@
 #include <unistd.h>
 
 #include "assert.h"
-#include "uv_os.h"
 #include "uv.h"
+#include "uv_os.h"
 
 /* The happy path for a uvPrepare request is:
  *
@@ -134,7 +134,9 @@ static void processRequests(struct uv *uv)
 }
 
 static void maybePrepareSegment(struct uv *uv);
-static void prepareSegmentFileCreateCb(struct uvFileCreate *req, int status)
+static void prepareSegmentFileCreateCb(struct uvFileCreate *req,
+                                       int status,
+                                       const char *errmsg)
 {
     struct segment *s;
     struct uv *uv;
@@ -154,7 +156,7 @@ static void prepareSegmentFileCreateCb(struct uvFileCreate *req, int status)
         flushRequests(uv, RAFT_IOERR);
         uv->prepare_file = NULL;
         uv->errored = true;
-        uvErrorf(uv, "create segment %s: %s", s->path, uv_strerror(status));
+        uvErrorf(uv, "create segment %s: %s", s->path, errmsg);
         uvFileClose(req->file, (uvFileCloseCb)raft_free);
         raft_free(s);
         return;

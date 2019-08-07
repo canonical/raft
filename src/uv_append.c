@@ -177,7 +177,9 @@ static void flushRequests(queue *q, int status)
 }
 
 static void processRequests(struct uv *uv);
-static void writeSegmentCb(struct uvFileWrite *write, const int status)
+static void writeSegmentCb(struct uvFileWrite *write,
+                           const int status,
+                           const char *errmsg)
 {
     struct segment *s = write->data;
     struct uv *uv = s->uv;
@@ -190,13 +192,9 @@ static void writeSegmentCb(struct uvFileWrite *write, const int status)
     assert(s->buf.len >= uv->block_size);
 
     /* Check if the write was successful. */
-    if (status != (int)s->buf.len) {
-        assert(status != UV_ECANCELED); /* We never cancel write requests */
-        if (status < 0) {
-            uvErrorf(uv, "write: %s", uv_strerror(status));
-        } else {
-            uvErrorf(uv, "only %d bytes written", status);
-        }
+    if (status != 0) {
+        assert(status != UV__CANCELED); /* We never cancel write requests */
+        uvErrorf(uv, "write: %s", errmsg);
         result = RAFT_IOERR;
         uv->errored = true;
     }

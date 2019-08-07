@@ -77,6 +77,7 @@ struct create_fixture
     unsigned max_n_writes; /* Max n of writes of the file to create */
     bool invoked;
     int status;
+    uvErrMsg errmsg;
 };
 
 TEST_SETUP(create)
@@ -98,11 +99,12 @@ TEST_TEAR_DOWN(create)
     free(f);
 }
 
-static void create__cb(struct uvFileCreate *req, int status)
+static void create__cb(struct uvFileCreate *req, int status, const char *errmsg)
 {
     struct create_fixture *f = req->data;
     f->invoked = true;
     f->status = status;
+    strcpy(f->errmsg, errmsg);
 }
 
 /**
@@ -151,7 +153,7 @@ TEST_CASE(create, error, no_entry, NULL)
 
     (void)params;
 
-    CREATE__INVOKE(RAFT_IOERR_NOENT);
+    CREATE__INVOKE(UV__NOENT);
 
     return MUNIT_OK;
 }
@@ -166,7 +168,7 @@ TEST_CASE(create, error, already_exists, NULL)
 
     test_dir_write_file(f->dir, "foo", buf, sizeof buf);
 
-    CREATE__INVOKE(RAFT_IOERR);
+    CREATE__INVOKE(UV__ERROR);
 
     return MUNIT_OK;
 }
@@ -181,7 +183,7 @@ TEST_CASE(create, error, no_space, NULL)
     f->size = 4096 * 32768;
 
     CREATE__INVOKE(0);
-    CREATE__WAIT_CB(RAFT_IOERR);
+    CREATE__WAIT_CB(UV__ERROR);
 
     return MUNIT_OK;
 }
@@ -196,7 +198,7 @@ TEST_CASE(create, error, no_resources, NULL)
 
     test_aio_fill(&ctx, 0);
 
-    CREATE__INVOKE(RAFT_IOERR);
+    CREATE__INVOKE(UV__ERROR);
 
     test_aio_destroy(ctx);
 
@@ -213,7 +215,7 @@ TEST_CASE(create, error, cancel, NULL)
     CREATE__INVOKE(0);
     CREATE__CLOSE;
 
-    CREATE__WAIT_CB(RAFT_CANCELED);
+    CREATE__WAIT_CB(UV__CANCELED);
 
     munit_assert_false(test_dir_has_file(f->dir, "foo"));
 
@@ -238,8 +240,9 @@ struct write_fixture
     uv_buf_t bufs[2];
     unsigned n_bufs;
     size_t offset;
-    int invoked; /* Number of times the write callback was invoked */
-    int status;  /* Result passed to the last callback invokation */
+    int invoked;     /* Number of times the write callback was invoked */
+    int status;      /* Result passed to the last callback invokation */
+    uvErrMsg errmsg; /* Error message passed to the last cb invokation */
 };
 
 TEST_SETUP(write)
@@ -279,12 +282,13 @@ TEST_TEAR_DOWN(write)
     free(f);
 }
 
-static void write_cb(struct uvFileWrite *req, int status)
+static void write_cb(struct uvFileWrite *req, int status, const char *errmsg)
 {
     struct write_fixture *f = req->data;
 
     f->invoked++;
     f->status = status;
+    strcpy(f->errmsg, errmsg);
 }
 
 /* Invoke @uvFileWrite and assert it returns the given code. */
@@ -316,10 +320,10 @@ static void write_cb(struct uvFileWrite *req, int status)
 
 /* Submit a write file request, wait for its completion and assert that no error
  * occurs. */
-#define write__complete                               \
-    {                                                 \
-        write__invoke(0);                             \
-        write__wait_cb(1, f->n_bufs * f->block_size); \
+#define write__complete       \
+    {                         \
+        write__invoke(0);     \
+        write__wait_cb(1, 0); \
     }
 
 /* Assert that the content of the test file has the given number of blocks, each
@@ -356,7 +360,7 @@ TEST_CASE(write, success, one, dir_all_params)
     (void)params;
 
     write__invoke(0);
-    write__wait_cb(1, f->block_size);
+    write__wait_cb(1, 0);
 
     return MUNIT_OK;
 }
@@ -446,10 +450,11 @@ TEST_CASE(write, success, concurrent, dir_all_params)
 
     write__invoke(0);
 
-    rv = uvFileWrite(&f->file, &req, &f->bufs[1], 1, f->block_size, write_cb, errmsg);
+    rv = uvFileWrite(&f->file, &req, &f->bufs[1], 1, f->block_size, write_cb,
+                     errmsg);
     munit_assert_int(rv, ==, 0);
 
-    write__wait_cb(2, f->block_size);
+    write__wait_cb(2, 0);
 
     write__assert_content(2);
 
@@ -475,7 +480,7 @@ TEST_CASE(write, success, concurrent_twice, dir_all_params)
     rv = uvFileWrite(&f->file, &req, &f->bufs[1], 1, 0, write_cb, errmsg);
     munit_assert_int(rv, ==, 0);
 
-    write__wait_cb(2, f->block_size);
+    write__wait_cb(2, 0);
 
     write__assert_content(1);
 
@@ -494,7 +499,7 @@ TEST_CASE(write, error, no_resources, dir_no_aio_params)
     test_aio_fill(&ctx, 0);
 
     write__invoke(0);
-    write__wait_cb(1, RAFT_IOERR);
+    write__wait_cb(1, UV__ERROR);
 
     test_aio_destroy(ctx);
 
@@ -512,7 +517,7 @@ TEST_CASE(write, error, cancel, dir_all_params)
 
     write__close;
 
-    write__wait_cb(1, RAFT_CANCELED);
+    write__wait_cb(1, UV__CANCELED);
 
     return MUNIT_OK;
 }

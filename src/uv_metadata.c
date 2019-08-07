@@ -56,7 +56,7 @@ static int loadFile(struct uv *uv,
     /* Open the metadata file, if it exists. */
     rv = uvOpenFile(uv->dir, filename, O_RDONLY, &fd, errmsg);
     if (rv != 0) {
-        if (rv != RAFT_IOERR_NOENT) {
+        if (rv != UV__NOENT) {
             uvErrorf(uv, "open %s: %s", filename, osStrError(rv));
             return RAFT_IOERR;
         }
@@ -68,7 +68,7 @@ static int loadFile(struct uv *uv,
     /* Read the content of the metadata file. */
     rv = uvReadFully(fd, buf, sizeof buf, errmsg);
     if (rv != 0) {
-        if (rv != RAFT_IOERR_NODATA) {
+        if (rv != UV__NODATA) {
             uvErrorf(uv, "read %s: %s", filename, osStrError(rv));
             return RAFT_IOERR;
         }

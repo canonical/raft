@@ -6,6 +6,7 @@
 #include "../lib/runner.h"
 
 #include "../../src/uv_os.h"
+#include "../../src/uv_error.h"
 
 TEST_MODULE(uv_os);
 
@@ -100,18 +101,6 @@ TEST_CASE(join, NULL)
     return MUNIT_OK;
 }
 
-/* Extract the directory name from a full path. */
-TEST_CASE(dirname, NULL)
-{
-    const uvPath path = "/foo/bar";
-    uvDir dir;
-    (void)data;
-    (void)params;
-    uvDirname(path, dir);
-    munit_assert_string_equal(dir, "/foo");
-    return MUNIT_OK;
-}
-
 /******************************************************************************
  *
  * uvEnsureDir
@@ -150,7 +139,7 @@ TEST_CASE(ensure_dir, error, mkdir, NULL)
     struct fixture *f = data;
     (void)params;
     strcpy(f->tmpdir, "/foobarbazegg");
-    ENSURE_DIR_ERROR(RAFT_IOERR);
+    ENSURE_DIR_ERROR(UV__ERROR);
     ASSERT_ERRMSG("mkdir: Permission denied");
     return MUNIT_OK;
 }
@@ -161,7 +150,7 @@ TEST_CASE(ensure_dir, error, stat, NULL)
     struct fixture *f = data;
     (void)params;
     strcpy(f->tmpdir, "/proc/1/root");
-    ENSURE_DIR_ERROR(RAFT_IOERR);
+    ENSURE_DIR_ERROR(UV__ERROR);
     ASSERT_ERRMSG("stat: Permission denied");
     return MUNIT_OK;
 }
@@ -172,7 +161,7 @@ TEST_CASE(ensure_dir, error, not_a_dir, NULL)
     struct fixture *f = data;
     (void)params;
     strcpy(f->tmpdir, "/proc/1/cmdline");
-    ENSURE_DIR_ERROR(RAFT_IOERR);
+    ENSURE_DIR_ERROR(UV__ERROR);
     ASSERT_ERRMSG("not a directory");
     return MUNIT_OK;
 }
@@ -195,7 +184,7 @@ TEST_CASE(sync_dir, error, open, NULL)
     struct fixture *f = data;
     (void)params;
     strcpy(f->tmpdir, "/foobarbazegg");
-    SYNC_DIR_ERROR(RAFT_IOERR);
+    SYNC_DIR_ERROR(UV__ERROR);
     ASSERT_ERRMSG("open: No such file or directory");
     return MUNIT_OK;
 }
@@ -218,7 +207,7 @@ TEST_CASE(open_file, error, open, NULL)
     struct fixture *f = data;
     int fd;
     (void)params;
-    OPEN_FILE_ERROR(RAFT_IOERR_NOENT, "foo", O_RDONLY, &fd);
+    OPEN_FILE_ERROR(UV__NOENT, "foo", O_RDONLY, &fd);
     ASSERT_ERRMSG("open: No such file or directory");
     return MUNIT_OK;
 }
@@ -286,7 +275,8 @@ TEST_CASE(probe, error, no_access, NULL)
     struct fixture *f = data;
     (void)params;
     test_dir_unexecutable(f->dir);
-    PROBE_IO_CAPABILITIES_ERROR(RAFT_IOERR);
+    PROBE_IO_CAPABILITIES_ERROR(UV__ERROR);
+    ASSERT_ERRMSG("mkstemp: Permission denied");
     return MUNIT_OK;
 }
 
@@ -296,7 +286,8 @@ TEST_CASE(probe, error, no_space, NULL)
     struct fixture *f = data;
     (void)params;
     test_dir_fill(f->dir, 0);
-    PROBE_IO_CAPABILITIES_ERROR(RAFT_IOERR);
+    PROBE_IO_CAPABILITIES_ERROR(UV__ERROR);
+    ASSERT_ERRMSG("posix_fallocate: No space left on device");
     return MUNIT_OK;
 }
 
@@ -309,7 +300,8 @@ TEST_CASE(probe, error, no_resources, dir_btrfs_params)
     aio_context_t ctx = 0;
     (void)params;
     test_aio_fill(&ctx, 0);
-    PROBE_IO_CAPABILITIES_ERROR(RAFT_IOERR);
+    PROBE_IO_CAPABILITIES_ERROR(UV__ERROR);
+    ASSERT_ERRMSG("io_setup: Resource temporarily unavailable");
     test_aio_destroy(ctx);
     return MUNIT_OK;
 }
