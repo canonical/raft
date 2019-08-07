@@ -218,7 +218,7 @@ static void writeAfterWorkCb(uv_work_t *work, int status)
 
     /* If we were closed, let's mark the request as canceled, regardless of the
      * actual outcome. */
-    if (req->file->closing) {
+    if (f->closing) {
         uvErrMsgPrintf(req->errmsg, "canceled");
         req->status = UV__CANCELED;
     }
