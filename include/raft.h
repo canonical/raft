@@ -391,7 +391,6 @@ struct raft_logger
      */
     void (*emit)(struct raft_logger *l,
                  int level,
-                 unsigned server_id,
                  raft_time time,
                  const char *format,
                  ...);

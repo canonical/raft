@@ -87,8 +87,8 @@ struct uv
 };
 
 /* Emit a log message with a certain level. */
-#define uvEmitf(UV, LEVEL, FORMAT, ...)                                       \
-    UV->logger->emit(UV->logger, LEVEL, UV->id, UV->io->time(UV->io), FORMAT, \
+#define uvEmitf(UV, LEVEL, FORMAT, ...)                               \
+    UV->logger->emit(UV->logger, LEVEL, UV->io->time(UV->io), FORMAT, \
                      ##__VA_ARGS__);
 #define uvDebugf(UV, F, ...) uvEmitf(UV, RAFT_DEBUG, F, ##__VA_ARGS__);
 #define uvInfof(UV, F, ...) uvEmitf(UV, RAFT_DEBUG, F, ##__VA_ARGS__);

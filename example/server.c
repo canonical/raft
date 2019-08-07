@@ -105,8 +105,8 @@ struct server
 };
 
 /* Convenience to emit a message. */
-#define emitf(S, LEVEL, FORMAT, ...)                                     \
-    S->logger.emit(&S->logger, LEVEL, S->id, S->io.time(&S->io), FORMAT, \
+#define emitf(S, LEVEL, FORMAT, ...)                              \
+    S->logger.emit(&S->logger, LEVEL, S->io.time(&S->io), FORMAT, \
                    ##__VA_ARGS__);
 
 /* Final callback in the shutdown sequence, invoked after the timer handle has

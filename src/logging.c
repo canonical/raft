@@ -5,34 +5,7 @@
 
 #define EMIT_BUF_LEN 1024
 
-static void defaultEmit(struct raft_logger *l,
-                        int level,
-                        unsigned server_id,
-                        raft_time time,
-                        const char *format,
-                        ...)
-{
-    va_list args;
-
-    if (level < l->level) {
-        return;
-    }
-
-    va_start(args, format);
-    emitToStream(stderr, server_id, time, level, format, args);
-    va_end(args);
-}
-
-int raft_default_logger_init(struct raft_logger *l)
-{
-    l->impl = NULL;
-    l->level = RAFT_INFO;
-    l->emit = defaultEmit;
-    return 0;
-}
-
-void emitToStream(FILE *stream,
-                  unsigned server_id,
+static void emitToStream(FILE *stream,
                   raft_time time,
                   int level,
                   const char *format,
@@ -76,12 +49,34 @@ void emitToStream(FILE *stream,
 
     cursor = buf + strlen(buf);
 
-    sprintf(cursor, "%d -> ", server_id);
-    cursor = buf + strlen(buf);
-
     /* Then render the message, possibly truncating it. */
     n = EMIT_BUF_LEN - strlen(buf) - 1;
     vsnprintf(cursor, n, format, args);
 
     fprintf(stream, "%s\n", buf);
+}
+
+static void defaultEmit(struct raft_logger *l,
+                        int level,
+                        raft_time time,
+                        const char *format,
+                        ...)
+{
+    va_list args;
+
+    if (level < l->level) {
+        return;
+    }
+
+    va_start(args, format);
+    emitToStream(stderr, time, level, format, args);
+    va_end(args);
+}
+
+int raft_default_logger_init(struct raft_logger *l)
+{
+    l->impl = NULL;
+    l->level = RAFT_INFO;
+    l->emit = defaultEmit;
+    return 0;
 }
