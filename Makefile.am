@@ -46,8 +46,7 @@ libtest_la_LDFLAGS =
 libtest_la_SOURCES = \
   test/lib/fault.c \
   test/lib/heap.c \
-  test/lib/munit.c \
-  test/lib/tracer.c
+  test/lib/munit.c
 
 test_CFLAGS = $(AM_CFLAGS) -DRAFT_TEST
 

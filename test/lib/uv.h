@@ -14,14 +14,12 @@
 #include "loop.h"
 #include "munit.h"
 #include "tcp.h"
-#include "tracer.h"
 
 #define FIXTURE_UV                      \
     FIXTURE_HEAP;                       \
     FIXTURE_TCP;                        \
     FIXTURE_LOOP;                       \
     FIXTURE_DIR;                        \
-    FIXTURE_TRACER;                     \
     struct raft_logger logger;          \
     struct raft_uv_transport transport; \
     struct raft_io io;                  \
@@ -36,7 +34,6 @@
         TCP_SETUP;                                                    \
         SETUP_LOOP;                                                   \
         DIR_SETUP;                                                    \
-        TRACER_SETUP;                                                 \
         rv__ = raft_uv_tcp_init(&f->transport, &f->loop);             \
         munit_assert_int(rv__, ==, 0);                                \
         rv__ = raft_uv_init(&f->io, &f->loop, f->dir, &f->transport); \
@@ -57,7 +54,6 @@
     LOOP_STOP;                        \
     raft_uv_close(&f->io);            \
     raft_uv_tcp_close(&f->transport); \
-    TRACER_TEAR_DOWN;                 \
     DIR_TEAR_DOWN;                    \
     TEAR_DOWN_LOOP;                   \
     TCP_TEAR_DOWN;                    \
