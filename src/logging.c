@@ -1,7 +1,7 @@
 #include <string.h>
 #include <time.h>
 
-#include "logging.h"
+#include "../include/raft.h"
 
 #define EMIT_BUF_LEN 1024
 
@@ -51,7 +51,7 @@ static void emitToStream(FILE *stream,
 
     cursor = buf + strlen(buf);
 
-    sprintf(cursor, "%s:%d -> ", file, line);
+    sprintf(cursor, "%15s:%03d - ", file, line);
     cursor = buf + strlen(buf);
 
     /* Then render the message, possibly truncating it. */
@@ -76,13 +76,13 @@ static void defaultEmit(struct raft_logger *l,
     }
 
     va_start(args, format);
-    emitToStream(stderr, time, level, file, line, format, args);
+    emitToStream(l->impl, time, level, file, line, format, args);
     va_end(args);
 }
 
-int raft_default_logger_init(struct raft_logger *l)
+int raft_stream_logger_init(struct raft_logger *l, FILE *stream)
 {
-    l->impl = NULL;
+    l->impl = stream;
     l->level = RAFT_INFO;
     l->emit = defaultEmit;
     return 0;

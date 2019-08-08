@@ -190,7 +190,7 @@ static int serverInit(struct server *s, const char *dir, unsigned id)
     }
 
     /* Initialize the default logger. */
-    raft_default_logger_init(&s->logger);
+    raft_stream_logger_init(&s->logger, stdout);
 
     /* Save the server ID. */
     s->id = id;

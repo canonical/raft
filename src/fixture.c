@@ -940,7 +940,7 @@ static int serverInit(struct raft_fixture *f, unsigned i, struct raft_fsm *fsm)
     }
     raft_set_election_timeout(&s->raft, ELECTION_TIMEOUT);
     raft_set_heartbeat_timeout(&s->raft, HEARTBEAT_TIMEOUT);
-    rv = raft_default_logger_init(&s->logger);
+    rv = raft_stream_logger_init(&s->logger, stderr);
     assert(rv == 0);
     return 0;
 }

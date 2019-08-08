@@ -23,48 +23,48 @@
     struct raft_logger logger;          \
     struct raft_uv_transport transport; \
     struct raft_io io;                  \
-    struct uv *uv;                      \
-    bool closed;
+    struct uv *uv
 
-#define SETUP_UV                                                      \
-    (void)user_data;                                                  \
-    {                                                                 \
-        int rv__;                                                     \
-        HEAP_SETUP;                                                   \
-        TCP_SETUP;                                                    \
-        SETUP_LOOP;                                                   \
-        DIR_SETUP;                                                    \
-        rv__ = raft_uv_tcp_init(&f->transport, &f->loop);             \
-        munit_assert_int(rv__, ==, 0);                                \
-        rv__ = raft_uv_init(&f->io, &f->loop, f->dir, &f->transport); \
-        munit_assert_int(rv__, ==, 0);                                \
-        f->io.data = f;                                               \
-        rv__ = raft_default_logger_init(&f->logger);                  \
-        munit_assert_int(rv__, ==, 0);                                \
-        rv__ = f->io.init(&f->io, &f->logger, 1, "127.0.0.1:9000");   \
-        munit_assert_int(rv__, ==, 0);                                \
-        f->uv = f->io.impl;                                           \
-        f->closed = false;                                            \
+#define SETUP_UV                                                     \
+    {                                                                \
+        int rv_;                                                     \
+        SETUP_HEAP;                                                  \
+        SETUP_TCP;                                                   \
+        SETUP_LOOP;                                                  \
+        SETUP_DIR;                                                   \
+        rv_ = raft_stream_logger_init(&f->logger, stderr);           \
+        munit_assert_int(rv_, ==, 0);                                \
+        rv_ = raft_uv_tcp_init(&f->transport, &f->loop);             \
+        munit_assert_int(rv_, ==, 0);                                \
+        rv_ = raft_uv_init(&f->io, &f->loop, f->dir, &f->transport); \
+        munit_assert_int(rv_, ==, 0);                                \
+        f->io.data = f;                                              \
+        f->uv = f->io.impl;                                          \
     }
 
 #define TEAR_DOWN_UV                  \
-    if (!f->closed) {                 \
-        UV_CLOSE;                     \
-    }                                 \
     LOOP_STOP;                        \
     raft_uv_close(&f->io);            \
     raft_uv_tcp_close(&f->transport); \
-    DIR_TEAR_DOWN;                    \
+    TEAR_DOWN_DIR;                    \
     TEAR_DOWN_LOOP;                   \
-    TCP_TEAR_DOWN;                    \
-    HEAP_TEAR_DOWN;
+    TEAR_DOWN_TCP;                    \
+    TEAR_DOWN_HEAP;
 
+/* Run the raft_io->init() method. */
+#define UV_INIT                                                    \
+    {                                                              \
+        int rv_;                                                   \
+        rv_ = f->io.init(&f->io, &f->logger, 1, "127.0.0.1:9000"); \
+        munit_assert_int(rv_, ==, 0);                              \
+    }
+
+/* Run the raft_io->close() method. */
 #define UV_CLOSE                         \
     {                                    \
         int rv_;                         \
         rv_ = f->io.close(&f->io, NULL); \
         munit_assert_int(rv_, ==, 0);    \
-        f->closed = true;                \
     }
 
 /* Create a valid closed segment file with FIRST_INDEX and N batches each

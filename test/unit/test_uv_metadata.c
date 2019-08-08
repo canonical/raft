@@ -1,7 +1,5 @@
-#include "../lib/dir.h"
-#include "../lib/heap.h"
-#include "../lib/loop.h"
 #include "../lib/runner.h"
+#include "../lib/uv.h"
 
 #include "../../include/raft/uv.h"
 
@@ -17,39 +15,21 @@ TEST_MODULE(uv_metadata);
 
 struct fixture
 {
-    FIXTURE_HEAP;
-    FIXTURE_LOOP;
-    char *dir;
-    struct raft_logger logger;
-    struct raft_uv_transport transport;
-    struct raft_io io;
+    FIXTURE_UV;
 };
 
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    int rv;
     (void)user_data;
-    SETUP_HEAP;
-    SETUP_LOOP;
-    f->dir = test_dir_setup(params);
-    raft_default_logger_init(&f->logger);
-    rv = raft_uv_tcp_init(&f->transport, &f->loop);
-    munit_assert_int(rv, ==, 0);
-    rv = raft_uv_init(&f->io, &f->loop, f->dir, &f->transport);
-    munit_assert_int(rv, ==, 0);
+    SETUP_UV;
     return f;
 }
 
 static void tear_down(void *data)
 {
     struct fixture *f = data;
-    LOOP_STOP;
-    raft_uv_close(&f->io);
-    raft_uv_tcp_close(&f->transport);
-    test_dir_tear_down(f->dir);
-    TEAR_DOWN_LOOP;
-    TEAR_DOWN_HEAP;
+    TEAR_DOWN_UV;
     free(f);
 }
 
@@ -74,13 +54,10 @@ static void tear_down(void *data)
         test_dir_write_file(f->dir, filename, buf, sizeof buf); \
     }
 
-/* Invoke io->init() and assert that it returns the given value */
-#define INIT(RV)                                      \
-    {                                                 \
-        int rv2;                                      \
-        rv2 = f->io.init(&f->io, &f->logger, 1, "1"); \
-        munit_assert_int(rv2, ==, RV);                \
-    }
+/* Invoke io->init() */
+#define INIT_RV f->io.init(&f->io, &f->logger, 1, "1")
+#define INIT munit_assert_int(INIT_RV, ==, 0)
+#define INIT_ERROR(RV) munit_assert_int(INIT_RV, ==, RV)
 
 /* Invoke io->close() */
 #define CLOSE                            \
@@ -127,7 +104,7 @@ TEST_CASE(load, empty_dir, NULL)
 {
     struct fixture *f = data;
     (void)params;
-    INIT(0);
+    INIT;
     ASSERT_CONTENT(1 /* n */, 1 /* version */, 0 /* term */, 0 /* voted for */);
     ASSERT_CONTENT(2 /* n */, 2 /* version */, 0 /* term */, 0 /* voted for */);
     CLOSE;
@@ -145,7 +122,7 @@ TEST_CASE(load, only_1, NULL)
           1, /* Version                              */
           1, /* Term                                 */
           0 /* Voted for                            */);
-    INIT(0);
+    INIT;
     ASSERT_CONTENT(1 /* n */, 3 /* version */, 1 /* term */, 0 /* voted for */);
     ASSERT_CONTENT(2 /* n */, 2 /* version */, 1 /* term */, 0 /* voted for */);
     CLOSE;
@@ -167,7 +144,7 @@ TEST_CASE(load, 1, NULL)
           2, /* Version                              */
           2, /* Term                                 */
           0 /* Voted for                            */);
-    INIT(0);
+    INIT;
     ASSERT_CONTENT(1 /* n */, 5 /* version */, 3 /* term */, 0 /* voted for */);
     ASSERT_CONTENT(2 /* n */, 4 /* version */, 3 /* term */, 0 /* voted for */);
     CLOSE;
@@ -189,7 +166,7 @@ TEST_CASE(load, 2, NULL)
           2, /* Version                              */
           2, /* Term                                 */
           0 /* Voted for                            */);
-    INIT(0);
+    INIT;
     ASSERT_CONTENT(1 /* n */, 3 /* version */, 2 /* term */, 0 /* voted for */);
     ASSERT_CONTENT(2 /* n */, 4 /* version */, 2 /* term */, 0 /* voted for */);
     CLOSE;
@@ -205,7 +182,7 @@ TEST_CASE(load, short_file, NULL)
     uint8_t buf[16];
     (void)params;
     test_dir_write_file(f->dir, "metadata1", buf, sizeof buf);
-    INIT(0);
+    INIT;
     ASSERT_CONTENT(1 /* n */, 1 /* version */, 0 /* term */, 0 /* voted for */);
     ASSERT_CONTENT(2 /* n */, 2 /* version */, 0 /* term */, 0 /* voted for */);
     CLOSE;
@@ -220,7 +197,7 @@ TEST_CASE(load, error, no_access, NULL)
     struct fixture *f = data;
     (void)params;
     test_dir_unexecutable(f->dir);
-    INIT(RAFT_IOERR);
+    INIT_ERROR(RAFT_IOERR);
     return MUNIT_OK;
 }
 
@@ -234,7 +211,7 @@ TEST_CASE(load, error, bad_format, NULL)
           1, /* Version                              */
           1, /* Term                                 */
           0 /* Voted for                            */);
-    INIT(RAFT_MALFORMED);
+    INIT_ERROR(RAFT_MALFORMED);
     return MUNIT_OK;
 }
 
@@ -248,7 +225,7 @@ TEST_CASE(load, error, bad_version, NULL)
           0, /* Version                              */
           1, /* Term                                 */
           0 /* Voted for                            */);
-    INIT(RAFT_CORRUPT);
+    INIT_ERROR(RAFT_CORRUPT);
     return MUNIT_OK;
 }
 
@@ -258,7 +235,7 @@ TEST_CASE(load, error, no_space, NULL)
     struct fixture *f = data;
     (void)params;
     test_dir_fill(f->dir, 4);
-    INIT(RAFT_IOERR);
+    INIT_ERROR(RAFT_IOERR);
     return MUNIT_OK;
 }
 
@@ -278,6 +255,6 @@ TEST_CASE(load, same_version, NULL)
           2, /* Version                              */
           2, /* Term                                 */
           0 /* Voted for                            */);
-    INIT(RAFT_CORRUPT);
+    INIT_ERROR(RAFT_CORRUPT);
     return MUNIT_OK;
 }

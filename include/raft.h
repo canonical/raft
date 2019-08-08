@@ -4,6 +4,7 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdio.h>
 
 #define RAFT_API __attribute__((visibility("default")))
 
@@ -52,7 +53,7 @@ enum {
     X(RAFT_TOOBIG, "data is too big")                                   \
     X(RAFT_NOCONNECTION, "no connection to remote server available")    \
     X(RAFT_BUSY, "operation can't be performed at this time")           \
-    X(RAFT_IOERR, "I/O error")                                          \
+    X(RAFT_IOERR, "I/O error")
 
 /**
  * Return the error message describing the given error code.
@@ -392,8 +393,8 @@ struct raft_logger
     void (*emit)(struct raft_logger *l,
                  int level,
                  raft_time time,
-		 const char *file,
-		 int line,
+                 const char *file,
+                 int line,
                  const char *format,
                  ...);
 };
@@ -442,9 +443,10 @@ void raft_tracer_walk(const struct raft_tracer *t,
                       void *data);
 
 /**
- * Default implementation of the logger interface, emitting messages to stdout.
+ * Implementation of the logger interface, emitting messages to the given
+ * stream.
  */
-RAFT_API int raft_default_logger_init(struct raft_logger *l);
+RAFT_API int raft_stream_logger_init(struct raft_logger *l, FILE *stream);
 
 /**
  * Logging levels.
