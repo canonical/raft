@@ -41,7 +41,7 @@ static int uvInit(struct raft_io *io,
     /* Ensure that the data directory exists and is accessible */
     rv = uvEnsureDir(uv->dir, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "ensure data dir %s: %s", uv->dir, osStrError(rv));
+        uvErrorf(uv, "ensure data dir %s: %s", uv->dir, errmsg);
         rv = RAFT_IOERR;
         goto err;
     }
@@ -51,6 +51,8 @@ static int uvInit(struct raft_io *io,
     if (rv != 0) {
         goto err;
     }
+    uvDebugf(uv, "metadata: version %lld, term %lld, voted for %d",
+             uv->metadata.version, uv->metadata.term, uv->metadata.voted_for);
 
     /* Detect the I/O capabilities of the underlying file system. */
     rv = uvProbeIoCapabilities(uv->dir, &direct_io, &uv->async_io, errmsg);
@@ -293,6 +295,10 @@ static int uvLoad(struct raft_io *io,
     rv = loadSnapshotAndEntries(uv, snapshot, start_index, entries, n_entries);
     if (rv != 0) {
         return rv;
+    }
+    uvDebugf(uv, "start index %lld, %ld entries", *start_index, *n_entries);
+    if (*snapshot == NULL) {
+        uvDebugf(uv, "no snapshot");
     }
 
     last_index = *start_index + *n_entries - 1;

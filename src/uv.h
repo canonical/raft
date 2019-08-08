@@ -8,9 +8,6 @@
 #include "uv_file.h"
 #include "uv_os.h"
 
-/* Current disk format version. */
-#define UV__DISK_FORMAT 1
-
 /* 8 Megabytes */
 #define UV__MAX_SEGMENT_SIZE (8 * 1024 * 1024)
 
@@ -20,6 +17,14 @@
 
 /* Template string for open segment filenames: incrementing counter. */
 #define UV__OPEN_TEMPLATE "open-%llu"
+
+/* Template string for snapshot filenames: snapshot term, snapshot index,
+ * creation timestamp (milliseconds since epoch). */
+#define UV__SNAPSHOT_TEMPLATE "snapshot-%llu-%llu-%llu"
+
+/* Template string for snapshot metadata filenames: snapshot term,  snapshot
+ * index, creation timestamp (milliseconds since epoch). */
+#define UV__SNAPSHOT_META_TEMPLATE UV__SNAPSHOT_TEMPLATE ".meta"
 
 /* State codes. */
 enum { UV__ACTIVE = 1, UV__CLOSED };

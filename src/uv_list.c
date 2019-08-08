@@ -52,6 +52,9 @@ int uvList(struct uv *uv,
          * know that this is not a segment filename, just free it and skip to
          * the next one. */
         if (rv != 0 || shouldIgnore(filename)) {
+            if (rv == 0) {
+                uvDebugf(uv, "ignore %s", filename);
+            }
             goto next;
         }
 
@@ -60,6 +63,9 @@ int uvList(struct uv *uv,
         rv = uvSnapshotInfoAppendIfMatch(uv, filename, snapshots, n_snapshots,
                                          &appended);
         if (appended || rv != 0) {
+            if (rv == 0) {
+                uvDebugf(uv, "snapshot %s", filename);
+            }
             goto next;
         }
 
@@ -67,8 +73,13 @@ int uvList(struct uv *uv,
         rv = uvSegmentInfoAppendIfMatch(entry->d_name, segments, n_segments,
                                         &appended);
         if (appended || rv != 0) {
+            if (rv == 0) {
+                uvDebugf(uv, "segment %s", filename);
+            }
             goto next;
         }
+
+	uvDebugf(uv, "ignore %s", filename);
 
     next:
         free(dirents[i]);

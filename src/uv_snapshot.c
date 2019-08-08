@@ -7,15 +7,8 @@
 #include "configuration.h"
 #include "logging.h"
 #include "uv.h"
+#include "uv_encoding.h"
 #include "uv_os.h"
-
-/* Template string for snapshot filenames: snapshot term, snapshot index,
- * creation timestamp (milliseconds since epoch). */
-#define TEMPLATE "snapshot-%llu-%llu-%llu"
-
-/* Template string for snapshot metadata filenames: snapshot term,  snapshot
- * index, creation timestamp (milliseconds since epoch). */
-#define META_TEMPLATE TEMPLATE ".meta"
 
 /* Arbitrary maximum configuration size. Should be practically be enough */
 #define META_MAX_CONFIGURATION_SIZE 1024 * 1024
@@ -34,8 +27,8 @@ static bool infoMatch(const char *filename, struct uvSnapshotInfo *info)
         return false;
     }
 
-    matched = sscanf(filename, META_TEMPLATE "%n", &info->term, &info->index,
-                     &info->timestamp, &consumed);
+    matched = sscanf(filename, UV__SNAPSHOT_META_TEMPLATE "%n", &info->term,
+                     &info->index, &info->timestamp, &consumed);
     if (matched != 3 || consumed != filename_len) {
         return false;
     }
@@ -315,7 +308,7 @@ struct put
     {
         unsigned long long timestamp;
         uint64_t header[4];         /* Format, CRC, configuration index/len */
-        struct raft_buffer bufs[2]; /* Premable and configuration */
+        struct raft_buffer bufs[2]; /* Preamble and configuration */
     } meta;
     int status;
     queue queue;
@@ -378,7 +371,7 @@ static int removeOldSegmentsAndSnapshots(struct uv *uv, raft_index last_index)
             continue;
         }
         if (segment->end_index < last_index) {
-	  rv = uvUnlinkFile(uv->dir, segment->filename, errmsg);
+            rv = uvUnlinkFile(uv->dir, segment->filename, errmsg);
             if (rv != 0) {
                 uvErrorf(uv, "unlink %s: %s", segment->filename,
                          osStrError(rv));
@@ -407,8 +400,8 @@ static void putWorkCb(uv_work_t *work)
     uvFilename filename;
     int rv;
 
-    sprintf(filename, META_TEMPLATE, r->snapshot->term, r->snapshot->index,
-            r->meta.timestamp);
+    sprintf(filename, UV__SNAPSHOT_META_TEMPLATE, r->snapshot->term,
+            r->snapshot->index, r->meta.timestamp);
 
     rv = uvMakeFile(uv->dir, filename, r->meta.bufs, 2, errmsg);
     if (rv != 0) {
@@ -417,8 +410,8 @@ static void putWorkCb(uv_work_t *work)
         return;
     }
 
-    sprintf(filename, TEMPLATE, r->snapshot->term, r->snapshot->index,
-            r->meta.timestamp);
+    sprintf(filename, UV__SNAPSHOT_TEMPLATE, r->snapshot->term,
+            r->snapshot->index, r->meta.timestamp);
 
     rv = uvMakeFile(uv->dir, filename, r->snapshot->bufs, r->snapshot->n_bufs,
                     errmsg);

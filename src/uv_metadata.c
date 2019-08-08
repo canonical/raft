@@ -1,6 +1,7 @@
 #include "assert.h"
 #include "byte.h"
 #include "uv.h"
+#include "uv_encoding.h"
 
 /* Format, version, term, vote */
 #define SIZE (8 * 4)
@@ -53,6 +54,8 @@ static int loadFile(struct uv *uv,
     /* Render the metadata path */
     filenameOf(n, filename);
 
+    memset(metadata, 0, sizeof *metadata);
+
     /* Open the metadata file, if it exists. */
     rv = uvOpenFile(uv->dir, filename, O_RDONLY, &fd, errmsg);
     if (rv != 0) {
@@ -61,7 +64,6 @@ static int loadFile(struct uv *uv,
             return RAFT_IOERR;
         }
         /* The file does not exist, just return. */
-        metadata->version = 0;
         return 0;
     }
 
@@ -75,7 +77,6 @@ static int loadFile(struct uv *uv,
         /* Assume that the server crashed while writing this metadata file, and
          * pretend it has not been written at all. */
         uvWarnf(uv, "read %s: ignore incomplete data", filename);
-        metadata->version = 0;
         close(fd);
         return 0;
     };
@@ -181,8 +182,6 @@ int uvMetadataLoad(struct uv *uv, struct uvMetadata *metadata)
     if (rv != 0) {
         return rv;
     }
-
-    logMetadata(N, metadata);
 
     return 0;
 }

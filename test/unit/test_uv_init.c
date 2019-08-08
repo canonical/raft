@@ -22,7 +22,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
-    SETUP_UV;
+    SETUP_UV_NO_INIT;
     return f;
 }
 
@@ -55,17 +55,11 @@ static void tear_down(void *data)
     }
 
 /* Invoke io->init() */
-#define INIT_RV f->io.init(&f->io, &f->logger, 1, "1")
-#define INIT munit_assert_int(INIT_RV, ==, 0)
-#define INIT_ERROR(RV) munit_assert_int(INIT_RV, ==, RV)
+#define INIT UV_INIT
+#define INIT_ERROR(RV) UV_INIT_ERROR(RV)
 
 /* Invoke io->close() */
-#define CLOSE                            \
-    {                                    \
-        int rv2;                         \
-        rv2 = f->io.close(&f->io, NULL); \
-        munit_assert_int(rv2, ==, 0);    \
-    }
+#define CLOSE UV_CLOSE
 
 /******************************************************************************
  *
@@ -111,6 +105,25 @@ TEST_CASE(ensure_dir, error, cant_create, NULL)
     return MUNIT_OK;
 }
 
+/* The given path is not a directory. */
+TEST_CASE(ensure_dir, error, not_a_dir, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+    strcpy(f->uv->dir, "/dev/null");
+    INIT_ERROR(RAFT_IOERR);
+    return MUNIT_OK;
+}
+
+/* Data directory not accessible */
+TEST_CASE(ensure_dir, error, no_access, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+    strcpy(f->uv->dir, "/root/foo");
+    INIT_ERROR(RAFT_IOERR);
+    return MUNIT_OK;
+}
 
 /******************************************************************************
  *

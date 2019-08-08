@@ -46,7 +46,7 @@ int uvEnsureDir(const uvDir dir, char *errmsg)
             return UV__ERROR;
         }
     } else if ((sb.st_mode & S_IFMT) != S_IFDIR) {
-        uvErrMsgPrintf(errmsg, "not a directory");
+        uvErrMsgPrintf(errmsg, "%s", strerror(ENOTDIR));
         return UV__ERROR;
     }
 

@@ -160,9 +160,9 @@ TEST_CASE(ensure_dir, error, not_a_dir, NULL)
 {
     struct fixture *f = data;
     (void)params;
-    strcpy(f->tmpdir, "/proc/1/cmdline");
+    strcpy(f->tmpdir, "/dev/null");
     ENSURE_DIR_ERROR(UV__ERROR);
-    ASSERT_ERRMSG("not a directory");
+    ASSERT_ERRMSG("Not a directory");
     return MUNIT_OK;
 }
 

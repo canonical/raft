@@ -24,6 +24,7 @@ struct fixture
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
+    (void)user_data;
     SETUP_UV;
     f->req.data = f;
     f->invoked = 0;
@@ -40,6 +41,7 @@ static void tear_down(void *data)
         uvFileClose(f->file, (uvFileCloseCb)raft_free);
     }
     TEAR_DOWN_UV;
+    free(f);
 }
 
 /******************************************************************************

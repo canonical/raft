@@ -134,8 +134,7 @@ check_PROGRAMS += test/unit/uv
 libtest_la_SOURCES += \
   test/lib/dir.c \
   test/lib/tcp.c \
-  test/lib/loop.c \
-  test/lib/uv.c
+  test/lib/loop.c
 
 test_lib_SOURCES += \
   test/lib/loop.c
@@ -151,31 +150,24 @@ test_unit_uv_SOURCES += \
   src/snapshot.c \
   src/tracer.c \
   test/unit/main_uv.c \
+  test/unit/test_uv_os.c \
   test/unit/test_uv_file.c \
   test/unit/test_uv_init.c \
-  test/unit/test_uv_os.c
+  test/unit/test_uv_list.c \
+  test/unit/test_uv_load.c \
+  test/unit/test_uv_prepare.c \
+  test/unit/test_uv_append.c \
+  test/unit/test_uv_finalize.c \
+  test/unit/test_uv_snapshot.c \
+  test/unit/test_uv_truncate.c \
+  test/unit/test_uv_tcp_connect.c \
+  test/unit/test_uv_tcp_listen.c \
+  test/unit/test_uv_recv.c \
+  test/unit/test_uv_send.c \
+  test/unit/test_uv.c
 test_unit_uv_CFLAGS = $(CODE_COVERAGE_CFLAGS) $(test_CFLAGS)
 test_unit_uv_LDADD = libtest.la
 test_unit_uv_LDFLAGS = $(UV_LIBS)
-
-# unit_test_SOURCES += \
-#   test/lib/dir.c \
-#   test/lib/uv.c \
-#   test/unit/test_uv.c \
-#   test/unit/test_uv_append.c \
-#   test/unit/test_uv_finalize.c \
-#   test/unit/test_uv_list.c \
-#   test/unit/test_uv_load.c \
-#   test/unit/test_uv_metadata.c \
-#   test/unit/test_uv_os.c \
-#   test/unit/test_uv_prepare.c \
-#   test/unit/test_uv_recv.c \
-#   test/unit/test_uv_send.c \
-#   test/unit/test_uv_snapshot.c \
-#   test/unit/test_uv_tcp_connect.c \
-#   test/unit/test_uv_tcp_listen.c \
-#   test/unit/test_uv_truncate.c
-# unit_test_LDFLAGS += $(UV_LIBS)
 
 AM_CFLAGS += $(UV_CFLAGS)
 

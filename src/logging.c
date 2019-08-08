@@ -51,7 +51,7 @@ static void emitToStream(FILE *stream,
 
     cursor = buf + strlen(buf);
 
-    sprintf(cursor, "%20s:%*d - ", file, 3, line);
+    sprintf(cursor, "%30s:%*d - ", file, 3, line);
     cursor = buf + strlen(buf);
 
     /* Then render the message, possibly truncating it. */

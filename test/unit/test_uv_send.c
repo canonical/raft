@@ -23,6 +23,7 @@ struct fixture
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
+    (void)user_data;
     SETUP_UV;
     f->message.type = RAFT_IO_REQUEST_VOTE;
     f->message.server_id = 1;
@@ -37,6 +38,7 @@ static void tear_down(void *data)
 {
     struct fixture *f = data;
     TEAR_DOWN_UV;
+    free(f);
 }
 
 static void send__send_cb(struct raft_io_send *req, int status)

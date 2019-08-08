@@ -89,6 +89,7 @@ static void tear_down(void *data)
     TEAR_DOWN_LOOP;
     test_tcp_tear_down(&f->tcp);
     test_heap_tear_down(&f->heap);
+    free(f);
 }
 
 /******************************************************************************

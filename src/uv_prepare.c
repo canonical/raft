@@ -39,7 +39,8 @@ struct segment
     struct uvFile *file;        /* Open segment file */
     struct uvFileCreate create; /* Create file request */
     unsigned long long counter; /* Segment counter */
-    uvPath path;                /* Path of the segment */
+    uvFilename filename;        /* Filename of the segment */
+    uvPath path;                /* Full path of the segment */
     queue queue;                /* Pool */
 };
 
@@ -145,7 +146,8 @@ static void prepareSegmentFileCreateCb(struct uvFileCreate *req,
     uv = s->uv;
 
     /* If we have been canceled, it means we are closing. */
-    if (status == UV_ECANCELED) {
+    if (status == UV__CANCELED) {
+        uvDebugf(uv, "canceled creation of %s", s->filename);
         assert(uv->closing);
         return;
     }
@@ -162,6 +164,7 @@ static void prepareSegmentFileCreateCb(struct uvFileCreate *req,
         return;
     }
 
+    uvDebugf(uv, "completed creation of %s", s->filename);
     uv->prepare_file = NULL;
     QUEUE_PUSH(&uv->prepare_pool, &s->queue);
 
@@ -176,7 +179,6 @@ static void prepareSegmentFileCreateCb(struct uvFileCreate *req,
 static int prepareSegment(struct uv *uv)
 {
     struct segment *s;
-    uvFilename filename;
     char errmsg[2048];
     int rv;
 
@@ -203,14 +205,15 @@ static int prepareSegment(struct uv *uv)
     s->create.data = s;
     s->counter = uv->prepare_next_counter;
 
-    sprintf(filename, UV__OPEN_TEMPLATE, s->counter);
-    uvJoin(uv->dir, filename, s->path);
+    sprintf(s->filename, UV__OPEN_TEMPLATE, s->counter);
+    uvJoin(uv->dir, s->filename, s->path);
 
-    rv = uvFileCreate(s->file, &s->create, uv->dir, filename,
+    uvDebugf(uv, "create open segment %s", s->filename);
+    rv = uvFileCreate(s->file, &s->create, uv->dir, s->filename,
                       uv->block_size * uv->n_blocks, MAX_CONCURRENT_WRITES,
                       prepareSegmentFileCreateCb, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "create segment file %d: %s", s->counter, uv_strerror(rv));
+        uvErrorf(uv, "can't create segment %s: %s", s->filename, errmsg);
         rv = RAFT_IOERR;
         goto err_after_file_init;
     }

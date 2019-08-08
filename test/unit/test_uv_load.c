@@ -4,6 +4,8 @@
 #include "../lib/uv.h"
 
 #include "../../src/byte.h"
+#include "../../src/entry.h"
+#include "../../src/snapshot.h"
 #include "../../src/uv_encoding.h"
 
 #define WORD_SIZE sizeof(uint64_t)
@@ -19,6 +21,8 @@ TEST_MODULE(uv_load);
 struct fixture
 {
     FIXTURE_UV;
+    raft_term term;
+    unsigned voted_for;
     struct raft_snapshot *snapshot;
     raft_index start_index;
     struct raft_entry *entries;
@@ -29,6 +33,7 @@ struct fixture
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
+    (void)user_data;
     SETUP_UV;
     f->snapshot = NULL;
     f->entries = NULL;
@@ -41,26 +46,14 @@ static void tear_down(void *data)
 {
     struct fixture *f = data;
     if (f->snapshot != NULL) {
-        raft_configuration_close(&f->snapshot->configuration);
-        raft_free(f->snapshot->bufs[0].base);
-        raft_free(f->snapshot->bufs);
-        raft_free(f->snapshot);
+        snapshotDestroy(f->snapshot);
     }
     if (f->entries != NULL) {
-        unsigned i;
-        void *batch = NULL;
-        munit_assert_int(f->n, >, 0);
-        for (i = 0; i < f->n; i++) {
-            if (f->entries[i].batch != batch) {
-                batch = f->entries[i].batch;
-                raft_free(batch);
-            }
-        }
-        raft_free(f->entries);
+        entryBatchesDestroy(f->entries, f->n);
     }
     TEAR_DOWN_UV;
+    free(f);
 }
-
 
 /******************************************************************************
  *
@@ -68,77 +61,36 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-#define LOAD(RV)                                                 \
-    {                                                            \
-        int rv;                                                  \
-        raft_term term;                                          \
-        unsigned voted_for;                                      \
-        rv = f->io.load(&f->io, &term, &voted_for, &f->snapshot, \
-                        &f->start_index, &f->entries, &f->n);    \
-        munit_assert_int(rv, ==, RV);                            \
-    }
+/* Invoke raft_io->load(). */
+#define LOAD_RV                                                                \
+    f->io.load(&f->io, &f->term, &f->voted_for, &f->snapshot, &f->start_index, \
+               &f->entries, &f->n)
+#define LOAD munit_assert_int(LOAD_RV, ==, 0)
+#define LOAD_ERROR(RV) munit_assert_int(LOAD_RV, ==, RV)
 
 /******************************************************************************
  *
- * Success scenarios.
+ * Data directory has only open or closed segments.
  *
  *****************************************************************************/
 
-TEST_SUITE(success);
-TEST_SETUP(success, setup);
-TEST_TEAR_DOWN(success, tear_down);
+TEST_SUITE(segments);
+TEST_SETUP(segments, setup);
+TEST_TEAR_DOWN(segments, tear_down);
 
-TEST_CASE(success, ignore_unknown, NULL)
+TEST_CASE(segments, ignore_unknown, NULL)
 {
     struct fixture *f = data;
-    uint8_t buf[8];
-    char filename1[128];
-    char filename2[128];
-
     (void)params;
-
-    strcpy(filename1, "1-1");
-    strcpy(filename2, "open-1");
-
-    strcat(filename1, "garbage");
-    strcat(filename2, "garbage");
-
-    memset(buf, 0, sizeof buf);
-
-    test_dir_write_file(f->dir, "garbage", buf, sizeof buf);
-    test_dir_write_file(f->dir, filename1, buf, sizeof buf);
-    test_dir_write_file(f->dir, filename2, buf, sizeof buf);
-
-    LOAD(0);
-
-    return MUNIT_OK;
-}
-
-/* The data directory has a closed segment with entries that are no longer
- * needed, since they are included in a snapshot. */
-TEST_CASE(success, closed_not_needed, NULL)
-{
-    /* TODO: We should support a trailing amount */
-    return MUNIT_SKIP;
-    struct fixture *f = data;
-    uint8_t buf[8];
-
-    (void)params;
-
-    test_io_uv_write_snapshot_meta_file(f->dir, 1, 2, 123, 1, 1);
-    test_io_uv_write_snapshot_data_file(f->dir, 1, 2, 123, buf, sizeof buf);
-    UV_WRITE_CLOSED_SEGMENT(1, 1, 1);
-
-    LOAD(0);
-
-    /* The segment has been removed. */
-    munit_assert_false(test_dir_has_file(f->dir, "1-1"));
-
+    test_dir_write_file_with_zeros(f->dir, "garbage", 128);
+    test_dir_write_file_with_zeros(f->dir, "1-1garbage", 128);
+    test_dir_write_file_with_zeros(f->dir, "open-1garbage", 128);
+    LOAD;
     return MUNIT_OK;
 }
 
 /* The data directory has a valid closed and open segments. */
-TEST_CASE(success, closed, NULL)
+TEST_CASE(segments, closed, NULL)
 {
     struct fixture *f = data;
 
@@ -148,7 +100,7 @@ TEST_CASE(success, closed, NULL)
     UV_WRITE_CLOSED_SEGMENT(3, 1, 1);
     UV_WRITE_OPEN_SEGMENT(1, 1, 1);
 
-    LOAD(0);
+    LOAD;
 
     munit_assert_int(f->n, ==, 4);
 
@@ -156,7 +108,7 @@ TEST_CASE(success, closed, NULL)
 }
 
 /* The data directory has an empty open segment. */
-TEST_CASE(success, open_empty, NULL)
+TEST_CASE(segments, open_empty, NULL)
 {
     struct fixture *f = data;
 
@@ -164,7 +116,7 @@ TEST_CASE(success, open_empty, NULL)
 
     test_dir_write_file(f->dir, "open-1", NULL, 0);
 
-    LOAD(0);
+    LOAD;
 
     /* The empty segment has been removed. */
     munit_assert_false(test_dir_has_file(f->dir, "open-1"));
@@ -173,7 +125,7 @@ TEST_CASE(success, open_empty, NULL)
 }
 
 /* The data directory has a freshly allocated open segment filled with zeros. */
-TEST_CASE(success, open_all_zeros, NULL)
+TEST_CASE(segments, open_all_zeros, NULL)
 {
     struct fixture *f = data;
 
@@ -181,7 +133,7 @@ TEST_CASE(success, open_all_zeros, NULL)
 
     test_dir_write_file_with_zeros(f->dir, "open-1", 256);
 
-    LOAD(0);
+    LOAD;
 
     /* The empty segment has been removed. */
     munit_assert_false(test_dir_has_file(f->dir, "open-1"));
@@ -191,7 +143,7 @@ TEST_CASE(success, open_all_zeros, NULL)
 
 /* The data directory has an allocated open segment which contains non-zero
  * corrupted data in its second batch. */
-TEST_CASE(success, open_not_all_zeros, NULL)
+TEST_CASE(segments, open_not_all_zeros, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[WORD_SIZE + /* CRC32 checksum */
@@ -216,7 +168,7 @@ TEST_CASE(success, open_not_all_zeros, NULL)
 
     test_dir_append_file(f->dir, "open-1", buf, sizeof buf);
 
-    LOAD(0);
+    LOAD;
 
     /* The segment has been renamed. */
     munit_assert_false(test_dir_has_file(f->dir, "open-1"));
@@ -230,7 +182,7 @@ TEST_CASE(success, open_not_all_zeros, NULL)
 
 /* The data directory has an open segment with a partially written batch that
  * needs to be truncated. */
-TEST_CASE(success, open_truncate, NULL)
+TEST_CASE(segments, open_truncate, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[256];
@@ -243,14 +195,14 @@ TEST_CASE(success, open_truncate, NULL)
 
     test_dir_append_file(f->dir, "open-1", buf, sizeof buf);
 
-    LOAD(0);
+    LOAD;
 
     return MUNIT_OK;
 }
 
 /* The data directory has an open segment whose first batch is only
  * partially written. In that case the segment gets removed. */
-TEST_CASE(success, open_partial_bach, NULL)
+TEST_CASE(segments, open_partial_bach, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[WORD_SIZE + /* Format version */
@@ -270,7 +222,7 @@ TEST_CASE(success, open_partial_bach, NULL)
 
     test_dir_overwrite_file(f->dir, "open-1", buf, sizeof buf, 0);
 
-    LOAD(0);
+    LOAD;
 
     /* The partially written segment has been removed. */
     munit_assert_false(test_dir_has_file(f->dir, "open-1"));
@@ -279,7 +231,7 @@ TEST_CASE(success, open_partial_bach, NULL)
 }
 
 /* The data directory has two segments, with the second having an entry. */
-TEST_CASE(success, open_second, NULL)
+TEST_CASE(segments, open_second, NULL)
 {
     struct fixture *f = data;
 
@@ -291,7 +243,7 @@ TEST_CASE(success, open_second, NULL)
     /* Second segment */
     UV_WRITE_OPEN_SEGMENT(2, 1, 1);
 
-    LOAD(0);
+    LOAD;
 
     /* The first and second segments have been renamed. */
     munit_assert_false(test_dir_has_file(f->dir, "open-1"));
@@ -304,7 +256,7 @@ TEST_CASE(success, open_second, NULL)
 
 /* The data directory has two segments, with the second one filled with
  * zeros. */
-TEST_CASE(success, open_second_all_zeroes, NULL)
+TEST_CASE(segments, open_second_all_zeroes, NULL)
 {
     struct fixture *f = data;
 
@@ -316,7 +268,7 @@ TEST_CASE(success, open_second_all_zeroes, NULL)
     /* Second segment */
     test_dir_write_file_with_zeros(f->dir, "open-2", 256);
 
-    LOAD(0);
+    LOAD;
 
     /* The first segment has been renamed. */
     munit_assert_false(test_dir_has_file(f->dir, "open-1"));
@@ -329,7 +281,7 @@ TEST_CASE(success, open_second_all_zeroes, NULL)
 }
 
 /* The data directory has a valid open segment. */
-TEST_CASE(success, open, NULL)
+TEST_CASE(segments, open, NULL)
 {
     struct fixture *f = data;
 
@@ -337,7 +289,40 @@ TEST_CASE(success, open, NULL)
 
     UV_WRITE_OPEN_SEGMENT(1, 1, 1);
 
-    LOAD(0);
+    LOAD;
+
+    return MUNIT_OK;
+}
+
+/******************************************************************************
+ *
+ * Data directory has a snapshot.
+ *
+ *****************************************************************************/
+
+TEST_SUITE(snapshot);
+TEST_SETUP(snapshot, setup);
+TEST_TEAR_DOWN(snapshot, tear_down);
+
+/* The data directory has a closed segment with entries that are no longer
+ * needed, since they are included in a snapshot. */
+TEST_CASE(snapshot, closed_segment_with_old_entries, NULL)
+{
+    struct fixture *f = data;
+    uint8_t buf[8];
+
+    (void)params;
+
+    UV_WRITE_SNAPSHOT(f->dir, 1 /* term */, 2 /* index */, 123 /* timestamp */,
+                      1 /* n servers */, 1 /* conf index */, buf /* data */,
+                      sizeof buf);
+    UV_WRITE_CLOSED_SEGMENT(1, 1, 1);
+
+    LOAD;
+
+    /* The segment is still there. */
+    /* TODO: We should support a trailing amount */
+    munit_assert_true(test_dir_has_file(f->dir, "1-1"));
 
     return MUNIT_OK;
 }
@@ -356,13 +341,9 @@ TEST_TEAR_DOWN(error, tear_down);
 TEST_CASE(error, short_format, NULL)
 {
     struct fixture *f = data;
-
     (void)params;
-
     test_dir_write_file_with_zeros(f->dir, "open-1", WORD_SIZE / 2);
-
-    LOAD(RAFT_IOERR);
-
+    LOAD_ERROR(RAFT_IOERR);
     return MUNIT_OK;
 }
 
@@ -372,15 +353,10 @@ TEST_CASE(error, short_preamble, NULL)
 {
     struct fixture *f = data;
     size_t offset = WORD_SIZE /* Format version */ + WORD_SIZE /* Checksums */;
-
     (void)params;
-
     UV_WRITE_OPEN_SEGMENT(1, 1, 1);
-
     test_dir_truncate_file(f->dir, "open-1", offset);
-
-    LOAD(RAFT_IOERR);
-
+    LOAD_ERROR(RAFT_IOERR);
     return MUNIT_OK;
 }
 
@@ -394,13 +370,9 @@ TEST_CASE(error, short_header, NULL)
                     WORD_SIZE /* Partial batch header */;
 
     (void)params;
-
     UV_WRITE_OPEN_SEGMENT(1, 1, 1);
-
     test_dir_truncate_file(f->dir, "open-1", offset);
-
-    LOAD(RAFT_IOERR);
-
+    LOAD_ERROR(RAFT_IOERR);
     return MUNIT_OK;
 }
 
@@ -416,13 +388,9 @@ TEST_CASE(error, short_data, NULL)
                     WORD_SIZE / 2 /* Partial entry data */;
 
     (void)params;
-
     UV_WRITE_OPEN_SEGMENT(1, 1, 1);
-
     test_dir_truncate_file(f->dir, "open-1", offset);
-
-    LOAD(RAFT_IOERR);
-
+    LOAD_ERROR(RAFT_IOERR);
     return MUNIT_OK;
 }
 
@@ -433,18 +401,12 @@ TEST_CASE(error, corrupt_header, NULL)
     size_t offset = WORD_SIZE /* Format version */;
     uint8_t buf[WORD_SIZE];
     void *cursor = &buf;
-
     (void)params;
-
     /* Render invalid checksums */
     bytePut64(&cursor, 123);
-
     UV_WRITE_CLOSED_SEGMENT(1, 1, 1);
-
     test_dir_overwrite_file(f->dir, "1-1", buf, sizeof buf, offset);
-
-    LOAD(RAFT_CORRUPT);
-
+    LOAD_ERROR(RAFT_CORRUPT);
     return MUNIT_OK;
 }
 
@@ -456,18 +418,12 @@ TEST_CASE(error, corrupt_data, NULL)
         WORD_SIZE /* Format version */ + WORD_SIZE / 2 /* Header checksum */;
     uint8_t buf[WORD_SIZE / 2];
     void *cursor = buf;
-
     (void)params;
-
     /* Render an invalid data checksum. */
     bytePut32(&cursor, 123456789);
-
     UV_WRITE_CLOSED_SEGMENT(1, 1, 1);
-
     test_dir_overwrite_file(f->dir, "1-1", buf, sizeof buf, offset);
-
-    LOAD(RAFT_CORRUPT);
-
+    LOAD_ERROR(RAFT_CORRUPT);
     return MUNIT_OK;
 }
 
@@ -476,13 +432,9 @@ TEST_CASE(error, corrupt_data, NULL)
 TEST_CASE(error, closed_bad_index, NULL)
 {
     struct fixture *f = data;
-
     (void)params;
-
     UV_WRITE_CLOSED_SEGMENT(2, 1, 1);
-
-    LOAD(RAFT_CORRUPT);
-
+    LOAD_ERROR(RAFT_CORRUPT);
     return MUNIT_OK;
 }
 
@@ -490,13 +442,9 @@ TEST_CASE(error, closed_bad_index, NULL)
 TEST_CASE(error, closed_empty, NULL)
 {
     struct fixture *f = data;
-
     (void)params;
-
     test_dir_write_file(f->dir, "1-1", NULL, 0);
-
-    LOAD(RAFT_CORRUPT);
-
+    LOAD_ERROR(RAFT_CORRUPT);
     return MUNIT_OK;
 }
 
@@ -504,15 +452,10 @@ TEST_CASE(error, closed_empty, NULL)
 TEST_CASE(error, closed_bad_format, NULL)
 {
     struct fixture *f = data;
-
     uint8_t buf[8] = {2, 0, 0, 0, 0, 0, 0, 0};
-
     (void)params;
-
     test_dir_write_file(f->dir, "1-1", buf, sizeof buf);
-
-    LOAD(RAFT_IOERR);
-
+    LOAD_ERROR(RAFT_IOERR);
     return MUNIT_OK;
 }
 
@@ -520,15 +463,10 @@ TEST_CASE(error, closed_bad_format, NULL)
 TEST_CASE(error, open_no_access, NULL)
 {
     struct fixture *f = data;
-
     (void)params;
-
     UV_WRITE_OPEN_SEGMENT(1, 1, 1);
-
     test_dir_unreadable_file(f->dir, "open-1");
-
-    LOAD(RAFT_IOERR);
-
+    LOAD_ERROR(RAFT_IOERR);
     return MUNIT_OK;
 }
 
@@ -539,17 +477,11 @@ TEST_CASE(error, open_zero_format, NULL)
     struct fixture *f = data;
     uint8_t buf[WORD_SIZE /* Format version */];
     void *cursor = buf;
-
     (void)params;
-
     bytePut64(&cursor, 0); /* Format version */
-
     UV_WRITE_OPEN_SEGMENT(1, 1, 1);
-
     test_dir_overwrite_file(f->dir, "open-1", buf, sizeof buf, 0);
-
-    LOAD(RAFT_MALFORMED);
-
+    LOAD_ERROR(RAFT_MALFORMED);
     return MUNIT_OK;
 }
 
@@ -560,14 +492,9 @@ TEST_CASE(error, open_bad_format, NULL)
     uint8_t buf[WORD_SIZE /* Format version */];
     void *cursor = buf;
     (void)params;
-
     bytePut64(&cursor, 2); /* Format version */
-
     UV_WRITE_OPEN_SEGMENT(1, 1, 1);
-
     test_dir_overwrite_file(f->dir, "open-1", buf, sizeof buf, 0);
-
-    LOAD(RAFT_MALFORMED);
-
+    LOAD_ERROR(RAFT_MALFORMED);
     return MUNIT_OK;
 }
