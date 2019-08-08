@@ -1,7 +1,7 @@
 /* Raft servers configuration test helpers. */
 
-#ifndef TEST_CONFIGURATION_H
-#define TEST_CONFIGURATION_H
+#ifndef TEST_CONFIGURATION_H_
+#define TEST_CONFIGURATION_H_
 
 #include "../../src/configuration.h"
 
@@ -13,4 +13,4 @@
  * voting servers. */
 #define CONFIGURATION_ADD_N
 
-#endif /* TEST_CONFIGURATION_H */
+#endif /* TEST_CONFIGURATION_H_ */

@@ -74,6 +74,7 @@ static int loadFile(struct uv *uv,
         }
         /* Assume that the server crashed while writing this metadata file, and
          * pretend it has not been written at all. */
+        uvWarnf(uv, "read %s: ignore incomplete data", filename);
         metadata->version = 0;
         close(fd);
         return 0;
@@ -132,6 +133,10 @@ static int indexOf(int version)
     return version % 2 == 1 ? 1 : 2;
 }
 
+#define logMetadata(PREFIX, M)                                                 \
+    uvDebugf(uv, "metadata" #PREFIX ": version %lld, term %lld, voted for %d", \
+             (M)->version, (M)->term, (M)->voted_for);
+
 int uvMetadataLoad(struct uv *uv, struct uvMetadata *metadata)
 {
     struct uvMetadata metadata1;
@@ -143,11 +148,13 @@ int uvMetadataLoad(struct uv *uv, struct uvMetadata *metadata)
     if (rv != 0) {
         return rv;
     }
+    logMetadata(1, &metadata1);
 
     rv = loadFile(uv, 2, &metadata2);
     if (rv != 0) {
         return rv;
     }
+    logMetadata(2, &metadata2);
 
     /* Check the versions. */
     if (metadata1.version == 0 && metadata2.version == 0) {
@@ -174,6 +181,8 @@ int uvMetadataLoad(struct uv *uv, struct uvMetadata *metadata)
     if (rv != 0) {
         return rv;
     }
+
+    logMetadata(N, metadata);
 
     return 0;
 }

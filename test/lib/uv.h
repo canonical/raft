@@ -11,6 +11,7 @@
 
 #include "dir.h"
 #include "heap.h"
+#include "logger.h"
 #include "loop.h"
 #include "munit.h"
 #include "tcp.h"
@@ -20,7 +21,7 @@
     FIXTURE_TCP;                        \
     FIXTURE_LOOP;                       \
     FIXTURE_DIR;                        \
-    struct raft_logger logger;          \
+    FIXTURE_LOGGER;                     \
     struct raft_uv_transport transport; \
     struct raft_io io;                  \
     struct uv *uv
@@ -32,8 +33,7 @@
         SETUP_TCP;                                                   \
         SETUP_LOOP;                                                  \
         SETUP_DIR;                                                   \
-        rv_ = raft_stream_logger_init(&f->logger, stderr);           \
-        munit_assert_int(rv_, ==, 0);                                \
+        SETUP_LOGGER;                                                \
         rv_ = raft_uv_tcp_init(&f->transport, &f->loop);             \
         munit_assert_int(rv_, ==, 0);                                \
         rv_ = raft_uv_init(&f->io, &f->loop, f->dir, &f->transport); \

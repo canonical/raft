@@ -36,10 +36,12 @@ static int uvInit(struct raft_io *io,
 
     uv->logger = logger;
 
+    uvDebugf(uv, "data dir: %s", uv->dir);
+
     /* Ensure that the data directory exists and is accessible */
     rv = uvEnsureDir(uv->dir, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "data dir %s: %s", uv->dir, osStrError(rv));
+        uvErrorf(uv, "ensure data dir %s: %s", uv->dir, osStrError(rv));
         rv = RAFT_IOERR;
         goto err;
     }
@@ -59,6 +61,7 @@ static int uvInit(struct raft_io *io,
     }
     uv->direct_io = direct_io != 0;
     uv->block_size = direct_io != 0 ? direct_io : 4096;
+    uvDebugf(uv, "I/O: direct %d, block %d", uv->direct_io, uv->block_size);
 
     /* We expect the maximum segment size to be a multiple of the block size */
     assert(UV__MAX_SEGMENT_SIZE % uv->block_size == 0);

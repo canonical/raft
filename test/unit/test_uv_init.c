@@ -5,7 +5,7 @@
 
 #include "../../src/byte.h"
 
-TEST_MODULE(uv_metadata);
+TEST_MODULE(uv_init);
 
 /******************************************************************************
  *
@@ -90,17 +90,41 @@ static void tear_down(void *data)
 
 /******************************************************************************
  *
- * Load metadata files
+ * Ensure data directory.
  *
  *****************************************************************************/
 
-TEST_SUITE(load);
+TEST_SUITE(ensure_dir);
 
-TEST_SETUP(load, setup);
-TEST_TEAR_DOWN(load, tear_down);
+TEST_SETUP(ensure_dir, setup);
+TEST_TEAR_DOWN(ensure_dir, tear_down);
+
+TEST_GROUP(ensure_dir, error);
+
+/* The data directory can't be created. */
+TEST_CASE(ensure_dir, error, cant_create, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+    strcpy(f->uv->dir, "/foo/bar");
+    INIT_ERROR(RAFT_IOERR);
+    return MUNIT_OK;
+}
+
+
+/******************************************************************************
+ *
+ * Loading metadata
+ *
+ *****************************************************************************/
+
+TEST_SUITE(metadata);
+
+TEST_SETUP(metadata, setup);
+TEST_TEAR_DOWN(metadata, tear_down);
 
 /* If the data directory is empty, the metadata files get initialized. */
-TEST_CASE(load, empty_dir, NULL)
+TEST_CASE(metadata, empty_dir, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -113,7 +137,7 @@ TEST_CASE(load, empty_dir, NULL)
 
 /* If the data directory has a single metadata1 file, its version gets updated
  * and the second metadata file gets created. */
-TEST_CASE(load, only_1, NULL)
+TEST_CASE(metadata, only_1, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -130,7 +154,7 @@ TEST_CASE(load, only_1, NULL)
 }
 
 /* The data directory has both metadata files, but metadata1 is greater. */
-TEST_CASE(load, 1, NULL)
+TEST_CASE(metadata, 1, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -152,7 +176,7 @@ TEST_CASE(load, 1, NULL)
 }
 
 /* The data directory has both metadata files, but metadata2 is greater. */
-TEST_CASE(load, 2, NULL)
+TEST_CASE(metadata, 2, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -176,7 +200,7 @@ TEST_CASE(load, 2, NULL)
 /* The metadata1 file has not the expected number of bytes. In this case the
  * file is not considered at all, and the effect is as if this was a brand new
  * server. */
-TEST_CASE(load, short_file, NULL)
+TEST_CASE(metadata, short_file, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[16];
@@ -189,10 +213,10 @@ TEST_CASE(load, short_file, NULL)
     return MUNIT_OK;
 }
 
-TEST_GROUP(load, error);
+TEST_GROUP(metadata, error);
 
 /* The data directory is not executable. */
-TEST_CASE(load, error, no_access, NULL)
+TEST_CASE(metadata, error, no_access, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -202,7 +226,7 @@ TEST_CASE(load, error, no_access, NULL)
 }
 
 /* The metadata1 file has not the expected format. */
-TEST_CASE(load, error, bad_format, NULL)
+TEST_CASE(metadata, error, bad_format, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -216,7 +240,7 @@ TEST_CASE(load, error, bad_format, NULL)
 }
 
 /* The metadata1 file has not a valid version. */
-TEST_CASE(load, error, bad_version, NULL)
+TEST_CASE(metadata, error, bad_version, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -230,7 +254,7 @@ TEST_CASE(load, error, bad_version, NULL)
 }
 
 /* No space is left for writing the initial metadata file. */
-TEST_CASE(load, error, no_space, NULL)
+TEST_CASE(metadata, error, no_space, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -241,7 +265,7 @@ TEST_CASE(load, error, no_space, NULL)
 
 /* The data directory has both metadata files, but they have the same
  * version. */
-TEST_CASE(load, same_version, NULL)
+TEST_CASE(metadata, same_version, NULL)
 {
     struct fixture *f = data;
     (void)params;
