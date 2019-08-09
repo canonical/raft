@@ -19,7 +19,8 @@ libraft_la_SOURCES = \
   src/error.c \
   src/heap.c \
   src/log.c \
-  src/logging.c \
+  src/logger_ring.c \
+  src/logger_stream.c \
   src/membership.c \
   src/progress.c \
   src/raft.c \
@@ -33,8 +34,7 @@ libraft_la_SOURCES = \
   src/snapshot.c \
   src/start.c \
   src/state.c \
-  src/tick.c \
-  src/tracer.c
+  src/tick.c
 
 check_PROGRAMS = test/unit/core integration-test fuzzy-test
 TESTS = $(check_PROGRAMS)
@@ -56,7 +56,7 @@ test_unit_core_SOURCES = \
   src/error.c \
   src/heap.c \
   src/log.c \
-  src/tracer.c \
+  src/logger_ring.c \
   test/unit/main_core.c \
   test/unit/test_byte.c \
   test/unit/test_configuration.c \
@@ -64,7 +64,7 @@ test_unit_core_SOURCES = \
   test/unit/test_error.c \
   test/unit/test_log.c \
   test/unit/test_queue.c \
-  test/unit/test_tracer.c
+  test/unit/test_logger_ring.c
 test_unit_core_CFLAGS = $(CODE_COVERAGE_CFLAGS) $(test_CFLAGS)
 test_unit_core_LDADD = libtest.la
 
@@ -143,12 +143,11 @@ test_unit_uv_SOURCES = $(raft_uv_SOURCES)
 test_unit_uv_SOURCES += \
   src/byte.c \
   src/configuration.c \
-  src/logging.c \
+  src/logger_stream.c \
   src/entry.c \
   src/error.c \
   src/heap.c \
   src/snapshot.c \
-  src/tracer.c \
   test/unit/main_uv.c \
   test/unit/test_uv_os.c \
   test/unit/test_uv_file.c \

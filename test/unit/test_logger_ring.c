@@ -3,9 +3,7 @@
 #include "../lib/heap.h"
 #include "../lib/runner.h"
 
-#include "../../src/tracer.h"
-
-TEST_MODULE(tracer);
+TEST_MODULE(ring_logger);
 
 /******************************************************************************
  *
@@ -23,7 +21,7 @@ struct entry
 struct fixture
 {
     FIXTURE_HEAP;
-    struct raft_tracer tracer;
+    struct raft_logger logger;
     struct entry *entries; /* Hold entries passed to the walkCb callback. */
     unsigned n_entries;    /* Length of the entries array. */
 };
@@ -34,7 +32,7 @@ static void *setup(const MunitParameter params[], void *user_data)
     (void)user_data;
     int rv;
     SETUP_HEAP;
-    rv = raft_tracer_init(&f->tracer, 1024);
+    rv = raft_ring_logger_init(&f->logger, 1024);
     munit_assert_int(rv, ==, 0);
     f->entries = NULL;
     f->n_entries = 0;
@@ -44,7 +42,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 static void tear_down(void *data)
 {
     struct fixture *f = data;
-    raft_tracer_close(&f->tracer);
+    raft_ring_logger_close(&f->logger);
     TEAR_DOWN_HEAP;
     free(f->entries);
     free(f);
@@ -58,10 +56,7 @@ static void tear_down(void *data)
 
 static raft_time clock = 0; /* Increased after each call to EMIT */
 
-static void walkCb(void *data,
-                   raft_time time,
-                   unsigned type,
-                   const char *message)
+static void walkCb(void *data, raft_time time, int type, const char *message)
 {
     struct fixture *f = data;
     struct entry *entry;
@@ -77,10 +72,11 @@ static void walkCb(void *data,
     entry->message = message;
 }
 
-#define EMIT(FORMAT, ...)                                                 \
-    {                                                                     \
-        clock++;                                                          \
-        tracerEmit(&f->tracer, clock, RAFT_DEBUG, FORMAT, ##__VA_ARGS__); \
+#define EMIT(FORMAT, ...)                                                   \
+    {                                                                       \
+        clock++;                                                            \
+        f->logger.emit(&f->logger, RAFT_DEBUG, clock, "foo.c", 123, FORMAT, \
+                       ##__VA_ARGS__);                                      \
     }
 
 #define EMIT_N(N, FORMAT, ...)           \
@@ -91,7 +87,7 @@ static void walkCb(void *data,
         }                                \
     }
 
-#define WALK raft_tracer_walk(&f->tracer, walkCb, f);
+#define WALK raft_ring_logger_walk(&f->logger, walkCb, f);
 
 /******************************************************************************
  *
@@ -112,7 +108,7 @@ static void walkCb(void *data,
 
 /******************************************************************************
  *
- * tracerEmit
+ * raft_logger->emit()
  *
  *****************************************************************************/
 

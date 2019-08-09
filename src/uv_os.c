@@ -10,7 +10,6 @@
 #include <unistd.h>
 
 #include "assert.h"
-#include "tracer.h"
 #include "uv_error.h"
 #include "uv_os.h"
 

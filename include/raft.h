@@ -400,53 +400,38 @@ struct raft_logger
 };
 
 /**
- * Circular buffer for collecting trace entries.
- *
- * Each entry consists of a text message plus following metadata:
- *
- * - Time at which the entry was created.
- * - Entry type (integer code).
- */
-struct raft_tracer
-{
-    void *buf;   /* Memory where entries are collected. */
-    size_t size; /* Size of buf. */
-    size_t head; /* First entry starts at this offset. */
-    size_t tail; /* Last entry starts at this offset. */
-};
-
-/**
- * Create a new message tracer, with a buffer of the given @size.
- */
-RAFT_API int raft_tracer_init(struct raft_tracer *t, size_t size);
-
-/**
- * Close a message tracer, releasing all its memory.
- */
-RAFT_API void raft_tracer_close(struct raft_tracer *t);
-
-/**
- * Callback invoked by raft_tracer_walk() when iterating through tracer entries.
- */
-typedef void (*raft_tracer_walk_cb)(void *data,
-                                    raft_time time,
-                                    unsigned type,
-                                    const char *message);
-
-/**
- * Iterate through all entries in the tracer, calling the given hook each
- * time. The @data argument will be passed back as first argument of the
- * callback.
- */
-void raft_tracer_walk(const struct raft_tracer *t,
-                      raft_tracer_walk_cb cb,
-                      void *data);
-
-/**
  * Implementation of the logger interface, emitting messages to the given
  * stream.
  */
 RAFT_API int raft_stream_logger_init(struct raft_logger *l, FILE *stream);
+
+/**
+ * Initialize the given logger with an implementation that saves messages into a
+ * circular ring buffer of the given @size.
+ */
+RAFT_API int raft_ring_logger_init(struct raft_logger *l, size_t size);
+
+/**
+ * Close a logger with a ring buffer implementation.
+ */
+RAFT_API void raft_ring_logger_close(struct raft_logger *l);
+
+/**
+ * Callback invoked by raft_ring_logger_walk() when iterating through messages.
+ */
+typedef void (*raft_ring_logger_walk_cb)(void *data,
+                                         raft_time time,
+                                         int level,
+                                         const char *message);
+
+/**
+ * Iterate through all messages in the given ring buffer logger, calling the
+ * given hook each time. The @data argument will be passed back as first
+ * argument of the callback.
+ */
+void raft_ring_logger_walk(const struct raft_logger *l,
+                           raft_ring_logger_walk_cb cb,
+                           void *data);
 
 /**
  * Logging levels.
