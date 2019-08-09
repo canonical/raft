@@ -923,6 +923,29 @@ void ioClose(struct raft_io *io)
     raft_free(io->impl);
 }
 
+/* Custom logging function which include the server ID. */
+static void emit(struct raft_logger *l,
+                 int level,
+                 raft_time time,
+                 const char *file,
+                 int line,
+                 const char *format,
+                 ...)
+{
+    va_list args;
+    unsigned id = *(unsigned*)l->impl;
+    char buf[2048];
+    (void)time;
+    if (level < l->level) {
+        return;
+    }
+    sprintf(buf, "%d: %30s:%*d - ", id, file, 3, line);
+    va_start(args, format);
+    vsprintf(buf + strlen(buf), format, args);
+    va_end(args);
+    fprintf(stderr, "%s\n", buf);
+}
+
 static int serverInit(struct raft_fixture *f, unsigned i, struct raft_fsm *fsm)
 {
     int rv;
@@ -940,8 +963,9 @@ static int serverInit(struct raft_fixture *f, unsigned i, struct raft_fsm *fsm)
     }
     raft_set_election_timeout(&s->raft, ELECTION_TIMEOUT);
     raft_set_heartbeat_timeout(&s->raft, HEARTBEAT_TIMEOUT);
-    rv = raft_stream_logger_init(&s->logger, stderr);
-    assert(rv == 0);
+    s->logger.impl = (void*)&s->id;
+    s->logger.level = RAFT_INFO;
+    s->logger.emit = emit;
     return 0;
 }
 
