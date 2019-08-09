@@ -21,14 +21,13 @@ TEST_MODULE(uv_snapshot);
         munit_assert_int(rv, ==, RV);                       \
     }
 
-#define WRITE_META                                                           \
-    test_io_uv_write_snapshot_meta_file(f->dir, f->meta.term, f->meta.index, \
-                                        f->meta.timestamp, 1, 1)
+#define WRITE_META                                              \
+    UV_WRITE_SNAPSHOT_META(f->dir, f->meta.term, f->meta.index, \
+                           f->meta.timestamp, 1, 1)
 
-#define WRITE_DATA                                                           \
-    test_io_uv_write_snapshot_data_file(f->dir, f->meta.term, f->meta.index, \
-                                        f->meta.timestamp, &f->data,         \
-                                        sizeof f->data)
+#define WRITE_DATA                                              \
+    UV_WRITE_SNAPSHOT_DATA(f->dir, f->meta.term, f->meta.index, \
+                           f->meta.timestamp, &f->data, sizeof f->data)
 
 /******************************************************************************
  *
@@ -51,6 +50,7 @@ struct load__fixture
 TEST_SETUP(load)
 {
     struct load__fixture *f = munit_malloc(sizeof *f);
+    (void)user_data;
     SETUP_UV;
     f->meta.term = 1;
     f->meta.index = 5;
@@ -70,6 +70,7 @@ TEST_TEAR_DOWN(load)
         raft_free(f->snapshot.bufs);
     }
     TEAR_DOWN_UV;
+    free(f);
 }
 
 /* There are no snapshot metadata files */
@@ -229,7 +230,7 @@ TEST_SUITE(put);
 
 struct put_fixture
 {
-    FIXTURE_UV
+    FIXTURE_UV;
     struct raft_snapshot snapshot;
     struct raft_io_snapshot_put req;
     struct raft_buffer bufs[2];
@@ -255,6 +256,7 @@ static bool put_cb_was_invoked(void *data)
 TEST_SETUP(put)
 {
     struct put_fixture *f = munit_malloc(sizeof *f);
+    (void)user_data;
     int rv;
     SETUP_UV;
     f->bufs[0].base = raft_malloc(8);
@@ -282,6 +284,7 @@ TEST_TEAR_DOWN(put)
     raft_free(f->bufs[0].base);
     raft_free(f->bufs[1].base);
     TEAR_DOWN_UV;
+    free(f);
 }
 
 static void append_cb(struct raft_io_append *req, int status)
@@ -405,7 +408,7 @@ TEST_SUITE(get);
 
 struct get_fixture
 {
-    FIXTURE_UV
+    FIXTURE_UV;
     struct raft_io_snapshot_get req;
     bool invoked;
     int status;
@@ -431,6 +434,7 @@ static bool get_cb_was_invoked(void *data)
 TEST_SETUP(get)
 {
     struct get_fixture *f = munit_malloc(sizeof *f);
+    (void)user_data;
     SETUP_UV;
     f->req.data = f;
     f->invoked = false;
@@ -447,15 +451,16 @@ TEST_TEAR_DOWN(get)
         raft_free(f->snapshot);
     }
     TEAR_DOWN_UV;
+    free(f);
 }
 
 /* Write a snapshot file */
-#define get__write_snapshot                                       \
-    uint8_t buf[8];                                               \
-    void *cursor = buf;                                           \
-    bytePut64(&cursor, 666);                                      \
-    test_io_uv_write_snapshot_meta_file(f->dir, 3, 8, 123, 1, 1); \
-    test_io_uv_write_snapshot_data_file(f->dir, 3, 8, 123, buf, sizeof buf)
+#define get__write_snapshot                          \
+    uint8_t buf[8];                                  \
+    void *cursor = buf;                              \
+    bytePut64(&cursor, 666);                         \
+    UV_WRITE_SNAPSHOT_META(f->dir, 3, 8, 123, 1, 1); \
+    UV_WRITE_SNAPSHOT_DATA(f->dir, 3, 8, 123, buf, sizeof buf)
 
 /* Invoke the snapshot_get method and check that it returns the given code. */
 #define get__invoke(RV)                                   \

@@ -24,6 +24,7 @@ struct fixture
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
+    (void)user_data;
     SETUP_UV;
     f->req.data = f;
     f->invoked = 0;
@@ -40,6 +41,7 @@ static void tear_down(void *data)
         uvFileClose(f->file, (uvFileCloseCb)raft_free);
     }
     TEAR_DOWN_UV;
+    free(f);
 }
 
 /******************************************************************************
@@ -127,7 +129,7 @@ TEST_SUITE(error);
 TEST_SETUP(error, setup);
 TEST_TEAR_DOWN(error, tear_down);
 
-/* The creation of the first segment fails because io_setup() returns EAGAIN. */
+/* The creation of the first segment fails because uvIoSetup() returns EAGAIN. */
 TEST_CASE(error, no_resources, NULL)
 {
     struct fixture *f = data;

@@ -11,8 +11,7 @@
 
 /**
  * Allocate and create the given snapshot, using the given @LAST_INDEX,
- * @LAST_TERM, copying the given @CONF, and generating an FSM snapshot using @X
- * and @Y.
+ * @LAST_TERM, the given @CONF, and generating an FSM snapshot using @X and @Y.
  */
 #define CREATE_SNAPSHOT(SNAPSHOT, LAST_INDEX, LAST_TERM, CONF, CONF_INDEX, X, \
                         Y)                                                    \
@@ -20,7 +19,7 @@
     munit_assert_ptr_not_null(SNAPSHOT);                                      \
     SNAPSHOT->index = LAST_INDEX;                                             \
     SNAPSHOT->term = LAST_TERM;                                               \
-    configurationCopy(CONF, &SNAPSHOT->configuration);                      \
+    SNAPSHOT->configuration = CONF;                                           \
     SNAPSHOT->configuration_index = CONF_INDEX;                               \
     test_fsm_encode_snapshot(X, Y, &SNAPSHOT->bufs, &SNAPSHOT->n_bufs)
 

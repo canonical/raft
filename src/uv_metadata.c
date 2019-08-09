@@ -1,10 +1,7 @@
-#include <errno.h>
-#include <fcntl.h>
-#include <string.h>
-
 #include "assert.h"
 #include "byte.h"
 #include "uv.h"
+#include "uv_encoding.h"
 
 /* Format, version, term, vote */
 #define SIZE (8 * 4)
@@ -35,7 +32,7 @@ static int decode(const void *buf, struct uvMetadata *metadata)
 }
 
 /* Render the filename of the metadata file with index @n. */
-static void filenameOf(const unsigned short n, osFilename filename)
+static void filenameOf(const unsigned short n, uvFilename filename)
 {
     sprintf(filename, "metadata%d", n);
 }
@@ -46,9 +43,10 @@ static int loadFile(struct uv *uv,
                     const unsigned short n,
                     struct uvMetadata *metadata)
 {
-    osFilename filename; /* Filename of the metadata file */
+    uvFilename filename; /* Filename of the metadata file */
     uint8_t buf[SIZE];   /* Content of metadata file */
     int fd;
+    char errmsg[2048];
     int rv;
 
     assert(n == 1 || n == 2);
@@ -56,28 +54,29 @@ static int loadFile(struct uv *uv,
     /* Render the metadata path */
     filenameOf(n, filename);
 
+    memset(metadata, 0, sizeof *metadata);
+
     /* Open the metadata file, if it exists. */
-    rv = osOpen(uv->dir, filename, O_RDONLY, &fd);
+    rv = uvOpenFile(uv->dir, filename, O_RDONLY, &fd, errmsg);
     if (rv != 0) {
-        if (rv != ENOENT) {
+        if (rv != UV__NOENT) {
             uvErrorf(uv, "open %s: %s", filename, osStrError(rv));
             return RAFT_IOERR;
         }
         /* The file does not exist, just return. */
-        metadata->version = 0;
         return 0;
     }
 
     /* Read the content of the metadata file. */
-    rv = osReadN(fd, buf, sizeof buf);
+    rv = uvReadFully(fd, buf, sizeof buf, errmsg);
     if (rv != 0) {
-        if (rv != ENODATA) {
+        if (rv != UV__NODATA) {
             uvErrorf(uv, "read %s: %s", filename, osStrError(rv));
             return RAFT_IOERR;
         }
         /* Assume that the server crashed while writing this metadata file, and
          * pretend it has not been written at all. */
-        metadata->version = 0;
+        uvWarnf(uv, "read %s: ignore incomplete data", filename);
         close(fd);
         return 0;
     };
@@ -106,6 +105,7 @@ static int loadFile(struct uv *uv,
 static int ensure(struct uv *uv, struct uvMetadata *metadata)
 {
     int i;
+    char errmsg[2048];
     int rv;
 
     /* Update both metadata files, so they are created if they didn't
@@ -119,7 +119,7 @@ static int ensure(struct uv *uv, struct uvMetadata *metadata)
     }
 
     /* Also sync the data directory so the entries get created. */
-    rv = osSyncDir(uv->dir);
+    rv = uvSyncDir(uv->dir, errmsg);
     if (rv != 0) {
         uvErrorf(uv, "sync %s: %s", uv->dir, osStrError(rv));
         return RAFT_IOERR;
@@ -134,6 +134,10 @@ static int indexOf(int version)
     return version % 2 == 1 ? 1 : 2;
 }
 
+#define logMetadata(PREFIX, M)                                                 \
+    uvDebugf(uv, "metadata" #PREFIX ": version %lld, term %lld, voted for %d", \
+             (M)->version, (M)->term, (M)->voted_for);
+
 int uvMetadataLoad(struct uv *uv, struct uvMetadata *metadata)
 {
     struct uvMetadata metadata1;
@@ -145,11 +149,13 @@ int uvMetadataLoad(struct uv *uv, struct uvMetadata *metadata)
     if (rv != 0) {
         return rv;
     }
+    logMetadata(1, &metadata1);
 
     rv = loadFile(uv, 2, &metadata2);
     if (rv != 0) {
         return rv;
     }
+    logMetadata(2, &metadata2);
 
     /* Check the versions. */
     if (metadata1.version == 0 && metadata2.version == 0) {
@@ -182,11 +188,12 @@ int uvMetadataLoad(struct uv *uv, struct uvMetadata *metadata)
 
 int uvMetadataStore(struct uv *uv, const struct uvMetadata *metadata)
 {
-    osFilename filename; /* Filename of the metadata file */
+    uvFilename filename; /* Filename of the metadata file */
     uint8_t buf[SIZE];   /* Content of metadata file */
     const int flags = O_WRONLY | O_CREAT | O_SYNC | O_TRUNC;
     unsigned short n;
     int fd;
+    char errmsg[2048];
     int rv;
 
     assert(metadata->version > 0);
@@ -199,13 +206,13 @@ int uvMetadataStore(struct uv *uv, const struct uvMetadata *metadata)
     filenameOf(n, filename);
 
     /* Write the metadata file, creating it if it does not exist. */
-    rv = osOpen(uv->dir, filename, flags, &fd);
+    rv = uvOpenFile(uv->dir, filename, flags, &fd, errmsg);
     if (rv != 0) {
         uvErrorf(uv, "open %s: %s", filename, osStrError(rv));
         return RAFT_IOERR;
     }
 
-    rv = osWriteN(fd, buf, sizeof buf);
+    rv = uvWriteFully(fd, buf, sizeof buf, errmsg);
     close(fd);
     if (rv != 0) {
         uvErrorf(uv, "write %s: %s", filename, osStrError(rv));

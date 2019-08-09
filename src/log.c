@@ -6,45 +6,42 @@
 #include "configuration.h"
 #include "log.h"
 
-/**
- * Calculate the reference count hash table key for the given entry index in an
- * table with the given size.
+/* Calculate the reference count hash table key for the given log entry index in
+ * an hash table of the given size.
  *
- * The hash is simply the index minus one modulo the size. This minimizes
- * conflicts in the most frequent case, where a new log entry is simpy appended
- * to the log and can use the hash table bucket next to the bucket for the entry
- * with the previous index (possibly resizing the table if its cap is reached).
- */
-static size_t refs_key(const raft_index index, const size_t size)
+ * The hash is simply the log entry index minus one modulo the size. This
+ * minimizes conflicts in the most frequent case, where a new log entry is
+ * simply appended to the log and can use the hash table bucket next to the
+ * bucket for the entry with the previous index (possibly resizing the table if
+ * its cap is reached). */
+static size_t refsKey(const raft_index index, const size_t size)
 {
     assert(index > 0);
     assert(size > 0);
-
     return (index - 1) % size;
 }
 
-/**
- * Try to insert a new ref count item into the given reference count hash table.
+/* Try to insert a new reference count item for the given log entry index into
+ * the given reference count hash table.
  *
  * A collision happens when the bucket associated with the hash key of the given
- * index is already used to refcount entries with a different index. In that
- * case the collision output parameter will be set to true and no new entry is
- * inserted into the hash table.
+ * log entry index is already used to refcount log entries with a different
+ * index. In that case the collision output parameter will be set to true and no
+ * new reference count item is inserted into the hash table.
  *
- * If two entries have the same index but different terms, the associated bucket
- * will be grown accordingly.
- */
-static int refs_try_insert(struct raft_entry_ref *table,
-                           const size_t size,
-                           const raft_term term,
-                           const raft_index index,
-                           const unsigned short count,
-                           bool *collision)
+ * If two log entries have the same index but different terms, the associated
+ * bucket will be grown accordingly. */
+static int refsTryInsert(struct raft_entry_ref *table,
+                         const size_t size,
+                         const raft_term term,
+                         const raft_index index,
+                         const unsigned short count,
+                         bool *collision)
 {
     struct raft_entry_ref *bucket;    /* Bucket associated with this index. */
-    struct raft_entry_ref *next_slot; /* For traversing the bucket slots */
-    struct raft_entry_ref *last_slot; /* To track the last traversed slot */
-    struct raft_entry_ref *slot;      /* Actual slot to use for this entry */
+    struct raft_entry_ref *next_slot; /* For traversing the bucket slots. */
+    struct raft_entry_ref *last_slot; /* To track the last traversed slot. */
+    struct raft_entry_ref *slot;      /* Actual slot to use for this entry. */
     size_t key;
 
     assert(table != NULL);
@@ -55,14 +52,13 @@ static int refs_try_insert(struct raft_entry_ref *table,
     assert(collision != NULL);
 
     /* Calculate the hash table key for the given index. */
-    key = refs_key(index, size);
+    key = refsKey(index, size);
     bucket = &table[key];
 
     /* If a bucket is empty, then there's no collision and we can fill its first
      * slot. */
     if (bucket->count == 0) {
         assert(bucket->next == NULL);
-
         slot = bucket;
         goto fill;
     }
@@ -114,14 +110,12 @@ fill:
     return 0;
 }
 
-/**
- * Move the slots of the given bucket into the given reference count hash
+/* Move the slots of the given bucket into the given reference count hash
  * table. The key of the bucket to use in the given table will be re-calculated
- * according to the given size.
- */
-static int refs_move(struct raft_entry_ref *bucket,
-                     struct raft_entry_ref *table,
-                     const size_t size)
+ * according to the given size. */
+static int refsMove(struct raft_entry_ref *bucket,
+                    struct raft_entry_ref *table,
+                    const size_t size)
 {
     struct raft_entry_ref *slot;
     struct raft_entry_ref *next_slot;
@@ -142,9 +136,9 @@ static int refs_move(struct raft_entry_ref *bucket,
 
         slot = next_slot;
 
-        /* Insert the ref count for this entry into the new table. */
-        rv = refs_try_insert(table, size, slot->term, slot->index, slot->count,
-                             &collision);
+        /* Insert the reference count for this entry into the new table. */
+        rv = refsTryInsert(table, size, slot->term, slot->index, slot->count,
+                           &collision);
 
         next_slot = slot->next;
 
@@ -166,10 +160,8 @@ static int refs_move(struct raft_entry_ref *bucket,
     return 0;
 }
 
-/**
- * Grow the size of the reference count hash table.
- */
-static int refs_grow(struct raft_log *l)
+/* Grow the size of the reference count hash table. */
+static int refsGrow(struct raft_log *l)
 {
     struct raft_entry_ref *table; /* New hash table. */
     size_t size;                  /* Size of the new hash table. */
@@ -191,7 +183,7 @@ static int refs_grow(struct raft_log *l)
     for (i = 0; i < l->refs_size; i++) {
         struct raft_entry_ref *bucket = &l->refs[i];
         if (bucket->count > 0) {
-            int rv = refs_move(bucket, table, size);
+            int rv = refsMove(bucket, table, size);
             if (rv != 0) {
                 return rv;
             }
@@ -209,12 +201,11 @@ static int refs_grow(struct raft_log *l)
     return 0;
 }
 
-/**
- * Initialize the refcount of the entry with the given index, setting it to 1.
- */
-static int refs_init(struct raft_log *l,
-                     const raft_term term,
-                     const raft_index index)
+/* Initialize the reference count of the entry with the given index, setting it
+ * to 1. */
+static int refsInit(struct raft_log *l,
+                    const raft_term term,
+                    const raft_index index)
 {
     int i;
 
@@ -225,7 +216,6 @@ static int refs_init(struct raft_log *l,
     /* Initialize the hash map with a reasonable size */
     if (l->refs == NULL) {
         l->refs_size = LOG__REFS_INITIAL_SIZE;
-
         l->refs = raft_calloc(l->refs_size, sizeof *l->refs);
         if (l->refs == NULL) {
             return RAFT_NOMEM;
@@ -243,7 +233,7 @@ static int refs_init(struct raft_log *l,
         bool collision;
         int rc;
 
-        rc = refs_try_insert(l->refs, l->refs_size, term, index, 1, &collision);
+        rc = refsTryInsert(l->refs, l->refs_size, term, index, 1, &collision);
         if (rc != 0) {
             return RAFT_NOMEM;
         }
@@ -252,7 +242,7 @@ static int refs_init(struct raft_log *l,
             return 0;
         }
 
-        rc = refs_grow(l);
+        rc = refsGrow(l);
         if (rc != 0) {
             return rc;
         }
@@ -261,12 +251,10 @@ static int refs_init(struct raft_log *l,
     return RAFT_NOMEM;
 }
 
-/**
- * Increment the refcount of the entry with the given term and index.
- */
-static void refs_incr(struct raft_log *l,
-                      const raft_term term,
-                      const raft_index index)
+/* Increment the refcount of the entry with the given term and index. */
+static void refsIncr(struct raft_log *l,
+                     const raft_term term,
+                     const raft_index index)
 {
     size_t key;                  /* Hash table key for the given index. */
     struct raft_entry_ref *slot; /* Slot for the given term/index */
@@ -275,28 +263,26 @@ static void refs_incr(struct raft_log *l,
     assert(term > 0);
     assert(index > 0);
 
-    key = refs_key(index, l->refs_size);
+    key = refsKey(index, l->refs_size);
 
-    /* Lookup the slot associated with the given term/index. */
+    /* Lookup the slot associated with the given term/index, which must have
+     * been previously inserted. */
     for (slot = &l->refs[key]; slot != NULL; slot = slot->next) {
         assert(slot->index == index);
         if (slot->term == term) {
             break;
         }
     }
-
     assert(slot != NULL);
 
     slot->count++;
 }
 
-/**
- * Decrement the refcount of the entry with the given index. Return a boolean
- * indicating whether the entry has now zero references.
- */
-static bool refs_decr(struct raft_log *l,
-                      const raft_term term,
-                      const raft_index index)
+/* Decrement the refcount of the entry with the given index. Return a boolean
+ * indicating whether the entry has now zero references. */
+static bool refsDecr(struct raft_log *l,
+                     const raft_term term,
+                     const raft_index index)
 {
     size_t key;                       /* Hash table key for the given index. */
     struct raft_entry_ref *slot;      /* Slot for the given term/index */
@@ -306,7 +292,7 @@ static bool refs_decr(struct raft_log *l,
     assert(term > 0);
     assert(index > 0);
 
-    key = refs_key(index, l->refs_size);
+    key = refsKey(index, l->refs_size);
     prev_slot = NULL;
 
     /* Lookup the slot associated with the given term/index, keeping track of
@@ -318,7 +304,6 @@ static bool refs_decr(struct raft_log *l,
         }
         prev_slot = slot;
     }
-
     assert(slot != NULL);
 
     slot->count--;
@@ -338,14 +323,8 @@ static bool refs_decr(struct raft_log *l,
         /* This is the very first slot, and slot list is not empty. Copy the
          * second slot into the first one, then delete it. */
         struct raft_entry_ref *second_slot = slot->next;
-        struct raft_entry_ref *tail_slots = second_slot->next;
-
-        slot->term = second_slot->term;
-        slot->index = second_slot->index;
-        slot->count = second_slot->count;
-
+        *slot = *second_slot;
         raft_free(second_slot);
-        slot->next = tail_slots;
     }
 
     return true;
@@ -354,7 +333,6 @@ static bool refs_decr(struct raft_log *l,
 void logInit(struct raft_log *l)
 {
     assert(l != NULL);
-
     l->entries = NULL;
     l->size = 0;
     l->front = l->back = 0;
@@ -365,12 +343,22 @@ void logInit(struct raft_log *l)
     l->snapshot.last_term = 0;
 }
 
-/**
- * Return the index of the i'th entry in the log.
- */
-static raft_index log__index(struct raft_log *l, size_t i)
+/* Return the index of the i'th entry in the log. */
+static raft_index indexAt(struct raft_log *l, size_t i)
 {
     return l->offset + i + 1;
+}
+
+/* Return the circular buffer position of the i'th entry in the log. */
+static size_t positionAt(struct raft_log *l, size_t i)
+{
+    return (l->front + i) % l->size;
+}
+
+/* Return the i'th entry in the log. */
+static struct raft_entry *entryAt(struct raft_log *l, size_t i)
+{
+    return &l->entries[positionAt(l, i)];
 }
 
 void logClose(struct raft_log *l)
@@ -381,17 +369,20 @@ void logClose(struct raft_log *l)
 
     if (l->entries != NULL) {
         size_t i;
-        size_t n = logNumOutstanding(l);
+        size_t n = logNumEntries(l);
 
         for (i = 0; i < n; i++) {
-            struct raft_entry *entry = &l->entries[(l->front + i) % l->size];
-            raft_index index = log__index(l, i);
-            size_t key = refs_key(index, l->refs_size);
+            struct raft_entry *entry = entryAt(l, i);
+            raft_index index = indexAt(l, i);
+            size_t key = refsKey(index, l->refs_size);
             struct raft_entry_ref *slot = &l->refs[key];
 
             /* We require that there are no outstanding references to active
              * entries. */
             assert(slot->count == 1);
+
+            /* TODO: we should support the case where the bucket has more than
+             * one slot. */
             assert(slot->next == NULL);
 
             /* Release the memory used by the entry data (either directly or via
@@ -417,17 +408,15 @@ void logClose(struct raft_log *l)
     }
 }
 
-/**
- * Ensure that the entries array has enough free slots for adding a new enty.
- */
-static int ensure_capacity(struct raft_log *l)
+/* Ensure that the entries array has enough free slots for adding a new enty. */
+static int ensureCapacity(struct raft_log *l)
 {
     struct raft_entry *entries; /* New entries array */
     size_t n;                   /* Current number of entries */
     size_t size;                /* Size of the new array */
-    size_t i, j;
+    size_t i;
 
-    n = logNumOutstanding(l);
+    n = logNumEntries(l);
 
     if (n + 1 < l->size) {
         return 0;
@@ -445,8 +434,7 @@ static int ensure_capacity(struct raft_log *l)
     /* Copy all active old entries to the beginning of the newly allocated
      * array. */
     for (i = 0; i < n; i++) {
-        j = (l->front + i) % l->size; /* Index in the current array */
-        memcpy(&entries[i], &l->entries[j], sizeof *entries);
+        memcpy(&entries[i], entryAt(l, i), sizeof *entries);
     }
 
     /* Release the old entries array. */
@@ -477,13 +465,14 @@ int logAppend(struct raft_log *l,
     assert(type == RAFT_CHANGE || type == RAFT_BARRIER || type == RAFT_COMMAND);
     assert(buf != NULL);
 
-    rv = ensure_capacity(l);
+    rv = ensureCapacity(l);
     if (rv != 0) {
         return rv;
     }
 
-    index = l->offset + logNumOutstanding(l) + 1;
-    rv = refs_init(l, term, index);
+    index = logLastIndex(l) + 1;
+
+    rv = refsInit(l, term, index);
     if (rv != 0) {
         return rv;
     }
@@ -557,7 +546,7 @@ err:
     return rv;
 }
 
-size_t logNumOutstanding(struct raft_log *l)
+size_t logNumEntries(struct raft_log *l)
 {
     assert(l != NULL);
 
@@ -572,37 +561,30 @@ size_t logNumOutstanding(struct raft_log *l)
 
 raft_index logLastIndex(struct raft_log *l)
 {
-    /* If there are no outstanding in-memory entries, but there is a snapshot
-     * available return its last index. */
-    if (logNumOutstanding(l) == 0 && l->snapshot.last_index != 0) {
-        /* Sanity check that the offset is set consistently */
-        assert(l->offset == l->snapshot.last_index);
-        return l->snapshot.last_index;
+    /* If there are no entries in the log, but there is a snapshot available
+     * check that it's last index is consistent with the offset. */
+    if (logNumEntries(l) == 0 && l->snapshot.last_index != 0) {
+        assert(l->offset <= l->snapshot.last_index);
     }
-    return l->offset + logNumOutstanding(l);
+    return l->offset + logNumEntries(l);
 }
 
-/**
- * Return the position of the entry with the given index in the entries array.
+/* Return the position of the entry with the given index in the entries array.
  *
  * If no entry with the given index is in the log return the size of the entries
- * array.
- */
-static size_t locate_entry(struct raft_log *l, const raft_index index)
+ * array. */
+static size_t locateEntry(struct raft_log *l, const raft_index index)
 {
-    if (logNumOutstanding(l) == 0) {
-        return 0;
-    }
+    size_t n = logNumEntries(l);
 
-    if (index < log__index(l, 0) ||
-        index > log__index(l, logNumOutstanding(l) - 1)) {
+    if (n == 0 || index < indexAt(l, 0) || index > indexAt(l, n - 1)) {
         return l->size;
     }
 
-    /* Get the array index of the desired entry. Log indexes start at 1, so we
-     * subtract one to get array indexes. We also need to subtract any index
-     * offset this log might start at. */
-    return (l->front + (index - 1) - l->offset) % l->size;
+    /* Get the circular buffer position of the desired entry. Log indexes start
+     * at 1, so we subtract one to get array indexes. We also need to subtract
+     * any index offset this log might start at. */
+    return positionAt(l, (index - 1) - l->offset);
 }
 
 raft_term logTermOf(struct raft_log *l, const raft_index index)
@@ -620,14 +602,14 @@ raft_term logTermOf(struct raft_log *l, const raft_index index)
         assert(l->snapshot.last_term != 0);
         /* Sanity check that if we still have the entry at last_index, its term
          * matches the one in the snapshot. */
-        i = locate_entry(l, index);
+        i = locateEntry(l, index);
         if (i != l->size) {
             assert(l->entries[i].term == l->snapshot.last_term);
         }
         return l->snapshot.last_term;
     }
 
-    i = locate_entry(l, index);
+    i = locateEntry(l, index);
     assert(i < l->size);
     return l->entries[i].term;
 }
@@ -651,7 +633,7 @@ const struct raft_entry *logGet(struct raft_log *l, const raft_index index)
     assert(l != NULL);
 
     /* Get the array index of the desired entry. */
-    i = locate_entry(l, index);
+    i = locateEntry(l, index);
     if (i == l->size) {
         return NULL;
     }
@@ -675,7 +657,7 @@ int logAcquire(struct raft_log *l,
     assert(n != NULL);
 
     /* Get the array index of the first entry to acquire. */
-    i = locate_entry(l, index);
+    i = locateEntry(l, index);
 
     if (i == l->size) {
         *n = 0;
@@ -705,28 +687,23 @@ int logAcquire(struct raft_log *l,
         size_t k = (i + j) % l->size;
         struct raft_entry *entry = &(*entries)[j];
         *entry = l->entries[k];
-        refs_incr(l, entry->term, index + j);
+        refsIncr(l, entry->term, index + j);
     }
 
     return 0;
 }
 
-/**
- * Return true if the given batch is referenced by any entry currently in the
- * log.
- */
-static bool is_batch_referenced(struct raft_log *l, const void *batch)
+/* Return true if the given batch is referenced by any entry currently in the
+ * log. */
+static bool isBatchReferenced(struct raft_log *l, const void *batch)
 {
-    size_t n = logNumOutstanding(l);
     size_t i;
 
     /* Iterate through all live entries to see if there's one
      * belonging to the same batch. This is slightly inefficient but
      * this code path should be taken very rarely in practice. */
-    for (i = 0; i < n; i++) {
-        struct raft_entry *entry;
-        entry = &l->entries[(l->front + i) % l->size];
-
+    for (i = 0; i < logNumEntries(l); i++) {
+        struct raft_entry *entry = entryAt(l, i);
         if (entry->batch == batch) {
             return true;
         }
@@ -750,7 +727,7 @@ void logRelease(struct raft_log *l,
         struct raft_entry *entry = &entries[i];
         bool unref;
 
-        unref = refs_decr(l, entry->term, index + i);
+        unref = refsDecr(l, entry->term, index + i);
 
         /* If there are no outstanding references to this entry, free its
          * payload if it's not part of a batch, or check if we can free the
@@ -762,7 +739,7 @@ void logRelease(struct raft_log *l,
                 }
             } else {
                 if (entry->batch != batch) {
-                    if (!is_batch_referenced(l, entry->batch)) {
+                    if (!isBatchReferenced(l, entry->batch)) {
                         batch = entry->batch;
                         raft_free(batch);
                     }
@@ -776,41 +753,36 @@ void logRelease(struct raft_log *l,
     }
 }
 
-/**
- * Clear the log if it became empty.
- */
-static void clear_if_empty(struct raft_log *l)
+/* Clear the log if it became empty. */
+static void clearIfEmpty(struct raft_log *l)
 {
-    if (logNumOutstanding(l) == 0) {
-        raft_free(l->entries);
-        l->entries = NULL;
-        l->size = 0;
-        l->front = 0;
-        l->back = 0;
+    if (logNumEntries(l) > 0) {
+        return;
     }
+    raft_free(l->entries);
+    l->entries = NULL;
+    l->size = 0;
+    l->front = 0;
+    l->back = 0;
 }
 
-/**
- * Destroy an entry, possibly releasing the memory of its buffer.
- */
-static void destroy_entry(struct raft_log *l, struct raft_entry *entry)
+/* Destroy an entry, possibly releasing the memory of its buffer. */
+static void destroyEntry(struct raft_log *l, struct raft_entry *entry)
 {
     if (entry->batch == NULL) {
         if (entry->buf.base != NULL) {
             raft_free(entry->buf.base);
         }
     } else {
-        if (!is_batch_referenced(l, entry->batch)) {
+        if (!isBatchReferenced(l, entry->batch)) {
             raft_free(entry->batch);
         }
     }
 }
 
-/**
- * Core logic of @logTruncate and @logDiscard, removing all
- * entries starting from @index.
- */
-static void remove_suffix(struct raft_log *l,
+/* Core logic of @logTruncate and @logDiscard, removing all log entries from
+ * @index onward. If @destroy is true, also destroy the removed entries. */
+static void removeSuffix(struct raft_log *l,
                           const raft_index index,
                           bool destroy)
 {
@@ -836,32 +808,31 @@ static void remove_suffix(struct raft_log *l,
         }
 
         entry = &l->entries[l->back];
-
-        unref = refs_decr(l, entry->term, start + n - i - 1);
+        unref = refsDecr(l, entry->term, start + n - i - 1);
 
         if (unref && destroy) {
-            destroy_entry(l, entry);
+            destroyEntry(l, entry);
         }
     }
 
-    clear_if_empty(l);
+    clearIfEmpty(l);
 }
 
 void logTruncate(struct raft_log *l, const raft_index index)
 {
-    if (logNumOutstanding(l) == 0) {
+    if (logNumEntries(l) == 0) {
         return;
     }
-    return remove_suffix(l, index, true);
+    return removeSuffix(l, index, true);
 }
 
 void logDiscard(struct raft_log *l, const raft_index index)
 {
-    return remove_suffix(l, index, false);
+    return removeSuffix(l, index, false);
 }
 
 /* Delete all entries up to the given index (included). */
-static void remove_prefix(struct raft_log *l, const raft_index index)
+static void removePrefix(struct raft_log *l, const raft_index index)
 {
     size_t i;
     size_t n;
@@ -871,7 +842,7 @@ static void remove_prefix(struct raft_log *l, const raft_index index)
     assert(index <= logLastIndex(l));
 
     /* Number of entries to delete */
-    n = (index - log__index(l, 0)) + 1;
+    n = (index - indexAt(l, 0)) + 1;
 
     for (i = 0; i < n; i++) {
         struct raft_entry *entry;
@@ -886,14 +857,14 @@ static void remove_prefix(struct raft_log *l, const raft_index index)
         }
         l->offset++;
 
-        unref = refs_decr(l, entry->term, l->offset);
+        unref = refsDecr(l, entry->term, l->offset);
 
         if (unref) {
-            destroy_entry(l, entry);
+            destroyEntry(l, entry);
         }
     }
 
-    clear_if_empty(l);
+    clearIfEmpty(l);
 }
 
 void logSnapshot(struct raft_log *l, raft_index last_index, unsigned trailing)
@@ -908,16 +879,16 @@ void logSnapshot(struct raft_log *l, raft_index last_index, unsigned trailing)
 
     /* If we have not at least n entries preceeding index, we're done */
     if (last_index <= trailing ||
-        locate_entry(l, last_index - trailing) == l->size) {
+        locateEntry(l, last_index - trailing) == l->size) {
         return;
     }
 
-    remove_prefix(l, last_index - trailing);
+    removePrefix(l, last_index - trailing);
 }
 
 void logRestore(struct raft_log *l, raft_index last_index, raft_term last_term)
 {
-    size_t n = logNumOutstanding(l);
+    size_t n = logNumEntries(l);
     assert(last_index > 0);
     assert(last_term > 0);
     if (n > 0) {

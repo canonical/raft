@@ -63,7 +63,7 @@ TEST_CASE(snapshot, no_entries, NULL)
 TEST_CASE(snapshot, followup_entries, NULL)
 {
     struct snapshot_fixture *f = data;
-    struct raft_entry *entries = raft_malloc(2 * sizeof *entries);
+    struct raft_entry entries[2];
     struct raft_fsm *fsm;
     (void)params;
 
@@ -81,7 +81,8 @@ TEST_CASE(snapshot, followup_entries, NULL)
                          1 /* conf index                                    */,
                          5 /* x                                             */,
                          7 /* y                                             */);
-    CLUSTER_SET_ENTRIES(0, entries, 2);
+    CLUSTER_ADD_ENTRY(0, &entries[0]);
+    CLUSTER_ADD_ENTRY(1, &entries[1]);
     CLUSTER_SET_TERM(0, 2);
     CLUSTER_START;
     CLUSTER_MAKE_PROGRESS;
@@ -147,22 +148,20 @@ TEST_CASE(entries, empty, NULL)
 TEST_CASE(entries, two, NULL)
 {
     struct entries_fixture *f = data;
-    struct raft_entry *entries = raft_malloc(2 * sizeof *entries);
+    struct raft_entry entry;
     struct raft_fsm *fsm;
     unsigned i;
     int rv;
     (void)params;
 
-    entries[0].type = RAFT_CHANGE;
-    entries[0].term = 1;
-    rv = configurationEncode(&f->configuration, &entries[0].buf);
+    rv = raft_bootstrap(CLUSTER_RAFT(0), &f->configuration);
     munit_assert_int(rv, ==, 0);
 
-    entries[1].type = RAFT_COMMAND;
-    entries[1].term = 3;
-    test_fsm_encode_set_x(123, &entries[1].buf);
+    entry.type = RAFT_COMMAND;
+    entry.term = 3;
+    test_fsm_encode_set_x(123, &entry.buf);
 
-    CLUSTER_SET_ENTRIES(0, entries, 2);
+    CLUSTER_ADD_ENTRY(0, &entry);
     CLUSTER_SET_TERM(0, 3);
 
     CLUSTER_START;

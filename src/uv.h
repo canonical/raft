@@ -5,11 +5,8 @@
 
 #include "../include/raft.h"
 
-#include "os.h"
 #include "uv_file.h"
-
-/* Current disk format version. */
-#define UV__DISK_FORMAT 1
+#include "uv_os.h"
 
 /* 8 Megabytes */
 #define UV__MAX_SEGMENT_SIZE (8 * 1024 * 1024)
@@ -20,6 +17,14 @@
 
 /* Template string for open segment filenames: incrementing counter. */
 #define UV__OPEN_TEMPLATE "open-%llu"
+
+/* Template string for snapshot filenames: snapshot term, snapshot index,
+ * creation timestamp (milliseconds since epoch). */
+#define UV__SNAPSHOT_TEMPLATE "snapshot-%llu-%llu-%llu"
+
+/* Template string for snapshot metadata filenames: snapshot term,  snapshot
+ * index, creation timestamp (milliseconds since epoch). */
+#define UV__SNAPSHOT_META_TEMPLATE UV__SNAPSHOT_TEMPLATE ".meta"
 
 /* State codes. */
 enum { UV__ACTIVE = 1, UV__CLOSED };
@@ -35,14 +40,18 @@ struct uvMetadata
     unsigned voted_for;         /* Server ID of last vote, or 0 */
 };
 
+/* Hold state associated with an outbound connection. */
 struct uvClient;
+
+/* Hold state associated with an inbound connection. */
 struct uvServer;
 
+/* Hold state of a libuv-based raft_io implementation. */
 struct uv
 {
     struct raft_io *io;                  /* I/O object we're implementing */
     struct uv_loop_s *loop;              /* UV event loop */
-    osDir dir;                           /* Data directory */
+    uvDir dir;                           /* Data directory */
     struct raft_uv_transport *transport; /* Network transport */
     struct raft_logger *logger;          /* Logger implementation */
     unsigned id;                         /* Server ID */
@@ -52,9 +61,9 @@ struct uv
     bool async_io;                       /* Whether async I/O is supported */
     size_t block_size;                   /* Block size of the data dir */
     unsigned n_blocks;                   /* N. of blocks in a segment */
-    struct uvClient **clients;           /* Outgoing connections */
+    struct uvClient **clients;           /* Outbound connections */
     unsigned n_clients;                  /* Length of the clients array */
-    struct uvServer **servers;           /* Incoming connections */
+    struct uvServer **servers;           /* Inbound connections */
     unsigned n_servers;                  /* Length of the servers array */
     unsigned connect_retry_delay;        /* Client connection retry delay */
     struct uvFile *prepare_file;         /* File segment being prepared */
@@ -83,9 +92,9 @@ struct uv
 };
 
 /* Emit a log message with a certain level. */
-#define uvEmitf(UV, LEVEL, FORMAT, ...)                                       \
-    UV->logger->emit(UV->logger, LEVEL, UV->id, UV->io->time(UV->io), FORMAT, \
-                     ##__VA_ARGS__);
+#define uvEmitf(UV, LEVEL, FORMAT, ...)                                 \
+    UV->logger->emit(UV->logger, LEVEL, UV->io->time(UV->io), __FILE__, \
+                     __LINE__, FORMAT, ##__VA_ARGS__);
 #define uvDebugf(UV, F, ...) uvEmitf(UV, RAFT_DEBUG, F, ##__VA_ARGS__);
 #define uvInfof(UV, F, ...) uvEmitf(UV, RAFT_DEBUG, F, ##__VA_ARGS__);
 #define uvWarnf(UV, F, ...) uvEmitf(UV, RAFT_WARN, F, ##__VA_ARGS__);
@@ -115,7 +124,7 @@ struct uvSegmentInfo
             unsigned long long counter; /* Open segment counter */
         };
     };
-    osFilename filename; /* Segment filename */
+    uvFilename filename; /* Segment filename */
 };
 
 /* Append a new item to the given segment info list if the given filename
@@ -202,7 +211,7 @@ struct uvSnapshotInfo
     raft_term term;
     raft_index index;
     unsigned long long timestamp;
-    osFilename filename;
+    uvFilename filename;
 };
 
 /* Append a new item to the given snapshot info list if the given filename

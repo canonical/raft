@@ -5,3 +5,4 @@ BraceWrapping:
  AfterStruct: true
 IndentWidth: 4
 PointerAlignment: Right
+IndentPPDirectives: AfterHash

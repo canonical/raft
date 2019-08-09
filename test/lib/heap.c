@@ -4,65 +4,57 @@
 #include "heap.h"
 #include "munit.h"
 
-struct test__heap
+struct heap
 {
-    int n; /* Number of outstanding allocations. */
-    struct test_fault fault;
+    int n;                   /* Number of outstanding allocations. */
+    struct test_fault fault; /* Fault trigger. */
 };
 
-static void test__heap_init(struct test__heap *t)
+static void heapInit(struct heap *h)
 {
-    t->n = 0;
-    test_fault_init(&t->fault);
+    h->n = 0;
+    test_fault_init(&h->fault);
 }
 
-static void *test__heap_malloc(void *data, size_t size)
+static void *heapMalloc(void *data, size_t size)
 {
-    struct test__heap *t = data;
-
-    if (test_fault_tick(&t->fault)) {
+    struct heap *h = data;
+    if (test_fault_tick(&h->fault)) {
         return NULL;
     }
-
-    t->n++;
-
+    h->n++;
     return munit_malloc(size);
 }
 
-static void test__free(void *data, void *ptr)
+static void heapFree(void *data, void *ptr)
 {
-    struct test__heap *t = data;
-
-    t->n--;
-
+    struct heap *h = data;
+    h->n--;
     free(ptr);
 }
 
-static void *test__calloc(void *data, size_t nmemb, size_t size)
+static void *heapCalloc(void *data, size_t nmemb, size_t size)
 {
-    struct test__heap *t = data;
-
-    if (test_fault_tick(&t->fault)) {
+    struct heap *h = data;
+    if (test_fault_tick(&h->fault)) {
         return NULL;
     }
-
-    t->n++;
-
+    h->n++;
     return munit_calloc(nmemb, size);
 }
 
-static void *test__realloc(void *data, void *ptr, size_t size)
+static void *heapRealloc(void *data, void *ptr, size_t size)
 {
-    struct test__heap *t = data;
+    struct heap *h = data;
 
-    if (test_fault_tick(&t->fault)) {
+    if (test_fault_tick(&h->fault)) {
         return NULL;
     }
 
     /* Increase the number of allocation only if ptr is NULL, since otherwise
      * realloc is a malloc plus a free. */
     if (ptr == NULL) {
-        t->n++;
+        h->n++;
     }
 
     ptr = realloc(ptr, size);
@@ -76,19 +68,18 @@ static void *test__realloc(void *data, void *ptr, size_t size)
     return ptr;
 }
 
-static void *test__aligned_alloc(void *data, size_t alignment, size_t size)
+static void *heapAlignedAlloc(void *data, size_t alignment, size_t size)
 {
-    struct test__heap *t = data;
+    struct heap *h = data;
     void *p;
 
-    if (test_fault_tick(&t->fault)) {
+    if (test_fault_tick(&h->fault)) {
         return NULL;
     }
 
-    t->n++;
+    h->n++;
 
     p = aligned_alloc(alignment, size);
-
     munit_assert_ptr_not_null(p);
 
     return p;
@@ -96,54 +87,50 @@ static void *test__aligned_alloc(void *data, size_t alignment, size_t size)
 
 void test_heap_setup(const MunitParameter params[], struct raft_heap *h)
 {
-    struct test__heap *t = munit_malloc(sizeof *t);
+    struct heap *heap = munit_malloc(sizeof *heap);
     const char *delay = munit_parameters_get(params, TEST_HEAP_FAULT_DELAY);
     const char *repeat = munit_parameters_get(params, TEST_HEAP_FAULT_REPEAT);
 
     munit_assert_ptr_not_null(h);
 
-    test__heap_init(t);
+    heapInit(heap);
 
     if (delay != NULL) {
-        t->fault.countdown = atoi(delay);
+        heap->fault.countdown = atoi(delay);
     }
     if (repeat != NULL) {
-        t->fault.n = atoi(repeat);
+        heap->fault.n = atoi(repeat);
     }
 
-    h->data = t;
-    h->malloc = test__heap_malloc;
-    h->free = test__free;
-    h->calloc = test__calloc;
-    h->realloc = test__realloc;
-    h->aligned_alloc = test__aligned_alloc;
+    h->data = heap;
+    h->malloc = heapMalloc;
+    h->free = heapFree;
+    h->calloc = heapCalloc;
+    h->realloc = heapRealloc;
+    h->aligned_alloc = heapAlignedAlloc;
 
     raft_heap_set(h);
-
-    test_fault_pause(&t->fault);
+    test_fault_pause(&heap->fault);
 }
 
 void test_heap_tear_down(struct raft_heap *h)
 {
-    struct test__heap *t = h->data;
-
-    if (t->n != 0) {
-      //munit_errorf("memory leak: %d outstanding allocations", t->n);
+    struct heap *heap = h->data;
+    if (heap->n != 0) {
+      //munit_errorf("memory leak: %d outstanding allocations", heap->n);
     }
-
-    free(t);
+    free(heap);
+    raft_heap_set_default();
 }
 
 void test_heap_fault_config(struct raft_heap *h, int delay, int repeat)
 {
-    struct test__heap *t = h->data;
-
-    test_fault_config(&t->fault, delay, repeat);
+    struct heap *heap = h->data;
+    test_fault_config(&heap->fault, delay, repeat);
 }
 
 void test_heap_fault_enable(struct raft_heap *h)
 {
-    struct test__heap *t = h->data;
-
-    test_fault_resume(&t->fault);
+    struct heap *heap = h->data;
+    test_fault_resume(&heap->fault);
 }

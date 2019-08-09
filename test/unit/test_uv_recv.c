@@ -33,6 +33,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     int rv;
+    (void)user_data;
     SETUP_UV;
     rv = f->io.start(&f->io, 10000, NULL, recv_cb);
     munit_assert_int(rv, ==, 0);
@@ -48,6 +49,7 @@ static void tear_down(void *data)
 {
     struct fixture *f = data;
     TEAR_DOWN_UV;
+    free(f);
 }
 
 #define recv__peer_connect test_tcp_connect(&f->tcp, 9000);

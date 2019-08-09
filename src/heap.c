@@ -63,6 +63,11 @@ void *raft_realloc(void *ptr, size_t size)
     return currentHeap->realloc(currentHeap->data, ptr, size);
 }
 
+void *raft_aligned_alloc(size_t alignment, size_t size)
+{
+    return currentHeap->aligned_alloc(currentHeap->data, alignment, size);
+}
+
 void raft_heap_set(struct raft_heap *heap)
 {
     currentHeap = heap;

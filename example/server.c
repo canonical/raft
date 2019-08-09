@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "../include/raft.h"
 #include "../include/raft/uv.h"
@@ -13,6 +14,29 @@
  * Sample application FSM that just increases a counter.
  *
  ********************************************************************/
+
+/* Custom logging function which include the server ID. */
+static void emit(struct raft_logger *l,
+                 int level,
+                 raft_time time,
+                 const char *file,
+                 int line,
+                 const char *format,
+                 ...)
+{
+    va_list args;
+    unsigned id = *(unsigned*)l->impl;
+    char buf[2048];
+    (void)time;
+    if (level < l->level) {
+        return;
+    }
+    sprintf(buf, "%d: %30s:%*d - ", id, file, 3, line);
+    va_start(args, format);
+    vsprintf(buf + strlen(buf), format, args);
+    va_end(args);
+    fprintf(stderr, "%s\n", buf);
+}
 
 struct fsm
 {
@@ -105,9 +129,9 @@ struct server
 };
 
 /* Convenience to emit a message. */
-#define emitf(S, LEVEL, FORMAT, ...)                                     \
-    S->logger.emit(&S->logger, LEVEL, S->id, S->io.time(&S->io), FORMAT, \
-                   ##__VA_ARGS__);
+#define emitf(S, LEVEL, FORMAT, ...)                                          \
+    S->logger.emit(&S->logger, LEVEL, S->io.time(&S->io), __FILE__, __LINE__, \
+                   FORMAT, ##__VA_ARGS__);
 
 /* Final callback in the shutdown sequence, invoked after the timer handle has
  * been closed. */
@@ -189,11 +213,13 @@ static int serverInit(struct server *s, const char *dir, unsigned id)
         goto errAfterIoInit;
     }
 
-    /* Initialize the default logger. */
-    raft_default_logger_init(&s->logger);
-
     /* Save the server ID. */
     s->id = id;
+
+    /* Initialize the default logger. */
+    s->logger.impl = (void*)&s->id;
+    s->logger.level = RAFT_INFO;
+    s->logger.emit = emit;
 
     /* Render the address. */
     sprintf(s->address, "127.0.0.1:900%d", id);

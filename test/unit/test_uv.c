@@ -126,22 +126,6 @@ TEST_SUITE(init);
 TEST_SETUP(init, setup);
 TEST_TEAR_DOWN(init, tear_down);
 
-/* The given path is not a directory. */
-TEST_CASE(init, not_a_dir, NULL)
-{
-    struct fixture *f = data;
-    struct raft_io io;
-    int rv;
-    return MUNIT_OK;
-
-    (void)params;
-
-    rv = raft_uv_init(&io, &f->loop, "/dev/null", &f->transport);
-    munit_assert_int(rv, ==, RAFT_IOERR);
-
-    return MUNIT_OK;
-}
-
 /* Data directory path is too long */
 TEST_CASE(init, dir_too_long, NULL)
 {
@@ -159,52 +143,6 @@ TEST_CASE(init, dir_too_long, NULL)
 
     rv = raft_uv_init(&io, &f->loop, dir, &transport);
     munit_assert_int(rv, ==, RAFT_NAMETOOLONG);
-
-    return MUNIT_OK;
-}
-
-/* Can't create data directory */
-TEST_CASE(init, cant_create_dir, NULL)
-{
-    struct fixture *f = data;
-    struct raft_uv_transport transport;
-    struct raft_io io;
-    int rv;
-
-    (void)params;
-
-    const char *dir = "/non/existing/path";
-
-    rv = raft_uv_init(&io, &f->loop, dir, &transport);
-    munit_assert_int(rv, ==, 0);
-
-    rv = io.init(&io, &f->logger, 1, "1");
-    munit_assert_int(rv, ==, RAFT_IOERR);
-
-    raft_uv_close(&io);
-
-    return MUNIT_OK;
-}
-
-/* Data directory not accessible */
-TEST_CASE(init, access_error, NULL)
-{
-    struct fixture *f = data;
-    struct raft_io io;
-    struct raft_uv_transport transport;
-    int rv;
-
-    (void)params;
-
-    const char *dir = "/root/foo";
-
-    rv = raft_uv_init(&io, &f->loop, dir, &transport);
-    munit_assert_int(rv, ==, 0);
-
-    rv = io.init(&io, &f->logger, 1, "1");
-    munit_assert_int(rv, ==, RAFT_IOERR);
-
-    raft_uv_close(&io);
 
     return MUNIT_OK;
 }

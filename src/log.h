@@ -1,7 +1,7 @@
 /* In-memory cache of the persistent raft log stored on disk. */
 
-#ifndef RAFT_LOG_H
-#define RAFT_LOG_H
+#ifndef RAFT_LOG_H_
+#define RAFT_LOG_H_
 
 #include "../include/raft.h"
 
@@ -14,10 +14,8 @@ void logInit(struct raft_log *l);
 /* Release all memory used by the given log object. */
 void logClose(struct raft_log *l);
 
-/* Get the current number of outstanding entries in the log, i.e. the number of
- * entries that are not included in the most recent snapshot (if any). Return
- * #0 if there are no outstanding entries. */
-size_t logNumOutstanding(struct raft_log *l);
+/* Get the number of entries the log currently contains. */
+size_t logNumEntries(struct raft_log *l);
 
 /* Get the index of the last entry in the log. Return #0 if the log is empty. */
 raft_index logLastIndex(struct raft_log *l);
@@ -40,7 +38,7 @@ raft_index logSnapshotIndex(struct raft_log *l);
  * invoked. Return #NULL if there is no such entry. */
 const struct raft_entry *logGet(struct raft_log *l, const raft_index index);
 
-/* Append the an entry to the log. */
+/* Append a new entry to the log. */
 int logAppend(struct raft_log *l,
               const raft_term term,
               const int type,
@@ -82,11 +80,11 @@ void logTruncate(struct raft_log *l, const raft_index index);
  */
 void logDiscard(struct raft_log *l, const raft_index index);
 
-/* To be called when taking a new snapshot. * The log must contain an entry at
- * @last_index, which is the index of the last entry included in the
+/* To be called when taking a new snapshot. The log must contain an entry at
+ * last_index, which is the index of the last entry included in the
  * snapshot. The function will update the last snapshot information and delete
- * all entries up @last_index - @trailing. If the log contains no entry a
- * @last_index - @trailing, then no entry will be deleted. */
+ * all entries up last_index - trailing (included). If the log contains no entry
+ * a last_index - trailing, then no entry will be deleted. */
 void logSnapshot(struct raft_log *l, raft_index last_index, unsigned trailing);
 
 /* To be called when restoring a snapshot.
@@ -104,4 +102,4 @@ void logRestore(struct raft_log *l, raft_index last_index, raft_term last_term);
  * current offset back to start_index. */
 void logSeek(struct raft_log *l, raft_index start_index);
 
-#endif /* RAFT_LOG_H */
+#endif /* RAFT_LOG_H_ */

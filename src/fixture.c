@@ -217,7 +217,7 @@ static bool ioFaultTick(struct io *io)
 }
 
 static int ioMethodInit(struct raft_io *raft_io,
-			struct raft_logger *logger,
+                        struct raft_logger *logger,
                         unsigned id,
                         const char *address)
 {
@@ -923,6 +923,29 @@ void ioClose(struct raft_io *io)
     raft_free(io->impl);
 }
 
+/* Custom logging function which include the server ID. */
+static void emit(struct raft_logger *l,
+                 int level,
+                 raft_time time,
+                 const char *file,
+                 int line,
+                 const char *format,
+                 ...)
+{
+    va_list args;
+    unsigned id = *(unsigned*)l->impl;
+    char buf[2048];
+    (void)time;
+    if (level < l->level) {
+        return;
+    }
+    sprintf(buf, "%d: %30s:%*d - ", id, file, 3, line);
+    va_start(args, format);
+    vsprintf(buf + strlen(buf), format, args);
+    va_end(args);
+    fprintf(stderr, "%s\n", buf);
+}
+
 static int serverInit(struct raft_fixture *f, unsigned i, struct raft_fsm *fsm)
 {
     int rv;
@@ -940,8 +963,9 @@ static int serverInit(struct raft_fixture *f, unsigned i, struct raft_fsm *fsm)
     }
     raft_set_election_timeout(&s->raft, ELECTION_TIMEOUT);
     raft_set_heartbeat_timeout(&s->raft, HEARTBEAT_TIMEOUT);
-    rv = raft_default_logger_init(&s->logger);
-    assert(rv == 0);
+    s->logger.impl = (void*)&s->id;
+    s->logger.level = RAFT_INFO;
+    s->logger.emit = emit;
     return 0;
 }
 
@@ -1380,11 +1404,13 @@ struct raft_fixture_event *raft_fixture_step(struct raft_fixture *f)
 {
     raft_time tick_time;
     raft_time completion_time;
-    unsigned i;
-    unsigned j;
+    unsigned i = f->n;
+    unsigned j = f->n;
 
     getLowestTickTime(f, &tick_time, &i);
     getLowestRequestCompletionTime(f, &completion_time, &j);
+
+    assert(i < f->n || j < f->n);
 
     if (tick_time < completion_time ||
         (tick_time == completion_time && i <= j)) {
@@ -1841,16 +1867,6 @@ void raft_fixture_set_snapshot(struct raft_fixture *f,
 {
     struct io *io = f->servers[i].io.impl;
     io->snapshot = snapshot;
-}
-
-void raft_fixture_set_entries(struct raft_fixture *f,
-                              unsigned i,
-                              struct raft_entry *entries,
-                              unsigned n)
-{
-    struct io *io = f->servers[i].io.impl;
-    io->entries = entries;
-    io->n = n;
 }
 
 void raft_fixture_add_entry(struct raft_fixture *f,

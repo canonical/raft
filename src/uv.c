@@ -12,9 +12,9 @@
 #include "configuration.h"
 #include "entry.h"
 #include "logging.h"
-#include "os.h"
 #include "uv.h"
 #include "uv_encoding.h"
+#include "uv_os.h"
 
 /* Retry to connect to peer servers every second.
  *
@@ -29,16 +29,19 @@ static int uvInit(struct raft_io *io,
 {
     struct uv *uv;
     size_t direct_io;
+    char errmsg[2048];
     int rv;
 
     uv = io->impl;
 
     uv->logger = logger;
 
+    uvDebugf(uv, "data dir: %s", uv->dir);
+
     /* Ensure that the data directory exists and is accessible */
-    rv = osEnsureDir(uv->dir);
+    rv = uvEnsureDir(uv->dir, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "data dir %s: %s", uv->dir, osStrError(rv));
+        uvErrorf(uv, "ensure data dir %s: %s", uv->dir, errmsg);
         rv = RAFT_IOERR;
         goto err;
     }
@@ -48,9 +51,11 @@ static int uvInit(struct raft_io *io,
     if (rv != 0) {
         goto err;
     }
+    uvDebugf(uv, "metadata: version %lld, term %lld, voted for %d",
+             uv->metadata.version, uv->metadata.term, uv->metadata.voted_for);
 
     /* Detect the I/O capabilities of the underlying file system. */
-    rv = osProbeIO(uv->dir, &direct_io, &uv->async_io);
+    rv = uvProbeIoCapabilities(uv->dir, &direct_io, &uv->async_io, errmsg);
     if (rv != 0) {
         uvErrorf(uv, "probe I/O capabilities: %s", uv_strerror(rv));
         rv = RAFT_IOERR;
@@ -58,6 +63,7 @@ static int uvInit(struct raft_io *io,
     }
     uv->direct_io = direct_io != 0;
     uv->block_size = direct_io != 0 ? direct_io : 4096;
+    uvDebugf(uv, "I/O: direct %d, block %d", uv->direct_io, uv->block_size);
 
     /* We expect the maximum segment size to be a multiple of the block size */
     assert(UV__MAX_SEGMENT_SIZE % uv->block_size == 0);
@@ -290,6 +296,10 @@ static int uvLoad(struct raft_io *io,
     if (rv != 0) {
         return rv;
     }
+    uvDebugf(uv, "start index %lld, %ld entries", *start_index, *n_entries);
+    if (*snapshot == NULL) {
+        uvDebugf(uv, "no snapshot");
+    }
 
     last_index = *start_index + *n_entries - 1;
 
@@ -418,7 +428,7 @@ int raft_uv_init(struct raft_io *io,
     assert(dir != NULL);
 
     /* Ensure that the given path doesn't exceed our static buffer limit */
-    if (strnlen(dir, OS_MAX_DIR_LEN + 1) > OS_MAX_DIR_LEN) {
+    if (strnlen(dir, UV__DIR_MAX_LEN + 1) > UV__DIR_MAX_LEN) {
         return RAFT_NAMETOOLONG;
     }
 

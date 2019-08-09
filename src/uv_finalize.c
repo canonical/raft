@@ -1,7 +1,7 @@
 #include "assert.h"
-#include "os.h"
 #include "queue.h"
 #include "uv.h"
+#include "uv_os.h"
 
 struct segment
 {
@@ -22,8 +22,9 @@ static void workCb(uv_work_t *work)
 {
     struct segment *s = work->data;
     struct uv *uv = s->uv;
-    osFilename filename1;
-    osFilename filename2;
+    uvFilename filename1;
+    uvFilename filename2;
+    char errmsg[2048];
     int rv;
 
     sprintf(filename1, UV__OPEN_TEMPLATE, s->counter);
@@ -31,12 +32,12 @@ static void workCb(uv_work_t *work)
     /* If the segment hasn't actually been used (because the writer has been
      * closed or aborted before making any write), then let's just remove it. */
     if (s->used == 0) {
-        osUnlink(uv->dir, filename1);
+        uvUnlinkFile(uv->dir, filename1, errmsg);
         goto out;
     }
 
     /* Truncate and rename the segment */
-    rv = osTruncate(uv->dir, filename1, s->used);
+    rv = uvTruncateFile(uv->dir, filename1, s->used, errmsg);
     if (rv != 0) {
         uvErrorf(uv, "truncate segment %s: %s", filename1, osStrError(rv));
         rv = RAFT_IOERR;
@@ -45,7 +46,7 @@ static void workCb(uv_work_t *work)
 
     sprintf(filename2, UV__CLOSED_TEMPLATE, s->first_index, s->last_index);
 
-    rv = osRename(uv->dir, filename1, filename2);
+    rv = uvRenameFile(uv->dir, filename1, filename2, errmsg);
     if (rv != 0) {
         uvErrorf(uv, "rename segment %d: %s", s->counter, osStrError(rv));
         rv = RAFT_IOERR;
@@ -146,8 +147,8 @@ int uvFinalize(struct uv *uv,
     if (used > 0) {
         assert(first_index > 0);
         assert(last_index >= first_index);
-	/* TODO: this assertion still fails sometimes */
-	/* assert(first_index == uv->finalize_last_index + 1); */
+        /* TODO: this assertion still fails sometimes */
+        /* assert(first_index == uv->finalize_last_index + 1); */
     }
 
     segment = raft_malloc(sizeof *segment);

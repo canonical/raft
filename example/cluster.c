@@ -15,11 +15,11 @@ static void forkServer(const char *topLevelDir, int i, int *pid)
     if (*pid == 0) {
         char *dir = malloc(strlen(topLevelDir) + strlen("/D") + 1);
         char *id = malloc(2);
-        char *argv[] = {"./example-server", dir, id, NULL};
+        char *argv[] = {"./example/server", dir, id, NULL};
         char *envp[] = {NULL};
         sprintf(dir, "%s/%d", topLevelDir, i + 1);
         sprintf(id, "%d", i + 1);
-        execve("./example-server", argv, envp);
+        execve("./example/server", argv, envp);
     }
 }
 
