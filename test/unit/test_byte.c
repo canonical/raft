@@ -107,3 +107,24 @@ TEST_CASE(get_string, malformed, NULL)
     munit_assert_ptr_equal(cursor, buf);
     return MUNIT_OK;
 }
+
+/******************************************************************************
+ *
+ * byteGet64Unaligned
+ *
+ *****************************************************************************/
+
+TEST_SUITE(get_64_unaligned);
+
+TEST_CASE(get_64_unaligned, success, NULL)
+{
+    uint8_t *buf = munit_malloc(sizeof(uint64_t) * 2);
+    void *cursor1 = buf + 1;
+    const void *cursor2 = buf + 1;
+    (void)data;
+    (void)params;
+    bytePut64Unaligned(&cursor1, 1);
+    munit_assert_int(byteGet64Unaligned(&cursor2), ==, 1);
+    free(buf);
+    return MUNIT_OK;
+}
