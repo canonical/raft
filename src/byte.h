@@ -95,8 +95,9 @@ RAFT__INLINE__ void bytePut64(void **cursor, uint64_t value)
 RAFT__INLINE__ void bytePut64Unaligned(void **cursor, uint64_t value)
 {
     unsigned i;
+    uint64_t flipped = byteFlip64(value);
     for (i = 0; i < sizeof(uint64_t); i++) {
-        bytePut8(cursor, *((uint8_t *)(&value) + i));
+        bytePut8(cursor, ((uint8_t *)(&flipped))[i]);
     }
 }
 
@@ -132,7 +133,7 @@ RAFT__INLINE__ uint64_t byteGet64Unaligned(const void **cursor)
     uint64_t value = 0;
     unsigned i;
     for (i = 0; i < sizeof(uint64_t); i++) {
-        *((uint8_t *)(&value) + i) = byteGet8(cursor);
+        ((uint8_t *)(&value))[i] = byteGet8(cursor);
     }
     return byteFlip64(value);
 }
