@@ -72,6 +72,26 @@ static void tear_down(void *data)
 
 /******************************************************************************
  *
+ * Assertions
+ *
+ *****************************************************************************/
+
+/* Check if closed segment file exists. */
+#define HAS_CLOSED_SEGMENT_FILE(START, END) \
+    test_dir_has_file(f->dir, #START "-" #END)
+
+/* Check if open segment file exists. */
+#define HAS_OPEN_SEGMENT_FILE(COUNT) test_dir_has_file(f->dir, "open-" #COUNT)
+
+/* Check if snapshot files exist. */
+#define HAS_SNAPSHOT_META_FILE(TERM, INDEX, TIMESTAMP) \
+    test_dir_has_file(f->dir,                          \
+                      "snapshot-" #TERM "-" #INDEX "-" #TIMESTAMP ".meta")
+#define HAS_SNAPSHOT_DATA_FILE(TERM, INDEX, TIMESTAMP) \
+    test_dir_has_file(f->dir, "snapshot-" #TERM "-" #INDEX "-" #TIMESTAMP)
+
+/******************************************************************************
+ *
  * Data directory has only open or closed segments.
  *
  *****************************************************************************/
@@ -121,7 +141,7 @@ TEST_CASE(segments, open_empty, NULL)
     LOAD;
 
     /* The empty segment has been removed. */
-    munit_assert_false(test_dir_has_file(f->dir, "open-1"));
+    munit_assert_false(HAS_OPEN_SEGMENT_FILE(1));
 
     return MUNIT_OK;
 }
@@ -138,7 +158,7 @@ TEST_CASE(segments, open_all_zeros, NULL)
     LOAD;
 
     /* The empty segment has been removed. */
-    munit_assert_false(test_dir_has_file(f->dir, "open-1"));
+    munit_assert_false(HAS_OPEN_SEGMENT_FILE(1));
 
     return MUNIT_OK;
 }
@@ -173,8 +193,8 @@ TEST_CASE(segments, open_not_all_zeros, NULL)
     LOAD;
 
     /* The segment has been renamed. */
-    munit_assert_false(test_dir_has_file(f->dir, "open-1"));
-    munit_assert_true(test_dir_has_file(f->dir, "1-1"));
+    munit_assert_false(HAS_OPEN_SEGMENT_FILE(1));
+    munit_assert_true(HAS_CLOSED_SEGMENT_FILE(1, 1));
 
     /* The first batch has been loaded */
     // munit_assert_int(f->loaded.n, ==, 1);
@@ -227,7 +247,7 @@ TEST_CASE(segments, open_partial_bach, NULL)
     LOAD;
 
     /* The partially written segment has been removed. */
-    munit_assert_false(test_dir_has_file(f->dir, "open-1"));
+    munit_assert_false(HAS_OPEN_SEGMENT_FILE(1));
 
     return MUNIT_OK;
 }
@@ -248,10 +268,10 @@ TEST_CASE(segments, open_second, NULL)
     LOAD;
 
     /* The first and second segments have been renamed. */
-    munit_assert_false(test_dir_has_file(f->dir, "open-1"));
-    munit_assert_false(test_dir_has_file(f->dir, "open-2"));
-    munit_assert_true(test_dir_has_file(f->dir, "1-1"));
-    munit_assert_true(test_dir_has_file(f->dir, "2-2"));
+    munit_assert_false(HAS_OPEN_SEGMENT_FILE(1));
+    munit_assert_false(HAS_OPEN_SEGMENT_FILE(2));
+    munit_assert_true(HAS_CLOSED_SEGMENT_FILE(1, 1));
+    munit_assert_true(HAS_CLOSED_SEGMENT_FILE(2, 2));
 
     return MUNIT_OK;
 }
@@ -273,11 +293,11 @@ TEST_CASE(segments, open_second_all_zeroes, NULL)
     LOAD;
 
     /* The first segment has been renamed. */
-    munit_assert_false(test_dir_has_file(f->dir, "open-1"));
-    munit_assert_true(test_dir_has_file(f->dir, "1-1"));
+    munit_assert_false(HAS_OPEN_SEGMENT_FILE(1));
+    munit_assert_true(HAS_CLOSED_SEGMENT_FILE(1, 1));
 
     /* The second segment has been removed. */
-    munit_assert_false(test_dir_has_file(f->dir, "open-2"));
+    munit_assert_false(HAS_OPEN_SEGMENT_FILE(2));
 
     return MUNIT_OK;
 }
@@ -306,26 +326,60 @@ TEST_SUITE(snapshot);
 TEST_SETUP(snapshot, setup);
 TEST_TEAR_DOWN(snapshot, tear_down);
 
+/* There are several snapshots, including an incomplete one. The last one is
+ * loaded and the incomplete or older ones are removed.  */
+TEST_CASE(snapshot, many, NULL)
+{
+    struct fixture *f = data;
+    uint8_t buf[8];
+    (void)params;
+    UV_WRITE_SNAPSHOT_META(f->dir, 1 /* term */, 8 /* index */,
+                           123 /* timestamp */, 1 /* n servers */,
+                           1 /* index */);
+
+    UV_WRITE_SNAPSHOT(f->dir, 1 /* term */, 8 /* index */, 456 /* timestamp */,
+                      1 /* n servers */, 1 /* conf index */, buf /* data */,
+                      sizeof buf);
+
+    UV_WRITE_SNAPSHOT(f->dir, 2 /* term */, 6 /* index */, 789 /* timestamp */,
+                      2 /* n servers */, 3 /* conf index */, buf /* data */,
+                      sizeof buf);
+
+    UV_WRITE_SNAPSHOT(f->dir, 2 /* term */, 9 /* index */, 999 /* timestamp */,
+                      2 /* n servers */, 3 /* conf index */, buf /* data */,
+                      sizeof buf);
+    LOAD;
+
+    /* Only the last two snapshot files are kept. */
+    munit_assert_false(HAS_SNAPSHOT_META_FILE(1, 8, 123));
+
+    /* TODO */
+    //munit_assert_false(HAS_SNAPSHOT_META_FILE(1, 8, 456));
+    //munit_assert_false(HAS_SNAPSHOT_DATA_FILE(1, 8, 456));
+
+    munit_assert_true(HAS_SNAPSHOT_META_FILE(2, 6, 789));
+    munit_assert_true(HAS_SNAPSHOT_DATA_FILE(2, 6, 789));
+
+    munit_assert_true(HAS_SNAPSHOT_META_FILE(2, 9, 999));
+    munit_assert_true(HAS_SNAPSHOT_DATA_FILE(2, 9, 999));
+
+    return MUNIT_OK;
+}
 /* The data directory has a closed segment with entries that are no longer
  * needed, since they are included in a snapshot. */
 TEST_CASE(snapshot, closed_segment_with_old_entries, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[8];
-
     (void)params;
-
     UV_WRITE_SNAPSHOT(f->dir, 1 /* term */, 2 /* index */, 123 /* timestamp */,
                       1 /* n servers */, 1 /* conf index */, buf /* data */,
                       sizeof buf);
     UV_WRITE_CLOSED_SEGMENT(1, 1, 1);
-
     LOAD;
-
     /* The segment is still there. */
     /* TODO: We should support a trailing amount */
-    munit_assert_true(test_dir_has_file(f->dir, "1-1"));
-
+    munit_assert_true(HAS_CLOSED_SEGMENT_FILE(1, 1));
     return MUNIT_OK;
 }
 
