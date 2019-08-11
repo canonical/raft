@@ -374,8 +374,7 @@ static int removeOldSegmentsAndSnapshots(struct uv *uv, raft_index last_index)
         if (segment->end_index < last_index) {
             rv = uvUnlinkFile(uv->dir, segment->filename, errmsg);
             if (rv != 0) {
-                uvErrorf(uv, "unlink %s: %s", segment->filename,
-                         errmsg);
+                uvErrorf(uv, "unlink %s: %s", segment->filename, errmsg);
                 rv = RAFT_IOERR;
                 goto out;
             }
@@ -391,6 +390,44 @@ out:
     }
 
     return rv;
+}
+
+int uvSnapshotKeepLastTwo(struct uv *uv,
+                          struct uvSnapshotInfo *snapshots,
+                          size_t n)
+{
+    size_t i;
+    uvErrMsg errmsg;
+    int rv;
+
+    /* Leave at least two snapshots, for safety. */
+    if (n <= 2) {
+        return 0;
+    }
+
+    for (i = 0; i < n - 2; i++) {
+        struct uvSnapshotInfo *s = &snapshots[i];
+        uvFilename filename;
+        rv = uvUnlinkFile(uv->dir, s->filename, errmsg);
+        if (rv != 0) {
+            uvErrorf(uv, "unlink %s: %s", s->filename, errmsg);
+            return RAFT_IOERR;
+        }
+        filenameOf(s, filename);
+        rv = uvUnlinkFile(uv->dir, filename, errmsg);
+        if (rv != 0) {
+            uvErrorf(uv, "unlink %s: %s", filename, errmsg);
+            return RAFT_IOERR;
+        }
+    }
+
+    rv = uvSyncDir(uv->dir, errmsg);
+    if (rv != 0) {
+        uvErrorf(uv, "sync %s: %s", uv->dir, errmsg);
+        return rv;
+    }
+
+    return 0;
 }
 
 static void putWorkCb(uv_work_t *work)
@@ -507,7 +544,7 @@ static void processPutRequests(struct uv *uv)
 }
 
 int uvSnapshotPut(struct raft_io *io,
-		  unsigned trailing,
+                  unsigned trailing,
                   struct raft_io_snapshot_put *req,
                   const struct raft_snapshot *snapshot,
                   raft_io_snapshot_put_cb cb)

@@ -232,6 +232,11 @@ int uvSnapshotLoad(struct uv *uv,
                    struct uvSnapshotInfo *meta,
                    struct raft_snapshot *snapshot);
 
+/* Remove all all snapshots except the last two. */
+int uvSnapshotKeepLastTwo(struct uv *uv,
+                          struct uvSnapshotInfo *snapshots,
+                          size_t n);
+
 /* Return a list of all snapshots and segments found in the data directory. Both
  * snapshots and segments are ordered by filename (closed segments come before
  * open ones). */

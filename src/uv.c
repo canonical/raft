@@ -216,6 +216,10 @@ static int loadSnapshotAndEntries(struct uv *uv,
             rv = RAFT_NOMEM;
             goto err;
         }
+	rv = uvSnapshotKeepLastTwo(uv, snapshots, n_snapshots);
+        if (rv != 0) {
+            goto err;
+        }
         rv = uvSnapshotLoad(uv, &snapshots[n_snapshots - 1], *snapshot);
         if (rv != 0) {
             goto err;

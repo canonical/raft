@@ -353,9 +353,8 @@ TEST_CASE(snapshot, many, NULL)
     /* Only the last two snapshot files are kept. */
     munit_assert_false(HAS_SNAPSHOT_META_FILE(1, 8, 123));
 
-    /* TODO */
-    //munit_assert_false(HAS_SNAPSHOT_META_FILE(1, 8, 456));
-    //munit_assert_false(HAS_SNAPSHOT_DATA_FILE(1, 8, 456));
+    munit_assert_false(HAS_SNAPSHOT_META_FILE(1, 8, 456));
+    munit_assert_false(HAS_SNAPSHOT_DATA_FILE(1, 8, 456));
 
     munit_assert_true(HAS_SNAPSHOT_META_FILE(2, 6, 789));
     munit_assert_true(HAS_SNAPSHOT_DATA_FILE(2, 6, 789));
