@@ -139,6 +139,17 @@ int uvSegmentInfoAppendIfMatch(const char *filename,
  * come before open segments. */
 void uvSegmentSort(struct uvSegmentInfo *infos, size_t n_infos);
 
+/* Keep only the closed segments whose entries are within the given trailing
+ * amount past the given snapshot last index. If no error occurs the location
+ * pointed by kept will contain the index of the first segment containing
+ * trailing entries, or n if no such closed segment was found. */
+int uvSegmentKeepTrailing(struct uv *uv,
+                          struct uvSegmentInfo *segments,
+                          size_t n,
+                          raft_index last_index,
+                          size_t trailing,
+                          size_t *kept);
+
 /* Load all entries contained in the given closed segment. */
 int uvSegmentLoadClosed(struct uv *uv,
                         struct uvSegmentInfo *segment,

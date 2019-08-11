@@ -325,18 +325,16 @@ struct get
     queue queue;
 };
 
-/* Remove all segmens and snapshots that are not needed anymore, but ignore
- * errors.
- *
- * TODO: remove code duplication with io_uv_load.c */
-static int removeOldSegmentsAndSnapshots(struct uv *uv, raft_index last_index)
+/* Remove all segmens and snapshots that are not needed anymore. */
+static int removeOldSegmentsAndSnapshots(struct uv *uv,
+                                         raft_index last_index,
+                                         size_t trailing)
 {
     struct uvSnapshotInfo *snapshots;
     struct uvSegmentInfo *segments;
     size_t n_snapshots;
     size_t n_segments;
-    size_t i;
-    char errmsg[2048];
+    uvErrMsg errmsg;
     int rv = 0;
 
     rv = uvList(uv, &snapshots, &n_snapshots, &segments, &n_segments);
@@ -344,41 +342,23 @@ static int removeOldSegmentsAndSnapshots(struct uv *uv, raft_index last_index)
         goto out;
     }
 
-    /* Leave at least two snapshots, for safety. */
-    if (n_snapshots > 2) {
-        for (i = 0; i < n_snapshots - 2; i++) {
-            struct uvSnapshotInfo *s = &snapshots[i];
-            uvFilename filename;
-            rv = uvUnlinkFile(uv->dir, s->filename, errmsg);
-            if (rv != 0) {
-                uvErrorf(uv, "unlink %s: %s", s->filename, errmsg);
-                rv = RAFT_IOERR;
-                goto out;
-            }
-            filenameOf(s, filename);
-            rv = uvUnlinkFile(uv->dir, filename, errmsg);
-            if (rv != 0) {
-                uvErrorf(uv, "unlink %s: %s", filename, errmsg);
-                rv = RAFT_IOERR;
-                goto out;
-            }
+    rv = uvSnapshotKeepLastTwo(uv, snapshots, n_snapshots);
+    if (rv != 0) {
+        goto out;
+    }
+
+    if (segments != NULL) {
+        size_t kept;
+        rv = uvSegmentKeepTrailing(uv, segments, n_segments, last_index,
+                                   trailing, &kept);
+        if (rv != 0) {
+            goto out;
         }
     }
 
-    /* Remove all unused closed segments */
-    for (i = 0; i < n_segments; i++) {
-        struct uvSegmentInfo *segment = &segments[i];
-        if (segment->is_open) {
-            continue;
-        }
-        if (segment->end_index < last_index) {
-            rv = uvUnlinkFile(uv->dir, segment->filename, errmsg);
-            if (rv != 0) {
-                uvErrorf(uv, "unlink %s: %s", segment->filename, errmsg);
-                rv = RAFT_IOERR;
-                goto out;
-            }
-        }
+    rv = uvSyncDir(uv->dir, errmsg);
+    if (rv != 0) {
+        uvErrorf(uv, "sync %s: %s", uv->dir, errmsg);
     }
 
 out:
@@ -421,12 +401,6 @@ int uvSnapshotKeepLastTwo(struct uv *uv,
         }
     }
 
-    rv = uvSyncDir(uv->dir, errmsg);
-    if (rv != 0) {
-        uvErrorf(uv, "sync %s: %s", uv->dir, errmsg);
-        return rv;
-    }
-
     return 0;
 }
 
@@ -466,16 +440,9 @@ static void putWorkCb(uv_work_t *work)
         return;
     }
 
-    rv = removeOldSegmentsAndSnapshots(uv, r->snapshot->index);
+    rv = removeOldSegmentsAndSnapshots(uv, r->snapshot->index, r->trailing);
     if (rv != 0) {
         r->status = rv;
-        return;
-    }
-
-    rv = uvSyncDir(uv->dir, errmsg);
-    if (rv != 0) {
-        uvErrorf(uv, "sync %s: %s", uv->dir, errmsg);
-        r->status = RAFT_IOERR;
         return;
     }
 
@@ -554,6 +521,8 @@ int uvSnapshotPut(struct raft_io *io,
     void *cursor;
     unsigned crc;
     int rv;
+
+    assert(trailing > 0);
 
     uv = io->impl;
 

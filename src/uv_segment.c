@@ -109,6 +109,49 @@ void uvSegmentSort(struct uvSegmentInfo *infos, size_t n_infos)
     qsort(infos, n_infos, sizeof *infos, compare);
 }
 
+int uvSegmentKeepTrailing(struct uv *uv,
+                          struct uvSegmentInfo *segments,
+                          size_t n,
+                          raft_index last_index,
+                          size_t trailing,
+                          size_t *kept)
+{
+    size_t retain_index;
+    size_t i;
+    uvErrMsg errmsg;
+    int rv;
+
+    assert(last_index > 0);
+    assert(n > 0);
+
+    *kept = n;
+
+    if (last_index <= trailing) {
+        return 0;
+    }
+
+    /* Index of the oldest entry we want to retain. */
+    retain_index = last_index - trailing + 1;
+
+    for (i = 0; i < n; i++) {
+        struct uvSegmentInfo *segment = &segments[i];
+        if (segment->is_open) {
+            break;
+        }
+        if (segment->end_index < retain_index) {
+            rv = uvUnlinkFile(uv->dir, segment->filename, errmsg);
+            if (rv != 0) {
+                uvErrorf(uv, "unlink %s: %s", segment->filename, errmsg);
+                return rv;
+            }
+        }
+        *kept = i;
+        break;
+    }
+
+    return 0;
+}
+
 /* Open a segment file and read its format version. */
 static int openSegment(struct uv *uv,
                        const uvFilename filename,

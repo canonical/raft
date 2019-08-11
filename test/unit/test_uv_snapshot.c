@@ -260,6 +260,7 @@ TEST_SETUP(put)
     (void)user_data;
     int rv;
     SETUP_UV;
+    f->trailing = 128;
     f->bufs[0].base = raft_malloc(8);
     f->bufs[1].base = raft_malloc(8);
     f->bufs[0].len = 8;

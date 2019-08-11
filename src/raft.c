@@ -12,7 +12,7 @@
 #define DEFAULT_ELECTION_TIMEOUT 1000 /* One second */
 #define DEFAULT_HEARTBEAT_TIMEOUT 100 /* One tenth of a second */
 #define DEFAULT_SNAPSHOT_THRESHOLD 1024
-#define DEFAULT_SNAPSHOT_TRAILING 128
+#define DEFAULT_SNAPSHOT_TRAILING 2048
 
 /* Set to 1 to enable tracing. */
 #if 0
