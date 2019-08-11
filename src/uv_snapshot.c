@@ -302,6 +302,7 @@ int uvSnapshotLoad(struct uv *uv,
 struct put
 {
     struct uv *uv;
+    size_t trailing;
     struct raft_io_snapshot_put *req;
     const struct raft_snapshot *snapshot;
     struct
@@ -506,6 +507,7 @@ static void processPutRequests(struct uv *uv)
 }
 
 int uvSnapshotPut(struct raft_io *io,
+		  unsigned trailing,
                   struct raft_io_snapshot_put *req,
                   const struct raft_snapshot *snapshot,
                   raft_io_snapshot_put_cb cb)
@@ -527,6 +529,7 @@ int uvSnapshotPut(struct raft_io *io,
     r->req = req;
     r->snapshot = snapshot;
     r->meta.timestamp = uv_now(uv->loop);
+    r->trailing = trailing;
 
     req->cb = cb;
 

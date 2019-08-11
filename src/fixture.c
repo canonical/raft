@@ -669,6 +669,7 @@ static int ioMethodTruncate(struct raft_io *raft_io, raft_index index)
 }
 
 static int ioMethodSnapshotPut(struct raft_io *raft_io,
+			       unsigned trailing,
                                struct raft_io_snapshot_put *req,
                                const struct raft_snapshot *snapshot,
                                raft_io_snapshot_put_cb cb)

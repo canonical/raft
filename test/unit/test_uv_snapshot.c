@@ -231,6 +231,7 @@ TEST_SUITE(put);
 struct put_fixture
 {
     FIXTURE_UV;
+    unsigned trailing;
     struct raft_snapshot snapshot;
     struct raft_io_snapshot_put req;
     struct raft_buffer bufs[2];
@@ -336,11 +337,12 @@ static void append_cb(struct raft_io_append *req, int status)
     }
 
 /* Invoke the snapshot_put method and check that it returns the given code. */
-#define put__invoke(RV)                                                  \
-    {                                                                    \
-        int rv2;                                                         \
-        rv2 = f->io.snapshot_put(&f->io, &f->req, &f->snapshot, put_cb); \
-        munit_assert_int(rv2, ==, RV);                                   \
+#define put__invoke(RV)                                                      \
+    {                                                                        \
+        int rv2;                                                             \
+        rv2 = f->io.snapshot_put(&f->io, f->trailing, &f->req, &f->snapshot, \
+                                 put_cb);                                    \
+        munit_assert_int(rv2, ==, RV);                                       \
     }
 
 #define put__wait_cb(STATUS) LOOP_RUN_UNTIL(put_cb_was_invoked, f);

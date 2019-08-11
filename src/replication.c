@@ -1222,8 +1222,8 @@ int replicationInstallSnapshot(struct raft *r,
 
     assert(r->snapshot.put.data == NULL);
     r->snapshot.put.data = request;
-    rv = r->io->snapshot_put(r->io, &r->snapshot.put, snapshot,
-                             installSnapshotCb);
+    rv = r->io->snapshot_put(r->io, r->snapshot.trailing, &r->snapshot.put,
+                             snapshot, installSnapshotCb);
     if (rv != 0) {
         goto err_after_bufs_alloc;
     }
@@ -1398,7 +1398,8 @@ static int takeSnapshot(struct raft *r)
 
     assert(r->snapshot.put.data == NULL);
     r->snapshot.put.data = r;
-    rv = r->io->snapshot_put(r->io, &r->snapshot.put, snapshot, takeSnapshotCb);
+    rv = r->io->snapshot_put(r->io, r->snapshot.trailing, &r->snapshot.put,
+                             snapshot, takeSnapshotCb);
     if (rv != 0) {
         goto abort_after_fsm_snapshot;
     }

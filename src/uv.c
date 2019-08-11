@@ -393,6 +393,7 @@ int uvSend(struct raft_io *io,
 
 /* Implementation raft_io->snapshot_put (defined in uv_snapshot.c). */
 int uvSnapshotPut(struct raft_io *io,
+		  unsigned trailing,
                   struct raft_io_snapshot_put *req,
                   const struct raft_snapshot *snapshot,
                   raft_io_snapshot_put_cb cb);
