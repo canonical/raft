@@ -928,7 +928,7 @@ int uvSegmentCreateFirstClosed(struct uv *uv,
     rv =
         uvOpenFile(uv->dir, filename, O_WRONLY | O_CREAT | O_EXCL, &fd, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "unlink %s: %s", filename, osStrError(rv));
+        uvErrorf(uv, "open %s: %s", filename, errmsg);
         rv = RAFT_IOERR;
         goto err_after_configuration_encode;
     }

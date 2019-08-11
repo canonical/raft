@@ -421,6 +421,13 @@ static void putWorkCb(uv_work_t *work)
         return;
     }
 
+    rv = uvSyncDir(uv->dir, errmsg);
+    if (rv != 0) {
+        uvErrorf(uv, "sync %s: %s", uv->dir, osStrError(rv));
+        r->status = RAFT_IOERR;
+        return;
+    }
+
     rv = removeOldSegmentsAndSnapshots(uv, r->snapshot->index);
     if (rv != 0) {
         r->status = rv;
