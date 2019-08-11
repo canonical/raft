@@ -578,13 +578,6 @@ int uvSetDirectIo(int fd, char *errmsg)
     return 0;
 }
 
-char strErrorBuf[2048];
-
-const char *osStrError(int rv)
-{
-    return strerror_r(rv, strErrorBuf, sizeof strErrorBuf);
-}
-
 int uvIoSetup(unsigned nr, aio_context_t *ctxp, char *errmsg)
 {
     int rv;

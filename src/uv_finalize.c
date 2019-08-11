@@ -39,7 +39,7 @@ static void workCb(uv_work_t *work)
     /* Truncate and rename the segment */
     rv = uvTruncateFile(uv->dir, filename1, s->used, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "truncate segment %s: %s", filename1, osStrError(rv));
+        uvErrorf(uv, "truncate segment %s: %s", filename1, errmsg);
         rv = RAFT_IOERR;
         goto abort;
     }
@@ -48,7 +48,7 @@ static void workCb(uv_work_t *work)
 
     rv = uvRenameFile(uv->dir, filename1, filename2, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "rename segment %d: %s", s->counter, osStrError(rv));
+        uvErrorf(uv, "rename segment %d: %s", s->counter, errmsg);
         rv = RAFT_IOERR;
         goto abort;
     }

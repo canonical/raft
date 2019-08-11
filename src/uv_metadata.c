@@ -60,7 +60,7 @@ static int loadFile(struct uv *uv,
     rv = uvOpenFile(uv->dir, filename, O_RDONLY, &fd, errmsg);
     if (rv != 0) {
         if (rv != UV__NOENT) {
-            uvErrorf(uv, "open %s: %s", filename, osStrError(rv));
+            uvErrorf(uv, "open %s: %s", filename, errmsg);
             return RAFT_IOERR;
         }
         /* The file does not exist, just return. */
@@ -71,7 +71,7 @@ static int loadFile(struct uv *uv,
     rv = uvReadFully(fd, buf, sizeof buf, errmsg);
     if (rv != 0) {
         if (rv != UV__NODATA) {
-            uvErrorf(uv, "read %s: %s", filename, osStrError(rv));
+            uvErrorf(uv, "read %s: %s", filename, errmsg);
             return RAFT_IOERR;
         }
         /* Assume that the server crashed while writing this metadata file, and
@@ -121,7 +121,7 @@ static int ensure(struct uv *uv, struct uvMetadata *metadata)
     /* Also sync the data directory so the entries get created. */
     rv = uvSyncDir(uv->dir, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "sync %s: %s", uv->dir, osStrError(rv));
+        uvErrorf(uv, "sync %s: %s", uv->dir, errmsg);
         return RAFT_IOERR;
     }
 
@@ -208,14 +208,14 @@ int uvMetadataStore(struct uv *uv, const struct uvMetadata *metadata)
     /* Write the metadata file, creating it if it does not exist. */
     rv = uvOpenFile(uv->dir, filename, flags, &fd, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "open %s: %s", filename, osStrError(rv));
+        uvErrorf(uv, "open %s: %s", filename, errmsg);
         return RAFT_IOERR;
     }
 
     rv = uvWriteFully(fd, buf, sizeof buf, errmsg);
     close(fd);
     if (rv != 0) {
-        uvErrorf(uv, "write %s: %s", filename, osStrError(rv));
+        uvErrorf(uv, "write %s: %s", filename, errmsg);
         return RAFT_IOERR;
     }
 

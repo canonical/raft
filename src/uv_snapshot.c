@@ -77,7 +77,7 @@ int uvSnapshotInfoAppendIfMatch(struct uv *uv,
             *appended = false;
             return 0;
         }
-        uvErrorf(uv, "stat %s: %s", snapshot_filename, osStrError(rv));
+        uvErrorf(uv, "stat %s: %s", snapshot_filename, errmsg);
         return RAFT_IOERR;
     }
 
@@ -141,13 +141,13 @@ static int loadMeta(struct uv *uv,
 
     rv = uvOpenFile(uv->dir, info->filename, O_RDONLY, &fd, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "open %s: %s", info->filename, osStrError(rv));
+        uvErrorf(uv, "open %s: %s", info->filename, errmsg);
         rv = RAFT_IOERR;
         goto err;
     }
     rv = uvReadFully(fd, header, sizeof header, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "read %s: %s", info->filename, osStrError(rv));
+        uvErrorf(uv, "read %s: %s", info->filename, errmsg);
         rv = RAFT_IOERR;
         goto err_after_open;
     }
@@ -182,7 +182,7 @@ static int loadMeta(struct uv *uv,
 
     rv = uvReadFully(fd, buf.base, buf.len, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "read %s: %s", info->filename, osStrError(rv));
+        uvErrorf(uv, "read %s: %s", info->filename, errmsg);
         rv = RAFT_IOERR;
         goto err_after_buf_malloc;
     }
@@ -234,14 +234,14 @@ static int loadData(struct uv *uv,
 
     rv = uvStatFile(uv->dir, filename, &sb, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "stat %s: %s", filename, osStrError(rv));
+        uvErrorf(uv, "stat %s: %s", filename, errmsg);
         rv = RAFT_IOERR;
         goto err;
     }
 
     rv = uvOpenFile(uv->dir, filename, O_RDONLY, &fd, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "open %s: %s", filename, osStrError(rv));
+        uvErrorf(uv, "open %s: %s", filename, errmsg);
         rv = RAFT_IOERR;
         goto err;
     }
@@ -255,7 +255,7 @@ static int loadData(struct uv *uv,
 
     rv = uvReadFully(fd, buf.base, buf.len, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "read %s: %s", filename, osStrError(rv));
+        uvErrorf(uv, "read %s: %s", filename, errmsg);
         goto err_after_buf_alloc;
     }
 
@@ -350,14 +350,14 @@ static int removeOldSegmentsAndSnapshots(struct uv *uv, raft_index last_index)
             uvFilename filename;
             rv = uvUnlinkFile(uv->dir, s->filename, errmsg);
             if (rv != 0) {
-                uvErrorf(uv, "unlink %s: %s", s->filename, osStrError(rv));
+                uvErrorf(uv, "unlink %s: %s", s->filename, errmsg);
                 rv = RAFT_IOERR;
                 goto out;
             }
             filenameOf(s, filename);
             rv = uvUnlinkFile(uv->dir, filename, errmsg);
             if (rv != 0) {
-                uvErrorf(uv, "unlink %s: %s", filename, osStrError(rv));
+                uvErrorf(uv, "unlink %s: %s", filename, errmsg);
                 rv = RAFT_IOERR;
                 goto out;
             }
@@ -374,7 +374,7 @@ static int removeOldSegmentsAndSnapshots(struct uv *uv, raft_index last_index)
             rv = uvUnlinkFile(uv->dir, segment->filename, errmsg);
             if (rv != 0) {
                 uvErrorf(uv, "unlink %s: %s", segment->filename,
-                         osStrError(rv));
+                         errmsg);
                 rv = RAFT_IOERR;
                 goto out;
             }
@@ -405,7 +405,7 @@ static void putWorkCb(uv_work_t *work)
 
     rv = uvMakeFile(uv->dir, filename, r->meta.bufs, 2, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "write %s: %s", filename, osStrError(rv));
+        uvErrorf(uv, "write %s: %s", filename, errmsg);
         r->status = RAFT_IOERR;
         return;
     }
@@ -416,14 +416,14 @@ static void putWorkCb(uv_work_t *work)
     rv = uvMakeFile(uv->dir, filename, r->snapshot->bufs, r->snapshot->n_bufs,
                     errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "write %s: %s", filename, osStrError(rv));
+        uvErrorf(uv, "write %s: %s", filename, errmsg);
         r->status = RAFT_IOERR;
         return;
     }
 
     rv = uvSyncDir(uv->dir, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "sync %s: %s", uv->dir, osStrError(rv));
+        uvErrorf(uv, "sync %s: %s", uv->dir, errmsg);
         r->status = RAFT_IOERR;
         return;
     }
@@ -436,7 +436,7 @@ static void putWorkCb(uv_work_t *work)
 
     rv = uvSyncDir(uv->dir, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "sync %s: %s", uv->dir, osStrError(rv));
+        uvErrorf(uv, "sync %s: %s", uv->dir, errmsg);
         r->status = RAFT_IOERR;
         return;
     }
