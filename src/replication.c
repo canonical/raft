@@ -4,7 +4,7 @@
 #include "configuration.h"
 #include "convert.h"
 #ifdef __GLIBC__
-#include "error.h"
+#    include "error.h"
 #endif
 #include "log.h"
 #include "logging.h"
@@ -17,17 +17,17 @@
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(MSG, ...) debugf(r, "replication: " MSG, ##__VA_ARGS__)
+#    define tracef(MSG, ...) debugf(r, "replication: " MSG, ##__VA_ARGS__)
 #else
-#define tracef(MSG, ...)
+#    define tracef(MSG, ...)
 #endif
 
 #ifndef max
-#define max(a, b) ((a) < (b) ? (b) : (a))
+#    define max(a, b) ((a) < (b) ? (b) : (a))
 #endif
 
 #ifndef min
-#define min(a, b) ((a) < (b) ? (a) : (b))
+#    define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
 /* Context of a RAFT_IO_APPEND_ENTRIES request that was submitted with
