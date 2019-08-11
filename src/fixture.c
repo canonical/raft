@@ -54,9 +54,9 @@ static char *describeMessage(const struct raft_message *m)
     }
     return d;
 }
-#define tracef(MSG, ...) debugf(io->io, MSG, ##__VA_ARGS__)
+#    define tracef(MSG, ...) debugf(io->io, MSG, ##__VA_ARGS__)
 #else
-#define tracef(MSG, ...)
+#    define tracef(MSG, ...)
 #endif
 
 /* Maximum number of peer stub instances connected to a certain stub
@@ -469,6 +469,7 @@ static int ioMethodClose(struct raft_io *raft_io,
 }
 
 static int ioMethodLoad(struct raft_io *io,
+                        unsigned snapshot_trailing,
                         raft_term *term,
                         unsigned *voted_for,
                         struct raft_snapshot **snapshot,
@@ -933,7 +934,7 @@ static void emit(struct raft_logger *l,
                  ...)
 {
     va_list args;
-    unsigned id = *(unsigned*)l->impl;
+    unsigned id = *(unsigned *)l->impl;
     char buf[2048];
     (void)time;
     if (level < l->level) {
@@ -963,7 +964,7 @@ static int serverInit(struct raft_fixture *f, unsigned i, struct raft_fsm *fsm)
     }
     raft_set_election_timeout(&s->raft, ELECTION_TIMEOUT);
     raft_set_heartbeat_timeout(&s->raft, HEARTBEAT_TIMEOUT);
-    s->logger.impl = (void*)&s->id;
+    s->logger.impl = (void *)&s->id;
     s->logger.level = RAFT_INFO;
     s->logger.emit = emit;
     return 0;

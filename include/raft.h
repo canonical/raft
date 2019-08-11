@@ -495,6 +495,7 @@ struct raft_io
      * is completed ownership of such memory is transfered to the raft instance.
      */
     int (*load)(struct raft_io *io,
+		unsigned trailing,
                 raft_term *term,
                 unsigned *voted_for,
                 struct raft_snapshot **snapshot,

@@ -21,6 +21,7 @@ TEST_MODULE(uv_load);
 struct fixture
 {
     FIXTURE_UV;
+    unsigned trailing;
     raft_term term;
     unsigned voted_for;
     struct raft_snapshot *snapshot;
@@ -35,6 +36,7 @@ static void *setup(const MunitParameter params[], void *user_data)
     struct fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
     SETUP_UV;
+    f->trailing = 10;
     f->snapshot = NULL;
     f->entries = NULL;
     f->n = 0;
@@ -62,9 +64,9 @@ static void tear_down(void *data)
  *****************************************************************************/
 
 /* Invoke raft_io->load(). */
-#define LOAD_RV                                                                \
-    f->io.load(&f->io, &f->term, &f->voted_for, &f->snapshot, &f->start_index, \
-               &f->entries, &f->n)
+#define LOAD_RV                                                            \
+    f->io.load(&f->io, f->trailing, &f->term, &f->voted_for, &f->snapshot, \
+               &f->start_index, &f->entries, &f->n)
 #define LOAD munit_assert_int(LOAD_RV, ==, 0)
 #define LOAD_ERROR(RV) munit_assert_int(LOAD_RV, ==, RV)
 
