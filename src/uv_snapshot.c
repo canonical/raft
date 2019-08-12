@@ -526,6 +526,8 @@ int uvSnapshotPut(struct raft_io *io,
 
     uv = io->impl;
 
+    uvDebugf(uv, "put snapshot at %lld, keeping %d", snapshot->index, trailing);
+
     r = raft_malloc(sizeof *r);
     if (r == NULL) {
         rv = RAFT_NOMEM;
