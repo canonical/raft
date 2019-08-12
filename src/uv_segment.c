@@ -139,6 +139,7 @@ int uvSegmentKeepTrailing(struct uv *uv,
             break;
         }
         if (segment->end_index < retain_index) {
+            uvDebugf(uv, "deleting closed segment %s", segment->filename);
             rv = uvUnlinkFile(uv->dir, segment->filename, errmsg);
             if (rv != 0) {
                 uvErrorf(uv, "unlink %s: %s", segment->filename, errmsg);
@@ -390,7 +391,8 @@ int uvSegmentLoadClosed(struct uv *uv,
         raft_free(tmp_entries);
     }
 
-    assert(i > 1); /* At least one batch was loaded. */
+    assert(i > 1);  /* At least one batch was loaded. */
+    assert(*n > 0); /* At least one entry was loaded. */
 
     close(fd);
 
@@ -434,13 +436,14 @@ static int loadOpen(struct uv *uv,
 
     rv = uvIsEmptyFile(uv->dir, info->filename, &empty, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "stat %s: %s", info->filename, errmsg);
+        uvErrorf(uv, "check if %s is empty: %s", info->filename, errmsg);
         rv = RAFT_IOERR;
         goto err;
     }
 
     if (empty) {
         /* Empty segment, let's discard it. */
+        uvInfof(uv, "remove empty open segment %s", info->filename);
         remove = true;
         goto done;
     }
@@ -456,13 +459,15 @@ static int loadOpen(struct uv *uv,
         if (format == 0) {
             rv = uvIsFilledWithTrailingZeros(fd, &all_zeros, errmsg);
             if (rv != 0) {
-                uvErrorf(uv, "check %s: %s", info->filename, errmsg);
+                uvErrorf(uv, "check if %s is zeroed: %s", info->filename,
+                         errmsg);
                 rv = RAFT_IOERR;
                 goto err_after_open;
             }
             if (all_zeros) {
                 /* This is equivalent to the empty case, let's remove the
                  * segment. */
+                uvInfof(uv, "remove zeroed open segment %s", info->filename);
                 remove = true;
                 goto done;
             }
@@ -501,14 +506,14 @@ static int loadOpen(struct uv *uv,
 
             rv2 = uvIsFilledWithTrailingZeros(fd, &all_zeros, errmsg);
             if (rv2 != 0) {
-                uvErrorf(uv, "check %s: %s", info->filename, i, errmsg);
+                uvErrorf(uv, "check if %s is zeroed: %s", info->filename, i,
+                         errmsg);
                 rv = RAFT_IOERR;
                 goto err_after_open;
             }
 
             if (!all_zeros) {
-                /* TODO: log a warning here, stating that the segment had a
-                 * non-zero partial batch, and reporting the decoding error. */
+                uvWarnf(uv, "%s has non-zero trail", info->filename);
             }
 
             rv = ftruncate(fd, offset);
@@ -555,8 +560,10 @@ done:
 
         /* At least one entry was loaded */
         assert(end_index >= first_index);
-
         sprintf(filename, UV__CLOSED_TEMPLATE, first_index, end_index);
+
+        uvInfof(uv, "finalize %s into %s", info->filename, filename);
+
         rv = uvRenameFile(uv->dir, info->filename, filename, errmsg);
         if (rv != 0) {
             uvErrorf(uv, "rename %s: %s", info->filename, errmsg);
@@ -760,8 +767,8 @@ int uvSegmentLoadAll(struct uv *uv,
     struct raft_entry *tmp_entries; /* Entries in current segment */
     size_t tmp_n;                   /* Number of entries in current segment */
     size_t i;
-    char errmsg[2048];
     int rv;
+
     assert(start_index >= 1);
     assert(n_infos > 0);
 
@@ -779,53 +786,16 @@ int uvSegmentLoadAll(struct uv *uv,
                 goto err;
             }
         } else {
-            unsigned prefix = 0; /* N of prefix entries ignored */
-            unsigned j;
-            void *batch;
+            assert(info->first_index >= start_index);
+            assert(info->first_index <= info->end_index);
 
-            /* If the entries in the segment are no longer needed, just remove
-             * it. */
-            if (info->end_index < start_index) {
-                rv = uvUnlinkFile(uv->dir, info->filename, errmsg);
-                if (rv != 0) {
-                    uvErrorf(uv, "unlink %s: %s", info->filename, errmsg);
-                    rv = RAFT_IOERR;
-                    goto err;
-                }
-                continue;
-            }
-
-            /* Check that start index encoded in the name of the segment matches
-             * what we expect. */
-            if (info->first_index > next_index) {
+            /* Check that the start index encoded in the name of the segment
+             * matches what we expect and there are no gaps in the sequence. */
+            if (info->first_index != next_index) {
                 uvErrorf(uv, "load %s: expected first index to be %lld",
                          info->filename, next_index);
                 rv = RAFT_CORRUPT;
                 goto err;
-            }
-
-            /* If the first index of the segment is lower than the next
-             * expected, it must mean that it overlaps with the last snapshot we
-             * loaded, and it must be the first segment we're loading. */
-            if (info->first_index < next_index) {
-                if (*n_entries != 0) {
-                    /* TODO: understand why this happens at LXD
-                     * upgrade. Re-enable this after 3.15 has been out for
-                     * reasonably long. */
-                    rv = uvUnlinkFile(uv->dir, info->filename, errmsg);
-                    if (rv != 0) {
-                        uvErrorf(uv, "unlink %s: %s", info->filename, errmsg);
-                        rv = RAFT_IOERR;
-                        goto err;
-                    }
-                    continue;
-                    /*uvErrorf(uv,
-                             "load %s: expected first segment at %lld or lower",
-                             info->filename, next_index);
-                    rv = RAFT_CORRUPT;
-                    goto err;*/
-                }
-                prefix = next_index - info->first_index;
             }
 
             rv = uvSegmentLoadClosed(uv, info, &tmp_entries, &tmp_n);
@@ -833,37 +803,15 @@ int uvSegmentLoadAll(struct uv *uv,
                 goto err;
             }
 
-            if (tmp_n - prefix > 0) {
-                rv = extendEntries(tmp_entries + prefix, tmp_n - prefix,
-                                   entries, n_entries);
-                if (rv != 0) {
-                    /* TODO: release memory of entries in tmp_entries */
-                    goto err;
-                }
-                if (prefix > 0) {
-                    batch = tmp_entries[prefix].batch;
-                    for (j = prefix; j > 0; j--) {
-                        struct raft_entry *entry = &tmp_entries[j - 1];
-                        if (entry->batch != batch) {
-                            raft_free(entry->batch);
-                            batch = entry->batch;
-                        }
-                    }
-                }
-            } else {
-                batch = NULL;
-                for (j = 0; j < tmp_n; j++) {
-                    struct raft_entry *entry = &tmp_entries[j];
-                    if (entry->batch != batch) {
-                        raft_free(entry->batch);
-                        batch = entry->batch;
-                    }
-                }
+            assert(tmp_n > 0);
+            rv = extendEntries(tmp_entries, tmp_n, entries, n_entries);
+            if (rv != 0) {
+                /* TODO: release memory of entries in tmp_entries */
+                goto err;
             }
 
             raft_free(tmp_entries);
-
-            next_index += tmp_n - prefix;
+            next_index += tmp_n;
         }
     }
 

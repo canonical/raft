@@ -216,7 +216,7 @@ static int loadSnapshotAndEntries(struct uv *uv,
             rv = RAFT_NOMEM;
             goto err;
         }
-	rv = uvSnapshotKeepLastTwo(uv, snapshots, n_snapshots);
+        rv = uvSnapshotKeepLastTwo(uv, snapshots, n_snapshots);
         if (rv != 0) {
             goto err;
         }
@@ -227,13 +227,17 @@ static int loadSnapshotAndEntries(struct uv *uv,
         raft_free(snapshots);
         snapshots = NULL;
 
-        last_index = (*snapshot)->index;
-        /* Update the start index. If there are closed segments on disk and the
-         * first index of the first closed segment is lower than the snapshot's
-         * last index, let's retain those entries. TODO: implement a trailing
-         * amount. */
-        if (segments != NULL && !segments[0].is_open &&
-            segments[0].first_index <= last_index) {
+        /* Update the start index. If there are closed segments on disk let's
+         * make sure that the first index of the first closed segment is not
+         * greater than the snapshot's last index plus one (so there are no
+         * missing entries), and update the start index accordingly. */
+        if (segments != NULL && !segments[0].is_open) {
+            if (segments[0].first_index > (*snapshot)->index) {
+                uvErrorf(uv, "found closed segment past last snapshot: %s",
+                         segments[0].filename);
+                rv = RAFT_CORRUPT;
+                goto err;
+            }
             *start_index = segments[0].first_index;
         } else {
             *start_index = (*snapshot)->index + 1;
@@ -251,10 +255,14 @@ static int loadSnapshotAndEntries(struct uv *uv,
         segments = NULL;
     }
 
+    /* Check that the entries we loaded from the segments are actually at least
+     * up to the lastest snapshot index. If not, discard them, we will delete
+     * them from disk when we take the next snapshot. */
     last_index = *start_index + *n - 1;
     if (*snapshot != NULL && last_index < (*snapshot)->index) {
-        /* TODO: entries are behind the snapshot, we should delete them from
-         * disk. */
+        uvWarnf(uv,
+                "last index in segment entries %lld is past last snapshot %lld",
+                last_index, (*snapshot)->index);
         *start_index = (*snapshot)->index + 1;
         entryBatchesDestroy(*entries, *n);
         *entries = NULL;
@@ -397,7 +405,7 @@ int uvSend(struct raft_io *io,
 
 /* Implementation raft_io->snapshot_put (defined in uv_snapshot.c). */
 int uvSnapshotPut(struct raft_io *io,
-		  unsigned trailing,
+                  unsigned trailing,
                   struct raft_io_snapshot_put *req,
                   const struct raft_snapshot *snapshot,
                   raft_io_snapshot_put_cb cb);
