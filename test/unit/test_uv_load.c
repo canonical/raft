@@ -365,7 +365,8 @@ TEST_CASE(snapshot, many, NULL)
     return MUNIT_OK;
 }
 /* The data directory has a closed segment with entries that are no longer
- * needed, since they are included in a snapshot. */
+ * needed, since they are included in a snapshot. We still keep those segments
+ * and just let the next snapshot logic delete them. */
 TEST_CASE(snapshot, closed_segment_with_old_entries, NULL)
 {
     struct fixture *f = data;
@@ -376,8 +377,6 @@ TEST_CASE(snapshot, closed_segment_with_old_entries, NULL)
                       sizeof buf);
     UV_WRITE_CLOSED_SEGMENT(1, 1, 1);
     LOAD;
-    /* The segment is still there. */
-    /* TODO: We should support a trailing amount */
     munit_assert_true(HAS_CLOSED_SEGMENT_FILE(1, 1));
     return MUNIT_OK;
 }

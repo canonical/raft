@@ -518,7 +518,14 @@ static int loadOpen(struct uv *uv,
 
             rv = ftruncate(fd, offset);
             if (rv == -1) {
-                uvErrorf(uv, "truncate %s: %s", info->filename, errmsg);
+                uvErrorf(uv, "ftruncate %s: %s", info->filename,
+                         strerror(errno));
+                rv = RAFT_IOERR;
+                goto err_after_open;
+            }
+            rv = fsync(fd);
+            if (rv == -1) {
+                uvErrorf(uv, "fsync %s: %s", info->filename, strerror(errno));
                 rv = RAFT_IOERR;
                 goto err_after_open;
             }
