@@ -139,6 +139,17 @@ int uvSegmentInfoAppendIfMatch(const char *filename,
  * come before open segments. */
 void uvSegmentSort(struct uvSegmentInfo *infos, size_t n_infos);
 
+/* Keep only the closed segments whose entries are within the given trailing
+ * amount past the given snapshot last index. If no error occurs the location
+ * pointed by 'deleted' will contain the index of the last segment that got
+ * deleted, or 'n' if no segment got deleted. */
+int uvSegmentKeepTrailing(struct uv *uv,
+                          struct uvSegmentInfo *segments,
+                          size_t n,
+                          raft_index last_index,
+                          size_t trailing,
+                          size_t *deleted);
+
 /* Load all entries contained in the given closed segment. */
 int uvSegmentLoadClosed(struct uv *uv,
                         struct uvSegmentInfo *segment,
@@ -231,6 +242,11 @@ void uvSnapshotSort(struct uvSnapshotInfo *infos, size_t n_infos);
 int uvSnapshotLoad(struct uv *uv,
                    struct uvSnapshotInfo *meta,
                    struct raft_snapshot *snapshot);
+
+/* Remove all all snapshots except the last two. */
+int uvSnapshotKeepLastTwo(struct uv *uv,
+                          struct uvSnapshotInfo *snapshots,
+                          size_t n);
 
 /* Return a list of all snapshots and segments found in the data directory. Both
  * snapshots and segments are ordered by filename (closed segments come before

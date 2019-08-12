@@ -231,6 +231,7 @@ TEST_SUITE(put);
 struct put_fixture
 {
     FIXTURE_UV;
+    unsigned trailing;
     struct raft_snapshot snapshot;
     struct raft_io_snapshot_put req;
     struct raft_buffer bufs[2];
@@ -259,6 +260,7 @@ TEST_SETUP(put)
     (void)user_data;
     int rv;
     SETUP_UV;
+    f->trailing = 128;
     f->bufs[0].base = raft_malloc(8);
     f->bufs[1].base = raft_malloc(8);
     f->bufs[0].len = 8;
@@ -297,7 +299,7 @@ static void append_cb(struct raft_io_append *req, int status)
 /* Append N entries to the log. */
 #define append(N)                                                       \
     {                                                                   \
-        struct raft_io_append req_;                                     \
+        struct raft_io_append *req_ = munit_malloc(sizeof *req_);       \
         int i;                                                          \
         int rv;                                                         \
         struct raft_entry *entries = munit_malloc(N * sizeof *entries); \
@@ -309,11 +311,11 @@ static void append_cb(struct raft_io_append *req, int status)
             entry->buf.len = 8;                                         \
             entry->batch = NULL;                                        \
         }                                                               \
-        req_.data = f;                                                  \
-        rv = f->io.append(&f->io, &req_, entries, N, append_cb);        \
+        req_->data = f;                                                 \
+        rv = f->io.append(&f->io, req_, entries, N, append_cb);         \
         munit_assert_int(rv, ==, 0);                                    \
                                                                         \
-        for (i = 0; i < 5; i++) {                                       \
+        for (i = 0; i < 20; i++) {                                      \
             LOOP_RUN(1);                                                \
             if (f->appended) {                                          \
                 break;                                                  \
@@ -325,6 +327,8 @@ static void append_cb(struct raft_io_append *req, int status)
             free(entry->buf.base);                                      \
         }                                                               \
         free(entries);                                                  \
+        free(req_);                                                     \
+        f->appended = false;                                            \
     }
 
 /* Submit a request to truncate the log at N */
@@ -336,11 +340,12 @@ static void append_cb(struct raft_io_append *req, int status)
     }
 
 /* Invoke the snapshot_put method and check that it returns the given code. */
-#define put__invoke(RV)                                                  \
-    {                                                                    \
-        int rv2;                                                         \
-        rv2 = f->io.snapshot_put(&f->io, &f->req, &f->snapshot, put_cb); \
-        munit_assert_int(rv2, ==, RV);                                   \
+#define put__invoke(RV)                                                      \
+    {                                                                        \
+        int rv2;                                                             \
+        rv2 = f->io.snapshot_put(&f->io, f->trailing, &f->req, &f->snapshot, \
+                                 put_cb);                                    \
+        munit_assert_int(rv2, ==, RV);                                       \
     }
 
 #define put__wait_cb(STATUS) LOOP_RUN_UNTIL(put_cb_was_invoked, f);
@@ -376,6 +381,52 @@ TEST_CASE(put, first, NULL)
     snapshotClose(&snapshot);
 
     raft_free(snapshots);
+
+    return MUNIT_OK;
+}
+
+/* If the number of closed entries is less than the given trailing amount, no
+ * segment is deleted. */
+TEST_CASE(put, entries_less_than_trailing, NULL)
+{
+    struct put_fixture *f = data;
+    unsigned i;
+    (void)params;
+    f->uv->n_blocks = 1; /* Lower the number of block to force finalizing */
+
+    for (i = 0; i < 40; i++) {
+        append(10);
+    }
+
+    f->snapshot.index = 100;
+    put__invoke(0);
+    put__wait_cb(0);
+
+    munit_assert_true(test_dir_has_file(f->dir, "1-150"));
+    munit_assert_true(test_dir_has_file(f->dir, "151-300"));
+
+    return MUNIT_OK;
+}
+
+/* If the number of closed entries is greater than the given trailing amount,
+ * closed segments that are fully past the trailing amount get deleted. */
+TEST_CASE(put, entries_more_than_trailing, NULL)
+{
+    struct put_fixture *f = data;
+    unsigned i;
+    (void)params;
+    f->uv->n_blocks = 1; /* Lower the number of block to force finalizing */
+
+    for (i = 0; i < 40; i++) {
+        append(10);
+    }
+
+    f->snapshot.index = 280;
+    put__invoke(0);
+    put__wait_cb(0);
+
+    munit_assert_false(test_dir_has_file(f->dir, "1-150"));
+    munit_assert_true(test_dir_has_file(f->dir, "151-300"));
 
     return MUNIT_OK;
 }

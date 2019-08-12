@@ -4,7 +4,7 @@
 #include "configuration.h"
 #include "convert.h"
 #ifdef __GLIBC__
-#include "error.h"
+#    include "error.h"
 #endif
 #include "log.h"
 #include "logging.h"
@@ -17,17 +17,17 @@
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(MSG, ...) debugf(r, "replication: " MSG, ##__VA_ARGS__)
+#    define tracef(MSG, ...) debugf(r, "replication: " MSG, ##__VA_ARGS__)
 #else
-#define tracef(MSG, ...)
+#    define tracef(MSG, ...)
 #endif
 
 #ifndef max
-#define max(a, b) ((a) < (b) ? (b) : (a))
+#    define max(a, b) ((a) < (b) ? (b) : (a))
 #endif
 
 #ifndef min
-#define min(a, b) ((a) < (b) ? (a) : (b))
+#    define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
 /* Context of a RAFT_IO_APPEND_ENTRIES request that was submitted with
@@ -1222,8 +1222,8 @@ int replicationInstallSnapshot(struct raft *r,
 
     assert(r->snapshot.put.data == NULL);
     r->snapshot.put.data = request;
-    rv = r->io->snapshot_put(r->io, &r->snapshot.put, snapshot,
-                             installSnapshotCb);
+    rv = r->io->snapshot_put(r->io, r->snapshot.trailing, &r->snapshot.put,
+                             snapshot, installSnapshotCb);
     if (rv != 0) {
         goto err_after_bufs_alloc;
     }
@@ -1398,7 +1398,8 @@ static int takeSnapshot(struct raft *r)
 
     assert(r->snapshot.put.data == NULL);
     r->snapshot.put.data = r;
-    rv = r->io->snapshot_put(r->io, &r->snapshot.put, snapshot, takeSnapshotCb);
+    rv = r->io->snapshot_put(r->io, r->snapshot.trailing, &r->snapshot.put,
+                             snapshot, takeSnapshotCb);
     if (rv != 0) {
         goto abort_after_fsm_snapshot;
     }

@@ -74,8 +74,7 @@ static void workCb(uv_work_t *work)
 
         rv = uvUnlinkFile(uv->dir, segment->filename, errmsg);
         if (rv != 0) {
-            uvErrorf(uv, "unlink segment %s: %s", segment->filename,
-                     uv_strerror(rv));
+            uvErrorf(uv, "unlink segment %s: %s", segment->filename, errmsg);
             rv = RAFT_IOERR;
             goto err_after_list;
         }
@@ -83,7 +82,7 @@ static void workCb(uv_work_t *work)
 
     rv = uvSyncDir(uv->dir, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "sync data directory: %s", uv_strerror(rv));
+        uvErrorf(uv, "sync data directory: %s", errmsg);
         rv = RAFT_IOERR;
         goto err_after_list;
     }

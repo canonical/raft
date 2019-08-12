@@ -8,7 +8,7 @@
 
 #define WORD_SIZE sizeof(uint64_t)
 
-TEST_MODULE(io_uv_load);
+TEST_MODULE(uv_list);
 
 /******************************************************************************
  *
@@ -74,16 +74,16 @@ static void tear_down(void *data)
 
 /******************************************************************************
  *
- * Success scenarios.
+ * Data directory has only open or closed segments.
  *
  *****************************************************************************/
 
-TEST_SUITE(success);
-TEST_SETUP(success, setup);
-TEST_TEAR_DOWN(success, tear_down);
+TEST_SUITE(segments);
+TEST_SETUP(segments, setup);
+TEST_TEAR_DOWN(segments, tear_down);
 
-/* There are no snapshots. */
-TEST_CASE(success, no_snapshots, NULL)
+/* Data directory is empty. */
+TEST_CASE(segments, empty, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -93,8 +93,18 @@ TEST_CASE(success, no_snapshots, NULL)
     return MUNIT_OK;
 }
 
+/******************************************************************************
+ *
+ * Data directory has one or more snapshots.
+ *
+ *****************************************************************************/
+
+TEST_SUITE(snapshots);
+TEST_SETUP(snapshots, setup);
+TEST_TEAR_DOWN(snapshots, tear_down);
+
 /* There is a single snapshot. */
-TEST_CASE(success, one_snapshot, NULL)
+TEST_CASE(snapshots, one, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[8];
@@ -103,14 +113,12 @@ TEST_CASE(success, one_snapshot, NULL)
                       1 /* n servers */, 1 /* conf index */, buf /* data */,
                       sizeof buf);
     LIST;
-    munit_assert_ptr_not_null(f->snapshots);
-    munit_assert_int(f->n_snapshots, ==, 1);
     ASSERT_SNAPSHOT(0, 1, 8, 123);
     return MUNIT_OK;
 }
 
 /* There are several snapshots, including an incomplete one. */
-TEST_CASE(success, many_snapshots, NULL)
+TEST_CASE(snapshots, many, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[8];

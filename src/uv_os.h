@@ -121,9 +121,6 @@ int uvProbeIoCapabilities(const uvDir dir,
 /* Configure the given file descriptor for direct I/O. */
 int uvSetDirectIo(int fd, char *errmsg);
 
-/* Return a human-readable description of the given OS error */
-const char *osStrError(int rv);
-
 /* Wrappers around the kernel AIO APIs that we use.. */
 int uvIoSetup(unsigned n, aio_context_t *ctx, char *errmsg);
 

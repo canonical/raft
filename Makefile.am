@@ -175,7 +175,7 @@ endif # UV_ENABLED
 if FIXTURE_ENABLED
 libraft_la_SOURCES += src/fixture.c
 raftinclude_HEADERS += include/raft/fixture.h
-#unit_test_SOURCES += test/unit/test_fixture.c
+integration_test_SOURCES += test/unit/test_fixture.c
 endif
 
 if EXAMPLE_ENABLED

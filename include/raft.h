@@ -495,6 +495,7 @@ struct raft_io
      * is completed ownership of such memory is transfered to the raft instance.
      */
     int (*load)(struct raft_io *io,
+		unsigned trailing,
                 raft_term *term,
                 unsigned *voted_for,
                 struct raft_snapshot **snapshot,
@@ -579,6 +580,7 @@ struct raft_io
      * Asynchronously persist a new snapshot.
      */
     int (*snapshot_put)(struct raft_io *io,
+			unsigned trailing,
                         struct raft_io_snapshot_put *req,
                         const struct raft_snapshot *snapshot,
                         raft_io_snapshot_put_cb cb);

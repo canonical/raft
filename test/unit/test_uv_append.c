@@ -405,8 +405,6 @@ TEST_CASE(success, truncate, NULL)
     struct fixture *f = data;
     int rv;
     (void)params;
-    /* TODO: flaky */
-    return MUNIT_SKIP;
 
     CREATE_ENTRIES(2, 64);
     APPEND(0);
@@ -501,7 +499,6 @@ TEST_CASE(error, too_big, NULL)
 TEST_CASE(error, cancel, NULL)
 {
     struct fixture *f = data;
-    return MUNIT_SKIP;
     (void)params;
 
     CREATE_ENTRIES(1, 64);

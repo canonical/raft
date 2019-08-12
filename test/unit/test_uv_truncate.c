@@ -164,7 +164,7 @@ TEST_CASE(success, partial_segment, NULL)
 
     munit_assert_true(test_dir_has_file(f->dir, "1-1"));
 
-    rv = f->io.load(&f->io, &term, &voted_for, &snapshot, &start_index,
+    rv = f->io.load(&f->io, 10, &term, &voted_for, &snapshot, &start_index,
                     &entries, &n);
     munit_assert_int(rv, ==, 0);
 

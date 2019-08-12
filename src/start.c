@@ -12,9 +12,9 @@
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(MSG, ...) debugf(r, "start: " MSG, ##__VA_ARGS__)
+#    define tracef(MSG, ...) debugf(r, "start: " MSG, ##__VA_ARGS__)
 #else
-#define tracef(MSG, ...)
+#    define tracef(MSG, ...)
 #endif
 
 /* Restore the most recent configuration. */
@@ -118,8 +118,9 @@ int raft_start(struct raft *r)
     assert(r->last_stored == 0);
 
     infof(r, "starting");
-    rv = r->io->load(r->io, &r->current_term, &r->voted_for, &snapshot,
-                     &start_index, &entries, &n_entries);
+    rv = r->io->load(r->io, r->snapshot.trailing, &r->current_term,
+                     &r->voted_for, &snapshot, &start_index, &entries,
+                     &n_entries);
     if (rv != 0) {
         return rv;
     }
