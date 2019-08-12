@@ -114,7 +114,7 @@ int uvSegmentKeepTrailing(struct uv *uv,
                           size_t n,
                           raft_index last_index,
                           size_t trailing,
-                          size_t *kept)
+                          size_t *deleted)
 {
     size_t retain_index;
     size_t i;
@@ -124,7 +124,7 @@ int uvSegmentKeepTrailing(struct uv *uv,
     assert(last_index > 0);
     assert(n > 0);
 
-    *kept = n;
+    *deleted = n;
 
     if (last_index <= trailing) {
         return 0;
@@ -144,8 +144,8 @@ int uvSegmentKeepTrailing(struct uv *uv,
                 uvErrorf(uv, "unlink %s: %s", segment->filename, errmsg);
                 return rv;
             }
+            *deleted = i;
         }
-        *kept = i;
         break;
     }
 

@@ -348,9 +348,9 @@ static int removeOldSegmentsAndSnapshots(struct uv *uv,
     }
 
     if (segments != NULL) {
-        size_t kept;
+        size_t deleted;
         rv = uvSegmentKeepTrailing(uv, segments, n_segments, last_index,
-                                   trailing, &kept);
+                                   trailing, &deleted);
         if (rv != 0) {
             goto out;
         }
