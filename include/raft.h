@@ -429,9 +429,9 @@ typedef void (*raft_ring_logger_walk_cb)(void *data,
  * given hook each time. The @data argument will be passed back as first
  * argument of the callback.
  */
-void raft_ring_logger_walk(const struct raft_logger *l,
-                           raft_ring_logger_walk_cb cb,
-                           void *data);
+RAFT_API void raft_ring_logger_walk(const struct raft_logger *l,
+                                    raft_ring_logger_walk_cb cb,
+                                    void *data);
 
 /**
  * Logging levels.
@@ -495,7 +495,7 @@ struct raft_io
      * is completed ownership of such memory is transfered to the raft instance.
      */
     int (*load)(struct raft_io *io,
-		unsigned trailing,
+                unsigned trailing,
                 raft_term *term,
                 unsigned *voted_for,
                 struct raft_snapshot **snapshot,
@@ -580,7 +580,7 @@ struct raft_io
      * Asynchronously persist a new snapshot.
      */
     int (*snapshot_put)(struct raft_io *io,
-			unsigned trailing,
+                        unsigned trailing,
                         struct raft_io_snapshot_put *req,
                         const struct raft_snapshot *snapshot,
                         raft_io_snapshot_put_cb cb);
