@@ -364,6 +364,7 @@ TEST_CASE(snapshot, many, NULL)
 
     return MUNIT_OK;
 }
+
 /* The data directory has a closed segment with entries that are no longer
  * needed, since they are included in a snapshot. We still keep those segments
  * and just let the next snapshot logic delete them. */
@@ -378,6 +379,77 @@ TEST_CASE(snapshot, closed_segment_with_old_entries, NULL)
     UV_WRITE_CLOSED_SEGMENT(1, 1, 1);
     LOAD;
     munit_assert_true(HAS_CLOSED_SEGMENT_FILE(1, 1));
+    munit_assert_int(f->start_index, ==, 3);
+    munit_assert_int(f->n, ==, 0);
+    return MUNIT_OK;
+}
+
+/* The data directory has a closed segment with entries that are no longer
+ * needed, since they are included in a snapshot. However it also has an open
+ * segment. An error is returned. */
+TEST_CASE(snapshot, dangling_open_segment, NULL)
+{
+    struct fixture *f = data;
+    uint8_t buf[8];
+    (void)params;
+    UV_WRITE_SNAPSHOT(f->dir, 1 /* term */, 2 /* index */, 123 /* timestamp */,
+                      1 /* n servers */, 1 /* conf index */, buf /* data */,
+                      sizeof buf);
+    UV_WRITE_CLOSED_SEGMENT(1, 1, 1);
+    UV_WRITE_OPEN_SEGMENT(1, 1, 1);
+    LOAD_ERROR(RAFT_CORRUPT);
+    return MUNIT_OK;
+}
+
+/* The data directory has several closed segments, all with entries compatible
+ * with the snapshot. */
+TEST_CASE(snapshot, valid_closed_segments, NULL)
+{
+    struct fixture *f = data;
+    uint8_t buf[8];
+    (void)params;
+    UV_WRITE_CLOSED_SEGMENT(1, 1, 1);
+    UV_WRITE_CLOSED_SEGMENT(2, 2, 2);
+    UV_WRITE_CLOSED_SEGMENT(4, 3, 4);
+    UV_WRITE_SNAPSHOT(f->dir, 1 /* term */, 4 /* index */, 123 /* timestamp */,
+                      1 /* n servers */, 1 /* conf index */, buf /* data */,
+                      sizeof buf);
+    LOAD;
+    munit_assert_int(f->start_index, ==, 1);
+    munit_assert_int(f->n, ==, 6);
+    return MUNIT_OK;
+}
+
+/* The data directory has several closed segments, some of which have a gap,
+ * which is still compatible with the snapshot. */
+TEST_CASE(snapshot, noncontigous_closed_segments, NULL)
+{
+    struct fixture *f = data;
+    uint8_t buf[8];
+    (void)params;
+    UV_WRITE_CLOSED_SEGMENT(1, 1, 1);
+    UV_WRITE_CLOSED_SEGMENT(4, 3, 4);
+    UV_WRITE_SNAPSHOT(f->dir, 1 /* term */, 4 /* index */, 123 /* timestamp */,
+                      1 /* n servers */, 1 /* conf index */, buf /* data */,
+                      sizeof buf);
+    LOAD;
+    munit_assert_int(f->start_index, ==, 4);
+    munit_assert_int(f->n, ==, 3);
+    return MUNIT_OK;
+}
+
+/* If the data directory has a closed segment whose start index is beyond the
+ * snapshot's last index, an error is returned. */
+TEST_CASE(snapshot, more_recent_closed_segment, NULL)
+{
+    struct fixture *f = data;
+    uint8_t buf[8];
+    (void)params;
+    UV_WRITE_CLOSED_SEGMENT(6, 3, 6);
+    UV_WRITE_SNAPSHOT(f->dir, 1 /* term */, 4 /* index */, 123 /* timestamp */,
+                      1 /* n servers */, 1 /* conf index */, buf /* data */,
+                      sizeof buf);
+    LOAD_ERROR(RAFT_CORRUPT);
     return MUNIT_OK;
 }
 
