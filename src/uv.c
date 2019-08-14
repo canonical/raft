@@ -215,24 +215,26 @@ static int filterSegments(struct uv *uv,
     uvDebugf(uv, "most recent closed segment is %s", segment->filename);
 
     /* If the end index of the last closed segment is lower than the last
-     * snapshot index, there is no entry that we can keep. We return an empty
-     * segment list, unless there is at least one open segment, in that case we
-     * bail out since we can't safely know at which index the open segment
-     * starts. */
+     * snapshot index, there might be no entry that we can keep. We return an
+     * empty segment list, unless there is at least one open segment, in that
+     * case we keep everything hoping that they contain all the entries since
+     * the last closed segment (TODO: we should encode the starting entry in the
+     * open segment). */
     if (segment->end_index < last_index) {
-        if ((*segments)[*n - 1].is_open) {
-            uvErrorf(uv,
-                     "most recent closed segment %s is behind last snapshot, "
-                     "yet there are open segments",
-                     segment->filename) return RAFT_CORRUPT;
-        }
-        uvWarnf(uv,
+        if (!(*segments)[*n - 1].is_open) {
+            uvWarnf(
+                uv,
                 "discarding all closed segments, since most recent is behind "
                 "last snapshot");
-        raft_free(*segments);
-        *segments = NULL;
-        *n = 0;
-        return 0;
+            raft_free(*segments);
+            *segments = NULL;
+            *n = 0;
+            return 0;
+        }
+        uvWarnf(uv,
+                "most recent closed segment %s is behind last snapshot, "
+                "yet there are open segments",
+                segment->filename);
     }
 
     /* Now scan the segments backwards, searching for the longest list of
@@ -319,7 +321,7 @@ static int loadSnapshotAndEntries(struct uv *uv,
         if (rv != 0) {
             goto err;
         }
-	uvDebugf(uv, "most recent snapshot at %lld", (*snapshot)->index);
+        uvDebugf(uv, "most recent snapshot at %lld", (*snapshot)->index);
         raft_free(snapshots);
         snapshots = NULL;
 
@@ -345,6 +347,18 @@ static int loadSnapshotAndEntries(struct uv *uv,
         if (rv != 0) {
             goto err;
         }
+
+	/* Check if all entries that we loaded are actually behind the last
+	 * snapshot. This can happen if the last closed segment was behind the
+	 * last snapshot and there were open segments, but the entries in the
+	 * open segments turned out to be behind the snapshot as well.  */
+        if (*snapshot != NULL && (*start_index + *n - 1) < (*snapshot)->index) {
+            *start_index = (*snapshot)->index + 1;
+            entryBatchesDestroy(*entries, *n);
+            *entries = NULL;
+            *n = 0;
+        }
+
         raft_free(segments);
         segments = NULL;
     }

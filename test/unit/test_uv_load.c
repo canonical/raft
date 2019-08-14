@@ -386,7 +386,7 @@ TEST_CASE(snapshot, closed_segment_with_old_entries, NULL)
 
 /* The data directory has a closed segment with entries that are no longer
  * needed, since they are included in a snapshot. However it also has an open
- * segment. An error is returned. */
+ * segment that has enough entries to reach the snapshot last index. */
 TEST_CASE(snapshot, dangling_open_segment, NULL)
 {
     struct fixture *f = data;
@@ -395,9 +395,33 @@ TEST_CASE(snapshot, dangling_open_segment, NULL)
     UV_WRITE_SNAPSHOT(f->dir, 1 /* term */, 2 /* index */, 123 /* timestamp */,
                       1 /* n servers */, 1 /* conf index */, buf /* data */,
                       sizeof buf);
-    UV_WRITE_CLOSED_SEGMENT(1, 1, 1);
-    UV_WRITE_OPEN_SEGMENT(1, 1, 1);
-    LOAD_ERROR(RAFT_CORRUPT);
+    UV_WRITE_CLOSED_SEGMENT(1 /* first index */, 1 /* n entries */,
+                            1 /* data */);
+    UV_WRITE_OPEN_SEGMENT(1 /* counter */, 1 /* n entries */, 2 /* data */);
+    LOAD;
+    munit_assert_int(f->start_index, ==, 1);
+    munit_assert_int(f->n, ==, 2);
+    return MUNIT_OK;
+}
+
+/* The data directory has a closed segment with entries that are no longer
+ * needed, since they are included in a snapshot. It also has an open segment,
+ * however that does not have enough entries to reach the snapshot last
+ * index. */
+TEST_CASE(snapshot, dangling_open_segment_behind, NULL)
+{
+    struct fixture *f = data;
+    uint8_t buf[8];
+    (void)params;
+    UV_WRITE_SNAPSHOT(f->dir, 1 /* term */, 3 /* index */, 123 /* timestamp */,
+                      1 /* n servers */, 1 /* conf index */, buf /* data */,
+                      sizeof buf);
+    UV_WRITE_CLOSED_SEGMENT(1 /* first index */, 1 /* n entries */,
+                            1 /* data */);
+    UV_WRITE_OPEN_SEGMENT(1 /* counter */, 1 /* n entries */, 2 /* data */);
+    LOAD;
+    munit_assert_int(f->start_index, ==, 4);
+    munit_assert_int(f->n, ==, 0);
     return MUNIT_OK;
 }
 

@@ -516,6 +516,11 @@ static int loadOpen(struct uv *uv,
                 uvWarnf(uv, "%s has non-zero trail", info->filename);
             }
 
+            uvWarnf(uv,
+                    "truncate open segment %s at %ld, since it has corrupted "
+                    "entries",
+                    info->filename, offset);
+
             rv = ftruncate(fd, offset);
             if (rv == -1) {
                 uvErrorf(uv, "ftruncate %s: %s", info->filename,
