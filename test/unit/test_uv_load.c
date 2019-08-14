@@ -419,9 +419,7 @@ TEST_CASE(snapshot, dangling_open_segment_behind, NULL)
     UV_WRITE_CLOSED_SEGMENT(1 /* first index */, 1 /* n entries */,
                             1 /* data */);
     UV_WRITE_OPEN_SEGMENT(1 /* counter */, 1 /* n entries */, 2 /* data */);
-    LOAD;
-    munit_assert_int(f->start_index, ==, 4);
-    munit_assert_int(f->n, ==, 0);
+    LOAD_ERROR(RAFT_CORRUPT);
     return MUNIT_OK;
 }
 

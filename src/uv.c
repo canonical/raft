@@ -342,21 +342,24 @@ static int loadSnapshotAndEntries(struct uv *uv,
 
     /* Read data from segments, closing any open segments. */
     if (segments != NULL) {
+        raft_index last_index;
         rv = uvSegmentLoadAll(uv, *start_index, segments, n_segments, entries,
                               n);
         if (rv != 0) {
             goto err;
         }
 
-	/* Check if all entries that we loaded are actually behind the last
-	 * snapshot. This can happen if the last closed segment was behind the
-	 * last snapshot and there were open segments, but the entries in the
-	 * open segments turned out to be behind the snapshot as well.  */
-        if (*snapshot != NULL && (*start_index + *n - 1) < (*snapshot)->index) {
-            *start_index = (*snapshot)->index + 1;
-            entryBatchesDestroy(*entries, *n);
-            *entries = NULL;
-            *n = 0;
+        /* Check if all entries that we loaded are actually behind the last
+         * snapshot. This can happen if the last closed segment was behind the
+         * last snapshot and there were open segments, but the entries in the
+         * open segments turned out to be behind the snapshot as well.  */
+        last_index = *start_index + *n - 1;
+        if (*snapshot != NULL && last_index < (*snapshot)->index) {
+            uvErrorf(uv,
+                     "index of last entry %lld is behind last snapshot %lld",
+                     last_index, (*snapshot)->index);
+	    rv = RAFT_CORRUPT;
+	    goto err_after_snapshot_load;
         }
 
         raft_free(segments);
