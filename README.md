@@ -66,6 +66,20 @@ It is recommended that you read
 documentation details, but here's a quick high-level guide of what you'll need
 to do (error handling is omitted for brevity).
 
+Create an instance of the stock ```raft_io``` interface implementation (or
+implement your own one if the one that comes with the library really does not
+fit):
+
+```C
+const char *dir = "/your/raft/data";
+struct uv_loop_s loop;
+struct raft_uv_transport transport;
+struct raft_io io;
+uv_loop_init(&loop);
+raft_uv_tcp_init(&transport, &loop);
+raft_uv_init(&io, &loop, dir, &transport);
+```
+
 Define your application Raft FSM, implementing the ```raft_fsm``` interface:
 
 ```C
@@ -78,17 +92,11 @@ struct raft_fsm
 }
 ```
 
-Create an instance of the stock ```raft_io``` interface (or implement your one
-if really the one that comes with the library does not fit):
+Create an instance of the stock ```raft_logger``` interface implementation:
 
 ```C
-const char *dir = "/your/raft/data";
-struct uv_loop_s loop;
-struct raft_uv_transport transport;
-struct raft_io io;
-uv_loop_init(&loop);
-raft_uv_tcp_init(&transport, &loop);
-raft_uv_init(&io, &loop, dir, &transport);
+struct raft_logger logger;
+raft_ring_logger_init(&logger, stdio);
 ```
 
 Pick a unique ID and address for each server and initialize the raft object:
@@ -97,7 +105,7 @@ Pick a unique ID and address for each server and initialize the raft object:
 unsigned id = 1;
 const char *address = "192.168.1.1:9999";
 struct raft raft;
-raft_init(&raft, &io, &fsm, id, address);
+raft_init(&raft, &io, &fsm, &logger, id, address);
 ```
 
 If it's the first time you start the cluster, create a configuration object
@@ -132,6 +140,9 @@ buf.len = ...; /* The length of your FSM entry data */
 buf.base = ...; /* Your FSM entry data */
 raft_apply(&raft, &req, &buf, 1, apply_callback);
 ```
+
+To add more servers to the cluster use the ```raft_add()``` and
+```raft_promote``` APIs.
   
 Notable users
 -------------
