@@ -13,7 +13,7 @@ compiler:
   - gcc
 script:
   - autoreconf -i
-  - ./configure --disable-uv --enable-debug --enable-code-coverage --enable-sanitize
+  - ./configure --enable-example --enable-debug --enable-code-coverage --enable-sanitize
   - ./test/lib/fs.sh setup
   - CFLAGS=-O0
   - make
