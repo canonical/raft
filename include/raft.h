@@ -667,12 +667,6 @@ struct raft;
 typedef void (*raft_close_cb)(struct raft *raft);
 
 /**
- * State watch callback. Invoked after a raft server changes its state. It gets
- * passed the old server state before the change. See @raft_watch.
- */
-typedef void (*raft_watch_cb)(struct raft *raft, int old_state);
-
-/**
  * Hold and drive the state of a single raft server in a cluster.
  */
 struct raft
@@ -822,11 +816,6 @@ struct raft
      * Callback to invoke once a close request has completed.
      */
     raft_close_cb close_cb;
-
-    /*
-     * Callback to invoke whenever the state changes.
-     */
-    raft_watch_cb watch_cb;
 };
 
 /**
@@ -911,11 +900,6 @@ RAFT_API void raft_set_logger_level(struct raft *r, unsigned level);
  * Return the code of the current raft state.
  */
 RAFT_API int raft_state(struct raft *r);
-
-/**
- * Invoke the given watch callback whenever the current raft state changes.
- */
-RAFT_API void raft_watch(struct raft *r, raft_watch_cb cb);
 
 /**
  * Return the ID and address of the current known leader, if any.

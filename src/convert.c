@@ -8,8 +8,8 @@
 #include "request.h"
 
 /* Convenience for setting a new state value and asserting that the transition
- * is valid. Return the old state. */
-static int setState(struct raft *r, int new_state)
+ * is valid. */
+static void setState(struct raft *r, int new_state)
 {
     int old_state = r->state;
 
@@ -25,8 +25,6 @@ static int setState(struct raft *r, int new_state)
            (old_state == RAFT_CANDIDATE && new_state == RAFT_UNAVAILABLE) ||
            (old_state == RAFT_LEADER && new_state == RAFT_UNAVAILABLE));
     r->state = new_state;
-
-    return old_state;
 }
 
 /* Clear follower state. */
@@ -125,38 +123,25 @@ static void clear(struct raft *r)
     }
 }
 
-/* Possibly trigger the watch callback if set. */
-static void triggerWatchCb(struct raft *r, int old_state)
-{
-    if (r->watch_cb != NULL) {
-        r->watch_cb(r, old_state);
-    }
-}
-
 void convertToFollower(struct raft *r)
 {
-    int old_state;
-
     clear(r);
-    old_state = setState(r, RAFT_FOLLOWER);
+    setState(r, RAFT_FOLLOWER);
 
     /* Reset election timer. */
     electionResetTimer(r);
 
     r->follower_state.current_leader.id = 0;
     r->follower_state.current_leader.address = NULL;
-
-    triggerWatchCb(r, old_state);
 }
 
 int convertToCandidate(struct raft *r)
 {
     size_t n_voting = configurationNumVoting(&r->configuration);
-    int old_state;
     int rv;
 
     clear(r);
-    old_state = setState(r, RAFT_CANDIDATE);
+    setState(r, RAFT_CANDIDATE);
 
     /* Allocate the votes array. */
     r->candidate_state.votes = raft_malloc(n_voting * sizeof(bool));
@@ -172,18 +157,15 @@ int convertToCandidate(struct raft *r)
         return rv;
     }
 
-    triggerWatchCb(r, old_state);
-
     return 0;
 }
 
 int convertToLeader(struct raft *r)
 {
-    int old_state;
     int rv;
 
     clear(r);
-    old_state = setState(r, RAFT_LEADER);
+    setState(r, RAFT_LEADER);
 
     /* Reset timers */
     r->election_timer_start = r->io->time(r->io);
@@ -205,15 +187,11 @@ int convertToLeader(struct raft *r)
     r->leader_state.round_index = 0;
     r->leader_state.round_start = 0;
 
-    triggerWatchCb(r, old_state);
-
     return 0;
 }
 
 void convertToUnavailable(struct raft *r)
 {
-    int old_state;
     clear(r);
-    old_state = setState(r, RAFT_UNAVAILABLE);
-    triggerWatchCb(r, old_state);
+    setState(r, RAFT_UNAVAILABLE);
 }
