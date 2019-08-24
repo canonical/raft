@@ -378,15 +378,6 @@
 /* Return the number of messages sent by the given server. */
 #define CLUSTER_N_RECV(I, TYPE) raft_fixture_n_recv(&f->cluster, I, TYPE)
 
-/* Setup a watch callback across all raft instances of the cluster. */
-#define CLUSTER_WATCH(CB)                     \
-    {                                         \
-        unsigned i_;                          \
-        for (i_ = 0; i_ < CLUSTER_N; i_++) {  \
-            raft_watch(CLUSTER_RAFT(i_), CB); \
-        }                                     \
-    }
-
 /* Set a fixture hook that randomizes election timeouts, disk latency and
  * network latency. */
 #define CLUSTER_RANDOMIZE                \

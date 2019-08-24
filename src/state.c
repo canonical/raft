@@ -42,8 +42,3 @@ void raft_set_logger_level(struct raft *r, unsigned level)
 {
     r->logger->level = level;
 }
-
-void raft_watch(struct raft *r, raft_watch_cb cb)
-{
-    r->watch_cb = cb;
-}
