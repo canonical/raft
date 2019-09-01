@@ -9,16 +9,16 @@
 
 #define N_SERVERS 3 /* Number of servers in the example cluster */
 
-static void forkServer(const char *topLevelDir, int i, int *pid)
+static void forkServer(const char *topLevelDir, unsigned i, pid_t *pid)
 {
     *pid = fork();
     if (*pid == 0) {
         char *dir = malloc(strlen(topLevelDir) + strlen("/D") + 1);
-        char *id = malloc(2);
+        char *id = malloc(N_SERVERS/10+2);
         char *argv[] = {"./example/server", dir, id, NULL};
         char *envp[] = {NULL};
-        sprintf(dir, "%s/%d", topLevelDir, i + 1);
-        sprintf(id, "%d", i + 1);
+        sprintf(dir, "%s/%u", topLevelDir, i + 1);
+        sprintf(id, "%u", i + 1);
         execve("./example/server", argv, envp);
     }
 }
@@ -28,8 +28,8 @@ int main(int argc, char *argv[])
     const char *topLevelDir = "/tmp/raft";
     struct timespec now;
     struct stat statBuf;
-    int pids[N_SERVERS];
-    int i;
+    pid_t pids[N_SERVERS];
+    unsigned i;
     int rv;
 
     if (argc > 2) {
