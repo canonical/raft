@@ -96,7 +96,14 @@ Create an instance of the stock ```raft_logger``` interface implementation:
 
 ```C
 struct raft_logger logger;
-raft_ring_logger_init(&logger, stdio);
+raft_stream_logger_init (&logger, stdout);
+```
+
+or
+
+```C
+struct raft_logger logger;
+raft_ring_logger_init (&logger, buffer_size);
 ```
 
 Pick a unique ID and address for each server and initialize the raft object:
