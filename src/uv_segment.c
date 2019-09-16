@@ -213,7 +213,7 @@ static int loadEntriesBatch(struct uv *uv,
 
     n = byteFlip64(preamble[1]);
     if (n == 0) {
-        uvErrorf(uv, "batch has zero entries");
+        uvErrorf(uv, "batch has zero entries (preamble at %d)", offset);
         rv = RAFT_CORRUPT;
         goto err;
     }
@@ -792,6 +792,8 @@ int uvSegmentLoadAll(struct uv *uv,
 
     for (i = 0; i < n_infos; i++) {
         struct uvSegmentInfo *info = &infos[i];
+
+	uvDebugf(uv, "load segment %s", info->filename);
 
         if (info->is_open) {
             rv = loadOpen(uv, info, entries, n_entries, &next_index);
