@@ -116,7 +116,7 @@ int uvSegmentKeepTrailing(struct uv *uv,
                           size_t trailing,
                           size_t *deleted)
 {
-    size_t retain_index;
+    raft_index retain_index;
     size_t i;
     uvErrMsg errmsg;
     int rv;
@@ -146,8 +146,9 @@ int uvSegmentKeepTrailing(struct uv *uv,
                 return rv;
             }
             *deleted = i;
-        }
-        break;
+        } else {
+	    break;
+	}
     }
 
     return 0;
