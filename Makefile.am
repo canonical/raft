@@ -1,5 +1,4 @@
 ACLOCAL_AMFLAGS = -I m4
-AM_CFLAGS = -I$(top_srcdir)/include -Wall
 
 include_HEADERS = include/raft.h
 
@@ -7,7 +6,7 @@ raftincludedir = $(includedir)/raft
 raftinclude_HEADERS =
 
 lib_LTLIBRARIES = libraft.la
-libraft_la_CFLAGS = -fvisibility=hidden $(CODE_COVERAGE_CFLAGS)
+libraft_la_CFLAGS = $(CODE_COVERAGE_CFLAGS) $(AM_CFLAGS)
 libraft_la_LDFLAGS = -version-info 0:7:0
 libraft_la_SOURCES = \
   src/byte.c \

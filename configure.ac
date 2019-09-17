@@ -71,6 +71,7 @@ AC_TYPE_UINT8_T
 AC_FUNC_MALLOC
 AC_CHECK_FUNCS([memcpy vsprintf])
 
+AX_CHECK_COMPILE_FLAG([-fvisibility=hidden], [AM_CFLAGS="$AM_CFLAGS -fvisibility=hidden"])
 AX_CHECK_COMPILE_FLAG([-fdiagnostics-color], [AM_CFLAGS="$AM_CFLAGS -fdiagnostics-color"])
 AX_CHECK_COMPILE_FLAG([-Wimplicit-fallthrough=5], [AM_CFLAGS="$AM_CFLAGS -Wimplicit-fallthrough=5"])
 AX_CHECK_COMPILE_FLAG([-Wcast-align], [AM_CFLAGS="$AM_CFLAGS -Wcast-align"])
@@ -102,6 +103,7 @@ AX_CHECK_COMPILE_FLAG([-Wnested-externs], [AM_CFLAGS="$AM_CFLAGS -Wnested-extern
 AX_CHECK_COMPILE_FLAG([-fasynchronous-unwind-tables], [AM_CFLAGS="$AM_CFLAGS -fasynchronous-unwind-tables"])
 AX_CHECK_COMPILE_FLAG([-pipe], [AM_CFLAGS="$AM_CFLAGS -pipe"])
 AX_CHECK_COMPILE_FLAG([-fexceptions], [AM_CFLAGS="$AM_CFLAGS -fexceptions"])
+AC_SUBST(AM_CFLAGS)
 
 AC_CONFIG_FILES([raft.pc Makefile])
 AC_OUTPUT
