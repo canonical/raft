@@ -14,7 +14,7 @@
     (sizeof(uint64_t) /* Message type. */ + \
      sizeof(uint64_t) /* Message size. */)
 
-size_t sizeofRequestVote()
+size_t sizeofRequestVote(void)
 {
     return sizeof(uint64_t) + /* Term. */
            sizeof(uint64_t) + /* Candidate ID. */
@@ -22,7 +22,7 @@ size_t sizeofRequestVote()
            sizeof(uint64_t) /* Last log term. */;
 }
 
-static size_t sizeofRequestVoteResult()
+static size_t sizeofRequestVoteResult(void)
 {
     return sizeof(uint64_t) + /* Term. */
            sizeof(uint64_t) /* Vote granted. */;
@@ -39,7 +39,7 @@ static size_t sizeofAppendEntries(const struct raft_append_entries *p)
            16 * p->n_entries /* One header per entry */;
 }
 
-static size_t sizeofAppendEntriesResult()
+static size_t sizeofAppendEntriesResult(void)
 {
     return sizeof(uint64_t) + /* Term. */
            sizeof(uint64_t) + /* Success. */
