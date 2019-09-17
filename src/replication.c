@@ -191,9 +191,9 @@ static void sendSnapshotGetCb(struct raft_io_snapshot_get *get,
     struct raft *r = req->raft;
     struct raft_message message;
     struct raft_install_snapshot *args = &message.install_snapshot;
-    const struct raft_server *server;
-    bool progress_state_is_snapshot;
-    unsigned i;
+    const struct raft_server *server = NULL;
+    bool progress_state_is_snapshot = false;
+    unsigned i = 0;
     int rv;
 
     if (status != 0) {

@@ -292,6 +292,7 @@ static void connectCb(struct raft_uv_connect *req,
     /*c->uv->logger->emit(c->uv->logger, level,
                         c->uv->io->time(c->uv->io), "connect to %d (%s): %s",
                         c->id, c->address, raft_strerror(status));*/
+    (void)level;
 
     /* Let's schedule another attempt. */
     c->state = DELAY;
