@@ -85,7 +85,6 @@ integration_test_SOURCES += \
   test/integration/test_snapshot.c \
   test/integration/test_tick.c \
   test/integration/test_start.c
-integration_test_CFLAGS = $(test_CFLAGS)
 integration_test_LDADD = libraft.la
 integration_test_LDFLAGS =
 
