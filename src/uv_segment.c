@@ -147,8 +147,8 @@ int uvSegmentKeepTrailing(struct uv *uv,
             }
             *deleted = i;
         } else {
-	    break;
-	}
+            break;
+        }
     }
 
     return 0;
@@ -240,7 +240,7 @@ static int loadEntriesBatch(struct uv *uv,
     }
     *(uint64_t *)header.base = preamble[1];
 
-    rv = uvReadFully(fd, header.base + sizeof(uint64_t),
+    rv = uvReadFully(fd, (uint8_t *)header.base + sizeof(uint64_t),
                      header.len - sizeof(uint64_t), errmsg);
     if (rv != 0) {
         uvErrorf(uv, "read: %s", errmsg);
@@ -712,7 +712,7 @@ int uvSegmentBufferAppend(struct uvSegmentBuffer *b,
     header = cursor;
     uvEncodeBatchHeader(entries, n_entries, cursor);
     crc1 = byteCrc32(header, uvSizeofBatchHeader(n_entries), 0);
-    cursor += uvSizeofBatchHeader(n_entries);
+    cursor = (uint8_t *)cursor + uvSizeofBatchHeader(n_entries);
 
     /* Batch data */
     crc2 = 0;
@@ -723,7 +723,7 @@ int uvSegmentBufferAppend(struct uvSegmentBuffer *b,
         assert(entry->buf.len % sizeof(uint64_t) == 0);
         memcpy(cursor, entry->buf.base, entry->buf.len);
         crc2 = byteCrc32(cursor, entry->buf.len, crc2);
-        cursor += entry->buf.len;
+        cursor = (uint8_t *)cursor + entry->buf.len;
     }
 
     bytePut32(&crc1_p, crc1);
@@ -793,7 +793,7 @@ int uvSegmentLoadAll(struct uv *uv,
     for (i = 0; i < n_infos; i++) {
         struct uvSegmentInfo *info = &infos[i];
 
-	uvDebugf(uv, "load segment %s", info->filename);
+        uvDebugf(uv, "load segment %s", info->filename);
 
         if (info->is_open) {
             rv = loadOpen(uv, info, entries, n_entries, &next_index);

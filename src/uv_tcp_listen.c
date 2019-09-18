@@ -49,7 +49,7 @@ static void preambleAllocCb(struct uv_handle_s *handle,
 {
     struct conn *c = handle->data;
     (void)suggested_size;
-    buf->base = (void *)c->handshake.preamble + c->handshake.nread;
+    buf->base = (char *)c->handshake.preamble + c->handshake.nread;
     buf->len = sizeof c->handshake.preamble - c->handshake.nread;
 }
 
