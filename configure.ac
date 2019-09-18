@@ -73,7 +73,6 @@ AC_FUNC_MALLOC
 AC_CHECK_FUNCS([memcpy vsprintf])
 
 AX_CHECK_COMPILE_FLAG([-std=c11], [AM_CFLAGS="$AM_CFLAGS -std=c11"])
-AX_CHECK_COMPILE_FLAG([-fvisibility=hidden], [AM_CFLAGS="$AM_CFLAGS -fvisibility=hidden"])
 AX_CHECK_COMPILE_FLAG([-fdiagnostics-color], [AM_CFLAGS="$AM_CFLAGS -fdiagnostics-color"])
 AX_CHECK_COMPILE_FLAG([-Wpedantic], [AM_CFLAGS="$AM_CFLAGS -Wpedantic"])
 AX_CHECK_COMPILE_FLAG([-Wall], [AM_CFLAGS="$AM_CFLAGS -Wall"])

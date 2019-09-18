@@ -7,6 +7,7 @@ raftincludedir = $(includedir)/raft
 raftinclude_HEADERS =
 
 lib_LTLIBRARIES = libraft.la
+libraft_la_CFLAGS = $(AM_CFLAGS) -fvisibility=hidden
 libraft_la_LDFLAGS = -version-info 0:7:0
 libraft_la_SOURCES = \
   src/byte.c \
@@ -63,7 +64,6 @@ test_unit_core_SOURCES = \
   test/unit/test_log.c \
   test/unit/test_queue.c \
   test/unit/test_logger_ring.c
-test_unit_core_CFLAGS = $(test_CFLAGS)
 test_unit_core_LDADD = libtest.la
 
 test_lib_SOURCES = \
