@@ -40,8 +40,7 @@ TESTS = $(check_PROGRAMS)
 
 check_LTLIBRARIES = libtest.la
 
-libtest_la_CFLAGS = -DMUNIT_TEST_NAME_LEN=60
-libtest_la_LDFLAGS =
+libtest_la_CFLAGS = $(AM_CFLAGS) -DMUNIT_TEST_NAME_LEN=60
 libtest_la_SOURCES = \
   test/lib/fault.c \
   test/lib/heap.c \
