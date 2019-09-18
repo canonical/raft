@@ -96,7 +96,6 @@ fuzzy_test_SOURCES += \
   test/fuzzy/test_liveness.c \
   test/fuzzy/test_membership.c \
   test/fuzzy/test_replication.c
-fuzzy_test_CFLAGS = $(AM_CFLAGS)
 fuzzy_test_LDADD = libraft.la
 fuzzy_test_LDFLAGS =
 
