@@ -45,7 +45,8 @@ libtest_la_CFLAGS = $(AM_CFLAGS) -DMUNIT_TEST_NAME_LEN=60
 libtest_la_SOURCES = \
   test/lib/fault.c \
   test/lib/heap.c \
-  test/lib/munit.c
+  test/lib/munit.c \
+  test/lib/tcp.c
 
 test_unit_core_SOURCES = \
   src/byte.c \
@@ -66,8 +67,7 @@ test_unit_core_LDADD = libtest.la
 
 test_lib_SOURCES = \
   test/lib/cluster.c \
-  test/lib/fsm.c \
-  test/lib/tcp.c
+  test/lib/fsm.c
 
 integration_test_SOURCES = $(test_lib_SOURCES)
 integration_test_SOURCES += \
