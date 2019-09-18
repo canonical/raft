@@ -19,7 +19,7 @@
  * Return true if the filename matched, false otherwise. */
 static bool infoMatch(const char *filename, struct uvSnapshotInfo *info)
 {
-    unsigned consumed = 0;
+    int consumed = 0;
     int matched;
     size_t filename_len = strnlen(filename, UV__FILENAME_MAX_LEN + 1);
 
@@ -29,7 +29,7 @@ static bool infoMatch(const char *filename, struct uvSnapshotInfo *info)
 
     matched = sscanf(filename, UV__SNAPSHOT_META_TEMPLATE "%n", &info->term,
                      &info->index, &info->timestamp, &consumed);
-    if (matched != 3 || consumed != filename_len) {
+    if (matched != 3 || consumed != (int)filename_len) {
         return false;
     }
 

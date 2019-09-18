@@ -17,7 +17,7 @@
  * Return true if the filename matched, false otherwise. */
 static bool infoMatch(const char *filename, struct uvSegmentInfo *info)
 {
-    unsigned consumed;
+    int consumed;
     int matched;
     size_t filename_len = strnlen(filename, UV__FILENAME_MAX_LEN + 1);
 
@@ -27,14 +27,14 @@ static bool infoMatch(const char *filename, struct uvSegmentInfo *info)
 
     matched = sscanf(filename, UV__CLOSED_TEMPLATE "%n", &info->first_index,
                      &info->end_index, &consumed);
-    if (matched == 2 && consumed == filename_len) {
+    if (matched == 2 && consumed == (int)filename_len) {
         info->is_open = false;
         goto match;
     }
 
     matched =
         sscanf(filename, UV__OPEN_TEMPLATE "%n", &info->counter, &consumed);
-    if (matched == 1 && consumed == filename_len) {
+    if (matched == 1 && consumed == (int)filename_len) {
         info->is_open = true;
         goto match;
     }
