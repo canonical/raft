@@ -160,7 +160,6 @@ test_unit_uv_SOURCES += \
   test/unit/test_uv_recv.c \
   test/unit/test_uv_send.c \
   test/unit/test_uv.c
-test_unit_uv_CFLAGS = $(test_CFLAGS)
 test_unit_uv_LDADD = libtest.la
 test_unit_uv_LDFLAGS = $(UV_LIBS)
 
