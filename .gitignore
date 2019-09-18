@@ -22,10 +22,9 @@ stamp-h1
 .libs/
 test/unit/core
 test/unit/uv
+test/integration/core
 test/*/*.log
 test/*/*.trs
-unit-test*
-integration-test*
 fuzzy-test*
 os-test*
 test-suite.log

@@ -36,7 +36,7 @@ libraft_la_SOURCES = \
   src/state.c \
   src/tick.c
 
-check_PROGRAMS = test/unit/core integration-test fuzzy-test
+check_PROGRAMS = test/unit/core test/integration/core fuzzy-test
 TESTS = $(check_PROGRAMS)
 
 check_LTLIBRARIES = libtest.la
@@ -66,8 +66,8 @@ test_unit_core_SOURCES = \
   test/unit/test_logger_ring.c
 test_unit_core_LDADD = libtest.la
 
-integration_test_SOURCES = \
-  test/integration/main.c \
+test_integration_core_SOURCES = \
+  test/integration/main_core.c \
   test/integration/test_apply.c \
   test/integration/test_barrier.c \
   test/integration/test_election.c \
@@ -76,8 +76,8 @@ integration_test_SOURCES = \
   test/integration/test_snapshot.c \
   test/integration/test_tick.c \
   test/integration/test_start.c
-integration_test_LDADD = libtest.la libraft.la
-integration_test_LDFLAGS =
+test_integration_core_LDADD = libtest.la libraft.la
+test_integration_core_LDFLAGS =
 
 fuzzy_test_SOURCES = \
   test/lib/cluster.c \
@@ -158,7 +158,7 @@ endif # UV_ENABLED
 if FIXTURE_ENABLED
 libraft_la_SOURCES += src/fixture.c
 raftinclude_HEADERS += include/raft/fixture.h
-integration_test_SOURCES += test/unit/test_fixture.c
+test_integration_core_SOURCES += test/unit/test_fixture.c
 endif
 
 if EXAMPLE_ENABLED
