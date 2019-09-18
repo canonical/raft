@@ -7,7 +7,6 @@ raftincludedir = $(includedir)/raft
 raftinclude_HEADERS =
 
 lib_LTLIBRARIES = libraft.la
-libraft_la_CFLAGS = $(AM_CFLAGS)
 libraft_la_LDFLAGS = -version-info 0:7:0
 libraft_la_SOURCES = \
   src/byte.c \
