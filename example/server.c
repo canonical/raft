@@ -25,7 +25,7 @@ static void emit(struct raft_logger *l,
                  ...)
 {
     va_list args;
-    unsigned id = *(unsigned*)l->impl;
+    unsigned id = *(unsigned *)l->impl;
     char buf[2048];
     (void)time;
     if (level < l->level) {
@@ -129,9 +129,9 @@ struct server
 };
 
 /* Convenience to emit a message. */
-#define emitf(S, LEVEL, FORMAT, ...)                                          \
+#define emitf(S, LEVEL, ...)                                                  \
     S->logger.emit(&S->logger, LEVEL, S->io.time(&S->io), __FILE__, __LINE__, \
-                   FORMAT, ##__VA_ARGS__);
+                   ##__VA_ARGS__);
 
 /* Final callback in the shutdown sequence, invoked after the timer handle has
  * been closed. */
@@ -217,7 +217,7 @@ static int serverInit(struct server *s, const char *dir, unsigned id)
     s->id = id;
 
     /* Initialize the default logger. */
-    s->logger.impl = (void*)&s->id;
+    s->logger.impl = (void *)&s->id;
     s->logger.level = RAFT_INFO;
     s->logger.emit = emit;
 
