@@ -126,9 +126,6 @@ libtest_la_SOURCES += \
   test/lib/tcp.c \
   test/lib/loop.c
 
-test_lib_SOURCES += \
-  test/lib/loop.c
-
 test_unit_uv_SOURCES = $(raft_uv_SOURCES)
 test_unit_uv_SOURCES += \
   src/byte.c \
