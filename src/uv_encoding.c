@@ -123,7 +123,7 @@ static void encodeInstallSnapshot(const struct raft_install_snapshot *p,
     bytePut64(&cursor, p->conf_index); /* Configuration index. */
     bytePut64(&cursor, conf_size);     /* Configuration length. */
     configurationEncodeToBuf(&p->conf, cursor);
-    cursor += conf_size;
+    cursor = (uint8_t *)cursor + conf_size;
     bytePut64(&cursor, p->data.len); /* Snapshot data size. */
 }
 
@@ -249,7 +249,7 @@ void uvEncodeBatchHeader(const struct raft_entry *entries,
         /* Message type (Either RAFT_COMMAND or RAFT_CHANGE) */
         bytePut8(&cursor, entry->type);
 
-        cursor += 3; /* Unused */
+        cursor = (uint8_t *)cursor + 3; /* Unused */
 
         /* Size of the log entry data, little endian. */
         bytePut32(&cursor, entry->buf.len);
@@ -313,7 +313,7 @@ int uvDecodeBatchHeader(const void *batch,
             goto err_after_alloc;
         }
 
-        cursor += 3; /* Unused */
+        cursor = (uint8_t*)cursor + 3; /* Unused */
 
         /* Size of the log entry data, little endian. */
         entry->buf.len = byteGet32(&cursor);
@@ -389,7 +389,7 @@ static int decodeInstallSnapshot(const uv_buf_t *buf,
     if (rv != 0) {
         return rv;
     }
-    cursor += conf.len;
+    cursor = (uint8_t*)cursor + conf.len;
     args->data.len = byteGet64(&cursor);
 
     return 0;
@@ -458,10 +458,10 @@ void uvDecodeEntriesBatch(const struct raft_buffer *buf,
 
         entry->buf.base = cursor;
 
-        cursor += entry->buf.len;
+	cursor = (uint8_t*)cursor + entry->buf.len;
         if (entry->buf.len % 8 != 0) {
             /* Add padding */
-            cursor += 8 - (entry->buf.len % 8);
+            cursor = (uint8_t*)cursor + 8 - (entry->buf.len % 8);
         }
     }
 }

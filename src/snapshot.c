@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdint.h>
 
 #include "snapshot.h"
 #include "assert.h"
@@ -55,7 +56,7 @@ int snapshotCopy(const struct raft_snapshot *src, struct raft_snapshot *dst)
     int rv;
     unsigned i;
     size_t size;
-    void *cursor;
+    uint8_t *cursor;
 
     dst->term = src->term;
     dst->index = src->index;

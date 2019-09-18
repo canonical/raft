@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdint.h>
 
 #include "assert.h"
 #include "entry.h"
@@ -42,7 +43,7 @@ int entryBatchCopy(const struct raft_entry *src,
 {
     size_t size = 0;
     void *batch;
-    void *cursor;
+    uint8_t *cursor;
     unsigned i;
 
     if (n == 0) {
