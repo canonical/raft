@@ -66,9 +66,6 @@ test_unit_core_SOURCES = \
   test/unit/test_logger_ring.c
 test_unit_core_LDADD = libtest.la
 
-test_lib_SOURCES = \
-  test/lib/cluster.c
-
 integration_test_SOURCES = \
   test/integration/main.c \
   test/integration/test_apply.c \
@@ -82,8 +79,8 @@ integration_test_SOURCES = \
 integration_test_LDADD = libtest.la libraft.la
 integration_test_LDFLAGS =
 
-fuzzy_test_SOURCES = $(test_lib_SOURCES)
-fuzzy_test_SOURCES += \
+fuzzy_test_SOURCES = \
+  test/lib/cluster.c \
   test/fuzzy/main.c \
   test/fuzzy/test_election.c \
   test/fuzzy/test_liveness.c \
