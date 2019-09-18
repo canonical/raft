@@ -47,8 +47,6 @@ libtest_la_SOURCES = \
   test/lib/heap.c \
   test/lib/munit.c
 
-test_CFLAGS = $(AM_CFLAGS) -DRAFT_TEST
-
 test_unit_core_SOURCES = \
   src/byte.c \
   src/configuration.c \
