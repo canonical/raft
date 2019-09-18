@@ -20,18 +20,18 @@
 /* Compile-time endianess detection (best effort). */
 #if (defined(__BYTE_ORDER) && (__BYTE_ORDER == __LITTLE_ENDIAN)) || \
     (defined(__ARMEL__) && (__ARMEL__ == 1))
-#    define RAFT__LITTLE_ENDIAN
+#    define RAFT__LITTLE_ENDIAN__
 #elif defined(__BYTE_ORDER) && (__BYTE_ORDER == __BIG_ENDIAN) && \
     defined(__GNUC__) && __GNUC__ >= 4 && __GNUC_MINOR__ >= 8
-#    define RAFT__BIG_ENDIAN
+#    define RAFT__BIG_ENDIAN__
 #endif
 
 /* Flip a 32-bit number to network byte order (little endian) */
 RAFT__INLINE__ uint32_t byteFlip32(uint32_t v)
 {
-#if defined(RAFT__LITTLE_ENDIAN)
+#if defined(RAFT__LITTLE_ENDIAN__)
     return v;
-#elif defined(RAFT__BIG_ENDIAN)
+#elif defined(RAFT__BIG_ENDIAN__)
     return __builtin_bswap32(v);
 #else /* Unknown endianess */
     union {
@@ -51,9 +51,9 @@ RAFT__INLINE__ uint32_t byteFlip32(uint32_t v)
 /* Flip a 64-bit number to network byte order (little endian) */
 RAFT__INLINE__ uint64_t byteFlip64(uint64_t v)
 {
-#if defined(RAFT__LITTLE_ENDIAN)
+#if defined(RAFT__LITTLE_ENDIAN__)
     return v;
-#elif defined(RAFT__BIG_ENDIAN)
+#elif defined(RAFT__BIG_ENDIAN__)
     return __builtin_bswap64(v);
 #else
     union {
@@ -171,5 +171,7 @@ RAFT__INLINE__ size_t bytePad64(size_t size)
 unsigned byteCrc32(const void *buf, size_t size, unsigned init);
 
 #undef RAFT__INLINE__
+#undef RAFT__LITTLE_ENDIAN__
+#undef RAFT__BIG_ENDIAN__
 
 #endif /* BYTE_H_ */
