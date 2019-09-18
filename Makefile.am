@@ -66,10 +66,7 @@ test_unit_core_LDADD = libtest.la
 
 test_lib_SOURCES = \
   test/lib/cluster.c \
-  test/lib/fault.c \
   test/lib/fsm.c \
-  test/lib/heap.c \
-  test/lib/munit.c \
   test/lib/tcp.c
 
 integration_test_SOURCES = $(test_lib_SOURCES)
@@ -83,7 +80,7 @@ integration_test_SOURCES += \
   test/integration/test_snapshot.c \
   test/integration/test_tick.c \
   test/integration/test_start.c
-integration_test_LDADD = libraft.la
+integration_test_LDADD = libtest.la libraft.la
 integration_test_LDFLAGS =
 
 fuzzy_test_SOURCES = $(test_lib_SOURCES)
@@ -93,7 +90,7 @@ fuzzy_test_SOURCES += \
   test/fuzzy/test_liveness.c \
   test/fuzzy/test_membership.c \
   test/fuzzy/test_replication.c
-fuzzy_test_LDADD = libraft.la
+fuzzy_test_LDADD = libtest.la libraft.la
 fuzzy_test_LDFLAGS =
 
 if UV_ENABLED
