@@ -1,4 +1,5 @@
 ACLOCAL_AMFLAGS = -I m4
+AM_CFLAGS += $(CODE_COVERAGE_CFLAGS)
 
 include_HEADERS = include/raft.h
 
@@ -6,7 +7,7 @@ raftincludedir = $(includedir)/raft
 raftinclude_HEADERS =
 
 lib_LTLIBRARIES = libraft.la
-libraft_la_CFLAGS = $(CODE_COVERAGE_CFLAGS) $(AM_CFLAGS)
+libraft_la_CFLAGS = $(AM_CFLAGS)
 libraft_la_LDFLAGS = -version-info 0:7:0
 libraft_la_SOURCES = \
   src/byte.c \
@@ -64,7 +65,7 @@ test_unit_core_SOURCES = \
   test/unit/test_log.c \
   test/unit/test_queue.c \
   test/unit/test_logger_ring.c
-test_unit_core_CFLAGS = $(CODE_COVERAGE_CFLAGS) $(test_CFLAGS)
+test_unit_core_CFLAGS = $(test_CFLAGS)
 test_unit_core_LDADD = libtest.la
 
 test_lib_SOURCES = \
@@ -163,7 +164,7 @@ test_unit_uv_SOURCES += \
   test/unit/test_uv_recv.c \
   test/unit/test_uv_send.c \
   test/unit/test_uv.c
-test_unit_uv_CFLAGS = $(CODE_COVERAGE_CFLAGS) $(test_CFLAGS)
+test_unit_uv_CFLAGS = $(test_CFLAGS)
 test_unit_uv_LDADD = libtest.la
 test_unit_uv_LDFLAGS = $(UV_LIBS)
 
