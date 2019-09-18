@@ -191,6 +191,10 @@ example_cluster_LDFLAGS = $(UV_LIBS)
 
 endif # EXAMPLE_ENABLED
 
+if !DEBUG_ENABLED
+  AM_CFLAGS += -DNDEBUG
+endif
+
 if SANITIZE_ENABLED
   AM_CFLAGS += -fsanitize=address
 endif
