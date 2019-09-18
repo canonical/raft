@@ -69,8 +69,7 @@ test_unit_core_LDADD = libtest.la
 test_lib_SOURCES = \
   test/lib/cluster.c
 
-integration_test_SOURCES = $(test_lib_SOURCES)
-integration_test_SOURCES += \
+integration_test_SOURCES = \
   test/integration/main.c \
   test/integration/test_apply.c \
   test/integration/test_barrier.c \
