@@ -4,7 +4,7 @@
 #include "../lib/heap.h"
 #include "../lib/runner.h"
 
-TEST_MODULE(configuration);
+TEST_MODULE(configuration)
 
 /******************************************************************************
  *
@@ -15,7 +15,7 @@ TEST_MODULE(configuration);
 struct fixture
 {
     FIXTURE_HEAP;
-    FIXTURE_CONFIGURATION;
+    FIXTURE_CONFIGURATION
 };
 
 static void *setup(const MunitParameter params[], void *user_data)
@@ -108,10 +108,10 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-TEST_SUITE(n_voting);
+TEST_SUITE(n_voting)
 
-TEST_SETUP(n_voting, setup);
-TEST_TEAR_DOWN(n_voting, tear_down);
+TEST_SETUP(n_voting, setup)
+TEST_TEAR_DOWN(n_voting, tear_down)
 
 /* All servers are voting. */
 TEST_CASE(n_voting, all_voters, NULL)
@@ -141,10 +141,10 @@ TEST_CASE(n_voting, filter, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(index_of);
+TEST_SUITE(index_of)
 
-TEST_SETUP(index_of, setup);
-TEST_TEAR_DOWN(index_of, tear_down);
+TEST_SETUP(index_of, setup)
+TEST_TEAR_DOWN(index_of, tear_down)
 
 /* If a matching server is found, it's index is returned. */
 TEST_CASE(index_of, match, NULL)
@@ -174,10 +174,10 @@ TEST_CASE(index_of, no_match, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(index_of_voting);
+TEST_SUITE(index_of_voting)
 
-TEST_SETUP(index_of_voting, setup);
-TEST_TEAR_DOWN(index_of_voting, tear_down);
+TEST_SETUP(index_of_voting, setup)
+TEST_TEAR_DOWN(index_of_voting, tear_down)
 
 /* The index of the matching voting server (relative to the number of voting
    servers) is returned. */
@@ -220,10 +220,10 @@ TEST_CASE(index_of_voting, non_voting, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(get);
+TEST_SUITE(get)
 
-TEST_SETUP(get, setup);
-TEST_TEAR_DOWN(get, tear_down);
+TEST_SETUP(get, setup)
+TEST_TEAR_DOWN(get, tear_down)
 
 /* If a matching server is found, it's returned. */
 TEST_CASE(get, match, NULL)
@@ -256,10 +256,10 @@ TEST_CASE(get, no_match, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(copy);
+TEST_SUITE(copy)
 
-TEST_SETUP(copy, setup);
-TEST_TEAR_DOWN(copy, tear_down);
+TEST_SETUP(copy, setup)
+TEST_TEAR_DOWN(copy, tear_down)
 
 /* Copy a configuration containing two servers */
 TEST_CASE(copy, two, NULL)
@@ -277,7 +277,7 @@ TEST_CASE(copy, two, NULL)
     return MUNIT_OK;
 }
 
-TEST_GROUP(copy, error);
+TEST_GROUP(copy, error)
 
 /* Out of memory */
 TEST_CASE(copy, error, oom, NULL)
@@ -298,10 +298,10 @@ TEST_CASE(copy, error, oom, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(add);
+TEST_SUITE(add)
 
-TEST_SETUP(add, setup);
-TEST_TEAR_DOWN(add, tear_down);
+TEST_SETUP(add, setup)
+TEST_TEAR_DOWN(add, tear_down)
 
 /* Add a server to the configuration. */
 TEST_CASE(add, one, NULL)
@@ -327,7 +327,7 @@ TEST_CASE(add, two, NULL)
     return MUNIT_OK;
 }
 
-TEST_GROUP(add, error);
+TEST_GROUP(add, error)
 
 /* Add a server with an ID which is already in use. */
 TEST_CASE(add, error, dup_id, NULL)
@@ -374,10 +374,10 @@ TEST_CASE(add, error, oom, add_oom_params)
  *
  *****************************************************************************/
 
-TEST_SUITE(remove);
+TEST_SUITE(remove)
 
-TEST_SETUP(remove, setup);
-TEST_TEAR_DOWN(remove, tear_down);
+TEST_SETUP(remove, setup)
+TEST_TEAR_DOWN(remove, tear_down)
 
 /* Remove the last and only server. */
 TEST_CASE(remove, last, NULL)
@@ -418,7 +418,7 @@ TEST_CASE(remove, middle, NULL)
     return MUNIT_OK;
 }
 
-TEST_GROUP(remove, error);
+TEST_GROUP(remove, error)
 
 /* Attempts to remove a server with an unknown ID result in an error. */
 TEST_CASE(remove, error, unknown, NULL)
@@ -448,10 +448,10 @@ TEST_CASE(remove, error, oom, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(encode);
+TEST_SUITE(encode)
 
-TEST_SETUP(encode, setup);
-TEST_TEAR_DOWN(encode, tear_down);
+TEST_SETUP(encode, setup)
+TEST_TEAR_DOWN(encode, tear_down)
 
 /* Encode a configuration with one server. */
 TEST_CASE(encode, one_server, NULL)
@@ -531,7 +531,7 @@ TEST_CASE(encode, two_servers, NULL)
     return MUNIT_OK;
 }
 
-TEST_GROUP(encode, error);
+TEST_GROUP(encode, error)
 
 /* Out of memory. */
 TEST_CASE(encode, error, oom, NULL)
@@ -552,10 +552,10 @@ TEST_CASE(encode, error, oom, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(decode);
+TEST_SUITE(decode)
 
-TEST_SETUP(decode, setup);
-TEST_TEAR_DOWN(decode, tear_down);
+TEST_SETUP(decode, setup)
+TEST_TEAR_DOWN(decode, tear_down)
 
 /* The decode a payload encoding a configuration with one server */
 TEST_CASE(decode, one_server, NULL)
@@ -609,7 +609,7 @@ TEST_CASE(decode, two_servers, NULL)
     return MUNIT_OK;
 }
 
-TEST_GROUP(decode, error);
+TEST_GROUP(decode, error)
 
 /* Not enough memory of the servers array. */
 TEST_CASE(decode, error, oom, NULL)

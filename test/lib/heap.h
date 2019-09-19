@@ -20,7 +20,7 @@
 #define TEST_HEAP_FAULT_REPEAT "heap-fault-repeat"
 
 /* Fixture helpers. */
-#define FIXTURE_HEAP struct raft_heap heap;
+#define FIXTURE_HEAP struct raft_heap heap
 #define SETUP_HEAP test_heap_setup(params, &f->heap)
 #define TEAR_DOWN_HEAP test_heap_tear_down(&f->heap)
 

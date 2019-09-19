@@ -2,7 +2,7 @@
 
 #include "../lib/runner.h"
 
-TEST_MODULE(byte);
+TEST_MODULE(byte)
 
 /******************************************************************************
  *
@@ -18,7 +18,7 @@ TEST_MODULE(byte);
  *
  *****************************************************************************/
 
-TEST_SUITE(crc32);
+TEST_SUITE(crc32)
 
 /* The same data produces the same sum. */
 TEST_CASE(crc32, valid, NULL)
@@ -48,7 +48,7 @@ TEST_CASE(crc32, invalid, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(flip);
+TEST_SUITE(flip)
 
 /* Convert a 32-bit number. */
 TEST_CASE(flip, 32, NULL)
@@ -84,7 +84,7 @@ TEST_CASE(flip, 64, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(get_string);
+TEST_SUITE(get_string)
 
 TEST_CASE(get_string, success, NULL)
 {
@@ -114,7 +114,7 @@ TEST_CASE(get_string, malformed, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(get_64_unaligned);
+TEST_SUITE(get_64_unaligned)
 
 TEST_CASE(get_64_unaligned, success, NULL)
 {

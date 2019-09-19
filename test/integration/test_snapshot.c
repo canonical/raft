@@ -1,7 +1,7 @@
 #include "../lib/cluster.h"
 #include "../lib/runner.h"
 
-TEST_MODULE(snapshot);
+TEST_MODULE(snapshot)
 
 /******************************************************************************
  *
@@ -62,10 +62,10 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-TEST_SUITE(install);
+TEST_SUITE(install)
 
-TEST_SETUP(install, setup);
-TEST_TEAR_DOWN(install, tear_down);
+TEST_SETUP(install, setup)
+TEST_TEAR_DOWN(install, tear_down)
 
 /* Install a snapshot on a follower that has fallen behind. */
 TEST_CASE(install, one, NULL)

@@ -1,7 +1,7 @@
 #include "../lib/cluster.h"
 #include "../lib/runner.h"
 
-TEST_MODULE(barrier);
+TEST_MODULE(barrier)
 
 /******************************************************************************
  *
@@ -67,9 +67,9 @@ static void barrier_cb(struct raft_barrier *req, int status)
  *
  *****************************************************************************/
 
-TEST_SUITE(success);
-TEST_SETUP(success, setup);
-TEST_TEAR_DOWN(success, tear_down);
+TEST_SUITE(success)
+TEST_SETUP(success, setup)
+TEST_TEAR_DOWN(success, tear_down)
 
 TEST_CASE(success, cb, NULL)
 {

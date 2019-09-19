@@ -1,7 +1,7 @@
 #include "../lib/cluster.h"
 #include "../lib/runner.h"
 
-TEST_MODULE(start);
+TEST_MODULE(start)
 
 /******************************************************************************
  *
@@ -14,7 +14,7 @@ struct snapshot_fixture
     FIXTURE_CLUSTER;
 };
 
-TEST_SUITE(snapshot);
+TEST_SUITE(snapshot)
 
 TEST_SETUP(snapshot)
 {
@@ -105,7 +105,7 @@ struct entries_fixture
     struct raft_configuration configuration;
 };
 
-TEST_SUITE(entries);
+TEST_SUITE(entries)
 
 TEST_SETUP(entries)
 {
@@ -189,7 +189,7 @@ struct single_voting_fixture
     FIXTURE_CLUSTER;
 };
 
-TEST_SUITE(single_voting);
+TEST_SUITE(single_voting)
 
 TEST_SETUP(single_voting)
 {
@@ -229,7 +229,7 @@ struct single_voting_not_us_fixture
     FIXTURE_CLUSTER;
 };
 
-TEST_SUITE(single_voting_not_us);
+TEST_SUITE(single_voting_not_us)
 
 TEST_SETUP(single_voting_not_us)
 {

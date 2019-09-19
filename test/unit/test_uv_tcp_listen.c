@@ -8,7 +8,7 @@
 
 #include "../../src/byte.h"
 
-TEST_MODULE(uv_tcp_listen);
+TEST_MODULE(uv_tcp_listen)
 
 /******************************************************************************
  *
@@ -76,7 +76,7 @@ static void *setup(const MunitParameter params[], void *user_data)
     munit_assert_int(rv, ==, 0);
 
     return f;
-};
+}
 
 static void tear_down(void *data)
 {
@@ -138,9 +138,9 @@ static bool acceptCbInvoked(void *data)
  *
  *****************************************************************************/
 
-TEST_SUITE(success);
+TEST_SUITE(success)
 
-TEST_SETUP(success, setup);
+TEST_SETUP(success, setup)
 TEST_TEAR_DOWN(success, tear_down)
 
 /* If the handshake is successful, the accept callback is invoked. */
@@ -169,9 +169,9 @@ TEST_CASE(success, first, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(error);
+TEST_SUITE(error)
 
-TEST_SETUP(error, setup);
+TEST_SETUP(error, setup)
 TEST_TEAR_DOWN(error, tear_down)
 
 /* The client sends us a bad protocol version */
@@ -247,9 +247,9 @@ TEST_CASE(error, oom, listen_error_oom_params)
  *
  *****************************************************************************/
 
-TEST_SUITE(close);
+TEST_SUITE(close)
 
-TEST_SETUP(close, setup);
+TEST_SETUP(close, setup)
 TEST_TEAR_DOWN(close, tear_down)
 
 /* Close the transport right after an incoming connection becomes pending, but

@@ -2,7 +2,7 @@
 
 #include "../lib/runner.h"
 
-TEST_MODULE(error);
+TEST_MODULE(error)
 
 /******************************************************************************
  *
@@ -10,7 +10,7 @@ TEST_MODULE(error);
  *
  *****************************************************************************/
 
-TEST_SUITE(strerror);
+TEST_SUITE(strerror)
 
 #define TEST_CASE_STRERROR(CODE, MSG)                        \
     TEST_CASE(strerror, CODE, NULL)                          \
@@ -21,7 +21,7 @@ TEST_SUITE(strerror);
         return MUNIT_OK;                                     \
     }
 
-RAFT_ERRNO_MAP(TEST_CASE_STRERROR);
+RAFT_ERRNO_MAP(TEST_CASE_STRERROR)
 
 TEST_CASE(strerror, default, NULL)
 {

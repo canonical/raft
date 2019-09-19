@@ -3,7 +3,7 @@
 #include "../lib/heap.h"
 #include "../lib/runner.h"
 
-TEST_MODULE(ring_logger);
+TEST_MODULE(ring_logger)
 
 /******************************************************************************
  *
@@ -72,19 +72,19 @@ static void walkCb(void *data, raft_time time, int type, const char *message)
     entry->message = message;
 }
 
-#define EMIT(FORMAT, ...)                                                   \
-    {                                                                       \
-        clock++;                                                            \
-        f->logger.emit(&f->logger, RAFT_DEBUG, clock, "foo.c", 123, FORMAT, \
-                       ##__VA_ARGS__);                                      \
+#define EMIT(...)                                                   \
+    {                                                               \
+        clock++;                                                    \
+        f->logger.emit(&f->logger, RAFT_DEBUG, clock, "foo.c", 123, \
+                       __VA_ARGS__);                                \
     }
 
-#define EMIT_N(N, FORMAT, ...)           \
-    {                                    \
-        int i_;                          \
-        for (i_ = 0; i_ < N; i_++) {     \
-            EMIT(FORMAT, ##__VA_ARGS__); \
-        }                                \
+#define EMIT_N(N, ...)               \
+    {                                \
+        int i_;                      \
+        for (i_ = 0; i_ < N; i_++) { \
+            EMIT(__VA_ARGS__);       \
+        }                            \
     }
 
 #define WALK raft_ring_logger_walk(&f->logger, walkCb, f);
@@ -112,9 +112,9 @@ static void walkCb(void *data, raft_time time, int type, const char *message)
  *
  *****************************************************************************/
 
-TEST_SUITE(emit);
-TEST_SETUP(emit, setup);
-TEST_TEAR_DOWN(emit, tear_down);
+TEST_SUITE(emit)
+TEST_SETUP(emit, setup)
+TEST_TEAR_DOWN(emit, tear_down)
 
 /* Emit a single entry. */
 TEST_CASE(emit, one, NULL)
@@ -220,9 +220,9 @@ TEST_CASE(emit, truncate, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(walk);
-TEST_SETUP(walk, setup);
-TEST_TEAR_DOWN(walk, tear_down);
+TEST_SUITE(walk)
+TEST_SETUP(walk, setup)
+TEST_TEAR_DOWN(walk, tear_down)
 
 /* Walk a tracer with no entries. */
 TEST_CASE(walk, empty, NULL)

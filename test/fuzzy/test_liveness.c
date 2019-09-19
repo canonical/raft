@@ -1,7 +1,7 @@
 #include "../lib/cluster.h"
 #include "../lib/runner.h"
 
-TEST_MODULE(liveness);
+TEST_MODULE(liveness)
 
 /******************************************************************************
  *
@@ -119,9 +119,9 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-TEST_SUITE(network);
-TEST_SETUP(network, setup);
-TEST_TEAR_DOWN(network, tear_down);
+TEST_SUITE(network)
+TEST_SETUP(network, setup)
+TEST_TEAR_DOWN(network, tear_down)
 
 static void apply_cb(struct raft_apply *req, int status, void *result)
 {

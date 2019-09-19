@@ -5,7 +5,7 @@
 
 #include "../../src/configuration.h"
 
-TEST_MODULE(membership);
+TEST_MODULE(membership)
 
 /******************************************************************************
  *
@@ -115,7 +115,7 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-TEST_SUITE(add);
+TEST_SUITE(add)
 TEST_SETUP(add, setup)
 TEST_TEAR_DOWN(add, tear_down)
 
@@ -152,7 +152,7 @@ TEST_CASE(add, committed, NULL)
     return MUNIT_OK;
 }
 
-TEST_GROUP(add, error);
+TEST_GROUP(add, error)
 
 /* Trying to add a server on a node which is not the leader results in an
  * error. */
@@ -199,7 +199,7 @@ TEST_CASE(add, error, dup_id, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(promote);
+TEST_SUITE(promote)
 TEST_SETUP(promote, setup)
 TEST_TEAR_DOWN(promote, tear_down)
 
@@ -364,7 +364,7 @@ TEST_CASE(promote, change_is_immediate, NULL)
     return MUNIT_OK;
 }
 
-TEST_GROUP(promote, error);
+TEST_GROUP(promote, error)
 
 /* Trying to promote a server on a node which is not the leader results in an
  * error. */
@@ -454,7 +454,7 @@ TEST_CASE(promote, error, leadership_lost, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(remove);
+TEST_SUITE(remove)
 TEST_SETUP(remove, setup)
 TEST_TEAR_DOWN(remove, tear_down)
 
@@ -489,7 +489,7 @@ TEST_CASE(remove, self, NULL)
     return MUNIT_OK;
 }
 
-TEST_GROUP(remove, error);
+TEST_GROUP(remove, error)
 
 /* Trying to remove a server on a node which is not the leader results in an
  * error. */

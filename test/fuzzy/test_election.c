@@ -1,7 +1,7 @@
 #include "../lib/cluster.h"
 #include "../lib/runner.h"
 
-TEST_MODULE(election);
+TEST_MODULE(election)
 
 /******************************************************************************
  *
@@ -45,9 +45,9 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-TEST_SUITE(run);
-TEST_SETUP(run, setup);
-TEST_TEAR_DOWN(run, tear_down);
+TEST_SUITE(run)
+TEST_SETUP(run, setup)
+TEST_TEAR_DOWN(run, tear_down)
 
 /* A leader is eventually elected */
 TEST_CASE(run, win, _params)

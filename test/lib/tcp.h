@@ -25,7 +25,7 @@ struct test_tcp
 };
 
 /* Fixture helpers. */
-#define FIXTURE_TCP struct test_tcp tcp;
+#define FIXTURE_TCP struct test_tcp tcp
 #define SETUP_TCP test_tcp_setup(params, &f->tcp)
 #define TEAR_DOWN_TCP test_tcp_tear_down(&f->tcp)
 

@@ -1,7 +1,7 @@
 #include "../lib/cluster.h"
 #include "../lib/runner.h"
 
-TEST_MODULE(tick);
+TEST_MODULE(tick)
 
 /******************************************************************************
  *
@@ -61,9 +61,9 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-TEST_SUITE(elapse);
-TEST_SETUP(elapse, setup);
-TEST_TEAR_DOWN(elapse, tear_down);
+TEST_SUITE(elapse)
+TEST_SETUP(elapse, setup)
+TEST_TEAR_DOWN(elapse, tear_down)
 
 /* Internal timers are updated according to the given time delta. */
 TEST_CASE(elapse, election_timer, NULL)

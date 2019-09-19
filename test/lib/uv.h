@@ -28,7 +28,7 @@
     struct raft_io io;                  \
     struct uv *uv;                      \
     bool initialized;                   \
-    bool closed;
+    bool closed
 
 #define SETUP_UV_NO_INIT                                             \
     {                                                                \

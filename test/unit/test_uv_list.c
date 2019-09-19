@@ -8,7 +8,7 @@
 
 #define WORD_SIZE sizeof(uint64_t)
 
-TEST_MODULE(uv_list);
+TEST_MODULE(uv_list)
 
 /******************************************************************************
  *
@@ -34,7 +34,7 @@ static void *setup(const MunitParameter params[], void *user_data)
     f->snapshots = NULL;
     f->segments = NULL;
     return f;
-};
+}
 
 static void tear_down(void *data)
 {
@@ -78,9 +78,9 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-TEST_SUITE(segments);
-TEST_SETUP(segments, setup);
-TEST_TEAR_DOWN(segments, tear_down);
+TEST_SUITE(segments)
+TEST_SETUP(segments, setup)
+TEST_TEAR_DOWN(segments, tear_down)
 
 /* Data directory is empty. */
 TEST_CASE(segments, empty, NULL)
@@ -99,9 +99,9 @@ TEST_CASE(segments, empty, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(snapshots);
-TEST_SETUP(snapshots, setup);
-TEST_TEAR_DOWN(snapshots, tear_down);
+TEST_SUITE(snapshots)
+TEST_SETUP(snapshots, setup)
+TEST_TEAR_DOWN(snapshots, tear_down)
 
 /* There is a single snapshot. */
 TEST_CASE(snapshots, one, NULL)

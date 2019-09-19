@@ -3,7 +3,7 @@
 
 #include "../../src/uv.h"
 
-TEST_MODULE(uv_prepare);
+TEST_MODULE(uv_prepare)
 
 /******************************************************************************
  *
@@ -87,10 +87,10 @@ static void prepareCb(struct uvPrepare *req,
  *
  *****************************************************************************/
 
-TEST_SUITE(success);
+TEST_SUITE(success)
 
-TEST_SETUP(success, setup);
-TEST_TEAR_DOWN(success, tear_down);
+TEST_SETUP(success, setup)
+TEST_TEAR_DOWN(success, tear_down)
 
 /* Issue the very first get request. */
 TEST_CASE(success, first, NULL)
@@ -124,10 +124,10 @@ TEST_CASE(success, second, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(error);
+TEST_SUITE(error)
 
-TEST_SETUP(error, setup);
-TEST_TEAR_DOWN(error, tear_down);
+TEST_SETUP(error, setup)
+TEST_TEAR_DOWN(error, tear_down)
 
 /* The creation of the first segment fails because uvIoSetup() returns EAGAIN. */
 TEST_CASE(error, no_resources, NULL)
@@ -180,10 +180,10 @@ TEST_CASE(error, oom, error_oom_params)
  *
  *****************************************************************************/
 
-TEST_SUITE(close);
+TEST_SUITE(close)
 
-TEST_SETUP(close, setup);
-TEST_TEAR_DOWN(close, tear_down);
+TEST_SETUP(close, setup)
+TEST_TEAR_DOWN(close, tear_down)
 
 /* It's possible to close the raft_io instance immediately after
  * initialization. */

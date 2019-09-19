@@ -1,7 +1,7 @@
 #include "../lib/cluster.h"
 #include "../lib/runner.h"
 
-TEST_MODULE(replication);
+TEST_MODULE(replication)
 
 /******************************************************************************
  *
@@ -80,12 +80,12 @@ static MunitParameterEnum cluster_3_params[] = {
  *
  *****************************************************************************/
 
-TEST_SUITE(send);
+TEST_SUITE(send)
 
-TEST_SETUP(send, setup);
-TEST_TEAR_DOWN(send, tear_down);
+TEST_SETUP(send, setup)
+TEST_TEAR_DOWN(send, tear_down)
 
-TEST_GROUP(send, heartbeat);
+TEST_GROUP(send, heartbeat)
 
 /* A leader sends a heartbeat message as soon as it gets elected. */
 TEST_CASE(send, heartbeat, initial, NULL)
@@ -202,7 +202,7 @@ TEST_CASE(send, heartbeat, skip, NULL)
     return MUNIT_OK;
 }
 
-TEST_GROUP(send, mode);
+TEST_GROUP(send, mode)
 
 /* A follower remains in probe mode until the leader receives a successful
  * AppendEntries response. */
@@ -298,7 +298,7 @@ TEST_CASE(send, mode, pipeline, NULL)
     return MUNIT_OK;
 }
 
-TEST_GROUP(send, error);
+TEST_GROUP(send, error)
 
 /* A follower disconnects while in probe mode. */
 TEST_CASE(send, error, disconnect, NULL)
@@ -419,10 +419,10 @@ TEST_CASE(send, error, io, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(receive);
+TEST_SUITE(receive)
 
-TEST_SETUP(receive, setup);
-TEST_TEAR_DOWN(receive, tear_down);
+TEST_SETUP(receive, setup)
+TEST_TEAR_DOWN(receive, tear_down)
 
 /* Receive the same entry a second time, before the first has been persisted. */
 TEST_CASE(receive, twice, NULL)
@@ -637,7 +637,7 @@ TEST_CASE(receive, match_last_snapshot, NULL)
     return MUNIT_OK;
 }
 
-TEST_GROUP(receive, candidate);
+TEST_GROUP(receive, candidate)
 
 /* If a candidate server receives a request contaning the same term as its
  * own, it it steps down to follower and accept the request . */
@@ -738,10 +738,10 @@ TEST_CASE(receive, candidate, higher_term, cluster_3_params)
  *
  *****************************************************************************/
 
-TEST_SUITE(result);
+TEST_SUITE(result)
 
-TEST_SETUP(result, setup);
-TEST_TEAR_DOWN(result, tear_down);
+TEST_SETUP(result, setup)
+TEST_TEAR_DOWN(result, tear_down)
 
 /* If the server handling the response is not the leader, the result
  * is ignored. */

@@ -14,14 +14,14 @@
 
 #define FIXTURE_LOOP struct uv_loop_s loop
 
-#define SETUP_LOOP                                                         \
-    {                                                                      \
-        int rv_;                                                           \
-        rv_ = uv_replace_allocator(raft_malloc, raft_realloc, raft_calloc, \
-                                   raft_free);                             \
-        munit_assert_int(rv_, ==, 0);                                      \
-        rv_ = uv_loop_init(&f->loop);                                      \
-        munit_assert_int(rv_, ==, 0);                                      \
+#define SETUP_LOOP                                                          \
+    {                                                                       \
+        int rv__;                                                           \
+        rv__ = uv_replace_allocator(raft_malloc, raft_realloc, raft_calloc, \
+                                    raft_free);                             \
+        munit_assert_int(rv__, ==, 0);                                      \
+        rv__ = uv_loop_init(&f->loop);                                      \
+        munit_assert_int(rv__, ==, 0);                                      \
     }
 
 #define TEAR_DOWN_LOOP                                                     \
@@ -44,10 +44,10 @@
  * iterations is reached. */
 #define LOOP_RUN(N)                                                       \
     {                                                                     \
-        unsigned i_;                                                      \
+        unsigned i__;                                                     \
         int rv__;                                                         \
         munit_assert_int(N, >, 0);                                        \
-        for (i_ = 0; i_ < N; i_++) {                                      \
+        for (i__ = 0; i__ < N; i__++) {                                   \
             rv__ = uv_run(&f->loop, UV_RUN_ONCE);                         \
             if (rv__ < 0) {                                               \
                 munit_errorf("uv_run: %s (%d)", uv_strerror(rv__), rv__); \

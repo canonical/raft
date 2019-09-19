@@ -3,7 +3,7 @@
 
 #include "../../src/uv.h"
 
-TEST_MODULE(uv_finalize);
+TEST_MODULE(uv_finalize)
 
 /******************************************************************************
  *
@@ -63,10 +63,10 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-TEST_SUITE(success);
+TEST_SUITE(success)
 
-TEST_SETUP(success, setup);
-TEST_TEAR_DOWN(success, tear_down);
+TEST_SETUP(success, setup)
+TEST_TEAR_DOWN(success, tear_down)
 
 /* Submit a request to finalize the first segment that was created. */
 TEST_CASE(success, first, NULL)
@@ -135,9 +135,9 @@ TEST_CASE(success, wait, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(error);
-TEST_SETUP(error, setup);
-TEST_TEAR_DOWN(error, tear_down);
+TEST_SUITE(error)
+TEST_SETUP(error, setup)
+TEST_TEAR_DOWN(error, tear_down)
 
 static char *error_oom_heap_fault_delay[] = {"0", NULL};
 static char *error_oom_heap_fault_repeat[] = {"1", NULL};

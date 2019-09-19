@@ -1,7 +1,7 @@
 #include "../lib/runner.h"
 #include "../lib/uv.h"
 
-TEST_MODULE(uv_truncate);
+TEST_MODULE(uv_truncate)
 
 /******************************************************************************
  *
@@ -91,10 +91,10 @@ static void appendCb(struct raft_io_append *req, int status)
  *
  *****************************************************************************/
 
-TEST_SUITE(success);
+TEST_SUITE(success)
 
-TEST_SETUP(success, setup);
-TEST_TEAR_DOWN(success, tear_down);
+TEST_SETUP(success, setup)
+TEST_TEAR_DOWN(success, tear_down)
 
 /* If the index to truncate is at the start of a segment, that segment and all
  * subsequent ones are removed. */
@@ -183,10 +183,10 @@ TEST_CASE(success, partial_segment, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(error);
+TEST_SUITE(error)
 
-TEST_SETUP(error, setup);
-TEST_TEAR_DOWN(error, tear_down);
+TEST_SETUP(error, setup)
+TEST_TEAR_DOWN(error, tear_down)
 
 static char *error_oom_heap_fault_delay[] = {"0", NULL};
 static char *error_oom_heap_fault_repeat[] = {"1", NULL};

@@ -5,7 +5,7 @@
 
 #include "../../src/uv.h"
 
-TEST_MODULE(io_uv_send);
+TEST_MODULE(io_uv_send)
 
 /**
  * Helpers.
@@ -13,7 +13,7 @@ TEST_MODULE(io_uv_send);
 
 struct fixture
 {
-    FIXTURE_UV
+    FIXTURE_UV;
     struct raft_io_send req;
     struct raft_message message;
     int invoked;
@@ -81,10 +81,10 @@ static void send__send_cb(struct raft_io_send *req, int status)
  * Success scenarios.
  */
 
-TEST_SUITE(success);
+TEST_SUITE(success)
 
-TEST_SETUP(success, setup);
-TEST_TEAR_DOWN(success, tear_down);
+TEST_SETUP(success, setup)
+TEST_TEAR_DOWN(success, tear_down)
 
 /* The first time a request is sent to a server a connection attempt is
  * triggered. If the connection succeeds the request gets written out. */
@@ -222,10 +222,10 @@ TEST_CASE(success, install_snapshot, NULL)
  * Error scenarios.
  */
 
-TEST_SUITE(error);
+TEST_SUITE(error)
 
-TEST_SETUP(error, setup);
-TEST_TEAR_DOWN(error, tear_down);
+TEST_SETUP(error, setup)
+TEST_TEAR_DOWN(error, tear_down)
 
 /* A connection attempt fails asynchronously after the connect function
  * returns. */
@@ -383,10 +383,10 @@ TEST_CASE(error, oom_async, error_oom_async_params)
  * Close back scenarios.
  */
 
-TEST_SUITE(close);
+TEST_SUITE(close)
 
-TEST_SETUP(close, setup);
-TEST_TEAR_DOWN(close, tear_down);
+TEST_SETUP(close, setup)
+TEST_TEAR_DOWN(close, tear_down)
 
 /* The backend gets closed while there is a pending write. */
 TEST_CASE(close, writing, NULL)
