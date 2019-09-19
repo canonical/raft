@@ -2,7 +2,7 @@
 
 #include "../lib/runner.h"
 
-TEST_MODULE(queue);
+TEST_MODULE(queue)
 
 /******************************************************************************
  *
@@ -95,10 +95,10 @@ struct item
  *
  *****************************************************************************/
 
-TEST_SUITE(is_empty);
+TEST_SUITE(is_empty)
 
-TEST_SETUP(is_empty, setup);
-TEST_TEAR_DOWN(is_empty, tear_down);
+TEST_SETUP(is_empty, setup)
+TEST_TEAR_DOWN(is_empty, tear_down)
 
 TEST_CASE(is_empty, yes, NULL)
 {
@@ -124,10 +124,10 @@ TEST_CASE(is_empty, no, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(push);
+TEST_SUITE(push)
 
-TEST_SETUP(push, setup);
-TEST_TEAR_DOWN(push, tear_down);
+TEST_SETUP(push, setup)
+TEST_TEAR_DOWN(push, tear_down)
 
 TEST_CASE(push, one, NULL)
 {
@@ -160,10 +160,10 @@ TEST_CASE(push, two, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(remove);
+TEST_SUITE(remove)
 
-TEST_SETUP(remove, setup);
-TEST_TEAR_DOWN(remove, tear_down);
+TEST_SETUP(remove, setup)
+TEST_TEAR_DOWN(remove, tear_down)
 
 TEST_CASE(remove, first, NULL)
 {
@@ -204,10 +204,10 @@ TEST_CASE(remove, success, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(tail);
+TEST_SUITE(tail)
 
-TEST_SETUP(tail, setup);
-TEST_TEAR_DOWN(tail, tear_down);
+TEST_SETUP(tail, setup)
+TEST_TEAR_DOWN(tail, tear_down)
 
 TEST_CASE(tail, one, NULL)
 {
@@ -245,10 +245,10 @@ TEST_CASE(tail, three, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(foreach);
+TEST_SUITE(foreach)
 
-TEST_SETUP(foreach, setup);
-TEST_TEAR_DOWN(foreach, tear_down);
+TEST_SETUP(foreach, setup)
+TEST_TEAR_DOWN(foreach, tear_down)
 
 /* Loop through a queue of zero items. */
 TEST_CASE(foreach, zero, NULL)

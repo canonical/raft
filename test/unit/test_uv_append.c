@@ -4,7 +4,7 @@
 #include "../../src/byte.h"
 #include "../../src/uv_encoding.h"
 
-TEST_MODULE(uv_append);
+TEST_MODULE(uv_append)
 
 /* Maximum number of blocks a segment can have */
 #define MAX_SEGMENT_BLOCKS 4
@@ -91,7 +91,7 @@ static void appendCb(struct raft_io_append *req, int status)
             munit_assert_ptr_not_null(entry->buf.base);          \
             memset(entry->buf.base, 0, entry->buf.len);          \
             cursor = entry->buf.base;                            \
-            bytePut64(&cursor, f->count);                      \
+            bytePut64(&cursor, f->count);                        \
             f->count++;                                          \
         }                                                        \
     }
@@ -157,14 +157,14 @@ static void appendCb(struct raft_io_append *req, int status)
         test_dir_read_file(f->dir, filename, buf.base, buf.len);             \
                                                                              \
         cursor = buf.base;                                                   \
-        munit_assert_int(byteGet64(&cursor), ==, 1);                       \
+        munit_assert_int(byteGet64(&cursor), ==, 1);                         \
                                                                              \
         while (i_ < N) {                                                     \
-            unsigned crc1 = byteGet32(&cursor);                            \
-            unsigned crc2 = byteGet32(&cursor);                            \
+            unsigned crc1 = byteGet32(&cursor);                              \
+            unsigned crc2 = byteGet32(&cursor);                              \
             const void *header = cursor;                                     \
             const void *content;                                             \
-            unsigned n_ = byteGet64(&cursor);                              \
+            unsigned n_ = byteGet64(&cursor);                                \
             struct raft_entry *entries = munit_malloc(n_ * sizeof *entries); \
             unsigned j_;                                                     \
             unsigned crc;                                                    \
@@ -173,12 +173,12 @@ static void appendCb(struct raft_io_append *req, int status)
             for (j_ = 0; j_ < n_; j_++) {                                    \
                 struct raft_entry *entry = &entries[j_];                     \
                                                                              \
-                entry->term = byteGet64(&cursor);                          \
-                entry->type = byteGet8(&cursor);                           \
-                byteGet8(&cursor);                                         \
-                byteGet8(&cursor);                                         \
-                byteGet8(&cursor);                                         \
-                entry->buf.len = byteGet32(&cursor);                       \
+                entry->term = byteGet64(&cursor);                            \
+                entry->type = byteGet8(&cursor);                             \
+                byteGet8(&cursor);                                           \
+                byteGet8(&cursor);                                           \
+                byteGet8(&cursor);                                           \
+                entry->buf.len = byteGet32(&cursor);                         \
                                                                              \
                 munit_assert_int(entry->term, ==, 1);                        \
                 munit_assert_int(entry->type, ==, RAFT_COMMAND);             \
@@ -186,7 +186,7 @@ static void appendCb(struct raft_io_append *req, int status)
                 data_size += entry->buf.len;                                 \
             }                                                                \
                                                                              \
-            crc = byteCrc32(header, uvSizeofBatchHeader(n_), 0);           \
+            crc = byteCrc32(header, uvSizeofBatchHeader(n_), 0);             \
             munit_assert_int(crc, ==, crc1);                                 \
                                                                              \
             content = cursor;                                                \
@@ -194,13 +194,13 @@ static void appendCb(struct raft_io_append *req, int status)
             for (j_ = 0; j_ < n_; j_++) {                                    \
                 struct raft_entry *entry = &entries[j_];                     \
                 uint64_t value;                                              \
-                value = byteFlip64(*(uint64_t *)cursor);                   \
+                value = byteFlip64(*(uint64_t *)cursor);                     \
                 munit_assert_int(value, ==, i_);                             \
-                cursor += entry->buf.len;                                    \
+                cursor = (uint8_t *)cursor + entry->buf.len;                 \
                 i_++;                                                        \
             }                                                                \
                                                                              \
-            crc = byteCrc32(content, data_size, 0);                        \
+            crc = byteCrc32(content, data_size, 0);                          \
             munit_assert_int(crc, ==, crc2);                                 \
                                                                              \
             free(entries);                                                   \
@@ -218,10 +218,10 @@ static void appendCb(struct raft_io_append *req, int status)
  *
  *****************************************************************************/
 
-TEST_SUITE(success);
+TEST_SUITE(success)
 
-TEST_SETUP(success, setup);
-TEST_TEAR_DOWN(success, tear_down);
+TEST_SETUP(success, setup)
+TEST_TEAR_DOWN(success, tear_down)
 
 /* Append the very first batch of entries. */
 TEST_CASE(success, first, NULL)
@@ -478,9 +478,9 @@ TEST_CASE(success, counter, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(error);
-TEST_SETUP(error, setup);
-TEST_TEAR_DOWN(error, tear_down);
+TEST_SUITE(error)
+TEST_SETUP(error, setup)
+TEST_TEAR_DOWN(error, tear_down)
 
 /* The batch of entries to append is too big. */
 TEST_CASE(error, too_big, NULL)
@@ -520,7 +520,8 @@ TEST_CASE(error, write, NULL)
     aio_context_t ctx = 0;
     (void)params;
 
-    /* FIXME: doesn't fail anymore after https://github.com/CanonicalLtd/raft/pull/49 */
+    /* FIXME: doesn't fail anymore after
+     * https://github.com/CanonicalLtd/raft/pull/49 */
     return MUNIT_SKIP;
 
     CREATE_ENTRIES(1, 64);
@@ -565,10 +566,10 @@ TEST_CASE(error, oom, error_oom_params)
  *
  *****************************************************************************/
 
-TEST_SUITE(close);
+TEST_SUITE(close)
 
-TEST_SETUP(close, setup);
-TEST_TEAR_DOWN(close, tear_down);
+TEST_SETUP(close, setup)
+TEST_TEAR_DOWN(close, tear_down)
 
 /* The write is closed while a write request is in progress. */
 TEST_CASE(close, during_write, NULL)

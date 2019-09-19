@@ -6,7 +6,7 @@
 #include "../../src/snapshot.h"
 #include "../../src/uv.h"
 
-TEST_MODULE(uv_snapshot);
+TEST_MODULE(uv_snapshot)
 
 /******************************************************************************
  *
@@ -35,9 +35,9 @@ TEST_MODULE(uv_snapshot);
  *
  *****************************************************************************/
 
-TEST_SUITE(load);
-TEST_GROUP(load, success);
-TEST_GROUP(load, error);
+TEST_SUITE(load)
+TEST_GROUP(load, success)
+TEST_GROUP(load, error)
 
 struct load__fixture
 {
@@ -226,7 +226,7 @@ TEST_CASE(load, error, oom, load_error_oom_params)
  *
  *****************************************************************************/
 
-TEST_SUITE(put);
+TEST_SUITE(put)
 
 struct put_fixture
 {
@@ -300,11 +300,11 @@ static void append_cb(struct raft_io_append *req, int status)
 #define append(N)                                                       \
     {                                                                   \
         struct raft_io_append *req_ = munit_malloc(sizeof *req_);       \
-        int i;                                                          \
-        int rv;                                                         \
+        int i_;                                                         \
+        int rv_;                                                        \
         struct raft_entry *entries = munit_malloc(N * sizeof *entries); \
-        for (i = 0; i < N; i++) {                                       \
-            struct raft_entry *entry = &entries[i];                     \
+        for (i_ = 0; i_ < N; i_++) {                                    \
+            struct raft_entry *entry = &entries[i_];                    \
             entry->term = 1;                                            \
             entry->type = RAFT_COMMAND;                                 \
             entry->buf.base = munit_malloc(8);                          \
@@ -312,18 +312,18 @@ static void append_cb(struct raft_io_append *req, int status)
             entry->batch = NULL;                                        \
         }                                                               \
         req_->data = f;                                                 \
-        rv = f->io.append(&f->io, req_, entries, N, append_cb);         \
-        munit_assert_int(rv, ==, 0);                                    \
+        rv_ = f->io.append(&f->io, req_, entries, N, append_cb);        \
+        munit_assert_int(rv_, ==, 0);                                   \
                                                                         \
-        for (i = 0; i < 20; i++) {                                      \
+        for (i_ = 0; i_ < 20; i_++) {                                   \
             LOOP_RUN(1);                                                \
             if (f->appended) {                                          \
                 break;                                                  \
             }                                                           \
         }                                                               \
         munit_assert(f->appended);                                      \
-        for (i = 0; i < N; i++) {                                       \
-            struct raft_entry *entry = &entries[i];                     \
+        for (i_ = 0; i_ < N; i_++) {                                    \
+            struct raft_entry *entry = &entries[i_];                    \
             free(entry->buf.base);                                      \
         }                                                               \
         free(entries);                                                  \
@@ -455,7 +455,7 @@ TEST_CASE(put, after_truncate, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(get);
+TEST_SUITE(get)
 
 struct get_fixture
 {

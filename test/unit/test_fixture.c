@@ -3,7 +3,7 @@
 #include "../lib/fsm.h"
 #include "../lib/runner.h"
 
-TEST_MODULE(fixture);
+TEST_MODULE(fixture)
 
 #define N_SERVERS 3
 
@@ -112,9 +112,9 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-TEST_SUITE(step);
-TEST_SETUP(step, setup);
-TEST_TEAR_DOWN(step, tear_down);
+TEST_SUITE(step)
+TEST_SETUP(step, setup)
+TEST_TEAR_DOWN(step, tear_down)
 
 /* If there is no disk I/O in progress or network messages in flight, the tick
  * callbacks are called. */
@@ -207,9 +207,9 @@ TEST_CASE(step, deliver, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(elect);
-TEST_SETUP(elect, setup);
-TEST_TEAR_DOWN(elect, tear_down);
+TEST_SUITE(elect)
+TEST_SETUP(elect, setup)
+TEST_TEAR_DOWN(elect, tear_down)
 
 /* Trigger the election of the first server. */
 TEST_CASE(elect, first, NULL)
@@ -275,9 +275,9 @@ TEST_CASE(elect, again, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(step_until_applied);
-TEST_SETUP(step_until_applied, setup);
-TEST_TEAR_DOWN(step_until_applied, tear_down);
+TEST_SUITE(step_until_applied)
+TEST_SETUP(step_until_applied, setup)
+TEST_TEAR_DOWN(step_until_applied, tear_down)
 
 /* Wait for one entry to be applied. */
 TEST_CASE(step_until_applied, one, NULL)

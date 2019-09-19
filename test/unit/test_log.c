@@ -2,7 +2,7 @@
 #include "../lib/log.h"
 #include "../lib/runner.h"
 
-TEST_MODULE(log);
+TEST_MODULE(log)
 
 /******************************************************************************
  *
@@ -91,7 +91,7 @@ static void tear_down(void *data)
         for (i = 0; i < N; i++) {                                  \
             struct raft_buffer buf;                                \
             int rv;                                                \
-            buf.base = batch + offset;                             \
+            buf.base = (uint8_t *)batch + offset;                  \
             buf.len = 8;                                           \
             *(uint64_t *)buf.base = i * 1000;                      \
             rv = logAppend(&f->log, 1, RAFT_COMMAND, &buf, batch); \
@@ -166,10 +166,10 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-TEST_SUITE(num_entries);
+TEST_SUITE(num_entries)
 
-TEST_SETUP(num_entries, setup);
-TEST_TEAR_DOWN(num_entries, tear_down);
+TEST_SETUP(num_entries, setup)
+TEST_TEAR_DOWN(num_entries, tear_down)
 
 /* If the log is empty, the return value is zero. */
 TEST_CASE(num_entries, empty, NULL)
@@ -230,10 +230,10 @@ TEST_CASE(num_entries, offset_not_empty, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(last_index);
+TEST_SUITE(last_index)
 
-TEST_SETUP(last_index, setup);
-TEST_TEAR_DOWN(last_index, tear_down);
+TEST_SETUP(last_index, setup)
+TEST_TEAR_DOWN(last_index, tear_down)
 
 /* If the log is empty, last index is 0. */
 TEST_CASE(last_index, empty, NULL)
@@ -295,10 +295,10 @@ TEST_CASE(last_index, two_with_offset, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(last_term);
+TEST_SUITE(last_term)
 
-TEST_SETUP(last_term, setup);
-TEST_TEAR_DOWN(last_term, tear_down);
+TEST_SETUP(last_term, setup)
+TEST_TEAR_DOWN(last_term, tear_down)
 
 /* If the log is empty, return zero. */
 TEST_CASE(last_term, empty, NULL)
@@ -327,10 +327,10 @@ TEST_CASE(last_term, snapshot, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(term_of);
+TEST_SUITE(term_of)
 
-TEST_SETUP(term_of, setup);
-TEST_TEAR_DOWN(term_of, tear_down);
+TEST_SETUP(term_of, setup)
+TEST_TEAR_DOWN(term_of, tear_down)
 
 /* If the given index is beyond the last index, return 0. */
 TEST_CASE(term_of, beyond_last, NULL)
@@ -413,10 +413,10 @@ TEST_CASE(term_of, snapshot_trailing, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(get);
+TEST_SUITE(get)
 
-TEST_SETUP(get, setup);
-TEST_TEAR_DOWN(get, tear_down);
+TEST_SETUP(get, setup)
+TEST_TEAR_DOWN(get, tear_down)
 
 /* The log is empty. */
 TEST_CASE(get, empty_log, NULL)
@@ -486,10 +486,10 @@ TEST_CASE(get, two_with_offset, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(append);
+TEST_SUITE(append)
 
-TEST_SETUP(append, setup);
-TEST_TEAR_DOWN(append, tear_down);
+TEST_SETUP(append, setup)
+TEST_TEAR_DOWN(append, tear_down)
 
 /* Append one entry to an empty log. */
 TEST_CASE(append, one, NULL)
@@ -632,7 +632,7 @@ TEST_CASE(append, batch, NULL)
     return MUNIT_OK;
 }
 
-TEST_GROUP(append, error);
+TEST_GROUP(append, error)
 
 static char *append_oom_heap_fault_delay[] = {"0", "1", NULL};
 static char *append_oom_heap_fault_repeat[] = {"1", NULL};
@@ -676,12 +676,12 @@ TEST_CASE(append, error, oom_refs, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(append_configuration);
+TEST_SUITE(append_configuration)
 
-TEST_SETUP(append_configuration, setup);
-TEST_TEAR_DOWN(append_configuration, tear_down);
+TEST_SETUP(append_configuration, setup)
+TEST_TEAR_DOWN(append_configuration, tear_down)
 
-TEST_GROUP(append_configuration, error);
+TEST_GROUP(append_configuration, error)
 
 static char *append_configuration_oom_heap_fault_delay[] = {"0", "1", NULL};
 static char *append_configuration_oom_heap_fault_repeat[] = {"1", NULL};
@@ -720,10 +720,10 @@ TEST_CASE(append_configuration, error, oom, append_configuration_oom_params)
  *
  *****************************************************************************/
 
-TEST_SUITE(acquire);
+TEST_SUITE(acquire)
 
-TEST_SETUP(acquire, setup);
-TEST_TEAR_DOWN(acquire, tear_down);
+TEST_SETUP(acquire, setup)
+TEST_TEAR_DOWN(acquire, tear_down)
 
 /* Acquire a single log entry. */
 TEST_CASE(acquire, one, NULL)
@@ -838,7 +838,7 @@ TEST_CASE(acquire, batch, NULL)
     return MUNIT_OK;
 }
 
-TEST_GROUP(acquire, error);
+TEST_GROUP(acquire, error)
 
 /* Trying to acquire entries out of range results in a NULL pointer. */
 TEST_CASE(acquire, error, out_of_range, NULL)
@@ -886,10 +886,10 @@ TEST_CASE(acquire, error, oom, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(truncate);
+TEST_SUITE(truncate)
 
-TEST_SETUP(truncate, setup);
-TEST_TEAR_DOWN(truncate, tear_down);
+TEST_SETUP(truncate, setup)
+TEST_TEAR_DOWN(truncate, tear_down)
 
 /* Truncate the last entry of a log with a single entry. */
 TEST_CASE(truncate, 1_last, NULL)
@@ -1074,7 +1074,7 @@ TEST_CASE(truncate, acquire_append, NULL)
     return MUNIT_OK;
 }
 
-TEST_GROUP(truncate, error);
+TEST_GROUP(truncate, error)
 
 static char *truncate_acquired_heap_fault_delay[] = {"0", NULL};
 static char *truncate_acquired_fault_repeat[] = {"1", NULL};
@@ -1124,10 +1124,10 @@ TEST_CASE(truncate, error, acquired_oom, truncate_acquired_oom_params)
  *
  *****************************************************************************/
 
-TEST_SUITE(snapshot);
+TEST_SUITE(snapshot)
 
-TEST_SETUP(snapshot, setup);
-TEST_TEAR_DOWN(snapshot, tear_down);
+TEST_SETUP(snapshot, setup)
+TEST_TEAR_DOWN(snapshot, tear_down)
 
 /* Take a snapshot at entry 3, keeping 2 trailing entries. */
 TEST_CASE(snapshot, trailing, NULL)
@@ -1298,10 +1298,10 @@ TEST_CASE(snapshot, wrap, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(restore);
+TEST_SUITE(restore)
 
-TEST_SETUP(restore, setup);
-TEST_TEAR_DOWN(restore, tear_down);
+TEST_SETUP(restore, setup)
+TEST_TEAR_DOWN(restore, tear_down)
 
 /* Mimick the initial restore of a snapshot after loading state from disk, when
  * there are no outstanding entries. */

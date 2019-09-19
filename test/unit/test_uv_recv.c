@@ -4,7 +4,7 @@
 #include "../../src/byte.h"
 #include "../../src/uv_encoding.h"
 
-TEST_MODULE(io_uv_recv);
+TEST_MODULE(io_uv_recv)
 
 /**
  * Helpers.
@@ -95,10 +95,10 @@ static void tear_down(void *data)
  * Success scenarios.
  */
 
-TEST_SUITE(success);
+TEST_SUITE(success)
 
-TEST_SETUP(success, setup);
-TEST_TEAR_DOWN(success, tear_down);
+TEST_SETUP(success, setup)
+TEST_TEAR_DOWN(success, tear_down)
 
 /* Receive the very first message over the connection. */
 TEST_CASE(success, first, NULL)
@@ -304,10 +304,10 @@ TEST_CASE(success, install_snapshot, NULL)
  * Failure scenarios.
  */
 
-TEST_SUITE(error);
+TEST_SUITE(error)
 
-TEST_SETUP(error, setup);
-TEST_TEAR_DOWN(error, tear_down);
+TEST_SETUP(error, setup)
+TEST_TEAR_DOWN(error, tear_down)
 
 /* The handshake fails because of an unexpected protocon version. */
 TEST_CASE(error, bad_protocol, NULL)
@@ -415,10 +415,10 @@ TEST_CASE(error, oom, error_oom_params)
  * Close backend scenarios.
  */
 
-TEST_SUITE(close);
+TEST_SUITE(close)
 
-TEST_SETUP(close, setup);
-TEST_TEAR_DOWN(close, tear_down);
+TEST_SETUP(close, setup)
+TEST_TEAR_DOWN(close, tear_down)
 
 /* The backend is closed just before accepting a new connection. */
 TEST_CASE(close, accept, NULL)

@@ -16,7 +16,7 @@
 #define FIXTURE_CLUSTER                             \
     FIXTURE_HEAP;                                   \
     struct raft_fsm fsms[RAFT_FIXTURE_MAX_SERVERS]; \
-    struct raft_fixture cluster;
+    struct raft_fixture cluster
 
 /* N is the default number of servers, but can be tweaked with the cluster-n
  * parameter. */

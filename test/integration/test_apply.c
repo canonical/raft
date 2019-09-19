@@ -1,7 +1,7 @@
 #include "../lib/cluster.h"
 #include "../lib/runner.h"
 
-TEST_MODULE(apply);
+TEST_MODULE(apply)
 
 /******************************************************************************
  *
@@ -72,9 +72,9 @@ static void apply_cb(struct raft_apply *req, int status, void *result)
  *
  *****************************************************************************/
 
-TEST_SUITE(success);
-TEST_SETUP(success, setup);
-TEST_TEAR_DOWN(success, tear_down);
+TEST_SUITE(success)
+TEST_SETUP(success, setup)
+TEST_TEAR_DOWN(success, tear_down)
 
 /* Append the very first command entry. */
 TEST_CASE(success, first, NULL)
@@ -93,9 +93,9 @@ TEST_CASE(success, first, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(error);
-TEST_SETUP(error, setup);
-TEST_TEAR_DOWN(error, tear_down);
+TEST_SUITE(error)
+TEST_SETUP(error, setup)
+TEST_TEAR_DOWN(error, tear_down)
 
 /* If the raft instance is not in leader state, an error is returned. */
 TEST_CASE(error, not_leader, NULL)

@@ -5,7 +5,7 @@
 
 #include "../../src/byte.h"
 
-TEST_MODULE(uv_init);
+TEST_MODULE(uv_init)
 
 /******************************************************************************
  *
@@ -88,12 +88,12 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-TEST_SUITE(ensure_dir);
+TEST_SUITE(ensure_dir)
 
-TEST_SETUP(ensure_dir, setup);
-TEST_TEAR_DOWN(ensure_dir, tear_down);
+TEST_SETUP(ensure_dir, setup)
+TEST_TEAR_DOWN(ensure_dir, tear_down)
 
-TEST_GROUP(ensure_dir, error);
+TEST_GROUP(ensure_dir, error)
 
 /* The data directory can't be created. */
 TEST_CASE(ensure_dir, error, cant_create, NULL)
@@ -131,10 +131,10 @@ TEST_CASE(ensure_dir, error, no_access, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(metadata);
+TEST_SUITE(metadata)
 
-TEST_SETUP(metadata, setup);
-TEST_TEAR_DOWN(metadata, tear_down);
+TEST_SETUP(metadata, setup)
+TEST_TEAR_DOWN(metadata, tear_down)
 
 /* If the data directory is empty, the metadata files get initialized. */
 TEST_CASE(metadata, empty_dir, NULL)
@@ -226,7 +226,7 @@ TEST_CASE(metadata, short_file, NULL)
     return MUNIT_OK;
 }
 
-TEST_GROUP(metadata, error);
+TEST_GROUP(metadata, error)
 
 /* The data directory is not executable. */
 TEST_CASE(metadata, error, no_access, NULL)

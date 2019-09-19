@@ -10,7 +10,7 @@
 
 #define WORD_SIZE sizeof(uint64_t)
 
-TEST_MODULE(uv_load);
+TEST_MODULE(uv_load)
 
 /******************************************************************************
  *
@@ -96,9 +96,9 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-TEST_SUITE(segments);
-TEST_SETUP(segments, setup);
-TEST_TEAR_DOWN(segments, tear_down);
+TEST_SUITE(segments)
+TEST_SETUP(segments, setup)
+TEST_TEAR_DOWN(segments, tear_down)
 
 TEST_CASE(segments, ignore_unknown, NULL)
 {
@@ -322,9 +322,9 @@ TEST_CASE(segments, open, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(snapshot);
-TEST_SETUP(snapshot, setup);
-TEST_TEAR_DOWN(snapshot, tear_down);
+TEST_SUITE(snapshot)
+TEST_SETUP(snapshot, setup)
+TEST_TEAR_DOWN(snapshot, tear_down)
 
 /* There are several snapshots, including an incomplete one. The last one is
  * loaded and the incomplete or older ones are removed.  */
@@ -481,9 +481,9 @@ TEST_CASE(snapshot, more_recent_closed_segment, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(error);
-TEST_SETUP(error, setup);
-TEST_TEAR_DOWN(error, tear_down);
+TEST_SUITE(error)
+TEST_SETUP(error, setup)
+TEST_TEAR_DOWN(error, tear_down)
 
 /* The data directory has an open segment which has incomplete format data. */
 TEST_CASE(error, short_format, NULL)

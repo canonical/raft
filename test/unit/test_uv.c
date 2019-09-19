@@ -7,7 +7,7 @@
 #include "../lib/runner.h"
 #include "../lib/uv.h"
 
-TEST_MODULE(uv);
+TEST_MODULE(uv)
 
 /**
  * Helpers
@@ -122,9 +122,9 @@ static void tear_down(void *data)
  * raft_uv_init
  */
 
-TEST_SUITE(init);
-TEST_SETUP(init, setup);
-TEST_TEAR_DOWN(init, tear_down);
+TEST_SUITE(init)
+TEST_SETUP(init, setup)
+TEST_TEAR_DOWN(init, tear_down)
 
 /* Data directory path is too long */
 TEST_CASE(init, dir_too_long, NULL)
@@ -151,9 +151,9 @@ TEST_CASE(init, dir_too_long, NULL)
  * raft_io_uv__start
  */
 
-TEST_SUITE(start);
-TEST_SETUP(start, setup);
-TEST_TEAR_DOWN(start, tear_down);
+TEST_SUITE(start)
+TEST_SETUP(start, setup)
+TEST_TEAR_DOWN(start, tear_down)
 
 /* Once the raft_io_uv instance is started, the tick function gets called
  * periodically. */
@@ -222,9 +222,9 @@ TEST_CASE(start, recv, NULL)
  * raft_io_uv__load
  */
 
-TEST_SUITE(load);
-TEST_SETUP(load, setup);
-TEST_TEAR_DOWN(load, tear_down);
+TEST_SUITE(load)
+TEST_SETUP(load, setup)
+TEST_TEAR_DOWN(load, tear_down)
 
 /* Load the initial state of a pristine server. */
 TEST_CASE(load, pristine, NULL)
@@ -257,9 +257,9 @@ TEST_CASE(load, pristine, NULL)
  * raft_io_uv__bootstrap
  */
 
-TEST_SUITE(bootstrap);
-TEST_SETUP(bootstrap, setup);
-TEST_TEAR_DOWN(bootstrap, tear_down);
+TEST_SUITE(bootstrap)
+TEST_SETUP(bootstrap, setup)
+TEST_TEAR_DOWN(bootstrap, tear_down)
 
 /* Bootstrap a pristine server. */
 TEST_CASE(bootstrap, pristine, NULL)
@@ -290,9 +290,9 @@ TEST_CASE(bootstrap, pristine, NULL)
  * raft_io_uv__set_term
  */
 
-TEST_SUITE(set_term);
-TEST_SETUP(set_term, setup);
-TEST_TEAR_DOWN(set_term, tear_down);
+TEST_SUITE(set_term)
+TEST_SETUP(set_term, setup)
+TEST_TEAR_DOWN(set_term, tear_down)
 
 /* Set the term on a pristine store. */
 TEST_CASE(set_term, term, NULL)
@@ -314,9 +314,9 @@ TEST_CASE(set_term, term, NULL)
  * raft_io_uv__set_vote
  */
 
-TEST_SUITE(set_vote);
-TEST_SETUP(set_vote, setup);
-TEST_TEAR_DOWN(set_vote, tear_down);
+TEST_SUITE(set_vote)
+TEST_SETUP(set_vote, setup)
+TEST_TEAR_DOWN(set_vote, tear_down)
 
 /* Set the vote on a pristine store. */
 TEST_CASE(set_vote, pristine, NULL)
@@ -341,9 +341,9 @@ TEST_CASE(set_vote, pristine, NULL)
  * raft_io_uv__append
  */
 
-TEST_SUITE(append);
-TEST_SETUP(append, setup);
-TEST_TEAR_DOWN(append, tear_down);
+TEST_SUITE(append)
+TEST_SETUP(append, setup)
+TEST_TEAR_DOWN(append, tear_down)
 
 /* Append entries on a pristine store. */
 TEST_CASE(append, pristine, NULL)
@@ -381,9 +381,9 @@ TEST_CASE(append, pristine, NULL)
  * raft_io_uv__send
  */
 
-TEST_SUITE(send);
-TEST_SETUP(send, setup);
-TEST_TEAR_DOWN(send, tear_down);
+TEST_SUITE(send)
+TEST_SETUP(send, setup)
+TEST_TEAR_DOWN(send, tear_down)
 
 /* Send the very first message. */
 TEST_CASE(send, first, NULL)

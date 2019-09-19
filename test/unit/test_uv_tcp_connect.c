@@ -8,7 +8,7 @@
 
 #include "../../src/byte.h"
 
-TEST_MODULE(uv_tcp_connect);
+TEST_MODULE(uv_tcp_connect)
 
 /******************************************************************************
  *
@@ -110,7 +110,7 @@ static void connect_cb(struct raft_uv_connect *req,
  *
  *****************************************************************************/
 
-TEST_SUITE(success);
+TEST_SUITE(success)
 
 TEST_SETUP(success, setup)
 TEST_TEAR_DOWN(success, tear_down)
@@ -133,7 +133,7 @@ TEST_CASE(success, first, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(error);
+TEST_SUITE(error)
 
 TEST_SETUP(error, setup)
 TEST_TEAR_DOWN(error, tear_down)
@@ -194,7 +194,7 @@ TEST_CASE(error, oom_async, connect_error_oom_async_params)
  *
  *****************************************************************************/
 
-TEST_SUITE(close);
+TEST_SUITE(close)
 
 TEST_SETUP(close, setup)
 TEST_TEAR_DOWN(close, tear_down)

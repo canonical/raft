@@ -26,7 +26,7 @@ static int test_fsm__apply(struct raft_fsm *fsm,
     }
 
     command = *(uint64_t *)buf->base;
-    value = *(int64_t *)(buf->base + 8);
+    value = *((int64_t *)buf->base + 1);
 
     switch (command) {
         case SET_X:
@@ -133,7 +133,7 @@ void test_fsm_encode_set_x(const int value, struct raft_buffer *buf)
     munit_assert_ptr_not_null(buf->base);
 
     *(uint64_t *)buf->base = SET_X;
-    *(int64_t *)(buf->base + 8) = value;
+    *((int64_t *)buf->base + 1) = value;
 }
 
 void test_fsm_encode_add_x(const int value, struct raft_buffer *buf)
@@ -144,7 +144,7 @@ void test_fsm_encode_add_x(const int value, struct raft_buffer *buf)
     munit_assert_ptr_not_null(buf->base);
 
     *(uint64_t *)buf->base = ADD_X;
-    *(int64_t *)(buf->base + 8) = value;
+    *((int64_t *)buf->base + 1) = value;
 }
 
 void test_fsm_encode_set_y(const int value, struct raft_buffer *buf)
@@ -155,7 +155,7 @@ void test_fsm_encode_set_y(const int value, struct raft_buffer *buf)
     munit_assert_ptr_not_null(buf->base);
 
     *(uint64_t *)buf->base = SET_Y;
-    *(int64_t *)(buf->base + 8) = value;
+    *((int64_t *)buf->base + 1) = value;
 }
 
 void test_fsm_encode_add_y(const int value, struct raft_buffer *buf)
@@ -166,7 +166,7 @@ void test_fsm_encode_add_y(const int value, struct raft_buffer *buf)
     munit_assert_ptr_not_null(buf->base);
 
     *(uint64_t *)buf->base = ADD_Y;
-    *(int64_t *)(buf->base + 8) = value;
+    *((int64_t *)buf->base + 1) = value;
 }
 
 void test_fsm_encode_snapshot(int x,

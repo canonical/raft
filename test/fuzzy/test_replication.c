@@ -1,7 +1,7 @@
 #include "../lib/cluster.h"
 #include "../lib/runner.h"
 
-TEST_MODULE(replication);
+TEST_MODULE(replication)
 
 /******************************************************************************
  *
@@ -54,9 +54,9 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-TEST_SUITE(entries);
-TEST_SETUP(entries, setup);
-TEST_TEAR_DOWN(entries, tear_down);
+TEST_SUITE(entries)
+TEST_SETUP(entries, setup)
+TEST_TEAR_DOWN(entries, tear_down)
 
 /* New entries on the leader are eventually replicated to followers. */
 TEST_CASE(entries, append, _params)

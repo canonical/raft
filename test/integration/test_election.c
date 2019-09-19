@@ -3,7 +3,7 @@
 
 #include "../../src/configuration.h"
 
-TEST_MODULE(election);
+TEST_MODULE(election)
 
 /******************************************************************************
  *
@@ -109,10 +109,10 @@ static MunitParameterEnum cluster_3_params[] = {
  *
  *****************************************************************************/
 
-TEST_SUITE(win);
+TEST_SUITE(win)
 
-TEST_SETUP(win, setup);
-TEST_TEAR_DOWN(win, tear_down);
+TEST_SETUP(win, setup)
+TEST_TEAR_DOWN(win, tear_down)
 
 /* Test an election round with two voters. */
 TEST_CASE(win, two_voters, NULL)
@@ -276,10 +276,10 @@ TEST_CASE(win, wait_quorum, cluster_5_params)
  *
  *****************************************************************************/
 
-TEST_SUITE(reject);
+TEST_SUITE(reject)
 
-TEST_SETUP(reject, setup);
-TEST_TEAR_DOWN(reject, tear_down);
+TEST_SETUP(reject, setup)
+TEST_TEAR_DOWN(reject, tear_down)
 
 TEST_CASE(reject, higher_term, NULL)
 {
@@ -540,10 +540,10 @@ TEST_CASE(reject, not_granted, cluster_5_params)
  *
  *****************************************************************************/
 
-TEST_SUITE(io_error);
+TEST_SUITE(io_error)
 
-TEST_SETUP(io_error, setup);
-TEST_TEAR_DOWN(io_error, tear_down);
+TEST_SETUP(io_error, setup)
+TEST_TEAR_DOWN(io_error, tear_down)
 
 static char *io_error_candidate_delay[] = {"0", "1", NULL};
 static MunitParameterEnum io_error_candidate_params[] = {

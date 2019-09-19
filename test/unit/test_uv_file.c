@@ -5,7 +5,7 @@
 #include "../../src/uv_file.h"
 #include "../../src/uv_os.h"
 
-TEST_MODULE(uv_file);
+TEST_MODULE(uv_file)
 
 /******************************************************************************
  *
@@ -184,9 +184,9 @@ static void writeCb(struct uvFileWrite *req, int status, const char *errmsg)
  *
  *****************************************************************************/
 
-TEST_SUITE(create);
-TEST_SETUP(create, setup);
-TEST_TEAR_DOWN(create, tear_down);
+TEST_SUITE(create)
+TEST_SETUP(create, setup)
+TEST_TEAR_DOWN(create, tear_down)
 
 /* If the given path is valid, the file gets created. */
 TEST_CASE(create, success, dir_all_params)
@@ -265,7 +265,7 @@ TEST_CASE(create, error, cancel, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(write);
+TEST_SUITE(write)
 
 TEST_SETUP(write)
 {

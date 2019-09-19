@@ -7,7 +7,7 @@
 
 #include "../../src/log.h"
 
-#define FIXTURE_LOG struct raft_log log;
+#define FIXTURE_LOG struct raft_log log
 #define SETUP_LOG logInit(&f->log)
 #define TEAR_DOWN_LOG logClose(&f->log)
 

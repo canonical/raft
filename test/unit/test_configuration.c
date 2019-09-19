@@ -14,7 +14,7 @@ TEST_MODULE(configuration)
 
 struct fixture
 {
-    FIXTURE_HEAP
+    FIXTURE_HEAP;
     FIXTURE_CONFIGURATION
 };
 

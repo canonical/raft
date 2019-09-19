@@ -2,7 +2,7 @@
 
 #include "../lib/runner.h"
 
-TEST_MODULE(heap);
+TEST_MODULE(heap)
 
 /******************************************************************************
  *
@@ -10,7 +10,7 @@ TEST_MODULE(heap);
  *
  *****************************************************************************/
 
-TEST_SUITE(default);
+TEST_SUITE(default)
 
 TEST_CASE(default, malloc, NULL)
 {
