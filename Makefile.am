@@ -1,5 +1,5 @@
 ACLOCAL_AMFLAGS = -I m4
-AM_CFLAGS = -I$(top_srcdir)/include -Wall
+AM_CFLAGS += $(CODE_COVERAGE_CFLAGS)
 
 include_HEADERS = include/raft.h
 
@@ -7,7 +7,7 @@ raftincludedir = $(includedir)/raft
 raftinclude_HEADERS =
 
 lib_LTLIBRARIES = libraft.la
-libraft_la_CFLAGS = -fvisibility=hidden $(CODE_COVERAGE_CFLAGS)
+libraft_la_CFLAGS = $(AM_CFLAGS) -fvisibility=hidden
 libraft_la_LDFLAGS = -version-info 0:7:0
 libraft_la_SOURCES = \
   src/byte.c \
@@ -36,19 +36,18 @@ libraft_la_SOURCES = \
   src/state.c \
   src/tick.c
 
-check_PROGRAMS = test/unit/core integration-test fuzzy-test
+check_PROGRAMS = test/unit/core test/integration/core fuzzy-test
 TESTS = $(check_PROGRAMS)
 
 check_LTLIBRARIES = libtest.la
 
-libtest_la_CFLAGS = -DMUNIT_TEST_NAME_LEN=60
-libtest_la_LDFLAGS =
+libtest_la_CFLAGS = $(AM_CFLAGS) -DMUNIT_TEST_NAME_LEN=60
 libtest_la_SOURCES = \
   test/lib/fault.c \
+  test/lib/fsm.c \
   test/lib/heap.c \
-  test/lib/munit.c
-
-test_CFLAGS = $(AM_CFLAGS) -DRAFT_TEST
+  test/lib/munit.c \
+  test/lib/tcp.c
 
 test_unit_core_SOURCES = \
   src/byte.c \
@@ -65,20 +64,10 @@ test_unit_core_SOURCES = \
   test/unit/test_log.c \
   test/unit/test_queue.c \
   test/unit/test_logger_ring.c
-test_unit_core_CFLAGS = $(CODE_COVERAGE_CFLAGS) $(test_CFLAGS)
 test_unit_core_LDADD = libtest.la
 
-test_lib_SOURCES = \
-  test/lib/cluster.c \
-  test/lib/fault.c \
-  test/lib/fsm.c \
-  test/lib/heap.c \
-  test/lib/munit.c \
-  test/lib/tcp.c
-
-integration_test_SOURCES = $(test_lib_SOURCES)
-integration_test_SOURCES += \
-  test/integration/main.c \
+test_integration_core_SOURCES = \
+  test/integration/main_core.c \
   test/integration/test_apply.c \
   test/integration/test_barrier.c \
   test/integration/test_election.c \
@@ -87,19 +76,17 @@ integration_test_SOURCES += \
   test/integration/test_snapshot.c \
   test/integration/test_tick.c \
   test/integration/test_start.c
-integration_test_CFLAGS = $(test_CFLAGS)
-integration_test_LDADD = libraft.la
-integration_test_LDFLAGS =
+test_integration_core_LDADD = libtest.la libraft.la
+test_integration_core_LDFLAGS =
 
-fuzzy_test_SOURCES = $(test_lib_SOURCES)
-fuzzy_test_SOURCES += \
+fuzzy_test_SOURCES = \
+  test/lib/cluster.c \
   test/fuzzy/main.c \
   test/fuzzy/test_election.c \
   test/fuzzy/test_liveness.c \
   test/fuzzy/test_membership.c \
   test/fuzzy/test_replication.c
-fuzzy_test_CFLAGS = $(AM_CFLAGS)
-fuzzy_test_LDADD = libraft.la
+fuzzy_test_LDADD = libtest.la libraft.la
 fuzzy_test_LDFLAGS =
 
 if UV_ENABLED
@@ -136,9 +123,6 @@ libtest_la_SOURCES += \
   test/lib/tcp.c \
   test/lib/loop.c
 
-test_lib_SOURCES += \
-  test/lib/loop.c
-
 test_unit_uv_SOURCES = $(raft_uv_SOURCES)
 test_unit_uv_SOURCES += \
   src/byte.c \
@@ -164,7 +148,6 @@ test_unit_uv_SOURCES += \
   test/unit/test_uv_recv.c \
   test/unit/test_uv_send.c \
   test/unit/test_uv.c
-test_unit_uv_CFLAGS = $(CODE_COVERAGE_CFLAGS) $(test_CFLAGS)
 test_unit_uv_LDADD = libtest.la
 test_unit_uv_LDFLAGS = $(UV_LIBS)
 
@@ -175,7 +158,7 @@ endif # UV_ENABLED
 if FIXTURE_ENABLED
 libraft_la_SOURCES += src/fixture.c
 raftinclude_HEADERS += include/raft/fixture.h
-integration_test_SOURCES += test/unit/test_fixture.c
+test_integration_core_SOURCES += test/unit/test_fixture.c
 endif
 
 if EXAMPLE_ENABLED
@@ -197,6 +180,10 @@ example_cluster_LDADD = libraft.la
 example_cluster_LDFLAGS = $(UV_LIBS)
 
 endif # EXAMPLE_ENABLED
+
+if !DEBUG_ENABLED
+  AM_CFLAGS += -DNDEBUG
+endif
 
 if SANITIZE_ENABLED
   AM_CFLAGS += -fsanitize=address

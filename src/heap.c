@@ -73,7 +73,7 @@ void raft_heap_set(struct raft_heap *heap)
     currentHeap = heap;
 }
 
-void raft_heap_set_default()
+void raft_heap_set_default(void)
 {
     currentHeap = &defaultHeap;
 }

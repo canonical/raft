@@ -306,7 +306,7 @@ int configurationDecode(const struct raft_buffer *buf,
         id = byteGet64Unaligned(&cursor);
 
         /* Server Address. */
-        address = byteGetString(&cursor, buf->len - (cursor - buf->base));
+        address = byteGetString(&cursor, buf->len - ((uint8_t*)cursor - (uint8_t*)buf->base));
         if (address == NULL) {
             return RAFT_MALFORMED;
         }

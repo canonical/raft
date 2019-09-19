@@ -20,18 +20,18 @@
 /* Compile-time endianess detection (best effort). */
 #if (defined(__BYTE_ORDER) && (__BYTE_ORDER == __LITTLE_ENDIAN)) || \
     (defined(__ARMEL__) && (__ARMEL__ == 1))
-#    define RAFT__LITTLE_ENDIAN
+#    define RAFT__LITTLE_ENDIAN__
 #elif defined(__BYTE_ORDER) && (__BYTE_ORDER == __BIG_ENDIAN) && \
     defined(__GNUC__) && __GNUC__ >= 4 && __GNUC_MINOR__ >= 8
-#    define RAFT__BIG_ENDIAN
+#    define RAFT__BIG_ENDIAN__
 #endif
 
 /* Flip a 32-bit number to network byte order (little endian) */
 RAFT__INLINE__ uint32_t byteFlip32(uint32_t v)
 {
-#if defined(RAFT__LITTLE_ENDIAN)
+#if defined(RAFT__LITTLE_ENDIAN__)
     return v;
-#elif defined(RAFT__BIG_ENDIAN)
+#elif defined(RAFT__BIG_ENDIAN__)
     return __builtin_bswap32(v);
 #else /* Unknown endianess */
     union {
@@ -51,9 +51,9 @@ RAFT__INLINE__ uint32_t byteFlip32(uint32_t v)
 /* Flip a 64-bit number to network byte order (little endian) */
 RAFT__INLINE__ uint64_t byteFlip64(uint64_t v)
 {
-#if defined(RAFT__LITTLE_ENDIAN)
+#if defined(RAFT__LITTLE_ENDIAN__)
     return v;
-#elif defined(RAFT__BIG_ENDIAN)
+#elif defined(RAFT__BIG_ENDIAN__)
     return __builtin_bswap64(v);
 #else
     union {
@@ -76,20 +76,23 @@ RAFT__INLINE__ uint64_t byteFlip64(uint64_t v)
 
 RAFT__INLINE__ void bytePut8(void **cursor, uint8_t value)
 {
-    *(uint8_t *)(*cursor) = value;
-    *cursor += sizeof(uint8_t);
+    uint8_t **p = (uint8_t **)cursor;
+    **p = value;
+    *p += 1;
 }
 
 RAFT__INLINE__ void bytePut32(void **cursor, uint32_t value)
 {
-    *(uint32_t *)(*cursor) = byteFlip32(value);
-    *cursor += sizeof(uint32_t);
+    uint32_t **p = (uint32_t **)cursor;
+    **p = byteFlip32(value);
+    *p += 1;
 }
 
 RAFT__INLINE__ void bytePut64(void **cursor, uint64_t value)
 {
-    *(uint64_t *)(*cursor) = byteFlip64(value);
-    *cursor += sizeof(uint64_t);
+    uint64_t **p = (uint64_t **)cursor;
+    **p = byteFlip64(value);
+    *p += 1;
 }
 
 RAFT__INLINE__ void bytePut64Unaligned(void **cursor, uint64_t value)
@@ -103,28 +106,32 @@ RAFT__INLINE__ void bytePut64Unaligned(void **cursor, uint64_t value)
 
 RAFT__INLINE__ void bytePutString(void **cursor, const char *value)
 {
-    strcpy((char *)(*cursor), value);
-    *cursor += strlen(value) + 1;
+    char **p = (char **)cursor;
+    strcpy(*p, value);
+    *p += strlen(value) + 1;
 }
 
 RAFT__INLINE__ uint8_t byteGet8(const void **cursor)
 {
-    uint8_t value = *(uint8_t *)(*cursor);
-    *cursor += sizeof(uint8_t);
+    const uint8_t **p = (const uint8_t **)cursor;
+    uint8_t value = **p;
+    *p += 1;
     return value;
 }
 
 RAFT__INLINE__ uint32_t byteGet32(const void **cursor)
 {
-    uint32_t value = byteFlip32(*(uint32_t *)(*cursor));
-    *cursor += sizeof(uint32_t);
+    const uint32_t **p = (const uint32_t **)cursor;
+    uint32_t value = byteFlip32(**p);
+    *p += 1;
     return value;
 }
 
 RAFT__INLINE__ uint64_t byteGet64(const void **cursor)
 {
-    uint64_t value = byteFlip64(*(uint64_t *)(*cursor));
-    *cursor += sizeof(uint64_t);
+    const uint64_t **p = (const uint64_t **)cursor;
+    uint64_t value = byteFlip64(**p);
+    *p += 1;
     return value;
 }
 
@@ -140,10 +147,11 @@ RAFT__INLINE__ uint64_t byteGet64Unaligned(const void **cursor)
 
 RAFT__INLINE__ const char *byteGetString(const void **cursor, size_t max_len)
 {
-    const char *value = *cursor;
+    const char **p = (const char **)cursor;
+    const char *value = *p;
     size_t len = 0;
     while (len < max_len) {
-        if (*(char *)(*cursor + len) == 0) {
+        if (*(*p + len) == 0) {
             break;
         }
         len++;
@@ -151,7 +159,7 @@ RAFT__INLINE__ const char *byteGetString(const void **cursor, size_t max_len)
     if (len == max_len) {
         return NULL;
     }
-    *cursor += len + 1;
+    *p += len + 1;
     return value;
 }
 
@@ -171,5 +179,7 @@ RAFT__INLINE__ size_t bytePad64(size_t size)
 unsigned byteCrc32(const void *buf, size_t size, unsigned init);
 
 #undef RAFT__INLINE__
+#undef RAFT__LITTLE_ENDIAN__
+#undef RAFT__BIG_ENDIAN__
 
 #endif /* BYTE_H_ */

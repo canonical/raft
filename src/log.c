@@ -823,12 +823,12 @@ void logTruncate(struct raft_log *l, const raft_index index)
     if (logNumEntries(l) == 0) {
         return;
     }
-    return removeSuffix(l, index, true);
+    removeSuffix(l, index, true);
 }
 
 void logDiscard(struct raft_log *l, const raft_index index)
 {
-    return removeSuffix(l, index, false);
+    removeSuffix(l, index, false);
 }
 
 /* Delete all entries up to the given index (included). */

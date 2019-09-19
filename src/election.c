@@ -6,9 +6,9 @@
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(MSG, ...) debugf(r, MSG, ##__VA_ARGS__)
+#define tracef(...) debugf(r, ##__VA_ARGS__)
 #else
-#define tracef(MSG, ...)
+#define tracef(...)
 #endif
 
 /* Vote request context */

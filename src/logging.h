@@ -8,14 +8,14 @@
 #include "../include/raft.h"
 
 /* Emit a log message */
-#define emitf(R, LEVEL, FORMAT, ...)                                          \
+#define emitf(LEVEL, R, ...)                                                  \
     R->logger->emit(R->logger, LEVEL, R->io->time(R->io), __FILE__, __LINE__, \
-                    FORMAT, ##__VA_ARGS__);
+                    ##__VA_ARGS__);
 
 /* Emit a log message with a certain level. */
-#define debugf(R, FORMAT, ...) emitf(R, RAFT_DEBUG, FORMAT, ##__VA_ARGS__);
-#define infof(R, FORMAT, ...) emitf(R, RAFT_INFO, FORMAT, ##__VA_ARGS__);
-#define warnf(R, FORMAT, ...) emitf(R, RAFT_WARN, FORMAT, ##__VA_ARGS__);
-#define errorf(R, FORMAT, ...) emitf(R, RAFT_ERROR, FORMAT, ##__VA_ARGS__);
+#define debugf(R, ...) emitf(RAFT_DEBUG, R, ##__VA_ARGS__);
+#define infof(R, ...) emitf(RAFT_INFO, R, ##__VA_ARGS__);
+#define warnf(R, ...) emitf(RAFT_WARN, R, ##__VA_ARGS__);
+#define errorf(R, ...) emitf(RAFT_ERROR, R, ##__VA_ARGS__);
 
 #endif /* LOGGING_H_ */

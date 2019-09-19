@@ -32,9 +32,9 @@
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(C, MSG, ...) uvDebugf(C->uv, MSG, ##__VA_ARGS__)
+#define tracef(C, ...) uvDebugf(C->uv, ##__VA_ARGS__)
 #else
-#define tracef(C, MSG, ...)
+#define tracef(C, ...)
 #endif
 
 /* Client state codes. */
@@ -292,6 +292,7 @@ static void connectCb(struct raft_uv_connect *req,
     /*c->uv->logger->emit(c->uv->logger, level,
                         c->uv->io->time(c->uv->io), "connect to %d (%s): %s",
                         c->id, c->address, raft_strerror(status));*/
+    (void)level;
 
     /* Let's schedule another attempt. */
     c->state = DELAY;
