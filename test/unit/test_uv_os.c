@@ -17,7 +17,6 @@
 struct fixture
 {
     FIXTURE_DIR;
-    uvDir tmpdir; /* Path to a temp directory, defaults to f->dir */
     char errmsg[2048];
 };
 
@@ -26,7 +25,6 @@ static void *setup(const MunitParameter params[], void *user_data)
     struct fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
     SETUP_DIR;
-    strcpy(f->tmpdir, f->dir);
     return f;
 }
 
@@ -43,18 +41,8 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-/* Invoke uvEnsureDir passing it the fixture's tmpdir. */
-#define ENSURE_DIR_RV uvEnsureDir(f->tmpdir, f->errmsg)
-#define ENSURE_DIR munit_assert_int(ENSURE_DIR_RV, ==, 0)
-#define ENSURE_DIR_ERROR(RV) munit_assert_int(ENSURE_DIR_RV, ==, RV)
-
-/* Invoke uvSyncDir passing it the fixture's tmpdir. */
-#define SYNC_DIR_RV uvSyncDir(f->tmpdir, f->errmsg)
-#define SYNC_DIR munit_assert_int(SYNC_DIR_RV, ==, 0)
-#define SYNC_DIR_ERROR(RV) munit_assert_int(SYNC_DIR_RV, ==, RV)
-
 /* Open a file the fixture's tmpdir. */
-#define OPEN_FILE_RV(...) uvOpenFile(f->tmpdir, __VA_ARGS__, f->errmsg)
+#define OPEN_FILE_RV(...) uvOpenFile(f->dir, __VA_ARGS__, f->errmsg)
 #define OPEN_FILE_ERROR(RV, ...) \
     munit_assert_int(OPEN_FILE_RV(__VA_ARGS__), ==, RV)
 
@@ -94,8 +82,6 @@ TEST(uvJoin, path, NULL, NULL, 0, NULL)
     const uvDir dir = "/foo";
     const uvFilename filename = "bar";
     uvPath path;
-    (void)data;
-    (void)params;
     uvJoin(dir, filename, path);
     munit_assert_string_equal(path, "/foo/bar");
     return MUNIT_OK;
@@ -109,14 +95,19 @@ TEST(uvJoin, path, NULL, NULL, 0, NULL)
 
 SUITE(uvEnsureDir)
 
+/* Invoke uvEnsureDir passing it the given dir. */
+#define ENSURE_DIR_RV(DIR) uvEnsureDir(DIR, f->errmsg)
+#define ENSURE_DIR(DIR) munit_assert_int(ENSURE_DIR_RV(DIR), ==, 0)
+#define ENSURE_DIR_ERROR(DIR, RV) munit_assert_int(ENSURE_DIR_RV(DIR), ==, RV)
+
 /* If the directory doesn't exist, it is created. */
 TEST(uvEnsureDir, does_not_exists, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
-    sprintf(f->tmpdir, "%s/sub", f->dir);
-    ENSURE_DIR;
-    munit_assert_true(test_dir_exists(f->tmpdir));
+    uvDir dir;
+    sprintf(dir, "%s/sub", f->dir);
+    ENSURE_DIR(dir);
+    munit_assert_true(test_dir_exists(dir));
     return MUNIT_OK;
 }
 
@@ -124,8 +115,7 @@ TEST(uvEnsureDir, does_not_exists, setup, tear_down, 0, NULL)
 TEST(uvEnsureDir, exists, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
-    ENSURE_DIR;
+    ENSURE_DIR(f->dir);
     return MUNIT_OK;
 }
 
@@ -133,9 +123,7 @@ TEST(uvEnsureDir, exists, setup, tear_down, 0, NULL)
 TEST(uvEnsureDir, mkdir_error, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
-    strcpy(f->tmpdir, "/foobarbazegg");
-    ENSURE_DIR_ERROR(UV__ERROR);
+    ENSURE_DIR_ERROR("/foobarbazegg", UV__ERROR);
     ASSERT_ERRMSG("mkdir: Permission denied");
     return MUNIT_OK;
 }
@@ -144,9 +132,7 @@ TEST(uvEnsureDir, mkdir_error, setup, tear_down, 0, NULL)
 TEST(uvEnsureDir, stat_error, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
-    strcpy(f->tmpdir, "/proc/1/root");
-    ENSURE_DIR_ERROR(UV__ERROR);
+    ENSURE_DIR_ERROR("/proc/1/root", UV__ERROR);
     ASSERT_ERRMSG("stat: Permission denied");
     return MUNIT_OK;
 }
@@ -155,9 +141,7 @@ TEST(uvEnsureDir, stat_error, setup, tear_down, 0, NULL)
 TEST(uvEnsureDir, not_a_dir, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
-    strcpy(f->tmpdir, "/dev/null");
-    ENSURE_DIR_ERROR(UV__ERROR);
+    ENSURE_DIR_ERROR("/dev/null", UV__ERROR);
     ASSERT_ERRMSG("Not a directory");
     return MUNIT_OK;
 }
@@ -170,13 +154,16 @@ TEST(uvEnsureDir, not_a_dir, setup, tear_down, 0, NULL)
 
 SUITE(uvSyncDir)
 
+/* Invoke uvSyncDir passing it the given dir. */
+#define SYNC_DIR_RV(DIR) uvSyncDir(DIR, f->errmsg)
+#define SYNC_DIR(DIR) munit_assert_int(SYNC_DIR_RV(DIR), ==, 0)
+#define SYNC_DIR_ERROR(DIR, RV) munit_assert_int(SYNC_DIR_RV(DIR), ==, RV)
+
 /* If the directory doesn't exist, an error is returned. */
 TEST(uvSyncDir, no_exists, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
-    strcpy(f->tmpdir, "/foobarbazegg");
-    SYNC_DIR_ERROR(UV__ERROR);
+    SYNC_DIR_ERROR("/foobarbazegg", UV__ERROR);
     ASSERT_ERRMSG("open: No such file or directory");
     return MUNIT_OK;
 }
