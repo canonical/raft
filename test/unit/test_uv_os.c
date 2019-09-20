@@ -181,7 +181,6 @@ TEST(uvOpenFile, no_exists, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     int fd;
-    (void)params;
     OPEN_FILE_ERROR(UV__NOENT, "foo", O_RDONLY, &fd);
     ASSERT_ERRMSG("open: No such file or directory");
     return MUNIT_OK;
@@ -200,7 +199,6 @@ TEST(uvProbeIoCapabilities, tmpfs, setup, tear_down, 0, dir_tmpfs_params)
     struct fixture *f = data;
     size_t direct_io;
     bool async_io;
-    (void)params;
     PROBE_IO_CAPABILITIES(&direct_io, &async_io);
     munit_assert_false(direct_io);
     munit_assert_false(async_io);
@@ -216,7 +214,6 @@ TEST(uvProbeIoCapabilities, zfs_direct_io, setup, tear_down, 0, dir_zfs_params)
     struct fixture *f = data;
     size_t direct_io;
     bool async_io;
-    (void)params;
     PROBE_IO_CAPABILITIES(&direct_io, &async_io);
     munit_assert_true(direct_io);
     munit_assert_false(async_io);
@@ -230,7 +227,6 @@ TEST_CASE(uvProbeIoCapabilities, zfs, setup, tear_down, 0, dir_zfs_params)
     struct fixture *f = data;
     size_t direct_io;
     bool async_io;
-    (void)params;
     PROBE_IO_CAPABILITIES(&direct_io, &async_io);
     munit_assert_false(direct_io);
     munit_assert_false(async_io);
@@ -244,7 +240,6 @@ TEST_CASE(uvProbeIoCapabilities, zfs, setup, tear_down, 0, dir_zfs_params)
 TEST(uvProbeIoCapabilities, no_access, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     test_dir_unexecutable(f->dir);
     PROBE_IO_CAPABILITIES_ERROR(UV__ERROR);
     ASSERT_ERRMSG("mkstemp: Permission denied");
@@ -255,7 +250,6 @@ TEST(uvProbeIoCapabilities, no_access, setup, tear_down, 0, NULL)
 TEST(uvProbeIoCapabilities, no_space, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     test_dir_fill(f->dir, 0);
     PROBE_IO_CAPABILITIES_ERROR(UV__ERROR);
     ASSERT_ERRMSG("posix_fallocate: No space left on device");
@@ -269,7 +263,6 @@ TEST(uvProbeIoCapabilities, no_resources, setup, tear_down, 0, dir_btrfs_params)
 {
     struct fixture *f = data;
     aio_context_t ctx = 0;
-    (void)params;
     test_aio_fill(&ctx, 0);
     PROBE_IO_CAPABILITIES_ERROR(UV__ERROR);
     ASSERT_ERRMSG("io_setup: Resource temporarily unavailable");
