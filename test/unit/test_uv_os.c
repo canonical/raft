@@ -143,11 +143,26 @@ TEST(uvOpenFile, noExists, dirSetup, dirTearDown, 0, NULL)
  *
  *****************************************************************************/
 
-/* Invoke uvProbeIoCapabilities against the fixture's tmpdir. */
 #define PROBE_IO_CAPABILITIES_RV(...) \
     uvProbeIoCapabilities(f->dir, __VA_ARGS__, f->errmsg)
-#define PROBE_IO_CAPABILITIES(DIRECT_IO, ASYNC_IO) \
-    munit_assert_int(PROBE_IO_CAPABILITIES_RV(DIRECT_IO, ASYNC_IO), ==, 0)
+
+/* Invoke uvProbeIoCapabilities against the given dir and assert that it returns
+ * the given values for direct I/O and async I/O. */
+#define PROBE_IO_CAPABILITIES(DIR, DIRECT_IO, ASYNC_IO)                     \
+    {                                                                       \
+        size_t direct_io_;                                                  \
+        bool async_io_;                                                     \
+        uvErrMsg errmsg_;                                                   \
+        int rv_;                                                            \
+        rv_ = uvProbeIoCapabilities(DIR, &direct_io_, &async_io_, errmsg_); \
+        munit_assert_int(rv_, ==, 0);                                       \
+        munit_assert_int(direct_io_, ==, DIRECT_IO);                        \
+        if (ASYNC_IO) {                                                     \
+            munit_assert_true(async_io_);                                   \
+        } else {                                                            \
+            munit_assert_false(async_io_);                                  \
+        }                                                                   \
+    }
 #define PROBE_IO_CAPABILITIES_ERROR(RV)                            \
     {                                                              \
         size_t direct_io;                                          \
@@ -179,14 +194,13 @@ static void tear_down(void *data)
 
 SUITE(uvProbeIoCapabilities)
 
-TEST(uvProbeIoCapabilities, tmpfs, setup, tear_down, 0, dir_tmpfs_params)
+TEST(uvProbeIoCapabilities, tmpfs, dirSetupTmpfs, dirTearDown, 0, NULL)
 {
-    struct fixture *f = data;
-    size_t direct_io;
-    bool async_io;
-    PROBE_IO_CAPABILITIES(&direct_io, &async_io);
-    munit_assert_false(direct_io);
-    munit_assert_false(async_io);
+    const char *dir = data;
+    if (dir == NULL) {
+        return MUNIT_SKIP;
+    }
+    PROBE_IO_CAPABILITIES(dir, 0, false);
     return MUNIT_OK;
 }
 

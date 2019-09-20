@@ -87,6 +87,9 @@ MunitParameterEnum dir_no_aio_params[] = {
 static char *mkTempDir(const char *parent)
 {
     char *dir;
+    if (parent == NULL) {
+        return NULL;
+    }
     dir = munit_malloc(strlen(parent) + strlen(SEP) + strlen(TEMPLATE) + 1);
     sprintf(dir, "%s%s%s", parent, SEP, TEMPLATE);
     if (mkdtemp(dir) == NULL) {
@@ -99,6 +102,11 @@ void *dirSetup(MUNIT_UNUSED const MunitParameter params[],
                MUNIT_UNUSED void *user_data)
 {
     return mkTempDir("/tmp");
+}
+
+void *dirSetupTmpfs(const MunitParameter params[], void *user_data)
+{
+    return mkTempDir(getenv("RAFT_TEST_TMPFS"));
 }
 
 /* Wrapper around remove(), compatible with ntfw. */
@@ -118,6 +126,10 @@ void dirTearDown(void *data)
 {
     char *dir = data;
     int rv;
+
+    if (dir == NULL) {
+        return;
+    }
 
     rv = chmod(dir, 0755);
     munit_assert_int(rv, ==, 0);

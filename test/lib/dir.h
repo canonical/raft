@@ -67,7 +67,11 @@ extern MunitParameterEnum dir_no_aio_params[];
  * Return a pointer the path of the created directory. */
 void *dirSetup(const MunitParameter params[], void *user_data);
 
-void *dir_setup_tmpfs(const MunitParameter params[], void *user_data);
+/* Create a temporary test directory backed by tmpfs.
+ *
+ * Return a pointer the path of the created directory, or NULL if no tmpfs file
+ * system is available. */
+void *dirSetupTmpfs(const MunitParameter params[], void *user_data);
 
 /* Recursively a temporary directory. */
 void dirTearDown(void *data);
