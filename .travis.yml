@@ -17,7 +17,7 @@ script:
   - ./test/lib/fs.sh setup
   - CFLAGS=-O0
   - make
-  - make check || cat ./test-suite.log
+  - make check || (cat ./test-suite.log && false)
   - if [ $TRAVIS_COMPILER = gcc ]; then make code-coverage-capture; fi
   - ./test/lib/fs.sh teardown
 after_success:
