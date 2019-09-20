@@ -6,6 +6,7 @@ addons:
     - lcov
     - linux-libc-dev
     - libuv1-dev
+    - btrfs-progs
     - xfsprogs
     - zfsutils-linux
 compiler:

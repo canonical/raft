@@ -109,6 +109,16 @@ void *dirSetupTmpfs(const MunitParameter params[], void *user_data)
     return mkTempDir(getenv("RAFT_TEST_TMPFS"));
 }
 
+void *dirSetupBtrfs(const MunitParameter params[], void *user_data)
+{
+    return mkTempDir(getenv("RAFT_TEST_BTRFS"));
+}
+
+void *dirSetupZfs(const MunitParameter params[], void *user_data)
+{
+    return mkTempDir(getenv("RAFT_TEST_ZFS"));
+}
+
 /* Wrapper around remove(), compatible with ntfw. */
 static int removeFn(const char *path,
                     const struct stat *sbuf,

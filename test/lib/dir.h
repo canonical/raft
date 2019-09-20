@@ -73,6 +73,18 @@ void *dirSetup(const MunitParameter params[], void *user_data);
  * system is available. */
 void *dirSetupTmpfs(const MunitParameter params[], void *user_data);
 
+/* Create a temporary test directory backed by btrfs.
+ *
+ * Return a pointer the path of the created directory, or NULL if no btrfs file
+ * system is available. */
+void *dirSetupBtrfs(const MunitParameter params[], void *user_data);
+
+/* Create a temporary test directory backed by zfs.
+ *
+ * Return a pointer the path of the created directory, or NULL if no zfs file
+ * system is available. */
+void *dirSetupZfs(const MunitParameter params[], void *user_data);
+
 /* Recursively a temporary directory. */
 void dirTearDown(void *data);
 
@@ -142,7 +154,8 @@ void test_dir_unreadable_file(const char *dir, const char *filename);
 /* Check if the given directory has the given file. */
 bool test_dir_has_file(const char *dir, const char *filename);
 
-/* Fill the underlying file system of the given dir, leaving only n bytes free. */
+/* Fill the underlying file system of the given dir, leaving only n bytes free.
+ */
 void test_dir_fill(const char *dir, const size_t n);
 
 /* Fill the AIO subsystem resources by allocating a lot of events to the given
