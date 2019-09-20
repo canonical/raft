@@ -508,8 +508,6 @@ TEST_CASE(error, cancel, NULL)
 
     WAIT_CB(1, RAFT_CANCELED);
 
-    munit_assert_false(test_dir_has_file(f->dir, "open-1"));
-
     return MUNIT_OK;
 }
 
