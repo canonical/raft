@@ -58,7 +58,7 @@ extern int _main_suites_n;
  * The tests and suites attributes of the next available MunitSuite slot in the
  * _module_suites array will be set to the suite's tests and suites arrays, and
  * the prefix attribute of the slot will be set to /S. */
-#define SUITE(S)      \
+#define SUITE(S)           \
     TEST_SUITE__DECLARE(S) \
     TEST_SUITE__ADD_CHILD(main, #S, S)
 
@@ -70,7 +70,8 @@ extern int _main_suites_n;
     static MunitResult test_##S##_##C(const MunitParameter params[], \
                                       void *data);                   \
     TEST__ADD_TO_SUITE(S, C, SETUP, TEAR_DOWN, OPTIONS, PARAMS)      \
-    static MunitResult test_##S##_##C(const MunitParameter params[], void *data)
+    static MunitResult test_##S##_##C(                               \
+        MUNIT_UNUSED const MunitParameter params[], MUNIT_UNUSED void *data)
 
 /* Declare a setup function.
  *
