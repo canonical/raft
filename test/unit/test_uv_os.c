@@ -5,10 +5,8 @@
 #include "../lib/dir.h"
 #include "../lib/runner.h"
 
-#include "../../src/uv_os.h"
 #include "../../src/uv_error.h"
-
-TEST_MODULE(uv_os)
+#include "../../src/uv_os.h"
 
 /******************************************************************************
  *
@@ -88,8 +86,10 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
+TEST_SUITE(uvJoin)
+
 /* Join a directory path and a filename into a full path. */
-TEST_CASE(join, NULL)
+TEST(uvJoin, path, NULL, NULL, 0, NULL)
 {
     const uvDir dir = "/foo";
     const uvFilename filename = "bar";
@@ -107,12 +107,10 @@ TEST_CASE(join, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(ensure_dir)
-TEST_SETUP(ensure_dir, setup)
-TEST_TEAR_DOWN(ensure_dir, tear_down)
+TEST_SUITE(uvEnsureDir)
 
 /* If the directory doesn't exist, it is created. */
-TEST(ensure_dir, does_not_exists, setup, tear_down, 0, NULL)
+TEST(uvEnsureDir, does_not_exists, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -123,7 +121,7 @@ TEST(ensure_dir, does_not_exists, setup, tear_down, 0, NULL)
 }
 
 /* If the directory exists, nothing is needed. */
-TEST_CASE(ensure_dir, exists, NULL)
+TEST(uvEnsureDir, exists, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -132,7 +130,7 @@ TEST_CASE(ensure_dir, exists, NULL)
 }
 
 /* If the directory can't be created, an error is returned. */
-TEST_CASE(ensure_dir, error_mkdir, NULL)
+TEST(uvEnsureDir, mkdir_error, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -143,7 +141,7 @@ TEST_CASE(ensure_dir, error_mkdir, NULL)
 }
 
 /* If the directory can't be probed for existence, an error is returned. */
-TEST_CASE(ensure_dir, error_stat, NULL)
+TEST(uvEnsureDir, stat_error, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -154,7 +152,7 @@ TEST_CASE(ensure_dir, error_stat, NULL)
 }
 
 /* If the given path is not a directory, an error is returned. */
-TEST_CASE(ensure_dir, error_not_a_dir, NULL)
+TEST(uvEnsureDir, not_a_dir, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -170,14 +168,10 @@ TEST_CASE(ensure_dir, error_not_a_dir, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(sync_dir)
-TEST_SETUP(sync_dir, setup)
-TEST_TEAR_DOWN(sync_dir, tear_down)
-
-TEST_GROUP(sync_dir, error)
+TEST_SUITE(uvSyncDir)
 
 /* If the directory doesn't exist, an error is returned. */
-TEST_CASE(sync_dir, error, open, NULL)
+TEST(uvSyncDir, no_exists, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -193,14 +187,10 @@ TEST_CASE(sync_dir, error, open, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(open_file)
-TEST_SETUP(open_file, setup)
-TEST_TEAR_DOWN(open_file, tear_down)
-
-TEST_GROUP(open_file, error)
+TEST_SUITE(uvOpenFile)
 
 /* If the directory doesn't exist, an error is returned. */
-TEST_CASE(open_file, error, open, NULL)
+TEST(uvOpenFile, no_exists, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     int fd;
@@ -216,11 +206,9 @@ TEST_CASE(open_file, error, open, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(probe)
-TEST_SETUP(probe, setup)
-TEST_TEAR_DOWN(probe, tear_down)
+TEST_SUITE(uvProbeIoCapabilities)
 
-TEST_CASE(probe, tmpfs, dir_tmpfs_params)
+TEST(uvProbeIoCapabilities, tmpfs, setup, tear_down, 0, dir_tmpfs_params)
 {
     struct fixture *f = data;
     size_t direct_io;
@@ -236,7 +224,7 @@ TEST_CASE(probe, tmpfs, dir_tmpfs_params)
 
 /* ZFS 0.8 reports that it supports direct I/O, but does not support fully
  * asynchronous kernel AIO. */
-TEST_CASE(probe, zfs_direct_io, dir_zfs_params)
+TEST(uvProbeIoCapabilities, zfs_direct_io, setup, tear_down, 0, dir_zfs_params)
 {
     struct fixture *f = data;
     size_t direct_io;
@@ -250,7 +238,7 @@ TEST_CASE(probe, zfs_direct_io, dir_zfs_params)
 
 #elif defined(RAFT_HAVE_ZFS)
 
-TEST_CASE(probe, zfs, dir_zfs_params)
+TEST_CASE(uvProbeIoCapabilities, zfs, setup, tear_down, 0, dir_zfs_params)
 {
     struct fixture *f = data;
     size_t direct_io;
@@ -264,11 +252,9 @@ TEST_CASE(probe, zfs, dir_zfs_params)
 
 #endif /* RAFT_HAVE_ZFS_GE_0_8 */
 
-TEST_GROUP(probe, error)
-
 /* If the given path is not executable, the block size of the underlying file
  * system can't be determined and an error is returned. */
-TEST_CASE(probe, error, no_access, NULL)
+TEST(uvProbeIoCapabilities, no_access, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -279,7 +265,7 @@ TEST_CASE(probe, error, no_access, NULL)
 }
 
 /* No space is left on the target device. */
-TEST_CASE(probe, error, no_space, NULL)
+TEST(uvProbeIoCapabilities, no_space, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -292,7 +278,7 @@ TEST_CASE(probe, error, no_space, NULL)
 #if defined(RAFT_HAVE_BTRFS) && defined(RWF_NOWAIT)
 
 /* The uvIoSetup() call fails with EAGAIN. */
-TEST_CASE(probe, error, no_resources, dir_btrfs_params)
+TEST(uvProbeIoCapabilities, no_resources, setup, tear_down, 0, dir_btrfs_params)
 {
     struct fixture *f = data;
     aio_context_t ctx = 0;
