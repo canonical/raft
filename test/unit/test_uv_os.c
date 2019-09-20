@@ -8,7 +8,7 @@
 #include "../../src/uv_os.h"
 #include "../../src/uv_error.h"
 
-TEST_MODULE(uv_os);
+TEST_MODULE(uv_os)
 
 /******************************************************************************
  *
@@ -107,9 +107,9 @@ TEST_CASE(join, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(ensure_dir);
-TEST_SETUP(ensure_dir, setup);
-TEST_TEAR_DOWN(ensure_dir, tear_down);
+TEST_SUITE(ensure_dir)
+TEST_SETUP(ensure_dir, setup)
+TEST_TEAR_DOWN(ensure_dir, tear_down)
 
 /* If the directory doesn't exist, it is created. */
 TEST_CASE(ensure_dir, does_not_exists, NULL)
@@ -172,9 +172,9 @@ TEST_CASE(ensure_dir, error, not_a_dir, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(sync_dir);
-TEST_SETUP(sync_dir, setup);
-TEST_TEAR_DOWN(sync_dir, tear_down);
+TEST_SUITE(sync_dir)
+TEST_SETUP(sync_dir, setup)
+TEST_TEAR_DOWN(sync_dir, tear_down)
 
 TEST_GROUP(sync_dir, error)
 
@@ -195,9 +195,9 @@ TEST_CASE(sync_dir, error, open, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(open_file);
-TEST_SETUP(open_file, setup);
-TEST_TEAR_DOWN(open_file, tear_down);
+TEST_SUITE(open_file)
+TEST_SETUP(open_file, setup)
+TEST_TEAR_DOWN(open_file, tear_down)
 
 TEST_GROUP(open_file, error)
 
@@ -218,9 +218,9 @@ TEST_CASE(open_file, error, open, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(probe);
-TEST_SETUP(probe, setup);
-TEST_TEAR_DOWN(probe, tear_down);
+TEST_SUITE(probe)
+TEST_SETUP(probe, setup)
+TEST_TEAR_DOWN(probe, tear_down)
 
 TEST_CASE(probe, tmpfs, dir_tmpfs_params)
 {
@@ -250,7 +250,7 @@ TEST_CASE(probe, zfs_direct_io, dir_zfs_params)
     return MUNIT_OK;
 }
 
-#else
+#elif defined(RAFT_HAVE_ZFS)
 
 TEST_CASE(probe, zfs, dir_zfs_params)
 {
