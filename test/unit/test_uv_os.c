@@ -51,7 +51,7 @@ TEST(uvJoin, path, NULL, NULL, 0, NULL)
 SUITE(uvEnsureDir)
 
 /* If the directory doesn't exist, it is created. */
-TEST(uvEnsureDir, doesNotExist, dirSetup, dirTearDown, 0, NULL)
+TEST(uvEnsureDir, doesNotExist, setupDir, tearDownDir, 0, NULL)
 {
     const char *parent = data;
     uvDir dir;
@@ -62,7 +62,7 @@ TEST(uvEnsureDir, doesNotExist, dirSetup, dirTearDown, 0, NULL)
 }
 
 /* If the directory exists, nothing is needed. */
-TEST(uvEnsureDir, exists, dirSetup, dirTearDown, 0, NULL)
+TEST(uvEnsureDir, exists, setupDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
     ENSURE_DIR(dir);
@@ -132,7 +132,7 @@ TEST(uvSyncDir, noExists, NULL, NULL, 0, NULL)
 SUITE(uvOpenFile)
 
 /* If the directory doesn't exist, an error is returned. */
-TEST(uvOpenFile, noExists, dirSetup, dirTearDown, 0, NULL)
+TEST(uvOpenFile, noExists, setupDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
     OPEN_FILE_ERROR(dir, "foo", O_RDONLY, UV__NOENT,
@@ -178,7 +178,7 @@ TEST(uvOpenFile, noExists, dirSetup, dirTearDown, 0, NULL)
 
 SUITE(uvProbeIoCapabilities)
 
-TEST(uvProbeIoCapabilities, tmpfs, dirSetupTmpfs, dirTearDown, 0, NULL)
+TEST(uvProbeIoCapabilities, tmpfs, setupTmpfsDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
     if (dir == NULL) {
@@ -190,7 +190,7 @@ TEST(uvProbeIoCapabilities, tmpfs, dirSetupTmpfs, dirTearDown, 0, NULL)
 
 /* ZFS 0.8 reports that it supports direct I/O, but does not support fully
  * asynchronous kernel AIO. */
-TEST(uvProbeIoCapabilities, zfsDirectIO, dirSetupZfs, dirTearDown, 0, NULL)
+TEST(uvProbeIoCapabilities, zfsDirectIO, setupZfsDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
     size_t direct_io = 0;
@@ -206,7 +206,7 @@ TEST(uvProbeIoCapabilities, zfsDirectIO, dirSetupZfs, dirTearDown, 0, NULL)
 
 /* If the given path is not executable, the block size of the underlying file
  * system can't be determined and an error is returned. */
-TEST(uvProbeIoCapabilities, noAccess, dirSetup, dirTearDown, 0, NULL)
+TEST(uvProbeIoCapabilities, noAccess, setupDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
     test_dir_unexecutable(dir);
@@ -215,7 +215,7 @@ TEST(uvProbeIoCapabilities, noAccess, dirSetup, dirTearDown, 0, NULL)
 }
 
 /* No space is left on the target device. */
-TEST(uvProbeIoCapabilities, noSpace, dirSetupTmpfs, dirTearDown, 0, NULL)
+TEST(uvProbeIoCapabilities, noSpace, setupTmpfsDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
     if (dir == NULL) {
@@ -230,7 +230,7 @@ TEST(uvProbeIoCapabilities, noSpace, dirSetupTmpfs, dirTearDown, 0, NULL)
 #if defined(RWF_NOWAIT)
 
 /* The uvIoSetup() call fails with EAGAIN. */
-TEST(uvProbeIoCapabilities, noResources, dirSetupBtrfs, dirTearDown, 0, NULL)
+TEST(uvProbeIoCapabilities, noResources, setupBtrfsDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
     aio_context_t ctx = 0;

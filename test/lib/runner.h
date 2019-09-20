@@ -73,6 +73,11 @@ extern int _main_suites_n;
     static MunitResult test_##S##_##C(                               \
         MUNIT_UNUSED const MunitParameter params[], MUNIT_UNUSED void *data)
 
+#define SKIP_IF_NO_FIXTURE \
+    if (f == NULL) {       \
+        return MUNIT_SKIP; \
+    }
+
 /* Declare a setup function.
  *
  * Possible signatures are:

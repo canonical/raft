@@ -5,11 +5,9 @@
 
 #include "../../include/raft.h"
 #include "../../include/raft/uv.h"
-
 #include "../../src/byte.h"
 #include "../../src/uv.h"
 #include "../../src/uv_encoding.h"
-
 #include "configuration.h"
 #include "dir.h"
 #include "heap.h"
@@ -30,22 +28,26 @@
     bool initialized;                   \
     bool closed
 
-#define SETUP_UV_NO_INIT                                             \
-    {                                                                \
-        int rv_;                                                     \
-        SETUP_HEAP;                                                  \
-        SETUP_TCP;                                                   \
-        SETUP_LOOP;                                                  \
-        SETUP_DIR;                                                   \
-        SETUP_LOGGER;                                                \
-        rv_ = raft_uv_tcp_init(&f->transport, &f->loop);             \
-        munit_assert_int(rv_, ==, 0);                                \
-        rv_ = raft_uv_init(&f->io, &f->loop, f->dir, &f->transport); \
-        munit_assert_int(rv_, ==, 0);                                \
-        f->io.data = f;                                              \
-        f->uv = f->io.impl;                                          \
-        f->initialized = false;                                      \
-        f->closed = false;                                           \
+#define SETUP_UV_NO_INIT                                                 \
+    {                                                                    \
+        int rv_;                                                         \
+        SETUP_DIR;                                                       \
+        if (f->dir == NULL) { /* Desired fs not available, skip test. */ \
+            free(f);                                                     \
+            return NULL;                                                 \
+        }                                                                \
+        SETUP_HEAP;                                                      \
+        SETUP_TCP;                                                       \
+        SETUP_LOOP;                                                      \
+        SETUP_LOGGER;                                                    \
+        rv_ = raft_uv_tcp_init(&f->transport, &f->loop);                 \
+        munit_assert_int(rv_, ==, 0);                                    \
+        rv_ = raft_uv_init(&f->io, &f->loop, f->dir, &f->transport);     \
+        munit_assert_int(rv_, ==, 0);                                    \
+        f->io.data = f;                                                  \
+        f->uv = f->io.impl;                                              \
+        f->initialized = false;                                          \
+        f->closed = false;                                               \
     }
 
 #define SETUP_UV      \
@@ -53,6 +55,9 @@
     UV_INIT
 
 #define TEAR_DOWN_UV                  \
+    if (f == NULL) {                  \
+        return;                       \
+    }                                 \
     if (f->initialized) {             \
         UV_CLOSE;                     \
     }                                 \
