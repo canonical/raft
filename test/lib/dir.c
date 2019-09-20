@@ -13,6 +13,9 @@
 
 #include "dir.h"
 
+#define SEP "/"
+#define TEMPLATE "raft-test-XXXXXX"
+
 #define TEST_DIR_TEMPLATE "./tmp/%s/raft-test-XXXXXX"
 
 char *test_dir_all[] = {"tmpfs", "ext4",
@@ -80,6 +83,51 @@ MunitParameterEnum dir_no_aio_params[] = {
     {NULL, NULL},
 };
 
+/* Create a temporary directory in the given parent directory. */
+static char *create(const char *parent)
+{
+    char *dir;
+    dir = munit_malloc(strlen(parent) + strlen(SEP) + strlen(TEMPLATE) + 1);
+    sprintf(dir, "%s%s%s", parent, SEP, TEMPLATE);
+    if (mkdtemp(dir) == NULL) {
+        munit_error(strerror(errno));
+    }
+    return dir;
+}
+
+void *dir_setup(MUNIT_UNUSED const MunitParameter params[],
+                MUNIT_UNUSED void *user_data)
+{
+    return create("/tmp");
+}
+
+/* Wrapper around remove(), compatible with ntfw. */
+static int removeFn(const char *path,
+                    const struct stat *sbuf,
+                    int type,
+                    struct FTW *ftwb)
+{
+    (void)sbuf;
+    (void)type;
+    (void)ftwb;
+
+    return remove(path);
+}
+
+void dir_tear_down(void *data)
+{
+    char *dir = data;
+    int rv;
+
+    rv = chmod(dir, 0755);
+    munit_assert_int(rv, ==, 0);
+
+    rv = nftw(dir, removeFn, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS);
+    munit_assert_int(rv, ==, 0);
+
+    free(dir);
+}
+
 char *test_dir_setup(const MunitParameter params[])
 {
     const char *fs = munit_parameters_get(params, TEST_DIR_FS);
@@ -100,30 +148,9 @@ char *test_dir_setup(const MunitParameter params[])
     return dir;
 }
 
-/* Wrapper around remove(), compatible with ntfw. */
-static int removeFn(const char *path,
-                    const struct stat *sbuf,
-                    int type,
-                    struct FTW *ftwb)
-{
-    (void)sbuf;
-    (void)type;
-    (void)ftwb;
-
-    return remove(path);
-}
-
 void test_dir_tear_down(char *dir)
 {
-    int rv;
-
-    rv = chmod(dir, 0755);
-    munit_assert_int(rv, ==, 0);
-
-    rv = nftw(dir, removeFn, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS);
-    munit_assert_int(rv, ==, 0);
-
-    free(dir);
+    dir_tear_down(dir);
 }
 
 /* Join the given @dir and @filename into @path. */

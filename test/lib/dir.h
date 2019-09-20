@@ -62,6 +62,14 @@ extern MunitParameterEnum dir_aio_params[];
  * AIO support (i.e. NOWAIT does not work). */
 extern MunitParameterEnum dir_no_aio_params[];
 
+/* Create a temporary test directory.
+ *
+ * Return a pointer the path of the created directory. */
+void *dir_setup(const MunitParameter params[], void *user_data);
+
+/* Recursively a temporary directory. */
+void dir_tear_down(void *data);
+
 /* Create a temporary test directory backed by the file system specified in the
  * TEST_DIR_FS parameter. If no parameter is given the default is to use
  * tmpfs. */
