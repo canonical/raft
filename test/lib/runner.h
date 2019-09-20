@@ -58,9 +58,12 @@ extern int _main_suites_n;
  * The tests and suites attributes of the next available MunitSuite slot in the
  * _module_suites array will be set to the suite's tests and suites arrays, and
  * the prefix attribute of the slot will be set to /S. */
-#define TEST_SUITE(S)      \
+#define SUITE(S)      \
     TEST_SUITE__DECLARE(S) \
     TEST_SUITE__ADD_CHILD(main, #S, S)
+
+/* TODO: legacy */
+#define TEST_SUITE SUITE
 
 /* Declare and register a new test. */
 #define TEST(S, C, SETUP, TEAR_DOWN, OPTIONS, PARAMS)                \

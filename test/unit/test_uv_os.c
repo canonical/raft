@@ -86,7 +86,7 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-TEST_SUITE(uvJoin)
+SUITE(uvJoin)
 
 /* Join a directory path and a filename into a full path. */
 TEST(uvJoin, path, NULL, NULL, 0, NULL)
@@ -107,7 +107,7 @@ TEST(uvJoin, path, NULL, NULL, 0, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(uvEnsureDir)
+SUITE(uvEnsureDir)
 
 /* If the directory doesn't exist, it is created. */
 TEST(uvEnsureDir, does_not_exists, setup, tear_down, 0, NULL)
@@ -168,7 +168,7 @@ TEST(uvEnsureDir, not_a_dir, setup, tear_down, 0, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(uvSyncDir)
+SUITE(uvSyncDir)
 
 /* If the directory doesn't exist, an error is returned. */
 TEST(uvSyncDir, no_exists, setup, tear_down, 0, NULL)
@@ -187,7 +187,7 @@ TEST(uvSyncDir, no_exists, setup, tear_down, 0, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(uvOpenFile)
+SUITE(uvOpenFile)
 
 /* If the directory doesn't exist, an error is returned. */
 TEST(uvOpenFile, no_exists, setup, tear_down, 0, NULL)
@@ -206,7 +206,7 @@ TEST(uvOpenFile, no_exists, setup, tear_down, 0, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(uvProbeIoCapabilities)
+SUITE(uvProbeIoCapabilities)
 
 TEST(uvProbeIoCapabilities, tmpfs, setup, tear_down, 0, dir_tmpfs_params)
 {
