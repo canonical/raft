@@ -16,8 +16,8 @@ script:
   - autoreconf -i
   - ./configure --enable-example --enable-debug --enable-code-coverage --enable-sanitize
   - ./test/lib/fs.sh setup
-  - make CFLAGS=-O0
-  - make check RAFT_TEST_TMPFS=./tmp/tmpfs
+  - make check CFLAGS=-O0
+               RAFT_TEST_TMPFS=./tmp/tmpfs
                RAFT_TEST_EXT4=./tmp/ext4
                RAFT_TEST_BTRFS=./tmp/btrfs
                RAFT_TEST_XFS=./tmp/xfs

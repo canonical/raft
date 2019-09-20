@@ -38,6 +38,9 @@ TEST(uvJoin, path, NULL, NULL, 0, NULL)
         uvErrMsg errmsg;                                   \
         munit_assert_int(uvEnsureDir(DIR, errmsg), ==, 0); \
     }
+
+/* Invoke uvEnsureDir passing it the given dir and check that the given error
+ * occurs. */
 #define ENSURE_DIR_ERROR(DIR, RV, ERRMSG)                   \
     {                                                       \
         uvErrMsg errmsg;                                    \
@@ -161,6 +164,7 @@ TEST(uvOpenFile, noExists, dirSetup, dirTearDown, 0, NULL)
         }                                                                   \
     }
 
+/* Invoke uvProbeIoCapabilities and check that the given error occurs. */
 #define PROBE_IO_CAPABILITIES_ERROR(DIR, RV, ERRMSG)                        \
     {                                                                       \
         size_t direct_io_;                                                  \
