@@ -2,47 +2,10 @@
 #include <fcntl.h>
 #include <stdio.h>
 
-#include "../lib/dir.h"
-#include "../lib/runner.h"
-
 #include "../../src/uv_error.h"
 #include "../../src/uv_os.h"
-
-/******************************************************************************
- *
- * Fixture
- *
- *****************************************************************************/
-
-struct fixture
-{
-    FIXTURE_DIR;
-    char errmsg[2048];
-};
-
-static void *setup(const MunitParameter params[], void *user_data)
-{
-    struct fixture *f = munit_malloc(sizeof *f);
-    (void)user_data;
-    SETUP_DIR;
-    return f;
-}
-
-static void tear_down(void *data)
-{
-    struct fixture *f = data;
-    TEAR_DOWN_DIR;
-    free(f);
-}
-
-/******************************************************************************
- *
- * Assertions
- *
- *****************************************************************************/
-
-/* Assert that the fixture's errmsg string matches the given value. */
-#define ASSERT_ERRMSG(MSG) munit_assert_string_equal(f->errmsg, MSG)
+#include "../lib/dir.h"
+#include "../lib/runner.h"
 
 /******************************************************************************
  *
@@ -85,7 +48,7 @@ TEST(uvJoin, path, NULL, NULL, 0, NULL)
 SUITE(uvEnsureDir)
 
 /* If the directory doesn't exist, it is created. */
-TEST(uvEnsureDir, does_not_exists, dir_setup, dir_tear_down, 0, NULL)
+TEST(uvEnsureDir, doesNotExist, dirSetup, dirTearDown, 0, NULL)
 {
     const char *parent = data;
     uvDir dir;
@@ -96,7 +59,7 @@ TEST(uvEnsureDir, does_not_exists, dir_setup, dir_tear_down, 0, NULL)
 }
 
 /* If the directory exists, nothing is needed. */
-TEST(uvEnsureDir, exists, dir_setup, dir_tear_down, 0, NULL)
+TEST(uvEnsureDir, exists, dirSetup, dirTearDown, 0, NULL)
 {
     const char *dir = data;
     ENSURE_DIR(dir);
@@ -104,21 +67,21 @@ TEST(uvEnsureDir, exists, dir_setup, dir_tear_down, 0, NULL)
 }
 
 /* If the directory can't be created, an error is returned. */
-TEST(uvEnsureDir, mkdir_error, NULL, NULL, 0, NULL)
+TEST(uvEnsureDir, mkdirError, NULL, NULL, 0, NULL)
 {
     ENSURE_DIR_ERROR("/foobarbazegg", UV__ERROR, "mkdir: Permission denied");
     return MUNIT_OK;
 }
 
 /* If the directory can't be probed for existence, an error is returned. */
-TEST(uvEnsureDir, stat_error, NULL, NULL, 0, NULL)
+TEST(uvEnsureDir, statError, NULL, NULL, 0, NULL)
 {
     ENSURE_DIR_ERROR("/proc/1/root", UV__ERROR, "stat: Permission denied");
     return MUNIT_OK;
 }
 
 /* If the given path is not a directory, an error is returned. */
-TEST(uvEnsureDir, not_a_dir, NULL, NULL, 0, NULL)
+TEST(uvEnsureDir, notDir, NULL, NULL, 0, NULL)
 {
     ENSURE_DIR_ERROR("/dev/null", UV__ERROR, "Not a directory");
     return MUNIT_OK;
@@ -141,7 +104,7 @@ TEST(uvEnsureDir, not_a_dir, NULL, NULL, 0, NULL)
 SUITE(uvSyncDir)
 
 /* If the directory doesn't exist, an error is returned. */
-TEST(uvSyncDir, no_exists, NULL, NULL, 0, NULL)
+TEST(uvSyncDir, noExists, NULL, NULL, 0, NULL)
 {
     SYNC_DIR_ERROR("/abcdef", UV__ERROR, "open: No such file or directory");
     return MUNIT_OK;
@@ -166,7 +129,7 @@ TEST(uvSyncDir, no_exists, NULL, NULL, 0, NULL)
 SUITE(uvOpenFile)
 
 /* If the directory doesn't exist, an error is returned. */
-TEST(uvOpenFile, no_exists, dir_setup, dir_tear_down, 0, NULL)
+TEST(uvOpenFile, noExists, dirSetup, dirTearDown, 0, NULL)
 {
     const char *dir = data;
     OPEN_FILE_ERROR(dir, "foo", O_RDONLY, UV__NOENT,
@@ -193,6 +156,27 @@ TEST(uvOpenFile, no_exists, dir_setup, dir_tear_down, 0, NULL)
         munit_assert_int(rv_, ==, RV);                             \
     }
 
+struct fixture
+{
+    FIXTURE_DIR;
+    char errmsg[2048];
+};
+
+static void *setup(const MunitParameter params[], void *user_data)
+{
+    struct fixture *f = munit_malloc(sizeof *f);
+    (void)user_data;
+    SETUP_DIR;
+    return f;
+}
+
+static void tear_down(void *data)
+{
+    struct fixture *f = data;
+    TEAR_DOWN_DIR;
+    free(f);
+}
+
 SUITE(uvProbeIoCapabilities)
 
 TEST(uvProbeIoCapabilities, tmpfs, setup, tear_down, 0, dir_tmpfs_params)
@@ -210,7 +194,7 @@ TEST(uvProbeIoCapabilities, tmpfs, setup, tear_down, 0, dir_tmpfs_params)
 
 /* ZFS 0.8 reports that it supports direct I/O, but does not support fully
  * asynchronous kernel AIO. */
-TEST(uvProbeIoCapabilities, zfs_direct_io, setup, tear_down, 0, dir_zfs_params)
+TEST(uvProbeIoCapabilities, zfsDirectIO, setup, tear_down, 0, dir_zfs_params)
 {
     struct fixture *f = data;
     size_t direct_io;
@@ -236,9 +220,12 @@ TEST(uvProbeIoCapabilities, zfs, setup, tear_down, 0, dir_zfs_params)
 
 #endif /* RAFT_HAVE_ZFS_GE_0_8 */
 
+/* Assert that the fixture's errmsg string matches the given value. */
+#define ASSERT_ERRMSG(MSG) munit_assert_string_equal(f->errmsg, MSG)
+
 /* If the given path is not executable, the block size of the underlying file
  * system can't be determined and an error is returned. */
-TEST(uvProbeIoCapabilities, no_access, setup, tear_down, 0, NULL)
+TEST(uvProbeIoCapabilities, noAccess, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     test_dir_unexecutable(f->dir);
@@ -248,7 +235,7 @@ TEST(uvProbeIoCapabilities, no_access, setup, tear_down, 0, NULL)
 }
 
 /* No space is left on the target device. */
-TEST(uvProbeIoCapabilities, no_space, setup, tear_down, 0, NULL)
+TEST(uvProbeIoCapabilities, noSpace, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     test_dir_fill(f->dir, 0);
@@ -260,7 +247,7 @@ TEST(uvProbeIoCapabilities, no_space, setup, tear_down, 0, NULL)
 #if defined(RAFT_HAVE_BTRFS) && defined(RWF_NOWAIT)
 
 /* The uvIoSetup() call fails with EAGAIN. */
-TEST(uvProbeIoCapabilities, no_resources, setup, tear_down, 0, dir_btrfs_params)
+TEST(uvProbeIoCapabilities, noResources, setup, tear_down, 0, dir_btrfs_params)
 {
     struct fixture *f = data;
     aio_context_t ctx = 0;

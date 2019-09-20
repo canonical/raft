@@ -1,3 +1,5 @@
+#include "dir.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <ftw.h>
@@ -10,8 +12,6 @@
 #include <unistd.h>
 
 #include "../../src/uv_os.h"
-
-#include "dir.h"
 
 #define SEP "/"
 #define TEMPLATE "raft-test-XXXXXX"
@@ -84,7 +84,7 @@ MunitParameterEnum dir_no_aio_params[] = {
 };
 
 /* Create a temporary directory in the given parent directory. */
-static char *create(const char *parent)
+static char *mkTempDir(const char *parent)
 {
     char *dir;
     dir = munit_malloc(strlen(parent) + strlen(SEP) + strlen(TEMPLATE) + 1);
@@ -95,10 +95,10 @@ static char *create(const char *parent)
     return dir;
 }
 
-void *dir_setup(MUNIT_UNUSED const MunitParameter params[],
-                MUNIT_UNUSED void *user_data)
+void *dirSetup(MUNIT_UNUSED const MunitParameter params[],
+               MUNIT_UNUSED void *user_data)
 {
-    return create("/tmp");
+    return mkTempDir("/tmp");
 }
 
 /* Wrapper around remove(), compatible with ntfw. */
@@ -114,7 +114,7 @@ static int removeFn(const char *path,
     return remove(path);
 }
 
-void dir_tear_down(void *data)
+void dirTearDown(void *data)
 {
     char *dir = data;
     int rv;
@@ -150,7 +150,7 @@ char *test_dir_setup(const MunitParameter params[])
 
 void test_dir_tear_down(char *dir)
 {
-    dir_tear_down(dir);
+    dirTearDown(dir);
 }
 
 /* Join the given @dir and @filename into @path. */
