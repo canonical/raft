@@ -112,7 +112,7 @@ TEST_SETUP(ensure_dir, setup)
 TEST_TEAR_DOWN(ensure_dir, tear_down)
 
 /* If the directory doesn't exist, it is created. */
-TEST_CASE(ensure_dir, does_not_exists, NULL)
+TEST(ensure_dir, does_not_exists, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -131,10 +131,8 @@ TEST_CASE(ensure_dir, exists, NULL)
     return MUNIT_OK;
 }
 
-TEST_GROUP(ensure_dir, error)
-
 /* If the directory can't be created, an error is returned. */
-TEST_CASE(ensure_dir, error, mkdir, NULL)
+TEST_CASE(ensure_dir, error_mkdir, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -145,7 +143,7 @@ TEST_CASE(ensure_dir, error, mkdir, NULL)
 }
 
 /* If the directory can't be probed for existence, an error is returned. */
-TEST_CASE(ensure_dir, error, stat, NULL)
+TEST_CASE(ensure_dir, error_stat, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -156,7 +154,7 @@ TEST_CASE(ensure_dir, error, stat, NULL)
 }
 
 /* If the given path is not a directory, an error is returned. */
-TEST_CASE(ensure_dir, error, not_a_dir, NULL)
+TEST_CASE(ensure_dir, error_not_a_dir, NULL)
 {
     struct fixture *f = data;
     (void)params;
