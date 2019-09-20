@@ -188,33 +188,21 @@ TEST(uvProbeIoCapabilities, tmpfs, dirSetupTmpfs, dirTearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-#if defined(RAFT_HAVE_ZFS_WITH_DIRECT_IO)
-
 /* ZFS 0.8 reports that it supports direct I/O, but does not support fully
  * asynchronous kernel AIO. */
 TEST(uvProbeIoCapabilities, zfsDirectIO, dirSetupZfs, dirTearDown, 0, NULL)
 {
     const char *dir = data;
+    size_t direct_io = 0;
+#if defined(RAFT_HAVE_ZFS_WITH_DIRECT_IO)
+    direct_io = 4096;
+#endif
     if (dir == NULL) {
         return MUNIT_SKIP;
     }
-    PROBE_IO_CAPABILITIES(dir, 4096, false);
+    PROBE_IO_CAPABILITIES(dir, direct_io, false);
     return MUNIT_OK;
 }
-
-#elif defined(RAFT_HAVE_ZFS)
-
-TEST(uvProbeIoCapabilities, zfs, dirSetupZfs, dirTearDown, 0, NULL)
-{
-    const char *dir = data;
-    if (dir == NULL) {
-        return MUNIT_SKIP;
-    }
-    PROBE_IO_CAPABILITIES(dir, 0, false);
-    return MUNIT_OK;
-}
-
-#endif /* RAFT_HAVE_ZFS_GE_0_8 */
 
 /* If the given path is not executable, the block size of the underlying file
  * system can't be determined and an error is returned. */
@@ -239,7 +227,7 @@ TEST(uvProbeIoCapabilities, noSpace, dirSetupTmpfs, dirTearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-#if defined(RAFT_HAVE_BTRFS) && defined(RWF_NOWAIT)
+#if defined(RWF_NOWAIT)
 
 /* The uvIoSetup() call fails with EAGAIN. */
 TEST(uvProbeIoCapabilities, noResources, dirSetupBtrfs, dirTearDown, 0, NULL)
@@ -256,4 +244,4 @@ TEST(uvProbeIoCapabilities, noResources, dirSetupBtrfs, dirTearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-#endif /* RAFT_HAVE_BTRFS && RWF_NOWAIT */
+#endif /* RWF_NOWAIT */
