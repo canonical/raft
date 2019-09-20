@@ -37,30 +37,6 @@ static void tear_down(void *data)
 
 /******************************************************************************
  *
- * Helper macros
- *
- *****************************************************************************/
-
-/* Open a file the fixture's tmpdir. */
-#define OPEN_FILE_RV(...) uvOpenFile(f->dir, __VA_ARGS__, f->errmsg)
-#define OPEN_FILE_ERROR(RV, ...) \
-    munit_assert_int(OPEN_FILE_RV(__VA_ARGS__), ==, RV)
-
-/* Invoke uvProbeIoCapabilities against the fixture's tmpdir. */
-#define PROBE_IO_CAPABILITIES_RV(...) \
-    uvProbeIoCapabilities(f->dir, __VA_ARGS__, f->errmsg)
-#define PROBE_IO_CAPABILITIES(DIRECT_IO, ASYNC_IO) \
-    munit_assert_int(PROBE_IO_CAPABILITIES_RV(DIRECT_IO, ASYNC_IO), ==, 0)
-#define PROBE_IO_CAPABILITIES_ERROR(RV)                            \
-    {                                                              \
-        size_t direct_io;                                          \
-        bool async_io;                                             \
-        int rv_ = PROBE_IO_CAPABILITIES_RV(&direct_io, &async_io); \
-        munit_assert_int(rv_, ==, RV);                             \
-    }
-
-/******************************************************************************
- *
  * Assertions
  *
  *****************************************************************************/
@@ -93,56 +69,58 @@ TEST(uvJoin, path, NULL, NULL, 0, NULL)
  *
  *****************************************************************************/
 
+/* Invoke uvEnsureDir passing it the given dir. */
+#define ENSURE_DIR(DIR)                                    \
+    {                                                      \
+        uvErrMsg errmsg;                                   \
+        munit_assert_int(uvEnsureDir(DIR, errmsg), ==, 0); \
+    }
+#define ENSURE_DIR_ERROR(DIR, RV, ERRMSG)                   \
+    {                                                       \
+        uvErrMsg errmsg;                                    \
+        munit_assert_int(uvEnsureDir(DIR, errmsg), ==, RV); \
+        munit_assert_string_equal(errmsg, ERRMSG);          \
+    }
+
 SUITE(uvEnsureDir)
 
-/* Invoke uvEnsureDir passing it the given dir. */
-#define ENSURE_DIR_RV(DIR) uvEnsureDir(DIR, f->errmsg)
-#define ENSURE_DIR(DIR) munit_assert_int(ENSURE_DIR_RV(DIR), ==, 0)
-#define ENSURE_DIR_ERROR(DIR, RV) munit_assert_int(ENSURE_DIR_RV(DIR), ==, RV)
-
 /* If the directory doesn't exist, it is created. */
-TEST(uvEnsureDir, does_not_exists, setup, tear_down, 0, NULL)
+TEST(uvEnsureDir, does_not_exists, dir_setup, dir_tear_down, 0, NULL)
 {
-    struct fixture *f = data;
+    const char *parent = data;
     uvDir dir;
-    sprintf(dir, "%s/sub", f->dir);
+    sprintf(dir, "%s/sub", parent);
     ENSURE_DIR(dir);
     munit_assert_true(test_dir_exists(dir));
     return MUNIT_OK;
 }
 
 /* If the directory exists, nothing is needed. */
-TEST(uvEnsureDir, exists, setup, tear_down, 0, NULL)
+TEST(uvEnsureDir, exists, dir_setup, dir_tear_down, 0, NULL)
 {
-    struct fixture *f = data;
-    ENSURE_DIR(f->dir);
+    const char *dir = data;
+    ENSURE_DIR(dir);
     return MUNIT_OK;
 }
 
 /* If the directory can't be created, an error is returned. */
-TEST(uvEnsureDir, mkdir_error, setup, tear_down, 0, NULL)
+TEST(uvEnsureDir, mkdir_error, NULL, NULL, 0, NULL)
 {
-    struct fixture *f = data;
-    ENSURE_DIR_ERROR("/foobarbazegg", UV__ERROR);
-    ASSERT_ERRMSG("mkdir: Permission denied");
+    ENSURE_DIR_ERROR("/foobarbazegg", UV__ERROR, "mkdir: Permission denied");
     return MUNIT_OK;
 }
 
 /* If the directory can't be probed for existence, an error is returned. */
-TEST(uvEnsureDir, stat_error, setup, tear_down, 0, NULL)
+TEST(uvEnsureDir, stat_error, NULL, NULL, 0, NULL)
 {
-    struct fixture *f = data;
-    ENSURE_DIR_ERROR("/proc/1/root", UV__ERROR);
-    ASSERT_ERRMSG("stat: Permission denied");
+    ENSURE_DIR_ERROR("/proc/1/root", UV__ERROR, "stat: Permission denied");
     return MUNIT_OK;
 }
 
 /* If the given path is not a directory, an error is returned. */
-TEST(uvEnsureDir, not_a_dir, setup, tear_down, 0, NULL)
+TEST(uvEnsureDir, not_a_dir, NULL, NULL, 0, NULL)
 {
-    struct fixture *f = data;
-    ENSURE_DIR_ERROR("/dev/null", UV__ERROR);
-    ASSERT_ERRMSG("Not a directory");
+    ENSURE_DIR_ERROR("/dev/null", UV__ERROR, "Not a directory");
     return MUNIT_OK;
 }
 
@@ -152,19 +130,20 @@ TEST(uvEnsureDir, not_a_dir, setup, tear_down, 0, NULL)
  *
  *****************************************************************************/
 
+/* Invoke uvSyncDir passing it the given dir. */
+#define SYNC_DIR_ERROR(DIR, RV, ERRMSG)                   \
+    {                                                     \
+        uvErrMsg errmsg;                                  \
+        munit_assert_int(uvSyncDir(DIR, errmsg), ==, RV); \
+        munit_assert_string_equal(errmsg, ERRMSG);        \
+    }
+
 SUITE(uvSyncDir)
 
-/* Invoke uvSyncDir passing it the given dir. */
-#define SYNC_DIR_RV(DIR) uvSyncDir(DIR, f->errmsg)
-#define SYNC_DIR(DIR) munit_assert_int(SYNC_DIR_RV(DIR), ==, 0)
-#define SYNC_DIR_ERROR(DIR, RV) munit_assert_int(SYNC_DIR_RV(DIR), ==, RV)
-
 /* If the directory doesn't exist, an error is returned. */
-TEST(uvSyncDir, no_exists, setup, tear_down, 0, NULL)
+TEST(uvSyncDir, no_exists, NULL, NULL, 0, NULL)
 {
-    struct fixture *f = data;
-    SYNC_DIR_ERROR("/foobarbazegg", UV__ERROR);
-    ASSERT_ERRMSG("open: No such file or directory");
+    SYNC_DIR_ERROR("/abcdef", UV__ERROR, "open: No such file or directory");
     return MUNIT_OK;
 }
 
@@ -174,15 +153,24 @@ TEST(uvSyncDir, no_exists, setup, tear_down, 0, NULL)
  *
  *****************************************************************************/
 
+/* Open a file the fixture's tmpdir. */
+#define OPEN_FILE_ERROR(DIR, FILENAME, FLAGS, RV, ERRMSG)        \
+    {                                                            \
+        int fd;                                                  \
+        uvErrMsg errmsg;                                         \
+        int rv_ = uvOpenFile(DIR, FILENAME, FLAGS, &fd, errmsg); \
+        munit_assert_int(rv_, ==, RV);                           \
+        munit_assert_string_equal(errmsg, ERRMSG);               \
+    }
+
 SUITE(uvOpenFile)
 
 /* If the directory doesn't exist, an error is returned. */
-TEST(uvOpenFile, no_exists, setup, tear_down, 0, NULL)
+TEST(uvOpenFile, no_exists, dir_setup, dir_tear_down, 0, NULL)
 {
-    struct fixture *f = data;
-    int fd;
-    OPEN_FILE_ERROR(UV__NOENT, "foo", O_RDONLY, &fd);
-    ASSERT_ERRMSG("open: No such file or directory");
+    const char *dir = data;
+    OPEN_FILE_ERROR(dir, "foo", O_RDONLY, UV__NOENT,
+                    "open: No such file or directory");
     return MUNIT_OK;
 }
 
@@ -191,6 +179,19 @@ TEST(uvOpenFile, no_exists, setup, tear_down, 0, NULL)
  * uvProbeIoCapabilities
  *
  *****************************************************************************/
+
+/* Invoke uvProbeIoCapabilities against the fixture's tmpdir. */
+#define PROBE_IO_CAPABILITIES_RV(...) \
+    uvProbeIoCapabilities(f->dir, __VA_ARGS__, f->errmsg)
+#define PROBE_IO_CAPABILITIES(DIRECT_IO, ASYNC_IO) \
+    munit_assert_int(PROBE_IO_CAPABILITIES_RV(DIRECT_IO, ASYNC_IO), ==, 0)
+#define PROBE_IO_CAPABILITIES_ERROR(RV)                            \
+    {                                                              \
+        size_t direct_io;                                          \
+        bool async_io;                                             \
+        int rv_ = PROBE_IO_CAPABILITIES_RV(&direct_io, &async_io); \
+        munit_assert_int(rv_, ==, RV);                             \
+    }
 
 SUITE(uvProbeIoCapabilities)
 
@@ -222,7 +223,7 @@ TEST(uvProbeIoCapabilities, zfs_direct_io, setup, tear_down, 0, dir_zfs_params)
 
 #elif defined(RAFT_HAVE_ZFS)
 
-TEST_CASE(uvProbeIoCapabilities, zfs, setup, tear_down, 0, dir_zfs_params)
+TEST(uvProbeIoCapabilities, zfs, setup, tear_down, 0, dir_zfs_params)
 {
     struct fixture *f = data;
     size_t direct_io;
