@@ -36,8 +36,14 @@ libraft_la_SOURCES = \
   src/state.c \
   src/tick.c
 
-check_PROGRAMS = test/unit/core test/integration/core fuzzy-test
-TESTS = $(check_PROGRAMS)
+check_PROGRAMS = \
+  test/unit/core \
+  test/integration/core \
+  fuzzy-test
+TESTS = \
+  test/unit/core \
+  test/integration/core \
+  fuzzy-test
 
 check_LTLIBRARIES = libtest.la
 
@@ -116,7 +122,9 @@ libraft_la_LDFLAGS += $(UV_LIBS)
 
 raftinclude_HEADERS += include/raft/uv.h
 
-check_PROGRAMS += test/unit/uv
+check_PROGRAMS += \
+  test/unit/uv \
+  test/benchmark/uv
 
 libtest_la_SOURCES += \
   test/lib/dir.c \
@@ -150,6 +158,11 @@ test_unit_uv_SOURCES += \
   test/unit/test_uv.c
 test_unit_uv_LDADD = libtest.la
 test_unit_uv_LDFLAGS = $(UV_LIBS)
+
+test_benchmark_uv_SOURCES = \
+  test/benchmark/main_uv.c
+test_benchmark_uv_LDADD = libtest.la
+test_benchmark_uv_LDFLAGS = $(UV_LIBS)
 
 AM_CFLAGS += $(UV_CFLAGS)
 
