@@ -125,6 +125,7 @@ raftinclude_HEADERS += include/raft/uv.h
 check_PROGRAMS += \
   test/unit/uv \
   test/benchmark/uv
+TESTS += test/unit/uv
 
 libtest_la_SOURCES += \
   test/lib/dir.c \

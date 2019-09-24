@@ -54,11 +54,13 @@ static void tearDownFile(void *data)
     TEAR_DOWN_DIR;
 }
 
-char *appendN[] = {"1", "16", "256", "1024", NULL};
+static char *appendN[] = {"1", "16", "256", "1024", NULL};
+
+static char *dirFs[] = {"ext4", "btrfs", "xfs", "zfs", NULL};
 
 static MunitParameterEnum appendParams[] = {
     {"n", appendN},
-    {TEST_DIR_FS, test_dir_all},
+    {TEST_DIR_FS, dirFs},
     {NULL, NULL},
 };
 
