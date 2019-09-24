@@ -19,15 +19,9 @@
 #define TEST_DIR_TEMPLATE "./tmp/%s/raft-test-XXXXXX"
 
 char *test_dir_all[] = {"tmpfs", "ext4",
-#if defined(RAFT_HAVE_BTRFS)
                         "btrfs",
-#endif
-#if defined(RAFT_HAVE_XFS)
                         "xfs",
-#endif
-#if defined(RAFT_HAVE_ZFS)
                         "zfs",
-#endif
                         NULL};
 
 char *test_dir_tmpfs[] = {"tmpfs", NULL};
@@ -37,20 +31,13 @@ char *test_dir_btrfs[] = {"btrfs", NULL};
 char *test_dir_zfs[] = {"zfs", NULL};
 
 char *test_dir_aio[] = {
-#if defined(RAFT_HAVE_BTRFS)
     "btrfs",
-#endif
     "ext4",
-#if defined(RAFT_HAVE_XFS)
     "xfs",
-#endif
     NULL};
 
 char *test_dir_no_aio[] = {"tmpfs",
-#if defined(RAFT_HAVE_ZFS)
-
                            "zfs",
-#endif
                            NULL};
 
 MunitParameterEnum dir_tmpfs_params[] = {
