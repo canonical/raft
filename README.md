@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/canonical/raft.png)](https://travis-ci.org/canonical/raft) [![codecov](https://codecov.io/gh/CanonicalLtd/raft/branch/master/graph/badge.svg)](https://codecov.io/gh/canonical/raft)
+[![Build Status](https://travis-ci.org/canonical/raft.png)](https://travis-ci.org/canonical/raft) [![codecov](https://codecov.io/gh/canonical/raft/branch/master/graph/badge.svg)](https://codecov.io/gh/canonical/raft)
 
 Fully asynchronous C implementation of the Raft consensus protocol.
 
