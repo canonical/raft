@@ -168,14 +168,10 @@ bin_PROGRAMS = \
  example/cluster
 
 example_server_SOURCES = example/server.c
-example_server_CFLAGS = $(AM_CFLAGS)
-example_server_CFLAGS += -I$(top_srcdir)/example
 example_server_LDADD = libraft.la
 example_server_LDFLAGS = $(UV_LIBS)
 
 example_cluster_SOURCES = example/cluster.c
-example_cluster_CFLAGS = $(AM_CFLAGS)
-example_cluster_CFLAGS += -I$(top_srcdir)/example
 example_cluster_LDADD = libraft.la
 example_cluster_LDFLAGS = $(UV_LIBS)
 
