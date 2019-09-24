@@ -19,8 +19,8 @@
 #define TEST_DIR_FS "dir-fs"
 
 #define FIXTURE_DIR char *dir
-#define SETUP_DIR f->dir = test_dir_setup(params)
-#define TEAR_DOWN_DIR test_dir_tear_down(f->dir)
+#define SETUP_DIR f->dir = setupDir(params, user_data)
+#define TEAR_DOWN_DIR tearDownDir(f->dir)
 
 /* List of all supported file system types. */
 extern char *test_dir_all[];
@@ -61,6 +61,44 @@ extern MunitParameterEnum dir_aio_params[];
 /* Contain a single TEST_DIR_FS parameter set to all file systems without proper
  * AIO support (i.e. NOWAIT does not work). */
 extern MunitParameterEnum dir_no_aio_params[];
+
+/* Create a temporary test directory.
+ *
+ * Return a pointer the path of the created directory. */
+void *setupDir(const MunitParameter params[], void *user_data);
+
+/* Create a temporary test directory backed by tmpfs.
+ *
+ * Return a pointer the path of the created directory, or NULL if no tmpfs file
+ * system is available. */
+void *setupTmpfsDir(const MunitParameter params[], void *user_data);
+
+/* Create a temporary test directory backed by ext4.
+ *
+ * Return a pointer the path of the created directory, or NULL if no ext4 file
+ * system is available. */
+void *setupExt4Dir(const MunitParameter params[], void *user_data);
+
+/* Create a temporary test directory backed by btrfs.
+ *
+ * Return a pointer the path of the created directory, or NULL if no btrfs file
+ * system is available. */
+void *setupBtrfsDir(const MunitParameter params[], void *user_data);
+
+/* Create a temporary test directory backed by zfs.
+ *
+ * Return a pointer the path of the created directory, or NULL if no zfs file
+ * system is available. */
+void *setupZfsDir(const MunitParameter params[], void *user_data);
+
+/* Create a temporary test directory backed by xfs.
+ *
+ * Return a pointer the path of the created directory, or NULL if no xfs file
+ * system is available. */
+void *setupXfsDir(const MunitParameter params[], void *user_data);
+
+/* Recursively remove a temporary directory. */
+void tearDownDir(void *data);
 
 /* Create a temporary test directory backed by the file system specified in the
  * TEST_DIR_FS parameter. If no parameter is given the default is to use
@@ -128,7 +166,8 @@ void test_dir_unreadable_file(const char *dir, const char *filename);
 /* Check if the given directory has the given file. */
 bool test_dir_has_file(const char *dir, const char *filename);
 
-/* Fill the underlying file system of the given dir, leaving only n bytes free. */
+/* Fill the underlying file system of the given dir, leaving only n bytes free.
+ */
 void test_dir_fill(const char *dir, const size_t n);
 
 /* Fill the AIO subsystem resources by allocating a lot of events to the given

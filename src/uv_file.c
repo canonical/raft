@@ -1,14 +1,14 @@
+#include "uv_file.h"
+
 #include <libgen.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/eventfd.h>
 #include <sys/vfs.h>
 #include <unistd.h>
-
 #include <uv.h>
 
 #include "assert.h"
-#include "uv_file.h"
 
 /* State codes */
 enum { CREATING = 1, READY, ERRORED, CLOSED };
@@ -332,7 +332,7 @@ static void createAfterWorkCb(uv_work_t *work, int status)
     /* If we were closed, abort here. */
     if (f->closing) {
         uvTryUnlinkFile(req->dir, req->filename);
-        uvErrMsgPrintf(errmsg, "canceled");
+        uvErrMsgPrintf(req->errmsg, "canceled");
         req->status = UV__CANCELED;
         goto out;
     }
@@ -628,6 +628,11 @@ err:
     assert(rv != 0);
     QUEUE_REMOVE(&req->queue);
     return rv;
+}
+
+bool uvFileIsOpen(struct uvFile *f)
+{
+    return !f->closing;
 }
 
 void uvFileClose(struct uvFile *f, uvFileCloseCb cb)

@@ -6,6 +6,7 @@ addons:
     - lcov
     - linux-libc-dev
     - libuv1-dev
+    - btrfs-progs
     - xfsprogs
     - zfsutils-linux
 compiler:
@@ -15,9 +16,13 @@ script:
   - autoreconf -i
   - ./configure --enable-example --enable-debug --enable-code-coverage --enable-sanitize
   - ./test/lib/fs.sh setup
-  - CFLAGS=-O0
-  - make
-  - make check || cat ./test-suite.log
+  - make check CFLAGS=-O0
+               RAFT_TEST_TMPFS=./tmp/tmpfs
+               RAFT_TEST_EXT4=./tmp/ext4
+               RAFT_TEST_BTRFS=./tmp/btrfs
+               RAFT_TEST_XFS=./tmp/xfs
+               RAFT_TEST_ZFS=./tmp/zfs
+    || (cat ./test-suite.log && false)
   - if [ $TRAVIS_COMPILER = gcc ]; then make code-coverage-capture; fi
   - ./test/lib/fs.sh teardown
 after_success:

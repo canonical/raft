@@ -1,9 +1,7 @@
+#include "../../include/raft/uv.h"
+#include "../../src/byte.h"
 #include "../lib/runner.h"
 #include "../lib/uv.h"
-
-#include "../../include/raft/uv.h"
-
-#include "../../src/byte.h"
 
 TEST_MODULE(uv_init)
 
@@ -267,10 +265,10 @@ TEST_CASE(metadata, error, bad_version, NULL)
 }
 
 /* No space is left for writing the initial metadata file. */
-TEST_CASE(metadata, error, no_space, NULL)
+TEST(metadata, noSpace, setup, tear_down, 0, dir_tmpfs_params)
 {
     struct fixture *f = data;
-    (void)params;
+    SKIP_IF_NO_FIXTURE;
     test_dir_fill(f->dir, 4);
     INIT_ERROR(RAFT_IOERR);
     return MUNIT_OK;

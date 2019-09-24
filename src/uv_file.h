@@ -63,6 +63,9 @@ int uvFileWrite(struct uvFile *f,
                 uvFileWriteCb cb,
                 char *errmsg);
 
+/* Return true if the given file is open. */
+bool uvFileIsOpen(struct uvFile *f);
+
 /* Close the given file and release all associated resources. There must be no
  * request in progress. */
 void uvFileClose(struct uvFile *f, uvFileCloseCb cb);

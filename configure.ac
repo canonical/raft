@@ -48,7 +48,7 @@ AC_CHECK_PROG(have_btrfs, btrfs, yes)
 AS_IF([test x"$have_btrfs" = x"yes"], [AC_DEFINE(RAFT_HAVE_BTRFS)], [])
 
 # Check if xfs is available (for enabling xfs-related tests).
-AC_CHECK_PROG(have_xfs, xfs, yes)
+AC_CHECK_PROG(have_xfs, mkfs.xfs, yes)
 AS_IF([test x"$have_xfs" = x"yes"], [AC_DEFINE(RAFT_HAVE_XFS)], [])
 
 # Check if zfs is available (for enabling zfs-related tests).

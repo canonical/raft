@@ -1,3 +1,5 @@
+#include "dir.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <ftw.h>
@@ -11,7 +13,8 @@
 
 #include "../../src/uv_os.h"
 
-#include "dir.h"
+#define SEP "/"
+#define TEMPLATE "raft-test-XXXXXX"
 
 #define TEST_DIR_TEMPLATE "./tmp/%s/raft-test-XXXXXX"
 
@@ -80,42 +83,89 @@ MunitParameterEnum dir_no_aio_params[] = {
     {NULL, NULL},
 };
 
-char *test_dir_setup(const MunitParameter params[])
+/* Create a temporary directory in the given parent directory. */
+static char *mkTempDir(const char *parent)
 {
-    const char *fs = munit_parameters_get(params, TEST_DIR_FS);
     char *dir;
-
-    if (fs == NULL) {
-        fs = "tmpfs";
+    if (parent == NULL) {
+        return NULL;
     }
-
-    dir = munit_malloc(strlen(TEST_DIR_TEMPLATE) + strlen(fs) + 1);
-
-    sprintf(dir, TEST_DIR_TEMPLATE, fs);
-
+    dir = munit_malloc(strlen(parent) + strlen(SEP) + strlen(TEMPLATE) + 1);
+    sprintf(dir, "%s%s%s", parent, SEP, TEMPLATE);
     if (mkdtemp(dir) == NULL) {
         munit_error(strerror(errno));
     }
-
     return dir;
+}
+
+void *setupDir(MUNIT_UNUSED const MunitParameter params[],
+               MUNIT_UNUSED void *user_data)
+{
+    const char *fs = munit_parameters_get(params, TEST_DIR_FS);
+    if (fs == NULL) {
+        return mkTempDir("/tmp");
+    } else if (strcmp(fs, "tmpfs") == 0) {
+        return setupTmpfsDir(params, user_data);
+    } else if (strcmp(fs, "ext4") == 0) {
+        return setupExt4Dir(params, user_data);
+    } else if (strcmp(fs, "btrfs") == 0) {
+        return setupBtrfsDir(params, user_data);
+    } else if (strcmp(fs, "zfs") == 0) {
+        return setupZfsDir(params, user_data);
+    } else if (strcmp(fs, "xfs") == 0) {
+        return setupXfsDir(params, user_data);
+    }
+    munit_errorf("Unsupported file system %s", fs);
+    return NULL;
+}
+
+void *setupTmpfsDir(MUNIT_UNUSED const MunitParameter params[],
+                    MUNIT_UNUSED void *user_data)
+{
+    return mkTempDir(getenv("RAFT_TEST_TMPFS"));
+}
+
+void *setupExt4Dir(MUNIT_UNUSED const MunitParameter params[],
+                   MUNIT_UNUSED void *user_data)
+{
+    return mkTempDir(getenv("RAFT_TEST_EXT4"));
+}
+
+void *setupBtrfsDir(MUNIT_UNUSED const MunitParameter params[],
+                    MUNIT_UNUSED void *user_data)
+{
+    return mkTempDir(getenv("RAFT_TEST_BTRFS"));
+}
+
+void *setupZfsDir(MUNIT_UNUSED const MunitParameter params[],
+                  MUNIT_UNUSED void *user_data)
+{
+    return mkTempDir(getenv("RAFT_TEST_ZFS"));
+}
+
+void *setupXfsDir(MUNIT_UNUSED const MunitParameter params[],
+                  MUNIT_UNUSED void *user_data)
+{
+    return mkTempDir(getenv("RAFT_TEST_XFS"));
 }
 
 /* Wrapper around remove(), compatible with ntfw. */
 static int removeFn(const char *path,
-                    const struct stat *sbuf,
-                    int type,
-                    struct FTW *ftwb)
+                    MUNIT_UNUSED const struct stat *sbuf,
+                    MUNIT_UNUSED int type,
+                    MUNIT_UNUSED struct FTW *ftwb)
 {
-    (void)sbuf;
-    (void)type;
-    (void)ftwb;
-
     return remove(path);
 }
 
-void test_dir_tear_down(char *dir)
+void tearDownDir(void *data)
 {
+    char *dir = data;
     int rv;
+
+    if (dir == NULL) {
+        return;
+    }
 
     rv = chmod(dir, 0755);
     munit_assert_int(rv, ==, 0);
@@ -124,6 +174,16 @@ void test_dir_tear_down(char *dir)
     munit_assert_int(rv, ==, 0);
 
     free(dir);
+}
+
+char *test_dir_setup(const MunitParameter params[])
+{
+    return setupDir(params, NULL);
+}
+
+void test_dir_tear_down(char *dir)
+{
+    tearDownDir(dir);
 }
 
 /* Join the given @dir and @filename into @path. */

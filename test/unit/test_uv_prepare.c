@@ -1,7 +1,6 @@
-#include "../lib/uv.h"
-#include "../lib/runner.h"
-
 #include "../../src/uv.h"
+#include "../lib/runner.h"
+#include "../lib/uv.h"
 
 TEST_MODULE(uv_prepare)
 
@@ -37,6 +36,9 @@ static void *setup(const MunitParameter params[], void *user_data)
 static void tear_down(void *data)
 {
     struct fixture *f = data;
+    if (f == NULL) {
+        return;
+    }
     if (f->file != NULL) {
         uvFileClose(f->file, (uvFileCloseCb)raft_free);
     }
@@ -71,7 +73,7 @@ static void prepareCb(struct uvPrepare *req,
     {                                            \
         int i;                                   \
         for (i = 0; i < 5; i++) {                \
-            LOOP_RUN(1);            \
+            LOOP_RUN(1);                         \
             if (f->invoked == 1) {               \
                 break;                           \
             }                                    \
@@ -129,7 +131,8 @@ TEST_SUITE(error)
 TEST_SETUP(error, setup)
 TEST_TEAR_DOWN(error, tear_down)
 
-/* The creation of the first segment fails because uvIoSetup() returns EAGAIN. */
+/* The creation of the first segment fails because uvIoSetup() returns EAGAIN.
+ */
 TEST_CASE(error, no_resources, NULL)
 {
     struct fixture *f = data;
@@ -143,11 +146,12 @@ TEST_CASE(error, no_resources, NULL)
 }
 
 /* The creation of the first segment fails because there's no space. */
-TEST_CASE(error, no_space, NULL)
+TEST(error, no_space, setup, tear_down, 0, dir_tmpfs_params)
 {
     struct fixture *f = data;
-    struct uv *uv = f->io.impl;
-    (void)params;
+    struct uv *uv;
+    SKIP_IF_NO_FIXTURE;
+    uv = f->io.impl;
     uv->n_blocks = 32768;
     PREPARE;
     WAIT_CB(RAFT_IOERR);
