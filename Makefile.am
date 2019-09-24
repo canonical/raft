@@ -160,7 +160,10 @@ test_unit_uv_LDADD = libtest.la
 test_unit_uv_LDFLAGS = $(UV_LIBS)
 
 test_benchmark_uv_SOURCES = \
-  test/benchmark/main_uv.c
+  src/heap.c \
+  src/uv_os.c \
+  test/benchmark/main_uv.c \
+  test/benchmark/test_uv_disk.c
 test_benchmark_uv_LDADD = libtest.la
 test_benchmark_uv_LDFLAGS = $(UV_LIBS)
 
