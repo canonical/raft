@@ -122,31 +122,31 @@ void *setupDir(MUNIT_UNUSED const MunitParameter params[],
 void *setupTmpfsDir(MUNIT_UNUSED const MunitParameter params[],
                     MUNIT_UNUSED void *user_data)
 {
-    return mkTempDir(getenv("RAFT_TEST_TMPFS"));
+    return mkTempDir(getenv("RAFT_TMP_TMPFS"));
 }
 
 void *setupExt4Dir(MUNIT_UNUSED const MunitParameter params[],
                    MUNIT_UNUSED void *user_data)
 {
-    return mkTempDir(getenv("RAFT_TEST_EXT4"));
+    return mkTempDir(getenv("RAFT_TMP_EXT4"));
 }
 
 void *setupBtrfsDir(MUNIT_UNUSED const MunitParameter params[],
                     MUNIT_UNUSED void *user_data)
 {
-    return mkTempDir(getenv("RAFT_TEST_BTRFS"));
+    return mkTempDir(getenv("RAFT_TMP_BTRFS"));
 }
 
 void *setupZfsDir(MUNIT_UNUSED const MunitParameter params[],
                   MUNIT_UNUSED void *user_data)
 {
-    return mkTempDir(getenv("RAFT_TEST_ZFS"));
+    return mkTempDir(getenv("RAFT_TMP_ZFS"));
 }
 
 void *setupXfsDir(MUNIT_UNUSED const MunitParameter params[],
                   MUNIT_UNUSED void *user_data)
 {
-    return mkTempDir(getenv("RAFT_TEST_XFS"));
+    return mkTempDir(getenv("RAFT_TMP_XFS"));
 }
 
 /* Wrapper around remove(), compatible with ntfw. */

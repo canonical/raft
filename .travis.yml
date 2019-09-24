@@ -17,11 +17,11 @@ script:
   - ./configure --enable-example --enable-debug --enable-code-coverage --enable-sanitize
   - ./test/lib/fs.sh setup
   - make check CFLAGS=-O0
-               RAFT_TEST_TMPFS=./tmp/tmpfs
-               RAFT_TEST_EXT4=./tmp/ext4
-               RAFT_TEST_BTRFS=./tmp/btrfs
-               RAFT_TEST_XFS=./tmp/xfs
-               RAFT_TEST_ZFS=./tmp/zfs
+               RAFT_TMP_TMPFS=./tmp/tmpfs
+               RAFT_TMP_EXT4=./tmp/ext4
+               RAFT_TMP_BTRFS=./tmp/btrfs
+               RAFT_TMP_XFS=./tmp/xfs
+               RAFT_TMP_ZFS=./tmp/zfs
     || (cat ./test-suite.log && false)
   - if [ $TRAVIS_COMPILER = gcc ]; then make code-coverage-capture; fi
   - ./test/lib/fs.sh teardown
