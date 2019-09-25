@@ -43,19 +43,10 @@ AX_CODE_COVERAGE
 # Checks for header files.
 AC_CHECK_HEADERS([stdlib.h string.h stdio.h assert.h unistd.h])
 
-# Check if btrfs is available (for enabling btrfs-related tests).
-AC_CHECK_PROG(have_btrfs, btrfs, yes)
-AS_IF([test x"$have_btrfs" = x"yes"], [AC_DEFINE(RAFT_HAVE_BTRFS)], [])
-
-# Check if xfs is available (for enabling xfs-related tests).
-AC_CHECK_PROG(have_xfs, mkfs.xfs, yes)
-AS_IF([test x"$have_xfs" = x"yes"], [AC_DEFINE(RAFT_HAVE_XFS)], [])
-
 # Check if zfs is available (for enabling zfs-related tests).
 AC_CHECK_PROG(have_zfs, zfs, yes)
 AS_IF([test x"$have_zfs" = x"yes"],
-   [AC_DEFINE(RAFT_HAVE_ZFS)
-    AX_COMPARE_VERSION($(zfs version | cut -f 2 -d - | head -1), [ge], [0.8.0],
+   [AX_COMPARE_VERSION($(zfs version | cut -f 2 -d - | head -1), [ge], [0.8.0],
        [AC_DEFINE(RAFT_HAVE_ZFS_WITH_DIRECT_IO)], [])
    ],
    [])

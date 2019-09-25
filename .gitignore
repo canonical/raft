@@ -23,6 +23,7 @@ stamp-h1
 test/unit/core
 test/unit/uv
 test/integration/core
+test/benchmark/uv
 test/*/*.log
 test/*/*.trs
 fuzzy-test*

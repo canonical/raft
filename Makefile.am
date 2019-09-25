@@ -36,8 +36,14 @@ libraft_la_SOURCES = \
   src/state.c \
   src/tick.c
 
-check_PROGRAMS = test/unit/core test/integration/core fuzzy-test
-TESTS = $(check_PROGRAMS)
+check_PROGRAMS = \
+  test/unit/core \
+  test/integration/core \
+  fuzzy-test
+TESTS = \
+  test/unit/core \
+  test/integration/core \
+  fuzzy-test
 
 check_LTLIBRARIES = libtest.la
 
@@ -116,7 +122,10 @@ libraft_la_LDFLAGS += $(UV_LIBS)
 
 raftinclude_HEADERS += include/raft/uv.h
 
-check_PROGRAMS += test/unit/uv
+check_PROGRAMS += \
+  test/unit/uv \
+  test/benchmark/uv
+TESTS += test/unit/uv
 
 libtest_la_SOURCES += \
   test/lib/dir.c \
@@ -151,6 +160,14 @@ test_unit_uv_SOURCES += \
 test_unit_uv_LDADD = libtest.la
 test_unit_uv_LDFLAGS = $(UV_LIBS)
 
+test_benchmark_uv_SOURCES = \
+  src/heap.c \
+  src/uv_os.c \
+  test/benchmark/main_uv.c \
+  test/benchmark/test_uv_disk.c
+test_benchmark_uv_LDADD = libtest.la
+test_benchmark_uv_LDFLAGS = $(UV_LIBS)
+
 AM_CFLAGS += $(UV_CFLAGS)
 
 endif # UV_ENABLED
@@ -168,14 +185,10 @@ bin_PROGRAMS = \
  example/cluster
 
 example_server_SOURCES = example/server.c
-example_server_CFLAGS = $(AM_CFLAGS)
-example_server_CFLAGS += -I$(top_srcdir)/example
 example_server_LDADD = libraft.la
 example_server_LDFLAGS = $(UV_LIBS)
 
 example_cluster_SOURCES = example/cluster.c
-example_cluster_CFLAGS = $(AM_CFLAGS)
-example_cluster_CFLAGS += -I$(top_srcdir)/example
 example_cluster_LDADD = libraft.la
 example_cluster_LDFLAGS = $(UV_LIBS)
 
