@@ -64,7 +64,7 @@ static int uvInit(struct raft_io *io,
     }
     uv->direct_io = direct_io != 0;
     uv->block_size = direct_io != 0 ? direct_io : 4096;
-    uvDebugf(uv, "I/O: direct %d, block %d", uv->direct_io, uv->block_size);
+    uvDebugf(uv, "I/O: direct %d, async %d, block %ld\n", uv->direct_io, uv->async_io, uv->block_size);
 
     /* We expect the maximum segment size to be a multiple of the block size */
     assert(UV__MAX_SEGMENT_SIZE % uv->block_size == 0);

@@ -7,6 +7,7 @@
 #include "../lib/runner.h"
 
 #define BLOCK_SIZE_ 4096
+#define BUF_SIZE BLOCK_SIZE_
 #define SEGMENT_SIZE (8 * 1024 * 1024)
 
 /******************************************************************************
@@ -74,13 +75,13 @@ TEST(synWrite, append, setupFile, tearDownFile, 0, appendParams)
 
     SKIP_IF_NO_FIXTURE;
 
-    buf = aligned_alloc(BLOCK_SIZE_, BLOCK_SIZE_);
+    buf = aligned_alloc(BLOCK_SIZE_, BUF_SIZE);
     munit_assert_ptr_not_null(buf);
 
     for (i = 0; i < atoi(n); i++) {
-        memset(buf, i, BLOCK_SIZE_);
-        rv = write(f->fd, buf, BLOCK_SIZE_);
-        munit_assert_int(rv, ==, BLOCK_SIZE_);
+        memset(buf, i, BUF_SIZE);
+        rv = write(f->fd, buf, BUF_SIZE);
+        munit_assert_int(rv, ==, BUF_SIZE);
     }
 
     free(buf);
