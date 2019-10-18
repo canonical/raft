@@ -10,14 +10,6 @@
 #define BUF_SIZE BLOCK_SIZE_
 #define SEGMENT_SIZE (8 * 1024 * 1024)
 
-/******************************************************************************
- *
- * Synchronous writes
- *
- *****************************************************************************/
-
-SUITE(synWrite)
-
 struct file
 {
     FIXTURE_DIR;
@@ -55,6 +47,23 @@ static void tearDownFile(void *data)
     TEAR_DOWN_DIR;
 }
 
+/******************************************************************************
+ *
+ * Synchronous writes with direct I/O.
+ *
+ *****************************************************************************/
+
+#define SET_DIO                                                   \
+    {                                                             \
+        int flags_;                                               \
+        int rv_;                                                  \
+        flags_ = fcntl(f->fd, F_GETFL);                           \
+        rv_ = fcntl(f->fd, F_SETFL, flags_ | O_DIRECT | O_DSYNC); \
+        munit_assert_int(rv_, ==, 0);                             \
+    }
+
+SUITE(dioWrite)
+
 static char *appendN[] = {"1", "16", "256", "1024", NULL};
 
 static char *dirFs[] = {"ext4", "btrfs", "xfs", "zfs", NULL};
@@ -65,7 +74,7 @@ static MunitParameterEnum appendParams[] = {
     {NULL, NULL},
 };
 
-TEST(synWrite, append, setupFile, tearDownFile, 0, appendParams)
+TEST(dioWrite, append, setupFile, tearDownFile, 0, appendParams)
 {
     struct file *f = data;
     const char *n = munit_parameters_get(params, "n");
@@ -74,6 +83,7 @@ TEST(synWrite, append, setupFile, tearDownFile, 0, appendParams)
     int i;
 
     SKIP_IF_NO_FIXTURE;
+    SET_DIO;
 
     buf = aligned_alloc(BLOCK_SIZE_, BUF_SIZE);
     munit_assert_ptr_not_null(buf);

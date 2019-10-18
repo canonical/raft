@@ -204,6 +204,21 @@ TEST(uvProbeIoCapabilities, zfsDirectIO, setupZfsDir, tearDownDir, 0, NULL)
     return MUNIT_OK;
 }
 
+#if defined(RWF_NOWAIT)
+
+/* File systems that fully support DIO. */
+TEST(uvProbeIoCapabilities, aio, setupDir, tearDownDir, 0, dir_aio_params)
+{
+    const char *dir = data;
+    if (dir == NULL) {
+        return MUNIT_SKIP;
+    }
+    PROBE_IO_CAPABILITIES(dir, 4096, true);
+    return MUNIT_OK;
+}
+
+#endif /* RWF_NOWAIT */
+
 /* If the given path is not executable, the block size of the underlying file
  * system can't be determined and an error is returned. */
 TEST(uvProbeIoCapabilities, noAccess, setupDir, tearDownDir, 0, NULL)
