@@ -9,7 +9,6 @@
 #include "../lib/runner.h"
 
 #define BLOCK_SIZE_ 4096
-#define BUF_SIZE 4096
 #define FILE_SIZE (8 * 1024 * 1024)
 
 /* Fixture with a pre-allocated open file. */
@@ -57,7 +56,12 @@ static void tearDownFile(void *data)
  * accordingly. */
 #define N_WRITES "n-writes"
 
+/* Size of the write buffer. */
+#define BUF_SIZE "buf-size"
+
 static char *nWrites[] = {"1", "16", "256", "1024", NULL};
+
+static char *bufSize[] = {"64", "128", "256", "512", "1024", "2048", "4096", NULL};
 
 static char *dirFs[] = {"ext4", "btrfs", "xfs", "zfs", NULL};
 
@@ -122,6 +126,7 @@ TEST(write, syncDirect, setupFile, tearDownFile, 0, writeSyncDirectParams)
 
 static MunitParameterEnum syncBufferedParams[] = {
     {N_WRITES, nWrites},
+    {BUF_SIZE, bufSize},
     {TEST_DIR_FS, dirFs},
     {NULL, NULL},
 };
@@ -130,14 +135,15 @@ TEST(write, syncBuffered, setupFile, tearDownFile, 0, syncBufferedParams)
 {
     struct file *f = data;
     const char *n = munit_parameters_get(params, N_WRITES);
+    const char *size = munit_parameters_get(params, BUF_SIZE);
     struct iovec iov;
     int rv;
     int i;
 
     SKIP_IF_NO_FIXTURE;
 
-    iov.iov_len = BUF_SIZE;
-    iov.iov_base = munit_malloc(BUF_SIZE);
+    iov.iov_len = atoi(size);
+    iov.iov_base = munit_malloc(iov.iov_len);
 
     for (i = 0; i < atoi(n); i++) {
         memset(iov.iov_base, i, iov.iov_len);
