@@ -1,16 +1,18 @@
+/* Benchmark operating system write performance using various APIs. */
+
 #include <fcntl.h>
+#include <stdio.h>
 #include <sys/uio.h>
 #include <unistd.h>
 
-#include "../../src/uv_error.h"
-#include "../../src/uv_os.h"
 #include "../lib/dir.h"
 #include "../lib/runner.h"
 
 #define BLOCK_SIZE_ 4096
 #define BUF_SIZE 4096
-#define SEGMENT_SIZE (8 * 1024 * 1024)
+#define FILE_SIZE (8 * 1024 * 1024)
 
+/* Fixture with a pre-allocated open file. */
 struct file
 {
     FIXTURE_DIR;
@@ -21,17 +23,18 @@ static void *setupFile(MUNIT_UNUSED const MunitParameter params[],
                        MUNIT_UNUSED void *user_data)
 {
     struct file *f = munit_malloc(sizeof *f);
+    char path[1024];
     int flags = O_WRONLY | O_CREAT;
-    uvErrMsg errmsg;
     int rv;
     SETUP_DIR;
     if (f->dir == NULL) {
         free(f);
         return NULL;
     }
-    rv = uvOpenFile(f->dir, "x", flags, &f->fd, errmsg);
-    munit_assert_int(rv, ==, 0);
-    rv = posix_fallocate(f->fd, 0, SEGMENT_SIZE);
+    sprintf(path, "%s/x", f->dir);
+    f->fd = open(path, flags, S_IRUSR | S_IWUSR);
+    munit_assert_int(f->fd, >=, 0);
+    rv = posix_fallocate(f->fd, 0, FILE_SIZE);
     munit_assert_int(rv, ==, 0);
     rv = fsync(f->fd);
     munit_assert_int(rv, ==, 0);
@@ -49,15 +52,16 @@ static void tearDownFile(void *data)
     free(f);
 }
 
-static char *appendN[] = {"1", "16", "256", "1024", NULL};
+/* Number of writes each test should peform. Each write should write a new chuck
+ * of bytes to the pre-allocated file, increasing the write offset
+ * accordingly. */
+#define N_WRITES "n-writes"
+
+static char *nWrites[] = {"1", "16", "256", "1024", NULL};
 
 static char *dirFs[] = {"ext4", "btrfs", "xfs", "zfs", NULL};
 
-static MunitParameterEnum appendParams[] = {
-    {"n", appendN},
-    {TEST_DIR_FS, dirFs},
-    {NULL, NULL},
-};
+SUITE(write)
 
 /******************************************************************************
  *
@@ -65,40 +69,49 @@ static MunitParameterEnum appendParams[] = {
  *
  *****************************************************************************/
 
-#define SET_DIO                              \
-    {                                        \
-        uvErrMsg errmsg_;                    \
-        int rv_;                             \
-        rv_ = uvSetDirectIo(f->fd, errmsg_); \
-        munit_assert_int(rv_, ==, 0);        \
+#define SET_DIRECT_IO                                   \
+    {                                                   \
+        int flags_;                                     \
+        int rv_;                                        \
+        flags_ = fcntl(f->fd, F_GETFL);                 \
+        rv_ = fcntl(f->fd, F_SETFL, flags_ | O_DIRECT); \
+        munit_assert_int(rv_, ==, 0);                   \
     }
 
-SUITE(dioWrite)
+static MunitParameterEnum writeSyncDirectParams[] = {
+    {N_WRITES, nWrites},
+    {TEST_DIR_FS, dirFs},
+    {NULL, NULL},
+};
 
-TEST(dioWrite, append, setupFile, tearDownFile, 0, appendParams)
+TEST(write, syncDirect, setupFile, tearDownFile, 0, writeSyncDirectParams)
 {
+#if defined(RWF_DSYNC) && defined(RWF_HIPRI)
     struct file *f = data;
-    const char *n = munit_parameters_get(params, "n");
+    const char *n = munit_parameters_get(params, N_WRITES);
     struct iovec iov;
     int rv;
     int i;
 
     SKIP_IF_NO_FIXTURE;
-    SET_DIO;
+    SET_DIRECT_IO;
 
-    iov.iov_len = BUF_SIZE;
+    iov.iov_len = BLOCK_SIZE_;
     iov.iov_base = aligned_alloc(BLOCK_SIZE_, iov.iov_len);
     munit_assert_ptr_not_null(iov.iov_base);
 
     for (i = 0; i < atoi(n); i++) {
         memset(iov.iov_base, i, iov.iov_len);
         rv = pwritev2(f->fd, &iov, 1, i * iov.iov_len, RWF_DSYNC | RWF_HIPRI);
-        munit_assert_int(rv, ==, BUF_SIZE);
+        munit_assert_int(rv, ==, iov.iov_len);
     }
 
     free(iov.iov_base);
 
     return MUNIT_OK;
+#else
+    return MUNIT_SKIP;
+#endif
 }
 
 /******************************************************************************
@@ -107,12 +120,16 @@ TEST(dioWrite, append, setupFile, tearDownFile, 0, appendParams)
  *
  *****************************************************************************/
 
-SUITE(ioWrite)
+static MunitParameterEnum syncBufferedParams[] = {
+    {N_WRITES, nWrites},
+    {TEST_DIR_FS, dirFs},
+    {NULL, NULL},
+};
 
-TEST(ioWrite, append, setupFile, tearDownFile, 0, appendParams)
+TEST(write, syncBuffered, setupFile, tearDownFile, 0, syncBufferedParams)
 {
     struct file *f = data;
-    const char *n = munit_parameters_get(params, "n");
+    const char *n = munit_parameters_get(params, N_WRITES);
     struct iovec iov;
     int rv;
     int i;
@@ -124,8 +141,15 @@ TEST(ioWrite, append, setupFile, tearDownFile, 0, appendParams)
 
     for (i = 0; i < atoi(n); i++) {
         memset(iov.iov_base, i, iov.iov_len);
+#if defined(RWF_DSYNC) && defined(RWF_HIPRI)
         rv = pwritev2(f->fd, &iov, 1, i * iov.iov_len, RWF_DSYNC | RWF_HIPRI);
-        munit_assert_int(rv, ==, BUF_SIZE);
+        munit_assert_int(rv, ==, iov.iov_len);
+#else
+        rv = pwritev(f->fd, &iov, 1, i * iov.iov_len);
+        munit_assert_int(rv, ==, iov.iov_len);
+        rv = fdatasync(f->fd);
+        munit_assert_int(rv, ==, 0);
+#endif
     }
 
     free(iov.iov_base);

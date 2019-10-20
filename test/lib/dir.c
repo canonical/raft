@@ -8,21 +8,16 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
+#include <sys/syscall.h>
 #include <sys/types.h>
 #include <unistd.h>
-
-#include "../../src/uv_os.h"
 
 #define SEP "/"
 #define TEMPLATE "raft-test-XXXXXX"
 
 #define TEST_DIR_TEMPLATE "./tmp/%s/raft-test-XXXXXX"
 
-char *test_dir_all[] = {"tmpfs", "ext4",
-                        "btrfs",
-                        "xfs",
-                        "zfs",
-                        NULL};
+char *test_dir_all[] = {"tmpfs", "ext4", "btrfs", "xfs", "zfs", NULL};
 
 char *test_dir_tmpfs[] = {"tmpfs", NULL};
 
@@ -30,15 +25,9 @@ char *test_dir_btrfs[] = {"btrfs", NULL};
 
 char *test_dir_zfs[] = {"zfs", NULL};
 
-char *test_dir_aio[] = {
-    "btrfs",
-    "ext4",
-    "xfs",
-    NULL};
+char *test_dir_aio[] = {"btrfs", "ext4", "xfs", NULL};
 
-char *test_dir_no_aio[] = {"tmpfs",
-                           "zfs",
-                           NULL};
+char *test_dir_no_aio[] = {"tmpfs", "zfs", NULL};
 
 MunitParameterEnum dir_tmpfs_params[] = {
     {TEST_DIR_FS, test_dir_tmpfs},
@@ -436,7 +425,6 @@ void test_aio_fill(aio_context_t *ctx, unsigned n)
     int rv;
     int limit;
     int used;
-    char errmsg[2048];
 
     /* Figure out how many events are available. */
     fd = open("/proc/sys/fs/aio-max-nr", O_RDONLY);
@@ -460,15 +448,14 @@ void test_aio_fill(aio_context_t *ctx, unsigned n)
 
     used = atoi(buf);
 
-    rv = uvIoSetup(limit - used - n, ctx, errmsg);
+    rv = syscall(__NR_io_setup, limit - used - n, ctx);
     munit_assert_int(rv, ==, 0);
 }
 
 void test_aio_destroy(aio_context_t ctx)
 {
-    char errmsg[2048];
     int rv;
 
-    rv = uvIoDestroy(ctx, errmsg);
+    rv = syscall(__NR_io_destroy, ctx);
     munit_assert_int(rv, ==, 0);
 }

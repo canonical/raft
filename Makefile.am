@@ -34,6 +34,7 @@ libraft_la_SOURCES = \
   src/snapshot.c \
   src/start.c \
   src/state.c \
+  src/syscall.c \
   src/tick.c
 
 check_PROGRAMS = \
@@ -124,7 +125,7 @@ raftinclude_HEADERS += include/raft/uv.h
 
 check_PROGRAMS += \
   test/unit/uv \
-  test/benchmark/uv
+  test/benchmark/os
 TESTS += test/unit/uv
 
 libtest_la_SOURCES += \
@@ -141,6 +142,7 @@ test_unit_uv_SOURCES += \
   src/error.c \
   src/heap.c \
   src/snapshot.c \
+  src/syscall.c \
   test/unit/main_uv.c \
   test/unit/test_uv_os.c \
   test/unit/test_uv_file.c \
@@ -160,15 +162,11 @@ test_unit_uv_SOURCES += \
 test_unit_uv_LDADD = libtest.la
 test_unit_uv_LDFLAGS = $(UV_LIBS)
 
-test_benchmark_uv_SOURCES = \
+test_benchmark_os_SOURCES = \
   src/heap.c \
-  src/uv_os.c \
-  src/uv_file.c \
-  test/benchmark/main_uv.c \
-  test/benchmark/test_uv_disk.c \
-  test/benchmark/test_uv_file.c
-test_benchmark_uv_LDADD = libtest.la
-test_benchmark_uv_LDFLAGS = $(UV_LIBS)
+  test/benchmark/main_os.c \
+  test/benchmark/test_os_write.c
+test_benchmark_os_LDADD = libtest.la
 
 AM_CFLAGS += $(UV_CFLAGS)
 
