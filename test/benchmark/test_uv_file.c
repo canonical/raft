@@ -87,6 +87,7 @@ static void tearDownFile(void *data)
     uvFileClose(&f->file, NULL);
     TEAR_DOWN_LOOP;
     TEAR_DOWN_DIR;
+    free(f);
 }
 
 static char *appendN[] = {"1", "16", "256", "1024", NULL};

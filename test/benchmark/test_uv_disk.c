@@ -1,4 +1,5 @@
 #include <fcntl.h>
+#include <sys/uio.h>
 #include <unistd.h>
 
 #include "../../src/uv_error.h"
@@ -45,6 +46,7 @@ static void tearDownFile(void *data)
     }
     close(f->fd);
     TEAR_DOWN_DIR;
+    free(f);
 }
 
 static char *appendN[] = {"1", "16", "256", "1024", NULL};
@@ -63,14 +65,12 @@ static MunitParameterEnum appendParams[] = {
  *
  *****************************************************************************/
 
-#define SET_DIO                                                 \
-    {                                                           \
-        int flags_ = O_WRONLY | O_DIRECT | O_DSYNC;             \
-        uvErrMsg errmsg_;                                       \
-        int rv_;                                                \
-        close(f->fd);                                           \
-        rv_ = uvOpenFile(f->dir, "x", flags_, &f->fd, errmsg_); \
-        munit_assert_int(rv_, ==, 0);                           \
+#define SET_DIO                              \
+    {                                        \
+        uvErrMsg errmsg_;                    \
+        int rv_;                             \
+        rv_ = uvSetDirectIo(f->fd, errmsg_); \
+        munit_assert_int(rv_, ==, 0);        \
     }
 
 SUITE(dioWrite)
@@ -79,23 +79,24 @@ TEST(dioWrite, append, setupFile, tearDownFile, 0, appendParams)
 {
     struct file *f = data;
     const char *n = munit_parameters_get(params, "n");
-    void *buf;
+    struct iovec iov;
     int rv;
     int i;
 
     SKIP_IF_NO_FIXTURE;
     SET_DIO;
 
-    buf = aligned_alloc(BLOCK_SIZE_, BUF_SIZE);
-    munit_assert_ptr_not_null(buf);
+    iov.iov_len = BUF_SIZE;
+    iov.iov_base = aligned_alloc(BLOCK_SIZE_, iov.iov_len);
+    munit_assert_ptr_not_null(iov.iov_base);
 
     for (i = 0; i < atoi(n); i++) {
-        memset(buf, i, BUF_SIZE);
-        rv = pwrite(f->fd, buf, BUF_SIZE, BUF_SIZE * i);
+        memset(iov.iov_base, i, iov.iov_len);
+        rv = pwritev2(f->fd, &iov, 1, i * iov.iov_len, RWF_DSYNC | RWF_HIPRI);
         munit_assert_int(rv, ==, BUF_SIZE);
     }
 
-    free(buf);
+    free(iov.iov_base);
 
     return MUNIT_OK;
 }
@@ -112,23 +113,22 @@ TEST(ioWrite, append, setupFile, tearDownFile, 0, appendParams)
 {
     struct file *f = data;
     const char *n = munit_parameters_get(params, "n");
-    void *buf;
+    struct iovec iov;
     int rv;
     int i;
 
     SKIP_IF_NO_FIXTURE;
 
-    buf = munit_malloc(BUF_SIZE);
+    iov.iov_len = BUF_SIZE;
+    iov.iov_base = munit_malloc(BUF_SIZE);
 
     for (i = 0; i < atoi(n); i++) {
-        memset(buf, i, BUF_SIZE);
-        rv = pwrite(f->fd, buf, BUF_SIZE, BUF_SIZE * i);
+        memset(iov.iov_base, i, iov.iov_len);
+        rv = pwritev2(f->fd, &iov, 1, i * iov.iov_len, RWF_DSYNC | RWF_HIPRI);
         munit_assert_int(rv, ==, BUF_SIZE);
-        rv = fdatasync(f->fd);
-        munit_assert_int(rv, ==, 0);
     }
 
-    free(buf);
+    free(iov.iov_base);
 
     return MUNIT_OK;
 }
