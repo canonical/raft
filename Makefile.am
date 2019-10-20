@@ -163,7 +163,7 @@ test_unit_uv_LDADD = libtest.la
 test_unit_uv_LDFLAGS = $(UV_LIBS)
 
 test_benchmark_os_SOURCES = \
-  src/heap.c \
+  src/syscall.c \
   test/benchmark/main_os.c \
   test/benchmark/test_os_write.c
 test_benchmark_os_LDADD = libtest.la

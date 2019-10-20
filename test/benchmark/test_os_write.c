@@ -5,6 +5,7 @@
 #include <sys/uio.h>
 #include <unistd.h>
 
+#include "../../src/syscall.h"
 #include "../lib/dir.h"
 #include "../lib/runner.h"
 
@@ -51,6 +52,15 @@ static void tearDownFile(void *data)
     free(f);
 }
 
+#define SET_DIRECT_IO                                   \
+    {                                                   \
+        int flags_;                                     \
+        int rv_;                                        \
+        flags_ = fcntl(f->fd, F_GETFL);                 \
+        rv_ = fcntl(f->fd, F_SETFL, flags_ | O_DIRECT); \
+        munit_assert_int(rv_, ==, 0);                   \
+    }
+
 /* Number of writes each test should peform. Each write should write a new chuck
  * of bytes to the pre-allocated file, increasing the write offset
  * accordingly. */
@@ -61,9 +71,10 @@ static void tearDownFile(void *data)
 
 static char *nWrites[] = {"1", "16", "256", "1024", NULL};
 
-static char *bufSize[] = {"64", "128", "256", "512", "1024", "2048", "4096", NULL};
+static char *bufSize[] = {"64",   "128",  "256",  "512",
+                          "1024", "2048", "4096", NULL};
 
-static char *dirFs[] = {"ext4", "btrfs", "xfs", "zfs", NULL};
+static char *dirFsAll[] = {"ext4", "btrfs", "xfs", "zfs", NULL};
 
 SUITE(write)
 
@@ -73,18 +84,9 @@ SUITE(write)
  *
  *****************************************************************************/
 
-#define SET_DIRECT_IO                                   \
-    {                                                   \
-        int flags_;                                     \
-        int rv_;                                        \
-        flags_ = fcntl(f->fd, F_GETFL);                 \
-        rv_ = fcntl(f->fd, F_SETFL, flags_ | O_DIRECT); \
-        munit_assert_int(rv_, ==, 0);                   \
-    }
-
 static MunitParameterEnum writeSyncDirectParams[] = {
     {N_WRITES, nWrites},
-    {TEST_DIR_FS, dirFs},
+    {TEST_DIR_FS, dirFsAll},
     {NULL, NULL},
 };
 
@@ -127,7 +129,7 @@ TEST(write, syncDirect, setupFile, tearDownFile, 0, writeSyncDirectParams)
 static MunitParameterEnum syncBufferedParams[] = {
     {N_WRITES, nWrites},
     {BUF_SIZE, bufSize},
-    {TEST_DIR_FS, dirFs},
+    {TEST_DIR_FS, dirFsAll},
     {NULL, NULL},
 };
 
@@ -161,4 +163,68 @@ TEST(write, syncBuffered, setupFile, tearDownFile, 0, syncBufferedParams)
     free(iov.iov_base);
 
     return MUNIT_OK;
+}
+
+/******************************************************************************
+ *
+ * Asynchronous writes with direct I/O and plain AIO.
+ *
+ *****************************************************************************/
+
+static MunitParameterEnum asyncDirectAIOParams[] = {
+    {N_WRITES, nWrites},
+    {TEST_DIR_FS, dirFsAll},
+    {NULL, NULL},
+};
+
+TEST(write, asyncDirectAIO, setupFile, tearDownFile, 0, asyncDirectAIOParams)
+{
+#if defined(RWF_NOWAIT) && defined(RWF_HIPRI) && defined(RWF_DSYNC)
+    struct file *f = data;
+    const char *n = munit_parameters_get(params, N_WRITES);
+    size_t size = BLOCK_SIZE_;
+    aio_context_t ctx = 0;
+    struct iocb iocb;
+    struct iocb *iocbs = &iocb;
+    struct io_event event;
+    void *buf;
+    int i;
+    int rv;
+
+    SKIP_IF_NO_FIXTURE;
+    SET_DIRECT_IO;
+
+    buf = aligned_alloc(size, size);
+    munit_assert_ptr_not_null(buf);
+
+    rv = io_setup(1, &ctx);
+    munit_assert_int(rv, ==, 0);
+
+    memset(&iocb, 0, sizeof iocb);
+    iocb.aio_lio_opcode = IOCB_CMD_PWRITE;
+    *((void **)(&iocb.aio_buf)) = buf;
+    iocb.aio_nbytes = size;
+    iocb.aio_fildes = f->fd;
+    iocb.aio_reqprio = 0;
+    iocb.aio_rw_flags |= RWF_NOWAIT | RWF_DSYNC;
+
+    for (i = 0; i < atoi(n); i++) {
+        memset(buf, i, size);
+        iocb.aio_offset = i * size;
+        rv = io_submit(ctx, 1, &iocbs);
+        munit_assert_int(rv, ==, 1);
+        rv = io_getevents(ctx, 1, 1, &event, NULL);
+        munit_assert_int(rv, ==, 1);
+        munit_assert_int(event.res, ==, size);
+    }
+
+    rv = io_destroy(ctx);
+    munit_assert_int(rv, ==, 0);
+
+    free(buf);
+
+    return 0;
+#else
+    return MUNIT_SKIP;
+#endif
 }
