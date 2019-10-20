@@ -4,8 +4,13 @@
 #define SYSCALL_H_
 
 #include <linux/aio_abi.h>
+#include <signal.h>
 #include <time.h>
+#ifdef HAVE_LINUX_IO_URING_H
+#include <linux/io_uring.h>
+#endif
 
+/* AIO */
 int io_setup(unsigned nr_events, aio_context_t *ctx_idp);
 
 int io_destroy(aio_context_t ctx_id);
@@ -17,5 +22,21 @@ int io_getevents(aio_context_t ctx_id,
                  long nr,
                  struct io_event *events,
                  struct timespec *timeout);
+
+#ifdef HAVE_LINUX_IO_URING_H
+/* uring */
+int io_uring_register(int fd,
+                      unsigned int opcode,
+                      const void *arg,
+                      unsigned int nr_args);
+
+int io_uring_setup(unsigned int entries, struct io_uring_params *p);
+
+int io_uring_enter(int fd,
+                   unsigned int to_submit,
+                   unsigned int min_complete,
+                   unsigned int flags,
+                   sigset_t *sig);
+#endif
 
 #endif /* SYSCALL_ */

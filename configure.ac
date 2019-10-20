@@ -41,7 +41,7 @@ AM_CONDITIONAL(SANITIZE_ENABLED, test x"$enable_sanitize" = x"yes")
 AX_CODE_COVERAGE
 
 # Checks for header files.
-AC_CHECK_HEADERS([stdlib.h string.h stdio.h assert.h unistd.h])
+AC_CHECK_HEADERS([stdlib.h string.h stdio.h assert.h unistd.h linux/io_uring.h])
 
 # Check if zfs is available (for enabling zfs-related tests).
 AC_CHECK_PROG(have_zfs, zfs, yes)

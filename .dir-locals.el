@@ -1,4 +1,4 @@
 ((nil . ((fill-column . 80)))
- (c-mode . ((flycheck-clang-definitions . ("RAFT_IO_UV" "RAFT_IO_STUB" "_GNU_SOURCE"))
+ (c-mode . ((flycheck-clang-definitions . ("HAVE_LINUX_IO_URING_H" "_GNU_SOURCE"))
 	    (flycheck-clang-args . ("-Wpedantic"))
-	    (flycheck-gcc-definitions . ("RAFT_IO_UV" "RAFT_IO_STUB" "_GNU_SOURCE")))))
+	    (flycheck-gcc-definitions . ("HAVE_LINUX_IO_URING_H" "_GNU_SOURCE")))))
