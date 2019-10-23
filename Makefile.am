@@ -41,10 +41,7 @@ check_PROGRAMS = \
   test/unit/core \
   test/integration/core \
   fuzzy-test
-TESTS = \
-  test/unit/core \
-  test/integration/core \
-  fuzzy-test
+TESTS = $(check_PROGRAMS)
 
 check_LTLIBRARIES = libtest.la
 
@@ -124,9 +121,7 @@ libraft_la_LDFLAGS += $(UV_LIBS)
 raftinclude_HEADERS += include/raft/uv.h
 
 check_PROGRAMS += \
-  test/unit/uv \
-  test/benchmark/os
-TESTS += test/unit/uv
+  test/unit/uv
 
 libtest_la_SOURCES += \
   test/lib/dir.c \
@@ -161,12 +156,6 @@ test_unit_uv_SOURCES += \
   test/unit/test_uv.c
 test_unit_uv_LDADD = libtest.la
 test_unit_uv_LDFLAGS = $(UV_LIBS)
-
-test_benchmark_os_SOURCES = \
-  src/syscall.c \
-  test/benchmark/main_os.c \
-  test/benchmark/test_os_write.c
-test_benchmark_os_LDADD = libtest.la
 
 AM_CFLAGS += $(UV_CFLAGS)
 
