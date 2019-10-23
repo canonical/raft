@@ -592,6 +592,11 @@ int raft_uv_init(struct raft_io *io,
     if (uv == NULL) {
         return RAFT_NOMEM;
     }
+    memset (uv, 0, sizeof (struct uv));
+    /* during initialization of a structure this big,
+       you're guaranteed to leave something uninitialized */
+    /* TODO: there actually are an unitialized fields
+       (8 octets, according to Valgrind) -- find them */
 
     uv->io = io;
     uv->loop = loop;
