@@ -37,6 +37,8 @@ libraft_la_SOURCES = \
   src/syscall.c \
   src/tick.c
 
+bin_PROGRAMS =
+
 check_PROGRAMS = \
   test/unit/core \
   test/integration/core \
@@ -169,7 +171,7 @@ endif
 
 if EXAMPLE_ENABLED
 
-bin_PROGRAMS = \
+bin_PROGRAMS += \
  example/server \
  example/cluster
 
@@ -182,6 +184,15 @@ example_cluster_LDADD = libraft.la
 example_cluster_LDFLAGS = $(UV_LIBS)
 
 endif # EXAMPLE_ENABLED
+
+if BENCHMARK_ENABLED
+
+bin_PROGRAMS += \
+ benchmark/os-disk-write
+
+benchmark_os_disk_write_SOURCES = benchmark/os_disk_write.c
+
+endif # BENCHMARK_ENABLED
 
 if !DEBUG_ENABLED
   AM_CFLAGS += -DNDEBUG

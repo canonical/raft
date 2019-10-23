@@ -29,6 +29,10 @@ AC_ARG_ENABLE(example, AS_HELP_STRING([--enable-example[=ARG]], [build the examp
 AS_IF([test "x$enable_example" = "xyes" -a "x$have_uv" = "xno"], [AC_MSG_ERROR([example program requires libuv])], [])
 AM_CONDITIONAL(EXAMPLE_ENABLED, test "x$enable_example" = "xyes")
 
+# The benchmark programs are optional.
+AC_ARG_ENABLE(benchmark, AS_HELP_STRING([--enable-benchmark[=ARG]], [build the benchmark programs [default=no]]))
+AM_CONDITIONAL(BENCHMARK_ENABLED, test "x$enable_benchmark" = "xyes")
+
 # Whether to enable debugging code.
 AC_ARG_ENABLE(debug, AS_HELP_STRING([--enable-debug[=ARG]], [enable debugging [default=no]]))
 AM_CONDITIONAL(DEBUG_ENABLED, test "x$enable_debug" = "xyes")
