@@ -104,7 +104,7 @@ bool progressShouldReplicate(struct raft *r, unsigned i)
     bool needs_heartbeat = now - p->last_send >= r->heartbeat_timeout;
     raft_index last_index = logLastIndex(&r->log);
     bool is_up_to_date = p->next_index == last_index + 1;
-    bool result;
+    bool result = false;
 
     /* We must be in a valid state. */
     assert(p->state == PROGRESS__PROBE || p->state == PROGRESS__PIPELINE ||

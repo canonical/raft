@@ -180,7 +180,7 @@ static int tickLeader(struct raft *r)
 
 static int tick(struct raft *r)
 {
-    int rv;
+    int rv = -1;
 
     assert(r->state == RAFT_UNAVAILABLE || r->state == RAFT_FOLLOWER ||
            r->state == RAFT_CANDIDATE || r->state == RAFT_LEADER);
