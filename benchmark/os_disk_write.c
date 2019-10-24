@@ -13,33 +13,28 @@
 
 static char doc[] = "Benchmark operating system disk write performance";
 
-#define SYNC_PWRITEV2_BUFFERED 0
-#define SYNC_PWRITEV2_DIRECT 1
-#define ASYNC_URING_BUFFERED 2
-#define ASYNC_URING_DIRECT 3
+#define PWRITEV2 0
+#define URING 1
 
-static const char *engines[] = {
-    [SYNC_PWRITEV2_BUFFERED] = "sync-pwritev2-buffered",
-    [SYNC_PWRITEV2_DIRECT] = "sync-pwritev2-direct",
-    [ASYNC_URING_BUFFERED] = "async-uring-buffered",
-    [ASYNC_URING_DIRECT] = "async-uring-direct",
-    NULL};
+static const char *engines[] =
+    {[PWRITEV2] = "pwritev2", [URING] = "uring", NULL};
 
 /* Order of fields: {NAME, KEY, ARG, FLAGS, DOC, GROUP}.*/
 static struct argp_option options[] = {
     {"dir", 'd', "DIR", 0, "Directory to use for temp files (default /tmp)", 0},
     {"buf", 'b', "BUF", 0, "Write buffer size (default st_blksize)", 0},
     {"writes", 'n', "N", 0, "Number of writes to perform (default 1024)", 0},
-    {"engine", 'e', "ENGINE", 0,
-     "I/O engine to use (default sync-buffered-pwritev2)", 0},
+    {"engine", 'e', "ENGINE", 0, "I/O engine to use (default pwritev2)", 0},
+    {"direct", 'D', NULL, 0, "Use direct I/O", 0},
     {0}};
 
 struct arguments
 {
-    int engine;
-    int n;
     char *dir;
     int buf;
+    int n;
+    int engine;
+    bool direct;
 };
 
 static int engineCode(const char *engine)
@@ -72,6 +67,9 @@ static error_t argumentsParse(int key, char *arg, struct argp_state *state)
             if (arguments->engine == -1) {
                 return ARGP_ERR_UNKNOWN;
             }
+            break;
+        case 'D':
+            arguments->direct = true;
             break;
         default:
             return ARGP_ERR_UNKNOWN;
@@ -212,11 +210,12 @@ static int writeWithUring(int fd, struct iovec *iov, int i)
     return 0;
 }
 
-int main(int argc, char *argv[])
+int benchmarkWritePerformance(const char *dir,
+                              int buf,
+                              int n,
+                              int engine,
+                              bool direct)
 {
-    struct argp argp = {options, argumentsParse, NULL, doc, 0, 0, 0};
-    struct arguments arguments;
-    struct stat st;
     char *path;
     int fd;
     struct iovec iov;
@@ -224,10 +223,66 @@ int main(int argc, char *argv[])
     int i;
     int rv;
 
+    path = makeTempFileTemplate(dir);
+    fd = mkstemp(path);
+    if (fd == -1) {
+        printf("mstemp '%s': %s\n", path, strerror(errno));
+        return -1;
+    }
+
+    rv = allocateTempFile(fd, dir, n, buf);
+    if (rv != 0) {
+        unlink(path);
+        return -1;
+    }
+
+    allocBuffer(&iov, buf);
+
+    if (direct) {
+        setDirectIO(fd);
+    }
+
+    timeNow(&start);
+    for (i = 0; i < n; i++) {
+        switch (engine) {
+            case PWRITEV2:
+                rv = writeWithPwriteV2(fd, &iov, i);
+                break;
+            case URING:
+                rv = writeWithUring(fd, &iov, i);
+                break;
+            default:
+                assert(0);
+        }
+    }
+
+    if (rv != 0) {
+        return -1;
+    }
+
+    printf("%-8s:  %8s writes of %4d bytes take %4d microsecs on average\n",
+           engines[engine], direct ? "direct" : "buffered", buf,
+           timeSince(&start) / n);
+
+    close(fd);
+    unlink(path);
+    free(path);
+
+    return 0;
+}
+
+int main(int argc, char *argv[])
+{
+    struct argp argp = {options, argumentsParse, NULL, doc, 0, 0, 0};
+    struct arguments arguments;
+    struct stat st;
+    int rv;
+
     arguments.dir = "/tmp";
     arguments.buf = 0;
     arguments.n = 1024;
-    arguments.engine = SYNC_PWRITEV2_BUFFERED;
+    arguments.engine = PWRITEV2;
+    arguments.direct = false;
 
     argp_parse(&argp, argc, argv, 0, 0, &arguments);
 
@@ -241,54 +296,11 @@ int main(int argc, char *argv[])
         arguments.buf = st.st_blksize;
     }
 
-    path = makeTempFileTemplate(arguments.dir);
-    fd = mkstemp(path);
-    if (fd == -1) {
-        printf("mstemp '%s': %s\n", path, strerror(errno));
-        return -1;
-    }
-
-    rv = allocateTempFile(fd, arguments.dir, arguments.n, arguments.buf);
-    if (rv != 0) {
-        unlink(path);
-        return -1;
-    }
-
-    allocBuffer(&iov, arguments.buf);
-
-    timeNow(&start);
-    for (i = 0; i < arguments.n; i++) {
-        switch (arguments.engine) {
-            case SYNC_PWRITEV2_BUFFERED:
-                rv = writeWithPwriteV2(fd, &iov, i);
-                break;
-            case SYNC_PWRITEV2_DIRECT:
-                setDirectIO(fd);
-                rv = writeWithPwriteV2(fd, &iov, i);
-                break;
-            case ASYNC_URING_BUFFERED:
-                rv = writeWithUring(fd, &iov, i);
-                break;
-            case ASYNC_URING_DIRECT:
-                setDirectIO(fd);
-                rv = writeWithUring(fd, &iov, i);
-                break;
-            default:
-                assert(0);
-        }
-    }
-
+    rv = benchmarkWritePerformance(arguments.dir, arguments.buf, arguments.n,
+                                   arguments.engine, arguments.direct);
     if (rv != 0) {
         return -1;
     }
-
-    printf("%-22s: writing %4d bytes takes %4d microsecs on average\n",
-           engines[arguments.engine], arguments.buf,
-           timeSince(&start) / arguments.n);
-
-    close(fd);
-    unlink(path);
-    free(path);
 
     return 0;
 }
