@@ -191,6 +191,7 @@ bin_PROGRAMS += \
  benchmark/os-disk-write
 
 benchmark_os_disk_write_SOURCES = benchmark/os_disk_write.c
+benchmark_os_disk_write_LDFLAGS = -luring
 
 endif # BENCHMARK_ENABLED
 

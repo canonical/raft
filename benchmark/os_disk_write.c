@@ -1,6 +1,7 @@
 #include <argp.h>
 #include <assert.h>
 #include <fcntl.h>
+#include <liburing.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
@@ -154,6 +155,63 @@ static void setDirectIO(int fd)
     assert(rv == 0);
 }
 
+static int writeWithPwriteV2(int fd, struct iovec *iov, int i)
+{
+    int rv;
+    rv = pwritev2(fd, iov, 1, i * iov->iov_len, RWF_DSYNC | RWF_HIPRI);
+    if (rv == -1) {
+        perror("pwritev2");
+        return -1;
+    }
+    assert(rv == (int)iov->iov_len);
+    return 0;
+}
+
+static struct io_uring uring;
+
+static void initUring(int fd, struct iovec *iov)
+{
+    int rv;
+    rv = io_uring_queue_init(4, &uring, 0);
+    assert(rv == 0);
+    rv = io_uring_register_files(&uring, &fd, 1);
+    assert(rv == 0);
+
+    rv = io_uring_register_buffers(&uring, iov, 1);
+    assert(rv == 0);
+}
+
+static int writeWithUring(int fd, struct iovec *iov, int i)
+{
+    struct io_uring_sqe *sqe;
+    struct io_uring_cqe *cqe;
+    int rv;
+
+    if (i == 0) {
+        initUring(fd, iov);
+    }
+
+    sqe = io_uring_get_sqe(&uring);
+    io_uring_prep_write_fixed(sqe, 0, iov->iov_base, iov->iov_len,
+                              i * iov->iov_len, 0);
+    io_uring_sqe_set_flags(sqe, IOSQE_FIXED_FILE);
+    sqe->rw_flags = RWF_DSYNC;
+
+    rv = io_uring_submit(&uring);
+    assert(rv == 1);
+
+    io_uring_wait_cqe(&uring, &cqe);
+    if (cqe->res < 0) {
+        printf("sqe failed: %s\n", strerror(-cqe->res));
+        return -1;
+    }
+    assert(cqe->res == (int)iov->iov_len);
+
+    io_uring_cqe_seen(&uring, cqe);
+
+    return 0;
+}
+
 int main(int argc, char *argv[])
 {
     struct argp argp = {options, argumentsParse, NULL, doc, 0, 0, 0};
@@ -202,17 +260,26 @@ int main(int argc, char *argv[])
     for (i = 0; i < arguments.n; i++) {
         switch (arguments.engine) {
             case SYNC_PWRITEV2_BUFFERED:
-                rv = pwritev2(fd, &iov, 1, 0, RWF_DSYNC | RWF_HIPRI);
-                assert(rv == (int)iov.iov_len);
+                rv = writeWithPwriteV2(fd, &iov, i);
                 break;
             case SYNC_PWRITEV2_DIRECT:
                 setDirectIO(fd);
-                rv = pwritev2(fd, &iov, 1, 0, RWF_DSYNC | RWF_HIPRI);
-                assert(rv == (int)iov.iov_len);
+                rv = writeWithPwriteV2(fd, &iov, i);
+                break;
+            case ASYNC_URING_BUFFERED:
+                rv = writeWithUring(fd, &iov, i);
+                break;
+            case ASYNC_URING_DIRECT:
+                setDirectIO(fd);
+                rv = writeWithUring(fd, &iov, i);
                 break;
             default:
                 assert(0);
         }
+    }
+
+    if (rv != 0) {
+        return -1;
     }
 
     printf("%-22s: writing %4d bytes takes %4d microsecs on average\n",
