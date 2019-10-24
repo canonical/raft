@@ -34,16 +34,16 @@ libraft_la_SOURCES = \
   src/snapshot.c \
   src/start.c \
   src/state.c \
+  src/syscall.c \
   src/tick.c
+
+bin_PROGRAMS =
 
 check_PROGRAMS = \
   test/unit/core \
   test/integration/core \
   fuzzy-test
-TESTS = \
-  test/unit/core \
-  test/integration/core \
-  fuzzy-test
+TESTS = $(check_PROGRAMS)
 
 check_LTLIBRARIES = libtest.la
 
@@ -123,9 +123,7 @@ libraft_la_LDFLAGS += $(UV_LIBS)
 raftinclude_HEADERS += include/raft/uv.h
 
 check_PROGRAMS += \
-  test/unit/uv \
-  test/benchmark/uv
-TESTS += test/unit/uv
+  test/unit/uv
 
 libtest_la_SOURCES += \
   test/lib/dir.c \
@@ -141,6 +139,7 @@ test_unit_uv_SOURCES += \
   src/error.c \
   src/heap.c \
   src/snapshot.c \
+  src/syscall.c \
   test/unit/main_uv.c \
   test/unit/test_uv_os.c \
   test/unit/test_uv_file.c \
@@ -160,16 +159,6 @@ test_unit_uv_SOURCES += \
 test_unit_uv_LDADD = libtest.la
 test_unit_uv_LDFLAGS = $(UV_LIBS)
 
-test_benchmark_uv_SOURCES = \
-  src/heap.c \
-  src/uv_os.c \
-  src/uv_file.c \
-  test/benchmark/main_uv.c \
-  test/benchmark/test_uv_disk.c \
-  test/benchmark/test_uv_file.c
-test_benchmark_uv_LDADD = libtest.la
-test_benchmark_uv_LDFLAGS = $(UV_LIBS)
-
 AM_CFLAGS += $(UV_CFLAGS)
 
 endif # UV_ENABLED
@@ -182,7 +171,7 @@ endif
 
 if EXAMPLE_ENABLED
 
-bin_PROGRAMS = \
+bin_PROGRAMS += \
  example/server \
  example/cluster
 
@@ -195,6 +184,16 @@ example_cluster_LDADD = libraft.la
 example_cluster_LDFLAGS = $(UV_LIBS)
 
 endif # EXAMPLE_ENABLED
+
+if BENCHMARK_ENABLED
+
+bin_PROGRAMS += \
+ benchmark/os-disk-write
+
+benchmark_os_disk_write_SOURCES = benchmark/os_disk_write.c
+benchmark_os_disk_write_LDFLAGS = -luring
+
+endif # BENCHMARK_ENABLED
 
 if !DEBUG_ENABLED
   AM_CFLAGS += -DNDEBUG

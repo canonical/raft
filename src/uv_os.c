@@ -3,13 +3,13 @@
 #include <libgen.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <sys/vfs.h>
 #include <unistd.h>
 
 #include "assert.h"
+#include "syscall.h"
 #include "uv_error.h"
 #include "uv_os.h"
 
@@ -581,7 +581,7 @@ int uvSetDirectIo(int fd, char *errmsg)
 int uvIoSetup(unsigned nr, aio_context_t *ctxp, char *errmsg)
 {
     int rv;
-    rv = syscall(__NR_io_setup, nr, ctxp);
+    rv = io_setup(nr, ctxp);
     if (rv == -1) {
         uvErrMsgSys(errmsg, io_setup, errno);
         return UV__ERROR;
@@ -592,7 +592,7 @@ int uvIoSetup(unsigned nr, aio_context_t *ctxp, char *errmsg)
 int uvIoDestroy(aio_context_t ctx, char *errmsg)
 {
     int rv;
-    rv = syscall(__NR_io_destroy, ctx);
+    rv = io_destroy(ctx);
     if (rv == -1) {
         uvErrMsgSys(errmsg, io_destroy, errno);
         return UV__ERROR;
@@ -609,7 +609,7 @@ void uvTryIoDestroy(aio_context_t ctx)
 int uvIoSubmit(aio_context_t ctx, long nr, struct iocb **iocbpp, char *errmsg)
 {
     int rv;
-    rv = syscall(__NR_io_submit, ctx, nr, iocbpp);
+    rv = io_submit(ctx, nr, iocbpp);
     if (rv == -1) {
         uvErrMsgSys(errmsg, io_submit, errno);
         switch (errno) {
@@ -635,7 +635,7 @@ int uvIoGetevents(aio_context_t ctx,
 {
     int rv;
     do {
-        rv = syscall(__NR_io_getevents, ctx, min_nr, max_nr, events, timeout);
+        rv = io_getevents(ctx, min_nr, max_nr, events, timeout);
     } while (rv == -1 && errno == EINTR);
 
     if (rv == -1) {
