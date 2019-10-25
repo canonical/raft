@@ -79,6 +79,7 @@ test_integration_core_SOURCES = \
   test/integration/test_bootstrap.c \
   test/integration/test_election.c \
   test/integration/test_membership.c \
+  test/integration/test_recover.c \
   test/integration/test_replication.c \
   test/integration/test_snapshot.c \
   test/integration/test_strerror.c \
@@ -150,6 +151,7 @@ test_unit_uv_SOURCES += \
   test/unit/test_uv_list.c \
   test/unit/test_uv_load.c \
   test/unit/test_uv_prepare.c \
+  test/unit/test_uv_recover.c \
   test/unit/test_uv_append.c \
   test/unit/test_uv_finalize.c \
   test/unit/test_uv_snapshot.c \

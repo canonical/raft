@@ -928,6 +928,14 @@ static int writeFirstClosed(struct uv *uv,
 int uvSegmentCreateFirstClosed(struct uv *uv,
                                const struct raft_configuration *configuration)
 {
+    return uvSegmentCreateClosedWithConfiguration(uv, 1, configuration);
+}
+
+int uvSegmentCreateClosedWithConfiguration(
+    struct uv *uv,
+    raft_index index,
+    const struct raft_configuration *configuration)
+{
     struct raft_buffer buf;
     char filename[UV__FILENAME_LEN];
     char errmsg_[2048];
@@ -936,7 +944,7 @@ int uvSegmentCreateFirstClosed(struct uv *uv,
     int rv;
 
     /* Render the path */
-    sprintf(filename, UV__CLOSED_TEMPLATE, (raft_index)1, (raft_index)1);
+    sprintf(filename, UV__CLOSED_TEMPLATE, index, index);
 
     /* Encode the given configuration. */
     rv = configurationEncode(configuration, &buf);

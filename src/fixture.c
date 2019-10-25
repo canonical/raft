@@ -1,9 +1,9 @@
+#include "../include/raft/fixture.h"
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include "../include/raft/fixture.h"
 
 #include "assert.h"
 #include "configuration.h"
@@ -54,9 +54,9 @@ static char *describeMessage(const struct raft_message *m)
     }
     return d;
 }
-#    define tracef(MSG, ...) debugf(io->io, MSG, ##__VA_ARGS__)
+#define tracef(MSG, ...) debugf(io->io, MSG, ##__VA_ARGS__)
 #else
-#    define tracef(MSG, ...)
+#define tracef(MSG, ...)
 #endif
 
 /* Maximum number of peer stub instances connected to a certain stub
@@ -555,6 +555,15 @@ static int ioMethodBootstrap(struct raft_io *raft_io,
     return 0;
 }
 
+static int ioMethodRecover(struct raft_io *io,
+                           const struct raft_configuration *conf)
+{
+    /* TODO: implement this API */
+    (void)io;
+    (void)conf;
+    return RAFT_IOERR;
+}
+
 static int ioMethodSetTerm(struct raft_io *raft_io, const raft_term term)
 {
     struct io *io = raft_io->impl;
@@ -669,7 +678,7 @@ static int ioMethodTruncate(struct raft_io *raft_io, raft_index index)
 }
 
 static int ioMethodSnapshotPut(struct raft_io *raft_io,
-			       unsigned trailing,
+                               unsigned trailing,
                                struct raft_io_snapshot_put *req,
                                const struct raft_snapshot *snapshot,
                                raft_io_snapshot_put_cb cb)
@@ -906,6 +915,7 @@ static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
     raft_io->close = ioMethodClose;
     raft_io->load = ioMethodLoad;
     raft_io->bootstrap = ioMethodBootstrap;
+    raft_io->recover = ioMethodRecover;
     raft_io->set_term = ioMethodSetTerm;
     raft_io->set_vote = ioMethodSetVote;
     raft_io->append = ioMethodAppend;

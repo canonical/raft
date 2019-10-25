@@ -129,6 +129,22 @@ int raft_bootstrap(struct raft *r, const struct raft_configuration *conf)
     return 0;
 }
 
+int raft_recover(struct raft *r, const struct raft_configuration *conf)
+{
+    int rv;
+
+    if (r->state != RAFT_UNAVAILABLE) {
+        return RAFT_BUSY;
+    }
+
+    rv = r->io->recover(r->io, conf);
+    if (rv != 0) {
+        return rv;
+    }
+
+    return 0;
+}
+
 const char *raft_strerror(int errnum)
 {
     return errCodeToString(errnum);
