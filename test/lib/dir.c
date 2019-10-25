@@ -418,7 +418,7 @@ void test_dir_fill(const char *dir, const size_t n)
     close(fd);
 }
 
-void test_aio_fill(aio_context_t *ctx, unsigned n)
+int test_aio_fill(aio_context_t *ctx, unsigned n)
 {
     char buf[256];
     int fd;
@@ -448,8 +448,17 @@ void test_aio_fill(aio_context_t *ctx, unsigned n)
 
     used = atoi(buf);
 
+    /* Best effort check that nothing process is using AIO. Our own unit tests
+     * case use up to 2 event slots at the time this function is called, so we
+     * don't consider those. */
+    if (used > 2) {
+        return -1;
+    }
+
     rv = syscall(__NR_io_setup, limit - used - n, ctx);
     munit_assert_int(rv, ==, 0);
+
+    return 0;
 }
 
 void test_aio_destroy(aio_context_t ctx)

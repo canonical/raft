@@ -218,7 +218,11 @@ TEST(uvFileCreate, noResources, setupFile, tearDownFile, 0, NULL)
 {
     struct file *f = data;
     aio_context_t ctx = 0;
-    test_aio_fill(&ctx, 0);
+    int rv;
+    rv = test_aio_fill(&ctx, 0);
+    if (rv != 0) {
+        return MUNIT_SKIP;
+    }
     CREATE_ERROR_("foo",     /* file name */
                   4096,      /* file size */
                   1,         /* max concurrent writes */
@@ -476,9 +480,13 @@ TEST(uvFileWrite, noResources, setupFile, tearDownFile, 0, dir_no_aio_params)
 {
     struct file *f = data;
     aio_context_t ctx = 0;
+    int rv;
     SKIP_IF_NO_FIXTURE;
     CREATE_("foo", f->block_size, 2);
-    test_aio_fill(&ctx, 0);
+    rv = test_aio_fill(&ctx, 0);
+    if (rv != 0) {
+        return MUNIT_SKIP;
+    }
     WRITE_FAILURE(1, 0, 0, UV__ERROR,
                   "io_setup: Resource temporarily unavailable");
     test_aio_destroy(ctx);

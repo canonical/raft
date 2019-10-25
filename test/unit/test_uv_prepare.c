@@ -137,8 +137,12 @@ TEST_CASE(error, no_resources, NULL)
 {
     struct fixture *f = data;
     aio_context_t ctx = 0;
+    int rv;
     (void)params;
-    test_aio_fill(&ctx, 0);
+    rv = test_aio_fill(&ctx, 0);
+    if (rv != 0) {
+        return MUNIT_SKIP;
+    }
     PREPARE;
     WAIT_CB(RAFT_IOERR);
     test_aio_destroy(ctx);
