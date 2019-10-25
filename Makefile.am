@@ -76,6 +76,7 @@ test_integration_core_SOURCES = \
   test/integration/main_core.c \
   test/integration/test_apply.c \
   test/integration/test_barrier.c \
+  test/integration/test_bootstrap.c \
   test/integration/test_election.c \
   test/integration/test_membership.c \
   test/integration/test_replication.c \

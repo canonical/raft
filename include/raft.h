@@ -822,8 +822,8 @@ RAFT_API void raft_close(struct raft *r, raft_close_cb cb);
 
 /**
  * Bootstrap this raft instance using the given configuration. The instance must
- * not have been started yet and must be completely pristine, otherwise an error
- * is returned.
+ * not have been started yet and must be completely pristine, otherwise
+ * #RAFT_CANTBOOTSTRAP will be returned.
  */
 RAFT_API int raft_bootstrap(struct raft *r,
                             const struct raft_configuration *conf);

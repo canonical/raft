@@ -117,7 +117,9 @@ int raft_bootstrap(struct raft *r, const struct raft_configuration *conf)
 {
     int rv;
 
-    assert(r->state == RAFT_UNAVAILABLE);
+    if (r->state != RAFT_UNAVAILABLE) {
+        return RAFT_CANTBOOTSTRAP;
+    }
 
     rv = r->io->bootstrap(r->io, conf);
     if (rv != 0) {
