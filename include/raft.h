@@ -829,6 +829,31 @@ RAFT_API int raft_bootstrap(struct raft *r,
                             const struct raft_configuration *conf);
 
 /**
+ * Force a new configuration in order to recover from a loss of quorum where the
+ * current configuration cannot be restored, such as when a majority of servers
+ * die at the same time.
+ *
+ * This works by appending the new configuration directly to the log stored on
+ * disk.
+ *
+ * In order for this operation to be safe you must follow these steps:
+ *
+ * 1. Make sure that no servers in the cluster are running, either because they
+ *    died or because you manually stopped them.
+ *
+ * 2. Run @raft_recover exactly one time, on the non-dead server which has
+ *    the highest term and the longest log.
+ *
+ * 3. Copy the data directory of the server you ran @raft_recover on to all
+ *    other non-dead servers in the cluster, replacing their current data
+ *    directory.
+ *
+ * 4. Restart all servers.
+ */
+RAFT_API int raft_recover(struct raft *r,
+                          const struct raft_configuration *conf);
+
+/**
  * Start the given raft instance.
  *
  * The initial term, vote, snapshot and entries will be loaded from disk using
