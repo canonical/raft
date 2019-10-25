@@ -249,10 +249,14 @@ TEST(uvProbeIoCapabilities, noResources, setupBtrfsDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
     aio_context_t ctx = 0;
+    int rv;
     if (dir == NULL) {
         return MUNIT_SKIP;
     }
-    test_aio_fill(&ctx, 0);
+    rv = test_aio_fill(&ctx, 0);
+    if (rv != 0) {
+        return MUNIT_SKIP;
+    }
     PROBE_IO_CAPABILITIES_ERROR(dir, UV__ERROR,
                                 "io_setup: Resource temporarily unavailable");
     test_aio_destroy(ctx);

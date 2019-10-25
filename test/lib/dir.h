@@ -172,8 +172,12 @@ void test_dir_fill(const char *dir, const size_t n);
 
 /* Fill the AIO subsystem resources by allocating a lot of events to the given
  * context, and leaving only @n events available for subsequent calls to
- * @io_setup. */
-void test_aio_fill(aio_context_t *ctx, unsigned n);
+ * @io_setup.
+ *
+ * Return -1 if it looks like there is another process already using the AIO
+ * subsytem, which would most probably make the calling test flaky because there
+ * won't be exactly @n events available anymore. */
+int test_aio_fill(aio_context_t *ctx, unsigned n);
 
 /* Destroy the given AIO context. */
 void test_aio_destroy(aio_context_t ctx);
