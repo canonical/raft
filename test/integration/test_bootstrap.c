@@ -36,8 +36,8 @@ static void tearDownCluster(void *data)
 SUITE(raft_bootstrap)
 
 /* Attempting to bootstrap an instance that's already started results in
- * RAFT_CANTBOOTSTRAP. */
-TEST(raft_bootstrap, alreadyStarted, setupCluster, tearDownCluster, 0, NULL)
+ * RAFT_BUSY. */
+TEST(raft_bootstrap, busy, setupCluster, tearDownCluster, 0, NULL)
 {
     struct cluster *f = data;
     struct raft *raft;
@@ -51,7 +51,7 @@ TEST(raft_bootstrap, alreadyStarted, setupCluster, tearDownCluster, 0, NULL)
     raft = CLUSTER_RAFT(0);
     CLUSTER_CONFIGURATION(&configuration);
     rv = raft_bootstrap(raft, &configuration);
-    munit_assert_int(rv, ==, RAFT_CANTBOOTSTRAP);
+    munit_assert_int(rv, ==, RAFT_BUSY);
     raft_configuration_close(&configuration);
 
     return MUNIT_OK;
