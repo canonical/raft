@@ -16,7 +16,7 @@ libraft_la_SOURCES = \
   src/convert.c \
   src/election.c \
   src/entry.c \
-  src/error.c \
+  src/err.c \
   src/heap.c \
   src/log.c \
   src/logger_ring.c \
@@ -58,7 +58,7 @@ libtest_la_SOURCES = \
 test_unit_core_SOURCES = \
   src/byte.c \
   src/configuration.c \
-  src/error.c \
+  src/err.c \
   src/heap.c \
   src/log.c \
   src/logger_ring.c \
@@ -66,7 +66,6 @@ test_unit_core_SOURCES = \
   test/unit/test_byte.c \
   test/unit/test_configuration.c \
   test/unit/test_heap.c \
-  test/unit/test_error.c \
   test/unit/test_log.c \
   test/unit/test_queue.c \
   test/unit/test_logger_ring.c
@@ -80,6 +79,7 @@ test_integration_core_SOURCES = \
   test/integration/test_membership.c \
   test/integration/test_replication.c \
   test/integration/test_snapshot.c \
+  test/integration/test_strerror.c \
   test/integration/test_tick.c \
   test/integration/test_start.c
 test_integration_core_LDADD = libtest.la libraft.la
@@ -136,7 +136,7 @@ test_unit_uv_SOURCES += \
   src/configuration.c \
   src/logger_stream.c \
   src/entry.c \
-  src/error.c \
+  src/err.c \
   src/heap.c \
   src/snapshot.c \
   src/syscall.c \

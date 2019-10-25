@@ -5,6 +5,7 @@
 #include "assert.h"
 #include "byte.h"
 #include "logging.h"
+#include "err.h"
 #include "uv.h"
 #include "uv_encoding.h"
 
@@ -266,7 +267,7 @@ static void readCb(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
             rv =
                 uvDecodeMessage(type, &s->header, &s->message, &s->payload.len);
             if (rv != 0) {
-                uvWarnf(s->uv, "decode message: %s", raft_strerror(rv));
+                uvWarnf(s->uv, "decode message: %s", errCodeToString(rv));
                 goto abort;
             }
 
@@ -417,7 +418,7 @@ static void acceptCb(struct raft_uv_transport *transport,
 
     rv = addServer(uv, id, address, stream);
     if (rv != 0) {
-        uvWarnf(uv, "add server: %s", raft_strerror(rv));
+        uvWarnf(uv, "add server: %s", errCodeToString(rv));
         goto abort;
     }
 
