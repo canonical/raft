@@ -519,6 +519,11 @@ struct raft_io
     int (*bootstrap)(struct raft_io *io, const struct raft_configuration *conf);
 
     /**
+     * Force appending a new configuration as last entry of the log.
+     */
+    int (*recover)(struct raft_io *io, const struct raft_configuration *conf);
+
+    /**
      * Synchronously persist current term (and nil vote). The implementation
      * MUST ensure that the change is durable before returning (e.g. using
      * fdatasync() or #O_DSYNC).
