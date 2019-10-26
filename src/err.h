@@ -3,12 +3,15 @@
 #ifndef ERROR_H_
 #define ERROR_H_
 
-/* Maximum length of an error message. */
-#define ERRMSG_MAX_LEN 2048
+#include <stddef.h>
 
-/* Convenience for declaring a fixed-size char buffer holding an error
- * message. */
-typedef char ErrMsg[ERRMSG_MAX_LEN];
+/* Format an error message. This is basically just a version of asprintf that
+ * uses raft_malloc(). */
+char *errMsgPrintf(const char *format, ...);
+
+/* Wrap the given error message with an additional prefix message. The wrapped
+ * message will be freed. */
+char *errMsgWrapf(char *e, const char *format, ...);
 
 /* Convert a numeric raft error code to a human-readable error message. */
 const char *errCodeToString(int errnum);

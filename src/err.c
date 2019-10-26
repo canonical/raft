@@ -1,6 +1,89 @@
 #include "err.h"
 
+#include <string.h>
+
 #include "../include/raft.h"
+#include "assert.h"
+
+#define WRAP_SEP ": "
+#define WRAP_SEP_LEN (int)strlen(WRAP_SEP)
+
+char *errMsgPrintf(const char *format, ...)
+{
+    int size;
+    char *e;
+    va_list args;
+    int rv;
+
+    va_start(args, format);
+    size = vsnprintf(NULL, 0, format, args);
+    va_end(args);
+
+    if (size == -1) {
+        return NULL;
+    }
+    size++;
+
+    e = raft_malloc(size);
+    if (e == NULL) {
+        return NULL;
+    }
+
+    va_start(args, format);
+    rv = vsnprintf(e, size, format, args);
+    va_end(args);
+
+    assert(rv == size - 1);
+
+    return e;
+}
+
+char *errMsgWrapf(char *e, const char *format, ...)
+{
+    int size;
+    char *prefix;
+    char *result;
+    va_list args;
+    int rv;
+
+    /* Calculate the lenght of the prefix. */
+    va_start(args, format);
+    size = vsnprintf(NULL, 0, format, args);
+    va_end(args);
+
+    if (size == -1) {
+        return e;
+    }
+    size++;
+
+    prefix = raft_malloc(size);
+    if (prefix == NULL) {
+        return e;
+    }
+
+    va_start(args, format);
+    rv = vsnprintf(prefix, size, format, args);
+    va_end(args);
+
+    assert(rv == size - 1);
+
+    /* Total size of the new message. */
+    size += WRAP_SEP_LEN + strlen(e);
+
+    result = raft_malloc(size);
+    if (result == NULL) {
+        raft_free(prefix);
+        return e;
+    }
+
+    rv = snprintf(result, size, "%s" WRAP_SEP "%s", prefix, e);
+    assert(rv == size - 1);
+
+    raft_free(prefix);
+    raft_free(e);
+
+    return result;
+}
 
 #define ERR_CODE_TO_STRING_MAP(X)                                       \
     X(RAFT_NOMEM, "out of memory")                                      \
@@ -23,7 +106,7 @@
     X(RAFT_IOERR, "I/O error")
 
 #define ERR_CODE_TO_STRING_CASE(CODE, MSG) \
-    case CODE:                          \
+    case CODE:                             \
         return MSG;
 
 const char *errCodeToString(int errnum)
