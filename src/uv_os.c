@@ -7,6 +7,7 @@
 #include <sys/uio.h>
 #include <sys/vfs.h>
 #include <unistd.h>
+#include <uv.h>
 
 #include "assert.h"
 #include "syscall.h"
@@ -25,26 +26,26 @@ void uvJoin(const uvDir dir, const uvFilename filename, uvPath path)
 
 int uvEnsureDir(const uvDir dir, char *errmsg)
 {
-    struct stat sb;
+    struct uv_fs_s req;
     int rv;
 
     /* Check that the given path doesn't exceed our static buffer limit */
     assert(strnlen(dir, UV__DIR_MAX_LEN + 1) <= UV__DIR_MAX_LEN);
 
     /* Make sure we have a directory we can write into. */
-    rv = stat(dir, &sb);
-    if (rv == -1) {
-        if (errno == ENOENT) {
+    rv = uv_fs_stat(NULL, &req, dir, NULL);
+    if (rv != 0) {
+        if (rv == UV_ENOENT) {
             rv = mkdir(dir, DEFAULT_DIR_PERM);
             if (rv != 0) {
                 uvErrMsgSys(errmsg, mkdir, errno);
                 return UV__ERROR;
             }
         } else {
-            uvErrMsgSys(errmsg, stat, errno);
+            uvErrMsgSys(errmsg, stat, -rv);
             return UV__ERROR;
         }
-    } else if ((sb.st_mode & S_IFMT) != S_IFDIR) {
+    } else if ((req.statbuf.st_mode & S_IFMT) != S_IFDIR) {
         uvErrMsgPrintf(errmsg, "%s", strerror(ENOTDIR));
         return UV__ERROR;
     }
