@@ -9,25 +9,6 @@
 
 /******************************************************************************
  *
- * uvJoin
- *
- *****************************************************************************/
-
-SUITE(uvJoin)
-
-/* Join a directory path and a filename into a full path. */
-TEST(uvJoin, path, NULL, NULL, 0, NULL)
-{
-    const uvDir dir = "/foo";
-    const uvFilename filename = "bar";
-    uvPath path;
-    uvJoin(dir, filename, path);
-    munit_assert_string_equal(path, "/foo/bar");
-    return MUNIT_OK;
-}
-
-/******************************************************************************
- *
  * uvEnsureDir
  *
  *****************************************************************************/

@@ -17,7 +17,7 @@
 /* Default permissions when creating a directory. */
 #define DEFAULT_DIR_PERM 0700
 
-void uvJoin(const uvDir dir, const uvFilename filename, uvPath path)
+static void uvJoin(const uvDir dir, const uvFilename filename, uvPath path)
 {
     strcpy(path, dir);
     strcat(path, "/");

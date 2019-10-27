@@ -33,9 +33,6 @@ typedef char uvFilename[UV__FILENAME_MAX_LEN];
 /* Fixed length string that can hold a directory path. */
 typedef char uvDir[UV__DIR_MAX_LEN];
 
-/* Concatenate a directory and a file. */
-void uvJoin(const uvDir dir, const uvFilename filename, uvPath path);
-
 /* Check that the given directory exists, and try to create it if it doesn't. */
 int uvEnsureDir(const uvDir dir, char *errmsg);
 

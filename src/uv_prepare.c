@@ -1,4 +1,5 @@
 #include <unistd.h>
+#include <string.h>
 
 #include "assert.h"
 #include "uv.h"
@@ -206,7 +207,9 @@ static int prepareSegment(struct uv *uv)
     s->counter = uv->prepare_next_counter;
 
     sprintf(s->filename, UV__OPEN_TEMPLATE, s->counter);
-    uvJoin(uv->dir, s->filename, s->path);
+    strcpy(s->path, uv->dir);
+    strcat(s->path, "/");
+    strcat(s->path, s->filename);
 
     uvDebugf(uv, "create open segment %s", s->filename);
     rv = uvFileCreate(s->file, &s->create, uv->dir, s->filename,
