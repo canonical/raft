@@ -24,7 +24,8 @@ static void workCb(uv_work_t *work)
     struct uv *uv = s->uv;
     char filename1[UV__FILENAME_MAX_LEN];
     char filename2[UV__FILENAME_MAX_LEN];
-    char errmsg[2048];
+    char errmsg_[2048];
+    char *errmsg = errmsg_;
     int rv;
 
     sprintf(filename1, UV__OPEN_TEMPLATE, s->counter);
@@ -35,7 +36,7 @@ static void workCb(uv_work_t *work)
     /* If the segment hasn't actually been used (because the writer has been
      * closed or aborted before making any write), then let's just remove it. */
     if (s->used == 0) {
-        uvUnlinkFile(uv->dir, filename1, errmsg);
+        uvTryUnlinkFile(uv->dir, filename1);
         goto out;
     }
 

@@ -178,7 +178,7 @@ err:
     return UV__ERROR;
 }
 
-int uvUnlinkFile(const char *dir, const char *filename, char *errmsg)
+int uvUnlinkFile(const char *dir, const char *filename, char **errmsg)
 {
     char path[UV__PATH_MAX_LEN];
     int rv;
@@ -189,7 +189,7 @@ int uvUnlinkFile(const char *dir, const char *filename, char *errmsg)
     uvJoin(dir, filename, path);
     rv = unlink(path);
     if (rv == -1) {
-        uvErrMsgSys(errmsg, unlink, errno);
+        *errmsg = uvSysErrMsg("unlink", -errno);
         return UV__ERROR;
     }
     return 0;
@@ -197,8 +197,12 @@ int uvUnlinkFile(const char *dir, const char *filename, char *errmsg)
 
 void uvTryUnlinkFile(const char *dir, const char *filename)
 {
-    uvErrMsg errmsg;
-    uvUnlinkFile(dir, filename, errmsg);
+    char *errmsg;
+    int rv;
+    rv = uvUnlinkFile(dir, filename, &errmsg);
+    if (rv != 0) {
+        raft_free(errmsg);
+    }
 }
 
 int uvTruncateFile(const char *dir,

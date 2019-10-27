@@ -73,9 +73,10 @@ static void workCb(uv_work_t *work)
             continue;
         }
 
-        rv = uvUnlinkFile(uv->dir, segment->filename, errmsg);
+        rv = uvUnlinkFile(uv->dir, segment->filename, &errmsg);
         if (rv != 0) {
             uvErrorf(uv, "unlink segment %s: %s", segment->filename, errmsg);
+            raft_free(errmsg);
             rv = RAFT_IOERR;
             goto err_after_list;
         }

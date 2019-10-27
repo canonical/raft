@@ -118,7 +118,7 @@ int uvSegmentKeepTrailing(struct uv *uv,
 {
     raft_index retain_index;
     size_t i;
-    uvErrMsg errmsg;
+    char *errmsg;
     int rv;
 
     assert(last_index > 0);
@@ -140,9 +140,10 @@ int uvSegmentKeepTrailing(struct uv *uv,
         }
         if (segment->end_index < retain_index) {
             uvDebugf(uv, "deleting closed segment %s", segment->filename);
-            rv = uvUnlinkFile(uv->dir, segment->filename, errmsg);
+            rv = uvUnlinkFile(uv->dir, segment->filename, &errmsg);
             if (rv != 0) {
                 uvErrorf(uv, "unlink %s: %s", segment->filename, errmsg);
+                raft_free(errmsg);
                 return rv;
             }
             *deleted = i;
@@ -432,7 +433,8 @@ static int loadOpen(struct uv *uv,
     struct raft_entry *tmp_entries; /* Entries in current batch */
     unsigned tmp_n_entries;         /* Number of entries in current batch */
     int i;
-    char errmsg[2048];
+    char errmsg_[2048];
+    char *errmsg = errmsg_;
     int rv;
 
     first_index = *next_index;
@@ -563,9 +565,10 @@ done:
     /* If the segment has no valid entries in it, we remove it. Otherwise we
      * rename it and keep it. */
     if (remove) {
-        rv = uvUnlinkFile(uv->dir, info->filename, errmsg);
+        rv = uvUnlinkFile(uv->dir, info->filename, &errmsg);
         if (rv != 0) {
             uvErrorf(uv, "unlink %s: %s", info->filename, errmsg);
+            raft_free(errmsg);
             rv = RAFT_IOERR;
             goto err_after_open;
         }

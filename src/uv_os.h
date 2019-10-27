@@ -59,7 +59,7 @@ int uvMakeFile(const char *dir,
                char **errmsg);
 
 /* Delete a file in a directory. */
-int uvUnlinkFile(const char *dir, const char *filename, char *errmsg);
+int uvUnlinkFile(const char *dir, const char *filename, char **errmsg);
 
 /* Like uvUnlinkFile, but ignoring errors. */
 void uvTryUnlinkFile(const char *dir, const char *filename);
