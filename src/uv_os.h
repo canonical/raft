@@ -36,7 +36,7 @@
 int uvEnsureDir(const char *dir, char **errmsg);
 
 /* Sync the given directory. */
-int uvSyncDir(const char *dir, char *errmsg);
+int uvSyncDir(const char *dir, char **errmsg);
 
 /* Return all entries of the given directory, in alphabetically sorted order. */
 int uvScanDir(const char *dir,

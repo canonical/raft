@@ -20,7 +20,7 @@
 #define DEFAULT_DIR_PERM 0700
 
 /* Format an error message caused by a failed system call or stdlib function. */
-#define uvSysErr(FUNC, CODE) errMsgPrintf(FUNC ": %s", uv_strerror(rv))
+#define uvSysErr(FUNC, CODE) errMsgPrintf(FUNC ": %s", uv_strerror(CODE))
 
 static void uvJoin(const char *dir, const char *filename, char *path)
 {
@@ -55,21 +55,21 @@ int uvEnsureDir(const char *dir, char **errmsg)
     return 0;
 }
 
-int uvSyncDir(const char *dir, char *errmsg)
+int uvSyncDir(const char *dir, char **errmsg)
 {
     struct uv_fs_s req;
-    int fd;
+    uv_file fd;
     int rv;
     fd = uv_fs_open(NULL, &req, dir, UV_FS_O_RDONLY | UV_FS_O_DIRECTORY, 0,
                     NULL);
     if (fd < 0) {
-        uvErrMsgSys(errmsg, open, -fd);
+        *errmsg = uvSysErr("open", fd);
         return UV__ERROR;
     }
-    rv = fsync(fd);
+    rv = uv_fs_fsync(NULL, &req, fd, NULL);
     close(fd);
-    if (rv == -1) {
-        uvErrMsgSys(errmsg, fsync, errno);
+    if (rv != 0) {
+        *errmsg = uvSysErr("fsync", rv);
         return UV__ERROR;
     }
     return 0;
@@ -262,7 +262,7 @@ int uvRenameFile(const char *dir,
         uvErrMsgSys(errmsg, rename, errno);
         return UV__ERROR;
     }
-    rv = uvSyncDir(dir, errmsg);
+    rv = uvSyncDir(dir, &errmsg);
     if (rv != 0) {
         return rv;
     }

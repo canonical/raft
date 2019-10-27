@@ -18,6 +18,7 @@ static void createWorkCb(uv_work_t *work)
 {
     struct uvFileCreate *req; /* Create file request object */
     struct uvFile *f;         /* File handle */
+    char *errmsg;
     int rv;
 
     req = work->data;
@@ -44,8 +45,10 @@ static void createWorkCb(uv_work_t *work)
         uvErrMsgSys(req->errmsg, fsync, errno);
         goto err;
     }
-    rv = uvSyncDir(req->dir, req->errmsg);
+    rv = uvSyncDir(req->dir, &errmsg);
     if (rv != 0) {
+        strcpy(req->errmsg, errmsg);
+        raft_free(errmsg);
         /* UNTESTED: should fail only in case of disk errors */
         goto err;
     }

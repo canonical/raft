@@ -913,7 +913,8 @@ int uvSegmentCreateFirstClosed(struct uv *uv,
 {
     struct raft_buffer buf;
     char filename[UV__FILENAME_MAX_LEN];
-    char errmsg[2048];
+    char errmsg_[2048];
+    char *errmsg = errmsg_;
     int fd;
     int rv;
 
@@ -944,9 +945,10 @@ int uvSegmentCreateFirstClosed(struct uv *uv,
     close(fd);
     raft_free(buf.base);
 
-    rv = uvSyncDir(uv->dir, errmsg);
+    rv = uvSyncDir(uv->dir, &errmsg);
     if (rv != 0) {
         uvErrorf(uv, "sync %s: %s", uv->dir, errmsg);
+        raft_free(errmsg);
         return RAFT_IOERR;
     }
 
