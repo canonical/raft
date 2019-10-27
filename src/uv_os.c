@@ -57,11 +57,13 @@ int uvEnsureDir(const char *dir, char **errmsg)
 
 int uvSyncDir(const char *dir, char *errmsg)
 {
+    struct uv_fs_s req;
     int fd;
     int rv;
-    fd = open(dir, O_RDONLY | O_DIRECTORY);
-    if (fd == -1) {
-        uvErrMsgSys(errmsg, open, errno);
+    fd = uv_fs_open(NULL, &req, dir, UV_FS_O_RDONLY | UV_FS_O_DIRECTORY, 0,
+                    NULL);
+    if (fd < 0) {
+        uvErrMsgSys(errmsg, open, -fd);
         return UV__ERROR;
     }
     rv = fsync(fd);
