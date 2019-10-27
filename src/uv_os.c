@@ -61,6 +61,18 @@ int uvEnsureDir(const char *dir, char **errmsg)
 #define UV_FS_O_DIRECTORY O_DIRECTORY
 #endif
 
+#if !defined(UV_FS_O_WRONLY)
+#define UV_FS_O_WRONLY O_WRONLY
+#endif
+
+#if !defined(UV_FS_O_CREAT)
+#define UV_FS_O_CREAT O_CREAT
+#endif
+
+#if !defined(UV_FS_O_EXCL)
+#define UV_FS_O_EXCL O_EXCL
+#endif
+
 int uvSyncDir(const char *dir, char **errmsg)
 {
     struct uv_fs_s req;
