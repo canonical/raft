@@ -470,10 +470,11 @@ static int loadOpen(struct uv *uv,
      * the segment was allocated but never written. */
     if (format != UV__DISK_FORMAT) {
         if (format == 0) {
-            rv = uvIsFilledWithTrailingZeros(fd, &all_zeros, errmsg);
+            rv = uvIsFilledWithTrailingZeros(fd, &all_zeros, &errmsg);
             if (rv != 0) {
                 uvErrorf(uv, "check if %s is zeroed: %s", info->filename,
                          errmsg);
+                raft_free(errmsg);
                 rv = RAFT_IOERR;
                 goto err_after_open;
             }
@@ -517,10 +518,11 @@ static int loadOpen(struct uv *uv,
              * incomplete data. */
             lseek(fd, offset, SEEK_SET);
 
-            rv2 = uvIsFilledWithTrailingZeros(fd, &all_zeros, errmsg);
+            rv2 = uvIsFilledWithTrailingZeros(fd, &all_zeros, &errmsg);
             if (rv2 != 0) {
                 uvErrorf(uv, "check if %s is zeroed: %s", info->filename, i,
                          errmsg);
+                raft_free(errmsg);
                 rv = RAFT_IOERR;
                 goto err_after_open;
             }

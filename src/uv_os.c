@@ -332,7 +332,7 @@ int uvWriteFully(const int fd, void *buf, const size_t n, char **errmsg)
     return 0;
 }
 
-int uvIsFilledWithTrailingZeros(const int fd, bool *flag, char *errmsg)
+int uvIsFilledWithTrailingZeros(const int fd, bool *flag, char **errmsg)
 {
     off_t size;
     off_t offset;
@@ -346,7 +346,7 @@ int uvIsFilledWithTrailingZeros(const int fd, bool *flag, char *errmsg)
     /* Figure the size of the rest of the file. */
     size = lseek(fd, 0, SEEK_END);
     if (size == -1) {
-        uvErrMsgSys(errmsg, lseek, errno);
+        *errmsg = uvSysErrMsg("lseek", -errno);
         return UV__ERROR;
     }
     size -= offset;
@@ -354,21 +354,18 @@ int uvIsFilledWithTrailingZeros(const int fd, bool *flag, char *errmsg)
     /* Reposition the file descriptor offset to the original offset. */
     offset = lseek(fd, offset, SEEK_SET);
     if (offset == -1) {
-        uvErrMsgSys(errmsg, lseek, errno);
+        *errmsg = uvSysErrMsg("lseek", -errno);
         return UV__ERROR;
     }
 
     data = raft_malloc(size);
     if (data == NULL) {
-        uvErrMsgPrintf(errmsg, "can't allocate read buffer");
+        *errmsg = errMsgPrintf("can't allocate read buffer");
         return UV__ERROR;
     }
 
-    char *errmsg2;
-    rv = uvReadFully(fd, data, size, &errmsg2);
+    rv = uvReadFully(fd, data, size, errmsg);
     if (rv != 0) {
-        strcpy(errmsg, errmsg2);
-        raft_free(errmsg2);
         return rv;
     }
 
