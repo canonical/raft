@@ -34,9 +34,9 @@ int uvEnsureDir(const char *dir, char *errmsg)
     rv = uv_fs_stat(NULL, &req, dir, NULL);
     if (rv != 0) {
         if (rv == UV_ENOENT) {
-            rv = mkdir(dir, DEFAULT_DIR_PERM);
+	  rv = uv_fs_mkdir(NULL, &req, dir, DEFAULT_DIR_PERM, NULL);
             if (rv != 0) {
-                uvErrMsgSys(errmsg, mkdir, errno);
+                uvErrMsgSys(errmsg, mkdir, -rv);
                 return UV__ERROR;
             }
         } else {
