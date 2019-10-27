@@ -83,7 +83,7 @@ int uvIsEmptyFile(const char *dir,
                   char **errmsg);
 
 /* Read exactly @n bytes from the given file descriptor. */
-int uvReadFully(int fd, void *buf, size_t n, char *errmsg);
+int uvReadFully(int fd, void *buf, size_t n, char **errmsg);
 
 /* Write exactly @n bytes to the given file descriptor. */
 int uvWriteFully(int fd, void *buf, size_t n, char *errmsg);

@@ -300,17 +300,17 @@ int uvIsEmptyFile(const char *dir,
     return 0;
 }
 
-int uvReadFully(const int fd, void *buf, const size_t n, char *errmsg)
+int uvReadFully(const int fd, void *buf, const size_t n, char **errmsg)
 {
     int rv;
     rv = read(fd, buf, n);
     if (rv == -1) {
-        uvErrMsgSys(errmsg, read, errno);
+        *errmsg = uvSysErrMsg("read", -errno);
         return UV__ERROR;
     }
     assert(rv >= 0);
     if ((size_t)rv < n) {
-        uvErrMsgPrintf(errmsg, "short read: %d bytes instead of %ld", rv, n);
+        *errmsg = errMsgPrintf("short read: %d bytes instead of %ld", rv, n);
         return UV__NODATA;
     }
     return 0;
@@ -364,8 +364,11 @@ int uvIsFilledWithTrailingZeros(const int fd, bool *flag, char *errmsg)
         return UV__ERROR;
     }
 
-    rv = uvReadFully(fd, data, size, errmsg);
+    char *errmsg2;
+    rv = uvReadFully(fd, data, size, &errmsg2);
     if (rv != 0) {
+        strcpy(errmsg, errmsg2);
+        raft_free(errmsg2);
         return rv;
     }
 

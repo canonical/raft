@@ -171,9 +171,10 @@ static int openSegment(struct uv *uv,
         raft_free(errmsg);
         return RAFT_IOERR;
     }
-    rv = uvReadFully(*fd, format, sizeof *format, errmsg);
+    rv = uvReadFully(*fd, format, sizeof *format, &errmsg);
     if (rv != 0) {
         uvErrorf(uv, "read %s: %s", filename, errmsg);
+        raft_free(errmsg);
         close(*fd);
         return RAFT_IOERR;
     }
@@ -199,7 +200,8 @@ static int loadEntriesBatch(struct uv *uv,
     uint32_t crc1;             /* Target checksum */
     uint32_t crc2;             /* Actual checksum */
     off_t offset;              /* Current segment file offset */
-    char errmsg[2048];
+    char errmsg_[2048];
+    char *errmsg = errmsg_;
     int rv;
 
     /* Save the current offset, to provide more information when logging. */
@@ -208,9 +210,10 @@ static int loadEntriesBatch(struct uv *uv,
     /* Read the preamble, consisting of the checksums for the batch header and
      * data buffers and the first 8 bytes of the header buffer, which contains
      * the number of entries in the batch. */
-    rv = uvReadFully(fd, preamble, sizeof preamble, errmsg);
+    rv = uvReadFully(fd, preamble, sizeof preamble, &errmsg);
     if (rv != 0) {
         uvErrorf(uv, "read: %s", errmsg);
+        raft_free(errmsg);
         return RAFT_IOERR;
     }
 
@@ -244,9 +247,10 @@ static int loadEntriesBatch(struct uv *uv,
     *(uint64_t *)header.base = preamble[1];
 
     rv = uvReadFully(fd, (uint8_t *)header.base + sizeof(uint64_t),
-                     header.len - sizeof(uint64_t), errmsg);
+                     header.len - sizeof(uint64_t), &errmsg);
     if (rv != 0) {
         uvErrorf(uv, "read: %s", errmsg);
+        raft_free(errmsg);
         rv = RAFT_IOERR;
         goto err_after_header_alloc;
     }
@@ -278,9 +282,10 @@ static int loadEntriesBatch(struct uv *uv,
         rv = RAFT_NOMEM;
         goto err_after_header_decode;
     }
-    rv = uvReadFully(fd, data.base, data.len, errmsg);
+    rv = uvReadFully(fd, data.base, data.len, &errmsg);
     if (rv != 0) {
         uvErrorf(uv, "read: %s", errmsg);
+        raft_free(errmsg);
         rv = RAFT_IOERR;
         goto err_after_data_alloc;
     }
@@ -444,7 +449,7 @@ static int loadOpen(struct uv *uv,
     rv = uvIsEmptyFile(uv->dir, info->filename, &empty, &errmsg);
     if (rv != 0) {
         uvErrorf(uv, "check if %s is empty: %s", info->filename, errmsg);
-	raft_free(errmsg);
+        raft_free(errmsg);
         rv = RAFT_IOERR;
         goto err;
     }

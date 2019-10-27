@@ -76,17 +76,20 @@ static int loadFile(struct uv *uv,
     }
 
     /* Read the content of the metadata file. */
-    rv = uvReadFully(fd, buf, sizeof buf, errmsg);
+    rv = uvReadFully(fd, buf, sizeof buf, &errmsg);
     if (rv != 0) {
         if (rv != UV__NODATA) {
             uvErrorf(uv, "read %s: %s", filename, errmsg);
-            return RAFT_IOERR;
+            rv = RAFT_IOERR;
+        } else {
+            /* Assume that the server crashed while writing this metadata file,
+             * and pretend it has not been written at all. */
+            uvWarnf(uv, "read %s: ignore incomplete data", filename);
+            close(fd);
+            rv = 0;
         }
-        /* Assume that the server crashed while writing this metadata file, and
-         * pretend it has not been written at all. */
-        uvWarnf(uv, "read %s: ignore incomplete data", filename);
-        close(fd);
-        return 0;
+	raft_free(errmsg);
+        return rv;
     };
 
     close(fd);
