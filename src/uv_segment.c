@@ -161,11 +161,13 @@ static int openSegment(struct uv *uv,
                        int *fd,
                        uint64_t *format)
 {
-    char errmsg[2048];
+    char errmsg_[2048];
+    char *errmsg = errmsg_;
     int rv;
-    rv = uvOpenFile(uv->dir, filename, flags, fd, errmsg);
+    rv = uvOpenFile(uv->dir, filename, flags, fd, &errmsg);
     if (rv != 0) {
         uvErrorf(uv, "open %s: %s", filename, errmsg);
+        raft_free(errmsg);
         return RAFT_IOERR;
     }
     rv = uvReadFully(*fd, format, sizeof *format, errmsg);
@@ -928,10 +930,11 @@ int uvSegmentCreateFirstClosed(struct uv *uv,
     }
 
     /* Open the file. */
-    rv =
-        uvOpenFile(uv->dir, filename, O_WRONLY | O_CREAT | O_EXCL, &fd, errmsg);
+    rv = uvOpenFile(uv->dir, filename, O_WRONLY | O_CREAT | O_EXCL, &fd,
+                    &errmsg);
     if (rv != 0) {
         uvErrorf(uv, "open %s: %s", filename, errmsg);
+        raft_free(errmsg);
         rv = RAFT_IOERR;
         goto err_after_configuration_encode;
     }
@@ -973,7 +976,8 @@ int uvSegmentTruncate(struct uv *uv,
     size_t n;
     size_t m;
     int fd;
-    char errmsg[2048];
+    char errmsg_[2048];
+    char *errmsg = errmsg_;
     int rv;
 
     assert(!segment->is_open);
@@ -998,9 +1002,11 @@ int uvSegmentTruncate(struct uv *uv,
     sprintf(filename, UV__CLOSED_TEMPLATE, segment->first_index, index - 1);
 
     /* Open the file. */
-    rv =
-        uvOpenFile(uv->dir, filename, O_WRONLY | O_CREAT | O_EXCL, &fd, errmsg);
+    rv = uvOpenFile(uv->dir, filename, O_WRONLY | O_CREAT | O_EXCL, &fd,
+                    &errmsg);
     if (rv != 0) {
+        uvErrorf(uv, "open %s: %s", filename, errmsg);
+        raft_free(errmsg);
         goto out_after_load;
     }
 

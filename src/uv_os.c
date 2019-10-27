@@ -85,7 +85,7 @@ int uvOpenFile(const char *dir,
                const char *filename,
                int flags,
                uv_file *fd,
-               char *errmsg)
+               char **errmsg)
 {
     struct uv_fs_s req;
     char path[UV__PATH_MAX_LEN];
@@ -98,7 +98,7 @@ int uvOpenFile(const char *dir,
     if (*fd < 0) {
         int rv = *fd;
         *fd = -1;
-        uvErrMsgSys(errmsg, open, -rv);
+        *errmsg = uvSysErrMsg("open", rv);
         return rv == UV_ENOENT ? UV__NOENT : UV__ERROR;
     }
     return 0;
@@ -134,6 +134,7 @@ int uvMakeFile(const char *dir,
     int fd;
     int rv;
     size_t size;
+    char *errmsg_;
     unsigned i;
 
     assert(UV__DIR_HAS_VALID_LEN(dir));
@@ -143,8 +144,10 @@ int uvMakeFile(const char *dir,
     for (i = 0; i < n_bufs; i++) {
         size += bufs[i].len;
     }
-    rv = uvOpenFile(dir, filename, flags, &fd, errmsg);
+    rv = uvOpenFile(dir, filename, flags, &fd, &errmsg_);
     if (rv != 0) {
+        strcpy(errmsg, errmsg_);
+        raft_free(errmsg);
         return rv;
     }
     rv = writev(fd, (const struct iovec *)bufs, n_bufs);
@@ -204,6 +207,7 @@ int uvTruncateFile(const char *dir,
                    char *errmsg)
 {
     char path[UV__PATH_MAX_LEN];
+    char *errmsg2;
     int fd;
     int rv;
 
@@ -212,8 +216,10 @@ int uvTruncateFile(const char *dir,
 
     uvJoin(dir, filename, path);
 
-    rv = uvOpenFile(dir, filename, O_RDWR, &fd, errmsg);
+    rv = uvOpenFile(dir, filename, O_RDWR, &fd, &errmsg2);
     if (rv != 0) {
+        strcpy(errmsg, errmsg2);
+        raft_free(errmsg2);
         goto err;
     }
     rv = ftruncate(fd, offset);

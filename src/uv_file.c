@@ -428,7 +428,8 @@ int uvFileCreate(struct uvFile *f,
                  char *errmsg)
 {
     int flags = O_WRONLY | O_CREAT | O_EXCL; /* Common open flags */
-    uvErrMsg errmsg2;
+    char errmsg2_[2048];
+    char *errmsg2 = errmsg2_;
     int rv;
 
     assert(UV__DIR_HAS_VALID_LEN(dir));
@@ -456,8 +457,10 @@ int uvFileCreate(struct uvFile *f,
     f->n_events = max_n_writes;
 
     /* Try to create a brand new file. */
-    rv = uvOpenFile(dir, filename, flags, &f->fd, errmsg);
+    rv = uvOpenFile(dir, filename, flags, &f->fd, &errmsg2);
     if (rv != 0) {
+        strcpy(errmsg, errmsg2);
+        raft_free(errmsg2);
         goto err;
     }
 

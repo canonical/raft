@@ -133,15 +133,17 @@ static int loadMeta(struct uv *uv,
     unsigned crc1;
     unsigned crc2;
     int fd;
-    char errmsg[2048];
+    char errmsg_[2048];
+    char *errmsg = errmsg_;
     int rv;
 
     snapshot->term = info->term;
     snapshot->index = info->index;
 
-    rv = uvOpenFile(uv->dir, info->filename, O_RDONLY, &fd, errmsg);
+    rv = uvOpenFile(uv->dir, info->filename, O_RDONLY, &fd, &errmsg);
     if (rv != 0) {
         uvErrorf(uv, "open %s: %s", info->filename, errmsg);
+        raft_free(errmsg);
         rv = RAFT_IOERR;
         goto err;
     }
@@ -226,7 +228,8 @@ static int loadData(struct uv *uv,
     struct stat sb;
     char filename[UV__FILENAME_MAX_LEN];
     struct raft_buffer buf;
-    char errmsg[2048];
+    char errmsg_[2048];
+    char *errmsg = errmsg_;
     int fd;
     int rv;
 
@@ -239,9 +242,10 @@ static int loadData(struct uv *uv,
         goto err;
     }
 
-    rv = uvOpenFile(uv->dir, filename, O_RDONLY, &fd, errmsg);
+    rv = uvOpenFile(uv->dir, filename, O_RDONLY, &fd, &errmsg);
     if (rv != 0) {
         uvErrorf(uv, "open %s: %s", filename, errmsg);
+	raft_free(errmsg);
         rv = RAFT_IOERR;
         goto err;
     }

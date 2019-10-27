@@ -50,7 +50,8 @@ static int loadFile(struct uv *uv,
     char filename[METADATA_FILENAME_SIZE]; /* Filename of the metadata file */
     uint8_t buf[METADATA_CONTENT_SIZE];    /* Content of metadata file */
     int fd;
-    char errmsg[2048];
+    char errmsg_[2048];
+    char *errmsg = errmsg_;
     int rv;
 
     assert(n == 1 || n == 2);
@@ -61,14 +62,17 @@ static int loadFile(struct uv *uv,
     memset(metadata, 0, sizeof *metadata);
 
     /* Open the metadata file, if it exists. */
-    rv = uvOpenFile(uv->dir, filename, O_RDONLY, &fd, errmsg);
+    rv = uvOpenFile(uv->dir, filename, O_RDONLY, &fd, &errmsg);
     if (rv != 0) {
         if (rv != UV__NOENT) {
             uvErrorf(uv, "open %s: %s", filename, errmsg);
-            return RAFT_IOERR;
+            rv = RAFT_IOERR;
+        } else {
+            rv = 0;
         }
+        raft_free(errmsg);
         /* The file does not exist, just return. */
-        return 0;
+        return rv;
     }
 
     /* Read the content of the metadata file. */
@@ -198,7 +202,8 @@ int uvMetadataStore(struct uv *uv, const struct uvMetadata *metadata)
     const int flags = O_WRONLY | O_CREAT | O_SYNC | O_TRUNC;
     unsigned short n;
     int fd;
-    char errmsg[2048];
+    char errmsg_[2048];
+    char *errmsg = errmsg_;
     int rv;
 
     assert(metadata->version > 0);
@@ -211,9 +216,10 @@ int uvMetadataStore(struct uv *uv, const struct uvMetadata *metadata)
     filenameOf(n, filename);
 
     /* Write the metadata file, creating it if it does not exist. */
-    rv = uvOpenFile(uv->dir, filename, flags, &fd, errmsg);
+    rv = uvOpenFile(uv->dir, filename, flags, &fd, &errmsg);
     if (rv != 0) {
         uvErrorf(uv, "open %s: %s", filename, errmsg);
+        raft_free(errmsg);
         return RAFT_IOERR;
     }
 

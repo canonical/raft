@@ -103,13 +103,14 @@ TEST(uvSyncDir, noExists, NULL, NULL, 0, NULL)
  *****************************************************************************/
 
 /* Open a file the fixture's tmpdir. */
-#define OPEN_FILE_ERROR(DIR, FILENAME, FLAGS, RV, ERRMSG)        \
-    {                                                            \
-        int fd;                                                  \
-        uvErrMsg errmsg;                                         \
-        int rv_ = uvOpenFile(DIR, FILENAME, FLAGS, &fd, errmsg); \
-        munit_assert_int(rv_, ==, RV);                           \
-        munit_assert_string_equal(errmsg, ERRMSG);               \
+#define OPEN_FILE_ERROR(DIR, FILENAME, FLAGS, RV, ERRMSG)         \
+    {                                                             \
+        int fd;                                                   \
+        char *errmsg;                                             \
+        int rv_ = uvOpenFile(DIR, FILENAME, FLAGS, &fd, &errmsg); \
+        munit_assert_int(rv_, ==, RV);                            \
+        munit_assert_string_equal(errmsg, ERRMSG);                \
+        raft_free(errmsg);                                        \
     }
 
 SUITE(uvOpenFile)
@@ -119,7 +120,7 @@ TEST(uvOpenFile, noExists, setupDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
     OPEN_FILE_ERROR(dir, "foo", O_RDONLY, UV__NOENT,
-                    "open: No such file or directory");
+                    "open: no such file or directory");
     return MUNIT_OK;
 }
 

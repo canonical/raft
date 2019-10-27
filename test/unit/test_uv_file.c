@@ -195,7 +195,7 @@ TEST(uvFileCreate, dirNoExists, setupFile, tearDownFile, 0, NULL)
                   4096,      /* file size */
                   1,         /* max concurrent writes */
                   UV__NOENT, /* error code */
-                  "open: No such file or directory" /* error message */);
+                  "open: no such file or directory" /* error message */);
     return MUNIT_OK;
 }
 
@@ -209,7 +209,7 @@ TEST(uvFileCreate, fileAlreadyExists, setupFile, tearDownFile, 0, NULL)
                   4096,      /* file size */
                   1,         /* max concurrent writes */
                   UV__ERROR, /* error code */
-                  "open: File exists" /* error message */);
+                  "open: file already exists" /* error message */);
     return MUNIT_OK;
 }
 

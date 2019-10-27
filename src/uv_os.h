@@ -43,7 +43,7 @@ int uvOpenFile(const char *dir,
                const char *filename,
                int flags,
                uv_file *fd,
-               char *errmsg);
+               char **errmsg);
 
 /* Stat a file in a directory. */
 int uvStatFile(const char *dir,
