@@ -49,8 +49,7 @@ int uvFileCreate(struct uvFile *f,
                  const char *filename,
                  size_t size,
                  unsigned max_concurrent_writes,
-                 uvFileCreateCb cb,
-                 char *errmsg);
+                 uvFileCreateCb cb);
 
 /* Asynchronously write data to the file associated with the given handle. */
 int uvFileWrite(struct uvFile *f,

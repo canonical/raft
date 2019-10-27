@@ -120,24 +120,23 @@ static void createCbAssertFail(struct uvFileCreate *req,
 
 /* Start creating a file with the given parameters and wait for the operation
  * to successfully complete. */
-#define CREATE(FILENAME, SIZE, MAX_CONCURRENT_WRITES)                         \
-    {                                                                         \
-        struct uvFileCreate req_;                                             \
-        bool done_ = false;                                                   \
-        uvErrMsg errmsg_;                                                     \
-        int rv_;                                                              \
-        int i_;                                                               \
-        req_.data = &done_;                                                   \
-        rv_ = uvFileCreate(&f->file, &req_, f->dir, FILENAME, SIZE,           \
-                           MAX_CONCURRENT_WRITES, createCbAssertOk, errmsg_); \
-        munit_assert_int(rv_, ==, 0);                                         \
-        for (i_ = 0; i_ < 2; i_++) {                                          \
-            LOOP_RUN(1);                                                      \
-            if (done_) {                                                      \
-                break;                                                        \
-            }                                                                 \
-        }                                                                     \
-        munit_assert_true(done_);                                             \
+#define CREATE(FILENAME, SIZE, MAX_CONCURRENT_WRITES)                \
+    {                                                                \
+        struct uvFileCreate req_;                                    \
+        bool done_ = false;                                          \
+        int rv_;                                                     \
+        int i_;                                                      \
+        req_.data = &done_;                                          \
+        rv_ = uvFileCreate(&f->file, &req_, f->dir, FILENAME, SIZE,  \
+                           MAX_CONCURRENT_WRITES, createCbAssertOk); \
+        munit_assert_int(rv_, ==, 0);                                \
+        for (i_ = 0; i_ < 2; i_++) {                                 \
+            LOOP_RUN(1);                                             \
+            if (done_) {                                             \
+                break;                                               \
+            }                                                        \
+        }                                                            \
+        munit_assert_true(done_);                                    \
     }
 
 /* Try to create a file with the given parameters and check that the given error
@@ -145,12 +144,11 @@ static void createCbAssertFail(struct uvFileCreate *req,
 #define CREATE_ERROR(FILENAME, SIZE, MAX_CONCURRENT_WRITES, RV, ERRMSG) \
     {                                                                   \
         struct uvFileCreate req_;                                       \
-        uvErrMsg errmsg_;                                               \
         int rv_;                                                        \
         rv_ = uvFileCreate(&f->file, &req_, f->dir, FILENAME, SIZE,     \
-                           MAX_CONCURRENT_WRITES, NULL, errmsg_);       \
+                           MAX_CONCURRENT_WRITES, NULL);                \
         munit_assert_int(rv_, ==, RV);                                  \
-        munit_assert_string_equal(errmsg_, ERRMSG);                     \
+        munit_assert_string_equal(uvFileErrMsg(&f->file), ERRMSG);      \
     }
 
 /* Start creating a file with the given parameters and wait for the operation to
@@ -160,13 +158,11 @@ static void createCbAssertFail(struct uvFileCreate *req,
         struct uvFileCreate req_;                                             \
         struct result result_ = {                                             \
             .status = STATUS, .errmsg = ERRMSG, .done = false};               \
-        uvErrMsg errmsg_;                                                     \
         int rv_;                                                              \
         int i_;                                                               \
         req_.data = &result_;                                                 \
-        rv_ =                                                                 \
-            uvFileCreate(&f->file, &req_, f->dir, FILENAME, SIZE,             \
-                         MAX_CONCURRENT_WRITES, createCbAssertFail, errmsg_); \
+        rv_ = uvFileCreate(&f->file, &req_, f->dir, FILENAME, SIZE,           \
+                           MAX_CONCURRENT_WRITES, createCbAssertFail);        \
         munit_assert_int(rv_, ==, 0);                                         \
         for (i_ = 0; i_ < 2; i_++) {                                          \
             LOOP_RUN(1);                                                      \
@@ -257,11 +253,10 @@ TEST(uvFileCreate, cancel, setupFile, tearDownFile, 0, NULL)
     struct uvFileCreate req;
     struct result result = {
         .status = UV__CANCELED, .errmsg = "canceled", .done = false};
-    uvErrMsg errmsg;
     int rv;
     req.data = &result;
     rv = uvFileCreate(&f->file, &req, f->dir, "foo", 4096, 1,
-                      createCbAssertFail, errmsg);
+                      createCbAssertFail);
     munit_assert_int(rv, ==, 0);
     uvFileClose(&f->file, NULL);
     LOOP_RUN(1);
@@ -334,7 +329,7 @@ static void writeCbAssertFail(struct uvFileWrite *req,
  * that value plus one, etc.
  *
  * OFFSET is the offset at which to write the buffers. */
-#define WRITE_(N_BUFS, CONTENT, OFFSET)                           \
+#define WRITE(N_BUFS, CONTENT, OFFSET)                            \
     {                                                             \
         struct uv_buf_t *bufs_;                                   \
         struct uvFileWrite req_;                                  \
@@ -390,7 +385,7 @@ TEST(uvFileWrite, one, setupFile, tearDownFile, 0, dir_all_params)
     struct file *f = data;
     SKIP_IF_NO_FIXTURE;
     CREATE("foo", f->block_size, 1);
-    WRITE_(1 /* n bufs */, 1 /* content */, 0 /* offset */);
+    WRITE(1 /* n bufs */, 1 /* content */, 0 /* offset */);
     return MUNIT_OK;
 }
 
@@ -400,8 +395,8 @@ TEST(uvFileWrite, two, setupFile, tearDownFile, 0, dir_all_params)
     struct file *f = data;
     SKIP_IF_NO_FIXTURE;
     CREATE("foo", f->block_size, 1);
-    WRITE_(1 /* n bufs */, 1 /* content */, 0 /* offset */);
-    WRITE_(1 /* n bufs */, 2 /* content */, f->block_size /* offset */);
+    WRITE(1 /* n bufs */, 1 /* content */, 0 /* offset */);
+    WRITE(1 /* n bufs */, 2 /* content */, f->block_size /* offset */);
     ASSERT_CONTENT(2);
     return MUNIT_OK;
 }
@@ -412,8 +407,8 @@ TEST(uvFileWrite, twice, setupFile, tearDownFile, 0, dir_all_params)
     struct file *f = data;
     SKIP_IF_NO_FIXTURE;
     CREATE("foo", f->block_size, 1);
-    WRITE_(1 /* n bufs */, 0 /* content */, 0 /* offset */);
-    WRITE_(1 /* n bufs */, 1 /* content */, 0 /* offset */);
+    WRITE(1 /* n bufs */, 0 /* content */, 0 /* offset */);
+    WRITE(1 /* n bufs */, 1 /* content */, 0 /* offset */);
     ASSERT_CONTENT(1);
     return MUNIT_OK;
 }
@@ -424,7 +419,7 @@ TEST(uvFileWrite, vec, setupFile, tearDownFile, 0, dir_all_params)
     struct file *f = data;
     SKIP_IF_NO_FIXTURE;
     CREATE("foo", f->block_size, 1);
-    WRITE_(2 /* n bufs */, 1 /* content */, 0 /* offset */);
+    WRITE(2 /* n bufs */, 1 /* content */, 0 /* offset */);
     ASSERT_CONTENT(1);
     return MUNIT_OK;
 }
@@ -435,8 +430,8 @@ TEST(uvFileWrite, vec_twice, setupFile, tearDownFile, 0, dir_all_params)
     struct file *f = data;
     SKIP_IF_NO_FIXTURE;
     CREATE("foo", f->block_size, 1);
-    WRITE_(2 /* n bufs */, 1 /* content */, 0 /* offset */);
-    WRITE_(2 /* n bufs */, 1 /* content */, 0 /* offset */);
+    WRITE(2 /* n bufs */, 1 /* content */, 0 /* offset */);
+    WRITE(2 /* n bufs */, 1 /* content */, 0 /* offset */);
     ASSERT_CONTENT(2);
     return MUNIT_OK;
 }

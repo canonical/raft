@@ -9,6 +9,7 @@
 #include <uv.h>
 
 #include "assert.h"
+#include "err.h"
 
 /* State codes */
 enum { CREATING = 1, READY, ERRORED, CLOSED };
@@ -172,6 +173,7 @@ static void pollCloseCb(struct uv_handle_s *handle)
         assert(rv == 0);
     }
     free(f->events);
+    raft_free(f->errmsg);
 
     f->state = CLOSED;
 
@@ -425,12 +427,10 @@ int uvFileCreate(struct uvFile *f,
                  const char *filename,
                  size_t size,
                  unsigned max_n_writes,
-                 uvFileCreateCb cb,
-                 char *errmsg)
+                 uvFileCreateCb cb)
 {
     int flags = O_WRONLY | O_CREAT | O_EXCL; /* Common open flags */
-    char errmsg2_[2048];
-    char *errmsg2 = errmsg2_;
+    char errmsg[2048];
     int rv;
 
     assert(UV__DIR_HAS_VALID_LEN(dir));
@@ -458,10 +458,8 @@ int uvFileCreate(struct uvFile *f,
     f->n_events = max_n_writes;
 
     /* Try to create a brand new file. */
-    rv = uvOpenFile(dir, filename, flags, &f->fd, &errmsg2);
+    rv = uvOpenFile(dir, filename, flags, &f->fd, &f->errmsg);
     if (rv != 0) {
-        strcpy(errmsg, errmsg2);
-        raft_free(errmsg2);
         goto err;
     }
 
@@ -469,6 +467,7 @@ int uvFileCreate(struct uvFile *f,
     rv = uvIoSetup(f->n_events /* Maximum concurrent requests */, &f->ctx,
                    errmsg);
     if (rv != 0) {
+        f->errmsg = errMsgPrintf("%s", errmsg);
         goto err_after_open;
     }
 
@@ -476,7 +475,7 @@ int uvFileCreate(struct uvFile *f,
     f->events = calloc(f->n_events, sizeof *f->events);
     if (f->events == NULL) {
         /* UNTESTED: define a configurable allocator that can fail? */
-        uvErrMsgPrintf(errmsg, "failed to alloc events array");
+        f->errmsg = errMsgPrintf("failed to alloc events array");
         rv = UV__ERROR;
         goto err_after_io_setup;
     }
@@ -484,7 +483,7 @@ int uvFileCreate(struct uvFile *f,
     rv = uv_queue_work(f->loop, &req->work, createWorkCb, createAfterWorkCb);
     if (rv != 0) {
         /* UNTESTED: with the current libuv implementation this can't fail. */
-        uvErrMsgPrintf(errmsg, "uv_queue_work: %s", uv_strerror(rv));
+        f->errmsg = uvSysErrMsg("uv_queue_work", rv);
         rv = UV__ERROR;
         goto err_after_open;
     }
@@ -492,7 +491,7 @@ int uvFileCreate(struct uvFile *f,
     return 0;
 
 err_after_io_setup:
-    uvIoDestroy(f->ctx, errmsg2);
+    uvIoDestroy(f->ctx, errmsg);
     f->ctx = 0;
 err_after_open:
     close(f->fd);

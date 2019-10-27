@@ -95,7 +95,7 @@ TEST_SETUP(success, setup)
 TEST_TEAR_DOWN(success, tear_down)
 
 /* Issue the very first get request. */
-TEST_CASE(success, first, NULL)
+TEST_CASE(success, firstA, NULL)
 {
     struct fixture *f = data;
     (void)params;

@@ -214,9 +214,10 @@ static int prepareSegment(struct uv *uv)
     uvDebugf(uv, "create open segment %s", s->filename);
     rv = uvFileCreate(s->file, &s->create, uv->dir, s->filename,
                       uv->block_size * uv->n_blocks, MAX_CONCURRENT_WRITES,
-                      prepareSegmentFileCreateCb, errmsg);
+                      prepareSegmentFileCreateCb);
     if (rv != 0) {
-        uvErrorf(uv, "can't create segment %s: %s", s->filename, errmsg);
+        uvErrorf(uv, "can't create segment %s: %s", s->filename,
+                 uvFileErrMsg(s->file));
         rv = RAFT_IOERR;
         goto err_after_file_init;
     }
