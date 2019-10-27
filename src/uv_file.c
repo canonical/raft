@@ -648,7 +648,7 @@ void uvFileClose(struct uvFile *f, uvFileCloseCb cb)
     f->closing = true;
     f->close_cb = cb;
 
-    if (f->fd != -1) {
+    if (f->fd >= 0) {
         rv = close(f->fd);
         assert(rv == 0);
     }

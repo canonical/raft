@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <uv.h>
 
 #include "../include/raft.h"
 
@@ -41,7 +42,7 @@ int uvSyncDir(const char *dir, char **errmsg);
 int uvOpenFile(const char *dir,
                const char *filename,
                int flags,
-               int *fd,
+               uv_file *fd,
                char *errmsg);
 
 /* Stat a file in a directory. */

@@ -52,6 +52,15 @@ int uvEnsureDir(const char *dir, char **errmsg)
     return 0;
 }
 
+/* For backward compat with older libuv */
+#if !defined(UV_FS_O_RDONLY)
+#define UV_FS_O_RDONLY O_RDONLY
+#endif
+
+#if !defined(UV_FS_O_DIRECTORY)
+#define UV_FS_O_DIRECTORY O_DIRECTORY
+#endif
+
 int uvSyncDir(const char *dir, char **errmsg)
 {
     struct uv_fs_s req;
@@ -75,19 +84,22 @@ int uvSyncDir(const char *dir, char **errmsg)
 int uvOpenFile(const char *dir,
                const char *filename,
                int flags,
-               int *fd,
+               uv_file *fd,
                char *errmsg)
 {
+    struct uv_fs_s req;
     char path[UV__PATH_MAX_LEN];
 
     assert(UV__DIR_HAS_VALID_LEN(dir));
     assert(UV__FILENAME_HAS_VALID_LEN(filename));
 
     uvJoin(dir, filename, path);
-    *fd = open(path, flags, S_IRUSR | S_IWUSR);
-    if (*fd == -1) {
-        uvErrMsgSys(errmsg, open, errno);
-        return errno == ENOENT ? UV__NOENT : UV__ERROR;
+    *fd = uv_fs_open(NULL, &req, path, flags, S_IRUSR | S_IWUSR, NULL);
+    if (*fd < 0) {
+        int rv = *fd;
+        *fd = -1;
+        uvErrMsgSys(errmsg, open, -rv);
+        return rv == UV_ENOENT ? UV__NOENT : UV__ERROR;
     }
     return 0;
 }
