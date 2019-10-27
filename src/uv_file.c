@@ -166,13 +166,17 @@ static void pollCloseCb(struct uv_handle_s *handle)
     assert(f->state != CLOSED);
     assert(QUEUE_IS_EMPTY(&f->write_queue));
 
-    rv = close(f->event_fd);
-    assert(rv == 0);
+    if (f->event_fd != -1) {
+        rv = close(f->event_fd);
+        assert(rv == 0);
+    }
     if (f->ctx != 0) {
         rv = uvIoDestroy(f->ctx, errmsg);
         assert(rv == 0);
     }
-    free(f->events);
+    if (f->events != NULL) {
+        free(f->events);
+    }
     raft_free(f->errmsg);
 
     f->state = CLOSED;
@@ -189,6 +193,11 @@ static void maybeClosed(struct uvFile *f)
     assert(f->state != CLOSED);
 
     if (!f->closing) {
+        return;
+    }
+
+    if (f->state == 0) {
+        pollCloseCb((struct uv_handle_s *)&f->event_poller);
         return;
     }
 
@@ -376,35 +385,14 @@ int uvFileInit(struct uvFile *f,
                bool async,
                char *errmsg)
 {
-    int rv;
-
+    (void)errmsg;
     f->loop = loop;
     f->fd = -1;
     f->direct = direct;
     f->async = async;
     f->event_fd = -1;
-    f->errmsg = NULL;
-
-    /* Create an event file descriptor to get notified when a write has
-     * completed. */
-    f->event_fd = eventfd(0, EFD_NONBLOCK);
-    if (f->event_fd < 0) {
-        /* UNTESTED: should fail only with ENOMEM */
-        uvErrMsgPrintf(errmsg, "eventfd: %s", strerror(errno));
-        rv = UV__ERROR;
-        goto err;
-    }
-
-    rv = uv_poll_init(f->loop, &f->event_poller, f->event_fd);
-    if (rv != 0) {
-        /* UNTESTED: with the current libuv implementation this should never
-         * fail. */
-        uvErrMsgPrintf(errmsg, "uv_poll_init: %s", uv_strerror(rv));
-        rv = UV__ERROR;
-        goto err_after_event_fd;
-    }
     f->event_poller.data = f;
-
+    f->errmsg = NULL;
     f->ctx = 0;
     f->events = NULL;
     f->n_events = 0;
@@ -413,12 +401,6 @@ int uvFileInit(struct uvFile *f,
     f->close_cb = NULL;
 
     return 0;
-
-err_after_event_fd:
-    close(f->event_fd);
-err:
-    assert(rv != 0);
-    return rv;
 }
 
 int uvFileCreate(struct uvFile *f,
@@ -480,16 +462,44 @@ int uvFileCreate(struct uvFile *f,
         goto err_after_io_setup;
     }
 
+    /* Create an event file descriptor to get notified when a write has
+     * completed. */
+    f->event_fd = eventfd(0, EFD_NONBLOCK);
+    if (f->event_fd < 0) {
+        /* UNTESTED: should fail only with ENOMEM */
+        f->errmsg = errMsgPrintf("eventfd: %s", strerror(errno));
+        rv = UV__ERROR;
+        goto err_after_events_alloc;
+    }
+
+    rv = uv_poll_init(f->loop, &f->event_poller, f->event_fd);
+    if (rv != 0) {
+        /* UNTESTED: with the current libuv implementation this should never
+         * fail. */
+        uvErrMsgPrintf(errmsg, "uv_poll_init: %s", uv_strerror(rv));
+        rv = UV__ERROR;
+        goto err_after_event_fd;
+    }
+
     rv = uv_queue_work(f->loop, &req->work, createWorkCb, createAfterWorkCb);
     if (rv != 0) {
         /* UNTESTED: with the current libuv implementation this can't fail. */
         f->errmsg = uvSysErrMsg("uv_queue_work", rv);
         rv = UV__ERROR;
-        goto err_after_open;
+        goto err_after_poll_init;
     }
 
     return 0;
 
+err_after_poll_init:
+    /* TODO: this is an async API actually. */
+    uv_close((struct uv_handle_s *)&f->event_poller, NULL);
+err_after_event_fd:
+    close(f->event_fd);
+    f->event_fd = -1;
+err_after_events_alloc:
+    free(f->events);
+    f->events = NULL;
 err_after_io_setup:
     uvIoDestroy(f->ctx, errmsg);
     f->ctx = 0;
