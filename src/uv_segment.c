@@ -582,9 +582,10 @@ done:
 
         uvInfof(uv, "finalize %s into %s", info->filename, filename);
 
-        rv = uvRenameFile(uv->dir, info->filename, filename, errmsg);
+        rv = uvRenameFile(uv->dir, info->filename, filename, &errmsg);
         if (rv != 0) {
             uvErrorf(uv, "rename %s: %s", info->filename, errmsg);
+	    raft_free(errmsg);
             rv = RAFT_IOERR;
             goto err_after_open;
         }

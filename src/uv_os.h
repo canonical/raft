@@ -74,7 +74,7 @@ int uvTruncateFile(const char *dir,
 int uvRenameFile(const char *dir,
                  const char *filename1,
                  const char *filename2,
-                 char *errmsg);
+                 char **errmsg);
 
 /* Check whether the given file in the given directory is empty. */
 int uvIsEmptyFile(const char *dir,

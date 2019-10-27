@@ -49,9 +49,10 @@ static void workCb(uv_work_t *work)
         goto abort;
     }
 
-    rv = uvRenameFile(uv->dir, filename1, filename2, errmsg);
+    rv = uvRenameFile(uv->dir, filename1, filename2, &errmsg);
     if (rv != 0) {
         uvErrorf(uv, "rename segment %d: %s", s->counter, errmsg);
+	raft_free(errmsg);
         rv = RAFT_IOERR;
         goto abort;
     }

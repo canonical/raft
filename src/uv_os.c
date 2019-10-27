@@ -259,7 +259,7 @@ err:
 int uvRenameFile(const char *dir,
                  const char *filename1,
                  const char *filename2,
-                 char *errmsg)
+                 char **errmsg)
 {
     char path1[UV__PATH_MAX_LEN];
     char path2[UV__PATH_MAX_LEN];
@@ -274,10 +274,10 @@ int uvRenameFile(const char *dir,
     /* TODO: double check that filename2 does not exist. */
     rv = rename(path1, path2);
     if (rv == -1) {
-        uvErrMsgSys(errmsg, rename, errno);
+        *errmsg = uvSysErrMsg("rename", errno);
         return UV__ERROR;
     }
-    rv = uvSyncDir(dir, &errmsg);
+    rv = uvSyncDir(dir, errmsg);
     if (rv != 0) {
         return rv;
     }
