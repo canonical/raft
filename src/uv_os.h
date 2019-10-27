@@ -80,7 +80,7 @@ int uvRenameFile(const char *dir,
 int uvIsEmptyFile(const char *dir,
                   const char *filename,
                   bool *empty,
-                  char *errmsg);
+                  char **errmsg);
 
 /* Read exactly @n bytes from the given file descriptor. */
 int uvReadFully(int fd, void *buf, size_t n, char *errmsg);

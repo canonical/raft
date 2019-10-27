@@ -350,13 +350,15 @@ int uvSegmentLoadClosed(struct uv *uv,
     struct raft_entry *tmp_entries; /* Entries in current batch */
     unsigned tmp_n;                 /* Number of entries in current batch */
     int i;
-    char errmsg[2048];
+    char errmsg_[2048];
+    char *errmsg = errmsg_;
     int rv;
 
     /* If the segment is completely empty, just bail out. */
-    rv = uvIsEmptyFile(uv->dir, info->filename, &empty, errmsg);
+    rv = uvIsEmptyFile(uv->dir, info->filename, &empty, &errmsg);
     if (rv != 0) {
         uvErrorf(uv, "stat %s: %s", info->filename, errmsg);
+        raft_free(errmsg);
         rv = RAFT_IOERR;
         goto err;
     }
@@ -439,9 +441,10 @@ static int loadOpen(struct uv *uv,
 
     first_index = *next_index;
 
-    rv = uvIsEmptyFile(uv->dir, info->filename, &empty, errmsg);
+    rv = uvIsEmptyFile(uv->dir, info->filename, &empty, &errmsg);
     if (rv != 0) {
         uvErrorf(uv, "check if %s is empty: %s", info->filename, errmsg);
+	raft_free(errmsg);
         rv = RAFT_IOERR;
         goto err;
     }
@@ -585,7 +588,7 @@ done:
         rv = uvRenameFile(uv->dir, info->filename, filename, &errmsg);
         if (rv != 0) {
             uvErrorf(uv, "rename %s: %s", info->filename, errmsg);
-	    raft_free(errmsg);
+            raft_free(errmsg);
             rv = RAFT_IOERR;
             goto err_after_open;
         }

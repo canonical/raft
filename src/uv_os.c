@@ -288,15 +288,12 @@ int uvRenameFile(const char *dir,
 int uvIsEmptyFile(const char *dir,
                   const char *filename,
                   bool *empty,
-                  char *errmsg)
+                  char **errmsg)
 {
     uv_stat_t sb;
-    char *errmsg2;
     int rv;
-    rv = uvStatFile(dir, filename, &sb, &errmsg2);
+    rv = uvStatFile(dir, filename, &sb, errmsg);
     if (rv != 0) {
-        strcpy(errmsg, errmsg2);
-        raft_free(errmsg2);
         return rv;
     }
     *empty = sb.st_size == 0 ? true : false;
