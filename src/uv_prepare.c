@@ -180,7 +180,6 @@ static void prepareSegmentFileCreateCb(struct uvFileCreate *req,
 static int prepareSegment(struct uv *uv)
 {
     struct segment *s;
-    char errmsg[2048];
     int rv;
 
     s = raft_malloc(sizeof *s);
@@ -195,12 +194,8 @@ static int prepareSegment(struct uv *uv)
         goto err_after_segment_alloc;
     }
 
-    rv = uvFileInit(s->file, uv->loop, uv->direct_io, uv->async_io, errmsg);
-    if (rv != 0) {
-        uvErrorf(uv, "init segment file %d: %s", s->counter, uv_strerror(rv));
-        rv = RAFT_IOERR;
-        goto err_after_file_alloc;
-    }
+    rv = uvFileInit(s->file, uv->loop, uv->direct_io, uv->async_io);
+    assert(rv == 0); /* This can't fail at the moment. */
 
     s->file->data = s;
     s->create.data = s;

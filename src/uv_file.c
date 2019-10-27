@@ -382,10 +382,8 @@ out:
 int uvFileInit(struct uvFile *f,
                struct uv_loop_s *loop,
                bool direct,
-               bool async,
-               char *errmsg)
+               bool async)
 {
-    (void)errmsg;
     f->loop = loop;
     f->fd = -1;
     f->direct = direct;

@@ -38,8 +38,7 @@ typedef void (*uvFileCloseCb)(struct uvFile *f);
 int uvFileInit(struct uvFile *f,
                struct uv_loop_s *loop,
                bool direct /* Whether to use direct I/O */,
-               bool async /* Whether async I/O is available */,
-               char *errmsg);
+               bool async /* Whether async I/O is available */);
 
 /* Create the given file in the given directory for subsequent non-blocking
  * writing. The file must not exist yet. */
