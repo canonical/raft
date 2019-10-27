@@ -877,7 +877,7 @@ static int writeFirstClosed(struct uv *uv,
     struct uvSegmentBuffer buf;
     struct raft_entry entry;
     size_t cap;
-    char errmsg[2048];
+    char *errmsg;
     int rv;
 
     /* Make sure that the given encoded configuration fits in the first
@@ -906,16 +906,17 @@ static int writeFirstClosed(struct uv *uv,
         return rv;
     }
 
-    rv = uvWriteFully(fd, buf.arena.base, buf.n, errmsg);
+    rv = uvWriteFully(fd, buf.arena.base, buf.n, &errmsg);
     uvSegmentBufferClose(&buf);
     if (rv != 0) {
         uvErrorf(uv, "write segment 1: %s", errmsg);
+        raft_free(errmsg);
         return RAFT_IOERR;
     }
 
     rv = fsync(fd);
     if (rv == -1) {
-        uvErrorf(uv, "fsync segment 1: %s", errmsg);
+        uvErrorf(uv, "fsync segment 1: %s", uv_strerror(-errno));
         return RAFT_IOERR;
     }
 
@@ -988,8 +989,7 @@ int uvSegmentTruncate(struct uv *uv,
     size_t n;
     size_t m;
     int fd;
-    char errmsg_[2048];
-    char *errmsg = errmsg_;
+    char *errmsg;
     int rv;
 
     assert(!segment->is_open);
@@ -1034,16 +1034,17 @@ int uvSegmentTruncate(struct uv *uv,
         goto out_after_buffer_init;
     }
 
-    rv = uvWriteFully(fd, buf.arena.base, buf.n, errmsg);
+    rv = uvWriteFully(fd, buf.arena.base, buf.n, &errmsg);
     if (rv != 0) {
         uvErrorf(uv, "write %s: %s", filename, errmsg);
+        raft_free(errmsg);
         rv = RAFT_IOERR;
         goto out_after_open;
     }
 
     rv = fsync(fd);
     if (rv == -1) {
-        uvErrorf(uv, "fsync %s: %s", filename, strerror(errno));
+        uvErrorf(uv, "fsync %s: %s", filename, uv_strerror(-errno));
         rv = RAFT_IOERR;
         goto out_after_open;
     }

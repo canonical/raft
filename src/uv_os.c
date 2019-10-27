@@ -316,17 +316,17 @@ int uvReadFully(const int fd, void *buf, const size_t n, char **errmsg)
     return 0;
 }
 
-int uvWriteFully(const int fd, void *buf, const size_t n, char *errmsg)
+int uvWriteFully(const int fd, void *buf, const size_t n, char **errmsg)
 {
     int rv;
     rv = write(fd, buf, n);
     if (rv == -1) {
-        uvErrMsgSys(errmsg, write, errno);
+        *errmsg = uvSysErrMsg("write", -errno);
         return UV__ERROR;
     }
     assert(rv >= 0);
     if ((size_t)rv < n) {
-        uvErrMsgPrintf(errmsg, "short write: %d bytes instead of %ld", rv, n);
+        *errmsg = errMsgPrintf("short write: %d bytes instead of %ld", rv, n);
         return UV__ERROR;
     }
     return 0;

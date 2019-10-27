@@ -205,8 +205,7 @@ int uvMetadataStore(struct uv *uv, const struct uvMetadata *metadata)
     const int flags = O_WRONLY | O_CREAT | O_SYNC | O_TRUNC;
     unsigned short n;
     int fd;
-    char errmsg_[2048];
-    char *errmsg = errmsg_;
+    char *errmsg;
     int rv;
 
     assert(metadata->version > 0);
@@ -226,10 +225,11 @@ int uvMetadataStore(struct uv *uv, const struct uvMetadata *metadata)
         return RAFT_IOERR;
     }
 
-    rv = uvWriteFully(fd, buf, sizeof buf, errmsg);
+    rv = uvWriteFully(fd, buf, sizeof buf, &errmsg);
     close(fd);
     if (rv != 0) {
         uvErrorf(uv, "write %s: %s", filename, errmsg);
+        raft_free(errmsg);
         return RAFT_IOERR;
     }
 
