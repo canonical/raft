@@ -107,7 +107,7 @@ int uvOpenFile(const char *dir,
 int uvStatFile(const char *dir,
                const char *filename,
                uv_stat_t *sb,
-               char *errmsg)
+               char **errmsg)
 {
     char path[UV__PATH_MAX_LEN];
     struct uv_fs_s req;
@@ -119,7 +119,7 @@ int uvStatFile(const char *dir,
     uvJoin(dir, filename, path);
     rv = uv_fs_stat(NULL, &req, path, NULL);
     if (rv != 0) {
-        uvErrMsgSys(errmsg, stat, -rv);
+        *errmsg = uvSysErrMsg("stat", rv);
         return rv == UV_ENOENT ? UV__NOENT : UV__ERROR;
     }
     memcpy(sb, &req.statbuf, sizeof *sb);
@@ -277,9 +277,12 @@ int uvIsEmptyFile(const char *dir,
                   char *errmsg)
 {
     uv_stat_t sb;
+    char *errmsg2;
     int rv;
-    rv = uvStatFile(dir, filename, &sb, errmsg);
+    rv = uvStatFile(dir, filename, &sb, &errmsg2);
     if (rv != 0) {
+        strcpy(errmsg, errmsg2);
+        raft_free(errmsg2);
         return rv;
     }
     *empty = sb.st_size == 0 ? true : false;

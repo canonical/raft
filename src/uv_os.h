@@ -49,7 +49,7 @@ int uvOpenFile(const char *dir,
 int uvStatFile(const char *dir,
                const char *filename,
                uv_stat_t *sb,
-               char *errmsg);
+               char **errmsg);
 
 /* Create a file and write the given content into it. */
 int uvMakeFile(const char *dir,

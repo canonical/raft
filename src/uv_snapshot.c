@@ -56,7 +56,8 @@ int uvSnapshotInfoAppendIfMatch(struct uv *uv,
     bool matched;
     uv_stat_t sb;
     char snapshot_filename[UV__FILENAME_MAX_LEN];
-    char errmsg[2048];
+    char errmsg_[2048];
+    char *errmsg = errmsg_;
     int rv;
 
     /* Check if it's a snapshot metadata filename */
@@ -70,15 +71,18 @@ int uvSnapshotInfoAppendIfMatch(struct uv *uv,
      * there's none, it means that we aborted before finishing the snapshot, so
      * let's remove the metadata file. */
     filenameOf(&info, snapshot_filename);
-    rv = uvStatFile(uv->dir, snapshot_filename, &sb, errmsg);
+    rv = uvStatFile(uv->dir, snapshot_filename, &sb, &errmsg);
     if (rv != 0) {
         if (rv == UV__NOENT) {
-            uvUnlinkFile(uv->dir, filename, errmsg); /* Ignore errors */
+            uvUnlinkFile(uv->dir, filename, errmsg_); /* Ignore errors */
             *appended = false;
-            return 0;
+            rv = 0;
+        } else {
+            uvErrorf(uv, "stat %s: %s", snapshot_filename, errmsg);
+            rv = RAFT_IOERR;
         }
-        uvErrorf(uv, "stat %s: %s", snapshot_filename, errmsg);
-        return RAFT_IOERR;
+        raft_free(errmsg);
+        return rv;
     }
 
     ARRAY__APPEND(struct uvSnapshotInfo, info, infos, n_infos, rv);
@@ -235,9 +239,10 @@ static int loadData(struct uv *uv,
 
     filenameOf(info, filename);
 
-    rv = uvStatFile(uv->dir, filename, &sb, errmsg);
+    rv = uvStatFile(uv->dir, filename, &sb, &errmsg);
     if (rv != 0) {
         uvErrorf(uv, "stat %s: %s", filename, errmsg);
+        raft_free(errmsg);
         rv = RAFT_IOERR;
         goto err;
     }
@@ -245,7 +250,7 @@ static int loadData(struct uv *uv,
     rv = uvOpenFile(uv->dir, filename, O_RDONLY, &fd, &errmsg);
     if (rv != 0) {
         uvErrorf(uv, "open %s: %s", filename, errmsg);
-	raft_free(errmsg);
+        raft_free(errmsg);
         rv = RAFT_IOERR;
         goto err;
     }
