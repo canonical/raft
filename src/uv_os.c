@@ -192,6 +192,7 @@ err:
 
 int uvUnlinkFile(const char *dir, const char *filename, char **errmsg)
 {
+    struct uv_fs_s req;
     char path[UV__PATH_MAX_LEN];
     int rv;
 
@@ -199,9 +200,9 @@ int uvUnlinkFile(const char *dir, const char *filename, char **errmsg)
     assert(UV__FILENAME_HAS_VALID_LEN(filename));
 
     uvJoin(dir, filename, path);
-    rv = unlink(path);
-    if (rv == -1) {
-        *errmsg = uvSysErrMsg("unlink", -errno);
+    rv = uv_fs_unlink(NULL, &req, path, NULL);
+    if (rv != 0) {
+        *errmsg = uvSysErrMsg("unlink", rv);
         return UV__ERROR;
     }
     return 0;
