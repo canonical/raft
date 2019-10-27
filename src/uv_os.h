@@ -33,7 +33,7 @@
     (strnlen(FILENAME, UV__FILENAME_MAX_LEN + 1) <= UV__FILENAME_MAX_LEN)
 
 /* Check that the given directory exists, and try to create it if it doesn't. */
-int uvEnsureDir(const char *dir, char *errmsg);
+int uvEnsureDir(const char *dir, char **errmsg);
 
 /* Sync the given directory. */
 int uvSyncDir(const char *dir, char *errmsg);

@@ -14,19 +14,20 @@
  *****************************************************************************/
 
 /* Invoke uvEnsureDir passing it the given dir. */
-#define ENSURE_DIR(DIR)                                    \
-    {                                                      \
-        uvErrMsg errmsg;                                   \
-        munit_assert_int(uvEnsureDir(DIR, errmsg), ==, 0); \
+#define ENSURE_DIR(DIR)                                     \
+    {                                                       \
+        char *errmsg;                                       \
+        munit_assert_int(uvEnsureDir(DIR, &errmsg), ==, 0); \
     }
 
 /* Invoke uvEnsureDir passing it the given dir and check that the given error
  * occurs. */
-#define ENSURE_DIR_ERROR(DIR, RV, ERRMSG)                   \
-    {                                                       \
-        uvErrMsg errmsg;                                    \
-        munit_assert_int(uvEnsureDir(DIR, errmsg), ==, RV); \
-        munit_assert_string_equal(errmsg, ERRMSG);          \
+#define ENSURE_DIR_ERROR(DIR, RV, ERRMSG)                    \
+    {                                                        \
+        char *errmsg;                                        \
+        munit_assert_int(uvEnsureDir(DIR, &errmsg), ==, RV); \
+        munit_assert_string_equal(errmsg, ERRMSG);           \
+        raft_free(errmsg);                                   \
     }
 
 SUITE(uvEnsureDir)
@@ -53,21 +54,21 @@ TEST(uvEnsureDir, exists, setupDir, tearDownDir, 0, NULL)
 /* If the directory can't be created, an error is returned. */
 TEST(uvEnsureDir, mkdirError, NULL, NULL, 0, NULL)
 {
-    ENSURE_DIR_ERROR("/foobarbazegg", UV__ERROR, "mkdir: Permission denied");
+    ENSURE_DIR_ERROR("/foobarbazegg", UV__ERROR, "mkdir: permission denied");
     return MUNIT_OK;
 }
 
 /* If the directory can't be probed for existence, an error is returned. */
 TEST(uvEnsureDir, statError, NULL, NULL, 0, NULL)
 {
-    ENSURE_DIR_ERROR("/proc/1/root", UV__ERROR, "stat: Permission denied");
+    ENSURE_DIR_ERROR("/proc/1/root", UV__ERROR, "stat: permission denied");
     return MUNIT_OK;
 }
 
 /* If the given path is not a directory, an error is returned. */
 TEST(uvEnsureDir, notDir, NULL, NULL, 0, NULL)
 {
-    ENSURE_DIR_ERROR("/dev/null", UV__ERROR, "Not a directory");
+    ENSURE_DIR_ERROR("/dev/null", UV__ERROR, "not a directory");
     return MUNIT_OK;
 }
 

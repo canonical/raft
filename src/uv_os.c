@@ -12,11 +12,15 @@
 #include <uv.h>
 
 #include "assert.h"
+#include "err.h"
 #include "syscall.h"
 #include "uv_error.h"
 
 /* Default permissions when creating a directory. */
 #define DEFAULT_DIR_PERM 0700
+
+/* Format an error message caused by a failed system call or stdlib function. */
+#define uvSysErr(FUNC, CODE) errMsgPrintf(FUNC ": %s", uv_strerror(rv))
 
 static void uvJoin(const char *dir, const char *filename, char *path)
 {
@@ -25,7 +29,7 @@ static void uvJoin(const char *dir, const char *filename, char *path)
     strcat(path, filename);
 }
 
-int uvEnsureDir(const char *dir, char *errmsg)
+int uvEnsureDir(const char *dir, char **errmsg)
 {
     struct uv_fs_s req;
     int rv;
@@ -34,17 +38,17 @@ int uvEnsureDir(const char *dir, char *errmsg)
     rv = uv_fs_stat(NULL, &req, dir, NULL);
     if (rv != 0) {
         if (rv == UV_ENOENT) {
-	  rv = uv_fs_mkdir(NULL, &req, dir, DEFAULT_DIR_PERM, NULL);
+            rv = uv_fs_mkdir(NULL, &req, dir, DEFAULT_DIR_PERM, NULL);
             if (rv != 0) {
-                uvErrMsgSys(errmsg, mkdir, -rv);
+                *errmsg = uvSysErr("mkdir", rv);
                 return UV__ERROR;
             }
         } else {
-            uvErrMsgSys(errmsg, stat, -rv);
+            *errmsg = uvSysErr("stat", rv);
             return UV__ERROR;
         }
     } else if ((req.statbuf.st_mode & S_IFMT) != S_IFDIR) {
-        uvErrMsgPrintf(errmsg, "%s", strerror(ENOTDIR));
+        *errmsg = errMsgPrintf("%s", uv_strerror(UV_ENOTDIR));
         return UV__ERROR;
     }
 
