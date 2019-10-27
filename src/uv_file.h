@@ -21,9 +21,7 @@ struct uvFileCreate;
 struct uvFileWrite;
 
 /* Callback called after a create file request has been completed. */
-typedef void (*uvFileCreateCb)(struct uvFileCreate *req,
-                               int status,
-                               const char *errmsg);
+typedef void (*uvFileCreateCb)(struct uvFileCreate *req, int status);
 
 /* Callback called after a write file request has been completed. */
 typedef void (*uvFileWriteCb)(struct uvFileWrite *req,
@@ -66,8 +64,7 @@ bool uvFileIsOpen(struct uvFile *f);
  * valid until a different error occurs or uvFileClose is called. */
 const char *uvFileErrMsg(struct uvFile *f);
 
-/* Close the given file and release all associated resources. There must be no
- * request in progress. */
+/* Close the given file and release all associated resources. */
 void uvFileClose(struct uvFile *f, uvFileCloseCb cb);
 
 struct uvFile
@@ -94,7 +91,6 @@ struct uvFileCreate
     void *data;            /* User data */
     struct uvFile *file;   /* File handle */
     int status;            /* Request result code */
-    uvErrMsg errmsg;       /* Error message (for status != 0) */
     struct uv_work_s work; /* To execute logic in the threadpool */
     uvFileCreateCb cb;     /* Callback to invoke upon request completion */
     const char *dir;       /* File directory */

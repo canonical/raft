@@ -19,7 +19,6 @@ static void createWorkCb(uv_work_t *work)
 {
     struct uvFileCreate *req; /* Create file request object */
     struct uvFile *f;         /* File handle */
-    char *errmsg;
     int rv;
 
     req = work->data;
@@ -35,7 +34,7 @@ static void createWorkCb(uv_work_t *work)
          *   posix_fallocate() returns zero on success, or an error number on
          *   failure.  Note that errno is not set.
          */
-        uvErrMsgSys(req->errmsg, posix_fallocate, rv);
+        f->errmsg = errMsgPrintf("posix_fallocate: %s", strerror(rv));
         goto err;
     }
 
@@ -43,21 +42,21 @@ static void createWorkCb(uv_work_t *work)
     rv = fsync(f->fd);
     if (rv == -1) {
         /* UNTESTED: should fail only in case of disk errors */
-        uvErrMsgSys(req->errmsg, fsync, errno);
+        f->errmsg = errMsgPrintf("fsync: %s", strerror(errno));
         goto err;
     }
-    rv = uvSyncDir(req->dir, &errmsg);
+    rv = uvSyncDir(req->dir, &f->errmsg);
     if (rv != 0) {
-        strcpy(req->errmsg, errmsg);
-        raft_free(errmsg);
         /* UNTESTED: should fail only in case of disk errors */
         goto err;
     }
 
     /* Set direct I/O if available. */
     if (f->direct) {
-        rv = uvSetDirectIo(f->fd, req->errmsg);
+        char errmsg[2048];
+        rv = uvSetDirectIo(f->fd, errmsg);
         if (rv != 0) {
+            f->errmsg = errMsgPrintf("%s", errmsg);
             goto err;
         }
     }
@@ -178,7 +177,7 @@ static void pollCloseCb(struct uv_handle_s *handle)
         free(f->events);
     }
     raft_free(f->errmsg);
-
+    f->errmsg = NULL;
     f->state = CLOSED;
 
     if (f->close_cb != NULL) {
@@ -335,7 +334,6 @@ static void createAfterWorkCb(uv_work_t *work, int status)
 {
     struct uvFileCreate *req;
     struct uvFile *f;
-    uvErrMsg errmsg;
     int rv;
 
     assert(status == 0); /* We don't cancel worker requests */
@@ -346,7 +344,8 @@ static void createAfterWorkCb(uv_work_t *work, int status)
     /* If we were closed, abort here. */
     if (f->closing) {
         uvTryUnlinkFile(req->dir, req->filename);
-        uvErrMsgPrintf(req->errmsg, "canceled");
+	raft_free(f->errmsg);
+        f->errmsg = errMsgPrintf("canceled");
         req->status = UV__CANCELED;
         goto out;
     }
@@ -355,8 +354,9 @@ static void createAfterWorkCb(uv_work_t *work, int status)
     if (req->status == 0) {
         rv = uv_poll_start(&f->event_poller, UV_READABLE, writePollCb);
         if (rv != 0) {
+            char errmsg[2048];
             /* UNTESTED: the underlying libuv calls should never fail. */
-            uvErrMsgPrintf(req->errmsg, "uv_poll_start: %s", uv_strerror(rv));
+            f->errmsg = uvSysErrMsg("uv_poll_start", rv);
             uvIoDestroy(f->ctx, errmsg);
             close(f->event_fd);
             close(f->fd);
@@ -373,7 +373,7 @@ out:
     }
 
     if (req->cb != NULL) {
-        req->cb(req, req->status, req->errmsg);
+        req->cb(req, req->status);
     }
 
     maybeClosed(f);

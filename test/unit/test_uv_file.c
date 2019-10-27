@@ -98,22 +98,19 @@ static void tearDownFile(void *data)
  *****************************************************************************/
 
 static void createCbAssertOk(struct uvFileCreate *req,
-                             int status,
-                             MUNIT_UNUSED const char *errmsg)
+                             int status)
 {
     bool *done = req->data;
     munit_assert_int(status, ==, 0);
     *done = true;
 }
 
-static void createCbAssertFail(struct uvFileCreate *req,
-                               int status,
-                               MUNIT_UNUSED const char *errmsg)
+static void createCbAssertFail(struct uvFileCreate *req, int status)
 {
     struct result *result = req->data;
     munit_assert_int(status, !=, 0);
     munit_assert_int(status, ==, result->status);
-    munit_assert_string_equal(errmsg, result->errmsg);
+    munit_assert_string_equal(uvFileErrMsg(req->file), result->errmsg);
     result->done = true;
 }
 

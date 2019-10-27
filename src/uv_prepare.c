@@ -137,8 +137,7 @@ static void processRequests(struct uv *uv)
 
 static void maybePrepareSegment(struct uv *uv);
 static void prepareSegmentFileCreateCb(struct uvFileCreate *req,
-                                       int status,
-                                       const char *errmsg)
+                                       int status)
 {
     struct segment *s;
     struct uv *uv;
@@ -159,7 +158,7 @@ static void prepareSegmentFileCreateCb(struct uvFileCreate *req,
         flushRequests(uv, RAFT_IOERR);
         uv->prepare_file = NULL;
         uv->errored = true;
-        uvErrorf(uv, "create segment %s: %s", s->path, errmsg);
+        uvErrorf(uv, "create segment %s: %s", s->path, uvFileErrMsg(req->file));
         uvFileClose(req->file, (uvFileCloseCb)raft_free);
         raft_free(s);
         return;
@@ -224,9 +223,6 @@ static int prepareSegment(struct uv *uv)
 
 err_after_file_init:
     uvFileClose(s->file, (uvFileCloseCb)raft_free);
-    goto err_after_segment_alloc;
-err_after_file_alloc:
-    raft_free(s->file);
 err_after_segment_alloc:
     raft_free(s);
 err:
