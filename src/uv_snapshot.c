@@ -54,7 +54,7 @@ int uvSnapshotInfoAppendIfMatch(struct uv *uv,
 {
     struct uvSnapshotInfo info;
     bool matched;
-    struct stat sb;
+    uv_stat_t sb;
     char snapshot_filename[UV__FILENAME_MAX_LEN];
     char errmsg[2048];
     int rv;
@@ -225,7 +225,7 @@ static int loadData(struct uv *uv,
                     struct uvSnapshotInfo *info,
                     struct raft_snapshot *snapshot)
 {
-    struct stat sb;
+    uv_stat_t sb;
     char filename[UV__FILENAME_MAX_LEN];
     struct raft_buffer buf;
     char errmsg_[2048];

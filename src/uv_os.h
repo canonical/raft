@@ -48,7 +48,7 @@ int uvOpenFile(const char *dir,
 /* Stat a file in a directory. */
 int uvStatFile(const char *dir,
                const char *filename,
-               struct stat *sb,
+               uv_stat_t *sb,
                char *errmsg);
 
 /* Create a file and write the given content into it. */
