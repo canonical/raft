@@ -38,7 +38,7 @@ static bool infoMatch(const char *filename, struct uvSnapshotInfo *info)
 }
 
 /* Render the filename of the data file of a snapshot */
-static void filenameOf(struct uvSnapshotInfo *info, uvFilename filename)
+static void filenameOf(struct uvSnapshotInfo *info, char *filename)
 {
     size_t len = strlen(info->filename) - strlen(".meta");
     assert(len < UV__FILENAME_MAX_LEN);
@@ -55,7 +55,7 @@ int uvSnapshotInfoAppendIfMatch(struct uv *uv,
     struct uvSnapshotInfo info;
     bool matched;
     struct stat sb;
-    uvFilename snapshot_filename;
+    char snapshot_filename[UV__FILENAME_MAX_LEN];
     char errmsg[2048];
     int rv;
 
@@ -224,7 +224,7 @@ static int loadData(struct uv *uv,
                     struct raft_snapshot *snapshot)
 {
     struct stat sb;
-    uvFilename filename;
+    char filename[UV__FILENAME_MAX_LEN];
     struct raft_buffer buf;
     char errmsg[2048];
     int fd;
@@ -387,7 +387,7 @@ int uvSnapshotKeepLastTwo(struct uv *uv,
 
     for (i = 0; i < n - 2; i++) {
         struct uvSnapshotInfo *s = &snapshots[i];
-        uvFilename filename;
+        char filename[UV__FILENAME_MAX_LEN];
         rv = uvUnlinkFile(uv->dir, s->filename, errmsg);
         if (rv != 0) {
             uvErrorf(uv, "unlink %s: %s", s->filename, errmsg);
@@ -409,7 +409,7 @@ static void putWorkCb(uv_work_t *work)
     struct put *r = work->data;
     struct uv *uv = r->uv;
     char errmsg[2048];
-    uvFilename filename;
+    char filename[UV__FILENAME_MAX_LEN];
     int rv;
 
     sprintf(filename, UV__SNAPSHOT_META_TEMPLATE, r->snapshot->term,

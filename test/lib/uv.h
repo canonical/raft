@@ -93,7 +93,7 @@
  * new entry. */
 #define UV_WRITE_CLOSED_SEGMENT(FIRST_INDEX, N, DATA)                         \
     {                                                                         \
-        uvFilename filename_;                                                 \
+        char filename_[256];                                                  \
         raft_index end_index_ = FIRST_INDEX + N - 1;                          \
         sprintf(filename_, "%llu-%llu", (raft_index)FIRST_INDEX, end_index_); \
         UV__WRITE_SEGMENT(filename_, N, DATA, true);                          \
@@ -104,7 +104,7 @@
  * value for the data of the firt entry, and will be incremented. */
 #define UV_WRITE_OPEN_SEGMENT(COUNTER, N, DATA)              \
     {                                                        \
-        uvFilename filename_;                                \
+        char filename_[256];                                                  \
         sprintf(filename_, "open-%llu", (uvCounter)COUNTER); \
         UV__WRITE_SEGMENT(filename_, N, DATA, false);        \
     }
@@ -156,7 +156,7 @@
 #define UV_WRITE_SNAPSHOT_META(DIR, TERM, INDEX, TIMESTAMP, CONF_N,        \
                                CONF_INDEX)                                 \
     {                                                                      \
-        uvFilename filename_;                                              \
+        char filename_[256];                                                  \
         struct raft_configuration conf_;                                   \
         struct raft_buffer buf_;                                           \
         int rv_;                                                           \
@@ -178,7 +178,7 @@
  * content of the snapshot file will be the one from BUF. */
 #define UV_WRITE_SNAPSHOT_DATA(DIR, TERM, INDEX, TIMESTAMP, BUF, SIZE) \
     {                                                                  \
-        uvFilename filename_;                                          \
+        char filename_[256];                                                  \
         sprintf(filename_, UV__SNAPSHOT_TEMPLATE, (raft_term)TERM,     \
                 (raft_index)INDEX, (raft_time)TIMESTAMP);              \
         test_dir_write_file(DIR, filename_, BUF, SIZE);                \

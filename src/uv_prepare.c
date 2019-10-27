@@ -36,13 +36,13 @@
 /* An open segment being prepared or sitting in the pool */
 struct segment
 {
-    struct uv *uv;               /* Open segment file */
-    struct uvFile *file;         /* Open segment file */
-    struct uvFileCreate create;  /* Create file request */
-    unsigned long long counter;  /* Segment counter */
-    uvFilename filename;         /* Filename of the segment */
-    char path[UV__PATH_MAX_LEN]; /* Full path of the segment */
-    queue queue;                 /* Pool */
+    struct uv *uv;                       /* Open segment file */
+    struct uvFile *file;                 /* Open segment file */
+    struct uvFileCreate create;          /* Create file request */
+    unsigned long long counter;          /* Segment counter */
+    char filename[UV__FILENAME_MAX_LEN]; /* Filename of the segment */
+    char path[UV__PATH_MAX_LEN];         /* Full path of the segment */
+    queue queue;                         /* Pool */
 };
 
 /* Flush all pending requests, invoking their callbacks with the given

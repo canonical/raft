@@ -418,7 +418,7 @@ err:
 int uvFileCreate(struct uvFile *f,
                  struct uvFileCreate *req,
                  const char *dir,
-                 uvFilename filename,
+                 const char *filename,
                  size_t size,
                  unsigned max_n_writes,
                  uvFileCreateCb cb,
@@ -429,6 +429,7 @@ int uvFileCreate(struct uvFile *f,
     int rv;
 
     assert(UV__DIR_HAS_VALID_LEN(dir));
+    assert(UV__FILENAME_HAS_VALID_LEN(filename));
     assert(size > 0);
     assert(!f->closing);
 
@@ -437,7 +438,7 @@ int uvFileCreate(struct uvFile *f,
     req->file = f;
     req->cb = cb;
     req->dir = dir;
-    strcpy(req->filename, filename);
+    req->filename = filename;
     req->size = size;
     req->status = 0;
     req->work.data = req;

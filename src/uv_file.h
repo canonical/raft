@@ -47,7 +47,7 @@ int uvFileInit(struct uvFile *f,
 int uvFileCreate(struct uvFile *f,
                  struct uvFileCreate *req,
                  const char *dir,
-                 uvFilename filename,
+                 const char *filename,
                  size_t size,
                  unsigned max_concurrent_writes,
                  uvFileCreateCb cb,
@@ -96,7 +96,7 @@ struct uvFileCreate
     struct uv_work_s work; /* To execute logic in the threadpool */
     uvFileCreateCb cb;     /* Callback to invoke upon request completion */
     const char *dir;       /* File directory */
-    uvFilename filename;   /* File name */
+    const char *filename;  /* File name */
     size_t size;           /* File size */
 };
 

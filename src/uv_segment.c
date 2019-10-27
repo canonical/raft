@@ -156,7 +156,7 @@ int uvSegmentKeepTrailing(struct uv *uv,
 
 /* Open a segment file and read its format version. */
 static int openSegment(struct uv *uv,
-                       const uvFilename filename,
+                       const char *filename,
                        const int flags,
                        int *fd,
                        uint64_t *format)
@@ -568,7 +568,7 @@ done:
             goto err_after_open;
         }
     } else {
-        uvFilename filename;
+        char filename[UV__FILENAME_MAX_LEN];
         raft_index end_index = *next_index - 1;
 
         /* At least one entry was loaded */
@@ -912,7 +912,7 @@ int uvSegmentCreateFirstClosed(struct uv *uv,
                                const struct raft_configuration *configuration)
 {
     struct raft_buffer buf;
-    uvFilename filename;
+    char filename[UV__FILENAME_MAX_LEN];
     char errmsg[2048];
     int fd;
     int rv;
@@ -965,7 +965,7 @@ int uvSegmentTruncate(struct uv *uv,
                       struct uvSegmentInfo *segment,
                       raft_index index)
 {
-    uvFilename filename;
+    char filename[UV__FILENAME_MAX_LEN];
     struct raft_entry *entries;
     struct uvSegmentBuffer buf;
     size_t n;

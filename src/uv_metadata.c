@@ -3,8 +3,12 @@
 #include "uv.h"
 #include "uv_encoding.h"
 
+/* We have metadata1 and metadata2. */
+#define METADATA_FILENAME_PREFIX "metadata"
+#define METADATA_FILENAME_SIZE (sizeof(METADATA_FILENAME_PREFIX) + 2)
+
 /* Format, version, term, vote */
-#define SIZE (8 * 4)
+#define METADATA_CONTENT_SIZE (8 * 4)
 
 /* Encode the content of a metadata file. */
 static void encode(const struct uvMetadata *metadata, void *buf)
@@ -32,9 +36,9 @@ static int decode(const void *buf, struct uvMetadata *metadata)
 }
 
 /* Render the filename of the metadata file with index @n. */
-static void filenameOf(const unsigned short n, uvFilename filename)
+static void filenameOf(const unsigned short n, char *filename)
 {
-    sprintf(filename, "metadata%d", n);
+    sprintf(filename, METADATA_FILENAME_PREFIX "%d", n);
 }
 
 /* Read the n'th metadata file (with n equal to 1 or 2) and decode the content
@@ -43,8 +47,8 @@ static int loadFile(struct uv *uv,
                     const unsigned short n,
                     struct uvMetadata *metadata)
 {
-    uvFilename filename; /* Filename of the metadata file */
-    uint8_t buf[SIZE];   /* Content of metadata file */
+    char filename[METADATA_FILENAME_SIZE]; /* Filename of the metadata file */
+    uint8_t buf[METADATA_CONTENT_SIZE];    /* Content of metadata file */
     int fd;
     char errmsg[2048];
     int rv;
@@ -188,8 +192,8 @@ int uvMetadataLoad(struct uv *uv, struct uvMetadata *metadata)
 
 int uvMetadataStore(struct uv *uv, const struct uvMetadata *metadata)
 {
-    uvFilename filename; /* Filename of the metadata file */
-    uint8_t buf[SIZE];   /* Content of metadata file */
+    char filename[METADATA_FILENAME_SIZE]; /* Filename of the metadata file */
+    uint8_t buf[METADATA_CONTENT_SIZE];    /* Content of metadata file */
     const int flags = O_WRONLY | O_CREAT | O_SYNC | O_TRUNC;
     unsigned short n;
     int fd;

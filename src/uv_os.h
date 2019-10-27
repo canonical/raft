@@ -24,12 +24,13 @@
 /* Maximum length of a directory path. */
 #define UV__DIR_MAX_LEN (UV__PATH_MAX_LEN - UV__SEP_LEN - UV__FILENAME_MAX_LEN)
 
-/* Evalulates to 1 if the given DIR string has at most UV__DIR_MAX_LEN chars. */
+/* True if the given DIR string has at most UV__DIR_MAX_LEN chars. */
 #define UV__DIR_HAS_VALID_LEN(DIR) \
     (strnlen(DIR, UV__DIR_MAX_LEN + 1) <= UV__DIR_MAX_LEN)
 
-/* Fixed length string that can hold a file name. */
-typedef char uvFilename[UV__FILENAME_MAX_LEN];
+/* True if the given FILENAME string has at most UV__FILENAME_MAX_LEN chars. */
+#define UV__FILENAME_HAS_VALID_LEN(FILENAME) \
+    (strnlen(FILENAME, UV__FILENAME_MAX_LEN + 1) <= UV__FILENAME_MAX_LEN)
 
 /* Check that the given directory exists, and try to create it if it doesn't. */
 int uvEnsureDir(const char *dir, char *errmsg);
@@ -45,45 +46,45 @@ int uvScanDir(const char *dir,
 
 /* Open a file in a directory. */
 int uvOpenFile(const char *dir,
-               const uvFilename filename,
+               const char *filename,
                int flags,
                int *fd,
                char *errmsg);
 
 /* Stat a file in a directory. */
 int uvStatFile(const char *dir,
-               const uvFilename filename,
+               const char *filename,
                struct stat *sb,
                char *errmsg);
 
 /* Create a file and write the given content into it. */
 int uvMakeFile(const char *dir,
-               const uvFilename filename,
+               const char *filename,
                struct raft_buffer *bufs,
                unsigned n_bufs,
                char *errmsg);
 
 /* Delete a file in a directory. */
-int uvUnlinkFile(const char *dir, const uvFilename filename, char *errmsg);
+int uvUnlinkFile(const char *dir, const char *filename, char *errmsg);
 
 /* Like uvUnlinkFile, but ignoring errors. */
-void uvTryUnlinkFile(const char *dir, const uvFilename filename);
+void uvTryUnlinkFile(const char *dir, const char *filename);
 
 /* Truncate a file in a directory. */
 int uvTruncateFile(const char *dir,
-                   const uvFilename filename,
+                   const char *filename,
                    size_t offset,
                    char *errmsg);
 
 /* Rename a file in a directory. */
 int uvRenameFile(const char *dir,
-                 const uvFilename filename1,
-                 const uvFilename filename2,
+                 const char *filename1,
+                 const char *filename2,
                  char *errmsg);
 
 /* Check whether the given file in the given directory is empty. */
 int uvIsEmptyFile(const char *dir,
-                  const uvFilename filename,
+                  const char *filename,
                   bool *empty,
                   char *errmsg);
 

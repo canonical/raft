@@ -18,7 +18,7 @@
 /* Default permissions when creating a directory. */
 #define DEFAULT_DIR_PERM 0700
 
-static void uvJoin(const char *dir, const uvFilename filename, char *path)
+static void uvJoin(const char *dir, const char *filename, char *path)
 {
     strcpy(path, dir);
     strcat(path, "/");
@@ -85,13 +85,16 @@ int uvScanDir(const char *dir,
 }
 
 int uvOpenFile(const char *dir,
-               const uvFilename filename,
+               const char *filename,
                int flags,
                int *fd,
                char *errmsg)
 {
     char path[UV__PATH_MAX_LEN];
+
     assert(UV__DIR_HAS_VALID_LEN(dir));
+    assert(UV__FILENAME_HAS_VALID_LEN(filename));
+
     uvJoin(dir, filename, path);
     *fd = open(path, flags, S_IRUSR | S_IWUSR);
     if (*fd == -1) {
@@ -102,13 +105,16 @@ int uvOpenFile(const char *dir,
 }
 
 int uvStatFile(const char *dir,
-               const uvFilename filename,
+               const char *filename,
                struct stat *sb,
                char *errmsg)
 {
     char path[UV__PATH_MAX_LEN];
     int rv;
+
     assert(UV__DIR_HAS_VALID_LEN(dir));
+    assert(UV__FILENAME_HAS_VALID_LEN(filename));
+
     uvJoin(dir, filename, path);
     rv = stat(path, sb);
     if (rv == -1) {
@@ -119,7 +125,7 @@ int uvStatFile(const char *dir,
 }
 
 int uvMakeFile(const char *dir,
-               const uvFilename filename,
+               const char *filename,
                struct raft_buffer *bufs,
                unsigned n_bufs,
                char *errmsg)
@@ -129,7 +135,10 @@ int uvMakeFile(const char *dir,
     int rv;
     size_t size;
     unsigned i;
+
     assert(UV__DIR_HAS_VALID_LEN(dir));
+    assert(UV__FILENAME_HAS_VALID_LEN(filename));
+
     size = 0;
     for (i = 0; i < n_bufs; i++) {
         size += bufs[i].len;
@@ -170,7 +179,10 @@ int uvUnlinkFile(const char *dir, const char *filename, char *errmsg)
 {
     char path[UV__PATH_MAX_LEN];
     int rv;
+
     assert(UV__DIR_HAS_VALID_LEN(dir));
+    assert(UV__FILENAME_HAS_VALID_LEN(filename));
+
     uvJoin(dir, filename, path);
     rv = unlink(path);
     if (rv == -1) {
@@ -187,15 +199,19 @@ void uvTryUnlinkFile(const char *dir, const char *filename)
 }
 
 int uvTruncateFile(const char *dir,
-                   const uvFilename filename,
+                   const char *filename,
                    size_t offset,
                    char *errmsg)
 {
     char path[UV__PATH_MAX_LEN];
     int fd;
     int rv;
-    uvJoin(dir, filename, path);
+
     assert(UV__DIR_HAS_VALID_LEN(dir));
+    assert(UV__FILENAME_HAS_VALID_LEN(filename));
+
+    uvJoin(dir, filename, path);
+
     rv = uvOpenFile(dir, filename, O_RDWR, &fd, errmsg);
     if (rv != 0) {
         goto err;
@@ -220,14 +236,18 @@ err:
 }
 
 int uvRenameFile(const char *dir,
-                 const uvFilename filename1,
-                 const uvFilename filename2,
+                 const char *filename1,
+                 const char *filename2,
                  char *errmsg)
 {
     char path1[UV__PATH_MAX_LEN];
     char path2[UV__PATH_MAX_LEN];
     int rv;
+
     assert(UV__DIR_HAS_VALID_LEN(dir));
+    assert(UV__FILENAME_HAS_VALID_LEN(filename1));
+    assert(UV__FILENAME_HAS_VALID_LEN(filename2));
+
     uvJoin(dir, filename1, path1);
     uvJoin(dir, filename2, path2);
     /* TODO: double check that filename2 does not exist. */
@@ -244,7 +264,7 @@ int uvRenameFile(const char *dir,
 }
 
 int uvIsEmptyFile(const char *dir,
-                  const uvFilename filename,
+                  const char *filename,
                   bool *empty,
                   char *errmsg)
 {
@@ -515,9 +535,9 @@ int uvProbeIoCapabilities(const char *dir,
                           bool *async,
                           char *errmsg)
 {
-    uvFilename filename;         /* Filename of the probe file */
-    char path[UV__PATH_MAX_LEN]; /* Full path of the probe file */
-    int fd;                      /* File descriptor of the probe file */
+    char filename[UV__FILENAME_MAX_LEN]; /* Filename of the probe file */
+    char path[UV__PATH_MAX_LEN];         /* Full path of the probe file */
+    int fd;                              /* File descriptor of the probe file */
     int rv;
 
     assert(UV__DIR_HAS_VALID_LEN(dir));

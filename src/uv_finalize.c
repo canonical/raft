@@ -22,8 +22,8 @@ static void workCb(uv_work_t *work)
 {
     struct segment *s = work->data;
     struct uv *uv = s->uv;
-    uvFilename filename1;
-    uvFilename filename2;
+    char filename1[UV__FILENAME_MAX_LEN];
+    char filename2[UV__FILENAME_MAX_LEN];
     char errmsg[2048];
     int rv;
 
