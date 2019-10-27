@@ -261,6 +261,7 @@ int uvRenameFile(const char *dir,
                  const char *filename2,
                  char **errmsg)
 {
+    struct uv_fs_s req;
     char path1[UV__PATH_MAX_LEN];
     char path2[UV__PATH_MAX_LEN];
     int rv;
@@ -272,9 +273,9 @@ int uvRenameFile(const char *dir,
     uvJoin(dir, filename1, path1);
     uvJoin(dir, filename2, path2);
     /* TODO: double check that filename2 does not exist. */
-    rv = rename(path1, path2);
-    if (rv == -1) {
-        *errmsg = uvSysErrMsg("rename", errno);
+    rv = uv_fs_rename(NULL, &req, path1, path2, NULL);
+    if (rv != 0) {
+        *errmsg = uvSysErrMsg("rename", rv);
         return UV__ERROR;
     }
     rv = uvSyncDir(dir, errmsg);
