@@ -31,7 +31,8 @@ static void *setupFile(const MunitParameter params[],
                        MUNIT_UNUSED void *user_data)
 {
     struct file *f = munit_malloc(sizeof *f);
-    uvErrMsg errmsg;
+    char errmsg_[2048];
+    char *errmsg = errmsg_;
     int rv;
     SETUP_DIR;
     if (f->dir == NULL) { /* Desired fs not available, skip test. */
@@ -39,7 +40,7 @@ static void *setupFile(const MunitParameter params[],
         return NULL;
     }
     SETUP_LOOP;
-    rv = uvProbeIoCapabilities(f->dir, &f->direct_io, &f->async_io, errmsg);
+    rv = uvProbeIoCapabilities(f->dir, &f->direct_io, &f->async_io, &errmsg);
     munit_assert_int(rv, ==, 0);
     rv = uvFileInit(&f->file, &f->loop, f->direct_io != 0, f->async_io, errmsg);
     munit_assert_int(rv, ==, 0);

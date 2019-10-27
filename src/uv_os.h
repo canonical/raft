@@ -106,7 +106,7 @@ bool uvIsAtEof(int fd);
 int uvProbeIoCapabilities(const char *dir,
                           size_t *direct,
                           bool *async,
-                          char *errmsg);
+                          char **errmsg);
 
 /* Configure the given file descriptor for direct I/O. */
 int uvSetDirectIo(int fd, char *errmsg);

@@ -132,32 +132,33 @@ TEST(uvOpenFile, noExists, setupDir, tearDownDir, 0, NULL)
 
 /* Invoke uvProbeIoCapabilities against the given dir and assert that it returns
  * the given values for direct I/O and async I/O. */
-#define PROBE_IO_CAPABILITIES(DIR, DIRECT_IO, ASYNC_IO)                     \
-    {                                                                       \
-        size_t direct_io_;                                                  \
-        bool async_io_;                                                     \
-        uvErrMsg errmsg_;                                                   \
-        int rv_;                                                            \
-        rv_ = uvProbeIoCapabilities(DIR, &direct_io_, &async_io_, errmsg_); \
-        munit_assert_int(rv_, ==, 0);                                       \
-        munit_assert_int(direct_io_, ==, DIRECT_IO);                        \
-        if (ASYNC_IO) {                                                     \
-            munit_assert_true(async_io_);                                   \
-        } else {                                                            \
-            munit_assert_false(async_io_);                                  \
-        }                                                                   \
+#define PROBE_IO_CAPABILITIES(DIR, DIRECT_IO, ASYNC_IO)                      \
+    {                                                                        \
+        size_t direct_io_;                                                   \
+        bool async_io_;                                                      \
+        char *errmsg_;                                                       \
+        int rv_;                                                             \
+        rv_ = uvProbeIoCapabilities(DIR, &direct_io_, &async_io_, &errmsg_); \
+        munit_assert_int(rv_, ==, 0);                                        \
+        munit_assert_int(direct_io_, ==, DIRECT_IO);                         \
+        if (ASYNC_IO) {                                                      \
+            munit_assert_true(async_io_);                                    \
+        } else {                                                             \
+            munit_assert_false(async_io_);                                   \
+        }                                                                    \
     }
 
 /* Invoke uvProbeIoCapabilities and check that the given error occurs. */
-#define PROBE_IO_CAPABILITIES_ERROR(DIR, RV, ERRMSG)                        \
-    {                                                                       \
-        size_t direct_io_;                                                  \
-        bool async_io_;                                                     \
-        uvErrMsg errmsg_;                                                   \
-        int rv_;                                                            \
-        rv_ = uvProbeIoCapabilities(DIR, &direct_io_, &async_io_, errmsg_); \
-        munit_assert_int(rv_, ==, RV);                                      \
-        munit_assert_string_equal(errmsg_, ERRMSG);                         \
+#define PROBE_IO_CAPABILITIES_ERROR(DIR, RV, ERRMSG)                         \
+    {                                                                        \
+        size_t direct_io_;                                                   \
+        bool async_io_;                                                      \
+        char *errmsg_;                                                       \
+        int rv_;                                                             \
+        rv_ = uvProbeIoCapabilities(DIR, &direct_io_, &async_io_, &errmsg_); \
+        munit_assert_int(rv_, ==, RV);                                       \
+        munit_assert_string_equal(errmsg_, ERRMSG);                          \
+        raft_free(errmsg_);                                                  \
     }
 
 SUITE(uvProbeIoCapabilities)
@@ -209,7 +210,7 @@ TEST(uvProbeIoCapabilities, noAccess, setupDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
     test_dir_unexecutable(dir);
-    PROBE_IO_CAPABILITIES_ERROR(dir, UV__ERROR, "mkstemp: Permission denied");
+    PROBE_IO_CAPABILITIES_ERROR(dir, UV__ERROR, "mkstemp: permission denied");
     return MUNIT_OK;
 }
 
@@ -222,7 +223,7 @@ TEST(uvProbeIoCapabilities, noSpace, setupTmpfsDir, tearDownDir, 0, NULL)
     }
     test_dir_fill(dir, 0);
     PROBE_IO_CAPABILITIES_ERROR(dir, UV__ERROR,
-                                "posix_fallocate: No space left on device");
+                                "posix_fallocate: no space left on device");
     return MUNIT_OK;
 }
 

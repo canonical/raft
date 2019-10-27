@@ -1,3 +1,5 @@
+#include "../include/raft/uv.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -5,8 +7,6 @@
 #include <unistd.h>
 
 #include "../include/raft.h"
-#include "../include/raft/uv.h"
-
 #include "assert.h"
 #include "byte.h"
 #include "configuration.h"
@@ -44,7 +44,7 @@ static int uvInit(struct raft_io *io,
     rv = uvEnsureDir(uv->dir, &errmsg);
     if (rv != 0) {
         uvErrorf(uv, "ensure data dir %s: %s", uv->dir, errmsg);
-	raft_free(errmsg);
+        raft_free(errmsg);
         rv = RAFT_IOERR;
         goto err;
     }
@@ -58,15 +58,17 @@ static int uvInit(struct raft_io *io,
              uv->metadata.version, uv->metadata.term, uv->metadata.voted_for);
 
     /* Detect the I/O capabilities of the underlying file system. */
-    rv = uvProbeIoCapabilities(uv->dir, &direct_io, &uv->async_io, errmsg);
+    rv = uvProbeIoCapabilities(uv->dir, &direct_io, &uv->async_io, &errmsg);
     if (rv != 0) {
         uvErrorf(uv, "probe I/O capabilities: %s", errmsg);
+        raft_free(errmsg);
         rv = RAFT_IOERR;
         goto err;
     }
     uv->direct_io = direct_io != 0;
     uv->block_size = direct_io != 0 ? direct_io : 4096;
-    uvDebugf(uv, "I/O: direct %d, async %d, block %ld\n", uv->direct_io, uv->async_io, uv->block_size);
+    uvDebugf(uv, "I/O: direct %d, async %d, block %ld\n", uv->direct_io,
+             uv->async_io, uv->block_size);
 
     /* We expect the maximum segment size to be a multiple of the block size */
     assert(UV__MAX_SEGMENT_SIZE % uv->block_size == 0);
@@ -360,8 +362,8 @@ static int loadSnapshotAndEntries(struct uv *uv,
             uvErrorf(uv,
                      "index of last entry %lld is behind last snapshot %lld",
                      last_index, (*snapshot)->index);
-	    rv = RAFT_CORRUPT;
-	    goto err_after_snapshot_load;
+            rv = RAFT_CORRUPT;
+            goto err_after_snapshot_load;
         }
 
         raft_free(segments);

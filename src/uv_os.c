@@ -395,7 +395,7 @@ bool uvIsAtEof(const int fd)
 }
 
 /* Check if direct I/O is possible on the given fd. */
-static int probeDirectIO(int fd, size_t *size, char *errmsg)
+static int probeDirectIO(int fd, size_t *size, char **errmsg)
 {
     int flags;             /* Current fcntl flags. */
     struct statfs fs_info; /* To check the file system type. */
@@ -408,13 +408,13 @@ static int probeDirectIO(int fd, size_t *size, char *errmsg)
     if (rv == -1) {
         if (errno != EINVAL) {
             /* UNTESTED: the parameters are ok, so this should never happen. */
-            uvErrMsgSys(errmsg, fnctl, errno);
+            *errmsg = uvSysErrMsg("fnctl", -errno);
             return UV__ERROR;
         }
         rv = fstatfs(fd, &fs_info);
         if (rv == -1) {
             /* UNTESTED: in practice ENOMEM should be the only failure mode */
-            uvErrMsgSys(errmsg, fstatfs, errno);
+            *errmsg = uvSysErrMsg("fstatfs", -errno);
             return UV__ERROR;
         }
         switch (fs_info.f_type) {
@@ -424,8 +424,8 @@ static int probeDirectIO(int fd, size_t *size, char *errmsg)
                 return 0;
             default:
                 /* UNTESTED: this is an unsupported file system. */
-                uvErrMsgPrintf(errmsg, "unsupported file system: %lx",
-                               fs_info.f_type);
+                *errmsg = errMsgPrintf("unsupported file system: %lx",
+                                       fs_info.f_type);
                 return UV__ERROR;
         }
     }
@@ -436,7 +436,7 @@ static int probeDirectIO(int fd, size_t *size, char *errmsg)
         buf = raft_aligned_alloc(*size, *size);
         if (buf == NULL) {
             /* UNTESTED: TODO */
-            uvErrMsgPrintf(errmsg, "can't allocate write buffer");
+            *errmsg = errMsgPrintf("can't allocate write buffer");
             return UV__ERROR;
         }
         memset(buf, 0, *size);
@@ -461,7 +461,7 @@ static int probeDirectIO(int fd, size_t *size, char *errmsg)
                 return 0;
             }
 
-            uvErrMsgSys(errmsg, write, errno);
+            *errmsg = uvSysErrMsg("write", -errno);
             return UV__ERROR;
         }
         *size = *size / 2;
@@ -473,7 +473,7 @@ static int probeDirectIO(int fd, size_t *size, char *errmsg)
 
 #if defined(RWF_NOWAIT)
 /* Check if fully non-blocking async I/O is possible on the given fd. */
-static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
+static int probeAsyncIO(int fd, size_t size, bool *ok, char **errmsg)
 {
     void *buf;                  /* Buffer to use for the probe write */
     aio_context_t ctx = 0;      /* KAIO context handle */
@@ -481,11 +481,13 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
     struct iocb *iocbs = &iocb; /* Because the io_submit() API sucks */
     struct io_event event;      /* KAIO response object */
     int n_events;
+    char errmsg_[2048];
     int rv;
 
     /* Setup the KAIO context handle */
-    rv = uvIoSetup(1, &ctx, errmsg);
+    rv = uvIoSetup(1, &ctx, errmsg_);
     if (rv != 0) {
+        *errmsg = errMsgPrintf("%s", errmsg_);
         /* UNTESTED: in practice this should fail only with ENOMEM */
         return rv;
     }
@@ -494,7 +496,7 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
     buf = raft_aligned_alloc(size, size);
     if (buf == NULL) {
         /* UNTESTED: define a configurable allocator that can fail? */
-        uvErrMsgPrintf(errmsg, "can't allocate write buffer");
+        *errmsg = errMsgPrintf("can't allocate write buffer");
         return UV__ERROR;
     }
     memset(buf, 0, size);
@@ -510,7 +512,7 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
     iocb.aio_rw_flags |= RWF_NOWAIT | RWF_DSYNC;
 
     /* Submit the KAIO request */
-    rv = uvIoSubmit(ctx, 1, &iocbs, errmsg);
+    rv = uvIoSubmit(ctx, 1, &iocbs, errmsg_);
     if (rv != 0) {
         /* UNTESTED: in practice this should fail only with ENOMEM */
         raft_free(buf);
@@ -520,11 +522,12 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
             *ok = false;
             return 0;
         }
+        *errmsg = errMsgPrintf("%s", errmsg_);
         return rv;
     }
 
     /* Fetch the response: will block until done. */
-    rv = uvIoGetevents(ctx, 1, 1, &event, NULL, &n_events, errmsg);
+    rv = uvIoGetevents(ctx, 1, 1, &event, NULL, &n_events, errmsg_);
     assert(rv == 0);
     assert(n_events == 1);
 
@@ -532,8 +535,9 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
     raft_free(buf);
 
     /* Release the KAIO context handle. */
-    rv = uvIoDestroy(ctx, errmsg);
+    rv = uvIoDestroy(ctx, errmsg_);
     if (rv != 0) {
+        *errmsg = errMsgPrintf("%s", errmsg_);
         return rv;
     }
 
@@ -555,7 +559,7 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
 int uvProbeIoCapabilities(const char *dir,
                           size_t *direct,
                           bool *async,
-                          char *errmsg)
+                          char **errmsg)
 {
     char filename[UV__FILENAME_MAX_LEN]; /* Filename of the probe file */
     char path[UV__PATH_MAX_LEN];         /* Full path of the probe file */
@@ -569,12 +573,12 @@ int uvProbeIoCapabilities(const char *dir,
     uvJoin(dir, filename, path);
     fd = mkstemp(path);
     if (fd == -1) {
-        uvErrMsgSys(errmsg, mkstemp, errno);
+        *errmsg = uvSysErrMsg("mkstemp", -errno);
         goto err;
     }
     rv = posix_fallocate(fd, 0, 4096);
     if (rv != 0) {
-        uvErrMsgSys(errmsg, posix_fallocate, rv);
+        *errmsg = uvSysErrMsg("posix_fallocate", -rv);
         goto err_after_file_open;
     }
     unlink(path);
