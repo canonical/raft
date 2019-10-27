@@ -27,6 +27,7 @@ struct result
     bool done;
 };
 
+/* Initialize a the fixture's uvFile object. */
 static void *setupFile(const MunitParameter params[],
                        MUNIT_UNUSED void *user_data)
 {
@@ -48,6 +49,8 @@ static void *setupFile(const MunitParameter params[],
     return f;
 }
 
+/* Cleanup the fixture's uvFile object, closing it if it got created during the
+ * tests. */
 static void tearDownFile(void *data)
 {
     struct file *f = data;

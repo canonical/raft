@@ -381,6 +381,7 @@ int uvFileInit(struct uvFile *f,
     f->direct = direct;
     f->async = async;
     f->event_fd = -1;
+    f->errmsg = NULL;
 
     /* Create an event file descriptor to get notified when a write has
      * completed. */
@@ -641,6 +642,11 @@ err:
 bool uvFileIsOpen(struct uvFile *f)
 {
     return !f->closing;
+}
+
+const char *uvFileErrMsg(struct uvFile *f)
+{
+    return f->errmsg;
 }
 
 void uvFileClose(struct uvFile *f, uvFileCloseCb cb)
