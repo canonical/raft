@@ -223,8 +223,9 @@ int uvTruncateFile(const char *dir,
                    size_t offset,
                    char **errmsg)
 {
+    struct uv_fs_s req;
     char path[UV__PATH_MAX_LEN];
-    int fd;
+    uv_file fd;
     int rv;
 
     assert(UV__DIR_HAS_VALID_LEN(dir));
@@ -236,14 +237,14 @@ int uvTruncateFile(const char *dir,
     if (rv != 0) {
         goto err;
     }
-    rv = ftruncate(fd, offset);
-    if (rv == -1) {
-        *errmsg = uvSysErrMsg("ftruncate", -errno);
+    rv = uv_fs_ftruncate(NULL, &req, fd, offset, NULL);
+    if (rv != 0) {
+        *errmsg = uvSysErrMsg("ftruncate", rv);
         goto err_after_open;
     }
-    rv = fsync(fd);
+    rv = uv_fs_fsync(NULL, &req, fd, NULL);
     if (rv == -1) {
-        *errmsg = uvSysErrMsg("fsync", -errno);
+        *errmsg = uvSysErrMsg("fsync", rv);
         goto err_after_open;
     }
     close(fd);
