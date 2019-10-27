@@ -1,5 +1,4 @@
-/* Create and write files asynchronously, using libuv on top of Linux AIO (aka
- * KAIO). */
+/* Create and write files asynchronously. */
 
 #ifndef UV_FILE_H_
 #define UV_FILE_H_
@@ -84,6 +83,7 @@ struct uvFile
     unsigned n_events;             /* Length of the events array */
     queue write_queue;             /* Queue of inflight write requests */
     bool closing;                  /* True during the close sequence */
+    char *errmsg;                  /* Describe last error occured */
     uvFileCloseCb close_cb;        /* Close callback */
 };
 

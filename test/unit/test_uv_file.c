@@ -117,7 +117,7 @@ static void createCbAssertFail(struct uvFileCreate *req,
 
 /* Start creating a file with the given parameters and wait for the operation
  * to successfully complete. */
-#define CREATE_(FILENAME, SIZE, MAX_CONCURRENT_WRITES)                        \
+#define CREATE(FILENAME, SIZE, MAX_CONCURRENT_WRITES)                         \
     {                                                                         \
         struct uvFileCreate req_;                                             \
         bool done_ = false;                                                   \
@@ -139,15 +139,15 @@ static void createCbAssertFail(struct uvFileCreate *req,
 
 /* Try to create a file with the given parameters and check that the given error
  * is immediately returned. */
-#define CREATE_ERROR_(FILENAME, SIZE, MAX_CONCURRENT_WRITES, RV, ERRMSG) \
-    {                                                                    \
-        struct uvFileCreate req_;                                        \
-        uvErrMsg errmsg_;                                                \
-        int rv_;                                                         \
-        rv_ = uvFileCreate(&f->file, &req_, f->dir, FILENAME, SIZE,      \
-                           MAX_CONCURRENT_WRITES, NULL, errmsg_);        \
-        munit_assert_int(rv_, ==, RV);                                   \
-        munit_assert_string_equal(errmsg_, ERRMSG);                      \
+#define CREATE_ERROR(FILENAME, SIZE, MAX_CONCURRENT_WRITES, RV, ERRMSG) \
+    {                                                                   \
+        struct uvFileCreate req_;                                       \
+        uvErrMsg errmsg_;                                               \
+        int rv_;                                                        \
+        rv_ = uvFileCreate(&f->file, &req_, f->dir, FILENAME, SIZE,     \
+                           MAX_CONCURRENT_WRITES, NULL, errmsg_);       \
+        munit_assert_int(rv_, ==, RV);                                  \
+        munit_assert_string_equal(errmsg_, ERRMSG);                     \
     }
 
 /* Start creating a file with the given parameters and wait for the operation to
@@ -181,9 +181,9 @@ TEST(uvFileCreate, success, setupFile, tearDownFile, 0, dir_all_params)
 {
     struct file *f = data;
     SKIP_IF_NO_FIXTURE;
-    CREATE_("foo", /* file name */
-            4096,  /* file size */
-            1 /* max concurrent writes */);
+    CREATE("foo", /* file name */
+           4096,  /* file size */
+           1 /* max concurrent writes */);
     munit_assert_true(test_dir_has_file(f->dir, "foo"));
     return MUNIT_OK;
 }
@@ -192,11 +192,11 @@ TEST(uvFileCreate, success, setupFile, tearDownFile, 0, dir_all_params)
 TEST(uvFileCreate, dirNoExists, setupFile, tearDownFile, 0, NULL)
 {
     struct file *f = data;
-    CREATE_ERROR_("foo/bar", /* file name */
-                  4096,      /* file size */
-                  1,         /* max concurrent writes */
-                  UV__NOENT, /* error code */
-                  "open: no such file or directory" /* error message */);
+    CREATE_ERROR("foo/bar", /* file name */
+                 4096,      /* file size */
+                 1,         /* max concurrent writes */
+                 UV__NOENT, /* error code */
+                 "open: no such file or directory" /* error message */);
     return MUNIT_OK;
 }
 
@@ -206,11 +206,11 @@ TEST(uvFileCreate, fileAlreadyExists, setupFile, tearDownFile, 0, NULL)
     struct file *f = data;
     char buf[8];
     test_dir_write_file(f->dir, "foo", buf, sizeof buf);
-    CREATE_ERROR_("foo",     /* file name */
-                  4096,      /* file size */
-                  1,         /* max concurrent writes */
-                  UV__ERROR, /* error code */
-                  "open: file already exists" /* error message */);
+    CREATE_ERROR("foo",     /* file name */
+                 4096,      /* file size */
+                 1,         /* max concurrent writes */
+                 UV__ERROR, /* error code */
+                 "open: file already exists" /* error message */);
     return MUNIT_OK;
 }
 
@@ -224,11 +224,11 @@ TEST(uvFileCreate, noResources, setupFile, tearDownFile, 0, NULL)
     if (rv != 0) {
         return MUNIT_SKIP;
     }
-    CREATE_ERROR_("foo",     /* file name */
-                  4096,      /* file size */
-                  1,         /* max concurrent writes */
-                  UV__ERROR, /* error code */
-                  "io_setup: Resource temporarily unavailable" /* message */);
+    CREATE_ERROR("foo",     /* file name */
+                 4096,      /* file size */
+                 1,         /* max concurrent writes */
+                 UV__ERROR, /* error code */
+                 "io_setup: Resource temporarily unavailable" /* message */);
     test_aio_destroy(ctx);
     return MUNIT_OK;
 }
@@ -386,7 +386,7 @@ TEST(uvFileWrite, one, setupFile, tearDownFile, 0, dir_all_params)
 {
     struct file *f = data;
     SKIP_IF_NO_FIXTURE;
-    CREATE_("foo", f->block_size, 1);
+    CREATE("foo", f->block_size, 1);
     WRITE_(1 /* n bufs */, 1 /* content */, 0 /* offset */);
     return MUNIT_OK;
 }
@@ -396,7 +396,7 @@ TEST(uvFileWrite, two, setupFile, tearDownFile, 0, dir_all_params)
 {
     struct file *f = data;
     SKIP_IF_NO_FIXTURE;
-    CREATE_("foo", f->block_size, 1);
+    CREATE("foo", f->block_size, 1);
     WRITE_(1 /* n bufs */, 1 /* content */, 0 /* offset */);
     WRITE_(1 /* n bufs */, 2 /* content */, f->block_size /* offset */);
     ASSERT_CONTENT(2);
@@ -408,7 +408,7 @@ TEST(uvFileWrite, twice, setupFile, tearDownFile, 0, dir_all_params)
 {
     struct file *f = data;
     SKIP_IF_NO_FIXTURE;
-    CREATE_("foo", f->block_size, 1);
+    CREATE("foo", f->block_size, 1);
     WRITE_(1 /* n bufs */, 0 /* content */, 0 /* offset */);
     WRITE_(1 /* n bufs */, 1 /* content */, 0 /* offset */);
     ASSERT_CONTENT(1);
@@ -420,7 +420,7 @@ TEST(uvFileWrite, vec, setupFile, tearDownFile, 0, dir_all_params)
 {
     struct file *f = data;
     SKIP_IF_NO_FIXTURE;
-    CREATE_("foo", f->block_size, 1);
+    CREATE("foo", f->block_size, 1);
     WRITE_(2 /* n bufs */, 1 /* content */, 0 /* offset */);
     ASSERT_CONTENT(1);
     return MUNIT_OK;
@@ -431,7 +431,7 @@ TEST(uvFileWrite, vec_twice, setupFile, tearDownFile, 0, dir_all_params)
 {
     struct file *f = data;
     SKIP_IF_NO_FIXTURE;
-    CREATE_("foo", f->block_size, 1);
+    CREATE("foo", f->block_size, 1);
     WRITE_(2 /* n bufs */, 1 /* content */, 0 /* offset */);
     WRITE_(2 /* n bufs */, 1 /* content */, 0 /* offset */);
     ASSERT_CONTENT(2);
@@ -483,7 +483,7 @@ TEST(uvFileWrite, noResources, setupFile, tearDownFile, 0, dir_no_aio_params)
     aio_context_t ctx = 0;
     int rv;
     SKIP_IF_NO_FIXTURE;
-    CREATE_("foo", f->block_size, 2);
+    CREATE("foo", f->block_size, 2);
     rv = test_aio_fill(&ctx, 0);
     if (rv != 0) {
         return MUNIT_SKIP;
@@ -505,7 +505,7 @@ TEST(uvFileWrite, cancel, setupFile, tearDownFile, 0, dir_all_params)
     uvErrMsg errmsg;
     int rv;
     SKIP_IF_NO_FIXTURE;
-    CREATE_("foo", f->block_size, 1);
+    CREATE("foo", f->block_size, 1);
     MAKE_BUFS(bufs, 1, 0);
     req.data = &result;
     rv = uvFileWrite(&f->file, &req, bufs, 1, 0, writeCbAssertFail, errmsg);
