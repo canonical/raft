@@ -418,17 +418,17 @@ static void putWorkCb(uv_work_t *work)
 {
     struct put *r = work->data;
     struct uv *uv = r->uv;
-    char errmsg_[2048];
-    char *errmsg = errmsg_;
+    char *errmsg;
     char filename[UV__FILENAME_MAX_LEN];
     int rv;
 
     sprintf(filename, UV__SNAPSHOT_META_TEMPLATE, r->snapshot->term,
             r->snapshot->index, r->meta.timestamp);
 
-    rv = uvMakeFile(uv->dir, filename, r->meta.bufs, 2, errmsg);
+    rv = uvMakeFile(uv->dir, filename, r->meta.bufs, 2, &errmsg);
     if (rv != 0) {
         uvErrorf(uv, "write %s: %s", filename, errmsg);
+	raft_free(errmsg);
         r->status = RAFT_IOERR;
         return;
     }
@@ -437,9 +437,10 @@ static void putWorkCb(uv_work_t *work)
             r->snapshot->index, r->meta.timestamp);
 
     rv = uvMakeFile(uv->dir, filename, r->snapshot->bufs, r->snapshot->n_bufs,
-                    errmsg);
+                    &errmsg);
     if (rv != 0) {
         uvErrorf(uv, "write %s: %s", filename, errmsg);
+	raft_free(errmsg);
         r->status = RAFT_IOERR;
         return;
     }

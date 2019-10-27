@@ -56,7 +56,7 @@ int uvMakeFile(const char *dir,
                const char *filename,
                struct raft_buffer *bufs,
                unsigned n_bufs,
-               char *errmsg);
+               char **errmsg);
 
 /* Delete a file in a directory. */
 int uvUnlinkFile(const char *dir, const char *filename, char *errmsg);
