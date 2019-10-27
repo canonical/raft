@@ -35,7 +35,7 @@ SUITE(uvEnsureDir)
 TEST(uvEnsureDir, doesNotExist, setupDir, tearDownDir, 0, NULL)
 {
     const char *parent = data;
-    uvDir dir;
+    char dir[1024];
     sprintf(dir, "%s/sub", parent);
     ENSURE_DIR(dir);
     munit_assert_true(test_dir_exists(dir));

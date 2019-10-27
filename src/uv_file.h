@@ -6,7 +6,6 @@
 
 #include <linux/aio_abi.h>
 #include <stdbool.h>
-
 #include <uv.h>
 
 #include "queue.h"
@@ -47,7 +46,7 @@ int uvFileInit(struct uvFile *f,
  * writing. The file must not exist yet. */
 int uvFileCreate(struct uvFile *f,
                  struct uvFileCreate *req,
-                 uvDir dir,
+                 const char *dir,
                  uvFilename filename,
                  size_t size,
                  unsigned max_concurrent_writes,
@@ -96,7 +95,7 @@ struct uvFileCreate
     uvErrMsg errmsg;       /* Error message (for status != 0) */
     struct uv_work_s work; /* To execute logic in the threadpool */
     uvFileCreateCb cb;     /* Callback to invoke upon request completion */
-    uvDir dir;             /* File directory */
+    const char *dir;       /* File directory */
     uvFilename filename;   /* File name */
     size_t size;           /* File size */
 };

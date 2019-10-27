@@ -1,3 +1,5 @@
+#include "uv_os.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <libgen.h>
@@ -12,25 +14,21 @@
 #include "assert.h"
 #include "syscall.h"
 #include "uv_error.h"
-#include "uv_os.h"
 
 /* Default permissions when creating a directory. */
 #define DEFAULT_DIR_PERM 0700
 
-static void uvJoin(const uvDir dir, const uvFilename filename, uvPath path)
+static void uvJoin(const char *dir, const uvFilename filename, uvPath path)
 {
     strcpy(path, dir);
     strcat(path, "/");
     strcat(path, filename);
 }
 
-int uvEnsureDir(const uvDir dir, char *errmsg)
+int uvEnsureDir(const char *dir, char *errmsg)
 {
     struct uv_fs_s req;
     int rv;
-
-    /* Check that the given path doesn't exceed our static buffer limit */
-    assert(strnlen(dir, UV__DIR_MAX_LEN + 1) <= UV__DIR_MAX_LEN);
 
     /* Make sure we have a directory we can write into. */
     rv = uv_fs_stat(NULL, &req, dir, NULL);
@@ -53,7 +51,7 @@ int uvEnsureDir(const uvDir dir, char *errmsg)
     return 0;
 }
 
-int uvSyncDir(const uvDir dir, char *errmsg)
+int uvSyncDir(const char *dir, char *errmsg)
 {
     int fd;
     int rv;
@@ -71,7 +69,7 @@ int uvSyncDir(const uvDir dir, char *errmsg)
     return 0;
 }
 
-int uvScanDir(const uvDir dir,
+int uvScanDir(const char *dir,
               struct dirent ***entries,
               int *n_entries,
               char *errmsg)
@@ -86,13 +84,14 @@ int uvScanDir(const uvDir dir,
     return 0;
 }
 
-int uvOpenFile(const uvDir dir,
+int uvOpenFile(const char *dir,
                const uvFilename filename,
                int flags,
                int *fd,
                char *errmsg)
 {
-    uvPath path;
+    char path[UV__PATH_MAX_LEN];
+    assert(UV__DIR_HAS_VALID_LEN(dir));
     uvJoin(dir, filename, path);
     *fd = open(path, flags, S_IRUSR | S_IWUSR);
     if (*fd == -1) {
@@ -102,13 +101,14 @@ int uvOpenFile(const uvDir dir,
     return 0;
 }
 
-int uvStatFile(const uvDir dir,
+int uvStatFile(const char *dir,
                const uvFilename filename,
                struct stat *sb,
                char *errmsg)
 {
-    uvPath path;
+    char path[UV__PATH_MAX_LEN];
     int rv;
+    assert(UV__DIR_HAS_VALID_LEN(dir));
     uvJoin(dir, filename, path);
     rv = stat(path, sb);
     if (rv == -1) {
@@ -118,7 +118,7 @@ int uvStatFile(const uvDir dir,
     return 0;
 }
 
-int uvMakeFile(const uvDir dir,
+int uvMakeFile(const char *dir,
                const uvFilename filename,
                struct raft_buffer *bufs,
                unsigned n_bufs,
@@ -129,6 +129,7 @@ int uvMakeFile(const uvDir dir,
     int rv;
     size_t size;
     unsigned i;
+    assert(UV__DIR_HAS_VALID_LEN(dir));
     size = 0;
     for (i = 0; i < n_bufs; i++) {
         size += bufs[i].len;
@@ -167,8 +168,9 @@ err:
 
 int uvUnlinkFile(const char *dir, const char *filename, char *errmsg)
 {
-    uvPath path;
+    char path[UV__PATH_MAX_LEN];
     int rv;
+    assert(UV__DIR_HAS_VALID_LEN(dir));
     uvJoin(dir, filename, path);
     rv = unlink(path);
     if (rv == -1) {
@@ -184,15 +186,16 @@ void uvTryUnlinkFile(const char *dir, const char *filename)
     uvUnlinkFile(dir, filename, errmsg);
 }
 
-int uvTruncateFile(const uvDir dir,
+int uvTruncateFile(const char *dir,
                    const uvFilename filename,
                    size_t offset,
                    char *errmsg)
 {
-    uvPath path;
+    char path[UV__PATH_MAX_LEN];
     int fd;
     int rv;
     uvJoin(dir, filename, path);
+    assert(UV__DIR_HAS_VALID_LEN(dir));
     rv = uvOpenFile(dir, filename, O_RDWR, &fd, errmsg);
     if (rv != 0) {
         goto err;
@@ -216,14 +219,15 @@ err:
     return UV__ERROR;
 }
 
-int uvRenameFile(const uvDir dir,
+int uvRenameFile(const char *dir,
                  const uvFilename filename1,
                  const uvFilename filename2,
                  char *errmsg)
 {
-    uvPath path1;
-    uvPath path2;
+    char path1[UV__PATH_MAX_LEN];
+    char path2[UV__PATH_MAX_LEN];
     int rv;
+    assert(UV__DIR_HAS_VALID_LEN(dir));
     uvJoin(dir, filename1, path1);
     uvJoin(dir, filename2, path2);
     /* TODO: double check that filename2 does not exist. */
@@ -239,7 +243,7 @@ int uvRenameFile(const uvDir dir,
     return 0;
 }
 
-int uvIsEmptyFile(const uvDir dir,
+int uvIsEmptyFile(const char *dir,
                   const uvFilename filename,
                   bool *empty,
                   char *errmsg)
@@ -506,15 +510,17 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
 }
 #endif /* RWF_NOWAIT */
 
-int uvProbeIoCapabilities(const uvDir dir,
+int uvProbeIoCapabilities(const char *dir,
                           size_t *direct,
                           bool *async,
                           char *errmsg)
 {
-    uvFilename filename; /* Filename of the probe file */
-    uvPath path;         /* Full path of the probe file */
-    int fd;              /* File descriptor of the probe file */
+    uvFilename filename;         /* Filename of the probe file */
+    char path[UV__PATH_MAX_LEN]; /* Full path of the probe file */
+    int fd;                      /* File descriptor of the probe file */
     int rv;
+
+    assert(UV__DIR_HAS_VALID_LEN(dir));
 
     /* Create a temporary probe file. */
     strcpy(filename, ".probe-XXXXXX");

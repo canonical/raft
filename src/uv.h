@@ -4,7 +4,6 @@
 #define UV_H_
 
 #include "../include/raft.h"
-
 #include "uv_file.h"
 #include "uv_os.h"
 
@@ -51,7 +50,7 @@ struct uv
 {
     struct raft_io *io;                  /* I/O object we're implementing */
     struct uv_loop_s *loop;              /* UV event loop */
-    uvDir dir;                           /* Data directory */
+    char dir[UV__DIR_MAX_LEN];           /* Data directory */
     struct raft_uv_transport *transport; /* Network transport */
     struct raft_logger *logger;          /* Logger implementation */
     unsigned id;                         /* Server ID */
