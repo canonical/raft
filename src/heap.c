@@ -1,6 +1,5 @@
-#include "stdlib.h"
-
 #include "../include/raft.h"
+#include "stdlib.h"
 
 static void *defaultMalloc(void *data, size_t size)
 {
@@ -50,6 +49,9 @@ void *raft_malloc(size_t size)
 
 void raft_free(void *ptr)
 {
+    if (ptr == NULL) {
+        return;
+    }
     currentHeap->free(currentHeap->data, ptr);
 }
 
