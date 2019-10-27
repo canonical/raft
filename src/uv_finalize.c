@@ -41,9 +41,10 @@ static void workCb(uv_work_t *work)
     }
 
     /* Truncate and rename the segment */
-    rv = uvTruncateFile(uv->dir, filename1, s->used, errmsg);
+    rv = uvTruncateFile(uv->dir, filename1, s->used, &errmsg);
     if (rv != 0) {
         uvErrorf(uv, "truncate segment %s: %s", filename1, errmsg);
+	raft_free(errmsg);
         rv = RAFT_IOERR;
         goto abort;
     }

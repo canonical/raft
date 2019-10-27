@@ -68,7 +68,7 @@ void uvTryUnlinkFile(const char *dir, const char *filename);
 int uvTruncateFile(const char *dir,
                    const char *filename,
                    size_t offset,
-                   char *errmsg);
+                   char **errmsg);
 
 /* Rename a file in a directory. */
 int uvRenameFile(const char *dir,

@@ -221,10 +221,9 @@ void uvTryUnlinkFile(const char *dir, const char *filename)
 int uvTruncateFile(const char *dir,
                    const char *filename,
                    size_t offset,
-                   char *errmsg)
+                   char **errmsg)
 {
     char path[UV__PATH_MAX_LEN];
-    char *errmsg2;
     int fd;
     int rv;
 
@@ -233,20 +232,18 @@ int uvTruncateFile(const char *dir,
 
     uvJoin(dir, filename, path);
 
-    rv = uvOpenFile(dir, filename, O_RDWR, &fd, &errmsg2);
+    rv = uvOpenFile(dir, filename, O_RDWR, &fd, errmsg);
     if (rv != 0) {
-        strcpy(errmsg, errmsg2);
-        raft_free(errmsg2);
         goto err;
     }
     rv = ftruncate(fd, offset);
     if (rv == -1) {
-        uvErrMsgSys(errmsg, ftruncate, errno);
+        *errmsg = uvSysErrMsg("ftruncate", -errno);
         goto err_after_open;
     }
     rv = fsync(fd);
     if (rv == -1) {
-        uvErrMsgSys(errmsg, fsync, errno);
+        *errmsg = uvSysErrMsg("fsync", -errno);
         goto err_after_open;
     }
     close(fd);
