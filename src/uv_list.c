@@ -1,5 +1,6 @@
 #include <string.h>
 
+#include "assert.h"
 #include "uv.h"
 
 static const char *ignored[] = {".", "..", "metadata1", "metadata2", NULL};
@@ -25,15 +26,15 @@ int uvList(struct uv *uv,
            struct uvSegmentInfo *segments[],
            size_t *n_segments)
 {
-    struct dirent **dirents;
-    int n_dirents;
+    struct uv_fs_s req;
+    struct uv_dirent_s entry;
+    int n;
     int i;
-    char errmsg[2048];
     int rv;
 
-    rv = uvScanDir(uv->dir, &dirents, &n_dirents, errmsg);
-    if (rv != 0) {
-        uvErrorf(uv, "scan %s: %s", uv->dir, errmsg);
+    n = uv_fs_scandir(NULL, &req, uv->dir, 0, NULL);
+    if (n < 0) {
+        uvErrorf(uv, "scan %s: %s", uv->dir, uv_strerror(n));
         return RAFT_IOERR;
     }
 
@@ -43,10 +44,15 @@ int uvList(struct uv *uv,
     *segments = NULL;
     *n_segments = 0;
 
-    for (i = 0; i < n_dirents; i++) {
-        struct dirent *entry = dirents[i];
-        const char *filename = entry->d_name;
+    rv = 0;
+
+    for (i = 0; i < n; i++) {
+        const char *filename;
         bool appended;
+
+        assert(uv_fs_scandir_next(&req, &entry) == 0); /* Can't fail in libuv */
+
+        filename = entry.name;
 
         /* If an error occurred while processing a preceeding entry or if we
          * know that this is not a segment filename, just free it and skip to
@@ -55,7 +61,7 @@ int uvList(struct uv *uv,
             if (rv == 0) {
                 uvDebugf(uv, "ignore %s", filename);
             }
-            goto next;
+            continue;
         }
 
         /* Append to the snapshot list if it's a snapshot metadata filename and
@@ -66,25 +72,23 @@ int uvList(struct uv *uv,
             if (rv == 0) {
                 uvDebugf(uv, "snapshot %s", filename);
             }
-            goto next;
+            continue;
         }
 
         /* Append to the segment list if it's a segment filename */
-        rv = uvSegmentInfoAppendIfMatch(entry->d_name, segments, n_segments,
+        rv = uvSegmentInfoAppendIfMatch(entry.name, segments, n_segments,
                                         &appended);
         if (appended || rv != 0) {
             if (rv == 0) {
                 uvDebugf(uv, "segment %s", filename);
             }
-            goto next;
+            continue;
         }
 
-	uvDebugf(uv, "ignore %s", filename);
-
-    next:
-        free(dirents[i]);
+        uvDebugf(uv, "ignore %s", filename);
     }
-    free(dirents);
+
+    assert(uv_fs_scandir_next(&req, &entry) == UV_EOF);
 
     if (rv != 0 && *segments != NULL) {
         raft_free(*segments);

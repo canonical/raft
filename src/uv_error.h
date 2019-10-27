@@ -30,4 +30,7 @@ typedef char uvErrMsg[UV__ERRMSG_MAX_LEN];
         sprintf(ERRMSG, #SYSCALL ": %s", strerror_r(ERRNUM, e_, sizeof e_)); \
     }
 
+/* Format an error message caused by a failed system call or stdlib function. */
+#define uvSysErrMsg(FUNC, CODE) errMsgPrintf(FUNC ": %s", uv_strerror(CODE))
+
 #endif /* UV_ERROR_H_ */

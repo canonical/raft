@@ -19,9 +19,6 @@
 /* Default permissions when creating a directory. */
 #define DEFAULT_DIR_PERM 0700
 
-/* Format an error message caused by a failed system call or stdlib function. */
-#define uvSysErr(FUNC, CODE) errMsgPrintf(FUNC ": %s", uv_strerror(CODE))
-
 static void uvJoin(const char *dir, const char *filename, char *path)
 {
     strcpy(path, dir);
@@ -40,11 +37,11 @@ int uvEnsureDir(const char *dir, char **errmsg)
         if (rv == UV_ENOENT) {
             rv = uv_fs_mkdir(NULL, &req, dir, DEFAULT_DIR_PERM, NULL);
             if (rv != 0) {
-                *errmsg = uvSysErr("mkdir", rv);
+                *errmsg = uvSysErrMsg("mkdir", rv);
                 return UV__ERROR;
             }
         } else {
-            *errmsg = uvSysErr("stat", rv);
+            *errmsg = uvSysErrMsg("stat", rv);
             return UV__ERROR;
         }
     } else if ((req.statbuf.st_mode & S_IFMT) != S_IFDIR) {
@@ -63,30 +60,15 @@ int uvSyncDir(const char *dir, char **errmsg)
     fd = uv_fs_open(NULL, &req, dir, UV_FS_O_RDONLY | UV_FS_O_DIRECTORY, 0,
                     NULL);
     if (fd < 0) {
-        *errmsg = uvSysErr("open", fd);
+        *errmsg = uvSysErrMsg("open", fd);
         return UV__ERROR;
     }
     rv = uv_fs_fsync(NULL, &req, fd, NULL);
     close(fd);
     if (rv != 0) {
-        *errmsg = uvSysErr("fsync", rv);
+        *errmsg = uvSysErrMsg("fsync", rv);
         return UV__ERROR;
     }
-    return 0;
-}
-
-int uvScanDir(const char *dir,
-              struct dirent ***entries,
-              int *n_entries,
-              char *errmsg)
-{
-    int rv;
-    rv = scandir(dir, entries, NULL, alphasort);
-    if (rv == -1) {
-        uvErrMsgSys(errmsg, scandir, errno);
-        return UV__ERROR;
-    }
-    *n_entries = rv;
     return 0;
 }
 

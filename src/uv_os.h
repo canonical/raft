@@ -3,7 +3,6 @@
 #ifndef UV_OS_H_
 #define UV_OS_H_
 
-#include <dirent.h>
 #include <linux/aio_abi.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -37,12 +36,6 @@ int uvEnsureDir(const char *dir, char **errmsg);
 
 /* Sync the given directory. */
 int uvSyncDir(const char *dir, char **errmsg);
-
-/* Return all entries of the given directory, in alphabetically sorted order. */
-int uvScanDir(const char *dir,
-              struct dirent ***entries,
-              int *n_entries,
-              char *errmsg);
 
 /* Open a file in a directory. */
 int uvOpenFile(const char *dir,
