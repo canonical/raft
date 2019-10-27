@@ -28,9 +28,6 @@
 #define UV__DIR_HAS_VALID_LEN(DIR) \
     (strnlen(DIR, UV__DIR_MAX_LEN + 1) <= UV__DIR_MAX_LEN)
 
-/* Fixed length string that can hold a complete file system path. */
-typedef char uvPath[UV__PATH_MAX_LEN];
-
 /* Fixed length string that can hold a file name. */
 typedef char uvFilename[UV__FILENAME_MAX_LEN];
 
