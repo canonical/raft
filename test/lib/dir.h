@@ -20,6 +20,12 @@
 
 #define FIXTURE_DIR char *dir
 #define SETUP_DIR f->dir = setupDir(params, user_data)
+#define SETUP_DIR_OR_SKIP                                            \
+    SETUP_DIR;                                                       \
+    if (f->dir == NULL) { /* Desired fs not available, skip test. */ \
+        free(f);                                                     \
+        return NULL;                                                 \
+    }
 #define TEAR_DOWN_DIR tearDownDir(f->dir)
 
 /* List of all supported file system types. */
