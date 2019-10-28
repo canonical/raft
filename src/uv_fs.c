@@ -23,21 +23,42 @@ const char *UvFsErrMsg(struct UvFs *fs)
     return fs->errmsg;
 }
 
-static void uvFsSetErrmsg(struct UvFs *fs, char *errmsg)
+void UvFsSetErrMsg(struct UvFs *fs, char *errmsg)
 {
     HeapFree(fs->errmsg); /* Delete any previous error. */
     fs->errmsg = errmsg;
 }
 
+static int uvFsSyncDir(const char *dir, char **errmsg)
+{
+    uv_file fd;
+    int rv;
+    fd = UvOsOpen(dir, UV_FS_O_RDONLY | UV_FS_O_DIRECTORY, 0);
+    if (fd < 0) {
+        *errmsg = uvSysErrMsg("open", fd);
+        return UV__ERROR;
+    }
+    rv = UvOsFsync(fd);
+    UvOsClose(fd);
+    if (rv != 0) {
+        *errmsg = uvSysErrMsg("fsync", rv);
+        return UV__ERROR;
+    }
+    return 0;
+}
+
 static void uvFsCreateFileWorkCb(uv_work_t *work)
 {
     struct UvFsCreateFile *req = work->data;
+    char path[UV__PATH_SZ];
     int flags = O_WRONLY | O_CREAT | O_EXCL; /* Common open flags */
     char *errmsg = NULL;
     uv_file fd;
     int rv = 0;
 
-    rv = UvOsOpen(req->path, flags, S_IRUSR | S_IWUSR);
+    UvOsJoin(req->dir, req->filename, path);
+
+    rv = UvOsOpen(path, flags, S_IRUSR | S_IWUSR);
     if (rv < 0) {
         errmsg = uvSysErrMsg("open", rv);
         rv = UV__ERROR;
@@ -49,14 +70,21 @@ static void uvFsCreateFileWorkCb(uv_work_t *work)
     /* Allocate the desired size.
      *
      * TODO: add a portable version of this OS api. */
-    rv = posix_fallocate(fd, 0, req->size);
+    rv = UvOsFallocate(fd, 0, req->size);
     if (rv != 0) {
         /* From the manual page:
          *
          *   posix_fallocate() returns zero on success, or an error number on
          *   failure.  Note that errno is not set.
          */
-        errmsg = errMsgPrintf("posix_fallocate: %s", strerror(rv));
+        errmsg = uvSysErrMsg("posix_fallocate", rv);
+        rv = UV__ERROR;
+        goto err_after_open;
+    }
+
+    rv = uvFsSyncDir(req->dir, &errmsg);
+    if (rv != 0) {
+        errmsg = errMsgWrapf(errmsg, "sync directory");
         rv = UV__ERROR;
         goto err_after_open;
     }
@@ -68,9 +96,8 @@ static void uvFsCreateFileWorkCb(uv_work_t *work)
 
 err_after_open:
     UvOsClose(fd);
-    UvOsUnlink(req->path);
+    UvOsUnlink(path);
 err:
-    assert(errmsg != NULL);
     assert(rv != 0);
     req->errmsg = errmsg;
     req->status = rv;
@@ -86,8 +113,10 @@ static void uvFsCreateFileAfterWorkCb(uv_work_t *work, int status)
      * the actual outcome. */
     if (req->canceled) {
         if (req->status == 0) {
+            char path[UV__PATH_SZ];
+            UvOsJoin(req->dir, req->filename, path);
             UvOsClose(req->fd);
-            UvOsUnlink(req->path);
+            UvOsUnlink(path);
         } else {
             HeapFree(req->errmsg);
         }
@@ -96,7 +125,7 @@ static void uvFsCreateFileAfterWorkCb(uv_work_t *work, int status)
     }
 
     /* Transfer possible errors back to the file system object. */
-    uvFsSetErrmsg(req->fs, req->errmsg);
+    UvFsSetErrMsg(req->fs, req->errmsg);
 
     if (req->cb != NULL) {
         req->cb(req, req->status);
@@ -114,7 +143,8 @@ int UvFsCreateFile(struct UvFs *fs,
 
     req->fs = fs;
     req->work.data = req;
-    UvOsJoin(dir, filename, req->path);
+    req->dir = dir;
+    req->filename = filename;
     req->size = size;
     req->cb = cb;
     req->canceled = false;
@@ -124,7 +154,7 @@ int UvFsCreateFile(struct UvFs *fs,
                        uvFsCreateFileAfterWorkCb);
     if (rv != 0) {
         /* UNTESTED: with the current libuv implementation this can't fail. */
-        fs->errmsg = uvSysErrMsg("uv_queue_work", rv);
+        UvFsSetErrMsg(fs, uvSysErrMsg("uv_queue_work", rv));
         return UV__ERROR;
     }
 

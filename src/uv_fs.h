@@ -25,6 +25,9 @@ void UvFsClose(struct UvFs *fs);
  * valid until a different error occurs or uvFsClose is called. */
 const char *UvFsErrMsg(struct UvFs *fs);
 
+/* Set the last error message, possibly replacing the former one. */
+void UvFsSetErrMsg(struct UvFs *fs, char *errmsg);
+
 /* Create file request. */
 struct UvFsCreateFile;
 
@@ -33,16 +36,17 @@ typedef void (*UvFsCreateFileCb)(struct UvFsCreateFile *req, int status);
 
 struct UvFsCreateFile
 {
-    void *data;             /* User data */
-    int status;             /* Request result code */
-    uv_file fd;             /* File handle */
-    struct UvFs *fs;        /* Fs object the request was submitted to */
-    struct uv_work_s work;  /* To execute logic in the threadpool */
-    char path[UV__PATH_SZ]; /* File path */
-    size_t size;            /* File size */
-    bool canceled;          /* Cancellation flag */
-    char *errmsg;           /* Error description */
-    UvFsCreateFileCb cb;    /* Callback to invoke upon request completion */
+    void *data;            /* User data */
+    int status;            /* Request result code */
+    uv_file fd;            /* File handle */
+    struct UvFs *fs;       /* Fs object the request was submitted to */
+    struct uv_work_s work; /* To execute logic in the threadpool */
+    const char *dir;       /* Directory */
+    const char *filename;  /* Filename */
+    size_t size;           /* File size */
+    bool canceled;         /* Cancellation flag */
+    char *errmsg;          /* Description of last error */
+    UvFsCreateFileCb cb;   /* Callback to invoke upon request completion */
 };
 
 /* Asynchronously create the given file in the given directory and allocate the

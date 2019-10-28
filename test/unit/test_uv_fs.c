@@ -1,5 +1,3 @@
-#include <unistd.h>
-
 #include "../../src/uv_error.h"
 #include "../../src/uv_fs.h"
 #include "../lib/dir.h"
@@ -61,7 +59,7 @@ static void createFileCbAssertOk(struct UvFsCreateFile *req, int status)
     bool *done = req->data;
     munit_assert_int(status, ==, 0);
     munit_assert_int(req->fd, >=, 0);
-    munit_assert_int(close(req->fd), ==, 0);
+    munit_assert_int(UvOsClose(req->fd), ==, 0);
     *done = true;
 }
 
@@ -165,14 +163,14 @@ TEST(UvFsCreateFile, noSpace, setupFs, tearDownFs, 0, dir_tmpfs_params)
                         "foo",        /* filename */
                         4096 * 32768, /* size */
                         UV__ERROR,    /* status */
-                        "posix_fallocate: No space left on device");
+                        "posix_fallocate: no space left on device");
     munit_assert_false(test_dir_has_file(f->dir, "foo"));
     return MUNIT_OK;
 }
 
 /* Cancel a create file request just after having issued it, the request had
  * actually succeeded. */
-TEST(UvFsCreateFile, cancelOk, setupFs, tearDownFs, 0, NULL)
+TEST(UvFsCreateFile, cancel, setupFs, tearDownFs, 0, NULL)
 {
     struct fs *f = data;
     struct UvFsCreateFile req;
@@ -180,25 +178,6 @@ TEST(UvFsCreateFile, cancelOk, setupFs, tearDownFs, 0, NULL)
     int rv;
     req.data = &result;
     rv = UvFsCreateFile(&f->fs, &req, "/non/existing/dir", "foo", 4096,
-                        createFileCbAssertFail);
-    munit_assert_int(rv, ==, 0);
-    UvFsCreateFileCancel(&req);
-    LOOP_RUN(1);
-    munit_assert_true(result.done);
-    munit_assert_false(test_dir_has_file(f->dir, "foo"));
-    return MUNIT_OK;
-}
-
-/* Cancel a create file request just after having issued it, the request had
- * actually failed. */
-TEST(UvFsCreateFile, cancelFail, setupFs, tearDownFs, 0, NULL)
-{
-    struct fs *f = data;
-    struct UvFsCreateFile req;
-    struct createFileResult result = {UV__CANCELED, "canceled", false};
-    int rv;
-    req.data = &result;
-    rv = UvFsCreateFile(&f->fs, &req, f->dir, "foo", 4096,
                         createFileCbAssertFail);
     munit_assert_int(rv, ==, 0);
     UvFsCreateFileCancel(&req);

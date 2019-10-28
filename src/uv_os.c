@@ -31,6 +31,27 @@ int UvOsClose(uv_file fd)
     return uv_fs_close(NULL, &req, fd, NULL);
 }
 
+int UvOsFsync(uv_file fd)
+{
+    struct uv_fs_s req;
+    return uv_fs_fsync(NULL, &req, fd, NULL);
+}
+
+int UvOsFallocate(uv_file fd, off_t offset, off_t len)
+{
+    int rv;
+    rv = posix_fallocate(fd, offset, len);
+    if (rv != 0) {
+        /* From the manual page:
+         *
+         *   posix_fallocate() returns zero on success, or an error number on
+         *   failure.  Note that errno is not set.
+         */
+        return -rv;
+    }
+    return 0;
+}
+
 int UvOsUnlink(const char *path)
 {
     struct uv_fs_s req;
@@ -44,6 +65,78 @@ void UvOsJoin(const char *dir, const char *filename, char *path)
     strcpy(path, dir);
     strcat(path, "/");
     strcat(path, filename);
+}
+
+int UvOsIoSetup(unsigned nr, aio_context_t *ctxp)
+{
+    int rv;
+    rv = io_setup(nr, ctxp);
+    if (rv == -1) {
+        return -errno;
+    }
+    return 0;
+}
+
+int UvOsIoDestroy(aio_context_t ctx)
+{
+    int rv;
+    rv = io_destroy(ctx);
+    if (rv == -1) {
+        return -errno;
+    }
+    return 0;
+}
+
+int UvOsIoSubmit(aio_context_t ctx, long nr, struct iocb **iocbpp)
+{
+    int rv;
+    rv = io_submit(ctx, nr, iocbpp);
+    if (rv == -1) {
+        return -errno;
+    }
+    assert(rv == nr); /* TODO: can something else be returned? */
+    return 0;
+}
+
+int UvOsIoGetevents(aio_context_t ctx,
+                    long min_nr,
+                    long max_nr,
+                    struct io_event *events,
+                    struct timespec *timeout)
+{
+    int rv;
+    do {
+        rv = io_getevents(ctx, min_nr, max_nr, events, timeout);
+    } while (rv == -1 && errno == EINTR);
+
+    if (rv == -1) {
+        return -errno;
+    }
+    assert(rv >= min_nr);
+    assert(rv <= max_nr);
+    return rv;
+}
+
+int UvOsEventfd(unsigned int initval, int flags)
+{
+    int rv;
+    rv = eventfd(initval, flags);
+    if (rv == -1) {
+        return -errno;
+    }
+    return rv;
+}
+
+int UvOsSetDirectIo(uv_file fd)
+{
+    int flags; /* Current fcntl flags */
+    int rv;
+    flags = fcntl(fd, F_GETFL);
+    rv = fcntl(fd, F_SETFL, flags | UV_FS_O_DIRECT);
+    if (rv == -1) {
+        return -errno;
+    }
+    return 0;
 }
 
 int uvEnsureDir(const char *dir, char **errmsg)
@@ -71,27 +164,6 @@ int uvEnsureDir(const char *dir, char **errmsg)
 
     return 0;
 }
-
-/* For backward compat with older libuv */
-#if !defined(UV_FS_O_RDONLY)
-#define UV_FS_O_RDONLY O_RDONLY
-#endif
-
-#if !defined(UV_FS_O_DIRECTORY)
-#define UV_FS_O_DIRECTORY O_DIRECTORY
-#endif
-
-#if !defined(UV_FS_O_WRONLY)
-#define UV_FS_O_WRONLY O_WRONLY
-#endif
-
-#if !defined(UV_FS_O_CREAT)
-#define UV_FS_O_CREAT O_CREAT
-#endif
-
-#if !defined(UV_FS_O_EXCL)
-#define UV_FS_O_EXCL O_EXCL
-#endif
 
 int uvSyncDir(const char *dir, char **errmsg)
 {
@@ -452,6 +524,7 @@ static int probeDirectIO(int fd, size_t *size, char **errmsg)
 
     /* Try to peform direct I/O, using various buffer size. */
     *size = 4096;
+    return 0;
     while (*size >= 512) {
         buf = raft_aligned_alloc(*size, *size);
         if (buf == NULL) {

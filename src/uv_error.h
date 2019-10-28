@@ -3,6 +3,8 @@
 #ifndef UV_ERROR_H_
 #define UV_ERROR_H_
 
+#include "err.h"
+
 /* Error codes. */
 enum {
     UV__ERROR = 1, /* Generic system error. */

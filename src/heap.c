@@ -58,6 +58,11 @@ void HeapFree(void *ptr)
     currentHeap->free(currentHeap->data, ptr);
 }
 
+void *HeapCalloc(size_t nmemb, size_t size)
+{
+    return currentHeap->calloc(currentHeap->data, nmemb, size);
+}
+
 void *raft_malloc(size_t size)
 {
     return HeapMalloc(size);
@@ -70,7 +75,7 @@ void raft_free(void *ptr)
 
 void *raft_calloc(size_t nmemb, size_t size)
 {
-    return currentHeap->calloc(currentHeap->data, nmemb, size);
+    return HeapCalloc(nmemb, size);
 }
 
 void *raft_realloc(void *ptr, size_t size)

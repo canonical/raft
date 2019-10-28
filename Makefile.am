@@ -117,7 +117,8 @@ raft_uv_SOURCES = \
   src/uv_tcp.c \
   src/uv_tcp_connect.c \
   src/uv_tcp_listen.c \
-  src/uv_truncate.c
+  src/uv_truncate.c \
+  src/uv_writer.c
 
 libraft_la_SOURCES += $(raft_uv_SOURCES)
 libraft_la_LDFLAGS += $(UV_LIBS)
@@ -158,6 +159,7 @@ test_unit_uv_SOURCES += \
   test/unit/test_uv_tcp_listen.c \
   test/unit/test_uv_recv.c \
   test/unit/test_uv_send.c \
+  test/unit/test_uv_writer.c \
   test/unit/test_uv.c
 test_unit_uv_LDADD = libtest.la
 test_unit_uv_LDFLAGS = $(UV_LIBS)

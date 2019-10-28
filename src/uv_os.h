@@ -6,11 +6,40 @@
 #include <linux/aio_abi.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <sys/eventfd.h>
 #include <sys/stat.h>
 #include <time.h>
 #include <uv.h>
 
 #include "../include/raft.h"
+
+/* For backward compat with older libuv */
+#if !defined(UV_FS_O_RDONLY)
+#define UV_FS_O_RDONLY O_RDONLY
+#endif
+
+#if !defined(UV_FS_O_DIRECTORY)
+#define UV_FS_O_DIRECTORY O_DIRECTORY
+#endif
+
+#if !defined(UV_FS_O_WRONLY)
+#define UV_FS_O_WRONLY O_WRONLY
+#endif
+
+#if !defined(UV_FS_O_CREAT)
+#define UV_FS_O_CREAT O_CREAT
+#endif
+
+#if !defined(UV_FS_O_EXCL)
+#define UV_FS_O_EXCL O_EXCL
+#endif
+
+#if !defined(UV_FS_O_DIRECT)
+#define UV_FS_O_DIRECT O_DIRECT
+#endif
+
+#define UV__EFD_NONBLOCK EFD_NONBLOCK
+#define UV__EOPNOTSUPP -EOPNOTSUPP
 
 /* Maximum size of a full file system path string. */
 #define UV__PATH_SZ 1024
@@ -40,12 +69,27 @@ int UvOsOpen(const char *path, int flags, int mode);
 /* Portable close() */
 int UvOsClose(uv_file fd);
 
+/* Portable fsync() */
+int UvOsFsync(uv_file fd);
+
 /* Portable unlink() */
 int UvOsUnlink(const char *path);
 
 /* Join dir and filename into a full OS path. */
 void UvOsJoin(const char *dir, const char *filename, char *path);
 
+/* TODO: figure a portable abstraction. */
+int UvOsIoSetup(unsigned nr, aio_context_t *ctxp);
+int UvOsIoDestroy(aio_context_t ctx);
+int UvOsIoSubmit(aio_context_t ctx, long nr, struct iocb **iocbpp);
+int UvOsIoGetevents(aio_context_t ctx,
+                    long min_nr,
+                    long max_nr,
+                    struct io_event *events,
+                    struct timespec *timeout);
+int UvOsFallocate(uv_file fd, off_t offset, off_t len);
+int UvOsEventfd(unsigned int initval, int flags);
+int UvOsSetDirectIo(uv_file fd);
 
 /* Check that the given directory exists, and try to create it if it doesn't. */
 int uvEnsureDir(const char *dir, char **errmsg);
