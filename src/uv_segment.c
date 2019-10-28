@@ -19,9 +19,9 @@ static bool infoMatch(const char *filename, struct uvSegmentInfo *info)
 {
     int consumed;
     int matched;
-    size_t filename_len = strnlen(filename, UV__FILENAME_MAX_LEN + 1);
+    size_t filename_len = strnlen(filename, UV__FILENAME_LEN + 1);
 
-    if (filename_len > UV__FILENAME_MAX_LEN) {
+    if (filename_len > UV__FILENAME_LEN) {
         return false;
     }
 
@@ -583,7 +583,7 @@ done:
             goto err_after_open;
         }
     } else {
-        char filename[UV__FILENAME_MAX_LEN];
+        char filename[UV__FILENAME_LEN];
         raft_index end_index = *next_index - 1;
 
         /* At least one entry was loaded */
@@ -929,7 +929,7 @@ int uvSegmentCreateFirstClosed(struct uv *uv,
                                const struct raft_configuration *configuration)
 {
     struct raft_buffer buf;
-    char filename[UV__FILENAME_MAX_LEN];
+    char filename[UV__FILENAME_LEN];
     char errmsg_[2048];
     char *errmsg = errmsg_;
     int fd;
@@ -985,7 +985,7 @@ int uvSegmentTruncate(struct uv *uv,
                       struct uvSegmentInfo *segment,
                       raft_index index)
 {
-    char filename[UV__FILENAME_MAX_LEN];
+    char filename[UV__FILENAME_LEN];
     struct raft_entry *entries;
     struct uvSegmentBuffer buf;
     size_t n;

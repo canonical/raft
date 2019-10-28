@@ -12,25 +12,40 @@
 
 #include "../include/raft.h"
 
-/* Maximum length of a file path. */
-#define UV__PATH_MAX_LEN 1024
+/* Maximum size of a full file system path string. */
+#define UV__PATH_SZ 1024
 
-/* Maximum length of a filename. */
-#define UV__FILENAME_MAX_LEN 128
+/* Maximum length of a filename string. */
+#define UV__FILENAME_LEN 128
 
 /* Length of path separator. */
 #define UV__SEP_LEN 1 /* strlen("/") */
 
-/* Maximum length of a directory path. */
-#define UV__DIR_MAX_LEN (UV__PATH_MAX_LEN - UV__SEP_LEN - UV__FILENAME_MAX_LEN)
+/* True if STR's length is at most LEN. */
+#define LEN_AT_MOST_(STR, LEN) (strnlen(STR, LEN + 1) <= LEN)
 
-/* True if the given DIR string has at most UV__DIR_MAX_LEN chars. */
-#define UV__DIR_HAS_VALID_LEN(DIR) \
-    (strnlen(DIR, UV__DIR_MAX_LEN + 1) <= UV__DIR_MAX_LEN)
+/* Maximum length of a directory path string. */
+#define UV__DIR_LEN (UV__PATH_SZ - UV__SEP_LEN - UV__FILENAME_LEN - 1)
 
-/* True if the given FILENAME string has at most UV__FILENAME_MAX_LEN chars. */
+/* True if the given DIR string has at most UV__DIR_LEN chars. */
+#define UV__DIR_HAS_VALID_LEN(DIR) LEN_AT_MOST_(DIR, UV__DIR_LEN)
+
+/* True if the given FILENAME string has at most UV__FILENAME_LEN chars. */
 #define UV__FILENAME_HAS_VALID_LEN(FILENAME) \
-    (strnlen(FILENAME, UV__FILENAME_MAX_LEN + 1) <= UV__FILENAME_MAX_LEN)
+    LEN_AT_MOST_(FILENAME, UV__FILENAME_LEN)
+
+/* Portable open() */
+int UvOsOpen(const char *path, int flags, int mode);
+
+/* Portable close() */
+int UvOsClose(uv_file fd);
+
+/* Portable unlink() */
+int UvOsUnlink(const char *path);
+
+/* Join dir and filename into a full OS path. */
+void UvOsJoin(const char *dir, const char *filename, char *path);
+
 
 /* Check that the given directory exists, and try to create it if it doesn't. */
 int uvEnsureDir(const char *dir, char **errmsg);

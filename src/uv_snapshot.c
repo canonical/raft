@@ -21,9 +21,9 @@ static bool infoMatch(const char *filename, struct uvSnapshotInfo *info)
 {
     int consumed = 0;
     int matched;
-    size_t filename_len = strnlen(filename, UV__FILENAME_MAX_LEN + 1);
+    size_t filename_len = strnlen(filename, UV__FILENAME_LEN + 1);
 
-    if (filename_len > UV__FILENAME_MAX_LEN) {
+    if (filename_len > UV__FILENAME_LEN) {
         return false;
     }
 
@@ -41,7 +41,7 @@ static bool infoMatch(const char *filename, struct uvSnapshotInfo *info)
 static void filenameOf(struct uvSnapshotInfo *info, char *filename)
 {
     size_t len = strlen(info->filename) - strlen(".meta");
-    assert(len < UV__FILENAME_MAX_LEN);
+    assert(len < UV__FILENAME_LEN);
     strncpy(filename, info->filename, len);
     filename[len] = 0;
 }
@@ -55,7 +55,7 @@ int uvSnapshotInfoAppendIfMatch(struct uv *uv,
     struct uvSnapshotInfo info;
     bool matched;
     uv_stat_t sb;
-    char snapshot_filename[UV__FILENAME_MAX_LEN];
+    char snapshot_filename[UV__FILENAME_LEN];
     char errmsg_[2048];
     char *errmsg = errmsg_;
     int rv;
@@ -232,7 +232,7 @@ static int loadData(struct uv *uv,
                     struct raft_snapshot *snapshot)
 {
     uv_stat_t sb;
-    char filename[UV__FILENAME_MAX_LEN];
+    char filename[UV__FILENAME_LEN];
     struct raft_buffer buf;
     char errmsg_[2048];
     char *errmsg = errmsg_;
@@ -400,7 +400,7 @@ int uvSnapshotKeepLastTwo(struct uv *uv,
 
     for (i = 0; i < n - 2; i++) {
         struct uvSnapshotInfo *s = &snapshots[i];
-        char filename[UV__FILENAME_MAX_LEN];
+        char filename[UV__FILENAME_LEN];
         rv = uvUnlinkFile(uv->dir, s->filename, &errmsg);
         if (rv != 0) {
             uvErrorf(uv, "unlink %s: %s", s->filename, errmsg);
@@ -424,7 +424,7 @@ static void putWorkCb(uv_work_t *work)
     struct put *r = work->data;
     struct uv *uv = r->uv;
     char *errmsg;
-    char filename[UV__FILENAME_MAX_LEN];
+    char filename[UV__FILENAME_LEN];
     int rv;
 
     sprintf(filename, UV__SNAPSHOT_META_TEMPLATE, r->snapshot->term,

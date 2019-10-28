@@ -7,40 +7,6 @@
 #include "heap.h"
 #include "uv_error.h"
 
-/* True if STR's length is at most LEN. */
-#define LEN_AT_MOST(STR, LEN) (strnlen(STR, LEN + 1) <= LEN)
-
-/* True if the given DIR string has at most UV__DIR_LEN chars. */
-#define DIR_HAS_VALID_LEN(DIR) LEN_AT_MOST(DIR, UV__DIR_LEN)
-
-/* True if the given FILENAME string has at most UV__FILENAME_LEN chars. */
-#define FILENAME_HAS_VALID_LEN(FILENAME) LEN_AT_MOST(FILENAME, UV__FILENAME_LEN)
-
-static int uvOsOpen(const char *path, int flags, int mode)
-{
-    struct uv_fs_s req;
-    return uv_fs_open(NULL, &req, path, flags, mode, NULL);
-}
-
-static int uvOsClose(uv_file fd)
-{
-    struct uv_fs_s req;
-    return uv_fs_close(NULL, &req, fd, NULL);
-}
-
-static int uvOsUnlink(const char *path)
-{
-    struct uv_fs_s req;
-    return uv_fs_unlink(NULL, &req, path, NULL);
-}
-
-static void uvOsJoin(const char *dir, const char *filename, char *path)
-{
-    strcpy(path, dir);
-    strcat(path, "/");
-    strcat(path, filename);
-}
-
 void UvFsInit(struct UvFs *fs, struct uv_loop_s *loop)
 {
     fs->loop = loop;
@@ -71,7 +37,7 @@ static void uvFsCreateFileWorkCb(uv_work_t *work)
     uv_file fd;
     int rv = 0;
 
-    rv = uvOsOpen(req->path, flags, S_IRUSR | S_IWUSR);
+    rv = UvOsOpen(req->path, flags, S_IRUSR | S_IWUSR);
     if (rv < 0) {
         errmsg = uvSysErrMsg("open", rv);
         rv = UV__ERROR;
@@ -80,7 +46,9 @@ static void uvFsCreateFileWorkCb(uv_work_t *work)
 
     fd = rv;
 
-    /* Allocate the desired size. */
+    /* Allocate the desired size.
+     *
+     * TODO: add a portable version of this OS api. */
     rv = posix_fallocate(fd, 0, req->size);
     if (rv != 0) {
         /* From the manual page:
@@ -99,8 +67,8 @@ static void uvFsCreateFileWorkCb(uv_work_t *work)
     return;
 
 err_after_open:
-    uvOsClose(fd);
-    uvOsUnlink(req->path);
+    UvOsClose(fd);
+    UvOsUnlink(req->path);
 err:
     assert(errmsg != NULL);
     assert(rv != 0);
@@ -118,8 +86,8 @@ static void uvFsCreateFileAfterWorkCb(uv_work_t *work, int status)
      * the actual outcome. */
     if (req->canceled) {
         if (req->status == 0) {
-            uvOsClose(req->fd);
-            uvOsUnlink(req->path);
+            UvOsClose(req->fd);
+            UvOsUnlink(req->path);
         } else {
             HeapFree(req->errmsg);
         }
@@ -144,12 +112,9 @@ int UvFsCreateFile(struct UvFs *fs,
 {
     int rv;
 
-    assert(DIR_HAS_VALID_LEN(dir));
-    assert(FILENAME_HAS_VALID_LEN(filename));
-
     req->fs = fs;
     req->work.data = req;
-    uvOsJoin(dir, filename, req->path);
+    UvOsJoin(dir, filename, req->path);
     req->size = size;
     req->cb = cb;
     req->canceled = false;

@@ -40,8 +40,8 @@ struct segment
     struct uvFile *file;                 /* Open segment file */
     struct uvFileCreate create;          /* Create file request */
     unsigned long long counter;          /* Segment counter */
-    char filename[UV__FILENAME_MAX_LEN]; /* Filename of the segment */
-    char path[UV__PATH_MAX_LEN];         /* Full path of the segment */
+    char filename[UV__FILENAME_LEN]; /* Filename of the segment */
+    char path[UV__PATH_SZ];              /* Full path of the segment */
     queue queue;                         /* Pool */
 };
 
@@ -136,8 +136,7 @@ static void processRequests(struct uv *uv)
 }
 
 static void maybePrepareSegment(struct uv *uv);
-static void prepareSegmentFileCreateCb(struct uvFileCreate *req,
-                                       int status)
+static void prepareSegmentFileCreateCb(struct uvFileCreate *req, int status)
 {
     struct segment *s;
     struct uv *uv;

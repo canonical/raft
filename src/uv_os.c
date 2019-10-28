@@ -19,8 +19,28 @@
 /* Default permissions when creating a directory. */
 #define DEFAULT_DIR_PERM 0700
 
-static void uvJoin(const char *dir, const char *filename, char *path)
+int UvOsOpen(const char *path, int flags, int mode)
 {
+    struct uv_fs_s req;
+    return uv_fs_open(NULL, &req, path, flags, mode, NULL);
+}
+
+int UvOsClose(uv_file fd)
+{
+    struct uv_fs_s req;
+    return uv_fs_close(NULL, &req, fd, NULL);
+}
+
+int UvOsUnlink(const char *path)
+{
+    struct uv_fs_s req;
+    return uv_fs_unlink(NULL, &req, path, NULL);
+}
+
+void UvOsJoin(const char *dir, const char *filename, char *path)
+{
+    assert(UV__DIR_HAS_VALID_LEN(dir));
+    assert(UV__FILENAME_HAS_VALID_LEN(filename));
     strcpy(path, dir);
     strcat(path, "/");
     strcat(path, filename);
@@ -100,12 +120,12 @@ int uvOpenFile(const char *dir,
                char **errmsg)
 {
     struct uv_fs_s req;
-    char path[UV__PATH_MAX_LEN];
+    char path[UV__PATH_SZ];
 
     assert(UV__DIR_HAS_VALID_LEN(dir));
     assert(UV__FILENAME_HAS_VALID_LEN(filename));
 
-    uvJoin(dir, filename, path);
+    UvOsJoin(dir, filename, path);
     *fd = uv_fs_open(NULL, &req, path, flags, S_IRUSR | S_IWUSR, NULL);
     if (*fd < 0) {
         int rv = *fd;
@@ -121,14 +141,14 @@ int uvStatFile(const char *dir,
                uv_stat_t *sb,
                char **errmsg)
 {
-    char path[UV__PATH_MAX_LEN];
+    char path[UV__PATH_SZ];
     struct uv_fs_s req;
     int rv;
 
     assert(UV__DIR_HAS_VALID_LEN(dir));
     assert(UV__FILENAME_HAS_VALID_LEN(filename));
 
-    uvJoin(dir, filename, path);
+    UvOsJoin(dir, filename, path);
     rv = uv_fs_stat(NULL, &req, path, NULL);
     if (rv != 0) {
         *errmsg = uvSysErrMsg("stat", rv);
@@ -193,13 +213,13 @@ err:
 int uvUnlinkFile(const char *dir, const char *filename, char **errmsg)
 {
     struct uv_fs_s req;
-    char path[UV__PATH_MAX_LEN];
+    char path[UV__PATH_SZ];
     int rv;
 
     assert(UV__DIR_HAS_VALID_LEN(dir));
     assert(UV__FILENAME_HAS_VALID_LEN(filename));
 
-    uvJoin(dir, filename, path);
+    UvOsJoin(dir, filename, path);
     rv = uv_fs_unlink(NULL, &req, path, NULL);
     if (rv != 0) {
         *errmsg = uvSysErrMsg("unlink", rv);
@@ -224,14 +244,14 @@ int uvTruncateFile(const char *dir,
                    char **errmsg)
 {
     struct uv_fs_s req;
-    char path[UV__PATH_MAX_LEN];
+    char path[UV__PATH_SZ];
     uv_file fd;
     int rv;
 
     assert(UV__DIR_HAS_VALID_LEN(dir));
     assert(UV__FILENAME_HAS_VALID_LEN(filename));
 
-    uvJoin(dir, filename, path);
+    UvOsJoin(dir, filename, path);
 
     rv = uvOpenFile(dir, filename, O_RDWR, &fd, errmsg);
     if (rv != 0) {
@@ -262,16 +282,16 @@ int uvRenameFile(const char *dir,
                  char **errmsg)
 {
     struct uv_fs_s req;
-    char path1[UV__PATH_MAX_LEN];
-    char path2[UV__PATH_MAX_LEN];
+    char path1[UV__PATH_SZ];
+    char path2[UV__PATH_SZ];
     int rv;
 
     assert(UV__DIR_HAS_VALID_LEN(dir));
     assert(UV__FILENAME_HAS_VALID_LEN(filename1));
     assert(UV__FILENAME_HAS_VALID_LEN(filename2));
 
-    uvJoin(dir, filename1, path1);
-    uvJoin(dir, filename2, path2);
+    UvOsJoin(dir, filename1, path1);
+    UvOsJoin(dir, filename2, path2);
     /* TODO: double check that filename2 does not exist. */
     rv = uv_fs_rename(NULL, &req, path1, path2, NULL);
     if (rv != 0) {
@@ -561,16 +581,16 @@ int uvProbeIoCapabilities(const char *dir,
                           bool *async,
                           char **errmsg)
 {
-    char filename[UV__FILENAME_MAX_LEN]; /* Filename of the probe file */
-    char path[UV__PATH_MAX_LEN];         /* Full path of the probe file */
-    int fd;                              /* File descriptor of the probe file */
+    char filename[UV__FILENAME_LEN]; /* Filename of the probe file */
+    char path[UV__PATH_SZ];          /* Full path of the probe file */
+    int fd;                          /* File descriptor of the probe file */
     int rv;
 
     assert(UV__DIR_HAS_VALID_LEN(dir));
 
     /* Create a temporary probe file. */
     strcpy(filename, ".probe-XXXXXX");
-    uvJoin(dir, filename, path);
+    UvOsJoin(dir, filename, path);
     fd = mkstemp(path);
     if (fd == -1) {
         *errmsg = uvSysErrMsg("mkstemp", -errno);

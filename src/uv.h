@@ -50,7 +50,7 @@ struct uv
 {
     struct raft_io *io;                  /* I/O object we're implementing */
     struct uv_loop_s *loop;              /* UV event loop */
-    char dir[UV__DIR_MAX_LEN];           /* Data directory */
+    char dir[UV__DIR_LEN];               /* Data directory */
     struct raft_uv_transport *transport; /* Network transport */
     struct raft_logger *logger;          /* Logger implementation */
     unsigned id;                         /* Server ID */
@@ -123,7 +123,7 @@ struct uvSegmentInfo
             unsigned long long counter; /* Open segment counter */
         };
     };
-    char filename[UV__FILENAME_MAX_LEN]; /* Segment filename */
+    char filename[UV__FILENAME_LEN]; /* Segment filename */
 };
 
 /* Append a new item to the given segment info list if the given filename
@@ -221,7 +221,7 @@ struct uvSnapshotInfo
     raft_term term;
     raft_index index;
     unsigned long long timestamp;
-    char filename[UV__FILENAME_MAX_LEN];
+    char filename[UV__FILENAME_LEN];
 };
 
 /* Append a new item to the given snapshot info list if the given filename

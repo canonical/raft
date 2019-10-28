@@ -6,17 +6,7 @@
 #include <stdbool.h>
 #include <uv.h>
 
-/* Maximum size of a full file system path string. */
-#define UV__PATH_SZ 1024
-
-/* Maximum length of a filename string. */
-#define UV__FILENAME_LEN 128
-
-/* Length of path separator string. */
-#define UV__SEP_LEN 1 /* strlen("/") */
-
-/* Maximum length of a directory path string. */
-#define UV__DIR_LEN (UV__PATH_SZ - UV__SEP_LEN - UV__FILENAME_LEN - 1)
+#include "uv_os.h"
 
 /* Abstract file system operations. */
 struct UvFs
