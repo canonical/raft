@@ -89,13 +89,10 @@ static void prepareCb(struct uvPrepare *req,
  *
  *****************************************************************************/
 
-TEST_SUITE(success)
-
-TEST_SETUP(success, setup)
-TEST_TEAR_DOWN(success, tear_down)
+SUITE(UvPrepare)
 
 /* Issue the very first get request. */
-TEST_CASE(success, firstA, NULL)
+TEST(UvPrepare, first, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -106,7 +103,7 @@ TEST_CASE(success, firstA, NULL)
 }
 
 /* Issue the very first get request and the a second one. */
-TEST_CASE(success, second, NULL)
+TEST(UvPrepare, second, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
