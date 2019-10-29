@@ -3,6 +3,7 @@
 
 #include "assert.h"
 #include "uv.h"
+#include "uv_error.h"
 #include "uv_os.h"
 
 /* The happy path for a uvPrepare request is:
@@ -130,9 +131,9 @@ static void processRequests(struct uv *uv)
         QUEUE_REMOVE(&req->queue);
 
         /* Finish the request */
-	assert(segment->fd >= 0);
-	req->fd = segment->fd;
-	req->counter = segment->counter;
+        assert(segment->fd >= 0);
+        req->fd = segment->fd;
+        req->counter = segment->counter;
         req->cb(req, 0);
         raft_free(segment);
     }

@@ -2,6 +2,7 @@
 #include "byte.h"
 #include "uv.h"
 #include "uv_encoding.h"
+#include "uv_error.h"
 
 /* We have metadata1 and metadata2. */
 #define METADATA_FILENAME_PREFIX "metadata"
@@ -88,7 +89,7 @@ static int loadFile(struct uv *uv,
             close(fd);
             rv = 0;
         }
-	raft_free(errmsg);
+        raft_free(errmsg);
         return rv;
     };
 

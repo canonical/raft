@@ -102,7 +102,6 @@ raft_uv_SOURCES = \
   src/uv.c \
   src/uv_append.c \
   src/uv_encoding.c \
-  src/uv_file.c \
   src/uv_finalize.c \
   src/uv_fs.c \
   src/uv_ip.c \
@@ -145,7 +144,6 @@ test_unit_uv_SOURCES += \
   src/syscall.c \
   test/unit/main_uv.c \
   test/unit/test_uv_os.c \
-  test/unit/test_uv_file.c \
   test/unit/test_uv_fs.c \
   test/unit/test_uv_init.c \
   test/unit/test_uv_list.c \
