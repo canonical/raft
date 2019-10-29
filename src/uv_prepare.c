@@ -41,7 +41,6 @@ struct preparedSegment
     struct UvFsCreateFile req;       /* Create file request */
     unsigned long long counter;      /* Segment counter */
     char filename[UV__FILENAME_LEN]; /* Filename of the segment */
-    char path[UV__PATH_SZ];          /* Full path of the segment */
     uv_file fd;                      /* File descriptor of prepared file */
     queue queue;                     /* Pool */
 };
@@ -148,6 +147,8 @@ static void prepareSegmentCreateFileCb(struct UvFsCreateFile *req, int status)
     s = req->data;
     uv = s->uv;
 
+    uv->prepare_create = NULL; /* Reset the creation in-progress marker. */
+
     /* If we have been canceled, it means we are closing. */
     if (status == UV__CANCELED) {
         uvDebugf(uv, "canceled creation of %s", s->filename);
@@ -159,9 +160,8 @@ static void prepareSegmentCreateFileCb(struct UvFsCreateFile *req, int status)
     /* If the request has failed, mark this instance as errored. */
     if (status != 0) {
         uvPrepareFlushRequests(uv, RAFT_IOERR);
-        uv->prepare_create = NULL;
         uv->errored = true;
-        uvErrorf(uv, "create segment %s: %s", s->path, UvFsErrMsg(&uv->fs));
+        uvErrorf(uv, "create segment %s: %s", s->filename, UvFsErrMsg(&uv->fs));
         raft_free(s);
         return;
     }
@@ -169,7 +169,6 @@ static void prepareSegmentCreateFileCb(struct UvFsCreateFile *req, int status)
     assert(req->fd >= 0);
 
     uvDebugf(uv, "completed creation of %s", s->filename);
-    uv->prepare_create = NULL;
     s->fd = req->fd;
     QUEUE_PUSH(&uv->prepare_pool, &s->queue);
 
@@ -197,9 +196,6 @@ static int prepareSegment(struct uv *uv)
     s->fd = -1;
 
     sprintf(s->filename, UV__OPEN_TEMPLATE, s->counter);
-    strcpy(s->path, uv->dir);
-    strcat(s->path, "/");
-    strcat(s->path, s->filename);
 
     uvDebugf(uv, "create open segment %s", s->filename);
     rv = UvFsCreateFile(&uv->fs, &s->req, uv->dir, s->filename,
