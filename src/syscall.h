@@ -6,7 +6,7 @@
 #include <linux/aio_abi.h>
 #include <signal.h>
 #include <time.h>
-#ifdef HAVE_LINUX_IO_URING_H
+#if HAVE_LINUX_IO_URING_H
 #include <linux/io_uring.h>
 #endif
 
@@ -23,7 +23,7 @@ int io_getevents(aio_context_t ctx_id,
                  struct io_event *events,
                  struct timespec *timeout);
 
-#ifdef HAVE_LINUX_IO_URING_H
+#if HAVE_LINUX_IO_URING_H
 /* uring */
 int io_uring_register(int fd,
                       unsigned int opcode,
