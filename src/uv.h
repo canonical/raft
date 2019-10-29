@@ -67,7 +67,7 @@ struct uv
     struct uvServer **servers;           /* Inbound connections */
     unsigned n_servers;                  /* Length of the servers array */
     unsigned connect_retry_delay;        /* Client connection retry delay */
-    struct uvFile *prepare_file;         /* File segment being prepared */
+    struct UvFsCreateFile *prepare_file; /* Segment being prepared */
     queue prepare_reqs;                  /* Pending prepare requests. */
     queue prepare_pool;                  /* Prepared open segments */
     uvCounter prepare_next_counter;      /* Counter of next open segment */
@@ -263,9 +263,11 @@ struct uvPrepare;
 typedef void (*uvPrepareCb)(struct uvPrepare *req, int status);
 struct uvPrepare
 {
-    void *data;     /* User data */
-    uvPrepareCb cb; /* Completion callback */
-    queue queue;    /* Links in uv_io->prepare_reqs */
+    void *data;                 /* User data */
+    uv_file fd;                 /* Resulting segment file descriptor */
+    unsigned long long counter; /* Resulting segment counter */
+    uvPrepareCb cb;             /* Completion callback */
+    queue queue;                /* Links in uv_io->prepare_reqs */
 };
 
 /* Submit a request to get a prepared open segment ready for writing. */

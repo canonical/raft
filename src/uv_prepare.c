@@ -36,13 +36,13 @@
 /* An open segment being prepared or sitting in the pool */
 struct segment
 {
-    struct uv *uv;                       /* Open segment file */
-    struct uvFile *file;                 /* Open segment file */
-    struct uvFileCreate create;          /* Create file request */
-    unsigned long long counter;          /* Segment counter */
+    struct uv *uv;                   /* Open segment file */
+    struct UvFsCreateFile req;       /* Create file request */
+    unsigned long long counter;      /* Segment counter */
     char filename[UV__FILENAME_LEN]; /* Filename of the segment */
-    char path[UV__PATH_SZ];              /* Full path of the segment */
-    queue queue;                         /* Pool */
+    char path[UV__PATH_SZ];          /* Full path of the segment */
+    uv_file fd;                      /* File descriptor of prepared file */
+    queue queue;                     /* Pool */
 };
 
 /* Flush all pending requests, invoking their callbacks with the given
@@ -59,21 +59,21 @@ static void flushRequests(struct uv *uv, int status)
     }
 }
 
-/* Destroy the segment object and remove the segment file. */
-static void removeSegmentFileCloseCb(struct uvFile *file)
+/* Start removing a prepared open segment */
+static void uvPrepareRemove(struct segment *s)
 {
-    struct segment *s = file->data;
-    raft_free(file);
-    unlink(s->path);
+    assert(s->counter > 0);
+    assert(s->fd >= 0);
+    UvOsClose(s->fd);
+    UvOsUnlink(s->path);
     raft_free(s);
 }
 
-/* Start removing a prepared open segment */
-static void removeSegment(struct segment *s)
+/* Cancel segment file creation. */
+static void uvPrepareCancel(struct segment *s)
 {
     assert(s->counter > 0);
-    assert(s->file != NULL);
-    uvFileClose(s->file, removeSegmentFileCloseCb);
+    UvFsCreateFileCancel(&s->req);
 }
 
 void uvPrepareClose(struct uv *uv)
@@ -90,13 +90,13 @@ void uvPrepareClose(struct uv *uv)
         head = QUEUE_HEAD(&uv->prepare_pool);
         s = QUEUE_DATA(head, struct segment, queue);
         QUEUE_REMOVE(&s->queue);
-        removeSegment(s);
+        uvPrepareRemove(s);
     }
 
     /* Cancel any in-progress segment creation request. */
     if (uv->prepare_file != NULL) {
         struct segment *s = uv->prepare_file->data;
-        removeSegment(s);
+        uvPrepareCancel(s);
     }
 }
 
@@ -130,14 +130,16 @@ static void processRequests(struct uv *uv)
         QUEUE_REMOVE(&req->queue);
 
         /* Finish the request */
-	uvFileClose(segment->file, (uvFileCloseCb)raft_free);
+	assert(segment->fd >= 0);
+	req->fd = segment->fd;
+	req->counter = segment->counter;
         req->cb(req, 0);
         raft_free(segment);
     }
 }
 
 static void maybePrepareSegment(struct uv *uv);
-static void prepareSegmentFileCreateCb(struct uvFileCreate *req, int status)
+static void prepareSegmentCreateFileCb(struct UvFsCreateFile *req, int status)
 {
     struct segment *s;
     struct uv *uv;
@@ -149,23 +151,25 @@ static void prepareSegmentFileCreateCb(struct uvFileCreate *req, int status)
     if (status == UV__CANCELED) {
         uvDebugf(uv, "canceled creation of %s", s->filename);
         assert(uv->closing);
-        return;
-    }
-
-    /* If the request has failed, simply close the file and mark this instance
-     * as errored. */
-    if (status != 0) {
-        flushRequests(uv, RAFT_IOERR);
-        uv->prepare_file = NULL;
-        uv->errored = true;
-        uvErrorf(uv, "create segment %s: %s", s->path, uvFileErrMsg(req->file));
-        uvFileClose(req->file, (uvFileCloseCb)raft_free);
         raft_free(s);
         return;
     }
 
+    /* If the request has failed, mark this instance as errored. */
+    if (status != 0) {
+        flushRequests(uv, RAFT_IOERR);
+        uv->prepare_file = NULL;
+        uv->errored = true;
+        uvErrorf(uv, "create segment %s: %s", s->path, UvFsErrMsg(&uv->fs));
+        raft_free(s);
+        return;
+    }
+
+    assert(req->fd >= 0);
+
     uvDebugf(uv, "completed creation of %s", s->filename);
     uv->prepare_file = NULL;
+    s->fd = req->fd;
     QUEUE_PUSH(&uv->prepare_pool, &s->queue);
 
     /* Let's process any pending request. */
@@ -187,18 +191,9 @@ static int prepareSegment(struct uv *uv)
         goto err;
     }
     s->uv = uv;
-    s->file = raft_malloc(sizeof *s->file);
-    if (s->file == NULL) {
-        rv = RAFT_NOMEM;
-        goto err_after_segment_alloc;
-    }
-
-    rv = uvFileInit(s->file, uv->loop, uv->direct_io, uv->async_io);
-    assert(rv == 0); /* This can't fail at the moment. */
-
-    s->file->data = s;
-    s->create.data = s;
+    s->req.data = s;
     s->counter = uv->prepare_next_counter;
+    s->fd = -1;
 
     sprintf(s->filename, UV__OPEN_TEMPLATE, s->counter);
     strcpy(s->path, uv->dir);
@@ -206,23 +201,21 @@ static int prepareSegment(struct uv *uv)
     strcat(s->path, s->filename);
 
     uvDebugf(uv, "create open segment %s", s->filename);
-    rv = uvFileCreate(s->file, &s->create, uv->dir, s->filename,
-                      uv->block_size * uv->n_blocks, MAX_CONCURRENT_WRITES,
-                      prepareSegmentFileCreateCb);
+    rv = UvFsCreateFile(&uv->fs, &s->req, uv->dir, s->filename,
+                        uv->block_size * uv->n_blocks,
+                        prepareSegmentCreateFileCb);
     if (rv != 0) {
         uvErrorf(uv, "can't create segment %s: %s", s->filename,
-                 uvFileErrMsg(s->file));
+                 UvFsErrMsg(&uv->fs));
         rv = RAFT_IOERR;
-        goto err_after_file_init;
+        goto err_after_segment_alloc;
     }
 
-    uv->prepare_file = s->file;
+    uv->prepare_file = &s->req;
     uv->prepare_next_counter++;
 
     return 0;
 
-err_after_file_init:
-    uvFileClose(s->file, (uvFileCloseCb)raft_free);
 err_after_segment_alloc:
     raft_free(s);
 err:
