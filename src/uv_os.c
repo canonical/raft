@@ -524,7 +524,6 @@ static int probeDirectIO(int fd, size_t *size, char **errmsg)
 
     /* Try to peform direct I/O, using various buffer size. */
     *size = 4096;
-    return 0;
     while (*size >= 512) {
         buf = raft_aligned_alloc(*size, *size);
         if (buf == NULL) {

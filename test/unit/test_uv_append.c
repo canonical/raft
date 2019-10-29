@@ -1,8 +1,7 @@
-#include "../lib/runner.h"
-#include "../lib/uv.h"
-
 #include "../../src/byte.h"
 #include "../../src/uv_encoding.h"
+#include "../lib/runner.h"
+#include "../lib/uv.h"
 
 TEST_MODULE(uv_append)
 
@@ -122,7 +121,7 @@ static void appendCb(struct raft_io_append *req, int status)
 #define WAIT_CB(N, STATUS)                       \
     {                                            \
         int i2;                                  \
-        for (i2 = 0; i2 < 10; i2++) {             \
+        for (i2 = 0; i2 < 10; i2++) {            \
             LOOP_RUN(1);                         \
             if (f->invoked == N) {               \
                 break;                           \
@@ -214,20 +213,16 @@ static void appendCb(struct raft_io_append *req, int status)
 
 /******************************************************************************
  *
- * Success scenarios.
+ * uvAppend
  *
  *****************************************************************************/
 
-TEST_SUITE(success)
-
-TEST_SETUP(success, setup)
-TEST_TEAR_DOWN(success, tear_down)
+SUITE(UvAppend)
 
 /* Append the very first batch of entries. */
-TEST_CASE(success, first, NULL)
+TEST(UvAppend, first, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     CREATE_ENTRIES(1, 64);
     APPEND(0);
     WAIT_CB(1, 0);
@@ -237,7 +232,7 @@ TEST_CASE(success, first, NULL)
 
 /* Write the very first entry and then another one, both fitting in the same
  * block. */
-TEST_CASE(success, fit_block, NULL)
+TEST(UvAppend, fitBlock, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -255,7 +250,7 @@ TEST_CASE(success, fit_block, NULL)
 }
 
 /* Write an entry that fills the first block exactly and then another one. */
-TEST_CASE(success, match_block, NULL)
+TEST(UvAppend, matchBlock, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     size_t size;
@@ -283,7 +278,7 @@ TEST_CASE(success, match_block, NULL)
  * the second block, then a third one that fills the rest of the second block
  * plus the whole third block exactly, and finally a fourth entry that fits in
  * the fourth block */
-TEST_CASE(success, exceed_block, NULL)
+TEST(UvAppend, exceedBlock, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     size_t written;
@@ -331,7 +326,7 @@ TEST_CASE(success, exceed_block, NULL)
 /* If an append request is submitted before the write operation of the previous
  * append request is started, then a single write will be performed for both
  * requests. */
-TEST_CASE(success, batch, NULL)
+TEST(UvAppend, batch, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -350,7 +345,7 @@ TEST_CASE(success, batch, NULL)
 
 /* An append request submitted while a write operation is in progress gets
  * executed only when the write completes. */
-TEST_CASE(success, wait, NULL)
+TEST(UvAppend, wait, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -371,7 +366,7 @@ TEST_CASE(success, wait, NULL)
 
 /* Several batches with different size gets appended in fast pace, which forces
  * the segment arena to grow. */
-TEST_CASE(success, resize_arena, NULL)
+TEST(UvAppend, resizeArena, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -400,7 +395,7 @@ TEST_CASE(success, resize_arena, NULL)
 
 /* A few append requests get queued, then a truncate request comes in and other
  * append requests right after, before truncation is fully completed. */
-TEST_CASE(success, truncate, NULL)
+TEST(UvAppend, truncate, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     int rv;
@@ -430,11 +425,10 @@ TEST_CASE(success, truncate, NULL)
 /* A few append requests get queued, then a truncate request comes in and other
  * append requests right after, before truncation is fully completed. However
  * the backend is closed before the truncation request can be processed. */
-TEST_CASE(success, truncate_closing, NULL)
+TEST(UvAppend, truncateClosing, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     int rv;
-    (void)params;
 
     CREATE_ENTRIES(2, 64);
     APPEND(0);
@@ -454,7 +448,7 @@ TEST_CASE(success, truncate_closing, NULL)
 }
 
 /* The counters of the open segments get increased as they are closed. */
-TEST_CASE(success, counter, NULL)
+TEST(UvAppend, counter, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     size_t size = f->uv->block_size;
@@ -474,18 +468,8 @@ TEST_CASE(success, counter, NULL)
     return MUNIT_OK;
 }
 
-/******************************************************************************
- *
- * Failure scenarios.
- *
- *****************************************************************************/
-
-TEST_SUITE(error)
-TEST_SETUP(error, setup)
-TEST_TEAR_DOWN(error, tear_down)
-
 /* The batch of entries to append is too big. */
-TEST_CASE(error, too_big, NULL)
+TEST(UvAppend, tooBig, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct uv *uv = f->io.impl;
@@ -498,7 +482,7 @@ TEST_CASE(error, too_big, NULL)
 }
 
 /* If the I/O instance is closed, all pending append requests get canceled. */
-TEST_CASE(error, cancel, NULL)
+TEST(UvAppend, cancel, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -514,7 +498,7 @@ TEST_CASE(error, cancel, NULL)
 }
 
 /* An error occurs while performing a write. */
-TEST_CASE(error, write, NULL)
+TEST(UvAppend, writeError, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     aio_context_t ctx = 0;
@@ -546,7 +530,7 @@ static MunitParameterEnum error_oom_params[] = {
 };
 
 /* Out of memory conditions. */
-TEST_CASE(error, oom, error_oom_params)
+TEST(UvAppend, oom, setup, tear_down, 0, error_oom_params)
 {
     struct fixture *f = data;
     (void)params;
@@ -560,19 +544,13 @@ TEST_CASE(error, oom, error_oom_params)
     return MUNIT_OK;
 }
 
-/******************************************************************************
- *
- * Close raft_io instance scenarios.
- *
- *****************************************************************************/
-
 TEST_SUITE(close)
 
 TEST_SETUP(close, setup)
 TEST_TEAR_DOWN(close, tear_down)
 
-/* The write is closed while a write request is in progress. */
-TEST_CASE(close, during_write, NULL)
+/* The uv instance is closed while a write request is in progress. */
+TEST(UvAppend, closeDuringWrite, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -591,7 +569,7 @@ TEST_CASE(close, during_write, NULL)
 
 /* When the writer gets closed it tells the writer to close the segment that
  * it's currently writing. */
-TEST_CASE(close, current_segment, NULL)
+TEST(UvAppend, currentSegment, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
