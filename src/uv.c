@@ -562,6 +562,7 @@ int raft_uv_init(struct raft_io *io,
     uv->transport = transport;
     uv->transport->data = uv;
     uv->id = 0;
+    UvFsInit(&uv->fs, uv->loop);
     uv->state = 0;
     uv->errored = false;
     uv->block_size = 0; /* Detected in raft_io->init() */
@@ -615,6 +616,7 @@ void raft_uv_close(struct raft_io *io)
 {
     struct uv *uv;
     uv = io->impl;
+    UvFsClose(&uv->fs);
     if (uv->clients != NULL) {
         raft_free(uv->clients);
     }
