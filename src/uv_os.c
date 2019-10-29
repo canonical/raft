@@ -573,13 +573,12 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char **errmsg)
     struct iocb *iocbs = &iocb; /* Because the io_submit() API sucks */
     struct io_event event;      /* KAIO response object */
     int n_events;
-    char errmsg_[2048];
     int rv;
 
     /* Setup the KAIO context handle */
-    rv = uvIoSetup(1, &ctx, errmsg_);
+    rv = UvOsIoSetup(1, &ctx);
     if (rv != 0) {
-        *errmsg = errMsgPrintf("%s", errmsg_);
+        *errmsg = uvSysErrMsg("io_setup", rv);
         /* UNTESTED: in practice this should fail only with ENOMEM */
         return rv;
     }
@@ -604,32 +603,31 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char **errmsg)
     iocb.aio_rw_flags |= RWF_NOWAIT | RWF_DSYNC;
 
     /* Submit the KAIO request */
-    rv = uvIoSubmit(ctx, 1, &iocbs, errmsg_);
+    rv = UvOsIoSubmit(ctx, 1, &iocbs);
     if (rv != 0) {
         /* UNTESTED: in practice this should fail only with ENOMEM */
         raft_free(buf);
-        uvTryIoDestroy(ctx);
+        UvOsIoDestroy(ctx);
         /* On ZFS 0.8 this is not properly supported yet. */
         if (errno == EOPNOTSUPP) {
             *ok = false;
             return 0;
         }
-        *errmsg = errMsgPrintf("%s", errmsg_);
+        *errmsg = errMsgPrintf("can't allocate write buffer");
         return rv;
     }
 
     /* Fetch the response: will block until done. */
-    rv = uvIoGetevents(ctx, 1, 1, &event, NULL, &n_events, errmsg_);
-    assert(rv == 0);
+    n_events = UvOsIoGetevents(ctx, 1, 1, &event, NULL);
     assert(n_events == 1);
 
     /* Release the write buffer. */
     raft_free(buf);
 
     /* Release the KAIO context handle. */
-    rv = uvIoDestroy(ctx, errmsg_);
+    rv = UvOsIoDestroy(ctx);
     if (rv != 0) {
-        *errmsg = errMsgPrintf("%s", errmsg_);
+        *errmsg = uvSysErrMsg("io_destroy", rv);
         return rv;
     }
 
@@ -708,87 +706,4 @@ err_after_file_open:
     close(fd);
 err:
     return UV__ERROR;
-}
-
-int uvSetDirectIo(int fd, char *errmsg)
-{
-    int flags; /* Current fcntl flags */
-    int rv;
-    flags = fcntl(fd, F_GETFL);
-    rv = fcntl(fd, F_SETFL, flags | O_DIRECT);
-    if (rv == -1) {
-        uvErrMsgSys(errmsg, fnctl, errno);
-        return UV__ERROR;
-    }
-    return 0;
-}
-
-int uvIoSetup(unsigned nr, aio_context_t *ctxp, char *errmsg)
-{
-    int rv;
-    rv = io_setup(nr, ctxp);
-    if (rv == -1) {
-        uvErrMsgSys(errmsg, io_setup, errno);
-        return UV__ERROR;
-    }
-    return 0;
-}
-
-int uvIoDestroy(aio_context_t ctx, char *errmsg)
-{
-    int rv;
-    rv = io_destroy(ctx);
-    if (rv == -1) {
-        uvErrMsgSys(errmsg, io_destroy, errno);
-        return UV__ERROR;
-    }
-    return 0;
-}
-
-void uvTryIoDestroy(aio_context_t ctx)
-{
-    uvErrMsg errmsg;
-    uvIoDestroy(ctx, errmsg);
-}
-
-int uvIoSubmit(aio_context_t ctx, long nr, struct iocb **iocbpp, char *errmsg)
-{
-    int rv;
-    rv = io_submit(ctx, nr, iocbpp);
-    if (rv == -1) {
-        uvErrMsgSys(errmsg, io_submit, errno);
-        switch (errno) {
-            case EOPNOTSUPP:
-                return UV__NOTSUPP;
-            case EAGAIN:
-                return UV__AGAIN;
-            default:
-                return UV__ERROR;
-        }
-    }
-    assert(rv == nr); /* TODO: can something else be returned? */
-    return 0;
-}
-
-int uvIoGetevents(aio_context_t ctx,
-                  long min_nr,
-                  long max_nr,
-                  struct io_event *events,
-                  struct timespec *timeout,
-                  int *nr,
-                  char *errmsg)
-{
-    int rv;
-    do {
-        rv = io_getevents(ctx, min_nr, max_nr, events, timeout);
-    } while (rv == -1 && errno == EINTR);
-
-    if (rv == -1) {
-        uvErrMsgSys(errmsg, io_getevents, errno);
-        return UV__ERROR;
-    }
-    assert(rv >= min_nr);
-    assert(rv <= max_nr);
-    *nr = rv;
-    return 0;
 }

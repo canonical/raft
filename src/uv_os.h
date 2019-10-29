@@ -167,24 +167,4 @@ int uvProbeIoCapabilities(const char *dir,
                           bool *async,
                           char **errmsg);
 
-/* Configure the given file descriptor for direct I/O. */
-int uvSetDirectIo(int fd, char *errmsg);
-
-/* Wrappers around the kernel AIO APIs that we use.. */
-int uvIoSetup(unsigned n, aio_context_t *ctx, char *errmsg);
-
-int uvIoDestroy(aio_context_t ctx, char *errmsg);
-
-void uvTryIoDestroy(aio_context_t ctx);
-
-int uvIoSubmit(aio_context_t ctx, long n, struct iocb **iocbs, char *errmsg);
-
-int uvIoGetevents(aio_context_t ctx,
-                  long min_nr,
-                  long max_nr,
-                  struct io_event *events,
-                  struct timespec *timeout,
-                  int *nr,
-                  char *errmsg);
-
 #endif /* UV_OS_H_ */
