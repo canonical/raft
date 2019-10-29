@@ -105,6 +105,15 @@ RAFT_API int raft_configuration_add(struct raft_configuration *c,
                                     const bool voting);
 
 /**
+ * Encode the given configuration object.
+ *
+ * The memory of the returned buffer is allocated using raft_malloc(), and
+ * client code is responsible for releasing it when no longer needed.
+ */
+RAFT_API int raft_configuration_encode(const struct raft_configuration *c,
+                                       struct raft_buffer *buf);
+
+/**
  * Log entry types.
  */
 enum {
