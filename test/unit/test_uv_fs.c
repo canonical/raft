@@ -184,6 +184,10 @@ TEST(UvFsCreateFile, cancel, setupFs, tearDownFs, 0, NULL)
     struct UvFsCreateFile req;
     struct createFileResult result = {UV__CANCELED, "canceled", false};
     int rv;
+#ifndef HAVE_DECL_UV_FS_O_CREAT
+    /* This test appears to leak memory on older libuv versions. */
+    return MUNIT_SKIP;
+#endif
     req.data = &result;
     rv = UvFsCreateFile(&f->fs, &req, "/non/existing/dir", "foo", 4096,
                         createFileCbAssertFail);
