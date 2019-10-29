@@ -145,6 +145,10 @@ TEST(UvFsCreateFile, fileAlreadyExists, setupFs, tearDownFs, 0, NULL)
 {
     struct fs *f = data;
     char buf[8];
+#ifndef HAVE_DECL_UV_FS_O_CREAT
+    /* This test appears to leak memory on older libuv versions. */
+    return MUNIT_SKIP;
+#endif
     test_dir_write_file(f->dir, "foo", buf, sizeof buf);
     CREATE_FILE_FAILURE(f->dir,    /* dir */
                         "foo",     /* filename */
@@ -158,6 +162,10 @@ TEST(UvFsCreateFile, fileAlreadyExists, setupFs, tearDownFs, 0, NULL)
 TEST(UvFsCreateFile, noSpace, setupFs, tearDownFs, 0, dir_tmpfs_params)
 {
     struct fs *f = data;
+#ifndef HAVE_DECL_UV_FS_O_CREAT
+    /* This test appears to leak memory on older libuv versions. */
+    return MUNIT_SKIP;
+#endif
     SKIP_IF_NO_FIXTURE;
     CREATE_FILE_FAILURE(f->dir,       /* dir */
                         "foo",        /* filename */
