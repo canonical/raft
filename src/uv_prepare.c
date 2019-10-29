@@ -95,8 +95,8 @@ void uvPrepareClose(struct uv *uv)
     }
 
     /* Cancel any in-progress segment creation request. */
-    if (uv->prepare_file != NULL) {
-        struct preparedSegment *s = uv->prepare_file->data;
+    if (uv->prepare_create != NULL) {
+        struct preparedSegment *s = uv->prepare_create->data;
         uvPrepareCancel(s);
     }
 }
@@ -159,7 +159,7 @@ static void prepareSegmentCreateFileCb(struct UvFsCreateFile *req, int status)
     /* If the request has failed, mark this instance as errored. */
     if (status != 0) {
         uvPrepareFlushRequests(uv, RAFT_IOERR);
-        uv->prepare_file = NULL;
+        uv->prepare_create = NULL;
         uv->errored = true;
         uvErrorf(uv, "create segment %s: %s", s->path, UvFsErrMsg(&uv->fs));
         raft_free(s);
@@ -169,7 +169,7 @@ static void prepareSegmentCreateFileCb(struct UvFsCreateFile *req, int status)
     assert(req->fd >= 0);
 
     uvDebugf(uv, "completed creation of %s", s->filename);
-    uv->prepare_file = NULL;
+    uv->prepare_create = NULL;
     s->fd = req->fd;
     QUEUE_PUSH(&uv->prepare_pool, &s->queue);
 
@@ -212,7 +212,7 @@ static int prepareSegment(struct uv *uv)
         goto err_after_segment_alloc;
     }
 
-    uv->prepare_file = &s->req;
+    uv->prepare_create = &s->req;
     uv->prepare_next_counter++;
 
     return 0;
@@ -235,7 +235,7 @@ static void maybePrepareSegment(struct uv *uv)
     assert(!uv->closing);
 
     /* If we are already creating a segment, we're done. */
-    if (uv->prepare_file != NULL) {
+    if (uv->prepare_create != NULL) {
         return;
     }
 

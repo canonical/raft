@@ -49,47 +49,47 @@ struct uvServer;
 /* Hold state of a libuv-based raft_io implementation. */
 struct uv
 {
-    struct raft_io *io;                  /* I/O object we're implementing */
-    struct uv_loop_s *loop;              /* UV event loop */
-    char dir[UV__DIR_LEN];               /* Data directory */
-    struct raft_uv_transport *transport; /* Network transport */
-    struct raft_logger *logger;          /* Logger implementation */
-    unsigned id;                         /* Server ID */
-    struct UvFs fs;                      /* File system abstraction */
-    int state;                           /* Current state */
-    bool errored;                        /* If a disk I/O error was hit */
-    bool direct_io;                      /* Whether direct I/O is supported */
-    bool async_io;                       /* Whether async I/O is supported */
-    size_t block_size;                   /* Block size of the data dir */
-    unsigned n_blocks;                   /* N. of blocks in a segment */
-    struct uvClient **clients;           /* Outbound connections */
-    unsigned n_clients;                  /* Length of the clients array */
-    struct uvServer **servers;           /* Inbound connections */
-    unsigned n_servers;                  /* Length of the servers array */
-    unsigned connect_retry_delay;        /* Client connection retry delay */
-    struct UvFsCreateFile *prepare_file; /* Segment being prepared */
-    queue prepare_reqs;                  /* Pending prepare requests. */
-    queue prepare_pool;                  /* Prepared open segments */
-    uvCounter prepare_next_counter;      /* Counter of next open segment */
-    raft_index append_next_index;        /* Index of next entry to append */
-    queue append_segments;               /* Open segments in use. */
-    queue append_pending_reqs;           /* Pending append requests. */
-    queue append_writing_reqs;           /* Append requests in flight */
-    queue finalize_reqs;                 /* Segments waiting to be closed */
-    raft_index finalize_last_index;      /* Last index of last closed seg */
-    struct uv_work_s finalize_work;      /* Resize and rename segments */
-    queue truncate_reqs;                 /* Pending truncate requests */
-    struct uv_work_s truncate_work;      /* Execute truncate log requests */
-    queue snapshot_put_reqs;             /* Inflight put snapshot requests */
-    queue snapshot_get_reqs;             /* Inflight get snapshot requests */
-    struct uv_work_s snapshot_put_work;  /* Execute snapshot put requests */
-    struct uvMetadata metadata;          /* Cache of metadata on disk */
-    struct uv_timer_s timer;             /* Timer for periodic ticks */
-    raft_io_tick_cb tick_cb;             /* Invoked when the timer expires */
-    raft_io_recv_cb recv_cb;             /* Invoked when upon RPC messages */
-    bool closing;                        /* True if we are closing */
-    raft_io_close_cb close_cb;           /* Invoked when finishing closing */
-    unsigned short log_level;            /* Logging level */
+    struct raft_io *io;                    /* I/O object we're implementing */
+    struct uv_loop_s *loop;                /* UV event loop */
+    char dir[UV__DIR_LEN];                 /* Data directory */
+    struct raft_uv_transport *transport;   /* Network transport */
+    struct raft_logger *logger;            /* Logger implementation */
+    unsigned id;                           /* Server ID */
+    struct UvFs fs;                        /* File system abstraction */
+    int state;                             /* Current state */
+    bool errored;                          /* If a disk I/O error was hit */
+    bool direct_io;                        /* Whether direct I/O is supported */
+    bool async_io;                         /* Whether async I/O is supported */
+    size_t block_size;                     /* Block size of the data dir */
+    unsigned n_blocks;                     /* N. of blocks in a segment */
+    struct uvClient **clients;             /* Outbound connections */
+    unsigned n_clients;                    /* Length of the clients array */
+    struct uvServer **servers;             /* Inbound connections */
+    unsigned n_servers;                    /* Length of the servers array */
+    unsigned connect_retry_delay;          /* Client connection retry delay */
+    struct UvFsCreateFile *prepare_create; /* Segment being prepared */
+    queue prepare_reqs;                    /* Pending prepare requests. */
+    queue prepare_pool;                    /* Prepared open segments */
+    uvCounter prepare_next_counter;        /* Counter of next open segment */
+    raft_index append_next_index;          /* Index of next entry to append */
+    queue append_segments;                 /* Open segments in use. */
+    queue append_pending_reqs;             /* Pending append requests. */
+    queue append_writing_reqs;             /* Append requests in flight */
+    queue finalize_reqs;                   /* Segments waiting to be closed */
+    raft_index finalize_last_index;        /* Last index of last closed seg */
+    struct uv_work_s finalize_work;        /* Resize and rename segments */
+    queue truncate_reqs;                   /* Pending truncate requests */
+    struct uv_work_s truncate_work;        /* Execute truncate log requests */
+    queue snapshot_put_reqs;               /* Inflight put snapshot requests */
+    queue snapshot_get_reqs;               /* Inflight get snapshot requests */
+    struct uv_work_s snapshot_put_work;    /* Execute snapshot put requests */
+    struct uvMetadata metadata;            /* Cache of metadata on disk */
+    struct uv_timer_s timer;               /* Timer for periodic ticks */
+    raft_io_tick_cb tick_cb;               /* Invoked when the timer expires */
+    raft_io_recv_cb recv_cb;               /* Invoked when upon RPC messages */
+    bool closing;                          /* True if we are closing */
+    raft_io_close_cb close_cb;             /* Invoked when finishing closing */
+    unsigned short log_level;              /* Logging level */
 };
 
 /* Emit a log message with a certain level. */
