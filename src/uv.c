@@ -1,3 +1,5 @@
+#include "../include/raft/uv.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -5,8 +7,6 @@
 #include <unistd.h>
 
 #include "../include/raft.h"
-#include "../include/raft/uv.h"
-
 #include "assert.h"
 #include "byte.h"
 #include "configuration.h"
@@ -30,7 +30,8 @@ static int uvInit(struct raft_io *io,
 {
     struct uv *uv;
     size_t direct_io;
-    char errmsg[2048];
+    char errmsg_[2048];
+    char *errmsg = errmsg_;
     int rv;
 
     uv = io->impl;
@@ -40,9 +41,10 @@ static int uvInit(struct raft_io *io,
     uvDebugf(uv, "data dir: %s", uv->dir);
 
     /* Ensure that the data directory exists and is accessible */
-    rv = uvEnsureDir(uv->dir, errmsg);
+    rv = uvEnsureDir(uv->dir, &errmsg);
     if (rv != 0) {
         uvErrorf(uv, "ensure data dir %s: %s", uv->dir, errmsg);
+        raft_free(errmsg);
         rv = RAFT_IOERR;
         goto err;
     }
@@ -56,15 +58,17 @@ static int uvInit(struct raft_io *io,
              uv->metadata.version, uv->metadata.term, uv->metadata.voted_for);
 
     /* Detect the I/O capabilities of the underlying file system. */
-    rv = uvProbeIoCapabilities(uv->dir, &direct_io, &uv->async_io, errmsg);
+    rv = uvProbeIoCapabilities(uv->dir, &direct_io, &uv->async_io, &errmsg);
     if (rv != 0) {
         uvErrorf(uv, "probe I/O capabilities: %s", errmsg);
+        raft_free(errmsg);
         rv = RAFT_IOERR;
         goto err;
     }
     uv->direct_io = direct_io != 0;
     uv->block_size = direct_io != 0 ? direct_io : 4096;
-    uvDebugf(uv, "I/O: direct %d, async %d, block %ld\n", uv->direct_io, uv->async_io, uv->block_size);
+    uvDebugf(uv, "I/O: direct %d, async %d, block %ld\n", uv->direct_io,
+             uv->async_io, uv->block_size);
 
     /* We expect the maximum segment size to be a multiple of the block size */
     assert(UV__MAX_SEGMENT_SIZE % uv->block_size == 0);
@@ -358,8 +362,8 @@ static int loadSnapshotAndEntries(struct uv *uv,
             uvErrorf(uv,
                      "index of last entry %lld is behind last snapshot %lld",
                      last_index, (*snapshot)->index);
-	    rv = RAFT_CORRUPT;
-	    goto err_after_snapshot_load;
+            rv = RAFT_CORRUPT;
+            goto err_after_snapshot_load;
         }
 
         raft_free(segments);
@@ -542,7 +546,7 @@ int raft_uv_init(struct raft_io *io,
     assert(dir != NULL);
 
     /* Ensure that the given path doesn't exceed our static buffer limit */
-    if (strnlen(dir, UV__DIR_MAX_LEN + 1) > UV__DIR_MAX_LEN) {
+    if (!UV__DIR_HAS_VALID_LEN(dir)) {
         return RAFT_NAMETOOLONG;
     }
 
@@ -558,6 +562,7 @@ int raft_uv_init(struct raft_io *io,
     uv->transport = transport;
     uv->transport->data = uv;
     uv->id = 0;
+    UvFsInit(&uv->fs, uv->loop);
     uv->state = 0;
     uv->errored = false;
     uv->block_size = 0; /* Detected in raft_io->init() */
@@ -611,6 +616,7 @@ void raft_uv_close(struct raft_io *io)
 {
     struct uv *uv;
     uv = io->impl;
+    UvFsClose(&uv->fs);
     if (uv->clients != NULL) {
         raft_free(uv->clients);
     }

@@ -1,11 +1,12 @@
-#include <string.h>
-
 #include "../include/raft.h"
+
+#include <string.h>
 
 #include "assert.h"
 #include "configuration.h"
 #include "convert.h"
 #include "election.h"
+#include "err.h"
 #include "log.h"
 #include "logging.h"
 
@@ -124,4 +125,9 @@ int raft_bootstrap(struct raft *r, const struct raft_configuration *conf)
     }
 
     return 0;
+}
+
+const char *raft_strerror(int errnum)
+{
+    return errCodeToString(errnum);
 }

@@ -63,9 +63,8 @@ AC_TYPE_UINT16_T
 AC_TYPE_UINT32_T
 AC_TYPE_UINT64_T
 
-# Checks for library functions.
-AC_FUNC_MALLOC
-AC_CHECK_FUNCS([memcpy vsprintf])
+# Checks for library functions and definitions.
+AC_CHECK_DECLS([UV_FS_O_CREAT], [], [], [[#include <uv.h>]])
 
 AX_CHECK_COMPILE_FLAG([-std=c11], [AM_CFLAGS="$AM_CFLAGS -std=c11"])
 AX_CHECK_COMPILE_FLAG([-fdiagnostics-color], [AM_CFLAGS="$AM_CFLAGS -fdiagnostics-color"])

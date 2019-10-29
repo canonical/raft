@@ -2,12 +2,13 @@
 #include <string.h>
 
 #include "../include/raft/uv.h"
-
 #include "assert.h"
 #include "byte.h"
 #include "queue.h"
 #include "uv.h"
 #include "uv_encoding.h"
+#include "uv_error.h"
+#include "uv_writer.h"
 
 /* The happy path for an append request is:
  *
@@ -43,8 +44,8 @@ struct segment
 {
     struct uv *uv;                  /* Our writer */
     struct uvPrepare prepare;       /* Prepare segment file request */
-    struct uvFile *file;            /* File to write to */
-    struct uvFileWrite write;       /* Write request */
+    struct UvWriter *writer;        /* Writer to perform async I/O */
+    struct UvWriterReq write;       /* Write request */
     unsigned long long counter;     /* Open segment counter */
     raft_index first_index;         /* Index of the first entry written */
     raft_index last_index;          /* Index of the last entry written */
@@ -145,7 +146,7 @@ static void finalizeSegment(struct segment *s)
          * file handle and release the segment memory. */
     }
 
-    uvFileClose(s->file, (uvFileCloseCb)raft_free);
+    UvWriterClose(s->writer, (UvWriterCloseCb)raft_free);
     uvSegmentBufferClose(&s->pending);
     QUEUE_REMOVE(&s->queue);
 
@@ -177,9 +178,7 @@ static void flushRequests(queue *q, int status)
 }
 
 static void processRequests(struct uv *uv);
-static void writeSegmentCb(struct uvFileWrite *write,
-                           const int status,
-                           const char *errmsg)
+static void writeSegmentCb(struct UvWriterReq *write, const int status)
 {
     struct segment *s = write->data;
     struct uv *uv = s->uv;
@@ -194,7 +193,7 @@ static void writeSegmentCb(struct uvFileWrite *write,
     /* Check if the write was successful. */
     if (status != 0) {
         assert(status != UV__CANCELED); /* We never cancel write requests */
-        uvErrorf(uv, "write: %s", errmsg);
+        uvErrorf(uv, "write: %s", UvWriterErrMsg(s->writer));
         result = RAFT_IOERR;
         uv->errored = true;
     }
@@ -260,13 +259,12 @@ static void writeSegmentCb(struct uvFileWrite *write,
  * of the given segment. */
 static int writeSegment(struct segment *s)
 {
-    char errmsg[2048];
     int rv;
-    assert(s->file != NULL);
+    assert(s->writer != NULL);
     assert(s->pending.n > 0);
     uvSegmentBufferFinalize(&s->pending, &s->buf);
-    rv = uvFileWrite(s->file, &s->write, &s->buf, 1,
-                     s->next_block * s->uv->block_size, writeSegmentCb, errmsg);
+    rv = UvWriterSubmit(s->writer, &s->write, &s->buf, 1,
+                        s->next_block * s->uv->block_size, writeSegmentCb);
     if (rv != 0) {
         return rv;
     }
@@ -322,7 +320,7 @@ prepare:
     assert(segment != NULL);
 
     /* If the preparer hasn't provided the segment yet, let's wait. */
-    if (segment->file == NULL) {
+    if (segment->writer == NULL) {
         return;
     }
 
@@ -384,21 +382,19 @@ err:
     uv->errored = true;
 }
 
-static void prepareSegmentCb(struct uvPrepare *req,
-                             struct uvFile *file,
-                             unsigned long long counter,
-                             int status)
+static void prepareSegmentCb(struct uvPrepare *req, int status)
 {
     struct segment *segment = req->data;
     struct uv *uv = segment->uv;
+    int rv;
 
     /* If we have been closed, let's discard the segment. */
     if (uv->closing) {
         QUEUE_REMOVE(&segment->queue);
         if (status == 0) {
-            uvFileClose(file, (uvFileCloseCb)raft_free);
+            UvOsClose(req->fd);
             /* Ignore errors, as there's nothing we can do about it. */
-            uvFinalize(uv, counter, 0, 0, 0);
+            uvFinalize(uv, req->counter, 0, 0, 0);
         }
         uvSegmentBufferClose(&segment->pending);
         raft_free(segment);
@@ -413,10 +409,17 @@ static void prepareSegmentCb(struct uvPrepare *req,
         return;
     }
 
-    assert(counter > 0);
-    assert(file != NULL);
-    segment->file = file;
-    segment->counter = counter;
+    assert(req->counter > 0);
+    assert(req->fd >= 0);
+
+    /* TODO: check for errors. */
+    segment->writer = raft_malloc(sizeof *segment->writer);
+    assert(segment->writer != NULL);
+    rv = UvWriterInit(&uv->fs, segment->writer, req->fd, uv->direct_io,
+                      uv->async_io, 1);
+    assert(rv == 0);
+
+    segment->counter = req->counter;
     processRequests(uv);
 }
 
@@ -427,7 +430,7 @@ static void initSegment(struct segment *s, struct uv *uv)
     s->prepare.data = s;
     s->write.data = s;
     s->counter = 0;
-    s->file = NULL;
+    s->writer = NULL;
     s->first_index = uv->append_next_index;
     s->last_index = s->first_index - 1;
     s->size = sizeof(uint64_t) /* Format version */;

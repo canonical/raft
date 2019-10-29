@@ -3,104 +3,153 @@
 #ifndef UV_OS_H_
 #define UV_OS_H_
 
-#include <dirent.h>
 #include <linux/aio_abi.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <sys/eventfd.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <uv.h>
 
 #include "../include/raft.h"
 
-/* Maximum length of a file path. */
-#define UV__PATH_MAX_LEN 1024
+/* For backward compat with older libuv */
+#if !defined(UV_FS_O_RDONLY)
+#define UV_FS_O_RDONLY O_RDONLY
+#endif
 
-/* Maximum length of a filename. */
-#define UV__FILENAME_MAX_LEN 128
+#if !defined(UV_FS_O_DIRECTORY)
+#define UV_FS_O_DIRECTORY O_DIRECTORY
+#endif
+
+#if !defined(UV_FS_O_WRONLY)
+#define UV_FS_O_WRONLY O_WRONLY
+#endif
+
+#if !defined(UV_FS_O_CREAT)
+#define UV_FS_O_CREAT O_CREAT
+#endif
+
+#if !defined(UV_FS_O_EXCL)
+#define UV_FS_O_EXCL O_EXCL
+#endif
+
+#if !defined(UV_FS_O_DIRECT)
+#define UV_FS_O_DIRECT O_DIRECT
+#endif
+
+#define UV__EFD_NONBLOCK EFD_NONBLOCK
+#define UV__EOPNOTSUPP -EOPNOTSUPP
+
+/* Maximum size of a full file system path string. */
+#define UV__PATH_SZ 1024
+
+/* Maximum length of a filename string. */
+#define UV__FILENAME_LEN 128
 
 /* Length of path separator. */
 #define UV__SEP_LEN 1 /* strlen("/") */
 
-/* Maximum length of a directory path. */
-#define UV__DIR_MAX_LEN (UV__PATH_MAX_LEN - UV__SEP_LEN - UV__FILENAME_MAX_LEN)
+/* True if STR's length is at most LEN. */
+#define LEN_AT_MOST_(STR, LEN) (strnlen(STR, LEN + 1) <= LEN)
 
-/* Fixed length string that can hold a complete file system path. */
-typedef char uvPath[UV__PATH_MAX_LEN];
+/* Maximum length of a directory path string. */
+#define UV__DIR_LEN (UV__PATH_SZ - UV__SEP_LEN - UV__FILENAME_LEN - 1)
 
-/* Fixed length string that can hold a file name. */
-typedef char uvFilename[UV__FILENAME_MAX_LEN];
+/* True if the given DIR string has at most UV__DIR_LEN chars. */
+#define UV__DIR_HAS_VALID_LEN(DIR) LEN_AT_MOST_(DIR, UV__DIR_LEN)
 
-/* Fixed length string that can hold a directory path. */
-typedef char uvDir[UV__DIR_MAX_LEN];
+/* True if the given FILENAME string has at most UV__FILENAME_LEN chars. */
+#define UV__FILENAME_HAS_VALID_LEN(FILENAME) \
+    LEN_AT_MOST_(FILENAME, UV__FILENAME_LEN)
 
-/* Concatenate a directory and a file. */
-void uvJoin(const uvDir dir, const uvFilename filename, uvPath path);
+/* Portable open() */
+int UvOsOpen(const char *path, int flags, int mode);
+
+/* Portable close() */
+int UvOsClose(uv_file fd);
+
+/* Portable fsync() */
+int UvOsFsync(uv_file fd);
+
+/* Portable unlink() */
+int UvOsUnlink(const char *path);
+
+/* Join dir and filename into a full OS path. */
+void UvOsJoin(const char *dir, const char *filename, char *path);
+
+/* TODO: figure a portable abstraction. */
+int UvOsIoSetup(unsigned nr, aio_context_t *ctxp);
+int UvOsIoDestroy(aio_context_t ctx);
+int UvOsIoSubmit(aio_context_t ctx, long nr, struct iocb **iocbpp);
+int UvOsIoGetevents(aio_context_t ctx,
+                    long min_nr,
+                    long max_nr,
+                    struct io_event *events,
+                    struct timespec *timeout);
+int UvOsFallocate(uv_file fd, off_t offset, off_t len);
+int UvOsEventfd(unsigned int initval, int flags);
+int UvOsSetDirectIo(uv_file fd);
 
 /* Check that the given directory exists, and try to create it if it doesn't. */
-int uvEnsureDir(const uvDir dir, char *errmsg);
+int uvEnsureDir(const char *dir, char **errmsg);
 
 /* Sync the given directory. */
-int uvSyncDir(const uvDir dir, char *errmsg);
-
-/* Return all entries of the given directory, in alphabetically sorted order. */
-int uvScanDir(const uvDir dir,
-              struct dirent ***entries,
-              int *n_entries,
-              char *errmsg);
+int uvSyncDir(const char *dir, char **errmsg);
 
 /* Open a file in a directory. */
-int uvOpenFile(const uvDir dir,
-               const uvFilename filename,
+int uvOpenFile(const char *dir,
+               const char *filename,
                int flags,
-               int *fd,
-               char *errmsg);
+               uv_file *fd,
+               char **errmsg);
 
 /* Stat a file in a directory. */
-int uvStatFile(const uvDir dir,
-               const uvFilename filename,
-               struct stat *sb,
-               char *errmsg);
+int uvStatFile(const char *dir,
+               const char *filename,
+               uv_stat_t *sb,
+               char **errmsg);
 
 /* Create a file and write the given content into it. */
-int uvMakeFile(const uvDir dir,
-               const uvFilename filename,
+int uvMakeFile(const char *dir,
+               const char *filename,
                struct raft_buffer *bufs,
                unsigned n_bufs,
-               char *errmsg);
+               char **errmsg);
 
 /* Delete a file in a directory. */
-int uvUnlinkFile(const uvDir dir, const uvFilename filename, char *errmsg);
+int uvUnlinkFile(const char *dir, const char *filename, char **errmsg);
 
 /* Like uvUnlinkFile, but ignoring errors. */
-void uvTryUnlinkFile(const uvDir dir, const uvFilename filename);
+void uvTryUnlinkFile(const char *dir, const char *filename);
 
 /* Truncate a file in a directory. */
-int uvTruncateFile(const uvDir dir,
-                   const uvFilename filename,
+int uvTruncateFile(const char *dir,
+                   const char *filename,
                    size_t offset,
-                   char *errmsg);
+                   char **errmsg);
 
 /* Rename a file in a directory. */
-int uvRenameFile(const uvDir dir,
-                 const uvFilename filename1,
-                 const uvFilename filename2,
-                 char *errmsg);
+int uvRenameFile(const char *dir,
+                 const char *filename1,
+                 const char *filename2,
+                 char **errmsg);
 
 /* Check whether the given file in the given directory is empty. */
-int uvIsEmptyFile(const uvDir dir,
-                  const uvFilename filename,
+int uvIsEmptyFile(const char *dir,
+                  const char *filename,
                   bool *empty,
-                  char *errmsg);
+                  char **errmsg);
 
 /* Read exactly @n bytes from the given file descriptor. */
-int uvReadFully(int fd, void *buf, size_t n, char *errmsg);
+int uvReadFully(int fd, void *buf, size_t n, char **errmsg);
 
 /* Write exactly @n bytes to the given file descriptor. */
-int uvWriteFully(int fd, void *buf, size_t n, char *errmsg);
+int uvWriteFully(int fd, void *buf, size_t n, char **errmsg);
 
 /* Check if the content of the file associated with the given file descriptor
  * contains all zeros from the current offset onward. */
-int uvIsFilledWithTrailingZeros(int fd, bool *flag, char *errmsg);
+int uvIsFilledWithTrailingZeros(int fd, bool *flag, char **errmsg);
 
 /* Check if the given file descriptor has reached the end of the file. */
 bool uvIsAtEof(int fd);
@@ -113,29 +162,9 @@ bool uvIsAtEof(int fd);
  *
  * The @async parameter will be set to true if fully asynchronous I/O is
  * possible using the KAIO API. */
-int uvProbeIoCapabilities(const uvDir dir,
+int uvProbeIoCapabilities(const char *dir,
                           size_t *direct,
                           bool *async,
-                          char *errmsg);
-
-/* Configure the given file descriptor for direct I/O. */
-int uvSetDirectIo(int fd, char *errmsg);
-
-/* Wrappers around the kernel AIO APIs that we use.. */
-int uvIoSetup(unsigned n, aio_context_t *ctx, char *errmsg);
-
-int uvIoDestroy(aio_context_t ctx, char *errmsg);
-
-void uvTryIoDestroy(aio_context_t ctx);
-
-int uvIoSubmit(aio_context_t ctx, long n, struct iocb **iocbs, char *errmsg);
-
-int uvIoGetevents(aio_context_t ctx,
-                  long min_nr,
-                  long max_nr,
-                  struct io_event *events,
-                  struct timespec *timeout,
-		  int *nr,
-                  char *errmsg);
+                          char **errmsg);
 
 #endif /* UV_OS_H_ */

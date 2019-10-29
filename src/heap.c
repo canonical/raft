@@ -1,4 +1,6 @@
-#include "stdlib.h"
+#include "heap.h"
+
+#include <stdlib.h>
 
 #include "../include/raft.h"
 
@@ -43,19 +45,37 @@ static struct raft_heap defaultHeap = {
 
 static struct raft_heap *currentHeap = &defaultHeap;
 
-void *raft_malloc(size_t size)
+void *HeapMalloc(size_t size)
 {
     return currentHeap->malloc(currentHeap->data, size);
 }
 
+void HeapFree(void *ptr)
+{
+    if (ptr == NULL) {
+        return;
+    }
+    currentHeap->free(currentHeap->data, ptr);
+}
+
+void *HeapCalloc(size_t nmemb, size_t size)
+{
+    return currentHeap->calloc(currentHeap->data, nmemb, size);
+}
+
+void *raft_malloc(size_t size)
+{
+    return HeapMalloc(size);
+}
+
 void raft_free(void *ptr)
 {
-    currentHeap->free(currentHeap->data, ptr);
+    HeapFree(ptr);
 }
 
 void *raft_calloc(size_t nmemb, size_t size)
 {
-    return currentHeap->calloc(currentHeap->data, nmemb, size);
+    return HeapCalloc(nmemb, size);
 }
 
 void *raft_realloc(void *ptr, size_t size)

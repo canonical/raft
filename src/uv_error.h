@@ -3,6 +3,8 @@
 #ifndef UV_ERROR_H_
 #define UV_ERROR_H_
 
+#include "err.h"
+
 /* Error codes. */
 enum {
     UV__ERROR = 1, /* Generic system error. */
@@ -24,10 +26,13 @@ typedef char uvErrMsg[UV__ERRMSG_MAX_LEN];
     snprintf(ERRMSG, UV__ERRMSG_MAX_LEN, __VA_ARGS__);
 
 /* Format an error message caused by a failed system call or stdlib function. */
-#define uvErrMsgSys(ERRMSG, SYSCALL, ERRNUM)                             \
+#define uvErrMsgSys(ERRMSG, SYSCALL, ERRNUM)                                 \
     {                                                                        \
         char e_[1024];                                                       \
         sprintf(ERRMSG, #SYSCALL ": %s", strerror_r(ERRNUM, e_, sizeof e_)); \
     }
+
+/* Format an error message caused by a failed system call or stdlib function. */
+#define uvSysErrMsg(FUNC, CODE) errMsgPrintf(FUNC ": %s", uv_strerror(CODE))
 
 #endif /* UV_ERROR_H_ */

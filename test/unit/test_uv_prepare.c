@@ -6,30 +6,19 @@ TEST_MODULE(uv_prepare)
 
 /******************************************************************************
  *
- * Fixture
+ * Fixture with an Uv instance.
  *
  *****************************************************************************/
 
 struct fixture
 {
     FIXTURE_UV;
-    struct uvPrepare req;
-    int invoked;                /* Number of times __get_cb was invoked */
-    struct uvFile *file;        /* Last open segment passed to __get_cb */
-    unsigned long long counter; /* Last counter passed to __get_cb */
-    int status;                 /* Last status passed to __get_cb */
 };
 
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    (void)user_data;
     SETUP_UV;
-    f->req.data = f;
-    f->invoked = 0;
-    f->file = NULL;
-    f->counter = 0;
-    f->status = -1;
     return f;
 }
 
@@ -39,130 +28,106 @@ static void tear_down(void *data)
     if (f == NULL) {
         return;
     }
-    if (f->file != NULL) {
-        uvFileClose(f->file, (uvFileCloseCb)raft_free);
-    }
     TEAR_DOWN_UV;
     free(f);
 }
 
 /******************************************************************************
  *
- * Helper macros
+ * UvPrepare
  *
  *****************************************************************************/
 
-static void prepareCb(struct uvPrepare *req,
-                      struct uvFile *file,
-                      unsigned long long counter,
-                      int status)
+/* Object linked to uvPrepare->data. */
+struct prepareData
 {
-    struct fixture *f = req->data;
+    int status;
+    unsigned long long counter;
+    bool done;
+};
 
-    f->invoked++;
-    f->file = file;
-    f->counter = counter;
-    f->status = status;
+static void prepareCb(struct uvPrepare *req, int status)
+{
+    struct prepareData *data = req->data;
+    munit_assert_int(status, ==, data->status);
+    if (status == 0) {
+        munit_assert_int(req->counter, ==, data->counter);
+        munit_assert_int(req->fd, >=, 0);
+        munit_assert_int(UvOsClose(req->fd), ==, 0);
+    }
+    data->done = true;
 }
 
-/* Invoke uvPrepare. */
-#define PREPARE uvPrepare(f->uv, &f->req, prepareCb);
-
-/* Wait for the get callback to fire and check its status. */
-#define WAIT_CB(STATUS)                          \
-    {                                            \
-        int i;                                   \
-        for (i = 0; i < 5; i++) {                \
-            LOOP_RUN(1);                         \
-            if (f->invoked == 1) {               \
-                break;                           \
-            }                                    \
-        }                                        \
-        munit_assert_int(f->invoked, ==, 1);     \
-        munit_assert_int(f->status, ==, STATUS); \
-        f->invoked = 0;                          \
+/* Wait for the prepare callback to fire. */
+#define PREPARE_WAIT(DATA)               \
+    {                                    \
+        int i_;                          \
+        for (i_ = 0; i_ < 2; i_++) {     \
+            LOOP_RUN(1);                 \
+            if ((DATA)->done) {          \
+                break;                   \
+            }                            \
+        }                                \
+        munit_assert_true((DATA)->done); \
     }
 
-/******************************************************************************
- *
- * Success scenarios.
- *
- *****************************************************************************/
+/* Submit a prepare request expecting the open segment with the given counter to
+ * be prepared, and wait for the operation to successfully complete. */
+#define PREPARE(COUNTER)                                \
+    {                                                   \
+        struct prepareData data_ = {0, COUNTER, false}; \
+        struct uvPrepare req_;                          \
+        req_.data = &data_;                             \
+        uvPrepare(f->uv, &req_, prepareCb);             \
+        PREPARE_WAIT(&data_);                           \
+    }
 
-TEST_SUITE(success)
+/* Submit a prepare request with the given parameters and wait for the operation
+ * to fail with the given. */
+#define PREPARE_FAILURE(RV)                        \
+    {                                              \
+        struct prepareData data_ = {RV, 0, false}; \
+        struct uvPrepare req_;                     \
+        req_.data = &data_;                        \
+        uvPrepare(f->uv, &req_, prepareCb);        \
+        PREPARE_WAIT(&data_);                      \
+    }
 
-TEST_SETUP(success, setup)
-TEST_TEAR_DOWN(success, tear_down)
+SUITE(UvPrepare)
 
 /* Issue the very first get request. */
-TEST_CASE(success, first, NULL)
+TEST(UvPrepare, first, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
-    PREPARE;
-    WAIT_CB(0);
+    PREPARE(1);
     munit_assert_true(test_dir_has_file(f->dir, "open-1"));
     return MUNIT_OK;
 }
 
 /* Issue the very first get request and the a second one. */
-TEST_CASE(success, second, NULL)
+TEST(UvPrepare, second, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
-    PREPARE;
-    WAIT_CB(0);
-    uvFileClose(f->file, (uvFileCloseCb)raft_free);
-    PREPARE;
-    WAIT_CB(0);
+    PREPARE(1);
+    PREPARE(2);
     munit_assert_true(test_dir_has_file(f->dir, "open-1"));
     munit_assert_true(test_dir_has_file(f->dir, "open-2"));
     return MUNIT_OK;
 }
 
-/******************************************************************************
- *
- * Failure scenarios.
- *
- *****************************************************************************/
-
-TEST_SUITE(error)
-
-TEST_SETUP(error, setup)
-TEST_TEAR_DOWN(error, tear_down)
-
-/* The creation of the first segment fails because uvIoSetup() returns EAGAIN.
- */
-TEST_CASE(error, no_resources, NULL)
-{
-    struct fixture *f = data;
-    aio_context_t ctx = 0;
-    int rv;
-    (void)params;
-    rv = test_aio_fill(&ctx, 0);
-    if (rv != 0) {
-        return MUNIT_SKIP;
-    }
-    PREPARE;
-    WAIT_CB(RAFT_IOERR);
-    test_aio_destroy(ctx);
-    return MUNIT_OK;
-}
-
 /* The creation of the first segment fails because there's no space. */
-TEST(error, no_space, setup, tear_down, 0, dir_tmpfs_params)
+TEST(UvPrepare, noSpace, setup, tear_down, 0, dir_tmpfs_params)
 {
     struct fixture *f = data;
     struct uv *uv;
     SKIP_IF_NO_FIXTURE;
     uv = f->io.impl;
     uv->n_blocks = 32768;
-    PREPARE;
-    WAIT_CB(RAFT_IOERR);
+    PREPARE_FAILURE(RAFT_IOERR);
     return MUNIT_OK;
 }
 
-static char *error_oom_heap_fault_delay[] = {"0", "1", NULL};
+static char *error_oom_heap_fault_delay[] = {"0", NULL};
 static char *error_oom_heap_fault_repeat[] = {"1", NULL};
 
 static MunitParameterEnum error_oom_params[] = {
@@ -172,55 +137,41 @@ static MunitParameterEnum error_oom_params[] = {
 };
 
 /* Out of memory conditions. */
-TEST_CASE(error, oom, error_oom_params)
+TEST(UvPrepare, oom, setup, tear_down, 0, error_oom_params)
 {
     struct fixture *f = data;
-    (void)params;
     test_heap_fault_enable(&f->heap);
-    PREPARE;
-    WAIT_CB(RAFT_NOMEM);
+    PREPARE_FAILURE(RAFT_NOMEM);
     return MUNIT_OK;
 }
 
-/******************************************************************************
- *
- * Close raft_io instance scenarios.
- *
- *****************************************************************************/
-
-TEST_SUITE(close)
-
-TEST_SETUP(close, setup)
-TEST_TEAR_DOWN(close, tear_down)
-
 /* It's possible to close the raft_io instance immediately after
  * initialization. */
-TEST_CASE(close, noop, NULL)
+TEST(UvPrepare, closeNoop, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     UV_CLOSE;
     return MUNIT_OK;
 }
 
 /* When the preparer is closed, all pending get requests get canceled. */
-TEST_CASE(close, cancel_requests, NULL)
+TEST(UvPrepare, closeCancelRequests, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
-    PREPARE;
+    struct prepareData data_ = {RAFT_CANCELED, 0, false};
+    struct uvPrepare req;
+    req.data = &data_;
+    uvPrepare(f->uv, &req, prepareCb);
     UV_CLOSE;
-    WAIT_CB(RAFT_CANCELED);
+    PREPARE_WAIT(&data_);
     return MUNIT_OK;
 }
 
 /* When the preparer is closed, all unused files ready get removed. */
-TEST_CASE(close, remove_pool, NULL)
+TEST(UvPrepare, closeRemovePool, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
-    PREPARE;
-    WAIT_CB(0);
+    PREPARE(1);
     LOOP_RUN(1);
     munit_assert_true(test_dir_has_file(f->dir, "open-2"));
     UV_CLOSE;

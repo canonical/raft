@@ -9,43 +9,25 @@
 
 /******************************************************************************
  *
- * uvJoin
- *
- *****************************************************************************/
-
-SUITE(uvJoin)
-
-/* Join a directory path and a filename into a full path. */
-TEST(uvJoin, path, NULL, NULL, 0, NULL)
-{
-    const uvDir dir = "/foo";
-    const uvFilename filename = "bar";
-    uvPath path;
-    uvJoin(dir, filename, path);
-    munit_assert_string_equal(path, "/foo/bar");
-    return MUNIT_OK;
-}
-
-/******************************************************************************
- *
  * uvEnsureDir
  *
  *****************************************************************************/
 
 /* Invoke uvEnsureDir passing it the given dir. */
-#define ENSURE_DIR(DIR)                                    \
-    {                                                      \
-        uvErrMsg errmsg;                                   \
-        munit_assert_int(uvEnsureDir(DIR, errmsg), ==, 0); \
+#define ENSURE_DIR(DIR)                                     \
+    {                                                       \
+        char *errmsg;                                       \
+        munit_assert_int(uvEnsureDir(DIR, &errmsg), ==, 0); \
     }
 
 /* Invoke uvEnsureDir passing it the given dir and check that the given error
  * occurs. */
-#define ENSURE_DIR_ERROR(DIR, RV, ERRMSG)                   \
-    {                                                       \
-        uvErrMsg errmsg;                                    \
-        munit_assert_int(uvEnsureDir(DIR, errmsg), ==, RV); \
-        munit_assert_string_equal(errmsg, ERRMSG);          \
+#define ENSURE_DIR_ERROR(DIR, RV, ERRMSG)                    \
+    {                                                        \
+        char *errmsg;                                        \
+        munit_assert_int(uvEnsureDir(DIR, &errmsg), ==, RV); \
+        munit_assert_string_equal(errmsg, ERRMSG);           \
+        raft_free(errmsg);                                   \
     }
 
 SUITE(uvEnsureDir)
@@ -54,7 +36,7 @@ SUITE(uvEnsureDir)
 TEST(uvEnsureDir, doesNotExist, setupDir, tearDownDir, 0, NULL)
 {
     const char *parent = data;
-    uvDir dir;
+    char dir[1024];
     sprintf(dir, "%s/sub", parent);
     ENSURE_DIR(dir);
     munit_assert_true(test_dir_exists(dir));
@@ -72,21 +54,21 @@ TEST(uvEnsureDir, exists, setupDir, tearDownDir, 0, NULL)
 /* If the directory can't be created, an error is returned. */
 TEST(uvEnsureDir, mkdirError, NULL, NULL, 0, NULL)
 {
-    ENSURE_DIR_ERROR("/foobarbazegg", UV__ERROR, "mkdir: Permission denied");
+    ENSURE_DIR_ERROR("/foobarbazegg", UV__ERROR, "mkdir: permission denied");
     return MUNIT_OK;
 }
 
 /* If the directory can't be probed for existence, an error is returned. */
 TEST(uvEnsureDir, statError, NULL, NULL, 0, NULL)
 {
-    ENSURE_DIR_ERROR("/proc/1/root", UV__ERROR, "stat: Permission denied");
+    ENSURE_DIR_ERROR("/proc/1/root", UV__ERROR, "stat: permission denied");
     return MUNIT_OK;
 }
 
 /* If the given path is not a directory, an error is returned. */
 TEST(uvEnsureDir, notDir, NULL, NULL, 0, NULL)
 {
-    ENSURE_DIR_ERROR("/dev/null", UV__ERROR, "Not a directory");
+    ENSURE_DIR_ERROR("/dev/null", UV__ERROR, "not a directory");
     return MUNIT_OK;
 }
 
@@ -97,11 +79,12 @@ TEST(uvEnsureDir, notDir, NULL, NULL, 0, NULL)
  *****************************************************************************/
 
 /* Invoke uvSyncDir passing it the given dir. */
-#define SYNC_DIR_ERROR(DIR, RV, ERRMSG)                   \
-    {                                                     \
-        uvErrMsg errmsg;                                  \
-        munit_assert_int(uvSyncDir(DIR, errmsg), ==, RV); \
-        munit_assert_string_equal(errmsg, ERRMSG);        \
+#define SYNC_DIR_ERROR(DIR, RV, ERRMSG)                    \
+    {                                                      \
+        char *errmsg;                                      \
+        munit_assert_int(uvSyncDir(DIR, &errmsg), ==, RV); \
+        munit_assert_string_equal(errmsg, ERRMSG);         \
+        raft_free(errmsg);                                 \
     }
 
 SUITE(uvSyncDir)
@@ -109,7 +92,7 @@ SUITE(uvSyncDir)
 /* If the directory doesn't exist, an error is returned. */
 TEST(uvSyncDir, noExists, NULL, NULL, 0, NULL)
 {
-    SYNC_DIR_ERROR("/abcdef", UV__ERROR, "open: No such file or directory");
+    SYNC_DIR_ERROR("/abcdef", UV__ERROR, "open: no such file or directory");
     return MUNIT_OK;
 }
 
@@ -120,13 +103,14 @@ TEST(uvSyncDir, noExists, NULL, NULL, 0, NULL)
  *****************************************************************************/
 
 /* Open a file the fixture's tmpdir. */
-#define OPEN_FILE_ERROR(DIR, FILENAME, FLAGS, RV, ERRMSG)        \
-    {                                                            \
-        int fd;                                                  \
-        uvErrMsg errmsg;                                         \
-        int rv_ = uvOpenFile(DIR, FILENAME, FLAGS, &fd, errmsg); \
-        munit_assert_int(rv_, ==, RV);                           \
-        munit_assert_string_equal(errmsg, ERRMSG);               \
+#define OPEN_FILE_ERROR(DIR, FILENAME, FLAGS, RV, ERRMSG)         \
+    {                                                             \
+        int fd;                                                   \
+        char *errmsg;                                             \
+        int rv_ = uvOpenFile(DIR, FILENAME, FLAGS, &fd, &errmsg); \
+        munit_assert_int(rv_, ==, RV);                            \
+        munit_assert_string_equal(errmsg, ERRMSG);                \
+        raft_free(errmsg);                                        \
     }
 
 SUITE(uvOpenFile)
@@ -136,7 +120,7 @@ TEST(uvOpenFile, noExists, setupDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
     OPEN_FILE_ERROR(dir, "foo", O_RDONLY, UV__NOENT,
-                    "open: No such file or directory");
+                    "open: no such file or directory");
     return MUNIT_OK;
 }
 
@@ -148,32 +132,33 @@ TEST(uvOpenFile, noExists, setupDir, tearDownDir, 0, NULL)
 
 /* Invoke uvProbeIoCapabilities against the given dir and assert that it returns
  * the given values for direct I/O and async I/O. */
-#define PROBE_IO_CAPABILITIES(DIR, DIRECT_IO, ASYNC_IO)                     \
-    {                                                                       \
-        size_t direct_io_;                                                  \
-        bool async_io_;                                                     \
-        uvErrMsg errmsg_;                                                   \
-        int rv_;                                                            \
-        rv_ = uvProbeIoCapabilities(DIR, &direct_io_, &async_io_, errmsg_); \
-        munit_assert_int(rv_, ==, 0);                                       \
-        munit_assert_int(direct_io_, ==, DIRECT_IO);                        \
-        if (ASYNC_IO) {                                                     \
-            munit_assert_true(async_io_);                                   \
-        } else {                                                            \
-            munit_assert_false(async_io_);                                  \
-        }                                                                   \
+#define PROBE_IO_CAPABILITIES(DIR, DIRECT_IO, ASYNC_IO)                      \
+    {                                                                        \
+        size_t direct_io_;                                                   \
+        bool async_io_;                                                      \
+        char *errmsg_;                                                       \
+        int rv_;                                                             \
+        rv_ = uvProbeIoCapabilities(DIR, &direct_io_, &async_io_, &errmsg_); \
+        munit_assert_int(rv_, ==, 0);                                        \
+        munit_assert_int(direct_io_, ==, DIRECT_IO);                         \
+        if (ASYNC_IO) {                                                      \
+            munit_assert_true(async_io_);                                    \
+        } else {                                                             \
+            munit_assert_false(async_io_);                                   \
+        }                                                                    \
     }
 
 /* Invoke uvProbeIoCapabilities and check that the given error occurs. */
-#define PROBE_IO_CAPABILITIES_ERROR(DIR, RV, ERRMSG)                        \
-    {                                                                       \
-        size_t direct_io_;                                                  \
-        bool async_io_;                                                     \
-        uvErrMsg errmsg_;                                                   \
-        int rv_;                                                            \
-        rv_ = uvProbeIoCapabilities(DIR, &direct_io_, &async_io_, errmsg_); \
-        munit_assert_int(rv_, ==, RV);                                      \
-        munit_assert_string_equal(errmsg_, ERRMSG);                         \
+#define PROBE_IO_CAPABILITIES_ERROR(DIR, RV, ERRMSG)                         \
+    {                                                                        \
+        size_t direct_io_;                                                   \
+        bool async_io_;                                                      \
+        char *errmsg_;                                                       \
+        int rv_;                                                             \
+        rv_ = uvProbeIoCapabilities(DIR, &direct_io_, &async_io_, &errmsg_); \
+        munit_assert_int(rv_, ==, RV);                                       \
+        munit_assert_string_equal(errmsg_, ERRMSG);                          \
+        raft_free(errmsg_);                                                  \
     }
 
 SUITE(uvProbeIoCapabilities)
@@ -225,7 +210,7 @@ TEST(uvProbeIoCapabilities, noAccess, setupDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
     test_dir_unexecutable(dir);
-    PROBE_IO_CAPABILITIES_ERROR(dir, UV__ERROR, "mkstemp: Permission denied");
+    PROBE_IO_CAPABILITIES_ERROR(dir, UV__ERROR, "mkstemp: permission denied");
     return MUNIT_OK;
 }
 
@@ -238,7 +223,7 @@ TEST(uvProbeIoCapabilities, noSpace, setupTmpfsDir, tearDownDir, 0, NULL)
     }
     test_dir_fill(dir, 0);
     PROBE_IO_CAPABILITIES_ERROR(dir, UV__ERROR,
-                                "posix_fallocate: No space left on device");
+                                "posix_fallocate: no space left on device");
     return MUNIT_OK;
 }
 

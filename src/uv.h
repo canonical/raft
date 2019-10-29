@@ -4,8 +4,8 @@
 #define UV_H_
 
 #include "../include/raft.h"
-
-#include "uv_file.h"
+#include "queue.h"
+#include "uv_fs.h"
 #include "uv_os.h"
 
 /* 8 Megabytes */
@@ -51,10 +51,11 @@ struct uv
 {
     struct raft_io *io;                  /* I/O object we're implementing */
     struct uv_loop_s *loop;              /* UV event loop */
-    uvDir dir;                           /* Data directory */
+    char dir[UV__DIR_LEN];               /* Data directory */
     struct raft_uv_transport *transport; /* Network transport */
     struct raft_logger *logger;          /* Logger implementation */
     unsigned id;                         /* Server ID */
+    struct UvFs fs;                      /* File system abstraction */
     int state;                           /* Current state */
     bool errored;                        /* If a disk I/O error was hit */
     bool direct_io;                      /* Whether direct I/O is supported */
@@ -66,7 +67,7 @@ struct uv
     struct uvServer **servers;           /* Inbound connections */
     unsigned n_servers;                  /* Length of the servers array */
     unsigned connect_retry_delay;        /* Client connection retry delay */
-    struct uvFile *prepare_file;         /* File segment being prepared */
+    struct UvFsCreateFile *prepare_file; /* Segment being prepared */
     queue prepare_reqs;                  /* Pending prepare requests. */
     queue prepare_pool;                  /* Prepared open segments */
     uvCounter prepare_next_counter;      /* Counter of next open segment */
@@ -124,7 +125,7 @@ struct uvSegmentInfo
             unsigned long long counter; /* Open segment counter */
         };
     };
-    uvFilename filename; /* Segment filename */
+    char filename[UV__FILENAME_LEN]; /* Segment filename */
 };
 
 /* Append a new item to the given segment info list if the given filename
@@ -222,7 +223,7 @@ struct uvSnapshotInfo
     raft_term term;
     raft_index index;
     unsigned long long timestamp;
-    uvFilename filename;
+    char filename[UV__FILENAME_LEN];
 };
 
 /* Append a new item to the given snapshot info list if the given filename
@@ -259,15 +260,14 @@ int uvList(struct uv *uv,
 
 /* Request to obtain a newly prepared open segment. */
 struct uvPrepare;
-typedef void (*uvPrepareCb)(struct uvPrepare *req,
-                            struct uvFile *file,
-                            unsigned long long counter,
-                            int status);
+typedef void (*uvPrepareCb)(struct uvPrepare *req, int status);
 struct uvPrepare
 {
-    void *data;     /* User data */
-    uvPrepareCb cb; /* Completion callback */
-    queue queue;    /* Links in uv_io->prepare_reqs */
+    void *data;                 /* User data */
+    uv_file fd;                 /* Resulting segment file descriptor */
+    unsigned long long counter; /* Resulting segment counter */
+    uvPrepareCb cb;             /* Completion callback */
+    queue queue;                /* Links in uv_io->prepare_reqs */
 };
 
 /* Submit a request to get a prepared open segment ready for writing. */

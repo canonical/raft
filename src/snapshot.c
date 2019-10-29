@@ -1,9 +1,11 @@
-#include <string.h>
-#include <stdint.h>
-
 #include "snapshot.h"
+
+#include <stdint.h>
+#include <string.h>
+
 #include "assert.h"
 #include "configuration.h"
+#include "err.h"
 #include "log.h"
 #include "logging.h"
 
@@ -32,7 +34,7 @@ int snapshotRestore(struct raft *r, struct raft_snapshot *snapshot)
     rv = r->fsm->restore(r->fsm, &snapshot->bufs[0]);
     if (rv != 0) {
         errorf(r, "restore snapshot %d: %s", snapshot->index,
-               raft_strerror(rv));
+               errCodeToString(rv));
         return rv;
     }
 

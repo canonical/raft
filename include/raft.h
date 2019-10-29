@@ -11,49 +11,24 @@
 /**
  * Error codes.
  */
-enum {
-    RAFT_NOMEM = 1,
-    RAFT_BADID,
-    RAFT_DUPLICATEID,
-    RAFT_DUPLICATEADDRESS,
-    RAFT_ALREADYVOTING,
-    RAFT_MALFORMED,
-    RAFT_NOTLEADER,
-    RAFT_LEADERSHIPLOST,
-    RAFT_SHUTDOWN,
-    RAFT_CANTBOOTSTRAP,
-    RAFT_CANTCHANGE,
-    RAFT_CORRUPT,
-    RAFT_CANCELED,
-    RAFT_NAMETOOLONG,
-    RAFT_TOOBIG,
-    RAFT_NOCONNECTION,
-    RAFT_BUSY,
-    RAFT_IOERR
-};
-
-/**
- * Map error codes to error messages.
- */
-#define RAFT_ERRNO_MAP(X)                                               \
-    X(RAFT_NOMEM, "out of memory")                                      \
-    X(RAFT_BADID, "server ID is not valid")                             \
-    X(RAFT_DUPLICATEID, "server ID already in use")                     \
-    X(RAFT_DUPLICATEADDRESS, "server address already in use")           \
-    X(RAFT_ALREADYVOTING, "server is already voting")                   \
-    X(RAFT_MALFORMED, "encoded data is malformed")                      \
-    X(RAFT_NOTLEADER, "server is not the leader")                       \
-    X(RAFT_LEADERSHIPLOST, "server has lost leadership")                \
-    X(RAFT_SHUTDOWN, "server is shutting down")                         \
-    X(RAFT_CANTBOOTSTRAP, "bootstrap only works on new clusters")       \
-    X(RAFT_CANTCHANGE, "a configuration change is already in progress") \
-    X(RAFT_CORRUPT, "persisted data is corrupted")                      \
-    X(RAFT_CANCELED, "operation canceled")                              \
-    X(RAFT_NAMETOOLONG, "data directory path is too long")              \
-    X(RAFT_TOOBIG, "data is too big")                                   \
-    X(RAFT_NOCONNECTION, "no connection to remote server available")    \
-    X(RAFT_BUSY, "operation can't be performed at this time")           \
-    X(RAFT_IOERR, "I/O error")
+#define RAFT_NOMEM 1
+#define RAFT_BADID 2
+#define RAFT_DUPLICATEID 3
+#define RAFT_DUPLICATEADDRESS 4
+#define RAFT_ALREADYVOTING 5
+#define RAFT_MALFORMED 6
+#define RAFT_NOTLEADER 7
+#define RAFT_LEADERSHIPLOST 8
+#define RAFT_SHUTDOWN 9
+#define RAFT_CANTBOOTSTRAP 10
+#define RAFT_CANTCHANGE 11
+#define RAFT_CORRUPT 12
+#define RAFT_CANCELED 13
+#define RAFT_NAMETOOLONG 14
+#define RAFT_TOOBIG 15
+#define RAFT_NOCONNECTION 16
+#define RAFT_BUSY 17
+#define RAFT_IOERR 18
 
 /**
  * Return the error message describing the given error code.

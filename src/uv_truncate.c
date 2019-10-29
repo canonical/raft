@@ -27,7 +27,8 @@ static void workCb(uv_work_t *work)
     size_t n_segments;
     size_t i;
     size_t j;
-    char errmsg[2048];
+    char errmsg_[2048];
+    char *errmsg = errmsg_;
     int rv;
 
     /* Load all segments on disk. */
@@ -72,17 +73,19 @@ static void workCb(uv_work_t *work)
             continue;
         }
 
-        rv = uvUnlinkFile(uv->dir, segment->filename, errmsg);
+        rv = uvUnlinkFile(uv->dir, segment->filename, &errmsg);
         if (rv != 0) {
             uvErrorf(uv, "unlink segment %s: %s", segment->filename, errmsg);
+            raft_free(errmsg);
             rv = RAFT_IOERR;
             goto err_after_list;
         }
     }
 
-    rv = uvSyncDir(uv->dir, errmsg);
+    rv = uvSyncDir(uv->dir, &errmsg);
     if (rv != 0) {
         uvErrorf(uv, "sync data directory: %s", errmsg);
+        raft_free(errmsg);
         rv = RAFT_IOERR;
         goto err_after_list;
     }
