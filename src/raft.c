@@ -131,3 +131,9 @@ const char *raft_strerror(int errnum)
 {
     return errCodeToString(errnum);
 }
+
+int raft_configuration_encode(const struct raft_configuration *c,
+                              struct raft_buffer *buf)
+{
+    return configurationEncode(c, buf);
+}
