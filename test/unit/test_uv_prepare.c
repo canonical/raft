@@ -6,7 +6,7 @@ TEST_MODULE(uv_prepare)
 
 /******************************************************************************
  *
- * Fixture
+ * Fixture with an Uv instance.
  *
  *****************************************************************************/
 
@@ -52,6 +52,31 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
+static void prepareCbAssertOk(struct uvPrepare *req, int status)
+{
+    bool *done = req->data;
+    munit_assert_int(status, ==, 0);
+    *done = true;
+}
+
+/* Submit a prepare request with the given parameters and wait for the operation
+ * to successfully complete. */
+#define PREPARE                                     \
+    {                                               \
+        struct uvPrepare req_;                      \
+        bool done_ = false;                         \
+        int i_;                                     \
+        req_.data = &done_;                         \
+        uvPrepare(f->uv, &req_, prepareCbAssertOk); \
+        for (i_ = 0; i_ < 2; i_++) {                \
+            LOOP_RUN(1);                            \
+            if (done_) {                            \
+                break;                              \
+            }                                       \
+        }                                           \
+        munit_assert_true(done_);                   \
+    }
+
 static void prepareCb(struct uvPrepare *req, int status)
 {
     struct fixture *f = req->data;
@@ -61,7 +86,7 @@ static void prepareCb(struct uvPrepare *req, int status)
 }
 
 /* Invoke uvPrepare. */
-#define PREPARE uvPrepare(f->uv, &f->req, prepareCb);
+#define PREPARE_ uvPrepare(f->uv, &f->req, prepareCb);
 
 /* Wait for the get callback to fire and check its status. */
 #define WAIT_CB(STATUS)                          \
@@ -92,7 +117,6 @@ TEST(UvPrepare, first, setup, tear_down, 0, NULL)
     struct fixture *f = data;
     (void)params;
     PREPARE;
-    WAIT_CB(0);
     munit_assert_true(test_dir_has_file(f->dir, "open-1"));
     return MUNIT_OK;
 }
@@ -103,10 +127,7 @@ TEST(UvPrepare, second, setup, tear_down, 0, NULL)
     struct fixture *f = data;
     (void)params;
     PREPARE;
-    WAIT_CB(0);
-    uvFileClose(f->file, (uvFileCloseCb)raft_free);
     PREPARE;
-    WAIT_CB(0);
     munit_assert_true(test_dir_has_file(f->dir, "open-1"));
     munit_assert_true(test_dir_has_file(f->dir, "open-2"));
     return MUNIT_OK;
@@ -135,7 +156,7 @@ TEST_CASE(error, no_resources, NULL)
     if (rv != 0) {
         return MUNIT_SKIP;
     }
-    PREPARE;
+    PREPARE_;
     WAIT_CB(RAFT_IOERR);
     test_aio_destroy(ctx);
     return MUNIT_OK;
@@ -149,7 +170,7 @@ TEST(error, no_space, setup, tear_down, 0, dir_tmpfs_params)
     SKIP_IF_NO_FIXTURE;
     uv = f->io.impl;
     uv->n_blocks = 32768;
-    PREPARE;
+    PREPARE_;
     WAIT_CB(RAFT_IOERR);
     return MUNIT_OK;
 }
@@ -169,7 +190,7 @@ TEST_CASE(error, oom, error_oom_params)
     struct fixture *f = data;
     (void)params;
     test_heap_fault_enable(&f->heap);
-    PREPARE;
+    PREPARE_;
     WAIT_CB(RAFT_NOMEM);
     return MUNIT_OK;
 }
@@ -200,7 +221,7 @@ TEST_CASE(close, cancel_requests, NULL)
 {
     struct fixture *f = data;
     (void)params;
-    PREPARE;
+    PREPARE_;
     UV_CLOSE;
     WAIT_CB(RAFT_CANCELED);
     return MUNIT_OK;
@@ -211,7 +232,7 @@ TEST_CASE(close, remove_pool, NULL)
 {
     struct fixture *f = data;
     (void)params;
-    PREPARE;
+    PREPARE_;
     WAIT_CB(0);
     LOOP_RUN(1);
     munit_assert_true(test_dir_has_file(f->dir, "open-2"));
