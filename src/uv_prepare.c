@@ -35,7 +35,7 @@
 #define TARGET_POOL_SIZE 2
 
 /* An open segment being prepared or sitting in the pool */
-struct segment
+struct preparedSegment
 {
     struct uv *uv;                   /* Open segment file */
     struct UvFsCreateFile req;       /* Create file request */
@@ -52,29 +52,29 @@ static void uvPrepareFlushRequests(struct uv *uv, int status)
 {
     while (!QUEUE_IS_EMPTY(&uv->prepare_reqs)) {
         queue *head;
-        struct uvPrepare *r;
+        struct uvPrepare *req;
         head = QUEUE_HEAD(&uv->prepare_reqs);
-        r = QUEUE_DATA(head, struct uvPrepare, queue);
-        QUEUE_REMOVE(&r->queue);
-        r->cb(r, status);
+        req = QUEUE_DATA(head, struct uvPrepare, queue);
+        QUEUE_REMOVE(&req->queue);
+        req->cb(req, status);
     }
 }
 
-/* Start removing a prepared open segment */
-static void uvPrepareRemove(struct segment *s)
+/* Remove a prepared open segment */
+static void uvPrepareRemove(struct preparedSegment *s)
 {
     assert(s->counter > 0);
     assert(s->fd >= 0);
     UvOsClose(s->fd);
-    UvOsUnlink(s->path);
+    UvFsRemoveFile(&s->uv->fs, s->uv->dir, s->filename);
     raft_free(s);
 }
 
-/* Cancel segment file creation. */
-static void uvPrepareCancel(struct segment *s)
+/* Cancel a prepared segment creation. */
+static void uvPrepareCancel(struct preparedSegment *s)
 {
     assert(s->counter > 0);
-    UvFsCreateFileCancel(&s->req);
+    UvFsCreateFileCancel(&s->req); /* Memory released in the create cb */
 }
 
 void uvPrepareClose(struct uv *uv)
@@ -87,16 +87,16 @@ void uvPrepareClose(struct uv *uv)
     /* Remove any unused prepared segment. */
     while (!QUEUE_IS_EMPTY(&uv->prepare_pool)) {
         queue *head;
-        struct segment *s;
+        struct preparedSegment *s;
         head = QUEUE_HEAD(&uv->prepare_pool);
-        s = QUEUE_DATA(head, struct segment, queue);
+        s = QUEUE_DATA(head, struct preparedSegment, queue);
         QUEUE_REMOVE(&s->queue);
         uvPrepareRemove(s);
     }
 
     /* Cancel any in-progress segment creation request. */
     if (uv->prepare_file != NULL) {
-        struct segment *s = uv->prepare_file->data;
+        struct preparedSegment *s = uv->prepare_file->data;
         uvPrepareCancel(s);
     }
 }
@@ -112,7 +112,7 @@ static void uvPrepareProcessRequests(struct uv *uv)
 
     /* We can finish the requests for which we have ready segments. */
     while (!QUEUE_IS_EMPTY(&uv->prepare_reqs)) {
-        struct segment *segment;
+        struct preparedSegment *segment;
         struct uvPrepare *req;
 
         /* If there's no prepared open segments available, let's bail out. */
@@ -122,7 +122,7 @@ static void uvPrepareProcessRequests(struct uv *uv)
 
         /* Pop a segment from the pool. */
         head = QUEUE_HEAD(&uv->prepare_pool);
-        segment = QUEUE_DATA(head, struct segment, queue);
+        segment = QUEUE_DATA(head, struct preparedSegment, queue);
         QUEUE_REMOVE(&segment->queue);
 
         /* Pop the head of the prepare requests queue. */
@@ -142,7 +142,7 @@ static void uvPrepareProcessRequests(struct uv *uv)
 static void maybePrepareSegment(struct uv *uv);
 static void prepareSegmentCreateFileCb(struct UvFsCreateFile *req, int status)
 {
-    struct segment *s;
+    struct preparedSegment *s;
     struct uv *uv;
 
     s = req->data;
@@ -183,7 +183,7 @@ static void prepareSegmentCreateFileCb(struct UvFsCreateFile *req, int status)
 /* Start creating a new segment file. */
 static int prepareSegment(struct uv *uv)
 {
-    struct segment *s;
+    struct preparedSegment *s;
     int rv;
 
     s = raft_malloc(sizeof *s);

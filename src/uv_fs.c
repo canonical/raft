@@ -165,3 +165,16 @@ void UvFsCreateFileCancel(struct UvFsCreateFile *req)
 {
     req->canceled = true;
 }
+
+int UvFsRemoveFile(struct UvFs *fs, const char *dir, const char *filename)
+{
+    char path[UV__PATH_SZ];
+    int rv;
+    UvOsJoin(dir, filename, path);
+    rv = UvOsUnlink(path);
+    if (rv != 0) {
+        UvFsSetErrMsg(fs, uvSysErrMsg("unlink", rv));
+        return UV__ERROR;
+    }
+    return 0;
+}
