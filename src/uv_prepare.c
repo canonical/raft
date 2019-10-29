@@ -48,7 +48,7 @@ struct segment
 
 /* Flush all pending requests, invoking their callbacks with the given
  * status. */
-static void flushRequests(struct uv *uv, int status)
+static void uvPrepareFlushRequests(struct uv *uv, int status)
 {
     while (!QUEUE_IS_EMPTY(&uv->prepare_reqs)) {
         queue *head;
@@ -82,7 +82,7 @@ void uvPrepareClose(struct uv *uv)
     assert(uv->closing);
 
     /* Cancel all pending prepare requests. */
-    flushRequests(uv, RAFT_CANCELED);
+    uvPrepareFlushRequests(uv, RAFT_CANCELED);
 
     /* Remove any unused prepared segment. */
     while (!QUEUE_IS_EMPTY(&uv->prepare_pool)) {
@@ -105,7 +105,7 @@ void uvPrepareClose(struct uv *uv)
  *
  * If we have some segments in the pool, use them to complete some pending
  * requests. */
-static void processRequests(struct uv *uv)
+static void uvPrepareProcessRequests(struct uv *uv)
 {
     queue *head;
     assert(!uv->closing);
@@ -158,7 +158,7 @@ static void prepareSegmentCreateFileCb(struct UvFsCreateFile *req, int status)
 
     /* If the request has failed, mark this instance as errored. */
     if (status != 0) {
-        flushRequests(uv, RAFT_IOERR);
+        uvPrepareFlushRequests(uv, RAFT_IOERR);
         uv->prepare_file = NULL;
         uv->errored = true;
         uvErrorf(uv, "create segment %s: %s", s->path, UvFsErrMsg(&uv->fs));
@@ -174,7 +174,7 @@ static void prepareSegmentCreateFileCb(struct UvFsCreateFile *req, int status)
     QUEUE_PUSH(&uv->prepare_pool, &s->queue);
 
     /* Let's process any pending request. */
-    processRequests(uv);
+    uvPrepareProcessRequests(uv);
 
     /* Start creating a new segment if needed. */
     maybePrepareSegment(uv);
@@ -246,7 +246,7 @@ static void maybePrepareSegment(struct uv *uv)
     if (n < TARGET_POOL_SIZE) {
         rv = prepareSegment(uv);
         if (rv != 0) {
-            flushRequests(uv, rv);
+            uvPrepareFlushRequests(uv, rv);
             uv->errored = true;
         }
     }
@@ -257,6 +257,6 @@ void uvPrepare(struct uv *uv, struct uvPrepare *req, uvPrepareCb cb)
     assert(uv->state == UV__ACTIVE);
     req->cb = cb;
     QUEUE_PUSH(&uv->prepare_reqs, &req->queue);
-    processRequests(uv);
+    uvPrepareProcessRequests(uv);
     maybePrepareSegment(uv);
 }
