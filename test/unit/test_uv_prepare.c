@@ -52,16 +52,11 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-static void prepareCb(struct uvPrepare *req,
-                      struct uvFile *file,
-                      unsigned long long counter,
-                      int status)
+static void prepareCb(struct uvPrepare *req, int status)
 {
     struct fixture *f = req->data;
 
     f->invoked++;
-    f->file = file;
-    f->counter = counter;
     f->status = status;
 }
 

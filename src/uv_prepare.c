@@ -55,7 +55,7 @@ static void flushRequests(struct uv *uv, int status)
         head = QUEUE_HEAD(&uv->prepare_reqs);
         r = QUEUE_DATA(head, struct uvPrepare, queue);
         QUEUE_REMOVE(&r->queue);
-        r->cb(r, NULL, 0, status);
+        r->cb(r, status);
     }
 }
 
@@ -130,7 +130,8 @@ static void processRequests(struct uv *uv)
         QUEUE_REMOVE(&req->queue);
 
         /* Finish the request */
-        req->cb(req, segment->file, segment->counter, 0);
+	uvFileClose(segment->file, (uvFileCloseCb)raft_free);
+        req->cb(req, 0);
         raft_free(segment);
     }
 }

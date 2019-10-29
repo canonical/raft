@@ -2,7 +2,6 @@
 #include <string.h>
 
 #include "../include/raft/uv.h"
-
 #include "assert.h"
 #include "byte.h"
 #include "queue.h"
@@ -384,13 +383,13 @@ err:
     uv->errored = true;
 }
 
-static void prepareSegmentCb(struct uvPrepare *req,
-                             struct uvFile *file,
-                             unsigned long long counter,
-                             int status)
+static void prepareSegmentCb(struct uvPrepare *req, int status)
 {
     struct segment *segment = req->data;
     struct uv *uv = segment->uv;
+
+    struct uvFile *file = NULL;
+    unsigned long long counter = 0;
 
     /* If we have been closed, let's discard the segment. */
     if (uv->closing) {

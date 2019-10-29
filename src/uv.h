@@ -258,10 +258,7 @@ int uvList(struct uv *uv,
 
 /* Request to obtain a newly prepared open segment. */
 struct uvPrepare;
-typedef void (*uvPrepareCb)(struct uvPrepare *req,
-                            struct uvFile *file,
-                            unsigned long long counter,
-                            int status);
+typedef void (*uvPrepareCb)(struct uvPrepare *req, int status);
 struct uvPrepare
 {
     void *data;     /* User data */
