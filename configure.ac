@@ -66,6 +66,11 @@ AC_TYPE_UINT64_T
 # Checks for library functions and definitions.
 AC_CHECK_DECLS([UV_FS_O_CREAT], [], [], [[#include <uv.h>]])
 
+# Enable large file support. This is mandatory in order to interoperate with
+# libuv, which enables large file support by default, making the size of 'off_t'
+# on 32-bit architecture be 8 bytes instead of the normal 4.
+AC_SYS_LARGEFILE
+
 AX_CHECK_COMPILE_FLAG([-std=c11], [AM_CFLAGS="$AM_CFLAGS -std=c11"])
 AX_CHECK_COMPILE_FLAG([-fdiagnostics-color], [AM_CFLAGS="$AM_CFLAGS -fdiagnostics-color"])
 AX_CHECK_COMPILE_FLAG([-Wpedantic], [AM_CFLAGS="$AM_CFLAGS -Wpedantic"])
