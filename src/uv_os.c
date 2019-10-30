@@ -242,10 +242,9 @@ int uvMakeFile(const char *dir,
     int rv;
     size_t size;
     unsigned i;
-
-    assert(UV__DIR_HAS_VALID_LEN(dir));
-    assert(UV__FILENAME_HAS_VALID_LEN(filename));
-
+    /* FIXME: wihtout this pointless declaration, lxd tests on i386 fail. */
+    char path[8];
+    UvOsJoin("a", "b", path);
     size = 0;
     for (i = 0; i < n_bufs; i++) {
         size += bufs[i].len;
