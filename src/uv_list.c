@@ -51,7 +51,7 @@ int uvList(struct uv *uv,
         bool appended;
 
         rv = uv_fs_scandir_next(&req, &entry);
-	assert(rv == 0); /* Can't fail in libuv */
+        assert(rv == 0); /* Can't fail in libuv */
 
         filename = entry.name;
 
