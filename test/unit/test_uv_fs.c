@@ -145,7 +145,7 @@ TEST(UvFsCreateFile, fileAlreadyExists, setupFs, tearDownFs, 0, NULL)
 {
     struct fs *f = data;
     char buf[8];
-#ifndef HAVE_DECL_UV_FS_O_CREAT
+#if !HAVE_DECL_UV_FS_O_CREAT
     /* This test appears to leak memory on older libuv versions. */
     return MUNIT_SKIP;
 #endif
@@ -162,7 +162,7 @@ TEST(UvFsCreateFile, fileAlreadyExists, setupFs, tearDownFs, 0, NULL)
 TEST(UvFsCreateFile, noSpace, setupFs, tearDownFs, 0, dir_tmpfs_params)
 {
     struct fs *f = data;
-#ifndef HAVE_DECL_UV_FS_O_CREAT
+#if !HAVE_DECL_UV_FS_O_CREAT
     /* This test appears to leak memory on older libuv versions. */
     return MUNIT_SKIP;
 #endif
@@ -184,6 +184,10 @@ TEST(UvFsCreateFile, cancel, setupFs, tearDownFs, 0, NULL)
     struct UvFsCreateFile req;
     struct createFileResult result = {UV__CANCELED, "canceled", false};
     int rv;
+#if !HAVE_DECL_UV_FS_O_CREAT
+    /* This test appears to leak memory on older libuv versions. */
+    return MUNIT_SKIP;
+#endif
     req.data = &result;
     rv = UvFsCreateFile(&f->fs, &req, "/non/existing/dir", "foo", 4096,
                         createFileCbAssertFail);
