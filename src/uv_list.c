@@ -50,7 +50,8 @@ int uvList(struct uv *uv,
         const char *filename;
         bool appended;
 
-        assert(uv_fs_scandir_next(&req, &entry) == 0); /* Can't fail in libuv */
+        rv = uv_fs_scandir_next(&req, &entry);
+	assert(rv == 0); /* Can't fail in libuv */
 
         filename = entry.name;
 
@@ -88,7 +89,9 @@ int uvList(struct uv *uv,
         uvDebugf(uv, "ignore %s", filename);
     }
 
-    assert(uv_fs_scandir_next(&req, &entry) == UV_EOF);
+    rv = uv_fs_scandir_next(&req, &entry);
+    assert(rv == UV_EOF);
+    rv = 0;
 
     if (rv != 0 && *segments != NULL) {
         raft_free(*segments);
