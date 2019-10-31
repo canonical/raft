@@ -105,7 +105,6 @@ static bool openSegmentHasEnoughSpareCapacity(struct openSegment *s,
 static void openSegmentReserveSegmentCapacity(struct openSegment *s,
                                               size_t size)
 {
-    assert(openSegmentHasEnoughSpareCapacity(s, size));
     s->size += size;
 }
 
@@ -117,7 +116,6 @@ static int openSegmentEncodeEntriesToWriteBuf(struct openSegment *s,
 {
     int rv;
     assert(req->segment == s);
-    assert(s->written + req->size <= s->uv->block_size * s->uv->n_blocks);
 
     /* If this is the very first write to the segment, we need to include the
      * format version */
@@ -505,12 +503,6 @@ static int uvAppendEnqueueRequest(struct uv *uv, struct uvAppend *append)
     assert(append->entries != NULL);
     assert(append->n > 0);
     assert(uv->append_next_index > 0);
-
-    /* TODO: at the moment we don't allow a single batch to exceed the size of a
-     * segment. */
-    if (append->size > uv->block_size * uv->n_blocks + sizeof(uint64_t)) {
-        return RAFT_TOOBIG;
-    }
 
     /* If we have no segments yet, it means this is the very first append, and
      * we need to add a new segment. Otherwise we check if the last segment has
