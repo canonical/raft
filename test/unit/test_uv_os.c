@@ -61,6 +61,11 @@ TEST(uvEnsureDir, mkdirError, NULL, NULL, 0, NULL)
 /* If the directory can't be probed for existence, an error is returned. */
 TEST(uvEnsureDir, statError, NULL, NULL, 0, NULL)
 {
+    bool has_access = test_dir_has_file("/proc/1", "root");
+    /* Skip the test is the process actually has access to /proc/1/root. */
+    if (has_access) {
+        return MUNIT_SKIP;
+    }
     ENSURE_DIR_ERROR("/proc/1/root", UV__ERROR, "stat: permission denied");
     return MUNIT_OK;
 }

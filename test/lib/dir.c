@@ -361,7 +361,7 @@ bool test_dir_has_file(const char *dir, const char *filename)
 
     fd = open(path, O_RDONLY);
     if (fd == -1) {
-        munit_assert_int(errno, ==, ENOENT);
+        munit_assert_true(errno == ENOENT || errno == EACCES);
         return false;
     }
 
