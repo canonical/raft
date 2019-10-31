@@ -572,7 +572,7 @@ int raft_uv_init(struct raft_io *io,
     uv->servers = NULL;
     uv->n_servers = 0;
     uv->connect_retry_delay = CONNECT_RETRY_DELAY;
-    uv->prepare_file = NULL;
+    uv->prepare_create = NULL;
     QUEUE_INIT(&uv->prepare_reqs);
     QUEUE_INIT(&uv->prepare_pool);
     uv->prepare_next_counter = 1;

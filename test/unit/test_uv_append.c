@@ -151,6 +151,14 @@ static void appendCb(struct raft_io_append *req, int status)
         sprintf(filename, "open-%d", COUNTER);                               \
                                                                              \
         buf.len = MAX_SEGMENT_BLOCKS * f->uv->block_size;                    \
+        if (buf.len < 8 + /* segment header */ +SIZE) {                      \
+            size_t rest;                                                     \
+            buf.len = 8 /* segment header */ + SIZE;                         \
+            rest = buf.len % f->uv->block_size;                              \
+            if (rest != 0) {                                                 \
+                buf.len += f->uv->block_size - rest;                         \
+            }                                                                \
+        }                                                                    \
         buf.base = munit_malloc(buf.len);                                    \
                                                                              \
         test_dir_read_file(f->dir, filename, buf.base, buf.len);             \
@@ -230,12 +238,42 @@ TEST(UvAppend, first, setup, tear_down, 0, NULL)
     return MUNIT_OK;
 }
 
+/* The very first batch of entries to append is bigger than the regular open
+ * segment size. */
+TEST(UvAppend, firstBig, setup, tear_down, 0, NULL)
+{
+    struct fixture *f = data;
+    struct uv *uv = f->io.impl;
+    CREATE_ENTRIES(MAX_SEGMENT_BLOCKS, uv->block_size);
+    APPEND(0);
+    WAIT_CB(1, 0);
+    ASSERT_SEGMENT(1, MAX_SEGMENT_BLOCKS, MAX_SEGMENT_BLOCKS * uv->block_size);
+    return MUNIT_OK;
+}
+
+/* The second batch of entries to append is bigger than the regular open
+ * segment size. */
+TEST(UvAppend, secondBig, setup, tear_down, 0, NULL)
+{
+    struct fixture *f = data;
+    struct uv *uv = f->io.impl;
+
+    CREATE_ENTRIES(1, 64);
+    APPEND(0);
+    WAIT_CB(1, 0);
+
+    CREATE_ENTRIES(MAX_SEGMENT_BLOCKS, uv->block_size);
+    APPEND(0);
+    WAIT_CB(1, 0);
+
+    return MUNIT_OK;
+}
+
 /* Write the very first entry and then another one, both fitting in the same
  * block. */
 TEST(UvAppend, fitBlock, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     CREATE_ENTRIES(1, 64);
     APPEND(0);
     WAIT_CB(1, 0);
@@ -254,7 +292,6 @@ TEST(UvAppend, matchBlock, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     size_t size;
-    (void)params;
 
     size = f->uv->block_size;
     size -= sizeof(uint64_t) +      /* Format */
@@ -284,7 +321,6 @@ TEST(UvAppend, exceedBlock, setup, tear_down, 0, NULL)
     size_t written;
     size_t size1;
     size_t size2;
-    (void)params;
 
     size1 = f->uv->block_size;
 
@@ -330,8 +366,6 @@ TEST(UvAppend, batch, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
-    (void)params;
-
     CREATE_ENTRIES(1, 64);
     APPEND(0);
 
@@ -348,7 +382,6 @@ TEST(UvAppend, batch, setup, tear_down, 0, NULL)
 TEST(UvAppend, wait, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
 
     CREATE_ENTRIES(1, 64);
     APPEND(0);
@@ -369,7 +402,6 @@ TEST(UvAppend, wait, setup, tear_down, 0, NULL)
 TEST(UvAppend, resizeArena, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
 
     CREATE_ENTRIES(2, 64);
     APPEND(0);
@@ -399,7 +431,6 @@ TEST(UvAppend, truncate, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     int rv;
-    (void)params;
 
     return MUNIT_SKIP; /* FIXME: flaky */
 
@@ -453,7 +484,6 @@ TEST(UvAppend, counter, setup, tear_down, 0, NULL)
     struct fixture *f = data;
     size_t size = f->uv->block_size;
     int i;
-    (void)params;
 
     for (i = 0; i < 10; i++) {
         CREATE_ENTRIES(1, size);
@@ -468,24 +498,10 @@ TEST(UvAppend, counter, setup, tear_down, 0, NULL)
     return MUNIT_OK;
 }
 
-/* The batch of entries to append is too big. */
-TEST(UvAppend, tooBig, setup, tear_down, 0, NULL)
-{
-    struct fixture *f = data;
-    struct uv *uv = f->io.impl;
-    (void)params;
-
-    CREATE_ENTRIES(MAX_SEGMENT_BLOCKS, uv->block_size);
-    APPEND(RAFT_TOOBIG);
-
-    return MUNIT_OK;
-}
-
 /* If the I/O instance is closed, all pending append requests get canceled. */
 TEST(UvAppend, cancel, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
 
     CREATE_ENTRIES(1, 64);
     APPEND(0);
@@ -502,7 +518,6 @@ TEST(UvAppend, writeError, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     aio_context_t ctx = 0;
-    (void)params;
 
     /* FIXME: doesn't fail anymore after
      * https://github.com/CanonicalLtd/raft/pull/49 */
@@ -553,7 +568,6 @@ TEST_TEAR_DOWN(close, tear_down)
 TEST(UvAppend, closeDuringWrite, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
 
     CREATE_ENTRIES(1, 64);
     APPEND(0);
@@ -572,7 +586,6 @@ TEST(UvAppend, closeDuringWrite, setup, tear_down, 0, NULL)
 TEST(UvAppend, currentSegment, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
 
     CREATE_ENTRIES(1, 64);
     APPEND(0);

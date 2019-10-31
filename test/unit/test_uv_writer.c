@@ -22,6 +22,8 @@ struct writer
     struct UvWriter writer;
 };
 
+#define N_BLOCKS 5
+
 /* Initialize a the fixture's UvFs object, leaving UvWriter unitialized. */
 static void *setupWriter(MUNIT_UNUSED const MunitParameter params[],
                          MUNIT_UNUSED void *user_data)
@@ -39,7 +41,7 @@ static void *setupWriter(MUNIT_UNUSED const MunitParameter params[],
     UvOsJoin(f->dir, "foo", path);
     f->fd = UvOsOpen(path, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
     munit_assert_int(f->fd, >=, 0);
-    rv = UvOsFallocate(f->fd, 0, f->block_size * 5);
+    rv = UvOsFallocate(f->fd, 0, f->block_size * N_BLOCKS);
     munit_assert_int(rv, ==, 0);
     return f;
 }
@@ -266,6 +268,7 @@ TEST(UvWriterSubmit, one, setupWriter, tearDownWriter, 0, dir_all_params)
     SKIP_IF_NO_FIXTURE;
     INIT(1);
     WRITE(1 /* n bufs */, 1 /* content */, 0 /* offset */);
+    ASSERT_CONTENT(1);
     CLOSE;
     return MUNIT_OK;
 }
@@ -317,6 +320,22 @@ TEST(UvWriterSubmit, vec_twice, setupWriter, tearDownWriter, 0, dir_all_params)
     WRITE(2 /* n bufs */, 1 /* content */, 0 /* offset */);
     WRITE(2 /* n bufs */, 1 /* content */, 0 /* offset */);
     ASSERT_CONTENT(2);
+    CLOSE;
+    return MUNIT_OK;
+}
+
+/* Write past the allocated space. */
+TEST(UvWriterSubmit, beyondEOF, setupWriter, tearDownWriter, 0, dir_all_params)
+{
+    struct writer *f = data;
+    int i;
+    SKIP_IF_NO_FIXTURE;
+    INIT(1);
+    for (i = 0; i < N_BLOCKS + 1; i++) {
+        WRITE(1 /* n bufs */, i + 1 /* content */,
+              i * f->block_size /* offset */);
+    }
+    ASSERT_CONTENT((N_BLOCKS + 1));
     CLOSE;
     return MUNIT_OK;
 }

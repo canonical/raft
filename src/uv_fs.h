@@ -61,4 +61,9 @@ int UvFsCreateFile(struct UvFs *fs,
 /* Cancel a create file request after it has been submitted. */
 void UvFsCreateFileCancel(struct UvFsCreateFile *req);
 
+/* Synchronously remove a file, calling the unlink() system call. */
+int UvFsRemoveFile(struct UvFs *fs,
+                   const char *dir,
+                   const char *filename);
+
 #endif /* UV_FS_H_ */
