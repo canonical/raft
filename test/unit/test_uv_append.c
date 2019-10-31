@@ -3,8 +3,6 @@
 #include "../lib/runner.h"
 #include "../lib/uv.h"
 
-TEST_MODULE(uv_append)
-
 /* Maximum number of blocks a segment can have */
 #define MAX_SEGMENT_BLOCKS 4
 
@@ -27,7 +25,6 @@ struct fixture
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    (void)user_data;
     SETUP_UV;
     f->uv->n_blocks = MAX_SEGMENT_BLOCKS;
     f->count = 0;

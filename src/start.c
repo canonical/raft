@@ -37,7 +37,30 @@ static int restoreMostRecentConfiguration(struct raft *r,
 }
 
 /* Restore the entries that were loaded from persistent storage. The most recent
- * configuration entry will be restored as well, if any. */
+ * configuration entry will be restored as well, if any.
+ *
+ * Note that we don't care whether the most recent configuration entry was
+ * actually committed or not. We don't allow more than one pending uncommitted
+ * configuration change at a time, plus
+ *
+ *   when adding or removing just asingle server, it is safe to switch directly
+ *   to the new configuration.
+ *
+ * and
+ *
+ *   The new configuration takes effect on each server as soon as it is added to
+ *   that server's log: the C_new entry is replicated to the C_new servers, and
+ *   a majority of the new configuration is used to determine the C_new entry's
+ *   commitment. This means that servers do notwait for configuration entries to
+ *   be committed, and each server always uses the latest configurationfound in
+ *   its log.
+ *
+ * as explained in section 4.1.
+ *
+ * TODO: we should probably set configuration_uncomitted_index as well, since we
+ * can't be sure a configuration change has been comitted and we need to be
+ * ready to roll back to the last committed configuration.
+ */
 static int restoreEntries(struct raft *r,
                           raft_index start_index,
                           struct raft_entry *entries,

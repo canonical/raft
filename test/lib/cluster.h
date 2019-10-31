@@ -7,7 +7,6 @@
 
 #include "../../include/raft.h"
 #include "../../include/raft/fixture.h"
-
 #include "fsm.h"
 #include "heap.h"
 #include "munit.h"
@@ -114,15 +113,15 @@
 
 /* Bootstrap all servers in the cluster. Only the first N servers will be
  * voting. */
-#define CLUSTER_BOOTSTRAP_N_VOTING(N)                                     \
-    {                                                                     \
-        int rv_;                                                          \
-        struct raft_configuration configuration;                          \
-        rv_ = raft_fixture_configuration(&f->cluster, N, &configuration); \
-        munit_assert_int(rv_, ==, 0);                                     \
-        rv_ = raft_fixture_bootstrap(&f->cluster, &configuration);        \
-        munit_assert_int(rv_, ==, 0);                                     \
-        raft_configuration_close(&configuration);                         \
+#define CLUSTER_BOOTSTRAP_N_VOTING(N)                                      \
+    {                                                                      \
+        int rv_;                                                           \
+        struct raft_configuration configuration_;                          \
+        rv_ = raft_fixture_configuration(&f->cluster, N, &configuration_); \
+        munit_assert_int(rv_, ==, 0);                                      \
+        rv_ = raft_fixture_bootstrap(&f->cluster, &configuration_);        \
+        munit_assert_int(rv_, ==, 0);                                      \
+        raft_configuration_close(&configuration_);                         \
     }
 
 /* Start all servers in the test cluster. */

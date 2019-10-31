@@ -475,6 +475,43 @@ static int uvBootstrap(struct raft_io *io,
     return 0;
 }
 
+/* Implementation of raft_io->recover. */
+static int uvRecover(struct raft_io *io, const struct raft_configuration *conf)
+{
+    struct uv *uv = io->impl;
+    struct raft_snapshot *snapshot;
+    raft_index start_index;
+    raft_index next_index;
+    struct raft_entry *entries;
+    size_t n_entries;
+    int rv;
+
+    /* Load the current state. This also closes any leftover open segment. */
+    rv = loadSnapshotAndEntries(uv, &snapshot, &start_index, &entries,
+                                &n_entries);
+    if (rv != 0) {
+        return rv;
+    }
+
+    /* We don't care about the actual data, just index of the last entry. */
+    if (snapshot != NULL) {
+        snapshotDestroy(snapshot);
+    }
+    if (entries != NULL) {
+        entryBatchesDestroy(entries, n_entries);
+    }
+
+    assert(start_index > 0);
+    next_index = start_index + n_entries;
+
+    rv = uvSegmentCreateClosedWithConfiguration(uv, next_index, conf);
+    if (rv != 0) {
+        return rv;
+    }
+
+    return 0;
+}
+
 /* Implementation of raft_io->set_term. */
 static int uvSetVote(struct raft_io *io, const unsigned server_id)
 {
@@ -599,6 +636,7 @@ int raft_uv_init(struct raft_io *io,
     io->close = uvClose;
     io->load = uvLoad;
     io->bootstrap = uvBootstrap;
+    io->recover = uvRecover;
     io->set_term = uvSetTerm;
     io->set_vote = uvSetVote;
     io->append = uvAppend;

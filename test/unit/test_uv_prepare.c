@@ -121,6 +121,10 @@ TEST(UvPrepare, noSpace, setup, tear_down, 0, dir_tmpfs_params)
     struct fixture *f = data;
     struct uv *uv;
     SKIP_IF_NO_FIXTURE;
+#if !HAVE_DECL_UV_FS_O_CREAT
+    /* This test appears to leak memory on older libuv versions. */
+    return MUNIT_SKIP;
+#endif
     uv = f->io.impl;
     uv->n_blocks = 32768;
     PREPARE_FAILURE(RAFT_IOERR);
