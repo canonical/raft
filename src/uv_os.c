@@ -58,6 +58,12 @@ int UvOsUnlink(const char *path)
     return uv_fs_unlink(NULL, &req, path, NULL);
 }
 
+int UvOsRename(const char *path1, const char *path2)
+{
+    struct uv_fs_s req;
+    return uv_fs_rename(NULL, &req, path1, path2, NULL);
+}
+
 void UvOsJoin(const char *dir, const char *filename, char *path)
 {
     assert(UV__DIR_HAS_VALID_LEN(dir));

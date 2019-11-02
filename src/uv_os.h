@@ -75,6 +75,9 @@ int UvOsFsync(uv_file fd);
 /* Portable unlink() */
 int UvOsUnlink(const char *path);
 
+/* Portable rename() */
+int UvOsRename(const char *path1, const char *path2);
+
 /* Join dir and filename into a full OS path. */
 void UvOsJoin(const char *dir, const char *filename, char *path);
 
