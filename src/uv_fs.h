@@ -66,4 +66,10 @@ int UvFsRemoveFile(struct UvFs *fs,
                    const char *dir,
                    const char *filename);
 
+/* Synchronously rename a file, calling the rename() system call. */
+int UvFsRenameFile(struct UvFs *fs,
+                   const char *dir,
+                   const char *filename1,
+                   const char *filename2);
+
 #endif /* UV_FS_H_ */

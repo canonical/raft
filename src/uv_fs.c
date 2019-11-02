@@ -29,20 +29,30 @@ void UvFsSetErrMsg(struct UvFs *fs, char *errmsg)
     fs->errmsg = errmsg;
 }
 
-static int uvFsSyncDir(const char *dir, char **errmsg)
+static int uvFsSyncDirThreadSafe(const char *dir, char **errmsg)
 {
     uv_file fd;
     int rv;
     fd = UvOsOpen(dir, UV_FS_O_RDONLY | UV_FS_O_DIRECTORY, 0);
     if (fd < 0) {
-        *errmsg = uvSysErrMsg("open", fd);
+        *errmsg = uvSysErrMsg("open directory", fd);
         return UV__ERROR;
     }
     rv = UvOsFsync(fd);
     UvOsClose(fd);
     if (rv != 0) {
-        *errmsg = uvSysErrMsg("fsync", rv);
+        *errmsg = uvSysErrMsg("fsync directory", rv);
         return UV__ERROR;
+    }
+    return 0;
+}
+
+static int uvFsSyncDir(struct UvFs *fs, const char *dir)
+{
+    int rv;
+    rv = uvFsSyncDirThreadSafe(dir, &fs->errmsg);
+    if (rv != 0) {
+        return rv;
     }
     return 0;
 }
@@ -82,10 +92,8 @@ static void uvFsCreateFileWorkCb(uv_work_t *work)
         goto err_after_open;
     }
 
-    rv = uvFsSyncDir(req->dir, &errmsg);
+    rv = uvFsSyncDirThreadSafe(req->dir, &errmsg);
     if (rv != 0) {
-        errmsg = errMsgWrapf(errmsg, "sync directory");
-        rv = UV__ERROR;
         goto err_after_open;
     }
 
@@ -175,6 +183,10 @@ int UvFsRemoveFile(struct UvFs *fs, const char *dir, const char *filename)
     if (rv != 0) {
         UvFsSetErrMsg(fs, uvSysErrMsg("unlink", rv));
         return UV__ERROR;
+    }
+    rv = uvFsSyncDir(fs, dir);
+    if (rv != 0) {
+        return 0;
     }
     return 0;
 }
