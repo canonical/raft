@@ -32,7 +32,6 @@ struct fixture
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    (void)user_data;
     SETUP_UV;
     f->trailing = 10;
     f->snapshot = NULL;
@@ -96,10 +95,10 @@ SUITE(UvLoad)
  *
  *****************************************************************************/
 
+/* File that are not part of the raft state are ignored. */
 TEST(UvLoad, ignoreUnknownFiles, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     test_dir_write_file_with_zeros(f->dir, "garbage", 128);
     test_dir_write_file_with_zeros(f->dir, "1-1garbage", 128);
     test_dir_write_file_with_zeros(f->dir, "open-1garbage", 128);
@@ -111,17 +110,11 @@ TEST(UvLoad, ignoreUnknownFiles, setup, tear_down, 0, NULL)
 TEST(UvLoad, bothOpenAndClosedSegments, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-
-    (void)params;
-
     UV_WRITE_CLOSED_SEGMENT(1, 2, 1);
     UV_WRITE_CLOSED_SEGMENT(3, 1, 1);
     UV_WRITE_OPEN_SEGMENT(1, 1, 1);
-
     LOAD;
-
     munit_assert_int(f->n, ==, 4);
-
     return MUNIT_OK;
 }
 
@@ -129,16 +122,10 @@ TEST(UvLoad, bothOpenAndClosedSegments, setup, tear_down, 0, NULL)
 TEST(UvLoad, emptyOpenSegment, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-
-    (void)params;
-
     test_dir_write_file(f->dir, "open-1", NULL, 0);
-
     LOAD;
-
     /* The empty segment has been removed. */
     munit_assert_false(HAS_OPEN_SEGMENT_FILE(1));
-
     return MUNIT_OK;
 }
 
@@ -146,16 +133,10 @@ TEST(UvLoad, emptyOpenSegment, setup, tear_down, 0, NULL)
 TEST(UvLoad, openSegmentWithTrailingZeros, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-
-    (void)params;
-
     test_dir_write_file_with_zeros(f->dir, "open-1", 256);
-
     LOAD;
-
     /* The empty segment has been removed. */
     munit_assert_false(HAS_OPEN_SEGMENT_FILE(1));
-
     return MUNIT_OK;
 }
 
@@ -170,8 +151,6 @@ TEST(UvLoad, openSegmentWithNonZeroData, setup, tear_down, 0, NULL)
                 WORD_SIZE + /* Entry type and data size */
                 WORD_SIZE /* Entry data */];
     void *cursor = buf;
-
-    (void)params;
 
     bytePut64(&cursor, 123);         /* Invalid checksums */
     bytePut64(&cursor, 1);           /* Number of entries */
@@ -205,8 +184,6 @@ TEST(UvLoad, openSegmentWithIncompleteBatch, setup, tear_down, 0, NULL)
     struct fixture *f = data;
     uint8_t buf[256];
 
-    (void)params;
-
     UV_WRITE_OPEN_SEGMENT(1, 1, 1);
 
     memset(buf, 0, sizeof buf);
@@ -229,7 +206,6 @@ TEST(UvLoad, openSegmentWithIncompleteFirstBatch, setup, tear_down, 0, NULL)
                 WORD_SIZE /* Batch data */];
     void *cursor = buf;
 
-    (void)params;
 
     bytePut64(&cursor, 1); /* Format version */
     bytePut64(&cursor, 0); /* CRC32 checksum */
@@ -252,9 +228,6 @@ TEST(UvLoad, openSegmentWithIncompleteFirstBatch, setup, tear_down, 0, NULL)
 TEST(UvLoad, twoOpenSegments, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-
-    (void)params;
-
     /* First segment. */
     UV_WRITE_OPEN_SEGMENT(1, 1, 1);
 
@@ -277,9 +250,6 @@ TEST(UvLoad, twoOpenSegments, setup, tear_down, 0, NULL)
 TEST(UvLoad, secondOpenSegmentIsAllZeros, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-
-    (void)params;
-
     /* First segment. */
     UV_WRITE_OPEN_SEGMENT(1, 1, 1);
 
@@ -302,9 +272,6 @@ TEST(UvLoad, secondOpenSegmentIsAllZeros, setup, tear_down, 0, NULL)
 TEST(UvLoad, openSegment, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-
-    (void)params;
-
     UV_WRITE_OPEN_SEGMENT(1, 1, 1);
 
     LOAD;
@@ -318,7 +285,6 @@ TEST(UvLoad, manySnapshots, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[8];
-    (void)params;
     UV_WRITE_SNAPSHOT_META(f->dir, 1 /* term */, 8 /* index */,
                            123 /* timestamp */, 1 /* n servers */,
                            1 /* index */);
@@ -358,7 +324,6 @@ TEST(UvLoad, closedSegmentWithEntriesBehindSnapshot, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[8];
-    (void)params;
     UV_WRITE_SNAPSHOT(f->dir, 1 /* term */, 2 /* index */, 123 /* timestamp */,
                       1 /* n servers */, 1 /* conf index */, buf /* data */,
                       sizeof buf);
@@ -377,7 +342,6 @@ TEST(UvLoad, openSegmentWithEntriesPastSnapshot, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[8];
-    (void)params;
     UV_WRITE_SNAPSHOT(f->dir, 1 /* term */, 2 /* index */, 123 /* timestamp */,
                       1 /* n servers */, 1 /* conf index */, buf /* data */,
                       sizeof buf);
@@ -398,7 +362,6 @@ TEST(UvLoad, openSegmentWithEntriesBehindSnapshot, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[8];
-    (void)params;
     UV_WRITE_SNAPSHOT(f->dir, 1 /* term */, 3 /* index */, 123 /* timestamp */,
                       1 /* n servers */, 1 /* conf index */, buf /* data */,
                       sizeof buf);
@@ -415,7 +378,6 @@ TEST(UvLoad, closedSegmentsOverlappingWithSnapshot, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[8];
-    (void)params;
     UV_WRITE_CLOSED_SEGMENT(1, 1, 1);
     UV_WRITE_CLOSED_SEGMENT(2, 2, 2);
     UV_WRITE_CLOSED_SEGMENT(4, 3, 4);
@@ -434,7 +396,6 @@ TEST(UvLoad, nonContiguousClosedSegments, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[8];
-    (void)params;
     UV_WRITE_CLOSED_SEGMENT(1, 1, 1);
     UV_WRITE_CLOSED_SEGMENT(4, 3, 4);
     UV_WRITE_SNAPSHOT(f->dir, 1 /* term */, 4 /* index */, 123 /* timestamp */,
@@ -452,7 +413,6 @@ TEST(UvLoad, closedSegmentWithEntriesPastSnapshot, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[8];
-    (void)params;
     UV_WRITE_CLOSED_SEGMENT(6, 3, 6);
     UV_WRITE_SNAPSHOT(f->dir, 1 /* term */, 4 /* index */, 123 /* timestamp */,
                       1 /* n servers */, 1 /* conf index */, buf /* data */,
@@ -465,7 +425,6 @@ TEST(UvLoad, closedSegmentWithEntriesPastSnapshot, setup, tear_down, 0, NULL)
 TEST(UvLoad, openSegmentWithIncompleteFormat, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     test_dir_write_file_with_zeros(f->dir, "open-1", WORD_SIZE / 2);
     LOAD_ERROR(RAFT_IOERR);
     return MUNIT_OK;
@@ -477,7 +436,6 @@ TEST(UvLoad, openSegmentWithIncompletePreamble, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     size_t offset = WORD_SIZE /* Format version */ + WORD_SIZE /* Checksums */;
-    (void)params;
     UV_WRITE_OPEN_SEGMENT(1, 1, 1);
     test_dir_truncate_file(f->dir, "open-1", offset);
     LOAD_ERROR(RAFT_IOERR);
@@ -493,7 +451,6 @@ TEST(UvLoad, openSegmentWithIncompleteBatchHeader, setup, tear_down, 0, NULL)
                     WORD_SIZE + /* Number of entries */
                     WORD_SIZE /* Partial batch header */;
 
-    (void)params;
     UV_WRITE_OPEN_SEGMENT(1, 1, 1);
     test_dir_truncate_file(f->dir, "open-1", offset);
     LOAD_ERROR(RAFT_IOERR);
@@ -511,7 +468,6 @@ TEST(UvLoad, openSegmentWithIncompleteBatchData, setup, tear_down, 0, NULL)
                     WORD_SIZE + /* Entry type and data size */
                     WORD_SIZE / 2 /* Partial entry data */;
 
-    (void)params;
     UV_WRITE_OPEN_SEGMENT(1, 1, 1);
     test_dir_truncate_file(f->dir, "open-1", offset);
     LOAD_ERROR(RAFT_IOERR);
@@ -525,7 +481,6 @@ TEST(UvLoad, openSegmentWithCorruptedBatchHeader, setup, tear_down, 0, NULL)
     size_t offset = WORD_SIZE /* Format version */;
     uint8_t buf[WORD_SIZE];
     void *cursor = &buf;
-    (void)params;
     /* Render invalid checksums */
     bytePut64(&cursor, 123);
     UV_WRITE_CLOSED_SEGMENT(1, 1, 1);
@@ -542,7 +497,6 @@ TEST(UvLoad, openSegmentWithCorruptedBatchData, setup, tear_down, 0, NULL)
         WORD_SIZE /* Format version */ + WORD_SIZE / 2 /* Header checksum */;
     uint8_t buf[WORD_SIZE / 2];
     void *cursor = buf;
-    (void)params;
     /* Render an invalid data checksum. */
     bytePut32(&cursor, 123456789);
     UV_WRITE_CLOSED_SEGMENT(1, 1, 1);
@@ -556,7 +510,6 @@ TEST(UvLoad, openSegmentWithCorruptedBatchData, setup, tear_down, 0, NULL)
 TEST(UvLoad, closedSegmentWithBadIndex, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     UV_WRITE_CLOSED_SEGMENT(2, 1, 1);
     LOAD_ERROR(RAFT_CORRUPT);
     return MUNIT_OK;
@@ -566,7 +519,6 @@ TEST(UvLoad, closedSegmentWithBadIndex, setup, tear_down, 0, NULL)
 TEST(UvLoad, emptyClosedSegment, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     test_dir_write_file(f->dir, "1-1", NULL, 0);
     LOAD_ERROR(RAFT_CORRUPT);
     return MUNIT_OK;
@@ -577,7 +529,6 @@ TEST(UvLoad, closedSegmentWithBadFormat, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[8] = {2, 0, 0, 0, 0, 0, 0, 0};
-    (void)params;
     test_dir_write_file(f->dir, "1-1", buf, sizeof buf);
     LOAD_ERROR(RAFT_IOERR);
     return MUNIT_OK;
@@ -587,7 +538,6 @@ TEST(UvLoad, closedSegmentWithBadFormat, setup, tear_down, 0, NULL)
 TEST(UvLoad, openSegmentWithNoAccessPermission, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     UV_WRITE_OPEN_SEGMENT(1, 1, 1);
     test_dir_unreadable_file(f->dir, "open-1");
     LOAD_ERROR(RAFT_IOERR);
@@ -601,7 +551,6 @@ TEST(UvLoad, openSegmentWithZeroFormatAndThenData, setup, tear_down, 0, NULL)
     struct fixture *f = data;
     uint8_t buf[WORD_SIZE /* Format version */];
     void *cursor = buf;
-    (void)params;
     bytePut64(&cursor, 0); /* Format version */
     UV_WRITE_OPEN_SEGMENT(1, 1, 1);
     test_dir_overwrite_file(f->dir, "open-1", buf, sizeof buf, 0);
@@ -615,7 +564,6 @@ TEST(UvLoad, openSegmentWithBadFormat, setup, tear_down, 0, NULL)
     struct fixture *f = data;
     uint8_t buf[WORD_SIZE /* Format version */];
     void *cursor = buf;
-    (void)params;
     bytePut64(&cursor, 2); /* Format version */
     UV_WRITE_OPEN_SEGMENT(1, 1, 1);
     test_dir_overwrite_file(f->dir, "open-1", buf, sizeof buf, 0);
