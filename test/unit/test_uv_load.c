@@ -99,16 +99,24 @@ SUITE(UvLoad)
  *
  *****************************************************************************/
 
+static char *unknownFiles[] = {
+    "garbage",
+    "0000000000000000000000000001-00000000001garbage",
+    "open-1garbage",
+    NULL,
+};
+
+static MunitParameterEnum unknownFilesParams[] = {
+    {"filename", unknownFiles},
+    {NULL, NULL},
+};
+
 /* File that are not part of the raft state are ignored. */
-TEST(UvLoad, ignoreUnknownFiles, setup, tear_down, 0, NULL)
+TEST(UvLoad, ignoreUnknownFiles, setup, tear_down, 0, unknownFilesParams)
 {
     struct fixture *f = data;
-    test_dir_write_file_with_zeros(f->dir, "garbage", 128);
-    test_dir_write_file_with_zeros(
-        f->dir,
-        "0000000000000000000000000001-0000000000000000000000000001garbage",
-        128);
-    test_dir_write_file_with_zeros(f->dir, "open-1garbage", 128);
+    const char *filename = munit_parameters_get(params, "filename");
+    test_dir_write_file_with_zeros(f->dir, filename, 128);
     LOAD;
     return MUNIT_OK;
 }
