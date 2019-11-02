@@ -1,12 +1,11 @@
-#include "../lib/dir.h"
-#include "../lib/heap.h"
-#include "../lib/runner.h"
-#include "../lib/uv.h"
-
 #include "../../src/byte.h"
 #include "../../src/entry.h"
 #include "../../src/snapshot.h"
 #include "../../src/uv_encoding.h"
+#include "../lib/dir.h"
+#include "../lib/heap.h"
+#include "../lib/runner.h"
+#include "../lib/uv.h"
 
 #define WORD_SIZE sizeof(uint64_t)
 
@@ -73,9 +72,14 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
+#define CLOSED_SEGMENT_FILENAME(START, END) \
+    "000000000000000" #START                \
+    "-"                                     \
+    "000000000000000" #END
+
 /* Check if closed segment file exists. */
 #define HAS_CLOSED_SEGMENT_FILE(START, END) \
-    test_dir_has_file(f->dir, #START "-" #END)
+    test_dir_has_file(f->dir, CLOSED_SEGMENT_FILENAME(START, END))
 
 /* Check if open segment file exists. */
 #define HAS_OPEN_SEGMENT_FILE(COUNT) test_dir_has_file(f->dir, "open-" #COUNT)
@@ -100,7 +104,10 @@ TEST(UvLoad, ignoreUnknownFiles, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     test_dir_write_file_with_zeros(f->dir, "garbage", 128);
-    test_dir_write_file_with_zeros(f->dir, "1-1garbage", 128);
+    test_dir_write_file_with_zeros(
+        f->dir,
+        "0000000000000000000000000001-0000000000000000000000000001garbage",
+        128);
     test_dir_write_file_with_zeros(f->dir, "open-1garbage", 128);
     LOAD;
     return MUNIT_OK;
@@ -205,7 +212,6 @@ TEST(UvLoad, openSegmentWithIncompleteFirstBatch, setup, tear_down, 0, NULL)
                 WORD_SIZE + /* Number of entries */
                 WORD_SIZE /* Batch data */];
     void *cursor = buf;
-
 
     bytePut64(&cursor, 1); /* Format version */
     bytePut64(&cursor, 0); /* CRC32 checksum */
@@ -484,7 +490,8 @@ TEST(UvLoad, openSegmentWithCorruptedBatchHeader, setup, tear_down, 0, NULL)
     /* Render invalid checksums */
     bytePut64(&cursor, 123);
     UV_WRITE_CLOSED_SEGMENT(1, 1, 1);
-    test_dir_overwrite_file(f->dir, "1-1", buf, sizeof buf, offset);
+    test_dir_overwrite_file(f->dir, CLOSED_SEGMENT_FILENAME(1, 1), buf,
+                            sizeof buf, offset);
     LOAD_ERROR(RAFT_CORRUPT);
     return MUNIT_OK;
 }
@@ -500,7 +507,8 @@ TEST(UvLoad, openSegmentWithCorruptedBatchData, setup, tear_down, 0, NULL)
     /* Render an invalid data checksum. */
     bytePut32(&cursor, 123456789);
     UV_WRITE_CLOSED_SEGMENT(1, 1, 1);
-    test_dir_overwrite_file(f->dir, "1-1", buf, sizeof buf, offset);
+    test_dir_overwrite_file(f->dir, CLOSED_SEGMENT_FILENAME(1, 1), buf,
+                            sizeof buf, offset);
     LOAD_ERROR(RAFT_CORRUPT);
     return MUNIT_OK;
 }
@@ -519,7 +527,7 @@ TEST(UvLoad, closedSegmentWithBadIndex, setup, tear_down, 0, NULL)
 TEST(UvLoad, emptyClosedSegment, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    test_dir_write_file(f->dir, "1-1", NULL, 0);
+    test_dir_write_file(f->dir, CLOSED_SEGMENT_FILENAME(1, 1), NULL, 0);
     LOAD_ERROR(RAFT_CORRUPT);
     return MUNIT_OK;
 }
@@ -529,7 +537,7 @@ TEST(UvLoad, closedSegmentWithBadFormat, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[8] = {2, 0, 0, 0, 0, 0, 0, 0};
-    test_dir_write_file(f->dir, "1-1", buf, sizeof buf);
+    test_dir_write_file(f->dir, CLOSED_SEGMENT_FILENAME(1, 1), buf, sizeof buf);
     LOAD_ERROR(RAFT_IOERR);
     return MUNIT_OK;
 }

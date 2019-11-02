@@ -1,10 +1,9 @@
-#include "../lib/runner.h"
-#include "../lib/uv.h"
-
 #include "../../src/byte.h"
 #include "../../src/queue.h"
 #include "../../src/snapshot.h"
 #include "../../src/uv.h"
+#include "../lib/runner.h"
+#include "../lib/uv.h"
 
 TEST_MODULE(uv_snapshot)
 
@@ -402,8 +401,10 @@ TEST_CASE(put, entries_less_than_trailing, NULL)
     put__invoke(0);
     put__wait_cb(0);
 
-    munit_assert_true(test_dir_has_file(f->dir, "1-150"));
-    munit_assert_true(test_dir_has_file(f->dir, "151-300"));
+    munit_assert_true(
+        test_dir_has_file(f->dir, "0000000000000001-0000000000000150"));
+    munit_assert_true(
+        test_dir_has_file(f->dir, "0000000000000151-0000000000000300"));
 
     return MUNIT_OK;
 }
@@ -425,8 +426,10 @@ TEST_CASE(put, entries_more_than_trailing, NULL)
     put__invoke(0);
     put__wait_cb(0);
 
-    munit_assert_false(test_dir_has_file(f->dir, "1-150"));
-    munit_assert_true(test_dir_has_file(f->dir, "151-300"));
+    munit_assert_false(
+        test_dir_has_file(f->dir, "0000000000000001-0000000000000150"));
+    munit_assert_true(
+        test_dir_has_file(f->dir, "0000000000000151-0000000000000300"));
 
     return MUNIT_OK;
 }

@@ -13,7 +13,7 @@
 
 /* Template string for closed segment filenames: start index (inclusive), end
  * index (inclusive). */
-#define UV__CLOSED_TEMPLATE "%llu-%llu"
+#define UV__CLOSED_TEMPLATE "%016llu-%016llu"
 
 /* Template string for open segment filenames: incrementing counter. */
 #define UV__OPEN_TEMPLATE "open-%llu"

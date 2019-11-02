@@ -488,8 +488,10 @@ TEST(UvAppend, counter, setup, tear_down, 0, NULL)
         WAIT_CB(1, 0);
     }
 
-    munit_assert_true(test_dir_has_file(f->dir, "1-3"));
-    munit_assert_true(test_dir_has_file(f->dir, "4-6"));
+    munit_assert_true(
+        test_dir_has_file(f->dir, "0000000000000001-0000000000000003"));
+    munit_assert_true(
+        test_dir_has_file(f->dir, "0000000000000004-0000000000000006"));
     munit_assert_true(test_dir_has_file(f->dir, "open-4"));
 
     return MUNIT_OK;
@@ -592,7 +594,8 @@ TEST(UvAppend, currentSegment, setup, tear_down, 0, NULL)
 
     LOOP_RUN(2);
 
-    munit_assert_true(test_dir_has_file(f->dir, "1-1"));
+    munit_assert_true(
+        test_dir_has_file(f->dir, "0000000000000001-0000000000000001"));
 
     return MUNIT_OK;
 }
