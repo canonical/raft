@@ -10,8 +10,6 @@
 
 #define WORD_SIZE sizeof(uint64_t)
 
-TEST_MODULE(uv_load)
-
 /******************************************************************************
  *
  * Fixture
@@ -90,17 +88,15 @@ static void tear_down(void *data)
 #define HAS_SNAPSHOT_DATA_FILE(TERM, INDEX, TIMESTAMP) \
     test_dir_has_file(f->dir, "snapshot-" #TERM "-" #INDEX "-" #TIMESTAMP)
 
+SUITE(UvLoad)
+
 /******************************************************************************
  *
- * Data directory has only open or closed segments.
+ * UvLoad
  *
  *****************************************************************************/
 
-TEST_SUITE(segments)
-TEST_SETUP(segments, setup)
-TEST_TEAR_DOWN(segments, tear_down)
-
-TEST_CASE(segments, ignore_unknown, NULL)
+TEST(UvLoad, ignoreUnknownFiles, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -112,7 +108,7 @@ TEST_CASE(segments, ignore_unknown, NULL)
 }
 
 /* The data directory has a valid closed and open segments. */
-TEST_CASE(segments, closed, NULL)
+TEST(UvLoad, bothOpenAndClosedSegments, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -130,7 +126,7 @@ TEST_CASE(segments, closed, NULL)
 }
 
 /* The data directory has an empty open segment. */
-TEST_CASE(segments, open_empty, NULL)
+TEST(UvLoad, emptyOpenSegment, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -147,7 +143,7 @@ TEST_CASE(segments, open_empty, NULL)
 }
 
 /* The data directory has a freshly allocated open segment filled with zeros. */
-TEST_CASE(segments, open_all_zeros, NULL)
+TEST(UvLoad, openSegmentWithTrailingZeros, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -165,7 +161,7 @@ TEST_CASE(segments, open_all_zeros, NULL)
 
 /* The data directory has an allocated open segment which contains non-zero
  * corrupted data in its second batch. */
-TEST_CASE(segments, open_not_all_zeros, NULL)
+TEST(UvLoad, openSegmentWithNonZeroData, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[WORD_SIZE + /* CRC32 checksum */
@@ -204,7 +200,7 @@ TEST_CASE(segments, open_not_all_zeros, NULL)
 
 /* The data directory has an open segment with a partially written batch that
  * needs to be truncated. */
-TEST_CASE(segments, open_truncate, NULL)
+TEST(UvLoad, openSegmentWithIncompleteBatch, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[256];
@@ -224,7 +220,7 @@ TEST_CASE(segments, open_truncate, NULL)
 
 /* The data directory has an open segment whose first batch is only
  * partially written. In that case the segment gets removed. */
-TEST_CASE(segments, open_partial_bach, NULL)
+TEST(UvLoad, openSegmentWithIncompleteFirstBatch, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[WORD_SIZE + /* Format version */
@@ -253,7 +249,7 @@ TEST_CASE(segments, open_partial_bach, NULL)
 }
 
 /* The data directory has two segments, with the second having an entry. */
-TEST_CASE(segments, open_second, NULL)
+TEST(UvLoad, twoOpenSegments, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -278,7 +274,7 @@ TEST_CASE(segments, open_second, NULL)
 
 /* The data directory has two segments, with the second one filled with
  * zeros. */
-TEST_CASE(segments, open_second_all_zeroes, NULL)
+TEST(UvLoad, secondOpenSegmentIsAllZeros, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -303,7 +299,7 @@ TEST_CASE(segments, open_second_all_zeroes, NULL)
 }
 
 /* The data directory has a valid open segment. */
-TEST_CASE(segments, open, NULL)
+TEST(UvLoad, openSegment, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -316,19 +312,9 @@ TEST_CASE(segments, open, NULL)
     return MUNIT_OK;
 }
 
-/******************************************************************************
- *
- * Data directory has a snapshot.
- *
- *****************************************************************************/
-
-TEST_SUITE(snapshot)
-TEST_SETUP(snapshot, setup)
-TEST_TEAR_DOWN(snapshot, tear_down)
-
 /* There are several snapshots, including an incomplete one. The last one is
  * loaded and the incomplete or older ones are removed.  */
-TEST_CASE(snapshot, many, NULL)
+TEST(UvLoad, manySnapshots, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[8];
@@ -368,7 +354,7 @@ TEST_CASE(snapshot, many, NULL)
 /* The data directory has a closed segment with entries that are no longer
  * needed, since they are included in a snapshot. We still keep those segments
  * and just let the next snapshot logic delete them. */
-TEST_CASE(snapshot, closed_segment_with_old_entries, NULL)
+TEST(UvLoad, closedSegmentWithEntriesBehindSnapshot, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[8];
@@ -387,7 +373,7 @@ TEST_CASE(snapshot, closed_segment_with_old_entries, NULL)
 /* The data directory has a closed segment with entries that are no longer
  * needed, since they are included in a snapshot. However it also has an open
  * segment that has enough entries to reach the snapshot last index. */
-TEST_CASE(snapshot, dangling_open_segment, NULL)
+TEST(UvLoad, openSegmentWithEntriesPastSnapshot, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[8];
@@ -408,7 +394,7 @@ TEST_CASE(snapshot, dangling_open_segment, NULL)
  * needed, since they are included in a snapshot. It also has an open segment,
  * however that does not have enough entries to reach the snapshot last
  * index. */
-TEST_CASE(snapshot, dangling_open_segment_behind, NULL)
+TEST(UvLoad, openSegmentWithEntriesBehindSnapshot, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[8];
@@ -425,7 +411,7 @@ TEST_CASE(snapshot, dangling_open_segment_behind, NULL)
 
 /* The data directory has several closed segments, all with entries compatible
  * with the snapshot. */
-TEST_CASE(snapshot, valid_closed_segments, NULL)
+TEST(UvLoad, closedSegmentsOverlappingWithSnapshot, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[8];
@@ -444,7 +430,7 @@ TEST_CASE(snapshot, valid_closed_segments, NULL)
 
 /* The data directory has several closed segments, some of which have a gap,
  * which is still compatible with the snapshot. */
-TEST_CASE(snapshot, noncontigous_closed_segments, NULL)
+TEST(UvLoad, nonContiguousClosedSegments, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[8];
@@ -462,7 +448,7 @@ TEST_CASE(snapshot, noncontigous_closed_segments, NULL)
 
 /* If the data directory has a closed segment whose start index is beyond the
  * snapshot's last index, an error is returned. */
-TEST_CASE(snapshot, more_recent_closed_segment, NULL)
+TEST(UvLoad, closedSegmentWithEntriesPastSnapshot, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[8];
@@ -475,18 +461,8 @@ TEST_CASE(snapshot, more_recent_closed_segment, NULL)
     return MUNIT_OK;
 }
 
-/******************************************************************************
- *
- * Failure scenarios.
- *
- *****************************************************************************/
-
-TEST_SUITE(error)
-TEST_SETUP(error, setup)
-TEST_TEAR_DOWN(error, tear_down)
-
 /* The data directory has an open segment which has incomplete format data. */
-TEST_CASE(error, short_format, NULL)
+TEST(UvLoad, openSegmentWithIncompleteFormat, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -497,7 +473,7 @@ TEST_CASE(error, short_format, NULL)
 
 /* The data directory has an open segment which has an incomplete batch
  * preamble. */
-TEST_CASE(error, short_preamble, NULL)
+TEST(UvLoad, openSegmentWithIncompletePreamble, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     size_t offset = WORD_SIZE /* Format version */ + WORD_SIZE /* Checksums */;
@@ -509,7 +485,7 @@ TEST_CASE(error, short_preamble, NULL)
 }
 
 /* The data directory has an open segment which has incomplete batch header. */
-TEST_CASE(error, short_header, NULL)
+TEST(UvLoad, openSegmentWithIncompleteBatchHeader, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     size_t offset = WORD_SIZE + /* Format version */
@@ -525,7 +501,7 @@ TEST_CASE(error, short_header, NULL)
 }
 
 /* The data directory has an open segment which has incomplete batch data. */
-TEST_CASE(error, short_data, NULL)
+TEST(UvLoad, openSegmentWithIncompleteBatchData, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     size_t offset = WORD_SIZE + /* Format version */
@@ -543,7 +519,7 @@ TEST_CASE(error, short_data, NULL)
 }
 
 /* The data directory has an open segment which has corrupted batch header. */
-TEST_CASE(error, corrupt_header, NULL)
+TEST(UvLoad, openSegmentWithCorruptedBatchHeader, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     size_t offset = WORD_SIZE /* Format version */;
@@ -559,7 +535,7 @@ TEST_CASE(error, corrupt_header, NULL)
 }
 
 /* The data directory has an open segment which has corrupted batch data. */
-TEST_CASE(error, corrupt_data, NULL)
+TEST(UvLoad, openSegmentWithCorruptedBatchData, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     size_t offset =
@@ -577,7 +553,7 @@ TEST_CASE(error, corrupt_data, NULL)
 
 /* The data directory has a closed segment whose first index does not match what
  * we expect. */
-TEST_CASE(error, closed_bad_index, NULL)
+TEST(UvLoad, closedSegmentWithBadIndex, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -587,7 +563,7 @@ TEST_CASE(error, closed_bad_index, NULL)
 }
 
 /* The data directory has an empty closed segment. */
-TEST_CASE(error, closed_empty, NULL)
+TEST(UvLoad, emptyClosedSegment, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -597,7 +573,7 @@ TEST_CASE(error, closed_empty, NULL)
 }
 
 /* The data directory has a closed segment with an unexpected format. */
-TEST_CASE(error, closed_bad_format, NULL)
+TEST(UvLoad, closedSegmentWithBadFormat, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[8] = {2, 0, 0, 0, 0, 0, 0, 0};
@@ -608,7 +584,7 @@ TEST_CASE(error, closed_bad_format, NULL)
 }
 
 /* The data directory has an open segment which is not readable. */
-TEST_CASE(error, open_no_access, NULL)
+TEST(UvLoad, openSegmentWithNoAccessPermission, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -620,7 +596,7 @@ TEST_CASE(error, open_no_access, NULL)
 
 /* The data directory has an open segment with format set to 0 and non-zero
  * content. */
-TEST_CASE(error, open_zero_format, NULL)
+TEST(UvLoad, openSegmentWithZeroFormatAndThenData, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[WORD_SIZE /* Format version */];
@@ -634,7 +610,7 @@ TEST_CASE(error, open_zero_format, NULL)
 }
 
 /* The data directory has an open segment with an unexpected format. */
-TEST_CASE(error, open_bad_format, NULL)
+TEST(UvLoad, openSegmentWithBadFormat, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[WORD_SIZE /* Format version */];
