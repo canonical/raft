@@ -22,10 +22,9 @@ static void workCb(uv_work_t *work)
 {
     struct segment *s = work->data;
     struct uv *uv = s->uv;
+    struct UvFs fs;
     char filename1[UV__FILENAME_LEN];
     char filename2[UV__FILENAME_LEN];
-    char errmsg_[2048];
-    char *errmsg = errmsg_;
     int rv;
 
     sprintf(filename1, UV__OPEN_TEMPLATE, s->counter);
@@ -33,37 +32,20 @@ static void workCb(uv_work_t *work)
 
     uvDebugf(uv, "finalize %s into %s", filename1, filename2);
 
-    /* If the segment hasn't actually been used (because the writer has been
-     * closed or aborted before making any write), then let's just remove it. */
-    if (s->used == 0) {
-        uvTryUnlinkFile(uv->dir, filename1);
-        goto out;
-    }
+    UvFsInit(&fs, uv->loop);
 
-    /* Truncate and rename the segment */
-    rv = uvTruncateFile(uv->dir, filename1, s->used, &errmsg);
+    /* Truncate and rename the segment. If the segment hasn't actually been used
+     * (because the writer has been closed or aborted before making any write),
+     * then it will be simply removed. */
+    rv = UvFsTruncateAndRenameFile(&fs, uv->dir, s->used, filename1, filename2);
     if (rv != 0) {
-        uvErrorf(uv, "truncate segment %s: %s", filename1, errmsg);
-	raft_free(errmsg);
-        rv = RAFT_IOERR;
-        goto abort;
+        uvErrorf(uv, "truncate segment %s: %s", filename1, UvFsErrMsg(&fs));
     }
 
-    rv = uvRenameFile(uv->dir, filename1, filename2, &errmsg);
-    if (rv != 0) {
-        uvErrorf(uv, "rename segment %d: %s", s->counter, errmsg);
-	raft_free(errmsg);
-        rv = RAFT_IOERR;
-        goto abort;
-    }
+    UvFsClose(&fs);
 
-out:
-    s->status = 0;
-    return;
-
-abort:
-    assert(rv != 0);
     s->status = rv;
+    return;
 }
 
 static void processRequests(struct uv *uv);

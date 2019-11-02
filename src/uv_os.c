@@ -31,12 +31,6 @@ int UvOsClose(uv_file fd)
     return uv_fs_close(NULL, &req, fd, NULL);
 }
 
-int UvOsFsync(uv_file fd)
-{
-    struct uv_fs_s req;
-    return uv_fs_fsync(NULL, &req, fd, NULL);
-}
-
 int UvOsFallocate(uv_file fd, off_t offset, off_t len)
 {
     int rv;
@@ -50,6 +44,18 @@ int UvOsFallocate(uv_file fd, off_t offset, off_t len)
         return -rv;
     }
     return 0;
+}
+
+int UvOsTruncate(uv_file fd, off_t offset)
+{
+    struct uv_fs_s req;
+    return uv_fs_ftruncate(NULL, &req, fd, offset, NULL);
+}
+
+int UvOsFsync(uv_file fd)
+{
+    struct uv_fs_s req;
+    return uv_fs_fsync(NULL, &req, fd, NULL);
 }
 
 int UvOsUnlink(const char *path)
@@ -310,44 +316,6 @@ void uvTryUnlinkFile(const char *dir, const char *filename)
     if (rv != 0) {
         raft_free(errmsg);
     }
-}
-
-int uvTruncateFile(const char *dir,
-                   const char *filename,
-                   size_t offset,
-                   char **errmsg)
-{
-    struct uv_fs_s req;
-    char path[UV__PATH_SZ];
-    uv_file fd;
-    int rv;
-
-    assert(UV__DIR_HAS_VALID_LEN(dir));
-    assert(UV__FILENAME_HAS_VALID_LEN(filename));
-
-    UvOsJoin(dir, filename, path);
-
-    rv = uvOpenFile(dir, filename, O_RDWR, &fd, errmsg);
-    if (rv != 0) {
-        goto err;
-    }
-    rv = uv_fs_ftruncate(NULL, &req, fd, offset, NULL);
-    if (rv != 0) {
-        *errmsg = uvSysErrMsg("ftruncate", rv);
-        goto err_after_open;
-    }
-    rv = uv_fs_fsync(NULL, &req, fd, NULL);
-    if (rv == -1) {
-        *errmsg = uvSysErrMsg("fsync", rv);
-        goto err_after_open;
-    }
-    close(fd);
-    return 0;
-
-err_after_open:
-    close(fd);
-err:
-    return UV__ERROR;
 }
 
 int uvRenameFile(const char *dir,

@@ -26,6 +26,10 @@
 #define UV_FS_O_WRONLY O_WRONLY
 #endif
 
+#if !defined(UV_FS_O_RDWR)
+#define UV_FS_O_RDWR O_RDWR
+#endif
+
 #if !defined(UV_FS_O_CREAT)
 #define UV_FS_O_CREAT O_CREAT
 #endif
@@ -69,6 +73,12 @@ int UvOsOpen(const char *path, int flags, int mode);
 /* Portable close() */
 int UvOsClose(uv_file fd);
 
+/* TODO: figure a portable abstraction. */
+int UvOsFallocate(uv_file fd, off_t offset, off_t len);
+
+/* Portable truncate() */
+int UvOsTruncate(uv_file fd, off_t offset);
+
 /* Portable fsync() */
 int UvOsFsync(uv_file fd);
 
@@ -90,7 +100,6 @@ int UvOsIoGetevents(aio_context_t ctx,
                     long max_nr,
                     struct io_event *events,
                     struct timespec *timeout);
-int UvOsFallocate(uv_file fd, off_t offset, off_t len);
 int UvOsEventfd(unsigned int initval, int flags);
 int UvOsSetDirectIo(uv_file fd);
 
@@ -125,12 +134,6 @@ int uvUnlinkFile(const char *dir, const char *filename, char **errmsg);
 
 /* Like uvUnlinkFile, but ignoring errors. */
 void uvTryUnlinkFile(const char *dir, const char *filename);
-
-/* Truncate a file in a directory. */
-int uvTruncateFile(const char *dir,
-                   const char *filename,
-                   size_t offset,
-                   char **errmsg);
 
 /* Rename a file in a directory. */
 int uvRenameFile(const char *dir,

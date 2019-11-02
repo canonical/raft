@@ -190,3 +190,67 @@ int UvFsRemoveFile(struct UvFs *fs, const char *dir, const char *filename)
     }
     return 0;
 }
+
+int UvFsTruncateAndRenameFile(struct UvFs *fs,
+                              const char *dir,
+                              size_t size,
+                              const char *filename1,
+                              const char *filename2)
+{
+    char path1[UV__PATH_SZ];
+    char path2[UV__PATH_SZ];
+    uv_file fd;
+    char *errmsg;
+    int rv;
+
+    UvOsJoin(dir, filename1, path1);
+    UvOsJoin(dir, filename2, path2);
+
+    /* If the desired size is zero, then let's just remove the original file. */
+    if (size == 0) {
+        rv = UvOsUnlink(path1);
+        if (rv != 0) {
+            errmsg = uvSysErrMsg("unlink", rv);
+            goto err;
+        }
+        goto sync;
+    }
+
+    /* Truncate and rename. */
+    rv = UvOsOpen(path1, UV_FS_O_RDWR, 0);
+    if (rv < 0) {
+        errmsg = uvSysErrMsg("open", rv);
+        goto err;
+    }
+    fd = rv;
+    rv = UvOsTruncate(fd, size);
+    if (rv != 0) {
+        errmsg = uvSysErrMsg("truncate", rv);
+        goto err_after_open;
+    }
+    rv = UvOsFsync(fd);
+    if (rv != 0) {
+        errmsg = uvSysErrMsg("fsync", rv);
+        goto err_after_open;
+    }
+    UvOsClose(fd);
+
+    rv = UvOsRename(path1, path2);
+    if (rv != 0) {
+        errmsg = uvSysErrMsg("rename", rv);
+        goto err;
+    }
+
+sync:
+    rv = uvFsSyncDir(fs, dir);
+    if (rv != 0) {
+        return rv;
+    }
+    return 0;
+
+err_after_open:
+    UvOsClose(fd);
+err:
+    UvFsSetErrMsg(fs, errmsg);
+    return UV__ERROR;
+}

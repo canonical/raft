@@ -61,15 +61,16 @@ int UvFsCreateFile(struct UvFs *fs,
 /* Cancel a create file request after it has been submitted. */
 void UvFsCreateFileCancel(struct UvFsCreateFile *req);
 
-/* Synchronously remove a file, calling the unlink() system call. */
-int UvFsRemoveFile(struct UvFs *fs,
-                   const char *dir,
-                   const char *filename);
+/* Synchronously remove a file, calling the unlink() system call and fsync()'ing
+ * the directory. */
+int UvFsRemoveFile(struct UvFs *fs, const char *dir, const char *filename);
 
-/* Synchronously rename a file, calling the rename() system call. */
-int UvFsRenameFile(struct UvFs *fs,
-                   const char *dir,
-                   const char *filename1,
-                   const char *filename2);
+/* Synchronously truncate a file to the given size and then rename it. If the
+ * size is zero, the file will be removed. */
+int UvFsTruncateAndRenameFile(struct UvFs *fs,
+                              const char *dir,
+                              size_t size,
+                              const char *filename1,
+                              const char *filename2);
 
 #endif /* UV_FS_H_ */
