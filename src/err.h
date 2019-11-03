@@ -5,6 +5,20 @@
 
 #include <stddef.h>
 
+struct ErrMsg
+{
+    char msg[256];
+};
+
+/* Return the underlying message. */
+const char *ErrMsgString(struct ErrMsg *e);
+
+/* Format an error message. */
+void ErrMsgPrintf(struct ErrMsg *e, const char *format, ...);
+
+/* Wrap the given error message with an additional prefix message.. */
+void ErrMsgWrapf(struct ErrMsg *e, const char *format, ...);
+
 /* Format an error message. This is basically just a version of asprintf that
  * uses raft_malloc(). */
 char *errMsgPrintf(const char *format, ...);

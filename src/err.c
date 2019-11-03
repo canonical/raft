@@ -8,6 +8,60 @@
 #define WRAP_SEP ": "
 #define WRAP_SEP_LEN (int)strlen(WRAP_SEP)
 
+const char *ErrMsgString(struct ErrMsg *e)
+{
+    return e->msg;
+}
+
+void ErrMsgPrintf(struct ErrMsg *e, const char *format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    vsnprintf(e->msg, sizeof e->msg, format, args);
+    va_end(args);
+}
+
+void ErrMsgWrapf(struct ErrMsg *e, const char *format, ...)
+{
+    size_t n = sizeof e->msg;
+    size_t prefix_n;
+    size_t prefix_and_sep_n;
+    size_t trail_n;
+    va_list args;
+    size_t i;
+
+    /* Calculate the lenght of the prefix. */
+    va_start(args, format);
+    prefix_n = vsnprintf(NULL, 0, format, args);
+    va_end(args);
+
+    /* If there isn't enough space for the ": " separator and at least one
+     * character of the wrapped error message, then just print the prefix. */
+    if (prefix_n >= n - (WRAP_SEP_LEN + 1)) {
+        vsnprintf(e->msg, n, format, args);
+        return;
+    }
+
+    /* Right-shift the wrapped message, to make room for the prefix. */
+    prefix_and_sep_n = prefix_n + WRAP_SEP_LEN;
+    trail_n = strnlen(e->msg, n - prefix_and_sep_n - 1);
+    memmove(e->msg + prefix_and_sep_n, e->msg, trail_n);
+    e->msg[prefix_and_sep_n + trail_n] = 0;
+
+    /* Print the prefix. */
+    va_start(args, format);
+    vsnprintf(e->msg, prefix_n + 1, format, args);
+    va_end(args);
+
+    /* Print the separator.
+     *
+     * Avoid using strncpy(e->msg + prefix_n, WRAP_SEP, WRAP_SEP_LEN) since it
+     * generates a warning. */
+    for (i = 0; i < WRAP_SEP_LEN; i++) {
+        e->msg[prefix_n + i] = WRAP_SEP[i];
+    }
+}
+
 char *errMsgPrintf(const char *format, ...)
 {
     int size;
