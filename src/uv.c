@@ -45,7 +45,6 @@ static int uvInit(struct raft_io *io,
     rv = UvFsEnsureDir(uv->dir, &errmsg2);
     if (rv != 0) {
         uvErrorf(uv, "ensure data dir %s: %s", uv->dir, ErrMsgString(&errmsg2));
-        raft_free(errmsg);
         rv = RAFT_IOERR;
         goto err;
     }

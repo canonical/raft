@@ -74,37 +74,37 @@ TEST(UvFsEnsureDir, notDir, NULL, NULL, 0, NULL)
 
 /******************************************************************************
  *
- * UvFsCreateFile
+ * UvFsAllocateFile
  *
  *****************************************************************************/
 
 /* Create a file with the given parameters and assert that no error occured. */
-#define CREATE_FILE(DIR, FILENAME, SIZE)                           \
-    {                                                              \
-        uv_file fd_;                                               \
-        struct ErrMsg errmsg_;                                     \
-        int rv_;                                                   \
-        rv_ = UvFsCreateFile(DIR, FILENAME, SIZE, &fd_, &errmsg_); \
-        munit_assert_int(rv_, ==, 0);                              \
-        munit_assert_int(UvOsClose(fd_), ==, 0);                   \
+#define CREATE_FILE(DIR, FILENAME, SIZE)                             \
+    {                                                                \
+        uv_file fd_;                                                 \
+        struct ErrMsg errmsg_;                                       \
+        int rv_;                                                     \
+        rv_ = UvFsAllocateFile(DIR, FILENAME, SIZE, &fd_, &errmsg_); \
+        munit_assert_int(rv_, ==, 0);                                \
+        munit_assert_int(UvOsClose(fd_), ==, 0);                     \
     }
 
 /* Assert that creating a file with the given parameters fails with the given
  * code and error message. */
-#define CREATE_FILE_ERROR(DIR, FILENAME, SIZE, RV, ERRMSG)         \
-    {                                                              \
-        uv_file fd_;                                               \
-        struct ErrMsg errmsg_;                                     \
-        int rv_;                                                   \
-        rv_ = UvFsCreateFile(DIR, FILENAME, SIZE, &fd_, &errmsg_); \
-        munit_assert_int(rv_, ==, RV);                             \
-        munit_assert_string_equal(ErrMsgString(&errmsg_), ERRMSG); \
+#define CREATE_FILE_ERROR(DIR, FILENAME, SIZE, RV, ERRMSG)           \
+    {                                                                \
+        uv_file fd_;                                                 \
+        struct ErrMsg errmsg_;                                       \
+        int rv_;                                                     \
+        rv_ = UvFsAllocateFile(DIR, FILENAME, SIZE, &fd_, &errmsg_); \
+        munit_assert_int(rv_, ==, RV);                               \
+        munit_assert_string_equal(ErrMsgString(&errmsg_), ERRMSG);   \
     }
 
-SUITE(UvFsCreateFile)
+SUITE(UvFsAllocateFile)
 
 /* If the given path is valid, the file gets created. */
-TEST(UvFsCreateFile, success, setupDir, tearDownDir, 0, NULL)
+TEST(UvFsAllocateFile, success, setupDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
     CREATE_FILE(dir,   /* dir */
@@ -115,7 +115,7 @@ TEST(UvFsCreateFile, success, setupDir, tearDownDir, 0, NULL)
 }
 
 /* The directory of given path does not exist, an error is returned. */
-TEST(UvFsCreateFile, dirNoExists, NULL, NULL, 0, NULL)
+TEST(UvFsAllocateFile, dirNoExists, NULL, NULL, 0, NULL)
 {
     CREATE_FILE_ERROR("/non/existing/dir", /* dir */
                       "foo",               /* filename */
@@ -126,7 +126,7 @@ TEST(UvFsCreateFile, dirNoExists, NULL, NULL, 0, NULL)
 }
 
 /* If the given path already exists, an error is returned. */
-TEST(UvFsCreateFile, fileAlreadyExists, setupDir, tearDownDir, 0, NULL)
+TEST(UvFsAllocateFile, fileAlreadyExists, setupDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
     char buf[8];
@@ -140,7 +140,7 @@ TEST(UvFsCreateFile, fileAlreadyExists, setupDir, tearDownDir, 0, NULL)
 }
 
 /* The file system has run out of space. */
-TEST(UvFsCreateFile, noSpace, setupDir, tearDownDir, 0, dir_tmpfs_params)
+TEST(UvFsAllocateFile, noSpace, setupDir, tearDownDir, 0, dir_tmpfs_params)
 {
     const char *dir = data;
     if (dir == NULL) {

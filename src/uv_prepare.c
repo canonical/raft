@@ -150,7 +150,7 @@ static void uvPrepareCreateFileWorkCb(uv_work_t *work)
     struct ErrMsg errmsg;
     int rv;
 
-    rv = UvFsCreateFile(s->uv->dir, s->filename, s->size, &s->fd, &errmsg);
+    rv = UvFsAllocateFile(s->uv->dir, s->filename, s->size, &s->fd, &errmsg);
     if (rv != 0) {
         s->errmsg = errMsgPrintf("create file: %s", ErrMsgString(&errmsg));
         s->status = rv;

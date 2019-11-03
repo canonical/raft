@@ -54,11 +54,11 @@ static int uvFsSyncDir(const char *dir, struct ErrMsg *errmsg)
     return 0;
 }
 
-int UvFsCreateFile(const char *dir,
-                   const char *filename,
-                   size_t size,
-                   uv_file *fd,
-                   struct ErrMsg *errmsg)
+int UvFsAllocateFile(const char *dir,
+                     const char *filename,
+                     size_t size,
+                     uv_file *fd,
+                     struct ErrMsg *errmsg)
 {
     char path[UV__PATH_SZ];
     int flags = O_WRONLY | O_CREAT | O_EXCL; /* Common open flags */
