@@ -118,7 +118,7 @@ int uvSegmentKeepTrailing(struct uv *uv,
 {
     raft_index retain_index;
     size_t i;
-    char *errmsg;
+    struct ErrMsg errmsg;
     int rv;
 
     assert(last_index > 0);
@@ -140,10 +140,10 @@ int uvSegmentKeepTrailing(struct uv *uv,
         }
         if (segment->end_index < retain_index) {
             uvDebugf(uv, "deleting closed segment %s", segment->filename);
-            rv = uvUnlinkFile(uv->dir, segment->filename, &errmsg);
+            rv = UvFsRemoveFile(uv->dir, segment->filename, &errmsg);
             if (rv != 0) {
-                uvErrorf(uv, "unlink %s: %s", segment->filename, errmsg);
-                raft_free(errmsg);
+                uvErrorf(uv, "unlink %s: %s", segment->filename,
+                         ErrMsgString(&errmsg));
                 return rv;
             }
             *deleted = i;

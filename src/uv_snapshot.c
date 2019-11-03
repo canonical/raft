@@ -391,7 +391,7 @@ int uvSnapshotKeepLastTwo(struct uv *uv,
                           size_t n)
 {
     size_t i;
-    char *errmsg;
+    struct ErrMsg errmsg;
     int rv;
 
     /* Leave at least two snapshots, for safety. */
@@ -402,17 +402,15 @@ int uvSnapshotKeepLastTwo(struct uv *uv,
     for (i = 0; i < n - 2; i++) {
         struct uvSnapshotInfo *s = &snapshots[i];
         char filename[UV__FILENAME_LEN];
-        rv = uvUnlinkFile(uv->dir, s->filename, &errmsg);
+        rv = UvFsRemoveFile(uv->dir, s->filename, &errmsg);
         if (rv != 0) {
-            uvErrorf(uv, "unlink %s: %s", s->filename, errmsg);
-            raft_free(errmsg);
+            uvErrorf(uv, "unlink %s: %s", s->filename, ErrMsgString(&errmsg));
             return RAFT_IOERR;
         }
         filenameOf(s, filename);
-        rv = uvUnlinkFile(uv->dir, filename, &errmsg);
+        rv = UvFsRemoveFile(uv->dir, filename, &errmsg);
         if (rv != 0) {
-            uvErrorf(uv, "unlink %s: %s", filename, errmsg);
-            raft_free(errmsg);
+            uvErrorf(uv, "unlink %s: %s", filename, ErrMsgString(&errmsg));
             return RAFT_IOERR;
         }
     }
