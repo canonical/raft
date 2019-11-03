@@ -147,16 +147,30 @@ static void uvPrepareProcessRequests(struct uv *uv)
 static void uvPrepareCreateFileWorkCb(uv_work_t *work)
 {
     struct preparedSegment *s = work->data;
+    struct uv *uv = s->uv;
     struct ErrMsg errmsg;
     int rv;
 
-    rv = UvFsAllocateFile(s->uv->dir, s->filename, s->size, &s->fd, &errmsg);
+    rv = UvFsAllocateFile(uv->dir, s->filename, s->size, &s->fd, &errmsg);
     if (rv != 0) {
-        s->errmsg = errMsgPrintf("create file: %s", ErrMsgString(&errmsg));
-        s->status = rv;
-    } else {
-        s->status = 0;
+        goto err;
     }
+
+    rv = UvFsSyncDir(uv->dir, &errmsg);
+    if (rv != 0) {
+        goto err_after_allocate;
+    }
+
+    s->status = 0;
+    return;
+
+err_after_allocate:
+    UvOsClose(s->fd);
+err:
+    assert(rv != 0);
+    s->errmsg = errMsgPrintf("create file: %s", ErrMsgString(&errmsg));
+    s->status = rv;
+    return;
 }
 
 static void maybePrepareSegment(struct uv *uv);

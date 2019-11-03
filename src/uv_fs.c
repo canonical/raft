@@ -36,7 +36,7 @@ int UvFsEnsureDir(const char *dir, struct ErrMsg *errmsg)
     return 0;
 }
 
-static int uvFsSyncDir(const char *dir, struct ErrMsg *errmsg)
+int UvFsSyncDir(const char *dir, struct ErrMsg *errmsg)
 {
     uv_file fd;
     int rv;
@@ -88,11 +88,6 @@ int UvFsAllocateFile(const char *dir,
         goto err_after_open;
     }
 
-    rv = uvFsSyncDir(dir, errmsg);
-    if (rv != 0) {
-        goto err_after_open;
-    }
-
     return 0;
 
 err_after_open:
@@ -113,7 +108,7 @@ int UvFsRemoveFile(const char *dir, const char *filename, struct ErrMsg *errmsg)
         UvErrMsgSys(errmsg, "unlink", rv);
         return UV__ERROR;
     }
-    rv = uvFsSyncDir(dir, errmsg);
+    rv = UvFsSyncDir(dir, errmsg);
     if (rv != 0) {
         return 0;
     }
@@ -170,7 +165,7 @@ int UvFsTruncateAndRenameFile(const char *dir,
     }
 
 sync:
-    rv = uvFsSyncDir(dir, errmsg);
+    rv = UvFsSyncDir(dir, errmsg);
     if (rv != 0) {
         return rv;
     }
