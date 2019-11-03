@@ -23,14 +23,12 @@ int UvFsAllocateFile(const char *dir,
                      uv_file *fd,
                      struct ErrMsg *errmsg);
 
-/* Create a file and write the given content into it, syncing the underlying
- * directory. */
-int uvMakeFile(const char *dir,
-               const char *filename,
-               struct raft_buffer *bufs,
-               unsigned n_bufs,
-               char **errmsg);
-
+/* Create a file and write the given content into it. */
+int UvFsMakeFile(const char *dir,
+                 const char *filename,
+                 struct raft_buffer *bufs,
+                 unsigned n_bufs,
+                 struct ErrMsg *errmsg);
 
 /* Synchronously remove a file, calling the unlink() system call. */
 int UvFsRemoveFile(const char *dir,

@@ -78,8 +78,8 @@ TEST(UvFsEnsureDir, notDir, NULL, NULL, 0, NULL)
  *
  *****************************************************************************/
 
-/* Create a file with the given parameters and assert that no error occured. */
-#define CREATE_FILE(DIR, FILENAME, SIZE)                             \
+/* Allocate a file with the given parameters and assert that no error occured. */
+#define ALLOCATE_FILE(DIR, FILENAME, SIZE)                           \
     {                                                                \
         uv_file fd_;                                                 \
         struct ErrMsg errmsg_;                                       \
@@ -91,7 +91,7 @@ TEST(UvFsEnsureDir, notDir, NULL, NULL, 0, NULL)
 
 /* Assert that creating a file with the given parameters fails with the given
  * code and error message. */
-#define CREATE_FILE_ERROR(DIR, FILENAME, SIZE, RV, ERRMSG)           \
+#define ALLOCATE_FILE_ERROR(DIR, FILENAME, SIZE, RV, ERRMSG)         \
     {                                                                \
         uv_file fd_;                                                 \
         struct ErrMsg errmsg_;                                       \
@@ -107,9 +107,9 @@ SUITE(UvFsAllocateFile)
 TEST(UvFsAllocateFile, success, setupDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
-    CREATE_FILE(dir,   /* dir */
-                "foo", /* filename */
-                4096 /* size */);
+    ALLOCATE_FILE(dir,   /* dir */
+                  "foo", /* filename */
+                  4096 /* size */);
     munit_assert_true(test_dir_has_file(dir, "foo"));
     return MUNIT_OK;
 }
@@ -117,11 +117,11 @@ TEST(UvFsAllocateFile, success, setupDir, tearDownDir, 0, NULL)
 /* The directory of given path does not exist, an error is returned. */
 TEST(UvFsAllocateFile, dirNoExists, NULL, NULL, 0, NULL)
 {
-    CREATE_FILE_ERROR("/non/existing/dir", /* dir */
-                      "foo",               /* filename */
-                      64,                  /* size */
-                      UV__ERROR,           /* status */
-                      "open: no such file or directory");
+    ALLOCATE_FILE_ERROR("/non/existing/dir", /* dir */
+                        "foo",               /* filename */
+                        64,                  /* size */
+                        UV__ERROR,           /* status */
+                        "open: no such file or directory");
     return MUNIT_OK;
 }
 
@@ -131,11 +131,11 @@ TEST(UvFsAllocateFile, fileAlreadyExists, setupDir, tearDownDir, 0, NULL)
     const char *dir = data;
     char buf[8];
     test_dir_write_file(dir, "foo", buf, sizeof buf);
-    CREATE_FILE_ERROR(dir,       /* dir */
-                      "foo",     /* filename */
-                      64,        /* size */
-                      UV__ERROR, /* status */
-                      "open: file already exists");
+    ALLOCATE_FILE_ERROR(dir,       /* dir */
+                        "foo",     /* filename */
+                        64,        /* size */
+                        UV__ERROR, /* status */
+                        "open: file already exists");
     return MUNIT_OK;
 }
 
@@ -146,11 +146,11 @@ TEST(UvFsAllocateFile, noSpace, setupDir, tearDownDir, 0, dir_tmpfs_params)
     if (dir == NULL) {
         return MUNIT_SKIP;
     }
-    CREATE_FILE_ERROR(dir,          /* dir */
-                      "foo",        /* filename */
-                      4096 * 32768, /* size */
-                      UV__ERROR,    /* status */
-                      "posix_fallocate: no space left on device");
+    ALLOCATE_FILE_ERROR(dir,          /* dir */
+                        "foo",        /* filename */
+                        4096 * 32768, /* size */
+                        UV__ERROR,    /* status */
+                        "posix_fallocate: no space left on device");
     munit_assert_false(test_dir_has_file(dir, "foo"));
     return MUNIT_OK;
 }

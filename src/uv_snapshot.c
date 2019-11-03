@@ -424,17 +424,16 @@ static void putWorkCb(uv_work_t *work)
 {
     struct put *r = work->data;
     struct uv *uv = r->uv;
-    char *errmsg;
+    struct ErrMsg errmsg;
     char filename[UV__FILENAME_LEN];
     int rv;
 
     sprintf(filename, UV__SNAPSHOT_META_TEMPLATE, r->snapshot->term,
             r->snapshot->index, r->meta.timestamp);
 
-    rv = uvMakeFile(uv->dir, filename, r->meta.bufs, 2, &errmsg);
+    rv = UvFsMakeFile(uv->dir, filename, r->meta.bufs, 2, &errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "write %s: %s", filename, errmsg);
-        raft_free(errmsg);
+        uvErrorf(uv, "write %s: %s", filename, ErrMsgString(&errmsg));
         r->status = RAFT_IOERR;
         return;
     }
@@ -442,19 +441,17 @@ static void putWorkCb(uv_work_t *work)
     sprintf(filename, UV__SNAPSHOT_TEMPLATE, r->snapshot->term,
             r->snapshot->index, r->meta.timestamp);
 
-    rv = uvMakeFile(uv->dir, filename, r->snapshot->bufs, r->snapshot->n_bufs,
-                    &errmsg);
+    rv = UvFsMakeFile(uv->dir, filename, r->snapshot->bufs, r->snapshot->n_bufs,
+                      &errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "write %s: %s", filename, errmsg);
-        raft_free(errmsg);
+        uvErrorf(uv, "write %s: %s", filename, ErrMsgString(&errmsg));
         r->status = RAFT_IOERR;
         return;
     }
 
-    rv = uvSyncDir(uv->dir, &errmsg);
+    rv = UvFsSyncDir(uv->dir, &errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "sync %s: %s", uv->dir, errmsg);
-        raft_free(errmsg);
+        uvErrorf(uv, "sync %s: %s", uv->dir, ErrMsgString(&errmsg));
         r->status = RAFT_IOERR;
         return;
     }

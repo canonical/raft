@@ -54,6 +54,26 @@ int UvFsSyncDir(const char *dir, struct ErrMsg *errmsg)
     return 0;
 }
 
+/* Open a file in a directory. */
+static int uvFsOpenFile(const char *dir,
+                        const char *filename,
+                        int flags,
+                        int mode,
+                        uv_file *fd,
+                        struct ErrMsg *errmsg)
+{
+    char path[UV__PATH_SZ];
+    int rv;
+    UvOsJoin(dir, filename, path);
+    rv = UvOsOpen(path, flags, mode);
+    if (rv < 0) {
+        UvErrMsgSys(errmsg, "open", rv);
+        return UV__ERROR;
+    }
+    *fd = rv;
+    return 0;
+}
+
 int UvFsAllocateFile(const char *dir,
                      const char *filename,
                      size_t size,
@@ -66,14 +86,10 @@ int UvFsAllocateFile(const char *dir,
 
     UvOsJoin(dir, filename, path);
 
-    rv = UvOsOpen(path, flags, S_IRUSR | S_IWUSR);
-    if (rv < 0) {
-        UvErrMsgSys(errmsg, "open", rv);
-        rv = UV__ERROR;
+    rv = uvFsOpenFile(dir, filename, flags, S_IRUSR | S_IWUSR, fd, errmsg);
+    if (rv != 0) {
         goto err;
     }
-
-    *fd = rv;
 
     /* Allocate the desired size. */
     rv = UvOsFallocate(*fd, 0, size);
@@ -95,6 +111,52 @@ err_after_open:
     UvOsUnlink(path);
 err:
     assert(rv != 0);
+    return rv;
+}
+
+int UvFsMakeFile(const char *dir,
+                 const char *filename,
+                 struct raft_buffer *bufs,
+                 unsigned n_bufs,
+                 struct ErrMsg *errmsg)
+{
+    int flags = UV_FS_O_WRONLY | UV_FS_O_CREAT | UV_FS_O_EXCL;
+    uv_file fd;
+    int rv;
+    size_t size;
+    unsigned i;
+    size = 0;
+    for (i = 0; i < n_bufs; i++) {
+        size += bufs[i].len;
+    }
+    rv = uvFsOpenFile(dir, filename, flags, S_IRUSR | S_IWUSR, &fd, errmsg);
+    if (rv != 0) {
+        goto err;
+    }
+    rv = UvOsWrite(fd, (const uv_buf_t *)bufs, n_bufs, 0);
+    if (rv != (int)(size)) {
+        if (rv < 0) {
+            UvErrMsgSys(errmsg, "write", rv);
+        } else {
+            ErrMsgPrintf(errmsg, "short write: %d only bytes written", rv);
+        }
+        goto err_after_file_open;
+    }
+    rv = UvOsFsync(fd);
+    if (rv != 0) {
+        UvErrMsgSys(errmsg, "fsync", rv);
+        goto err_after_file_open;
+    }
+    rv = UvOsClose(fd);
+    if (rv != 0) {
+        UvErrMsgSys(errmsg, "close", rv);
+        goto err;
+    }
+    return 0;
+
+err_after_file_open:
+    UvOsClose(fd);
+err:
     return rv;
 }
 

@@ -58,6 +58,15 @@ int UvOsFsync(uv_file fd)
     return uv_fs_fsync(NULL, &req, fd, NULL);
 }
 
+int UvOsWrite(uv_file fd,
+              const uv_buf_t bufs[],
+              unsigned int nbufs,
+              int64_t offset)
+{
+    struct uv_fs_s req;
+    return uv_fs_write(NULL, &req, fd, bufs, nbufs, offset, NULL);
+}
+
 int UvOsUnlink(const char *path)
 {
     struct uv_fs_s req;
@@ -214,54 +223,6 @@ int uvStatFile(const char *dir,
     }
     memcpy(sb, &req.statbuf, sizeof *sb);
     return 0;
-}
-
-int uvMakeFile(const char *dir,
-               const char *filename,
-               struct raft_buffer *bufs,
-               unsigned n_bufs,
-               char **errmsg)
-{
-    int flags = UV_FS_O_WRONLY | UV_FS_O_CREAT | UV_FS_O_EXCL;
-    struct uv_fs_s req;
-    uv_file fd;
-    int rv;
-    size_t size;
-    unsigned i;
-    size = 0;
-    for (i = 0; i < n_bufs; i++) {
-        size += bufs[i].len;
-    }
-    rv = uvOpenFile(dir, filename, flags, &fd, errmsg);
-    if (rv != 0) {
-        return rv;
-    }
-    rv = uv_fs_write(NULL, &req, fd, (const uv_buf_t *)bufs, n_bufs, 0, NULL);
-    if (rv != (int)(size)) {
-        if (rv < 0) {
-            *errmsg = uvSysErrMsg("write", rv);
-        } else {
-            assert(rv >= 0);
-            *errmsg = errMsgPrintf("short write: %d only bytes written", rv);
-        }
-        goto err_after_file_open;
-    }
-    rv = uv_fs_fsync(NULL, &req, fd, NULL);
-    if (rv != 0) {
-        *errmsg = uvSysErrMsg("fsync", rv);
-        goto err_after_file_open;
-    }
-    rv = uv_fs_close(NULL, &req, fd, NULL);
-    if (rv != 0) {
-        *errmsg = uvSysErrMsg("close", rv);
-        goto err;
-    }
-    return 0;
-
-err_after_file_open:
-    uv_fs_close(NULL, &req, fd, NULL);
-err:
-    return UV__ERROR;
 }
 
 int uvUnlinkFile(const char *dir, const char *filename, char **errmsg)

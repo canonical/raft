@@ -82,6 +82,12 @@ int UvOsTruncate(uv_file fd, off_t offset);
 /* Portable fsync() */
 int UvOsFsync(uv_file fd);
 
+/* Portable write() */
+int UvOsWrite(uv_file fd,
+              const uv_buf_t bufs[],
+              unsigned int nbufs,
+              int64_t offset);
+
 /* Portable unlink() */
 int UvOsUnlink(const char *path);
 
@@ -117,13 +123,6 @@ int uvOpenFile(const char *dir,
 int uvStatFile(const char *dir,
                const char *filename,
                uv_stat_t *sb,
-               char **errmsg);
-
-/* Create a file and write the given content into it. */
-int uvMakeFile(const char *dir,
-               const char *filename,
-               struct raft_buffer *bufs,
-               unsigned n_bufs,
                char **errmsg);
 
 /* Delete a file in a directory. */
