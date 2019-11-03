@@ -32,8 +32,7 @@ int uvMakeFile(const char *dir,
                char **errmsg);
 
 
-/* Synchronously remove a file, calling the unlink() system call and fsync()'ing
- * the directory. */
+/* Synchronously remove a file, calling the unlink() system call. */
 int UvFsRemoveFile(const char *dir,
                    const char *filename,
                    struct ErrMsg *errmsg);

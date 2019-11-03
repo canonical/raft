@@ -108,10 +108,6 @@ int UvFsRemoveFile(const char *dir, const char *filename, struct ErrMsg *errmsg)
         UvErrMsgSys(errmsg, "unlink", rv);
         return UV__ERROR;
     }
-    rv = UvFsSyncDir(dir, errmsg);
-    if (rv != 0) {
-        return 0;
-    }
     return 0;
 }
 
