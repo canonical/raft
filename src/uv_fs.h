@@ -6,12 +6,13 @@
 #include <stdbool.h>
 #include <uv.h>
 
+#include "err.h"
 #include "uv_os.h"
 
 /* Abstract file system operations. */
 struct UvFs
 {
-    char *errmsg; /* Description of last error occurred. */
+    struct ErrMsg errmsg; /* Description of last error occurred. */
 };
 
 /* Initialize a file system object. */
@@ -23,9 +24,6 @@ void UvFsClose(struct UvFs *fs);
 /* Return an error message describing the last error occurred. The pointer is
  * valid until a different error occurs or uvFsClose is called. */
 const char *UvFsErrMsg(struct UvFs *fs);
-
-/* Set the last error message, possibly replacing the former one. */
-void UvFsSetErrMsg(struct UvFs *fs, char *errmsg);
 
 /* Create the given file in the given directory, allocate the given size to it
  * and return its file descriptor. The file must not exist yet. */

@@ -24,7 +24,6 @@ static void *setupFs(MUNIT_UNUSED const MunitParameter params[],
     struct fs *f = munit_malloc(sizeof *f);
     SETUP_DIR_OR_SKIP;
     SETUP_LOOP;
-    UvFsInit(&f->fs);
     return f;
 }
 
@@ -35,7 +34,6 @@ static void tearDownFs(void *data)
     if (f == NULL) {
         return; /* Was skipped. */
     }
-    UvFsClose(&f->fs);
     TEAR_DOWN_LOOP;
     TEAR_DOWN_DIR;
     free(f);

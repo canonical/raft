@@ -71,9 +71,7 @@ static void uvPrepareRemove(struct preparedSegment *s)
     assert(s->counter > 0);
     assert(s->fd >= 0);
     UvOsClose(s->fd);
-    UvFsInit(&fs);
     UvFsRemoveFile(&fs, s->uv->dir, s->filename);
-    UvFsClose(&fs);
     raft_free(s);
 }
 
@@ -152,8 +150,6 @@ static void uvPrepareCreateFileWorkCb(uv_work_t *work)
     struct UvFs fs;
     int rv;
 
-    UvFsInit(&fs);
-
     rv = UvFsCreateFile(&fs, s->uv->dir, s->filename, s->size, &s->fd);
     if (rv != 0) {
         s->errmsg = errMsgPrintf("create file: %s", UvFsErrMsg(&fs));
@@ -161,8 +157,6 @@ static void uvPrepareCreateFileWorkCb(uv_work_t *work)
     } else {
         s->status = 0;
     }
-
-    UvFsClose(&fs);
 }
 
 static void maybePrepareSegment(struct uv *uv);

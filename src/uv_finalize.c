@@ -32,8 +32,6 @@ static void workCb(uv_work_t *work)
 
     uvDebugf(uv, "finalize %s into %s", filename1, filename2);
 
-    UvFsInit(&fs);
-
     /* Truncate and rename the segment. If the segment hasn't actually been used
      * (because the writer has been closed or aborted before making any write),
      * then it will be simply removed. */
@@ -41,8 +39,6 @@ static void workCb(uv_work_t *work)
     if (rv != 0) {
         uvErrorf(uv, "truncate segment %s: %s", filename1, UvFsErrMsg(&fs));
     }
-
-    UvFsClose(&fs);
 
     s->status = rv;
     return;

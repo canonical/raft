@@ -7,51 +7,25 @@
 #include "heap.h"
 #include "uv_error.h"
 
-void UvFsInit(struct UvFs *fs)
-{
-    fs->errmsg = NULL;
-}
-
-void UvFsClose(struct UvFs *fs)
-{
-    HeapFree(fs->errmsg);
-}
-
 const char *UvFsErrMsg(struct UvFs *fs)
 {
-    return fs->errmsg;
+    return ErrMsgString(&fs->errmsg);
 }
 
-void UvFsSetErrMsg(struct UvFs *fs, char *errmsg)
-{
-    HeapFree(fs->errmsg); /* Delete any previous error. */
-    fs->errmsg = errmsg;
-}
-
-static int uvFsSyncDirThreadSafe(const char *dir, char **errmsg)
+static int uvFsSyncDir(struct UvFs *fs, const char *dir)
 {
     uv_file fd;
     int rv;
     fd = UvOsOpen(dir, UV_FS_O_RDONLY | UV_FS_O_DIRECTORY, 0);
     if (fd < 0) {
-        *errmsg = uvSysErrMsg("open directory", fd);
+        UvErrMsgSys(&fs->errmsg, "open directory", fd);
         return UV__ERROR;
     }
     rv = UvOsFsync(fd);
     UvOsClose(fd);
     if (rv != 0) {
-        *errmsg = uvSysErrMsg("fsync directory", rv);
+        UvErrMsgSys(&fs->errmsg, "fsync directory", fd);
         return UV__ERROR;
-    }
-    return 0;
-}
-
-static int uvFsSyncDir(struct UvFs *fs, const char *dir)
-{
-    int rv;
-    rv = uvFsSyncDirThreadSafe(dir, &fs->errmsg);
-    if (rv != 0) {
-        return rv;
     }
     return 0;
 }
@@ -64,14 +38,13 @@ int UvFsCreateFile(struct UvFs *fs,
 {
     char path[UV__PATH_SZ];
     int flags = O_WRONLY | O_CREAT | O_EXCL; /* Common open flags */
-    char *errmsg = NULL;
     int rv = 0;
 
     UvOsJoin(dir, filename, path);
 
     rv = UvOsOpen(path, flags, S_IRUSR | S_IWUSR);
     if (rv < 0) {
-        errmsg = uvSysErrMsg("open", rv);
+        UvErrMsgSys(&fs->errmsg, "open", rv);
         rv = UV__ERROR;
         goto err;
     }
@@ -86,12 +59,12 @@ int UvFsCreateFile(struct UvFs *fs,
          *   posix_fallocate() returns zero on success, or an error number on
          *   failure.  Note that errno is not set.
          */
-        errmsg = uvSysErrMsg("posix_fallocate", rv);
+        UvErrMsgSys(&fs->errmsg, "posix_fallocate", rv);
         rv = UV__ERROR;
         goto err_after_open;
     }
 
-    rv = uvFsSyncDirThreadSafe(dir, &errmsg);
+    rv = uvFsSyncDir(fs, dir);
     if (rv != 0) {
         goto err_after_open;
     }
@@ -103,7 +76,6 @@ err_after_open:
     UvOsUnlink(path);
 err:
     assert(rv != 0);
-    UvFsSetErrMsg(fs, errmsg);
     return rv;
 }
 
@@ -114,7 +86,7 @@ int UvFsRemoveFile(struct UvFs *fs, const char *dir, const char *filename)
     UvOsJoin(dir, filename, path);
     rv = UvOsUnlink(path);
     if (rv != 0) {
-        UvFsSetErrMsg(fs, uvSysErrMsg("unlink", rv));
+        UvErrMsgSys(&fs->errmsg, "unlink", rv);
         return UV__ERROR;
     }
     rv = uvFsSyncDir(fs, dir);
@@ -133,7 +105,6 @@ int UvFsTruncateAndRenameFile(struct UvFs *fs,
     char path1[UV__PATH_SZ];
     char path2[UV__PATH_SZ];
     uv_file fd;
-    char *errmsg;
     int rv;
 
     UvOsJoin(dir, filename1, path1);
@@ -143,7 +114,7 @@ int UvFsTruncateAndRenameFile(struct UvFs *fs,
     if (size == 0) {
         rv = UvOsUnlink(path1);
         if (rv != 0) {
-            errmsg = uvSysErrMsg("unlink", rv);
+            UvErrMsgSys(&fs->errmsg, "unlink", rv);
             goto err;
         }
         goto sync;
@@ -152,25 +123,25 @@ int UvFsTruncateAndRenameFile(struct UvFs *fs,
     /* Truncate and rename. */
     rv = UvOsOpen(path1, UV_FS_O_RDWR, 0);
     if (rv < 0) {
-        errmsg = uvSysErrMsg("open", rv);
+        UvErrMsgSys(&fs->errmsg, "open", rv);
         goto err;
     }
     fd = rv;
     rv = UvOsTruncate(fd, size);
     if (rv != 0) {
-        errmsg = uvSysErrMsg("truncate", rv);
+        UvErrMsgSys(&fs->errmsg, "truncate", rv);
         goto err_after_open;
     }
     rv = UvOsFsync(fd);
     if (rv != 0) {
-        errmsg = uvSysErrMsg("fsync", rv);
+        UvErrMsgSys(&fs->errmsg, "fsync", rv);
         goto err_after_open;
     }
     UvOsClose(fd);
 
     rv = UvOsRename(path1, path2);
     if (rv != 0) {
-        errmsg = uvSysErrMsg("rename", rv);
+        UvErrMsgSys(&fs->errmsg, "rename", rv);
         goto err;
     }
 
@@ -184,6 +155,5 @@ sync:
 err_after_open:
     UvOsClose(fd);
 err:
-    UvFsSetErrMsg(fs, errmsg);
     return UV__ERROR;
 }
