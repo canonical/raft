@@ -9,6 +9,9 @@
 #include "err.h"
 #include "uv_os.h"
 
+/* Check that the given directory exists, and try to create it if it doesn't. */
+int UvFsEnsureDir(const char *dir, struct ErrMsg *errmsg);
+
 /* Create the given file in the given directory, allocate the given size to it
  * and return its file descriptor. The file must not exist yet. */
 int UvFsCreateFile(const char *dir,

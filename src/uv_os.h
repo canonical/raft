@@ -103,9 +103,6 @@ int UvOsIoGetevents(aio_context_t ctx,
 int UvOsEventfd(unsigned int initval, int flags);
 int UvOsSetDirectIo(uv_file fd);
 
-/* Check that the given directory exists, and try to create it if it doesn't. */
-int uvEnsureDir(const char *dir, char **errmsg);
-
 /* Sync the given directory. */
 int uvSyncDir(const char *dir, char **errmsg);
 

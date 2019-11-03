@@ -151,32 +151,6 @@ int UvOsSetDirectIo(uv_file fd)
     return 0;
 }
 
-int uvEnsureDir(const char *dir, char **errmsg)
-{
-    struct uv_fs_s req;
-    int rv;
-
-    /* Make sure we have a directory we can write into. */
-    rv = uv_fs_stat(NULL, &req, dir, NULL);
-    if (rv != 0) {
-        if (rv == UV_ENOENT) {
-            rv = uv_fs_mkdir(NULL, &req, dir, DEFAULT_DIR_PERM, NULL);
-            if (rv != 0) {
-                *errmsg = uvSysErrMsg("mkdir", rv);
-                return UV__ERROR;
-            }
-        } else {
-            *errmsg = uvSysErrMsg("stat", rv);
-            return UV__ERROR;
-        }
-    } else if ((req.statbuf.st_mode & S_IFMT) != S_IFDIR) {
-        *errmsg = errMsgPrintf("%s", uv_strerror(UV_ENOTDIR));
-        return UV__ERROR;
-    }
-
-    return 0;
-}
-
 int uvSyncDir(const char *dir, char **errmsg)
 {
     struct uv_fs_s req;
