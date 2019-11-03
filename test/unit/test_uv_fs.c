@@ -47,71 +47,25 @@ static void tearDownFs(void *data)
  *
  *****************************************************************************/
 
-struct createFileResult
-{
-    int status;
-    const char *errmsg;
-    bool done;
-};
-
-static void createFileCbAssertOk(struct UvFsCreateFile *req, int status)
-{
-    bool *done = req->data;
-    munit_assert_int(status, ==, 0);
-    munit_assert_int(req->fd, >=, 0);
-    munit_assert_int(UvOsClose(req->fd), ==, 0);
-    *done = true;
-}
-
-static void createFileCbAssertFail(struct UvFsCreateFile *req, int status)
-{
-    struct createFileResult *result = req->data;
-    munit_assert_int(status, !=, 0);
-    munit_assert_int(status, ==, result->status);
-    munit_assert_string_equal(UvFsErrMsg(req->fs), result->errmsg);
-    result->done = true;
-}
-
-/* Start creating a file with the given parameters and wait for the operation
- * to successfully complete. */
-#define CREATE_FILE(DIR, FILENAME, SIZE)                         \
-    {                                                            \
-        struct UvFsCreateFile req_;                              \
-        bool done_ = false;                                      \
-        int rv_;                                                 \
-        int i_;                                                  \
-        req_.data = &done_;                                      \
-        rv_ = UvFsCreateFile(&f->fs, &req_, DIR, FILENAME, SIZE, \
-                             createFileCbAssertOk);              \
-        munit_assert_int(rv_, ==, 0);                            \
-        for (i_ = 0; i_ < 2; i_++) {                             \
-            LOOP_RUN(1);                                         \
-            if (done_) {                                         \
-                break;                                           \
-            }                                                    \
-        }                                                        \
-        munit_assert_true(done_);                                \
+/* Create a file with the given parameters and assert that no error occured. */
+#define CREATE_FILE(DIR, FILENAME, SIZE)                          \
+    {                                                             \
+        uv_file fd_;                                              \
+        int rv_;                                                  \
+        rv_ = UvFsCreateFile2(&f->fs, DIR, FILENAME, SIZE, &fd_); \
+        munit_assert_int(rv_, ==, 0);                             \
+        munit_assert_int(UvOsClose(fd_), ==, 0);                  \
     }
 
-/* Start creating a file with the given parameters and wait for the operation to
- * fail with the given code and message. */
-#define CREATE_FILE_FAILURE(DIR, FILENAME, SIZE, STATUS, ERRMSG)   \
-    {                                                              \
-        struct UvFsCreateFile req_;                                \
-        struct createFileResult result_ = {STATUS, ERRMSG, false}; \
-        int rv_;                                                   \
-        int i_;                                                    \
-        req_.data = &result_;                                      \
-        rv_ = UvFsCreateFile(&f->fs, &req_, DIR, FILENAME, SIZE,   \
-                             createFileCbAssertFail);              \
-        munit_assert_int(rv_, ==, 0);                              \
-        for (i_ = 0; i_ < 2; i_++) {                               \
-            LOOP_RUN(1);                                           \
-            if (result_.done) {                                    \
-                break;                                             \
-            }                                                      \
-        }                                                          \
-        munit_assert_true(result_.done);                           \
+/* Assert that creating a file with the given parameters fails with the given
+ * code and error message. */
+#define CREATE_FILE_ERROR(DIR, FILENAME, SIZE, RV, ERRMSG)        \
+    {                                                             \
+        uv_file fd_;                                              \
+        int rv_;                                                  \
+        rv_ = UvFsCreateFile2(&f->fs, DIR, FILENAME, SIZE, &fd_); \
+        munit_assert_int(rv_, ==, RV);                            \
+        munit_assert_string_equal(UvFsErrMsg(&f->fs), ERRMSG);    \
     }
 
 SUITE(UvFsCreateFile)
@@ -132,11 +86,11 @@ TEST(UvFsCreateFile, success, setupFs, tearDownFs, 0, NULL)
 TEST(UvFsCreateFile, dirNoExists, setupFs, tearDownFs, 0, NULL)
 {
     struct fs *f = data;
-    CREATE_FILE_FAILURE("/non/existing/dir", /* dir */
-                        "foo",               /* filename */
-                        64,                  /* size */
-                        UV__ERROR,           /* status */
-                        "open: no such file or directory");
+    CREATE_FILE_ERROR("/non/existing/dir", /* dir */
+                      "foo",               /* filename */
+                      64,                  /* size */
+                      UV__ERROR,           /* status */
+                      "open: no such file or directory");
     return MUNIT_OK;
 }
 
@@ -145,16 +99,12 @@ TEST(UvFsCreateFile, fileAlreadyExists, setupFs, tearDownFs, 0, NULL)
 {
     struct fs *f = data;
     char buf[8];
-#if !HAVE_DECL_UV_FS_O_CREAT
-    /* This test appears to leak memory on older libuv versions. */
-    return MUNIT_SKIP;
-#endif
     test_dir_write_file(f->dir, "foo", buf, sizeof buf);
-    CREATE_FILE_FAILURE(f->dir,    /* dir */
-                        "foo",     /* filename */
-                        64,        /* size */
-                        UV__ERROR, /* status */
-                        "open: file already exists");
+    CREATE_FILE_ERROR(f->dir,    /* dir */
+                      "foo",     /* filename */
+                      64,        /* size */
+                      UV__ERROR, /* status */
+                      "open: file already exists");
     return MUNIT_OK;
 }
 
@@ -162,39 +112,12 @@ TEST(UvFsCreateFile, fileAlreadyExists, setupFs, tearDownFs, 0, NULL)
 TEST(UvFsCreateFile, noSpace, setupFs, tearDownFs, 0, dir_tmpfs_params)
 {
     struct fs *f = data;
-#if !HAVE_DECL_UV_FS_O_CREAT
-    /* This test appears to leak memory on older libuv versions. */
-    return MUNIT_SKIP;
-#endif
     SKIP_IF_NO_FIXTURE;
-    CREATE_FILE_FAILURE(f->dir,       /* dir */
-                        "foo",        /* filename */
-                        4096 * 32768, /* size */
-                        UV__ERROR,    /* status */
-                        "posix_fallocate: no space left on device");
-    munit_assert_false(test_dir_has_file(f->dir, "foo"));
-    return MUNIT_OK;
-}
-
-/* Cancel a create file request just after having issued it, the request had
- * actually succeeded. */
-TEST(UvFsCreateFile, cancel, setupFs, tearDownFs, 0, NULL)
-{
-    struct fs *f = data;
-    struct UvFsCreateFile req;
-    struct createFileResult result = {UV__CANCELED, "canceled", false};
-    int rv;
-#if !HAVE_DECL_UV_FS_O_CREAT
-    /* This test appears to leak memory on older libuv versions. */
-    return MUNIT_SKIP;
-#endif
-    req.data = &result;
-    rv = UvFsCreateFile(&f->fs, &req, "/non/existing/dir", "foo", 4096,
-                        createFileCbAssertFail);
-    munit_assert_int(rv, ==, 0);
-    UvFsCreateFileCancel(&req);
-    LOOP_RUN(1);
-    munit_assert_true(result.done);
+    CREATE_FILE_ERROR(f->dir,       /* dir */
+                      "foo",        /* filename */
+                      4096 * 32768, /* size */
+                      UV__ERROR,    /* status */
+                      "posix_fallocate: no space left on device");
     munit_assert_false(test_dir_has_file(f->dir, "foo"));
     return MUNIT_OK;
 }
