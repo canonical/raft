@@ -82,6 +82,9 @@ int UvOsTruncate(uv_file fd, off_t offset);
 /* Portable fsync() */
 int UvOsFsync(uv_file fd);
 
+/* Portable stat() */
+int UvOsStat(const char* path, uv_stat_t *sb);
+
 /* Portable write() */
 int UvOsWrite(uv_file fd,
               const uv_buf_t bufs[],

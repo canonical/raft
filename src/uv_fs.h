@@ -30,6 +30,15 @@ int UvFsMakeFile(const char *dir,
                  unsigned n_bufs,
                  struct ErrMsg *errmsg);
 
+/* Read exactly @n bytes from the given file descriptor. */
+int UvFsReadFrom(int fd, struct raft_buffer *buf, struct ErrMsg *errmsg);
+
+/* Read all the content of the givn file. */
+int UvFsReadFile(const char *dir,
+                 const char *filename,
+                 struct raft_buffer *buf,
+                 struct ErrMsg *errmsg);
+
 /* Synchronously remove a file, calling the unlink() system call. */
 int UvFsRemoveFile(const char *dir,
                    const char *filename,

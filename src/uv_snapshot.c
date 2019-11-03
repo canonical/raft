@@ -232,65 +232,32 @@ static int loadData(struct uv *uv,
                     struct uvSnapshotInfo *info,
                     struct raft_snapshot *snapshot)
 {
-    uv_stat_t sb;
     char filename[UV__FILENAME_LEN];
     struct raft_buffer buf;
-    char errmsg_[2048];
-    char *errmsg = errmsg_;
-    int fd;
+    struct ErrMsg errmsg;
     int rv;
 
     filenameOf(info, filename);
 
-    rv = uvStatFile(uv->dir, filename, &sb, &errmsg);
+    rv = UvFsReadFile(uv->dir, filename, &buf, &errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "stat %s: %s", filename, errmsg);
-        raft_free(errmsg);
-        rv = RAFT_IOERR;
+        uvErrorf(uv, "stat %s: %s", filename, ErrMsgString(&errmsg));
         goto err;
-    }
-
-    rv = uvOpenFile(uv->dir, filename, O_RDONLY, &fd, &errmsg);
-    if (rv != 0) {
-        uvErrorf(uv, "open %s: %s", filename, errmsg);
-        raft_free(errmsg);
-        rv = RAFT_IOERR;
-        goto err;
-    }
-
-    buf.len = sb.st_size;
-    buf.base = raft_malloc(buf.len);
-    if (buf.base == NULL) {
-        rv = RAFT_NOMEM;
-        goto err_after_open;
-    }
-
-    rv = uvReadFully(fd, buf.base, buf.len, &errmsg);
-    if (rv != 0) {
-        uvErrorf(uv, "read %s: %s", filename, errmsg);
-        raft_free(errmsg);
-        goto err_after_buf_alloc;
     }
 
     snapshot->bufs = raft_malloc(sizeof *snapshot->bufs);
     snapshot->n_bufs = 1;
     if (snapshot->bufs == NULL) {
         rv = RAFT_NOMEM;
-        goto err_after_buf_alloc;
+        goto err_after_read_file;
     }
 
     snapshot->bufs[0] = buf;
 
-    close(fd);
-
     return 0;
 
-err_after_buf_alloc:
+err_after_read_file:
     raft_free(buf.base);
-
-err_after_open:
-    close(fd);
-
 err:
     assert(rv != 0);
     return rv;

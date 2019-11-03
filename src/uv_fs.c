@@ -1,6 +1,7 @@
 #include "uv_fs.h"
 
 #include <string.h>
+#include <unistd.h>
 
 #include "assert.h"
 #include "err.h"
@@ -155,6 +156,73 @@ int UvFsMakeFile(const char *dir,
     return 0;
 
 err_after_file_open:
+    UvOsClose(fd);
+err:
+    return rv;
+}
+
+int UvFsReadFrom(int fd, struct raft_buffer *buf, struct ErrMsg *errmsg)
+{
+    int rv;
+    /* TODO: use uv_fs_read() */
+    rv = read(fd, buf->base, buf->len);
+    if (rv == -1) {
+        UvErrMsgSys(errmsg, "read", -errno);
+        return UV__ERROR;
+    }
+    assert(rv >= 0);
+    if ((size_t)rv < buf->len) {
+        ErrMsgPrintf(errmsg, "short read: %d bytes instead of %ld", rv,
+                     buf->len);
+        return UV__NODATA;
+    }
+    return 0;
+}
+
+int UvFsReadFile(const char *dir,
+                 const char *filename,
+                 struct raft_buffer *buf,
+                 struct ErrMsg *errmsg)
+{
+    uv_stat_t sb;
+    char path[UV__PATH_SZ];
+    uv_file fd;
+    int rv;
+
+    UvOsJoin(dir, filename, path);
+
+    rv = UvOsStat(path, &sb);
+    if (rv != 0) {
+        UvErrMsgSys(errmsg, "stat", rv);
+        rv = RAFT_IOERR;
+        goto err;
+    }
+
+    rv = uvFsOpenFile(dir, filename, O_RDONLY, 0, &fd, errmsg);
+    if (rv != 0) {
+        goto err;
+    }
+
+    buf->len = sb.st_size;
+    buf->base = HeapMalloc(buf->len);
+    if (buf->base == NULL) {
+        ErrMsgPrintf(errmsg, "out of memory");
+        rv = RAFT_NOMEM;
+        goto err_after_open;
+    }
+
+    rv = UvFsReadFrom(fd, buf, errmsg);
+    if (rv != 0) {
+        goto err_after_buf_alloc;
+    }
+
+    UvOsClose(fd);
+
+    return 0;
+
+err_after_buf_alloc:
+    HeapFree(buf->base);
+err_after_open:
     UvOsClose(fd);
 err:
     return rv;

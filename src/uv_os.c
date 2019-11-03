@@ -58,6 +58,18 @@ int UvOsFsync(uv_file fd)
     return uv_fs_fsync(NULL, &req, fd, NULL);
 }
 
+int UvOsStat(const char *path, uv_stat_t *sb)
+{
+    struct uv_fs_s req;
+    int rv;
+    rv = uv_fs_stat(NULL, &req, path, NULL);
+    if (rv != 0) {
+        return rv;
+    }
+    memcpy(sb, &req.statbuf, sizeof *sb);
+    return 0;
+}
+
 int UvOsWrite(uv_file fd,
               const uv_buf_t bufs[],
               unsigned int nbufs,
