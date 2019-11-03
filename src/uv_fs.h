@@ -49,6 +49,14 @@ struct UvFsCreateFile
     UvFsCreateFileCb cb;   /* Callback to invoke upon request completion */
 };
 
+/* Create the given file in the given directory, allocate the given size to it
+ * and return its file descriptor. The file must not exist yet. */
+int UvFsCreateFile2(struct UvFs *fs,
+                    const char *dir,
+                    const char *filename,
+                    size_t size,
+                    uv_file *fd);
+
 /* Asynchronously create the given file in the given directory and allocate the
  * given size to it. The file must not exist yet. */
 int UvFsCreateFile(struct UvFs *fs,

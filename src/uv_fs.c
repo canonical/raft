@@ -57,6 +57,57 @@ static int uvFsSyncDir(struct UvFs *fs, const char *dir)
     return 0;
 }
 
+int UvFsCreateFile2(struct UvFs *fs,
+                    const char *dir,
+                    const char *filename,
+                    size_t size,
+                    uv_file *fd)
+{
+    char path[UV__PATH_SZ];
+    int flags = O_WRONLY | O_CREAT | O_EXCL; /* Common open flags */
+    char *errmsg = NULL;
+    int rv = 0;
+
+    UvOsJoin(dir, filename, path);
+
+    rv = UvOsOpen(path, flags, S_IRUSR | S_IWUSR);
+    if (rv < 0) {
+        errmsg = uvSysErrMsg("open", rv);
+        rv = UV__ERROR;
+        goto err;
+    }
+
+    *fd = rv;
+
+    /* Allocate the desired size. */
+    rv = UvOsFallocate(*fd, 0, size);
+    if (rv != 0) {
+        /* From the manual page:
+         *
+         *   posix_fallocate() returns zero on success, or an error number on
+         *   failure.  Note that errno is not set.
+         */
+        errmsg = uvSysErrMsg("posix_fallocate", rv);
+        rv = UV__ERROR;
+        goto err_after_open;
+    }
+
+    rv = uvFsSyncDirThreadSafe(dir, &errmsg);
+    if (rv != 0) {
+        goto err_after_open;
+    }
+
+    return 0;
+
+err_after_open:
+    UvOsClose(*fd);
+    UvOsUnlink(path);
+err:
+    assert(rv != 0);
+    UvFsSetErrMsg(fs, errmsg);
+    return rv;
+}
+
 static void uvFsCreateFileWorkCb(uv_work_t *work)
 {
     struct UvFsCreateFile *req = work->data;
