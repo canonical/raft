@@ -151,7 +151,7 @@ static void uvPrepareCreateFileWorkCb(uv_work_t *work)
 
     UvFsInit(&fs, NULL);
 
-    rv = UvFsCreateFile2(&fs, s->uv->dir, s->filename, s->size, &s->fd);
+    rv = UvFsCreateFile(&fs, s->uv->dir, s->filename, s->size, &s->fd);
     if (rv != 0) {
         s->errmsg = errMsgPrintf("create file: %s", UvFsErrMsg(&fs));
         s->status = rv;

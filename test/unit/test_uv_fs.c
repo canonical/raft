@@ -48,24 +48,24 @@ static void tearDownFs(void *data)
  *****************************************************************************/
 
 /* Create a file with the given parameters and assert that no error occured. */
-#define CREATE_FILE(DIR, FILENAME, SIZE)                          \
-    {                                                             \
-        uv_file fd_;                                              \
-        int rv_;                                                  \
-        rv_ = UvFsCreateFile2(&f->fs, DIR, FILENAME, SIZE, &fd_); \
-        munit_assert_int(rv_, ==, 0);                             \
-        munit_assert_int(UvOsClose(fd_), ==, 0);                  \
+#define CREATE_FILE(DIR, FILENAME, SIZE)                         \
+    {                                                            \
+        uv_file fd_;                                             \
+        int rv_;                                                 \
+        rv_ = UvFsCreateFile(&f->fs, DIR, FILENAME, SIZE, &fd_); \
+        munit_assert_int(rv_, ==, 0);                            \
+        munit_assert_int(UvOsClose(fd_), ==, 0);                 \
     }
 
 /* Assert that creating a file with the given parameters fails with the given
  * code and error message. */
-#define CREATE_FILE_ERROR(DIR, FILENAME, SIZE, RV, ERRMSG)        \
-    {                                                             \
-        uv_file fd_;                                              \
-        int rv_;                                                  \
-        rv_ = UvFsCreateFile2(&f->fs, DIR, FILENAME, SIZE, &fd_); \
-        munit_assert_int(rv_, ==, RV);                            \
-        munit_assert_string_equal(UvFsErrMsg(&f->fs), ERRMSG);    \
+#define CREATE_FILE_ERROR(DIR, FILENAME, SIZE, RV, ERRMSG)       \
+    {                                                            \
+        uv_file fd_;                                             \
+        int rv_;                                                 \
+        rv_ = UvFsCreateFile(&f->fs, DIR, FILENAME, SIZE, &fd_); \
+        munit_assert_int(rv_, ==, RV);                           \
+        munit_assert_string_equal(UvFsErrMsg(&f->fs), ERRMSG);   \
     }
 
 SUITE(UvFsCreateFile)
