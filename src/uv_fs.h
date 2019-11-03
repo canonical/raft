@@ -37,8 +37,7 @@ int UvFsRemoveFile(const char *dir,
                    const char *filename,
                    struct ErrMsg *errmsg);
 
-/* Synchronously truncate a file to the given size and then rename it. If the
- * size is zero, the file will be removed. */
+/* Synchronously truncate a file to the given size and then rename it. */
 int UvFsTruncateAndRenameFile(const char *dir,
                               size_t size,
                               const char *filename1,

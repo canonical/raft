@@ -32,18 +32,36 @@ static void workCb(uv_work_t *work)
 
     uvDebugf(uv, "finalize %s into %s", filename1, filename2);
 
-    /* Truncate and rename the segment. If the segment hasn't actually been used
-     * (because the writer has been closed or aborted before making any write),
-     * then it will be simply removed. */
+    /* If the segment hasn't actually been used (because the writer has been
+     * closed or aborted before making any write), just remove it. */
+    if (s->used == 0) {
+        rv = UvFsRemoveFile(uv->dir, filename1, &errmsg);
+        if (rv != 0) {
+            goto err;
+        }
+        goto sync;
+    }
+
+    /* Truncate and rename the segment.*/
     rv = UvFsTruncateAndRenameFile(uv->dir, s->used, filename1, filename2,
                                    &errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "truncate segment %s: %s", filename1,
-                 ErrMsgString(&errmsg));
+        goto err;
     }
 
-    s->status = rv;
+sync:
+    rv = UvFsSyncDir(uv->dir, &errmsg);
+    if (rv != 0) {
+        goto err;
+    }
+
+    s->status = 0;
     return;
+
+err:
+    uvErrorf(uv, "truncate segment %s: %s", filename1, ErrMsgString(&errmsg));
+    assert(rv != 0);
+    s->status = rv;
 }
 
 static void processRequests(struct uv *uv);

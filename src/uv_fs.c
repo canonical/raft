@@ -125,16 +125,6 @@ int UvFsTruncateAndRenameFile(const char *dir,
     UvOsJoin(dir, filename1, path1);
     UvOsJoin(dir, filename2, path2);
 
-    /* If the desired size is zero, then let's just remove the original file. */
-    if (size == 0) {
-        rv = UvOsUnlink(path1);
-        if (rv != 0) {
-            UvErrMsgSys(errmsg, "unlink", rv);
-            goto err;
-        }
-        goto sync;
-    }
-
     /* Truncate and rename. */
     rv = UvOsOpen(path1, UV_FS_O_RDWR, 0);
     if (rv < 0) {
@@ -160,11 +150,6 @@ int UvFsTruncateAndRenameFile(const char *dir,
         goto err;
     }
 
-sync:
-    rv = UvFsSyncDir(dir, errmsg);
-    if (rv != 0) {
-        return rv;
-    }
     return 0;
 
 err_after_open:
