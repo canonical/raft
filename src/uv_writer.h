@@ -3,8 +3,11 @@
 #ifndef UV_WRITER_H_
 #define UV_WRITER_H_
 
+#include <uv.h>
+
+#include "err.h"
 #include "queue.h"
-#include "uv_fs.h"
+#include "uv_os.h"
 
 /* Perform asynchronous writes to a single file. */
 struct UvWriter;
@@ -30,13 +33,13 @@ struct UvWriter
 };
 
 /* Initialize a file writer. */
-int UvWriterInit(struct UvFs *fs,
-                 struct UvWriter *w,
+int UvWriterInit(struct UvWriter *w,
                  struct uv_loop_s *loop,
                  uv_file fd,
                  bool direct /* Whether to use direct I/O */,
                  bool async /* Whether async I/O is available */,
-                 unsigned max_concurrent_writes);
+                 unsigned max_concurrent_writes,
+                 struct ErrMsg *errmsg);
 
 /* Close the given file and release all associated resources. */
 void UvWriterClose(struct UvWriter *w, UvWriterCloseCb cb);

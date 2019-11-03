@@ -204,15 +204,14 @@ static void uvWriterPollCb(uv_poll_t *poller, int status, int events)
     }
 }
 
-int UvWriterInit(struct UvFs *fs,
-                 struct UvWriter *w,
+int UvWriterInit(struct UvWriter *w,
                  struct uv_loop_s *loop,
                  uv_file fd,
                  bool direct /* Whether to use direct I/O */,
                  bool async /* Whether async I/O is available */,
-                 unsigned max_concurrent_writes)
+                 unsigned max_concurrent_writes,
+                 struct ErrMsg *errmsg)
 {
-    char *errmsg = NULL;
     int rv = 0;
 
     w->loop = loop;
@@ -226,7 +225,7 @@ int UvWriterInit(struct UvFs *fs,
     if (direct) {
         rv = UvOsSetDirectIo(w->fd);
         if (rv != 0) {
-            errmsg = uvSysErrMsg("fcntl", rv);
+            UvErrMsgSys(errmsg, "fcntl", rv);
             goto err;
         }
     }
@@ -234,7 +233,7 @@ int UvWriterInit(struct UvFs *fs,
     /* Setup the AIO context. */
     rv = UvOsIoSetup(w->n_events, &w->ctx);
     if (rv != 0) {
-        errmsg = uvSysErrMsg("io_setup", rv);
+        UvErrMsgSys(errmsg, "io_setup", rv);
         rv = UV__ERROR;
         goto err;
     }
@@ -243,7 +242,7 @@ int UvWriterInit(struct UvFs *fs,
     w->events = HeapCalloc(w->n_events, sizeof *w->events);
     if (w->events == NULL) {
         /* UNTESTED: todo */
-        errmsg = errMsgPrintf("failed to alloc events array");
+        ErrMsgPrintf(errmsg, "failed to alloc events array");
         rv = UV__ERROR;
         goto err_after_io_setup;
     }
@@ -253,7 +252,7 @@ int UvWriterInit(struct UvFs *fs,
     rv = UvOsEventfd(0, UV__EFD_NONBLOCK);
     if (rv < 0) {
         /* UNTESTED: should fail only with ENOMEM */
-        errmsg = uvSysErrMsg("eventfd", rv);
+        UvErrMsgSys(errmsg, "eventfd", rv);
         rv = UV__ERROR;
         goto err_after_events_alloc;
     }
@@ -263,7 +262,7 @@ int UvWriterInit(struct UvFs *fs,
     if (rv != 0) {
         /* UNTESTED: with the current libuv implementation this should never
          * fail. */
-        errmsg = uvSysErrMsg("uv_poll_init", rv);
+        UvErrMsgSys(errmsg, "uv_poll_init", rv);
         rv = UV__ERROR;
         goto err_after_event_fd;
     }
@@ -273,7 +272,7 @@ int UvWriterInit(struct UvFs *fs,
     if (rv != 0) {
         /* UNTESTED: with the current libuv implementation this should never
          * fail. */
-        errmsg = uvSysErrMsg("uv_poll_start", rv);
+        UvErrMsgSys(errmsg, "uv_poll_start", rv);
         rv = UV__ERROR;
         goto err_after_event_fd;
     }
@@ -289,7 +288,6 @@ err_after_events_alloc:
 err_after_io_setup:
     UvOsIoDestroy(w->ctx);
 err:
-    UvFsSetErrMsg(fs, errmsg);
     assert(rv != 0);
     return rv;
 }

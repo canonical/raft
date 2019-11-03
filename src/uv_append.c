@@ -389,6 +389,7 @@ static void appendPrepareCb(struct uvPrepare *req, int status)
 {
     struct openSegment *segment = req->data;
     struct uv *uv = segment->uv;
+    struct ErrMsg errmsg;
     int rv;
 
     /* If we have been closed, let's discard the segment. */
@@ -418,8 +419,8 @@ static void appendPrepareCb(struct uvPrepare *req, int status)
     /* TODO: check for errors. */
     segment->writer = raft_malloc(sizeof *segment->writer);
     assert(segment->writer != NULL);
-    rv = UvWriterInit(NULL, segment->writer, uv->loop, req->fd, uv->direct_io,
-                      uv->async_io, 1);
+    rv = UvWriterInit(segment->writer, uv->loop, req->fd, uv->direct_io,
+                      uv->async_io, 1, &errmsg);
     assert(rv == 0);
 
     segment->counter = req->counter;
