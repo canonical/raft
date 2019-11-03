@@ -28,27 +28,6 @@ const char *UvFsErrMsg(struct UvFs *fs);
 /* Set the last error message, possibly replacing the former one. */
 void UvFsSetErrMsg(struct UvFs *fs, char *errmsg);
 
-/* Create file request. */
-struct UvFsCreateFile;
-
-/* Callback called after a create file request has been completed. */
-typedef void (*UvFsCreateFileCb)(struct UvFsCreateFile *req, int status);
-
-struct UvFsCreateFile
-{
-    void *data;            /* User data */
-    int status;            /* Request result code */
-    uv_file fd;            /* File handle */
-    struct UvFs *fs;       /* Fs object the request was submitted to */
-    struct uv_work_s work; /* To execute logic in the threadpool */
-    const char *dir;       /* Directory */
-    const char *filename;  /* Filename */
-    size_t size;           /* File size */
-    bool canceled;         /* Cancellation flag */
-    char *errmsg;          /* Description of last error */
-    UvFsCreateFileCb cb;   /* Callback to invoke upon request completion */
-};
-
 /* Create the given file in the given directory, allocate the given size to it
  * and return its file descriptor. The file must not exist yet. */
 int UvFsCreateFile2(struct UvFs *fs,
@@ -56,18 +35,6 @@ int UvFsCreateFile2(struct UvFs *fs,
                     const char *filename,
                     size_t size,
                     uv_file *fd);
-
-/* Asynchronously create the given file in the given directory and allocate the
- * given size to it. The file must not exist yet. */
-int UvFsCreateFile(struct UvFs *fs,
-                   struct UvFsCreateFile *req,
-                   const char *dir,
-                   const char *filename,
-                   size_t size,
-                   UvFsCreateFileCb cb);
-
-/* Cancel a create file request after it has been submitted. */
-void UvFsCreateFileCancel(struct UvFsCreateFile *req);
 
 /* Synchronously remove a file, calling the unlink() system call and fsync()'ing
  * the directory. */
