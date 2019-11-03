@@ -32,7 +32,7 @@ static void workCb(uv_work_t *work)
 
     uvDebugf(uv, "finalize %s into %s", filename1, filename2);
 
-    UvFsInit(&fs, uv->loop);
+    UvFsInit(&fs);
 
     /* Truncate and rename the segment. If the segment hasn't actually been used
      * (because the writer has been closed or aborted before making any write),

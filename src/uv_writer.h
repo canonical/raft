@@ -16,7 +16,7 @@ typedef void (*UvWriterCloseCb)(struct UvWriter *w);
 struct UvWriter
 {
     void *data;                    /* User data */
-    struct UvFs *fs;               /* Underlying fs object */
+    struct uv_loop_s *loop;        /* Event loop */
     uv_file fd;                    /* File handle */
     bool async;                    /* Whether fully async I/O is supported */
     aio_context_t ctx;             /* KAIO handle */
@@ -32,6 +32,7 @@ struct UvWriter
 /* Initialize a file writer. */
 int UvWriterInit(struct UvFs *fs,
                  struct UvWriter *w,
+                 struct uv_loop_s *loop,
                  uv_file fd,
                  bool direct /* Whether to use direct I/O */,
                  bool async /* Whether async I/O is available */,

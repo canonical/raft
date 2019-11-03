@@ -34,7 +34,7 @@ static void *setupWriter(MUNIT_UNUSED const MunitParameter params[],
     int rv;
     SETUP_DIR_OR_SKIP;
     SETUP_LOOP;
-    UvFsInit(&f->fs, &f->loop);
+    UvFsInit(&f->fs);
     rv = uvProbeIoCapabilities(f->dir, &f->direct_io, &f->async_io, &errmsg);
     munit_assert_int(rv, ==, 0);
     f->block_size = f->direct_io != 0 ? f->direct_io : 4096;
@@ -72,21 +72,21 @@ static void closeCbMarkDone(struct UvWriter *w)
     *done = true;
 }
 
-#define INIT(MAX_WRITES)                                                 \
-    {                                                                    \
-        int rv_;                                                         \
-        rv_ = UvWriterInit(&f->fs, &f->writer, f->fd, f->direct_io != 0, \
-                           f->async_io, MAX_WRITES);                     \
-        munit_assert_int(rv_, ==, 0);                                    \
+#define INIT(MAX_WRITES)                                                \
+    {                                                                   \
+        int rv_;                                                        \
+        rv_ = UvWriterInit(&f->fs, &f->writer, &f->loop, f->fd,         \
+                           f->direct_io != 0, f->async_io, MAX_WRITES); \
+        munit_assert_int(rv_, ==, 0);                                   \
     }
 
-#define INIT_ERROR(RV, ERRMSG)                                           \
-    {                                                                    \
-        int rv_;                                                         \
-        rv_ = UvWriterInit(&f->fs, &f->writer, f->fd, f->direct_io != 0, \
-                           f->async_io, 1);                              \
-        munit_assert_int(rv_, ==, RV);                                   \
-        munit_assert_string_equal(UvFsErrMsg(&f->fs), ERRMSG);           \
+#define INIT_ERROR(RV, ERRMSG)                                  \
+    {                                                           \
+        int rv_;                                                \
+        rv_ = UvWriterInit(&f->fs, &f->writer, &f->loop, f->fd, \
+                           f->direct_io != 0, f->async_io, 1);  \
+        munit_assert_int(rv_, ==, RV);                          \
+        munit_assert_string_equal(UvFsErrMsg(&f->fs), ERRMSG);  \
     }
 
 /* Start closing the writer wait for it shutdown. */

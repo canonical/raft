@@ -11,12 +11,11 @@
 /* Abstract file system operations. */
 struct UvFs
 {
-    struct uv_loop_s *loop; /* Event loop. */
-    char *errmsg;           /* Description of last error occurred. */
+    char *errmsg; /* Description of last error occurred. */
 };
 
 /* Initialize a file system object. */
-void UvFsInit(struct UvFs *fs, struct uv_loop_s *loop);
+void UvFsInit(struct UvFs *fs);
 
 /* Release all reasources used by file system. */
 void UvFsClose(struct UvFs *fs);

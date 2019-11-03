@@ -24,7 +24,7 @@ static void *setupFs(MUNIT_UNUSED const MunitParameter params[],
     struct fs *f = munit_malloc(sizeof *f);
     SETUP_DIR_OR_SKIP;
     SETUP_LOOP;
-    UvFsInit(&f->fs, &f->loop);
+    UvFsInit(&f->fs);
     return f;
 }
 

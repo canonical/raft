@@ -603,7 +603,6 @@ int raft_uv_init(struct raft_io *io,
     uv->transport->data = uv;
     uv->logger = NULL;  /* will be set later, or will fail earlier */
     uv->id = 0;
-    UvFsInit(&uv->fs, uv->loop);
     uv->state = 0;
     uv->errored = false;
     uv->direct_io = false;  /* assume unsupported */
@@ -665,7 +664,6 @@ void raft_uv_close(struct raft_io *io)
 {
     struct uv *uv;
     uv = io->impl;
-    UvFsClose(&uv->fs);
     if (uv->clients != NULL) {
         raft_free(uv->clients);
     }

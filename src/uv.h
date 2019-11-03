@@ -55,7 +55,6 @@ struct uv
     struct raft_uv_transport *transport; /* Network transport */
     struct raft_logger *logger;          /* Logger implementation */
     unsigned id;                         /* Server ID */
-    struct UvFs fs;                      /* File system abstraction */
     int state;                           /* Current state */
     bool errored;                        /* If a disk I/O error was hit */
     bool direct_io;                      /* Whether direct I/O is supported */

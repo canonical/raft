@@ -74,10 +74,10 @@ struct uvAppend
  * In particular, calculate the number of bytes needed to store this batch in on
  * disk. */
 static void uvAppendInit(struct uvAppend *a,
-                       struct raft_io_append *req,
-                       const struct raft_entry entries[],
-                       unsigned n,
-                       raft_io_append_cb cb)
+                         struct raft_io_append *req,
+                         const struct raft_entry entries[],
+                         unsigned n,
+                         raft_io_append_cb cb)
 {
     unsigned i;
     a->req = req;
@@ -112,7 +112,7 @@ static void openSegmentReserveSegmentCapacity(struct openSegment *s,
  * request into it. IOW, previous data in the write buffer will be retained, and
  * data for these new entries will be appended. */
 static int openSegmentEncodeEntriesToWriteBuf(struct openSegment *s,
-                                          struct uvAppend *req)
+                                              struct uvAppend *req)
 {
     int rv;
     assert(req->segment == s);
@@ -418,7 +418,7 @@ static void appendPrepareCb(struct uvPrepare *req, int status)
     /* TODO: check for errors. */
     segment->writer = raft_malloc(sizeof *segment->writer);
     assert(segment->writer != NULL);
-    rv = UvWriterInit(&uv->fs, segment->writer, req->fd, uv->direct_io,
+    rv = UvWriterInit(NULL, segment->writer, uv->loop, req->fd, uv->direct_io,
                       uv->async_io, 1);
     assert(rv == 0);
 

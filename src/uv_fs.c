@@ -7,9 +7,8 @@
 #include "heap.h"
 #include "uv_error.h"
 
-void UvFsInit(struct UvFs *fs, struct uv_loop_s *loop)
+void UvFsInit(struct UvFs *fs)
 {
-    fs->loop = loop;
     fs->errmsg = NULL;
 }
 

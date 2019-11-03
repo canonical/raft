@@ -184,7 +184,7 @@ static void uvWriterPollCb(uv_poll_t *poller, int status, int events)
             req->iocb.aio_resfd = 0;
             req->iocb.aio_rw_flags &= ~RWF_NOWAIT;
             req->work.data = req;
-            rv = uv_queue_work(w->fs->loop, &req->work, uvWriterWorkCb,
+            rv = uv_queue_work(w->loop, &req->work, uvWriterWorkCb,
                                uvWriterAfterWorkCb);
             if (rv != 0) {
                 /* UNTESTED: with the current libuv implementation this should
@@ -206,6 +206,7 @@ static void uvWriterPollCb(uv_poll_t *poller, int status, int events)
 
 int UvWriterInit(struct UvFs *fs,
                  struct UvWriter *w,
+                 struct uv_loop_s *loop,
                  uv_file fd,
                  bool direct /* Whether to use direct I/O */,
                  bool async /* Whether async I/O is available */,
@@ -214,7 +215,7 @@ int UvWriterInit(struct UvFs *fs,
     char *errmsg = NULL;
     int rv = 0;
 
-    w->fs = fs;
+    w->loop = loop;
     w->fd = fd;
     w->async = async;
     w->ctx = 0;
@@ -258,7 +259,7 @@ int UvWriterInit(struct UvFs *fs,
     }
     w->event_fd = rv;
 
-    rv = uv_poll_init(fs->loop, &w->event_poller, w->event_fd);
+    rv = uv_poll_init(loop, &w->event_poller, w->event_fd);
     if (rv != 0) {
         /* UNTESTED: with the current libuv implementation this should never
          * fail. */
@@ -438,8 +439,8 @@ int UvWriterSubmit(struct UvWriter *w,
     /* If we got here it means we need to run io_submit in the threadpool. */
     req->work.data = req;
 
-    rv = uv_queue_work(w->fs->loop, &req->work, uvWriterWorkCb,
-                       uvWriterAfterWorkCb);
+    rv =
+        uv_queue_work(w->loop, &req->work, uvWriterWorkCb, uvWriterAfterWorkCb);
     if (rv != 0) {
         /* UNTESTED: with the current libuv implementation this can't fail. */
         errmsg = uvSysErrMsg("uv_queue_work", rv);
