@@ -67,11 +67,11 @@ static void uvPrepareFlushRequests(struct uv *uv, int status)
 /* Remove a prepared open segment */
 static void uvPrepareRemove(struct preparedSegment *s)
 {
-    struct UvFs fs;
+    struct ErrMsg errmsg;
     assert(s->counter > 0);
     assert(s->fd >= 0);
     UvOsClose(s->fd);
-    UvFsRemoveFile(&fs, s->uv->dir, s->filename);
+    UvFsRemoveFile(s->uv->dir, s->filename, &errmsg);
     raft_free(s);
 }
 
@@ -147,12 +147,12 @@ static void uvPrepareProcessRequests(struct uv *uv)
 static void uvPrepareCreateFileWorkCb(uv_work_t *work)
 {
     struct preparedSegment *s = work->data;
-    struct UvFs fs;
+    struct ErrMsg errmsg;
     int rv;
 
-    rv = UvFsCreateFile(&fs, s->uv->dir, s->filename, s->size, &s->fd);
+    rv = UvFsCreateFile(s->uv->dir, s->filename, s->size, &s->fd, &errmsg);
     if (rv != 0) {
-        s->errmsg = errMsgPrintf("create file: %s", UvFsErrMsg(&fs));
+        s->errmsg = errMsgPrintf("create file: %s", ErrMsgString(&errmsg));
         s->status = rv;
     } else {
         s->status = 0;

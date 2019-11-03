@@ -7,34 +7,29 @@
 #include "heap.h"
 #include "uv_error.h"
 
-const char *UvFsErrMsg(struct UvFs *fs)
-{
-    return ErrMsgString(&fs->errmsg);
-}
-
-static int uvFsSyncDir(struct UvFs *fs, const char *dir)
+static int uvFsSyncDir(const char *dir, struct ErrMsg *errmsg)
 {
     uv_file fd;
     int rv;
     fd = UvOsOpen(dir, UV_FS_O_RDONLY | UV_FS_O_DIRECTORY, 0);
     if (fd < 0) {
-        UvErrMsgSys(&fs->errmsg, "open directory", fd);
+        UvErrMsgSys(errmsg, "open directory", fd);
         return UV__ERROR;
     }
     rv = UvOsFsync(fd);
     UvOsClose(fd);
     if (rv != 0) {
-        UvErrMsgSys(&fs->errmsg, "fsync directory", fd);
+        UvErrMsgSys(errmsg, "fsync directory", fd);
         return UV__ERROR;
     }
     return 0;
 }
 
-int UvFsCreateFile(struct UvFs *fs,
-                   const char *dir,
+int UvFsCreateFile(const char *dir,
                    const char *filename,
                    size_t size,
-                   uv_file *fd)
+                   uv_file *fd,
+                   struct ErrMsg *errmsg)
 {
     char path[UV__PATH_SZ];
     int flags = O_WRONLY | O_CREAT | O_EXCL; /* Common open flags */
@@ -44,7 +39,7 @@ int UvFsCreateFile(struct UvFs *fs,
 
     rv = UvOsOpen(path, flags, S_IRUSR | S_IWUSR);
     if (rv < 0) {
-        UvErrMsgSys(&fs->errmsg, "open", rv);
+        UvErrMsgSys(errmsg, "open", rv);
         rv = UV__ERROR;
         goto err;
     }
@@ -59,12 +54,12 @@ int UvFsCreateFile(struct UvFs *fs,
          *   posix_fallocate() returns zero on success, or an error number on
          *   failure.  Note that errno is not set.
          */
-        UvErrMsgSys(&fs->errmsg, "posix_fallocate", rv);
+        UvErrMsgSys(errmsg, "posix_fallocate", rv);
         rv = UV__ERROR;
         goto err_after_open;
     }
 
-    rv = uvFsSyncDir(fs, dir);
+    rv = uvFsSyncDir(dir, errmsg);
     if (rv != 0) {
         goto err_after_open;
     }
@@ -79,28 +74,28 @@ err:
     return rv;
 }
 
-int UvFsRemoveFile(struct UvFs *fs, const char *dir, const char *filename)
+int UvFsRemoveFile(const char *dir, const char *filename, struct ErrMsg *errmsg)
 {
     char path[UV__PATH_SZ];
     int rv;
     UvOsJoin(dir, filename, path);
     rv = UvOsUnlink(path);
     if (rv != 0) {
-        UvErrMsgSys(&fs->errmsg, "unlink", rv);
+        UvErrMsgSys(errmsg, "unlink", rv);
         return UV__ERROR;
     }
-    rv = uvFsSyncDir(fs, dir);
+    rv = uvFsSyncDir(dir, errmsg);
     if (rv != 0) {
         return 0;
     }
     return 0;
 }
 
-int UvFsTruncateAndRenameFile(struct UvFs *fs,
-                              const char *dir,
+int UvFsTruncateAndRenameFile(const char *dir,
                               size_t size,
                               const char *filename1,
-                              const char *filename2)
+                              const char *filename2,
+                              struct ErrMsg *errmsg)
 {
     char path1[UV__PATH_SZ];
     char path2[UV__PATH_SZ];
@@ -114,7 +109,7 @@ int UvFsTruncateAndRenameFile(struct UvFs *fs,
     if (size == 0) {
         rv = UvOsUnlink(path1);
         if (rv != 0) {
-            UvErrMsgSys(&fs->errmsg, "unlink", rv);
+            UvErrMsgSys(errmsg, "unlink", rv);
             goto err;
         }
         goto sync;
@@ -123,30 +118,30 @@ int UvFsTruncateAndRenameFile(struct UvFs *fs,
     /* Truncate and rename. */
     rv = UvOsOpen(path1, UV_FS_O_RDWR, 0);
     if (rv < 0) {
-        UvErrMsgSys(&fs->errmsg, "open", rv);
+        UvErrMsgSys(errmsg, "open", rv);
         goto err;
     }
     fd = rv;
     rv = UvOsTruncate(fd, size);
     if (rv != 0) {
-        UvErrMsgSys(&fs->errmsg, "truncate", rv);
+        UvErrMsgSys(errmsg, "truncate", rv);
         goto err_after_open;
     }
     rv = UvOsFsync(fd);
     if (rv != 0) {
-        UvErrMsgSys(&fs->errmsg, "fsync", rv);
+        UvErrMsgSys(errmsg, "fsync", rv);
         goto err_after_open;
     }
     UvOsClose(fd);
 
     rv = UvOsRename(path1, path2);
     if (rv != 0) {
-        UvErrMsgSys(&fs->errmsg, "rename", rv);
+        UvErrMsgSys(errmsg, "rename", rv);
         goto err;
     }
 
 sync:
-    rv = uvFsSyncDir(fs, dir);
+    rv = uvFsSyncDir(dir, errmsg);
     if (rv != 0) {
         return rv;
     }

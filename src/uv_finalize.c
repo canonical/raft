@@ -22,9 +22,9 @@ static void workCb(uv_work_t *work)
 {
     struct segment *s = work->data;
     struct uv *uv = s->uv;
-    struct UvFs fs;
     char filename1[UV__FILENAME_LEN];
     char filename2[UV__FILENAME_LEN];
+    struct ErrMsg errmsg;
     int rv;
 
     sprintf(filename1, UV__OPEN_TEMPLATE, s->counter);
@@ -35,9 +35,11 @@ static void workCb(uv_work_t *work)
     /* Truncate and rename the segment. If the segment hasn't actually been used
      * (because the writer has been closed or aborted before making any write),
      * then it will be simply removed. */
-    rv = UvFsTruncateAndRenameFile(&fs, uv->dir, s->used, filename1, filename2);
+    rv = UvFsTruncateAndRenameFile(uv->dir, s->used, filename1, filename2,
+                                   &errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "truncate segment %s: %s", filename1, UvFsErrMsg(&fs));
+        uvErrorf(uv, "truncate segment %s: %s", filename1,
+                 ErrMsgString(&errmsg));
     }
 
     s->status = rv;
