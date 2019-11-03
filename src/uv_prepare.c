@@ -94,8 +94,9 @@ void uvPrepareClose(struct uv *uv)
     }
 
     /* Cancel any in-progress segment creation request. */
-    if (uv->prepare_create != NULL) {
-        struct preparedSegment *s = uv->prepare_create->data;
+    if (uv->prepare_inflight != NULL) {
+        struct UvFsCreateFile *req = uv->prepare_inflight;
+        struct preparedSegment *s = req->data;
         uvPrepareCancel(s);
     }
 }
@@ -147,7 +148,7 @@ static void prepareSegmentCreateFileCb(struct UvFsCreateFile *req, int status)
     s = req->data;
     uv = s->uv;
 
-    uv->prepare_create = NULL; /* Reset the creation in-progress marker. */
+    uv->prepare_inflight = NULL; /* Reset the creation in-progress marker. */
 
     /* If we have been canceled, it means we are closing. */
     if (status == UV__CANCELED) {
@@ -208,7 +209,7 @@ static int prepareSegment(struct uv *uv)
         goto err_after_segment_alloc;
     }
 
-    uv->prepare_create = &s->req;
+    uv->prepare_inflight = &s->req;
     uv->prepare_next_counter++;
 
     return 0;
@@ -231,7 +232,7 @@ static void maybePrepareSegment(struct uv *uv)
     assert(!uv->closing);
 
     /* If we are already creating a segment, we're done. */
-    if (uv->prepare_create != NULL) {
+    if (uv->prepare_inflight != NULL) {
         return;
     }
 
