@@ -3,6 +3,8 @@
 #ifndef UV_ERROR_H_
 #define UV_ERROR_H_
 
+#include <uv.h>
+
 #include "err.h"
 
 /* Error codes. */
@@ -33,12 +35,10 @@ typedef char uvErrMsg[UV__ERRMSG_MAX_LEN];
     }
 
 /* Format an error message caused by a failed system call or stdlib function. */
-#define UvErrMsgSys(ERRMSG, SYSCALL, ERRNUM)                        \
-    {                                                               \
-        char syserr[256];                                           \
-        ErrMsgPrintf(ERRMSG, "%s",                                  \
-                     uv_strerror_r(ERRNUM, syserr, sizeof syserr)); \
-        ErrMsgWrapf(ERRMSG, SYSCALL);                               \
+#define UvErrMsgSys(ERRMSG, SYSCALL, ERRNUM)             \
+    {                                                    \
+        ErrMsgPrintf(ERRMSG, "%s", uv_strerror(ERRNUM)); \
+        ErrMsgWrapf(ERRMSG, SYSCALL);                    \
     }
 
 /* Format an error message caused by a failed system call or stdlib function. */

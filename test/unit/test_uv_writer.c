@@ -18,6 +18,7 @@ struct writer
     size_t block_size;
     size_t direct_io;
     bool async_io;
+    struct ErrMsg errmsg;
     struct UvWriter writer;
 };
 
@@ -71,21 +72,19 @@ static void closeCbMarkDone(struct UvWriter *w)
 
 #define INIT(MAX_WRITES)                                                   \
     {                                                                      \
-        struct ErrMsg errmsg_;                                             \
         int rv_;                                                           \
         rv_ = UvWriterInit(&f->writer, &f->loop, f->fd, f->direct_io != 0, \
-                           f->async_io, MAX_WRITES, &errmsg_);             \
+                           f->async_io, MAX_WRITES, &f->errmsg);           \
         munit_assert_int(rv_, ==, 0);                                      \
     }
 
 #define INIT_ERROR(RV, ERRMSG)                                             \
     {                                                                      \
-        struct ErrMsg errmsg_;                                             \
         int rv_;                                                           \
         rv_ = UvWriterInit(&f->writer, &f->loop, f->fd, f->direct_io != 0, \
-                           f->async_io, 1, &errmsg_);                      \
+                           f->async_io, 1, &f->errmsg);                    \
         munit_assert_int(rv_, ==, RV);                                     \
-        munit_assert_string_equal(ErrMsgString(&errmsg_), ERRMSG);         \
+        munit_assert_string_equal(ErrMsgString(&f->errmsg), ERRMSG);       \
     }
 
 /* Start closing the writer wait for it shutdown. */
@@ -155,7 +154,7 @@ static void submitCbAssertFail(struct UvWriterReq *req, int status)
     struct submitResult *result = req->data;
     munit_assert_int(status, !=, 0);
     munit_assert_int(status, ==, result->status);
-    munit_assert_string_equal(UvWriterErrMsg(req->writer), result->errmsg);
+    munit_assert_string_equal(ErrMsgString(&req->errmsg), result->errmsg);
     result->done = true;
 }
 
@@ -240,24 +239,24 @@ static void submitCbAssertFail(struct UvWriterReq *req, int status)
 
 /* Assert that the content of the test file has the given number of blocks, each
  * filled with progressive numbers. */
-#define ASSERT_CONTENT(N)                                       \
-  {                                                             \
-    size_t size = N * f->block_size;                            \
-    void *buf = munit_malloc(size);                             \
-                                                                \
-    test_dir_read_file(f->dir, "foo", buf, size);               \
-                                                                \
-    for (unsigned __i = 0; __i < N; __i++)                      \
-      {                                                         \
-        char *cursor = (char *)buf + __i * f->block_size;       \
-        for (unsigned __j = 0; __j < f->block_size; __j++)      \
-          {                                                     \
-            munit_assert_int (cursor[__j], ==, __i + 1);        \
-          }                                                     \
-      }                                                         \
-                                                                \
-    free(buf);                                                  \
-  }
+#define ASSERT_CONTENT(N)                                    \
+    {                                                        \
+        size_t size = N * f->block_size;                     \
+        void *buf = munit_malloc(size);                      \
+        unsigned i_;                                         \
+        unsigned j_;                                         \
+                                                             \
+        test_dir_read_file(f->dir, "foo", buf, size);        \
+                                                             \
+        for (i_ = 0; i_ < N; i_++) {                         \
+            char *cursor = (char *)buf + i_ * f->block_size; \
+            for (j_ = 0; j_ < f->block_size; j_++) {         \
+                munit_assert_int(cursor[j_], ==, i_ + 1);    \
+            }                                                \
+        }                                                    \
+                                                             \
+        free(buf);                                           \
+    }
 
 SUITE(UvWriterSubmit)
 

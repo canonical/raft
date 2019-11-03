@@ -4,6 +4,7 @@
 #define UV_H_
 
 #include "../include/raft.h"
+#include "err.h"
 #include "queue.h"
 #include "uv_fs.h"
 #include "uv_os.h"
@@ -89,6 +90,7 @@ struct uv
     bool closing;                        /* True if we are closing */
     raft_io_close_cb close_cb;           /* Invoked when finishing closing */
     unsigned short log_level;            /* Logging level */
+    struct ErrMsg errmsg;                /* Description of last error occured */
 };
 
 /* Emit a log message with a certain level. */
