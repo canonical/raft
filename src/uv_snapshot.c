@@ -55,10 +55,9 @@ int uvSnapshotInfoAppendIfMatch(struct uv *uv,
 {
     struct uvSnapshotInfo info;
     bool matched;
-    uv_stat_t sb;
     char snapshot_filename[UV__FILENAME_LEN];
-    char errmsg_[2048];
-    char *errmsg = errmsg_;
+    bool exists;
+    struct ErrMsg errmsg;
     int rv;
 
     /* Check if it's a snapshot metadata filename */
@@ -72,18 +71,16 @@ int uvSnapshotInfoAppendIfMatch(struct uv *uv,
      * there's none, it means that we aborted before finishing the snapshot, so
      * let's remove the metadata file. */
     filenameOf(&info, snapshot_filename);
-    rv = uvStatFile(uv->dir, snapshot_filename, &sb, &errmsg);
+    rv = UvFsFileExists(uv->dir, snapshot_filename, &exists, &errmsg);
     if (rv != 0) {
-        if (rv == UV__NOENT) {
-            uvTryUnlinkFile(uv->dir, filename); /* Ignore errors */
-            *appended = false;
-            rv = 0;
-        } else {
-            uvErrorf(uv, "stat %s: %s", snapshot_filename, errmsg);
-            rv = RAFT_IOERR;
-        }
-        raft_free(errmsg);
+        uvErrorf(uv, "stat %s: %s", snapshot_filename, ErrMsgString(&errmsg));
+        rv = RAFT_IOERR;
         return rv;
+    }
+    if (!exists) {
+        UvFsRemoveFile(uv->dir, filename, &errmsg); /* Ignore errors */
+        *appended = false;
+        return 0;
     }
 
     ARRAY__APPEND(struct uvSnapshotInfo, info, infos, n_infos, rv);

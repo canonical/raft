@@ -15,6 +15,12 @@ int UvFsEnsureDir(const char *dir, struct ErrMsg *errmsg);
 /* Sync the given directory by calling fsync(). */
 int UvFsSyncDir(const char *dir, struct ErrMsg *errmsg);
 
+/* Check whether a the given file exists. */
+int UvFsFileExists(const char *dir,
+                   const char *filename,
+                   bool *exists,
+                   struct ErrMsg *errmsg);
+
 /* Create the given file in the given directory and allocate the given size to
  * it, returning its file descriptor. The file must not exist yet. */
 int UvFsAllocateFile(const char *dir,

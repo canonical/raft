@@ -55,6 +55,33 @@ int UvFsSyncDir(const char *dir, struct ErrMsg *errmsg)
     return 0;
 }
 
+int UvFsFileExists(const char *dir,
+                   const char *filename,
+                   bool *exists,
+                   struct ErrMsg *errmsg)
+{
+    uv_stat_t sb;
+    char path[UV__PATH_SZ];
+    int rv;
+
+    UvOsJoin(dir, filename, path);
+
+    rv = UvOsStat(path, &sb);
+    if (rv != 0) {
+        if (rv == UV_ENOENT) {
+            *exists = false;
+            goto out;
+        }
+        UvErrMsgSys(errmsg, "stat", rv);
+        return UV__ERROR;
+    }
+
+    *exists = true;
+
+out:
+    return 0;
+}
+
 /* Open a file in a directory. */
 static int uvFsOpenFile(const char *dir,
                         const char *filename,
