@@ -1372,7 +1372,7 @@ static void completeRequest(struct raft_fixture *f, unsigned i, raft_time t)
 {
     struct io *io = f->servers[i].io.impl;
     queue *head;
-    struct request *r;
+    struct request *r = NULL;
     bool found = false;
     f->time = t;
     f->event.server_index = i;

@@ -592,16 +592,22 @@ int raft_uv_init(struct raft_io *io,
     if (uv == NULL) {
         return RAFT_NOMEM;
     }
+    memset (uv, 0, sizeof (struct uv));
+    /* during initialization of a structure this big (40 fields),
+       you're guaranteed to forget to initialize something */
 
     uv->io = io;
     uv->loop = loop;
     strcpy(uv->dir, dir);
     uv->transport = transport;
     uv->transport->data = uv;
+    uv->logger = NULL;  /* will be set later, or will fail earlier */
     uv->id = 0;
     UvFsInit(&uv->fs, uv->loop);
     uv->state = 0;
     uv->errored = false;
+    uv->direct_io = false;  /* assume unsupported */
+    uv->async_io = false;  /* assume unsupported */
     uv->block_size = 0; /* Detected in raft_io->init() */
     uv->n_blocks = 0;   /* Calculated in raft_io->init() */
     uv->clients = NULL;
@@ -625,11 +631,16 @@ int raft_uv_init(struct raft_io *io,
     QUEUE_INIT(&uv->snapshot_put_reqs);
     QUEUE_INIT(&uv->snapshot_get_reqs);
     uv->snapshot_put_work.data = NULL;
-    uv->tick_cb = NULL;
+    /* TODO: struct uvMetadata metadata;  /\* Cache of metadata on disk *\/ */
+    /* TODO: struct uv_timer_s timer;     /\* Timer for periodic ticks *\/ */
+    uv->tick_cb = NULL;  /* will be set at ~start~ */
+    uv->recv_cb = NULL;  /* will be set at ~start~ */
     uv->closing = false;
     uv->close_cb = NULL;
 
     /* Set the raft_io implementation. */
+    io->version = 1;  /* future-proof'ing */
+    io->data = NULL;  /* canary-poison */
     io->impl = uv;
     io->init = uvInit;
     io->start = uvStart;

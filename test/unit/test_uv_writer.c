@@ -241,24 +241,24 @@ static void submitCbAssertFail(struct UvWriterReq *req, int status)
 
 /* Assert that the content of the test file has the given number of blocks, each
  * filled with progressive numbers. */
-#define ASSERT_CONTENT(N)                                   \
-    {                                                       \
-        size_t size = N * f->block_size;                    \
-        void *buf = munit_malloc(size);                     \
-        unsigned i;                                         \
-        unsigned j;                                         \
-                                                            \
-        test_dir_read_file(f->dir, "foo", buf, size);       \
-                                                            \
-        for (i = 0; i < N; i++) {                           \
-            char *cursor = (char *)buf + i * f->block_size; \
-            for (j = 0; j < f->block_size; j++) {           \
-                munit_assert_int(cursor[j], ==, i + 1);     \
-            }                                               \
-        }                                                   \
-                                                            \
-        free(buf);                                          \
-    }
+#define ASSERT_CONTENT(N)                                       \
+  {                                                             \
+    size_t size = N * f->block_size;                            \
+    void *buf = munit_malloc(size);                             \
+                                                                \
+    test_dir_read_file(f->dir, "foo", buf, size);               \
+                                                                \
+    for (unsigned __i = 0; __i < N; __i++)                      \
+      {                                                         \
+        char *cursor = (char *)buf + __i * f->block_size;       \
+        for (unsigned __j = 0; __j < f->block_size; __j++)      \
+          {                                                     \
+            munit_assert_int (cursor[__j], ==, __i + 1);        \
+          }                                                     \
+      }                                                         \
+                                                                \
+    free(buf);                                                  \
+  }
 
 SUITE(UvWriterSubmit)
 
