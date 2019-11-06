@@ -49,14 +49,22 @@ int UvFsFileHasOnlyTrailingZeros(uv_file fd, bool *flag, struct ErrMsg *errmsg);
 /* Check if the given file descriptor has reached the end of the file. */
 bool UvFsIsAtEof(uv_file fd);
 
-/* Read exactly @n bytes from the given file descriptor. */
-int UvFsReadFrom(uv_file fd, struct raft_buffer *buf, struct ErrMsg *errmsg);
+/* Read exactly buf->len bytes from the given file descriptor into buf->base. */
+int UvFsReadInto(uv_file fd, struct raft_buffer *buf, struct ErrMsg *errmsg);
 
-/* Read all the content of the givn file. */
+/* Read all the content of the given file. */
 int UvFsReadFile(const char *dir,
                  const char *filename,
                  struct raft_buffer *buf,
                  struct ErrMsg *errmsg);
+
+/* Read exactly buf->len bytes from the given file into buf->base. Fail if the
+ * file contains more than buf->len bytes. Return UV__NODATA if the file is
+ * empty. */
+int UvFsReadFileInto(const char *dir,
+                     const char *filename,
+                     struct raft_buffer *buf,
+                     struct ErrMsg *errmsg);
 
 /* Synchronously remove a file, calling the unlink() system call. */
 int UvFsRemoveFile(const char *dir,

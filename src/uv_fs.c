@@ -241,7 +241,7 @@ int UvFsFileHasOnlyTrailingZeros(uv_file fd, bool *flag, struct ErrMsg *errmsg)
         return UV__ERROR;
     }
 
-    rv = UvFsReadFrom(fd, &buf, errmsg);
+    rv = UvFsReadInto(fd, &buf, errmsg);
     if (rv != 0) {
         return rv;
     }
@@ -271,8 +271,7 @@ bool UvFsIsAtEof(uv_file fd)
     return offset == size;           /* Compare current offset and size */
 }
 
-
-int UvFsReadFrom(uv_file fd, struct raft_buffer *buf, struct ErrMsg *errmsg)
+int UvFsReadInto(uv_file fd, struct raft_buffer *buf, struct ErrMsg *errmsg)
 {
     int rv;
     /* TODO: use uv_fs_read() */
@@ -322,7 +321,7 @@ int UvFsReadFile(const char *dir,
         goto err_after_open;
     }
 
-    rv = UvFsReadFrom(fd, buf, errmsg);
+    rv = UvFsReadInto(fd, buf, errmsg);
     if (rv != 0) {
         goto err_after_buf_alloc;
     }
@@ -333,6 +332,56 @@ int UvFsReadFile(const char *dir,
 
 err_after_buf_alloc:
     HeapFree(buf->base);
+err_after_open:
+    UvOsClose(fd);
+err:
+    return rv;
+}
+
+int UvFsReadFileInto(const char *dir,
+                     const char *filename,
+                     struct raft_buffer *buf,
+                     struct ErrMsg *errmsg)
+{
+    uv_stat_t sb;
+    char path[UV__PATH_SZ];
+    uv_file fd;
+    int rv;
+
+    UvOsJoin(dir, filename, path);
+
+    rv = UvOsStat(path, &sb);
+    if (rv != 0) {
+        UvErrMsgSys(errmsg, "stat", rv);
+        rv = UV__ERROR;
+        goto err;
+    }
+
+    if (buf->len != sb.st_size) {
+        ErrMsgPrintf(errmsg, "file has size %ld instead of %ld", sb.st_size,
+                     buf->len);
+        if (sb.st_size < buf->len) {
+            rv = UV__NODATA;
+        } else {
+            rv = RAFT_CORRUPT;
+        }
+        goto err;
+    }
+
+    rv = uvFsOpenFile(dir, filename, O_RDONLY, 0, &fd, errmsg);
+    if (rv != 0) {
+        goto err;
+    }
+
+    rv = UvFsReadInto(fd, buf, errmsg);
+    if (rv != 0) {
+        goto err_after_open;
+    }
+
+    UvOsClose(fd);
+
+    return 0;
+
 err_after_open:
     UvOsClose(fd);
 err:

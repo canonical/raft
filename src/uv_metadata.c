@@ -48,11 +48,11 @@ static int loadFile(struct uv *uv,
                     const unsigned short n,
                     struct uvMetadata *metadata)
 {
-    char filename[METADATA_FILENAME_SIZE]; /* Filename of the metadata file */
-    uint8_t buf[METADATA_CONTENT_SIZE];    /* Content of metadata file */
-    int fd;
-    char errmsg_[2048];
-    char *errmsg = errmsg_;
+    char filename[METADATA_FILENAME_SIZE];  /* Filename of the metadata file */
+    uint8_t content[METADATA_CONTENT_SIZE]; /* Content of metadata file */
+    struct raft_buffer buf;
+    bool exists;
+    struct ErrMsg errmsg;
     int rv;
 
     assert(n == 1 || n == 2);
@@ -60,43 +60,39 @@ static int loadFile(struct uv *uv,
     /* Render the metadata path */
     filenameOf(n, filename);
 
+    rv = UvFsFileExists(uv->dir, filename, &exists, &errmsg);
+    if (rv != 0) {
+        uvErrorf(uv, "check if %s exists: %s", filename, ErrMsgString(&errmsg));
+        return RAFT_IOERR;
+    }
+
     memset(metadata, 0, sizeof *metadata);
 
-    /* Open the metadata file, if it exists. */
-    rv = uvOpenFile(uv->dir, filename, O_RDONLY, &fd, &errmsg);
-    if (rv != 0) {
-        if (rv != UV__NOENT) {
-            uvErrorf(uv, "open %s: %s", filename, errmsg);
-            rv = RAFT_IOERR;
-        } else {
-            rv = 0;
-        }
-        raft_free(errmsg);
-        /* The file does not exist, just return. */
-        return rv;
+    /* If the file does not exist, just return. */
+    if (!exists) {
+        return 0;
     }
 
     /* Read the content of the metadata file. */
-    rv = uvReadFully(fd, buf, sizeof buf, &errmsg);
+    buf.base = content;
+    buf.len = sizeof content;
+
+    rv = UvFsReadFileInto(uv->dir, filename, &buf, &errmsg);
     if (rv != 0) {
         if (rv != UV__NODATA) {
-            uvErrorf(uv, "read %s: %s", filename, errmsg);
+            uvErrorf(uv, "read %s: %s", filename, ErrMsgString(&errmsg));
             rv = RAFT_IOERR;
         } else {
             /* Assume that the server crashed while writing this metadata file,
              * and pretend it has not been written at all. */
             uvWarnf(uv, "read %s: ignore incomplete data", filename);
-            close(fd);
             rv = 0;
         }
-        raft_free(errmsg);
         return rv;
     };
 
-    close(fd);
-
     /* Decode the content of the metadata file. */
-    rv = decode(buf, metadata);
+    rv = decode(content, metadata);
     if (rv != 0) {
         assert(rv == RAFT_MALFORMED);
         uvErrorf(uv, "load %s: bad format version", filename);
