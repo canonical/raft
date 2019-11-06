@@ -208,7 +208,60 @@ err:
     return rv;
 }
 
-int UvFsReadFrom(int fd, struct raft_buffer *buf, struct ErrMsg *errmsg)
+int UvFsFileHasOnlyTrailingZeros(uv_file fd, bool *flag, struct ErrMsg *errmsg)
+{
+    struct raft_buffer buf;
+    off_t size;
+    off_t offset;
+    size_t i;
+    int rv;
+
+    /* Save the current offset. */
+    offset = lseek(fd, 0, SEEK_CUR);
+
+    /* Figure the size of the rest of the file. */
+    size = lseek(fd, 0, SEEK_END);
+    if (size == -1) {
+        UvErrMsgSys(errmsg, "lseek", -errno);
+        return UV__ERROR;
+    }
+    size -= offset;
+
+    /* Reposition the file descriptor offset to the original offset. */
+    offset = lseek(fd, offset, SEEK_SET);
+    if (offset == -1) {
+        UvErrMsgSys(errmsg, "lseek", -errno);
+        return UV__ERROR;
+    }
+
+    buf.len = size;
+    buf.base = raft_malloc(buf.len);
+    if (buf.base == NULL) {
+        ErrMsgPrintf(errmsg, "can't allocate read buffer");
+        return UV__ERROR;
+    }
+
+    rv = UvFsReadFrom(fd, &buf, errmsg);
+    if (rv != 0) {
+        return rv;
+    }
+
+    for (i = 0; i < (size_t)size; i++) {
+        if (((char *)buf.base)[i] != 0) {
+            *flag = false;
+            goto done;
+        }
+    }
+
+    *flag = true;
+
+done:
+    raft_free(buf.base);
+
+    return 0;
+}
+
+int UvFsReadFrom(uv_file fd, struct raft_buffer *buf, struct ErrMsg *errmsg)
 {
     int rv;
     /* TODO: use uv_fs_read() */

@@ -140,10 +140,6 @@ int uvReadFully(int fd, void *buf, size_t n, char **errmsg);
 /* Write exactly @n bytes to the given file descriptor. */
 int uvWriteFully(int fd, void *buf, size_t n, char **errmsg);
 
-/* Check if the content of the file associated with the given file descriptor
- * contains all zeros from the current offset onward. */
-int uvIsFilledWithTrailingZeros(int fd, bool *flag, char **errmsg);
-
 /* Check if the given file descriptor has reached the end of the file. */
 bool uvIsAtEof(int fd);
 

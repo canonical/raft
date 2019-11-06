@@ -326,58 +326,6 @@ int uvWriteFully(const int fd, void *buf, const size_t n, char **errmsg)
     return 0;
 }
 
-int uvIsFilledWithTrailingZeros(const int fd, bool *flag, char **errmsg)
-{
-    off_t size;
-    off_t offset;
-    char *data;
-    size_t i;
-    int rv;
-
-    /* Save the current offset. */
-    offset = lseek(fd, 0, SEEK_CUR);
-
-    /* Figure the size of the rest of the file. */
-    size = lseek(fd, 0, SEEK_END);
-    if (size == -1) {
-        *errmsg = uvSysErrMsg("lseek", -errno);
-        return UV__ERROR;
-    }
-    size -= offset;
-
-    /* Reposition the file descriptor offset to the original offset. */
-    offset = lseek(fd, offset, SEEK_SET);
-    if (offset == -1) {
-        *errmsg = uvSysErrMsg("lseek", -errno);
-        return UV__ERROR;
-    }
-
-    data = raft_malloc(size);
-    if (data == NULL) {
-        *errmsg = errMsgPrintf("can't allocate read buffer");
-        return UV__ERROR;
-    }
-
-    rv = uvReadFully(fd, data, size, errmsg);
-    if (rv != 0) {
-        return rv;
-    }
-
-    for (i = 0; i < (size_t)size; i++) {
-        if (data[i] != 0) {
-            *flag = false;
-            goto done;
-        }
-    }
-
-    *flag = true;
-
-done:
-    raft_free(data);
-
-    return 0;
-}
-
 bool uvIsAtEof(const int fd)
 {
     off_t offset;

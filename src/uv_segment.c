@@ -438,9 +438,8 @@ static int loadOpen(struct uv *uv,
     struct raft_entry *tmp_entries; /* Entries in current batch */
     unsigned tmp_n_entries;         /* Number of entries in current batch */
     int i;
-    char errmsg_[2048];
-    char *errmsg = errmsg_;
     struct ErrMsg errmsg2;
+    off_t offset;
     int rv;
 
     first_index = *next_index;
@@ -449,7 +448,6 @@ static int loadOpen(struct uv *uv,
     if (rv != 0) {
         uvErrorf(uv, "check if %s is empty: %s", info->filename,
                  ErrMsgString(&errmsg2));
-        raft_free(errmsg);
         rv = RAFT_IOERR;
         goto err;
     }
@@ -470,11 +468,10 @@ static int loadOpen(struct uv *uv,
      * the segment was allocated but never written. */
     if (format != UV__DISK_FORMAT) {
         if (format == 0) {
-            rv = uvIsFilledWithTrailingZeros(fd, &all_zeros, &errmsg);
+            rv = UvFsFileHasOnlyTrailingZeros(fd, &all_zeros, &errmsg2);
             if (rv != 0) {
                 uvErrorf(uv, "check if %s is zeroed: %s", info->filename,
-                         errmsg);
-                raft_free(errmsg);
+                         ErrMsgString(&errmsg2));
                 rv = RAFT_IOERR;
                 goto err_after_open;
             }
@@ -496,10 +493,10 @@ static int loadOpen(struct uv *uv,
     for (i = 1; !last; i++) {
         /* Save the current file descriptor offset, in case we need to truncate
          * the file to exclude this batch because it's incomplete. */
-        off_t offset = lseek(fd, 0, SEEK_CUR);
+        offset = lseek(fd, 0, SEEK_CUR);
 
         if (offset == -1) {
-            uvErrorf(uv, "offset %s: %s", info->filename, i, errmsg);
+            uvErrorf(uv, "offset %s: %s", info->filename, i, strerror(errno));
             return RAFT_IOERR;
         }
 
@@ -518,11 +515,10 @@ static int loadOpen(struct uv *uv,
              * incomplete data. */
             lseek(fd, offset, SEEK_SET);
 
-            rv2 = uvIsFilledWithTrailingZeros(fd, &all_zeros, &errmsg);
+            rv2 = UvFsFileHasOnlyTrailingZeros(fd, &all_zeros, &errmsg2);
             if (rv2 != 0) {
                 uvErrorf(uv, "check if %s is zeroed: %s", info->filename, i,
-                         errmsg);
-                raft_free(errmsg);
+                         ErrMsgString(&errmsg2));
                 rv = RAFT_IOERR;
                 goto err_after_open;
             }
@@ -535,20 +531,6 @@ static int loadOpen(struct uv *uv,
                     "truncate open segment %s at %ld, since it has corrupted "
                     "entries",
                     info->filename, offset);
-
-            rv = ftruncate(fd, offset);
-            if (rv == -1) {
-                uvErrorf(uv, "ftruncate %s: %s", info->filename,
-                         strerror(errno));
-                rv = RAFT_IOERR;
-                goto err_after_open;
-            }
-            rv = fsync(fd);
-            if (rv == -1) {
-                uvErrorf(uv, "fsync %s: %s", info->filename, strerror(errno));
-                rv = RAFT_IOERR;
-                goto err_after_open;
-            }
 
             break;
         }
@@ -575,10 +557,10 @@ done:
     /* If the segment has no valid entries in it, we remove it. Otherwise we
      * rename it and keep it. */
     if (remove) {
-        rv = uvUnlinkFile(uv->dir, info->filename, &errmsg);
+        rv = UvFsRemoveFile(uv->dir, info->filename, &errmsg2);
         if (rv != 0) {
-            uvErrorf(uv, "unlink %s: %s", info->filename, errmsg);
-            raft_free(errmsg);
+            uvErrorf(uv, "unlink %s: %s", info->filename,
+                     ErrMsgString(&errmsg2));
             rv = RAFT_IOERR;
             goto err_after_open;
         }
@@ -592,10 +574,11 @@ done:
 
         uvInfof(uv, "finalize %s into %s", info->filename, filename);
 
-        rv = uvRenameFile(uv->dir, info->filename, filename, &errmsg);
+        rv = UvFsTruncateAndRenameFile(uv->dir, offset, info->filename,
+                                       filename, &errmsg2);
         if (rv != 0) {
-            uvErrorf(uv, "rename %s: %s", info->filename, errmsg);
-            raft_free(errmsg);
+            uvErrorf(uv, "finalize %s: %s", info->filename,
+                     ErrMsgString(&errmsg2));
             rv = RAFT_IOERR;
             goto err_after_open;
         }
