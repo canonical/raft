@@ -459,7 +459,7 @@ static int loadOpen(struct uv *uv,
         goto done;
     }
 
-    rv = openSegment(uv, info->filename, O_RDWR, &fd, &format);
+    rv = openSegment(uv, info->filename, O_RDONLY, &fd, &format);
     if (rv != 0) {
         goto err;
     }
