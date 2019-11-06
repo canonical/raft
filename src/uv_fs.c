@@ -82,6 +82,26 @@ out:
     return 0;
 }
 
+int UvFsFileIsEmpty(const char *dir,
+                    const char *filename,
+                    bool *empty,
+                    struct ErrMsg *errmsg)
+{
+    uv_stat_t sb;
+    char path[UV__PATH_SZ];
+    int rv;
+
+    UvOsJoin(dir, filename, path);
+
+    rv = UvOsStat(path, &sb);
+    if (rv != 0) {
+        UvErrMsgSys(errmsg, "stat", rv);
+        return UV__ERROR;
+    }
+    *empty = sb.st_size == 0 ? true : false;
+    return 0;
+}
+
 /* Open a file in a directory. */
 static int uvFsOpenFile(const char *dir,
                         const char *filename,

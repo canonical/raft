@@ -294,21 +294,6 @@ int uvRenameFile(const char *dir,
     return 0;
 }
 
-int uvIsEmptyFile(const char *dir,
-                  const char *filename,
-                  bool *empty,
-                  char **errmsg)
-{
-    uv_stat_t sb;
-    int rv;
-    rv = uvStatFile(dir, filename, &sb, errmsg);
-    if (rv != 0) {
-        return rv;
-    }
-    *empty = sb.st_size == 0 ? true : false;
-    return 0;
-}
-
 int uvReadFully(const int fd, void *buf, const size_t n, char **errmsg)
 {
     int rv;

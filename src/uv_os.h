@@ -122,12 +122,6 @@ int uvOpenFile(const char *dir,
                uv_file *fd,
                char **errmsg);
 
-/* Stat a file in a directory. */
-int uvStatFile(const char *dir,
-               const char *filename,
-               uv_stat_t *sb,
-               char **errmsg);
-
 /* Delete a file in a directory. */
 int uvUnlinkFile(const char *dir, const char *filename, char **errmsg);
 
@@ -139,12 +133,6 @@ int uvRenameFile(const char *dir,
                  const char *filename1,
                  const char *filename2,
                  char **errmsg);
-
-/* Check whether the given file in the given directory is empty. */
-int uvIsEmptyFile(const char *dir,
-                  const char *filename,
-                  bool *empty,
-                  char **errmsg);
 
 /* Read exactly @n bytes from the given file descriptor. */
 int uvReadFully(int fd, void *buf, size_t n, char **errmsg);

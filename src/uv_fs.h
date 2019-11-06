@@ -21,6 +21,12 @@ int UvFsFileExists(const char *dir,
                    bool *exists,
                    struct ErrMsg *errmsg);
 
+/* Check whether the given file in the given directory is empty. */
+int UvFsFileIsEmpty(const char *dir,
+                    const char *filename,
+                    bool *empty,
+                    struct ErrMsg *errmsg);
+
 /* Create the given file in the given directory and allocate the given size to
  * it, returning its file descriptor. The file must not exist yet. */
 int UvFsAllocateFile(const char *dir,
