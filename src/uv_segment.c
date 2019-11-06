@@ -195,13 +195,13 @@ static int loadEntriesBatch(struct uv *uv,
     unsigned n;                /* Number of entries in the batch */
     unsigned max_n;            /* Maximum number of entries we expect */
     unsigned i;                /* Iterate through the entries */
+    struct raft_buffer buf;    /* Read buffer */
     struct raft_buffer header; /* Batch header */
     struct raft_buffer data;   /* Batch data */
     uint32_t crc1;             /* Target checksum */
     uint32_t crc2;             /* Actual checksum */
     off_t offset;              /* Current segment file offset */
-    char errmsg_[2048];
-    char *errmsg = errmsg_;
+    struct ErrMsg errmsg;
     int rv;
 
     /* Save the current offset, to provide more information when logging. */
@@ -210,10 +210,11 @@ static int loadEntriesBatch(struct uv *uv,
     /* Read the preamble, consisting of the checksums for the batch header and
      * data buffers and the first 8 bytes of the header buffer, which contains
      * the number of entries in the batch. */
-    rv = uvReadFully(fd, preamble, sizeof preamble, &errmsg);
+    buf.base = preamble;
+    buf.len = sizeof preamble;
+    rv = UvFsReadInto(fd, &buf, &errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "read: %s", errmsg);
-        raft_free(errmsg);
+        uvErrorf(uv, "read: %s", ErrMsgString(&errmsg));
         return RAFT_IOERR;
     }
 
@@ -246,11 +247,11 @@ static int loadEntriesBatch(struct uv *uv,
     }
     *(uint64_t *)header.base = preamble[1];
 
-    rv = uvReadFully(fd, (uint8_t *)header.base + sizeof(uint64_t),
-                     header.len - sizeof(uint64_t), &errmsg);
+    buf.base = (uint8_t *)header.base + sizeof(uint64_t);
+    buf.len = header.len - sizeof(uint64_t);
+    rv = UvFsReadInto(fd, &buf, &errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "read: %s", errmsg);
-        raft_free(errmsg);
+        uvErrorf(uv, "read: %s", ErrMsgString(&errmsg));
         rv = RAFT_IOERR;
         goto err_after_header_alloc;
     }
@@ -282,10 +283,9 @@ static int loadEntriesBatch(struct uv *uv,
         rv = RAFT_NOMEM;
         goto err_after_header_decode;
     }
-    rv = uvReadFully(fd, data.base, data.len, &errmsg);
+    rv = UvFsReadInto(fd, &data, &errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "read: %s", errmsg);
-        raft_free(errmsg);
+        uvErrorf(uv, "read: %s", ErrMsgString(&errmsg));
         rv = RAFT_IOERR;
         goto err_after_data_alloc;
     }
