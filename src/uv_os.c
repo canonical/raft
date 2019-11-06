@@ -255,35 +255,6 @@ int uvUnlinkFile(const char *dir, const char *filename, char **errmsg)
     return 0;
 }
 
-int uvRenameFile(const char *dir,
-                 const char *filename1,
-                 const char *filename2,
-                 char **errmsg)
-{
-    struct uv_fs_s req;
-    char path1[UV__PATH_SZ];
-    char path2[UV__PATH_SZ];
-    int rv;
-
-    assert(UV__DIR_HAS_VALID_LEN(dir));
-    assert(UV__FILENAME_HAS_VALID_LEN(filename1));
-    assert(UV__FILENAME_HAS_VALID_LEN(filename2));
-
-    UvOsJoin(dir, filename1, path1);
-    UvOsJoin(dir, filename2, path2);
-    /* TODO: double check that filename2 does not exist. */
-    rv = uv_fs_rename(NULL, &req, path1, path2, NULL);
-    if (rv != 0) {
-        *errmsg = uvSysErrMsg("rename", rv);
-        return UV__ERROR;
-    }
-    rv = uvSyncDir(dir, errmsg);
-    if (rv != 0) {
-        return rv;
-    }
-    return 0;
-}
-
 int uvReadFully(const int fd, void *buf, const size_t n, char **errmsg)
 {
     int rv;

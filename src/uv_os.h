@@ -125,12 +125,6 @@ int uvOpenFile(const char *dir,
 /* Delete a file in a directory. */
 int uvUnlinkFile(const char *dir, const char *filename, char **errmsg);
 
-/* Rename a file in a directory. */
-int uvRenameFile(const char *dir,
-                 const char *filename1,
-                 const char *filename2,
-                 char **errmsg);
-
 /* Read exactly @n bytes from the given file descriptor. */
 int uvReadFully(int fd, void *buf, size_t n, char **errmsg);
 
