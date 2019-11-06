@@ -113,7 +113,7 @@ static int loadFile(struct uv *uv,
 static int ensure(struct uv *uv, struct uvMetadata *metadata)
 {
     int i;
-    char *errmsg;
+    struct ErrMsg errmsg;
     int rv;
 
     /* Update both metadata files, so they are created if they didn't
@@ -127,10 +127,9 @@ static int ensure(struct uv *uv, struct uvMetadata *metadata)
     }
 
     /* Also sync the data directory so the entries get created. */
-    rv = uvSyncDir(uv->dir, &errmsg);
+    rv = UvFsSyncDir(uv->dir, &errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "sync %s: %s", uv->dir, errmsg);
-        raft_free(errmsg);
+        uvErrorf(uv, "sync %s: %s", uv->dir, ErrMsgString(&errmsg));
         return RAFT_IOERR;
     }
 

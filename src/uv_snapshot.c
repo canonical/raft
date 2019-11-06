@@ -311,7 +311,7 @@ static int removeOldSegmentsAndSnapshots(struct uv *uv,
     struct uvSegmentInfo *segments;
     size_t n_snapshots;
     size_t n_segments;
-    char *errmsg;
+    struct ErrMsg errmsg;
     int rv = 0;
 
     rv = uvList(uv, &snapshots, &n_snapshots, &segments, &n_segments);
@@ -333,10 +333,9 @@ static int removeOldSegmentsAndSnapshots(struct uv *uv,
         }
     }
 
-    rv = uvSyncDir(uv->dir, &errmsg);
+    rv = UvFsSyncDir(uv->dir, &errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "sync %s: %s", uv->dir, errmsg);
-        raft_free(errmsg);
+        uvErrorf(uv, "sync %s: %s", uv->dir, ErrMsgString(&errmsg));
     }
 
 out:
