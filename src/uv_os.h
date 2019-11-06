@@ -125,9 +125,6 @@ int uvOpenFile(const char *dir,
 /* Delete a file in a directory. */
 int uvUnlinkFile(const char *dir, const char *filename, char **errmsg);
 
-/* Like uvUnlinkFile, but ignoring errors. */
-void uvTryUnlinkFile(const char *dir, const char *filename);
-
 /* Rename a file in a directory. */
 int uvRenameFile(const char *dir,
                  const char *filename1,

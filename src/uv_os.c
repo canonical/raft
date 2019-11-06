@@ -255,16 +255,6 @@ int uvUnlinkFile(const char *dir, const char *filename, char **errmsg)
     return 0;
 }
 
-void uvTryUnlinkFile(const char *dir, const char *filename)
-{
-    char *errmsg;
-    int rv;
-    rv = uvUnlinkFile(dir, filename, &errmsg);
-    if (rv != 0) {
-        raft_free(errmsg);
-    }
-}
-
 int uvRenameFile(const char *dir,
                  const char *filename1,
                  const char *filename2,
