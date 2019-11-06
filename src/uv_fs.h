@@ -42,6 +42,13 @@ int UvFsMakeFile(const char *dir,
                  unsigned n_bufs,
                  struct ErrMsg *errmsg);
 
+/* Create or replace a file, writing the given content into it. */
+int UvFsMakeOrReplaceFile(const char *dir,
+                          const char *filename,
+                          struct raft_buffer *bufs,
+                          unsigned n_bufs,
+                          struct ErrMsg *errmsg);
+
 /* Check if the content of the file associated with the given file descriptor
  * contains all zeros from the current offset onward. */
 int UvFsFileHasOnlyTrailingZeros(uv_file fd, bool *flag, struct ErrMsg *errmsg);

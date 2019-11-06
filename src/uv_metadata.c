@@ -197,36 +197,28 @@ int uvMetadataLoad(struct uv *uv, struct uvMetadata *metadata)
 
 int uvMetadataStore(struct uv *uv, const struct uvMetadata *metadata)
 {
-    char filename[METADATA_FILENAME_SIZE]; /* Filename of the metadata file */
-    uint8_t buf[METADATA_CONTENT_SIZE];    /* Content of metadata file */
-    const int flags = O_WRONLY | O_CREAT | O_SYNC | O_TRUNC;
+    char filename[METADATA_FILENAME_SIZE];  /* Filename of the metadata file */
+    uint8_t content[METADATA_CONTENT_SIZE]; /* Content of metadata file */
+    struct raft_buffer buf;
     unsigned short n;
-    int fd;
-    char *errmsg;
+    struct ErrMsg errmsg;
     int rv;
 
     assert(metadata->version > 0);
 
     /* Encode the given metadata. */
-    encode(metadata, buf);
+    encode(metadata, content);
 
     /* Render the metadata file name. */
     n = indexOf(metadata->version);
     filenameOf(n, filename);
 
     /* Write the metadata file, creating it if it does not exist. */
-    rv = uvOpenFile(uv->dir, filename, flags, &fd, &errmsg);
+    buf.base = content;
+    buf.len = sizeof content;
+    rv = UvFsMakeOrReplaceFile(uv->dir, filename, &buf, 1, &errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "open %s: %s", filename, errmsg);
-        raft_free(errmsg);
-        return RAFT_IOERR;
-    }
-
-    rv = uvWriteFully(fd, buf, sizeof buf, &errmsg);
-    close(fd);
-    if (rv != 0) {
-        uvErrorf(uv, "write %s: %s", filename, errmsg);
-        raft_free(errmsg);
+        uvErrorf(uv, "create %s: %s", filename, ErrMsgString(&errmsg));
         return RAFT_IOERR;
     }
 

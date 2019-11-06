@@ -162,13 +162,13 @@ err:
     return rv;
 }
 
-int UvFsMakeFile(const char *dir,
-                 const char *filename,
-                 struct raft_buffer *bufs,
-                 unsigned n_bufs,
-                 struct ErrMsg *errmsg)
+static int uvFsWriteFile(const char *dir,
+                         const char *filename,
+			 int flags,
+                         struct raft_buffer *bufs,
+                         unsigned n_bufs,
+                         struct ErrMsg *errmsg)
 {
-    int flags = UV_FS_O_WRONLY | UV_FS_O_CREAT | UV_FS_O_EXCL;
     uv_file fd;
     int rv;
     size_t size;
@@ -206,6 +206,26 @@ err_after_file_open:
     UvOsClose(fd);
 err:
     return rv;
+}
+
+int UvFsMakeFile(const char *dir,
+                 const char *filename,
+                 struct raft_buffer *bufs,
+                 unsigned n_bufs,
+                 struct ErrMsg *errmsg)
+{
+    int flags = UV_FS_O_WRONLY | UV_FS_O_CREAT | UV_FS_O_EXCL;
+    return uvFsWriteFile(dir, filename, flags, bufs, n_bufs, errmsg);
+}
+
+int UvFsMakeOrReplaceFile(const char *dir,
+                          const char *filename,
+                          struct raft_buffer *bufs,
+                          unsigned n_bufs,
+                          struct ErrMsg *errmsg)
+{
+    int flags = O_WRONLY | O_CREAT | O_SYNC | O_TRUNC;
+    return uvFsWriteFile(dir, filename, flags, bufs, n_bufs, errmsg);
 }
 
 int UvFsFileHasOnlyTrailingZeros(uv_file fd, bool *flag, struct ErrMsg *errmsg)
