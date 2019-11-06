@@ -215,28 +215,6 @@ int uvOpenFile(const char *dir,
     return 0;
 }
 
-int uvStatFile(const char *dir,
-               const char *filename,
-               uv_stat_t *sb,
-               char **errmsg)
-{
-    char path[UV__PATH_SZ];
-    struct uv_fs_s req;
-    int rv;
-
-    assert(UV__DIR_HAS_VALID_LEN(dir));
-    assert(UV__FILENAME_HAS_VALID_LEN(filename));
-
-    UvOsJoin(dir, filename, path);
-    rv = uv_fs_stat(NULL, &req, path, NULL);
-    if (rv != 0) {
-        *errmsg = uvSysErrMsg("stat", rv);
-        return rv == UV_ENOENT ? UV__NOENT : UV__ERROR;
-    }
-    memcpy(sb, &req.statbuf, sizeof *sb);
-    return 0;
-}
-
 int uvReadFully(const int fd, void *buf, const size_t n, char **errmsg)
 {
     int rv;
@@ -267,16 +245,6 @@ int uvWriteFully(const int fd, void *buf, const size_t n, char **errmsg)
         return UV__ERROR;
     }
     return 0;
-}
-
-bool uvIsAtEof(const int fd)
-{
-    off_t offset;
-    off_t size;
-    offset = lseek(fd, 0, SEEK_CUR); /* Get the current offset */
-    size = lseek(fd, 0, SEEK_END);   /* Get file size */
-    lseek(fd, offset, SEEK_SET);     /* Restore current offset */
-    return offset == size;           /* Compare current offset and size */
 }
 
 /* Check if direct I/O is possible on the given fd. */

@@ -128,9 +128,6 @@ int uvReadFully(int fd, void *buf, size_t n, char **errmsg);
 /* Write exactly @n bytes to the given file descriptor. */
 int uvWriteFully(int fd, void *buf, size_t n, char **errmsg);
 
-/* Check if the given file descriptor has reached the end of the file. */
-bool uvIsAtEof(int fd);
-
 /* Return information about the I/O capabilities of the underlying file
  * system.
  *

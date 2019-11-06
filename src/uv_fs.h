@@ -46,6 +46,9 @@ int UvFsMakeFile(const char *dir,
  * contains all zeros from the current offset onward. */
 int UvFsFileHasOnlyTrailingZeros(uv_file fd, bool *flag, struct ErrMsg *errmsg);
 
+/* Check if the given file descriptor has reached the end of the file. */
+bool UvFsIsAtEof(uv_file fd);
+
 /* Read exactly @n bytes from the given file descriptor. */
 int UvFsReadFrom(uv_file fd, struct raft_buffer *buf, struct ErrMsg *errmsg);
 
