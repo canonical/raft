@@ -237,24 +237,6 @@ int uvStatFile(const char *dir,
     return 0;
 }
 
-int uvUnlinkFile(const char *dir, const char *filename, char **errmsg)
-{
-    struct uv_fs_s req;
-    char path[UV__PATH_SZ];
-    int rv;
-
-    assert(UV__DIR_HAS_VALID_LEN(dir));
-    assert(UV__FILENAME_HAS_VALID_LEN(filename));
-
-    UvOsJoin(dir, filename, path);
-    rv = uv_fs_unlink(NULL, &req, path, NULL);
-    if (rv != 0) {
-        *errmsg = uvSysErrMsg("unlink", rv);
-        return UV__ERROR;
-    }
-    return 0;
-}
-
 int uvReadFully(const int fd, void *buf, const size_t n, char **errmsg)
 {
     int rv;

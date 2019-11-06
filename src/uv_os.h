@@ -122,9 +122,6 @@ int uvOpenFile(const char *dir,
                uv_file *fd,
                char **errmsg);
 
-/* Delete a file in a directory. */
-int uvUnlinkFile(const char *dir, const char *filename, char **errmsg);
-
 /* Read exactly @n bytes from the given file descriptor. */
 int uvReadFully(int fd, void *buf, size_t n, char **errmsg);
 
