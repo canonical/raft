@@ -3,7 +3,7 @@
 #ifndef UV_WRITER_H_
 #define UV_WRITER_H_
 
-#include <uv.h>
+#include <stdbool.h>
 
 #include "err.h"
 #include "queue.h"

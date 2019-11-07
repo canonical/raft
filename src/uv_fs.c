@@ -9,6 +9,7 @@
 #include "err.h"
 #include "heap.h"
 #include "uv_error.h"
+#include "uv_os.h"
 
 /* Default permissions when creating a directory. */
 #define DEFAULT_DIR_PERM 0700

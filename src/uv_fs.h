@@ -3,11 +3,10 @@
 #ifndef UV_FS_H_
 #define UV_FS_H_
 
-#include <stdbool.h>
 #include <uv.h>
 
+#include "../include/raft.h"
 #include "err.h"
-#include "uv_os.h"
 
 /* Check that the given directory exists, and try to create it if it doesn't. */
 int UvFsEnsureDir(const char *dir, struct ErrMsg *errmsg);

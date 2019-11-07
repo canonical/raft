@@ -6,8 +6,6 @@
 #include <linux/aio_abi.h>
 #include <uv.h>
 
-#include "../include/raft.h"
-
 /* For backward compat with older libuv */
 #if !defined(UV_FS_O_RDONLY)
 #define UV_FS_O_RDONLY O_RDONLY

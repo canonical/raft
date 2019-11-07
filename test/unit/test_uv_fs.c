@@ -1,4 +1,5 @@
 #include "../../src/uv_error.h"
+#include "../../src/uv_os.h"
 #include "../../src/uv_fs.h"
 #include "../lib/dir.h"
 #include "../lib/runner.h"
