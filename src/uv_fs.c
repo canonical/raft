@@ -654,8 +654,6 @@ int UvFsProbeCapabilities(const char *dir,
     int fd;                          /* File descriptor of the probe file */
     int rv;
 
-    assert(UV__DIR_HAS_VALID_LEN(dir));
-
     /* Create a temporary probe file. */
     strcpy(filename, ".probe-XXXXXX");
     UvOsJoin(dir, filename, path);
