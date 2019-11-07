@@ -74,11 +74,35 @@ TEST(UvFsEnsureDir, notDir, NULL, NULL, 0, NULL)
 
 /******************************************************************************
  *
+ * UvFsSyncDir
+ *
+ *****************************************************************************/
+
+/* Invoke UvFsSyncDir passing it the given dir. */
+#define SYNC_DIR_ERROR(DIR, RV, ERRMSG)                           \
+    {                                                             \
+        struct ErrMsg errmsg;                                     \
+        munit_assert_int(UvFsSyncDir(DIR, &errmsg), ==, RV);      \
+        munit_assert_string_equal(ErrMsgString(&errmsg), ERRMSG); \
+    }
+
+SUITE(UvFsSyncDir)
+
+/* If the directory doesn't exist, an error is returned. */
+TEST(UvFsSyncDir, noExists, NULL, NULL, 0, NULL)
+{
+    SYNC_DIR_ERROR("/abcdef", UV__ERROR, "open directory: no such file or directory");
+    return MUNIT_OK;
+}
+
+/******************************************************************************
+ *
  * UvFsAllocateFile
  *
  *****************************************************************************/
 
-/* Allocate a file with the given parameters and assert that no error occured. */
+/* Allocate a file with the given parameters and assert that no error occured.
+ */
 #define ALLOCATE_FILE(DIR, FILENAME, SIZE)                           \
     {                                                                \
         uv_file fd_;                                                 \

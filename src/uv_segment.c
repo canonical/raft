@@ -924,8 +924,7 @@ int uvSegmentCreateClosedWithConfiguration(
 {
     struct raft_buffer buf;
     char filename[UV__FILENAME_LEN];
-    char errmsg_[2048];
-    char *errmsg = errmsg_;
+    struct ErrMsg errmsg;
     int rv;
 
     /* Render the path */
@@ -945,10 +944,9 @@ int uvSegmentCreateClosedWithConfiguration(
 
     raft_free(buf.base);
 
-    rv = uvSyncDir(uv->dir, &errmsg);
+    rv = UvFsSyncDir(uv->dir, &errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "sync %s: %s", uv->dir, errmsg);
-        raft_free(errmsg);
+        uvErrorf(uv, "sync %s: %s", uv->dir, ErrMsgString(&errmsg));
         return RAFT_IOERR;
     }
 

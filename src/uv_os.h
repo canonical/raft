@@ -112,9 +112,6 @@ int UvOsIoGetevents(aio_context_t ctx,
 int UvOsEventfd(unsigned int initval, int flags);
 int UvOsSetDirectIo(uv_file fd);
 
-/* Sync the given directory. */
-int uvSyncDir(const char *dir, char **errmsg);
-
 /* Open a file in a directory. */
 int uvOpenFile(const char *dir,
                const char *filename,

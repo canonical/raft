@@ -172,26 +172,6 @@ int UvOsSetDirectIo(uv_file fd)
     return 0;
 }
 
-int uvSyncDir(const char *dir, char **errmsg)
-{
-    struct uv_fs_s req;
-    uv_file fd;
-    int rv;
-    fd = uv_fs_open(NULL, &req, dir, UV_FS_O_RDONLY | UV_FS_O_DIRECTORY, 0,
-                    NULL);
-    if (fd < 0) {
-        *errmsg = uvSysErrMsg("open", fd);
-        return UV__ERROR;
-    }
-    rv = uv_fs_fsync(NULL, &req, fd, NULL);
-    uv_fs_close(NULL, &req, fd, NULL);
-    if (rv != 0) {
-        *errmsg = uvSysErrMsg("fsync", rv);
-        return UV__ERROR;
-    }
-    return 0;
-}
-
 int uvOpenFile(const char *dir,
                const char *filename,
                int flags,

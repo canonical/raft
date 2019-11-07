@@ -9,30 +9,6 @@
 
 /******************************************************************************
  *
- * uvSyncDir
- *
- *****************************************************************************/
-
-/* Invoke uvSyncDir passing it the given dir. */
-#define SYNC_DIR_ERROR(DIR, RV, ERRMSG)                    \
-    {                                                      \
-        char *errmsg;                                      \
-        munit_assert_int(uvSyncDir(DIR, &errmsg), ==, RV); \
-        munit_assert_string_equal(errmsg, ERRMSG);         \
-        raft_free(errmsg);                                 \
-    }
-
-SUITE(uvSyncDir)
-
-/* If the directory doesn't exist, an error is returned. */
-TEST(uvSyncDir, noExists, NULL, NULL, 0, NULL)
-{
-    SYNC_DIR_ERROR("/abcdef", UV__ERROR, "open: no such file or directory");
-    return MUNIT_OK;
-}
-
-/******************************************************************************
- *
  * uvOpenFile
  *
  *****************************************************************************/
