@@ -125,9 +125,6 @@ int uvOpenFile(const char *dir,
 /* Read exactly @n bytes from the given file descriptor. */
 int uvReadFully(int fd, void *buf, size_t n, char **errmsg);
 
-/* Write exactly @n bytes to the given file descriptor. */
-int uvWriteFully(int fd, void *buf, size_t n, char **errmsg);
-
 /* Return information about the I/O capabilities of the underlying file
  * system.
  *

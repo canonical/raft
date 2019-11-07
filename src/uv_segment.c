@@ -854,16 +854,24 @@ err:
     return rv;
 }
 
-/* Write the first closed segment */
-static int writeFirstClosed(struct uv *uv,
-                            const int fd,
-                            const struct raft_buffer *conf)
+/* Write a closed segment */
+static int writeClosedSegment(struct uv *uv,
+                              raft_index first_index,
+                              raft_index last_index,
+                              const struct raft_buffer *conf)
 {
+    char filename[UV__FILENAME_LEN];
     struct uvSegmentBuffer buf;
+    struct raft_buffer data;
     struct raft_entry entry;
     size_t cap;
-    char *errmsg;
+    struct ErrMsg errmsg;
     int rv;
+
+    assert(first_index <= last_index);
+
+    /* Render the path */
+    sprintf(filename, UV__CLOSED_TEMPLATE, first_index, last_index);
 
     /* Make sure that the given encoded configuration fits in the first
      * block */
@@ -891,17 +899,12 @@ static int writeFirstClosed(struct uv *uv,
         return rv;
     }
 
-    rv = uvWriteFully(fd, buf.arena.base, buf.n, &errmsg);
+    data.base = buf.arena.base;
+    data.len = buf.n;
+    rv = UvFsMakeFile(uv->dir, filename, &data, 1, &errmsg);
     uvSegmentBufferClose(&buf);
     if (rv != 0) {
-        uvErrorf(uv, "write segment 1: %s", errmsg);
-        raft_free(errmsg);
-        return RAFT_IOERR;
-    }
-
-    rv = fsync(fd);
-    if (rv == -1) {
-        uvErrorf(uv, "fsync segment 1: %s", uv_strerror(-errno));
+        uvErrorf(uv, "write segment %s: %s", filename, ErrMsgString(&errmsg));
         return RAFT_IOERR;
     }
 
@@ -923,7 +926,6 @@ int uvSegmentCreateClosedWithConfiguration(
     char filename[UV__FILENAME_LEN];
     char errmsg_[2048];
     char *errmsg = errmsg_;
-    int fd;
     int rv;
 
     /* Render the path */
@@ -935,23 +937,12 @@ int uvSegmentCreateClosedWithConfiguration(
         goto err;
     }
 
-    /* Open the file. */
-    rv = uvOpenFile(uv->dir, filename, O_WRONLY | O_CREAT | O_EXCL, &fd,
-                    &errmsg);
+    /* Write the file */
+    rv = writeClosedSegment(uv, index, index, &buf);
     if (rv != 0) {
-        uvErrorf(uv, "open %s: %s", filename, errmsg);
-        raft_free(errmsg);
-        rv = RAFT_IOERR;
         goto err_after_configuration_encode;
     }
 
-    /* Write the content */
-    rv = writeFirstClosed(uv, fd, &buf);
-    if (rv != 0) {
-        goto err_after_file_open;
-    }
-
-    close(fd);
     raft_free(buf.base);
 
     rv = uvSyncDir(uv->dir, &errmsg);
@@ -963,8 +954,6 @@ int uvSegmentCreateClosedWithConfiguration(
 
     return 0;
 
-err_after_file_open:
-    close(fd);
 err_after_configuration_encode:
     raft_free(buf.base);
 err:
@@ -979,10 +968,10 @@ int uvSegmentTruncate(struct uv *uv,
     char filename[UV__FILENAME_LEN];
     struct raft_entry *entries;
     struct uvSegmentBuffer buf;
+    struct raft_buffer data;
     size_t n;
     size_t m;
-    int fd;
-    char *errmsg;
+    struct ErrMsg errmsg;
     int rv;
 
     assert(!segment->is_open);
@@ -999,22 +988,6 @@ int uvSegmentTruncate(struct uv *uv,
     assert(index - segment->first_index < n);
     m = index - segment->first_index;
 
-    /* Render the path.
-     *
-     * TODO: we should use a temporary file name so in case of crash we don't
-     *      consider this segment as corrupted.
-     */
-    sprintf(filename, UV__CLOSED_TEMPLATE, segment->first_index, index - 1);
-
-    /* Open the file. */
-    rv = uvOpenFile(uv->dir, filename, O_WRONLY | O_CREAT | O_EXCL, &fd,
-                    &errmsg);
-    if (rv != 0) {
-        uvErrorf(uv, "open %s: %s", filename, errmsg);
-        raft_free(errmsg);
-        goto out_after_load;
-    }
-
     uvSegmentBufferInit(&buf, uv->block_size);
 
     rv = uvSegmentBufferFormat(&buf);
@@ -1027,26 +1000,25 @@ int uvSegmentTruncate(struct uv *uv,
         goto out_after_buffer_init;
     }
 
-    rv = uvWriteFully(fd, buf.arena.base, buf.n, &errmsg);
-    if (rv != 0) {
-        uvErrorf(uv, "write %s: %s", filename, errmsg);
-        raft_free(errmsg);
-        rv = RAFT_IOERR;
-        goto out_after_open;
-    }
+    /* Render the path.
+     *
+     * TODO: we should use a temporary file name so in case of crash we don't
+     *      consider this segment as corrupted.
+     */
+    sprintf(filename, UV__CLOSED_TEMPLATE, segment->first_index, index - 1);
 
-    rv = fsync(fd);
-    if (rv == -1) {
-        uvErrorf(uv, "fsync %s: %s", filename, uv_strerror(-errno));
+    data.base = buf.arena.base;
+    data.len = buf.n;
+
+    rv = UvFsMakeFile(uv->dir, filename, &data, 1, &errmsg);
+    if (rv != 0) {
+        uvErrorf(uv, "write %s: %s", filename, ErrMsgString(&errmsg));
         rv = RAFT_IOERR;
-        goto out_after_open;
+        goto out_after_buffer_init;
     }
 
 out_after_buffer_init:
     uvSegmentBufferClose(&buf);
-out_after_open:
-    close(fd);
-out_after_load:
     entryBatchesDestroy(entries, n);
 out:
     return rv;

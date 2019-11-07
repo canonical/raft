@@ -231,22 +231,6 @@ int uvReadFully(const int fd, void *buf, const size_t n, char **errmsg)
     return 0;
 }
 
-int uvWriteFully(const int fd, void *buf, const size_t n, char **errmsg)
-{
-    int rv;
-    rv = write(fd, buf, n);
-    if (rv == -1) {
-        *errmsg = uvSysErrMsg("write", -errno);
-        return UV__ERROR;
-    }
-    assert(rv >= 0);
-    if ((size_t)rv < n) {
-        *errmsg = errMsgPrintf("short write: %d bytes instead of %ld", rv, n);
-        return UV__ERROR;
-    }
-    return 0;
-}
-
 /* Check if direct I/O is possible on the given fd. */
 static int probeDirectIO(int fd, size_t *size, char **errmsg)
 {
