@@ -56,6 +56,12 @@ int UvFsFileHasOnlyTrailingZeros(uv_file fd, bool *flag, struct ErrMsg *errmsg);
 /* Check if the given file descriptor has reached the end of the file. */
 bool UvFsIsAtEof(uv_file fd);
 
+/* Open a file for reading. */
+int UvFsOpenFileForReading(const char *dir,
+                           const char *filename,
+                           uv_file *fd,
+                           struct ErrMsg *errmsg);
+
 /* Read exactly buf->len bytes from the given file descriptor into buf->base. */
 int UvFsReadInto(uv_file fd, struct raft_buffer *buf, struct ErrMsg *errmsg);
 

@@ -158,24 +158,23 @@ int uvSegmentKeepTrailing(struct uv *uv,
 /* Open a segment file and read its format version. */
 static int openSegment(struct uv *uv,
                        const char *filename,
-                       const int flags,
-                       int *fd,
+                       uv_file *fd,
                        uint64_t *format)
 {
-    char errmsg_[2048];
-    char *errmsg = errmsg_;
+    struct ErrMsg errmsg;
+    struct raft_buffer buf;
     int rv;
-    rv = uvOpenFile(uv->dir, filename, flags, fd, &errmsg);
+    rv = UvFsOpenFileForReading(uv->dir, filename, fd, &errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "open %s: %s", filename, errmsg);
-        raft_free(errmsg);
+        uvErrorf(uv, "open %s: %s", filename, ErrMsgString(&errmsg));
         return RAFT_IOERR;
     }
-    rv = uvReadFully(*fd, format, sizeof *format, &errmsg);
+    buf.base = format;
+    buf.len = sizeof *format;
+    rv = UvFsReadInto(*fd, &buf, &errmsg);
     if (rv != 0) {
         uvErrorf(uv, "read %s: %s", filename, errmsg);
-        raft_free(errmsg);
-        close(*fd);
+        UvOsClose(*fd);
         return RAFT_IOERR;
     }
     *format = byteFlip64(*format);
@@ -349,7 +348,7 @@ int uvSegmentLoadClosed(struct uv *uv,
                         size_t *n)
 {
     bool empty;                     /* Whether the file is empty */
-    int fd;                         /* Segment file descriptor */
+    uv_file fd;                     /* Segment file descriptor */
     uint64_t format;                /* Format version */
     bool last;                      /* Whether the last batch was reached */
     struct raft_entry *tmp_entries; /* Entries in current batch */
@@ -372,7 +371,7 @@ int uvSegmentLoadClosed(struct uv *uv,
     }
 
     /* Open the segment file. */
-    rv = openSegment(uv, info->filename, O_RDONLY, &fd, &format);
+    rv = openSegment(uv, info->filename, &fd, &format);
     if (rv != 0) {
         goto err;
     }
@@ -432,7 +431,7 @@ static int loadOpen(struct uv *uv,
     bool empty;                     /* Whether the segment file is empty */
     bool remove = false;            /* Whether to remove this segment */
     bool last = false;              /* Whether the last batch was reached */
-    int fd;                         /* Segment file descriptor */
+    uv_file fd;                     /* Segment file descriptor */
     uint64_t format;                /* Format version */
     size_t n_batches = 0;           /* Number of loaded batches */
     struct raft_entry *tmp_entries; /* Entries in current batch */
@@ -459,7 +458,7 @@ static int loadOpen(struct uv *uv,
         goto done;
     }
 
-    rv = openSegment(uv, info->filename, O_RDONLY, &fd, &format);
+    rv = openSegment(uv, info->filename, &fd, &format);
     if (rv != 0) {
         goto err;
     }

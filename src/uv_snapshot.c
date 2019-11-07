@@ -134,25 +134,24 @@ static int loadMeta(struct uv *uv,
     unsigned format;
     unsigned crc1;
     unsigned crc2;
-    int fd;
-    char errmsg_[2048];
-    char *errmsg = errmsg_;
+    uv_file fd;
+    struct ErrMsg errmsg;
     int rv;
 
     snapshot->term = info->term;
     snapshot->index = info->index;
 
-    rv = uvOpenFile(uv->dir, info->filename, O_RDONLY, &fd, &errmsg);
+    rv = UvFsOpenFileForReading(uv->dir, info->filename, &fd, &errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "open %s: %s", info->filename, errmsg);
-        raft_free(errmsg);
+        uvErrorf(uv, "open %s: %s", info->filename, ErrMsgString(&errmsg));
         rv = RAFT_IOERR;
         goto err;
     }
-    rv = uvReadFully(fd, header, sizeof header, &errmsg);
+    buf.base = header;
+    buf.len = sizeof header;
+    rv = UvFsReadInto(fd, &buf, &errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "read %s: %s", info->filename, errmsg);
-        raft_free(errmsg);
+        uvErrorf(uv, "read %s: %s", info->filename, ErrMsgString(&errmsg));
         rv = RAFT_IOERR;
         goto err_after_open;
     }
@@ -185,10 +184,9 @@ static int loadMeta(struct uv *uv,
         goto err_after_open;
     }
 
-    rv = uvReadFully(fd, buf.base, buf.len, &errmsg);
+    rv = UvFsReadInto(fd, &buf, &errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "read %s: %s", info->filename, errmsg);
-        raft_free(errmsg);
+        uvErrorf(uv, "read %s: %s", info->filename, ErrMsgString(&errmsg));
         rv = RAFT_IOERR;
         goto err_after_buf_malloc;
     }
@@ -209,7 +207,7 @@ static int loadMeta(struct uv *uv,
     }
 
     raft_free(buf.base);
-    close(fd);
+    UvOsClose(fd);
 
     return 0;
 

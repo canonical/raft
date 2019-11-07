@@ -195,22 +195,6 @@ int uvOpenFile(const char *dir,
     return 0;
 }
 
-int uvReadFully(const int fd, void *buf, const size_t n, char **errmsg)
-{
-    int rv;
-    rv = read(fd, buf, n);
-    if (rv == -1) {
-        *errmsg = uvSysErrMsg("read", -errno);
-        return UV__ERROR;
-    }
-    assert(rv >= 0);
-    if ((size_t)rv < n) {
-        *errmsg = errMsgPrintf("short read: %d bytes instead of %ld", rv, n);
-        return UV__NODATA;
-    }
-    return 0;
-}
-
 /* Check if direct I/O is possible on the given fd. */
 static int probeDirectIO(int fd, size_t *size, char **errmsg)
 {

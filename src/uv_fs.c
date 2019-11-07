@@ -122,6 +122,19 @@ static int uvFsOpenFile(const char *dir,
     return 0;
 }
 
+int UvFsOpenFileForReading(const char *dir,
+                           const char *filename,
+                           uv_file *fd,
+                           struct ErrMsg *errmsg)
+{
+    char path[UV__PATH_SZ];
+    int flags = O_RDONLY;
+
+    UvOsJoin(dir, filename, path);
+
+    return uvFsOpenFile(dir, filename, flags, 0, fd, errmsg);
+}
+
 int UvFsAllocateFile(const char *dir,
                      const char *filename,
                      size_t size,
@@ -164,7 +177,7 @@ err:
 
 static int uvFsWriteFile(const char *dir,
                          const char *filename,
-			 int flags,
+                         int flags,
                          struct raft_buffer *bufs,
                          unsigned n_bufs,
                          struct ErrMsg *errmsg)
