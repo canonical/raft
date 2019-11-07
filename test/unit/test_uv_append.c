@@ -6,6 +6,10 @@
 /* Maximum number of blocks a segment can have */
 #define MAX_SEGMENT_BLOCKS 4
 
+/* Expected block size of the temporary directory (usually backed by tmpfs). We
+ * should detect this at runtime instead. */
+#define SEGMENT_BLOCK_SIZE 4096
+
 /******************************************************************************
  *
  * Fixture
@@ -26,7 +30,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     SETUP_UV_NO_INIT;
-    raft_uv_set_segment_size(&f->io, 4096 * MAX_SEGMENT_BLOCKS);
+    raft_uv_set_segment_size(&f->io, SEGMENT_BLOCK_SIZE * MAX_SEGMENT_BLOCKS);
     UV_INIT;
     f->count = 0;
     f->invoked = 0;

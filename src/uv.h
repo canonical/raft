@@ -62,7 +62,6 @@ struct uv
     bool async_io;                       /* Whether async I/O is supported */
     size_t segment_size;                 /* Initial size of open segments. */
     size_t block_size;                   /* Block size of the data dir */
-    unsigned n_blocks;                   /* N. of blocks in a segment */
     struct uvClient **clients;           /* Outbound connections */
     unsigned n_clients;                  /* Length of the clients array */
     struct uvServer **servers;           /* Inbound connections */
@@ -167,6 +166,9 @@ int uvSegmentLoadAll(struct uv *uv,
                      size_t n_segments,
                      struct raft_entry **entries,
                      size_t *n_entries);
+
+/* Return the number of blocks in a segments. */
+#define uvSegmentBlocks(UV) (UV->segment_size / UV->block_size)
 
 /* A dynamically allocated buffer holding data to be written into a segment
  * file.

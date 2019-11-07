@@ -236,7 +236,7 @@ static int prepareSegment(struct uv *uv)
     s->counter = uv->prepare_next_counter;
     s->work.data = s;
     s->fd = -1;
-    s->size = uv->block_size * uv->n_blocks;
+    s->size = uv->block_size * uvSegmentBlocks(uv);
     s->canceled = false;
 
     sprintf(s->filename, UV__OPEN_TEMPLATE, s->counter);

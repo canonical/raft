@@ -92,7 +92,7 @@ static void uvAppendInit(struct uvAppend *a,
 static bool openSegmentHasEnoughSpareCapacity(struct openSegment *s,
                                               size_t size)
 {
-    size_t cap = s->uv->block_size * s->uv->n_blocks;
+    size_t cap = s->uv->block_size * uvSegmentBlocks(s->uv);
     return s->size + size <= cap;
 }
 

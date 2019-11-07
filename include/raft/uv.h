@@ -80,11 +80,19 @@ RAFT_API int raft_uv_init(struct raft_io *io,
 RAFT_API void raft_uv_close(struct raft_io *io);
 
 /**
- * Set the initial size of newly created open segments. The default is 8
- * megabytes.
+ * Set the block size that will be used for direct I/O.
  *
- * This function must be invoked before passing the raft_io instance to
- * @raft_init().
+ * The default is to automatically detect the appropriate block size.
+ */
+RAFT_API void raft_uv_set_block_size(struct raft_io *io, size_t size);
+
+/**
+ * Set the maximum initial size of newly created open segments.
+ *
+ * If the given size is not a multiple of the block size, the actual size will
+ * be reduced to the closest multiple.
+ *
+ * The default is 8 megabytes.
  */
 RAFT_API void raft_uv_set_segment_size(struct raft_io *io, size_t size);
 

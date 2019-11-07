@@ -391,7 +391,7 @@ TEST_CASE(put, entries_less_than_trailing, NULL)
     struct put_fixture *f = data;
     unsigned i;
     (void)params;
-    f->uv->n_blocks = 1; /* Lower the number of block to force finalizing */
+    f->uv->segment_size = f->uv->block_size; /* Lower the number of block to force finalizing */
 
     for (i = 0; i < 40; i++) {
         append(10);
@@ -416,7 +416,7 @@ TEST_CASE(put, entries_more_than_trailing, NULL)
     struct put_fixture *f = data;
     unsigned i;
     (void)params;
-    f->uv->n_blocks = 1; /* Lower the number of block to force finalizing */
+    f->uv->segment_size = f->uv->block_size; /* Lower the number of block to force finalizing */
 
     for (i = 0; i < 40; i++) {
         append(10);

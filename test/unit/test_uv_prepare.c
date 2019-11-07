@@ -126,7 +126,7 @@ TEST(UvPrepare, noSpace, setup, tear_down, 0, dir_tmpfs_params)
     return MUNIT_SKIP;
 #endif
     uv = f->io.impl;
-    uv->n_blocks = 32768;
+    uv->segment_size = 32768 * uv->block_size;
     PREPARE_FAILURE(RAFT_IOERR);
     return MUNIT_OK;
 }
