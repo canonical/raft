@@ -25,8 +25,9 @@ struct fixture
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    SETUP_UV;
-    f->uv->n_blocks = MAX_SEGMENT_BLOCKS;
+    SETUP_UV_NO_INIT;
+    raft_uv_set_segment_size(&f->io, 4096 * MAX_SEGMENT_BLOCKS);
+    UV_INIT;
     f->count = 0;
     f->invoked = 0;
     f->status = 0;
