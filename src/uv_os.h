@@ -112,13 +112,6 @@ int UvOsIoGetevents(aio_context_t ctx,
 int UvOsEventfd(unsigned int initval, int flags);
 int UvOsSetDirectIo(uv_file fd);
 
-/* Open a file in a directory. */
-int uvOpenFile(const char *dir,
-               const char *filename,
-               int flags,
-               uv_file *fd,
-               char **errmsg);
-
 /* Return information about the I/O capabilities of the underlying file
  * system.
  *

@@ -173,7 +173,7 @@ static int openSegment(struct uv *uv,
     buf.len = sizeof *format;
     rv = UvFsReadInto(*fd, &buf, &errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "read %s: %s", filename, errmsg);
+        uvErrorf(uv, "read %s: %s", filename, ErrMsgString(&errmsg));
         UvOsClose(*fd);
         return RAFT_IOERR;
     }

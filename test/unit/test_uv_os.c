@@ -9,34 +9,6 @@
 
 /******************************************************************************
  *
- * uvOpenFile
- *
- *****************************************************************************/
-
-/* Open a file the fixture's tmpdir. */
-#define OPEN_FILE_ERROR(DIR, FILENAME, FLAGS, RV, ERRMSG)         \
-    {                                                             \
-        int fd;                                                   \
-        char *errmsg;                                             \
-        int rv_ = uvOpenFile(DIR, FILENAME, FLAGS, &fd, &errmsg); \
-        munit_assert_int(rv_, ==, RV);                            \
-        munit_assert_string_equal(errmsg, ERRMSG);                \
-        raft_free(errmsg);                                        \
-    }
-
-SUITE(uvOpenFile)
-
-/* If the directory doesn't exist, an error is returned. */
-TEST(uvOpenFile, noExists, setupDir, tearDownDir, 0, NULL)
-{
-    const char *dir = data;
-    OPEN_FILE_ERROR(dir, "foo", O_RDONLY, UV__NOENT,
-                    "open: no such file or directory");
-    return MUNIT_OK;
-}
-
-/******************************************************************************
- *
  * uvProbeIoCapabilities
  *
  *****************************************************************************/

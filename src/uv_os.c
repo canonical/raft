@@ -172,29 +172,6 @@ int UvOsSetDirectIo(uv_file fd)
     return 0;
 }
 
-int uvOpenFile(const char *dir,
-               const char *filename,
-               int flags,
-               uv_file *fd,
-               char **errmsg)
-{
-    struct uv_fs_s req;
-    char path[UV__PATH_SZ];
-
-    assert(UV__DIR_HAS_VALID_LEN(dir));
-    assert(UV__FILENAME_HAS_VALID_LEN(filename));
-
-    UvOsJoin(dir, filename, path);
-    *fd = uv_fs_open(NULL, &req, path, flags, S_IRUSR | S_IWUSR, NULL);
-    if (*fd < 0) {
-        int rv = *fd;
-        *fd = -1;
-        *errmsg = uvSysErrMsg("open", rv);
-        return rv == UV_ENOENT ? UV__NOENT : UV__ERROR;
-    }
-    return 0;
-}
-
 /* Check if direct I/O is possible on the given fd. */
 static int probeDirectIO(int fd, size_t *size, char **errmsg)
 {

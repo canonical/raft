@@ -91,7 +91,35 @@ SUITE(UvFsSyncDir)
 /* If the directory doesn't exist, an error is returned. */
 TEST(UvFsSyncDir, noExists, NULL, NULL, 0, NULL)
 {
-    SYNC_DIR_ERROR("/abcdef", UV__ERROR, "open directory: no such file or directory");
+    SYNC_DIR_ERROR("/abcdef", UV__ERROR,
+                   "open directory: no such file or directory");
+    return MUNIT_OK;
+}
+
+/******************************************************************************
+ *
+ * UvFsOpenFileForReading
+ *
+ *****************************************************************************/
+
+/* Open a file in the given dir. */
+#define OPEN_FILE_FOR_READING_ERROR(DIR, FILENAME, RV, ERRMSG)           \
+    {                                                                    \
+        uv_file fd_;                                                     \
+        struct ErrMsg errmsg_;                                           \
+        int rv_ = UvFsOpenFileForReading(DIR, FILENAME, &fd_, &errmsg_); \
+        munit_assert_int(rv_, ==, RV);                                   \
+        munit_assert_string_equal(ErrMsgString(&errmsg_), ERRMSG);       \
+    }
+
+SUITE(UvFsOpenFileForReading)
+
+/* If the directory doesn't exist, an error is returned. */
+TEST(UvFsOpenFileForReading, noExists, setupDir, tearDownDir, 0, NULL)
+{
+    const char *dir = data;
+    OPEN_FILE_FOR_READING_ERROR(dir, "foo", UV__ERROR,
+                                "open: no such file or directory");
     return MUNIT_OK;
 }
 
