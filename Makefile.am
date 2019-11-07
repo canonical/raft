@@ -127,7 +127,8 @@ libraft_la_LDFLAGS += $(UV_LIBS)
 raftinclude_HEADERS += include/raft/uv.h
 
 check_PROGRAMS += \
-  test/unit/uv
+  test/unit/uv \
+  test/integration/uv
 
 libtest_la_SOURCES += \
   test/lib/dir.c \
@@ -151,7 +152,6 @@ test_unit_uv_SOURCES += \
   test/unit/test_uv_load.c \
   test/unit/test_uv_prepare.c \
   test/unit/test_uv_recover.c \
-  test/unit/test_uv_append.c \
   test/unit/test_uv_finalize.c \
   test/unit/test_uv_snapshot.c \
   test/unit/test_uv_truncate.c \
@@ -163,6 +163,12 @@ test_unit_uv_SOURCES += \
   test/unit/test_uv.c
 test_unit_uv_LDADD = libtest.la
 test_unit_uv_LDFLAGS = $(UV_LIBS)
+
+test_integration_uv_SOURCES = \
+  test/integration/main_uv.c \
+  test/integration/test_uv_append.c
+test_integration_uv_LDADD = libtest.la libraft.la
+test_integration_uv_LDFLAGS = $(UV_LIBS)
 
 AM_CFLAGS += $(UV_CFLAGS)
 
