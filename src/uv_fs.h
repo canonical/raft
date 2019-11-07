@@ -91,4 +91,17 @@ int UvFsTruncateAndRenameFile(const char *dir,
                               const char *filename2,
                               struct ErrMsg *errmsg);
 
+/* Return information about the I/O capabilities of the underlying file
+ * system.
+ *
+ * The @direct parameter will be set to zero if direct I/O is not possible, or
+ * to the block size to use for direct I/O otherwise.
+ *
+ * The @async parameter will be set to true if fully asynchronous I/O is
+ * possible using the KAIO API. */
+int UvFsProbeCapabilities(const char *dir,
+                          size_t *direct,
+                          bool *async,
+                          struct ErrMsg *errmsg);
+
 #endif /* UV_FS_H_ */

@@ -30,9 +30,7 @@ static int uvInit(struct raft_io *io,
 {
     struct uv *uv;
     size_t direct_io;
-    char errmsg_[2048];
-    char *errmsg = errmsg_;
-    struct ErrMsg errmsg2;
+    struct ErrMsg errmsg;
     int rv;
 
     uv = io->impl;
@@ -42,9 +40,9 @@ static int uvInit(struct raft_io *io,
     uvDebugf(uv, "data dir: %s", uv->dir);
 
     /* Ensure that the data directory exists and is accessible */
-    rv = UvFsEnsureDir(uv->dir, &errmsg2);
+    rv = UvFsEnsureDir(uv->dir, &errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "ensure data dir %s: %s", uv->dir, ErrMsgString(&errmsg2));
+        uvErrorf(uv, "ensure data dir %s: %s", uv->dir, ErrMsgString(&errmsg));
         rv = RAFT_IOERR;
         goto err;
     }
@@ -58,10 +56,9 @@ static int uvInit(struct raft_io *io,
              uv->metadata.version, uv->metadata.term, uv->metadata.voted_for);
 
     /* Detect the I/O capabilities of the underlying file system. */
-    rv = uvProbeIoCapabilities(uv->dir, &direct_io, &uv->async_io, &errmsg);
+    rv = UvFsProbeCapabilities(uv->dir, &direct_io, &uv->async_io, &errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "probe I/O capabilities: %s", errmsg);
-        raft_free(errmsg);
+        uvErrorf(uv, "probe I/O capabilities: %s", ErrMsgString(&errmsg));
         rv = RAFT_IOERR;
         goto err;
     }
@@ -592,7 +589,7 @@ int raft_uv_init(struct raft_io *io,
     if (uv == NULL) {
         return RAFT_NOMEM;
     }
-    memset (uv, 0, sizeof (struct uv));
+    memset(uv, 0, sizeof(struct uv));
     /* during initialization of a structure this big (40 fields),
        you're guaranteed to forget to initialize something */
 
@@ -601,14 +598,14 @@ int raft_uv_init(struct raft_io *io,
     strcpy(uv->dir, dir);
     uv->transport = transport;
     uv->transport->data = uv;
-    uv->logger = NULL;  /* will be set later, or will fail earlier */
+    uv->logger = NULL; /* will be set later, or will fail earlier */
     uv->id = 0;
     uv->state = 0;
     uv->errored = false;
-    uv->direct_io = false;  /* assume unsupported */
+    uv->direct_io = false; /* assume unsupported */
     uv->async_io = false;  /* assume unsupported */
-    uv->block_size = 0; /* Detected in raft_io->init() */
-    uv->n_blocks = 0;   /* Calculated in raft_io->init() */
+    uv->block_size = 0;    /* Detected in raft_io->init() */
+    uv->n_blocks = 0;      /* Calculated in raft_io->init() */
     uv->clients = NULL;
     uv->n_clients = 0;
     uv->servers = NULL;
@@ -632,14 +629,14 @@ int raft_uv_init(struct raft_io *io,
     uv->snapshot_put_work.data = NULL;
     /* TODO: struct uvMetadata metadata;  /\* Cache of metadata on disk *\/ */
     /* TODO: struct uv_timer_s timer;     /\* Timer for periodic ticks *\/ */
-    uv->tick_cb = NULL;  /* will be set at ~start~ */
-    uv->recv_cb = NULL;  /* will be set at ~start~ */
+    uv->tick_cb = NULL; /* will be set at ~start~ */
+    uv->recv_cb = NULL; /* will be set at ~start~ */
     uv->closing = false;
     uv->close_cb = NULL;
 
     /* Set the raft_io implementation. */
-    io->version = 1;  /* future-proof'ing */
-    io->data = NULL;  /* canary-poison */
+    io->version = 1; /* future-proof'ing */
+    io->data = NULL; /* canary-poison */
     io->impl = uv;
     io->init = uvInit;
     io->start = uvStart;

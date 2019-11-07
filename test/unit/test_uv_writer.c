@@ -1,4 +1,5 @@
 #include "../../src/uv_error.h"
+#include "../../src/uv_fs.h"
 #include "../../src/uv_writer.h"
 #include "../lib/dir.h"
 #include "../lib/loop.h"
@@ -30,11 +31,11 @@ static void *setupWriter(MUNIT_UNUSED const MunitParameter params[],
 {
     struct writer *f = munit_malloc(sizeof *f);
     char path[UV__PATH_SZ];
-    char *errmsg;
+    struct ErrMsg errmsg;
     int rv;
     SETUP_DIR_OR_SKIP;
     SETUP_LOOP;
-    rv = uvProbeIoCapabilities(f->dir, &f->direct_io, &f->async_io, &errmsg);
+    rv = UvFsProbeCapabilities(f->dir, &f->direct_io, &f->async_io, &errmsg);
     munit_assert_int(rv, ==, 0);
     f->block_size = f->direct_io != 0 ? f->direct_io : 4096;
     UvOsJoin(f->dir, "foo", path);

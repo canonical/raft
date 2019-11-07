@@ -206,3 +206,128 @@ TEST(UvFsAllocateFile, noSpace, setupDir, tearDownDir, 0, dir_tmpfs_params)
     munit_assert_false(test_dir_has_file(dir, "foo"));
     return MUNIT_OK;
 }
+
+/******************************************************************************
+ *
+ * UvFsProbeCapabilities
+ *
+ *****************************************************************************/
+
+/* Invoke UvFsProbeCapabilities against the given dir and assert that it returns
+ * the given values for direct I/O and async I/O. */
+#define PROBE_CAPABILITIES(DIR, DIRECT_IO, ASYNC_IO)                         \
+    {                                                                        \
+        size_t direct_io_;                                                   \
+        bool async_io_;                                                      \
+        struct ErrMsg errmsg_;                                               \
+        int rv_;                                                             \
+        rv_ = UvFsProbeCapabilities(DIR, &direct_io_, &async_io_, &errmsg_); \
+        munit_assert_int(rv_, ==, 0);                                        \
+        munit_assert_int(direct_io_, ==, DIRECT_IO);                         \
+        if (ASYNC_IO) {                                                      \
+            munit_assert_true(async_io_);                                    \
+        } else {                                                             \
+            munit_assert_false(async_io_);                                   \
+        }                                                                    \
+    }
+
+/* Invoke UvFsProbeCapabilities and check that the given error occurs. */
+#define PROBE_CAPABILITIES_ERROR(DIR, RV, ERRMSG)                            \
+    {                                                                        \
+        size_t direct_io_;                                                   \
+        bool async_io_;                                                      \
+        struct ErrMsg errmsg_;                                               \
+        int rv_;                                                             \
+        rv_ = UvFsProbeCapabilities(DIR, &direct_io_, &async_io_, &errmsg_); \
+        munit_assert_int(rv_, ==, RV);                                       \
+        munit_assert_string_equal(ErrMsgString(&errmsg_), ERRMSG);           \
+    }
+
+SUITE(UvFsProbeCapabilities)
+
+TEST(UvFsProbeCapabilities, tmpfs, setupTmpfsDir, tearDownDir, 0, NULL)
+{
+    const char *dir = data;
+    if (dir == NULL) {
+        return MUNIT_SKIP;
+    }
+    PROBE_CAPABILITIES(dir, 0, false);
+    return MUNIT_OK;
+}
+
+/* ZFS 0.8 reports that it supports direct I/O, but does not support fully
+ * asynchronous kernel AIO. */
+TEST(UvFsProbeCapabilities, zfsDirectIO, setupZfsDir, tearDownDir, 0, NULL)
+{
+    const char *dir = data;
+    size_t direct_io = 0;
+#if defined(RAFT_HAVE_ZFS_WITH_DIRECT_IO)
+    direct_io = 4096;
+#endif
+    if (dir == NULL) {
+        return MUNIT_SKIP;
+    }
+    PROBE_CAPABILITIES(dir, direct_io, false);
+    return MUNIT_OK;
+}
+
+#if defined(RWF_NOWAIT)
+
+/* File systems that fully support DIO. */
+TEST(UvFsProbeCapabilities, aio, setupDir, tearDownDir, 0, dir_aio_params)
+{
+    const char *dir = data;
+    if (dir == NULL) {
+        return MUNIT_SKIP;
+    }
+    PROBE_CAPABILITIES(dir, 4096, true);
+    return MUNIT_OK;
+}
+
+#endif /* RWF_NOWAIT */
+
+/* If the given path is not executable, the block size of the underlying file
+ * system can't be determined and an error is returned. */
+TEST(UvFsProbeCapabilities, noAccess, setupDir, tearDownDir, 0, NULL)
+{
+    const char *dir = data;
+    test_dir_unexecutable(dir);
+    PROBE_CAPABILITIES_ERROR(dir, UV__ERROR, "mkstemp: permission denied");
+    return MUNIT_OK;
+}
+
+/* No space is left on the target device. */
+TEST(UvFsProbeCapabilities, noSpace, setupTmpfsDir, tearDownDir, 0, NULL)
+{
+    const char *dir = data;
+    if (dir == NULL) {
+        return MUNIT_SKIP;
+    }
+    test_dir_fill(dir, 0);
+    PROBE_CAPABILITIES_ERROR(dir, UV__ERROR,
+                             "posix_fallocate: no space left on device");
+    return MUNIT_OK;
+}
+
+#if defined(RWF_NOWAIT)
+
+/* The uvIoSetup() call fails with EAGAIN. */
+TEST(UvFsProbeCapabilities, noResources, setupBtrfsDir, tearDownDir, 0, NULL)
+{
+    const char *dir = data;
+    aio_context_t ctx = 0;
+    int rv;
+    if (dir == NULL) {
+        return MUNIT_SKIP;
+    }
+    rv = test_aio_fill(&ctx, 0);
+    if (rv != 0) {
+        return MUNIT_SKIP;
+    }
+    PROBE_CAPABILITIES_ERROR(dir, UV__ERROR,
+                             "io_setup: Resource temporarily unavailable");
+    test_aio_destroy(ctx);
+    return MUNIT_OK;
+}
+
+#endif /* RWF_NOWAIT */

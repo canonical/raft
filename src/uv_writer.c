@@ -401,7 +401,7 @@ int UvWriterSubmit(struct UvWriter *w,
         switch (rv) {
             case UV__EOPNOTSUPP:
                 /* NOWAIT is not supported, this should not occur because we
-                 * checked it in uvProbeIoCapabilities. */
+                 * checked it in UvFsProbeCapabilities. */
                 assert(0);
                 break;
             case UV_EAGAIN:

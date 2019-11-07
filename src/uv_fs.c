@@ -1,6 +1,7 @@
 #include "uv_fs.h"
 
 #include <string.h>
+#include <sys/vfs.h>
 #include <unistd.h>
 
 #include "assert.h"
@@ -477,6 +478,228 @@ int UvFsTruncateAndRenameFile(const char *dir,
 
 err_after_open:
     UvOsClose(fd);
+err:
+    return UV__ERROR;
+}
+
+/* Check if direct I/O is possible on the given fd. */
+static int probeDirectIO(int fd, size_t *size, struct ErrMsg *errmsg)
+{
+    int flags;             /* Current fcntl flags. */
+    struct statfs fs_info; /* To check the file system type. */
+    void *buf;             /* Buffer to use for the probe write. */
+    int rv;
+
+    flags = fcntl(fd, F_GETFL);
+    rv = fcntl(fd, F_SETFL, flags | O_DIRECT);
+
+    if (rv == -1) {
+        if (errno != EINVAL) {
+            /* UNTESTED: the parameters are ok, so this should never happen. */
+            UvErrMsgSys(errmsg, "fnctl", -errno);
+            return UV__ERROR;
+        }
+        rv = fstatfs(fd, &fs_info);
+        if (rv == -1) {
+            /* UNTESTED: in practice ENOMEM should be the only failure mode */
+            UvErrMsgSys(errmsg, "fstatfs", -errno);
+            return UV__ERROR;
+        }
+        switch (fs_info.f_type) {
+            case 0x01021994: /* TMPFS_MAGIC */
+            case 0x2fc12fc1: /* ZFS magic */
+                *size = 0;
+                return 0;
+            default:
+                /* UNTESTED: this is an unsupported file system. */
+                ErrMsgPrintf(errmsg, "unsupported file system: %lx",
+                             fs_info.f_type);
+                return UV__ERROR;
+        }
+    }
+
+    /* Try to peform direct I/O, using various buffer size. */
+    *size = 4096;
+    while (*size >= 512) {
+        buf = raft_aligned_alloc(*size, *size);
+        if (buf == NULL) {
+            /* UNTESTED: TODO */
+            ErrMsgPrintf(errmsg, "can't allocate write buffer");
+            return UV__ERROR;
+        }
+        memset(buf, 0, *size);
+        rv = write(fd, buf, *size);
+        raft_free(buf);
+        if (rv > 0) {
+            /* Since we fallocate'ed the file, we should never fail because of
+             * lack of disk space, and all bytes should have been written. */
+            assert(rv == (int)(*size));
+            return 0;
+        }
+        assert(rv == -1);
+        if (errno != EIO && errno != EOPNOTSUPP) {
+            /* UNTESTED: this should basically fail only because of disk errors,
+             * since we allocated the file with posix_fallocate. */
+
+            /* FIXME: this is a workaround because shiftfs doesn't return EINVAL
+             * in the fnctl call above, for example when the underlying fs is
+             * ZFS. */
+            if (errno == EINVAL && *size == 4096) {
+                *size = 0;
+                return 0;
+            }
+
+            UvErrMsgSys(errmsg, "write", -errno);
+            return UV__ERROR;
+        }
+        *size = *size / 2;
+    }
+
+    *size = 0;
+    return 0;
+}
+
+#if defined(RWF_NOWAIT)
+/* Check if fully non-blocking async I/O is possible on the given fd. */
+static int probeAsyncIO(int fd, size_t size, bool *ok, struct ErrMsg *errmsg)
+{
+    void *buf;                  /* Buffer to use for the probe write */
+    aio_context_t ctx = 0;      /* KAIO context handle */
+    struct iocb iocb;           /* KAIO request object */
+    struct iocb *iocbs = &iocb; /* Because the io_submit() API sucks */
+    struct io_event event;      /* KAIO response object */
+    int n_events;
+    int rv;
+
+    /* Setup the KAIO context handle */
+    rv = UvOsIoSetup(1, &ctx);
+    if (rv != 0) {
+        UvErrMsgSys(errmsg, "io_setup", rv);
+        /* UNTESTED: in practice this should fail only with ENOMEM */
+        return rv;
+    }
+
+    /* Allocate the write buffer */
+    buf = raft_aligned_alloc(size, size);
+    if (buf == NULL) {
+        /* UNTESTED: define a configurable allocator that can fail? */
+        ErrMsgPrintf(errmsg, "can't allocate write buffer");
+        return UV__ERROR;
+    }
+    memset(buf, 0, size);
+
+    /* Prepare the KAIO request object */
+    memset(&iocb, 0, sizeof iocb);
+    iocb.aio_lio_opcode = IOCB_CMD_PWRITE;
+    *((void **)(&iocb.aio_buf)) = buf;
+    iocb.aio_nbytes = size;
+    iocb.aio_offset = 0;
+    iocb.aio_fildes = fd;
+    iocb.aio_reqprio = 0;
+    iocb.aio_rw_flags |= RWF_NOWAIT | RWF_DSYNC;
+
+    /* Submit the KAIO request */
+    rv = UvOsIoSubmit(ctx, 1, &iocbs);
+    if (rv != 0) {
+        /* UNTESTED: in practice this should fail only with ENOMEM */
+        raft_free(buf);
+        UvOsIoDestroy(ctx);
+        /* On ZFS 0.8 this is not properly supported yet. */
+        if (errno == EOPNOTSUPP) {
+            *ok = false;
+            return 0;
+        }
+        ErrMsgPrintf(errmsg, "can't allocate write buffer");
+        return rv;
+    }
+
+    /* Fetch the response: will block until done. */
+    n_events = UvOsIoGetevents(ctx, 1, 1, &event, NULL);
+    assert(n_events == 1);
+
+    /* Release the write buffer. */
+    raft_free(buf);
+
+    /* Release the KAIO context handle. */
+    rv = UvOsIoDestroy(ctx);
+    if (rv != 0) {
+        UvErrMsgSys(errmsg, "io_destroy", rv);
+        return rv;
+    }
+
+    if (event.res > 0) {
+        assert(event.res == (int)size);
+        *ok = true;
+    } else {
+        /* UNTESTED: this should basically fail only because of disk errors,
+         * since we allocated the file with posix_fallocate and the block size
+         * is supposed to be correct. */
+        assert(event.res != EAGAIN);
+        *ok = false;
+    }
+
+    return 0;
+}
+#endif /* RWF_NOWAIT */
+
+int UvFsProbeCapabilities(const char *dir,
+                          size_t *direct,
+                          bool *async,
+                          struct ErrMsg *errmsg)
+{
+    char filename[UV__FILENAME_LEN]; /* Filename of the probe file */
+    char path[UV__PATH_SZ];          /* Full path of the probe file */
+    int fd;                          /* File descriptor of the probe file */
+    int rv;
+
+    assert(UV__DIR_HAS_VALID_LEN(dir));
+
+    /* Create a temporary probe file. */
+    strcpy(filename, ".probe-XXXXXX");
+    UvOsJoin(dir, filename, path);
+    fd = mkstemp(path);
+    if (fd == -1) {
+        UvErrMsgSys(errmsg, "mkstemp", -errno);
+        goto err;
+    }
+    rv = posix_fallocate(fd, 0, 4096);
+    if (rv != 0) {
+        UvErrMsgSys(errmsg, "posix_fallocate", -rv);
+        goto err_after_file_open;
+    }
+    unlink(path);
+
+    /* Check if we can use direct I/O. */
+    rv = probeDirectIO(fd, direct, errmsg);
+    if (rv != 0) {
+        goto err_after_file_open;
+    }
+
+#if !defined(RWF_NOWAIT)
+    /* We can't have fully async I/O, since io_submit might potentially block.
+     */
+    *async = false;
+#else
+    /* If direct I/O is not possible, we can't perform fully asynchronous
+     * I/O, because io_submit might potentially block. */
+    if (*direct == 0) {
+        *async = false;
+        goto out;
+    }
+    rv = probeAsyncIO(fd, *direct, async, errmsg);
+    if (rv != 0) {
+        goto err_after_file_open;
+    }
+#endif /* RWF_NOWAIT */
+
+#if defined(RWF_NOWAIT)
+out:
+#endif /* RWF_NOWAIT */
+    close(fd);
+    return 0;
+
+err_after_file_open:
+    close(fd);
 err:
     return UV__ERROR;
 }
