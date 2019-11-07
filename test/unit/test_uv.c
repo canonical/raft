@@ -9,9 +9,11 @@
 
 TEST_MODULE(uv)
 
-/**
- * Helpers
- */
+/******************************************************************************
+ *
+ * Fixture with a raft_io instance initialized with the libuv implementation.
+ *
+ *****************************************************************************/
 
 struct fixture
 {

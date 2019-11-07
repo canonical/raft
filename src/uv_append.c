@@ -1,7 +1,3 @@
-#include <stdlib.h>
-#include <string.h>
-
-#include "../include/raft/uv.h"
 #include "assert.h"
 #include "byte.h"
 #include "queue.h"

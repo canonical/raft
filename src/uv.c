@@ -68,9 +68,9 @@ static int uvInit(struct raft_io *io,
     uvDebugf(uv, "I/O: direct %d, async %d, block %ld\n", uv->direct_io,
              uv->async_io, uv->block_size);
 
-    /* We expect the maximum segment size to be a multiple of the block size */
-    assert(UV__MAX_SEGMENT_SIZE % uv->block_size == 0);
-    uv->n_blocks = UV__MAX_SEGMENT_SIZE / uv->block_size;
+    /* We expect the maximum segment size to be a multiple of the block size. */
+    assert(uv->segment_size % uv->block_size == 0);
+    uv->n_blocks = uv->segment_size / uv->block_size;
 
     assert(uv->state == 0);
     uv->id = id;
@@ -605,8 +605,9 @@ int raft_uv_init(struct raft_io *io,
     uv->errored = false;
     uv->direct_io = false; /* assume unsupported */
     uv->async_io = false;  /* assume unsupported */
-    uv->block_size = 0;    /* Detected in raft_io->init() */
-    uv->n_blocks = 0;      /* Calculated in raft_io->init() */
+    uv->segment_size = UV__MAX_SEGMENT_SIZE;
+    uv->block_size = 0; /* Detected in raft_io->init() */
+    uv->n_blocks = 0;   /* Calculated in raft_io->init() */
     uv->clients = NULL;
     uv->n_clients = 0;
     uv->servers = NULL;
@@ -669,4 +670,11 @@ void raft_uv_close(struct raft_io *io)
         raft_free(uv->servers);
     }
     raft_free(uv);
+}
+
+void raft_uv_set_segment_size(struct raft_io *io, size_t size)
+{
+    struct uv *uv;
+    uv = io->impl;
+    uv->segment_size = size;
 }

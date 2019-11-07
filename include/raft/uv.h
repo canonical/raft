@@ -1,5 +1,5 @@
-#ifndef RAFT_IO_UV_H
-#define RAFT_IO_UV_H
+#ifndef RAFT_UV_H
+#define RAFT_UV_H
 
 #include <uv.h>
 
@@ -78,6 +78,15 @@ RAFT_API int raft_uv_init(struct raft_io *io,
                           struct raft_uv_transport *transport);
 
 RAFT_API void raft_uv_close(struct raft_io *io);
+
+/**
+ * Set the initial size of newly created open segments. The default is 8
+ * megabytes.
+ *
+ * This function must be invoked before passing the raft_io instance to
+ * @raft_init().
+ */
+RAFT_API void raft_uv_set_segment_size(struct raft_io *io, size_t size);
 
 /**
  * Callback invoked by the transport implementation when a new incoming
@@ -186,4 +195,4 @@ RAFT_API int raft_uv_tcp_init(struct raft_uv_transport *t,
 
 RAFT_API void raft_uv_tcp_close(struct raft_uv_transport *t);
 
-#endif /* RAFT_IO_UV_H */
+#endif /* RAFT_UV_H */
