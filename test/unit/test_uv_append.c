@@ -6,8 +6,7 @@
 /* Maximum number of blocks a segment can have */
 #define MAX_SEGMENT_BLOCKS 4
 
-/* Expected block size of the temporary directory (usually backed by tmpfs). We
- * should detect this at runtime instead. */
+/* This block size should work fine for all file systems. */
 #define SEGMENT_BLOCK_SIZE 4096
 
 /******************************************************************************
@@ -29,9 +28,9 @@ struct fixture
 static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    SETUP_UV_NO_INIT;
+    SETUP_UV;
+    raft_uv_set_block_size(&f->io, SEGMENT_BLOCK_SIZE);
     raft_uv_set_segment_size(&f->io, SEGMENT_BLOCK_SIZE * MAX_SEGMENT_BLOCKS);
-    UV_INIT;
     f->count = 0;
     f->invoked = 0;
     f->status = 0;
@@ -152,13 +151,13 @@ static void appendCb(struct raft_io_append *req, int status)
                                                                              \
         sprintf(filename, "open-%d", COUNTER);                               \
                                                                              \
-        buf.len = MAX_SEGMENT_BLOCKS * f->uv->block_size;                    \
+        buf.len = MAX_SEGMENT_BLOCKS * SEGMENT_BLOCK_SIZE;                   \
         if (buf.len < 8 + /* segment header */ +SIZE) {                      \
             size_t rest;                                                     \
             buf.len = 8 /* segment header */ + SIZE;                         \
-            rest = buf.len % f->uv->block_size;                              \
+            rest = buf.len % SEGMENT_BLOCK_SIZE;                             \
             if (rest != 0) {                                                 \
-                buf.len += f->uv->block_size - rest;                         \
+                buf.len += SEGMENT_BLOCK_SIZE - rest;                        \
             }                                                                \
         }                                                                    \
         buf.base = munit_malloc(buf.len);                                    \
@@ -295,7 +294,7 @@ TEST(UvAppend, matchBlock, setup, tear_down, 0, NULL)
     struct fixture *f = data;
     size_t size;
 
-    size = f->uv->block_size;
+    size = SEGMENT_BLOCK_SIZE;
     size -= sizeof(uint64_t) +      /* Format */
             sizeof(uint64_t) +      /* Checksums */
             uvSizeofBatchHeader(1); /* Header */
@@ -324,7 +323,7 @@ TEST(UvAppend, exceedBlock, setup, tear_down, 0, NULL)
     size_t size1;
     size_t size2;
 
-    size1 = f->uv->block_size;
+    size1 = SEGMENT_BLOCK_SIZE;
 
     CREATE_ENTRIES(1, size1);
     APPEND(0);
@@ -343,9 +342,9 @@ TEST(UvAppend, exceedBlock, setup, tear_down, 0, NULL)
               64;                      /* Size of second batch */
 
     /* Write a third entry that fills the second block exactly */
-    size2 = f->uv->block_size - (written % f->uv->block_size);
+    size2 = SEGMENT_BLOCK_SIZE - (written % SEGMENT_BLOCK_SIZE);
     size2 -= (2 * sizeof(uint32_t) + uvSizeofBatchHeader(1));
-    size2 += f->uv->block_size;
+    size2 += SEGMENT_BLOCK_SIZE;
 
     CREATE_ENTRIES(1, size2);
     APPEND(0);
@@ -408,21 +407,21 @@ TEST(UvAppend, resizeArena, setup, tear_down, 0, NULL)
     CREATE_ENTRIES(2, 64);
     APPEND(0);
 
-    CREATE_ENTRIES(1, f->uv->block_size);
+    CREATE_ENTRIES(1, SEGMENT_BLOCK_SIZE);
     APPEND(0);
 
     CREATE_ENTRIES(2, 64);
     APPEND(0);
 
-    CREATE_ENTRIES(1, f->uv->block_size);
+    CREATE_ENTRIES(1, SEGMENT_BLOCK_SIZE);
     APPEND(0);
 
-    CREATE_ENTRIES(1, f->uv->block_size);
+    CREATE_ENTRIES(1, SEGMENT_BLOCK_SIZE);
     APPEND(0);
 
     WAIT_CB(5, 0);
 
-    ASSERT_SEGMENT(1, 7, 64 * 4 + f->uv->block_size * 3);
+    ASSERT_SEGMENT(1, 7, 64 * 4 + SEGMENT_BLOCK_SIZE * 3);
 
     return MUNIT_OK;
 }
@@ -484,7 +483,7 @@ TEST(UvAppend, truncateClosing, setup, tear_down, 0, NULL)
 TEST(UvAppend, counter, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    size_t size = f->uv->block_size;
+    size_t size = SEGMENT_BLOCK_SIZE;
     int i;
 
     for (i = 0; i < 10; i++) {

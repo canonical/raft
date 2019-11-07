@@ -64,7 +64,9 @@ static int uvInit(struct raft_io *io,
         goto err;
     }
     uv->direct_io = direct_io != 0;
-    uv->block_size = direct_io != 0 ? direct_io : 4096;
+    if (uv->block_size == 0) {
+        uv->block_size = direct_io != 0 ? direct_io : 4096;
+    }
     uvDebugf(uv, "I/O: direct %d, async %d, block %ld\n", uv->direct_io,
              uv->async_io, uv->block_size);
 
@@ -675,4 +677,11 @@ void raft_uv_set_segment_size(struct raft_io *io, size_t size)
     struct uv *uv;
     uv = io->impl;
     uv->segment_size = size;
+}
+
+void raft_uv_set_block_size(struct raft_io *io, size_t size)
+{
+    struct uv *uv;
+    uv = io->impl;
+    uv->block_size = size;
 }
