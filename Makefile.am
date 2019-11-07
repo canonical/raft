@@ -145,7 +145,6 @@ test_unit_uv_SOURCES += \
   src/snapshot.c \
   src/syscall.c \
   test/unit/main_uv.c \
-  test/unit/test_uv_os.c \
   test/unit/test_uv_fs.c \
   test/unit/test_uv_init.c \
   test/unit/test_uv_list.c \
