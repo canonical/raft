@@ -4,11 +4,6 @@
 #define UV_OS_H_
 
 #include <linux/aio_abi.h>
-#include <stdbool.h>
-#include <stdlib.h>
-#include <sys/eventfd.h>
-#include <sys/stat.h>
-#include <time.h>
 #include <uv.h>
 
 #include "../include/raft.h"
@@ -42,8 +37,9 @@
 #define UV_FS_O_DIRECT O_DIRECT
 #endif
 
-#define UV__EFD_NONBLOCK EFD_NONBLOCK
-#define UV__EOPNOTSUPP -EOPNOTSUPP
+#if !defined(UV_FS_O_NONBLOCK)
+#define UV_FS_O_NONBLOCK O_NONBLOCK
+#endif
 
 /* Maximum size of a full file system path string. */
 #define UV__PATH_SZ 1024

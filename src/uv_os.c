@@ -5,6 +5,7 @@
 #include <libgen.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/eventfd.h>
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <sys/vfs.h>
@@ -153,6 +154,9 @@ int UvOsIoGetevents(aio_context_t ctx,
 int UvOsEventfd(unsigned int initval, int flags)
 {
     int rv;
+    /* At the moment only UV_FS_O_NONBLOCK is supported */
+    assert(flags == UV_FS_O_NONBLOCK);
+    flags = EFD_NONBLOCK;
     rv = eventfd(initval, flags);
     if (rv == -1) {
         return -errno;

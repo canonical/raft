@@ -244,7 +244,7 @@ int UvWriterInit(struct UvWriter *w,
 
     /* Create an event file descriptor to get notified when a write has
      * completed. */
-    rv = UvOsEventfd(0, UV__EFD_NONBLOCK);
+    rv = UvOsEventfd(0, UV_FS_O_NONBLOCK);
     if (rv < 0) {
         /* UNTESTED: should fail only with ENOMEM */
         UvErrMsgSys(errmsg, "eventfd", rv);
@@ -399,11 +399,6 @@ int UvWriterSubmit(struct UvWriter *w,
 
         /* Check the reason of the error. */
         switch (rv) {
-            case UV__EOPNOTSUPP:
-                /* NOWAIT is not supported, this should not occur because we
-                 * checked it in UvFsProbeCapabilities. */
-                assert(0);
-                break;
             case UV_EAGAIN:
                 break;
             default:

@@ -1,5 +1,6 @@
 #include "uv_fs.h"
 
+#include <stdlib.h>
 #include <string.h>
 #include <sys/vfs.h>
 #include <unistd.h>
