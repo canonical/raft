@@ -39,8 +39,8 @@ static void *setupWriter(MUNIT_UNUSED const MunitParameter params[],
     munit_assert_int(rv, ==, 0);
     f->block_size = f->direct_io != 0 ? f->direct_io : 4096;
     UvOsJoin(f->dir, "foo", path);
-    f->fd = UvOsOpen(path, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
-    munit_assert_int(f->fd, >=, 0);
+    rv = UvOsOpen(path, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR, &f->fd);
+    munit_assert_int(rv, ==, 0);
     rv = UvOsFallocate(f->fd, 0, f->block_size * N_BLOCKS);
     munit_assert_int(rv, ==, 0);
     return f;

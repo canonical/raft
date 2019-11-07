@@ -44,9 +44,9 @@ int UvFsSyncDir(const char *dir, struct ErrMsg *errmsg)
 {
     uv_file fd;
     int rv;
-    fd = UvOsOpen(dir, UV_FS_O_RDONLY | UV_FS_O_DIRECTORY, 0);
-    if (fd < 0) {
-        UvErrMsgSys(errmsg, "open directory", fd);
+    rv = UvOsOpen(dir, UV_FS_O_RDONLY | UV_FS_O_DIRECTORY, 0, &fd);
+    if (rv != 0) {
+        UvErrMsgSys(errmsg, "open directory", rv);
         return UV__ERROR;
     }
     rv = UvOsFsync(fd);
@@ -116,12 +116,11 @@ static int uvFsOpenFile(const char *dir,
     char path[UV__PATH_SZ];
     int rv;
     UvOsJoin(dir, filename, path);
-    rv = UvOsOpen(path, flags, mode);
-    if (rv < 0) {
+    rv = UvOsOpen(path, flags, mode, fd);
+    if (rv != 0) {
         UvErrMsgSys(errmsg, "open", rv);
         return UV__ERROR;
     }
-    *fd = rv;
     return 0;
 }
 
@@ -452,12 +451,11 @@ int UvFsTruncateAndRenameFile(const char *dir,
     UvOsJoin(dir, filename2, path2);
 
     /* Truncate and rename. */
-    rv = UvOsOpen(path1, UV_FS_O_RDWR, 0);
-    if (rv < 0) {
+    rv = UvOsOpen(path1, UV_FS_O_RDWR, 0, &fd);
+    if (rv != 0) {
         UvErrMsgSys(errmsg, "open", rv);
         goto err;
     }
-    fd = rv;
     rv = UvOsTruncate(fd, size);
     if (rv != 0) {
         UvErrMsgSys(errmsg, "truncate", rv);

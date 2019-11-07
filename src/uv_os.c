@@ -20,10 +20,16 @@
 /* Default permissions when creating a directory. */
 #define DEFAULT_DIR_PERM 0700
 
-int UvOsOpen(const char *path, int flags, int mode)
+int UvOsOpen(const char *path, int flags, int mode, uv_file *fd)
 {
     struct uv_fs_s req;
-    return uv_fs_open(NULL, &req, path, flags, mode, NULL);
+    int rv;
+    rv = uv_fs_open(NULL, &req, path, flags, mode, NULL);
+    if (rv < 0) {
+        return rv;
+    }
+    *fd = rv;
+    return 0;
 }
 
 int UvOsClose(uv_file fd)

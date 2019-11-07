@@ -62,7 +62,7 @@
     LEN_AT_MOST_(FILENAME, UV__FILENAME_LEN)
 
 /* Portable open() */
-int UvOsOpen(const char *path, int flags, int mode);
+int UvOsOpen(const char *path, int flags, int mode, uv_file *fd);
 
 /* Portable close() */
 int UvOsClose(uv_file fd);
