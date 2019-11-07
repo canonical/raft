@@ -50,7 +50,7 @@ TEST(UvFsEnsureDir, exists, setupDir, tearDownDir, 0, NULL)
 /* If the directory can't be created, an error is returned. */
 TEST(UvFsEnsureDir, mkdirError, NULL, NULL, 0, NULL)
 {
-    ENSURE_DIR_ERROR("/foobarbazegg", UV__ERROR, "mkdir: permission denied");
+    ENSURE_DIR_ERROR("/foobarbazegg", RAFT_IOERR, "mkdir: permission denied");
     return MUNIT_OK;
 }
 
@@ -62,14 +62,14 @@ TEST(UvFsEnsureDir, statError, NULL, NULL, 0, NULL)
     if (has_access) {
         return MUNIT_SKIP;
     }
-    ENSURE_DIR_ERROR("/proc/1/root", UV__ERROR, "stat: permission denied");
+    ENSURE_DIR_ERROR("/proc/1/root", RAFT_IOERR, "stat: permission denied");
     return MUNIT_OK;
 }
 
 /* If the given path is not a directory, an error is returned. */
 TEST(UvFsEnsureDir, notDir, NULL, NULL, 0, NULL)
 {
-    ENSURE_DIR_ERROR("/dev/null", UV__ERROR, "not a directory");
+    ENSURE_DIR_ERROR("/dev/null", RAFT_IOERR, "not a directory");
     return MUNIT_OK;
 }
 
@@ -293,7 +293,7 @@ TEST(UvFsProbeCapabilities, noAccess, setupDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
     test_dir_unexecutable(dir);
-    PROBE_CAPABILITIES_ERROR(dir, UV__ERROR, "mkstemp: permission denied");
+    PROBE_CAPABILITIES_ERROR(dir, RAFT_IOERR, "mkstemp: permission denied");
     return MUNIT_OK;
 }
 
@@ -305,7 +305,7 @@ TEST(UvFsProbeCapabilities, noSpace, setupTmpfsDir, tearDownDir, 0, NULL)
         return MUNIT_SKIP;
     }
     test_dir_fill(dir, 0);
-    PROBE_CAPABILITIES_ERROR(dir, UV__ERROR,
+    PROBE_CAPABILITIES_ERROR(dir, RAFT_IOERR,
                              "posix_fallocate: no space left on device");
     return MUNIT_OK;
 }
@@ -325,7 +325,7 @@ TEST(UvFsProbeCapabilities, noResources, setupBtrfsDir, tearDownDir, 0, NULL)
     if (rv != 0) {
         return MUNIT_SKIP;
     }
-    PROBE_CAPABILITIES_ERROR(dir, UV__ERROR,
+    PROBE_CAPABILITIES_ERROR(dir, RAFT_IOERR,
                              "io_setup: Resource temporarily unavailable");
     test_aio_destroy(ctx);
     return MUNIT_OK;

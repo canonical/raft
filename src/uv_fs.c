@@ -26,15 +26,15 @@ int UvFsEnsureDir(const char *dir, struct ErrMsg *errmsg)
             rv = uv_fs_mkdir(NULL, &req, dir, DEFAULT_DIR_PERM, NULL);
             if (rv != 0) {
                 UvErrMsgSys(errmsg, "mkdir", rv);
-                return UV__ERROR;
+                return RAFT_IOERR;
             }
         } else {
             UvErrMsgSys(errmsg, "stat", rv);
-            return UV__ERROR;
+            return RAFT_IOERR;
         }
     } else if ((req.statbuf.st_mode & S_IFMT) != S_IFDIR) {
         ErrMsgPrintf(errmsg, "%s", uv_strerror(UV_ENOTDIR));
-        return UV__ERROR;
+        return RAFT_IOERR;
     }
 
     return 0;
@@ -497,13 +497,13 @@ static int probeDirectIO(int fd, size_t *size, struct ErrMsg *errmsg)
         if (errno != EINVAL) {
             /* UNTESTED: the parameters are ok, so this should never happen. */
             UvErrMsgSys(errmsg, "fnctl", -errno);
-            return UV__ERROR;
+            return RAFT_IOERR;
         }
         rv = fstatfs(fd, &fs_info);
         if (rv == -1) {
             /* UNTESTED: in practice ENOMEM should be the only failure mode */
             UvErrMsgSys(errmsg, "fstatfs", -errno);
-            return UV__ERROR;
+            return RAFT_IOERR;
         }
         switch (fs_info.f_type) {
             case 0x01021994: /* TMPFS_MAGIC */
@@ -514,7 +514,7 @@ static int probeDirectIO(int fd, size_t *size, struct ErrMsg *errmsg)
                 /* UNTESTED: this is an unsupported file system. */
                 ErrMsgPrintf(errmsg, "unsupported file system: %lx",
                              fs_info.f_type);
-                return UV__ERROR;
+                return RAFT_IOERR;
         }
     }
 
@@ -525,7 +525,7 @@ static int probeDirectIO(int fd, size_t *size, struct ErrMsg *errmsg)
         if (buf == NULL) {
             /* UNTESTED: TODO */
             ErrMsgPrintf(errmsg, "can't allocate write buffer");
-            return UV__ERROR;
+            return RAFT_IOERR;
         }
         memset(buf, 0, *size);
         rv = write(fd, buf, *size);
@@ -550,7 +550,7 @@ static int probeDirectIO(int fd, size_t *size, struct ErrMsg *errmsg)
             }
 
             UvErrMsgSys(errmsg, "write", -errno);
-            return UV__ERROR;
+            return RAFT_IOERR;
         }
         *size = *size / 2;
     }
@@ -584,7 +584,7 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, struct ErrMsg *errmsg)
     if (buf == NULL) {
         /* UNTESTED: define a configurable allocator that can fail? */
         ErrMsgPrintf(errmsg, "can't allocate write buffer");
-        return UV__ERROR;
+        return RAFT_NOMEM;
     }
     memset(buf, 0, size);
 
@@ -609,8 +609,8 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, struct ErrMsg *errmsg)
             *ok = false;
             return 0;
         }
-        ErrMsgPrintf(errmsg, "can't allocate write buffer");
-        return rv;
+        UvErrMsgSys(errmsg, "io_submit", rv);
+        return RAFT_IOERR;
     }
 
     /* Fetch the response: will block until done. */
@@ -624,7 +624,7 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, struct ErrMsg *errmsg)
     rv = UvOsIoDestroy(ctx);
     if (rv != 0) {
         UvErrMsgSys(errmsg, "io_destroy", rv);
-        return rv;
+        return RAFT_IOERR;
     }
 
     if (event.res > 0) {
@@ -658,14 +658,16 @@ int UvFsProbeCapabilities(const char *dir,
     fd = mkstemp(path);
     if (fd == -1) {
         UvErrMsgSys(errmsg, "mkstemp", -errno);
+        rv = RAFT_IOERR;
         goto err;
     }
     rv = posix_fallocate(fd, 0, 4096);
     if (rv != 0) {
         UvErrMsgSys(errmsg, "posix_fallocate", -rv);
+        rv = RAFT_IOERR;
         goto err_after_file_open;
     }
-    unlink(path);
+    UvOsUnlink(path);
 
     /* Check if we can use direct I/O. */
     rv = probeDirectIO(fd, direct, errmsg);
@@ -699,5 +701,5 @@ out:
 err_after_file_open:
     close(fd);
 err:
-    return UV__ERROR;
+    return rv;
 }

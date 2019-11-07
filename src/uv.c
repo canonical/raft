@@ -31,7 +31,6 @@ static int uvInit(struct raft_io *io,
 {
     struct uv *uv;
     size_t direct_io;
-    struct ErrMsg errmsg;
     int rv;
 
     uv = io->impl;
@@ -41,10 +40,9 @@ static int uvInit(struct raft_io *io,
     uvDebugf(uv, "data dir: %s", uv->dir);
 
     /* Ensure that the data directory exists and is accessible */
-    rv = UvFsEnsureDir(uv->dir, &errmsg);
+    rv = UvFsEnsureDir(uv->dir, &uv->errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "ensure data dir %s: %s", uv->dir, ErrMsgString(&errmsg));
-        rv = RAFT_IOERR;
+        ErrMsgWrapf(&uv->errmsg, "ensure data dir %s", uv->dir);
         goto err;
     }
 
@@ -57,17 +55,16 @@ static int uvInit(struct raft_io *io,
              uv->metadata.version, uv->metadata.term, uv->metadata.voted_for);
 
     /* Detect the I/O capabilities of the underlying file system. */
-    rv = UvFsProbeCapabilities(uv->dir, &direct_io, &uv->async_io, &errmsg);
+    rv = UvFsProbeCapabilities(uv->dir, &direct_io, &uv->async_io, &uv->errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "probe I/O capabilities: %s", ErrMsgString(&errmsg));
-        rv = RAFT_IOERR;
+        ErrMsgWrapf(&uv->errmsg, "probe I/O capabilities");
         goto err;
     }
     uv->direct_io = direct_io != 0;
     if (uv->block_size == 0) {
         uv->block_size = direct_io != 0 ? direct_io : 4096;
     }
-    uvDebugf(uv, "I/O: direct %d, async %d, block %ld\n", uv->direct_io,
+    uvDebugf(uv, "I/O: direct %d, async %d, block %ld", uv->direct_io,
              uv->async_io, uv->block_size);
 
     /* We expect the maximum segment size to be a multiple of the block size. */
@@ -570,6 +567,14 @@ static int uvRandom(struct raft_io *io, int min, int max)
     return min + (abs(rand()) % (max - min));
 }
 
+/* Implementation of raft_io->errmsg. */
+static const char *uvErrMsg(struct raft_io *io)
+{
+    struct uv *uv;
+    uv = io->impl;
+    return ErrMsgString(&uv->errmsg);
+}
+
 int raft_uv_init(struct raft_io *io,
                  struct uv_loop_s *loop,
                  const char *dir,
@@ -592,20 +597,18 @@ int raft_uv_init(struct raft_io *io,
         return RAFT_NOMEM;
     }
     memset(uv, 0, sizeof(struct uv));
-    /* during initialization of a structure this big (40 fields),
-       you're guaranteed to forget to initialize something */
 
     uv->io = io;
     uv->loop = loop;
     strcpy(uv->dir, dir);
     uv->transport = transport;
     uv->transport->data = uv;
-    uv->logger = NULL; /* will be set later, or will fail earlier */
-    uv->id = 0;
+    uv->logger = NULL; /* Set by raft_io->init() */
+    uv->id = 0;        /* Set by raft_io->init() */
     uv->state = 0;
     uv->errored = false;
-    uv->direct_io = false; /* assume unsupported */
-    uv->async_io = false;  /* assume unsupported */
+    uv->direct_io = false; /* Assume unsupported */
+    uv->async_io = false;  /* Assume unsupported */
     uv->segment_size = UV__MAX_SEGMENT_SIZE;
     uv->block_size = 0; /* Detected in raft_io->init() */
     uv->clients = NULL;
@@ -629,10 +632,10 @@ int raft_uv_init(struct raft_io *io,
     QUEUE_INIT(&uv->snapshot_put_reqs);
     QUEUE_INIT(&uv->snapshot_get_reqs);
     uv->snapshot_put_work.data = NULL;
-    /* TODO: struct uvMetadata metadata;  /\* Cache of metadata on disk *\/ */
-    /* TODO: struct uv_timer_s timer;     /\* Timer for periodic ticks *\/ */
-    uv->tick_cb = NULL; /* will be set at ~start~ */
-    uv->recv_cb = NULL; /* will be set at ~start~ */
+    memset(&uv->metadata, 0, sizeof uv->metadata);
+    uv->timer.data = uv;
+    uv->tick_cb = NULL; /* Set by raft_io->start() */
+    uv->recv_cb = NULL; /* Set by raft_io->start() */
     uv->closing = false;
     uv->close_cb = NULL;
 
@@ -655,6 +658,7 @@ int raft_uv_init(struct raft_io *io,
     io->snapshot_get = uvSnapshotGet;
     io->time = uvTime;
     io->random = uvRandom;
+    io->errmsg = uvErrMsg;
 
     return 0;
 }
