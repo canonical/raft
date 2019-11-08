@@ -440,20 +440,30 @@ static int uvBootstrap(struct raft_io *io,
                        const struct raft_configuration *configuration)
 {
     struct uv *uv;
+    struct uvMetadata metadata;
     int rv;
     uv = io->impl;
 
     UV__CHECK_DIR(uv);
 
+    /* Load current metadata */
+    rv = uvMetadataLoad(uv, &metadata);
+    if (rv != 0) {
+        return rv;
+    }
+
     /* We shouldn't have written anything else yet. */
-    if (uv->metadata.term != 0) {
-        ErrMsgPrintf(&uv->errmsg, "metadata contain term %lld",
-                     uv->metadata.term);
+    if (metadata.term != 0) {
+        ErrMsgPrintf(&uv->errmsg, "metadata contain term %lld", metadata.term);
         return RAFT_CANTBOOTSTRAP;
     }
 
     /* Write the term */
-    rv = uvSetTerm(io, 1);
+    assert(metadata.version > 0);
+    assert(metadata.voted_for == 0);
+    metadata.version++;
+    metadata.term = 1;
+    rv = uvMetadataStore(uv, &metadata);
     if (rv != 0) {
         return rv;
     }
