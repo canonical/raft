@@ -52,7 +52,6 @@ static int loadFile(struct uv *uv,
     uint8_t content[METADATA_CONTENT_SIZE]; /* Content of metadata file */
     struct raft_buffer buf;
     bool exists;
-    struct ErrMsg errmsg;
     int rv;
 
     assert(n == 1 || n == 2);
@@ -60,9 +59,9 @@ static int loadFile(struct uv *uv,
     /* Render the metadata path */
     filenameOf(n, filename);
 
-    rv = UvFsFileExists(uv->dir, filename, &exists, &errmsg);
+    rv = UvFsFileExists(uv->dir, filename, &exists, &uv->errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "check if %s exists: %s", filename, ErrMsgString(&errmsg));
+        ErrMsgWrapf(&uv->errmsg, "check if %s exists", filename);
         return RAFT_IOERR;
     }
 
@@ -77,10 +76,10 @@ static int loadFile(struct uv *uv,
     buf.base = content;
     buf.len = sizeof content;
 
-    rv = UvFsReadFileInto(uv->dir, filename, &buf, &errmsg);
+    rv = UvFsReadFileInto(uv->dir, filename, &buf, &uv->errmsg);
     if (rv != 0) {
         if (rv != UV__NODATA) {
-            uvErrorf(uv, "read %s: %s", filename, ErrMsgString(&errmsg));
+            ErrMsgWrapf(&uv->errmsg, "load content of %s", filename);
             rv = RAFT_IOERR;
         } else {
             /* Assume that the server crashed while writing this metadata file,
@@ -173,8 +172,9 @@ int uvMetadataLoad(struct uv *uv, struct uvMetadata *metadata)
         metadata->voted_for = 0;
     } else if (metadata1.version == metadata2.version) {
         /* The two metadata files can't have the same version. */
-        uvErrorf(uv, "metadata1 and metadata2 are both at version %d",
-                 metadata1.version);
+        ErrMsgPrintf(&uv->errmsg,
+                     "metadata1 and metadata2 are both at version %d",
+                     metadata1.version);
         return RAFT_CORRUPT;
     } else {
         /* Pick the metadata with the grater version. */
