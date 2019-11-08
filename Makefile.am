@@ -189,11 +189,9 @@ bin_PROGRAMS += \
 
 example_server_SOURCES = example/server.c
 example_server_LDADD = libraft.la
-example_server_LDFLAGS = $(UV_LIBS)
+example_server_LDFLAGS = -no-install $(UV_LIBS)
 
 example_cluster_SOURCES = example/cluster.c
-example_cluster_LDADD = libraft.la
-example_cluster_LDFLAGS = $(UV_LIBS)
 
 endif # EXAMPLE_ENABLED
 
