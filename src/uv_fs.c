@@ -11,7 +11,7 @@
 #include "uv_error.h"
 #include "uv_os.h"
 
-int UvFsEnsureDir(const char *dir, struct ErrMsg *errmsg)
+int UvFsCheckDir(const char *dir, struct ErrMsg *errmsg)
 {
     struct uv_fs_s req;
     int rv;

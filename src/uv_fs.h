@@ -8,8 +8,8 @@
 #include "../include/raft.h"
 #include "err.h"
 
-/* Check that the given directory exists, and try to create it if it doesn't. */
-int UvFsEnsureDir(const char *dir, struct ErrMsg *errmsg);
+/* Check that the given directory exists. */
+int UvFsCheckDir(const char *dir, struct ErrMsg *errmsg);
 
 /* Sync the given directory by calling fsync(). */
 int UvFsSyncDir(const char *dir, struct ErrMsg *errmsg);
