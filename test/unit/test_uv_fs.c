@@ -28,18 +28,7 @@
 
 SUITE(UvFsEnsureDir)
 
-/* If the directory doesn't exist, it is created. */
-TEST(UvFsEnsureDir, doesNotExist, setupDir, tearDownDir, 0, NULL)
-{
-    const char *parent = data;
-    char dir[1024];
-    sprintf(dir, "%s/sub", parent);
-    ENSURE_DIR(dir);
-    munit_assert_true(test_dir_exists(dir));
-    return MUNIT_OK;
-}
-
-/* If the directory exists, nothing is needed. */
+/* If the directory exists, the function suceeds. */
 TEST(UvFsEnsureDir, exists, setupDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
@@ -47,10 +36,13 @@ TEST(UvFsEnsureDir, exists, setupDir, tearDownDir, 0, NULL)
     return MUNIT_OK;
 }
 
-/* If the directory can't be created, an error is returned. */
-TEST(UvFsEnsureDir, mkdirError, NULL, NULL, 0, NULL)
+/* If the directory doesn't exist, it an error is returned. */
+TEST(UvFsEnsureDir, doesNotExist, setupDir, tearDownDir, 0, NULL)
 {
-    ENSURE_DIR_ERROR("/foobarbazegg", RAFT_IOERR, "mkdir: permission denied");
+    const char *parent = data;
+    char dir[1024];
+    sprintf(dir, "%s/sub", parent);
+    ENSURE_DIR_ERROR(dir, RAFT_IOERR, "stat: no such file or directory");
     return MUNIT_OK;
 }
 

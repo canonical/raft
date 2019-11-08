@@ -11,9 +11,6 @@
 #include "uv_error.h"
 #include "uv_os.h"
 
-/* Default permissions when creating a directory. */
-#define DEFAULT_DIR_PERM 0700
-
 int UvFsEnsureDir(const char *dir, struct ErrMsg *errmsg)
 {
     struct uv_fs_s req;
@@ -22,17 +19,11 @@ int UvFsEnsureDir(const char *dir, struct ErrMsg *errmsg)
     /* Make sure we have a directory we can write into. */
     rv = uv_fs_stat(NULL, &req, dir, NULL);
     if (rv != 0) {
-        if (rv == UV_ENOENT) {
-            rv = uv_fs_mkdir(NULL, &req, dir, DEFAULT_DIR_PERM, NULL);
-            if (rv != 0) {
-                UvErrMsgSys(errmsg, "mkdir", rv);
-                return RAFT_IOERR;
-            }
-        } else {
-            UvErrMsgSys(errmsg, "stat", rv);
-            return RAFT_IOERR;
-        }
-    } else if ((req.statbuf.st_mode & S_IFMT) != S_IFDIR) {
+        UvErrMsgSys(errmsg, "stat", rv);
+        return RAFT_IOERR;
+    }
+
+    if ((req.statbuf.st_mode & S_IFMT) != S_IFDIR) {
         ErrMsgPrintf(errmsg, "%s", uv_strerror(UV_ENOTDIR));
         return RAFT_IOERR;
     }
