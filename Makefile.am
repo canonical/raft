@@ -147,7 +147,6 @@ test_unit_uv_SOURCES += \
   src/syscall.c \
   test/unit/main_uv.c \
   test/unit/test_uv_fs.c \
-  test/unit/test_uv_init.c \
   test/unit/test_uv_list.c \
   test/unit/test_uv_load.c \
   test/unit/test_uv_prepare.c \
@@ -167,7 +166,9 @@ test_unit_uv_LDFLAGS = $(UV_LIBS)
 test_integration_uv_SOURCES = \
   test/integration/main_uv.c \
   test/integration/test_uv_append.c \
-  test/integration/test_uv_bootstrap.c
+  test/integration/test_uv_bootstrap.c \
+  test/integration/test_uv_load.c \
+  test/integration/test_uv_set_term.c
 test_integration_uv_LDADD = libtest.la libraft.la
 test_integration_uv_LDFLAGS = -no-install $(UV_LIBS)
 

@@ -224,14 +224,75 @@ int UvFsMakeFile(const char *dir,
     return uvFsWriteFile(dir, filename, flags, bufs, n_bufs, errmsg);
 }
 
-int UvFsMakeOrReplaceFile(const char *dir,
-                          const char *filename,
-                          struct raft_buffer *bufs,
-                          unsigned n_bufs,
-                          struct ErrMsg *errmsg)
+int UvFsMakeOrOverwriteFile(const char *dir,
+                            const char *filename,
+                            const struct raft_buffer *buf,
+                            struct ErrMsg *errmsg)
 {
-    int flags = O_WRONLY | O_CREAT | O_SYNC | O_TRUNC;
-    return uvFsWriteFile(dir, filename, flags, bufs, n_bufs, errmsg);
+    char path[UV__PATH_SZ];
+    int flags = UV_FS_O_WRONLY;
+    int mode = 0;
+    bool exists = true;
+    uv_file fd;
+    int rv;
+
+    UvOsJoin(dir, filename, path);
+
+open:
+    rv = UvOsOpen(path, flags, mode, &fd);
+    if (rv != 0) {
+        if (rv == UV_ENOENT && !(flags & UV_FS_O_CREAT)) {
+            exists = false;
+            flags |= UV_FS_O_CREAT;
+	    mode = S_IRUSR | S_IWUSR;
+            goto open;
+        }
+        goto err;
+    }
+
+    rv = UvOsWrite(fd, (const uv_buf_t *)buf, 1, 0);
+    if (rv != (int)(buf->len)) {
+        if (rv < 0) {
+            UvErrMsgSys(errmsg, "write", rv);
+        } else {
+            ErrMsgPrintf(errmsg, "short write: %d only bytes written", rv);
+        }
+        goto err_after_file_open;
+    }
+
+    if (exists) {
+        rv = UvOsFdatasync(fd);
+        if (rv != 0) {
+            UvErrMsgSys(errmsg, "fsync", rv);
+            goto err_after_file_open;
+        }
+    } else {
+        rv = UvOsFsync(fd);
+        if (rv != 0) {
+            UvErrMsgSys(errmsg, "fsync", rv);
+            goto err_after_file_open;
+        }
+    }
+
+    rv = UvOsClose(fd);
+    if (rv != 0) {
+        UvErrMsgSys(errmsg, "close", rv);
+        goto err;
+    }
+
+    if (!exists) {
+        rv = UvFsSyncDir(dir, errmsg);
+        if (rv != 0) {
+            goto err;
+        }
+    }
+
+    return 0;
+
+err_after_file_open:
+    UvOsClose(fd);
+err:
+    return RAFT_IOERR;
 }
 
 int UvFsFileHasOnlyTrailingZeros(uv_file fd, bool *flag, struct ErrMsg *errmsg)

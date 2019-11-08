@@ -22,12 +22,15 @@ static void encode(const struct uvMetadata *metadata, void *buf)
 }
 
 /* Decode the content of a metadata file. */
-static int decode(const void *buf, struct uvMetadata *metadata)
+static int decode(const void *buf,
+                  struct uvMetadata *metadata,
+                  struct ErrMsg *errmsg)
 {
     const void *cursor = buf;
     unsigned format;
     format = byteGet64(&cursor);
     if (format != UV__DISK_FORMAT) {
+        ErrMsgPrintf(errmsg, "bad format version %d", format);
         return RAFT_MALFORMED;
     }
     metadata->version = byteGet64(&cursor);
@@ -84,6 +87,7 @@ static int loadFile(struct uv *uv,
         } else {
             /* Assume that the server crashed while writing this metadata file,
              * and pretend it has not been written at all. */
+            UvFsRemoveFile(uv->dir, filename, &uv->errmsg);
             uvWarnf(uv, "read %s: ignore incomplete data", filename);
             rv = 0;
         }
@@ -91,10 +95,9 @@ static int loadFile(struct uv *uv,
     };
 
     /* Decode the content of the metadata file. */
-    rv = decode(content, metadata);
+    rv = decode(content, metadata, &uv->errmsg);
     if (rv != 0) {
-        assert(rv == RAFT_MALFORMED);
-        ErrMsgPrintf(&uv->errmsg, "load %s: bad format version", filename);
+        ErrMsgWrapf(&uv->errmsg, "load %s", filename);
         return rv;
     }
 
@@ -102,34 +105,6 @@ static int loadFile(struct uv *uv,
     if (metadata->version == 0) {
         ErrMsgPrintf(&uv->errmsg, "load %s: version is set to zero", filename);
         return RAFT_CORRUPT;
-    }
-
-    return 0;
-}
-
-/* Update both metadata files using the given one as seed, so they are created
- * if they didn't exist. */
-static int ensure(struct uv *uv, struct uvMetadata *metadata)
-{
-    int i;
-    struct ErrMsg errmsg;
-    int rv;
-
-    /* Update both metadata files, so they are created if they didn't
-     * exist. Also sync the data directory so the entries get created. */
-    for (i = 0; i < 2; i++) {
-        metadata->version++;
-        rv = uvMetadataStore(uv, metadata);
-        if (rv != 0) {
-            return rv;
-        }
-    }
-
-    /* Also sync the data directory so the entries get created. */
-    rv = UvFsSyncDir(uv->dir, &errmsg);
-    if (rv != 0) {
-        uvErrorf(uv, "sync %s: %s", uv->dir, ErrMsgString(&errmsg));
-        return RAFT_IOERR;
     }
 
     return 0;
@@ -185,12 +160,6 @@ int uvMetadataLoad(struct uv *uv, struct uvMetadata *metadata)
         }
     }
 
-    /* Update the metadata files, so they are created if they did not exist. */
-    rv = ensure(uv, metadata);
-    if (rv != 0) {
-        return rv;
-    }
-
     return 0;
 }
 
@@ -200,7 +169,6 @@ int uvMetadataStore(struct uv *uv, const struct uvMetadata *metadata)
     uint8_t content[METADATA_CONTENT_SIZE]; /* Content of metadata file */
     struct raft_buffer buf;
     unsigned short n;
-    struct ErrMsg errmsg;
     int rv;
 
     assert(metadata->version > 0);
@@ -215,10 +183,10 @@ int uvMetadataStore(struct uv *uv, const struct uvMetadata *metadata)
     /* Write the metadata file, creating it if it does not exist. */
     buf.base = content;
     buf.len = sizeof content;
-    rv = UvFsMakeOrReplaceFile(uv->dir, filename, &buf, 1, &errmsg);
+    rv = UvFsMakeOrOverwriteFile(uv->dir, filename, &buf, &uv->errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "create %s: %s", filename, ErrMsgString(&errmsg));
-        return RAFT_IOERR;
+        ErrMsgWrapf(&uv->errmsg, "persist %s", filename);
+        return rv;
     }
 
     return 0;

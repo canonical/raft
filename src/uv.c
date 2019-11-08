@@ -23,6 +23,25 @@
  * TODO: implement an exponential backoff instead.  */
 #define CONNECT_RETRY_DELAY 1000
 
+/* Utility macro for ensuring that the metadata cache was populated reading data
+ * from disk. */
+#define ENSURE_METADATA_CACHE(UV)                                   \
+    do {                                                            \
+        int _rv;                                                    \
+        if (UV->metadata.version > 0) {                             \
+            break;                                                  \
+        }                                                           \
+        _rv = UvFsCheckDir(UV->dir, &UV->errmsg);                   \
+        if (_rv != 0) {                                             \
+            ErrMsgWrapf(&UV->errmsg, "check data dir %s", UV->dir); \
+            return RAFT_IOERR;                                      \
+        }                                                           \
+        _rv = uvMetadataLoad(UV, &UV->metadata);                    \
+        if (_rv != 0) {                                             \
+            return _rv;                                             \
+        }                                                           \
+    } while (0)
+
 /* Implementation of raft_io->init. */
 static int uvInit(struct raft_io *io,
                   struct raft_logger *logger,
@@ -38,14 +57,6 @@ static int uvInit(struct raft_io *io,
     uv->logger = logger;
 
     uvDebugf(uv, "data dir: %s", uv->dir);
-
-    /* Load current metadata */
-    rv = uvMetadataLoad(uv, &uv->metadata);
-    if (rv != 0) {
-        goto err;
-    }
-    uvDebugf(uv, "metadata: version %lld, term %lld, voted for %d",
-             uv->metadata.version, uv->metadata.term, uv->metadata.voted_for);
 
     /* Detect the I/O capabilities of the underlying file system. */
     rv = UvFsProbeCapabilities(uv->dir, &direct_io, &uv->async_io, &uv->errmsg);
@@ -103,14 +114,6 @@ static int uvStart(struct raft_io *io,
     uv = io->impl;
 
     assert(uv->state == UV__ACTIVE);
-
-    UV__CHECK_DIR(uv);
-
-    /* Populate the metadata cache. */
-    rv = uvMetadataLoad(uv, &uv->metadata);
-    if (rv != 0) {
-        return rv;
-    }
 
     uv->tick_cb = tick_cb;
     uv->recv_cb = recv_cb;
@@ -402,7 +405,8 @@ static int uvLoad(struct raft_io *io,
     raft_index last_index;
     int rv;
     uv = io->impl;
-    assert(uv->metadata.version > 0);
+
+    ENSURE_METADATA_CACHE(uv);
 
     *term = uv->metadata.term;
     *voted_for = uv->metadata.voted_for;
@@ -434,7 +438,7 @@ static int uvSetTerm(struct raft_io *io, const raft_term term)
     struct uv *uv;
     int rv;
     uv = io->impl;
-    assert(uv->metadata.version > 0);
+    ENSURE_METADATA_CACHE(uv);
     uv->metadata.version++;
     uv->metadata.term = term;
     uv->metadata.voted_for = 0;
@@ -450,30 +454,20 @@ static int uvBootstrap(struct raft_io *io,
                        const struct raft_configuration *configuration)
 {
     struct uv *uv;
-    struct uvMetadata metadata;
     int rv;
     uv = io->impl;
 
-    UV__CHECK_DIR(uv);
-
-    /* Load current metadata */
-    rv = uvMetadataLoad(uv, &metadata);
-    if (rv != 0) {
-        return rv;
-    }
+    ENSURE_METADATA_CACHE(uv);
 
     /* We shouldn't have written anything else yet. */
-    if (metadata.term != 0) {
-        ErrMsgPrintf(&uv->errmsg, "metadata contain term %lld", metadata.term);
+    if (uv->metadata.term != 0) {
+        ErrMsgPrintf(&uv->errmsg, "metadata contain term %lld",
+                     uv->metadata.term);
         return RAFT_CANTBOOTSTRAP;
     }
 
     /* Write the term */
-    assert(metadata.version > 0);
-    assert(metadata.voted_for == 0);
-    metadata.version++;
-    metadata.term = 1;
-    rv = uvMetadataStore(uv, &metadata);
+    rv = uvSetTerm(io, 1);
     if (rv != 0) {
         return rv;
     }
@@ -530,7 +524,7 @@ static int uvSetVote(struct raft_io *io, const unsigned server_id)
     struct uv *uv;
     int rv;
     uv = io->impl;
-    assert(uv->metadata.version > 0);
+    ENSURE_METADATA_CACHE(uv);
     uv->metadata.version++;
     uv->metadata.voted_for = server_id;
     rv = uvMetadataStore(uv, &uv->metadata);

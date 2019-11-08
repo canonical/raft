@@ -65,6 +65,11 @@ int UvOsFsync(uv_file fd)
     return uv_fs_fsync(NULL, &req, fd, NULL);
 }
 
+int UvOsFdatasync(uv_file fd) {
+    struct uv_fs_s req;
+    return uv_fs_fdatasync(NULL, &req, fd, NULL);
+}
+
 int UvOsStat(const char *path, uv_stat_t *sb)
 {
     struct uv_fs_s req;

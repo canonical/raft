@@ -41,12 +41,19 @@ int UvFsMakeFile(const char *dir,
                  unsigned n_bufs,
                  struct ErrMsg *errmsg);
 
-/* Create or replace a file, writing the given content into it. */
-int UvFsMakeOrReplaceFile(const char *dir,
-                          const char *filename,
-                          struct raft_buffer *bufs,
-                          unsigned n_bufs,
-                          struct ErrMsg *errmsg);
+/* Create or overwrite a file.
+ *
+ * If the file does not exists yet, it gets created, the given content written
+ * to it, and then fully persisted to disk by fsync()'ing the file and the
+ * dir.
+ *
+ * If the file already exists, it gets overwritten. The assumption is that the
+ * file size will stay the same and its content will change, so only fdatasync()
+ * will be used */
+int UvFsMakeOrOverwriteFile(const char *dir,
+                            const char *filename,
+                            const struct raft_buffer *buf,
+                            struct ErrMsg *errmsg);
 
 /* Check if the content of the file associated with the given file descriptor
  * contains all zeros from the current offset onward. */

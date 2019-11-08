@@ -29,7 +29,7 @@
 
 /* Utility macro for checking that the data directory exists and is
  * accessible. */
-#define UV__CHECK_DIR(UV)                                           \
+#define UV__CHECK_DATA_DIR(UV)                                      \
     do {                                                            \
         int _rv;                                                    \
         _rv = UvFsCheckDir(UV->dir, &UV->errmsg);                   \

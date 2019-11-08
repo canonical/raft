@@ -27,6 +27,10 @@
 #define UV_FS_O_CREAT O_CREAT
 #endif
 
+#if !defined(UV_FS_O_TRUNC)
+#define UV_FS_O_TRUNC O_TRUNC
+#endif
+
 #if !defined(UV_FS_O_EXCL)
 #define UV_FS_O_EXCL O_EXCL
 #endif
@@ -75,6 +79,9 @@ int UvOsTruncate(uv_file fd, off_t offset);
 
 /* Portable fsync() */
 int UvOsFsync(uv_file fd);
+
+/* Portable fdatasync() */
+int UvOsFdatasync(uv_file fd);
 
 /* Portable stat() */
 int UvOsStat(const char* path, uv_stat_t *sb);
