@@ -166,7 +166,8 @@ test_unit_uv_LDFLAGS = $(UV_LIBS)
 
 test_integration_uv_SOURCES = \
   test/integration/main_uv.c \
-  test/integration/test_uv_append.c
+  test/integration/test_uv_append.c \
+  test/integration/test_uv_bootstrap.c
 test_integration_uv_LDADD = libtest.la libraft.la
 test_integration_uv_LDFLAGS = $(UV_LIBS)
 

@@ -27,6 +27,18 @@
  * index, creation timestamp (milliseconds since epoch). */
 #define UV__SNAPSHOT_META_TEMPLATE UV__SNAPSHOT_TEMPLATE ".meta"
 
+/* Utility macro for checking that the data directory exists and is
+ * accessible. */
+#define UV__CHECK_DIR(UV)                                           \
+    do {                                                            \
+        int _rv;                                                    \
+        _rv = UvFsCheckDir(UV->dir, &UV->errmsg);                   \
+        if (_rv != 0) {                                             \
+            ErrMsgWrapf(&UV->errmsg, "check data dir %s", UV->dir); \
+            return RAFT_IOERR;                                      \
+        }                                                           \
+    } while (0)
+
 /* State codes. */
 enum { UV__ACTIVE = 1, UV__CLOSED };
 

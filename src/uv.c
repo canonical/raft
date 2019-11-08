@@ -441,10 +441,11 @@ static int uvBootstrap(struct raft_io *io,
 {
     struct uv *uv;
     int rv;
-
     uv = io->impl;
 
-    /* We shouldn't have written anything else yet. */
+    UV__CHECK_DIR(uv);
+
+      /* We shouldn't have written anything else yet. */
     if (uv->metadata.term != 0) {
         return RAFT_CANTBOOTSTRAP;
     }
