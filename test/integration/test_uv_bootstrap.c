@@ -37,6 +37,22 @@ static void tearDownUv(void *data)
 
 SUITE(bootstrap)
 
+/* Add a server to the fixture's configuration. */
+#define CONFIGURATION_ADD(ID, ADDRESS)                             \
+    {                                                              \
+        int rv_;                                                   \
+        rv_ = raft_configuration_add(&f->conf, ID, ADDRESS, true); \
+        munit_assert_int(rv_, ==, 0);                              \
+    }
+
+/* Invoke f->io->bootstrap() and assert that no error occurs. */
+#define BOOTSTRAP                                \
+    {                                            \
+        int rv_;                                 \
+        rv_ = f->io.bootstrap(&f->io, &f->conf); \
+        munit_assert_int(rv_, ==, 0);            \
+    }
+
 /* Invoke f->io->bootstrap() and assert that it returns the given error code and
  * message. */
 #define BOOTSTRAP_ERROR(RV, ERRMSG)                              \
@@ -53,7 +69,18 @@ TEST(bootstrap, dirDoesNotExist, setupUv, tearDownUv, 0, NULL)
     struct fixture *f = data;
     char errmsg[128];
     test_dir_remove(f->dir);
-    sprintf(errmsg, "check data dir %s: stat: no such file or directory", f->dir);
+    sprintf(errmsg, "check data dir %s: stat: no such file or directory",
+            f->dir);
     BOOTSTRAP_ERROR(RAFT_IOERR, errmsg);
+    return MUNIT_OK;
+}
+
+/* The data directory already has metadata files with a non-zero term. */
+TEST(bootstrap, termIsNonZero, setupUv, tearDownUv, 0, NULL)
+{
+    struct fixture *f = data;
+    CONFIGURATION_ADD(1, "1");
+    BOOTSTRAP;
+    BOOTSTRAP_ERROR(RAFT_CANTBOOTSTRAP, "metadata contain term 1");
     return MUNIT_OK;
 }

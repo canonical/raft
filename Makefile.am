@@ -169,7 +169,7 @@ test_integration_uv_SOURCES = \
   test/integration/test_uv_append.c \
   test/integration/test_uv_bootstrap.c
 test_integration_uv_LDADD = libtest.la libraft.la
-test_integration_uv_LDFLAGS = $(UV_LIBS)
+test_integration_uv_LDFLAGS = -no-install $(UV_LIBS)
 
 AM_CFLAGS += $(UV_CFLAGS)
 

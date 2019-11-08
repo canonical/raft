@@ -445,8 +445,10 @@ static int uvBootstrap(struct raft_io *io,
 
     UV__CHECK_DIR(uv);
 
-      /* We shouldn't have written anything else yet. */
+    /* We shouldn't have written anything else yet. */
     if (uv->metadata.term != 0) {
+        ErrMsgPrintf(&uv->errmsg, "metadata contain term %lld",
+                     uv->metadata.term);
         return RAFT_CANTBOOTSTRAP;
     }
 
