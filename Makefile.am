@@ -86,7 +86,7 @@ test_integration_core_SOURCES = \
   test/integration/test_tick.c \
   test/integration/test_start.c
 test_integration_core_LDADD = libtest.la libraft.la
-test_integration_core_LDFLAGS =
+test_integration_core_LDFLAGS = -no-install
 
 fuzzy_test_SOURCES = \
   test/lib/cluster.c \
@@ -96,7 +96,7 @@ fuzzy_test_SOURCES = \
   test/fuzzy/test_membership.c \
   test/fuzzy/test_replication.c
 fuzzy_test_LDADD = libtest.la libraft.la
-fuzzy_test_LDFLAGS =
+fuzzy_test_LDFLAGS = -no-install
 
 if UV_ENABLED
 
