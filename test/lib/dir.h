@@ -106,13 +106,8 @@ void *setupXfsDir(const MunitParameter params[], void *user_data);
 /* Recursively remove a temporary directory. */
 void tearDownDir(void *data);
 
-/* Create a temporary test directory backed by the file system specified in the
- * TEST_DIR_FS parameter. If no parameter is given the default is to use
- * tmpfs. */
-char *test_dir_setup(const MunitParameter params[]);
-
 /* Recursively remove a temporary directory. */
-void test_dir_tear_down(char *dir);
+void test_dir_remove(char *dir);
 
 /* Write the given @buf to the given @filename in the given @dir. */
 void test_dir_write_file(const char *dir,

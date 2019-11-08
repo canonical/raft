@@ -137,29 +137,23 @@ static int removeFn(const char *path,
 void tearDownDir(void *data)
 {
     char *dir = data;
-    int rv;
-
     if (dir == NULL) {
         return;
     }
+    if (test_dir_exists(dir)) {
+        test_dir_remove(dir);
+    }
+    free(dir);
+}
 
+void test_dir_remove(char *dir)
+{
+    int rv;
     rv = chmod(dir, 0755);
     munit_assert_int(rv, ==, 0);
 
     rv = nftw(dir, removeFn, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS);
     munit_assert_int(rv, ==, 0);
-
-    free(dir);
-}
-
-char *test_dir_setup(const MunitParameter params[])
-{
-    return setupDir(params, NULL);
-}
-
-void test_dir_tear_down(char *dir)
-{
-    tearDownDir(dir);
 }
 
 /* Join the given @dir and @filename into @path. */
