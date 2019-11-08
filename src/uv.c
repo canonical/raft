@@ -39,13 +39,6 @@ static int uvInit(struct raft_io *io,
 
     uvDebugf(uv, "data dir: %s", uv->dir);
 
-    /* Ensure that the data directory exists and is accessible */
-    rv = UvFsEnsureDir(uv->dir, &uv->errmsg);
-    if (rv != 0) {
-        ErrMsgWrapf(&uv->errmsg, "ensure data dir %s", uv->dir);
-        goto err;
-    }
-
     /* Load current metadata */
     rv = uvMetadataLoad(uv, &uv->metadata);
     if (rv != 0) {
