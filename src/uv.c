@@ -101,7 +101,17 @@ static int uvStart(struct raft_io *io,
     struct uv *uv;
     int rv;
     uv = io->impl;
+
     assert(uv->state == UV__ACTIVE);
+
+    UV__CHECK_DIR(uv);
+
+    /* Populate the metadata cache. */
+    rv = uvMetadataLoad(uv, &uv->metadata);
+    if (rv != 0) {
+        return rv;
+    }
+
     uv->tick_cb = tick_cb;
     uv->recv_cb = recv_cb;
     rv = uvRecv(uv);

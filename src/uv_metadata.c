@@ -94,13 +94,13 @@ static int loadFile(struct uv *uv,
     rv = decode(content, metadata);
     if (rv != 0) {
         assert(rv == RAFT_MALFORMED);
-        uvErrorf(uv, "load %s: bad format version", filename);
+        ErrMsgPrintf(&uv->errmsg, "load %s: bad format version", filename);
         return rv;
     }
 
     /* Sanity checks that values make sense */
     if (metadata->version == 0) {
-        uvErrorf(uv, "load %s: version is set to zero", filename);
+        ErrMsgPrintf(&uv->errmsg, "load %s: version is set to zero", filename);
         return RAFT_CORRUPT;
     }
 
