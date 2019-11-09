@@ -279,14 +279,14 @@ unsigned byteCrc32(const void *buf, const size_t size, const unsigned init)
 
 /******************************************************************************
  *
- * uvAppend
+ * raft_io->append()
  *
  *****************************************************************************/
 
-SUITE(UvAppend)
+SUITE(append)
 
 /* Append the very first batch of entries. */
-TEST(UvAppend, first, setup, tear_down, 0, NULL)
+TEST(append, first, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     CREATE_ENTRIES(1, 64);
@@ -298,7 +298,7 @@ TEST(UvAppend, first, setup, tear_down, 0, NULL)
 
 /* The very first batch of entries to append is bigger than the regular open
  * segment size. */
-TEST(UvAppend, firstBig, setup, tear_down, 0, NULL)
+TEST(append, firstBig, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct uv *uv = f->io.impl;
@@ -311,7 +311,7 @@ TEST(UvAppend, firstBig, setup, tear_down, 0, NULL)
 
 /* The second batch of entries to append is bigger than the regular open
  * segment size. */
-TEST(UvAppend, secondBig, setup, tear_down, 0, NULL)
+TEST(append, secondBig, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct uv *uv = f->io.impl;
@@ -329,7 +329,7 @@ TEST(UvAppend, secondBig, setup, tear_down, 0, NULL)
 
 /* Write the very first entry and then another one, both fitting in the same
  * block. */
-TEST(UvAppend, fitBlock, setup, tear_down, 0, NULL)
+TEST(append, fitBlock, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     CREATE_ENTRIES(1, 64);
@@ -346,7 +346,7 @@ TEST(UvAppend, fitBlock, setup, tear_down, 0, NULL)
 }
 
 /* Write an entry that fills the first block exactly and then another one. */
-TEST(UvAppend, matchBlock, setup, tear_down, 0, NULL)
+TEST(append, matchBlock, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     size_t size;
@@ -373,7 +373,7 @@ TEST(UvAppend, matchBlock, setup, tear_down, 0, NULL)
  * the second block, then a third one that fills the rest of the second block
  * plus the whole third block exactly, and finally a fourth entry that fits in
  * the fourth block */
-TEST(UvAppend, exceedBlock, setup, tear_down, 0, NULL)
+TEST(append, exceedBlock, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     size_t written;
@@ -420,7 +420,7 @@ TEST(UvAppend, exceedBlock, setup, tear_down, 0, NULL)
 /* If an append request is submitted before the write operation of the previous
  * append request is started, then a single write will be performed for both
  * requests. */
-TEST(UvAppend, batch, setup, tear_down, 0, NULL)
+TEST(append, batch, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -437,7 +437,7 @@ TEST(UvAppend, batch, setup, tear_down, 0, NULL)
 
 /* An append request submitted while a write operation is in progress gets
  * executed only when the write completes. */
-TEST(UvAppend, wait, setup, tear_down, 0, NULL)
+TEST(append, wait, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -457,7 +457,7 @@ TEST(UvAppend, wait, setup, tear_down, 0, NULL)
 
 /* Several batches with different size gets appended in fast pace, which forces
  * the segment arena to grow. */
-TEST(UvAppend, resizeArena, setup, tear_down, 0, NULL)
+TEST(append, resizeArena, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -485,7 +485,7 @@ TEST(UvAppend, resizeArena, setup, tear_down, 0, NULL)
 
 /* A few append requests get queued, then a truncate request comes in and other
  * append requests right after, before truncation is fully completed. */
-TEST(UvAppend, truncate, setup, tear_down, 0, NULL)
+TEST(append, truncate, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     int rv;
@@ -514,7 +514,7 @@ TEST(UvAppend, truncate, setup, tear_down, 0, NULL)
 /* A few append requests get queued, then a truncate request comes in and other
  * append requests right after, before truncation is fully completed. However
  * the backend is closed before the truncation request can be processed. */
-TEST(UvAppend, truncateClosing, setup, tear_down, 0, NULL)
+TEST(append, truncateClosing, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     int rv;
@@ -537,7 +537,7 @@ TEST(UvAppend, truncateClosing, setup, tear_down, 0, NULL)
 }
 
 /* The counters of the open segments get increased as they are closed. */
-TEST(UvAppend, counter, setup, tear_down, 0, NULL)
+TEST(append, counter, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     size_t size = SEGMENT_BLOCK_SIZE;
@@ -559,7 +559,7 @@ TEST(UvAppend, counter, setup, tear_down, 0, NULL)
 }
 
 /* If the I/O instance is closed, all pending append requests get canceled. */
-TEST(UvAppend, cancel, setup, tear_down, 0, NULL)
+TEST(append, cancel, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -574,7 +574,7 @@ TEST(UvAppend, cancel, setup, tear_down, 0, NULL)
 }
 
 /* An error occurs while performing a write. */
-TEST(UvAppend, writeError, setup, tear_down, 0, NULL)
+TEST(append, writeError, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     aio_context_t ctx = 0;
@@ -605,7 +605,7 @@ static MunitParameterEnum error_oom_params[] = {
 };
 
 /* Out of memory conditions. */
-TEST(UvAppend, oom, setup, tear_down, 0, error_oom_params)
+TEST(append, oom, setup, tear_down, 0, error_oom_params)
 {
     struct fixture *f = data;
     (void)params;
@@ -625,7 +625,7 @@ TEST_SETUP(close, setup)
 TEST_TEAR_DOWN(close, tear_down)
 
 /* The uv instance is closed while a write request is in progress. */
-TEST(UvAppend, closeDuringWrite, setup, tear_down, 0, NULL)
+TEST(append, closeDuringWrite, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -643,7 +643,7 @@ TEST(UvAppend, closeDuringWrite, setup, tear_down, 0, NULL)
 
 /* When the writer gets closed it tells the writer to close the segment that
  * it's currently writing. */
-TEST(UvAppend, currentSegment, setup, tear_down, 0, NULL)
+TEST(append, currentSegment, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
