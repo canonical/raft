@@ -81,6 +81,6 @@ TEST(load, dirNotAccessible, setupUv, tearDownUv, 0, NULL)
     struct fixture *f = data;
     test_dir_unexecutable(f->dir);
     LOAD_ERROR(RAFT_IOERR,
-               "check if metadata1 exists: stat: permission denied");
+               "probe I/O capabilities: mkstemp: permission denied");
     return MUNIT_OK;
 }

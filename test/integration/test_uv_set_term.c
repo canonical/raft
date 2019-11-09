@@ -221,7 +221,7 @@ TEST(set_term, dirNotAccessible, setupUv, tearDownUv, 0, NULL)
     struct fixture *f = data;
     test_dir_unexecutable(f->dir);
     SET_TERM_ERROR(1, RAFT_IOERR,
-                   "check if metadata1 exists: stat: permission denied");
+                   "probe I/O capabilities: mkstemp: permission denied");
     return MUNIT_OK;
 }
 
@@ -258,13 +258,14 @@ TEST(set_term, metadataOneAndTwoSameVersion, setupUv, tearDownUv, 0, NULL)
     return MUNIT_OK;
 }
 
-/* No space is left for writing the initial metadata file. */
+/* No space is left for probing I/O capabilities. */
 TEST(set_term, noSpace, setupUv, tearDownUv, 0, dir_tmpfs_params)
 {
     struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;
     test_dir_fill(f->dir, 4);
-    SET_TERM_ERROR(1, RAFT_IOERR,
-                   "persist metadata1: write: no space left on device");
+    SET_TERM_ERROR(
+        1, RAFT_IOERR,
+        "probe I/O capabilities: posix_fallocate: no space left on device");
     return MUNIT_OK;
 }

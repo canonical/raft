@@ -410,7 +410,7 @@ static void acceptCb(struct raft_uv_transport *transport,
 {
     struct uv *uv = transport->data;
     int rv;
-    assert(uv->state == UV__ACTIVE || uv->closing);
+    assert(uv->state >= UV__INITIALIZED || uv->closing);
 
     if (uv->closing) {
         goto abort;

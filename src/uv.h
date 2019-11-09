@@ -28,7 +28,53 @@
 #define UV__SNAPSHOT_META_TEMPLATE UV__SNAPSHOT_TEMPLATE ".meta"
 
 /* State codes. */
-enum { UV__ACTIVE = 1, UV__CLOSED };
+enum {
+    UV__PRISTINE = 0, /* Initiale state */
+    UV__INITIALIZED,  /* Metadata cache populated and I/O capabilities probed */
+    UV__ACTIVE,
+    UV__CLOSED
+};
+
+/* Utility macro for lazy initialization:
+ *
+ * - make sure that the data directory is accessible
+ * - probe the underlying file system capabilities
+ * - populate the metadata cache by reading data from disk
+ */
+#define UV__MAYBE_INITIALIZE(UV)                                            \
+    do {                                                                    \
+        size_t direct_io;                                                   \
+        int _rv;                                                            \
+        if (UV->state != UV__PRISTINE) {                                    \
+            break;                                                          \
+        }                                                                   \
+        uvDebugf(uv, "data dir: %s", uv->dir);                              \
+        _rv = UvFsCheckDir(UV->dir, &UV->errmsg);                           \
+        if (_rv != 0) {                                                     \
+            ErrMsgWrapf(&UV->errmsg, "check data dir %s", UV->dir);         \
+            return _rv;                                                     \
+        }                                                                   \
+        _rv = UvFsProbeCapabilities(uv->dir, &direct_io, &uv->async_io,     \
+                                    &uv->errmsg);                           \
+        if (_rv != 0) {                                                     \
+            ErrMsgWrapf(&uv->errmsg, "probe I/O capabilities");             \
+            return _rv;                                                     \
+        }                                                                   \
+        uv->direct_io = direct_io != 0;                                     \
+        if (uv->block_size == 0) {                                          \
+            uv->block_size = direct_io != 0 ? direct_io : 4096;             \
+        }                                                                   \
+        /* We expect the maximum segment size to be a multiple of the block \
+         * size. */                                                         \
+        assert(uv->segment_size % uv->block_size == 0);                     \
+        uvDebugf(uv, "I/O: direct %d, async %d, block %ld", uv->direct_io,  \
+                 uv->async_io, uv->block_size);                             \
+        _rv = uvMetadataLoad(UV, &UV->metadata);                            \
+        if (_rv != 0) {                                                     \
+            return _rv;                                                     \
+        }                                                                   \
+        UV->state = UV__INITIALIZED;                                        \
+    } while (0)
 
 /* Open segment counter type */
 typedef unsigned long long uvCounter;
@@ -281,8 +327,10 @@ struct uvPrepare
     queue queue;                /* Links in uv_io->prepare_reqs */
 };
 
-/* Submit a request to get a prepared open segment ready for writing. */
-void uvPrepare(struct uv *uv, struct uvPrepare *req, uvPrepareCb cb);
+/* Submit a request to get a prepared open segment ready for writing.
+*
+*  TODO: should not return any value. */
+int uvPrepare(struct uv *uv, struct uvPrepare *req, uvPrepareCb cb);
 
 /* Cancel all pending prepare requests and start removing all unused prepared
  * open segments. If a segment currently being created, wait for it to complete

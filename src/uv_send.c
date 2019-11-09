@@ -399,8 +399,6 @@ int uvSend(struct raft_io *io,
     struct uvClient *c;
     int rv;
 
-    assert(uv->state == UV__ACTIVE);
-
     /* Allocate a new request object. */
     r = raft_malloc(sizeof *r);
     if (r == NULL) {

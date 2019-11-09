@@ -23,25 +23,6 @@
  * TODO: implement an exponential backoff instead.  */
 #define CONNECT_RETRY_DELAY 1000
 
-/* Utility macro for ensuring that the metadata cache was populated reading data
- * from disk. */
-#define ENSURE_METADATA_CACHE(UV)                                   \
-    do {                                                            \
-        int _rv;                                                    \
-        if (UV->metadata.version > 0) {                             \
-            break;                                                  \
-        }                                                           \
-        _rv = UvFsCheckDir(UV->dir, &UV->errmsg);                   \
-        if (_rv != 0) {                                             \
-            ErrMsgWrapf(&UV->errmsg, "check data dir %s", UV->dir); \
-            return RAFT_IOERR;                                      \
-        }                                                           \
-        _rv = uvMetadataLoad(UV, &UV->metadata);                    \
-        if (_rv != 0) {                                             \
-            return _rv;                                             \
-        }                                                           \
-    } while (0)
-
 /* Implementation of raft_io->init. */
 static int uvInit(struct raft_io *io,
                   struct raft_logger *logger,
@@ -49,30 +30,11 @@ static int uvInit(struct raft_io *io,
                   const char *address)
 {
     struct uv *uv;
-    size_t direct_io;
     int rv;
 
     uv = io->impl;
 
     uv->logger = logger;
-
-    uvDebugf(uv, "data dir: %s", uv->dir);
-
-    /* Detect the I/O capabilities of the underlying file system. */
-    rv = UvFsProbeCapabilities(uv->dir, &direct_io, &uv->async_io, &uv->errmsg);
-    if (rv != 0) {
-        ErrMsgWrapf(&uv->errmsg, "probe I/O capabilities");
-        goto err;
-    }
-    uv->direct_io = direct_io != 0;
-    if (uv->block_size == 0) {
-        uv->block_size = direct_io != 0 ? direct_io : 4096;
-    }
-    uvDebugf(uv, "I/O: direct %d, async %d, block %ld", uv->direct_io,
-             uv->async_io, uv->block_size);
-
-    /* We expect the maximum segment size to be a multiple of the block size. */
-    assert(uv->segment_size % uv->block_size == 0);
 
     assert(uv->state == 0);
     uv->id = id;
@@ -83,14 +45,9 @@ static int uvInit(struct raft_io *io,
     rv = uv_timer_init(uv->loop, &uv->timer);
     assert(rv == 0); /* This should never fail */
     uv->timer.data = uv;
-    uv->state = UV__ACTIVE;
     uv->log_level = RAFT_INFO;
 
     return 0;
-
-err:
-    assert(rv != 0);
-    return rv;
 }
 
 /* Periodic timer callback */
@@ -113,7 +70,9 @@ static int uvStart(struct raft_io *io,
     int rv;
     uv = io->impl;
 
-    assert(uv->state == UV__ACTIVE);
+    UV__MAYBE_INITIALIZE(uv);
+
+    uv->state = UV__ACTIVE;
 
     uv->tick_cb = tick_cb;
     uv->recv_cb = recv_cb;
@@ -176,7 +135,6 @@ static int uvClose(struct raft_io *io, void (*cb)(struct raft_io *io))
     struct uv *uv;
     int rv;
     uv = io->impl;
-    assert(uv->state == UV__ACTIVE);
     uv->close_cb = cb;
     uv->closing = true;
     rv = uv_timer_stop(&uv->timer);
@@ -406,7 +364,7 @@ static int uvLoad(struct raft_io *io,
     int rv;
     uv = io->impl;
 
-    ENSURE_METADATA_CACHE(uv);
+    UV__MAYBE_INITIALIZE(uv);
 
     *term = uv->metadata.term;
     *voted_for = uv->metadata.voted_for;
@@ -438,7 +396,7 @@ static int uvSetTerm(struct raft_io *io, const raft_term term)
     struct uv *uv;
     int rv;
     uv = io->impl;
-    ENSURE_METADATA_CACHE(uv);
+    UV__MAYBE_INITIALIZE(uv);
     uv->metadata.version++;
     uv->metadata.term = term;
     uv->metadata.voted_for = 0;
@@ -457,7 +415,7 @@ static int uvBootstrap(struct raft_io *io,
     int rv;
     uv = io->impl;
 
-    ENSURE_METADATA_CACHE(uv);
+    UV__MAYBE_INITIALIZE(uv);
 
     /* We shouldn't have written anything else yet. */
     if (uv->metadata.term != 0) {
@@ -524,7 +482,7 @@ static int uvSetVote(struct raft_io *io, const unsigned server_id)
     struct uv *uv;
     int rv;
     uv = io->impl;
-    ENSURE_METADATA_CACHE(uv);
+    UV__MAYBE_INITIALIZE(uv);
     uv->metadata.version++;
     uv->metadata.voted_for = server_id;
     rv = uvMetadataStore(uv, &uv->metadata);
@@ -615,7 +573,7 @@ int raft_uv_init(struct raft_io *io,
     uv->transport->data = uv;
     uv->logger = NULL; /* Set by raft_io->init() */
     uv->id = 0;        /* Set by raft_io->init() */
-    uv->state = 0;
+    uv->state = UV__PRISTINE;
     uv->errored = false;
     uv->direct_io = false; /* Assume unsupported */
     uv->async_io = false;  /* Assume unsupported */

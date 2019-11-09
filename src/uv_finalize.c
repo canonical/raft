@@ -142,8 +142,6 @@ int uvFinalize(struct uv *uv,
 {
     struct segment *segment;
 
-    assert(uv->state == UV__ACTIVE || uv->closing);
-
     /* If the open segment is not empty, we expect its first index to be the
      * successor of the end index of the last segment we closed. */
     if (used > 0) {

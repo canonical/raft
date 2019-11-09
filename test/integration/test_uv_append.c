@@ -595,7 +595,7 @@ TEST(UvAppend, writeError, setup, tear_down, 0, NULL)
     return MUNIT_OK;
 }
 
-static char *error_oom_heap_fault_delay[] = {"0", "1", NULL};
+static char *error_oom_heap_fault_delay[] = {"1", NULL};
 static char *error_oom_heap_fault_repeat[] = {"1", NULL};
 
 static MunitParameterEnum error_oom_params[] = {
