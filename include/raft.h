@@ -462,12 +462,13 @@ struct raft_io
     void *impl;
 
     /**
-     * Initialize the backend.
+     * Configure the backend with operational parameters (server ID and address)
+     * and additional dependencies.
      */
-    int (*init)(struct raft_io *io,
-                struct raft_logger *logger,
-                unsigned id,
-                const char *address);
+    void (*config)(struct raft_io *io,
+                   struct raft_logger *logger,
+                   unsigned id,
+                   const char *address);
 
     /**
      * Read persisted state from storage.

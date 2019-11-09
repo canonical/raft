@@ -70,11 +70,11 @@
     TEAR_DOWN_HEAP;
 
 /* Run the raft_io->init() method. */
-#define UV_INIT_RV f->io.init(&f->io, &f->logger, 1, "127.0.0.1:9000")
-#define UV_INIT                              \
-    {                                        \
-        munit_assert_int(UV_INIT_RV, ==, 0); \
-        f->initialized = true;               \
+#define UV_INIT_RV f->io.config(&f->io, &f->logger, 1, "127.0.0.1:9000")
+#define UV_INIT                \
+    {                          \
+        UV_INIT_RV;            \
+        f->initialized = true; \
     }
 #define UV_INIT_ERROR(RV) munit_assert_int(UV_INIT_RV, ==, RV)
 

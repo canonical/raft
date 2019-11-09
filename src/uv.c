@@ -23,31 +23,24 @@
  * TODO: implement an exponential backoff instead.  */
 #define CONNECT_RETRY_DELAY 1000
 
-/* Implementation of raft_io->init. */
-static int uvInit(struct raft_io *io,
-                  struct raft_logger *logger,
-                  unsigned id,
-                  const char *address)
+/* Implementation of raft_io->config. */
+static void uvConfig(struct raft_io *io,
+                     struct raft_logger *logger,
+                     unsigned id,
+                     const char *address)
 {
     struct uv *uv;
     int rv;
-
     uv = io->impl;
-
     uv->logger = logger;
-
     assert(uv->state == 0);
     uv->id = id;
     rv = uv->transport->init(uv->transport, id, address);
-    if (rv != 0) {
-        return rv;
-    }
+    assert(rv == 0);
     rv = uv_timer_init(uv->loop, &uv->timer);
     assert(rv == 0); /* This should never fail */
     uv->timer.data = uv;
     uv->log_level = RAFT_INFO;
-
-    return 0;
 }
 
 /* Periodic timer callback */
@@ -611,7 +604,7 @@ int raft_uv_init(struct raft_io *io,
     io->version = 1; /* future-proof'ing */
     io->data = NULL; /* canary-poison */
     io->impl = uv;
-    io->init = uvInit;
+    io->config = uvConfig;
     io->start = uvStart;
     io->close = uvClose;
     io->load = uvLoad;
