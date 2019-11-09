@@ -29,7 +29,7 @@ static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
-    SETUP_UV_NO_INIT;
+    SETUP_UV;
     f->uv->logger = &f->logger;
     f->snapshots = NULL;
     f->segments = NULL;

@@ -28,7 +28,7 @@
     bool initialized;                   \
     bool closed
 
-#define SETUP_UV_NO_INIT                                                 \
+#define SETUP_UV                                                         \
     {                                                                    \
         int rv_;                                                         \
         SETUP_DIR;                                                       \
@@ -46,21 +46,15 @@
         munit_assert_int(rv_, ==, 0);                                    \
         f->io.data = f;                                                  \
         f->uv = f->io.impl;                                              \
-        f->initialized = false;                                          \
+        f->io.config(&f->io, &f->logger, 1, "127.0.0.1:9000");           \
         f->closed = false;                                               \
     }
-
-#define SETUP_UV      \
-    SETUP_UV_NO_INIT; \
-    UV_INIT
 
 #define TEAR_DOWN_UV                  \
     if (f == NULL) {                  \
         return;                       \
     }                                 \
-    if (f->initialized) {             \
-        UV_CLOSE;                     \
-    }                                 \
+    UV_CLOSE;                         \
     LOOP_STOP;                        \
     raft_uv_close(&f->io);            \
     raft_uv_tcp_close(&f->transport); \
@@ -68,15 +62,6 @@
     TEAR_DOWN_LOOP;                   \
     TEAR_DOWN_TCP;                    \
     TEAR_DOWN_HEAP;
-
-/* Run the raft_io->init() method. */
-#define UV_INIT_RV f->io.config(&f->io, &f->logger, 1, "127.0.0.1:9000")
-#define UV_INIT                \
-    {                          \
-        UV_INIT_RV;            \
-        f->initialized = true; \
-    }
-#define UV_INIT_ERROR(RV) munit_assert_int(UV_INIT_RV, ==, RV)
 
 /* Run the raft_io->close() method, if not ran already. */
 #define UV_CLOSE                         \
