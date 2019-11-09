@@ -292,12 +292,14 @@ static void maybePrepareSegment(struct uv *uv)
     }
 }
 
-int uvPrepare(struct uv *uv, struct uvPrepare *req, uvPrepareCb cb)
+void uvPrepare(struct uv *uv, struct uvPrepare *req, uvPrepareCb cb)
 {
-    UV__MAYBE_INITIALIZE(uv);
+    int rv;
+    /* TODO: drop initialization, needed only by tests. */
+    rv = uvMaybeInitialize(uv);
+    assert(rv == 0);
     req->cb = cb;
     QUEUE_PUSH(&uv->prepare_reqs, &req->queue);
     uvPrepareProcessRequests(uv);
     maybePrepareSegment(uv);
-    return 0;
 }

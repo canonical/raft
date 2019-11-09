@@ -502,7 +502,10 @@ int uvSnapshotPut(struct raft_io *io,
 
     uv = io->impl;
 
-    UV__MAYBE_INITIALIZE(uv);
+    rv = uvMaybeInitialize(uv);
+    if (rv != 0) {
+        goto err;
+    }
 
     uvDebugf(uv, "put snapshot at %lld, keeping %d", snapshot->index, trailing);
 

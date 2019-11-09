@@ -23,6 +23,41 @@
  * TODO: implement an exponential backoff instead.  */
 #define CONNECT_RETRY_DELAY 1000
 
+int uvMaybeInitialize(struct uv *uv)
+{
+    size_t direct_io;
+    int rv;
+    if (uv->state != UV__PRISTINE) {
+        return 0;
+    }
+    uvDebugf(uv, "data dir: %s", uv->dir);
+    rv = UvFsCheckDir(uv->dir, &uv->errmsg);
+    if (rv != 0) {
+        ErrMsgWrapf(&uv->errmsg, "check data dir %s", uv->dir);
+        return rv;
+    }
+    rv = UvFsProbeCapabilities(uv->dir, &direct_io, &uv->async_io, &uv->errmsg);
+    if (rv != 0) {
+        ErrMsgWrapf(&uv->errmsg, "probe I/O capabilities");
+        return rv;
+    }
+    uv->direct_io = direct_io != 0;
+    if (uv->block_size == 0) {
+        uv->block_size = direct_io != 0 ? direct_io : 4096;
+    }
+    /* We expect the maximum segment size to be a multiple of the block
+     * size. */
+    assert(uv->segment_size % uv->block_size == 0);
+    uvDebugf(uv, "I/O: direct %d, async %d, block %ld", uv->direct_io,
+             uv->async_io, uv->block_size);
+    rv = uvMetadataLoad(uv, &uv->metadata);
+    if (rv != 0) {
+        return rv;
+    }
+    uv->state = UV__INITIALIZED;
+    return 0;
+}
+
 /* Implementation of raft_io->config. */
 static void uvConfig(struct raft_io *io,
                      struct raft_logger *logger,
@@ -63,7 +98,10 @@ static int uvStart(struct raft_io *io,
     int rv;
     uv = io->impl;
 
-    UV__MAYBE_INITIALIZE(uv);
+    rv = uvMaybeInitialize(uv);
+    if (rv != 0) {
+        return rv;
+    }
 
     uv->state = UV__ACTIVE;
 
@@ -357,7 +395,10 @@ static int uvLoad(struct raft_io *io,
     int rv;
     uv = io->impl;
 
-    UV__MAYBE_INITIALIZE(uv);
+    rv = uvMaybeInitialize(uv);
+    if (rv != 0) {
+        return rv;
+    }
 
     *term = uv->metadata.term;
     *voted_for = uv->metadata.voted_for;
@@ -389,7 +430,10 @@ static int uvSetTerm(struct raft_io *io, const raft_term term)
     struct uv *uv;
     int rv;
     uv = io->impl;
-    UV__MAYBE_INITIALIZE(uv);
+    rv = uvMaybeInitialize(uv);
+    if (rv != 0) {
+        return rv;
+    }
     uv->metadata.version++;
     uv->metadata.term = term;
     uv->metadata.voted_for = 0;
@@ -408,7 +452,10 @@ static int uvBootstrap(struct raft_io *io,
     int rv;
     uv = io->impl;
 
-    UV__MAYBE_INITIALIZE(uv);
+    rv = uvMaybeInitialize(uv);
+    if (rv != 0) {
+        return rv;
+    }
 
     /* We shouldn't have written anything else yet. */
     if (uv->metadata.term != 0) {
@@ -475,7 +522,10 @@ static int uvSetVote(struct raft_io *io, const unsigned server_id)
     struct uv *uv;
     int rv;
     uv = io->impl;
-    UV__MAYBE_INITIALIZE(uv);
+    rv = uvMaybeInitialize(uv);
+    if (rv != 0) {
+        return rv;
+    }
     uv->metadata.version++;
     uv->metadata.voted_for = server_id;
     rv = uvMetadataStore(uv, &uv->metadata);
