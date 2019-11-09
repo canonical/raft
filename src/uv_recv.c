@@ -428,7 +428,7 @@ abort:
     uv_close((struct uv_handle_s *)stream, (uv_close_cb)raft_free);
 }
 
-int uvRecv(struct uv *uv)
+int uvRecvStart(struct uv *uv)
 {
     int rv;
     rv = uv->transport->listen(uv->transport, acceptCb);

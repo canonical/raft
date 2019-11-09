@@ -349,7 +349,7 @@ void uvTruncateMaybeProcessRequests(struct uv *uv);
 void uvSendClose(struct uv *uv);
 
 /* Start receiving messages from new incoming connections. */
-int uvRecv(struct uv *uv);
+int uvRecvStart(struct uv *uv);
 
 /* Stop all servers by closing the inbound stream handles and aborting all
  * requests being received.  */

@@ -79,7 +79,7 @@ static void uvConfig(struct raft_io *io,
 }
 
 /* Periodic timer callback */
-static void timerCb(uv_timer_t *timer)
+static void uvTickTimerCb(uv_timer_t *timer)
 {
     struct uv *uv;
     uv = timer->data;
@@ -97,26 +97,23 @@ static int uvStart(struct raft_io *io,
     struct uv *uv;
     int rv;
     uv = io->impl;
-
     rv = uvMaybeInitialize(uv);
     if (rv != 0) {
         return rv;
     }
-
     uv->state = UV__ACTIVE;
-
     uv->tick_cb = tick_cb;
     uv->recv_cb = recv_cb;
-    rv = uvRecv(uv);
+    rv = uvRecvStart(uv);
     if (rv != 0) {
         return rv;
     }
-    rv = uv_timer_start(&uv->timer, timerCb, msecs, msecs);
+    rv = uv_timer_start(&uv->timer, uvTickTimerCb, msecs, msecs);
     assert(rv == 0);
     return 0;
 }
 
-static bool hasPendingDiskIO(struct uv *uv)
+static bool uvHasPendingDiskIO(struct uv *uv)
 {
     return !QUEUE_IS_EMPTY(&uv->append_segments) ||
            !QUEUE_IS_EMPTY(&uv->finalize_reqs) ||
@@ -134,11 +131,11 @@ void uvMaybeClose(struct uv *uv)
     }
 
     if (uv->state == UV__CLOSED) {
-        assert(!hasPendingDiskIO(uv));
+        assert(!uvHasPendingDiskIO(uv));
         return;
     }
 
-    if (hasPendingDiskIO(uv)) {
+    if (uvHasPendingDiskIO(uv)) {
         return;
     }
 
@@ -148,16 +145,16 @@ void uvMaybeClose(struct uv *uv)
     }
 }
 
-static void timerCloseCb(uv_handle_t *handle)
+static void uvTickTimerCloseCb(uv_handle_t *handle)
 {
     struct uv *uv = handle->data;
     uvMaybeClose(uv);
 }
 
-static void transportCloseCb(struct raft_uv_transport *t)
+static void uvTransportCloseCb(struct raft_uv_transport *t)
 {
     struct uv *uv = t->data;
-    uv_close((uv_handle_t *)&uv->timer, timerCloseCb);
+    uv_close((uv_handle_t *)&uv->timer, uvTickTimerCloseCb);
 }
 
 /* Implementation of raft_io->close. */
@@ -175,16 +172,16 @@ static int uvClose(struct raft_io *io, void (*cb)(struct raft_io *io))
     uvPrepareClose(uv);
     uvAppendClose(uv);
     uvTruncateClose(uv);
-    uv->transport->close(uv->transport, transportCloseCb);
+    uv->transport->close(uv->transport, uvTransportCloseCb);
     return 0;
 }
 
 /* Filter the given segment list to find the most recent contiguous chunk of
  * closed segments that overlaps with the given snapshot last index. */
-static int filterSegments(struct uv *uv,
-                          raft_index last_index,
-                          struct uvSegmentInfo **segments,
-                          size_t *n)
+static int uvFilterSegments(struct uv *uv,
+                            raft_index last_index,
+                            struct uvSegmentInfo **segments,
+                            size_t *n)
 {
     struct uvSegmentInfo *segment;
     size_t i; /* First valid closed segment. */
@@ -278,11 +275,11 @@ static int filterSegments(struct uv *uv,
 
 /* Load the last snapshot (if any) and all entries contained in all segment
  * files of the data directory. */
-static int loadSnapshotAndEntries(struct uv *uv,
-                                  struct raft_snapshot **snapshot,
-                                  raft_index *start_index,
-                                  struct raft_entry *entries[],
-                                  size_t *n)
+static int uvLoadSnapshotAndEntries(struct uv *uv,
+                                    struct raft_snapshot **snapshot,
+                                    raft_index *start_index,
+                                    struct raft_entry *entries[],
+                                    size_t *n)
 {
     struct uvSnapshotInfo *snapshots;
     struct uvSegmentInfo *segments;
@@ -324,7 +321,7 @@ static int loadSnapshotAndEntries(struct uv *uv,
          * make sure that the first index of the first closed segment is not
          * greater than the snapshot's last index plus one (so there are no
          * missing entries), and update the start index accordingly. */
-        rv = filterSegments(uv, (*snapshot)->index, &segments, &n_segments);
+        rv = uvFilterSegments(uv, (*snapshot)->index, &segments, &n_segments);
         if (rv != 0) {
             goto err_after_snapshot_load;
         }
@@ -404,7 +401,8 @@ static int uvLoad(struct raft_io *io,
     *voted_for = uv->metadata.voted_for;
     *snapshot = NULL;
 
-    rv = loadSnapshotAndEntries(uv, snapshot, start_index, entries, n_entries);
+    rv =
+        uvLoadSnapshotAndEntries(uv, snapshot, start_index, entries, n_entries);
     if (rv != 0) {
         return rv;
     }
@@ -437,6 +435,25 @@ static int uvSetTerm(struct raft_io *io, const raft_term term)
     uv->metadata.version++;
     uv->metadata.term = term;
     uv->metadata.voted_for = 0;
+    rv = uvMetadataStore(uv, &uv->metadata);
+    if (rv != 0) {
+        return rv;
+    }
+    return 0;
+}
+
+/* Implementation of raft_io->set_term. */
+static int uvSetVote(struct raft_io *io, const unsigned server_id)
+{
+    struct uv *uv;
+    int rv;
+    uv = io->impl;
+    rv = uvMaybeInitialize(uv);
+    if (rv != 0) {
+        return rv;
+    }
+    uv->metadata.version++;
+    uv->metadata.voted_for = server_id;
     rv = uvMetadataStore(uv, &uv->metadata);
     if (rv != 0) {
         return rv;
@@ -491,8 +508,8 @@ static int uvRecover(struct raft_io *io, const struct raft_configuration *conf)
     int rv;
 
     /* Load the current state. This also closes any leftover open segment. */
-    rv = loadSnapshotAndEntries(uv, &snapshot, &start_index, &entries,
-                                &n_entries);
+    rv = uvLoadSnapshotAndEntries(uv, &snapshot, &start_index, &entries,
+                                  &n_entries);
     if (rv != 0) {
         return rv;
     }
@@ -513,25 +530,6 @@ static int uvRecover(struct raft_io *io, const struct raft_configuration *conf)
         return rv;
     }
 
-    return 0;
-}
-
-/* Implementation of raft_io->set_term. */
-static int uvSetVote(struct raft_io *io, const unsigned server_id)
-{
-    struct uv *uv;
-    int rv;
-    uv = io->impl;
-    rv = uvMaybeInitialize(uv);
-    if (rv != 0) {
-        return rv;
-    }
-    uv->metadata.version++;
-    uv->metadata.voted_for = server_id;
-    rv = uvMetadataStore(uv, &uv->metadata);
-    if (rv != 0) {
-        return rv;
-    }
     return 0;
 }
 
