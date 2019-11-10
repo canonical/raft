@@ -25,7 +25,6 @@
     struct raft_uv_transport transport; \
     struct raft_io io;                  \
     struct uv *uv;                      \
-    bool initialized;                   \
     bool closed
 
 #define SETUP_UV                                                         \
