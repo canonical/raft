@@ -32,6 +32,18 @@ static void tearDownUv(void *data)
  *
  *****************************************************************************/
 
+/* Re-initialize the raft_io instance, to refresh the metadata cache. */
+#define REINIT                                                       \
+    do {                                                             \
+        int _rv;                                                     \
+        f->io.close(&f->io, NULL);                                   \
+        LOOP_RUN(2);                                                 \
+        raft_uv_close(&f->io);                                       \
+        _rv = raft_uv_init(&f->io, &f->loop, f->dir, &f->transport); \
+        munit_assert_int(_rv, ==, 0);                                \
+        f->io.config(&f->io, &f->logger, 1, "127.0.0.1:9000");       \
+    } while (0)
+
 /* Invoke f->io->set_term() and assert that no error occurs. */
 #define SET_TERM(TERM)                      \
     do {                                    \
@@ -138,6 +150,7 @@ TEST(set_term, metadataOneExists, setupUv, tearDownUv, 0, NULL)
                         1, /* Version                              */
                         1, /* Term                                 */
                         0 /* Voted for                            */);
+    REINIT;
     SET_TERM(2);
     ASSERT_METADATA_FILE(1, 1, 1, 0);
     ASSERT_METADATA_FILE(2, 2, 2, 0);
@@ -158,6 +171,7 @@ TEST(set_term, metadataOneIsGreater, setupUv, tearDownUv, 0, NULL)
                         2, /* Version                              */
                         2, /* Term                                 */
                         0 /* Voted for                            */);
+    REINIT;
     SET_TERM(4);
     ASSERT_METADATA_FILE(1 /* n */, 3 /* version */, 3 /* term */,
                          0 /* voted for */);
@@ -180,6 +194,7 @@ TEST(set_term, metadataTwoIsGreater, setupUv, tearDownUv, 0, NULL)
                         2, /* Version                              */
                         2, /* Term                                 */
                         0 /* Voted for                            */);
+    REINIT;
     SET_TERM(2);
     ASSERT_METADATA_FILE(1 /* n */, 3 /* version */, 2 /* term */,
                          0 /* voted for */);

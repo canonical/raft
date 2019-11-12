@@ -107,14 +107,6 @@ struct uv
 #define uvWarnf(UV, ...) uvEmitf(RAFT_WARN, UV, ##__VA_ARGS__);
 #define uvErrorf(UV, ...) uvEmitf(RAFT_ERROR, UV, ##__VA_ARGS__);
 
-/* Lazy initialization:
- *
- * - make sure that the data directory is accessible
- * - probe the underlying file system capabilities
- * - populate the metadata cache by reading data from disk
- */
-int uvMaybeInitialize(struct uv *uv);
-
 /* Load Raft metadata from disk, choosing the most recent version (either the
  * metadata1 or metadata2 file). */
 int uvMetadataLoad(const char *dir, struct uvMetadata *metadata, char *errmsg);

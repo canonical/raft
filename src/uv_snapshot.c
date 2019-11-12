@@ -502,11 +502,6 @@ int uvSnapshotPut(struct raft_io *io,
 
     uv = io->impl;
 
-    rv = uvMaybeInitialize(uv);
-    if (rv != 0) {
-        goto err;
-    }
-
     uvDebugf(uv, "put snapshot at %lld, keeping %d", snapshot->index, trailing);
 
     r = raft_malloc(sizeof *r);

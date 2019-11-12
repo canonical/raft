@@ -548,11 +548,6 @@ int uvAppend(struct raft_io *io,
 
     uv = io->impl;
 
-    rv = uvMaybeInitialize(uv);
-    if (rv != 0) {
-        return rv;
-    }
-
     append = raft_malloc(sizeof *append);
     if (append == NULL) {
         rv = RAFT_NOMEM;
