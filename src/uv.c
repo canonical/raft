@@ -577,6 +577,7 @@ int raft_uv_init(struct raft_io *io,
     struct uv *uv;
     size_t direct_io;
     bool async_io;
+    struct uvMetadata metadata;
     int rv;
 
     assert(io != NULL);
@@ -593,6 +594,11 @@ int raft_uv_init(struct raft_io *io,
 
     /* Proble file system capabilities */
     rv = UvFsProbeCapabilities(dir, &direct_io, &async_io, io->errmsg);
+    if (rv != 0) {
+        return rv;
+    }
+
+    rv = uvMetadataLoad(dir, &metadata, io->errmsg);
     if (rv != 0) {
         return rv;
     }
@@ -639,7 +645,7 @@ int raft_uv_init(struct raft_io *io,
     QUEUE_INIT(&uv->snapshot_put_reqs);
     QUEUE_INIT(&uv->snapshot_get_reqs);
     uv->snapshot_put_work.data = NULL;
-    memset(&uv->metadata, 0, sizeof uv->metadata);
+    uv->metadata = metadata;
     uv->timer.data = uv;
     uv->tick_cb = NULL; /* Set by raft_io->start() */
     uv->recv_cb = NULL; /* Set by raft_io->start() */
