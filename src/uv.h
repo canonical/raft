@@ -93,7 +93,6 @@ struct uv
     raft_io_recv_cb recv_cb;             /* Invoked when upon RPC messages */
     bool closing;                        /* True if we are closing */
     raft_io_close_cb close_cb;           /* Invoked when finishing closing */
-    unsigned short log_level;            /* Logging level */
     char errmsg[RAFT_ERRMSG_BUF_SIZE];   /* Description of last error occured */
 };
 

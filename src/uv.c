@@ -39,7 +39,6 @@ static void uvConfig(struct raft_io *io,
     rv = uv_timer_init(uv->loop, &uv->timer);
     assert(rv == 0); /* This should never fail */
     uv->timer.data = uv;
-    uv->log_level = RAFT_INFO;
 }
 
 /* Periodic timer callback */
@@ -573,8 +572,8 @@ int raft_uv_init(struct raft_io *io,
     strcpy(uv->dir, dir);
     uv->transport = transport;
     uv->transport->data = uv;
-    uv->logger = NULL; /* Set by raft_io->init() */
-    uv->id = 0;        /* Set by raft_io->init() */
+    uv->logger = NULL; /* Set by raft_io->config() */
+    uv->id = 0;        /* Set by raft_io->config() */
     uv->state = UV__PRISTINE;
     uv->errored = false;
     uv->direct_io = direct_io != 0;
