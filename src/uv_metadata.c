@@ -34,6 +34,13 @@ static int decode(const void *buf, struct uvMetadata *metadata, char *errmsg)
     metadata->version = byteGet64(&cursor);
     metadata->term = byteGet64(&cursor);
     metadata->voted_for = byteGet64(&cursor);
+
+    /* Sanity checks that values make sense */
+    if (metadata->version == 0) {
+        ErrMsgPrintf(errmsg, "version is set to zero");
+        return RAFT_CORRUPT;
+    }
+
     return 0;
 }
 
@@ -75,6 +82,10 @@ static int loadFile(const char *dir,
         return 0;
     }
 
+    /* If the file exists but has less bytes than expected assume that the
+     * server crashed while writing this metadata file, and pretend it has not
+     * been written at all. If it has more file than expected, return an
+     * error. */
     rv = UvFsFileSize(dir, filename, &size, errmsg);
     if (rv != 0) {
         ErrMsgWrapf(errmsg, "check size of %s", filename);
@@ -83,8 +94,6 @@ static int loadFile(const char *dir,
 
     if (size != sizeof content) {
         if ((size_t)size < sizeof content) {
-            /* Assume that the server crashed while writing this metadata file,
-             * and pretend it has not been written at all. */
             UvFsRemoveFile(dir, filename, errmsg);
             return 0;
         }
@@ -99,21 +108,15 @@ static int loadFile(const char *dir,
 
     rv = UvFsReadFileInto(dir, filename, &buf, errmsg);
     if (rv != 0) {
-        ErrMsgWrapf(errmsg, "load content of %s", filename);
+        ErrMsgWrapf(errmsg, "read content of %s", filename);
         return rv;
     };
 
     /* Decode the content of the metadata file. */
     rv = decode(content, metadata, errmsg);
     if (rv != 0) {
-        ErrMsgWrapf(errmsg, "load %s", filename);
+        ErrMsgWrapf(errmsg, "decode content of %s", filename);
         return rv;
-    }
-
-    /* Sanity checks that values make sense */
-    if (metadata->version == 0) {
-        ErrMsgPrintf(errmsg, "load %s: version is set to zero", filename);
-        return RAFT_CORRUPT;
     }
 
     return 0;

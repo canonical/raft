@@ -190,7 +190,8 @@ TEST(raft_uv_init, metadataOneBadFormat, setupUv, tearDownUv, 0, NULL)
                         1, /* Version                              */
                         1, /* Term                                 */
                         0 /* Voted for                            */);
-    INIT_ERROR(f->dir, RAFT_MALFORMED, "load metadata1: bad format version 2");
+    INIT_ERROR(f->dir, RAFT_MALFORMED,
+               "decode content of metadata1: bad format version 2");
     return MUNIT_OK;
 }
 
@@ -203,7 +204,8 @@ TEST(raft_uv_init, metadataOneBadVersion, setupUv, tearDownUv, 0, NULL)
                         0, /* Version                              */
                         1, /* Term                                 */
                         0 /* Voted for                            */);
-    INIT_ERROR(f->dir, RAFT_CORRUPT, "load metadata1: version is set to zero");
+    INIT_ERROR(f->dir, RAFT_CORRUPT,
+               "decode content of metadata1: version is set to zero");
     return MUNIT_OK;
 }
 
