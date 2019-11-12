@@ -590,20 +590,25 @@ int raft_uv_init(struct raft_io *io,
                  struct raft_uv_transport *transport)
 {
     struct uv *uv;
+    int rv;
 
     assert(io != NULL);
     assert(loop != NULL);
     assert(dir != NULL);
 
-    /* Ensure that the given path doesn't exceed our static buffer limit */
+    memset(io->errmsg2, 0, sizeof io->errmsg2);
+
+    /* Ensure that the given path doesn't exceed our static buffer limit. */
     if (!UV__DIR_HAS_VALID_LEN(dir)) {
-        return RAFT_NAMETOOLONG;
+        rv = RAFT_NAMETOOLONG;
+        goto err;
     }
 
     /* Allocate the raft_io_uv object */
     uv = raft_malloc(sizeof *uv);
     if (uv == NULL) {
-        return RAFT_NOMEM;
+        rv = RAFT_NOMEM;
+        goto err;
     }
     memset(uv, 0, sizeof(struct uv));
 
@@ -670,6 +675,13 @@ int raft_uv_init(struct raft_io *io,
     io->errmsg = uvErrMsg;
 
     return 0;
+
+err:
+    assert(rv != 0);
+    if (io->errmsg2[0] == 0) {
+        strcpy(io->errmsg2, errCodeToString(rv));
+    }
+    return rv;
 }
 
 void raft_uv_close(struct raft_io *io)

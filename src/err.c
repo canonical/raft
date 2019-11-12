@@ -153,7 +153,7 @@ char *errMsgWrapf(char *e, const char *format, ...)
     X(RAFT_CANTCHANGE, "a configuration change is already in progress") \
     X(RAFT_CORRUPT, "persisted data is corrupted")                      \
     X(RAFT_CANCELED, "operation canceled")                              \
-    X(RAFT_NAMETOOLONG, "data directory path is too long")              \
+    X(RAFT_NAMETOOLONG, "resource name too long")                       \
     X(RAFT_TOOBIG, "data is too big")                                   \
     X(RAFT_NOCONNECTION, "no connection to remote server available")    \
     X(RAFT_BUSY, "operation can't be performed at this time")           \
