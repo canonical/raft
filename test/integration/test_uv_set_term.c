@@ -215,16 +215,6 @@ TEST(set_term, metadataOneBadFormat, setupUv, tearDownUv, 0, NULL)
     return MUNIT_OK;
 }
 
-/* The data directory is not executable. */
-TEST(set_term, dirNotAccessible, setupUv, tearDownUv, 0, NULL)
-{
-    struct fixture *f = data;
-    test_dir_unexecutable(f->dir);
-    SET_TERM_ERROR(1, RAFT_IOERR,
-                   "probe I/O capabilities: mkstemp: permission denied");
-    return MUNIT_OK;
-}
-
 /* The metadata1 file has not a valid version. */
 TEST(set_term, metadataOneBadVersion, setupUv, tearDownUv, 0, NULL)
 {

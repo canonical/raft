@@ -335,6 +335,14 @@ void test_dir_unexecutable(const char *dir)
     munit_assert_int(rv, ==, 0);
 }
 
+void test_dir_unwritable(const char *dir)
+{
+    int rv;
+
+    rv = chmod(dir, 0500);
+    munit_assert_int(rv, ==, 0);
+}
+
 void test_dir_unreadable_file(const char *dir, const char *filename)
 {
     char path[256];

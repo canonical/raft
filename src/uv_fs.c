@@ -38,8 +38,14 @@ int UvFsCheckDir(const char *dir, char *errmsg)
         return RAFT_ERROR;
     }
 
-    if ((req.statbuf.st_mode & S_IFMT) != S_IFDIR) {
+    if (!(req.statbuf.st_mode & S_IFDIR)) {
         ErrMsgPrintf((struct ErrMsg *)errmsg, "path '%s' is not a directory",
+                     dir);
+        return RAFT_INVALID;
+    }
+
+    if (!(req.statbuf.st_mode & S_IWRITE)) {
+        ErrMsgPrintf((struct ErrMsg *)errmsg, "directory '%s' is not writable",
                      dir);
         return RAFT_INVALID;
     }

@@ -11,19 +11,23 @@
  *****************************************************************************/
 
 /* Invoke UvFsCheckDir passing it the given dir. */
-#define CHECK_DIR(DIR)                                      \
-    {                                                       \
-        char errmsg[RAFT_ERRMSG_BUF_SIZE];                  \
-        munit_assert_int(UvFsCheckDir(DIR, errmsg), ==, 0); \
+#define CHECK_DIR(DIR)                      \
+    {                                       \
+        int _rv;                            \
+        char _errmsg[RAFT_ERRMSG_BUF_SIZE]; \
+        _rv = UvFsCheckDir(DIR, _errmsg);   \
+        munit_assert_int(_rv, ==, 0);       \
     }
 
 /* Invoke UvFsCheckDir passing it the given dir and check that the given error
  * occurs. */
-#define CHECK_DIR_ERROR(DIR, RV, ERRMSG)                     \
-    {                                                        \
-        char errmsg[RAFT_ERRMSG_BUF_SIZE];                   \
-        munit_assert_int(UvFsCheckDir(DIR, errmsg), ==, RV); \
-        munit_assert_string_equal(errmsg, ERRMSG);           \
+#define CHECK_DIR_ERROR(DIR, RV, ERRMSG)            \
+    {                                               \
+        int _rv;                                    \
+        char _errmsg[RAFT_ERRMSG_BUF_SIZE];         \
+        _rv = UvFsCheckDir(DIR, _errmsg);           \
+        munit_assert_int(_rv, ==, RV);              \
+        munit_assert_string_equal(_errmsg, ERRMSG); \
     }
 
 SUITE(UvFsCheckDir)
@@ -40,11 +44,11 @@ TEST(UvFsCheckDir, exists, setupDir, tearDownDir, 0, NULL)
 TEST(UvFsCheckDir, doesNotExist, setupDir, tearDownDir, 0, NULL)
 {
     const char *parent = data;
-    char status[2048];
-    char dir[1024];
-    sprintf(dir, "%s/sub", parent);
-    sprintf(status, "directory '%s' does not exist", dir);
-    CHECK_DIR_ERROR(dir, RAFT_NOTFOUND, status);
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
+    char dir[128];
+    sprintf(errmsg, "%s/sub", parent);
+    sprintf(errmsg, "directory '%s' does not exist", dir);
+    CHECK_DIR_ERROR(dir, RAFT_NOTFOUND, errmsg);
     return MUNIT_OK;
 }
 
@@ -74,6 +78,17 @@ TEST(UvFsCheckDir, notDir, NULL, NULL, 0, NULL)
 {
     CHECK_DIR_ERROR("/dev/null", RAFT_INVALID,
                     "path '/dev/null' is not a directory");
+    return MUNIT_OK;
+}
+
+/* If the given directory is not writable, an error is returned. */
+TEST(UvFsCheckDir, notWritable, setupDir, tearDownDir, 0, NULL)
+{
+    const char *dir = data;
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
+    sprintf(errmsg, "directory '%s' is not writable", dir);
+    test_dir_unwritable(dir);
+    CHECK_DIR_ERROR(dir, RAFT_INVALID, errmsg);
     return MUNIT_OK;
 }
 

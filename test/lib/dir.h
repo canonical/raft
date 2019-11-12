@@ -161,6 +161,9 @@ bool test_dir_exists(const char *dir);
 /* Make the given directory not executable, so files can't be open. */
 void test_dir_unexecutable(const char *dir);
 
+/* Make the given directory not writable. */
+void test_dir_unwritable(const char *dir);
+
 /* Make the given file not readable. */
 void test_dir_unreadable_file(const char *dir, const char *filename);
 
