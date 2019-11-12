@@ -48,8 +48,8 @@ TEST(UvFsCheckDir, doesNotExist, setupDir, tearDownDir, 0, NULL)
     return MUNIT_OK;
 }
 
-/* If the directory can't be probed for existence, an error is returned. */
-TEST(UvFsCheckDir, statError, NULL, NULL, 0, NULL)
+/* If the process can't access the directory, an error is returned. */
+TEST(UvFsCheckDir, permissionDenied, NULL, NULL, 0, NULL)
 {
     bool has_access = test_dir_has_file("/proc/1", "root");
     /* Skip the test is the process actually has access to /proc/1/root. */
@@ -58,6 +58,14 @@ TEST(UvFsCheckDir, statError, NULL, NULL, 0, NULL)
     }
     CHECK_DIR_ERROR("/proc/1/root", RAFT_UNAUTHORIZED,
                     "can't access directory '/proc/1/root'");
+    return MUNIT_OK;
+}
+
+/* If the given path contains a non-directory prefix, an error is returned. */
+TEST(UvFsCheckDir, notDirPrefix, NULL, NULL, 0, NULL)
+{
+    CHECK_DIR_ERROR("/dev/null/foo", RAFT_INVALID,
+                    "path '/dev/null/foo' is not a directory");
     return MUNIT_OK;
 }
 

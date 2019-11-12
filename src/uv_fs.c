@@ -28,9 +28,14 @@ int UvFsCheckDir(const char *dir, char *errmsg)
                 ErrMsgPrintf((struct ErrMsg *)errmsg,
                              "can't access directory '%s'", dir);
                 return RAFT_UNAUTHORIZED;
+            case UV_ENOTDIR:
+                ErrMsgPrintf((struct ErrMsg *)errmsg,
+                             "path '%s' is not a directory", dir);
+                return RAFT_INVALID;
         }
-        UvErrMsgSys((struct ErrMsg *)errmsg, "stat", rv);
-        return RAFT_IOERR;
+        ErrMsgPrintf((struct ErrMsg *)errmsg, "can't stat '%s': %s", dir,
+                     uv_strerror(rv));
+        return RAFT_ERROR;
     }
 
     if ((req.statbuf.st_mode & S_IFMT) != S_IFDIR) {
