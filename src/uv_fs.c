@@ -19,6 +19,10 @@ int UvFsCheckDir(const char *dir, struct ErrMsg *errmsg)
     /* Make sure we have a directory we can write into. */
     rv = uv_fs_stat(NULL, &req, dir, NULL);
     if (rv != 0) {
+        if (rv == UV_ENOENT) {
+            ErrMsgFromCode(errmsg, RAFT_NOTFOUND);
+            return RAFT_NOTFOUND;
+        }
         UvErrMsgSys(errmsg, "stat", rv);
         return RAFT_IOERR;
     }
@@ -244,7 +248,7 @@ open:
         if (rv == UV_ENOENT && !(flags & UV_FS_O_CREAT)) {
             exists = false;
             flags |= UV_FS_O_CREAT;
-	    mode = S_IRUSR | S_IWUSR;
+            mode = S_IRUSR | S_IWUSR;
             goto open;
         }
         goto err;

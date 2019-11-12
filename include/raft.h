@@ -29,6 +29,7 @@
 #define RAFT_NOCONNECTION 16
 #define RAFT_BUSY 17
 #define RAFT_IOERR 18
+#define RAFT_NOTFOUND 19
 
 /**
  * Return the error message describing the given error code.

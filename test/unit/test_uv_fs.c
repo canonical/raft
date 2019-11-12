@@ -42,7 +42,7 @@ TEST(UvFsCheckDir, doesNotExist, setupDir, tearDownDir, 0, NULL)
     const char *parent = data;
     char dir[1024];
     sprintf(dir, "%s/sub", parent);
-    CHECK_DIR_ERROR(dir, RAFT_IOERR, "stat: no such file or directory");
+    CHECK_DIR_ERROR(dir, RAFT_NOTFOUND, "resource does not exist");
     return MUNIT_OK;
 }
 

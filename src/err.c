@@ -62,6 +62,11 @@ void ErrMsgWrapf(struct ErrMsg *e, const char *format, ...)
     }
 }
 
+void ErrMsgFromCode(struct ErrMsg *e, int code)
+{
+    ErrMsgPrintf(e, "%s", errCodeToString(code));
+}
+
 char *errMsgPrintf(const char *format, ...)
 {
     int size;
@@ -157,7 +162,8 @@ char *errMsgWrapf(char *e, const char *format, ...)
     X(RAFT_TOOBIG, "data is too big")                                   \
     X(RAFT_NOCONNECTION, "no connection to remote server available")    \
     X(RAFT_BUSY, "operation can't be performed at this time")           \
-    X(RAFT_IOERR, "I/O error")
+    X(RAFT_IOERR, "I/O error")                                          \
+    X(RAFT_NOTFOUND, "resource does not exist")
 
 #define ERR_CODE_TO_STRING_CASE(CODE, MSG) \
     case CODE:                             \

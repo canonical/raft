@@ -8,7 +8,7 @@
 #include "../include/raft.h"
 #include "err.h"
 
-/* Check that the given directory exists. */
+/* Check that the given directory can be used. */
 int UvFsCheckDir(const char *dir, struct ErrMsg *errmsg);
 
 /* Sync the given directory by calling fsync(). */

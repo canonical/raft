@@ -14,8 +14,10 @@ struct raft_uv_transport;
  * The @dir path will be copied, and its memory can possibly be released once
  * this function returns.
  *
- * Rerturn #RAFT_NAMETOOLONG if @dir exceeds the size of the internal buffer
- * that should hold it.
+ * Return #RAFT_NAMETOOLONG if @dir exceeds the size of the internal buffer
+ * that should hold it
+ *
+ * Return #RAFT_NOTFOUND if @dir does not exist.
  *
  * The implementation of metadata and log persistency is virtually the same as
  * the one found in LogCabin [0].
