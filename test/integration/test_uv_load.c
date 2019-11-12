@@ -46,7 +46,7 @@ static void tearDownUv(void *data)
         _rv = f->io.load(&f->io, 10, &_term, &_voted_for, &_snapshot, \
                          &_start_index, &_entries, &_n);              \
         munit_assert_int(_rv, ==, RV);                                \
-        munit_assert_string_equal(f->io.errmsg(&f->io), ERRMSG);      \
+        munit_assert_string_equal(f->io.errmsg_(&f->io), ERRMSG);     \
     } while (0)
 
 /* Invoke f->io->load() and assert that it returns the given state. */

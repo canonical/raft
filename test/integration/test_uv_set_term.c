@@ -42,12 +42,12 @@ static void tearDownUv(void *data)
 
 /* Invoke f->io->set_term() and assert that the given error code is returned and
  * the given error message set. */
-#define SET_TERM_ERROR(TERM, RV, ERRMSG)                         \
-    do {                                                         \
-        int _rv;                                                 \
-        _rv = f->io.set_term(&f->io, TERM);                      \
-        munit_assert_int(_rv, ==, RV);                           \
-        munit_assert_string_equal(f->io.errmsg(&f->io), ERRMSG); \
+#define SET_TERM_ERROR(TERM, RV, ERRMSG)                          \
+    do {                                                          \
+        int _rv;                                                  \
+        _rv = f->io.set_term(&f->io, TERM);                       \
+        munit_assert_int(_rv, ==, RV);                            \
+        munit_assert_string_equal(f->io.errmsg_(&f->io), ERRMSG); \
     } while (0)
 
 /* Write either the metadata1 or metadata2 file, filling it with the given

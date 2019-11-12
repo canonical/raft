@@ -55,13 +55,13 @@ static void tearDownUv(void *data)
  *****************************************************************************/
 
 /* Invoke raft_uv_init() and assert that the given error code is returned and
- * the given status message set. */
-#define INIT_ERROR(DIR, RV, STATUS)                               \
+ * the given error message set. */
+#define INIT_ERROR(DIR, RV, ERRMSG)                               \
     do {                                                          \
         int _rv;                                                  \
         _rv = raft_uv_init(&f->io, &f->loop, DIR, &f->transport); \
         munit_assert_int(_rv, ==, RV);                            \
-        munit_assert_string_equal(f->io.status, STATUS);          \
+        munit_assert_string_equal(f->io.errmsg, ERRMSG);          \
     } while (0)
 
 SUITE(raft_uv_init)

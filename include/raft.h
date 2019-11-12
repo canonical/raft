@@ -32,6 +32,11 @@
 #define RAFT_NOTFOUND 19
 
 /**
+ * Size of human-readable error message buffers.
+ */
+#define RAFT_ERRMSG_BUF_SIZE 256
+
+/**
  * Return the error message describing the given error code.
  */
 RAFT_API const char *raft_strerror(int errnum);
@@ -466,7 +471,7 @@ struct raft_io
      * Human-readable message providing diagnostic information about the last
      * error occurred.
      */
-    char status[256];
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
 
     /**
      * Configure the backend with operational parameters (server ID and address)
@@ -602,7 +607,7 @@ struct raft_io
     /**
      * Return a human-readable description of the last error occurred.
      */
-    const char *(*errmsg)(struct raft_io *io);
+    const char *(*errmsg_)(struct raft_io *io);
 };
 
 /**

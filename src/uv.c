@@ -595,11 +595,11 @@ int raft_uv_init(struct raft_io *io,
     assert(loop != NULL);
     assert(dir != NULL);
 
-    memset(io->status, 0, sizeof io->status);
+    memset(io->errmsg, 0, sizeof io->errmsg);
 
     /* Ensure that the given path doesn't exceed our static buffer limit. */
     if (!UV__DIR_HAS_VALID_LEN(dir)) {
-        sprintf(io->status, "directory path too long");
+        sprintf(io->errmsg, "directory path too long");
         rv = RAFT_NAMETOOLONG;
         goto err;
     }
@@ -607,7 +607,7 @@ int raft_uv_init(struct raft_io *io,
     /* Allocate the raft_io_uv object */
     uv = raft_malloc(sizeof *uv);
     if (uv == NULL) {
-        sprintf(io->status, "out of memory");
+        sprintf(io->errmsg, "out of memory");
         rv = RAFT_NOMEM;
         goto err;
     }
@@ -673,7 +673,7 @@ int raft_uv_init(struct raft_io *io,
     io->snapshot_get = uvSnapshotGet;
     io->time = uvTime;
     io->random = uvRandom;
-    io->errmsg = uvErrMsg;
+    io->errmsg_ = uvErrMsg;
 
     return 0;
 
