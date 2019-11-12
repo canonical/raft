@@ -12,7 +12,7 @@
 #define METADATA_CONTENT_SIZE (8 * 4)
 
 /* Encode the content of a metadata file. */
-static void encode(const struct uvMetadata *metadata, void *buf)
+static void uvMetadataEncode(const struct uvMetadata *metadata, void *buf)
 {
     void *cursor = buf;
     bytePut64(&cursor, UV__DISK_FORMAT);
@@ -22,7 +22,9 @@ static void encode(const struct uvMetadata *metadata, void *buf)
 }
 
 /* Decode the content of a metadata file. */
-static int decode(const void *buf, struct uvMetadata *metadata, char *errmsg)
+static int uvMetadataDecode(const void *buf,
+                            struct uvMetadata *metadata,
+                            char *errmsg)
 {
     const void *cursor = buf;
     unsigned format;
@@ -45,17 +47,17 @@ static int decode(const void *buf, struct uvMetadata *metadata, char *errmsg)
 }
 
 /* Render the filename of the metadata file with index @n. */
-static void filenameOf(const unsigned short n, char *filename)
+static void uvMetadataFilename(const unsigned short n, char *filename)
 {
     sprintf(filename, METADATA_FILENAME_PREFIX "%d", n);
 }
 
 /* Read the n'th metadata file (with n equal to 1 or 2) and decode the content
  * of the file, populating the given metadata buffer accordingly. */
-static int loadFile(const char *dir,
-                    const unsigned short n,
-                    struct uvMetadata *metadata,
-                    char *errmsg)
+static int uvMetadataLoadN(const char *dir,
+                           const unsigned short n,
+                           struct uvMetadata *metadata,
+                           char *errmsg)
 {
     char filename[METADATA_FILENAME_SIZE];  /* Filename of the metadata file */
     uint8_t content[METADATA_CONTENT_SIZE]; /* Content of metadata file */
@@ -67,7 +69,7 @@ static int loadFile(const char *dir,
     assert(n == 1 || n == 2);
 
     /* Render the metadata path */
-    filenameOf(n, filename);
+    uvMetadataFilename(n, filename);
 
     rv = UvFsFileExists(dir, filename, &exists, errmsg);
     if (rv != 0) {
@@ -113,19 +115,13 @@ static int loadFile(const char *dir,
     };
 
     /* Decode the content of the metadata file. */
-    rv = decode(content, metadata, errmsg);
+    rv = uvMetadataDecode(content, metadata, errmsg);
     if (rv != 0) {
         ErrMsgWrapf(errmsg, "decode content of %s", filename);
         return rv;
     }
 
     return 0;
-}
-
-/* Return the metadata file index associated with the given version. */
-static int indexOf(int version)
-{
-    return version % 2 == 1 ? 1 : 2;
 }
 
 int uvMetadataLoad(const char *dir, struct uvMetadata *metadata, char *errmsg)
@@ -135,12 +131,11 @@ int uvMetadataLoad(const char *dir, struct uvMetadata *metadata, char *errmsg)
     int rv;
 
     /* Read the two metadata files (if available). */
-    rv = loadFile(dir, 1, &metadata1, errmsg);
+    rv = uvMetadataLoadN(dir, 1, &metadata1, errmsg);
     if (rv != 0) {
         return rv;
     }
-
-    rv = loadFile(dir, 2, &metadata2, errmsg);
+    rv = uvMetadataLoadN(dir, 2, &metadata2, errmsg);
     if (rv != 0) {
         return rv;
     }
@@ -168,6 +163,12 @@ int uvMetadataLoad(const char *dir, struct uvMetadata *metadata, char *errmsg)
     return 0;
 }
 
+/* Return the metadata file index associated with the given version. */
+static int uvMetadataFileIndex(int version)
+{
+    return version % 2 == 1 ? 1 : 2;
+}
+
 int uvMetadataStore(struct uv *uv, const struct uvMetadata *metadata)
 {
     char filename[METADATA_FILENAME_SIZE];  /* Filename of the metadata file */
@@ -179,11 +180,11 @@ int uvMetadataStore(struct uv *uv, const struct uvMetadata *metadata)
     assert(metadata->version > 0);
 
     /* Encode the given metadata. */
-    encode(metadata, content);
+    uvMetadataEncode(metadata, content);
 
     /* Render the metadata file name. */
-    n = indexOf(metadata->version);
-    filenameOf(n, filename);
+    n = uvMetadataFileIndex(metadata->version);
+    uvMetadataFilename(n, filename);
 
     /* Write the metadata file, creating it if it does not exist. */
     buf.base = content;
