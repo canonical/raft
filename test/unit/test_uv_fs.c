@@ -63,7 +63,8 @@ TEST(UvFsCheckDir, statError, NULL, NULL, 0, NULL)
 /* If the given path is not a directory, an error is returned. */
 TEST(UvFsCheckDir, notDir, NULL, NULL, 0, NULL)
 {
-    CHECK_DIR_ERROR("/dev/null", RAFT_IOERR, "not a directory");
+    CHECK_DIR_ERROR("/dev/null", RAFT_INVALID,
+                    "path '/dev/null' is not a directory");
     return MUNIT_OK;
 }
 

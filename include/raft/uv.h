@@ -19,6 +19,8 @@ struct raft_uv_transport;
  *
  * Return #RAFT_NOTFOUND if @dir does not exist.
  *
+ * Return #RAFT_INVALID if @dir exists but it's not a directory.
+ *
  * The implementation of metadata and log persistency is virtually the same as
  * the one found in LogCabin [0].
  *

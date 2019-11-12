@@ -30,6 +30,7 @@
 #define RAFT_BUSY 17
 #define RAFT_IOERR 18
 #define RAFT_NOTFOUND 19
+#define RAFT_INVALID 20
 
 /**
  * Size of human-readable error message buffers.

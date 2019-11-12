@@ -19,18 +19,20 @@ int UvFsCheckDir(const char *dir, char *errmsg)
     /* Make sure we have a directory we can write into. */
     rv = uv_fs_stat(NULL, &req, dir, NULL);
     if (rv != 0) {
-        if (rv == UV_ENOENT) {
-            ErrMsgPrintf((struct ErrMsg *)errmsg,
-                         "directory '%s' does not exist", dir);
-            return RAFT_NOTFOUND;
+        switch (rv) {
+            case UV_ENOENT:
+                ErrMsgPrintf((struct ErrMsg *)errmsg,
+                             "directory '%s' does not exist", dir);
+                return RAFT_NOTFOUND;
         }
         UvErrMsgSys((struct ErrMsg *)errmsg, "stat", rv);
         return RAFT_IOERR;
     }
 
     if ((req.statbuf.st_mode & S_IFMT) != S_IFDIR) {
-        ErrMsgPrintf((struct ErrMsg *)errmsg, "%s", uv_strerror(UV_ENOTDIR));
-        return RAFT_IOERR;
+        ErrMsgPrintf((struct ErrMsg *)errmsg, "path '%s' is not a directory",
+                     dir);
+        return RAFT_INVALID;
     }
 
     return 0;
