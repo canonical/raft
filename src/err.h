@@ -5,19 +5,11 @@
 
 #include <stddef.h>
 
-struct ErrMsg
-{
-    char msg[256];
-};
-
-/* Return the underlying message. */
-const char *ErrMsgString(struct ErrMsg *e);
-
 /* Format an error message. */
-void ErrMsgPrintf(struct ErrMsg *e, const char *format, ...);
+void ErrMsgPrintf(char *e, const char *format, ...);
 
 /* Wrap the given error message with an additional prefix message.. */
-void ErrMsgWrapf(struct ErrMsg *e, const char *format, ...);
+void ErrMsgWrapf(char *e, const char *format, ...);
 
 /* Convert a numeric raft error code to a human-readable error message. */
 const char *errCodeToString(int errnum);

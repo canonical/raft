@@ -27,7 +27,7 @@ static void workCb(uv_work_t *work)
     size_t n_segments;
     size_t i;
     size_t j;
-    struct ErrMsg errmsg;
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int rv;
 
     /* Load all segments on disk. */
@@ -72,18 +72,17 @@ static void workCb(uv_work_t *work)
             continue;
         }
 
-        rv = UvFsRemoveFile(uv->dir, segment->filename, &errmsg);
+        rv = UvFsRemoveFile(uv->dir, segment->filename, errmsg);
         if (rv != 0) {
-            uvErrorf(uv, "unlink segment %s: %s", segment->filename,
-                     ErrMsgString(&errmsg));
+            uvErrorf(uv, "unlink segment %s: %s", segment->filename, errmsg);
             rv = RAFT_IOERR;
             goto err_after_list;
         }
     }
 
-    rv = UvFsSyncDir(uv->dir, &errmsg);
+    rv = UvFsSyncDir(uv->dir, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "sync data directory: %s", ErrMsgString(&errmsg));
+        uvErrorf(uv, "sync data directory: %s", errmsg);
         rv = RAFT_IOERR;
         goto err_after_list;
     }

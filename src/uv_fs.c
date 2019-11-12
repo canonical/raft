@@ -18,7 +18,7 @@ int UvFsCheckDir(const char *dir, char *errmsg)
 
     /* Ensure that the given path doesn't exceed our static buffer limit. */
     if (!UV__DIR_HAS_VALID_LEN(dir)) {
-        ErrMsgPrintf((struct ErrMsg *)errmsg, "directory path too long");
+        ErrMsgPrintf((char *)errmsg, "directory path too long");
         return RAFT_NAMETOOLONG;
     }
 
@@ -27,31 +27,31 @@ int UvFsCheckDir(const char *dir, char *errmsg)
     if (rv != 0) {
         switch (rv) {
             case UV_ENOENT:
-                ErrMsgPrintf((struct ErrMsg *)errmsg,
+                ErrMsgPrintf((char *)errmsg,
                              "directory '%s' does not exist", dir);
                 return RAFT_NOTFOUND;
             case UV_EACCES:
-                ErrMsgPrintf((struct ErrMsg *)errmsg,
+                ErrMsgPrintf((char *)errmsg,
                              "can't access directory '%s'", dir);
                 return RAFT_UNAUTHORIZED;
             case UV_ENOTDIR:
-                ErrMsgPrintf((struct ErrMsg *)errmsg,
+                ErrMsgPrintf((char *)errmsg,
                              "path '%s' is not a directory", dir);
                 return RAFT_INVALID;
         }
-        ErrMsgPrintf((struct ErrMsg *)errmsg, "can't stat '%s': %s", dir,
+        ErrMsgPrintf((char *)errmsg, "can't stat '%s': %s", dir,
                      uv_strerror(rv));
         return RAFT_ERROR;
     }
 
     if (!(req.statbuf.st_mode & S_IFDIR)) {
-        ErrMsgPrintf((struct ErrMsg *)errmsg, "path '%s' is not a directory",
+        ErrMsgPrintf((char *)errmsg, "path '%s' is not a directory",
                      dir);
         return RAFT_INVALID;
     }
 
     if (!(req.statbuf.st_mode & S_IWRITE)) {
-        ErrMsgPrintf((struct ErrMsg *)errmsg, "directory '%s' is not writable",
+        ErrMsgPrintf((char *)errmsg, "directory '%s' is not writable",
                      dir);
         return RAFT_INVALID;
     }
@@ -59,7 +59,7 @@ int UvFsCheckDir(const char *dir, char *errmsg)
     return 0;
 }
 
-int UvFsSyncDir(const char *dir, struct ErrMsg *errmsg)
+int UvFsSyncDir(const char *dir, char *errmsg)
 {
     uv_file fd;
     int rv;
@@ -80,7 +80,7 @@ int UvFsSyncDir(const char *dir, struct ErrMsg *errmsg)
 int UvFsFileExists(const char *dir,
                    const char *filename,
                    bool *exists,
-                   struct ErrMsg *errmsg)
+                   char *errmsg)
 {
     uv_stat_t sb;
     char path[UV__PATH_SZ];
@@ -107,7 +107,7 @@ out:
 int UvFsFileIsEmpty(const char *dir,
                     const char *filename,
                     bool *empty,
-                    struct ErrMsg *errmsg)
+                    char *errmsg)
 {
     uv_stat_t sb;
     char path[UV__PATH_SZ];
@@ -130,7 +130,7 @@ static int uvFsOpenFile(const char *dir,
                         int flags,
                         int mode,
                         uv_file *fd,
-                        struct ErrMsg *errmsg)
+                        char *errmsg)
 {
     char path[UV__PATH_SZ];
     int rv;
@@ -146,7 +146,7 @@ static int uvFsOpenFile(const char *dir,
 int UvFsOpenFileForReading(const char *dir,
                            const char *filename,
                            uv_file *fd,
-                           struct ErrMsg *errmsg)
+                           char *errmsg)
 {
     char path[UV__PATH_SZ];
     int flags = O_RDONLY;
@@ -160,7 +160,7 @@ int UvFsAllocateFile(const char *dir,
                      const char *filename,
                      size_t size,
                      uv_file *fd,
-                     struct ErrMsg *errmsg)
+                     char *errmsg)
 {
     char path[UV__PATH_SZ];
     int flags = O_WRONLY | O_CREAT | O_EXCL; /* Common open flags */
@@ -201,7 +201,7 @@ static int uvFsWriteFile(const char *dir,
                          int flags,
                          struct raft_buffer *bufs,
                          unsigned n_bufs,
-                         struct ErrMsg *errmsg)
+                         char *errmsg)
 {
     uv_file fd;
     int rv;
@@ -246,7 +246,7 @@ int UvFsMakeFile(const char *dir,
                  const char *filename,
                  struct raft_buffer *bufs,
                  unsigned n_bufs,
-                 struct ErrMsg *errmsg)
+                 char *errmsg)
 {
     int flags = UV_FS_O_WRONLY | UV_FS_O_CREAT | UV_FS_O_EXCL;
     return uvFsWriteFile(dir, filename, flags, bufs, n_bufs, errmsg);
@@ -255,7 +255,7 @@ int UvFsMakeFile(const char *dir,
 int UvFsMakeOrOverwriteFile(const char *dir,
                             const char *filename,
                             const struct raft_buffer *buf,
-                            struct ErrMsg *errmsg)
+                            char *errmsg)
 {
     char path[UV__PATH_SZ];
     int flags = UV_FS_O_WRONLY;
@@ -323,7 +323,7 @@ err:
     return RAFT_IOERR;
 }
 
-int UvFsFileHasOnlyTrailingZeros(uv_file fd, bool *flag, struct ErrMsg *errmsg)
+int UvFsFileHasOnlyTrailingZeros(uv_file fd, bool *flag, char *errmsg)
 {
     struct raft_buffer buf;
     off_t size;
@@ -386,7 +386,7 @@ bool UvFsIsAtEof(uv_file fd)
     return offset == size;           /* Compare current offset and size */
 }
 
-int UvFsReadInto(uv_file fd, struct raft_buffer *buf, struct ErrMsg *errmsg)
+int UvFsReadInto(uv_file fd, struct raft_buffer *buf, char *errmsg)
 {
     int rv;
     /* TODO: use uv_fs_read() */
@@ -407,7 +407,7 @@ int UvFsReadInto(uv_file fd, struct raft_buffer *buf, struct ErrMsg *errmsg)
 int UvFsReadFile(const char *dir,
                  const char *filename,
                  struct raft_buffer *buf,
-                 struct ErrMsg *errmsg)
+                 char *errmsg)
 {
     uv_stat_t sb;
     char path[UV__PATH_SZ];
@@ -456,7 +456,7 @@ err:
 int UvFsReadFileInto(const char *dir,
                      const char *filename,
                      struct raft_buffer *buf,
-                     struct ErrMsg *errmsg)
+                     char *errmsg)
 {
     uv_stat_t sb;
     char path[UV__PATH_SZ];
@@ -503,7 +503,7 @@ err:
     return rv;
 }
 
-int UvFsRemoveFile(const char *dir, const char *filename, struct ErrMsg *errmsg)
+int UvFsRemoveFile(const char *dir, const char *filename, char *errmsg)
 {
     char path[UV__PATH_SZ];
     int rv;
@@ -520,7 +520,7 @@ int UvFsTruncateAndRenameFile(const char *dir,
                               size_t size,
                               const char *filename1,
                               const char *filename2,
-                              struct ErrMsg *errmsg)
+                              char *errmsg)
 {
     char path1[UV__PATH_SZ];
     char path2[UV__PATH_SZ];
@@ -563,7 +563,7 @@ err:
 }
 
 /* Check if direct I/O is possible on the given fd. */
-static int probeDirectIO(int fd, size_t *size, struct ErrMsg *errmsg)
+static int probeDirectIO(int fd, size_t *size, char *errmsg)
 {
     int flags;             /* Current fcntl flags. */
     struct statfs fs_info; /* To check the file system type. */
@@ -641,7 +641,7 @@ static int probeDirectIO(int fd, size_t *size, struct ErrMsg *errmsg)
 
 #if defined(RWF_NOWAIT)
 /* Check if fully non-blocking async I/O is possible on the given fd. */
-static int probeAsyncIO(int fd, size_t size, bool *ok, struct ErrMsg *errmsg)
+static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
 {
     void *buf;                  /* Buffer to use for the probe write */
     aio_context_t ctx = 0;      /* KAIO context handle */
@@ -725,7 +725,7 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, struct ErrMsg *errmsg)
 int UvFsProbeCapabilities(const char *dir,
                           size_t *direct,
                           bool *async,
-                          struct ErrMsg *errmsg)
+                          char *errmsg)
 {
     char filename[UV__FILENAME_LEN]; /* Filename of the probe file */
     char path[UV__PATH_SZ];          /* Full path of the probe file */

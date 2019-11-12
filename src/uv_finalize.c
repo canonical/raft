@@ -24,7 +24,7 @@ static void workCb(uv_work_t *work)
     struct uv *uv = s->uv;
     char filename1[UV__FILENAME_LEN];
     char filename2[UV__FILENAME_LEN];
-    struct ErrMsg errmsg;
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int rv;
 
     sprintf(filename1, UV__OPEN_TEMPLATE, s->counter);
@@ -35,7 +35,7 @@ static void workCb(uv_work_t *work)
     /* If the segment hasn't actually been used (because the writer has been
      * closed or aborted before making any write), just remove it. */
     if (s->used == 0) {
-        rv = UvFsRemoveFile(uv->dir, filename1, &errmsg);
+        rv = UvFsRemoveFile(uv->dir, filename1, errmsg);
         if (rv != 0) {
             goto err;
         }
@@ -44,13 +44,13 @@ static void workCb(uv_work_t *work)
 
     /* Truncate and rename the segment.*/
     rv = UvFsTruncateAndRenameFile(uv->dir, s->used, filename1, filename2,
-                                   &errmsg);
+                                   errmsg);
     if (rv != 0) {
         goto err;
     }
 
 sync:
-    rv = UvFsSyncDir(uv->dir, &errmsg);
+    rv = UvFsSyncDir(uv->dir, errmsg);
     if (rv != 0) {
         goto err;
     }
@@ -59,7 +59,7 @@ sync:
     return;
 
 err:
-    uvErrorf(uv, "truncate segment %s: %s", filename1, ErrMsgString(&errmsg));
+    uvErrorf(uv, "truncate segment %s: %s", filename1, errmsg);
     assert(rv != 0);
     s->status = rv;
 }

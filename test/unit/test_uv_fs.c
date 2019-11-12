@@ -99,11 +99,11 @@ TEST(UvFsCheckDir, notWritable, setupDir, tearDownDir, 0, NULL)
  *****************************************************************************/
 
 /* Invoke UvFsSyncDir passing it the given dir. */
-#define SYNC_DIR_ERROR(DIR, RV, ERRMSG)                           \
-    {                                                             \
-        struct ErrMsg errmsg;                                     \
-        munit_assert_int(UvFsSyncDir(DIR, &errmsg), ==, RV);      \
-        munit_assert_string_equal(ErrMsgString(&errmsg), ERRMSG); \
+#define SYNC_DIR_ERROR(DIR, RV, ERRMSG)                      \
+    {                                                        \
+        char _errmsg[RAFT_ERRMSG_BUF_SIZE];                  \
+        munit_assert_int(UvFsSyncDir(DIR, _errmsg), ==, RV); \
+        munit_assert_string_equal(_errmsg, ERRMSG);          \
     }
 
 SUITE(UvFsSyncDir)
@@ -123,13 +123,13 @@ TEST(UvFsSyncDir, noExists, NULL, NULL, 0, NULL)
  *****************************************************************************/
 
 /* Open a file in the given dir. */
-#define OPEN_FILE_FOR_READING_ERROR(DIR, FILENAME, RV, ERRMSG)           \
-    {                                                                    \
-        uv_file fd_;                                                     \
-        struct ErrMsg errmsg_;                                           \
-        int rv_ = UvFsOpenFileForReading(DIR, FILENAME, &fd_, &errmsg_); \
-        munit_assert_int(rv_, ==, RV);                                   \
-        munit_assert_string_equal(ErrMsgString(&errmsg_), ERRMSG);       \
+#define OPEN_FILE_FOR_READING_ERROR(DIR, FILENAME, RV, ERRMSG)          \
+    {                                                                   \
+        uv_file fd_;                                                    \
+        char errmsg_[RAFT_ERRMSG_BUF_SIZE];                             \
+        int rv_ = UvFsOpenFileForReading(DIR, FILENAME, &fd_, errmsg_); \
+        munit_assert_int(rv_, ==, RV);                                  \
+        munit_assert_string_equal(errmsg_, ERRMSG);                     \
     }
 
 SUITE(UvFsOpenFileForReading)
@@ -154,7 +154,7 @@ TEST(UvFsOpenFileForReading, noExists, setupDir, tearDownDir, 0, NULL)
 #define ALLOCATE_FILE(DIR, FILENAME, SIZE)                           \
     {                                                                \
         uv_file fd_;                                                 \
-        struct ErrMsg errmsg_;                                       \
+        char errmsg_;                                                \
         int rv_;                                                     \
         rv_ = UvFsAllocateFile(DIR, FILENAME, SIZE, &fd_, &errmsg_); \
         munit_assert_int(rv_, ==, 0);                                \
@@ -163,14 +163,14 @@ TEST(UvFsOpenFileForReading, noExists, setupDir, tearDownDir, 0, NULL)
 
 /* Assert that creating a file with the given parameters fails with the given
  * code and error message. */
-#define ALLOCATE_FILE_ERROR(DIR, FILENAME, SIZE, RV, ERRMSG)         \
-    {                                                                \
-        uv_file fd_;                                                 \
-        struct ErrMsg errmsg_;                                       \
-        int rv_;                                                     \
-        rv_ = UvFsAllocateFile(DIR, FILENAME, SIZE, &fd_, &errmsg_); \
-        munit_assert_int(rv_, ==, RV);                               \
-        munit_assert_string_equal(ErrMsgString(&errmsg_), ERRMSG);   \
+#define ALLOCATE_FILE_ERROR(DIR, FILENAME, SIZE, RV, ERRMSG)        \
+    {                                                               \
+        uv_file fd_;                                                \
+        char errmsg_[RAFT_ERRMSG_BUF_SIZE];                         \
+        int rv_;                                                    \
+        rv_ = UvFsAllocateFile(DIR, FILENAME, SIZE, &fd_, errmsg_); \
+        munit_assert_int(rv_, ==, RV);                              \
+        munit_assert_string_equal(errmsg_, ERRMSG);                 \
     }
 
 SUITE(UvFsAllocateFile)
@@ -239,7 +239,7 @@ TEST(UvFsAllocateFile, noSpace, setupDir, tearDownDir, 0, dir_tmpfs_params)
     {                                                                        \
         size_t direct_io_;                                                   \
         bool async_io_;                                                      \
-        struct ErrMsg errmsg_;                                               \
+        char errmsg_;                                                        \
         int rv_;                                                             \
         rv_ = UvFsProbeCapabilities(DIR, &direct_io_, &async_io_, &errmsg_); \
         munit_assert_int(rv_, ==, 0);                                        \
@@ -252,15 +252,15 @@ TEST(UvFsAllocateFile, noSpace, setupDir, tearDownDir, 0, dir_tmpfs_params)
     }
 
 /* Invoke UvFsProbeCapabilities and check that the given error occurs. */
-#define PROBE_CAPABILITIES_ERROR(DIR, RV, ERRMSG)                            \
-    {                                                                        \
-        size_t direct_io_;                                                   \
-        bool async_io_;                                                      \
-        struct ErrMsg errmsg_;                                               \
-        int rv_;                                                             \
-        rv_ = UvFsProbeCapabilities(DIR, &direct_io_, &async_io_, &errmsg_); \
-        munit_assert_int(rv_, ==, RV);                                       \
-        munit_assert_string_equal(ErrMsgString(&errmsg_), ERRMSG);           \
+#define PROBE_CAPABILITIES_ERROR(DIR, RV, ERRMSG)                           \
+    {                                                                       \
+        size_t direct_io_;                                                  \
+        bool async_io_;                                                     \
+        char errmsg_[RAFT_ERRMSG_BUF_SIZE];                                 \
+        int rv_;                                                            \
+        rv_ = UvFsProbeCapabilities(DIR, &direct_io_, &async_io_, errmsg_); \
+        munit_assert_int(rv_, ==, RV);                                      \
+        munit_assert_string_equal(errmsg_, ERRMSG);                         \
     }
 
 SUITE(UvFsProbeCapabilities)

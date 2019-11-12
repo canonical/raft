@@ -58,7 +58,7 @@ int uvSnapshotInfoAppendIfMatch(struct uv *uv,
     bool matched;
     char snapshot_filename[UV__FILENAME_LEN];
     bool exists;
-    struct ErrMsg errmsg;
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int rv;
 
     /* Check if it's a snapshot metadata filename */
@@ -72,14 +72,14 @@ int uvSnapshotInfoAppendIfMatch(struct uv *uv,
      * there's none, it means that we aborted before finishing the snapshot, so
      * let's remove the metadata file. */
     filenameOf(&info, snapshot_filename);
-    rv = UvFsFileExists(uv->dir, snapshot_filename, &exists, &errmsg);
+    rv = UvFsFileExists(uv->dir, snapshot_filename, &exists, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "stat %s: %s", snapshot_filename, ErrMsgString(&errmsg));
+        uvErrorf(uv, "stat %s: %s", snapshot_filename, errmsg);
         rv = RAFT_IOERR;
         return rv;
     }
     if (!exists) {
-        UvFsRemoveFile(uv->dir, filename, &errmsg); /* Ignore errors */
+        UvFsRemoveFile(uv->dir, filename, errmsg); /* Ignore errors */
         *appended = false;
         return 0;
     }
@@ -136,23 +136,23 @@ static int loadMeta(struct uv *uv,
     unsigned crc1;
     unsigned crc2;
     uv_file fd;
-    struct ErrMsg errmsg;
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int rv;
 
     snapshot->term = info->term;
     snapshot->index = info->index;
 
-    rv = UvFsOpenFileForReading(uv->dir, info->filename, &fd, &errmsg);
+    rv = UvFsOpenFileForReading(uv->dir, info->filename, &fd, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "open %s: %s", info->filename, ErrMsgString(&errmsg));
+        uvErrorf(uv, "open %s: %s", info->filename, errmsg);
         rv = RAFT_IOERR;
         goto err;
     }
     buf.base = header;
     buf.len = sizeof header;
-    rv = UvFsReadInto(fd, &buf, &errmsg);
+    rv = UvFsReadInto(fd, &buf, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "read %s: %s", info->filename, ErrMsgString(&errmsg));
+        uvErrorf(uv, "read %s: %s", info->filename, errmsg);
         rv = RAFT_IOERR;
         goto err_after_open;
     }
@@ -185,9 +185,9 @@ static int loadMeta(struct uv *uv,
         goto err_after_open;
     }
 
-    rv = UvFsReadInto(fd, &buf, &errmsg);
+    rv = UvFsReadInto(fd, &buf, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "read %s: %s", info->filename, ErrMsgString(&errmsg));
+        uvErrorf(uv, "read %s: %s", info->filename, errmsg);
         rv = RAFT_IOERR;
         goto err_after_buf_malloc;
     }
@@ -230,14 +230,14 @@ static int loadData(struct uv *uv,
 {
     char filename[UV__FILENAME_LEN];
     struct raft_buffer buf;
-    struct ErrMsg errmsg;
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int rv;
 
     filenameOf(info, filename);
 
-    rv = UvFsReadFile(uv->dir, filename, &buf, &errmsg);
+    rv = UvFsReadFile(uv->dir, filename, &buf, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "stat %s: %s", filename, ErrMsgString(&errmsg));
+        uvErrorf(uv, "stat %s: %s", filename, errmsg);
         goto err;
     }
 
@@ -310,7 +310,7 @@ static int removeOldSegmentsAndSnapshots(struct uv *uv,
     struct uvSegmentInfo *segments;
     size_t n_snapshots;
     size_t n_segments;
-    struct ErrMsg errmsg;
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int rv = 0;
 
     rv = uvList(uv, &snapshots, &n_snapshots, &segments, &n_segments);
@@ -332,9 +332,9 @@ static int removeOldSegmentsAndSnapshots(struct uv *uv,
         }
     }
 
-    rv = UvFsSyncDir(uv->dir, &errmsg);
+    rv = UvFsSyncDir(uv->dir, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "sync %s: %s", uv->dir, ErrMsgString(&errmsg));
+        uvErrorf(uv, "sync %s: %s", uv->dir, errmsg);
     }
 
 out:
@@ -353,7 +353,7 @@ int uvSnapshotKeepLastTwo(struct uv *uv,
                           size_t n)
 {
     size_t i;
-    struct ErrMsg errmsg;
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int rv;
 
     /* Leave at least two snapshots, for safety. */
@@ -364,15 +364,15 @@ int uvSnapshotKeepLastTwo(struct uv *uv,
     for (i = 0; i < n - 2; i++) {
         struct uvSnapshotInfo *s = &snapshots[i];
         char filename[UV__FILENAME_LEN];
-        rv = UvFsRemoveFile(uv->dir, s->filename, &errmsg);
+        rv = UvFsRemoveFile(uv->dir, s->filename, errmsg);
         if (rv != 0) {
-            uvErrorf(uv, "unlink %s: %s", s->filename, ErrMsgString(&errmsg));
+            uvErrorf(uv, "unlink %s: %s", s->filename, errmsg);
             return RAFT_IOERR;
         }
         filenameOf(s, filename);
-        rv = UvFsRemoveFile(uv->dir, filename, &errmsg);
+        rv = UvFsRemoveFile(uv->dir, filename, errmsg);
         if (rv != 0) {
-            uvErrorf(uv, "unlink %s: %s", filename, ErrMsgString(&errmsg));
+            uvErrorf(uv, "unlink %s: %s", filename, errmsg);
             return RAFT_IOERR;
         }
     }
@@ -384,16 +384,16 @@ static void putWorkCb(uv_work_t *work)
 {
     struct put *r = work->data;
     struct uv *uv = r->uv;
-    struct ErrMsg errmsg;
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
     char filename[UV__FILENAME_LEN];
     int rv;
 
     sprintf(filename, UV__SNAPSHOT_META_TEMPLATE, r->snapshot->term,
             r->snapshot->index, r->meta.timestamp);
 
-    rv = UvFsMakeFile(uv->dir, filename, r->meta.bufs, 2, &errmsg);
+    rv = UvFsMakeFile(uv->dir, filename, r->meta.bufs, 2, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "write %s: %s", filename, ErrMsgString(&errmsg));
+        uvErrorf(uv, "write %s: %s", filename, errmsg);
         r->status = RAFT_IOERR;
         return;
     }
@@ -402,16 +402,16 @@ static void putWorkCb(uv_work_t *work)
             r->snapshot->index, r->meta.timestamp);
 
     rv = UvFsMakeFile(uv->dir, filename, r->snapshot->bufs, r->snapshot->n_bufs,
-                      &errmsg);
+                      errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "write %s: %s", filename, ErrMsgString(&errmsg));
+        uvErrorf(uv, "write %s: %s", filename, errmsg);
         r->status = RAFT_IOERR;
         return;
     }
 
-    rv = UvFsSyncDir(uv->dir, &errmsg);
+    rv = UvFsSyncDir(uv->dir, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "sync %s: %s", uv->dir, ErrMsgString(&errmsg));
+        uvErrorf(uv, "sync %s: %s", uv->dir, errmsg);
         r->status = RAFT_IOERR;
         return;
     }

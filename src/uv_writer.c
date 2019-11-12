@@ -10,7 +10,7 @@
 /* Copy the error message from the request object to the writer object. */
 static void uvWriterReqTransferErrMsg(struct UvWriterReq *req)
 {
-    ErrMsgPrintf(req->writer->errmsg, "%s", ErrMsgString(&req->errmsg));
+    ErrMsgPrintf(req->writer->errmsg, "%s", req->errmsg);
 }
 
 /* Set the request status according the given result code. */
@@ -19,7 +19,7 @@ static void uvWriterReqSetStatus(struct UvWriterReq *req, int result)
     if (result < 0) {
         req->status = UV__ERROR;
     } else if ((size_t)result < req->len) {
-        ErrMsgPrintf(&req->errmsg, "short write: %d bytes instead of %ld",
+        ErrMsgPrintf(req->errmsg, "short write: %d bytes instead of %ld",
                      result, req->len);
         req->status = UV__ERROR;
     } else {
@@ -65,7 +65,7 @@ static void uvWriterWorkCb(uv_work_t *work)
         ctx = 0;
         rv = UvOsIoSetup(1 /* Maximum concurrent requests */, &ctx);
         if (rv != 0) {
-            UvErrMsgSys(&req->errmsg, "io_setup", rv);
+            UvErrMsgSys(req->errmsg, "io_setup", rv);
             goto out;
         }
     } else {
@@ -77,7 +77,7 @@ static void uvWriterWorkCb(uv_work_t *work)
     if (rv != 0) {
         /* UNTESTED: since we're not using NOWAIT and the parameters are valid,
          * this shouldn't fail. */
-        UvErrMsgSys(&req->errmsg, "io_submit", rv);
+        UvErrMsgSys(req->errmsg, "io_submit", rv);
         goto out_after_io_setup;
     }
 
@@ -114,7 +114,7 @@ static void uvWriterAfterWorkCb(uv_work_t *work, int status)
     /* If we were canceled, let's mark the request as canceled, regardless of
      * the actual outcome. */
     if (req->canceled) {
-        ErrMsgPrintf(&req->errmsg, "canceled");
+        ErrMsgPrintf(req->errmsg, "canceled");
         req->status = UV__CANCELED;
     }
 
@@ -166,7 +166,7 @@ static void uvWriterPollCb(uv_poll_t *poller, int status, int events)
         /* If we are closing, we mark the write as canceled, although
          * technically it might have worked. */
         if (req->canceled) {
-            ErrMsgPrintf(&req->errmsg, "canceled");
+            ErrMsgPrintf(req->errmsg, "canceled");
             req->status = UV__CANCELED;
             goto finish;
         }
@@ -184,7 +184,7 @@ static void uvWriterPollCb(uv_poll_t *poller, int status, int events)
             if (rv != 0) {
                 /* UNTESTED: with the current libuv implementation this should
                  * never fail. */
-                UvErrMsgSys(&req->errmsg, "uv_queue_work", rv);
+                UvErrMsgSys(req->errmsg, "uv_queue_work", rv);
                 req->status = UV__ERROR;
                 goto finish;
             }
@@ -205,7 +205,7 @@ int UvWriterInit(struct UvWriter *w,
                  bool direct /* Whether to use direct I/O */,
                  bool async /* Whether async I/O is available */,
                  unsigned max_concurrent_writes,
-                 struct ErrMsg *errmsg)
+                 char *errmsg)
 {
     int rv = 0;
 

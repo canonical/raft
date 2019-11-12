@@ -31,9 +31,9 @@ int uvMaybeInitialize(struct uv *uv)
         return 0;
     }
     uvDebugf(uv, "data dir: %s", uv->dir);
-    rv = UvFsProbeCapabilities(uv->dir, &direct_io, &uv->async_io, &uv->errmsg);
+    rv = UvFsProbeCapabilities(uv->dir, &direct_io, &uv->async_io, uv->errmsg);
     if (rv != 0) {
-        ErrMsgWrapf(&uv->errmsg, "probe I/O capabilities");
+        ErrMsgWrapf(uv->errmsg, "probe I/O capabilities");
         return rv;
     }
     uv->direct_io = direct_io != 0;
@@ -471,7 +471,7 @@ static int uvBootstrap(struct raft_io *io,
 
     /* We shouldn't have written anything else yet. */
     if (uv->metadata.term != 0) {
-        ErrMsgPrintf(&uv->errmsg, "metadata contain term %lld",
+        ErrMsgPrintf(uv->errmsg, "metadata contain term %lld",
                      uv->metadata.term);
         return RAFT_CANTBOOTSTRAP;
     }
@@ -576,7 +576,7 @@ static const char *uvErrMsg(struct raft_io *io)
 {
     struct uv *uv;
     uv = io->impl;
-    return ErrMsgString(&uv->errmsg);
+    return uv->errmsg;
 }
 
 int raft_uv_init(struct raft_io *io,
@@ -601,7 +601,7 @@ int raft_uv_init(struct raft_io *io,
     /* Allocate the raft_io_uv object */
     uv = raft_malloc(sizeof *uv);
     if (uv == NULL) {
-        ErrMsgPrintf((struct ErrMsg *)io->errmsg, "out of memory");
+        ErrMsgPrintf(io->errmsg, "out of memory");
         rv = RAFT_NOMEM;
         goto err;
     }

@@ -67,11 +67,11 @@ static void uvPrepareFlushRequests(struct uv *uv, int status)
 /* Remove a prepared open segment */
 static void uvPrepareRemove(struct preparedSegment *s)
 {
-    struct ErrMsg errmsg;
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
     assert(s->counter > 0);
     assert(s->fd >= 0);
     UvOsClose(s->fd);
-    UvFsRemoveFile(s->uv->dir, s->filename, &errmsg);
+    UvFsRemoveFile(s->uv->dir, s->filename, errmsg);
     raft_free(s);
 }
 
@@ -148,15 +148,15 @@ static void uvPrepareCreateFileWorkCb(uv_work_t *work)
 {
     struct preparedSegment *s = work->data;
     struct uv *uv = s->uv;
-    struct ErrMsg errmsg;
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int rv;
 
-    rv = UvFsAllocateFile(uv->dir, s->filename, s->size, &s->fd, &errmsg);
+    rv = UvFsAllocateFile(uv->dir, s->filename, s->size, &s->fd, errmsg);
     if (rv != 0) {
         goto err;
     }
 
-    rv = UvFsSyncDir(uv->dir, &errmsg);
+    rv = UvFsSyncDir(uv->dir, errmsg);
     if (rv != 0) {
         goto err_after_allocate;
     }

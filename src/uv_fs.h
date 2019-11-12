@@ -12,19 +12,19 @@
 int UvFsCheckDir(const char *dir, char *errmsg);
 
 /* Sync the given directory by calling fsync(). */
-int UvFsSyncDir(const char *dir, struct ErrMsg *errmsg);
+int UvFsSyncDir(const char *dir, char *errmsg);
 
 /* Check whether a the given file exists. */
 int UvFsFileExists(const char *dir,
                    const char *filename,
                    bool *exists,
-                   struct ErrMsg *errmsg);
+                   char *errmsg);
 
 /* Check whether the given file in the given directory is empty. */
 int UvFsFileIsEmpty(const char *dir,
                     const char *filename,
                     bool *empty,
-                    struct ErrMsg *errmsg);
+                    char *errmsg);
 
 /* Create the given file in the given directory and allocate the given size to
  * it, returning its file descriptor. The file must not exist yet. */
@@ -32,14 +32,14 @@ int UvFsAllocateFile(const char *dir,
                      const char *filename,
                      size_t size,
                      uv_file *fd,
-                     struct ErrMsg *errmsg);
+                     char *errmsg);
 
 /* Create a file and write the given content into it. */
 int UvFsMakeFile(const char *dir,
                  const char *filename,
                  struct raft_buffer *bufs,
                  unsigned n_bufs,
-                 struct ErrMsg *errmsg);
+                 char *errmsg);
 
 /* Create or overwrite a file.
  *
@@ -53,11 +53,11 @@ int UvFsMakeFile(const char *dir,
 int UvFsMakeOrOverwriteFile(const char *dir,
                             const char *filename,
                             const struct raft_buffer *buf,
-                            struct ErrMsg *errmsg);
+                            char *errmsg);
 
 /* Check if the content of the file associated with the given file descriptor
  * contains all zeros from the current offset onward. */
-int UvFsFileHasOnlyTrailingZeros(uv_file fd, bool *flag, struct ErrMsg *errmsg);
+int UvFsFileHasOnlyTrailingZeros(uv_file fd, bool *flag, char *errmsg);
 
 /* Check if the given file descriptor has reached the end of the file. */
 bool UvFsIsAtEof(uv_file fd);
@@ -66,16 +66,16 @@ bool UvFsIsAtEof(uv_file fd);
 int UvFsOpenFileForReading(const char *dir,
                            const char *filename,
                            uv_file *fd,
-                           struct ErrMsg *errmsg);
+                           char *errmsg);
 
 /* Read exactly buf->len bytes from the given file descriptor into buf->base. */
-int UvFsReadInto(uv_file fd, struct raft_buffer *buf, struct ErrMsg *errmsg);
+int UvFsReadInto(uv_file fd, struct raft_buffer *buf, char *errmsg);
 
 /* Read all the content of the given file. */
 int UvFsReadFile(const char *dir,
                  const char *filename,
                  struct raft_buffer *buf,
-                 struct ErrMsg *errmsg);
+                 char *errmsg);
 
 /* Read exactly buf->len bytes from the given file into buf->base. Fail if the
  * file contains more than buf->len bytes. Return UV__NODATA if the file is
@@ -83,19 +83,19 @@ int UvFsReadFile(const char *dir,
 int UvFsReadFileInto(const char *dir,
                      const char *filename,
                      struct raft_buffer *buf,
-                     struct ErrMsg *errmsg);
+                     char *errmsg);
 
 /* Synchronously remove a file, calling the unlink() system call. */
 int UvFsRemoveFile(const char *dir,
                    const char *filename,
-                   struct ErrMsg *errmsg);
+                   char *errmsg);
 
 /* Synchronously truncate a file to the given size and then rename it. */
 int UvFsTruncateAndRenameFile(const char *dir,
                               size_t size,
                               const char *filename1,
                               const char *filename2,
-                              struct ErrMsg *errmsg);
+                              char *errmsg);
 
 /* Return information about the I/O capabilities of the underlying file
  * system.
@@ -108,6 +108,6 @@ int UvFsTruncateAndRenameFile(const char *dir,
 int UvFsProbeCapabilities(const char *dir,
                           size_t *direct,
                           bool *async,
-                          struct ErrMsg *errmsg);
+                          char *errmsg);
 
 #endif /* UV_FS_H_ */

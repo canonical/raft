@@ -19,7 +19,7 @@ struct writer
     size_t block_size;
     size_t direct_io;
     bool async_io;
-    struct ErrMsg errmsg;
+    char errmsg[256];
     struct UvWriter writer;
 };
 
@@ -31,11 +31,11 @@ static void *setupWriter(MUNIT_UNUSED const MunitParameter params[],
 {
     struct writer *f = munit_malloc(sizeof *f);
     char path[UV__PATH_SZ];
-    struct ErrMsg errmsg;
+    char errmsg[256];
     int rv;
     SETUP_DIR_OR_SKIP;
     SETUP_LOOP;
-    rv = UvFsProbeCapabilities(f->dir, &f->direct_io, &f->async_io, &errmsg);
+    rv = UvFsProbeCapabilities(f->dir, &f->direct_io, &f->async_io, errmsg);
     munit_assert_int(rv, ==, 0);
     f->block_size = f->direct_io != 0 ? f->direct_io : 4096;
     UvOsJoin(f->dir, "foo", path);
@@ -75,7 +75,7 @@ static void closeCbMarkDone(struct UvWriter *w)
     {                                                                      \
         int rv_;                                                           \
         rv_ = UvWriterInit(&f->writer, &f->loop, f->fd, f->direct_io != 0, \
-                           f->async_io, MAX_WRITES, &f->errmsg);           \
+                           f->async_io, MAX_WRITES, f->errmsg);            \
         munit_assert_int(rv_, ==, 0);                                      \
     }
 
@@ -83,9 +83,9 @@ static void closeCbMarkDone(struct UvWriter *w)
     {                                                                      \
         int rv_;                                                           \
         rv_ = UvWriterInit(&f->writer, &f->loop, f->fd, f->direct_io != 0, \
-                           f->async_io, 1, &f->errmsg);                    \
+                           f->async_io, 1, f->errmsg);                     \
         munit_assert_int(rv_, ==, RV);                                     \
-        munit_assert_string_equal(ErrMsgString(&f->errmsg), ERRMSG);       \
+        munit_assert_string_equal(f->errmsg, ERRMSG);                      \
     }
 
 /* Start closing the writer wait for it shutdown. */
@@ -155,7 +155,7 @@ static void submitCbAssertFail(struct UvWriterReq *req, int status)
     struct submitResult *result = req->data;
     munit_assert_int(status, !=, 0);
     munit_assert_int(status, ==, result->status);
-    munit_assert_string_equal(ErrMsgString(&req->errmsg), result->errmsg);
+    munit_assert_string_equal(req->errmsg, result->errmsg);
     result->done = true;
 }
 

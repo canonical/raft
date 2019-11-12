@@ -29,7 +29,7 @@ struct UvWriter
     struct uv_poll_s event_poller; /* To make the loop poll for event_fd */
     UvWriterCloseCb close_cb;      /* Close callback */
     queue write_queue;             /* Queue of inflight write requests */
-    struct ErrMsg *errmsg;         /* Description of last error */
+    char *errmsg;                  /* Description of last error */
 };
 
 /* Initialize a file writer. */
@@ -39,7 +39,7 @@ int UvWriterInit(struct UvWriter *w,
                  bool direct /* Whether to use direct I/O */,
                  bool async /* Whether async I/O is available */,
                  unsigned max_concurrent_writes,
-                 struct ErrMsg *errmsg);
+                 char *errmsg);
 
 /* Close the given file and release all associated resources. */
 void UvWriterClose(struct UvWriter *w, UvWriterCloseCb cb);
@@ -59,7 +59,7 @@ struct UvWriterReq
     struct uv_work_s work;   /* To execute logic in the threadpool */
     UvWriterReqCb cb;        /* Callback to invoke upon request completion */
     struct iocb iocb;        /* KAIO request (for writing) */
-    struct ErrMsg errmsg;    /* Error description (for thread-safety) */
+    char errmsg[256];        /* Error description (for thread-safety) */
     queue queue;             /* Prev/next links in the inflight queue */
     bool canceled;           /* Whether the request has been canceled */
 };
