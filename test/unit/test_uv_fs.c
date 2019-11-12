@@ -324,8 +324,9 @@ TEST(UvFsProbeCapabilities, noSpace, setupTmpfsDir, tearDownDir, 0, NULL)
         return MUNIT_SKIP;
     }
     test_dir_fill(dir, 0);
-    PROBE_CAPABILITIES_ERROR(dir, RAFT_IOERR,
-                             "posix_fallocate: no space left on device");
+    PROBE_CAPABILITIES_ERROR(
+        dir, RAFT_NOSPACE,
+        "not enough space to create I/O capabilities probe file");
     return MUNIT_OK;
 }
 

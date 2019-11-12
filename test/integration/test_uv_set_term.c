@@ -247,15 +247,3 @@ TEST(set_term, metadataOneAndTwoSameVersion, setupUv, tearDownUv, 0, NULL)
                    "metadata1 and metadata2 are both at version 2");
     return MUNIT_OK;
 }
-
-/* No space is left for probing I/O capabilities. */
-TEST(set_term, noSpace, setupUv, tearDownUv, 0, dir_tmpfs_params)
-{
-    struct fixture *f = data;
-    SKIP_IF_NO_FIXTURE;
-    test_dir_fill(f->dir, 4);
-    SET_TERM_ERROR(
-        1, RAFT_IOERR,
-        "probe I/O capabilities: posix_fallocate: no space left on device");
-    return MUNIT_OK;
-}

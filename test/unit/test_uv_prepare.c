@@ -131,11 +131,7 @@ TEST(UvPrepare, noSpace, setup, tear_down, 0, dir_tmpfs_params)
     return MUNIT_OK;
 }
 
-#if defined(RWF_NOWAIT)
-static char *error_oom_heap_fault_delay[] = {"2", NULL};
-#else
-static char *error_oom_heap_fault_delay[] = {"1", NULL};
-#endif
+static char *error_oom_heap_fault_delay[] = {"0", NULL};
 static char *error_oom_heap_fault_repeat[] = {"1", NULL};
 
 static MunitParameterEnum error_oom_params[] = {

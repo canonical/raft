@@ -87,7 +87,12 @@ TEST(raft_uv_init, dirTooLong, setupUv, tearDownUv, 0, NULL)
     INIT_ERROR(LONG_DIR, RAFT_NAMETOOLONG, "directory path too long");
     return 0;
 }
-static char *oom_heap_fault_delay[] = {"0", NULL};
+
+#if defined(RWF_NOWAIT)
+static char *oom_heap_fault_delay[] = {"2", NULL};
+#else
+static char *oom_heap_fault_delay[] = {"1", NULL};
+#endif
 static char *oom_heap_fault_repeat[] = {"1", NULL};
 
 static MunitParameterEnum oom_params[] = {
@@ -122,5 +127,16 @@ TEST(raft_uv_init, dirNotAccessible, setupUv, tearDownUv, 0, NULL)
     sprintf(errmsg, "directory '%s' is not writable", f->dir);
     test_dir_unexecutable(f->dir);
     INIT_ERROR(f->dir, RAFT_INVALID, errmsg);
+    return MUNIT_OK;
+}
+
+/* No space is left for probing I/O capabilities. */
+TEST(raft_uv_init, noSpace, setupUv, tearDownUv, 0, dir_tmpfs_params)
+{
+    struct uv *f = data;
+    SKIP_IF_NO_FIXTURE;
+    test_dir_fill(f->dir, 4);
+    INIT_ERROR(f->dir, RAFT_NOSPACE,
+               "not enough space to create I/O capabilities probe file");
     return MUNIT_OK;
 }

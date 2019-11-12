@@ -27,16 +27,16 @@ int UvFsCheckDir(const char *dir, char *errmsg)
     if (rv != 0) {
         switch (rv) {
             case UV_ENOENT:
-                ErrMsgPrintf((char *)errmsg,
-                             "directory '%s' does not exist", dir);
+                ErrMsgPrintf((char *)errmsg, "directory '%s' does not exist",
+                             dir);
                 return RAFT_NOTFOUND;
             case UV_EACCES:
-                ErrMsgPrintf((char *)errmsg,
-                             "can't access directory '%s'", dir);
+                ErrMsgPrintf((char *)errmsg, "can't access directory '%s'",
+                             dir);
                 return RAFT_UNAUTHORIZED;
             case UV_ENOTDIR:
-                ErrMsgPrintf((char *)errmsg,
-                             "path '%s' is not a directory", dir);
+                ErrMsgPrintf((char *)errmsg, "path '%s' is not a directory",
+                             dir);
                 return RAFT_INVALID;
         }
         ErrMsgPrintf((char *)errmsg, "can't stat '%s': %s", dir,
@@ -45,14 +45,12 @@ int UvFsCheckDir(const char *dir, char *errmsg)
     }
 
     if (!(req.statbuf.st_mode & S_IFDIR)) {
-        ErrMsgPrintf((char *)errmsg, "path '%s' is not a directory",
-                     dir);
+        ErrMsgPrintf((char *)errmsg, "path '%s' is not a directory", dir);
         return RAFT_INVALID;
     }
 
     if (!(req.statbuf.st_mode & S_IWRITE)) {
-        ErrMsgPrintf((char *)errmsg, "directory '%s' is not writable",
-                     dir);
+        ErrMsgPrintf((char *)errmsg, "directory '%s' is not writable", dir);
         return RAFT_INVALID;
     }
 
@@ -743,8 +741,18 @@ int UvFsProbeCapabilities(const char *dir,
     }
     rv = posix_fallocate(fd, 0, 4096);
     if (rv != 0) {
-        UvErrMsgSys(errmsg, "posix_fallocate", -rv);
-        rv = RAFT_IOERR;
+        switch (rv) {
+            case ENOSPC:
+                ErrMsgPrintf(
+                    errmsg,
+                    "not enough space to create I/O capabilities probe file");
+                rv = RAFT_NOSPACE;
+                break;
+            default:
+                UvErrMsgSys(errmsg, "posix_allocate", -rv);
+                rv = RAFT_IOERR;
+                break;
+        }
         goto err_after_file_open;
     }
     UvOsUnlink(path);

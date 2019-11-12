@@ -25,21 +25,11 @@
 
 int uvMaybeInitialize(struct uv *uv)
 {
-    size_t direct_io;
     int rv;
     if (uv->state != UV__PRISTINE) {
         return 0;
     }
     uvDebugf(uv, "data dir: %s", uv->dir);
-    rv = UvFsProbeCapabilities(uv->dir, &direct_io, &uv->async_io, uv->errmsg);
-    if (rv != 0) {
-        ErrMsgWrapf(uv->errmsg, "probe I/O capabilities");
-        return rv;
-    }
-    uv->direct_io = direct_io != 0;
-    if (uv->block_size == 0) {
-        uv->block_size = direct_io != 0 ? direct_io : 4096;
-    }
     /* We expect the maximum segment size to be a multiple of the block
      * size. */
     assert(uv->segment_size % uv->block_size == 0);
@@ -585,11 +575,14 @@ int raft_uv_init(struct raft_io *io,
                  struct raft_uv_transport *transport)
 {
     struct uv *uv;
+    size_t direct_io;
+    bool async_io;
     int rv;
 
     assert(io != NULL);
     assert(loop != NULL);
     assert(dir != NULL);
+    assert(transport != NULL);
 
     memset(io->errmsg, 0, sizeof io->errmsg);
 
@@ -598,10 +591,15 @@ int raft_uv_init(struct raft_io *io,
         return rv;
     }
 
+    /* Proble file system capabilities */
+    rv = UvFsProbeCapabilities(dir, &direct_io, &async_io, io->errmsg);
+    if (rv != 0) {
+        return rv;
+    }
+
     /* Allocate the raft_io_uv object */
     uv = raft_malloc(sizeof *uv);
     if (uv == NULL) {
-        ErrMsgPrintf(io->errmsg, "out of memory");
         rv = RAFT_NOMEM;
         goto err;
     }
@@ -616,10 +614,10 @@ int raft_uv_init(struct raft_io *io,
     uv->id = 0;        /* Set by raft_io->init() */
     uv->state = UV__PRISTINE;
     uv->errored = false;
-    uv->direct_io = false; /* Assume unsupported */
-    uv->async_io = false;  /* Assume unsupported */
+    uv->direct_io = direct_io != 0;
+    uv->async_io = async_io;
     uv->segment_size = UV__MAX_SEGMENT_SIZE;
-    uv->block_size = 0; /* Detected in raft_io->init() */
+    uv->block_size = direct_io != 0 ? direct_io : 4096;
     uv->clients = NULL;
     uv->n_clients = 0;
     uv->servers = NULL;
@@ -673,6 +671,9 @@ int raft_uv_init(struct raft_io *io,
 
 err:
     assert(rv != 0);
+    if (rv == RAFT_NOMEM) {
+        ErrMsgPrintf(io->errmsg, "out of memory");
+    }
     return rv;
 }
 
