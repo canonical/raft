@@ -575,7 +575,7 @@ int raft_uv_init(struct raft_io *io,
     uv->transport->data = uv;
     uv->logger = NULL; /* Set by raft_io->init() */
     uv->id = 0;        /* Set by raft_io->init() */
-    uv->state = UV__INITIALIZED;
+    uv->state = UV__PRISTINE;
     uv->errored = false;
     uv->direct_io = direct_io != 0;
     uv->async_io = async_io;

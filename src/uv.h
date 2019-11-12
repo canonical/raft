@@ -29,8 +29,7 @@
 
 /* State codes. */
 enum {
-    UV__PRISTINE = 0, /* Initiale state */
-    UV__INITIALIZED,  /* Metadata cache populated and I/O capabilities probed */
+    UV__PRISTINE, /* Metadata cache populated and I/O capabilities probed */
     UV__ACTIVE,
     UV__CLOSED
 };
