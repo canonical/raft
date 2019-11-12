@@ -20,7 +20,7 @@ int UvFsCheckDir(const char *dir, struct ErrMsg *errmsg)
     rv = uv_fs_stat(NULL, &req, dir, NULL);
     if (rv != 0) {
         if (rv == UV_ENOENT) {
-            ErrMsgFromCode(errmsg, RAFT_NOTFOUND);
+            ErrMsgPrintf(errmsg, "directory '%s' does not exist", dir);
             return RAFT_NOTFOUND;
         }
         UvErrMsgSys(errmsg, "stat", rv);

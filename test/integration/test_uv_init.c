@@ -55,13 +55,13 @@ static void tearDownUv(void *data)
  *****************************************************************************/
 
 /* Invoke raft_uv_init() and assert that the given error code is returned and
- * the given error message set. */
-#define INIT_ERROR(DIR, RV, ERRMSG)                               \
+ * the given status message set. */
+#define INIT_ERROR(DIR, RV, STATUS)                               \
     do {                                                          \
         int _rv;                                                  \
         _rv = raft_uv_init(&f->io, &f->loop, DIR, &f->transport); \
         munit_assert_int(_rv, ==, RV);                            \
-        munit_assert_string_equal(f->io.errmsg2, ERRMSG);         \
+        munit_assert_string_equal(f->io.status, STATUS);          \
     } while (0)
 
 SUITE(raft_uv_init)
@@ -84,7 +84,7 @@ SUITE(raft_uv_init)
 TEST(raft_uv_init, dirTooLong, setupUv, tearDownUv, 0, NULL)
 {
     struct uv *f = data;
-    INIT_ERROR(LONG_DIR, RAFT_NAMETOOLONG, "resource name too long");
+    INIT_ERROR(LONG_DIR, RAFT_NAMETOOLONG, "directory path too long");
     return 0;
 }
 static char *oom_heap_fault_delay[] = {"0", NULL};

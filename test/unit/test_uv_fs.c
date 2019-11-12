@@ -40,9 +40,11 @@ TEST(UvFsCheckDir, exists, setupDir, tearDownDir, 0, NULL)
 TEST(UvFsCheckDir, doesNotExist, setupDir, tearDownDir, 0, NULL)
 {
     const char *parent = data;
+    char status[2048];
     char dir[1024];
     sprintf(dir, "%s/sub", parent);
-    CHECK_DIR_ERROR(dir, RAFT_NOTFOUND, "resource does not exist");
+    sprintf(status, "directory '%s' does not exist", dir);
+    CHECK_DIR_ERROR(dir, RAFT_NOTFOUND, status);
     return MUNIT_OK;
 }
 

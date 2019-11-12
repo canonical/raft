@@ -463,9 +463,10 @@ struct raft_io
     void *impl;
 
     /**
-     * Description of last error occurred.
+     * Human-readable message providing diagnostic information about the last
+     * error occurred.
      */
-    char errmsg2[256];
+    char status[256];
 
     /**
      * Configure the backend with operational parameters (server ID and address)

@@ -69,7 +69,7 @@ TEST(bootstrap, dirDoesNotExist, setupUv, tearDownUv, 0, NULL)
     struct fixture *f = data;
     char errmsg[128];
     test_dir_remove(f->dir);
-    sprintf(errmsg, "check data dir %s: resource does not exist", f->dir);
+    sprintf(errmsg, "directory '%s' does not exist", f->dir);
     BOOTSTRAP_ERROR(RAFT_NOTFOUND, errmsg);
     return MUNIT_OK;
 }
