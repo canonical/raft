@@ -41,7 +41,7 @@ int UvFsCheckDir(const char *dir, char *errmsg)
         }
         ErrMsgPrintf((char *)errmsg, "can't stat '%s': %s", dir,
                      uv_strerror(rv));
-        return RAFT_ERROR;
+        return RAFT_IOERR;
     }
 
     if (!(req.statbuf.st_mode & S_IFDIR)) {
@@ -93,7 +93,7 @@ int UvFsFileExists(const char *dir,
             goto out;
         }
         UvErrMsgSys(errmsg, "stat", rv);
-        return UV__ERROR;
+        return RAFT_IOERR;
     }
 
     *exists = true;

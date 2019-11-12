@@ -28,11 +28,11 @@
 #define RAFT_TOOBIG 15
 #define RAFT_NOCONNECTION 16
 #define RAFT_BUSY 17
-#define RAFT_IOERR 18
-#define RAFT_NOTFOUND 19
-#define RAFT_INVALID 20
-#define RAFT_UNAUTHORIZED 21
-#define RAFT_NOSPACE 22
+#define RAFT_IOERR 18        /* File system or storage error */
+#define RAFT_NOTFOUND 19     /* Resource not found */
+#define RAFT_INVALID 20      /* Invalid parameter */
+#define RAFT_UNAUTHORIZED 21 /* No access to a resource */
+#define RAFT_NOSPACE 22      /* Not enough space on disk */
 
 /**
  * Size of human-readable error message buffers.

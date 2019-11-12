@@ -73,6 +73,9 @@ static void tearDownUv(void *data)
         munit_assert_string_equal(f->io.errmsg, ERRMSG);          \
     } while (0)
 
+/* Invoke raft_uv_close(). */
+#define CLOSE raft_uv_close(&f->io)
+
 /* Write either the metadata1 or metadata2 file, filling it with the given
  * values. */
 #define WRITE_METADATA_FILE(N, FORMAT, VERSION, TERM, VOTED_FOR) \
@@ -174,7 +177,7 @@ TEST(raft_uv_init, metadataOneTooShort, setupUv, tearDownUv, 0, NULL)
     uint8_t buf[16];
     test_dir_write_file(f->dir, "metadata1", buf, sizeof buf);
     INIT(f->dir);
-    raft_uv_close(&f->io);
+    CLOSE;
     return MUNIT_OK;
 }
 
