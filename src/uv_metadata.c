@@ -52,6 +52,7 @@ static int loadFile(const char *dir,
 {
     char filename[METADATA_FILENAME_SIZE];  /* Filename of the metadata file */
     uint8_t content[METADATA_CONTENT_SIZE]; /* Content of metadata file */
+    off_t size;
     struct raft_buffer buf;
     bool exists;
     int rv;
@@ -64,7 +65,7 @@ static int loadFile(const char *dir,
     rv = UvFsFileExists(dir, filename, &exists, errmsg);
     if (rv != 0) {
         ErrMsgWrapf(errmsg, "check if %s exists", filename);
-        return RAFT_IOERR;
+        return rv;
     }
 
     memset(metadata, 0, sizeof *metadata);
@@ -74,21 +75,31 @@ static int loadFile(const char *dir,
         return 0;
     }
 
+    rv = UvFsFileSize(dir, filename, &size, errmsg);
+    if (rv != 0) {
+        ErrMsgWrapf(errmsg, "check size of %s", filename);
+        return rv;
+    }
+
+    if (size != sizeof content) {
+        if ((size_t)size < sizeof content) {
+            /* Assume that the server crashed while writing this metadata file,
+             * and pretend it has not been written at all. */
+            UvFsRemoveFile(dir, filename, errmsg);
+            return 0;
+        }
+        ErrMsgPrintf(errmsg, "%s has size %ld instead of %ld", size,
+                     sizeof content, filename);
+        return RAFT_CORRUPT;
+    }
+
     /* Read the content of the metadata file. */
     buf.base = content;
     buf.len = sizeof content;
 
     rv = UvFsReadFileInto(dir, filename, &buf, errmsg);
     if (rv != 0) {
-        if (rv != UV__NODATA) {
-            ErrMsgWrapf(errmsg, "load content of %s", filename);
-            rv = RAFT_IOERR;
-        } else {
-            /* Assume that the server crashed while writing this metadata file,
-             * and pretend it has not been written at all. */
-            UvFsRemoveFile(dir, filename, errmsg);
-            rv = 0;
-        }
+        ErrMsgWrapf(errmsg, "load content of %s", filename);
         return rv;
     };
 

@@ -20,6 +20,12 @@ int UvFsFileExists(const char *dir,
                    bool *exists,
                    char *errmsg);
 
+/* Get the size of the given file. */
+int UvFsFileSize(const char *dir,
+                 const char *filename,
+                 off_t *size,
+                 char *errmsg);
+
 /* Check whether the given file in the given directory is empty. */
 int UvFsFileIsEmpty(const char *dir,
                     const char *filename,
@@ -86,9 +92,7 @@ int UvFsReadFileInto(const char *dir,
                      char *errmsg);
 
 /* Synchronously remove a file, calling the unlink() system call. */
-int UvFsRemoveFile(const char *dir,
-                   const char *filename,
-                   char *errmsg);
+int UvFsRemoveFile(const char *dir, const char *filename, char *errmsg);
 
 /* Synchronously truncate a file to the given size and then rename it. */
 int UvFsTruncateAndRenameFile(const char *dir,

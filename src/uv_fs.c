@@ -102,10 +102,11 @@ out:
     return 0;
 }
 
-int UvFsFileIsEmpty(const char *dir,
-                    const char *filename,
-                    bool *empty,
-                    char *errmsg)
+/* Get the size of the given file. */
+int UvFsFileSize(const char *dir,
+                 const char *filename,
+                 off_t *size,
+                 char *errmsg)
 {
     uv_stat_t sb;
     char path[UV__PATH_SZ];
@@ -116,9 +117,26 @@ int UvFsFileIsEmpty(const char *dir,
     rv = UvOsStat(path, &sb);
     if (rv != 0) {
         UvErrMsgSys(errmsg, "stat", rv);
-        return UV__ERROR;
+        return RAFT_IOERR;
     }
-    *empty = sb.st_size == 0 ? true : false;
+    *size = sb.st_size;
+
+    return 0;
+}
+
+int UvFsFileIsEmpty(const char *dir,
+                    const char *filename,
+                    bool *empty,
+                    char *errmsg)
+{
+    off_t size;
+    int rv;
+
+    rv = UvFsFileSize(dir, filename, &size, errmsg);
+    if (rv != 0) {
+        return rv;
+    }
+    *empty = size == 0 ? true : false;
     return 0;
 }
 
@@ -456,30 +474,11 @@ int UvFsReadFileInto(const char *dir,
                      struct raft_buffer *buf,
                      char *errmsg)
 {
-    uv_stat_t sb;
     char path[UV__PATH_SZ];
     uv_file fd;
     int rv;
 
     UvOsJoin(dir, filename, path);
-
-    rv = UvOsStat(path, &sb);
-    if (rv != 0) {
-        UvErrMsgSys(errmsg, "stat", rv);
-        rv = UV__ERROR;
-        goto err;
-    }
-
-    if (buf->len != sb.st_size) {
-        ErrMsgPrintf(errmsg, "file has size %ld instead of %ld", sb.st_size,
-                     buf->len);
-        if (sb.st_size < buf->len) {
-            rv = UV__NODATA;
-        } else {
-            rv = RAFT_CORRUPT;
-        }
-        goto err;
-    }
 
     rv = uvFsOpenFile(dir, filename, O_RDONLY, 0, &fd, errmsg);
     if (rv != 0) {
