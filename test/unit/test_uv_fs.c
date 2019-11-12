@@ -11,19 +11,19 @@
  *****************************************************************************/
 
 /* Invoke UvFsCheckDir passing it the given dir. */
-#define CHECK_DIR(DIR)                                       \
-    {                                                        \
-        struct ErrMsg errmsg;                                \
-        munit_assert_int(UvFsCheckDir(DIR, &errmsg), ==, 0); \
+#define CHECK_DIR(DIR)                                      \
+    {                                                       \
+        char errmsg[RAFT_ERRMSG_BUF_SIZE];                  \
+        munit_assert_int(UvFsCheckDir(DIR, errmsg), ==, 0); \
     }
 
 /* Invoke UvFsCheckDir passing it the given dir and check that the given error
  * occurs. */
-#define CHECK_DIR_ERROR(DIR, RV, ERRMSG)                          \
-    {                                                             \
-        struct ErrMsg errmsg;                                     \
-        munit_assert_int(UvFsCheckDir(DIR, &errmsg), ==, RV);     \
-        munit_assert_string_equal(ErrMsgString(&errmsg), ERRMSG); \
+#define CHECK_DIR_ERROR(DIR, RV, ERRMSG)                     \
+    {                                                        \
+        char errmsg[RAFT_ERRMSG_BUF_SIZE];                   \
+        munit_assert_int(UvFsCheckDir(DIR, errmsg), ==, RV); \
+        munit_assert_string_equal(errmsg, ERRMSG);           \
     }
 
 SUITE(UvFsCheckDir)

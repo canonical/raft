@@ -17,13 +17,13 @@ void ErrMsgPrintf(struct ErrMsg *e, const char *format, ...)
 {
     va_list args;
     va_start(args, format);
-    vsnprintf(e->msg, sizeof e->msg, format, args);
+    vsnprintf(e->msg, RAFT_ERRMSG_BUF_SIZE, format, args);
     va_end(args);
 }
 
 void ErrMsgWrapf(struct ErrMsg *e, const char *format, ...)
 {
-    size_t n = sizeof e->msg;
+    size_t n = RAFT_ERRMSG_BUF_SIZE;
     size_t prefix_n;
     size_t prefix_and_sep_n;
     size_t trail_n;

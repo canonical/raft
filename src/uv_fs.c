@@ -11,7 +11,7 @@
 #include "uv_error.h"
 #include "uv_os.h"
 
-int UvFsCheckDir(const char *dir, struct ErrMsg *errmsg)
+int UvFsCheckDir(const char *dir, char *errmsg)
 {
     struct uv_fs_s req;
     int rv;
@@ -20,15 +20,16 @@ int UvFsCheckDir(const char *dir, struct ErrMsg *errmsg)
     rv = uv_fs_stat(NULL, &req, dir, NULL);
     if (rv != 0) {
         if (rv == UV_ENOENT) {
-            ErrMsgPrintf(errmsg, "directory '%s' does not exist", dir);
+            ErrMsgPrintf((struct ErrMsg *)errmsg,
+                         "directory '%s' does not exist", dir);
             return RAFT_NOTFOUND;
         }
-        UvErrMsgSys(errmsg, "stat", rv);
+        UvErrMsgSys((struct ErrMsg *)errmsg, "stat", rv);
         return RAFT_IOERR;
     }
 
     if ((req.statbuf.st_mode & S_IFMT) != S_IFDIR) {
-        ErrMsgPrintf(errmsg, "%s", uv_strerror(UV_ENOTDIR));
+        ErrMsgPrintf((struct ErrMsg *)errmsg, "%s", uv_strerror(UV_ENOTDIR));
         return RAFT_IOERR;
     }
 

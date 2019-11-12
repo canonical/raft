@@ -9,7 +9,7 @@
 #include "err.h"
 
 /* Check that the given directory can be used. */
-int UvFsCheckDir(const char *dir, struct ErrMsg *errmsg);
+int UvFsCheckDir(const char *dir, char *errmsg);
 
 /* Sync the given directory by calling fsync(). */
 int UvFsSyncDir(const char *dir, struct ErrMsg *errmsg);
