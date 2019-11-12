@@ -55,12 +55,12 @@ SUITE(bootstrap)
 
 /* Invoke f->io->bootstrap() and assert that it returns the given error code and
  * message. */
-#define BOOTSTRAP_ERROR(RV, ERRMSG)                               \
-    {                                                             \
-        int rv_;                                                  \
-        rv_ = f->io.bootstrap(&f->io, &f->conf);                  \
-        munit_assert_int(rv_, ==, RV);                            \
-        munit_assert_string_equal(f->io.errmsg_(&f->io), ERRMSG); \
+#define BOOTSTRAP_ERROR(RV, ERRMSG)                      \
+    {                                                    \
+        int rv_;                                         \
+        rv_ = f->io.bootstrap(&f->io, &f->conf);         \
+        munit_assert_int(rv_, ==, RV);                   \
+        munit_assert_string_equal(f->io.errmsg, ERRMSG); \
     }
 
 /* The data directory already has metadata files with a non-zero term. */

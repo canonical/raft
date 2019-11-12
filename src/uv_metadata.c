@@ -192,9 +192,9 @@ int uvMetadataStore(struct uv *uv, const struct uvMetadata *metadata)
     /* Write the metadata file, creating it if it does not exist. */
     buf.base = content;
     buf.len = sizeof content;
-    rv = UvFsMakeOrOverwriteFile(uv->dir, filename, &buf, uv->errmsg);
+    rv = UvFsMakeOrOverwriteFile(uv->dir, filename, &buf, uv->io->errmsg);
     if (rv != 0) {
-        ErrMsgWrapf(uv->errmsg, "persist %s", filename);
+        ErrMsgWrapf(uv->io->errmsg, "persist %s", filename);
         return rv;
     }
 

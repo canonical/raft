@@ -417,7 +417,7 @@ static int uvBootstrap(struct raft_io *io,
 
     /* We shouldn't have written anything else yet. */
     if (uv->metadata.term != 0) {
-        ErrMsgPrintf(uv->errmsg, "metadata contain term %lld",
+        ErrMsgPrintf(io->errmsg, "metadata contain term %lld",
                      uv->metadata.term);
         return RAFT_CANTBOOTSTRAP;
     }
@@ -515,14 +515,6 @@ static int uvRandom(struct raft_io *io, int min, int max)
 {
     (void)io;
     return min + (abs(rand()) % (max - min));
-}
-
-/* Implementation of raft_io->errmsg. */
-static const char *uvErrMsg(struct raft_io *io)
-{
-    struct uv *uv;
-    uv = io->impl;
-    return uv->errmsg;
 }
 
 int raft_uv_init(struct raft_io *io,
@@ -627,7 +619,6 @@ int raft_uv_init(struct raft_io *io,
     io->snapshot_get = uvSnapshotGet;
     io->time = uvTime;
     io->random = uvRandom;
-    io->errmsg_ = uvErrMsg;
 
     return 0;
 

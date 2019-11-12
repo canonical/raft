@@ -192,7 +192,7 @@ static void writeSegmentCb(struct UvWriterReq *write, const int status)
     /* Check if the write was successful. */
     if (status != 0) {
         assert(status != UV__CANCELED); /* We never cancel write requests */
-        uvErrorf(uv, "write: %s", uv->errmsg);
+        uvErrorf(uv, "write: %s", uv->io->errmsg);
         result = RAFT_IOERR;
         uv->errored = true;
     }
@@ -415,7 +415,7 @@ static void appendPrepareCb(struct uvPrepare *req, int status)
     segment->writer = raft_malloc(sizeof *segment->writer);
     assert(segment->writer != NULL);
     rv = UvWriterInit(segment->writer, uv->loop, req->fd, uv->direct_io,
-                      uv->async_io, 1, uv->errmsg);
+                      uv->async_io, 1, uv->io->errmsg);
     assert(rv == 0);
 
     segment->counter = req->counter;

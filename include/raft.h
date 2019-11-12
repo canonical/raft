@@ -606,11 +606,6 @@ struct raft_io
      * Generate a random integer between min and max.
      */
     int (*random)(struct raft_io *io, int min, int max);
-
-    /**
-     * Return a human-readable description of the last error occurred.
-     */
-    const char *(*errmsg_)(struct raft_io *io);
 };
 
 /**
