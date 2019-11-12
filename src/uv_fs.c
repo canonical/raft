@@ -24,6 +24,10 @@ int UvFsCheckDir(const char *dir, char *errmsg)
                 ErrMsgPrintf((struct ErrMsg *)errmsg,
                              "directory '%s' does not exist", dir);
                 return RAFT_NOTFOUND;
+            case UV_EACCES:
+                ErrMsgPrintf((struct ErrMsg *)errmsg,
+                             "can't access directory '%s'", dir);
+                return RAFT_UNAUTHORIZED;
         }
         UvErrMsgSys((struct ErrMsg *)errmsg, "stat", rv);
         return RAFT_IOERR;

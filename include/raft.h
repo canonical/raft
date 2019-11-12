@@ -31,6 +31,7 @@
 #define RAFT_IOERR 18
 #define RAFT_NOTFOUND 19
 #define RAFT_INVALID 20
+#define RAFT_UNAUTHORIZED 21
 
 /**
  * Size of human-readable error message buffers.

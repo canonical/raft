@@ -56,7 +56,8 @@ TEST(UvFsCheckDir, statError, NULL, NULL, 0, NULL)
     if (has_access) {
         return MUNIT_SKIP;
     }
-    CHECK_DIR_ERROR("/proc/1/root", RAFT_IOERR, "stat: permission denied");
+    CHECK_DIR_ERROR("/proc/1/root", RAFT_UNAUTHORIZED,
+                    "can't access directory '/proc/1/root'");
     return MUNIT_OK;
 }
 
