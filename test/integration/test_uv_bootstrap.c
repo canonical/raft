@@ -63,17 +63,6 @@ SUITE(bootstrap)
         munit_assert_string_equal(f->io.errmsg_(&f->io), ERRMSG); \
     }
 
-/* The data directory does not exist. */
-TEST(bootstrap, dirDoesNotExist, setupUv, tearDownUv, 0, NULL)
-{
-    struct fixture *f = data;
-    char errmsg[128];
-    test_dir_remove(f->dir);
-    sprintf(errmsg, "directory '%s' does not exist", f->dir);
-    BOOTSTRAP_ERROR(RAFT_NOTFOUND, errmsg);
-    return MUNIT_OK;
-}
-
 /* The data directory already has metadata files with a non-zero term. */
 TEST(bootstrap, termIsNonZero, setupUv, tearDownUv, 0, NULL)
 {

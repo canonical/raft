@@ -104,3 +104,23 @@ TEST(raft_uv_init, oom, setupUv, tearDownUv, 0, oom_params)
     INIT_ERROR(f->dir, RAFT_NOMEM, "out of memory");
     return 0;
 }
+
+/* The given directory does not exist. */
+TEST(raft_uv_init, dirDoesNotExist, setupUv, tearDownUv, 0, NULL)
+{
+    struct uv *f = data;
+    INIT_ERROR("/foo/bar/egg/baz", RAFT_NOTFOUND,
+               "directory '/foo/bar/egg/baz' does not exist");
+    return MUNIT_OK;
+}
+
+/* The given directory not accessible */
+TEST(raft_uv_init, dirNotAccessible, setupUv, tearDownUv, 0, NULL)
+{
+    struct uv *f = data;
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
+    sprintf(errmsg, "directory '%s' is not writable", f->dir);
+    test_dir_unexecutable(f->dir);
+    INIT_ERROR(f->dir, RAFT_INVALID, errmsg);
+    return MUNIT_OK;
+}

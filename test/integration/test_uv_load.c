@@ -74,14 +74,3 @@ TEST(load, emptyDir, setupUv, tearDownUv, 0, NULL)
     LOAD(0, 0, NULL, 0, NULL, 0);
     return MUNIT_OK;
 }
-
-/* Data directory not accessible */
-TEST(load, dirNotAccessible, setupUv, tearDownUv, 0, NULL)
-{
-    struct fixture *f = data;
-    char errmsg[RAFT_ERRMSG_BUF_SIZE];
-    sprintf(errmsg, "directory '%s' is not writable", f->dir);
-    test_dir_unexecutable(f->dir);
-    LOAD_ERROR(RAFT_INVALID, errmsg);
-    return MUNIT_OK;
-}

@@ -31,10 +31,6 @@ int uvMaybeInitialize(struct uv *uv)
         return 0;
     }
     uvDebugf(uv, "data dir: %s", uv->dir);
-    rv = UvFsCheckDir(uv->dir, (char *)&uv->errmsg);
-    if (rv != 0) {
-        return rv;
-    }
     rv = UvFsProbeCapabilities(uv->dir, &direct_io, &uv->async_io, &uv->errmsg);
     if (rv != 0) {
         ErrMsgWrapf(&uv->errmsg, "probe I/O capabilities");
@@ -597,11 +593,9 @@ int raft_uv_init(struct raft_io *io,
 
     memset(io->errmsg, 0, sizeof io->errmsg);
 
-    /* Ensure that the given path doesn't exceed our static buffer limit. */
-    if (!UV__DIR_HAS_VALID_LEN(dir)) {
-        ErrMsgPrintf((struct ErrMsg *)io->errmsg, "directory path too long");
-        rv = RAFT_NAMETOOLONG;
-        goto err;
+    rv = UvFsCheckDir(dir, io->errmsg);
+    if (rv != 0) {
+        return rv;
     }
 
     /* Allocate the raft_io_uv object */
