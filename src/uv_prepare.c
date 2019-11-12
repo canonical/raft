@@ -168,7 +168,6 @@ err_after_allocate:
     UvOsClose(s->fd);
 err:
     assert(rv != 0);
-    s->errmsg = errMsgPrintf("create file: %s", ErrMsgString(&errmsg));
     s->status = rv;
     return;
 }
