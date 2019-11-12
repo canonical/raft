@@ -96,7 +96,10 @@ static int uvMetadataLoadN(const char *dir,
 
     if (size != sizeof content) {
         if ((size_t)size < sizeof content) {
-            UvFsRemoveFile(dir, filename, errmsg);
+            rv = UvFsRemoveFile(dir, filename, errmsg);
+            if (rv != 0) {
+                return rv;
+            }
             return 0;
         }
         ErrMsgPrintf(errmsg, "%s has size %ld instead of %ld", size,

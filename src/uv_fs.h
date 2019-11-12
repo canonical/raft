@@ -74,7 +74,8 @@ int UvFsOpenFileForReading(const char *dir,
                            uv_file *fd,
                            char *errmsg);
 
-/* Read exactly buf->len bytes from the given file descriptor into buf->base. */
+/* Read exactly buf->len bytes from the given file descriptor into
+   buf->base. Fail if less than buf->len bytes are read. */
 int UvFsReadInto(uv_file fd, struct raft_buffer *buf, char *errmsg);
 
 /* Read all the content of the given file. */
@@ -83,9 +84,8 @@ int UvFsReadFile(const char *dir,
                  struct raft_buffer *buf,
                  char *errmsg);
 
-/* Read exactly buf->len bytes from the given file into buf->base. Fail if the
- * file contains more than buf->len bytes. Return UV__NODATA if the file is
- * empty. */
+/* Read exactly buf->len bytes from the given file into buf->base. Fail if less
+ * than buf->len bytes are read. */
 int UvFsReadFileInto(const char *dir,
                      const char *filename,
                      struct raft_buffer *buf,

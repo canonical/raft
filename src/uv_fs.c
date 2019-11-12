@@ -409,13 +409,13 @@ int UvFsReadInto(uv_file fd, struct raft_buffer *buf, char *errmsg)
     rv = read(fd, buf->base, buf->len);
     if (rv == -1) {
         UvErrMsgSys(errmsg, "read", -errno);
-        return UV__ERROR;
+        return RAFT_IOERR;
     }
     assert(rv >= 0);
     if ((size_t)rv < buf->len) {
         ErrMsgPrintf(errmsg, "short read: %d bytes instead of %ld", rv,
                      buf->len);
-        return UV__NODATA;
+        return RAFT_IOERR;
     }
     return 0;
 }
@@ -508,7 +508,7 @@ int UvFsRemoveFile(const char *dir, const char *filename, char *errmsg)
     rv = UvOsUnlink(path);
     if (rv != 0) {
         UvErrMsgSys(errmsg, "unlink", rv);
-        return UV__ERROR;
+        return RAFT_IOERR;
     }
     return 0;
 }
