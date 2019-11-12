@@ -117,7 +117,7 @@ int uvMaybeInitialize(struct uv *uv);
 
 /* Load Raft metadata from disk, choosing the most recent version (either the
  * metadata1 or metadata2 file). */
-int uvMetadataLoad(struct uv *uv, struct uvMetadata *metadata);
+int uvMetadataLoad(const char *dir, struct uvMetadata *metadata, char *errmsg);
 
 /* Store the given metadata to disk, writing the appropriate metadata file
  * according to the metadata version (if the version is odd, write metadata1,

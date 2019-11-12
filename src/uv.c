@@ -35,7 +35,7 @@ int uvMaybeInitialize(struct uv *uv)
     assert(uv->segment_size % uv->block_size == 0);
     uvDebugf(uv, "I/O: direct %d, async %d, block %ld", uv->direct_io,
              uv->async_io, uv->block_size);
-    rv = uvMetadataLoad(uv, &uv->metadata);
+    rv = uvMetadataLoad(uv->dir, &uv->metadata, uv->errmsg);
     if (rv != 0) {
         return rv;
     }

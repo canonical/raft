@@ -45,9 +45,10 @@ static void filenameOf(const unsigned short n, char *filename)
 
 /* Read the n'th metadata file (with n equal to 1 or 2) and decode the content
  * of the file, populating the given metadata buffer accordingly. */
-static int loadFile(struct uv *uv,
+static int loadFile(const char *dir,
                     const unsigned short n,
-                    struct uvMetadata *metadata)
+                    struct uvMetadata *metadata,
+                    char *errmsg)
 {
     char filename[METADATA_FILENAME_SIZE];  /* Filename of the metadata file */
     uint8_t content[METADATA_CONTENT_SIZE]; /* Content of metadata file */
@@ -60,9 +61,9 @@ static int loadFile(struct uv *uv,
     /* Render the metadata path */
     filenameOf(n, filename);
 
-    rv = UvFsFileExists(uv->dir, filename, &exists, uv->errmsg);
+    rv = UvFsFileExists(dir, filename, &exists, errmsg);
     if (rv != 0) {
-        ErrMsgWrapf(uv->errmsg, "check if %s exists", filename);
+        ErrMsgWrapf(errmsg, "check if %s exists", filename);
         return RAFT_IOERR;
     }
 
@@ -77,31 +78,30 @@ static int loadFile(struct uv *uv,
     buf.base = content;
     buf.len = sizeof content;
 
-    rv = UvFsReadFileInto(uv->dir, filename, &buf, uv->errmsg);
+    rv = UvFsReadFileInto(dir, filename, &buf, errmsg);
     if (rv != 0) {
         if (rv != UV__NODATA) {
-            ErrMsgWrapf(uv->errmsg, "load content of %s", filename);
+            ErrMsgWrapf(errmsg, "load content of %s", filename);
             rv = RAFT_IOERR;
         } else {
             /* Assume that the server crashed while writing this metadata file,
              * and pretend it has not been written at all. */
-            UvFsRemoveFile(uv->dir, filename, uv->errmsg);
-            uvWarnf(uv, "read %s: ignore incomplete data", filename);
+            UvFsRemoveFile(dir, filename, errmsg);
             rv = 0;
         }
         return rv;
     };
 
     /* Decode the content of the metadata file. */
-    rv = decode(content, metadata, uv->errmsg);
+    rv = decode(content, metadata, errmsg);
     if (rv != 0) {
-        ErrMsgWrapf(uv->errmsg, "load %s", filename);
+        ErrMsgWrapf(errmsg, "load %s", filename);
         return rv;
     }
 
     /* Sanity checks that values make sense */
     if (metadata->version == 0) {
-        ErrMsgPrintf(uv->errmsg, "load %s: version is set to zero", filename);
+        ErrMsgPrintf(errmsg, "load %s: version is set to zero", filename);
         return RAFT_CORRUPT;
     }
 
@@ -114,28 +114,22 @@ static int indexOf(int version)
     return version % 2 == 1 ? 1 : 2;
 }
 
-#define logMetadata(PREFIX, M)                                                 \
-    uvDebugf(uv, "metadata" #PREFIX ": version %lld, term %lld, voted for %d", \
-             (M)->version, (M)->term, (M)->voted_for);
-
-int uvMetadataLoad(struct uv *uv, struct uvMetadata *metadata)
+int uvMetadataLoad(const char *dir, struct uvMetadata *metadata, char *errmsg)
 {
     struct uvMetadata metadata1;
     struct uvMetadata metadata2;
     int rv;
 
     /* Read the two metadata files (if available). */
-    rv = loadFile(uv, 1, &metadata1);
+    rv = loadFile(dir, 1, &metadata1, errmsg);
     if (rv != 0) {
         return rv;
     }
-    logMetadata(1, &metadata1);
 
-    rv = loadFile(uv, 2, &metadata2);
+    rv = loadFile(dir, 2, &metadata2, errmsg);
     if (rv != 0) {
         return rv;
     }
-    logMetadata(2, &metadata2);
 
     /* Check the versions. */
     if (metadata1.version == 0 && metadata2.version == 0) {
@@ -145,8 +139,7 @@ int uvMetadataLoad(struct uv *uv, struct uvMetadata *metadata)
         metadata->voted_for = 0;
     } else if (metadata1.version == metadata2.version) {
         /* The two metadata files can't have the same version. */
-        ErrMsgPrintf(uv->errmsg,
-                     "metadata1 and metadata2 are both at version %d",
+        ErrMsgPrintf(errmsg, "metadata1 and metadata2 are both at version %d",
                      metadata1.version);
         return RAFT_CORRUPT;
     } else {
