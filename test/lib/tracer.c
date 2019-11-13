@@ -15,6 +15,6 @@ void test_tracer_emit(struct raft_tracer *t,
     (void)time;
     va_start(args, format);
     vsnprintf(buf, sizeof buf, format, args);
-    munit_logf(MUNIT_LOG_INFO, "%30s:%*d - %s", file, 3, line, buf);
+    fprintf(stderr, "%20s:%*d - %s\n", file, 3, line, buf);
     va_end(args);
 }

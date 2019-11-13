@@ -104,6 +104,11 @@ RAFT_API void raft_uv_set_block_size(struct raft_io *io, size_t size);
 RAFT_API void raft_uv_set_segment_size(struct raft_io *io, size_t size);
 
 /**
+ * Emit low-level debug messages using the given tracer.
+ */
+RAFT_API void raft_uv_set_tracer(struct raft_io *io, struct raft_tracer *tracer);
+
+/**
  * Callback invoked by the transport implementation when a new incoming
  * connection has been established.
  *

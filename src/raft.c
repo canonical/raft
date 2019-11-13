@@ -9,6 +9,7 @@
 #include "err.h"
 #include "log.h"
 #include "logging.h"
+#include "tracing.h"
 
 #define DEFAULT_ELECTION_TIMEOUT 1000 /* One second */
 #define DEFAULT_HEARTBEAT_TIMEOUT 100 /* One tenth of a second */
@@ -22,24 +23,6 @@
 #define tracef(MSG, ...)
 #endif
 
-/* No-op trace emit function. */
-static inline void noopTracerEmit(struct raft_tracer *t,
-                                  raft_time time,
-                                  const char *file,
-                                  int line,
-                                  const char *format,
-                                  ...)
-{
-    (void)t;
-    (void)time;
-    (void)file;
-    (void)line;
-    (void)format;
-}
-
-/* Default no-op tracer. */
-static struct raft_tracer noopTracer = {.emit = noopTracerEmit};
-
 int raft_init(struct raft *r,
               struct raft_io *io,
               struct raft_fsm *fsm,
@@ -52,7 +35,7 @@ int raft_init(struct raft *r,
     r->io->data = r;
     r->fsm = fsm;
     r->logger = logger;
-    r->tracer = &noopTracer;
+    r->tracer = &NoopTracer;
     r->id = id;
     /* Make a copy of the address */
     r->address = raft_malloc(strlen(address) + 1);
@@ -77,7 +60,7 @@ int raft_init(struct raft *r,
     r->snapshot.trailing = DEFAULT_SNAPSHOT_TRAILING;
     r->snapshot.put.data = NULL;
     r->close_cb = NULL;
-    r->io->config(r->io, r->tracer, r->id, r->address);
+    r->io->config(r->io, r->id, r->address);
     return 0;
 }
 

@@ -35,7 +35,8 @@ libraft_la_SOURCES = \
   src/start.c \
   src/state.c \
   src/syscall.c \
-  src/tick.c
+  src/tick.c \
+  src/tracing.c
 
 bin_PROGRAMS =
 
@@ -140,7 +141,7 @@ test_unit_uv_SOURCES = $(raft_uv_SOURCES)
 test_unit_uv_SOURCES += \
   src/byte.c \
   src/configuration.c \
-  src/logger_stream.c \
+  src/tracing.c \
   src/entry.c \
   src/err.c \
   src/heap.c \

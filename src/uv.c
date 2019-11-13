@@ -14,6 +14,7 @@
 #include "entry.h"
 #include "logging.h"
 #include "snapshot.h"
+#include "tracing.h"
 #include "uv.h"
 #include "uv_encoding.h"
 #include "uv_os.h"
@@ -24,22 +25,17 @@
 #define CONNECT_RETRY_DELAY 1000
 
 /* Implementation of raft_io->config. */
-static void uvConfig(struct raft_io *io,
-                     struct raft_tracer *tracer,
-                     unsigned id,
-                     const char *address)
+static void uvConfig(struct raft_io *io, unsigned id, const char *address)
 {
     struct uv *uv;
     int rv;
     uv = io->impl;
-    uv->tracer = tracer;
     uv->id = id;
     rv = uv->transport->init(uv->transport, id, address);
     assert(rv == 0);
     rv = uv_timer_init(uv->loop, &uv->timer);
     assert(rv == 0); /* This should never fail */
     uv->timer.data = uv;
-    uvDebugf(uv, "hello");
 }
 
 /* Periodic timer callback */
@@ -565,8 +561,8 @@ int raft_uv_init(struct raft_io *io,
     strcpy(uv->dir, dir);
     uv->transport = transport;
     uv->transport->data = uv;
-    uv->tracer = NULL; /* Set by raft_io->config() */
-    uv->id = 0;        /* Set by raft_io->config() */
+    uv->tracer = &NoopTracer;
+    uv->id = 0; /* Set by raft_io->config() */
     uv->state = UV__PRISTINE;
     uv->errored = false;
     uv->direct_io = direct_io != 0;
@@ -656,4 +652,11 @@ void raft_uv_set_block_size(struct raft_io *io, size_t size)
     struct uv *uv;
     uv = io->impl;
     uv->block_size = size;
+}
+
+void raft_uv_set_tracer(struct raft_io *io, struct raft_tracer *tracer)
+{
+    struct uv *uv;
+    uv = io->impl;
+    uv->tracer = tracer;
 }
