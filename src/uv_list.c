@@ -34,7 +34,7 @@ int uvList(struct uv *uv,
 
     n = uv_fs_scandir(NULL, &req, uv->dir, 0, NULL);
     if (n < 0) {
-        uvErrorf(uv, "scan %s: %s", uv->dir, uv_strerror(n));
+        Tracef(uv->tracer, "scan %s: %s", uv->dir, uv_strerror(n));
         return RAFT_IOERR;
     }
 
@@ -60,7 +60,7 @@ int uvList(struct uv *uv,
          * the next one. */
         if (rv != 0 || shouldIgnore(filename)) {
             if (rv == 0) {
-                uvDebugf(uv, "ignore %s", filename);
+                Tracef(uv->tracer, "ignore %s", filename);
             }
             continue;
         }
@@ -71,7 +71,7 @@ int uvList(struct uv *uv,
                                          &appended);
         if (appended || rv != 0) {
             if (rv == 0) {
-                uvDebugf(uv, "snapshot %s", filename);
+                Tracef(uv->tracer, "snapshot %s", filename);
             }
             continue;
         }
@@ -81,12 +81,12 @@ int uvList(struct uv *uv,
                                         &appended);
         if (appended || rv != 0) {
             if (rv == 0) {
-                uvDebugf(uv, "segment %s", filename);
+                Tracef(uv->tracer, "segment %s", filename);
             }
             continue;
         }
 
-        uvDebugf(uv, "ignore %s", filename);
+        Tracef(uv->tracer, "ignore %s", filename);
     }
 
     rv = uv_fs_scandir_next(&req, &entry);

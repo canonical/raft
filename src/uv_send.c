@@ -1,7 +1,6 @@
 #include <string.h>
 
 #include "../include/raft/uv.h"
-
 #include "assert.h"
 #include "uv.h"
 #include "uv_encoding.h"
@@ -32,7 +31,7 @@
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(C, ...) uvDebugf(C->uv, ##__VA_ARGS__)
+#define tracef(C, ...) Tracef(C->uv->tracer, ##__VA_ARGS__)
 #else
 #define tracef(C, ...)
 #endif

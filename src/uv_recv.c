@@ -1,11 +1,10 @@
 #include <string.h>
 
 #include "../include/raft/uv.h"
-
 #include "assert.h"
 #include "byte.h"
-#include "logging.h"
 #include "err.h"
+#include "logging.h"
 #include "uv.h"
 #include "uv_encoding.h"
 
@@ -251,7 +250,7 @@ static void readCb(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
 
             /* The length of the header must be greater than zero. */
             if (s->header.len == 0) {
-                uvWarnf(s->uv, "message has zero length");
+                Tracef(s->uv->tracer, "message has zero length");
                 goto abort;
             }
         } else if (s->payload.len == 0) {
@@ -267,7 +266,8 @@ static void readCb(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
             rv =
                 uvDecodeMessage(type, &s->header, &s->message, &s->payload.len);
             if (rv != 0) {
-                uvWarnf(s->uv, "decode message: %s", errCodeToString(rv));
+                Tracef(s->uv->tracer, "decode message: %s",
+                       errCodeToString(rv));
                 goto abort;
             }
 
@@ -327,7 +327,7 @@ static void readCb(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
     assert(nread < 0);
 
     if (nread != UV_EOF) {
-        uvWarnf(s->uv, "receive data: %s", uv_strerror(nread));
+        Tracef(s->uv->tracer, "receive data: %s", uv_strerror(nread));
     }
 
 abort:
@@ -342,7 +342,7 @@ static int startServer(struct uvServer *s)
 
     rv = uv_read_start(s->stream, allocCb, readCb);
     if (rv != 0) {
-        uvWarnf(s->uv, "start reading: %s", uv_strerror(rv));
+        Tracef(s->uv->tracer, "start reading: %s", uv_strerror(rv));
         return RAFT_IOERR;
     }
 
@@ -418,7 +418,7 @@ static void acceptCb(struct raft_uv_transport *transport,
 
     rv = addServer(uv, id, address, stream);
     if (rv != 0) {
-        uvWarnf(uv, "add server: %s", errCodeToString(rv));
+        Tracef(uv->tracer, "add server: %s", errCodeToString(rv));
         goto abort;
     }
 

@@ -74,7 +74,7 @@ int uvSnapshotInfoAppendIfMatch(struct uv *uv,
     filenameOf(&info, snapshot_filename);
     rv = UvFsFileExists(uv->dir, snapshot_filename, &exists, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "stat %s: %s", snapshot_filename, errmsg);
+        Tracef(uv->tracer, "stat %s: %s", snapshot_filename, errmsg);
         rv = RAFT_IOERR;
         return rv;
     }
@@ -144,7 +144,7 @@ static int loadMeta(struct uv *uv,
 
     rv = UvFsOpenFileForReading(uv->dir, info->filename, &fd, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "open %s: %s", info->filename, errmsg);
+        Tracef(uv->tracer, "open %s: %s", info->filename, errmsg);
         rv = RAFT_IOERR;
         goto err;
     }
@@ -152,14 +152,15 @@ static int loadMeta(struct uv *uv,
     buf.len = sizeof header;
     rv = UvFsReadInto(fd, &buf, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "read %s: %s", info->filename, errmsg);
+        Tracef(uv->tracer, "read %s: %s", info->filename, errmsg);
         rv = RAFT_IOERR;
         goto err_after_open;
     }
 
     format = byteFlip64(header[0]);
     if (format != UV__DISK_FORMAT) {
-        uvErrorf(uv, "load %s: unsupported format %lu", info->filename, format);
+        Tracef(uv->tracer, "load %s: unsupported format %lu", info->filename,
+               format);
         rv = RAFT_MALFORMED;
         goto err_after_open;
     }
@@ -169,13 +170,14 @@ static int loadMeta(struct uv *uv,
     snapshot->configuration_index = byteFlip64(header[2]);
     buf.len = byteFlip64(header[3]);
     if (buf.len > META_MAX_CONFIGURATION_SIZE) {
-        uvErrorf(uv, "load %s: configuration data too big (%ld)",
-                 info->filename, buf.len);
+        Tracef(uv->tracer, "load %s: configuration data too big (%ld)",
+               info->filename, buf.len);
         rv = RAFT_CORRUPT;
         goto err_after_open;
     }
     if (buf.len == 0) {
-        uvErrorf(uv, "load %s: no configuration data", info->filename, buf.len);
+        Tracef(uv->tracer, "load %s: no configuration data", info->filename,
+               buf.len);
         rv = RAFT_CORRUPT;
         goto err_after_open;
     }
@@ -187,7 +189,7 @@ static int loadMeta(struct uv *uv,
 
     rv = UvFsReadInto(fd, &buf, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "read %s: %s", info->filename, errmsg);
+        Tracef(uv->tracer, "read %s: %s", info->filename, errmsg);
         rv = RAFT_IOERR;
         goto err_after_buf_malloc;
     }
@@ -196,7 +198,7 @@ static int loadMeta(struct uv *uv,
     crc2 = byteCrc32(buf.base, buf.len, crc2);
 
     if (crc1 != crc2) {
-        uvErrorf(uv, "read %s: checksum mismatch", info->filename);
+        Tracef(uv->tracer, "read %s: checksum mismatch", info->filename);
         rv = RAFT_CORRUPT;
         goto err_after_open;
     }
@@ -237,7 +239,7 @@ static int loadData(struct uv *uv,
 
     rv = UvFsReadFile(uv->dir, filename, &buf, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "stat %s: %s", filename, errmsg);
+        Tracef(uv->tracer, "stat %s: %s", filename, errmsg);
         goto err;
     }
 
@@ -334,7 +336,7 @@ static int removeOldSegmentsAndSnapshots(struct uv *uv,
 
     rv = UvFsSyncDir(uv->dir, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "sync %s: %s", uv->dir, errmsg);
+        Tracef(uv->tracer, "sync %s: %s", uv->dir, errmsg);
     }
 
 out:
@@ -366,13 +368,13 @@ int uvSnapshotKeepLastTwo(struct uv *uv,
         char filename[UV__FILENAME_LEN];
         rv = UvFsRemoveFile(uv->dir, s->filename, errmsg);
         if (rv != 0) {
-            uvErrorf(uv, "unlink %s: %s", s->filename, errmsg);
+            Tracef(uv->tracer, "unlink %s: %s", s->filename, errmsg);
             return RAFT_IOERR;
         }
         filenameOf(s, filename);
         rv = UvFsRemoveFile(uv->dir, filename, errmsg);
         if (rv != 0) {
-            uvErrorf(uv, "unlink %s: %s", filename, errmsg);
+            Tracef(uv->tracer, "unlink %s: %s", filename, errmsg);
             return RAFT_IOERR;
         }
     }
@@ -393,7 +395,7 @@ static void putWorkCb(uv_work_t *work)
 
     rv = UvFsMakeFile(uv->dir, filename, r->meta.bufs, 2, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "write %s: %s", filename, errmsg);
+        Tracef(uv->tracer, "write %s: %s", filename, errmsg);
         r->status = RAFT_IOERR;
         return;
     }
@@ -404,14 +406,14 @@ static void putWorkCb(uv_work_t *work)
     rv = UvFsMakeFile(uv->dir, filename, r->snapshot->bufs, r->snapshot->n_bufs,
                       errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "write %s: %s", filename, errmsg);
+        Tracef(uv->tracer, "write %s: %s", filename, errmsg);
         r->status = RAFT_IOERR;
         return;
     }
 
     rv = UvFsSyncDir(uv->dir, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "sync %s: %s", uv->dir, errmsg);
+        Tracef(uv->tracer, "sync %s: %s", uv->dir, errmsg);
         r->status = RAFT_IOERR;
         return;
     }
@@ -480,8 +482,8 @@ static void processPutRequests(struct uv *uv)
     rv = uv_queue_work(uv->loop, &uv->snapshot_put_work, putWorkCb,
                        putAfterWorkCb);
     if (rv != 0) {
-        uvErrorf(uv, "store snapshot %lld: %s", r->snapshot->index,
-                 uv_strerror(rv));
+        Tracef(uv->tracer, "store snapshot %lld: %s", r->snapshot->index,
+               uv_strerror(rv));
         uv->errored = true;
     }
 }
@@ -502,7 +504,8 @@ int uvSnapshotPut(struct raft_io *io,
 
     uv = io->impl;
 
-    uvDebugf(uv, "put snapshot at %lld, keeping %d", snapshot->index, trailing);
+    Tracef(uv->tracer, "put snapshot at %lld, keeping %d", snapshot->index,
+           trailing);
 
     r = raft_malloc(sizeof *r);
     if (r == NULL) {
@@ -642,7 +645,7 @@ int uvSnapshotGet(struct raft_io *io,
     QUEUE_PUSH(&uv->snapshot_get_reqs, &r->queue);
     rv = uv_queue_work(uv->loop, &r->work, getWorkCb, getAfterWorkCb);
     if (rv != 0) {
-        uvErrorf(uv, "get last snapshot: %s", uv_strerror(rv));
+        Tracef(uv->tracer, "get last snapshot: %s", uv_strerror(rv));
         rv = RAFT_IOERR;
         goto err_after_snapshot_alloc;
     }

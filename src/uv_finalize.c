@@ -30,7 +30,7 @@ static void workCb(uv_work_t *work)
     sprintf(filename1, UV__OPEN_TEMPLATE, s->counter);
     sprintf(filename2, UV__CLOSED_TEMPLATE, s->first_index, s->last_index);
 
-    uvDebugf(uv, "finalize %s into %s", filename1, filename2);
+    Tracef(uv->tracer, "finalize %s into %s", filename1, filename2);
 
     /* If the segment hasn't actually been used (because the writer has been
      * closed or aborted before making any write), just remove it. */
@@ -59,7 +59,7 @@ sync:
     return;
 
 err:
-    uvErrorf(uv, "truncate segment %s: %s", filename1, errmsg);
+    Tracef(uv->tracer, "truncate segment %s: %s", filename1, errmsg);
     assert(rv != 0);
     s->status = rv;
 }
@@ -93,8 +93,8 @@ static int finalizeSegment(struct segment *s)
 
     rv = uv_queue_work(uv->loop, &uv->finalize_work, workCb, afterWorkCb);
     if (rv != 0) {
-        uvErrorf(uv, "start to truncate segment file %d: %s", s->counter,
-                 uv_strerror(rv));
+        Tracef(uv->tracer, "start to truncate segment file %d: %s", s->counter,
+               uv_strerror(rv));
         return RAFT_IOERR;
     }
 

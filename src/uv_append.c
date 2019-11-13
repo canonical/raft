@@ -192,7 +192,7 @@ static void writeSegmentCb(struct UvWriterReq *write, const int status)
     /* Check if the write was successful. */
     if (status != 0) {
         assert(status != UV__CANCELED); /* We never cancel write requests */
-        uvErrorf(uv, "write: %s", uv->io->errmsg);
+        Tracef(uv->tracer, "write: %s", uv->io->errmsg);
         result = RAFT_IOERR;
         uv->errored = true;
     }

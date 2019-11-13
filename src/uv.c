@@ -160,7 +160,7 @@ static int uvFilterSegments(struct uv *uv,
     j--;
 
     segment = &(*segments)[j];
-    uvDebugf(uv, "most recent closed segment is %s", segment->filename);
+    Tracef(uv->tracer, "most recent closed segment is %s", segment->filename);
 
     /* If the end index of the last closed segment is lower than the last
      * snapshot index, there might be no entry that we can keep. We return an
@@ -170,8 +170,8 @@ static int uvFilterSegments(struct uv *uv,
      * open segment). */
     if (segment->end_index < last_index) {
         if (!(*segments)[*n - 1].is_open) {
-            uvWarnf(
-                uv,
+            Tracef(
+                uv->tracer,
                 "discarding all closed segments, since most recent is behind "
                 "last snapshot");
             raft_free(*segments);
@@ -179,10 +179,10 @@ static int uvFilterSegments(struct uv *uv,
             *n = 0;
             return 0;
         }
-        uvWarnf(uv,
-                "most recent closed segment %s is behind last snapshot, "
-                "yet there are open segments",
-                segment->filename);
+        Tracef(uv->tracer,
+               "most recent closed segment %s is behind last snapshot, "
+               "yet there are open segments",
+               segment->filename);
     }
 
     /* Now scan the segments backwards, searching for the longest list of
@@ -194,8 +194,8 @@ static int uvFilterSegments(struct uv *uv,
             newer = &(*segments)[i];
             older = &(*segments)[i - 1];
             if (older->end_index != newer->first_index - 1) {
-                uvWarnf(uv, "discarding non contiguous segment %s",
-                        older->filename);
+                Tracef(uv->tracer, "discarding non contiguous segment %s",
+                       older->filename);
                 break;
             }
         }
@@ -208,8 +208,8 @@ static int uvFilterSegments(struct uv *uv,
      * missing entries). */
     segment = &(*segments)[i];
     if (segment->first_index > last_index + 1) {
-        uvErrorf(uv, "found closed segment past last snapshot: %s",
-                 segment->filename);
+        Tracef(uv->tracer, "found closed segment past last snapshot: %s",
+               segment->filename);
         return RAFT_CORRUPT;
     }
 
@@ -269,7 +269,7 @@ static int uvLoadSnapshotAndEntries(struct uv *uv,
         if (rv != 0) {
             goto err;
         }
-        uvDebugf(uv, "most recent snapshot at %lld", (*snapshot)->index);
+        Tracef(uv->tracer, "most recent snapshot at %lld", (*snapshot)->index);
         raft_free(snapshots);
         snapshots = NULL;
 
@@ -303,9 +303,9 @@ static int uvLoadSnapshotAndEntries(struct uv *uv,
          * open segments turned out to be behind the snapshot as well.  */
         last_index = *start_index + *n - 1;
         if (*snapshot != NULL && last_index < (*snapshot)->index) {
-            uvErrorf(uv,
-                     "index of last entry %lld is behind last snapshot %lld",
-                     last_index, (*snapshot)->index);
+            Tracef(uv->tracer,
+                   "index of last entry %lld is behind last snapshot %lld",
+                   last_index, (*snapshot)->index);
             rv = RAFT_CORRUPT;
             goto err_after_snapshot_load;
         }
@@ -357,9 +357,10 @@ static int uvLoad(struct raft_io *io,
     if (rv != 0) {
         return rv;
     }
-    uvDebugf(uv, "start index %lld, %ld entries", *start_index, *n_entries);
+    Tracef(uv->tracer, "start index %lld, %ld entries", *start_index,
+           *n_entries);
     if (*snapshot == NULL) {
-        uvDebugf(uv, "no snapshot");
+        Tracef(uv->tracer, "no snapshot");
     }
 
     last_index = *start_index + *n_entries - 1;

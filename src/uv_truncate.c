@@ -74,7 +74,8 @@ static void workCb(uv_work_t *work)
 
         rv = UvFsRemoveFile(uv->dir, segment->filename, errmsg);
         if (rv != 0) {
-            uvErrorf(uv, "unlink segment %s: %s", segment->filename, errmsg);
+            Tracef(uv->tracer, "unlink segment %s: %s", segment->filename,
+                   errmsg);
             rv = RAFT_IOERR;
             goto err_after_list;
         }
@@ -82,7 +83,7 @@ static void workCb(uv_work_t *work)
 
     rv = UvFsSyncDir(uv->dir, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "sync data directory: %s", errmsg);
+        Tracef(uv->tracer, "sync data directory: %s", errmsg);
         rv = RAFT_IOERR;
         goto err_after_list;
     }
@@ -154,7 +155,8 @@ static void processRequests(struct uv *uv)
     uv->truncate_work.data = r;
     rv = uv_queue_work(uv->loop, &uv->truncate_work, workCb, afterWorkCb);
     if (rv != 0) {
-        uvErrorf(uv, "truncate index %lld: %s", r->index, uv_strerror(rv));
+        Tracef(uv->tracer, "truncate index %lld: %s", r->index,
+               uv_strerror(rv));
         uv->truncate_work.data = NULL;
         uv->errored = true;
     }

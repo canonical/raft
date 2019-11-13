@@ -193,7 +193,7 @@ static void uvPrepareCreateFileAfterWorkCb(uv_work_t *work, int status)
         } else {
             HeapFree(s->errmsg);
         }
-        uvDebugf(uv, "canceled creation of %s", s->filename);
+        Tracef(uv->tracer, "canceled creation of %s", s->filename);
         raft_free(s);
         return;
     }
@@ -202,7 +202,7 @@ static void uvPrepareCreateFileAfterWorkCb(uv_work_t *work, int status)
     if (s->status != 0) {
         uvPrepareFlushRequests(uv, RAFT_IOERR);
         uv->errored = true;
-        uvErrorf(uv, "create segment %s: %s", s->filename, s->errmsg);
+        Tracef(uv->tracer, "create segment %s: %s", s->filename, s->errmsg);
         HeapFree(s->errmsg);
         raft_free(s);
         return;
@@ -210,7 +210,7 @@ static void uvPrepareCreateFileAfterWorkCb(uv_work_t *work, int status)
 
     assert(s->fd >= 0);
 
-    uvDebugf(uv, "completed creation of %s", s->filename);
+    Tracef(uv->tracer, "completed creation of %s", s->filename);
     QUEUE_PUSH(&uv->prepare_pool, &s->queue);
 
     /* Let's process any pending request. */
@@ -240,13 +240,13 @@ static int prepareSegment(struct uv *uv)
 
     sprintf(s->filename, UV__OPEN_TEMPLATE, s->counter);
 
-    uvDebugf(uv, "create open segment %s", s->filename);
+    Tracef(uv->tracer, "create open segment %s", s->filename);
     rv = uv_queue_work(uv->loop, &s->work, uvPrepareCreateFileWorkCb,
                        uvPrepareCreateFileAfterWorkCb);
     if (rv != 0) {
         /* UNTESTED: with the current libuv implementation this can't fail. */
-        uvErrorf(uv, "can't create segment %s: %s", s->filename,
-                 uv_strerror(rv));
+        Tracef(uv->tracer, "can't create segment %s: %s", s->filename,
+               uv_strerror(rv));
         rv = RAFT_IOERR;
         goto err_after_segment_alloc;
     }

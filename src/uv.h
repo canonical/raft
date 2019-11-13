@@ -6,9 +6,9 @@
 #include "../include/raft.h"
 #include "err.h"
 #include "queue.h"
+#include "tracing.h"
 #include "uv_fs.h"
 #include "uv_os.h"
-#include "tracing.h"
 
 /* 8 Megabytes */
 #define UV__MAX_SEGMENT_SIZE (8 * 1024 * 1024)
@@ -95,13 +95,6 @@ struct uv
     bool closing;                        /* True if we are closing */
     raft_io_close_cb close_cb;           /* Invoked when finishing closing */
 };
-
-/* Emit a log message with a certain level. */
-#define uvTracef(LEVEL, UV, ...) Tracef(UV->tracer, ##__VA_ARGS__)
-#define uvDebugf(UV, ...) uvTracef(RAFT_DEBUG, UV, ##__VA_ARGS__);
-#define uvInfof(UV, ...) uvTracef(RAFT_INFO, UV, ##__VA_ARGS__);
-#define uvWarnf(UV, ...) uvTracef(RAFT_WARN, UV, ##__VA_ARGS__);
-#define uvErrorf(UV, ...) uvTracef(RAFT_ERROR, UV, ##__VA_ARGS__);
 
 /* Load Raft metadata from disk, choosing the most recent version (either the
  * metadata1 or metadata2 file). */
