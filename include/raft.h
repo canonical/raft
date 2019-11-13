@@ -365,6 +365,27 @@ struct raft_io_snapshot_get
 };
 
 /**
+ * Customizable tracer, for debugging purposes.
+ */
+struct raft_tracer
+{
+    /**
+     * Implementation-defined state object.
+     */
+    void *impl;
+
+    /**
+     * Emit a single trace message.
+     */
+    void (*emit)(struct raft_tracer *t,
+                 raft_time time,
+                 const char *file,
+                 int line,
+                 const char *format,
+                 ...);
+};
+
+/**
  * Logger interface.
  */
 struct raft_logger
@@ -481,7 +502,7 @@ struct raft_io
      * and additional dependencies.
      */
     void (*config)(struct raft_io *io,
-                   struct raft_logger *logger,
+                   struct raft_tracer *tracer,
                    unsigned id,
                    const char *address);
 
@@ -678,6 +699,7 @@ struct raft
 {
     void *data;                 /* Custom user data. */
     struct raft_logger *logger; /* Logging implementation. */
+    struct raft_tracer *tracer; /* Tracer implementation. */
     struct raft_io *io;         /* Disk and network I/O implementation. */
     struct raft_fsm *fsm;       /* User-defined FSM to apply commands to. */
     unsigned id;                /* Server ID of this raft instance. */

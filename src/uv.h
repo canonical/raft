@@ -58,7 +58,7 @@ struct uv
     struct uv_loop_s *loop;              /* UV event loop */
     char dir[UV__DIR_LEN];               /* Data directory */
     struct raft_uv_transport *transport; /* Network transport */
-    struct raft_logger *logger;          /* Logger implementation */
+    struct raft_tracer *tracer;          /* Debug tracing */
     unsigned id;                         /* Server ID */
     int state;                           /* Current state */
     bool errored;                        /* If a disk I/O error was hit */
@@ -96,9 +96,9 @@ struct uv
 };
 
 /* Emit a log message with a certain level. */
-#define uvEmitf(LEVEL, UV, ...)                                         \
-    UV->logger->emit(UV->logger, LEVEL, UV->io->time(UV->io), __FILE__, \
-                     __LINE__, ##__VA_ARGS__);
+#define uvEmitf(LEVEL, UV, ...)                                            \
+    UV->tracer->emit(UV->tracer, UV->io->time(UV->io), __FILE__, __LINE__, \
+                     ##__VA_ARGS__);
 #define uvDebugf(UV, ...) uvEmitf(RAFT_DEBUG, UV, ##__VA_ARGS__);
 #define uvInfof(UV, ...) uvEmitf(RAFT_INFO, UV, ##__VA_ARGS__);
 #define uvWarnf(UV, ...) uvEmitf(RAFT_WARN, UV, ##__VA_ARGS__);

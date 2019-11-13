@@ -22,6 +22,24 @@
 #define tracef(MSG, ...)
 #endif
 
+/* No-op trace emit function. */
+static inline void noopTracerEmit(struct raft_tracer *t,
+                                  raft_time time,
+                                  const char *file,
+                                  int line,
+                                  const char *format,
+                                  ...)
+{
+    (void)t;
+    (void)time;
+    (void)file;
+    (void)line;
+    (void)format;
+}
+
+/* Default no-op tracer. */
+static struct raft_tracer noopTracer = {.emit = noopTracerEmit};
+
 int raft_init(struct raft *r,
               struct raft_io *io,
               struct raft_fsm *fsm,
@@ -34,6 +52,7 @@ int raft_init(struct raft *r,
     r->io->data = r;
     r->fsm = fsm;
     r->logger = logger;
+    r->tracer = &noopTracer;
     r->id = id;
     /* Make a copy of the address */
     r->address = raft_malloc(strlen(address) + 1);
@@ -58,7 +77,7 @@ int raft_init(struct raft *r,
     r->snapshot.trailing = DEFAULT_SNAPSHOT_TRAILING;
     r->snapshot.put.data = NULL;
     r->close_cb = NULL;
-    r->io->config(r->io, r->logger, r->id, r->address);
+    r->io->config(r->io, r->tracer, r->id, r->address);
     return 0;
 }
 

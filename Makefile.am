@@ -53,6 +53,7 @@ libtest_la_SOURCES = \
   test/lib/fsm.c \
   test/lib/heap.c \
   test/lib/munit.c \
+  test/lib/tracer.c \
   test/lib/tcp.c
 
 test_unit_core_SOURCES = \

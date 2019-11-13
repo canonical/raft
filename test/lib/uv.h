@@ -11,17 +11,17 @@
 #include "configuration.h"
 #include "dir.h"
 #include "heap.h"
-#include "logger.h"
 #include "loop.h"
 #include "munit.h"
 #include "tcp.h"
+#include "tracer.h"
 
 #define FIXTURE_UV                      \
     FIXTURE_HEAP;                       \
     FIXTURE_TCP;                        \
     FIXTURE_LOOP;                       \
     FIXTURE_DIR;                        \
-    FIXTURE_LOGGER;                     \
+    FIXTURE_TRACER;                     \
     struct raft_uv_transport transport; \
     struct raft_io io;                  \
     struct uv *uv;                      \
@@ -38,14 +38,14 @@
         SETUP_HEAP;                                                      \
         SETUP_TCP;                                                       \
         SETUP_LOOP;                                                      \
-        SETUP_LOGGER;                                                    \
+        SETUP_TRACER;                                                    \
         rv_ = raft_uv_tcp_init(&f->transport, &f->loop);                 \
         munit_assert_int(rv_, ==, 0);                                    \
         rv_ = raft_uv_init(&f->io, &f->loop, f->dir, &f->transport);     \
         munit_assert_int(rv_, ==, 0);                                    \
         f->io.data = f;                                                  \
         f->uv = f->io.impl;                                              \
-        f->io.config(&f->io, &f->logger, 1, "127.0.0.1:9000");           \
+        f->io.config(&f->io, &f->tracer, 1, "127.0.0.1:9000");           \
         f->closed = false;                                               \
     }
 
@@ -57,6 +57,7 @@
     LOOP_STOP;                        \
     raft_uv_close(&f->io);            \
     raft_uv_tcp_close(&f->transport); \
+    TEAR_DOWN_TRACER;                 \
     TEAR_DOWN_DIR;                    \
     TEAR_DOWN_LOOP;                   \
     TEAR_DOWN_TCP;                    \

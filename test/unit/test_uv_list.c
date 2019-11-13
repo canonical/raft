@@ -30,7 +30,7 @@ static void *setup(const MunitParameter params[], void *user_data)
     struct fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
     SETUP_UV;
-    f->uv->logger = &f->logger;
+    f->uv->tracer = &f->tracer;
     f->snapshots = NULL;
     f->segments = NULL;
     return f;
