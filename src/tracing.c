@@ -2,14 +2,12 @@
 
 /* No-op trace emit function. */
 static inline void noopTracerEmit(struct raft_tracer *t,
-                                  raft_time time,
                                   const char *file,
                                   int line,
                                   const char *format,
                                   ...)
 {
     (void)t;
-    (void)time;
     (void)file;
     (void)line;
     (void)format;

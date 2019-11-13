@@ -96,13 +96,12 @@ struct uv
 };
 
 /* Emit a log message with a certain level. */
-#define uvEmitf(LEVEL, UV, ...)                                            \
-    UV->tracer->emit(UV->tracer, UV->io->time(UV->io), __FILE__, __LINE__, \
-                     ##__VA_ARGS__);
-#define uvDebugf(UV, ...) uvEmitf(RAFT_DEBUG, UV, ##__VA_ARGS__);
-#define uvInfof(UV, ...) uvEmitf(RAFT_INFO, UV, ##__VA_ARGS__);
-#define uvWarnf(UV, ...) uvEmitf(RAFT_WARN, UV, ##__VA_ARGS__);
-#define uvErrorf(UV, ...) uvEmitf(RAFT_ERROR, UV, ##__VA_ARGS__);
+#define uvTracef(LEVEL, UV, ...) \
+    UV->tracer->emit(UV->tracer, __FILE__, __LINE__, ##__VA_ARGS__);
+#define uvDebugf(UV, ...) uvTracef(RAFT_DEBUG, UV, ##__VA_ARGS__);
+#define uvInfof(UV, ...) uvTracef(RAFT_INFO, UV, ##__VA_ARGS__);
+#define uvWarnf(UV, ...) uvTracef(RAFT_WARN, UV, ##__VA_ARGS__);
+#define uvErrorf(UV, ...) uvTracef(RAFT_ERROR, UV, ##__VA_ARGS__);
 
 /* Load Raft metadata from disk, choosing the most recent version (either the
  * metadata1 or metadata2 file). */

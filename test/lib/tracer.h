@@ -11,7 +11,6 @@
 #define TEAR_DOWN_TRACER
 
 void test_tracer_emit(struct raft_tracer *t,
-                      raft_time time,
                       const char *file,
                       int line,
                       const char *format,

@@ -378,7 +378,6 @@ struct raft_tracer
      * Emit a single trace message.
      */
     void (*emit)(struct raft_tracer *t,
-                 raft_time time,
                  const char *file,
                  int line,
                  const char *format,

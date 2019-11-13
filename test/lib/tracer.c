@@ -3,7 +3,6 @@
 #include "munit.h"
 
 void test_tracer_emit(struct raft_tracer *t,
-                      raft_time time,
                       const char *file,
                       int line,
                       const char *format,
@@ -12,7 +11,6 @@ void test_tracer_emit(struct raft_tracer *t,
     va_list args;
     char buf[1024];
     (void)t;
-    (void)time;
     va_start(args, format);
     vsnprintf(buf, sizeof buf, format, args);
     fprintf(stderr, "%20s:%*d - %s\n", file, 3, line, buf);
