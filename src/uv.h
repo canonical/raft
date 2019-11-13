@@ -8,6 +8,7 @@
 #include "queue.h"
 #include "uv_fs.h"
 #include "uv_os.h"
+#include "tracing.h"
 
 /* 8 Megabytes */
 #define UV__MAX_SEGMENT_SIZE (8 * 1024 * 1024)
@@ -96,8 +97,7 @@ struct uv
 };
 
 /* Emit a log message with a certain level. */
-#define uvTracef(LEVEL, UV, ...) \
-    UV->tracer->emit(UV->tracer, __FILE__, __LINE__, ##__VA_ARGS__);
+#define uvTracef(LEVEL, UV, ...) Tracef(UV->tracer, ##__VA_ARGS__)
 #define uvDebugf(UV, ...) uvTracef(RAFT_DEBUG, UV, ##__VA_ARGS__);
 #define uvInfof(UV, ...) uvTracef(RAFT_INFO, UV, ##__VA_ARGS__);
 #define uvWarnf(UV, ...) uvTracef(RAFT_WARN, UV, ##__VA_ARGS__);
