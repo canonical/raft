@@ -533,6 +533,17 @@ struct raft_io
                  raft_io_recv_cb recv_cb);
 
     /**
+     * Stop the backend.
+     *
+     * From now on the implementation must stop accepting RPC requests and must
+     * stop invoking the @tick and @recv callbacks.
+     *
+     * It's safe to assume that no more calls to append(), send(), truncate()
+     * etc. will be made from now on.
+     */
+    int (*stop)(struct raft_io *io);
+
+    /**
      * Stop calling the @tick and @recv callbacks, and complete or cancel any
      * in-progress I/O as soon as possible. Invoke the close callback once the
      * #raft_io instance can be freed.
