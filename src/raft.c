@@ -42,6 +42,7 @@ int raft_init(struct raft *r,
     if (r->address == NULL) {
         return RAFT_NOMEM;
     }
+    r->pending_io = 0;
     strcpy(r->address, address);
     r->current_term = 0;
     r->voted_for = 0;
