@@ -1,6 +1,8 @@
 #include "recv_install_snapshot.h"
+
 #include "assert.h"
 #include "convert.h"
+#include "io.h"
 #include "log.h"
 #include "logging.h"
 #include "recv.h"
@@ -8,8 +10,10 @@
 
 static void sendCb(struct raft_io_send *req, int status)
 {
+    struct raft *r = req->data;
     (void)status;
     raft_free(req);
+    IoPendingDecrement(r);
 }
 
 int rpcRecvInstallSnapshot(struct raft *r,
@@ -83,9 +87,12 @@ reply:
     if (req == NULL) {
         return RAFT_NOMEM;
     }
+    req->data = r;
 
+    IoPendingIncrement(r);
     rv = r->io->send(r->io, req, &message, sendCb);
     if (rv != 0) {
+        IoPendingDecrement(r);
         raft_free(req);
         return rv;
     }

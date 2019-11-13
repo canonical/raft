@@ -1,6 +1,8 @@
 #include "recv_request_vote.h"
+
 #include "assert.h"
 #include "election.h"
+#include "io.h"
 #include "logging.h"
 #include "recv.h"
 
@@ -13,8 +15,10 @@
 
 static void sendCb(struct raft_io_send *req, int status)
 {
+    struct raft *r = req->data;
     (void)status;
     raft_free(req);
+    IoPendingDecrement(r);
 }
 
 int recvRequestVote(struct raft *r,
@@ -84,9 +88,12 @@ reply:
     if (req == NULL) {
         return RAFT_NOMEM;
     }
+    req->data = r;
 
+    IoPendingIncrement(r);
     rv = r->io->send(r->io, req, &message, sendCb);
     if (rv != 0) {
+        IoPendingDecrement(r);
         raft_free(req);
         return rv;
     }

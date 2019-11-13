@@ -7,6 +7,7 @@
 #include "convert.h"
 #include "election.h"
 #include "err.h"
+#include "io.h"
 #include "log.h"
 #include "logging.h"
 #include "tracing.h"
@@ -42,7 +43,7 @@ int raft_init(struct raft *r,
     if (r->address == NULL) {
         return RAFT_NOMEM;
     }
-    r->pending_io = 0;
+    r->io_pending = 0;
     strcpy(r->address, address);
     r->current_term = 0;
     r->voted_for = 0;
@@ -65,20 +66,6 @@ int raft_init(struct raft *r,
     return 0;
 }
 
-static void io_close_cb(struct raft_io *io)
-{
-    struct raft *r = io->data;
-    infof(r, "stopped");
-
-    raft_free(r->address);
-    logClose(&r->log);
-    raft_configuration_close(&r->configuration);
-
-    if (r->close_cb != NULL) {
-        r->close_cb(r);
-    }
-}
-
 void raft_close(struct raft *r, void (*cb)(struct raft *r))
 {
     assert(r != NULL);
@@ -87,7 +74,9 @@ void raft_close(struct raft *r, void (*cb)(struct raft *r))
         convertToUnavailable(r);
     }
     r->close_cb = cb;
-    r->io->close(r->io, io_close_cb);
+    if (r->io_pending == 0) {
+        r->io->close(r->io, io_close_cb);
+    }
 }
 
 void raft_set_election_timeout(struct raft *r, const unsigned msecs)
