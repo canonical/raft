@@ -37,7 +37,3 @@ raft_index raft_last_applied(struct raft *r)
 {
     return r->last_applied;
 }
-
-void raft_set_logger_level(struct raft *r, unsigned level)
-{
-}

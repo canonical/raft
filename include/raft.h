@@ -943,12 +943,6 @@ RAFT_API void raft_set_snapshot_threshold(struct raft *r, unsigned n);
 RAFT_API void raft_set_snapshot_trailing(struct raft *r, unsigned n);
 
 /**
- * Set the logging level. Only messages with at this level or above will be
- * emitted.
- */
-RAFT_API void raft_set_logger_level(struct raft *r, unsigned level);
-
-/**
  * Return the code of the current raft state.
  */
 RAFT_API int raft_state(struct raft *r);
