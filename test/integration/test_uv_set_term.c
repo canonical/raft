@@ -37,9 +37,8 @@ static void tearDownUv(void *data)
     do {                                                             \
         int _rv;                                                     \
         f->io.stop(&f->io);                                          \
-        f->io.close(&f->io, NULL);                                   \
+        raft_uv_close(&f->io, NULL);                                 \
         LOOP_RUN(2);                                                 \
-        raft_uv_close(&f->io);                                       \
         _rv = raft_uv_init(&f->io, &f->loop, f->dir, &f->transport); \
         munit_assert_int(_rv, ==, 0);                                \
         f->io.config(&f->io, 1, "127.0.0.1:9000");                   \

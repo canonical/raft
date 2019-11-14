@@ -81,7 +81,7 @@ void raft_close(struct raft *r, void (*cb)(struct raft *r))
     r->io->stop(r->io);
 
     if (has_no_pending_io) {
-        r->io->close(r->io, io_close_cb);
+        IoCompleted(r);
     }
 }
 

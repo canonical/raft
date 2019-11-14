@@ -74,7 +74,7 @@ static void tearDownUv(void *data)
     } while (0)
 
 /* Invoke raft_uv_close(). */
-#define CLOSE raft_uv_close(&f->io)
+#define CLOSE raft_uv_close(&f->io, NULL)
 
 /* Write either the metadata1 or metadata2 file, filling it with the given
  * values. */

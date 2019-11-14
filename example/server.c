@@ -260,7 +260,7 @@ errAfterRaftInit:
 errAfterFsmInit:
     fsmClose(&s->fsm);
 errAfterIoInit:
-    raft_uv_close(&s->io);
+    raft_uv_close(&s->io, NULL);
 errAfterTcpInit:
     raft_uv_tcp_close(&s->transport, NULL);
 errAfterTimerInit:
@@ -279,13 +279,19 @@ static void tcpCloseCb(struct raft_uv_transport *t)
     uv_loop_close(&s->loop);
 }
 
+static void ioCloseCb(struct raft_io *io)
+{
+    struct server *s = io->data;
+    s->transport.data = s;
+    raft_uv_tcp_close(&s->transport, tcpCloseCb);
+}
+
 /* Release the memory the raft instance and all its dependencies. */
 static void serverClose(struct server *s)
 {
     fsmClose(&s->fsm);
-    raft_uv_close(&s->io);
-    s->transport.data = s;
-    raft_uv_tcp_close(&s->transport, tcpCloseCb);
+    s->io.data = s;
+    raft_uv_close(&s->io, ioCloseCb);
 }
 
 /* Called after a request to apply a new command to the FSM has been

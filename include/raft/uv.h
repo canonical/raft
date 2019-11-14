@@ -84,7 +84,16 @@ RAFT_API int raft_uv_init(struct raft_io *io,
                           const char *dir,
                           struct raft_uv_transport *transport);
 
-RAFT_API void raft_uv_close(struct raft_io *io);
+/**
+ * Close the backend and realease all resources it acquired.
+ *
+ * Abort any in-progress I/O. The associated callacks will be invoked with
+ * #RAFT_CANCELED.
+ *
+ * The @cb callback passed to this method will be invoked once it's safe to
+ * release the memory of the transport object.
+ */
+RAFT_API void raft_uv_close(struct raft_io *io, raft_io_close_cb cb);
 
 /**
  * Set the block size that will be used for direct I/O.
@@ -211,11 +220,11 @@ RAFT_API int raft_uv_tcp_init(struct raft_uv_transport *t,
 /**
  * Close the transport.
  *
- * - Abort all pending @connect requests. The callback of each pending
- *   request will be invoked with #RAFT_CANCELED.
+ * Abort all pending @connect requests. The callback of each pending request
+ * will be invoked with #RAFT_CANCELED.
  *
- * - Invoke the @cb callback passed to this method will be invoked once it's
- *   safe to release the memory of the transport object.
+ * The @cb callback passed to this method will be invoked once it's safe to
+ * release the memory of the transport object.
  */
 RAFT_API void raft_uv_tcp_close(struct raft_uv_transport *t,
                                 raft_uv_transport_close_cb cb);

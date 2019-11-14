@@ -195,6 +195,7 @@ static void uvPrepareCreateFileAfterWorkCb(uv_work_t *work, int status)
         }
         Tracef(uv->tracer, "canceled creation of %s", s->filename);
         raft_free(s);
+	uvMaybeClose(uv);
         return;
     }
 

@@ -544,13 +544,6 @@ struct raft_io
     int (*stop)(struct raft_io *io);
 
     /**
-     * Stop calling the @tick and @recv callbacks, and complete or cancel any
-     * in-progress I/O as soon as possible. Invoke the close callback once the
-     * #raft_io instance can be freed.
-     */
-    int (*close)(struct raft_io *io, raft_io_close_cb cb);
-
-    /**
      * Bootstrap a server belonging to a new cluster.
      *
      * The I/O implementation must synchronously persist the given configuration

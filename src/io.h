@@ -11,6 +11,8 @@ void IoPendingIncrement(struct raft *r);
 /* Decrement the io_pending counter, possibly invoking the close callback. */
 void IoPendingDecrement(struct raft *r);
 
-void io_close_cb(struct raft_io *io);
+/* Invoked upon shutdown when all pending I/O has been completed and the close
+ * callback can be invoked. */
+void IoCompleted(struct raft *r);
 
 #endif /* IO_H_ */

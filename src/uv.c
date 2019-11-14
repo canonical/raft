@@ -28,13 +28,9 @@
 static void uvConfig(struct raft_io *io, unsigned id, const char *address)
 {
     struct uv *uv;
-    int rv;
     uv = io->impl;
     uv->id = id;
     uv->transport->config(uv->transport, id, address);
-    rv = uv_timer_init(uv->loop, &uv->timer);
-    assert(rv == 0); /* This should never fail */
-    uv->timer.data = uv;
 }
 
 /* Periodic timer callback */
@@ -73,6 +69,7 @@ static bool uvHasPendingDiskIO(struct uv *uv)
     return !QUEUE_IS_EMPTY(&uv->append_segments) ||
            !QUEUE_IS_EMPTY(&uv->finalize_reqs) ||
            uv->finalize_work.data != NULL ||
+           uv->prepare_inflight != NULL ||
            !QUEUE_IS_EMPTY(&uv->truncate_reqs) ||
            uv->truncate_work.data != NULL ||
            !QUEUE_IS_EMPTY(&uv->snapshot_put_reqs) ||
@@ -95,9 +92,16 @@ void uvMaybeClose(struct uv *uv)
     }
 
     uv->state = UV__CLOSED;
+    if (uv->clients != NULL) {
+        raft_free(uv->clients);
+    }
+    if (uv->servers != NULL) {
+        raft_free(uv->servers);
+    }
     if (uv->close_cb != NULL) {
         uv->close_cb(uv->io);
     }
+    raft_free(uv);
 }
 
 static void uvTickTimerCloseCb(uv_handle_t *handle)
@@ -116,25 +120,6 @@ static int uvStop(struct raft_io *io) {
     assert(rv == 0);
     rv = uv->transport->stop(uv->transport);
     assert(rv == 0);
-    return 0;
-}
-
-/* Implementation of raft_io->close. */
-static int uvClose(struct raft_io *io, void (*cb)(struct raft_io *io))
-{
-    struct uv *uv;
-    int rv;
-    uv = io->impl;
-    uv->close_cb = cb;
-    uv->closing = true;
-    rv = uv_timer_stop(&uv->timer);
-    assert(rv == 0);
-    uvSendClose(uv);
-    uvRecvClose(uv);
-    uvPrepareClose(uv);
-    uvAppendClose(uv);
-    uvTruncateClose(uv);
-    uv_close((uv_handle_t *)&uv->timer, uvTickTimerCloseCb);
     return 0;
 }
 
@@ -598,6 +583,8 @@ int raft_uv_init(struct raft_io *io,
     QUEUE_INIT(&uv->snapshot_get_reqs);
     uv->snapshot_put_work.data = NULL;
     uv->metadata = metadata;
+    rv = uv_timer_init(uv->loop, &uv->timer);
+    assert(rv == 0); /* This should never fail */
     uv->timer.data = uv;
     uv->tick_cb = NULL; /* Set by raft_io->start() */
     uv->recv_cb = NULL; /* Set by raft_io->start() */
@@ -611,7 +598,6 @@ int raft_uv_init(struct raft_io *io,
     io->config = uvConfig;
     io->start = uvStart;
     io->stop = uvStop;
-    io->close = uvClose;
     io->load = uvLoad;
     io->bootstrap = uvBootstrap;
     io->recover = uvRecover;
@@ -635,17 +621,21 @@ err:
     return rv;
 }
 
-void raft_uv_close(struct raft_io *io)
+void raft_uv_close(struct raft_io *io, raft_io_close_cb cb)
 {
     struct uv *uv;
+    int rv;
     uv = io->impl;
-    if (uv->clients != NULL) {
-        raft_free(uv->clients);
-    }
-    if (uv->servers != NULL) {
-        raft_free(uv->servers);
-    }
-    raft_free(uv);
+    uv->close_cb = cb;
+    uv->closing = true;
+    rv = uv_timer_stop(&uv->timer);
+    assert(rv == 0);
+    uvSendClose(uv);
+    uvRecvClose(uv);
+    uvPrepareClose(uv);
+    uvAppendClose(uv);
+    uvTruncateClose(uv);
+    uv_close((uv_handle_t *)&uv->timer, uvTickTimerCloseCb);
 }
 
 void raft_uv_set_segment_size(struct raft_io *io, size_t size)

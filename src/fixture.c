@@ -449,28 +449,6 @@ static int ioMethodStop(struct raft_io *raft_io)
     return 0;
 }
 
-static int ioMethodClose(struct raft_io *raft_io,
-                         void (*cb)(struct raft_io *io))
-{
-    struct io *io = raft_io->impl;
-    size_t i;
-    for (i = 0; i < io->n; i++) {
-        struct raft_entry *entry = &io->entries[i];
-        raft_free(entry->buf.base);
-    }
-    if (io->entries != NULL) {
-        raft_free(io->entries);
-    }
-    if (io->snapshot != NULL) {
-        snapshotClose(io->snapshot);
-        raft_free(io->snapshot);
-    }
-    if (cb != NULL) {
-        cb(raft_io);
-    }
-    return 0;
-}
-
 static int ioMethodLoad(struct raft_io *io,
                         unsigned snapshot_trailing,
                         raft_term *term,
@@ -916,7 +894,6 @@ static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
     raft_io->config = ioMethodConfig;
     raft_io->start = ioMethodStart;
     raft_io->stop = ioMethodStop;
-    raft_io->close = ioMethodClose;
     raft_io->load = ioMethodLoad;
     raft_io->bootstrap = ioMethodBootstrap;
     raft_io->recover = ioMethodRecover;
@@ -934,9 +911,22 @@ static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
 }
 
 /* Release all memory held by the given stub I/O implementation. */
-void ioClose(struct raft_io *io)
+void ioClose(struct raft_io *raft_io)
 {
-    raft_free(io->impl);
+    struct io *io = raft_io->impl;
+    size_t i;
+    for (i = 0; i < io->n; i++) {
+        struct raft_entry *entry = &io->entries[i];
+        raft_free(entry->buf.base);
+    }
+    if (io->entries != NULL) {
+        raft_free(io->entries);
+    }
+    if (io->snapshot != NULL) {
+        snapshotClose(io->snapshot);
+        raft_free(io->snapshot);
+    }
+    raft_free(io);
 }
 
 /* Custom logging function which include the server ID. */
