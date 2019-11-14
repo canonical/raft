@@ -35,7 +35,6 @@ int raft_init(struct raft *r,
     r->io = io;
     r->io->data = r;
     r->fsm = fsm;
-    r->logger = logger;
     r->tracer = &NoopTracer;
     r->id = id;
     /* Make a copy of the address */

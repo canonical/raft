@@ -8,9 +8,8 @@
 #include "../include/raft.h"
 
 /* Emit a log message */
-#define emitf(LEVEL, R, ...)                                                  \
-    R->logger->emit(R->logger, LEVEL, R->io->time(R->io), __FILE__, __LINE__, \
-                    ##__VA_ARGS__);
+#define emitf(LEVEL, R, ...) \
+    R->tracer->emit(R->tracer, __FILE__, __LINE__, ##__VA_ARGS__);
 
 /* Emit a log message with a certain level. */
 #define debugf(R, ...) emitf(RAFT_DEBUG, R, ##__VA_ARGS__);

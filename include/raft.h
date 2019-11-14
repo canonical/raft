@@ -698,7 +698,6 @@ typedef void (*raft_close_cb)(struct raft *raft);
 struct raft
 {
     void *data;                 /* Custom user data. */
-    struct raft_logger *logger; /* Logging implementation. */
     struct raft_tracer *tracer; /* Tracer implementation. */
     struct raft_io *io;         /* Disk and network I/O implementation. */
     struct raft_fsm *fsm;       /* User-defined FSM to apply commands to. */
