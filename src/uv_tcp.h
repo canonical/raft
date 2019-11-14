@@ -22,8 +22,8 @@ struct uvTcp
     queue connect_reqs;                  /* Pending connection requests */
 };
 
-/* Implementation of raft_uv_transport->listen. */
-int uvTcpListen(struct raft_uv_transport *t, raft_uv_accept_cb cb);
+/* Implementation of raft_uv_transport->start. */
+int uvTcpStart(struct raft_uv_transport *t, raft_uv_accept_cb cb);
 
 /* Close the listener handle and all pending incoming connections being
  * accepted. */

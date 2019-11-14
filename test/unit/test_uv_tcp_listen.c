@@ -69,7 +69,7 @@ static void *setup(const MunitParameter params[], void *user_data)
     strcpy(cursor, "127.0.0.1:666");
 
     f->transport.data = f;
-    rv = f->transport.listen(&f->transport, acceptCb);
+    rv = f->transport.start(&f->transport, acceptCb);
     munit_assert_int(rv, ==, 0);
 
     return f;

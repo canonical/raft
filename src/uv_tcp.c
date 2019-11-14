@@ -79,7 +79,7 @@ int raft_uv_tcp_init(struct raft_uv_transport *transport,
 
     transport->impl = t;
     transport->config = uvTcpConfig;
-    transport->listen = uvTcpListen;
+    transport->start = uvTcpStart;
     transport->stop = uvTcpStop;
     transport->connect = uvTcpConnect;
     transport->close = uvTcpClose;

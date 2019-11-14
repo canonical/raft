@@ -262,7 +262,7 @@ err:
     assert(rv != 0);
 }
 
-int uvTcpListen(struct raft_uv_transport *transport, raft_uv_accept_cb cb)
+int uvTcpStart(struct raft_uv_transport *transport, raft_uv_accept_cb cb)
 {
     struct uvTcp *t;
     struct sockaddr_in addr;
