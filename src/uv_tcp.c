@@ -12,15 +12,11 @@ static void uvTcpConfig(struct raft_uv_transport *transport,
                         const char *address)
 {
     struct UvTcp *t;
-    int rv;
     assert(id > 0);
     assert(address != NULL);
     t = transport->impl;
     t->id = id;
     t->address = address;
-    rv = uv_tcp_init(t->loop, &t->listener);
-    assert(rv == 0);
-    t->listener.data = t;
 }
 
 int raft_uv_tcp_init(struct raft_uv_transport *transport,

@@ -38,7 +38,6 @@ static void tearDown(void *data)
 {
     struct fixture *f = data;
     if (!f->closed) {
-        f->transport.stop(&f->transport);
         raft_uv_tcp_close(&f->transport, NULL);
     }
     LOOP_STOP;
@@ -152,7 +151,6 @@ static void connectCbAssertFail(struct raft_uv_connect *req,
             LOOP_RUN(1);                                              \
             munit_assert_false(_result.done);                         \
         }                                                             \
-        f->transport.stop(&f->transport);                             \
         raft_uv_tcp_close(&f->transport, NULL);                       \
         f->closed = true;                                             \
         for (_i = 0; _i < 2; _i++) {                                  \
