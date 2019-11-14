@@ -221,20 +221,9 @@ int UvTcpConnect(struct raft_uv_transport *transport,
 }
 
 /* Abort a connection request. */
-static void abortConnection(struct UvTcpConnect *r)
+void UvTcpConnectCancel(struct UvTcpConnect *r)
 {
     QUEUE_REMOVE(&r->queue);
     r->status = RAFT_CANCELED;
     uv_close((struct uv_handle_s *)r->tcp, closeCb);
-}
-
-void UvTcpConnectClose(struct UvTcp *t)
-{
-    while (!QUEUE_IS_EMPTY(&t->connect_reqs)) {
-        queue *head;
-        struct UvTcpConnect *r;
-        head = QUEUE_HEAD(&t->connect_reqs);
-        r = QUEUE_DATA(head, struct UvTcpConnect, queue);
-        abortConnection(r);
-    }
 }

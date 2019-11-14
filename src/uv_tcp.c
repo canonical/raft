@@ -58,7 +58,14 @@ void raft_uv_tcp_close(struct raft_uv_transport *transport,
     struct UvTcp *t = transport->impl;
     t->close_cb = cb;
     t->address = NULL;
-    UvTcpConnectClose(t);
+
+    while (!QUEUE_IS_EMPTY(&t->connect_reqs)) {
+        queue *head;
+        struct UvTcpConnect *r;
+        head = QUEUE_HEAD(&t->connect_reqs);
+        r = QUEUE_DATA(head, struct UvTcpConnect, queue);
+        UvTcpConnectCancel(r);
+    }
 
     /* If the listening handle has already been closed, invoke the close
      * callback immediately. */
