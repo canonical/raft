@@ -100,27 +100,13 @@ struct raft_fsm
 }
 ```
 
-Create an instance of the stock ```raft_logger``` interface implementation:
-
-```C
-struct raft_logger logger;
-raft_stream_logger_init (&logger, stdout);
-```
-
-or
-
-```C
-struct raft_logger logger;
-raft_ring_logger_init (&logger, buffer_size);
-```
-
 Pick a unique ID and address for each server and initialize the raft object:
 
 ```C
 unsigned id = 1;
 const char *address = "192.168.1.1:9999";
 struct raft raft;
-raft_init(&raft, &io, &fsm, &logger, id, address);
+raft_init(&raft, &io, &fsm, id, address);
 ```
 
 If it's the first time you start the cluster, create a configuration object
