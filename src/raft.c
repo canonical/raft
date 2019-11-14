@@ -68,13 +68,19 @@ int raft_init(struct raft *r,
 
 void raft_close(struct raft *r, void (*cb)(struct raft *r))
 {
-    assert(r != NULL);
+    bool has_no_pending_io;
     assert(r->close_cb == NULL);
     if (r->state != RAFT_UNAVAILABLE) {
         convertToUnavailable(r);
     }
     r->close_cb = cb;
-    if (r->io_pending == 0) {
+
+    /* Check now if there is pending I/O and remember, because io->stop() could
+     * invoke callbacks synchronously and drop io_pending to zero. */
+    has_no_pending_io = r->io_pending == 0;
+    r->io->stop(r->io);
+
+    if (has_no_pending_io) {
         r->io->close(r->io, io_close_cb);
     }
 }

@@ -36,6 +36,7 @@ static void tearDownUv(void *data)
 #define REINIT                                                       \
     do {                                                             \
         int _rv;                                                     \
+        f->io.stop(&f->io);                                          \
         f->io.close(&f->io, NULL);                                   \
         LOOP_RUN(2);                                                 \
         raft_uv_close(&f->io);                                       \

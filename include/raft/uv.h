@@ -106,7 +106,8 @@ RAFT_API void raft_uv_set_segment_size(struct raft_io *io, size_t size);
 /**
  * Emit low-level debug messages using the given tracer.
  */
-RAFT_API void raft_uv_set_tracer(struct raft_io *io, struct raft_tracer *tracer);
+RAFT_API void raft_uv_set_tracer(struct raft_io *io,
+                                 struct raft_tracer *tracer);
 
 /**
  * Callback invoked by the transport implementation when a new incoming
@@ -178,6 +179,14 @@ struct raft_uv_transport
     int (*listen)(struct raft_uv_transport *t, raft_uv_accept_cb cb);
 
     /**
+     * Stop listening.
+     *
+     * The implementation must stop accepting incoming connections. The @cb
+     * callback passed to @listen must not be invoked anymore.
+     */
+    int (*stop)(struct raft_uv_transport *t);
+
+    /**
      * Connect to the server with the given ID and address.
      *
      * The @cb callback must be invoked when the connection has been established
@@ -194,9 +203,6 @@ struct raft_uv_transport
      * Close the transport.
      *
      * The implementation must:
-     *
-     * - Stop accepting incoming connections. The @cb callback passed to @listen
-     *   must not be invoked anymore.
      *
      * - Abort all pending @connect requests. The callback of each pending
      *   request must be invoked with #RAFT_CANCELED.

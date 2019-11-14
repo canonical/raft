@@ -1,12 +1,10 @@
+#include "../../include/raft.h"
+#include "../../include/raft/uv.h"
+#include "../../src/byte.h"
 #include "../lib/heap.h"
 #include "../lib/loop.h"
 #include "../lib/runner.h"
 #include "../lib/tcp.h"
-
-#include "../../include/raft.h"
-#include "../../include/raft/uv.h"
-
-#include "../../src/byte.h"
 
 TEST_MODULE(uv_tcp_listen)
 
@@ -82,6 +80,7 @@ static void tear_down(void *data)
 {
     struct fixture *f = data;
     if (!f->closed) {
+        f->transport.stop(&f->transport);
         f->transport.close(&f->transport, NULL);
     }
     LOOP_STOP;

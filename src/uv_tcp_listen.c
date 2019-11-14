@@ -1,7 +1,6 @@
 #include <string.h>
 
 #include "../include/raft/uv.h"
-
 #include "assert.h"
 #include "byte.h"
 #include "uv_ip.h"
@@ -283,6 +282,7 @@ int uvTcpListen(struct raft_uv_transport *transport, raft_uv_accept_cb cb)
     }
     rv = uv_listen((uv_stream_t *)&t->listener, 1, listenCb);
     if (rv != 0) {
+        t->listener.data = NULL;
         /* UNTESTED: what are the error conditions? */
         return RAFT_IOERR;
     }

@@ -31,7 +31,7 @@
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(C, ...) Tracef(C->uv->tracer, ##__VA_ARGS__)
+#define tracef(C, ...) Tracef(C->uv->tracer, __VA_ARGS__)
 #else
 #define tracef(C, ...)
 #endif
@@ -443,6 +443,22 @@ static void streamCloseCb(struct uv_handle_s *handle)
     uv_close((struct uv_handle_s *)&c->timer, timerCloseCb);
 }
 
+static void stopClient(struct uvClient *c)
+{
+    while (!QUEUE_IS_EMPTY(&c->send_reqs)) {
+        queue *head;
+        struct send *r;
+        head = QUEUE_HEAD(&c->send_reqs);
+        r = QUEUE_DATA(head, struct send, queue);
+        QUEUE_REMOVE(head);
+        if (r->req->cb != NULL) {
+            r->req->cb(r->req, RAFT_CANCELED);
+        }
+        closeRequest(r);
+        raft_free(r);
+    }
+}
+
 static void closeClient(struct uvClient *c)
 {
     int rv;
@@ -490,6 +506,14 @@ static void closeClient(struct uvClient *c)
 
 out:
     c->state = CLOSING;
+}
+
+void uvSendStop(struct uv *uv)
+{
+    unsigned i;
+    for (i = 0; i < uv->n_clients; i++) {
+        stopClient(uv->clients[i]);
+    }
 }
 
 void uvSendClose(struct uv *uv)

@@ -68,6 +68,8 @@
 #define UV_CLOSE                         \
     if (!f->closed) {                    \
         int rv_;                         \
+        rv_ = f->io.stop(&f->io);        \
+        munit_assert_int(rv_, ==, 0);    \
         rv_ = f->io.close(&f->io, NULL); \
         munit_assert_int(rv_, ==, 0);    \
         f->closed = true;                \

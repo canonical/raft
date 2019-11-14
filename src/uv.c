@@ -113,6 +113,19 @@ static void uvTransportCloseCb(struct raft_uv_transport *t)
     uv_close((uv_handle_t *)&uv->timer, uvTickTimerCloseCb);
 }
 
+/* Implementation of raft_io->stop. */
+static int uvStop(struct raft_io *io) {
+    struct uv *uv;
+    int rv;
+    uv = io->impl;
+    uvSendStop(uv);
+    rv = uv_timer_stop(&uv->timer);
+    assert(rv == 0);
+    rv = uv->transport->stop(uv->transport);
+    assert(rv == 0);
+    return 0;
+}
+
 /* Implementation of raft_io->close. */
 static int uvClose(struct raft_io *io, void (*cb)(struct raft_io *io))
 {
@@ -604,6 +617,7 @@ int raft_uv_init(struct raft_io *io,
     io->impl = uv;
     io->config = uvConfig;
     io->start = uvStart;
+    io->stop = uvStop;
     io->close = uvClose;
     io->load = uvLoad;
     io->bootstrap = uvBootstrap;
