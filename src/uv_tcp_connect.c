@@ -195,7 +195,7 @@ err:
     return rv;
 }
 
-int uvTcpConnect(struct raft_uv_transport *transport,
+int UvTcpConnect(struct raft_uv_transport *transport,
                  struct raft_uv_connect *req,
                  unsigned id,
                  const char *address,
@@ -241,7 +241,7 @@ static void abortConnection(struct connect *r)
     uv_close((struct uv_handle_s *)r->tcp, closeCb);
 }
 
-void uvTcpConnectClose(struct UvTcp *t)
+void UvTcpConnectClose(struct UvTcp *t)
 {
     while (!QUEUE_IS_EMPTY(&t->connect_reqs)) {
         queue *head;

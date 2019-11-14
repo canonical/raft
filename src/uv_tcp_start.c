@@ -262,7 +262,7 @@ err:
     assert(rv != 0);
 }
 
-int uvTcpStart(struct raft_uv_transport *transport, raft_uv_accept_cb cb)
+int UvTcpStart(struct raft_uv_transport *transport, raft_uv_accept_cb cb)
 {
     struct UvTcp *t;
     struct sockaddr_in addr;
@@ -290,7 +290,7 @@ int uvTcpStart(struct raft_uv_transport *transport, raft_uv_accept_cb cb)
     return 0;
 }
 
-void uvTcpListenClose(struct UvTcp *t)
+static void uvTcpListenClose(struct UvTcp *t)
 {
     /* Abort all connections currently being accepted */
     while (!QUEUE_IS_EMPTY(&t->accept_conns)) {
@@ -301,3 +301,28 @@ void uvTcpListenClose(struct UvTcp *t)
         closeConn(r);
     }
 }
+
+/* Close callback for uvTcp->listener. */
+static void listenerCloseCb(struct uv_handle_s *handle)
+{
+    struct UvTcp *t = handle->data;
+    t->listener.data = NULL;
+    if (t->close_cb != NULL) {
+        t->close_cb(t->transport);
+    }
+    /* If the address has been reset, it means that we have been closed. Release
+     * the transport->impl memory. */
+    if (t->address == NULL) {
+        raft_free(t);
+    }
+}
+
+/* Implementation of raft_uv_transport->stop. */
+int UvTcpStop(struct raft_uv_transport *transport)
+{
+    struct UvTcp *t = transport->impl;
+    uvTcpListenClose(t);
+    uv_close((struct uv_handle_s *)&t->listener, listenerCloseCb);
+    return 0;
+}
+

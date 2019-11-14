@@ -23,20 +23,19 @@ struct UvTcp
 };
 
 /* Implementation of raft_uv_transport->start. */
-int uvTcpStart(struct raft_uv_transport *t, raft_uv_accept_cb cb);
+int UvTcpStart(struct raft_uv_transport *t, raft_uv_accept_cb cb);
 
-/* Close the listener handle and all pending incoming connections being
- * accepted. */
-void uvTcpListenClose(struct UvTcp *t);
+/* Implementation of raft_uv_transport->stop. */
+int UvTcpStop(struct raft_uv_transport *t);
 
 /* Implementation of raft_uv_transport->connect. */
-int uvTcpConnect(struct raft_uv_transport *transport,
+int UvTcpConnect(struct raft_uv_transport *transport,
                  struct raft_uv_connect *req,
                  unsigned id,
                  const char *address,
                  raft_uv_connect_cb cb);
 
 /* Cancel all pending connection requests. */
-void uvTcpConnectClose(struct UvTcp *t);
+void UvTcpConnectClose(struct UvTcp *t);
 
 #endif /* UV_TCP_H_ */

@@ -23,30 +23,6 @@ static void uvTcpConfig(struct raft_uv_transport *transport,
     t->listener.data = t;
 }
 
-/* Close callback for uvTcp->listener. */
-static void listenerCloseCb(struct uv_handle_s *handle)
-{
-    struct UvTcp *t = handle->data;
-    t->listener.data = NULL;
-    if (t->close_cb != NULL) {
-        t->close_cb(t->transport);
-    }
-    /* If the address has been reset, it means that we have been closed. Release
-     * the transport->impl memory. */
-    if (t->address == NULL) {
-        raft_free(t);
-    }
-}
-
-/* Implementation of raft_uv_transport->stop. */
-static int uvTcpStop(struct raft_uv_transport *transport)
-{
-    struct UvTcp *t = transport->impl;
-    uvTcpListenClose(t);
-    uv_close((struct uv_handle_s *)&t->listener, listenerCloseCb);
-    return 0;
-}
-
 int raft_uv_tcp_init(struct raft_uv_transport *transport,
                      struct uv_loop_s *loop)
 {
@@ -69,9 +45,9 @@ int raft_uv_tcp_init(struct raft_uv_transport *transport,
 
     transport->impl = t;
     transport->config = uvTcpConfig;
-    transport->start = uvTcpStart;
-    transport->stop = uvTcpStop;
-    transport->connect = uvTcpConnect;
+    transport->start = UvTcpStart;
+    transport->stop = UvTcpStop;
+    transport->connect = UvTcpConnect;
 
     return 0;
 }
@@ -82,7 +58,7 @@ void raft_uv_tcp_close(struct raft_uv_transport *transport,
     struct UvTcp *t = transport->impl;
     t->close_cb = cb;
     t->address = NULL;
-    uvTcpConnectClose(t);
+    UvTcpConnectClose(t);
 
     /* If the listening handle has already been closed, invoke the close
      * callback immediately. */
