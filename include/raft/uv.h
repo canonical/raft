@@ -165,12 +165,14 @@ struct raft_uv_transport
     void *impl;
 
     /**
-     * Initialize the transport with the given server's identity.
+     * Configure the transport with the given server's identity.
      */
-    int (*init)(struct raft_uv_transport *t, unsigned id, const char *address);
+    void (*config)(struct raft_uv_transport *t,
+                   unsigned id,
+                   const char *address);
 
     /**
-     * Listen for incoming connections.
+     * Start listening for incoming connections.
      *
      * Once a new connection is accepted, the @cb callback passed in the
      * initializer must be invoked with the relevant details of the connecting

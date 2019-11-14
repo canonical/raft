@@ -6,10 +6,10 @@
 #include "../include/raft/uv.h"
 #include "assert.h"
 
-/* Implementation of raft_io_uv_transport->init. */
-static int uvTcpInit(struct raft_uv_transport *transport,
-                     unsigned id,
-                     const char *address)
+/* Implementation of raft_io_uv_transport->config. */
+static void uvTcpConfig(struct raft_uv_transport *transport,
+                        unsigned id,
+                        const char *address)
 {
     struct uvTcp *t;
     int rv;
@@ -19,7 +19,6 @@ static int uvTcpInit(struct raft_uv_transport *transport,
     rv = uv_tcp_init(t->loop, &t->listener);
     assert(rv == 0);
     t->listener.data = t;
-    return 0;
 }
 
 /* Close callback for uvTcp->listener. */
@@ -79,7 +78,7 @@ int raft_uv_tcp_init(struct raft_uv_transport *transport,
     QUEUE_INIT(&t->connect_reqs);
 
     transport->impl = t;
-    transport->init = uvTcpInit;
+    transport->config = uvTcpConfig;
     transport->listen = uvTcpListen;
     transport->stop = uvTcpStop;
     transport->connect = uvTcpConnect;

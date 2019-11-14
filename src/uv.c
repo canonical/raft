@@ -31,8 +31,7 @@ static void uvConfig(struct raft_io *io, unsigned id, const char *address)
     int rv;
     uv = io->impl;
     uv->id = id;
-    rv = uv->transport->init(uv->transport, id, address);
-    assert(rv == 0);
+    uv->transport->config(uv->transport, id, address);
     rv = uv_timer_init(uv->loop, &uv->timer);
     assert(rv == 0); /* This should never fail */
     uv->timer.data = uv;
