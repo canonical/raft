@@ -851,7 +851,6 @@ struct raft
 RAFT_API int raft_init(struct raft *r,
                        struct raft_io *io,
                        struct raft_fsm *fsm,
-                       struct raft_logger *logger,
                        unsigned id,
                        const char *address);
 
