@@ -22,6 +22,19 @@ struct UvTcp
     queue connect_reqs;                  /* Pending connection requests */
 };
 
+/* Hold state for a single connection request. */
+struct UvTcpConnect
+{
+    struct UvTcp *t;             /* Transport implementation */
+    struct raft_uv_connect *req; /* User request */
+    uv_buf_t handshake;          /* Handshake data */
+    struct uv_tcp_s *tcp;        /* TCP connection socket handle */
+    struct uv_connect_s connect; /* TCP connectionr request */
+    struct uv_write_s write;     /* TCP handshake request */
+    int status;                  /* Returned to the request callback */
+    queue queue;                 /* Pending connect queue */
+};
+
 /* Implementation of raft_uv_transport->start. */
 int UvTcpStart(struct raft_uv_transport *t, raft_uv_accept_cb cb);
 
