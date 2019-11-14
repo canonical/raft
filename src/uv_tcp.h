@@ -16,8 +16,8 @@ struct UvTcp
     unsigned id;                         /* ID of this raft server */
     const char *address;                 /* Address of this raft server */
     struct uv_tcp_s listener;            /* Listening TCP socket handle */
-    raft_uv_accept_cb accept_cb;         /* After accepting a connection */
-    raft_uv_transport_close_cb close_cb; /* When it's safe to free us */
+    raft_uv_accept_cb accept_cb;         /* Call after accepting a connection */
+    raft_uv_transport_close_cb close_cb; /* Call when it's safe to free us */
     queue accept_conns;                  /* Connections being accepted */
     queue connect_reqs;                  /* Pending connection requests */
 };
