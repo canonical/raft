@@ -6,8 +6,6 @@
 #include "../lib/runner.h"
 #include "../lib/tcp.h"
 
-TEST_MODULE(uv_tcp_connect)
-
 /******************************************************************************
  *
  * Fixture
@@ -107,13 +105,10 @@ static void connect_cb(struct raft_uv_connect *req,
  *
  *****************************************************************************/
 
-TEST_SUITE(success)
-
-TEST_SETUP(success, setup)
-TEST_TEAR_DOWN(success, tear_down)
+SUITE(tcp_connect)
 
 /* Successfully connect to the peer. */
-TEST_CASE(success, first, NULL)
+TEST(tcp_connect, first, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -124,19 +119,8 @@ TEST_CASE(success, first, NULL)
     return MUNIT_OK;
 }
 
-/******************************************************************************
- *
- * Failure scenarios
- *
- *****************************************************************************/
-
-TEST_SUITE(error)
-
-TEST_SETUP(error, setup)
-TEST_TEAR_DOWN(error, tear_down)
-
 /* The peer has shutdown */
-TEST_CASE(error, refused, NULL)
+TEST(tcp_connect, refused, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -156,7 +140,7 @@ static MunitParameterEnum connect_error_oom_params[] = {
 };
 
 /* Out of memory conditions. */
-TEST_CASE(error, oom, connect_error_oom_params)
+TEST(tcp_connect, oom, setup, tear_down, 0, connect_error_oom_params)
 {
     struct fixture *f = data;
     (void)params;
@@ -175,7 +159,7 @@ static MunitParameterEnum connect_error_oom_async_params[] = {
 };
 
 /* Out of memory condition after the attempt has started. */
-TEST_CASE(error, oom_async, connect_error_oom_async_params)
+TEST(tcp_connect, oom_assync, setup, tear_down, 0, connect_error_oom_async_params)
 {
     struct fixture *f = data;
     (void)params;
@@ -185,20 +169,9 @@ TEST_CASE(error, oom_async, connect_error_oom_async_params)
     return MUNIT_OK;
 }
 
-/******************************************************************************
- *
- * Close scenarios
- *
- *****************************************************************************/
-
-TEST_SUITE(close)
-
-TEST_SETUP(close, setup)
-TEST_TEAR_DOWN(close, tear_down)
-
 /* The transport is closed immediately after a connect request as been
  * submitted. The request's callback is invoked with RAFT_CANCELED. */
-TEST_CASE(close, immediately, NULL)
+TEST(tcp_connect, closeImmediately, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -209,7 +182,7 @@ TEST_CASE(close, immediately, NULL)
 }
 
 /* The transport gets closed during the handshake. */
-TEST_CASE(close, handshake, NULL)
+TEST(tcp_connect, closeDuringHandshake, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
