@@ -35,7 +35,7 @@ struct handshake
 /* Hold handshake data for a new connection being established. */
 struct conn
 {
-    struct uvTcp *t;            /* Transport implementation */
+    struct UvTcp *t;            /* Transport implementation */
     struct uv_tcp_s *tcp;       /* TCP connection socket handle */
     struct handshake handshake; /* Handshake data */
     queue queue;                /* Pending accept queue */
@@ -231,7 +231,7 @@ err_after_tcp_init:
  * and start receiving handshake data. */
 static void listenCb(struct uv_stream_s *stream, int status)
 {
-    struct uvTcp *t = stream->data;
+    struct UvTcp *t = stream->data;
     struct conn *c;
     int rv;
     assert(stream == (struct uv_stream_s *)&t->listener);
@@ -264,7 +264,7 @@ err:
 
 int uvTcpStart(struct raft_uv_transport *transport, raft_uv_accept_cb cb)
 {
-    struct uvTcp *t;
+    struct UvTcp *t;
     struct sockaddr_in addr;
     int rv;
 
@@ -290,7 +290,7 @@ int uvTcpStart(struct raft_uv_transport *transport, raft_uv_accept_cb cb)
     return 0;
 }
 
-void uvTcpListenClose(struct uvTcp *t)
+void uvTcpListenClose(struct UvTcp *t)
 {
     /* Abort all connections currently being accepted */
     while (!QUEUE_IS_EMPTY(&t->accept_conns)) {

@@ -11,7 +11,7 @@ static void uvTcpConfig(struct raft_uv_transport *transport,
                         unsigned id,
                         const char *address)
 {
-    struct uvTcp *t;
+    struct UvTcp *t;
     int rv;
     assert(id > 0);
     assert(address != NULL);
@@ -26,7 +26,7 @@ static void uvTcpConfig(struct raft_uv_transport *transport,
 /* Close callback for uvTcp->listener. */
 static void listenerCloseCb(struct uv_handle_s *handle)
 {
-    struct uvTcp *t = handle->data;
+    struct UvTcp *t = handle->data;
     t->listener.data = NULL;
     if (t->close_cb != NULL) {
         t->close_cb(t->transport);
@@ -41,7 +41,7 @@ static void listenerCloseCb(struct uv_handle_s *handle)
 /* Implementation of raft_uv_transport->stop. */
 static int uvTcpStop(struct raft_uv_transport *transport)
 {
-    struct uvTcp *t = transport->impl;
+    struct UvTcp *t = transport->impl;
     uvTcpListenClose(t);
     uv_close((struct uv_handle_s *)&t->listener, listenerCloseCb);
     return 0;
@@ -50,7 +50,7 @@ static int uvTcpStop(struct raft_uv_transport *transport)
 int raft_uv_tcp_init(struct raft_uv_transport *transport,
                      struct uv_loop_s *loop)
 {
-    struct uvTcp *t;
+    struct UvTcp *t;
 
     t = raft_malloc(sizeof *t);
     if (t == NULL) {
@@ -79,7 +79,7 @@ int raft_uv_tcp_init(struct raft_uv_transport *transport,
 void raft_uv_tcp_close(struct raft_uv_transport *transport,
                        raft_uv_transport_close_cb cb)
 {
-    struct uvTcp *t = transport->impl;
+    struct UvTcp *t = transport->impl;
     t->close_cb = cb;
     t->address = NULL;
     uvTcpConnectClose(t);

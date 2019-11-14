@@ -9,7 +9,7 @@
 /* Protocol version. */
 #define UV__TCP_HANDSHAKE_PROTOCOL 1
 
-struct uvTcp
+struct UvTcp
 {
     struct raft_uv_transport *transport; /* Interface object we implement */
     struct uv_loop_s *loop;              /* UV loop */
@@ -27,7 +27,7 @@ int uvTcpStart(struct raft_uv_transport *t, raft_uv_accept_cb cb);
 
 /* Close the listener handle and all pending incoming connections being
  * accepted. */
-void uvTcpListenClose(struct uvTcp *t);
+void uvTcpListenClose(struct UvTcp *t);
 
 /* Implementation of raft_uv_transport->connect. */
 int uvTcpConnect(struct raft_uv_transport *transport,
@@ -37,6 +37,6 @@ int uvTcpConnect(struct raft_uv_transport *transport,
                  raft_uv_connect_cb cb);
 
 /* Cancel all pending connection requests. */
-void uvTcpConnectClose(struct uvTcp *t);
+void uvTcpConnectClose(struct UvTcp *t);
 
 #endif /* UV_TCP_H_ */

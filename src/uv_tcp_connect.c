@@ -32,7 +32,7 @@
 /* Hold state for a single connection request. */
 struct connect
 {
-    struct uvTcp *t;             /* Transport implementation */
+    struct UvTcp *t;             /* Transport implementation */
     struct raft_uv_connect *req; /* User request */
     uv_buf_t handshake;          /* Handshake data */
     struct uv_tcp_s *tcp;        /* TCP connection socket handle */
@@ -201,7 +201,7 @@ int uvTcpConnect(struct raft_uv_transport *transport,
                  const char *address,
                  raft_uv_connect_cb cb)
 {
-    struct uvTcp *t;
+    struct UvTcp *t;
     struct connect *r;
     int rv;
 
@@ -241,7 +241,7 @@ static void abortConnection(struct connect *r)
     uv_close((struct uv_handle_s *)r->tcp, closeCb);
 }
 
-void uvTcpConnectClose(struct uvTcp *t)
+void uvTcpConnectClose(struct UvTcp *t)
 {
     while (!QUEUE_IS_EMPTY(&t->connect_reqs)) {
         queue *head;
