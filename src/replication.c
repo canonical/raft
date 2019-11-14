@@ -251,7 +251,7 @@ static void sendSnapshotGetCb(struct raft_io_snapshot_get *get,
         goto abort_with_snapshot;
     }
 
-    return;
+    goto out;
 
 abort_with_snapshot:
     snapshotClose(snapshot);
@@ -262,6 +262,8 @@ abort:
         progressAbortSnapshot(r, i);
     }
     raft_free(req);
+out:
+    IoPendingDecrement(r);
     return;
 }
 
@@ -286,8 +288,10 @@ static int sendSnapshot(struct raft *r, const unsigned i)
     /* TODO: make sure that the I/O implementation really returns the latest
      * snapshot *at this time* and not any snapshot that might be stored at a
      * later point. Otherwise the progress snapshot_index would be wrong. */
+    IoPendingIncrement(r);
     rv = r->io->snapshot_get(r->io, &request->get, sendSnapshotGetCb);
     if (rv != 0) {
+        IoPendingDecrement(r);
         goto err_after_req_alloc;
     }
 
