@@ -1129,13 +1129,17 @@ static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
 
     result.term = r->current_term;
 
-    /* TODO: check the current state to see if we are still followers */
+    /* If we are shutting down, let's discard the result. TODO: what about other
+     * states? */
+    if (r->state == RAFT_UNAVAILABLE) {
+        goto discard;
+    }
 
     if (status != 0) {
         result.rejected = snapshot->index;
         errorf(r, "save snapshot %d: %s", snapshot->index,
                raft_strerror(status));
-        goto err;
+        goto discard;
     }
 
     /* From Figure 5.3:
@@ -1149,7 +1153,7 @@ static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
         result.rejected = snapshot->index;
         errorf(r, "restore snapshot %d: %s", snapshot->index,
                raft_strerror(status));
-        goto err;
+        goto discard;
     }
 
     debugf(r, "restored snapshot with last index %llu", snapshot->index);
@@ -1158,16 +1162,20 @@ static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
 
     goto respond;
 
-err:
+discard:
     /* In case of error we must also free the snapshot data buffer and free the
      * configuration. */
     raft_free(snapshot->bufs[0].base);
     raft_configuration_close(&snapshot->configuration);
 
 respond:
-    result.last_log_index = r->last_stored;
-    sendAppendEntriesResult(r, &result);
+    if (r->state != RAFT_UNAVAILABLE) {
+        result.last_log_index = r->last_stored;
+        sendAppendEntriesResult(r, &result);
+    }
+
     raft_free(request);
+    IoPendingDecrement(r);
 }
 
 int replicationInstallSnapshot(struct raft *r,
@@ -1241,9 +1249,11 @@ int replicationInstallSnapshot(struct raft *r,
 
     assert(r->snapshot.put.data == NULL);
     r->snapshot.put.data = request;
+    IoPendingIncrement(r);
     rv = r->io->snapshot_put(r->io, r->snapshot.trailing, &r->snapshot.put,
                              snapshot, installSnapshotCb);
     if (rv != 0) {
+        IoPendingDecrement(r);
         goto err_after_bufs_alloc;
     }
 
@@ -1390,6 +1400,7 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
 out:
     snapshotClose(&r->snapshot.pending);
     r->snapshot.pending.term = 0;
+    IoPendingDecrement(r);
 }
 
 static int takeSnapshot(struct raft *r)
@@ -1422,9 +1433,11 @@ static int takeSnapshot(struct raft *r)
 
     assert(r->snapshot.put.data == NULL);
     r->snapshot.put.data = r;
+    IoPendingIncrement(r);
     rv = r->io->snapshot_put(r->io, r->snapshot.trailing, &r->snapshot.put,
                              snapshot, takeSnapshotCb);
     if (rv != 0) {
+        IoPendingDecrement(r);
         goto abort_after_fsm_snapshot;
     }
 
