@@ -498,6 +498,7 @@ out:
     /* Tell the log that we're done referencing these entries. */
     logRelease(&r->log, request->index, request->entries, request->n);
     raft_free(request);
+    IoPendingDecrement(r);
 }
 
 /* Submit a disk write for all entries from the given index onward. */
@@ -535,8 +536,10 @@ static int appendLeader(struct raft *r, raft_index index)
     request->n = n;
     request->req.data = request;
 
+    IoPendingIncrement(r);
     rv = r->io->append(r->io, &request->req, entries, n, appendLeaderCb);
     if (rv != 0) {
+        IoPendingDecrement(r);
         goto err_after_request_alloc;
     }
 
@@ -864,6 +867,7 @@ out:
                request->args.n_entries);
 
     raft_free(request);
+    IoPendingDecrement(r);
 }
 
 /* Check the log matching property against an incoming AppendEntries request.
@@ -1083,9 +1087,11 @@ int replicationAppend(struct raft *r,
     assert(request->args.n_entries == n);
 
     request->req.data = request;
+    IoPendingIncrement(r);
     rv = r->io->append(r->io, &request->req, request->args.entries,
                        request->args.n_entries, appendFollowerCb);
     if (rv != 0) {
+        IoPendingDecrement(r);
         goto err_after_acquire_entries;
     }
 
@@ -1346,6 +1352,11 @@ static void applyChange(struct raft *r, const raft_index index)
 
 static bool shouldTakeSnapshot(struct raft *r)
 {
+    /* If we are shutting down, let's not do anything. */
+    if (r->state == RAFT_UNAVAILABLE) {
+        return false;
+    }
+
     /* If a snapshot is already in progress, we don't want to start another
      *  one. */
     if (r->snapshot.pending.term != 0) {
