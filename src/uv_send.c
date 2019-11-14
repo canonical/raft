@@ -452,7 +452,7 @@ static void stopClient(struct uvClient *c)
         r = QUEUE_DATA(head, struct send, queue);
         QUEUE_REMOVE(head);
         if (r->req->cb != NULL) {
-            r->req->cb(r->req, RAFT_CANCELED);
+            r->req->cb(r->req, RAFT_NOCONNECTION);
         }
         closeRequest(r);
         raft_free(r);

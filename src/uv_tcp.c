@@ -13,6 +13,8 @@ static void uvTcpConfig(struct raft_uv_transport *transport,
 {
     struct uvTcp *t;
     int rv;
+    assert(id > 0);
+    assert(address != NULL);
     t = transport->impl;
     t->id = id;
     t->address = address;
@@ -29,6 +31,11 @@ static void listenerCloseCb(struct uv_handle_s *handle)
     if (t->close_cb != NULL) {
         t->close_cb(t->transport);
     }
+    /* If the address has been reset, it means that we have been closed. Release
+     * the transport->impl memory. */
+    if (t->address == NULL) {
+        raft_free(t);
+    }
 }
 
 /* Implementation of raft_uv_transport->stop. */
@@ -38,23 +45,6 @@ static int uvTcpStop(struct raft_uv_transport *transport)
     uvTcpListenClose(t);
     uv_close((struct uv_handle_s *)&t->listener, listenerCloseCb);
     return 0;
-}
-
-/* Implementation of raft_uv_transport->close. */
-static void uvTcpClose(struct raft_uv_transport *transport,
-                       raft_uv_transport_close_cb cb)
-{
-    struct uvTcp *t = transport->impl;
-    t->close_cb = cb;
-    uvTcpConnectClose(t);
-
-    /* If the listening handle has already been closed, invoke the close
-     * callback immediately. */
-    if (t->listener.data == NULL) {
-        if (t->close_cb != NULL) {
-            t->close_cb(t->transport);
-        }
-    }
 }
 
 int raft_uv_tcp_init(struct raft_uv_transport *transport,
@@ -82,12 +72,24 @@ int raft_uv_tcp_init(struct raft_uv_transport *transport,
     transport->start = uvTcpStart;
     transport->stop = uvTcpStop;
     transport->connect = uvTcpConnect;
-    transport->close = uvTcpClose;
 
     return 0;
 }
 
-void raft_uv_tcp_close(struct raft_uv_transport *transport)
+void raft_uv_tcp_close(struct raft_uv_transport *transport,
+                       raft_uv_transport_close_cb cb)
 {
-    raft_free(transport->impl);
+    struct uvTcp *t = transport->impl;
+    t->close_cb = cb;
+    t->address = NULL;
+    uvTcpConnectClose(t);
+
+    /* If the listening handle has already been closed, invoke the close
+     * callback immediately. */
+    if (t->listener.data == NULL) {
+        if (t->close_cb != NULL) {
+            t->close_cb(t->transport);
+        }
+        raft_free(t);
+    }
 }

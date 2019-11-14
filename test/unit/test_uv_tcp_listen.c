@@ -80,10 +80,9 @@ static void tear_down(void *data)
     struct fixture *f = data;
     if (!f->closed) {
         f->transport.stop(&f->transport);
-        f->transport.close(&f->transport, NULL);
     }
+    raft_uv_tcp_close(&f->transport, NULL);
     LOOP_STOP;
-    raft_uv_tcp_close(&f->transport);
     TEAR_DOWN_LOOP;
     test_tcp_tear_down(&f->tcp);
     test_heap_tear_down(&f->heap);

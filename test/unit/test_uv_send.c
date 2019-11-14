@@ -414,7 +414,7 @@ TEST_CASE(close, writing, NULL)
 
     UV_CLOSE;
 
-    send__wait_cb(RAFT_CANCELED);
+    send__wait_cb(RAFT_NOCONNECTION);
 
     raft_free(entry.buf.base);
 
@@ -431,7 +431,7 @@ TEST_CASE(close, connecting, NULL)
     send__invoke(0);
     UV_CLOSE;
 
-    send__wait_cb(RAFT_CANCELED);
+    send__wait_cb(RAFT_NOCONNECTION);
 
     return MUNIT_OK;
 }

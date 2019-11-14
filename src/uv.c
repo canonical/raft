@@ -106,12 +106,6 @@ static void uvTickTimerCloseCb(uv_handle_t *handle)
     uvMaybeClose(uv);
 }
 
-static void uvTransportCloseCb(struct raft_uv_transport *t)
-{
-    struct uv *uv = t->data;
-    uv_close((uv_handle_t *)&uv->timer, uvTickTimerCloseCb);
-}
-
 /* Implementation of raft_io->stop. */
 static int uvStop(struct raft_io *io) {
     struct uv *uv;
@@ -140,7 +134,7 @@ static int uvClose(struct raft_io *io, void (*cb)(struct raft_io *io))
     uvPrepareClose(uv);
     uvAppendClose(uv);
     uvTruncateClose(uv);
-    uv->transport->close(uv->transport, uvTransportCloseCb);
+    uv_close((uv_handle_t *)&uv->timer, uvTickTimerCloseCb);
     return 0;
 }
 

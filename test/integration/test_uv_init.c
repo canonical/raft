@@ -42,7 +42,7 @@ static void tearDownUv(void *data)
     if (f == NULL) {
         return;
     }
-    raft_uv_tcp_close(&f->transport);
+    raft_uv_tcp_close(&f->transport, NULL);
     TEAR_DOWN_LOOP;
     TEAR_DOWN_HEAP;
     TEAR_DOWN_DIR;

@@ -50,18 +50,18 @@
         f->closed = false;                                               \
     }
 
-#define TEAR_DOWN_UV                  \
-    if (f == NULL) {                  \
-        return;                       \
-    }                                 \
-    UV_CLOSE;                         \
-    LOOP_STOP;                        \
-    raft_uv_close(&f->io);            \
-    raft_uv_tcp_close(&f->transport); \
-    TEAR_DOWN_TRACER;                 \
-    TEAR_DOWN_DIR;                    \
-    TEAR_DOWN_LOOP;                   \
-    TEAR_DOWN_TCP;                    \
+#define TEAR_DOWN_UV                        \
+    if (f == NULL) {                        \
+        return;                             \
+    }                                       \
+    UV_CLOSE;                               \
+    raft_uv_tcp_close(&f->transport, NULL); \
+    LOOP_STOP;                              \
+    raft_uv_close(&f->io);                  \
+    TEAR_DOWN_TRACER;                       \
+    TEAR_DOWN_DIR;                          \
+    TEAR_DOWN_LOOP;                         \
+    TEAR_DOWN_TCP;                          \
     TEAR_DOWN_HEAP;
 
 /* Run the raft_io->close() method, if not ran already. */

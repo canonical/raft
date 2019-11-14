@@ -131,7 +131,7 @@ struct server
 /* Convenience to emit a message. */
 #define emitf(S, LEVEL, ...)                                                  \
     S->logger.emit(&S->logger, LEVEL, S->io.time(&S->io), __FILE__, __LINE__, \
-                   ##__VA_ARGS__);
+                   __VA_ARGS__);
 
 /* Final callback in the shutdown sequence, invoked after the timer handle has
  * been closed. */
@@ -262,7 +262,7 @@ errAfterFsmInit:
 errAfterIoInit:
     raft_uv_close(&s->io);
 errAfterTcpInit:
-    raft_uv_tcp_close(&s->transport);
+    raft_uv_tcp_close(&s->transport, NULL);
 errAfterTimerInit:
     uv_close((struct uv_handle_s *)&s->timer, NULL);
 errAfterSigintInit:
@@ -273,13 +273,19 @@ err:
     return rv;
 }
 
+static void tcpCloseCb(struct raft_uv_transport *t)
+{
+    struct server *s = t->data;
+    uv_loop_close(&s->loop);
+}
+
 /* Release the memory the raft instance and all its dependencies. */
 static void serverClose(struct server *s)
 {
     fsmClose(&s->fsm);
     raft_uv_close(&s->io);
-    raft_uv_tcp_close(&s->transport);
-    uv_loop_close(&s->loop);
+    s->transport.data = s;
+    raft_uv_tcp_close(&s->transport, tcpCloseCb);
 }
 
 /* Called after a request to apply a new command to the FSM has been

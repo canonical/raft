@@ -49,10 +49,9 @@ static void tear_down(void *data)
     struct fixture *f = data;
     if (!f->closed) {
         f->transport.stop(&f->transport);
-        f->transport.close(&f->transport, NULL);
+        raft_uv_tcp_close(&f->transport, NULL);
     }
     LOOP_STOP;
-    raft_uv_tcp_close(&f->transport);
     TEAR_DOWN_LOOP;
     test_tcp_tear_down(&f->tcp);
     test_heap_tear_down(&f->heap);
@@ -97,9 +96,9 @@ static void connect_cb(struct raft_uv_connect *req,
 
 #define PEER_SHUTDOWN test_tcp_stop(&f->tcp);
 
-#define CLOSE                                \
-    f->transport.stop(&f->transport);        \
-    f->transport.close(&f->transport, NULL); \
+#define CLOSE                               \
+    f->transport.stop(&f->transport);       \
+    raft_uv_tcp_close(&f->transport, NULL); \
     f->closed = true;
 
 /******************************************************************************

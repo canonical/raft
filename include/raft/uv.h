@@ -200,19 +200,6 @@ struct raft_uv_transport
                    unsigned id,
                    const char *address,
                    raft_uv_connect_cb cb);
-
-    /**
-     * Close the transport.
-     *
-     * The implementation must:
-     *
-     * - Abort all pending @connect requests. The callback of each pending
-     *   request must be invoked with #RAFT_CANCELED.
-     *
-     * - Invoke the @cb callback passed to this method once it's safe to release
-     *   the memory of the transport object.
-     */
-    void (*close)(struct raft_uv_transport *t, raft_uv_transport_close_cb cb);
 };
 
 /**
@@ -221,6 +208,16 @@ struct raft_uv_transport
 RAFT_API int raft_uv_tcp_init(struct raft_uv_transport *t,
                               struct uv_loop_s *loop);
 
-RAFT_API void raft_uv_tcp_close(struct raft_uv_transport *t);
+/**
+ * Close the transport.
+ *
+ * - Abort all pending @connect requests. The callback of each pending
+ *   request will be invoked with #RAFT_CANCELED.
+ *
+ * - Invoke the @cb callback passed to this method will be invoked once it's
+ *   safe to release the memory of the transport object.
+ */
+RAFT_API void raft_uv_tcp_close(struct raft_uv_transport *t,
+                                raft_uv_transport_close_cb cb);
 
 #endif /* RAFT_UV_H */
