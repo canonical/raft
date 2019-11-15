@@ -46,20 +46,25 @@ static void uvWriterMaybeClose(struct UvWriter *w)
     if (!w->closing) {
         return;
     }
-    if (QUEUE_IS_EMPTY(&w->write_queue)) {
-        uv_close((struct uv_handle_s *)&w->event_poller, uvWriterPollerCloseCb);
+    if (!QUEUE_IS_EMPTY(&w->write_queue)) {
+        return;
     }
+    if (uv_is_closing((struct uv_handle_s *)&w->event_poller)) {
+        return;
+    }
+    uv_close((struct uv_handle_s *)&w->event_poller, uvWriterPollerCloseCb);
 }
 /* Remove the request from the queue of inflight writes and invoke the request
  * callback if set. */
 static void uvWriterReqFinish(struct UvWriterReq *req)
 {
+    struct UvWriter *writer = req->writer;
     QUEUE_REMOVE(&req->queue);
     if (req->status != 0) {
         uvWriterReqTransferErrMsg(req);
     }
     req->cb(req, req->status);
-    uvWriterMaybeClose(req->writer);
+    uvWriterMaybeClose(writer);
 }
 
 /* Run blocking syscalls involved in a file write request.
@@ -233,6 +238,8 @@ int UvWriterInit(struct UvWriter *w,
 {
     int rv = 0;
 
+    memset(w, 0, sizeof *w);
+
     w->loop = loop;
     w->fd = fd;
     w->async = async;
@@ -322,6 +329,7 @@ void UvWriterClose(struct UvWriter *w, UvWriterCloseCb cb)
 {
     queue *head;
     assert(!w->closing);
+    w->closing = true;
     /* If UvWriterInit didn't make it to initialize the poller, let's return
      * early. */
     if (w->event_poller.data == NULL) {
@@ -337,7 +345,6 @@ void UvWriterClose(struct UvWriter *w, UvWriterCloseCb cb)
         uvWriterCancel(req);
     }
     w->close_cb = cb;
-    w->closing = true;
     uvWriterMaybeClose(w);
 }
 

@@ -5,6 +5,7 @@
 #include "../include/raft.h"
 #include "../include/raft/uv.h"
 #include "assert.h"
+#include "err.h"
 
 /* Implementation of raft_io_uv_transport->config. */
 static void uvTcpConfig(struct raft_uv_transport *transport,
@@ -23,10 +24,10 @@ int raft_uv_tcp_init(struct raft_uv_transport *transport,
                      struct uv_loop_s *loop)
 {
     struct UvTcp *t;
-
+    memset(transport, 0, sizeof *transport);
     t = raft_malloc(sizeof *t);
     if (t == NULL) {
-        /* UNTESTED: not interesting */
+        ErrMsgPrintf(transport->errmsg, "out of memory");
         return RAFT_NOMEM;
     }
     t->transport = transport;
@@ -52,6 +53,15 @@ void raft_uv_tcp_close(struct raft_uv_transport *transport,
                        raft_uv_transport_close_cb cb)
 {
     struct UvTcp *t = transport->impl;
+
+    /* Exit immediately if initialization failed. */
+    if (t == NULL) {
+        if (cb != NULL) {
+            cb(transport);
+        }
+        return;
+    }
+
     t->close_cb = cb;
     t->address = NULL;
 

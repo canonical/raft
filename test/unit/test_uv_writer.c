@@ -183,7 +183,6 @@ static void *setUpDeps(const MunitParameter params[], void *user_data)
     munit_assert_int(rv, ==, 0);
     rv = UvOsFallocate(f->fd, 0, f->block_size * N_BLOCKS);
     munit_assert_int(rv, ==, 0);
-    memset(&f->writer, 0, sizeof f->writer);
     return f;
 }
 
