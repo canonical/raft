@@ -62,7 +62,6 @@ struct UvWriterReq
     struct iocb iocb;        /* KAIO request (for writing) */
     char errmsg[256];        /* Error description (for thread-safety) */
     queue queue;             /* Prev/next links in the inflight queue */
-    bool canceled;           /* Whether the request has been canceled */
 };
 
 /* Asynchronously write data to the underlying file. */

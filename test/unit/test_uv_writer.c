@@ -128,14 +128,14 @@ static void submitCbAssertResult(struct UvWriterReq *req, int status)
 
 /* Submit a write request with the given parameters, close the writer after
  * N loop iterations and assert that the request got canceled. */
-#define WRITE_CANCEL(N_BUFS, CONTENT, OFFSET, N)                      \
-    do {                                                              \
-        WRITE_REQ(N_BUFS, CONTENT, OFFSET, 0 /* rv */, UV__CANCELED); \
-        LOOP_RUN(N);                                                  \
-        munit_assert_false(_result.done);                             \
-        CLOSE;                                                        \
-        LOOP_RUN_UNTIL(&_result.done);                                \
-        DESTROY_BUFS(_bufs, N_BUFS);                                  \
+#define WRITE_CANCEL(N_BUFS, CONTENT, OFFSET, N, STATUS)        \
+    do {                                                        \
+        WRITE_REQ(N_BUFS, CONTENT, OFFSET, 0 /* rv */, STATUS); \
+        LOOP_RUN(N);                                            \
+        munit_assert_false(_result.done);                       \
+        CLOSE;                                                  \
+        LOOP_RUN_UNTIL(&_result.done);                          \
+        DESTROY_BUFS(_bufs, N_BUFS);                            \
     } while (0)
 
 /* Assert that the content of the test file has the given number of blocks, each
@@ -346,11 +346,28 @@ TEST(UvWriterSubmit, noResources, setUpDeps, tearDown, 0, dir_no_aio_params)
     return MUNIT_OK;
 }
 
-/* Cancel an inflight write. */
-TEST(UvWriterSubmit, cancel, setUp, tearDownDeps, 0, dir_all_params)
+/******************************************************************************
+ *
+ * UvWriterSubmit
+ *
+ *****************************************************************************/
+
+SUITE(UvWriterClose)
+
+/* Close with an inflight write running in the threadpool. */
+TEST(UvWriterClose, threadpool, setUp, tearDownDeps, 0, dir_no_aio_params)
 {
     struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;
-    WRITE_CANCEL(1, 0, 0, 0);
+    WRITE_CANCEL(1, 0, 0, 0, 0);
+    return MUNIT_OK;
+}
+
+/* Close with an inflight AIO write . */
+TEST(UvWriterClose, aio, setUp, tearDownDeps, 0, dir_aio_params)
+{
+    struct fixture *f = data;
+    SKIP_IF_NO_FIXTURE;
+    WRITE_CANCEL(1, 0, 0, 0, RAFT_CANCELED);
     return MUNIT_OK;
 }

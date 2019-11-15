@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "../include/raft.h"
 #include "assert.h"
 #include "heap.h"
 #include "uv_error.h"
@@ -27,9 +28,32 @@ static void uvWriterReqSetStatus(struct UvWriterReq *req, int result)
     }
 }
 
+/* Remove the request from the queue of inflight writes and invoke the request
+ * callback if set. */
+static void uvWriterReqFinish(struct UvWriterReq *req)
+{
+    QUEUE_REMOVE(&req->queue);
+    if (req->status != 0) {
+        uvWriterReqTransferErrMsg(req);
+    }
+    req->cb(req, req->status);
+}
+
 static void uvWriterPollerCloseCb(struct uv_handle_s *handle)
 {
     struct UvWriter *w = handle->data;
+
+    /* Cancel all pending requests. */
+    while (!QUEUE_IS_EMPTY(&w->write_queue)) {
+        queue *head;
+        struct UvWriterReq *req;
+        head = QUEUE_HEAD(&w->write_queue);
+        req = QUEUE_DATA(head, struct UvWriterReq, queue);
+        /* This can't be a threadpool request, since we wait for them. */
+        assert(req->work.data == NULL);
+        req->status = RAFT_CANCELED;
+        uvWriterReqFinish(req);
+    }
 
     UvOsClose(w->fd);
     UvOsClose(w->event_fd);
@@ -41,30 +65,10 @@ static void uvWriterPollerCloseCb(struct uv_handle_s *handle)
     }
 }
 
-static void uvWriterMaybeClose(struct UvWriter *w)
+static void uvWriterPollerClose(struct UvWriter *w)
 {
-    if (!w->closing) {
-        return;
-    }
-    if (!QUEUE_IS_EMPTY(&w->write_queue)) {
-        return;
-    }
-    if (uv_is_closing((struct uv_handle_s *)&w->event_poller)) {
-        return;
-    }
+    assert(w->closing);
     uv_close((struct uv_handle_s *)&w->event_poller, uvWriterPollerCloseCb);
-}
-/* Remove the request from the queue of inflight writes and invoke the request
- * callback if set. */
-static void uvWriterReqFinish(struct UvWriterReq *req)
-{
-    struct UvWriter *writer = req->writer;
-    QUEUE_REMOVE(&req->queue);
-    if (req->status != 0) {
-        uvWriterReqTransferErrMsg(req);
-    }
-    req->cb(req, req->status);
-    uvWriterMaybeClose(writer);
 }
 
 /* Run blocking syscalls involved in a file write request.
@@ -134,20 +138,19 @@ out:
  * request callback. */
 static void uvWriterAfterWorkCb(uv_work_t *work, int status)
 {
-    struct UvWriterReq *req; /* Write file request object */
+    struct UvWriterReq *req = work->data; /* Write file request object */
+    struct UvWriter *w = req->writer;
 
     assert(status == 0); /* We don't cancel worker requests */
 
-    req = work->data;
-
-    /* If we were canceled, let's mark the request as canceled, regardless of
-     * the actual outcome. */
-    if (req->canceled) {
-        ErrMsgPrintf(req->errmsg, "canceled");
-        req->status = UV__CANCELED;
-    }
-
     uvWriterReqFinish(req);
+
+    /* If we are closing and were waiting for this request to finish, let's
+     * unblock. */
+    if (w->closing) {
+        /* TODO: support cancellation with concurrent requests. */
+        uvWriterPollerClose(w);
+    }
 }
 
 /* Callback fired when the event fd associated with AIO write requests should be
@@ -192,14 +195,6 @@ static void uvWriterPollCb(uv_poll_t *poller, int status, int events)
         struct io_event *event = &w->events[i];
         struct UvWriterReq *req = *((void **)&event->data);
 
-        /* If we are closing, we mark the write as canceled, although
-         * technically it might have worked. */
-        if (req->canceled) {
-            ErrMsgPrintf(req->errmsg, "canceled");
-            req->status = UV__CANCELED;
-            goto finish;
-        }
-
 #if defined(RWF_NOWAIT)
         /* If we got EAGAIN, it means it was not possible to perform the write
          * asynchronously, so let's fall back to the threadpool. */
@@ -207,7 +202,7 @@ static void uvWriterPollCb(uv_poll_t *poller, int status, int events)
             req->iocb.aio_flags &= ~IOCB_FLAG_RESFD;
             req->iocb.aio_resfd = 0;
             req->iocb.aio_rw_flags &= ~RWF_NOWAIT;
-	    assert(req->work.data == NULL);
+            assert(req->work.data == NULL);
             req->work.data = req;
             rv = uv_queue_work(w->loop, &req->work, uvWriterWorkCb,
                                uvWriterAfterWorkCb);
@@ -321,17 +316,12 @@ err:
     return rv;
 }
 
-static void uvWriterCancel(struct UvWriterReq *req)
-{
-    req->canceled = true;
-}
-
 void UvWriterClose(struct UvWriter *w, UvWriterCloseCb cb)
 {
-    queue *head;
-
+    int rv;
     assert(!w->closing);
     w->closing = true;
+    w->close_cb = cb;
 
     /* If UvWriterInit didn't make it to initialize the poller, let's return
      * early. */
@@ -342,14 +332,25 @@ void UvWriterClose(struct UvWriter *w, UvWriterCloseCb cb)
         return;
     }
 
-    QUEUE_FOREACH(head, &w->write_queue)
-    {
+    rv = uv_poll_stop(&w->event_poller);
+    assert(rv == 0); /* Can this ever fail? */
+
+    /* If we have requests executing in the threadpool, we need to wait for
+     * them.
+     *
+     * TODO: below we assume there is at most one in-flight request. We should
+     * support cancellation of concurrent requests. */
+    if (!QUEUE_IS_EMPTY(&w->write_queue)) {
+        queue *head;
         struct UvWriterReq *req;
+        head = QUEUE_HEAD(&w->write_queue);
         req = QUEUE_DATA(head, struct UvWriterReq, queue);
-        uvWriterCancel(req);
+        if (req->work.data != NULL) {
+            return;
+        }
     }
-    w->close_cb = cb;
-    uvWriterMaybeClose(w);
+
+    uvWriterPollerClose(w);
 }
 
 /* Return the total lengths of the given buffers. */
@@ -398,7 +399,6 @@ int UvWriterSubmit(struct UvWriter *w,
     memset(&req->iocb, 0, sizeof req->iocb);
     memset(req->errmsg, 0, sizeof req->errmsg);
     QUEUE_PUSH(&w->write_queue, &req->queue);
-    req->canceled = false;
 
     req->iocb.aio_fildes = w->fd;
     req->iocb.aio_lio_opcode = IOCB_CMD_PWRITEV;
