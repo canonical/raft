@@ -39,6 +39,7 @@
         SETUP_TCP;                                                       \
         SETUP_LOOP;                                                      \
         SETUP_TRACER;                                                    \
+        test_tcp_listen(&f->tcp);                                        \
         rv_ = raft_uv_tcp_init(&f->transport, &f->loop);                 \
         munit_assert_int(rv_, ==, 0);                                    \
         rv_ = raft_uv_init(&f->io, &f->loop, f->dir, &f->transport);     \

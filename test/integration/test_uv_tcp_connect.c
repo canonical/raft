@@ -1,6 +1,5 @@
 #include "../../include/raft.h"
 #include "../../include/raft/uv.h"
-#include "../../src/byte.h"
 #include "../lib/heap.h"
 #include "../lib/loop.h"
 #include "../lib/runner.h"
@@ -16,7 +15,7 @@ struct fixture
 {
     FIXTURE_HEAP;
     FIXTURE_LOOP;
-    struct test_tcp tcp;
+    FIXTURE_TCP;
     struct raft_uv_transport transport;
     bool closed;
 };
@@ -27,7 +26,7 @@ static void *setUp(const MunitParameter params[], void *user_data)
     (void)user_data;
     SETUP_HEAP;
     SETUP_LOOP;
-    test_tcp_setup(params, &f->tcp);
+    SETUP_TCP;
     raft_uv_tcp_init(&f->transport, &f->loop);
     f->transport.config(&f->transport, 1, "127.0.0.1:9000");
     f->closed = false;
@@ -41,9 +40,9 @@ static void tearDown(void *data)
         raft_uv_tcp_close(&f->transport, NULL);
     }
     LOOP_STOP;
+    TEAR_DOWN_TCP;
     TEAR_DOWN_LOOP;
-    test_tcp_tear_down(&f->tcp);
-    test_heap_tear_down(&f->heap);
+    TEAR_DOWN_HEAP;
     free(f);
 }
 
@@ -168,13 +167,16 @@ static void connectCbAssertFail(struct raft_uv_connect *req,
  *
  *****************************************************************************/
 
+#define BOGUS_ADDRESS "127.0.0.1:6666"
+
 SUITE(tcp_connect)
 
 /* Successfully connect to the peer. */
 TEST(tcp_connect, first, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    CONNECT(2, f->tcp.server.address);
+    TCP_LISTEN;
+    CONNECT(2, TCP_ADDRESS);
     return MUNIT_OK;
 }
 
@@ -183,7 +185,7 @@ TEST(tcp_connect, refused, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
-    CONNECT_FAILURE(2, "127.0.0.1:6666", RAFT_NOCONNECTION, "");
+    CONNECT_FAILURE(2, BOGUS_ADDRESS, RAFT_NOCONNECTION, "");
     return MUNIT_OK;
 }
 
@@ -200,8 +202,8 @@ static MunitParameterEnum oomParams[] = {
 TEST(tcp_connect, oom, setUp, tearDown, 0, oomParams)
 {
     struct fixture *f = data;
-    test_heap_fault_enable(&f->heap);
-    CONNECT_ERROR(2, f->tcp.server.address, RAFT_NOMEM, "");
+    HEAP_FAULT_ENABLE;
+    CONNECT_ERROR(2, BOGUS_ADDRESS, RAFT_NOMEM, "");
     return MUNIT_OK;
 }
 
@@ -218,8 +220,9 @@ static MunitParameterEnum oomAsyncParams[] = {
 TEST(tcp_connect, oomAsync, setUp, tearDown, 0, oomAsyncParams)
 {
     struct fixture *f = data;
-    test_heap_fault_enable(&f->heap);
-    CONNECT_FAILURE(2, f->tcp.server.address, RAFT_NOMEM, "");
+    TCP_LISTEN;
+    HEAP_FAULT_ENABLE;
+    CONNECT_FAILURE(2, TCP_ADDRESS, RAFT_NOMEM, "");
     return MUNIT_OK;
 }
 
@@ -228,7 +231,7 @@ TEST(tcp_connect, oomAsync, setUp, tearDown, 0, oomAsyncParams)
 TEST(tcp_connect, closeImmediately, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    CONNECT_CANCEL(2, f->tcp.server.address, 0);
+    CONNECT_CANCEL(2, BOGUS_ADDRESS, 0);
     return MUNIT_OK;
 }
 
@@ -236,6 +239,7 @@ TEST(tcp_connect, closeImmediately, setUp, tearDown, 0, NULL)
 TEST(tcp_connect, closeDuringHandshake, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    CONNECT_CANCEL(2, f->tcp.server.address, 1);
+    TCP_LISTEN;
+    CONNECT_CANCEL(2, TCP_ADDRESS, 1);
     return MUNIT_OK;
 }

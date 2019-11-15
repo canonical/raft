@@ -53,9 +53,10 @@ static void *setup(const MunitParameter params[], void *user_data)
     void *cursor;
     int rv;
     (void)user_data;
-    test_heap_setup(params, &f->heap);
-    test_tcp_setup(params, &f->tcp);
+    SETUP_HEAP;
     SETUP_LOOP;
+    SETUP_TCP;
+    test_tcp_listen(&f->tcp);
     raft_uv_tcp_init(&f->transport, &f->loop);
     f->transport.config(&f->transport, 1, "127.0.0.1:9000");
     f->closed = false;
