@@ -87,19 +87,12 @@ static void connectCbAssertFail(struct raft_uv_connect *req,
     {                                                                 \
         struct raft_uv_connect _req;                                  \
         bool _done = false;                                           \
-        int _i;                                                       \
         int _rv;                                                      \
         _req.data = &_done;                                           \
         _rv = f->transport.connect(&f->transport, &_req, ID, ADDRESS, \
                                    connectCbAssertOk);                \
         munit_assert_int(_rv, ==, 0);                                 \
-        for (_i = 0; _i < 2; _i++) {                                  \
-            LOOP_RUN(1);                                              \
-            if (_done) {                                              \
-                break;                                                \
-            }                                                         \
-        }                                                             \
-        munit_assert_true(_done);                                     \
+        LOOP_RUN_UNTIL(&_done);                                       \
     }
 
 /* Submit a connect request and assert that it fails synchronously with the
@@ -110,7 +103,7 @@ static void connectCbAssertFail(struct raft_uv_connect *req,
         int _rv;                                                             \
         _rv = f->transport.connect(&f->transport, &_req, ID, ADDRESS, NULL); \
         munit_assert_int(_rv, ==, RV);                                       \
-        munit_assert_string_equal(f->transport.errmsg, ERRMSG);       \
+        munit_assert_string_equal(f->transport.errmsg, ERRMSG);              \
     }
 
 /* Submit a connect request with the given parameters and wait for the operation
@@ -119,19 +112,12 @@ static void connectCbAssertFail(struct raft_uv_connect *req,
     {                                                                 \
         struct raft_uv_connect _req;                                  \
         struct result _result = {STATUS, ERRMSG, false};              \
-        int _i;                                                       \
         int _rv;                                                      \
         _req.data = &_result;                                         \
         _rv = f->transport.connect(&f->transport, &_req, ID, ADDRESS, \
                                    connectCbAssertFail);              \
         munit_assert_int(_rv, ==, 0);                                 \
-        for (_i = 0; _i < 2; _i++) {                                  \
-            LOOP_RUN(1);                                              \
-            if (_result.done) {                                       \
-                break;                                                \
-            }                                                         \
-        }                                                             \
-        munit_assert_true(_result.done);                              \
+        LOOP_RUN_UNTIL(&_result.done);                                \
         munit_assert_string_equal(f->transport.errmsg, ERRMSG);       \
     }
 
@@ -153,13 +139,7 @@ static void connectCbAssertFail(struct raft_uv_connect *req,
         }                                                             \
         raft_uv_tcp_close(&f->transport, NULL);                       \
         f->closed = true;                                             \
-        for (_i = 0; _i < 2; _i++) {                                  \
-            LOOP_RUN(1);                                              \
-            if (_result.done) {                                       \
-                break;                                                \
-            }                                                         \
-        }                                                             \
-        munit_assert_true(_result.done);                              \
+        LOOP_RUN_UNTIL(&_result.done);                                \
     }
 
 /******************************************************************************
