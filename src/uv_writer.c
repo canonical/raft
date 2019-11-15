@@ -370,6 +370,7 @@ int UvWriterSubmit(struct UvWriter *w,
 #if defined(RWF_NOWAIT)
     struct iocb *iocbs = &req->iocb;
 #endif /* RWF_NOWAIT */
+    assert(!w->closing);
 
     /* TODO: at the moment we are not leveraging the support for concurrent
      *       writes, so ensure that we're getting write requests
