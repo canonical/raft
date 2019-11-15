@@ -207,6 +207,7 @@ static void uvWriterPollCb(uv_poll_t *poller, int status, int events)
             req->iocb.aio_flags &= ~IOCB_FLAG_RESFD;
             req->iocb.aio_resfd = 0;
             req->iocb.aio_rw_flags &= ~RWF_NOWAIT;
+	    assert(req->work.data == NULL);
             req->work.data = req;
             rv = uv_queue_work(w->loop, &req->work, uvWriterWorkCb,
                                uvWriterAfterWorkCb);
@@ -328,8 +329,10 @@ static void uvWriterCancel(struct UvWriterReq *req)
 void UvWriterClose(struct UvWriter *w, UvWriterCloseCb cb)
 {
     queue *head;
+
     assert(!w->closing);
     w->closing = true;
+
     /* If UvWriterInit didn't make it to initialize the poller, let's return
      * early. */
     if (w->event_poller.data == NULL) {
@@ -338,6 +341,7 @@ void UvWriterClose(struct UvWriter *w, UvWriterCloseCb cb)
         }
         return;
     }
+
     QUEUE_FOREACH(head, &w->write_queue)
     {
         struct UvWriterReq *req;
@@ -387,9 +391,15 @@ int UvWriterSubmit(struct UvWriter *w,
     assert(n > 0);
 
     req->writer = w;
-    req->cb = cb;
     req->len = lenOfBufs(bufs, n);
+    req->status = -1;
+    req->work.data = NULL;
+    req->cb = cb;
     memset(&req->iocb, 0, sizeof req->iocb);
+    memset(req->errmsg, 0, sizeof req->errmsg);
+    QUEUE_PUSH(&w->write_queue, &req->queue);
+    req->canceled = false;
+
     req->iocb.aio_fildes = w->fd;
     req->iocb.aio_lio_opcode = IOCB_CMD_PWRITEV;
     req->iocb.aio_reqprio = 0;
@@ -397,10 +407,6 @@ int UvWriterSubmit(struct UvWriter *w,
     req->iocb.aio_nbytes = n;
     req->iocb.aio_offset = offset;
     *((void **)(&req->iocb.aio_data)) = (void *)req;
-
-    req->canceled = false;
-
-    QUEUE_PUSH(&w->write_queue, &req->queue);
 
 #if defined(RWF_HIPRI)
     /* High priority request, if possible */
@@ -459,7 +465,6 @@ int UvWriterSubmit(struct UvWriter *w,
 
     /* If we got here it means we need to run io_submit in the threadpool. */
     req->work.data = req;
-
     rv =
         uv_queue_work(w->loop, &req->work, uvWriterWorkCb, uvWriterAfterWorkCb);
     if (rv != 0) {
