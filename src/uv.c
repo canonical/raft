@@ -622,12 +622,9 @@ err:
 void raft_uv_close(struct raft_io *io, raft_io_close_cb cb)
 {
     struct uv *uv;
-    int rv;
     uv = io->impl;
     uv->close_cb = cb;
     uv->closing = true;
-    rv = uv_timer_stop(&uv->timer);
-    assert(rv == 0);
     uvSendClose(uv);
     uvRecvClose(uv);
     uvPrepareClose(uv);
