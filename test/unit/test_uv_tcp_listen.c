@@ -96,12 +96,6 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-static bool acceptCbInvoked(void *data)
-{
-    struct fixture *f = data;
-    return f->invoked > 0;
-}
-
 /* Connect to the listening socket of the transport, creating a new connection
  * that is waiting to be accepted. */
 #define PEER_CONNECT test_tcp_connect(&f->tcp, 9000);
@@ -126,8 +120,8 @@ static bool acceptCbInvoked(void *data)
 #define WAIT_READ_CB LOOP_RUN(1);
 
 /* Spin the event loop until the accept callback gets eventually invoked. */
-#define WAIT_ACCEPTED_CB                \
-    LOOP_RUN_UNTIL(acceptCbInvoked, f); \
+#define WAIT_ACCEPTED_CB         \
+    LOOP_RUN_UNTIL(&f->invoked); \
     f->invoked = 0;
 
 /******************************************************************************

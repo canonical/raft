@@ -247,12 +247,6 @@ static void put_cb(struct raft_io_snapshot_put *req, int status)
     f->appended = false;
 }
 
-static bool put_cb_was_invoked(void *data)
-{
-    struct put_fixture *f = data;
-    return f->invoked;
-}
-
 TEST_SETUP(put)
 {
     struct put_fixture *f = munit_malloc(sizeof *f);
@@ -347,7 +341,7 @@ static void append_cb(struct raft_io_append *req, int status)
         munit_assert_int(rv2, ==, RV);                                       \
     }
 
-#define put__wait_cb(STATUS) LOOP_RUN_UNTIL(put_cb_was_invoked, f);
+#define put__wait_cb(STATUS) LOOP_RUN_UNTIL(&f->invoked)
 
 /* Put the first snapshot. */
 TEST_CASE(put, first, NULL)
@@ -479,12 +473,6 @@ static void get_cb(struct raft_io_snapshot_get *req,
     f->snapshot = snapshot;
 }
 
-static bool get_cb_was_invoked(void *data)
-{
-    struct get_fixture *f = data;
-    return f->invoked;
-}
-
 TEST_SETUP(get)
 {
     struct get_fixture *f = munit_malloc(sizeof *f);
@@ -524,7 +512,7 @@ TEST_TEAR_DOWN(get)
         munit_assert_int(rv, ==, RV);                     \
     }
 
-#define get__wait_cb(STATUS) LOOP_RUN_UNTIL(get_cb_was_invoked, f);
+#define get__wait_cb(STATUS) LOOP_RUN_UNTIL(&f->invoked)
 
 TEST_CASE(get, first, NULL)
 {
