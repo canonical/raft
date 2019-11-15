@@ -353,9 +353,12 @@ int uvSegmentLoadClosed(struct uv *uv,
     bool last;                      /* Whether the last batch was reached */
     struct raft_entry *tmp_entries; /* Entries in current batch */
     unsigned tmp_n;                 /* Number of entries in current batch */
+    unsigned expected_n; /* Number of entries that we expect to find */
     int i;
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int rv;
+
+    expected_n = info->end_index - info->first_index + 1;
 
     /* If the segment is completely empty, just bail out. */
     rv = UvFsFileIsEmpty(uv->dir, info->filename, &empty, errmsg);
@@ -399,6 +402,13 @@ int uvSegmentLoadClosed(struct uv *uv,
         raft_free(tmp_entries);
     }
 
+    if (*n != expected_n) {
+        Tracef(uv->tracer, "segment %s has %lu entries (expected %u)",
+               info->filename, *n, expected_n);
+        rv = RAFT_CORRUPT;
+        goto err_after_extend_entries;
+    }
+
     assert(i > 1);  /* At least one batch was loaded. */
     assert(*n > 0); /* At least one entry was loaded. */
 
@@ -409,6 +419,11 @@ int uvSegmentLoadClosed(struct uv *uv,
 err_after_batch_load:
     raft_free(tmp_entries[0].batch);
     raft_free(tmp_entries);
+
+err_after_extend_entries:
+    if (*entries != NULL) {
+        entryBatchesDestroy(*entries, *n);
+    }
 
 err_after_open:
     close(fd);

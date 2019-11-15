@@ -547,6 +547,7 @@ int uvAppend(struct raft_io *io,
     int rv;
 
     uv = io->impl;
+    assert(!uv->closing);
 
     append = raft_malloc(sizeof *append);
     if (append == NULL) {

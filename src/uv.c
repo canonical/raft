@@ -68,8 +68,7 @@ static bool uvHasPendingDiskIO(struct uv *uv)
 {
     return !QUEUE_IS_EMPTY(&uv->append_segments) ||
            !QUEUE_IS_EMPTY(&uv->finalize_reqs) ||
-           uv->finalize_work.data != NULL ||
-           uv->prepare_inflight != NULL ||
+           uv->finalize_work.data != NULL || uv->prepare_inflight != NULL ||
            !QUEUE_IS_EMPTY(&uv->truncate_reqs) ||
            uv->truncate_work.data != NULL ||
            !QUEUE_IS_EMPTY(&uv->snapshot_put_reqs) ||
@@ -111,7 +110,8 @@ static void uvTickTimerCloseCb(uv_handle_t *handle)
 }
 
 /* Implementation of raft_io->stop. */
-static int uvStop(struct raft_io *io) {
+static int uvStop(struct raft_io *io)
+{
     struct uv *uv;
     int rv;
     uv = io->impl;
@@ -270,7 +270,7 @@ static int uvLoadSnapshotAndEntries(struct uv *uv,
          * missing entries), and update the start index accordingly. */
         rv = uvFilterSegments(uv, (*snapshot)->index, &segments, &n_segments);
         if (rv != 0) {
-            goto err_after_snapshot_load;
+            goto err;
         }
         if (segments != NULL && !segments[0].is_open) {
             *start_index = segments[0].first_index;
@@ -298,7 +298,7 @@ static int uvLoadSnapshotAndEntries(struct uv *uv,
                    "index of last entry %lld is behind last snapshot %lld",
                    last_index, (*snapshot)->index);
             rv = RAFT_CORRUPT;
-            goto err_after_snapshot_load;
+            goto err;
         }
 
         raft_free(segments);
@@ -307,19 +307,17 @@ static int uvLoadSnapshotAndEntries(struct uv *uv,
 
     return 0;
 
-err_after_snapshot_load:
-    snapshotClose(*snapshot);
 err:
     assert(rv != 0);
+    if (*snapshot != NULL) {
+        snapshotDestroy(*snapshot);
+        *snapshot = NULL;
+    }
     if (snapshots != NULL) {
         raft_free(snapshots);
     }
     if (segments != NULL) {
         raft_free(segments);
-    }
-    if (*snapshot != NULL) {
-        raft_free(*snapshot);
-        *snapshot = NULL;
     }
     return rv;
 }
