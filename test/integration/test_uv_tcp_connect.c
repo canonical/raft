@@ -108,7 +108,7 @@ static void cbAssertResult(struct raft_uv_connect *req,
     }
 
 /* Submit a connect request with the given parameters, close the transport after
- * N loop iterations and assert that the request got canceled.. */
+ * N loop iterations and assert that the request got canceled. */
 #define CONNECT_CANCEL(ID, ADDRESS, N)                       \
     {                                                        \
         CONNECT_REQ(ID, ADDRESS, 0 /* rv */, RAFT_CANCELED); \
