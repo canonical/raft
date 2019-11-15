@@ -45,7 +45,6 @@
     {                                                                     \
         unsigned i__;                                                     \
         int rv__;                                                         \
-        munit_assert_int(N, >, 0);                                        \
         for (i__ = 0; i__ < N; i__++) {                                   \
             rv__ = uv_run(&f->loop, UV_RUN_ONCE);                         \
             if (rv__ < 0) {                                               \

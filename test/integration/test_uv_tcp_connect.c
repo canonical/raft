@@ -55,91 +55,68 @@ static void tearDown(void *data)
 struct result
 {
     int status;
-    const char *errmsg;
     bool done;
 };
 
-static void connectCbAssertOk(struct raft_uv_connect *req,
-                              struct uv_stream_s *stream,
-                              int status)
-{
-    bool *done = req->data;
-    munit_assert_int(status, ==, 0);
-    munit_assert_int(UV_TCP, ==, stream->type);
-    uv_close((struct uv_handle_s *)stream, (uv_close_cb)raft_free);
-    *done = true;
-}
-
-static void connectCbAssertFail(struct raft_uv_connect *req,
-                                struct uv_stream_s *stream,
-                                int status)
+static void cbAssertResult(struct raft_uv_connect *req,
+                           struct uv_stream_s *stream,
+                           int status)
 {
     struct result *result = req->data;
     (void)stream;
-    munit_assert_int(status, !=, 0);
     munit_assert_int(status, ==, result->status);
+    if (status == 0) {
+        uv_close((struct uv_handle_s *)stream, (uv_close_cb)raft_free);
+    }
     result->done = true;
 }
 
-/* Submit a connect request with the given parameters and wait for the operation
- * to successfully complete. */
-#define CONNECT(ID, ADDRESS)                                          \
-    {                                                                 \
-        struct raft_uv_connect _req;                                  \
-        bool _done = false;                                           \
-        int _rv;                                                      \
-        _req.data = &_done;                                           \
-        _rv = f->transport.connect(&f->transport, &_req, ID, ADDRESS, \
-                                   connectCbAssertOk);                \
-        munit_assert_int(_rv, ==, 0);                                 \
-        LOOP_RUN_UNTIL(&_done);                                       \
-    }
+#define CLOSE
+
+#define CONNECT_REQ(ID, ADDRESS, RV, STATUS)                      \
+    struct raft_uv_connect _req;                                  \
+    struct result _result = {STATUS, false};                      \
+    int _rv;                                                      \
+    _req.data = &_result;                                         \
+    _rv = f->transport.connect(&f->transport, &_req, ID, ADDRESS, \
+                               cbAssertResult);                   \
+    munit_assert_int(_rv, ==, RV)
 
 /* Submit a connect request and assert that it fails synchronously with the
  * given error code and message. */
-#define CONNECT_ERROR(ID, ADDRESS, RV, ERRMSG)                               \
-    {                                                                        \
-        struct raft_uv_connect _req;                                         \
-        int _rv;                                                             \
-        _rv = f->transport.connect(&f->transport, &_req, ID, ADDRESS, NULL); \
-        munit_assert_int(_rv, ==, RV);                                       \
-        munit_assert_string_equal(f->transport.errmsg, ERRMSG);              \
+#define CONNECT_ERROR(ID, ADDRESS, RV, ERRMSG)                  \
+    {                                                           \
+        CONNECT_REQ(ID, ADDRESS, RV /* rv */, 0 /* status */);  \
+        munit_assert_string_equal(f->transport.errmsg, ERRMSG); \
+    }
+
+/* Submit a connect request with the given parameters and wait for the operation
+ * to successfully complete. */
+#define CONNECT(ID, ADDRESS)                                  \
+    {                                                         \
+        CONNECT_REQ(ID, ADDRESS, 0 /* rv */, 0 /* status */); \
+        LOOP_RUN_UNTIL(&_result.done);                        \
     }
 
 /* Submit a connect request with the given parameters and wait for the operation
  * to fail with the given code and message. */
-#define CONNECT_FAILURE(ID, ADDRESS, STATUS, ERRMSG)                  \
-    {                                                                 \
-        struct raft_uv_connect _req;                                  \
-        struct result _result = {STATUS, ERRMSG, false};              \
-        int _rv;                                                      \
-        _req.data = &_result;                                         \
-        _rv = f->transport.connect(&f->transport, &_req, ID, ADDRESS, \
-                                   connectCbAssertFail);              \
-        munit_assert_int(_rv, ==, 0);                                 \
-        LOOP_RUN_UNTIL(&_result.done);                                \
-        munit_assert_string_equal(f->transport.errmsg, ERRMSG);       \
+#define CONNECT_FAILURE(ID, ADDRESS, STATUS, ERRMSG)            \
+    {                                                           \
+        CONNECT_REQ(ID, ADDRESS, 0 /* rv */, STATUS);           \
+        LOOP_RUN_UNTIL(&_result.done);                          \
+        munit_assert_string_equal(f->transport.errmsg, ERRMSG); \
     }
 
 /* Submit a connect request with the given parameters, close the transport after
  * N loop iterations and assert that the request got canceled.. */
-#define CONNECT_CANCEL(ID, ADDRESS, N)                                \
-    {                                                                 \
-        struct raft_uv_connect _req;                                  \
-        struct result _result = {RAFT_CANCELED, "", false};           \
-        int _i;                                                       \
-        int _rv;                                                      \
-        _req.data = &_result;                                         \
-        _rv = f->transport.connect(&f->transport, &_req, ID, ADDRESS, \
-                                   connectCbAssertFail);              \
-        munit_assert_int(_rv, ==, 0);                                 \
-        for (_i = 0; _i < N; _i++) {                                  \
-            LOOP_RUN(1);                                              \
-            munit_assert_false(_result.done);                         \
-        }                                                             \
-        raft_uv_tcp_close(&f->transport, NULL);                       \
-        f->closed = true;                                             \
-        LOOP_RUN_UNTIL(&_result.done);                                \
+#define CONNECT_CANCEL(ID, ADDRESS, N)                       \
+    {                                                        \
+        CONNECT_REQ(ID, ADDRESS, 0 /* rv */, RAFT_CANCELED); \
+        LOOP_RUN(N);                                         \
+        munit_assert_false(_result.done);                    \
+        raft_uv_tcp_close(&f->transport, NULL);              \
+        f->closed = true;                                    \
+        LOOP_RUN_UNTIL(&_result.done);                       \
     }
 
 /******************************************************************************
