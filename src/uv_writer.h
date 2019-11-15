@@ -29,6 +29,7 @@ struct UvWriter
     struct uv_poll_s event_poller; /* To make the loop poll for event_fd */
     UvWriterCloseCb close_cb;      /* Close callback */
     queue write_queue;             /* Queue of inflight write requests */
+    bool closing;                  /* Whether we're closing or closed */
     char *errmsg;                  /* Description of last error */
 };
 
@@ -71,8 +72,5 @@ int UvWriterSubmit(struct UvWriter *w,
                    unsigned n,
                    size_t offset,
                    UvWriterReqCb cb);
-
-/* Cancel a write request that had been submitted. */
-void UvWriterCancel(struct UvWriterReq *req);
 
 #endif /* UV_WRITER_H_ */

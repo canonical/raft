@@ -214,8 +214,8 @@ static void cbAssertResult(struct UvWriterReq *req, int status)
         WRITE_REQ(N_BUFS, CONTENT, OFFSET, 0 /* rv */, UV__CANCELED); \
         LOOP_RUN(N);                                                  \
         munit_assert_false(_result.done);                             \
-        UvWriterCancel(&_req);                                        \
-        LOOP_RUN_UNTIL(&_result.done);                                \
+        CLOSE;                                                        \
+        munit_assert_true(_result.done);                              \
         DESTROY_BUFS(_bufs, N_BUFS);                                  \
     }
 
@@ -360,6 +360,5 @@ TEST(UvWriterSubmit, cancel, setUp, tearDown, 0, dir_all_params)
     SKIP_IF_NO_FIXTURE;
     INIT(1);
     WRITE_CANCEL(1, 0, 0, 0);
-    CLOSE;
     return MUNIT_OK;
 }

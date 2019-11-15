@@ -27,6 +27,29 @@ static void uvWriterReqSetStatus(struct UvWriterReq *req, int result)
     }
 }
 
+static void uvWriterPollerCloseCb(struct uv_handle_s *handle)
+{
+    struct UvWriter *w = handle->data;
+
+    UvOsClose(w->fd);
+    UvOsClose(w->event_fd);
+    HeapFree(w->events);
+    UvOsIoDestroy(w->ctx);
+
+    if (w->close_cb != NULL) {
+        w->close_cb(w);
+    }
+}
+
+static void uvWriterMaybeClose(struct UvWriter *w)
+{
+    if (!w->closing) {
+        return;
+    }
+    if (QUEUE_IS_EMPTY(&w->write_queue)) {
+        uv_close((struct uv_handle_s *)&w->event_poller, uvWriterPollerCloseCb);
+    }
+}
 /* Remove the request from the queue of inflight writes and invoke the request
  * callback if set. */
 static void uvWriterReqFinish(struct UvWriterReq *req)
@@ -36,6 +59,7 @@ static void uvWriterReqFinish(struct UvWriterReq *req)
         uvWriterReqTransferErrMsg(req);
     }
     req->cb(req, req->status);
+    uvWriterMaybeClose(req->writer);
 }
 
 /* Run blocking syscalls involved in a file write request.
@@ -215,6 +239,7 @@ int UvWriterInit(struct UvWriter *w,
     w->ctx = 0;
     w->n_events = max_concurrent_writes;
     w->errmsg = errmsg;
+    w->closing = false;
 
     /* Set direct I/O if available. */
     if (direct) {
@@ -287,25 +312,23 @@ err:
     return rv;
 }
 
-static void uvWriterPollerCloseCb(struct uv_handle_s *handle)
+static void uvWriterCancel(struct UvWriterReq *req)
 {
-    struct UvWriter *w = handle->data;
-
-    UvOsClose(w->fd);
-    UvOsClose(w->event_fd);
-    HeapFree(w->events);
-    UvOsIoDestroy(w->ctx);
-
-    if (w->close_cb != NULL) {
-        w->close_cb(w);
-    }
+    req->canceled = true;
 }
 
 void UvWriterClose(struct UvWriter *w, UvWriterCloseCb cb)
 {
-    assert(QUEUE_IS_EMPTY(&w->write_queue));
+    queue *head;
+    QUEUE_FOREACH(head, &w->write_queue)
+    {
+        struct UvWriterReq *req;
+        req = QUEUE_DATA(head, struct UvWriterReq, queue);
+        uvWriterCancel(req);
+    }
     w->close_cb = cb;
-    uv_close((struct uv_handle_s *)&w->event_poller, uvWriterPollerCloseCb);
+    w->closing = true;
+    uvWriterMaybeClose(w);
 }
 
 /* Return the total lengths of the given buffers. */
@@ -437,9 +460,4 @@ err:
     assert(rv != 0);
     QUEUE_REMOVE(&req->queue);
     return rv;
-}
-
-void UvWriterCancel(struct UvWriterReq *req)
-{
-    req->canceled = true;
 }
