@@ -237,17 +237,19 @@ int UvWriterInit(struct UvWriter *w,
                  char *errmsg)
 {
     int rv = 0;
-
     memset(w, 0, sizeof *w);
-
     w->loop = loop;
     w->fd = fd;
     w->async = async;
     w->ctx = 0;
+    w->events = NULL;
     w->n_events = max_concurrent_writes;
-    w->errmsg = errmsg;
-    w->closing = false;
+    w->event_fd = -1;
     w->event_poller.data = NULL;
+    w->close_cb = NULL;
+    QUEUE_INIT(&w->write_queue);
+    w->closing = false;
+    w->errmsg = errmsg;
 
     /* Set direct I/O if available. */
     if (direct) {
@@ -304,8 +306,6 @@ int UvWriterInit(struct UvWriter *w,
         rv = UV__ERROR;
         goto err_after_event_fd;
     }
-
-    QUEUE_INIT(&w->write_queue);
 
     return 0;
 
