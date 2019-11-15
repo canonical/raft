@@ -300,6 +300,11 @@ static void uvAppendProcessRequests(struct uv *uv)
         assert(QUEUE_IS_EMPTY(&uv->append_pending_reqs));
         assert(QUEUE_IS_EMPTY(&uv->append_writing_reqs));
         segment = getCurrentOpenSegment(uv);
+	/* If the current segment is not there anymore it means that was already
+	 * finalized. */
+        if (segment == NULL) {
+            return;
+        }
         assert(segment != NULL);
         assert(segment->finalize);
     }
