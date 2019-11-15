@@ -195,7 +195,7 @@ static void uvPrepareCreateFileAfterWorkCb(uv_work_t *work, int status)
         }
         Tracef(uv->tracer, "canceled creation of %s", s->filename);
         raft_free(s);
-	uvMaybeClose(uv);
+        uvMaybeClose(uv);
         return;
     }
 
@@ -294,6 +294,7 @@ static void maybePrepareSegment(struct uv *uv)
 
 void uvPrepare(struct uv *uv, struct uvPrepare *req, uvPrepareCb cb)
 {
+    assert(!uv->closing);
     req->cb = cb;
     QUEUE_PUSH(&uv->prepare_reqs, &req->queue);
     uvPrepareProcessRequests(uv);
