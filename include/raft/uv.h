@@ -174,6 +174,12 @@ struct raft_uv_transport
     void *impl;
 
     /**
+     * Human-readable message providing diagnostic information about the last
+     * error occurred.
+     */
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
+
+    /**
      * Configure the transport with the given server's identity.
      */
     void (*config)(struct raft_uv_transport *t,

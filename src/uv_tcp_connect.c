@@ -1,9 +1,9 @@
 #include <string.h>
 
 #include "../include/raft/uv.h"
-
 #include "assert.h"
 #include "byte.h"
+#include "err.h"
 #include "uv_ip.h"
 #include "uv_tcp.h"
 
@@ -103,6 +103,7 @@ err:
 static void connectCb(struct uv_connect_s *connect, int status)
 {
     struct UvTcpConnect *r = connect->data;
+    struct UvTcp *t = r->t;
     int rv;
 
     /* If we were canceled via tcp_close(), let's bail out, the close callback
@@ -112,6 +113,8 @@ static void connectCb(struct uv_connect_s *connect, int status)
     }
 
     if (status != 0) {
+        ErrMsgPrintf(t->transport->errmsg, "uv_tcp_connect(): %s",
+                     uv_strerror(status));
         rv = RAFT_NOCONNECTION;
         goto err;
     }
@@ -119,6 +122,8 @@ static void connectCb(struct uv_connect_s *connect, int status)
     /* Initialize the handshake buffer and write it out. */
     rv = encodeHandshake(r->t->id, r->t->address, &r->handshake);
     if (rv != 0) {
+        assert(rv == RAFT_NOMEM);
+        ErrMsgPrintf(r->t->transport->errmsg, "out of memory");
         goto err;
     }
     rv = uv_write(&r->write, (struct uv_stream_s *)r->tcp, &r->handshake, 1,
@@ -145,11 +150,13 @@ err:
 /* Create a new TCP handle and submit a connection request to the event loop. */
 static int startConnecting(struct UvTcpConnect *r, const char *address)
 {
+    struct UvTcp *t = r->t;
     struct sockaddr_in addr;
     int rv;
 
     r->tcp = raft_malloc(sizeof *r->tcp);
     if (r->tcp == NULL) {
+        ErrMsgPrintf(t->transport->errmsg, "out of memory");
         rv = RAFT_NOMEM;
         goto err;
     }
@@ -169,6 +176,8 @@ static int startConnecting(struct UvTcpConnect *r, const char *address)
     if (rv != 0) {
         /* UNTESTED: since parsing succeed, this should fail only because of
          * lack of system resources */
+        ErrMsgPrintf(t->transport->errmsg, "uv_tcp_connect(): %s",
+                     uv_strerror(rv));
         rv = RAFT_NOCONNECTION;
         goto err_after_tcp_init;
     }
@@ -199,6 +208,7 @@ int UvTcpConnect(struct raft_uv_transport *transport,
     /* Create and initialize a new TCP connection request object */
     r = raft_malloc(sizeof *r);
     if (r == NULL) {
+        ErrMsgPrintf(transport->errmsg, "out of memory");
         return RAFT_NOMEM;
     }
     r->t = t;

@@ -52,7 +52,7 @@ static void tearDown(void *data)
  *
  *****************************************************************************/
 
-struct connectResult
+struct result
 {
     int status;
     const char *errmsg;
@@ -74,11 +74,10 @@ static void connectCbAssertFail(struct raft_uv_connect *req,
                                 struct uv_stream_s *stream,
                                 int status)
 {
-    struct connectResult *result = req->data;
+    struct result *result = req->data;
     (void)stream;
     munit_assert_int(status, !=, 0);
     munit_assert_int(status, ==, result->status);
-    /*munit_assert_string_equal(req->errmsg, result->errmsg);*/
     result->done = true;
 }
 
@@ -111,6 +110,7 @@ static void connectCbAssertFail(struct raft_uv_connect *req,
         int _rv;                                                             \
         _rv = f->transport.connect(&f->transport, &_req, ID, ADDRESS, NULL); \
         munit_assert_int(_rv, ==, RV);                                       \
+        munit_assert_string_equal(f->transport.errmsg, ERRMSG);       \
     }
 
 /* Submit a connect request with the given parameters and wait for the operation
@@ -118,7 +118,7 @@ static void connectCbAssertFail(struct raft_uv_connect *req,
 #define CONNECT_FAILURE(ID, ADDRESS, STATUS, ERRMSG)                  \
     {                                                                 \
         struct raft_uv_connect _req;                                  \
-        struct connectResult _result = {STATUS, ERRMSG, false};       \
+        struct result _result = {STATUS, ERRMSG, false};              \
         int _i;                                                       \
         int _rv;                                                      \
         _req.data = &_result;                                         \
@@ -132,6 +132,7 @@ static void connectCbAssertFail(struct raft_uv_connect *req,
             }                                                         \
         }                                                             \
         munit_assert_true(_result.done);                              \
+        munit_assert_string_equal(f->transport.errmsg, ERRMSG);       \
     }
 
 /* Submit a connect request with the given parameters, close the transport after
@@ -139,7 +140,7 @@ static void connectCbAssertFail(struct raft_uv_connect *req,
 #define CONNECT_CANCEL(ID, ADDRESS, N)                                \
     {                                                                 \
         struct raft_uv_connect _req;                                  \
-        struct connectResult _result = {RAFT_CANCELED, "", false};    \
+        struct result _result = {RAFT_CANCELED, "", false};           \
         int _i;                                                       \
         int _rv;                                                      \
         _req.data = &_result;                                         \
@@ -185,7 +186,8 @@ TEST(tcp_connect, refused, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
-    CONNECT_FAILURE(2, BOGUS_ADDRESS, RAFT_NOCONNECTION, "");
+    CONNECT_FAILURE(2, BOGUS_ADDRESS, RAFT_NOCONNECTION,
+                    "uv_tcp_connect(): connection refused");
     return MUNIT_OK;
 }
 
@@ -203,7 +205,7 @@ TEST(tcp_connect, oom, setUp, tearDown, 0, oomParams)
 {
     struct fixture *f = data;
     HEAP_FAULT_ENABLE;
-    CONNECT_ERROR(2, BOGUS_ADDRESS, RAFT_NOMEM, "");
+    CONNECT_ERROR(2, BOGUS_ADDRESS, RAFT_NOMEM, "out of memory");
     return MUNIT_OK;
 }
 
@@ -222,7 +224,7 @@ TEST(tcp_connect, oomAsync, setUp, tearDown, 0, oomAsyncParams)
     struct fixture *f = data;
     TCP_LISTEN;
     HEAP_FAULT_ENABLE;
-    CONNECT_FAILURE(2, TCP_ADDRESS, RAFT_NOMEM, "");
+    CONNECT_FAILURE(2, TCP_ADDRESS, RAFT_NOMEM, "out of memory");
     return MUNIT_OK;
 }
 
