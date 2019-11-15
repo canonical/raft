@@ -7,7 +7,7 @@
 
 /******************************************************************************
  *
- * Fixture with a pristine TCP-based raft_uv_transport.
+ * Fixture with a TCP-based raft_uv_transport.
  *
  *****************************************************************************/
 
@@ -17,34 +17,7 @@ struct fixture
     FIXTURE_LOOP;
     FIXTURE_TCP;
     struct raft_uv_transport transport;
-    bool closed;
 };
-
-static void *setUp(const MunitParameter params[], void *user_data)
-{
-    struct fixture *f = munit_malloc(sizeof *f);
-    (void)user_data;
-    SETUP_HEAP;
-    SETUP_LOOP;
-    SETUP_TCP;
-    raft_uv_tcp_init(&f->transport, &f->loop);
-    f->transport.config(&f->transport, 1, "127.0.0.1:9000");
-    f->closed = false;
-    return f;
-}
-
-static void tearDown(void *data)
-{
-    struct fixture *f = data;
-    if (!f->closed) {
-        raft_uv_tcp_close(&f->transport, NULL);
-    }
-    LOOP_STOP;
-    TEAR_DOWN_TCP;
-    TEAR_DOWN_LOOP;
-    TEAR_DOWN_HEAP;
-    free(f);
-}
 
 /******************************************************************************
  *
@@ -58,9 +31,9 @@ struct result
     bool done;
 };
 
-static void cbAssertResult(struct raft_uv_connect *req,
-                           struct uv_stream_s *stream,
-                           int status)
+static void connectCbAssertResult(struct raft_uv_connect *req,
+                                  struct uv_stream_s *stream,
+                                  int status)
 {
     struct result *result = req->data;
     (void)stream;
@@ -71,7 +44,15 @@ static void cbAssertResult(struct raft_uv_connect *req,
     result->done = true;
 }
 
-#define CLOSE
+#define INIT                                                     \
+    do {                                                         \
+        int _rv;                                                 \
+        _rv = raft_uv_tcp_init(&f->transport, &f->loop);         \
+        munit_assert_int(_rv, ==, 0);                            \
+        f->transport.config(&f->transport, 1, "127.0.0.1:9000"); \
+    } while (0)
+
+#define CLOSE raft_uv_tcp_close(&f->transport, NULL)
 
 #define CONNECT_REQ(ID, ADDRESS, RV, STATUS)                      \
     struct raft_uv_connect _req;                                  \
@@ -79,7 +60,7 @@ static void cbAssertResult(struct raft_uv_connect *req,
     int _rv;                                                      \
     _req.data = &_result;                                         \
     _rv = f->transport.connect(&f->transport, &_req, ID, ADDRESS, \
-                               cbAssertResult);                   \
+                               connectCbAssertResult);            \
     munit_assert_int(_rv, ==, RV)
 
 /* Submit a connect request and assert that it fails synchronously with the
@@ -114,10 +95,49 @@ static void cbAssertResult(struct raft_uv_connect *req,
         CONNECT_REQ(ID, ADDRESS, 0 /* rv */, RAFT_CANCELED); \
         LOOP_RUN(N);                                         \
         munit_assert_false(_result.done);                    \
-        raft_uv_tcp_close(&f->transport, NULL);              \
-        f->closed = true;                                    \
+        CLOSE;                                               \
         LOOP_RUN_UNTIL(&_result.done);                       \
     }
+
+/******************************************************************************
+ *
+ * Set up and tear down.
+ *
+ *****************************************************************************/
+
+static void *setUpDeps(const MunitParameter params[],
+                       MUNIT_UNUSED void *user_data)
+{
+    struct fixture *f = munit_malloc(sizeof *f);
+    SETUP_HEAP;
+    SETUP_LOOP;
+    SETUP_TCP;
+    return f;
+}
+
+static void tearDownDeps(void *data)
+{
+    struct fixture *f = data;
+    LOOP_STOP;
+    TEAR_DOWN_TCP;
+    TEAR_DOWN_LOOP;
+    TEAR_DOWN_HEAP;
+    free(f);
+}
+
+static void *setUp(const MunitParameter params[], void *user_data)
+{
+    struct fixture *f = setUpDeps(params, user_data);
+    INIT;
+    return f;
+}
+
+static void tearDown(void *data)
+{
+    struct fixture *f = data;
+    CLOSE;
+    tearDownDeps(f);
+}
 
 /******************************************************************************
  *
@@ -187,7 +207,7 @@ TEST(tcp_connect, oomAsync, setUp, tearDown, 0, oomAsyncParams)
 
 /* The transport is closed immediately after a connect request as been
  * submitted. The request's callback is invoked with RAFT_CANCELED. */
-TEST(tcp_connect, closeImmediately, setUp, tearDown, 0, NULL)
+TEST(tcp_connect, closeImmediately, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
     CONNECT_CANCEL(2, BOGUS_ADDRESS, 0);
@@ -195,7 +215,7 @@ TEST(tcp_connect, closeImmediately, setUp, tearDown, 0, NULL)
 }
 
 /* The transport gets closed during the handshake. */
-TEST(tcp_connect, closeDuringHandshake, setUp, tearDown, 0, NULL)
+TEST(tcp_connect, closeDuringHandshake, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
     TCP_LISTEN;

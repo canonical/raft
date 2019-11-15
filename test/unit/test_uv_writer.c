@@ -167,8 +167,7 @@ static void submitCbAssertResult(struct UvWriterReq *req, int status)
  *
  *****************************************************************************/
 
-/* Initialize the file only, leaving UvWriter completely pristine. */
-static void *setUpNoInit(const MunitParameter params[], void *user_data)
+static void *setUpDeps(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     char path[UV__PATH_SZ];
@@ -188,8 +187,7 @@ static void *setUpNoInit(const MunitParameter params[], void *user_data)
     return f;
 }
 
-/* Cleanup all dependencies, without closing the UvWriter object. */
-static void tearDownNoClose(void *data)
+static void tearDownDeps(void *data)
 {
     struct fixture *f = data;
     if (f == NULL) {
@@ -201,10 +199,9 @@ static void tearDownNoClose(void *data)
     free(f);
 }
 
-/* Initialize the UvWriter object. */
 static void *setUp(const MunitParameter params[], void *user_data)
 {
-    struct fixture *f = setUpNoInit(params, user_data);
+    struct fixture *f = setUpDeps(params, user_data);
     if (f == NULL) {
         return NULL;
     }
@@ -212,7 +209,6 @@ static void *setUp(const MunitParameter params[], void *user_data)
     return f;
 }
 
-/* Cleanup the fixture's UvFs object. */
 static void tearDown(void *data)
 {
     struct fixture *f = data;
@@ -220,7 +216,7 @@ static void tearDown(void *data)
         return; /* Was skipped. */
     }
     CLOSE;
-    tearDownNoClose(f);
+    tearDownDeps(f);
 }
 
 /******************************************************************************
@@ -232,7 +228,7 @@ static void tearDown(void *data)
 SUITE(UvWriterInit)
 
 /* The kernel has ran out of available AIO events. */
-TEST(UvWriterInit, noResources, setUpNoInit, tearDownNoClose, 0, NULL)
+TEST(UvWriterInit, noResources, setUpDeps, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     aio_context_t ctx = 0;
@@ -243,15 +239,6 @@ TEST(UvWriterInit, noResources, setUpNoInit, tearDownNoClose, 0, NULL)
     }
     INIT_ERROR(UV__ERROR, "io_setup: resource temporarily unavailable");
     test_aio_destroy(ctx);
-    return MUNIT_OK;
-}
-
-/* Initialize and then close the fixture writer. */
-TEST(UvWriterInit, success, setUpNoInit, tearDownNoClose, 0, NULL)
-{
-    struct fixture *f = data;
-    INIT(1);
-    CLOSE;
     return MUNIT_OK;
 }
 
@@ -343,7 +330,7 @@ TEST(UvWriterSubmit, concurrentSame, NULL, NULL, 0, dir_all_params)
 
 /* There are not enough resources to create an AIO context to perform the
  * write. */
-TEST(UvWriterSubmit, noResources, setUpNoInit, tearDown, 0, dir_no_aio_params)
+TEST(UvWriterSubmit, noResources, setUpDeps, tearDown, 0, dir_no_aio_params)
 {
     struct fixture *f = data;
     aio_context_t ctx = 0;
@@ -361,7 +348,7 @@ TEST(UvWriterSubmit, noResources, setUpNoInit, tearDown, 0, dir_no_aio_params)
 }
 
 /* Cancel an inflight write. */
-TEST(UvWriterSubmit, cancel, setUp, tearDownNoClose, 0, dir_all_params)
+TEST(UvWriterSubmit, cancel, setUp, tearDownDeps, 0, dir_all_params)
 {
     struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;

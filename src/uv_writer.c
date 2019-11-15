@@ -240,6 +240,7 @@ int UvWriterInit(struct UvWriter *w,
     w->n_events = max_concurrent_writes;
     w->errmsg = errmsg;
     w->closing = false;
+    w->event_poller.data = NULL;
 
     /* Set direct I/O if available. */
     if (direct) {
@@ -320,6 +321,15 @@ static void uvWriterCancel(struct UvWriterReq *req)
 void UvWriterClose(struct UvWriter *w, UvWriterCloseCb cb)
 {
     queue *head;
+    assert(!w->closing);
+    /* If UvWriterInit didn't make it to initialize the poller, let's return
+     * early. */
+    if (w->event_poller.data == NULL) {
+        if (w->close_cb != NULL) {
+            w->close_cb(w);
+        }
+        return;
+    }
     QUEUE_FOREACH(head, &w->write_queue)
     {
         struct UvWriterReq *req;
