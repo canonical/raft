@@ -679,9 +679,6 @@ void raft_uv_close(struct raft_io *io)
     if (uv->servers != NULL) {
         raft_free(uv->servers);
     }
-    if (uv->close_cb != NULL) {
-        uv->close_cb(uv->io);
-    }
     raft_free(uv);
 }
 
