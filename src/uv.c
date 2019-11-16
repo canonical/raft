@@ -28,9 +28,11 @@
 static void uvConfig(struct raft_io *io, unsigned id, const char *address)
 {
     struct uv *uv;
+    int rv;
     uv = io->impl;
     uv->id = id;
-    uv->transport->config(uv->transport, id, address);
+    rv = uv->transport->init(uv->transport, id, address);
+    assert(rv == 0);
 }
 
 /* Periodic timer callback */

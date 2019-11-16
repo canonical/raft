@@ -180,11 +180,9 @@ struct raft_uv_transport
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
 
     /**
-     * Configure the transport with the given server's identity.
+     * Initialize the transport with the given server's identity.
      */
-    void (*config)(struct raft_uv_transport *t,
-                   unsigned id,
-                   const char *address);
+    int (*init)(struct raft_uv_transport *t, unsigned id, const char *address);
 
     /**
      * Start listening for incoming connections.
@@ -194,14 +192,6 @@ struct raft_uv_transport
      * Raft server.
      */
     int (*start)(struct raft_uv_transport *t, raft_uv_accept_cb cb);
-
-    /**
-     * Stop listening.
-     *
-     * The implementation must stop accepting incoming connections. The @cb
-     * callback passed to @listen must not be invoked anymore.
-     */
-    int (*stop)(struct raft_uv_transport *t);
 
     /**
      * Connect to the server with the given ID and address.
@@ -215,6 +205,14 @@ struct raft_uv_transport
                    unsigned id,
                    const char *address,
                    raft_uv_connect_cb cb);
+
+    /**
+     * Stop listening.
+     *
+     * The implementation must stop accepting incoming connections. The @cb
+     * callback passed to @listen must not be invoked anymore.
+     */
+    int (*stop)(struct raft_uv_transport *t);
 };
 
 /**

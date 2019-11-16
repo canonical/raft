@@ -58,7 +58,8 @@ static void *setup(const MunitParameter params[], void *user_data)
     SETUP_TCP;
     test_tcp_listen(&f->tcp);
     raft_uv_tcp_init(&f->transport, &f->loop);
-    f->transport.config(&f->transport, 1, "127.0.0.1:9000");
+    rv = f->transport.init(&f->transport, 1, "127.0.0.1:9000");
+    munit_assert_int(rv, ==, 0);
     f->closed = false;
     f->invoked = 0;
     f->handshake.offset = 0;

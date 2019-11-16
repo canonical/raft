@@ -7,10 +7,10 @@
 #include "assert.h"
 #include "err.h"
 
-/* Implementation of raft_io_uv_transport->config. */
-static void uvTcpConfig(struct raft_uv_transport *transport,
-                        unsigned id,
-                        const char *address)
+/* Implementation of raft_uv_transport->init. */
+static int uvTcpInit(struct raft_uv_transport *transport,
+                     unsigned id,
+                     const char *address)
 {
     struct UvTcp *t;
     assert(id > 0);
@@ -18,6 +18,7 @@ static void uvTcpConfig(struct raft_uv_transport *transport,
     t = transport->impl;
     t->id = id;
     t->address = address;
+    return 0;
 }
 
 int raft_uv_tcp_init(struct raft_uv_transport *transport,
@@ -41,7 +42,7 @@ int raft_uv_tcp_init(struct raft_uv_transport *transport,
     QUEUE_INIT(&t->connect_reqs);
 
     transport->impl = t;
-    transport->config = uvTcpConfig;
+    transport->init = uvTcpInit;
     transport->start = UvTcpStart;
     transport->stop = UvTcpStop;
     transport->connect = UvTcpConnect;

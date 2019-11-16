@@ -44,12 +44,13 @@ static void connectCbAssertResult(struct raft_uv_connect *req,
     result->done = true;
 }
 
-#define INIT                                                     \
-    do {                                                         \
-        int _rv;                                                 \
-        _rv = raft_uv_tcp_init(&f->transport, &f->loop);         \
-        munit_assert_int(_rv, ==, 0);                            \
-        f->transport.config(&f->transport, 1, "127.0.0.1:9000"); \
+#define INIT                                                         \
+    do {                                                             \
+        int _rv;                                                     \
+        _rv = raft_uv_tcp_init(&f->transport, &f->loop);             \
+        munit_assert_int(_rv, ==, 0);                                \
+        _rv = f->transport.init(&f->transport, 1, "127.0.0.1:9000"); \
+        munit_assert_int(_rv, ==, 0);                                \
     } while (0)
 
 #define CLOSE raft_uv_tcp_close(&f->transport, NULL)
