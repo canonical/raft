@@ -68,6 +68,12 @@ int raft_init(struct raft *r,
     return 0;
 }
 
+static void ioCloseCb(struct raft_io *io)
+{
+    struct raft *r = io->data;
+    IoCompleted(r);
+}
+
 void raft_close(struct raft *r, void (*cb)(struct raft *r))
 {
     bool has_no_pending_io;
@@ -80,11 +86,7 @@ void raft_close(struct raft *r, void (*cb)(struct raft *r))
     /* Check now if there is pending I/O and remember, because io->stop() could
      * invoke callbacks synchronously and drop io_pending to zero. */
     has_no_pending_io = r->io_pending == 0;
-    r->io->stop(r->io);
-
-    if (has_no_pending_io) {
-        IoCompleted(r);
-    }
+    r->io->close(r->io, ioCloseCb);
 }
 
 void raft_set_election_timeout(struct raft *r, const unsigned msecs)

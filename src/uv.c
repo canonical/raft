@@ -96,16 +96,6 @@ void uvMaybeClose(struct uv *uv)
     }
 
     uv->state = UV__CLOSED;
-    if (uv->clients != NULL) {
-        raft_free(uv->clients);
-    }
-    if (uv->servers != NULL) {
-        raft_free(uv->servers);
-    }
-    if (uv->close_cb != NULL) {
-        uv->close_cb(uv->io);
-    }
-    raft_free(uv);
 }
 
 static void uvTickTimerCloseCb(uv_handle_t *handle)
@@ -115,16 +105,24 @@ static void uvTickTimerCloseCb(uv_handle_t *handle)
 }
 
 /* Implementation of raft_io->stop. */
-static int uvStop(struct raft_io *io)
+static void uvClose(struct raft_io *io, raft_io_close_cb cb)
 {
     struct uv *uv;
     int rv;
     uv = io->impl;
+    assert(!uv->closing);
+    uv->close_cb = cb;
+    uv->closing = true;
     uvSendStop(uv);
     rv = uv_timer_stop(&uv->timer);
     assert(rv == 0);
+    uvSendClose(uv);
+    uvRecvClose(uv);
+    uvPrepareClose(uv);
+    uvAppendClose(uv);
+    uvTruncateClose(uv);
     uv->transport->close(uv->transport, NULL);
-    return 0;
+    uv_close((uv_handle_t *)&uv->timer, uvTickTimerCloseCb);
 }
 
 /* Filter the given segment list to find the most recent contiguous chunk of
@@ -598,8 +596,8 @@ int raft_uv_init(struct raft_io *io,
     io->data = NULL; /* canary-poison */
     io->impl = uv;
     io->init = uvInit;
+    io->close = uvClose;
     io->start = uvStart;
-    io->stop = uvStop;
     io->load = uvLoad;
     io->bootstrap = uvBootstrap;
     io->recover = uvRecover;
@@ -623,18 +621,20 @@ err:
     return rv;
 }
 
-void raft_uv_close(struct raft_io *io, raft_io_close_cb cb)
+void raft_uv_close(struct raft_io *io)
 {
     struct uv *uv;
     uv = io->impl;
-    uv->close_cb = cb;
-    uv->closing = true;
-    uvSendClose(uv);
-    uvRecvClose(uv);
-    uvPrepareClose(uv);
-    uvAppendClose(uv);
-    uvTruncateClose(uv);
-    uv_close((uv_handle_t *)&uv->timer, uvTickTimerCloseCb);
+    if (uv->clients != NULL) {
+        raft_free(uv->clients);
+    }
+    if (uv->servers != NULL) {
+        raft_free(uv->servers);
+    }
+    if (uv->close_cb != NULL) {
+        uv->close_cb(uv->io);
+    }
+    raft_free(uv);
 }
 
 void raft_uv_set_segment_size(struct raft_io *io, size_t size)

@@ -444,10 +444,11 @@ static void ioFlushAll(struct io *io)
     }
 }
 
-static int ioMethodStop(struct raft_io *raft_io)
+static void ioMethodClose(struct raft_io *raft_io, raft_io_close_cb cb)
 {
-    (void)raft_io;
-    return 0;
+    if (cb != NULL) {
+        cb(raft_io);
+    }
 }
 
 static int ioMethodLoad(struct raft_io *io,
@@ -893,8 +894,8 @@ static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
 
     raft_io->impl = io;
     raft_io->init = ioMethodInit;
+    raft_io->close = ioMethodClose;
     raft_io->start = ioMethodStart;
-    raft_io->stop = ioMethodStop;
     raft_io->load = ioMethodLoad;
     raft_io->bootstrap = ioMethodBootstrap;
     raft_io->recover = ioMethodRecover;

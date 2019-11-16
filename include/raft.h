@@ -503,6 +503,16 @@ struct raft_io
     int (*init)(struct raft_io *io, unsigned id, const char *address);
 
     /**
+     * Release all resources used by the backend.
+     *
+     * The @tick and @recv callbacks must not be invoked anymore, and pending
+     * asynchronous requests be completed or canceled as soon as
+     * possible. Invoke the close callback once the #raft_io instance can be
+     * freed.
+     */
+    void (*close)(struct raft_io *io, raft_io_close_cb cb);
+
+    /**
      * Read persisted state from storage.
      *
      * The implementation must synchronously read the current state from
@@ -531,17 +541,6 @@ struct raft_io
                  unsigned msecs,
                  raft_io_tick_cb tick_cb,
                  raft_io_recv_cb recv_cb);
-
-    /**
-     * Stop the backend.
-     *
-     * From now on the implementation must stop accepting RPC requests and must
-     * stop invoking the @tick and @recv callbacks.
-     *
-     * It's safe to assume that no more calls to append(), send(), truncate()
-     * etc. will be made from now on.
-     */
-    int (*stop)(struct raft_io *io);
 
     /**
      * Bootstrap a server belonging to a new cluster.

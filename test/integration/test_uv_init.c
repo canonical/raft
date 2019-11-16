@@ -73,8 +73,8 @@ static void tearDownUv(void *data)
         munit_assert_string_equal(f->io.errmsg, ERRMSG);          \
     } while (0)
 
-/* Invoke raft_uv_close(). */
-#define CLOSE raft_uv_close(&f->io, NULL)
+/* Invoke raft_io->close(). */
+#define CLOSE f->io.close(&f->io, NULL)
 
 /* Write either the metadata1 or metadata2 file, filling it with the given
  * values. */

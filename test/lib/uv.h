@@ -58,6 +58,7 @@
     }                                 \
     UV_CLOSE;                         \
     LOOP_STOP;                        \
+    raft_uv_close(&f->io);            \
     raft_uv_tcp_close(&f->transport); \
     TEAR_DOWN_TRACER;                 \
     TEAR_DOWN_DIR;                    \
@@ -66,13 +67,10 @@
     TEAR_DOWN_HEAP;
 
 /* Run the raft_io->close() method, if not ran already. */
-#define UV_CLOSE                      \
-    if (!f->closed) {                 \
-        int rv_;                      \
-        rv_ = f->io.stop(&f->io);     \
-        munit_assert_int(rv_, ==, 0); \
-        raft_uv_close(&f->io, NULL);  \
-        f->closed = true;             \
+#define UV_CLOSE                   \
+    if (!f->closed) {              \
+        f->io.close(&f->io, NULL); \
+        f->closed = true;          \
     }
 
 /* Create a valid closed segment file with FIRST_INDEX and N batches, each
