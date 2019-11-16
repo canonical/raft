@@ -150,7 +150,7 @@ static void finalizeSegment(struct openSegment *s)
     QUEUE_REMOVE(&s->queue);
 
     raft_free(s);
-    uvMaybeClose(uv);
+    uvMaybeFireCloseCb(uv);
 }
 
 /* Flush the append requests in the given queue, firing their callbacks with the

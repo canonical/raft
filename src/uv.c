@@ -28,13 +28,42 @@
 static int uvInit(struct raft_io *io, unsigned id, const char *address)
 {
     struct uv *uv;
+    size_t direct_io;
+    struct uvMetadata metadata;
     int rv;
     uv = io->impl;
     uv->id = id;
-    rv = uv->transport->init(uv->transport, id, address);
+
+    rv = UvFsCheckDir(uv->dir, io->errmsg);
     if (rv != 0) {
         return rv;
     }
+
+    /* Proble file system capabilities */
+    rv = UvFsProbeCapabilities(uv->dir, &direct_io, &uv->async_io, io->errmsg);
+    if (rv != 0) {
+        return rv;
+    }
+    uv->direct_io = direct_io != 0;
+    uv->block_size = direct_io != 0 ? direct_io : 4096;
+
+    rv = uvMetadataLoad(uv->dir, &metadata, io->errmsg);
+    if (rv != 0) {
+        return rv;
+    }
+    uv->metadata = metadata;
+
+    rv = uv->transport->init(uv->transport, id, address);
+    if (rv != 0) {
+        strncpy(io->errmsg, uv->transport->errmsg, RAFT_ERRMSG_BUF_SIZE);
+        return rv;
+    }
+    uv->transport->data = uv;
+
+    rv = uv_timer_init(uv->loop, &uv->timer);
+    assert(rv == 0); /* This should never fail */
+    uv->timer.data = uv;
+
     return 0;
 }
 
@@ -80,28 +109,62 @@ static bool uvHasPendingDiskIO(struct uv *uv)
            !QUEUE_IS_EMPTY(&uv->snapshot_get_reqs);
 }
 
-void uvMaybeClose(struct uv *uv)
+void uvMaybeFireCloseCb(struct uv *uv)
 {
     if (!uv->closing) {
         return;
     }
 
-    if (uv->state == UV__CLOSED) {
-        assert(!uvHasPendingDiskIO(uv));
+    if (uv->transport->data != NULL) {
+        return;
+    }
+    if (uv->timer.data != NULL) {
+        return;
+    }
+    if (!QUEUE_IS_EMPTY(&uv->append_segments)) {
+        return;
+    }
+    if (!QUEUE_IS_EMPTY(&uv->finalize_reqs)) {
+        return;
+    }
+    if (uv->finalize_work.data != NULL) {
+        return;
+    }
+    if (uv->prepare_inflight != NULL) {
+        return;
+    }
+    if (!QUEUE_IS_EMPTY(&uv->truncate_reqs)) {
+        return;
+    }
+    if (uv->truncate_work.data != NULL) {
+        return;
+    }
+    if (!QUEUE_IS_EMPTY(&uv->snapshot_put_reqs)) {
+        return;
+    }
+    if (!QUEUE_IS_EMPTY(&uv->snapshot_get_reqs)) {
         return;
     }
 
-    if (uvHasPendingDiskIO(uv)) {
-        return;
+    if (uv->close_cb != NULL) {
+        uv->close_cb(uv->io);
     }
-
-    uv->state = UV__CLOSED;
 }
 
 static void uvTickTimerCloseCb(uv_handle_t *handle)
 {
     struct uv *uv = handle->data;
-    uvMaybeClose(uv);
+    assert(uv->closing);
+    uv->timer.data = NULL;
+    uvMaybeFireCloseCb(uv);
+}
+
+static void uvTransportCloseCb(struct raft_uv_transport *transport)
+{
+    struct uv *uv = transport->data;
+    assert(uv->closing);
+    uv->transport->data = NULL;
+    uvMaybeFireCloseCb(uv);
 }
 
 /* Implementation of raft_io->stop. */
@@ -121,8 +184,13 @@ static void uvClose(struct raft_io *io, raft_io_close_cb cb)
     uvPrepareClose(uv);
     uvAppendClose(uv);
     uvTruncateClose(uv);
-    uv->transport->close(uv->transport, NULL);
-    uv_close((uv_handle_t *)&uv->timer, uvTickTimerCloseCb);
+    if (uv->transport->data != NULL) {
+        uv->transport->close(uv->transport, uvTransportCloseCb);
+    }
+    if (uv->timer.data != NULL) {
+        uv_close((uv_handle_t *)&uv->timer, uvTickTimerCloseCb);
+    }
+    uvMaybeFireCloseCb(uv);
 }
 
 /* Filter the given segment list to find the most recent contiguous chunk of
@@ -512,9 +580,7 @@ int raft_uv_init(struct raft_io *io,
                  struct raft_uv_transport *transport)
 {
     struct uv *uv;
-    size_t direct_io;
-    bool async_io;
-    struct uvMetadata metadata;
+    void *data;
     int rv;
 
     assert(io != NULL);
@@ -522,23 +588,9 @@ int raft_uv_init(struct raft_io *io,
     assert(dir != NULL);
     assert(transport != NULL);
 
-    memset(io->errmsg, 0, sizeof io->errmsg);
-
-    rv = UvFsCheckDir(dir, io->errmsg);
-    if (rv != 0) {
-        return rv;
-    }
-
-    /* Proble file system capabilities */
-    rv = UvFsProbeCapabilities(dir, &direct_io, &async_io, io->errmsg);
-    if (rv != 0) {
-        return rv;
-    }
-
-    rv = uvMetadataLoad(dir, &metadata, io->errmsg);
-    if (rv != 0) {
-        return rv;
-    }
+    data = io->data;
+    memset(io, 0, sizeof *io);
+    io->data = data;
 
     /* Allocate the raft_io_uv object */
     uv = raft_malloc(sizeof *uv);
@@ -552,15 +604,15 @@ int raft_uv_init(struct raft_io *io,
     uv->loop = loop;
     strcpy(uv->dir, dir);
     uv->transport = transport;
-    uv->transport->data = uv;
+    uv->transport->data = NULL;
     uv->tracer = &NoopTracer;
     uv->id = 0; /* Set by raft_io->config() */
     uv->state = UV__PRISTINE;
     uv->errored = false;
-    uv->direct_io = direct_io != 0;
-    uv->async_io = async_io;
+    uv->direct_io = false;
+    uv->async_io = false;
     uv->segment_size = UV__MAX_SEGMENT_SIZE;
-    uv->block_size = direct_io != 0 ? direct_io : 4096;
+    uv->block_size = 0;
     uv->clients = NULL;
     uv->n_clients = 0;
     uv->servers = NULL;
@@ -582,10 +634,7 @@ int raft_uv_init(struct raft_io *io,
     QUEUE_INIT(&uv->snapshot_put_reqs);
     QUEUE_INIT(&uv->snapshot_get_reqs);
     uv->snapshot_put_work.data = NULL;
-    uv->metadata = metadata;
-    rv = uv_timer_init(uv->loop, &uv->timer);
-    assert(rv == 0); /* This should never fail */
-    uv->timer.data = uv;
+    uv->timer.data = NULL;
     uv->tick_cb = NULL; /* Set by raft_io->start() */
     uv->recv_cb = NULL; /* Set by raft_io->start() */
     uv->closing = false;
@@ -593,7 +642,6 @@ int raft_uv_init(struct raft_io *io,
 
     /* Set the raft_io implementation. */
     io->version = 1; /* future-proof'ing */
-    io->data = NULL; /* canary-poison */
     io->impl = uv;
     io->init = uvInit;
     io->close = uvClose;

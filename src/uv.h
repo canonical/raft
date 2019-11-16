@@ -343,6 +343,6 @@ void uvRecvClose(struct uv *uv);
  * snapshot put requests. */
 void uvSnapshotMaybeProcessRequests(struct uv *uv);
 
-void uvMaybeClose(struct uv *uv);
+void uvMaybeFireCloseCb(struct uv *uv);
 
 #endif /* UV_H_ */

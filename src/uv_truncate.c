@@ -127,7 +127,7 @@ static void afterWorkCb(uv_work_t *work, int status)
 
     uvAppendMaybeProcessRequests(uv);
     uvSnapshotMaybeProcessRequests(uv);
-    uvMaybeClose(uv);
+    uvMaybeFireCloseCb(uv);
 }
 
 /* Process pending truncate requests. */

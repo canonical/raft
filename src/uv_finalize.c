@@ -77,7 +77,7 @@ static void afterWorkCb(uv_work_t *work, int status)
     raft_free(s);
     processRequests(uv);
     uvTruncateMaybeProcessRequests(uv);
-    uvMaybeClose(uv);
+    uvMaybeFireCloseCb(uv);
 }
 
 /* Schedule finalizing an open segment. */

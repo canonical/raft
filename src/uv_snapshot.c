@@ -443,7 +443,7 @@ static void putAfterWorkCb(uv_work_t *work, int status)
     raft_free(r->meta.bufs[1].base);
     raft_free(r);
 
-    uvMaybeClose(uv);
+    uvMaybeFireCloseCb(uv);
 }
 
 /* Process pending put requests. */
@@ -613,7 +613,7 @@ static void getAfterWorkCb(uv_work_t *work, int status)
     QUEUE_REMOVE(&r->queue);
     r->req->cb(r->req, r->snapshot, r->status);
     raft_free(r);
-    uvMaybeClose(uv);
+    uvMaybeFireCloseCb(uv);
 }
 
 int uvSnapshotGet(struct raft_io *io,

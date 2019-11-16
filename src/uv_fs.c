@@ -600,9 +600,8 @@ static int probeDirectIO(int fd, size_t *size, char *errmsg)
     while (*size >= 512) {
         buf = raft_aligned_alloc(*size, *size);
         if (buf == NULL) {
-            /* UNTESTED: TODO */
-            ErrMsgPrintf(errmsg, "can't allocate write buffer");
-            return RAFT_IOERR;
+            ErrMsgPrintf(errmsg, "out of memory");
+            return RAFT_NOMEM;
         }
         memset(buf, 0, *size);
         rv = write(fd, buf, *size);
@@ -659,8 +658,7 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
     /* Allocate the write buffer */
     buf = raft_aligned_alloc(size, size);
     if (buf == NULL) {
-        /* UNTESTED: define a configurable allocator that can fail? */
-        ErrMsgPrintf(errmsg, "can't allocate write buffer");
+        ErrMsgPrintf(errmsg, "out of memory");
         return RAFT_NOMEM;
     }
     memset(buf, 0, size);

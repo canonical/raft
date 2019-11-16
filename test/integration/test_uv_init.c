@@ -11,49 +11,27 @@
  *
  *****************************************************************************/
 
-struct uv
+struct fixture
 {
     FIXTURE_DIR;
     FIXTURE_HEAP;
     FIXTURE_LOOP;
     struct raft_uv_transport transport;
     struct raft_io io;
+    bool closed;
 };
-
-static void *setupUv(const MunitParameter params[], void *user_data)
-{
-    struct uv *f = munit_malloc(sizeof *f);
-    int rv;
-    SETUP_DIR;
-    if (f->dir == NULL) { /* Desired fs not available, skip test. */
-        free(f);
-        return NULL;
-    }
-    SETUP_HEAP;
-    SETUP_LOOP;
-    rv = raft_uv_tcp_init(&f->transport, &f->loop);
-    munit_assert_int(rv, ==, 0);
-    return f;
-}
-
-static void tearDownUv(void *data)
-{
-    struct uv *f = data;
-    if (f == NULL) {
-        return;
-    }
-    raft_uv_tcp_close(&f->transport);
-    TEAR_DOWN_LOOP;
-    TEAR_DOWN_HEAP;
-    TEAR_DOWN_DIR;
-    free(f);
-}
 
 /******************************************************************************
  *
- * raft_uv_init
+ * Helper macros
  *
  *****************************************************************************/
+
+static void closeCb(struct raft_io *io)
+{
+    struct fixture *f = io->data;
+    f->closed = true;
+}
 
 /* Invoke raft_uv_init() and assert that no error occurs. */
 #define INIT(DIR)                                                 \
@@ -61,6 +39,16 @@ static void tearDownUv(void *data)
         int _rv;                                                  \
         _rv = raft_uv_init(&f->io, &f->loop, DIR, &f->transport); \
         munit_assert_int(_rv, ==, 0);                             \
+        _rv = f->io.init(&f->io, 1, "1");                         \
+        munit_assert_int(_rv, ==, 0);                             \
+    } while (0)
+
+/* Invoke raft_io->close(). */
+#define CLOSE                         \
+    do {                              \
+        f->io.close(&f->io, closeCb); \
+        LOOP_RUN_UNTIL(&f->closed);   \
+        raft_uv_close(&f->io);        \
     } while (0)
 
 /* Invoke raft_uv_init() and assert that the given error code is returned and
@@ -69,12 +57,12 @@ static void tearDownUv(void *data)
     do {                                                          \
         int _rv;                                                  \
         _rv = raft_uv_init(&f->io, &f->loop, DIR, &f->transport); \
+        munit_assert_int(_rv, ==, 0);                             \
+        _rv = f->io.init(&f->io, 1, "1");                         \
         munit_assert_int(_rv, ==, RV);                            \
         munit_assert_string_equal(f->io.errmsg, ERRMSG);          \
+        CLOSE;                                                    \
     } while (0)
-
-/* Invoke raft_io->close(). */
-#define CLOSE f->io.close(&f->io, NULL)
 
 /* Write either the metadata1 or metadata2 file, filling it with the given
  * values. */
@@ -91,8 +79,6 @@ static void tearDownUv(void *data)
         test_dir_write_file(f->dir, filename, buf, sizeof buf);  \
     }
 
-SUITE(raft_uv_init)
-
 #define LONG_DIR                                                               \
     "/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
     "/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" \
@@ -108,48 +94,87 @@ SUITE(raft_uv_init)
     "/lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll" \
     "/mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
 
-TEST(raft_uv_init, dirTooLong, setupUv, tearDownUv, 0, NULL)
+static void *setUp(const MunitParameter params[], void *user_data)
 {
-    struct uv *f = data;
+    struct fixture *f = munit_malloc(sizeof *f);
+    int rv;
+    SETUP_DIR;
+    if (f->dir == NULL) { /* Desired fs not available, skip test. */
+        free(f);
+        return NULL;
+    }
+    SETUP_HEAP;
+    SETUP_LOOP;
+    rv = raft_uv_tcp_init(&f->transport, &f->loop);
+    munit_assert_int(rv, ==, 0);
+    f->io.data = f;
+    f->closed = false;
+    return f;
+}
+
+static void tearDown(void *data)
+{
+    struct fixture *f = data;
+    if (f == NULL) {
+        return;
+    }
+    raft_uv_tcp_close(&f->transport);
+    TEAR_DOWN_LOOP;
+    TEAR_DOWN_HEAP;
+    TEAR_DOWN_DIR;
+    free(f);
+}
+
+/******************************************************************************
+ *
+ * raft_io->init()
+ *
+ *****************************************************************************/
+
+SUITE(init)
+
+TEST(init, dirTooLong, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
     INIT_ERROR(LONG_DIR, RAFT_NAMETOOLONG, "directory path too long");
     return 0;
 }
 
 #if defined(RWF_NOWAIT)
-static char *oom_heap_fault_delay[] = {"2", NULL};
+static char *oomHeapFaultDelay[] = {"1", "2", NULL};
 #else
-static char *oom_heap_fault_delay[] = {"1", NULL};
+static char *oomHeapFaultDelay[] = {"1", NULL};
 #endif
-static char *oom_heap_fault_repeat[] = {"1", NULL};
+static char *oomHeapFaultRepeat[] = {"1", NULL};
 
-static MunitParameterEnum oom_params[] = {
-    {TEST_HEAP_FAULT_DELAY, oom_heap_fault_delay},
-    {TEST_HEAP_FAULT_REPEAT, oom_heap_fault_repeat},
+static MunitParameterEnum oomParams[] = {
+    {TEST_HEAP_FAULT_DELAY, oomHeapFaultDelay},
+    {TEST_HEAP_FAULT_REPEAT, oomHeapFaultRepeat},
     {NULL, NULL},
 };
 
 /* Out of memory conditions. */
-TEST(raft_uv_init, oom, setupUv, tearDownUv, 0, oom_params)
+TEST(init, oom, setUp, tearDown, 0, oomParams)
 {
-    struct uv *f = data;
+    struct fixture *f = data;
     HEAP_FAULT_ENABLE;
     INIT_ERROR(f->dir, RAFT_NOMEM, "out of memory");
     return 0;
 }
 
 /* The given directory does not exist. */
-TEST(raft_uv_init, dirDoesNotExist, setupUv, tearDownUv, 0, NULL)
+TEST(init, dirDoesNotExist, setUp, tearDown, 0, NULL)
 {
-    struct uv *f = data;
+    struct fixture *f = data;
     INIT_ERROR("/foo/bar/egg/baz", RAFT_NOTFOUND,
                "directory '/foo/bar/egg/baz' does not exist");
     return MUNIT_OK;
 }
 
 /* The given directory not accessible */
-TEST(raft_uv_init, dirNotAccessible, setupUv, tearDownUv, 0, NULL)
+TEST(init, dirNotAccessible, setUp, tearDown, 0, NULL)
 {
-    struct uv *f = data;
+    struct fixture *f = data;
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
     sprintf(errmsg, "directory '%s' is not writable", f->dir);
     test_dir_unexecutable(f->dir);
@@ -158,9 +183,9 @@ TEST(raft_uv_init, dirNotAccessible, setupUv, tearDownUv, 0, NULL)
 }
 
 /* No space is left for probing I/O capabilities. */
-TEST(raft_uv_init, noSpace, setupUv, tearDownUv, 0, dir_tmpfs_params)
+TEST(init, noSpace, setUp, tearDown, 0, dir_tmpfs_params)
 {
-    struct uv *f = data;
+    struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;
     test_dir_fill(f->dir, 4);
     INIT_ERROR(f->dir, RAFT_NOSPACE,
@@ -171,9 +196,9 @@ TEST(raft_uv_init, noSpace, setupUv, tearDownUv, 0, dir_tmpfs_params)
 /* The metadata1 file has not the expected number of bytes. In this case the
  * file is not considered at all, and the effect is as if this was a brand new
  * server. */
-TEST(raft_uv_init, metadataOneTooShort, setupUv, tearDownUv, 0, NULL)
+TEST(init, metadataOneTooShort, setUp, tearDown, 0, NULL)
 {
-    struct uv *f = data;
+    struct fixture *f = data;
     uint8_t buf[16];
     test_dir_write_file(f->dir, "metadata1", buf, sizeof buf);
     INIT(f->dir);
@@ -182,9 +207,9 @@ TEST(raft_uv_init, metadataOneTooShort, setupUv, tearDownUv, 0, NULL)
 }
 
 /* The metadata1 file has not the expected format. */
-TEST(raft_uv_init, metadataOneBadFormat, setupUv, tearDownUv, 0, NULL)
+TEST(init, metadataOneBadFormat, setUp, tearDown, 0, NULL)
 {
-    struct uv *f = data;
+    struct fixture *f = data;
     WRITE_METADATA_FILE(1, /* Metadata file index                  */
                         2, /* Format                               */
                         1, /* Version                              */
@@ -196,9 +221,9 @@ TEST(raft_uv_init, metadataOneBadFormat, setupUv, tearDownUv, 0, NULL)
 }
 
 /* The metadata1 file has not a valid version. */
-TEST(raft_uv_init, metadataOneBadVersion, setupUv, tearDownUv, 0, NULL)
+TEST(init, metadataOneBadVersion, setUp, tearDown, 0, NULL)
 {
-    struct uv *f = data;
+    struct fixture *f = data;
     WRITE_METADATA_FILE(1, /* Metadata file index                  */
                         1, /* Format                               */
                         0, /* Version                              */
@@ -211,9 +236,9 @@ TEST(raft_uv_init, metadataOneBadVersion, setupUv, tearDownUv, 0, NULL)
 
 /* The data directory has both metadata files, but they have the same
  * version. */
-TEST(raft_uv_init, metadataOneAndTwoSameVersion, setupUv, tearDownUv, 0, NULL)
+TEST(init, metadataOneAndTwoSameVersion, setUp, tearDown, 0, NULL)
 {
-    struct uv *f = data;
+    struct fixture *f = data;
     WRITE_METADATA_FILE(1, /* Metadata file index                  */
                         1, /* Format                               */
                         2, /* Version                              */
