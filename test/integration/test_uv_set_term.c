@@ -1,47 +1,54 @@
+#include "../../include/raft/uv.h"
+#include "../../src/byte.h"
+#include "../lib/dir.h"
+#include "../lib/heap.h"
+#include "../lib/loop.h"
 #include "../lib/runner.h"
-#include "../lib/uv.h"
 
 /******************************************************************************
  *
- * Fixture with a pristine libuv-based raft_io instance.
+ * Fixture with a libuv-based raft_io instance.
  *
  *****************************************************************************/
 
 struct fixture
 {
-    FIXTURE_UV;
+    FIXTURE_DIR;
+    FIXTURE_HEAP;
+    FIXTURE_LOOP;
+    struct raft_uv_transport transport;
+    struct raft_io io;
+    bool closed;
 };
-
-static void *setupUv(const MunitParameter params[], void *user_data)
-{
-    struct fixture *f = munit_malloc(sizeof *f);
-    SETUP_UV;
-    return f;
-}
-
-static void tearDownUv(void *data)
-{
-    struct fixture *f = data;
-    TEAR_DOWN_UV;
-    free(f);
-}
 
 /******************************************************************************
  *
- * raft_io->set_term()
+ * Helper macros
  *
  *****************************************************************************/
 
-/* Re-initialize the raft_io instance, to refresh the metadata cache. */
-#define REINIT                                                       \
+static void closeCb(struct raft_io *io)
+{
+    struct fixture *f = io->data;
+    f->closed = true;
+}
+
+/* Invoke raft_uv_init() and assert that no error occurs. */
+#define INIT                                                         \
     do {                                                             \
         int _rv;                                                     \
-        f->io.close(&f->io, NULL);                                   \
-        LOOP_RUN(2);                                                 \
         _rv = raft_uv_init(&f->io, &f->loop, f->dir, &f->transport); \
         munit_assert_int(_rv, ==, 0);                                \
-        _rv = f->io.init(&f->io, 1, "127.0.0.1:9000");               \
+        _rv = f->io.init(&f->io, 1, "1");                            \
         munit_assert_int(_rv, ==, 0);                                \
+    } while (0)
+
+/* Invoke raft_io->close(). */
+#define CLOSE                         \
+    do {                              \
+        f->io.close(&f->io, closeCb); \
+        LOOP_RUN_UNTIL(&f->closed);   \
+        raft_uv_close(&f->io);        \
     } while (0)
 
 /* Invoke f->io->set_term() and assert that no error occurs. */
@@ -92,10 +99,54 @@ static void tearDownUv(void *data)
         munit_assert_int(byteGet64(&cursor), ==, VOTED_FOR);     \
     }
 
+/******************************************************************************
+ *
+ * Set up and tear down.
+ *
+ *****************************************************************************/
+
+static void *setUpDeps(const MunitParameter params[], void *user_data)
+{
+    struct fixture *f = munit_malloc(sizeof *f);
+    int rv;
+    SETUP_DIR;
+    SETUP_HEAP;
+    SETUP_LOOP;
+    rv = raft_uv_tcp_init(&f->transport, &f->loop);
+    munit_assert_int(rv, ==, 0);
+    f->io.data = f;
+    f->closed = false;
+    return f;
+}
+
+static void *setUp(const MunitParameter params[], void *user_data)
+{
+    struct fixture *f = setUpDeps(params, user_data);
+    INIT;
+    return f;
+}
+
+static void tearDown(void *data)
+{
+    struct fixture *f = data;
+    CLOSE;
+    raft_uv_tcp_close(&f->transport);
+    TEAR_DOWN_LOOP;
+    TEAR_DOWN_HEAP;
+    TEAR_DOWN_DIR;
+    free(f);
+}
+
+/******************************************************************************
+ *
+ * raft_io->set_term()
+ *
+ *****************************************************************************/
+
 SUITE(set_term)
 
 /* The very first time set_term() is called, the metadata1 file gets written. */
-TEST(set_term, first, setupUv, tearDownUv, 0, NULL)
+TEST(set_term, first, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     SET_TERM(1);
@@ -105,7 +156,7 @@ TEST(set_term, first, setupUv, tearDownUv, 0, NULL)
 }
 
 /* The second time set_term() is called, the metadata2 file gets written. */
-TEST(set_term, second, setupUv, tearDownUv, 0, NULL)
+TEST(set_term, second, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     SET_TERM(1);
@@ -116,7 +167,7 @@ TEST(set_term, second, setupUv, tearDownUv, 0, NULL)
 }
 
 /* The third time set_term() is called, the metadata1 file gets overwritten. */
-TEST(set_term, third, setupUv, tearDownUv, 0, NULL)
+TEST(set_term, third, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     SET_TERM(1);
@@ -128,7 +179,7 @@ TEST(set_term, third, setupUv, tearDownUv, 0, NULL)
 }
 
 /* The fourth time set_term() is called, the metadata2 file gets overwritten. */
-TEST(set_term, fourth, setupUv, tearDownUv, 0, NULL)
+TEST(set_term, fourth, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     SET_TERM(1);
@@ -142,7 +193,7 @@ TEST(set_term, fourth, setupUv, tearDownUv, 0, NULL)
 
 /* If the data directory has a single metadata1 file, the first time set_data()
  * is called, the second metadata file gets created. */
-TEST(set_term, metadataOneExists, setupUv, tearDownUv, 0, NULL)
+TEST(set_term, metadataOneExists, setUpDeps, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     WRITE_METADATA_FILE(1, /* Metadata file index                  */
@@ -150,7 +201,7 @@ TEST(set_term, metadataOneExists, setupUv, tearDownUv, 0, NULL)
                         1, /* Version                              */
                         1, /* Term                                 */
                         0 /* Voted for                            */);
-    REINIT;
+    INIT;
     SET_TERM(2);
     ASSERT_METADATA_FILE(1, 1, 1, 0);
     ASSERT_METADATA_FILE(2, 2, 2, 0);
@@ -158,7 +209,7 @@ TEST(set_term, metadataOneExists, setupUv, tearDownUv, 0, NULL)
 }
 
 /* The data directory has both metadata files, but metadata1 is greater. */
-TEST(set_term, metadataOneIsGreater, setupUv, tearDownUv, 0, NULL)
+TEST(set_term, metadataOneIsGreater, setUpDeps, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     WRITE_METADATA_FILE(1, /* Metadata file index                  */
@@ -171,7 +222,7 @@ TEST(set_term, metadataOneIsGreater, setupUv, tearDownUv, 0, NULL)
                         2, /* Version                              */
                         2, /* Term                                 */
                         0 /* Voted for                            */);
-    REINIT;
+    INIT;
     SET_TERM(4);
     ASSERT_METADATA_FILE(1 /* n */, 3 /* version */, 3 /* term */,
                          0 /* voted for */);
@@ -181,7 +232,7 @@ TEST(set_term, metadataOneIsGreater, setupUv, tearDownUv, 0, NULL)
 }
 
 /* The data directory has both metadata files, but metadata2 is greater. */
-TEST(set_term, metadataTwoIsGreater, setupUv, tearDownUv, 0, NULL)
+TEST(set_term, metadataTwoIsGreater, setUpDeps, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     WRITE_METADATA_FILE(1, /* Metadata file index                  */
@@ -194,7 +245,7 @@ TEST(set_term, metadataTwoIsGreater, setupUv, tearDownUv, 0, NULL)
                         2, /* Version                              */
                         2, /* Term                                 */
                         0 /* Voted for                            */);
-    REINIT;
+    INIT;
     SET_TERM(2);
     ASSERT_METADATA_FILE(1 /* n */, 3 /* version */, 2 /* term */,
                          0 /* voted for */);
