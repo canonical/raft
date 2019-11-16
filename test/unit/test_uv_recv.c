@@ -4,8 +4,6 @@
 #include "../../src/byte.h"
 #include "../../src/uv_encoding.h"
 
-TEST_MODULE(io_uv_recv)
-
 /**
  * Helpers.
  */
@@ -95,13 +93,10 @@ static void tear_down(void *data)
  * Success scenarios.
  */
 
-TEST_SUITE(success)
-
-TEST_SETUP(success, setup)
-TEST_TEAR_DOWN(success, tear_down)
+SUITE(recv)
 
 /* Receive the very first message over the connection. */
-TEST_CASE(success, first, NULL)
+TEST(recv, first, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -130,7 +125,7 @@ TEST_CASE(success, first, NULL)
 }
 
 /* Receive the a first message then another one. */
-TEST_CASE(success, second, NULL)
+TEST(recv, second, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -147,7 +142,7 @@ TEST_CASE(success, second, NULL)
 }
 
 /* Receive a RequestVote result message. */
-TEST_CASE(success, request_vote_result, NULL)
+TEST(recv, requestVoteResult, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -170,7 +165,7 @@ TEST_CASE(success, request_vote_result, NULL)
 }
 
 /* Receive an AppendEntries message with two entries. */
-TEST_CASE(success, append_entries, NULL)
+TEST(recv, appendEntries, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entries[2];
@@ -214,7 +209,7 @@ TEST_CASE(success, append_entries, NULL)
 }
 
 /* Receive an AppendEntries message with no entries (i.e. an heartbeat). */
-TEST_CASE(success, heartbeat, NULL)
+TEST(recv, heartbeat, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -234,7 +229,7 @@ TEST_CASE(success, heartbeat, NULL)
 }
 
 /* Receive an AppendEntries result f->peer.message. */
-TEST_CASE(success, append_entries_result, NULL)
+TEST(recv, appendEntriesResult, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -259,7 +254,7 @@ TEST_CASE(success, append_entries_result, NULL)
 }
 
 /* Receive an InstallSnapshot message. */
-TEST_CASE(success, install_snapshot, NULL)
+TEST(recv, installSnasphot, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_install_snapshot *p = &f->peer.message.install_snapshot;
@@ -300,17 +295,8 @@ TEST_CASE(success, install_snapshot, NULL)
     return MUNIT_OK;
 }
 
-/**
- * Failure scenarios.
- */
-
-TEST_SUITE(error)
-
-TEST_SETUP(error, setup)
-TEST_TEAR_DOWN(error, tear_down)
-
 /* The handshake fails because of an unexpected protocon version. */
-TEST_CASE(error, bad_protocol, NULL)
+TEST(recv, badProtocol, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     void *cursor = f->peer.handshake;
@@ -333,7 +319,7 @@ TEST_CASE(error, bad_protocol, NULL)
 }
 
 /* A message can't have zero length. */
-TEST_CASE(error, bad_size, NULL)
+TEST(recv, badSize, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     uint64_t buf[2];
@@ -357,7 +343,7 @@ TEST_CASE(error, bad_size, NULL)
 }
 
 /* A message with a bad type causes the connection to be aborted. */
-TEST_CASE(error, bad_type, NULL)
+TEST(recv, badType, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     uint64_t buf[3];
@@ -390,7 +376,7 @@ static MunitParameterEnum error_oom_params[] = {
 };
 
 /* Out of memory conditions. */
-TEST_CASE(error, oom, error_oom_params)
+TEST(recv, oom, setup, tear_down, 0, error_oom_params)
 {
     struct fixture *f = data;
 
@@ -415,13 +401,8 @@ TEST_CASE(error, oom, error_oom_params)
  * Close backend scenarios.
  */
 
-TEST_SUITE(close)
-
-TEST_SETUP(close, setup)
-TEST_TEAR_DOWN(close, tear_down)
-
 /* The backend is closed just before accepting a new connection. */
-TEST_CASE(close, accept, NULL)
+TEST(recv, closeBeforeAccept, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -439,7 +420,7 @@ TEST_CASE(close, accept, NULL)
 
 /* The backend is closed after receiving the header of an AppendEntries
  * message. */
-TEST_CASE(close, append_entries, NULL)
+TEST(recv, closeAfterAppendEntriesHeader, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry;
