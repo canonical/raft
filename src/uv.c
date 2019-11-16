@@ -25,14 +25,17 @@
 #define CONNECT_RETRY_DELAY 1000
 
 /* Implementation of raft_io->config. */
-static void uvConfig(struct raft_io *io, unsigned id, const char *address)
+static int uvInit(struct raft_io *io, unsigned id, const char *address)
 {
     struct uv *uv;
     int rv;
     uv = io->impl;
     uv->id = id;
     rv = uv->transport->init(uv->transport, id, address);
-    assert(rv == 0);
+    if (rv != 0) {
+        return rv;
+    }
+    return 0;
 }
 
 /* Periodic timer callback */
@@ -594,7 +597,7 @@ int raft_uv_init(struct raft_io *io,
     io->version = 1; /* future-proof'ing */
     io->data = NULL; /* canary-poison */
     io->impl = uv;
-    io->config = uvConfig;
+    io->init = uvInit;
     io->start = uvStart;
     io->stop = uvStop;
     io->load = uvLoad;

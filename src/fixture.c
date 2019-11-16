@@ -216,13 +216,14 @@ static bool ioFaultTick(struct io *io)
     return false;
 }
 
-static void ioMethodConfig(struct raft_io *raft_io,
-                           unsigned id,
-                           const char *address)
+static int ioMethodInit(struct raft_io *raft_io,
+                        unsigned id,
+                        const char *address)
 {
     struct io *io = raft_io->impl;
     io->id = id;
     io->address = address;
+    return 0;
 }
 
 static int ioMethodStart(struct raft_io *raft_io,
@@ -891,7 +892,7 @@ static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
     io->n_append = 0;
 
     raft_io->impl = io;
-    raft_io->config = ioMethodConfig;
+    raft_io->init = ioMethodInit;
     raft_io->start = ioMethodStart;
     raft_io->stop = ioMethodStop;
     raft_io->load = ioMethodLoad;

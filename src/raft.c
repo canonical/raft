@@ -30,6 +30,7 @@ int raft_init(struct raft *r,
               const unsigned id,
               const char *address)
 {
+    int rv;
     assert(r != NULL);
     r->io = io;
     r->io->data = r;
@@ -60,7 +61,10 @@ int raft_init(struct raft *r,
     r->snapshot.trailing = DEFAULT_SNAPSHOT_TRAILING;
     r->snapshot.put.data = NULL;
     r->close_cb = NULL;
-    r->io->config(r->io, r->id, r->address);
+    rv = r->io->init(r->io, r->id, r->address);
+    if (rv != 0) {
+        return rv;
+    }
     return 0;
 }
 

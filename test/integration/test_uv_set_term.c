@@ -41,7 +41,8 @@ static void tearDownUv(void *data)
         LOOP_RUN(2);                                                 \
         _rv = raft_uv_init(&f->io, &f->loop, f->dir, &f->transport); \
         munit_assert_int(_rv, ==, 0);                                \
-        f->io.config(&f->io, 1, "127.0.0.1:9000");                   \
+        _rv = f->io.init(&f->io, 1, "127.0.0.1:9000");               \
+        munit_assert_int(_rv, ==, 0);                                \
     } while (0)
 
 /* Invoke f->io->set_term() and assert that no error occurs. */

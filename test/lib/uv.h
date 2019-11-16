@@ -47,7 +47,8 @@
         raft_uv_set_tracer(&f->io, &f->tracer);                          \
         f->io.data = f;                                                  \
         f->uv = f->io.impl;                                              \
-        f->io.config(&f->io, 1, "127.0.0.1:9000");                       \
+        rv_ = f->io.init(&f->io, 1, "127.0.0.1:9000");                   \
+        munit_assert_int(rv_, ==, 0);                                    \
         f->closed = false;                                               \
     }
 

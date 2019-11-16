@@ -497,10 +497,10 @@ struct raft_io
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
 
     /**
-     * Configure the backend with operational parameters such as server ID and
+     * Initialize the backend with operational parameters such as server ID and
      * address.
      */
-    void (*config)(struct raft_io *io, unsigned id, const char *address);
+    int (*init)(struct raft_io *io, unsigned id, const char *address);
 
     /**
      * Read persisted state from storage.
