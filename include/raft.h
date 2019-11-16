@@ -702,7 +702,6 @@ struct raft
     struct raft_fsm *fsm;       /* User-defined FSM to apply commands to. */
     unsigned id;                /* Server ID of this raft instance. */
     char *address;              /* Server address of this raft instance. */
-    unsigned io_pending;        /* Number of pending async I/O requests */
 
     /*
      * Cache of the server's persistent state, updated on stable storage before

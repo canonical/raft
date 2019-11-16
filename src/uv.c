@@ -98,17 +98,6 @@ static int uvStart(struct raft_io *io,
     return 0;
 }
 
-static bool uvHasPendingDiskIO(struct uv *uv)
-{
-    return !QUEUE_IS_EMPTY(&uv->append_segments) ||
-           !QUEUE_IS_EMPTY(&uv->finalize_reqs) ||
-           uv->finalize_work.data != NULL || uv->prepare_inflight != NULL ||
-           !QUEUE_IS_EMPTY(&uv->truncate_reqs) ||
-           uv->truncate_work.data != NULL ||
-           !QUEUE_IS_EMPTY(&uv->snapshot_put_reqs) ||
-           !QUEUE_IS_EMPTY(&uv->snapshot_get_reqs);
-}
-
 void uvMaybeFireCloseCb(struct uv *uv)
 {
     if (!uv->closing) {

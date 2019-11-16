@@ -18,7 +18,6 @@ libraft_la_SOURCES = \
   src/entry.c \
   src/err.c \
   src/heap.c \
-  src/io.c \
   src/log.c \
   src/logger_ring.c \
   src/logger_stream.c \

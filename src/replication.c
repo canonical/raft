@@ -3,7 +3,6 @@
 #include "assert.h"
 #include "configuration.h"
 #include "convert.h"
-#include "io.h"
 #ifdef __GLIBC__
 #include "error.h"
 #endif
@@ -74,8 +73,6 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
     /* Tell the log that we're done referencing these entries. */
     logRelease(&r->log, req->index, req->entries, req->n);
     raft_free(req);
-
-    IoPendingDecrement(r);
 }
 
 /* Send an AppendEntries message to the i'th server, including all log entries
@@ -131,11 +128,9 @@ static int sendAppendEntries(struct raft *r,
     req->n = args->n_entries;
     req->server_id = server->id;
 
-    IoPendingIncrement(r);
     req->send.data = req;
     rv = r->io->send(r->io, &req->send, &message, sendAppendEntriesCb);
     if (rv != 0) {
-        IoPendingDecrement(r);
         goto err_after_req_alloc;
     }
 
@@ -186,7 +181,6 @@ static void sendInstallSnapshotCb(struct raft_io_send *send, int status)
     snapshotClose(req->snapshot);
     raft_free(req->snapshot);
     raft_free(req);
-    IoPendingDecrement(r);
 }
 
 static void sendSnapshotGetCb(struct raft_io_snapshot_get *get,
@@ -244,10 +238,8 @@ static void sendSnapshotGetCb(struct raft_io_snapshot_get *get,
     debugf(r, "sending snapshot with last index %ld to %ld", snapshot->index,
            server->id);
 
-    IoPendingIncrement(r);
     rv = r->io->send(r->io, &req->send, &message, sendInstallSnapshotCb);
     if (rv != 0) {
-        IoPendingDecrement(r);
         goto abort_with_snapshot;
     }
 
@@ -263,7 +255,6 @@ abort:
     }
     raft_free(req);
 out:
-    IoPendingDecrement(r);
     return;
 }
 
@@ -288,10 +279,8 @@ static int sendSnapshot(struct raft *r, const unsigned i)
     /* TODO: make sure that the I/O implementation really returns the latest
      * snapshot *at this time* and not any snapshot that might be stored at a
      * later point. Otherwise the progress snapshot_index would be wrong. */
-    IoPendingIncrement(r);
     rv = r->io->snapshot_get(r->io, &request->get, sendSnapshotGetCb);
     if (rv != 0) {
-        IoPendingDecrement(r);
         goto err_after_req_alloc;
     }
 
@@ -502,7 +491,6 @@ out:
     /* Tell the log that we're done referencing these entries. */
     logRelease(&r->log, request->index, request->entries, request->n);
     raft_free(request);
-    IoPendingDecrement(r);
 }
 
 /* Submit a disk write for all entries from the given index onward. */
@@ -540,10 +528,8 @@ static int appendLeader(struct raft *r, raft_index index)
     request->n = n;
     request->req.data = request;
 
-    IoPendingIncrement(r);
     rv = r->io->append(r->io, &request->req, entries, n, appendLeaderCb);
     if (rv != 0) {
-        IoPendingDecrement(r);
         goto err_after_request_alloc;
     }
 
@@ -746,7 +732,6 @@ static void sendAppendEntriesResultCb(struct raft_io_send *req, int status)
     struct raft *r = req->data;
     (void)status;
     raft_free(req);
-    IoPendingDecrement(r);
 }
 
 static void sendAppendEntriesResult(
@@ -768,10 +753,8 @@ static void sendAppendEntriesResult(
     }
     req->data = r;
 
-    IoPendingIncrement(r);
     rv = r->io->send(r->io, req, &message, sendAppendEntriesResultCb);
     if (rv != 0) {
-        IoPendingDecrement(r);
         raft_free(req);
     }
 }
@@ -871,7 +854,6 @@ out:
                request->args.n_entries);
 
     raft_free(request);
-    IoPendingDecrement(r);
 }
 
 /* Check the log matching property against an incoming AppendEntries request.
@@ -1091,11 +1073,9 @@ int replicationAppend(struct raft *r,
     assert(request->args.n_entries == n);
 
     request->req.data = request;
-    IoPendingIncrement(r);
     rv = r->io->append(r->io, &request->req, request->args.entries,
                        request->args.n_entries, appendFollowerCb);
     if (rv != 0) {
-        IoPendingDecrement(r);
         goto err_after_acquire_entries;
     }
 
@@ -1179,7 +1159,6 @@ respond:
     }
 
     raft_free(request);
-    IoPendingDecrement(r);
 }
 
 int replicationInstallSnapshot(struct raft *r,
@@ -1253,11 +1232,9 @@ int replicationInstallSnapshot(struct raft *r,
 
     assert(r->snapshot.put.data == NULL);
     r->snapshot.put.data = request;
-    IoPendingIncrement(r);
     rv = r->io->snapshot_put(r->io, r->snapshot.trailing, &r->snapshot.put,
                              snapshot, installSnapshotCb);
     if (rv != 0) {
-        IoPendingDecrement(r);
         goto err_after_bufs_alloc;
     }
 
@@ -1404,7 +1381,6 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
 out:
     snapshotClose(&r->snapshot.pending);
     r->snapshot.pending.term = 0;
-    IoPendingDecrement(r);
 }
 
 static int takeSnapshot(struct raft *r)
@@ -1437,11 +1413,9 @@ static int takeSnapshot(struct raft *r)
 
     assert(r->snapshot.put.data == NULL);
     r->snapshot.put.data = r;
-    IoPendingIncrement(r);
     rv = r->io->snapshot_put(r->io, r->snapshot.trailing, &r->snapshot.put,
                              snapshot, takeSnapshotCb);
     if (rv != 0) {
-        IoPendingDecrement(r);
         goto abort_after_fsm_snapshot;
     }
 

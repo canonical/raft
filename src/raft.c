@@ -7,7 +7,6 @@
 #include "convert.h"
 #include "election.h"
 #include "err.h"
-#include "io.h"
 #include "log.h"
 #include "logging.h"
 #include "tracing.h"
@@ -42,7 +41,6 @@ int raft_init(struct raft *r,
     if (r->address == NULL) {
         return RAFT_NOMEM;
     }
-    r->io_pending = 0;
     strcpy(r->address, address);
     r->current_term = 0;
     r->voted_for = 0;
@@ -71,21 +69,21 @@ int raft_init(struct raft *r,
 static void ioCloseCb(struct raft_io *io)
 {
     struct raft *r = io->data;
-    IoCompleted(r);
+    raft_free(r->address);
+    logClose(&r->log);
+    raft_configuration_close(&r->configuration);
+    if (r->close_cb != NULL) {
+        r->close_cb(r);
+    }
 }
 
 void raft_close(struct raft *r, void (*cb)(struct raft *r))
 {
-    bool has_no_pending_io;
     assert(r->close_cb == NULL);
     if (r->state != RAFT_UNAVAILABLE) {
         convertToUnavailable(r);
     }
     r->close_cb = cb;
-
-    /* Check now if there is pending I/O and remember, because io->stop() could
-     * invoke callbacks synchronously and drop io_pending to zero. */
-    has_no_pending_io = r->io_pending == 0;
     r->io->close(r->io, ioCloseCb);
 }
 

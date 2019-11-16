@@ -2,7 +2,6 @@
 
 #include "assert.h"
 #include "configuration.h"
-#include "io.h"
 #include "log.h"
 #include "logging.h"
 
@@ -70,7 +69,6 @@ static void sendRequestVoteCb(struct raft_io_send *send, int status)
               req->server_id, raft_strerror(status));
     }
     raft_free(req);
-    IoPendingDecrement(r);
 }
 
 /* Send a RequestVote RPC to the given server. */
@@ -99,10 +97,8 @@ static int sendRequestVote(struct raft *r, const struct raft_server *server)
     req->send.data = req;
     req->server_id = server->id;
 
-    IoPendingIncrement(r);
     rv = r->io->send(r->io, &req->send, &message, sendRequestVoteCb);
     if (rv != 0) {
-        IoPendingDecrement(r);
         raft_free(req);
         return rv;
     }
