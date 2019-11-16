@@ -114,27 +114,15 @@ struct Server
     ServerCloseCb close_cb;             /* Optional close callback. */
 };
 
-static void serverTransportCloseCb(struct raft_uv_transport *transport)
+static void serverRaftCloseCb(struct raft *raft)
 {
-    struct Server *s = transport->data;
+    struct Server *s = raft->data;
+    raft_uv_close(&s->io);
+    raft_uv_tcp_close(&s->transport);
     FsmClose(&s->fsm);
     if (s->close_cb != NULL) {
         s->close_cb(s);
     }
-}
-
-static void serverIoCloseCb(struct raft_io *io)
-{
-    struct Server *s = io->data;
-    s->transport.data = s;
-    raft_uv_tcp_close(&s->transport, serverTransportCloseCb);
-}
-
-static void serverRaftCloseCb(struct raft *raft)
-{
-    struct Server *s = raft->data;
-    s->io.data = s;
-    raft_uv_close(&s->io, serverIoCloseCb);
 }
 
 /* Final callback in the shutdown sequence, invoked after the timer handle has

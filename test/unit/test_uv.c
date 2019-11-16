@@ -144,7 +144,12 @@ TEST_CASE(init, dir_too_long, NULL)
     dir[sizeof dir - 1] = 0;
 
     rv = raft_uv_init(&io, &f->loop, dir, &transport);
+    munit_assert_int(rv, ==, 0);
+
+    rv = io.init(&io, 1, "1");
     munit_assert_int(rv, ==, RAFT_NAMETOOLONG);
+
+    raft_uv_close(&io);
 
     return MUNIT_OK;
 }
