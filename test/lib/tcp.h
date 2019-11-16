@@ -16,6 +16,9 @@
 
 #define TCP_LISTEN test_tcp_listen(&f->tcp)
 #define TCP_ADDRESS test_tcp_address(&f->tcp)
+#define TCP_CONNECT(PORT) test_tcp_connect(&f->tcp, PORT)
+#define TCP_SEND(BUF, N) test_tcp_send(&f->tcp, BUF, N)
+#define TCP_CLOSE test_tcp_close(&f->tcp)
 
 /**
  * Object that can be used to setup and control a TCP server and/or client.
@@ -75,6 +78,5 @@ int test_tcp_accept(struct test_tcp *t);
  * Close the server socket.
  */
 void test_tcp_stop(struct test_tcp *t);
-
 
 #endif /* TEST_TCP_H */

@@ -431,7 +431,7 @@ abort:
 int uvRecvStart(struct uv *uv)
 {
     int rv;
-    rv = uv->transport->start(uv->transport, acceptCb);
+    rv = uv->transport->listen(uv->transport, acceptCb);
     if (rv != 0) {
         return rv;
     }

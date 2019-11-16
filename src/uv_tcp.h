@@ -22,24 +22,11 @@ struct UvTcp
     raft_uv_transport_close_cb close_cb; /* Call when it's safe to free us */
 };
 
-/* Hold state for a single connection request. */
-struct UvTcpConnect
-{
-    struct UvTcp *t;             /* Transport implementation */
-    struct raft_uv_connect *req; /* User request */
-    uv_buf_t handshake;          /* Handshake data */
-    struct uv_tcp_s *tcp;        /* TCP connection socket handle */
-    struct uv_connect_s connect; /* TCP connectionr request */
-    struct uv_write_s write;     /* TCP handshake request */
-    int status;                  /* Returned to the request callback */
-    queue queue;                 /* Pending connect queue */
-};
+/* Implementation of raft_uv_transport->listen. */
+int UvTcpListen(struct raft_uv_transport *transport, raft_uv_accept_cb cb);
 
-/* Implementation of raft_uv_transport->start. */
-int UvTcpStart(struct raft_uv_transport *t, raft_uv_accept_cb cb);
-
-/* Implementation of raft_uv_transport->stop. */
-int UvTcpStop(struct raft_uv_transport *t);
+/* Stop accepting new connection and close all connections being accepted. */
+void UvTcpListenStop(struct UvTcp *t);
 
 /* Implementation of raft_uv_transport->connect. */
 int UvTcpConnect(struct raft_uv_transport *transport,
@@ -48,7 +35,11 @@ int UvTcpConnect(struct raft_uv_transport *transport,
                  const char *address,
                  raft_uv_connect_cb cb);
 
-/* Cancel a pending connection requests. */
-void UvTcpConnectCancel(struct UvTcpConnect *req);
+/* Cancel all pending connection requests. */
+void UvTcpConnectStop(struct UvTcp *t);
+
+/* Fire the transport close callback if the transport is closing and there's no
+ * more pending callback. */
+void UvTcpMaybeFireCloseCb(struct UvTcp *t);
 
 #endif /* UV_TCP_H_ */

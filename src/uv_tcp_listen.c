@@ -1,8 +1,8 @@
 #include <string.h>
 
-#include "../include/raft/uv.h"
 #include "assert.h"
 #include "byte.h"
+#include "heap.h"
 #include "uv_ip.h"
 #include "uv_tcp.h"
 
@@ -25,7 +25,7 @@
  */
 
 /* Hold state for a connection being accepted. */
-struct handshake
+struct uvTcpHandshake
 {
     uint64_t preamble[3]; /* Preamble buffer */
     uv_buf_t address;     /* Address buffer */
@@ -33,20 +33,21 @@ struct handshake
 };
 
 /* Hold handshake data for a new connection being established. */
-struct conn
+struct uvTcpIncoming
 {
-    struct UvTcp *t;            /* Transport implementation */
-    struct uv_tcp_s *tcp;       /* TCP connection socket handle */
-    struct handshake handshake; /* Handshake data */
-    queue queue;                /* Pending accept queue */
+    struct UvTcp *t;                 /* Transport implementation */
+    struct uv_tcp_s *tcp;            /* TCP connection socket handle */
+    struct uvTcpHandshake handshake; /* Handshake data */
+    bool closing;                    /* Whether we're shutting down */
+    queue queue;                     /* Pending accept queue */
 };
 
 /* Read the preamble of the handshake. */
-static void preambleAllocCb(struct uv_handle_s *handle,
-                            size_t suggested_size,
-                            uv_buf_t *buf)
+static void uvTcpPreambleAllocCb(struct uv_handle_s *handle,
+                                 size_t suggested_size,
+                                 uv_buf_t *buf)
 {
-    struct conn *c = handle->data;
+    struct uvTcpIncoming *c = handle->data;
     (void)suggested_size;
     buf->base = (char *)c->handshake.preamble + c->handshake.nread;
     buf->len = sizeof c->handshake.preamble - c->handshake.nread;
@@ -55,7 +56,7 @@ static void preambleAllocCb(struct uv_handle_s *handle,
 /* Decode the handshake preamble, containing the protocol version, the ID of the
  * connecting server and the length of its address. Also, allocate the buffer to
  * start reading the server address. */
-static int decodePreamble(struct handshake *h)
+static int uvTcpDecodePreamble(struct uvTcpHandshake *h)
 {
     uint64_t protocol;
     protocol = byteFlip64(h->preamble[0]);
@@ -63,7 +64,7 @@ static int decodePreamble(struct handshake *h)
         return RAFT_MALFORMED;
     }
     h->address.len = byteFlip64(h->preamble[2]);
-    h->address.base = raft_malloc(h->address.len);
+    h->address.base = HeapMalloc(h->address.len);
     if (h->address.base == NULL) {
         return RAFT_NOMEM;
     }
@@ -74,57 +75,62 @@ static int decodePreamble(struct handshake *h)
 /* The accepted TCP client connection has been closed, release all memory
  * associated with accept object. We can get here only if an error occurrent
  * during the handshake or if raft_io_transport->close() has been invoked. */
-static void closeCb(struct uv_handle_s *handle)
+static void uvTcpIncomingCloseCb(struct uv_handle_s *handle)
 {
-    struct conn *c = handle->data;
-    /* We have to be careful to not use the c->t reference, since that
-     * io_uv__tcp transport object might have been released at this point. */
+    struct uvTcpIncoming *c = handle->data;
+    struct UvTcp *t = c->t;
+    assert(c->closing);
+    QUEUE_REMOVE(&c->queue);
     if (c->handshake.address.base != NULL) {
-        raft_free(c->handshake.address.base);
+        HeapFree(c->handshake.address.base);
     }
-    raft_free(c->tcp);
-    raft_free(c);
+    HeapFree(c->tcp);
+    HeapFree(c);
+    UvTcpMaybeFireCloseCb(t);
 }
 
-/* Close an incoming TCP connection. Can be called at any time after starting
- * the handshake. */
-static void closeConn(struct conn *c)
+/* Close an incoming TCP connection which hasn't complete the handshake yet. */
+static void uvTcpIncomingClose(struct uvTcpIncoming *c)
 {
-    QUEUE_REMOVE(&c->queue);
+    c->closing = true;
     /* After uv_close() returns we are guaranteed that no more alloc_cb or
      * read_cb will be called. */
-    uv_close((struct uv_handle_s *)c->tcp, closeCb);
+    uv_close((struct uv_handle_s *)c->tcp, uvTcpIncomingCloseCb);
 }
 
 /* Read the address part of the handshake. */
-static void addressAllocCb(struct uv_handle_s *handle,
-                           size_t suggested_size,
-                           uv_buf_t *buf)
+static void uvTcpAddressAllocCb(struct uv_handle_s *handle,
+                                size_t suggested_size,
+                                uv_buf_t *buf)
 {
-    struct conn *c = handle->data;
+    struct uvTcpIncoming *c = handle->data;
     (void)suggested_size;
+    assert(!c->t->closing);
+    assert(!c->closing);
     buf->base = c->handshake.address.base + c->handshake.nread;
     buf->len = c->handshake.address.len - c->handshake.nread;
 }
 
-static void addressReadCb(uv_stream_t *stream,
-                          ssize_t nread,
-                          const uv_buf_t *buf)
+static void uvTcpAdressReadCb(uv_stream_t *stream,
+                              ssize_t nread,
+                              const uv_buf_t *buf)
 {
-    struct conn *c = stream->data;
+    struct uvTcpIncoming *c = stream->data;
     char *address;
     unsigned id;
     size_t n;
     int rv;
 
     (void)buf;
+    assert(!c->t->closing);
+    assert(!c->closing);
 
     if (nread == 0) {
         /* Empty read just ignore it. */
         return;
     }
     if (nread < 0) {
-        closeConn(c);
+        uvTcpIncomingClose(c);
         return;
     }
 
@@ -148,15 +154,15 @@ static void addressReadCb(uv_stream_t *stream,
     address = c->handshake.address.base;
     QUEUE_REMOVE(&c->queue);
     c->t->accept_cb(c->t->transport, id, address, (struct uv_stream_s *)c->tcp);
-    raft_free(c->handshake.address.base);
-    raft_free(c);
+    HeapFree(c->handshake.address.base);
+    HeapFree(c);
 }
 
-static void preambleReadCb(uv_stream_t *stream,
-                           ssize_t nread,
-                           const uv_buf_t *buf)
+static void uvTcpPreambleReadCb(uv_stream_t *stream,
+                                ssize_t nread,
+                                const uv_buf_t *buf)
 {
-    struct conn *c = stream->data;
+    struct uvTcpIncoming *c = stream->data;
     size_t n;
     int rv;
 
@@ -167,7 +173,7 @@ static void preambleReadCb(uv_stream_t *stream,
         return;
     }
     if (nread < 0) {
-        closeConn(c);
+        uvTcpIncomingClose(c);
         return;
     }
 
@@ -185,25 +191,26 @@ static void preambleReadCb(uv_stream_t *stream,
     }
 
     /* If we have completed reading the preamble, let's parse it. */
-    rv = decodePreamble(&c->handshake);
+    rv = uvTcpDecodePreamble(&c->handshake);
     if (rv != 0) {
-        closeConn(c);
+        uvTcpIncomingClose(c);
         return;
     }
 
     rv = uv_read_stop(stream);
     assert(rv == 0);
-    rv = uv_read_start((uv_stream_t *)c->tcp, addressAllocCb, addressReadCb);
+    rv = uv_read_start((uv_stream_t *)c->tcp, uvTcpAddressAllocCb,
+                       uvTcpAdressReadCb);
     assert(rv == 0);
 }
 
 /* Start reading handshake data for a new incoming connection. */
-static int readHandshake(struct conn *c)
+static int uvTcpReadHandshake(struct uvTcpIncoming *c)
 {
     int rv;
     memset(&c->handshake, 0, sizeof c->handshake);
 
-    c->tcp = raft_malloc(sizeof *c->tcp);
+    c->tcp = HeapMalloc(sizeof *c->tcp);
     if (c->tcp == NULL) {
         return RAFT_NOMEM;
     }
@@ -217,52 +224,56 @@ static int readHandshake(struct conn *c)
         rv = RAFT_IOERR;
         goto err_after_tcp_init;
     }
-    rv = uv_read_start((uv_stream_t *)c->tcp, preambleAllocCb, preambleReadCb);
+    rv = uv_read_start((uv_stream_t *)c->tcp, uvTcpPreambleAllocCb,
+                       uvTcpPreambleReadCb);
     assert(rv == 0);
 
     return 0;
 
 err_after_tcp_init:
-    uv_close((uv_handle_t *)c->tcp, (uv_close_cb)raft_free);
+    uv_close((uv_handle_t *)c->tcp, (uv_close_cb)HeapFree);
     return rv;
 }
 
 /* Called when there's a new incoming connection: create a new tcp_accept object
  * and start receiving handshake data. */
-static void listenCb(struct uv_stream_s *stream, int status)
+static void uvTcpListenCb(struct uv_stream_s *stream, int status)
 {
     struct UvTcp *t = stream->data;
-    struct conn *c;
+    struct uvTcpIncoming *c;
     int rv;
     assert(stream == (struct uv_stream_s *)&t->listener);
 
-    if (status < 0) {
+    if (status != 0) {
         rv = RAFT_IOERR;
         goto err;
     }
 
-    c = raft_malloc(sizeof *c);
+    c = HeapMalloc(sizeof *c);
     if (c == NULL) {
         rv = RAFT_NOMEM;
         goto err;
     }
     c->t = t;
+    c->closing = false;
 
-    rv = readHandshake(c);
+    QUEUE_PUSH(&t->accept_conns, &c->queue);
+
+    rv = uvTcpReadHandshake(c);
     if (rv != 0) {
         goto err_after_accept_alloc;
     }
 
-    QUEUE_PUSH(&t->accept_conns, &c->queue);
     return;
 
 err_after_accept_alloc:
-    raft_free(c);
+    QUEUE_REMOVE(&c->queue);
+    HeapFree(c);
 err:
     assert(rv != 0);
 }
 
-int UvTcpStart(struct raft_uv_transport *transport, raft_uv_accept_cb cb)
+int UvTcpListen(struct raft_uv_transport *transport, raft_uv_accept_cb cb)
 {
     struct UvTcp *t;
     struct sockaddr_in addr;
@@ -280,9 +291,8 @@ int UvTcpStart(struct raft_uv_transport *transport, raft_uv_accept_cb cb)
         /* UNTESTED: what are the error conditions? */
         return RAFT_IOERR;
     }
-    rv = uv_listen((uv_stream_t *)&t->listener, 1, listenCb);
+    rv = uv_listen((uv_stream_t *)&t->listener, 1, uvTcpListenCb);
     if (rv != 0) {
-        t->listener.data = NULL;
         /* UNTESTED: what are the error conditions? */
         return RAFT_IOERR;
     }
@@ -290,41 +300,40 @@ int UvTcpStart(struct raft_uv_transport *transport, raft_uv_accept_cb cb)
     return 0;
 }
 
-static void uvTcpListenClose(struct UvTcp *t)
-{
-    /* Abort all connections currently being accepted */
-    while (!QUEUE_IS_EMPTY(&t->accept_conns)) {
-        queue *head;
-        struct conn *r;
-        head = QUEUE_HEAD(&t->accept_conns);
-        r = QUEUE_DATA(head, struct conn, queue);
-        closeConn(r);
-    }
-}
-
 /* Close callback for uvTcp->listener. */
-static void listenerCloseCb(struct uv_handle_s *handle)
+static void uvTcpListenerCloseCb(struct uv_handle_s *handle)
 {
     struct UvTcp *t = handle->data;
+    assert(t->closing);
     t->listener.data = NULL;
-    if (t->close_cb != NULL) {
-        t->close_cb(t->transport);
-    }
-    /* If the address has been reset, it means that we have been closed. Release
-     * the transport->impl memory. */
-    if (t->address == NULL) {
-        raft_free(t);
-    }
+    UvTcpMaybeFireCloseCb(t);
 }
 
-/* Implementation of raft_uv_transport->stop. */
-int UvTcpStop(struct raft_uv_transport *transport)
+/* Stop accepting new connection and close all connections being accepted. */
+void UvTcpListenStop(struct UvTcp *t)
 {
-    struct UvTcp *t = transport->impl;
-    uvTcpListenClose(t);
+    queue *head;
+    assert(t->closing);
+
+    /* Short circuit in case init() failed. */
     if (t->listener.data == NULL) {
-        return 0;
+        assert(QUEUE_IS_EMPTY(&t->accept_conns));
+        assert(QUEUE_IS_EMPTY(&t->connect_reqs));
+        if (t->close_cb != NULL) {
+            t->close_cb(t->transport);
+            return;
+        }
     }
-    uv_close((struct uv_handle_s *)&t->listener, listenerCloseCb);
-    return 0;
+
+    QUEUE_FOREACH(head, &t->accept_conns)
+    {
+        struct uvTcpIncoming *conn;
+        head = QUEUE_HEAD(&t->accept_conns);
+        conn = QUEUE_DATA(head, struct uvTcpIncoming, queue);
+        if (!conn->closing) {
+            uvTcpIncomingClose(conn);
+        }
+    }
+
+    uv_close((struct uv_handle_s *)&t->listener, uvTcpListenerCloseCb);
 }

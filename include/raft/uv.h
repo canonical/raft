@@ -191,7 +191,7 @@ struct raft_uv_transport
      * initializer must be invoked with the relevant details of the connecting
      * Raft server.
      */
-    int (*start)(struct raft_uv_transport *t, raft_uv_accept_cb cb);
+    int (*listen)(struct raft_uv_transport *t, raft_uv_accept_cb cb);
 
     /**
      * Connect to the server with the given ID and address.
