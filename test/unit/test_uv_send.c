@@ -1,11 +1,8 @@
 #include <unistd.h>
 
-#include "../lib/uv.h"
-#include "../lib/runner.h"
-
 #include "../../src/uv.h"
-
-TEST_MODULE(io_uv_send)
+#include "../lib/runner.h"
+#include "../lib/uv.h"
 
 /**
  * Helpers.
@@ -62,7 +59,7 @@ static void send__send_cb(struct raft_io_send *req, int status)
             if (f->invoked > 0) {                \
                 break;                           \
             }                                    \
-            LOOP_RUN(1);            \
+            LOOP_RUN(1);                         \
         }                                        \
         munit_assert_int(f->invoked, ==, 1);     \
         munit_assert_int(f->status, ==, STATUS); \
@@ -81,14 +78,11 @@ static void send__send_cb(struct raft_io_send *req, int status)
  * Success scenarios.
  */
 
-TEST_SUITE(success)
-
-TEST_SETUP(success, setup)
-TEST_TEAR_DOWN(success, tear_down)
+SUITE(send)
 
 /* The first time a request is sent to a server a connection attempt is
  * triggered. If the connection succeeds the request gets written out. */
-TEST_CASE(success, first, NULL)
+TEST(send, first, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -102,7 +96,7 @@ TEST_CASE(success, first, NULL)
 
 /* The second time a request is sent it re-uses the connection that was already
  * established */
-TEST_CASE(success, second, NULL)
+TEST(send, second, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -118,7 +112,7 @@ TEST_CASE(success, second, NULL)
 }
 
 /* Send a request vote result message. */
-TEST_CASE(success, vote_result, NULL)
+TEST(send, voteResult, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -132,7 +126,7 @@ TEST_CASE(success, vote_result, NULL)
 }
 
 /* Send an append entries message. */
-TEST_CASE(success, append_entries, NULL)
+TEST(send, appendEntries, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entries[2];
@@ -160,7 +154,7 @@ TEST_CASE(success, append_entries, NULL)
 }
 
 /* Send an append entries message with zero entries (i.e. a heartbeat). */
-TEST_CASE(success, heartbeat, NULL)
+TEST(send, heartbeat, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -178,7 +172,7 @@ TEST_CASE(success, heartbeat, NULL)
 }
 
 /* Send an append entries result message. */
-TEST_CASE(success, append_entries_result, NULL)
+TEST(send, appendEntriesResult, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -192,7 +186,7 @@ TEST_CASE(success, append_entries_result, NULL)
 }
 
 /* Send an install snapshot message. */
-TEST_CASE(success, install_snapshot, NULL)
+TEST(send, installSnapshot, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_install_snapshot *p = &f->message.install_snapshot;
@@ -218,18 +212,9 @@ TEST_CASE(success, install_snapshot, NULL)
     return MUNIT_OK;
 }
 
-/**
- * Error scenarios.
- */
-
-TEST_SUITE(error)
-
-TEST_SETUP(error, setup)
-TEST_TEAR_DOWN(error, tear_down)
-
 /* A connection attempt fails asynchronously after the connect function
  * returns. */
-TEST_CASE(error, connect, NULL)
+TEST(send, noConnection, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -250,7 +235,7 @@ TEST_CASE(error, connect, NULL)
 }
 
 /* The message has an invalid IPv4 address. */
-TEST_CASE(error, bad_address, NULL)
+TEST(send, badAddress, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -270,7 +255,7 @@ TEST_CASE(error, bad_address, NULL)
 }
 
 /* The message has an invalid type. */
-TEST_CASE(error, bad_message, NULL)
+TEST(send, badMessage, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -285,7 +270,7 @@ TEST_CASE(error, bad_message, NULL)
 
 /* After the connection is established the peer dies and then comes back a
  * little bit later. */
-TEST_CASE(error, reconnect, NULL)
+TEST(send, reconnect, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     int socket;
@@ -309,7 +294,7 @@ TEST_CASE(error, reconnect, NULL)
 
 /* If there's no more space in the queue of pending requests, the oldest request
  * gets evicted and its callback fired with RAFT_NOCONNECTION. */
-TEST_CASE(error, queue, NULL)
+TEST(send, queue, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -338,7 +323,7 @@ static MunitParameterEnum error_oom_params[] = {
 };
 
 /* Out of memory conditions. */
-TEST_CASE(error, oom, error_oom_params)
+TEST(send, oom, setup, tear_down, 0, error_oom_params)
 {
     struct fixture *f = data;
 
@@ -362,7 +347,7 @@ static MunitParameterEnum error_oom_async_params[] = {
 
 /* Transient out of memory error happening after @raft__io_uv_rpc_send has
  * returned. */
-TEST_CASE(error, oom_async, error_oom_async_params)
+TEST(send, oom_async, setup, tear_down, 0, error_oom_async_params)
 {
     struct fixture *f = data;
 
@@ -379,17 +364,8 @@ TEST_CASE(error, oom_async, error_oom_async_params)
     return MUNIT_OK;
 }
 
-/**
- * Close back scenarios.
- */
-
-TEST_SUITE(close)
-
-TEST_SETUP(close, setup)
-TEST_TEAR_DOWN(close, tear_down)
-
 /* The backend gets closed while there is a pending write. */
-TEST_CASE(close, writing, NULL)
+TEST(send, closeDuringWrite, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry;
@@ -422,7 +398,7 @@ TEST_CASE(close, writing, NULL)
 }
 
 /* The backend gets closed while there is a pending connect request. */
-TEST_CASE(close, connecting, NULL)
+TEST(send, closeDuringConnection, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
 
