@@ -3,7 +3,6 @@
 
 #include "../include/raft.h"
 #include "../include/raft/uv.h"
-
 #include "queue.h"
 
 /* Protocol version. */
@@ -17,9 +16,10 @@ struct UvTcp
     const char *address;                 /* Address of this raft server */
     struct uv_tcp_s listener;            /* Listening TCP socket handle */
     raft_uv_accept_cb accept_cb;         /* Call after accepting a connection */
-    raft_uv_transport_close_cb close_cb; /* Call when it's safe to free us */
     queue accept_conns;                  /* Connections being accepted */
     queue connect_reqs;                  /* Pending connection requests */
+    bool closing;                        /* True after close() is called */
+    raft_uv_transport_close_cb close_cb; /* Call when it's safe to free us */
 };
 
 /* Hold state for a single connection request. */

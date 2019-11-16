@@ -120,8 +120,7 @@ static int uvStop(struct raft_io *io)
     uvSendStop(uv);
     rv = uv_timer_stop(&uv->timer);
     assert(rv == 0);
-    rv = uv->transport->stop(uv->transport);
-    assert(rv == 0);
+    uv->transport->close(uv->transport, NULL);
     return 0;
 }
 

@@ -12,13 +12,62 @@ static int uvTcpInit(struct raft_uv_transport *transport,
                      unsigned id,
                      const char *address)
 {
-    struct UvTcp *t;
+    struct UvTcp *t = transport->impl;
+    int rv;
     assert(id > 0);
     assert(address != NULL);
-    t = transport->impl;
     t->id = id;
     t->address = address;
+    rv = uv_tcp_init(t->loop, &t->listener);
+    if (rv != 0) {
+        return rv;
+    }
+    t->listener.data = t;
     return 0;
+}
+
+/* Close callback for uvTcp->listener. */
+static void uvTcpListenerCloseCb(struct uv_handle_s *handle)
+{
+    struct UvTcp *t = handle->data;
+    assert(t->closing);
+    t->listener.data = NULL;
+    if (!QUEUE_IS_EMPTY(&t->connect_reqs)) {
+        return;
+    }
+    if (t->close_cb != NULL) {
+        t->close_cb(t->transport);
+    }
+}
+
+/* Implementation of raft_uv_transport->close. */
+static void uvTcpClose(struct raft_uv_transport *transport,
+                       raft_uv_transport_close_cb cb)
+{
+    struct UvTcp *t = transport->impl;
+    queue *head;
+
+    assert(!t->closing);
+    t->closing = true;
+    t->close_cb = cb;
+
+    /* Short circuit in case init() failed. */
+    if (t->listener.data == NULL) {
+        if (cb != NULL) {
+            cb(transport);
+            return;
+        }
+    }
+
+    QUEUE_FOREACH(head, &t->connect_reqs)
+    {
+        struct UvTcpConnect *req;
+        head = QUEUE_HEAD(&t->connect_reqs);
+        req = QUEUE_DATA(head, struct UvTcpConnect, queue);
+        UvTcpConnectCancel(req);
+    }
+
+    uv_close((struct uv_handle_s *)&t->listener, uvTcpListenerCloseCb);
 }
 
 int raft_uv_tcp_init(struct raft_uv_transport *transport,
@@ -37,49 +86,22 @@ int raft_uv_tcp_init(struct raft_uv_transport *transport,
     t->address = NULL;
     t->listener.data = NULL;
     t->accept_cb = NULL;
-    t->close_cb = NULL;
     QUEUE_INIT(&t->accept_conns);
     QUEUE_INIT(&t->connect_reqs);
+    t->closing = false;
+    t->close_cb = NULL;
 
     transport->impl = t;
     transport->init = uvTcpInit;
+    transport->close = uvTcpClose;
     transport->start = UvTcpStart;
-    transport->stop = UvTcpStop;
     transport->connect = UvTcpConnect;
 
     return 0;
 }
 
-void raft_uv_tcp_close(struct raft_uv_transport *transport,
-                       raft_uv_transport_close_cb cb)
+void raft_uv_tcp_close(struct raft_uv_transport *transport)
 {
     struct UvTcp *t = transport->impl;
-
-    /* Exit immediately if initialization failed. */
-    if (t == NULL) {
-        if (cb != NULL) {
-            cb(transport);
-        }
-        return;
-    }
-
-    t->close_cb = cb;
-    t->address = NULL;
-
-    while (!QUEUE_IS_EMPTY(&t->connect_reqs)) {
-        queue *head;
-        struct UvTcpConnect *r;
-        head = QUEUE_HEAD(&t->connect_reqs);
-        r = QUEUE_DATA(head, struct UvTcpConnect, queue);
-        UvTcpConnectCancel(r);
-    }
-
-    /* If the listening handle has already been closed, invoke the close
-     * callback immediately. */
-    if (t->listener.data == NULL) {
-        if (t->close_cb != NULL) {
-            t->close_cb(t->transport);
-        }
-        raft_free(t);
-    }
+    raft_free(t);
 }

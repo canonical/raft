@@ -17,6 +17,7 @@ struct fixture
     FIXTURE_LOOP;
     FIXTURE_TCP;
     struct raft_uv_transport transport;
+    bool closed;
 };
 
 /******************************************************************************
@@ -44,6 +45,12 @@ static void connectCbAssertResult(struct raft_uv_connect *req,
     result->done = true;
 }
 
+static void closeCb(struct raft_uv_transport *transport)
+{
+    struct fixture *f = transport->data;
+    f->closed = true;
+}
+
 #define INIT                                                         \
     do {                                                             \
         int _rv;                                                     \
@@ -51,9 +58,16 @@ static void connectCbAssertResult(struct raft_uv_connect *req,
         munit_assert_int(_rv, ==, 0);                                \
         _rv = f->transport.init(&f->transport, 1, "127.0.0.1:9000"); \
         munit_assert_int(_rv, ==, 0);                                \
+        f->transport.data = f;                                       \
+        f->closed = false;                                           \
     } while (0)
 
-#define CLOSE raft_uv_tcp_close(&f->transport, NULL)
+#define CLOSE                                       \
+    do {                                            \
+        f->transport.close(&f->transport, closeCb); \
+        LOOP_RUN_UNTIL(&f->closed);                 \
+        raft_uv_tcp_close(&f->transport);           \
+    } while (0)
 
 #define CONNECT_REQ(ID, ADDRESS, RV, STATUS)                      \
     struct raft_uv_connect _req;                                  \
@@ -91,13 +105,15 @@ static void connectCbAssertResult(struct raft_uv_connect *req,
 
 /* Submit a connect request with the given parameters, close the transport after
  * N loop iterations and assert that the request got canceled. */
-#define CONNECT_CANCEL(ID, ADDRESS, N)                       \
+#define CONNECT_CLOSE(ID, ADDRESS, N)                        \
     {                                                        \
         CONNECT_REQ(ID, ADDRESS, 0 /* rv */, RAFT_CANCELED); \
         LOOP_RUN(N);                                         \
         munit_assert_false(_result.done);                    \
-        CLOSE;                                               \
+        f->transport.close(&f->transport, closeCb);          \
         LOOP_RUN_UNTIL(&_result.done);                       \
+        LOOP_RUN_UNTIL(&f->closed);                          \
+        raft_uv_tcp_close(&f->transport);                    \
     }
 
 /******************************************************************************
@@ -142,7 +158,7 @@ static void tearDown(void *data)
 
 /******************************************************************************
  *
- * Success scenarios
+ * raft_uv_transport->connect()
  *
  *****************************************************************************/
 
@@ -211,7 +227,7 @@ TEST(tcp_connect, oomAsync, setUp, tearDown, 0, oomAsyncParams)
 TEST(tcp_connect, closeImmediately, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
-    CONNECT_CANCEL(2, BOGUS_ADDRESS, 0);
+    CONNECT_CLOSE(2, BOGUS_ADDRESS, 0);
     return MUNIT_OK;
 }
 
@@ -220,6 +236,6 @@ TEST(tcp_connect, closeDuringHandshake, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
     TCP_LISTEN;
-    CONNECT_CANCEL(2, TCP_ADDRESS, 1);
+    CONNECT_CLOSE(2, TCP_ADDRESS, 1);
     return MUNIT_OK;
 }

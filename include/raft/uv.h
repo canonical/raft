@@ -207,12 +207,19 @@ struct raft_uv_transport
                    raft_uv_connect_cb cb);
 
     /**
-     * Stop listening.
+     * Close the transport.
      *
-     * The implementation must stop accepting incoming connections. The @cb
-     * callback passed to @listen must not be invoked anymore.
+     * The implementation must:
+     *
+     * - Stop accepting incoming connections. The @cb callback passed to @listen
+     *   must not be invoked anymore.
+     *
+     * - Cancel all pending @connect requests.
+     *
+     * - Invoke the @cb callback passed to this method once it's safe to release
+     *   the memory of the transport object.
      */
-    int (*stop)(struct raft_uv_transport *t);
+    void (*close)(struct raft_uv_transport *t, raft_uv_transport_close_cb cb);
 };
 
 /**
@@ -222,15 +229,8 @@ RAFT_API int raft_uv_tcp_init(struct raft_uv_transport *t,
                               struct uv_loop_s *loop);
 
 /**
- * Close the transport.
- *
- * Abort all pending @connect requests. The callback of each pending request
- * will be invoked with #RAFT_CANCELED.
- *
- * The @cb callback passed to this method will be invoked once it's safe to
- * release the memory of the transport object.
+ * Release any memory allocated internally.
  */
-RAFT_API void raft_uv_tcp_close(struct raft_uv_transport *t,
-                                raft_uv_transport_close_cb cb);
+RAFT_API void raft_uv_tcp_close(struct raft_uv_transport *t);
 
 #endif /* RAFT_UV_H */

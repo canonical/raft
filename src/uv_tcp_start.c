@@ -271,10 +271,6 @@ int UvTcpStart(struct raft_uv_transport *transport, raft_uv_accept_cb cb)
     t = transport->impl;
     t->accept_cb = cb;
 
-    rv = uv_tcp_init(t->loop, &t->listener);
-    assert(rv == 0);
-    t->listener.data = t;
-
     rv = uvIpParse(t->address, &addr);
     if (rv != 0) {
         return rv;
