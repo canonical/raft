@@ -4,6 +4,7 @@
 #include "assert.h"
 #include "byte.h"
 #include "err.h"
+#include "heap.h"
 #include "logging.h"
 #include "uv.h"
 #include "uv_encoding.h"
@@ -49,29 +50,21 @@ struct uvServer
     struct raft_message message; /* The message being received */
 };
 
-static void copyAddress(const char *address1, char **address2)
-{
-    *address2 = raft_malloc(strlen(address1) + 1);
-    if (*address2 == NULL) {
-        return;
-    }
-    strcpy(*address2, address1);
-}
-
 /* Initialize a new server object for reading requests from an incoming
  * connection. */
-static int initServer(struct uvServer *s,
-                      struct uv *uv,
-                      const unsigned id,
-                      const char *address,
-                      struct uv_stream_s *stream)
+static int uvServerInit(struct uvServer *s,
+                        struct uv *uv,
+                        const unsigned id,
+                        const char *address,
+                        struct uv_stream_s *stream)
 {
     s->uv = uv;
     s->id = id;
-    copyAddress(address, &s->address); /* Make a copy of the address string. */
+    s->address = HeapMalloc(strlen(address) + 1);
     if (s->address == NULL) {
         return RAFT_NOMEM;
     }
+    strcpy(s->address, address);
     s->stream = stream;
     s->stream->data = s;
     s->buf.base = NULL;
@@ -110,7 +103,9 @@ static void closeServer(struct uvServer *s)
 
 /* Invoked to initialize the read buffer for the next asynchronous read on the
  * socket. */
-static void allocCb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
+static void uvServerAllocCb(uv_handle_t *handle,
+                            size_t suggested_size,
+                            uv_buf_t *buf)
 {
     struct uvServer *s = handle->data;
     (void)suggested_size;
@@ -134,7 +129,7 @@ static void allocCb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
         if (s->payload.len == 0) {
             assert(s->header.len > 0);
             assert(s->header.base == NULL);
-            s->header.base = raft_malloc(s->header.len);
+            s->header.base = HeapMalloc(s->header.len);
             if (s->header.base == NULL) {
                 /* Setting all buffer fields to 0 will make read_cb fail with
                  * ENOBUFS. */
@@ -147,7 +142,7 @@ static void allocCb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
 
         /* If we get here we should be expecting the payload. */
         assert(s->payload.len > 0);
-        s->payload.base = raft_malloc(s->payload.len);
+        s->payload.base = HeapMalloc(s->payload.len);
         if (s->payload.base == NULL) {
             /* Setting all buffer fields to 0 will make read_cb fail with
              * ENOBUFS. */
@@ -199,7 +194,7 @@ static void stopServer(struct uvServer *s)
 }
 
 /* Invoke the receive callback. */
-static void recvMessage(struct uvServer *s)
+static void uvFireRecvCb(struct uvServer *s)
 {
     s->uv->recv_cb(s->uv->io, &s->message);
 
@@ -216,7 +211,9 @@ static void recvMessage(struct uvServer *s)
 }
 
 /* Callback invoked when data has been read from the socket. */
-static void readCb(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
+static void uvServerReadCb(uv_stream_t *stream,
+                           ssize_t nread,
+                           const uv_buf_t *buf)
 {
     struct uvServer *s = stream->data;
     int rv;
@@ -276,7 +273,7 @@ static void readCb(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
 
             /* If the message has no payload, we're done. */
             if (s->payload.len == 0) {
-                recvMessage(s);
+                uvFireRecvCb(s);
             }
         } else {
             /* If we get here it means that we've just completed reading the
@@ -301,7 +298,7 @@ static void readCb(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
                     assert(0);
             }
 
-            recvMessage(s);
+            uvFireRecvCb(s);
         }
 
         /* Mark that we're done with this chunk. When the alloc callback will
@@ -336,23 +333,21 @@ abort:
 }
 
 /* Start reading incoming requests. */
-static int startServer(struct uvServer *s)
+static int uvServerStart(struct uvServer *s)
 {
     int rv;
-
-    rv = uv_read_start(s->stream, allocCb, readCb);
+    rv = uv_read_start(s->stream, uvServerAllocCb, uvServerReadCb);
     if (rv != 0) {
         Tracef(s->uv->tracer, "start reading: %s", uv_strerror(rv));
         return RAFT_IOERR;
     }
-
     return 0;
 }
 
-static int addServer(struct uv *uv,
-                     unsigned id,
-                     const char *address,
-                     struct uv_stream_s *stream)
+static int uvAddServer(struct uv *uv,
+                       unsigned id,
+                       const char *address,
+                       struct uv_stream_s *stream)
 {
     struct uvServer **servers;
     struct uvServer *s;
@@ -361,7 +356,7 @@ static int addServer(struct uv *uv,
 
     /* Grow the servers array */
     n_servers = uv->n_servers + 1;
-    servers = raft_realloc(uv->servers, n_servers * sizeof *servers);
+    servers = HeapRealloc(uv->servers, n_servers * sizeof *servers);
     if (servers == NULL) {
         rv = RAFT_NOMEM;
         goto err;
@@ -371,20 +366,20 @@ static int addServer(struct uv *uv,
     uv->n_servers = n_servers;
 
     /* Initialize the new connection */
-    s = raft_malloc(sizeof *s);
+    s = HeapMalloc(sizeof *s);
     if (s == NULL) {
         rv = RAFT_NOMEM;
         goto err_after_servers_realloc;
     }
     servers[n_servers - 1] = s;
 
-    rv = initServer(s, uv, id, address, stream);
+    rv = uvServerInit(s, uv, id, address, stream);
     if (rv != 0) {
         goto err_after_server_alloc;
     }
 
     /* This will start reading requests. */
-    rv = startServer(s);
+    rv = uvServerStart(s);
     if (rv != 0) {
         goto err_after_init_server;
     }
@@ -403,10 +398,10 @@ err:
     return rv;
 }
 
-static void acceptCb(struct raft_uv_transport *transport,
-                     unsigned id,
-                     const char *address,
-                     struct uv_stream_s *stream)
+static void uvRecvAcceptCb(struct raft_uv_transport *transport,
+                           unsigned id,
+                           const char *address,
+                           struct uv_stream_s *stream)
 {
     struct uv *uv = transport->data;
     int rv;
@@ -416,7 +411,7 @@ static void acceptCb(struct raft_uv_transport *transport,
         goto abort;
     }
 
-    rv = addServer(uv, id, address, stream);
+    rv = uvAddServer(uv, id, address, stream);
     if (rv != 0) {
         Tracef(uv->tracer, "add server: %s", errCodeToString(rv));
         goto abort;
@@ -431,7 +426,7 @@ abort:
 int uvRecvStart(struct uv *uv)
 {
     int rv;
-    rv = uv->transport->listen(uv->transport, acceptCb);
+    rv = uv->transport->listen(uv->transport, uvRecvAcceptCb);
     if (rv != 0) {
         return rv;
     }

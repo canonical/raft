@@ -536,6 +536,17 @@ TEST(append, truncateClosing, setup, tear_down, 0, NULL)
     return MUNIT_OK;
 }
 
+/* A few append requests get queued, however the backend is closed before
+ * preparing the second segment completes. */
+TEST(append, prepareClosing, setup, tear_down, 0, NULL)
+{
+    struct fixture *f = data;
+    CREATE_ENTRIES(2, 64);
+    APPEND(0);
+    LOOP_RUN(1);
+    return MUNIT_OK;
+}
+
 /* The counters of the open segments get increased as they are closed. */
 TEST(append, counter, setup, tear_down, 0, NULL)
 {

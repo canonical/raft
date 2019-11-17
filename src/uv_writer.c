@@ -140,6 +140,9 @@ static void uvWriterAfterWorkCb(uv_work_t *work, int status)
 {
     struct UvWriterReq *req = work->data; /* Write file request object */
     struct UvWriter *w = req->writer;
+    /* FIXME: we save the value before the callback because it might then change
+     * synchronously. */
+    bool closing = w->closing;
 
     assert(status == 0); /* We don't cancel worker requests */
 
@@ -147,7 +150,7 @@ static void uvWriterAfterWorkCb(uv_work_t *work, int status)
 
     /* If we are closing and were waiting for this request to finish, let's
      * unblock. */
-    if (w->closing) {
+    if (closing) {
         /* TODO: support cancellation with concurrent requests. */
         uvWriterPollerClose(w);
     }
