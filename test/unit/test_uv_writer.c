@@ -128,7 +128,7 @@ static void submitCbAssertResult(struct UvWriterReq *req, int status)
 
 /* Submit a write request with the given parameters, close the writer after
  * N loop iterations and assert that the request got canceled. */
-#define WRITE_CANCEL(N_BUFS, CONTENT, OFFSET, N, STATUS)        \
+#define WRITE_CLOSE(N_BUFS, CONTENT, OFFSET, N, STATUS)        \
     do {                                                        \
         WRITE_REQ(N_BUFS, CONTENT, OFFSET, 0 /* rv */, STATUS); \
         LOOP_RUN(N);                                            \
@@ -359,7 +359,7 @@ TEST(UvWriterClose, threadpool, setUp, tearDownDeps, 0, dir_no_aio_params)
 {
     struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;
-    WRITE_CANCEL(1, 0, 0, 0, 0);
+    WRITE_CLOSE(1, 0, 0, 0, 0);
     return MUNIT_OK;
 }
 
@@ -370,7 +370,7 @@ TEST(UvWriterClose, aio, setUp, tearDownDeps, 0, dir_aio_params)
 {
     struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;
-    WRITE_CANCEL(1, 0, 0, 0, RAFT_CANCELED);
+    WRITE_CLOSE(1, 0, 0, 0, RAFT_CANCELED);
     return MUNIT_OK;
 }
 
