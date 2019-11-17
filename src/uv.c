@@ -160,14 +160,10 @@ static void uvTransportCloseCb(struct raft_uv_transport *transport)
 static void uvClose(struct raft_io *io, raft_io_close_cb cb)
 {
     struct uv *uv;
-    int rv;
     uv = io->impl;
     assert(!uv->closing);
     uv->close_cb = cb;
     uv->closing = true;
-    uvSendStop(uv);
-    rv = uv_timer_stop(&uv->timer);
-    assert(rv == 0);
     uvSendClose(uv);
     uvRecvClose(uv);
     uvPrepareClose(uv);
@@ -683,6 +679,13 @@ void raft_uv_set_block_size(struct raft_io *io, size_t size)
     struct uv *uv;
     uv = io->impl;
     uv->block_size = size;
+}
+
+void raft_uv_set_connect_retry_delay(struct raft_io *io, unsigned msecs)
+{
+    struct uv *uv;
+    uv = io->impl;
+    uv->connect_retry_delay = msecs;
 }
 
 void raft_uv_set_tracer(struct raft_io *io, struct raft_tracer *tracer)

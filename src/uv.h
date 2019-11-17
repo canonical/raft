@@ -325,9 +325,6 @@ void uvTruncateClose(struct uv *uv);
  * segment is left. */
 void uvTruncateMaybeProcessRequests(struct uv *uv);
 
-/* Cancel send requests that are waiting for a connection.  */
-void uvSendStop(struct uv *uv);
-
 /* Stop all clients by closing the outbound stream handles and canceling all
  * pending send requests.  */
 void uvSendClose(struct uv *uv);
