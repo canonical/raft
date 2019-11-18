@@ -66,6 +66,7 @@ static void uvTcpConnectFinish(struct uvTcpConnect *connect)
     struct raft_uv_connect *req = connect->req;
     int status = connect->status;
     QUEUE_REMOVE(&connect->queue);
+    HeapFree(connect->handshake.base);
     raft_free(connect);
     req->cb(req, stream, status);
 }
@@ -95,15 +96,13 @@ static void uvTcpConnectHandshakeWriteCb(struct uv_write_s *write, int status)
     struct uvTcpConnect *r = write->data;
     struct UvTcp *t = r->t;
 
-    /* We don't need the handshake buffer anymore. */
-    HeapFree(r->handshake.base);
-
     if (t->closing) {
         r->status = RAFT_CANCELED;
         return;
     }
 
     if (status != 0) {
+        assert(status != UV_ECANCELED); /* t->closing would have been true */
         r->status = RAFT_NOCONNECTION;
         uvTcpConnectAbort(r);
         return;
@@ -125,34 +124,24 @@ static void uvTcpConnectCb(struct uv_connect_s *connect, int status)
     }
 
     if (status != 0) {
-        rv = RAFT_NOCONNECTION;
+        assert(status != UV_ECANCELED); /* t->closing would have been true */
+        r->status = RAFT_NOCONNECTION;
         ErrMsgPrintf(t->transport->errmsg, "uv_tcp_connect(): %s",
                      uv_strerror(status));
         goto err;
     }
 
-    /* Initialize the handshake buffer and write it out. */
-    rv = uvTcpConnectEncodeHandshake(r->t->id, r->t->address, &r->handshake);
-    if (rv != 0) {
-        assert(rv == RAFT_NOMEM);
-        ErrMsgPrintf(r->t->transport->errmsg, "out of memory");
-        goto err;
-    }
     rv = uv_write(&r->write, (struct uv_stream_s *)r->tcp, &r->handshake, 1,
                   uvTcpConnectHandshakeWriteCb);
     if (rv != 0) {
         /* UNTESTED: what are the error conditions? perhaps ENOMEM */
-        rv = RAFT_IOERR;
-        goto err_after_encodeHandshake;
+        r->status = RAFT_NOCONNECTION;
+        goto err;
     }
-    r->write.data = r;
 
     return;
 
-err_after_encodeHandshake:
-    HeapFree(r->handshake.base);
 err:
-    r->status = rv;
     uvTcpConnectAbort(r);
 }
 
@@ -163,13 +152,20 @@ static int uvTcpStartConnecting(struct uvTcpConnect *r, const char *address)
     struct sockaddr_in addr;
     int rv;
 
+    /* Initialize the handshake buffer. */
+    rv = uvTcpConnectEncodeHandshake(t->id, t->address, &r->handshake);
+    if (rv != 0) {
+        assert(rv == RAFT_NOMEM);
+        ErrMsgPrintf(r->t->transport->errmsg, "out of memory");
+        goto err;
+    }
+
     r->tcp = HeapMalloc(sizeof *r->tcp);
     if (r->tcp == NULL) {
         ErrMsgPrintf(t->transport->errmsg, "out of memory");
         rv = RAFT_NOMEM;
-        goto err;
+        goto err_after_encode_handshake;
     }
-    r->handshake.base = NULL;
 
     rv = uv_tcp_init(r->t->loop, r->tcp);
     assert(rv == 0);
@@ -190,12 +186,13 @@ static int uvTcpStartConnecting(struct uvTcpConnect *r, const char *address)
         rv = RAFT_NOCONNECTION;
         goto err_after_tcp_init;
     }
-    r->connect.data = r;
 
     return 0;
 
 err_after_tcp_init:
     uv_close((uv_handle_t *)r->tcp, (uv_close_cb)HeapFree);
+err_after_encode_handshake:
+    HeapFree(r->handshake.base);
 err:
     return rv;
 }
@@ -222,6 +219,8 @@ int UvTcpConnect(struct raft_uv_transport *transport,
     r->t = t;
     r->req = req;
     r->status = 0;
+    r->write.data = r;
+    r->connect.data = r;
 
     req->cb = cb;
 

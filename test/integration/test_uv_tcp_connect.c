@@ -170,7 +170,7 @@ TEST(tcp_connect, refused, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-static char *oomHeapFaultDelay[] = {"0", "1", NULL};
+static char *oomHeapFaultDelay[] = {"0", "1", "2", NULL};
 static char *oomHeapFaultRepeat[] = {"1", NULL};
 
 static MunitParameterEnum oomParams[] = {
@@ -185,25 +185,6 @@ TEST(tcp_connect, oom, setUp, tearDown, 0, oomParams)
     struct fixture *f = data;
     HEAP_FAULT_ENABLE;
     CONNECT_ERROR(2, BOGUS_ADDRESS, RAFT_NOMEM, "out of memory");
-    return MUNIT_OK;
-}
-
-static char *oomAsyncHeapFaultDelay[] = {"3", NULL};
-static char *oomAsyncHeapFaultRepeat[] = {"1", NULL};
-
-static MunitParameterEnum oomAsyncParams[] = {
-    {TEST_HEAP_FAULT_DELAY, oomAsyncHeapFaultDelay},
-    {TEST_HEAP_FAULT_REPEAT, oomAsyncHeapFaultRepeat},
-    {NULL, NULL},
-};
-
-/* Out of memory condition after the attempt has started. */
-TEST(tcp_connect, oomAsync, setUp, tearDown, 0, oomAsyncParams)
-{
-    struct fixture *f = data;
-    TCP_LISTEN;
-    HEAP_FAULT_ENABLE;
-    CONNECT_FAILURE(2, TCP_ADDRESS, RAFT_NOMEM, "out of memory");
     return MUNIT_OK;
 }
 
