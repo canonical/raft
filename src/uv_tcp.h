@@ -35,8 +35,8 @@ int UvTcpConnect(struct raft_uv_transport *transport,
                  const char *address,
                  raft_uv_connect_cb cb);
 
-/* Cancel all pending connection requests. */
-void UvTcpConnectStop(struct UvTcp *t);
+/* Abort all pending connection requests. */
+void UvTcpConnectClose(struct UvTcp *t);
 
 /* Fire the transport close callback if the transport is closing and there's no
  * more pending callback. */

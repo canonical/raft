@@ -35,7 +35,7 @@ static void uvTcpClose(struct raft_uv_transport *transport,
     t->closing = true;
     t->close_cb = cb;
     UvTcpListenStop(t);
-    UvTcpConnectStop(t);
+    UvTcpConnectClose(t);
 }
 
 void UvTcpMaybeFireCloseCb(struct UvTcp *t)
