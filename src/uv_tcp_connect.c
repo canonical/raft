@@ -87,6 +87,8 @@ static void uvTcpConnectTcpCloseCb(struct uv_handle_s *handle)
 /* Abort a connection request. */
 static void uvTcpConnectAbort(struct uvTcpConnect *connect)
 {
+    QUEUE_REMOVE(&connect->queue);
+    QUEUE_PUSH(&connect->t->aborting, &connect->queue);
     uv_close((struct uv_handle_s *)connect->tcp, uvTcpConnectTcpCloseCb);
 }
 
@@ -225,7 +227,7 @@ int UvTcpConnect(struct raft_uv_transport *transport,
     req->cb = cb;
 
     /* Keep track of the pending request */
-    QUEUE_PUSH(&t->connect_reqs, &r->queue);
+    QUEUE_PUSH(&t->connecting, &r->queue);
 
     /* Start connecting */
     rv = uvTcpStartConnecting(r, address);
@@ -244,12 +246,11 @@ err:
 
 void UvTcpConnectClose(struct UvTcp *t)
 {
-    queue *head;
-    QUEUE_FOREACH(head, &t->connect_reqs)
-    {
-        struct uvTcpConnect *req;
-        head = QUEUE_HEAD(&t->connect_reqs);
-        req = QUEUE_DATA(head, struct uvTcpConnect, queue);
-        uvTcpConnectAbort(req);
+    while (!QUEUE_IS_EMPTY(&t->connecting)) {
+        struct uvTcpConnect *connect;
+        queue *head;
+        head = QUEUE_HEAD(&t->connecting);
+        connect = QUEUE_DATA(head, struct uvTcpConnect, queue);
+        uvTcpConnectAbort(connect);
     }
 }

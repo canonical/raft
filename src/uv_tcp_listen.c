@@ -257,7 +257,7 @@ static void uvTcpListenCb(struct uv_stream_s *stream, int status)
     c->t = t;
     c->closing = false;
 
-    QUEUE_PUSH(&t->accept_conns, &c->queue);
+    QUEUE_PUSH(&t->accepting, &c->queue);
 
     rv = uvTcpReadHandshake(c);
     if (rv != 0) {
@@ -316,18 +316,18 @@ void UvTcpListenClose(struct UvTcp *t)
 
     /* Short circuit in case init() failed. */
     if (t->listener.data == NULL) {
-        assert(QUEUE_IS_EMPTY(&t->accept_conns));
-        assert(QUEUE_IS_EMPTY(&t->connect_reqs));
+        assert(QUEUE_IS_EMPTY(&t->accepting));
+        assert(QUEUE_IS_EMPTY(&t->connecting));
         if (t->close_cb != NULL) {
             t->close_cb(t->transport);
             return;
         }
     }
 
-    QUEUE_FOREACH(head, &t->accept_conns)
+    QUEUE_FOREACH(head, &t->accepting)
     {
         struct uvTcpIncoming *conn;
-        head = QUEUE_HEAD(&t->accept_conns);
+        head = QUEUE_HEAD(&t->accepting);
         conn = QUEUE_DATA(head, struct uvTcpIncoming, queue);
         if (!conn->closing) {
             uvTcpIncomingAbort(conn);

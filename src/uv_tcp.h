@@ -16,8 +16,9 @@ struct UvTcp
     const char *address;                 /* Address of this raft server */
     struct uv_tcp_s listener;            /* Listening TCP socket handle */
     raft_uv_accept_cb accept_cb;         /* Call after accepting a connection */
-    queue accept_conns;                  /* Connections being accepted */
-    queue connect_reqs;                  /* Pending connection requests */
+    queue accepting;                     /* Connections being accepted */
+    queue connecting;                    /* Pending connection requests */
+    queue aborting;                      /* Connections being aborted */
     bool closing;                        /* True after close() is called */
     raft_uv_transport_close_cb close_cb; /* Call when it's safe to free us */
 };

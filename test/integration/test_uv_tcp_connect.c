@@ -36,7 +36,6 @@ static void connectCbAssertResult(struct raft_uv_connect *req,
                                   int status)
 {
     struct result *result = req->data;
-    (void)stream;
     munit_assert_int(status, ==, result->status);
     if (status == 0) {
         uv_close((struct uv_handle_s *)stream, (uv_close_cb)raft_free);
@@ -193,7 +192,8 @@ TEST(tcp_connect, oom, setUp, tearDown, 0, oomParams)
 TEST(tcp_connect, closeImmediately, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
-    CONNECT_CLOSE(2, BOGUS_ADDRESS, 0);
+    TCP_LISTEN;
+    CONNECT_CLOSE(2, TCP_ADDRESS, 0);
     return MUNIT_OK;
 }
 
@@ -203,5 +203,31 @@ TEST(tcp_connect, closeDuringHandshake, setUp, tearDownDeps, 0, NULL)
     struct fixture *f = data;
     TCP_LISTEN;
     CONNECT_CLOSE(2, TCP_ADDRESS, 1);
+    return MUNIT_OK;
+}
+
+static void checkCb(struct uv_check_s *check)
+{
+    struct raft_uv_transport *transport = check->data;
+    transport->close(transport, raft_uv_tcp_close);
+    uv_close((struct uv_handle_s*)check, NULL);
+}
+
+/* The transport gets closed right after a connection failure, while the
+ * connection attempt is being aborted. */
+TEST(tcp_connect, closeDuringAbort, setUp, tearDownDeps, 0, NULL)
+{
+    struct fixture *f = data;
+    struct uv_check_s check;
+    int rv;
+    /* Use a check handle in order to close the transport in the same loop
+     * iteration where the connection failure occurs. */
+    rv = uv_check_init(&f->loop, &check);
+    munit_assert_int(rv, ==, 0);
+    check.data = &f->transport;
+    uv_check_start(&check, checkCb);
+    CONNECT_REQ(2, BOGUS_ADDRESS, 0, RAFT_NOCONNECTION);
+    LOOP_RUN(1);
+    LOOP_RUN_UNTIL(&_result.done);
     return MUNIT_OK;
 }
