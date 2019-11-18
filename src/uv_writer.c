@@ -39,58 +39,6 @@ static void uvWriterReqFinish(struct UvWriterReq *req)
     req->cb(req, req->status);
 }
 
-static void uvWriterMaybeFireCloseCb(struct UvWriter *w)
-{
-    assert(w->closing);
-    if (w->event_poller.data != NULL) {
-        return;
-    }
-    if (w->check.data != NULL) {
-        return;
-    }
-    if (w->close_cb != NULL) {
-        w->close_cb(w);
-    }
-}
-
-static void uvWriterPollerCloseCb(struct uv_handle_s *handle)
-{
-    struct UvWriter *w = handle->data;
-    w->event_poller.data = NULL;
-
-    /* Cancel all pending requests. */
-    while (!QUEUE_IS_EMPTY(&w->poll_queue)) {
-        queue *head;
-        struct UvWriterReq *req;
-        head = QUEUE_HEAD(&w->poll_queue);
-        req = QUEUE_DATA(head, struct UvWriterReq, queue);
-        assert(req->work.data == NULL);
-        req->status = RAFT_CANCELED;
-        uvWriterReqFinish(req);
-    }
-
-    UvOsClose(w->fd);
-    UvOsClose(w->event_fd);
-    HeapFree(w->events);
-    UvOsIoDestroy(w->ctx);
-
-    uvWriterMaybeFireCloseCb(w);
-}
-
-static void uvWriterCheckCloseCb(struct uv_handle_s *handle)
-{
-    struct UvWriter *w = handle->data;
-    w->check.data = NULL;
-    uvWriterMaybeFireCloseCb(w);
-}
-
-static void uvWriterPollerClose(struct UvWriter *w)
-{
-    assert(w->closing);
-    uv_close((struct uv_handle_s *)&w->event_poller, uvWriterPollerCloseCb);
-    uv_close((struct uv_handle_s *)&w->check, uvWriterCheckCloseCb);
-}
-
 /* Run blocking syscalls involved in a file write request.
  *
  * Perform a KAIO write request and synchronously wait for it to complete. */
@@ -159,21 +107,8 @@ out:
 static void uvWriterAfterWorkCb(uv_work_t *work, int status)
 {
     struct UvWriterReq *req = work->data; /* Write file request object */
-    struct UvWriter *w = req->writer;
-    /* FIXME: we save the value before the callback because it might then change
-     * synchronously. */
-    bool closing = w->closing;
-
     assert(status == 0); /* We don't cancel worker requests */
-
     uvWriterReqFinish(req);
-
-    /* If we are closing and were waiting for this request to finish, let's
-     * unblock. */
-    if (closing) {
-        /* TODO: support cancellation with concurrent requests. */
-        uvWriterPollerClose(w);
-    }
 }
 
 /* Callback fired when the event fd associated with AIO write requests should be
@@ -353,6 +288,60 @@ err:
     return rv;
 }
 
+static void uvWriterMaybeFireCloseCb(struct UvWriter *w)
+{
+    assert(w->closing);
+    if (w->event_poller.data != NULL) {
+        return;
+    }
+    if (w->check.data != NULL) {
+        return;
+    }
+
+    UvOsClose(w->fd);
+    HeapFree(w->events);
+    UvOsIoDestroy(w->ctx);
+
+    if (w->close_cb != NULL) {
+        w->close_cb(w);
+    }
+}
+
+static void uvWriterPollerCloseCb(struct uv_handle_s *handle)
+{
+    struct UvWriter *w = handle->data;
+    w->event_poller.data = NULL;
+
+    /* Cancel all pending requests. */
+    while (!QUEUE_IS_EMPTY(&w->poll_queue)) {
+        queue *head;
+        struct UvWriterReq *req;
+        head = QUEUE_HEAD(&w->poll_queue);
+        req = QUEUE_DATA(head, struct UvWriterReq, queue);
+        assert(req->work.data == NULL);
+        req->status = RAFT_CANCELED;
+        uvWriterReqFinish(req);
+    }
+
+    uvWriterMaybeFireCloseCb(w);
+}
+
+static void uvWriterCheckCloseCb(struct uv_handle_s *handle)
+{
+    struct UvWriter *w = handle->data;
+    w->check.data = NULL;
+    uvWriterMaybeFireCloseCb(w);
+}
+
+static void uvWriterCheckCb(struct uv_check_s *check)
+{
+    struct UvWriter *w = check->data;
+    if (!QUEUE_IS_EMPTY(&w->work_queue)) {
+        return;
+    }
+    uv_close((struct uv_handle_s *)&w->check, uvWriterCheckCloseCb);
+}
+
 void UvWriterClose(struct UvWriter *w, UvWriterCloseCb cb)
 {
     int rv;
@@ -369,26 +358,23 @@ void UvWriterClose(struct UvWriter *w, UvWriterCloseCb cb)
         return;
     }
 
+    /* We can close the event file descriptor right away, but we shoudln't close
+     * the main file descriptor or destroy the AIO context since there might be
+     * threadpool requests in flight. */
+    UvOsClose(w->event_fd);
+
     rv = uv_poll_stop(&w->event_poller);
     assert(rv == 0); /* Can this ever fail? */
 
-    /* If we have requests executing in the threadpool, we need to wait for
-     * them.
-     *
-     * TODO: below we assume there is at most one in-flight request. We should
-     * support cancellation of concurrent requests. */
-    if (!QUEUE_IS_EMPTY(&w->work_queue)) {
-        queue *head;
-        struct UvWriterReq *req;
-        head = QUEUE_HEAD(&w->work_queue);
-        req = QUEUE_DATA(head, struct UvWriterReq, queue);
-        if (req->work.data != NULL) {
-            return;
-        }
-    }
-
     uv_close((struct uv_handle_s *)&w->event_poller, uvWriterPollerCloseCb);
-    uv_close((struct uv_handle_s *)&w->check, uvWriterCheckCloseCb);
+
+    /* If we have requests executing in the threadpool, we need to wait for
+     * them. That's done in the check callback. */
+    if (!QUEUE_IS_EMPTY(&w->work_queue)) {
+        uv_check_start(&w->check, uvWriterCheckCb);
+    } else {
+        uv_close((struct uv_handle_s *)&w->check, uvWriterCheckCloseCb);
+    }
 }
 
 /* Return the total lengths of the given buffers. */
