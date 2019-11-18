@@ -128,7 +128,7 @@ static void submitCbAssertResult(struct UvWriterReq *req, int status)
 
 /* Submit a write request with the given parameters, close the writer after
  * N loop iterations and assert that the request got canceled. */
-#define WRITE_CLOSE(N_BUFS, CONTENT, OFFSET, N, STATUS)        \
+#define WRITE_CLOSE(N_BUFS, CONTENT, OFFSET, N, STATUS)         \
     do {                                                        \
         WRITE_REQ(N_BUFS, CONTENT, OFFSET, 0 /* rv */, STATUS); \
         LOOP_RUN(N);                                            \

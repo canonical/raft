@@ -39,17 +39,31 @@ static void uvWriterReqFinish(struct UvWriterReq *req)
     req->cb(req, req->status);
 }
 
+static void uvWriterMaybeFireCloseCb(struct UvWriter *w)
+{
+    assert(w->closing);
+    if (w->event_poller.data != NULL) {
+        return;
+    }
+    if (w->check.data != NULL) {
+        return;
+    }
+    if (w->close_cb != NULL) {
+        w->close_cb(w);
+    }
+}
+
 static void uvWriterPollerCloseCb(struct uv_handle_s *handle)
 {
     struct UvWriter *w = handle->data;
+    w->event_poller.data = NULL;
 
     /* Cancel all pending requests. */
-    while (!QUEUE_IS_EMPTY(&w->work_queue)) {
+    while (!QUEUE_IS_EMPTY(&w->poll_queue)) {
         queue *head;
         struct UvWriterReq *req;
-        head = QUEUE_HEAD(&w->work_queue);
+        head = QUEUE_HEAD(&w->poll_queue);
         req = QUEUE_DATA(head, struct UvWriterReq, queue);
-        /* This can't be a threadpool request, since we wait for them. */
         assert(req->work.data == NULL);
         req->status = RAFT_CANCELED;
         uvWriterReqFinish(req);
@@ -60,15 +74,21 @@ static void uvWriterPollerCloseCb(struct uv_handle_s *handle)
     HeapFree(w->events);
     UvOsIoDestroy(w->ctx);
 
-    if (w->close_cb != NULL) {
-        w->close_cb(w);
-    }
+    uvWriterMaybeFireCloseCb(w);
+}
+
+static void uvWriterCheckCloseCb(struct uv_handle_s *handle)
+{
+    struct UvWriter *w = handle->data;
+    w->check.data = NULL;
+    uvWriterMaybeFireCloseCb(w);
 }
 
 static void uvWriterPollerClose(struct UvWriter *w)
 {
     assert(w->closing);
     uv_close((struct uv_handle_s *)&w->event_poller, uvWriterPollerCloseCb);
+    uv_close((struct uv_handle_s *)&w->check, uvWriterCheckCloseCb);
 }
 
 /* Run blocking syscalls involved in a file write request.
@@ -235,8 +255,10 @@ int UvWriterInit(struct UvWriter *w,
                  unsigned max_concurrent_writes,
                  char *errmsg)
 {
+    void *data = w->data;
     int rv = 0;
     memset(w, 0, sizeof *w);
+    w->data = data;
     w->loop = loop;
     w->fd = fd;
     w->async = async;
@@ -245,6 +267,7 @@ int UvWriterInit(struct UvWriter *w,
     w->n_events = max_concurrent_writes;
     w->event_fd = -1;
     w->event_poller.data = NULL;
+    w->check.data = NULL;
     w->close_cb = NULL;
     QUEUE_INIT(&w->poll_queue);
     QUEUE_INIT(&w->work_queue);
@@ -297,6 +320,16 @@ int UvWriterInit(struct UvWriter *w,
         goto err_after_event_fd;
     }
     w->event_poller.data = w;
+
+    rv = uv_check_init(loop, &w->check);
+    if (rv != 0) {
+        /* UNTESTED: with the current libuv implementation this should never
+         * fail. */
+        UvErrMsgSys(errmsg, "uv_check_init", rv);
+        rv = UV__ERROR;
+        goto err_after_event_fd;
+    }
+    w->check.data = w;
 
     rv = uv_poll_start(&w->event_poller, UV_READABLE, uvWriterPollCb);
     if (rv != 0) {
@@ -354,7 +387,8 @@ void UvWriterClose(struct UvWriter *w, UvWriterCloseCb cb)
         }
     }
 
-    uvWriterPollerClose(w);
+    uv_close((struct uv_handle_s *)&w->event_poller, uvWriterPollerCloseCb);
+    uv_close((struct uv_handle_s *)&w->check, uvWriterCheckCloseCb);
 }
 
 /* Return the total lengths of the given buffers. */
