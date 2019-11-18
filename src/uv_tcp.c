@@ -44,15 +44,13 @@ void UvTcpMaybeFireCloseCb(struct UvTcp *t)
         return;
     }
 
+    assert(QUEUE_IS_EMPTY(&t->accepting));
     assert(QUEUE_IS_EMPTY(&t->connecting));
 
     if (t->listener.data != NULL) {
         return;
     }
     if (!QUEUE_IS_EMPTY(&t->aborting)) {
-        return;
-    }
-    if (!QUEUE_IS_EMPTY(&t->accepting)) {
         return;
     }
 
