@@ -102,7 +102,7 @@ static void uvTcpConnectHandshakeWriteCb(struct uv_write_s *write, int status)
     /* We don't need the handshake buffer anymore. */
     HeapFree(r->handshake.base);
 
-    if (t->closing || status == UV_ECANCELED) {
+    if (t->closing) {
         r->status = RAFT_CANCELED;
         return;
     }
@@ -123,7 +123,7 @@ static void uvTcpConnectCb(struct uv_connect_s *connect, int status)
     struct UvTcp *t = r->t;
     int rv;
 
-    if (t->closing || status == UV_ECANCELED) {
+    if (t->closing) {
         r->status = RAFT_CANCELED;
         return;
     }
