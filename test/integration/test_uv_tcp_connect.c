@@ -17,7 +17,6 @@ struct fixture
     FIXTURE_LOOP;
     FIXTURE_TCP;
     struct raft_uv_transport transport;
-    bool closed;
 };
 
 /******************************************************************************
@@ -45,12 +44,6 @@ static void connectCbAssertResult(struct raft_uv_connect *req,
     result->done = true;
 }
 
-static void closeCb(struct raft_uv_transport *transport)
-{
-    struct fixture *f = transport->data;
-    f->closed = true;
-}
-
 #define INIT                                                         \
     do {                                                             \
         int _rv;                                                     \
@@ -59,15 +52,9 @@ static void closeCb(struct raft_uv_transport *transport)
         _rv = f->transport.init(&f->transport, 1, "127.0.0.1:9000"); \
         munit_assert_int(_rv, ==, 0);                                \
         f->transport.data = f;                                       \
-        f->closed = false;                                           \
     } while (0)
 
-#define CLOSE                                       \
-    do {                                            \
-        f->transport.close(&f->transport, closeCb); \
-        LOOP_RUN_UNTIL(&f->closed);                 \
-        raft_uv_tcp_close(&f->transport);           \
-    } while (0)
+#define CLOSE f->transport.close(&f->transport, raft_uv_tcp_close)
 
 #define CONNECT_REQ(ID, ADDRESS, RV, STATUS)                      \
     struct raft_uv_connect _req;                                  \
@@ -110,10 +97,8 @@ static void closeCb(struct raft_uv_transport *transport)
         CONNECT_REQ(ID, ADDRESS, 0 /* rv */, RAFT_CANCELED); \
         LOOP_RUN(N);                                         \
         munit_assert_false(_result.done);                    \
-        f->transport.close(&f->transport, closeCb);          \
+        CLOSE;                                               \
         LOOP_RUN_UNTIL(&_result.done);                       \
-        LOOP_RUN_UNTIL(&f->closed);                          \
-        raft_uv_tcp_close(&f->transport);                    \
     }
 
 /******************************************************************************
