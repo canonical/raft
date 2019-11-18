@@ -38,16 +38,16 @@
 /* An open segment being prepared or sitting in the pool */
 struct preparedSegment
 {
-    struct uv *uv;                   /* Open segment file */
-    size_t size;                     /* Segment size */
-    struct uv_work_s work;           /* To execute logic in the threadpool */
-    int status;                      /* Result of threadpool callback */
-    char *errmsg;                    /* Error of threadpool callback */
-    bool canceled;                   /* Cancellation flag */
-    unsigned long long counter;      /* Segment counter */
-    char filename[UV__FILENAME_LEN]; /* Filename of the segment */
-    uv_file fd;                      /* File descriptor of prepared file */
-    queue queue;                     /* Pool */
+    struct uv *uv;                     /* Open segment file */
+    size_t size;                       /* Segment size */
+    struct uv_work_s work;             /* To execute logic in the threadpool */
+    int status;                        /* Result of threadpool callback */
+    char errmsg[RAFT_ERRMSG_BUF_SIZE]; /* Error of threadpool callback */
+    bool canceled;                     /* Cancellation flag */
+    unsigned long long counter;        /* Segment counter */
+    char filename[UV__FILENAME_LEN];   /* Filename of the segment */
+    uv_file fd;                        /* File descriptor of prepared file */
+    queue queue;                       /* Pool */
 };
 
 /* Flush all pending requests, invoking their callbacks with the given
@@ -67,11 +67,10 @@ static void uvPrepareFlushRequests(struct uv *uv, int status)
 /* Remove a prepared open segment */
 static void uvPrepareRemove(struct preparedSegment *s)
 {
-    char errmsg[RAFT_ERRMSG_BUF_SIZE];
     assert(s->counter > 0);
     assert(s->fd >= 0);
     UvOsClose(s->fd);
-    UvFsRemoveFile(s->uv->dir, s->filename, errmsg);
+    UvFsRemoveFile(s->uv->dir, s->filename, s->errmsg);
     raft_free(s);
 }
 
@@ -139,8 +138,8 @@ static void uvPrepareProcessRequests(struct uv *uv)
         assert(segment->fd >= 0);
         req->fd = segment->fd;
         req->counter = segment->counter;
+        HeapFree(segment);
         req->cb(req, 0);
-        raft_free(segment);
     }
 }
 
@@ -148,15 +147,14 @@ static void uvPrepareCreateFileWorkCb(uv_work_t *work)
 {
     struct preparedSegment *s = work->data;
     struct uv *uv = s->uv;
-    char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int rv;
 
-    rv = UvFsAllocateFile(uv->dir, s->filename, s->size, &s->fd, errmsg);
+    rv = UvFsAllocateFile(uv->dir, s->filename, s->size, &s->fd, s->errmsg);
     if (rv != 0) {
         goto err;
     }
 
-    rv = UvFsSyncDir(uv->dir, errmsg);
+    rv = UvFsSyncDir(uv->dir, s->errmsg);
     if (rv != 0) {
         goto err_after_allocate;
     }
@@ -172,7 +170,7 @@ err:
     return;
 }
 
-static void maybePrepareSegment(struct uv *uv);
+static void uvMaybePrepareSegment(struct uv *uv);
 
 static void uvPrepareCreateFileAfterWorkCb(uv_work_t *work, int status)
 {
@@ -190,8 +188,6 @@ static void uvPrepareCreateFileAfterWorkCb(uv_work_t *work, int status)
             UvOsJoin(uv->dir, s->filename, path);
             UvOsClose(s->fd);
             UvOsUnlink(path);
-        } else {
-            HeapFree(s->errmsg);
         }
         Tracef(uv->tracer, "canceled creation of %s", s->filename);
         raft_free(s);
@@ -204,7 +200,6 @@ static void uvPrepareCreateFileAfterWorkCb(uv_work_t *work, int status)
         uvPrepareFlushRequests(uv, RAFT_IOERR);
         uv->errored = true;
         Tracef(uv->tracer, "create segment %s: %s", s->filename, s->errmsg);
-        HeapFree(s->errmsg);
         raft_free(s);
         return;
     }
@@ -218,11 +213,11 @@ static void uvPrepareCreateFileAfterWorkCb(uv_work_t *work, int status)
     uvPrepareProcessRequests(uv);
 
     /* Start creating a new segment if needed. */
-    maybePrepareSegment(uv);
+    uvMaybePrepareSegment(uv);
 }
 
 /* Start creating a new segment file. */
-static int prepareSegment(struct uv *uv)
+static int uvPrepareSegment(struct uv *uv)
 {
     struct preparedSegment *s;
     int rv;
@@ -232,6 +227,7 @@ static int prepareSegment(struct uv *uv)
         rv = RAFT_NOMEM;
         goto err;
     }
+    memset(s, 0, sizeof *s);
     s->uv = uv;
     s->counter = uv->prepare_next_counter;
     s->work.data = s;
@@ -266,7 +262,7 @@ err:
 
 /* If the pool has less than TARGET_POOL_SIZE segments, and we're not already
  * creating a segment, start creating a new segment. */
-static void maybePrepareSegment(struct uv *uv)
+static void uvMaybePrepareSegment(struct uv *uv)
 {
     queue *head;
     unsigned n;
@@ -284,7 +280,7 @@ static void maybePrepareSegment(struct uv *uv)
     QUEUE_FOREACH(head, &uv->prepare_pool) { n++; }
 
     if (n < TARGET_POOL_SIZE) {
-        rv = prepareSegment(uv);
+        rv = uvPrepareSegment(uv);
         if (rv != 0) {
             uvPrepareFlushRequests(uv, rv);
             uv->errored = true;
@@ -298,5 +294,5 @@ void uvPrepare(struct uv *uv, struct uvPrepare *req, uvPrepareCb cb)
     req->cb = cb;
     QUEUE_PUSH(&uv->prepare_reqs, &req->queue);
     uvPrepareProcessRequests(uv);
-    maybePrepareSegment(uv);
+    uvMaybePrepareSegment(uv);
 }
