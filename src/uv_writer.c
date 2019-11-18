@@ -44,10 +44,10 @@ static void uvWriterPollerCloseCb(struct uv_handle_s *handle)
     struct UvWriter *w = handle->data;
 
     /* Cancel all pending requests. */
-    while (!QUEUE_IS_EMPTY(&w->write_queue)) {
+    while (!QUEUE_IS_EMPTY(&w->work_queue)) {
         queue *head;
         struct UvWriterReq *req;
-        head = QUEUE_HEAD(&w->write_queue);
+        head = QUEUE_HEAD(&w->work_queue);
         req = QUEUE_DATA(head, struct UvWriterReq, queue);
         /* This can't be a threadpool request, since we wait for them. */
         assert(req->work.data == NULL);
@@ -246,7 +246,8 @@ int UvWriterInit(struct UvWriter *w,
     w->event_fd = -1;
     w->event_poller.data = NULL;
     w->close_cb = NULL;
-    QUEUE_INIT(&w->write_queue);
+    QUEUE_INIT(&w->poll_queue);
+    QUEUE_INIT(&w->work_queue);
     w->closing = false;
     w->errmsg = errmsg;
 
@@ -343,10 +344,10 @@ void UvWriterClose(struct UvWriter *w, UvWriterCloseCb cb)
      *
      * TODO: below we assume there is at most one in-flight request. We should
      * support cancellation of concurrent requests. */
-    if (!QUEUE_IS_EMPTY(&w->write_queue)) {
+    if (!QUEUE_IS_EMPTY(&w->work_queue)) {
         queue *head;
         struct UvWriterReq *req;
-        head = QUEUE_HEAD(&w->write_queue);
+        head = QUEUE_HEAD(&w->work_queue);
         req = QUEUE_DATA(head, struct UvWriterReq, queue);
         if (req->work.data != NULL) {
             return;
@@ -384,7 +385,8 @@ int UvWriterSubmit(struct UvWriter *w,
      *       writes, so ensure that we're getting write requests
      *       sequentially. */
     if (w->n_events == 1) {
-        assert(QUEUE_IS_EMPTY(&w->write_queue));
+        assert(QUEUE_IS_EMPTY(&w->poll_queue));
+        assert(QUEUE_IS_EMPTY(&w->work_queue));
     }
 
     assert(w->fd >= 0);
@@ -401,7 +403,6 @@ int UvWriterSubmit(struct UvWriter *w,
     req->cb = cb;
     memset(&req->iocb, 0, sizeof req->iocb);
     memset(req->errmsg, 0, sizeof req->errmsg);
-    QUEUE_PUSH(&w->write_queue, &req->queue);
 
     req->iocb.aio_fildes = w->fd;
     req->iocb.aio_lio_opcode = IOCB_CMD_PWRITEV;
@@ -439,6 +440,7 @@ int UvWriterSubmit(struct UvWriter *w,
 #if defined(RWF_NOWAIT)
     /* Try to submit the write request asynchronously */
     if (w->async) {
+        QUEUE_PUSH(&w->poll_queue, &req->queue);
         rv = UvOsIoSubmit(w->ctx, 1, &iocbs);
 
         /* If no error occurred, we're done, the write request was
@@ -446,6 +448,8 @@ int UvWriterSubmit(struct UvWriter *w,
         if (rv == 0) {
             goto done;
         }
+
+        QUEUE_REMOVE(&req->queue);
 
         /* Check the reason of the error. */
         switch (rv) {
@@ -467,11 +471,13 @@ int UvWriterSubmit(struct UvWriter *w,
 #endif /* RWF_NOWAIT */
 
     /* If we got here it means we need to run io_submit in the threadpool. */
+    QUEUE_PUSH(&w->work_queue, &req->queue);
     req->work.data = req;
     rv =
         uv_queue_work(w->loop, &req->work, uvWriterWorkCb, uvWriterAfterWorkCb);
     if (rv != 0) {
         /* UNTESTED: with the current libuv implementation this can't fail. */
+        QUEUE_REMOVE(&req->queue);
         UvErrMsgSys(w->errmsg, "uv_queue_work", rv);
         rv = UV__ERROR;
         goto err;
@@ -484,6 +490,5 @@ done:
 
 err:
     assert(rv != 0);
-    QUEUE_REMOVE(&req->queue);
     return rv;
 }

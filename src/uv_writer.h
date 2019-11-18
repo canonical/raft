@@ -28,7 +28,8 @@ struct UvWriter
     int event_fd;                  /* Poll'ed to check if write is finished */
     struct uv_poll_s event_poller; /* To make the loop poll for event_fd */
     UvWriterCloseCb close_cb;      /* Close callback */
-    queue write_queue;             /* Queue of inflight write requests */
+    queue poll_queue;              /* Pollable write requests */
+    queue work_queue;              /* Threadpool write requests */
     bool closing;                  /* Whether we're closing or closed */
     char *errmsg;                  /* Description of last error */
 };
