@@ -34,7 +34,7 @@ static void uvTcpClose(struct raft_uv_transport *transport,
     assert(!t->closing);
     t->closing = true;
     t->close_cb = cb;
-    UvTcpListenStop(t);
+    UvTcpListenClose(t);
     UvTcpConnectClose(t);
 }
 

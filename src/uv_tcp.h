@@ -26,7 +26,7 @@ struct UvTcp
 int UvTcpListen(struct raft_uv_transport *transport, raft_uv_accept_cb cb);
 
 /* Stop accepting new connection and close all connections being accepted. */
-void UvTcpListenStop(struct UvTcp *t);
+void UvTcpListenClose(struct UvTcp *t);
 
 /* Implementation of raft_uv_transport->connect. */
 int UvTcpConnect(struct raft_uv_transport *transport,

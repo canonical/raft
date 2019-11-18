@@ -74,8 +74,8 @@ static int uvTcpDecodePreamble(struct uvTcpHandshake *h)
 
 /* The accepted TCP client connection has been closed, release all memory
  * associated with accept object. We can get here only if an error occurrent
- * during the handshake or if raft_io_transport->close() has been invoked. */
-static void uvTcpIncomingCloseCb(struct uv_handle_s *handle)
+ * during the handshake or if raft_uv_transport->close() has been invoked. */
+static void uvTcpIncomingTcpCloseCb(struct uv_handle_s *handle)
 {
     struct uvTcpIncoming *c = handle->data;
     struct UvTcp *t = c->t;
@@ -90,12 +90,12 @@ static void uvTcpIncomingCloseCb(struct uv_handle_s *handle)
 }
 
 /* Close an incoming TCP connection which hasn't complete the handshake yet. */
-static void uvTcpIncomingClose(struct uvTcpIncoming *c)
+static void uvTcpIncomingAbort(struct uvTcpIncoming *c)
 {
     c->closing = true;
     /* After uv_close() returns we are guaranteed that no more alloc_cb or
      * read_cb will be called. */
-    uv_close((struct uv_handle_s *)c->tcp, uvTcpIncomingCloseCb);
+    uv_close((struct uv_handle_s *)c->tcp, uvTcpIncomingTcpCloseCb);
 }
 
 /* Read the address part of the handshake. */
@@ -130,7 +130,7 @@ static void uvTcpAdressReadCb(uv_stream_t *stream,
         return;
     }
     if (nread < 0) {
-        uvTcpIncomingClose(c);
+        uvTcpIncomingAbort(c);
         return;
     }
 
@@ -173,7 +173,7 @@ static void uvTcpPreambleReadCb(uv_stream_t *stream,
         return;
     }
     if (nread < 0) {
-        uvTcpIncomingClose(c);
+        uvTcpIncomingAbort(c);
         return;
     }
 
@@ -193,7 +193,7 @@ static void uvTcpPreambleReadCb(uv_stream_t *stream,
     /* If we have completed reading the preamble, let's parse it. */
     rv = uvTcpDecodePreamble(&c->handshake);
     if (rv != 0) {
-        uvTcpIncomingClose(c);
+        uvTcpIncomingAbort(c);
         return;
     }
 
@@ -309,8 +309,7 @@ static void uvTcpListenerCloseCb(struct uv_handle_s *handle)
     UvTcpMaybeFireCloseCb(t);
 }
 
-/* Stop accepting new connection and close all connections being accepted. */
-void UvTcpListenStop(struct UvTcp *t)
+void UvTcpListenClose(struct UvTcp *t)
 {
     queue *head;
     assert(t->closing);
@@ -331,7 +330,7 @@ void UvTcpListenStop(struct UvTcp *t)
         head = QUEUE_HEAD(&t->accept_conns);
         conn = QUEUE_DATA(head, struct uvTcpIncoming, queue);
         if (!conn->closing) {
-            uvTcpIncomingClose(conn);
+            uvTcpIncomingAbort(conn);
         }
     }
 

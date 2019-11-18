@@ -85,64 +85,64 @@ static void uvTcpConnectTcpCloseCb(struct uv_handle_s *handle)
 }
 
 /* Abort a connection request. */
-static void uvTcpConnectAbort(struct uvTcpConnect *r)
+static void uvTcpConnectAbort(struct uvTcpConnect *connect)
 {
-    uv_close((struct uv_handle_s *)r->tcp, uvTcpConnectTcpCloseCb);
+    uv_close((struct uv_handle_s *)connect->tcp, uvTcpConnectTcpCloseCb);
 }
 
 /* The handshake TCP write completes. Fire the connect callback. */
 static void uvTcpConnectHandshakeWriteCb(struct uv_write_s *write, int status)
 {
-    struct uvTcpConnect *r = write->data;
-    struct UvTcp *t = r->t;
+    struct uvTcpConnect *connect = write->data;
+    struct UvTcp *t = connect->t;
 
     if (t->closing) {
-        r->status = RAFT_CANCELED;
+        connect->status = RAFT_CANCELED;
         return;
     }
 
     if (status != 0) {
         assert(status != UV_ECANCELED); /* t->closing would have been true */
-        r->status = RAFT_NOCONNECTION;
-        uvTcpConnectAbort(r);
+        connect->status = RAFT_NOCONNECTION;
+        uvTcpConnectAbort(connect);
         return;
     }
 
-    uvTcpConnectFinish(r);
+    uvTcpConnectFinish(connect);
 }
 
 /* The TCP connection is established. Write the handshake data. */
-static void uvTcpConnectCb(struct uv_connect_s *connect, int status)
+static void uvTcpConnectCb(struct uv_connect_s *req, int status)
 {
-    struct uvTcpConnect *r = connect->data;
-    struct UvTcp *t = r->t;
+    struct uvTcpConnect *connect = req->data;
+    struct UvTcp *t = connect->t;
     int rv;
 
     if (t->closing) {
-        r->status = RAFT_CANCELED;
+        connect->status = RAFT_CANCELED;
         return;
     }
 
     if (status != 0) {
         assert(status != UV_ECANCELED); /* t->closing would have been true */
-        r->status = RAFT_NOCONNECTION;
+        connect->status = RAFT_NOCONNECTION;
         ErrMsgPrintf(t->transport->errmsg, "uv_tcp_connect(): %s",
                      uv_strerror(status));
         goto err;
     }
 
-    rv = uv_write(&r->write, (struct uv_stream_s *)r->tcp, &r->handshake, 1,
-                  uvTcpConnectHandshakeWriteCb);
+    rv = uv_write(&connect->write, (struct uv_stream_s *)connect->tcp,
+                  &connect->handshake, 1, uvTcpConnectHandshakeWriteCb);
     if (rv != 0) {
         /* UNTESTED: what are the error conditions? perhaps ENOMEM */
-        r->status = RAFT_NOCONNECTION;
+        connect->status = RAFT_NOCONNECTION;
         goto err;
     }
 
     return;
 
 err:
-    uvTcpConnectAbort(r);
+    uvTcpConnectAbort(connect);
 }
 
 /* Create a new TCP handle and submit a connection request to the event loop. */
