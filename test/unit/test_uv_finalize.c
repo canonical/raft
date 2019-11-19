@@ -68,25 +68,6 @@ TEST_SUITE(success)
 TEST_SETUP(success, setup)
 TEST_TEAR_DOWN(success, tear_down)
 
-/* Submit a request to finalize the first segment that was created. */
-TEST_CASE(success, first, NULL)
-{
-    struct fixture *f = data;
-    (void)params;
-
-    return MUNIT_SKIP; /* FIXME: FLaky on Travis */
-
-    WRITE_OPEN_SEGMENT(1);
-
-    FINALIZE(0);
-
-    LOOP_RUN(1);
-
-    munit_assert_true(test_dir_has_file(f->dir, "1-2"));
-
-    return MUNIT_OK;
-}
-
 /* Submet a request to finalize an open segment that was never written. */
 TEST_CASE(success, unused, NULL)
 {
