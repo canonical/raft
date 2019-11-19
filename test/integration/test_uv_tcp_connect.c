@@ -64,8 +64,8 @@ static void connectCbAssertResult(struct raft_uv_connect *req,
                                connectCbAssertResult);            \
     munit_assert_int(_rv, ==, RV)
 
-/* Submit a connect request and assert that it fails synchronously with the
- * given error code and message. */
+/* Try to submit a connect request and assert that the given error code and
+ * message are returned. */
 #define CONNECT_ERROR(ID, ADDRESS, RV, ERRMSG)                  \
     {                                                           \
         CONNECT_REQ(ID, ADDRESS, RV /* rv */, 0 /* status */);  \

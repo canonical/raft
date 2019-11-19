@@ -216,6 +216,8 @@ static int uvPrepareSegment(struct uv *uv)
     struct preparedSegment *s;
     int rv;
 
+    assert(uv->prepare_inflight == NULL);
+
     s = raft_malloc(sizeof *s);
     if (s == NULL) {
         rv = RAFT_NOMEM;
