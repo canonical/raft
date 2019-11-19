@@ -151,7 +151,6 @@ test_unit_uv_SOURCES += \
   test/unit/test_uv_fs.c \
   test/unit/test_uv_list.c \
   test/unit/test_uv_load.c \
-  test/unit/test_uv_recover.c \
   test/unit/test_uv_finalize.c \
   test/unit/test_uv_snapshot.c \
   test/unit/test_uv_truncate.c \
@@ -167,6 +166,7 @@ test_integration_uv_SOURCES = \
   test/integration/test_uv_append.c \
   test/integration/test_uv_bootstrap.c \
   test/integration/test_uv_load.c \
+  test/integration/test_uv_recover.c \
   test/integration/test_uv_send.c \
   test/integration/test_uv_set_term.c \
   test/integration/test_uv_tcp_connect.c \
