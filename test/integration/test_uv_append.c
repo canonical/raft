@@ -1,5 +1,6 @@
+#include "../../src/byte.h"
 #include "../lib/runner.h"
-#include "../lib/uv.h"
+#include "../lib/uv_.h"
 
 /* Maximum number of blocks a segment can have */
 #define MAX_SEGMENT_BLOCKS 4
@@ -15,6 +16,7 @@
 
 struct fixture
 {
+    FIXTURE_UV_DEPS;
     FIXTURE_UV;
     struct raft_entry *entries;
     unsigned n;
@@ -115,9 +117,12 @@ static void appendCbAssertResult(struct raft_io_append *req, int status)
         DESTROY_ENTRIES;                                            \
     }
 
+#define UV_CLOSE f->io.close(&f->io, raft_uv_close)
+
 static void *setUp(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
+    SETUP_UV_DEPS;
     SETUP_UV;
     raft_uv_set_block_size(&f->io, SEGMENT_BLOCK_SIZE);
     raft_uv_set_segment_size(&f->io, SEGMENT_BLOCK_SIZE * MAX_SEGMENT_BLOCKS);
@@ -127,11 +132,18 @@ static void *setUp(const MunitParameter params[], void *user_data)
     return f;
 }
 
+static void tearDownDeps(void *data)
+{
+    struct fixture *f = data;
+    TEAR_DOWN_UV_DEPS;
+    free(f);
+}
+
 static void tearDown(void *data)
 {
     struct fixture *f = data;
     TEAR_DOWN_UV;
-    free(f);
+    tearDownDeps(f);
 }
 
 /******************************************************************************
@@ -358,9 +370,10 @@ TEST(append, first, setUp, tearDown, 0, NULL)
 TEST(append, firstBig, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    struct uv *uv = f->io.impl;
-    APPEND(MAX_SEGMENT_BLOCKS, uv->block_size);
-    ASSERT_SEGMENT(1, MAX_SEGMENT_BLOCKS, MAX_SEGMENT_BLOCKS * uv->block_size);
+    /* struct uv *uv = f->io.impl; */
+    APPEND(MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE);
+    ASSERT_SEGMENT(1, MAX_SEGMENT_BLOCKS,
+                   MAX_SEGMENT_BLOCKS * SEGMENT_BLOCK_SIZE);
     return MUNIT_OK;
 }
 
@@ -369,9 +382,8 @@ TEST(append, firstBig, setUp, tearDown, 0, NULL)
 TEST(append, secondBig, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    struct uv *uv = f->io.impl;
     APPEND(1, 64);
-    APPEND(MAX_SEGMENT_BLOCKS, uv->block_size);
+    APPEND(MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE);
     return MUNIT_OK;
 }
 
@@ -592,7 +604,7 @@ TEST(append, counter, setUp, tearDown, 0, NULL)
 }
 
 /* If the I/O instance is closed, all pending append requests get canceled. */
-TEST(append, cancel, setUp, tearDown, 0, NULL)
+TEST(append, cancel, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -667,7 +679,7 @@ TEST(append, closeDuringWrite, setUp, tearDown, 0, NULL)
 
 /* When the writer gets closed it tells the writer to close the segment that
  * it's currently writing. */
-TEST(append, currentSegment, setUp, tearDown, 0, NULL)
+TEST(append, currentSegment, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
 
