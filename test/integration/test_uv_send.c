@@ -1,12 +1,8 @@
 #include <unistd.h>
 
-#include "../../include/raft/uv.h"
-#include "../lib/dir.h"
-#include "../lib/heap.h"
-#include "../lib/loop.h"
 #include "../lib/runner.h"
 #include "../lib/tcp.h"
-#include "../lib/tracer.h"
+#include "../lib/uv_.h"
 
 /******************************************************************************
  *
@@ -16,13 +12,9 @@
 
 struct fixture
 {
-    FIXTURE_DIR;
-    FIXTURE_HEAP;
-    FIXTURE_LOOP;
+    FIXTURE_UV_DEPS;
     FIXTURE_TCP;
-    FIXTURE_TRACER;
-    struct raft_uv_transport transport;
-    struct raft_io io;
+    FIXTURE_UV;
     struct raft_message message;
     bool closed;
 };
@@ -51,24 +43,6 @@ static void sendCbAssertResult(struct raft_io_send *req, int status)
     munit_assert_int(status, ==, result->status);
     result->done = true;
 }
-
-/* Invoke raft_uv_init() and assert that no error occurs. */
-#define INIT                                                         \
-    do {                                                             \
-        int _rv;                                                     \
-        _rv = raft_uv_init(&f->io, &f->loop, f->dir, &f->transport); \
-        munit_assert_int(_rv, ==, 0);                                \
-        _rv = f->io.init(&f->io, 1, "1");                            \
-        munit_assert_int(_rv, ==, 0);                                \
-    } while (0)
-
-/* Invoke raft_io->close(). */
-#define CLOSE                         \
-    do {                              \
-        f->io.close(&f->io, closeCb); \
-        LOOP_RUN_UNTIL(&f->closed);   \
-        raft_uv_close(&f->io);        \
-    } while (0)
 
 /* Set the type of the fixture's message. */
 #define SET_MESSAGE_TYPE(TYPE) f->message.type = TYPE;
@@ -132,14 +106,9 @@ static void sendCbAssertResult(struct raft_io_send *req, int status)
 static void *setUpDeps(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    int rv;
-    SETUP_DIR;
-    SETUP_HEAP;
-    SETUP_LOOP;
-    SETUP_TRACER;
-    TCP_LISTEN;
-    rv = raft_uv_tcp_init(&f->transport, &f->loop);
-    munit_assert_int(rv, ==, 0);
+    SETUP_UV_DEPS;
+    SETUP_TCP;
+    TCP_SERVER_LISTEN;
     f->io.data = f;
     f->closed = false;
     return f;
@@ -148,20 +117,15 @@ static void *setUpDeps(const MunitParameter params[], void *user_data)
 static void tearDownDeps(void *data)
 {
     struct fixture *f = data;
-    raft_uv_tcp_close(&f->transport);
-    TEAR_DOWN_TRACER;
     TEAR_DOWN_TCP;
-    TEAR_DOWN_LOOP;
-    TEAR_DOWN_HEAP;
-    TEAR_DOWN_DIR;
+    TEAR_DOWN_UV_DEPS;
     free(f);
 }
 
 static void *setUp(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = setUpDeps(params, user_data);
-    INIT;
-    raft_uv_set_tracer(&f->io, &f->tracer);
+    SETUP_UV;
     f->message.type = RAFT_IO_REQUEST_VOTE;
     f->message.server_id = 1;
     f->message.server_address = f->tcp.server.address;
@@ -171,7 +135,7 @@ static void *setUp(const MunitParameter params[], void *user_data)
 static void tearDown(void *data)
 {
     struct fixture *f = data;
-    CLOSE;
+    TEAR_DOWN_UV;
     tearDownDeps(f);
 }
 
@@ -341,7 +305,7 @@ TEST(send, queue, setUp, tearDownDeps, 0, NULL)
     }
 
     LOOP_RUN_UNTIL(&result.done);
-    CLOSE;
+    TEAR_DOWN_UV;
 
     return MUNIT_OK;
 }

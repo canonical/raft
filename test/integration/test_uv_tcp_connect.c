@@ -154,8 +154,8 @@ SUITE(tcp_connect)
 TEST(tcp_connect, first, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    TCP_LISTEN;
-    CONNECT(2, TCP_ADDRESS);
+    TCP_SERVER_LISTEN;
+    CONNECT(2, TCP_SERVER_ADDRESS);
     return MUNIT_OK;
 }
 
@@ -192,8 +192,8 @@ TEST(tcp_connect, oom, setUp, tearDown, 0, oomParams)
 TEST(tcp_connect, closeImmediately, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
-    TCP_LISTEN;
-    CONNECT_CLOSE(2, TCP_ADDRESS, 0);
+    TCP_SERVER_LISTEN;
+    CONNECT_CLOSE(2, TCP_SERVER_ADDRESS, 0);
     return MUNIT_OK;
 }
 
@@ -201,8 +201,8 @@ TEST(tcp_connect, closeImmediately, setUp, tearDownDeps, 0, NULL)
 TEST(tcp_connect, closeDuringHandshake, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
-    TCP_LISTEN;
-    CONNECT_CLOSE(2, TCP_ADDRESS, 1);
+    TCP_SERVER_LISTEN;
+    CONNECT_CLOSE(2, TCP_SERVER_ADDRESS, 1);
     return MUNIT_OK;
 }
 
@@ -210,7 +210,7 @@ static void checkCb(struct uv_check_s *check)
 {
     struct raft_uv_transport *transport = check->data;
     transport->close(transport, raft_uv_tcp_close);
-    uv_close((struct uv_handle_s*)check, NULL);
+    uv_close((struct uv_handle_s *)check, NULL);
 }
 
 /* The transport gets closed right after a connection failure, while the

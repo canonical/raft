@@ -137,23 +137,23 @@ static void tearDown(void *data)
 
 /* Connect to the listening socket of the transport, creating a new connection
  * that is waiting to be accepted. */
-#define PEER_CONNECT TCP_CONNECT(9000)
+#define PEER_CONNECT TCP_CLIENT_CONNECT(9000)
 
 /* Make the peer close the connection. */
-#define PEER_CLOSE TCP_CLOSE
+#define PEER_CLOSE TCP_CLIENT_CLOSE
 
 /* Make the connected client send handshake data. */
-#define PEER_HANDSHAKE                      \
-    do {                                    \
-        size_t n = sizeof f->handshake.buf; \
-        TCP_SEND(f->handshake.buf, n);      \
+#define PEER_HANDSHAKE                        \
+    do {                                      \
+        size_t n = sizeof f->handshake.buf;   \
+        TCP_CLIENT_SEND(f->handshake.buf, n); \
     } while (0)
 
 /* Make the connected client send partial handshake data: only N bytes will be
  * sent, starting from the offset of the last call. */
-#define PEER_HANDSHAKE_PARTIAL(N)                            \
-    do {                                                     \
-        TCP_SEND(f->handshake.buf + f->handshake.offset, N); \
+#define PEER_HANDSHAKE_PARTIAL(N)                                   \
+    do {                                                            \
+        TCP_CLIENT_SEND(f->handshake.buf + f->handshake.offset, N); \
     } while (0)
 
 /* After a PEER_CONNECT() call, spin the event loop until the connected
