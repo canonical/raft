@@ -151,7 +151,6 @@ test_unit_uv_SOURCES += \
   test/unit/test_uv_fs.c \
   test/unit/test_uv_list.c \
   test/unit/test_uv_load.c \
-  test/unit/test_uv_prepare.c \
   test/unit/test_uv_recover.c \
   test/unit/test_uv_finalize.c \
   test/unit/test_uv_snapshot.c \

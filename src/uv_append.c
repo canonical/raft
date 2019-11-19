@@ -409,7 +409,7 @@ static void appendPrepareCb(struct uvPrepare *req, int status)
         QUEUE_REMOVE(&segment->queue);
         raft_free(segment);
         uv->errored = true;
-        flushRequests(&uv->append_writing_reqs, RAFT_IOERR);
+        flushRequests(&uv->append_pending_reqs, RAFT_IOERR);
         return;
     }
 

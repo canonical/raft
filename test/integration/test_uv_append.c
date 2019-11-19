@@ -90,9 +90,7 @@ static void appendCbAssertResult(struct raft_io_append *req, int status)
 #define APPEND_EXPECT(I, STATUS) _result##I.status = STATUS
 
 /* Wait for the append request identified by I to complete. */
-#define APPEND_WAIT(I, STATUS) \
-    APPEND_EXPECT(I, STATUS);  \
-    LOOP_RUN_UNTIL(&_result##I.done)
+#define APPEND_WAIT(I) LOOP_RUN_UNTIL(&_result##I.done)
 
 /* Submit an append request with an entries array with N_ENTRIES entries, each
  * one of size ENTRY_SIZE, and wait for the operation to successfully
@@ -100,17 +98,17 @@ static void appendCbAssertResult(struct raft_io_append *req, int status)
 #define APPEND(N_ENTRIES, ENTRY_SIZE)            \
     do {                                         \
         APPEND_SUBMIT(0, N_ENTRIES, ENTRY_SIZE); \
-        APPEND_WAIT(0, 0);                       \
+        APPEND_WAIT(0);                          \
     } while (0)
 
 /* Submit an append request with the given parameters and wait for the operation
  * to fail with the given code and message. */
 #define APPEND_FAILURE(N_ENTRIES, ENTRY_SIZE, STATUS, ERRMSG)       \
     {                                                               \
-        APPEND_SUBMIT(0, N_ENTRIES, ENTRY_SIZE, STATUS);            \
+        APPEND_SUBMIT(0, N_ENTRIES, ENTRY_SIZE);                    \
+        APPEND_EXPECT(0, STATUS);                                   \
         APPEND_WAIT(0);                                             \
         /*munit_assert_string_equal(f->transport.errmsg, ERRMSG);*/ \
-        DESTROY_ENTRIES;                                            \
     }
 
 static void *setUp(const MunitParameter params[], void *user_data)
@@ -307,6 +305,38 @@ TEST(append, first, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
+/* As soon as the backend starts writing the first open segment, a second one
+ * and a third one get prepared. */
+TEST(append, prepareSegments, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    APPEND(1, 64);
+    while (!test_dir_has_file(f->dir, "open-3")) {
+        LOOP_RUN(1);
+    }
+    munit_assert_true(test_dir_has_file(f->dir, "open-1"));
+    munit_assert_true(test_dir_has_file(f->dir, "open-2"));
+    munit_assert_true(test_dir_has_file(f->dir, "open-3"));
+    return MUNIT_OK;
+}
+
+/* Once the first segment fills up, it gets finalized, and an additional one
+ * gets prepared, to maintain the available segments pool size. */
+TEST(append, finalizeSegment, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    APPEND(MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE);
+    APPEND(1, 64);
+    while (!test_dir_has_file(f->dir, "open-4")) {
+        LOOP_RUN(1);
+    }
+    munit_assert_true(
+        test_dir_has_file(f->dir, "0000000000000001-0000000000000004"));
+    munit_assert_false(test_dir_has_file(f->dir, "open-1"));
+    munit_assert_true(test_dir_has_file(f->dir, "open-4"));
+    return MUNIT_OK;
+}
+
 /* The very first batch of entries to append is bigger than the regular open
  * segment size. */
 TEST(append, firstBig, setUp, tearDown, 0, NULL)
@@ -406,8 +436,8 @@ TEST(append, batch, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
     APPEND_SUBMIT(0, 1, 64);
     APPEND_SUBMIT(1, 1, 64);
-    APPEND_WAIT(0, 0);
-    APPEND_WAIT(1, 0);
+    APPEND_WAIT(0);
+    APPEND_WAIT(1);
     return MUNIT_OK;
 }
 
@@ -419,8 +449,8 @@ TEST(append, wait, setUp, tearDown, 0, NULL)
     APPEND_SUBMIT(0, 1, 64);
     LOOP_RUN(1);
     APPEND_SUBMIT(1, 1, 64);
-    APPEND_WAIT(0, 0);
-    APPEND_WAIT(1, 0);
+    APPEND_WAIT(0);
+    APPEND_WAIT(1);
     return MUNIT_OK;
 }
 
@@ -434,11 +464,11 @@ TEST(append, resizeArena, setUp, tearDown, 0, NULL)
     APPEND_SUBMIT(2, 2, 64);
     APPEND_SUBMIT(3, 1, SEGMENT_BLOCK_SIZE);
     APPEND_SUBMIT(4, 1, SEGMENT_BLOCK_SIZE);
-    APPEND_WAIT(0, 0);
-    APPEND_WAIT(1, 0);
-    APPEND_WAIT(2, 0);
-    APPEND_WAIT(3, 0);
-    APPEND_WAIT(4, 0);
+    APPEND_WAIT(0);
+    APPEND_WAIT(1);
+    APPEND_WAIT(2);
+    APPEND_WAIT(3);
+    APPEND_WAIT(4);
     ASSERT_SEGMENT(1, 7, 64 * 4 + SEGMENT_BLOCK_SIZE * 3);
     return MUNIT_OK;
 }
@@ -461,8 +491,8 @@ TEST(append, truncate, setUp, tearDown, 0, NULL)
 
     APPEND_SUBMIT(1, 2, 64);
 
-    APPEND_WAIT(0, 0);
-    APPEND_WAIT(1, 0);
+    APPEND_WAIT(0);
+    APPEND_WAIT(1);
 
     return MUNIT_OK;
 }
@@ -522,6 +552,20 @@ TEST(append, cancel, setUp, tearDownDeps, 0, NULL)
     return MUNIT_OK;
 }
 
+/* The creation of the first segment fails because there's no space. */
+TEST(append, noSpace, setUp, tearDown, 0, dir_tmpfs_params)
+{
+    struct fixture *f = data;
+    SKIP_IF_NO_FIXTURE;
+#if !HAVE_DECL_UV_FS_O_CREAT
+    /* This test appears to leak memory on older libuv versions. */
+    return MUNIT_SKIP;
+#endif
+    raft_uv_set_segment_size(&f->io, SEGMENT_BLOCK_SIZE * 32768);
+    APPEND_FAILURE(1, 64, RAFT_IOERR, "");
+    return MUNIT_OK;
+}
+
 /* An error occurs while performing a write. */
 TEST(append, writeError, setUp, tearDown, 0, NULL)
 {
@@ -534,12 +578,12 @@ TEST(append, writeError, setUp, tearDown, 0, NULL)
 
     APPEND_SUBMIT(0, 1, 64);
     test_aio_fill(&ctx, 0);
-    APPEND_WAIT(0, 0);
+    APPEND_WAIT(0);
     test_aio_destroy(ctx);
     return MUNIT_OK;
 }
 
-static char *oomHeapFaultDelay[] = {"1", NULL};
+static char *oomHeapFaultDelay[] = {"1", /* FIXME "2", */ NULL};
 static char *oomHeapFaultRepeat[] = {"1", NULL};
 
 static MunitParameterEnum oomParams[] = {
@@ -568,6 +612,32 @@ TEST(append, closeDuringWrite, setUp, tearDown, 0, NULL)
     LOOP_RUN(1);
     TEAR_DOWN_UV;
 
+    return MUNIT_OK;
+}
+
+/* When the backend is closed, all unused open segments get removed. */
+TEST(append, removeSegmentUponClose, setUp, tearDownDeps, 0, NULL)
+{
+    struct fixture *f = data;
+    APPEND(1, 64);
+    while (!test_dir_has_file(f->dir, "open-2")) {
+        LOOP_RUN(1);
+    }
+    TEAR_DOWN_UV;
+    munit_assert_false(test_dir_has_file(f->dir, "open-2"));
+    return MUNIT_OK;
+}
+
+/* When the backend is closed, all pending prepare get requests get canceled. */
+TEST(append, cancelPrepareRequest, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    /* TODO: find a way to test a prepare request cancelation */
+    return MUNIT_SKIP;
+    APPEND(MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE);
+    APPEND_SUBMIT(0, 1, 64);
+    APPEND_EXPECT(0, RAFT_CANCELED);
+    TEAR_DOWN_UV;
     return MUNIT_OK;
 }
 
