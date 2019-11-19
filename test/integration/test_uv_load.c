@@ -67,7 +67,7 @@ static void tearDownUv(void *data)
 
 SUITE(load)
 
-/* Data directory not accessible */
+/* Load the initial state of a pristine server. */
 TEST(load, emptyDir, setupUv, tearDownUv, 0, NULL)
 {
     struct fixture *f = data;

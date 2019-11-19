@@ -75,6 +75,15 @@ SUITE(bootstrap)
         munit_assert_string_equal(f->io.errmsg, ERRMSG); \
     }
 
+/* Bootstrap a pristine server. */
+TEST(bootstrap, pristine, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    CONFIGURATION_ADD(1, "1");
+    BOOTSTRAP;
+    return MUNIT_OK;
+}
+
 /* The data directory already has metadata files with a non-zero term. */
 TEST(bootstrap, termIsNonZero, setUp, tearDown, 0, NULL)
 {

@@ -154,8 +154,7 @@ test_unit_uv_SOURCES += \
   test/unit/test_uv_finalize.c \
   test/unit/test_uv_snapshot.c \
   test/unit/test_uv_recv.c \
-  test/unit/test_uv_writer.c \
-  test/unit/test_uv.c
+  test/unit/test_uv_writer.c
 test_unit_uv_LDADD = libtest.la
 test_unit_uv_LDFLAGS = $(UV_LIBS)
 
