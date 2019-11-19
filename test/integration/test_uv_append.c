@@ -19,10 +19,7 @@ struct fixture
     FIXTURE_UV_DEPS;
     FIXTURE_UV;
     struct raft_entry *entries;
-    unsigned n;
-    int count;   /* To generate deterministic entry data */
-    int invoked; /* Number of times append_cb was invoked */
-    int status;  /* Last status passed to append_cb */
+    int count; /* To generate deterministic entry data */
 };
 
 /******************************************************************************
@@ -44,80 +41,77 @@ static void appendCbAssertResult(struct raft_io_append *req, int status)
     result->done = true;
 }
 
-/* Set the arguments for the next append entries call. The f->entries array will
- * be populated with N entries each of size SIZE. */
-#define CREATE_ENTRIES(N, SIZE)                                  \
-    {                                                            \
-        int i_;                                                  \
-        f->entries = raft_malloc(N * sizeof(struct raft_entry)); \
-        f->n = N;                                                \
-        munit_assert_ptr_not_null(f->entries);                   \
-        for (i_ = 0; i_ < N; i_++) {                             \
-            struct raft_entry *entry = &f->entries[i_];          \
-            void *cursor;                                        \
-            entry->term = 1;                                     \
-            entry->type = RAFT_COMMAND;                          \
-            entry->buf.base = raft_malloc(SIZE);                 \
-            entry->buf.len = SIZE;                               \
-            entry->batch = NULL;                                 \
-            munit_assert_ptr_not_null(entry->buf.base);          \
-            memset(entry->buf.base, 0, entry->buf.len);          \
-            cursor = entry->buf.base;                            \
-            bytePut64(&cursor, f->count);                        \
-            f->count++;                                          \
-        }                                                        \
+#define ENTRIES(I, N, SIZE)                                 \
+    struct raft_entry _entries##I[N];                       \
+    uint8_t _entries_data##I[N * SIZE];                     \
+    {                                                       \
+        int _i;                                             \
+        for (_i = 0; _i < N; _i++) {                        \
+            struct raft_entry *entry = &_entries##I[_i];    \
+            void *cursor;                                   \
+            entry->term = 1;                                \
+            entry->type = RAFT_COMMAND;                     \
+            entry->buf.base = &_entries_data##I[_i * SIZE]; \
+            entry->buf.len = SIZE;                          \
+            entry->batch = NULL;                            \
+            munit_assert_ptr_not_null(entry->buf.base);     \
+            memset(entry->buf.base, 0, entry->buf.len);     \
+            cursor = entry->buf.base;                       \
+            bytePut64(&cursor, f->count);                   \
+            f->count++;                                     \
+        }                                                   \
     }
 
-#define DESTROY_ENTRIES                         \
-    do {                                        \
-        unsigned _i;                            \
-        for (_i = 0; _i < f->n; _i++) {         \
-            raft_free(f->entries[_i].buf.base); \
-        }                                       \
-        raft_free(f->entries);                  \
-    } while (0)
-
-#define APPEND_REQ(RV, STATUS)                                                 \
-    struct raft_io_append _req;                                                \
-    struct result _result = {STATUS, false};                                   \
-    int _rv;                                                                   \
-    _req.data = &_result;                                                      \
-    _rv = f->io.append(&f->io, &_req, f->entries, f->n, appendCbAssertResult); \
-    munit_assert_int(_rv, ==, RV)
-
-/* Submit an append request with an entries array with N_ENTRIES entries, each
- * one of
- * size ENTRY_SIZE, and wait for the operation to successfully complete. */
-#define APPEND(N_ENTRIES, ENTRY_SIZE)           \
-    do {                                        \
-        CREATE_ENTRIES(N_ENTRIES, ENTRY_SIZE);  \
-        APPEND_REQ(0 /* rv */, 0 /* status */); \
-        LOOP_RUN_UNTIL(&_result.done);          \
-        DESTROY_ENTRIES;                        \
-    } while (0)
+/* Submit an append request identified by I, with N_ENTRIES entries, each one of
+ * size ENTRY_SIZE. The default expectation is for the operation to succeed. A
+ * custom STATUS can be set with APPEND_EXPECT. */
+#define APPEND_SUBMIT(I, N_ENTRIES, ENTRY_SIZE)                     \
+    struct raft_io_append _req##I;                                  \
+    struct result _result##I = {0, false};                          \
+    int _rv##I;                                                     \
+    ENTRIES(I, N_ENTRIES, ENTRY_SIZE);                              \
+    _req##I.data = &_result##I;                                     \
+    _rv##I = f->io.append(&f->io, &_req##I, _entries##I, N_ENTRIES, \
+                          appendCbAssertResult);                    \
+    munit_assert_int(_rv##I, ==, 0)
 
 /* Try to submit an append request and assert that the given error code and
  * message are returned. */
-#define APPEND_ERROR(N_ENTRIES, ENTRY_SIZE, RV, ERRMSG)       \
-    do {                                                      \
-        CREATE_ENTRIES(N_ENTRIES, ENTRY_SIZE);                \
-        APPEND_REQ(RV /* rv */, 0 /* status */);              \
-        DESTROY_ENTRIES;                                      \
-        /* munit_assert_string_equal(f->io.errmsg, ERRMSG);*/ \
+#define APPEND_ERROR(N_ENTRIES, ENTRY_SIZE, RV, ERRMSG)                \
+    do {                                                               \
+        struct raft_io_append _req;                                    \
+        int _rv;                                                       \
+        ENTRIES(0, N_ENTRIES, ENTRY_SIZE);                             \
+        _rv = f->io.append(&f->io, &_req, _entries0, N_ENTRIES, NULL); \
+        munit_assert_int(_rv, ==, RV);                                 \
+        /* munit_assert_string_equal(f->io.errmsg, ERRMSG);*/          \
+    } while (0)
+
+#define APPEND_EXPECT(I, STATUS) _result##I.status = STATUS
+
+/* Wait for the append request identified by I to complete. */
+#define APPEND_WAIT(I, STATUS) \
+    APPEND_EXPECT(I, STATUS);  \
+    LOOP_RUN_UNTIL(&_result##I.done)
+
+/* Submit an append request with an entries array with N_ENTRIES entries, each
+ * one of size ENTRY_SIZE, and wait for the operation to successfully
+ * complete. */
+#define APPEND(N_ENTRIES, ENTRY_SIZE)            \
+    do {                                         \
+        APPEND_SUBMIT(0, N_ENTRIES, ENTRY_SIZE); \
+        APPEND_WAIT(0, 0);                       \
     } while (0)
 
 /* Submit an append request with the given parameters and wait for the operation
  * to fail with the given code and message. */
 #define APPEND_FAILURE(N_ENTRIES, ENTRY_SIZE, STATUS, ERRMSG)       \
     {                                                               \
-        CREATE_ENTRIES(N_ENTRIES, ENTRY_SIZE);                      \
-        APPEND_REQ(0 /* rv */, STATUS);                             \
-        LOOP_RUN_UNTIL(&_result.done);                              \
+        APPEND_SUBMIT(0, N_ENTRIES, ENTRY_SIZE, STATUS);            \
+        APPEND_WAIT(0);                                             \
         /*munit_assert_string_equal(f->transport.errmsg, ERRMSG);*/ \
         DESTROY_ENTRIES;                                            \
     }
-
-#define UV_CLOSE f->io.close(&f->io, raft_uv_close)
 
 static void *setUp(const MunitParameter params[], void *user_data)
 {
@@ -127,8 +121,6 @@ static void *setUp(const MunitParameter params[], void *user_data)
     raft_uv_set_block_size(&f->io, SEGMENT_BLOCK_SIZE);
     raft_uv_set_segment_size(&f->io, SEGMENT_BLOCK_SIZE * MAX_SEGMENT_BLOCKS);
     f->count = 0;
-    f->invoked = 0;
-    f->status = 0;
     return f;
 }
 
@@ -151,28 +143,6 @@ static void tearDown(void *data)
  * Helper macros
  *
  *****************************************************************************/
-
-struct append_req
-{
-    struct raft_io_append req;
-    struct fixture *f;
-    struct raft_entry *entries;
-    unsigned n;
-};
-
-static void appendCb(struct raft_io_append *req, int status)
-{
-    struct append_req *r = req->data;
-    struct fixture *f = r->f;
-    unsigned i;
-    f->invoked++;
-    f->status = status;
-    for (i = 0; i < r->n; i++) {
-        raft_free(r->entries[i].buf.base);
-    }
-    raft_free((struct raft_entry *)r->entries);
-    free(r);
-}
 
 /* Taken from https://github.com/gcc-mirror/gcc/blob/master/libiberty/crc32.c */
 static const unsigned table[] = {
@@ -232,34 +202,6 @@ unsigned byteCrc32(const void *buf, const size_t size, const unsigned init)
     }
     return crc;
 }
-
-#define APPEND_                                                          \
-    {                                                                    \
-        struct append_req *r = munit_malloc(sizeof *r);                  \
-        int rv_;                                                         \
-        r->f = f;                                                        \
-        r->entries = f->entries;                                         \
-        r->n = f->n;                                                     \
-        r->req.data = r;                                                 \
-        rv_ = f->io.append(&f->io, &r->req, f->entries, f->n, appendCb); \
-        munit_assert_int(rv_, ==, 0);                                    \
-    }
-
-/* Wait for the given number of append request callbacks to fire and check the
- * last status. */
-#define WAIT_CB(N, STATUS)                       \
-    {                                            \
-        int i2;                                  \
-        for (i2 = 0; i2 < 10; i2++) {            \
-            LOOP_RUN(1);                         \
-            if (f->invoked == N) {               \
-                break;                           \
-            }                                    \
-        }                                        \
-        munit_assert_int(f->invoked, ==, N);     \
-        munit_assert_int(f->status, ==, STATUS); \
-        f->invoked = 0;                          \
-    }
 
 /******************************************************************************
  *
@@ -394,7 +336,6 @@ TEST(append, fitBlock, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
     APPEND(1, 64);
     APPEND(1, 64);
-    ;
     ASSERT_SEGMENT(1, 2, 128);
     return MUNIT_OK;
 }
@@ -463,15 +404,10 @@ TEST(append, exceedBlock, setUp, tearDown, 0, NULL)
 TEST(append, batch, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-
-    CREATE_ENTRIES(1, 64);
-    APPEND_;
-
-    CREATE_ENTRIES(1, 64);
-    APPEND_;
-
-    WAIT_CB(2, 0);
-
+    APPEND_SUBMIT(0, 1, 64);
+    APPEND_SUBMIT(1, 1, 64);
+    APPEND_WAIT(0, 0);
+    APPEND_WAIT(1, 0);
     return MUNIT_OK;
 }
 
@@ -480,46 +416,30 @@ TEST(append, batch, setUp, tearDown, 0, NULL)
 TEST(append, wait, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-
-    CREATE_ENTRIES(1, 64);
-    APPEND_;
-
+    APPEND_SUBMIT(0, 1, 64);
     LOOP_RUN(1);
-
-    CREATE_ENTRIES(1, 64);
-    APPEND_;
-
-    WAIT_CB(1, 0);
-    WAIT_CB(1, 0);
-
+    APPEND_SUBMIT(1, 1, 64);
+    APPEND_WAIT(0, 0);
+    APPEND_WAIT(1, 0);
     return MUNIT_OK;
 }
 
-/* Several batches with different size gets appended in fast pace, which forces
- * the segment arena to grow. */
+/* Several batches with different size gets appended in fast pace, forcing the
+ * segment arena to grow. */
 TEST(append, resizeArena, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-
-    CREATE_ENTRIES(2, 64);
-    APPEND_;
-
-    CREATE_ENTRIES(1, SEGMENT_BLOCK_SIZE);
-    APPEND_;
-
-    CREATE_ENTRIES(2, 64);
-    APPEND_;
-
-    CREATE_ENTRIES(1, SEGMENT_BLOCK_SIZE);
-    APPEND_;
-
-    CREATE_ENTRIES(1, SEGMENT_BLOCK_SIZE);
-    APPEND_;
-
-    WAIT_CB(5, 0);
-
+    APPEND_SUBMIT(0, 2, 64);
+    APPEND_SUBMIT(1, 1, SEGMENT_BLOCK_SIZE);
+    APPEND_SUBMIT(2, 2, 64);
+    APPEND_SUBMIT(3, 1, SEGMENT_BLOCK_SIZE);
+    APPEND_SUBMIT(4, 1, SEGMENT_BLOCK_SIZE);
+    APPEND_WAIT(0, 0);
+    APPEND_WAIT(1, 0);
+    APPEND_WAIT(2, 0);
+    APPEND_WAIT(3, 0);
+    APPEND_WAIT(4, 0);
     ASSERT_SEGMENT(1, 7, 64 * 4 + SEGMENT_BLOCK_SIZE * 3);
-
     return MUNIT_OK;
 }
 
@@ -534,17 +454,15 @@ TEST(append, truncate, setUp, tearDown, 0, NULL)
 
     APPEND(2, 64);
 
-    CREATE_ENTRIES(2, 64);
-
-    APPEND_;
+    APPEND_SUBMIT(0, 2, 64);
 
     rv = f->io.truncate(&f->io, 2);
     munit_assert_int(rv, ==, 0);
 
-    CREATE_ENTRIES(2, 64);
-    APPEND_;
+    APPEND_SUBMIT(1, 2, 64);
 
-    WAIT_CB(2, 0);
+    APPEND_WAIT(0, 0);
+    APPEND_WAIT(1, 0);
 
     return MUNIT_OK;
 }
@@ -552,34 +470,28 @@ TEST(append, truncate, setUp, tearDown, 0, NULL)
 /* A few append requests get queued, then a truncate request comes in and other
  * append requests right after, before truncation is fully completed. However
  * the backend is closed before the truncation request can be processed. */
-TEST(append, truncateClosing, setUp, tearDown, 0, NULL)
+TEST(append, truncateClosing, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
     int rv;
-
     APPEND(2, 64);
-
-    CREATE_ENTRIES(2, 64);
-
-    APPEND_;
-
+    APPEND_SUBMIT(0, 2, 64);
     rv = f->io.truncate(&f->io, 2);
     munit_assert_int(rv, ==, 0);
-
-    CREATE_ENTRIES(2, 64);
-    APPEND_;
-
+    APPEND_SUBMIT(1, 2, 64);
+    APPEND_EXPECT(1, RAFT_CANCELED);
+    TEAR_DOWN_UV;
     return MUNIT_OK;
 }
 
 /* A few append requests get queued, however the backend is closed before
  * preparing the second segment completes. */
-TEST(append, prepareClosing, setUp, tearDown, 0, NULL)
+TEST(append, prepareClosing, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
-    CREATE_ENTRIES(2, 64);
-    APPEND_;
+    APPEND_SUBMIT(0, 2, 64);
     LOOP_RUN(1);
+    TEAR_DOWN_UV;
     return MUNIT_OK;
 }
 
@@ -589,17 +501,14 @@ TEST(append, counter, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
     size_t size = SEGMENT_BLOCK_SIZE;
     int i;
-
     for (i = 0; i < 10; i++) {
         APPEND(1, size);
     }
-
     munit_assert_true(
         test_dir_has_file(f->dir, "0000000000000001-0000000000000003"));
     munit_assert_true(
         test_dir_has_file(f->dir, "0000000000000004-0000000000000006"));
     munit_assert_true(test_dir_has_file(f->dir, "open-4"));
-
     return MUNIT_OK;
 }
 
@@ -607,14 +516,9 @@ TEST(append, counter, setUp, tearDown, 0, NULL)
 TEST(append, cancel, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
-
-    CREATE_ENTRIES(1, 64);
-    APPEND_;
-
-    UV_CLOSE;
-
-    WAIT_CB(1, RAFT_CANCELED);
-
+    APPEND_SUBMIT(0, 1, 64);
+    APPEND_EXPECT(0, RAFT_CANCELED);
+    TEAR_DOWN_UV;
     return MUNIT_OK;
 }
 
@@ -628,19 +532,14 @@ TEST(append, writeError, setUp, tearDown, 0, NULL)
      * https://github.com/CanonicalLtd/raft/pull/49 */
     return MUNIT_SKIP;
 
-    CREATE_ENTRIES(1, 64);
-    APPEND_;
-
+    APPEND_SUBMIT(0, 1, 64);
     test_aio_fill(&ctx, 0);
-
-    WAIT_CB(1, RAFT_IOERR);
-
+    APPEND_WAIT(0, 0);
     test_aio_destroy(ctx);
-
     return MUNIT_OK;
 }
 
-static char *oomHeapFaultDelay[] = {"2", NULL};
+static char *oomHeapFaultDelay[] = {"1", NULL};
 static char *oomHeapFaultRepeat[] = {"1", NULL};
 
 static MunitParameterEnum oomParams[] = {
@@ -665,14 +564,9 @@ TEST(append, closeDuringWrite, setUp, tearDown, 0, NULL)
     /* TODO: broken */
     return MUNIT_SKIP;
 
-    CREATE_ENTRIES(1, 64);
-    APPEND_;
-
+    APPEND_SUBMIT(0, 1, 64);
     LOOP_RUN(1);
-
-    UV_CLOSE;
-
-    WAIT_CB(1, 0);
+    TEAR_DOWN_UV;
 
     return MUNIT_OK;
 }
@@ -683,13 +577,9 @@ TEST(append, currentSegment, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
 
-    CREATE_ENTRIES(1, 64);
-    APPEND_;
-    WAIT_CB(1, 0);
+    APPEND(1, 64);
 
-    UV_CLOSE;
-
-    LOOP_RUN(2);
+    TEAR_DOWN_UV;
 
     munit_assert_true(
         test_dir_has_file(f->dir, "0000000000000001-0000000000000001"));
