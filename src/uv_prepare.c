@@ -105,42 +105,34 @@ void uvPrepareClose(struct uv *uv)
     }
 }
 
-/* Process pending prepare requests.
- *
- * If we have some segments in the pool, use them to complete some pending
- * requests. */
-static void uvPrepareProcessRequests(struct uv *uv)
+/* Finish the oldest pending prepare request using the next available prepared
+ * segment. */
+static void uvPrepareRequestFinish(struct uv *uv)
 {
     queue *head;
+    struct preparedSegment *segment;
+    struct uvPrepare *req;
+
     assert(!uv->closing);
+    assert(!QUEUE_IS_EMPTY(&uv->prepare_reqs));
+    assert(!QUEUE_IS_EMPTY(&uv->prepare_pool));
 
-    /* We can finish the requests for which we have ready segments. */
-    while (!QUEUE_IS_EMPTY(&uv->prepare_reqs)) {
-        struct preparedSegment *segment;
-        struct uvPrepare *req;
+    /* Pop a segment from the pool. */
+    head = QUEUE_HEAD(&uv->prepare_pool);
+    segment = QUEUE_DATA(head, struct preparedSegment, queue);
+    QUEUE_REMOVE(&segment->queue);
 
-        /* If there's no prepared open segments available, let's bail out. */
-        if (QUEUE_IS_EMPTY(&uv->prepare_pool)) {
-            break;
-        }
+    /* Pop the head of the prepare requests queue. */
+    head = QUEUE_HEAD(&uv->prepare_reqs);
+    req = QUEUE_DATA(head, struct uvPrepare, queue);
+    QUEUE_REMOVE(&req->queue);
 
-        /* Pop a segment from the pool. */
-        head = QUEUE_HEAD(&uv->prepare_pool);
-        segment = QUEUE_DATA(head, struct preparedSegment, queue);
-        QUEUE_REMOVE(&segment->queue);
-
-        /* Pop the head of the prepare requests queue. */
-        head = QUEUE_HEAD(&uv->prepare_reqs);
-        req = QUEUE_DATA(head, struct uvPrepare, queue);
-        QUEUE_REMOVE(&req->queue);
-
-        /* Finish the request */
-        assert(segment->fd >= 0);
-        req->fd = segment->fd;
-        req->counter = segment->counter;
-        HeapFree(segment);
-        req->cb(req, 0);
-    }
+    /* Finish the request */
+    assert(segment->fd >= 0);
+    req->fd = segment->fd;
+    req->counter = segment->counter;
+    HeapFree(segment);
+    req->cb(req, 0);
 }
 
 static void uvPrepareCreateFileWorkCb(uv_work_t *work)
@@ -210,7 +202,9 @@ static void uvPrepareCreateFileAfterWorkCb(uv_work_t *work, int status)
     QUEUE_PUSH(&uv->prepare_pool, &s->queue);
 
     /* Let's process any pending request. */
-    uvPrepareProcessRequests(uv);
+    if (!QUEUE_IS_EMPTY(&uv->prepare_reqs)) {
+        uvPrepareRequestFinish(uv);
+    }
 
     /* Start creating a new segment if needed. */
     uvMaybePrepareSegment(uv);
@@ -293,6 +287,8 @@ void uvPrepare(struct uv *uv, struct uvPrepare *req, uvPrepareCb cb)
     assert(!uv->closing);
     req->cb = cb;
     QUEUE_PUSH(&uv->prepare_reqs, &req->queue);
-    uvPrepareProcessRequests(uv);
+    if (!QUEUE_IS_EMPTY(&uv->prepare_pool)) {
+        uvPrepareRequestFinish(uv);
+    }
     uvMaybePrepareSegment(uv);
 }
