@@ -1,8 +1,6 @@
 #include "../lib/runner.h"
 #include "../lib/uv.h"
 
-TEST_MODULE(uv_truncate)
-
 /******************************************************************************
  *
  * Fixture
@@ -15,7 +13,7 @@ struct fixture
     bool appended;
 };
 
-static void *setup(const MunitParameter params[], void *user_data)
+static void *setUp(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
@@ -24,7 +22,7 @@ static void *setup(const MunitParameter params[], void *user_data)
     return f;
 }
 
-static void tear_down(void *data)
+static void tearDown(void *data)
 {
     struct fixture *f = data;
     TEAR_DOWN_UV;
@@ -91,14 +89,11 @@ static void appendCb(struct raft_io_append *req, int status)
  *
  *****************************************************************************/
 
-TEST_SUITE(success)
-
-TEST_SETUP(success, setup)
-TEST_TEAR_DOWN(success, tear_down)
+SUITE(truncate)
 
 /* If the index to truncate is at the start of a segment, that segment and all
  * subsequent ones are removed. */
-TEST_CASE(success, whole_segment, NULL)
+TEST(truncate, wholeSegment, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -121,7 +116,7 @@ TEST_CASE(success, whole_segment, NULL)
 }
 
 /* The index to truncate is the same as the last appended entry. */
-TEST_CASE(success, same_as_last_index, NULL)
+TEST(truncate, sameAsLastIndex, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -145,7 +140,7 @@ TEST_CASE(success, same_as_last_index, NULL)
 
 /* If the index to truncate is not at the start of a segment, that segment gets
  * truncated. */
-TEST_CASE(success, partial_segment, NULL)
+TEST(truncate, partialSegment, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     raft_term term;
@@ -183,17 +178,6 @@ TEST_CASE(success, partial_segment, NULL)
     return MUNIT_OK;
 }
 
-/******************************************************************************
- *
- * Failure scenarios.
- *
- *****************************************************************************/
-
-TEST_SUITE(error)
-
-TEST_SETUP(error, setup)
-TEST_TEAR_DOWN(error, tear_down)
-
 static char *error_oom_heap_fault_delay[] = {"0", NULL};
 static char *error_oom_heap_fault_repeat[] = {"1", NULL};
 
@@ -204,7 +188,7 @@ static MunitParameterEnum error_oom_params[] = {
 };
 
 /* Out of memory conditions */
-TEST_CASE(error, oom, error_oom_params)
+TEST(truncate, oom, setUp, tearDown, 0, error_oom_params)
 {
     struct fixture *f = data;
     (void)params;
