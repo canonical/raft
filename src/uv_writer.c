@@ -107,7 +107,7 @@ out:
 static void uvWriterAfterWorkCb(uv_work_t *work, int status)
 {
     struct UvWriterReq *req = work->data; /* Write file request object */
-    assert(status == 0); /* We don't cancel worker requests */
+    assert(status == 0);                  /* We don't cancel worker requests */
     uvWriterReqFinish(req);
 }
 
@@ -288,15 +288,9 @@ err:
     return rv;
 }
 
-static void uvWriterMaybeFireCloseCb(struct UvWriter *w)
+static void uvWriterCleanUpAndFireCloseCb(struct UvWriter *w)
 {
     assert(w->closing);
-    if (w->event_poller.data != NULL) {
-        return;
-    }
-    if (w->check.data != NULL) {
-        return;
-    }
 
     UvOsClose(w->fd);
     HeapFree(w->events);
@@ -323,14 +317,21 @@ static void uvWriterPollerCloseCb(struct uv_handle_s *handle)
         uvWriterReqFinish(req);
     }
 
-    uvWriterMaybeFireCloseCb(w);
+    if (w->check.data != NULL) {
+        return;
+    }
+
+    uvWriterCleanUpAndFireCloseCb(w);
 }
 
 static void uvWriterCheckCloseCb(struct uv_handle_s *handle)
 {
     struct UvWriter *w = handle->data;
     w->check.data = NULL;
-    uvWriterMaybeFireCloseCb(w);
+    if (w->event_poller.data != NULL) {
+        return;
+    }
+    uvWriterCleanUpAndFireCloseCb(w);
 }
 
 static void uvWriterCheckCb(struct uv_check_s *check)
