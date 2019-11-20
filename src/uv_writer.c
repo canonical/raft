@@ -350,15 +350,6 @@ void UvWriterClose(struct UvWriter *w, UvWriterCloseCb cb)
     w->closing = true;
     w->close_cb = cb;
 
-    /* If UvWriterInit didn't make it to initialize the poller, let's return
-     * early. */
-    if (w->event_poller.data == NULL) {
-        if (w->close_cb != NULL) {
-            w->close_cb(w);
-        }
-        return;
-    }
-
     /* We can close the event file descriptor right away, but we shoudln't close
      * the main file descriptor or destroy the AIO context since there might be
      * threadpool requests in flight. */

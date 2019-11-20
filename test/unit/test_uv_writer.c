@@ -60,16 +60,6 @@ static void submitCbAssertResult(struct UvWriterReq *req, int status)
         f->closed = false;                                                 \
     } while (0)
 
-/* Close helper. */
-#define CLOSE_SUBMIT                    \
-    munit_assert_false(f->closed);      \
-    UvWriterClose(&f->writer, closeCb); \
-    munit_assert_false(f->closed)
-#define CLOSE_WAIT LOOP_RUN_UNTIL(&f->closed)
-#define CLOSE     \
-    CLOSE_SUBMIT; \
-    CLOSE_WAIT
-
 /* Trye to initialize the fixture's writer and check that the given error is
  * returned. */
 #define INIT_ERROR(RV, ERRMSG)                                             \
@@ -80,6 +70,16 @@ static void submitCbAssertResult(struct UvWriterReq *req, int status)
         munit_assert_int(_rv, ==, RV);                                     \
         munit_assert_string_equal(f->errmsg, ERRMSG);                      \
     } while (0)
+
+/* Close helper. */
+#define CLOSE_SUBMIT                    \
+    munit_assert_false(f->closed);      \
+    UvWriterClose(&f->writer, closeCb); \
+    munit_assert_false(f->closed)
+#define CLOSE_WAIT LOOP_RUN_UNTIL(&f->closed)
+#define CLOSE     \
+    CLOSE_SUBMIT; \
+    CLOSE_WAIT
 
 #define MAKE_BUFS(BUFS, N_BUFS, CONTENT)                               \
     {                                                                  \
@@ -244,7 +244,7 @@ static void tearDown(void *data)
 SUITE(UvWriterInit)
 
 /* The kernel has ran out of available AIO events. */
-TEST(UvWriterInit, noResources, setUpDeps, tearDown, 0, NULL)
+TEST(UvWriterInit, noResources, setUpDeps, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
     aio_context_t ctx = 0;
