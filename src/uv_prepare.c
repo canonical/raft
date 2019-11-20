@@ -284,7 +284,7 @@ static void uvMaybePrepareSegment(struct uv *uv)
     }
 }
 
-void uvPrepare(struct uv *uv, struct uvPrepare *req, uvPrepareCb cb)
+void UvPrepare(struct uv *uv, struct uvPrepare *req, uvPrepareCb cb)
 {
     assert(!uv->closing);
     req->cb = cb;

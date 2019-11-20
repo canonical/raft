@@ -458,7 +458,7 @@ static int submitPrepareSegmentRequest(struct uv *uv)
     }
     openSegmentInit(segment, uv);
     QUEUE_PUSH(&uv->append_segments, &segment->queue);
-    uvPrepare(uv, &segment->prepare, appendPrepareCb);
+    UvPrepare(uv, &segment->prepare, appendPrepareCb);
     return 0;
 err:
     assert(rv != 0);

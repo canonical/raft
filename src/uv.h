@@ -276,7 +276,7 @@ struct uvPrepare
 };
 
 /* Submit a request to get a prepared open segment ready for writing. */
-void uvPrepare(struct uv *uv, struct uvPrepare *req, uvPrepareCb cb);
+void UvPrepare(struct uv *uv, struct uvPrepare *req, uvPrepareCb cb);
 
 /* Cancel all pending prepare requests and start removing all unused prepared
  * open segments. If a segment currently being created, wait for it to complete
