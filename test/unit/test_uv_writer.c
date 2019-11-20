@@ -21,6 +21,7 @@ struct fixture
     bool async_io;
     char errmsg[256];
     struct UvWriter writer;
+    bool closed;
 };
 
 /******************************************************************************
@@ -34,6 +35,12 @@ struct result
     int status;
     bool done;
 };
+
+static void closeCb(struct UvWriter *writer)
+{
+    struct fixture *f = writer->data;
+    f->closed = true;
+}
 
 static void submitCbAssertResult(struct UvWriterReq *req, int status)
 {
@@ -49,10 +56,19 @@ static void submitCbAssertResult(struct UvWriterReq *req, int status)
         _rv = UvWriterInit(&f->writer, &f->loop, f->fd, f->direct_io != 0, \
                            f->async_io, MAX_WRITES, f->errmsg);            \
         munit_assert_int(_rv, ==, 0);                                      \
+        f->writer.data = f;                                                \
+        f->closed = false;                                                 \
     } while (0)
 
-/* Start closing the writer. */
-#define CLOSE UvWriterClose(&f->writer, NULL)
+/* Close helper. */
+#define CLOSE_SUBMIT                    \
+    munit_assert_false(f->closed);      \
+    UvWriterClose(&f->writer, closeCb); \
+    munit_assert_false(f->closed)
+#define CLOSE_WAIT LOOP_RUN_UNTIL(&f->closed)
+#define CLOSE     \
+    CLOSE_SUBMIT; \
+    CLOSE_WAIT
 
 /* Trye to initialize the fixture's writer and check that the given error is
  * returned. */
@@ -132,10 +148,11 @@ static void submitCbAssertResult(struct UvWriterReq *req, int status)
     do {                                                        \
         WRITE_REQ(N_BUFS, CONTENT, OFFSET, 0 /* rv */, STATUS); \
         LOOP_RUN(N);                                            \
+        CLOSE_SUBMIT;                                           \
         munit_assert_false(_result.done);                       \
-        CLOSE;                                                  \
         LOOP_RUN_UNTIL(&_result.done);                          \
         DESTROY_BUFS(_bufs, N_BUFS);                            \
+        CLOSE_WAIT;                                             \
     } while (0)
 
 /* Assert that the content of the test file has the given number of blocks, each
