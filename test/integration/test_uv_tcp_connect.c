@@ -17,6 +17,7 @@ struct fixture
     FIXTURE_LOOP;
     FIXTURE_TCP;
     struct raft_uv_transport transport;
+    bool closed;
 };
 
 /******************************************************************************
@@ -30,6 +31,12 @@ struct result
     int status;
     bool done;
 };
+
+static void closeCb(struct raft_uv_transport *transport)
+{
+    struct fixture *f = transport->data;
+    f->closed = true;
+}
 
 static void connectCbAssertResult(struct raft_uv_connect *req,
                                   struct uv_stream_s *stream,
@@ -46,14 +53,20 @@ static void connectCbAssertResult(struct raft_uv_connect *req,
 #define INIT                                                         \
     do {                                                             \
         int _rv;                                                     \
-        _rv = raft_uv_tcp_init(&f->transport, &f->loop);             \
-        munit_assert_int(_rv, ==, 0);                                \
         _rv = f->transport.init(&f->transport, 1, "127.0.0.1:9000"); \
         munit_assert_int(_rv, ==, 0);                                \
         f->transport.data = f;                                       \
+        f->closed = false;                                           \
     } while (0)
 
-#define CLOSE f->transport.close(&f->transport, raft_uv_tcp_close)
+#define CLOSE_SUBMIT                            \
+    munit_assert_false(f->closed);              \
+    f->transport.close(&f->transport, closeCb); \
+    munit_assert_false(f->closed)
+#define CLOSE_WAIT LOOP_RUN_UNTIL(&f->closed)
+#define CLOSE     \
+    CLOSE_SUBMIT; \
+    CLOSE_WAIT
 
 #define CONNECT_REQ(ID, ADDRESS, RV, STATUS)                      \
     struct raft_uv_connect _req;                                  \
@@ -95,9 +108,10 @@ static void connectCbAssertResult(struct raft_uv_connect *req,
     {                                                        \
         CONNECT_REQ(ID, ADDRESS, 0 /* rv */, RAFT_CANCELED); \
         LOOP_RUN(N);                                         \
+        CLOSE_SUBMIT;                                        \
         munit_assert_false(_result.done);                    \
-        CLOSE;                                               \
         LOOP_RUN_UNTIL(&_result.done);                       \
+        CLOSE_WAIT;                                          \
     }
 
 /******************************************************************************
@@ -110,9 +124,12 @@ static void *setUpDeps(const MunitParameter params[],
                        MUNIT_UNUSED void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
+    int rv;
     SETUP_HEAP;
     SETUP_LOOP;
     SETUP_TCP;
+    rv = raft_uv_tcp_init(&f->transport, &f->loop);
+    munit_assert_int(rv, ==, 0);
     return f;
 }
 
@@ -120,6 +137,7 @@ static void tearDownDeps(void *data)
 {
     struct fixture *f = data;
     LOOP_STOP;
+    raft_uv_tcp_close(&f->transport);
     TEAR_DOWN_TCP;
     TEAR_DOWN_LOOP;
     TEAR_DOWN_HEAP;
@@ -208,8 +226,8 @@ TEST(tcp_connect, closeDuringHandshake, setUp, tearDownDeps, 0, NULL)
 
 static void checkCb(struct uv_check_s *check)
 {
-    struct raft_uv_transport *transport = check->data;
-    transport->close(transport, raft_uv_tcp_close);
+    struct fixture *f = check->data;
+    CLOSE_SUBMIT;
     uv_close((struct uv_handle_s *)check, NULL);
 }
 
@@ -224,10 +242,11 @@ TEST(tcp_connect, closeDuringAbort, setUp, tearDownDeps, 0, NULL)
      * iteration where the connection failure occurs. */
     rv = uv_check_init(&f->loop, &check);
     munit_assert_int(rv, ==, 0);
-    check.data = &f->transport;
+    check.data = f;
     uv_check_start(&check, checkCb);
     CONNECT_REQ(2, BOGUS_ADDRESS, 0, RAFT_NOCONNECTION);
     LOOP_RUN(1);
     LOOP_RUN_UNTIL(&_result.done);
+    CLOSE_WAIT;
     return MUNIT_OK;
 }
