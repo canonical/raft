@@ -1,5 +1,5 @@
 #include "../lib/runner.h"
-#include "../lib/uv.h"
+#include "../lib/uv_.h"
 
 /******************************************************************************
  *
@@ -9,6 +9,7 @@
 
 struct fixture
 {
+    FIXTURE_UV_DEPS;
     FIXTURE_UV;
     bool appended;
 };
@@ -16,7 +17,7 @@ struct fixture
 static void *setUp(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    (void)user_data;
+    SETUP_UV_DEPS;
     SETUP_UV;
     f->appended = false;
     return f;
@@ -26,6 +27,7 @@ static void tearDown(void *data)
 {
     struct fixture *f = data;
     TEAR_DOWN_UV;
+    TEAR_DOWN_UV_DEPS;
     free(f);
 }
 
@@ -55,7 +57,7 @@ static void appendCb(struct raft_io_append *req, int status)
             entry->type = RAFT_COMMAND;                                   \
             entry->buf.base = munit_malloc(8);                            \
             entry->buf.len = 8;                                           \
-            *(uint64_t *)entry->buf.base = byteFlip64(i + 1);           \
+            *(uint64_t *)entry->buf.base = i + 1;                         \
             entry->batch = NULL;                                          \
         }                                                                 \
         req_.data = f;                                                    \
@@ -170,7 +172,7 @@ TEST(truncate, partialSegment, setUp, tearDown, 0, NULL)
     munit_assert_int(rv, ==, 0);
 
     munit_assert_int(n, ==, 1);
-    munit_assert_int(byteFlip64(*(uint64_t *)entries[0].buf.base), ==, 1);
+    munit_assert_int(*(uint64_t *)entries[0].buf.base, ==, 1);
 
     raft_free(entries[0].batch);
     raft_free(entries);
