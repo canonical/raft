@@ -374,6 +374,11 @@ err:
     if (segments != NULL) {
         raft_free(segments);
     }
+    if (*entries != NULL) {
+        entryBatchesDestroy(*entries, *n);
+        *entries = NULL;
+        *n = 0;
+    }
     return rv;
 }
 

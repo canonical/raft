@@ -281,13 +281,68 @@ void test_dir_truncate_file(const char *dir,
     joinPath(dir, filename, path);
 
     fd = open(path, O_RDWR, S_IRUSR | S_IWUSR);
-
     munit_assert_int(fd, !=, -1);
 
     rv = ftruncate(fd, n);
     munit_assert_int(rv, ==, 0);
 
-    close(fd);
+    rv = close(fd);
+    munit_assert_int(rv, ==, 0);
+}
+
+void test_dir_grow_file(const char *dir, const char *filename, const size_t n)
+{
+    char path[256];
+    int fd;
+    struct stat sb;
+    void *buf;
+    size_t size;
+    int rv;
+
+    joinPath(dir, filename, path);
+
+    fd = open(path, O_RDWR, S_IRUSR | S_IWUSR);
+    munit_assert_int(fd, !=, -1);
+
+    rv = fstat(fd, &sb);
+    munit_assert_int(rv, ==, 0);
+    munit_assert_int(sb.st_size, <=, n);
+
+    /* Fill with zeros. */
+    lseek(fd, sb.st_size, SEEK_SET);
+    size = n - sb.st_size;
+    buf = munit_malloc(size);
+    rv = write(fd, buf, size);
+    munit_assert_int(rv, ==, size);
+    free(buf);
+
+    rv = close(fd);
+    munit_assert_int(rv, ==, 0);
+}
+
+void test_dir_rename_file(const char *dir,
+                          const char *filename1,
+                          const char *filename2)
+{
+    char path1[256];
+    char path2[256];
+    int rv;
+
+    joinPath(dir, filename1, path1);
+    joinPath(dir, filename2, path2);
+
+    rv = rename(path1, path2);
+    munit_assert_int(rv, ==, 0);
+}
+
+void test_dir_remove_file(const char *dir, const char *filename)
+{
+    char path[256];
+    int rv;
+
+    joinPath(dir, filename, path);
+    rv = unlink(path);
+    munit_assert_int(rv, ==, 0);
 }
 
 void test_dir_read_file(const char *dir,

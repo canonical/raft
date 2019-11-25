@@ -543,9 +543,10 @@ static int loadOpen(struct uv *uv,
             }
 
             Tracef(uv->tracer,
-                   "truncate open segment %s at %ld, since it has corrupted "
+                   "truncate open segment %s at %ld (batch %d), since it has "
+                   "corrupted "
                    "entries",
-                   info->filename, offset);
+                   info->filename, offset, i);
 
             break;
         }

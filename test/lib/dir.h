@@ -149,6 +149,17 @@ void test_dir_truncate_file(const char *dir,
                             const char *filename,
                             const size_t n);
 
+/* Grow the given file to the given size, filling the new bytes with zeros. */
+void test_dir_grow_file(const char *dir, const char *filename, const size_t n);
+
+/* Rename a file in the given directory from filename1 to filename2. */
+void test_dir_rename_file(const char *dir,
+                          const char *filename1,
+                          const char *filename2);
+
+/* Remove a file. */
+void test_dir_remove_file(const char *dir, const char *filename);
+
 /* Read into @buf the content of the given @filename in the given @dir. */
 void test_dir_read_file(const char *dir,
                         const char *filename,

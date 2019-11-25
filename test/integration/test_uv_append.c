@@ -1,4 +1,3 @@
-#include "../../src/byte.h"
 #include "../lib/runner.h"
 #include "../lib/uv_.h"
 
@@ -50,7 +49,6 @@ static void appendCbAssertResult(struct raft_io_append *req, int status)
         int _i;                                             \
         for (_i = 0; _i < N; _i++) {                        \
             struct raft_entry *entry = &_entries##I[_i];    \
-            void *cursor;                                   \
             entry->term = 1;                                \
             entry->type = RAFT_COMMAND;                     \
             entry->buf.base = &_entries_data##I[_i * SIZE]; \
@@ -58,8 +56,7 @@ static void appendCbAssertResult(struct raft_io_append *req, int status)
             entry->batch = NULL;                            \
             munit_assert_ptr_not_null(entry->buf.base);     \
             memset(entry->buf.base, 0, entry->buf.len);     \
-            cursor = entry->buf.base;                       \
-            bytePut64(&cursor, f->count);                   \
+            *(uint64_t *)entry->buf.base = f->count;        \
             f->count++;                                     \
         }                                                   \
     }
@@ -153,60 +150,60 @@ static void tearDown(void *data)
 /* Shutdown the fixture's raft_io instance, then load all entries on disk using
  * a new raft_io instance, and assert that there are N entries with a total data
  * size of TOTAL_DATA_SIZE bytes. */
-#define ASSERT_ENTRIES(N, TOTAL_DATA_SIZE)                               \
-    TEAR_DOWN_UV;                                                        \
-    do {                                                                 \
-        struct uv_loop_s _loop;                                          \
-        struct raft_uv_transport _transport;                             \
-        struct raft_io _io;                                              \
-        raft_term _term;                                                 \
-        unsigned _voted_for;                                             \
-        struct raft_snapshot *_snapshot;                                 \
-        raft_index _start_index;                                         \
-        struct raft_entry *_entries;                                     \
-        size_t _i;                                                       \
-        size_t _n;                                                       \
-        void *_batch = NULL;                                             \
-        size_t _total_data_size = 0;                                     \
-        int _rv;                                                         \
-                                                                         \
-        _rv = uv_loop_init(&_loop);                                      \
-        munit_assert_int(_rv, ==, 0);                                    \
-        _rv = raft_uv_tcp_init(&_transport, &_loop);                     \
-        munit_assert_int(_rv, ==, 0);                                    \
-        _rv = raft_uv_init(&_io, &_loop, f->dir, &_transport);           \
-        munit_assert_int(_rv, ==, 0);                                    \
-        _rv = _io.init(&_io, 1, "1");                                    \
-        munit_assert_int(_rv, ==, 0);                                    \
-        _rv = _io.load(&_io, 10, &_term, &_voted_for, &_snapshot,        \
-                       &_start_index, &_entries, &_n);                   \
-        munit_assert_int(_rv, ==, 0);                                    \
-        _io.close(&_io, NULL);                                           \
-        uv_run(&_loop, UV_RUN_NOWAIT);                                   \
-        raft_uv_close(&_io);                                             \
-        raft_uv_tcp_close(&_transport);                                  \
-        uv_loop_close(&_loop);                                           \
-                                                                         \
-        munit_assert_ptr_null(_snapshot);                                \
-        munit_assert_int(_n, ==, N);                                     \
-        for (_i = 0; _i < _n; _i++) {                                    \
-            struct raft_entry *_entry = &_entries[_i];                   \
-            uint64_t _value = byteFlip64(*(uint64_t *)_entry->buf.base); \
-            munit_assert_int(_entry->term, ==, 1);                       \
-            munit_assert_int(_entry->type, ==, RAFT_COMMAND);            \
-            munit_assert_int(_value, ==, _i);                            \
-            munit_assert_ptr_not_null(_entry->batch);                    \
-        }                                                                \
-        for (_i = 0; _i < _n; _i++) {                                    \
-            struct raft_entry *_entry = &_entries[_i];                   \
-            if (_entry->batch != _batch) {                               \
-                _batch = _entry->batch;                                  \
-                raft_free(_batch);                                       \
-            }                                                            \
-            _total_data_size += _entry->buf.len;                         \
-        }                                                                \
-        raft_free(_entries);                                             \
-        munit_assert_int(_total_data_size, ==, TOTAL_DATA_SIZE);         \
+#define ASSERT_ENTRIES(N, TOTAL_DATA_SIZE)                        \
+    TEAR_DOWN_UV;                                                 \
+    do {                                                          \
+        struct uv_loop_s _loop;                                   \
+        struct raft_uv_transport _transport;                      \
+        struct raft_io _io;                                       \
+        raft_term _term;                                          \
+        unsigned _voted_for;                                      \
+        struct raft_snapshot *_snapshot;                          \
+        raft_index _start_index;                                  \
+        struct raft_entry *_entries;                              \
+        size_t _i;                                                \
+        size_t _n;                                                \
+        void *_batch = NULL;                                      \
+        size_t _total_data_size = 0;                              \
+        int _rv;                                                  \
+                                                                  \
+        _rv = uv_loop_init(&_loop);                               \
+        munit_assert_int(_rv, ==, 0);                             \
+        _rv = raft_uv_tcp_init(&_transport, &_loop);              \
+        munit_assert_int(_rv, ==, 0);                             \
+        _rv = raft_uv_init(&_io, &_loop, f->dir, &_transport);    \
+        munit_assert_int(_rv, ==, 0);                             \
+        _rv = _io.init(&_io, 1, "1");                             \
+        munit_assert_int(_rv, ==, 0);                             \
+        _rv = _io.load(&_io, 10, &_term, &_voted_for, &_snapshot, \
+                       &_start_index, &_entries, &_n);            \
+        munit_assert_int(_rv, ==, 0);                             \
+        _io.close(&_io, NULL);                                    \
+        uv_run(&_loop, UV_RUN_NOWAIT);                            \
+        raft_uv_close(&_io);                                      \
+        raft_uv_tcp_close(&_transport);                           \
+        uv_loop_close(&_loop);                                    \
+                                                                  \
+        munit_assert_ptr_null(_snapshot);                         \
+        munit_assert_int(_n, ==, N);                              \
+        for (_i = 0; _i < _n; _i++) {                             \
+            struct raft_entry *_entry = &_entries[_i];            \
+            uint64_t _value = *(uint64_t *)_entry->buf.base;      \
+            munit_assert_int(_entry->term, ==, 1);                \
+            munit_assert_int(_entry->type, ==, RAFT_COMMAND);     \
+            munit_assert_int(_value, ==, _i);                     \
+            munit_assert_ptr_not_null(_entry->batch);             \
+        }                                                         \
+        for (_i = 0; _i < _n; _i++) {                             \
+            struct raft_entry *_entry = &_entries[_i];            \
+            if (_entry->batch != _batch) {                        \
+                _batch = _entry->batch;                           \
+                raft_free(_batch);                                \
+            }                                                     \
+            _total_data_size += _entry->buf.len;                  \
+        }                                                         \
+        raft_free(_entries);                                      \
+        munit_assert_int(_total_data_size, ==, TOTAL_DATA_SIZE);  \
     } while (0);
 
 /******************************************************************************

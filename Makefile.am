@@ -150,7 +150,6 @@ test_unit_uv_SOURCES += \
   test/unit/main_uv.c \
   test/unit/test_uv_fs.c \
   test/unit/test_uv_list.c \
-  test/unit/test_uv_load.c \
   test/unit/test_uv_snapshot.c \
   test/unit/test_uv_recv.c \
   test/unit/test_uv_writer.c
