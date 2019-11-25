@@ -1,14 +1,11 @@
+#include "../../src/byte.h"
+#include "../../src/uv_encoding.h"
 #include "../lib/dir.h"
 #include "../lib/heap.h"
 #include "../lib/runner.h"
 #include "../lib/uv.h"
 
-#include "../../src/byte.h"
-#include "../../src/uv_encoding.h"
-
 #define WORD_SIZE sizeof(uint64_t)
-
-TEST_MODULE(uv_list)
 
 /******************************************************************************
  *
@@ -78,12 +75,10 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-TEST_SUITE(segments)
-TEST_SETUP(segments, setup)
-TEST_TEAR_DOWN(segments, tear_down)
+SUITE(UvList)
 
 /* Data directory is empty. */
-TEST_CASE(segments, empty, NULL)
+TEST(UvList, emptyDir, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -93,18 +88,8 @@ TEST_CASE(segments, empty, NULL)
     return MUNIT_OK;
 }
 
-/******************************************************************************
- *
- * Data directory has one or more snapshots.
- *
- *****************************************************************************/
-
-TEST_SUITE(snapshots)
-TEST_SETUP(snapshots, setup)
-TEST_TEAR_DOWN(snapshots, tear_down)
-
 /* There is a single snapshot. */
-TEST_CASE(snapshots, one, NULL)
+TEST(UvList, oneSnapshot, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[8];
@@ -118,7 +103,7 @@ TEST_CASE(snapshots, one, NULL)
 }
 
 /* There are several snapshots, including an incomplete one. */
-TEST_CASE(snapshots, many, NULL)
+TEST(UvList, manySnapshots, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[8];
