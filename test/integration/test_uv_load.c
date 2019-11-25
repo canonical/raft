@@ -1,5 +1,5 @@
 #include "../lib/runner.h"
-#include "../lib/uv.h"
+#include "../lib/uv_.h"
 
 /******************************************************************************
  *
@@ -9,12 +9,14 @@
 
 struct fixture
 {
+    FIXTURE_UV_DEPS;
     FIXTURE_UV;
 };
 
 static void *setupUv(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
+    SETUP_UV_DEPS;
     SETUP_UV;
     return f;
 }
@@ -23,6 +25,7 @@ static void tearDownUv(void *data)
 {
     struct fixture *f = data;
     TEAR_DOWN_UV;
+    TEAR_DOWN_UV_DEPS;
     free(f);
 }
 
