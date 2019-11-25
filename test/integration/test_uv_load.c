@@ -130,7 +130,7 @@ struct snapshot
             entry->term = 1;                                              \
             entry->type = RAFT_COMMAND;                                   \
             entry->buf.base = &_new_entry_data;                           \
-            entry->buf.len = sizeof(uint64_t);                            \
+            entry->buf.len = sizeof _new_entry_data;                      \
             entry->batch = NULL;                                          \
             munit_assert_ptr_not_null(entry->buf.base);                   \
             memset(entry->buf.base, 0, entry->buf.len);                   \

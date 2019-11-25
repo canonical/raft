@@ -150,7 +150,6 @@ test_unit_uv_SOURCES += \
   test/unit/main_uv.c \
   test/unit/test_uv_fs.c \
   test/unit/test_uv_list.c \
-  test/unit/test_uv_snapshot.c \
   test/unit/test_uv_recv.c \
   test/unit/test_uv_writer.c
 test_unit_uv_LDADD = libtest.la
@@ -167,6 +166,7 @@ test_integration_uv_SOURCES = \
   test/integration/test_uv_set_term.c \
   test/integration/test_uv_tcp_connect.c \
   test/integration/test_uv_tcp_listen.c \
+  test/integration/test_uv_snapshot_put.c \
   test/integration/test_uv_truncate.c
 test_integration_uv_LDADD = libtest.la libraft.la
 test_integration_uv_LDFLAGS = -no-install $(UV_LIBS)
