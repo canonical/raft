@@ -1,9 +1,7 @@
 #include "../../include/raft/uv.h"
 #include "../../src/byte.h"
-#include "../lib/dir.h"
-#include "../lib/heap.h"
-#include "../lib/loop.h"
 #include "../lib/runner.h"
+#include "../lib/uv_.h"
 
 /******************************************************************************
  *
@@ -13,11 +11,8 @@
 
 struct fixture
 {
-    FIXTURE_DIR;
-    FIXTURE_HEAP;
-    FIXTURE_LOOP;
-    struct raft_uv_transport transport;
-    struct raft_io io;
+    FIXTURE_UV_DEPS;
+    FIXTURE_UV;
     bool closed;
 };
 
@@ -97,16 +92,7 @@ static void closeCb(struct raft_io *io)
 static void *setUp(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    int rv;
-    SETUP_DIR;
-    if (f->dir == NULL) { /* Desired fs not available, skip test. */
-        free(f);
-        return NULL;
-    }
-    SETUP_HEAP;
-    SETUP_LOOP;
-    rv = raft_uv_tcp_init(&f->transport, &f->loop);
-    munit_assert_int(rv, ==, 0);
+    SETUP_UV_DEPS;
     f->io.data = f;
     f->closed = false;
     return f;
@@ -118,10 +104,7 @@ static void tearDown(void *data)
     if (f == NULL) {
         return;
     }
-    raft_uv_tcp_close(&f->transport);
-    TEAR_DOWN_LOOP;
-    TEAR_DOWN_HEAP;
-    TEAR_DOWN_DIR;
+    TEAR_DOWN_UV_DEPS;
     free(f);
 }
 
