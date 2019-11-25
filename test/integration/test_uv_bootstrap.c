@@ -1,5 +1,5 @@
 #include "../lib/runner.h"
-#include "../lib/uv.h"
+#include "../lib/uv_.h"
 
 /******************************************************************************
  *
@@ -9,6 +9,7 @@
 
 struct fixture
 {
+    FIXTURE_UV_DEPS;
     FIXTURE_UV;
     struct raft_configuration conf;
 };
@@ -44,6 +45,7 @@ struct fixture
 static void *setUp(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
+    SETUP_UV_DEPS;
     SETUP_UV;
     raft_configuration_init(&f->conf);
     return f;
@@ -54,6 +56,7 @@ static void tearDown(void *data)
     struct fixture *f = data;
     raft_configuration_close(&f->conf);
     TEAR_DOWN_UV;
+    TEAR_DOWN_UV_DEPS;
     free(f);
 }
 
