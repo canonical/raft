@@ -149,7 +149,6 @@ test_unit_uv_SOURCES += \
   src/syscall.c \
   test/unit/main_uv.c \
   test/unit/test_uv_fs.c \
-  test/unit/test_uv_recv.c \
   test/unit/test_uv_writer.c
 test_unit_uv_LDADD = libtest.la
 test_unit_uv_LDFLAGS = $(UV_LIBS)
