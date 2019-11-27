@@ -313,16 +313,7 @@ void UvTcpListenClose(struct UvTcp *t)
 {
     queue *head;
     assert(t->closing);
-
-    /* Short circuit in case init() failed. */
-    if (t->listener.data == NULL) {
-        assert(QUEUE_IS_EMPTY(&t->accepting));
-        assert(QUEUE_IS_EMPTY(&t->connecting));
-        if (t->close_cb != NULL) {
-            t->close_cb(t->transport);
-            return;
-        }
-    }
+    assert(t->listener.data != NULL);
 
     while (!QUEUE_IS_EMPTY(&t->accepting)) {
         struct uvTcpIncoming *incoming;

@@ -1,7 +1,6 @@
 #ifndef UV_TCP_H_
 #define UV_TCP_H_
 
-#include "../include/raft.h"
 #include "../include/raft/uv.h"
 #include "queue.h"
 
@@ -11,7 +10,7 @@
 struct UvTcp
 {
     struct raft_uv_transport *transport; /* Interface object we implement */
-    struct uv_loop_s *loop;              /* UV loop */
+    struct uv_loop_s *loop;              /* Event loop */
     unsigned id;                         /* ID of this raft server */
     const char *address;                 /* Address of this raft server */
     struct uv_tcp_s listener;            /* Listening TCP socket handle */

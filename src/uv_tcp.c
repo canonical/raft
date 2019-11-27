@@ -63,7 +63,9 @@ int raft_uv_tcp_init(struct raft_uv_transport *transport,
                      struct uv_loop_s *loop)
 {
     struct UvTcp *t;
+    void *data = transport->data;
     memset(transport, 0, sizeof *transport);
+    transport->data = data;
     t = raft_malloc(sizeof *t);
     if (t == NULL) {
         ErrMsgPrintf(transport->errmsg, "out of memory");
