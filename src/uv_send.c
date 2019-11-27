@@ -6,24 +6,24 @@
 #include "uv.h"
 #include "uv_encoding.h"
 
-/* The happy path for an io_uv_send request is:
+/* The happy path for an raft_io_send request is:
  *
- * - Get the io_uv_client object whose address matches the one of target server.
- * - Encode the message write buffers into the client->stream handle.  Once the
- * - write completes, fire the send request callback.
+ * - Get the uvClient object whose address matches the one of target server.
+ * - Encode the message and write it using the uvClient's TCP handle.
+ * - Once the write completes, fire the send request callback.
  *
  * Possible failure modes are:
  *
- * - The io_uv->clients array has no client object with a matching address. In
- *   this case add a new client object to the array, add the send request to the
+ * - The Uv->clients array has no client object with a matching address. In this
+ *   case add a new client object to the array, add the send request to the
  *   queue of pending requests and submit a connection request. Once the
  *   connection request succeeds, try to write the encoded request to the
  *   connected stream handle. If the connection request fails, schedule another
  *   attempt.
  *
- * - The io_uv->clients array has a client object which is not connected. Add
- *   the send request to the pending queue, and, if there's no connection
- *   attempt already in progress, start a new one.
+ * - The Uv->clients array has a client object which is not connected. Add the
+ *   send request to the pending queue, and, if there's no connection attempt
+ *   already in progress, start a new one.
  *
  * - The write request fails (either synchronously or asynchronously). In this
  *   case we fire the request callback with an error, close the connection
@@ -47,7 +47,7 @@ enum {
 };
 
 /* Maximum number of requests that can be buffered.  */
-#define QUEUE_SIZE 3
+#define UV__CLIENT_MAX_PENDING 3
 
 struct uvClient
 {
@@ -60,7 +60,6 @@ struct uvClient
     char *address;                  /* Address of the other server */
     int state;                      /* Current client state */
     queue send_reqs;                /* Pending send message requests */
-    unsigned n_send_reqs;           /* Number of pending send requests */
 };
 
 /* Hold state for a single send RPC message request. */
@@ -109,7 +108,6 @@ static int uvClientInit(struct uvClient *c,
     strcpy(c->address, address);
     c->state = 0;
     QUEUE_INIT(&c->send_reqs);
-    c->n_send_reqs = 0;
     rv = uv_timer_init(c->uv->loop, &c->timer);
     assert(rv == 0);
     return 0;
@@ -158,7 +156,17 @@ static void uvClientWriteCb(struct uv_write_s *write, const int status)
     uvSendDestroy(send);
 }
 
-int uvClientSend(struct uvClient *c, struct uvSend *send)
+/* Return the number of send requests that we have parked in the send queue
+ * because no connection is available yet. */
+static int uvClientPendingCount(struct uvClient *c)
+{
+    queue *head;
+    int n = 0;
+    QUEUE_FOREACH(head, &c->send_reqs) { n++; }
+    return n;
+}
+
+static int uvClientSend(struct uvClient *c, struct uvSend *send)
 {
     int rv;
     assert(c->state == UV__CLIENT_CONNECTED || c->state == UV__CLIENT_DELAY ||
@@ -168,21 +176,21 @@ int uvClientSend(struct uvClient *c, struct uvSend *send)
     /* If there's no connection available, let's queue the request. */
     if (c->state == UV__CLIENT_DELAY || c->state == UV__CLIENT_CONNECTING) {
         assert(c->stream == NULL);
-        if (c->n_send_reqs == QUEUE_SIZE) {
+        if (uvClientPendingCount(c) == UV__CLIENT_MAX_PENDING) {
             /* Fail the oldest request */
             tracef(c, "queue full -> evict oldest message");
             queue *head;
             struct uvSend *oldest_send;
+            struct raft_io_send *req;
             head = QUEUE_HEAD(&c->send_reqs);
             oldest_send = QUEUE_DATA(head, struct uvSend, queue);
             QUEUE_REMOVE(head);
-            oldest_send->req->cb(oldest_send->req, RAFT_NOCONNECTION);
+            req = oldest_send->req;
             uvSendDestroy(oldest_send);
-            c->n_send_reqs--;
+            req->cb(req, RAFT_NOCONNECTION);
         }
         tracef(c, "no connection available -> enqueue message");
         QUEUE_PUSH(&c->send_reqs, &send->queue);
-        c->n_send_reqs++;
         return 0;
     }
 
@@ -222,7 +230,6 @@ static void uvClientFlushPending(struct uvClient *c)
             uvSendDestroy(send);
         }
     }
-    c->n_send_reqs = 0;
 }
 
 static void uvClientTimerCb(uv_timer_t *timer)
@@ -251,8 +258,6 @@ static void uvClientConnectCb(struct raft_uv_connect *req,
     /* If the transport has been closed before the connection was fully setup,
      * it means that we're shutting down: let's bail out. */
     if (status == RAFT_CANCELED) {
-        /* We must be careful to not reference c->uv, since that io_uv object
-         * might have been released already. */
         assert(stream == NULL);
         assert(c->state == UV__CLIENT_CLOSING);
         uv_close((struct uv_handle_s *)&c->timer, uvClientTimerCloseCb);
@@ -333,15 +338,15 @@ static int uvGetClient(struct uv *uv,
     /* Check if we already have a client object for this peer server. */
     for (i = 0; i < uv->n_clients; i++) {
         *client = uv->clients[i];
-
-        if ((*client)->id == id) {
-            /* TODO: handle a change in the address */
-            /* assert(strcmp((*client)->address, address) == 0); */
-            assert((*client)->state == UV__CLIENT_CONNECTED ||
-                   (*client)->state == UV__CLIENT_DELAY ||
-                   (*client)->state == UV__CLIENT_CONNECTING);
-            return 0;
+        if ((*client)->id != id) {
+            continue;
         }
+        /* TODO: handle a change in the address */
+        /* assert(strcmp((*client)->address, address) == 0); */
+        assert((*client)->state == UV__CLIENT_CONNECTING ||
+               (*client)->state == UV__CLIENT_CONNECTED ||
+               (*client)->state == UV__CLIENT_DELAY);
+        return 0;
     }
 
     /* Grow the connections array */
