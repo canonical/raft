@@ -161,6 +161,7 @@ test_integration_uv_SOURCES = \
   test/integration/test_uv_bootstrap.c \
   test/integration/test_uv_load.c \
   test/integration/test_uv_recover.c \
+  test/integration/test_uv_recv.c \
   test/integration/test_uv_send.c \
   test/integration/test_uv_set_term.c \
   test/integration/test_uv_tcp_connect.c \
