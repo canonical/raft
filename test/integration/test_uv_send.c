@@ -257,7 +257,7 @@ TEST(send, badAddress, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
     f->message.server_address = "1";
-    SEND_CLOSE(1);
+    SEND_CLOSE(0);
     return MUNIT_OK;
 }
 

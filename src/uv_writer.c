@@ -489,6 +489,7 @@ int UvWriterSubmit(struct UvWriter *w,
         uv_queue_work(w->loop, &req->work, uvWriterWorkCb, uvWriterAfterWorkCb);
     if (rv != 0) {
         /* UNTESTED: with the current libuv implementation this can't fail. */
+	req->work.data = NULL;
         QUEUE_REMOVE(&req->queue);
         UvErrMsgSys(w->errmsg, "uv_queue_work", rv);
         rv = UV__ERROR;
