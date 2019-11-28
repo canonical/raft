@@ -67,8 +67,7 @@ struct uv
     bool async_io;                       /* Whether async I/O is supported */
     size_t segment_size;                 /* Initial size of open segments. */
     size_t block_size;                   /* Block size of the data dir */
-    struct uvClient **clients;           /* Outbound connections */
-    unsigned n_clients;                  /* Length of the clients array */
+    queue clients;                       /* Outbound connections */
     struct uvServer **servers;           /* Inbound connections */
     unsigned n_servers;                  /* Length of the servers array */
     unsigned connect_retry_delay;        /* Client connection retry delay */

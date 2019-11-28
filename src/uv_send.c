@@ -14,14 +14,14 @@
  *
  * Possible failure modes are:
  *
- * - The Uv->clients array has no client object with a matching address. In this
+ * - The Uv->clients queue has no client object with a matching address. In this
  *   case add a new client object to the array, add the send request to the
  *   queue of pending requests and submit a connection request. Once the
  *   connection request succeeds, try to write the encoded request to the
  *   connected stream handle. If the connection request fails, schedule another
  *   attempt.
  *
- * - The Uv->clients array has a client object which is not connected. Add the
+ * - The Uv->clients queue has a client object which is not connected. Add the
  *   send request to the pending queue, and, if there's no connection attempt
  *   already in progress, start a new one.
  *
@@ -59,6 +59,7 @@ struct uvClient
     unsigned id;                    /* ID of the other server */
     char *address;                  /* Address of the other server */
     int state;                      /* Current client state */
+    queue queue;                    /* Clients queue */
     queue send_reqs;                /* Pending send message requests */
 };
 
@@ -330,14 +331,13 @@ static int uvGetClient(struct uv *uv,
                        const char *address,
                        struct uvClient **client)
 {
-    struct uvClient **clients;
-    unsigned n_clients;
-    unsigned i;
+    queue *head;
     int rv;
 
     /* Check if we already have a client object for this peer server. */
-    for (i = 0; i < uv->n_clients; i++) {
-        *client = uv->clients[i];
+    QUEUE_FOREACH(head, &uv->clients)
+    {
+        *client = QUEUE_DATA(head, struct uvClient, queue);
         if ((*client)->id != id) {
             continue;
         }
@@ -349,30 +349,18 @@ static int uvGetClient(struct uv *uv,
         return 0;
     }
 
-    /* Grow the connections array */
-    n_clients = uv->n_clients + 1;
-    clients = HeapRealloc(uv->clients, n_clients * sizeof *clients);
-    if (clients == NULL) {
-        rv = RAFT_NOMEM;
-        goto err;
-    }
-
-    uv->clients = clients;
-    uv->n_clients = n_clients;
-
     /* Initialize the new connection */
     *client = HeapMalloc(sizeof **client);
     if (*client == NULL) {
         rv = RAFT_NOMEM;
-        goto err_after_clients_realloc;
+        goto err;
     }
-
-    clients[n_clients - 1] = *client;
 
     rv = uvClientInit(*client, uv, id, address);
     if (rv != 0) {
         goto err_after_client_alloc;
     }
+    QUEUE_PUSH(&uv->clients, &(*client)->queue);
 
     /* Make a first connection attempt right away.. */
     uvClientAttemptConnect(*client);
@@ -382,14 +370,8 @@ static int uvGetClient(struct uv *uv,
 
 err_after_client_alloc:
     raft_free(*client);
-
-err_after_clients_realloc:
-    /* Simply pretend that the connection was not inserted at all */
-    uv->n_clients--;
-
 err:
     assert(rv != 0);
-
     return rv;
 }
 
@@ -497,11 +479,12 @@ out:
 
 void uvSendClose(struct uv *uv)
 {
-    unsigned i;
+    queue *head;
     assert(uv->closing);
-    for (i = 0; i < uv->n_clients; i++) {
-        struct uvClient *c = uv->clients[i];
-        assert(c != NULL);
-        uvClientClose(c);
+    QUEUE_FOREACH(head, &uv->clients)
+    {
+        struct uvClient *client;
+        client = QUEUE_DATA(head, struct uvClient, queue);
+        uvClientClose(client);
     }
 }

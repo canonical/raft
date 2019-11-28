@@ -310,7 +310,7 @@ TEST(send, queue, setUp, tearDownDeps, 0, NULL)
     return MUNIT_OK;
 }
 
-static char *oomHeapFaultDelay[] = {"0", "1", "2", "3", "4", "5", NULL};
+static char *oomHeapFaultDelay[] = {"0", "1", "2", "3", "4", NULL};
 static char *oomHeapFaultRepeat[] = {"1", NULL};
 
 static MunitParameterEnum oomParams[] = {
