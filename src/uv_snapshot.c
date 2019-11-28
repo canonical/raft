@@ -6,6 +6,7 @@
 #include "assert.h"
 #include "byte.h"
 #include "configuration.h"
+#include "heap.h"
 #include "logging.h"
 #include "uv.h"
 #include "uv_encoding.h"
@@ -19,7 +20,7 @@
  * (snapshot-xxx-yyy-zzz.meta), and fill the given info structure if so.
  *
  * Return true if the filename matched, false otherwise. */
-static bool infoMatch(const char *filename, struct uvSnapshotInfo *info)
+static bool uvSnapshotInfoMatch(const char *filename, struct uvSnapshotInfo *info)
 {
     int consumed = 0;
     int matched;
@@ -40,7 +41,7 @@ static bool infoMatch(const char *filename, struct uvSnapshotInfo *info)
 }
 
 /* Render the filename of the data file of a snapshot */
-static void filenameOf(struct uvSnapshotInfo *info, char *filename)
+static void uvSnapshotFilenameOf(struct uvSnapshotInfo *info, char *filename)
 {
     size_t len = strlen(info->filename) - strlen(".meta");
     assert(len < UV__FILENAME_LEN);
@@ -62,7 +63,7 @@ int uvSnapshotInfoAppendIfMatch(struct uv *uv,
     int rv;
 
     /* Check if it's a snapshot metadata filename */
-    matched = infoMatch(filename, &info);
+    matched = uvSnapshotInfoMatch(filename, &info);
     if (!matched) {
         *appended = false;
         return 0;
@@ -71,7 +72,7 @@ int uvSnapshotInfoAppendIfMatch(struct uv *uv,
     /* Check if there's actually a snapshot file for this snapshot metadata. If
      * there's none, it means that we aborted before finishing the snapshot, so
      * let's remove the metadata file. */
-    filenameOf(&info, snapshot_filename);
+    uvSnapshotFilenameOf(&info, snapshot_filename);
     rv = UvFsFileExists(uv->dir, snapshot_filename, &exists, errmsg);
     if (rv != 0) {
         Tracef(uv->tracer, "stat %s: %s", snapshot_filename, errmsg);
@@ -95,7 +96,7 @@ int uvSnapshotInfoAppendIfMatch(struct uv *uv,
 }
 
 /* Compare two snapshots to decide which one is more recent. */
-static int compare(const void *p1, const void *p2)
+static int uvSnapshotCompare(const void *p1, const void *p2)
 {
     struct uvSnapshotInfo *s1 = (struct uvSnapshotInfo *)p1;
     struct uvSnapshotInfo *s2 = (struct uvSnapshotInfo *)p2;
@@ -118,14 +119,14 @@ static int compare(const void *p1, const void *p2)
 
 void uvSnapshotSort(struct uvSnapshotInfo *infos, size_t n_infos)
 {
-    qsort(infos, n_infos, sizeof *infos, compare);
+    qsort(infos, n_infos, sizeof *infos, uvSnapshotCompare);
 }
 
 /* Parse the metadata file of a snapshot and populate the given snapshot object
  * accordingly. */
-static int loadMeta(struct uv *uv,
-                    struct uvSnapshotInfo *info,
-                    struct raft_snapshot *snapshot)
+static int uvSnapshotLoadMeta(struct uv *uv,
+                              struct uvSnapshotInfo *info,
+                              struct raft_snapshot *snapshot)
 {
     uint64_t header[1 + /* Format version */
                     1 + /* CRC checksum */
@@ -226,16 +227,16 @@ err:
 }
 
 /* Load the snapshot data file. */
-static int loadData(struct uv *uv,
-                    struct uvSnapshotInfo *info,
-                    struct raft_snapshot *snapshot)
+static int uvSnapshotLoadData(struct uv *uv,
+                              struct uvSnapshotInfo *info,
+                              struct raft_snapshot *snapshot)
 {
     char filename[UV__FILENAME_LEN];
     struct raft_buffer buf;
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int rv;
 
-    filenameOf(info, filename);
+    uvSnapshotFilenameOf(info, filename);
 
     rv = UvFsReadFile(uv->dir, filename, &buf, errmsg);
     if (rv != 0) {
@@ -266,11 +267,11 @@ int uvSnapshotLoad(struct uv *uv,
                    struct raft_snapshot *snapshot)
 {
     int rv;
-    rv = loadMeta(uv, meta, snapshot);
+    rv = uvSnapshotLoadMeta(uv, meta, snapshot);
     if (rv != 0) {
         return rv;
     }
-    rv = loadData(uv, meta, snapshot);
+    rv = uvSnapshotLoadData(uv, meta, snapshot);
     if (rv != 0) {
         return rv;
     }
@@ -371,7 +372,7 @@ int uvSnapshotKeepLastTwo(struct uv *uv,
             Tracef(uv->tracer, "unlink %s: %s", s->filename, errmsg);
             return RAFT_IOERR;
         }
-        filenameOf(s, filename);
+        uvSnapshotFilenameOf(s, filename);
         rv = UvFsRemoveFile(uv->dir, filename, errmsg);
         if (rv != 0) {
             Tracef(uv->tracer, "unlink %s: %s", filename, errmsg);
@@ -382,82 +383,83 @@ int uvSnapshotKeepLastTwo(struct uv *uv,
     return 0;
 }
 
-static void putWorkCb(uv_work_t *work)
+static void uvSnapshotPutWorkCb(uv_work_t *work)
 {
-    struct put *r = work->data;
-    struct uv *uv = r->uv;
+    struct put *put = work->data;
+    struct uv *uv = put->uv;
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
     char filename[UV__FILENAME_LEN];
     int rv;
 
-    sprintf(filename, UV__SNAPSHOT_META_TEMPLATE, r->snapshot->term,
-            r->snapshot->index, r->meta.timestamp);
+    sprintf(filename, UV__SNAPSHOT_META_TEMPLATE, put->snapshot->term,
+            put->snapshot->index, put->meta.timestamp);
 
-    rv = UvFsMakeFile(uv->dir, filename, r->meta.bufs, 2, errmsg);
+    rv = UvFsMakeFile(uv->dir, filename, put->meta.bufs, 2, errmsg);
     if (rv != 0) {
         Tracef(uv->tracer, "write %s: %s", filename, errmsg);
-        r->status = RAFT_IOERR;
+        put->status = RAFT_IOERR;
         return;
     }
 
-    sprintf(filename, UV__SNAPSHOT_TEMPLATE, r->snapshot->term,
-            r->snapshot->index, r->meta.timestamp);
+    sprintf(filename, UV__SNAPSHOT_TEMPLATE, put->snapshot->term,
+            put->snapshot->index, put->meta.timestamp);
 
-    rv = UvFsMakeFile(uv->dir, filename, r->snapshot->bufs, r->snapshot->n_bufs,
-                      errmsg);
+    rv = UvFsMakeFile(uv->dir, filename, put->snapshot->bufs,
+                      put->snapshot->n_bufs, errmsg);
     if (rv != 0) {
         Tracef(uv->tracer, "write %s: %s", filename, errmsg);
-        r->status = RAFT_IOERR;
+        put->status = RAFT_IOERR;
         return;
     }
 
     rv = UvFsSyncDir(uv->dir, errmsg);
     if (rv != 0) {
         Tracef(uv->tracer, "sync %s: %s", uv->dir, errmsg);
-        r->status = RAFT_IOERR;
+        put->status = RAFT_IOERR;
         return;
     }
 
-    rv = removeOldSegmentsAndSnapshots(uv, r->snapshot->index, r->trailing);
+    rv = removeOldSegmentsAndSnapshots(uv, put->snapshot->index, put->trailing);
     if (rv != 0) {
-        r->status = rv;
+        put->status = rv;
         return;
     }
 
-    r->status = 0;
+    put->status = 0;
 
     return;
 }
 
-static void putAfterWorkCb(uv_work_t *work, int status)
+static void uvSnapshotPutAfterWorkCb(uv_work_t *work, int status)
 {
-    struct put *r = work->data;
-    struct uv *uv = r->uv;
-
+    struct put *put = work->data;
+    struct raft_io_snapshot_put *req = put->req;
+    int put_status = put->status;
+    struct uv *uv = put->uv;
     assert(status == 0);
-    QUEUE_REMOVE(&r->queue);
+    QUEUE_REMOVE(&put->queue);
     uv->snapshot_put_work.data = NULL;
-
-    r->req->cb(r->req, r->status);
-
-    raft_free(r->meta.bufs[1].base);
-    raft_free(r);
-
+    HeapFree(put->meta.bufs[1].base);
+    HeapFree(put);
+    req->cb(req, put_status);
     uvMaybeFireCloseCb(uv);
 }
 
 /* Process pending put requests. */
-static void processPutRequests(struct uv *uv)
+void uvSnapshotMaybeProcessRequests(struct uv *uv)
 {
-    struct put *r;
+    struct put *put;
     queue *head;
     int rv;
 
+    /* If there aren't pending snapshot put requests, there's nothing to do. */
+    if (QUEUE_IS_EMPTY(&uv->snapshot_put_reqs)) {
+        return;
+    }
     /* If we're already writing a snapshot, let's wait. */
     if (uv->snapshot_put_work.data != NULL) {
         return;
     }
-
     /* If there's a pending truncate request, let's wait. Typically the truncate
      * request is initiated by the InstallSnapshot RPC handler. */
     if (uv->truncate_work.data != NULL || !QUEUE_IS_EMPTY(&uv->truncate_reqs)) {
@@ -466,7 +468,7 @@ static void processPutRequests(struct uv *uv)
 
     /* Get the head of the queue */
     head = QUEUE_HEAD(&uv->snapshot_put_reqs);
-    r = QUEUE_DATA(head, struct put, queue);
+    put = QUEUE_DATA(head, struct put, queue);
 
     /* Detect if we're being run just after a truncate request in order to
      * restore a snaphost, in that case we want to adjust the finalize last
@@ -475,14 +477,14 @@ static void processPutRequests(struct uv *uv)
      * TODO: this doesn't work in all cases. Reason about exact sequence of
      * events, make logic more elegant and robust.  */
     if (uv->finalize_last_index == 0) {
-        uv->finalize_last_index = r->snapshot->index;
+        uv->finalize_last_index = put->snapshot->index;
     }
 
-    uv->snapshot_put_work.data = r;
-    rv = uv_queue_work(uv->loop, &uv->snapshot_put_work, putWorkCb,
-                       putAfterWorkCb);
+    uv->snapshot_put_work.data = put;
+    rv = uv_queue_work(uv->loop, &uv->snapshot_put_work, uvSnapshotPutWorkCb,
+                       uvSnapshotPutAfterWorkCb);
     if (rv != 0) {
-        Tracef(uv->tracer, "store snapshot %lld: %s", r->snapshot->index,
+        Tracef(uv->tracer, "store snapshot %lld: %s", put->snapshot->index,
                uv_strerror(rv));
         uv->errored = true;
     }
@@ -495,7 +497,7 @@ int uvSnapshotPut(struct raft_io *io,
                   raft_io_snapshot_put_cb cb)
 {
     struct uv *uv;
-    struct put *r;
+    struct put *put;
     void *cursor;
     unsigned crc;
     int rv;
@@ -503,28 +505,29 @@ int uvSnapshotPut(struct raft_io *io,
     assert(trailing > 0);
 
     uv = io->impl;
+    assert(!uv->closing);
 
     Tracef(uv->tracer, "put snapshot at %lld, keeping %d", snapshot->index,
            trailing);
 
-    r = raft_malloc(sizeof *r);
-    if (r == NULL) {
+    put = HeapMalloc(sizeof *put);
+    if (put == NULL) {
         rv = RAFT_NOMEM;
         goto err;
     }
-    r->uv = uv;
-    r->req = req;
-    r->snapshot = snapshot;
-    r->meta.timestamp = uv_now(uv->loop);
-    r->trailing = trailing;
+    put->uv = uv;
+    put->req = req;
+    put->snapshot = snapshot;
+    put->meta.timestamp = uv_now(uv->loop);
+    put->trailing = trailing;
 
     req->cb = cb;
 
     /* Prepare the buffers for the metadata file. */
-    r->meta.bufs[0].base = r->meta.header;
-    r->meta.bufs[0].len = sizeof r->meta.header;
+    put->meta.bufs[0].base = put->meta.header;
+    put->meta.bufs[0].len = sizeof put->meta.header;
 
-    rv = configurationEncode(&snapshot->configuration, &r->meta.bufs[1]);
+    rv = configurationEncode(&snapshot->configuration, &put->meta.bufs[1]);
     if (rv != 0) {
         goto err_after_req_alloc;
     }
@@ -541,40 +544,31 @@ int uvSnapshotPut(struct raft_io *io,
         uvAppendFixPreparedSegmentFirstIndex(uv);
     }
 
-    cursor = r->meta.header;
+    cursor = put->meta.header;
     bytePut64(&cursor, UV__DISK_FORMAT);
     bytePut64(&cursor, 0);
     bytePut64(&cursor, snapshot->configuration_index);
-    bytePut64(&cursor, r->meta.bufs[1].len);
+    bytePut64(&cursor, put->meta.bufs[1].len);
 
-    crc = byteCrc32(&r->meta.header[2], sizeof(uint64_t) * 2, 0);
-    crc = byteCrc32(r->meta.bufs[1].base, r->meta.bufs[1].len, crc);
+    crc = byteCrc32(&put->meta.header[2], sizeof(uint64_t) * 2, 0);
+    crc = byteCrc32(put->meta.bufs[1].base, put->meta.bufs[1].len, crc);
 
-    cursor = &r->meta.header[1];
+    cursor = &put->meta.header[1];
     bytePut64(&cursor, crc);
 
-    QUEUE_PUSH(&uv->snapshot_put_reqs, &r->queue);
-    processPutRequests(uv);
+    QUEUE_PUSH(&uv->snapshot_put_reqs, &put->queue);
+    uvSnapshotMaybeProcessRequests(uv);
 
     return 0;
 
 err_after_req_alloc:
-    raft_free(r);
+    HeapFree(put);
 err:
     assert(rv != 0);
     return rv;
 }
 
-void uvSnapshotMaybeProcessRequests(struct uv *uv)
-{
-    /* If there aren't pending snapshot put requests, there's nothing to do. */
-    if (QUEUE_IS_EMPTY(&uv->snapshot_put_reqs)) {
-        return;
-    }
-    processPutRequests(uv);
-}
-
-static void getWorkCb(uv_work_t *work)
+static void uvSnapshotGetWorkCb(uv_work_t *work)
 {
     struct get *r = work->data;
     struct uv *uv = r->uv;
@@ -583,9 +577,7 @@ static void getWorkCb(uv_work_t *work)
     struct uvSegmentInfo *segments;
     size_t n_segments;
     int rv;
-
     r->status = 0;
-
     rv = uvList(uv, &snapshots, &n_snapshots, &segments, &n_segments);
     if (rv != 0) {
         r->status = rv;
@@ -605,14 +597,17 @@ out:
     return;
 }
 
-static void getAfterWorkCb(uv_work_t *work, int status)
+static void uvSnapshotGetAfterWorkCb(uv_work_t *work, int status)
 {
-    struct get *r = work->data;
-    struct uv *uv = r->uv;
+    struct get *get = work->data;
+    struct raft_io_snapshot_get *req = get->req;
+    struct raft_snapshot *snapshot = get->snapshot;
+    int req_status = get->status;
+    struct uv *uv = get->uv;
     assert(status == 0);
-    QUEUE_REMOVE(&r->queue);
-    r->req->cb(r->req, r->snapshot, r->status);
-    raft_free(r);
+    QUEUE_REMOVE(&get->queue);
+    HeapFree(get);
+    req->cb(req, snapshot, req_status);
     uvMaybeFireCloseCb(uv);
 }
 
@@ -621,30 +616,33 @@ int uvSnapshotGet(struct raft_io *io,
                   raft_io_snapshot_get_cb cb)
 {
     struct uv *uv;
-    struct get *r;
+    struct get *get;
     int rv;
 
     uv = io->impl;
+    assert(!uv->closing);
 
-    r = raft_malloc(sizeof *r);
-    if (r == NULL) {
+    get = HeapMalloc(sizeof *get);
+    if (get == NULL) {
         rv = RAFT_NOMEM;
         goto err;
     }
-    r->uv = uv;
-    r->req = req;
+    get->uv = uv;
+    get->req = req;
     req->cb = cb;
 
-    r->snapshot = raft_malloc(sizeof *r->snapshot);
-    if (r->snapshot == NULL) {
+    get->snapshot = raft_malloc(sizeof *get->snapshot);
+    if (get->snapshot == NULL) {
         rv = RAFT_NOMEM;
         goto err_after_req_alloc;
     }
-    r->work.data = r;
+    get->work.data = get;
 
-    QUEUE_PUSH(&uv->snapshot_get_reqs, &r->queue);
-    rv = uv_queue_work(uv->loop, &r->work, getWorkCb, getAfterWorkCb);
+    QUEUE_PUSH(&uv->snapshot_get_reqs, &get->queue);
+    rv = uv_queue_work(uv->loop, &get->work, uvSnapshotGetWorkCb,
+                       uvSnapshotGetAfterWorkCb);
     if (rv != 0) {
+        QUEUE_REMOVE(&get->queue);
         Tracef(uv->tracer, "get last snapshot: %s", uv_strerror(rv));
         rv = RAFT_IOERR;
         goto err_after_snapshot_alloc;
@@ -653,9 +651,9 @@ int uvSnapshotGet(struct raft_io *io,
     return 0;
 
 err_after_snapshot_alloc:
-    raft_free(r->snapshot);
+    raft_free(get->snapshot);
 err_after_req_alloc:
-    raft_free(r);
+    raft_free(get);
 err:
     assert(rv != 0);
     return rv;
