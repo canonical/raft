@@ -118,9 +118,12 @@ static int uvClientInit(struct uvClient *c,
 static void uvClientTimerCloseCb(struct uv_handle_s *handle)
 {
     struct uvClient *c = handle->data;
+    struct uv *uv = c->uv;
     assert(c->address != NULL);
+    QUEUE_REMOVE(&c->queue);
     HeapFree(c->address);
     HeapFree(c);
+    uvMaybeFireCloseCb(uv);
 }
 
 /* Forward declaration. */
@@ -268,7 +271,7 @@ static void uvClientConnectCb(struct raft_uv_connect *req,
     /* TODO: this should not happen, but makes LXD heartbeat unit test fail:
      * understand why. */
     if (status == 0 && c->state == UV__CLIENT_CLOSING) {
-        uv_close((struct uv_handle_s *)stream, (uv_close_cb)raft_free);
+        uv_close((struct uv_handle_s *)stream, (uv_close_cb)HeapFree);
         uv_close((struct uv_handle_s *)&c->timer, uvClientTimerCloseCb);
         return;
     }
@@ -369,7 +372,7 @@ static int uvGetClient(struct uv *uv,
     return 0;
 
 err_after_client_alloc:
-    raft_free(*client);
+    HeapFree(*client);
 err:
     assert(rv != 0);
     return rv;
@@ -384,6 +387,8 @@ int uvSend(struct raft_io *io,
     struct uvSend *send;
     struct uvClient *client;
     int rv;
+
+    assert(!uv->closing);
 
     /* Allocate a new request object. */
     send = HeapMalloc(sizeof *send);
@@ -428,12 +433,16 @@ static void uvStreamCloseCb(struct uv_handle_s *handle)
     uv_close((struct uv_handle_s *)&c->timer, uvClientTimerCloseCb);
 }
 
-static void uvClientClose(struct uvClient *c)
+static void uvClientAbort(struct uvClient *c)
 {
+    struct uv *uv = c->uv;
     int rv;
 
     assert(c->state == UV__CLIENT_CONNECTED || c->state == UV__CLIENT_DELAY ||
            c->state == UV__CLIENT_CONNECTING);
+
+    QUEUE_REMOVE(&c->queue);
+    QUEUE_PUSH(&uv->aborting, &c->queue);
 
     while (!QUEUE_IS_EMPTY(&c->send_reqs)) {
         queue *head;
@@ -479,12 +488,12 @@ out:
 
 void uvSendClose(struct uv *uv)
 {
-    queue *head;
     assert(uv->closing);
-    QUEUE_FOREACH(head, &uv->clients)
-    {
+    while (!QUEUE_IS_EMPTY(&uv->clients)) {
+        queue *head;
         struct uvClient *client;
+        head = QUEUE_HEAD(&uv->clients);
         client = QUEUE_DATA(head, struct uvClient, queue);
-        uvClientClose(client);
+        uvClientAbort(client);
     }
 }

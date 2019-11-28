@@ -91,6 +91,7 @@ struct uv
     struct uv_timer_s timer;             /* Timer for periodic ticks */
     raft_io_tick_cb tick_cb;             /* Invoked when the timer expires */
     raft_io_recv_cb recv_cb;             /* Invoked when upon RPC messages */
+    queue aborting;                      /* Cleanups upon errors or shutdown */
     bool closing;                        /* True if we are closing */
     raft_io_close_cb close_cb;           /* Invoked when finishing closing */
 };

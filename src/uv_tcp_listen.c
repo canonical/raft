@@ -79,10 +79,11 @@ static void uvTcpIncomingCloseCb(struct uv_handle_s *handle)
 /* Close an incoming TCP connection which hasn't complete the handshake yet. */
 static void uvTcpIncomingAbort(struct uvTcpIncoming *incoming)
 {
+    struct UvTcp *t = incoming->t;
     /* After uv_close() returns we are guaranteed that no more alloc_cb or
      * read_cb will be called. */
     QUEUE_REMOVE(&incoming->queue);
-    QUEUE_PUSH(&incoming->t->aborting, &incoming->queue);
+    QUEUE_PUSH(&t->aborting, &incoming->queue);
     uv_close((struct uv_handle_s *)incoming->tcp, uvTcpIncomingCloseCb);
 }
 
