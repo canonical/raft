@@ -41,9 +41,7 @@
 enum {
     UV__CLIENT_CONNECTING = 1, /* During transport->connect() */
     UV__CLIENT_CONNECTED,      /* After a successful connect attempt */
-    UV__CLIENT_DELAY,          /* Wait before another transport->connect() */
-    UV__CLIENT_CLOSING,
-    UV__CLIENT_CLOSED,
+    UV__CLIENT_DELAY          /* Wait before another transport->connect() */
 };
 
 /* Maximum number of requests that can be buffered.  */
@@ -60,6 +58,7 @@ struct uvClient
     unsigned id;                    /* ID of the other server */
     char *address;                  /* Address of the other server */
     int state;                      /* Current client state */
+    bool closing;                   /* True after calling uvClientAbort */
     queue pending;                  /* Pending send message requests */
     queue queue;                    /* Clients queue */
 };
@@ -110,6 +109,7 @@ static int uvClientInit(struct uvClient *c,
     }
     strcpy(c->address, address);
     c->state = 0;
+    c->closing = false;
     QUEUE_INIT(&c->pending);
     rv = uv_timer_init(c->uv->loop, &c->timer);
     assert(rv == 0);
@@ -169,7 +169,7 @@ static void uvClientWriteCb(struct uv_write_s *write, const int status)
      * the stream handle, and trigger a new connection attempt. */
     if (status != 0) {
         cb_status = RAFT_IOERR;
-        if (c->state == UV__CLIENT_CONNECTED) {
+        if (c->state == UV__CLIENT_CONNECTED && !c->closing) {
             assert(status != UV_ECANCELED);
             assert(c->stream != NULL);
             uv_close((struct uv_handle_s *)c->stream, (uv_close_cb)HeapFree);
@@ -269,13 +269,13 @@ static void uvClientConnectCb(struct raft_uv_connect *req,
     tracef(c, "connect attempt completed -> status %s",
            errCodeToString(status));
 
-    assert(c->state == UV__CLIENT_CONNECTING || c->state == UV__CLIENT_CLOSING);
+    assert(c->state == UV__CLIENT_CONNECTING || c->closing);
     assert(c->stream == NULL);
 
     c->connect.data = NULL;
 
     /* If we are closing, bail out, possibly discarding the new connection. */
-    if (c->state == UV__CLIENT_CLOSING) {
+    if (c->closing) {
         if (status == 0) {
             uv_close((struct uv_handle_s *)stream, (uv_close_cb)HeapFree);
         }
@@ -402,7 +402,7 @@ static void uvClientAbort(struct uvClient *c)
     /* Closing the timer implicitely stop it, so the timeout callback won't be
      * fired. */
     uv_close((struct uv_handle_s *)&c->timer, uvClientTimerCloseCb);
-    c->state = UV__CLIENT_CLOSING;
+    c->closing = true;
 }
 
 /* Find the client object associated with the given server, or create one if
