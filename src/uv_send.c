@@ -37,13 +37,6 @@
 #define tracef(C, ...)
 #endif
 
-/* Client state codes. */
-enum {
-    UV__CLIENT_CONNECTING = 1, /* During transport->connect() */
-    UV__CLIENT_CONNECTED,      /* After a successful connect attempt */
-    UV__CLIENT_DELAY          /* Wait before another transport->connect() */
-};
-
 /* Maximum number of requests that can be buffered.  */
 #define UV__CLIENT_MAX_PENDING 3
 
@@ -57,7 +50,6 @@ struct uvClient
     unsigned n_connect_attempt;     /* Consecutive connection attempts */
     unsigned id;                    /* ID of the other server */
     char *address;                  /* Address of the other server */
-    int state;                      /* Current client state */
     bool closing;                   /* True after calling uvClientAbort */
     queue pending;                  /* Pending send message requests */
     queue queue;                    /* Clients queue */
@@ -108,7 +100,6 @@ static int uvClientInit(struct uvClient *c,
         return RAFT_NOMEM;
     }
     strcpy(c->address, address);
-    c->state = 0;
     c->closing = false;
     QUEUE_INIT(&c->pending);
     rv = uv_timer_init(c->uv->loop, &c->timer);
@@ -169,7 +160,7 @@ static void uvClientWriteCb(struct uv_write_s *write, const int status)
      * the stream handle, and trigger a new connection attempt. */
     if (status != 0) {
         cb_status = RAFT_IOERR;
-        if (c->state == UV__CLIENT_CONNECTED && !c->closing) {
+        if (c->stream != NULL && !c->closing) {
             assert(status != UV_ECANCELED);
             assert(c->stream != NULL);
             uv_close((struct uv_handle_s *)c->stream, (uv_close_cb)HeapFree);
@@ -190,8 +181,8 @@ static void uvClientWriteCb(struct uv_write_s *write, const int status)
 static int uvClientSend(struct uvClient *c, struct uvSend *send)
 {
     int rv;
-    assert(c->state == UV__CLIENT_CONNECTED || c->state == UV__CLIENT_DELAY ||
-           c->state == UV__CLIENT_CONNECTING);
+    assert(c->stream != NULL || uv_is_active((struct uv_handle_s *)&c->timer) ||
+           c->connect.data != NULL);
     send->client = c;
 
     /* If there's no connection available, let's queue the request. */
@@ -219,7 +210,6 @@ static int uvClientSend(struct uvClient *c, struct uvSend *send)
 static void uvClientFlushPending(struct uvClient *c)
 {
     int rv;
-    assert(c->state == UV__CLIENT_CONNECTED);
     assert(c->stream != NULL);
     tracef(c, "flush pending messages");
     while (!QUEUE_IS_EMPTY(&c->pending)) {
@@ -241,7 +231,7 @@ static void uvClientFlushPending(struct uvClient *c)
 static void uvClientTimerCb(uv_timer_t *timer)
 {
     struct uvClient *c = timer->data;
-    assert(c->state == UV__CLIENT_DELAY);
+    assert(!c->closing);
     assert(c->stream == NULL);
     tracef(c, "timer expired -> attempt to reconnect");
     uvClientAttemptConnect(c); /* Retry to connect. */
@@ -269,7 +259,7 @@ static void uvClientConnectCb(struct raft_uv_connect *req,
     tracef(c, "connect attempt completed -> status %s",
            errCodeToString(status));
 
-    assert(c->state == UV__CLIENT_CONNECTING || c->closing);
+    assert(c->connect.data != NULL);
     assert(c->stream == NULL);
 
     c->connect.data = NULL;
@@ -283,13 +273,10 @@ static void uvClientConnectCb(struct raft_uv_connect *req,
         return;
     }
 
-    assert(c->state == UV__CLIENT_CONNECTING);
-
     /* If, the connection attempt was successful, we're good. */
     if (status == 0) {
         assert(stream != NULL);
         c->stream = stream;
-        c->state = UV__CLIENT_CONNECTED;
         c->n_connect_attempt = 0;
         c->stream->data = c;
         uvClientFlushPending(c);
@@ -328,7 +315,6 @@ static void uvClientConnectCb(struct raft_uv_connect *req,
     (void)level;
 
     /* Let's schedule another attempt. */
-    c->state = UV__CLIENT_DELAY;
     rv = uv_timer_start(&c->timer, uvClientTimerCb, c->uv->connect_retry_delay,
                         0);
     assert(rv == 0);
@@ -341,7 +327,6 @@ static void uvClientAttemptConnect(struct uvClient *c)
     assert(c->stream == NULL);
 
     c->n_connect_attempt++;
-    c->state = UV__CLIENT_CONNECTING;
 
     c->connect.data = c;
     rv = c->uv->transport->connect(c->uv->transport, &c->connect, c->id,
@@ -349,7 +334,6 @@ static void uvClientAttemptConnect(struct uvClient *c)
     if (rv != 0) {
         /* Restart the timer, so we can retry. */
         c->connect.data = NULL;
-        c->state = UV__CLIENT_DELAY;
         rv = uv_timer_start(&c->timer, uvClientTimerCb,
                             c->uv->connect_retry_delay, 0);
         assert(rv == 0);
@@ -381,8 +365,8 @@ static void uvClientAbort(struct uvClient *c)
     int rv;
 
     assert(uv->closing);
-    assert(c->state == UV__CLIENT_CONNECTED || c->state == UV__CLIENT_DELAY ||
-           c->state == UV__CLIENT_CONNECTING);
+    assert(c->stream != NULL || uv_is_active((struct uv_handle_s *)&c->timer) ||
+           c->connect.data != NULL);
 
     QUEUE_REMOVE(&c->queue);
     QUEUE_PUSH(&uv->aborting, &c->queue);
@@ -394,7 +378,6 @@ static void uvClientAbort(struct uvClient *c)
      * eventually complete all inflight write requests, possibly with failing
      * them with UV_ECANCELED. */
     if (c->stream != NULL) {
-        assert(c->state == UV__CLIENT_CONNECTED);
         tracef(c, "client stopped -> close outbound stream");
         uv_close((uv_handle_t *)c->stream, uvStreamCloseCb);
     }
@@ -424,9 +407,6 @@ static int uvGetClient(struct uv *uv,
         }
         /* TODO: handle a change in the address */
         /* assert(strcmp((*client)->address, address) == 0); */
-        assert((*client)->state == UV__CLIENT_CONNECTING ||
-               (*client)->state == UV__CLIENT_CONNECTED ||
-               (*client)->state == UV__CLIENT_DELAY);
         return 0;
     }
 
@@ -445,7 +425,6 @@ static int uvGetClient(struct uv *uv,
 
     /* Make a first connection attempt right away.. */
     uvClientAttemptConnect(*client);
-    assert((*client)->state != 0);
 
     return 0;
 
