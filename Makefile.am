@@ -102,7 +102,7 @@ fuzzy_test_LDFLAGS = -no-install
 
 if UV_ENABLED
 
-raft_uv_SOURCES = \
+libraft_la_SOURCES += \
   src/uv.c \
   src/uv_append.c \
   src/uv_encoding.c \
@@ -122,8 +122,6 @@ raft_uv_SOURCES = \
   src/uv_tcp_connect.c \
   src/uv_truncate.c \
   src/uv_writer.c
-
-libraft_la_SOURCES += $(raft_uv_SOURCES)
 libraft_la_LDFLAGS += $(UV_LIBS)
 
 raftinclude_HEADERS += include/raft/uv.h
@@ -137,16 +135,14 @@ libtest_la_SOURCES += \
   test/lib/tcp.c \
   test/lib/loop.c
 
-test_unit_uv_SOURCES = $(raft_uv_SOURCES)
-test_unit_uv_SOURCES += \
-  src/byte.c \
-  src/configuration.c \
-  src/tracing.c \
-  src/entry.c \
+test_unit_uv_SOURCES = \
   src/err.c \
   src/heap.c \
-  src/snapshot.c \
   src/syscall.c \
+  src/tracing.c \
+  src/uv_fs.c \
+  src/uv_os.c \
+  src/uv_writer.c \
   test/unit/main_uv.c \
   test/unit/test_uv_fs.c \
   test/unit/test_uv_writer.c
