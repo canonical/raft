@@ -15,6 +15,7 @@
 #define TEAR_DOWN_TCP test_tcp_tear_down(&f->tcp)
 
 #define TCP_SERVER_LISTEN test_tcp_listen(&f->tcp)
+#define TCP_SERVER_STOP test_tcp_stop(&f->tcp)
 #define TCP_SERVER_ADDRESS test_tcp_address(&f->tcp)
 #define TCP_CLIENT_CONNECT(PORT) test_tcp_connect(&f->tcp, PORT)
 #define TCP_CLIENT_SEND(BUF, N) test_tcp_send(&f->tcp, BUF, N)

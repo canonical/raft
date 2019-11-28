@@ -6,17 +6,18 @@
 
 /******************************************************************************
  *
- * Fixture with a libuv-based raft_io instance.
+ * Fixture with a libuv-based raft_io instance and some pre-set messages.
  *
  *****************************************************************************/
+
+#define N_MESSAGES 5
 
 struct fixture
 {
     FIXTURE_UV_DEPS;
     FIXTURE_TCP;
     FIXTURE_UV;
-    struct raft_message message;
-    bool closed;
+    struct raft_message messages[N_MESSAGES];
 };
 
 /******************************************************************************
@@ -31,12 +32,6 @@ struct result
     bool done;
 };
 
-static void closeCb(struct raft_io *io)
-{
-    struct fixture *f = io->data;
-    f->closed = true;
-}
-
 static void sendCbAssertResult(struct raft_io_send *req, int status)
 {
     struct result *result = req->data;
@@ -44,58 +39,46 @@ static void sendCbAssertResult(struct raft_io_send *req, int status)
     result->done = true;
 }
 
-/* Set the type of the fixture's message. */
-#define SET_MESSAGE_TYPE(TYPE) f->message.type = TYPE;
+/* Get I'th fixture's message. */
+#define MESSAGE(I) (&f->messages[I])
 
-/* Change the default connect retry delay. */
-#define SET_CONNECT_RETRY_DELAY(MSECS) \
-    raft_uv_set_connect_retry_delay(&f->io, MSECS)
+/* Submit a send request for the I'th fixture's message. */
+#define SEND_SUBMIT(I, RV, STATUS)                                         \
+    struct raft_io_send _req##I;                                           \
+    struct result _result##I = {STATUS, false};                            \
+    int _rv##I;                                                            \
+    _req##I.data = &_result##I;                                            \
+    _rv##I =                                                               \
+        f->io.send(&f->io, &_req##I, &f->messages[I], sendCbAssertResult); \
+    munit_assert_int(_rv##I, ==, RV)
 
-#define SEND_REQ(RV, STATUS)                                          \
-    struct raft_io_send _req;                                         \
-    struct result _result = {STATUS, false};                          \
-    int _rv;                                                          \
-    _req.data = &_result;                                             \
-    _rv = f->io.send(&f->io, &_req, &f->message, sendCbAssertResult); \
-    munit_assert_int(_rv, ==, RV)
+/* Wait for the submit request of the I'th message to finish. */
+#define SEND_WAIT(I) LOOP_RUN_UNTIL(&_result##I.done)
 
-/* Submit a send request for the fixture's message and wait for the operation to
- * successfully complete. */
-#define SEND                                  \
-    {                                         \
-        SEND_REQ(0 /* rv */, 0 /* status */); \
-        LOOP_RUN_UNTIL(&_result.done);        \
-    }
+/* Submit a send request for the I'th fixture's message and wait for the
+ * operation to successfully complete. */
+#define SEND(I)                                     \
+    do {                                            \
+        SEND_SUBMIT(I, 0 /* rv */, 0 /* status */); \
+        SEND_WAIT(I);                               \
+    } while (0)
 
 /* Submit a send request and assert that it fails synchronously with the
  * given error code and message. */
-#define SEND_ERROR(RV, ERRMSG)                                       \
-    {                                                                \
-        SEND_REQ(RV, 0 /* status */);                                \
+#define SEND_ERROR(I, RV, ERRMSG)                                    \
+    do {                                                             \
+        SEND_SUBMIT(I, RV, 0 /* status */);                          \
         /* munit_assert_string_equal(f->transport.errmsg, ERRMSG);*/ \
-    }
+    } while (0)
 
 /* Submit a send request and wait for the operation to fail with the given code
  * and message. */
-#define SEND_FAILURE(STATUS, ERRMSG)                                \
-    {                                                               \
-        SEND_REQ(0 /* rv */, STATUS);                               \
-        LOOP_RUN_UNTIL(&_result.done);                              \
+#define SEND_FAILURE(I, STATUS, ERRMSG)                             \
+    do {                                                            \
+        SEND_SUBMIT(I, 0 /* rv */, STATUS);                         \
+        SEND_WAIT(I);                                               \
         /*munit_assert_string_equal(f->transport.errmsg, ERRMSG);*/ \
-    }
-
-/* Submit a send request, close the backend after N loop iterations and assert
- * that the request got canceled. */
-#define SEND_CLOSE(N)                        \
-    {                                        \
-        SEND_REQ(0 /* rv */, RAFT_CANCELED); \
-        LOOP_RUN(N);                         \
-        munit_assert_false(_result.done);    \
-        f->io.close(&f->io, closeCb);        \
-        LOOP_RUN_UNTIL(&_result.done);       \
-        LOOP_RUN_UNTIL(&f->closed);          \
-        raft_uv_close(&f->io);               \
-    }
+    } while (0)
 
 /******************************************************************************
  *
@@ -110,7 +93,6 @@ static void *setUpDeps(const MunitParameter params[], void *user_data)
     SETUP_TCP;
     TCP_SERVER_LISTEN;
     f->io.data = f;
-    f->closed = false;
     return f;
 }
 
@@ -125,10 +107,15 @@ static void tearDownDeps(void *data)
 static void *setUp(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = setUpDeps(params, user_data);
+    unsigned i;
     SETUP_UV;
-    f->message.type = RAFT_IO_REQUEST_VOTE;
-    f->message.server_id = 1;
-    f->message.server_address = f->tcp.server.address;
+    raft_uv_set_connect_retry_delay(&f->io, 1);
+    for (i = 0; i < N_MESSAGES; i++) {
+        struct raft_message *message = &f->messages[i];
+        message->type = RAFT_IO_REQUEST_VOTE;
+        message->server_id = 1;
+        message->server_address = f->tcp.server.address;
+    }
     return f;
 }
 
@@ -152,7 +139,7 @@ SUITE(send)
 TEST(send, first, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    SEND;
+    SEND(0);
     return MUNIT_OK;
 }
 
@@ -161,8 +148,19 @@ TEST(send, first, setUp, tearDown, 0, NULL)
 TEST(send, second, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    SEND;
-    SEND;
+    SEND(0);
+    SEND(0);
+    return MUNIT_OK;
+}
+
+/* Sunmit a few send requests in parallel. */
+TEST(send, parallel, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    SEND_SUBMIT(0 /* message */, 0 /* rv */, 0 /* status */);
+    SEND_SUBMIT(1 /* message */, 0 /* rv */, 0 /* status */);
+    SEND_WAIT(0);
+    SEND_WAIT(1);
     return MUNIT_OK;
 }
 
@@ -170,8 +168,8 @@ TEST(send, second, setUp, tearDown, 0, NULL)
 TEST(send, voteResult, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    SET_MESSAGE_TYPE(RAFT_IO_REQUEST_VOTE_RESULT);
-    SEND;
+    MESSAGE(0)->type = RAFT_IO_REQUEST_VOTE_RESULT;
+    SEND(0);
     return MUNIT_OK;
 }
 
@@ -185,11 +183,11 @@ TEST(send, appendEntries, setUp, tearDown, 0, NULL)
     entries[1].buf.base = raft_malloc(8);
     entries[1].buf.len = 8;
 
-    SET_MESSAGE_TYPE(RAFT_IO_APPEND_ENTRIES);
-    f->message.append_entries.entries = entries;
-    f->message.append_entries.n_entries = 2;
+    MESSAGE(0)->type = RAFT_IO_APPEND_ENTRIES;
+    MESSAGE(0)->append_entries.entries = entries;
+    MESSAGE(0)->append_entries.n_entries = 2;
 
-    SEND;
+    SEND(0);
 
     raft_free(entries[0].buf.base);
     raft_free(entries[1].buf.base);
@@ -201,10 +199,10 @@ TEST(send, appendEntries, setUp, tearDown, 0, NULL)
 TEST(send, heartbeat, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    SET_MESSAGE_TYPE(RAFT_IO_APPEND_ENTRIES);
-    f->message.append_entries.entries = NULL;
-    f->message.append_entries.n_entries = 0;
-    SEND;
+    MESSAGE(0)->type = RAFT_IO_APPEND_ENTRIES;
+    MESSAGE(0)->append_entries.entries = NULL;
+    MESSAGE(0)->append_entries.n_entries = 0;
+    SEND(0);
     return MUNIT_OK;
 }
 
@@ -212,8 +210,8 @@ TEST(send, heartbeat, setUp, tearDown, 0, NULL)
 TEST(send, appendEntriesResult, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    SET_MESSAGE_TYPE(RAFT_IO_APPEND_ENTRIES_RESULT);
-    SEND;
+    MESSAGE(0)->type = RAFT_IO_APPEND_ENTRIES_RESULT;
+    SEND(0);
     return MUNIT_OK;
 }
 
@@ -221,10 +219,10 @@ TEST(send, appendEntriesResult, setUp, tearDown, 0, NULL)
 TEST(send, installSnapshot, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    struct raft_install_snapshot *p = &f->message.install_snapshot;
+    struct raft_install_snapshot *p = &MESSAGE(0)->install_snapshot;
     int rv;
 
-    SET_MESSAGE_TYPE(RAFT_IO_INSTALL_SNAPSHOT);
+    MESSAGE(0)->type = RAFT_IO_INSTALL_SNAPSHOT;
 
     raft_configuration_init(&p->conf);
     rv = raft_configuration_add(&p->conf, 1, "1", true);
@@ -233,7 +231,7 @@ TEST(send, installSnapshot, setUp, tearDown, 0, NULL)
     p->data.len = 8;
     p->data.base = raft_malloc(p->data.len);
 
-    SEND;
+    SEND(0);
 
     raft_configuration_close(&p->conf);
     raft_free(p->data.base);
@@ -246,9 +244,9 @@ TEST(send, installSnapshot, setUp, tearDown, 0, NULL)
 TEST(send, noConnection, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
-    f->message.server_address = "127.0.0.1:123456";
-    SET_CONNECT_RETRY_DELAY(1);
-    SEND_CLOSE(2);
+    MESSAGE(0)->server_address = "127.0.0.1:123456";
+    SEND_SUBMIT(0 /* message */, 0 /* rv */, RAFT_CANCELED /* status */);
+    TEAR_DOWN_UV;
     return MUNIT_OK;
 }
 
@@ -256,8 +254,9 @@ TEST(send, noConnection, setUp, tearDownDeps, 0, NULL)
 TEST(send, badAddress, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
-    f->message.server_address = "1";
-    SEND_CLOSE(0);
+    MESSAGE(0)->server_address = "1";
+    SEND_SUBMIT(0 /* message */, 0 /* rv */, RAFT_CANCELED /* status */);
+    TEAR_DOWN_UV;
     return MUNIT_OK;
 }
 
@@ -265,48 +264,56 @@ TEST(send, badAddress, setUp, tearDownDeps, 0, NULL)
 TEST(send, badMessage, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    SET_MESSAGE_TYPE(666);
-    SEND_ERROR(RAFT_MALFORMED, "");
+    MESSAGE(0)->type = 666;
+    SEND_ERROR(0, RAFT_MALFORMED, "");
+    return MUNIT_OK;
+}
+
+/* Old send requests that have accumolated and could not yet be sent are
+ * progressively evicted. */
+TEST(send, evictOldPending, setUp, tearDownDeps, 0, NULL)
+{
+    struct fixture *f = data;
+    TCP_SERVER_STOP;
+    SEND_SUBMIT(0 /* message */, 0 /* rv */, RAFT_NOCONNECTION /* status */);
+    SEND_SUBMIT(1 /* message */, 0 /* rv */, RAFT_CANCELED /* status */);
+    SEND_SUBMIT(2 /* message */, 0 /* rv */, RAFT_CANCELED /* status */);
+    SEND_SUBMIT(3 /* message */, 0 /* rv */, RAFT_CANCELED /* status */);
+    SEND_WAIT(0);
+    TEAR_DOWN_UV;
     return MUNIT_OK;
 }
 
 /* After the connection is established the peer dies and then comes back a
  * little bit later. */
-TEST(send, reconnect, setUp, tearDown, 0, NULL)
+TEST(send, reconnectAfterWriteError, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     int socket;
-    SEND;
+    SEND(0);
     socket = test_tcp_accept(&f->tcp);
     close(socket);
-    SEND_FAILURE(RAFT_IOERR, "");
-    SEND;
+    SEND_FAILURE(0, RAFT_IOERR, "");
+    SEND(0);
     return MUNIT_OK;
 }
 
-/* If there's no more space in the queue of pending requests, the oldest request
- * gets evicted and its callback fired with RAFT_NOCONNECTION. */
-TEST(send, queue, setUp, tearDownDeps, 0, NULL)
+/* After the connection is established the peer dies and then comes back a
+ * little bit later. At the time the peer died there where several writes
+ * pending. */
+TEST(send, reconnectAfterMultipleWriteErrors, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    struct raft_io_send reqs[4];
-    struct result result = {RAFT_NOCONNECTION, false};
-    unsigned i;
-    int rv;
-    test_tcp_stop(&f->tcp);
-
-    reqs[0].data = &result;
-    rv = f->io.send(&f->io, &reqs[0], &f->message, sendCbAssertResult);
-    munit_assert_int(rv, ==, 0);
-
-    for (i = 1; i < 4; i++) {
-        rv = f->io.send(&f->io, &reqs[i], &f->message, NULL);
-        munit_assert_int(rv, ==, 0);
-    }
-
-    LOOP_RUN_UNTIL(&result.done);
-    TEAR_DOWN_UV;
-
+    int socket;
+    signal(SIGPIPE, SIG_IGN);
+    SEND(0);
+    socket = test_tcp_accept(&f->tcp);
+    close(socket);
+    SEND_SUBMIT(1 /* message */, 0 /* rv */, RAFT_IOERR /* status */);
+    SEND_SUBMIT(2 /* message */, 0 /* rv */, RAFT_IOERR /* status */);
+    SEND_WAIT(1);
+    SEND_WAIT(2);
+    SEND(3);
     return MUNIT_OK;
 }
 
@@ -324,7 +331,7 @@ TEST(send, oom, setUp, tearDown, 0, oomParams)
 {
     struct fixture *f = data;
     HEAP_FAULT_ENABLE;
-    SEND_ERROR(RAFT_NOMEM, "");
+    SEND_ERROR(0, RAFT_NOMEM, "");
     return MUNIT_OK;
 }
 
@@ -341,8 +348,7 @@ static MunitParameterEnum oomAsyncParams[] = {
 TEST(send, oomAsync, setUp, tearDown, 0, oomAsyncParams)
 {
     struct fixture *f = data;
-    SET_CONNECT_RETRY_DELAY(1);
-    SEND;
+    SEND(0);
     return MUNIT_OK;
 }
 
@@ -357,11 +363,12 @@ TEST(send, closeDuringWrite, setUp, tearDownDeps, 0, NULL)
     entry.buf.len = 1024 * 1024 * 8;
     entry.buf.base = raft_malloc(entry.buf.len);
 
-    SET_MESSAGE_TYPE(RAFT_IO_APPEND_ENTRIES);
-    f->message.append_entries.entries = &entry;
-    f->message.append_entries.n_entries = 1;
+    MESSAGE(0)->type = RAFT_IO_APPEND_ENTRIES;
+    MESSAGE(0)->append_entries.entries = &entry;
+    MESSAGE(0)->append_entries.n_entries = 1;
 
-    SEND_CLOSE(2);
+    SEND_SUBMIT(0 /* message */, 0 /* rv */, RAFT_CANCELED /* status */);
+    TEAR_DOWN_UV;
 
     raft_free(entry.buf.base);
 
@@ -372,6 +379,7 @@ TEST(send, closeDuringWrite, setUp, tearDownDeps, 0, NULL)
 TEST(send, closeDuringConnection, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
-    SEND_CLOSE(0);
+    SEND_SUBMIT(0 /* message */, 0 /* rv */, RAFT_CANCELED /* status */);
+    TEAR_DOWN_UV;
     return MUNIT_OK;
 }
