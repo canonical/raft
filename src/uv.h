@@ -46,12 +46,6 @@ struct uvMetadata
     unsigned voted_for;         /* Server ID of last vote, or 0 */
 };
 
-/* Hold state associated with an outbound connection. */
-struct uvClient;
-
-/* Hold state associated with an inbound connection. */
-struct uvServer;
-
 /* Hold state of a libuv-based raft_io implementation. */
 struct uv
 {
@@ -68,8 +62,7 @@ struct uv
     size_t segment_size;                 /* Initial size of open segments. */
     size_t block_size;                   /* Block size of the data dir */
     queue clients;                       /* Outbound connections */
-    struct uvServer **servers;           /* Inbound connections */
-    unsigned n_servers;                  /* Length of the servers array */
+    queue servers;                       /* Inbound connections */
     unsigned connect_retry_delay;        /* Client connection retry delay */
     void *prepare_inflight;              /* Segment being prepared */
     queue prepare_reqs;                  /* Pending prepare requests. */

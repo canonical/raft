@@ -607,8 +607,7 @@ int raft_uv_init(struct raft_io *io,
     uv->segment_size = UV__MAX_SEGMENT_SIZE;
     uv->block_size = 0;
     QUEUE_INIT(&uv->clients);
-    uv->servers = NULL;
-    uv->n_servers = 0;
+    QUEUE_INIT(&uv->servers);
     uv->connect_retry_delay = CONNECT_RETRY_DELAY;
     uv->prepare_inflight = NULL;
     QUEUE_INIT(&uv->prepare_reqs);
@@ -666,9 +665,6 @@ void raft_uv_close(struct raft_io *io)
 {
     struct uv *uv;
     uv = io->impl;
-    if (uv->servers != NULL) {
-        raft_free(uv->servers);
-    }
     raft_free(uv);
 }
 

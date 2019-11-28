@@ -104,6 +104,7 @@ static int uvClientInit(struct uvClient *c,
     strcpy(c->address, address);
     QUEUE_INIT(&c->pending);
     c->closing = false;
+    QUEUE_PUSH(&uv->clients, &c->queue);
     return 0;
 }
 
@@ -450,7 +451,6 @@ static int uvGetClient(struct uv *uv,
     if (rv != 0) {
         goto err_after_client_alloc;
     }
-    QUEUE_PUSH(&uv->clients, &(*client)->queue);
 
     /* Make a first connection attempt right away.. */
     uvClientConnect(*client);
