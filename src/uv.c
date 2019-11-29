@@ -169,7 +169,7 @@ static void uvClose(struct raft_io *io, raft_io_close_cb cb)
     uv->closing = true;
     UvSendClose(uv);
     UvRecvClose(uv);
-    uvPrepareClose(uv);
+    UvPrepareClose(uv);
     uvAppendClose(uv);
     uvTruncateClose(uv);
     if (uv->transport->data != NULL) {

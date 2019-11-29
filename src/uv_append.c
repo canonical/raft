@@ -1,5 +1,6 @@
 #include "assert.h"
 #include "byte.h"
+#include "heap.h"
 #include "queue.h"
 #include "uv.h"
 #include "uv_encoding.h"
@@ -300,8 +301,8 @@ static void uvAppendProcessRequests(struct uv *uv)
         assert(QUEUE_IS_EMPTY(&uv->append_pending_reqs));
         assert(QUEUE_IS_EMPTY(&uv->append_writing_reqs));
         segment = getCurrentOpenSegment(uv);
-	/* If the current segment is not there anymore it means that was already
-	 * finalized. */
+        /* If the current segment is not there anymore it means that was already
+         * finalized. */
         if (segment == NULL) {
             return;
         }
@@ -386,6 +387,25 @@ err:
     uv->errored = true;
 }
 
+/* Start writing to a new prepared segment. */
+static int uvAppendSegmentStart(struct uv *uv,
+                                uv_file fd,
+                                uvCounter counter,
+                                struct openSegment *segment)
+{
+    int rv;
+    /* TODO: check for errors. */
+    segment->writer = HeapMalloc(sizeof *segment->writer);
+    assert(segment->writer != NULL);
+    rv = UvWriterInit(segment->writer, uv->loop, fd, uv->direct_io,
+                      uv->async_io, 1, uv->io->errmsg);
+    assert(rv == 0);
+
+    segment->counter = counter;
+    uvAppendProcessRequests(uv);
+    return 0;
+}
+
 static void appendPrepareCb(struct uvPrepare *req, int status)
 {
     struct openSegment *segment = req->data;
@@ -416,15 +436,9 @@ static void appendPrepareCb(struct uvPrepare *req, int status)
     assert(req->counter > 0);
     assert(req->fd >= 0);
 
+    rv = uvAppendSegmentStart(uv, req->fd, req->counter, segment);
     /* TODO: check for errors. */
-    segment->writer = raft_malloc(sizeof *segment->writer);
-    assert(segment->writer != NULL);
-    rv = UvWriterInit(segment->writer, uv->loop, req->fd, uv->direct_io,
-                      uv->async_io, 1, uv->io->errmsg);
     assert(rv == 0);
-
-    segment->counter = req->counter;
-    uvAppendProcessRequests(uv);
 }
 
 /* Initialize a new open segment object. */
@@ -450,6 +464,8 @@ static void openSegmentInit(struct openSegment *s, struct uv *uv)
 static int submitPrepareSegmentRequest(struct uv *uv)
 {
     struct openSegment *segment;
+    uv_file fd;
+    uvCounter counter;
     int rv;
     segment = raft_malloc(sizeof *segment);
     if (segment == NULL) {
@@ -458,7 +474,16 @@ static int submitPrepareSegmentRequest(struct uv *uv)
     }
     openSegmentInit(segment, uv);
     QUEUE_PUSH(&uv->append_segments, &segment->queue);
-    UvPrepare(uv, &segment->prepare, appendPrepareCb);
+    UvPrepare(uv, &fd, &counter, &segment->prepare, appendPrepareCb);
+
+    /* If we've been returned a ready prepared segment right away, start writing
+     * to it immediately. */
+    if (fd != -1) {
+        rv = uvAppendSegmentStart(uv, fd, counter, segment);
+        if (rv != 0) {
+            goto err;
+        }
+    }
     return 0;
 err:
     assert(rv != 0);

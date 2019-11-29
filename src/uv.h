@@ -280,13 +280,21 @@ struct uvPrepare
     queue queue;                /* Links in uv_io->prepare_reqs */
 };
 
-/* Submit a request to get a prepared open segment ready for writing. */
-void UvPrepare(struct uv *uv, struct uvPrepare *req, uvPrepareCb cb);
+/* Get a prepared open segment ready for writing. If a prepared open segment is
+ * already available in the pool, it will be returned immediately using the fd
+ * and counter pointers and the request callback won't be invoked. Otherwise the
+ * request will be queued and its callback invoked once a newly prepared segment
+ * is available. */
+void UvPrepare(struct uv *uv,
+               uv_file *fd,
+               uvCounter *counter,
+               struct uvPrepare *req,
+               uvPrepareCb cb);
 
 /* Cancel all pending prepare requests and start removing all unused prepared
  * open segments. If a segment currently being created, wait for it to complete
  * and then remove it immediately. */
-void uvPrepareClose(struct uv *uv);
+void UvPrepareClose(struct uv *uv);
 
 /* Callback invoked after completing a truncate request. If there are append
  * requests that have accumulated in while the truncate request was executed,

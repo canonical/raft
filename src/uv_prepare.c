@@ -81,7 +81,7 @@ static void uvPrepareCancel(struct preparedSegment *s)
     s->canceled = true; /* Memory released in uvPrepareCreateFileAfterWorkCb */
 }
 
-void uvPrepareClose(struct uv *uv)
+void UvPrepareClose(struct uv *uv)
 {
     assert(uv->closing);
 
@@ -105,22 +105,32 @@ void uvPrepareClose(struct uv *uv)
     }
 }
 
+/* Pop the oldest prepared segment in the pool and return its fd and counter
+ * through the given pointers. */
+static void uvPrepareConsume(struct uv *uv, uv_file *fd, uvCounter *counter)
+{
+    queue *head;
+    struct preparedSegment *segment;
+    /* Pop a segment from the pool. */
+    head = QUEUE_HEAD(&uv->prepare_pool);
+    segment = QUEUE_DATA(head, struct preparedSegment, queue);
+    assert(segment->fd >= 0);
+    QUEUE_REMOVE(&segment->queue);
+    *fd = segment->fd;
+    *counter = segment->counter;
+    HeapFree(segment);
+}
+
 /* Finish the oldest pending prepare request using the next available prepared
  * segment. */
 static void uvPrepareRequestFinish(struct uv *uv)
 {
     queue *head;
-    struct preparedSegment *segment;
     struct uvPrepare *req;
 
     assert(!uv->closing);
     assert(!QUEUE_IS_EMPTY(&uv->prepare_reqs));
     assert(!QUEUE_IS_EMPTY(&uv->prepare_pool));
-
-    /* Pop a segment from the pool. */
-    head = QUEUE_HEAD(&uv->prepare_pool);
-    segment = QUEUE_DATA(head, struct preparedSegment, queue);
-    QUEUE_REMOVE(&segment->queue);
 
     /* Pop the head of the prepare requests queue. */
     head = QUEUE_HEAD(&uv->prepare_reqs);
@@ -128,10 +138,7 @@ static void uvPrepareRequestFinish(struct uv *uv)
     QUEUE_REMOVE(&req->queue);
 
     /* Finish the request */
-    assert(segment->fd >= 0);
-    req->fd = segment->fd;
-    req->counter = segment->counter;
-    HeapFree(segment);
+    uvPrepareConsume(uv, &req->fd, &req->counter);
     req->cb(req, 0);
 }
 
@@ -284,13 +291,19 @@ static void uvMaybePrepareSegment(struct uv *uv)
     }
 }
 
-void UvPrepare(struct uv *uv, struct uvPrepare *req, uvPrepareCb cb)
+void UvPrepare(struct uv *uv,
+               uv_file *fd,
+               uvCounter *counter,
+               struct uvPrepare *req,
+               uvPrepareCb cb)
 {
     assert(!uv->closing);
-    req->cb = cb;
-    QUEUE_PUSH(&uv->prepare_reqs, &req->queue);
     if (!QUEUE_IS_EMPTY(&uv->prepare_pool)) {
-        uvPrepareRequestFinish(uv);
+        uvPrepareConsume(uv, fd, counter);
+	return;
     }
+    *fd = -1;
+    QUEUE_PUSH(&uv->prepare_reqs, &req->queue);
+    req->cb = cb;
     uvMaybePrepareSegment(uv);
 }
