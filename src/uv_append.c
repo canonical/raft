@@ -134,7 +134,7 @@ static void flushRequests(queue *q, int status)
         QUEUE_REMOVE(head);
         r = QUEUE_DATA(head, struct uvAppend, queue);
         r->req->cb(r->req, status);
-        raft_free(r);
+        HeapFree(r);
     }
 }
 
@@ -415,7 +415,7 @@ static void uvOpenSegmentPrepareCb(struct uvPrepare *req, int status)
 
     if (status != 0) {
         QUEUE_REMOVE(&segment->queue);
-        raft_free(segment);
+        HeapFree(segment);
         uv->errored = true;
         flushRequests(&uv->append_pending_reqs, RAFT_IOERR);
         return;
@@ -617,7 +617,7 @@ int UvAppend(struct raft_io *io,
     return 0;
 
 err_after_req_alloc:
-    raft_free(append);
+    HeapFree(append);
 err:
     assert(rv != 0);
     return rv;
