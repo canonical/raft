@@ -285,11 +285,11 @@ struct uvPrepare
  * and counter pointers and the request callback won't be invoked. Otherwise the
  * request will be queued and its callback invoked once a newly prepared segment
  * is available. */
-void UvPrepare(struct uv *uv,
-               uv_file *fd,
-               uvCounter *counter,
-               struct uvPrepare *req,
-               uvPrepareCb cb);
+int UvPrepare(struct uv *uv,
+              uv_file *fd,
+              uvCounter *counter,
+              struct uvPrepare *req,
+              uvPrepareCb cb);
 
 /* Cancel all pending prepare requests and start removing all unused prepared
  * open segments. If a segment currently being created, wait for it to complete

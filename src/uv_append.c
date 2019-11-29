@@ -474,7 +474,10 @@ static int submitPrepareSegmentRequest(struct uv *uv)
     }
     openSegmentInit(segment, uv);
     QUEUE_PUSH(&uv->append_segments, &segment->queue);
-    UvPrepare(uv, &fd, &counter, &segment->prepare, appendPrepareCb);
+    rv = UvPrepare(uv, &fd, &counter, &segment->prepare, appendPrepareCb);
+    if (rv != 0) {
+        goto err;
+    }
 
     /* If we've been returned a ready prepared segment right away, start writing
      * to it immediately. */
