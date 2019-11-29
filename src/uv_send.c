@@ -396,7 +396,8 @@ static void uvClientAbort(struct uvClient *c)
     int rv;
 
     assert(uv->closing);
-    assert(c->stream != NULL || uv_is_active((struct uv_handle_s *)&c->timer) ||
+    assert(c->stream != NULL || c->old_stream != NULL ||
+           uv_is_active((struct uv_handle_s *)&c->timer) ||
            c->connect.data != NULL);
 
     QUEUE_REMOVE(&c->queue);
