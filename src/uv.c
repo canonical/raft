@@ -524,13 +524,6 @@ static int uvRecover(struct raft_io *io, const struct raft_configuration *conf)
     return 0;
 }
 
-/* Implementation of raft_io->append (defined in uv_append.c).*/
-int uvAppend(struct raft_io *io,
-             struct raft_io_append *req,
-             const struct raft_entry entries[],
-             unsigned n,
-             raft_io_append_cb cb);
-
 /* Implementation of raft_io->truncate (defined in uv_truncate.c). */
 int uvTruncate(struct raft_io *io, raft_index index);
 
@@ -625,7 +618,7 @@ int raft_uv_init(struct raft_io *io,
     io->recover = uvRecover;
     io->set_term = uvSetTerm;
     io->set_vote = uvSetVote;
-    io->append = uvAppend;
+    io->append = UvAppend;
     io->truncate = uvTruncate;
     io->send = UvSend;
     io->snapshot_put = UvSnapshotPut;
