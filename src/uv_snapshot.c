@@ -490,7 +490,7 @@ void uvSnapshotMaybeProcessRequests(struct uv *uv)
     }
 }
 
-int uvSnapshotPut(struct raft_io *io,
+int UvSnapshotPut(struct raft_io *io,
                   unsigned trailing,
                   struct raft_io_snapshot_put *req,
                   const struct raft_snapshot *snapshot,
@@ -611,7 +611,7 @@ static void uvSnapshotGetAfterWorkCb(uv_work_t *work, int status)
     uvMaybeFireCloseCb(uv);
 }
 
-int uvSnapshotGet(struct raft_io *io,
+int UvSnapshotGet(struct raft_io *io,
                   struct raft_io_snapshot_get *req,
                   raft_io_snapshot_get_cb cb)
 {

@@ -247,6 +247,18 @@ int uvSnapshotKeepLastTwo(struct uv *uv,
                           struct uvSnapshotInfo *snapshots,
                           size_t n);
 
+/* Implementation raft_io->snapshot_put (defined in uv_snapshot.c). */
+int UvSnapshotPut(struct raft_io *io,
+                  unsigned trailing,
+                  struct raft_io_snapshot_put *req,
+                  const struct raft_snapshot *snapshot,
+                  raft_io_snapshot_put_cb cb);
+
+/* Implementation of raft_io->snapshot_get (defined in uv_snapshot.c). */
+int UvSnapshotGet(struct raft_io *io,
+                  struct raft_io_snapshot_get *req,
+                  raft_io_snapshot_get_cb cb);
+
 /* Return a list of all snapshots and segments found in the data directory. Both
  * snapshots and segments are ordered by filename (closed segments come before
  * open ones). */

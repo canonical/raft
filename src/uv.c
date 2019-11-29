@@ -534,18 +534,6 @@ int uvAppend(struct raft_io *io,
 /* Implementation of raft_io->truncate (defined in uv_truncate.c). */
 int uvTruncate(struct raft_io *io, raft_index index);
 
-/* Implementation raft_io->snapshot_put (defined in uv_snapshot.c). */
-int uvSnapshotPut(struct raft_io *io,
-                  unsigned trailing,
-                  struct raft_io_snapshot_put *req,
-                  const struct raft_snapshot *snapshot,
-                  raft_io_snapshot_put_cb cb);
-
-/* Implementation of raft_io->snapshot_get (defined in uv_snapshot.c). */
-int uvSnapshotGet(struct raft_io *io,
-                  struct raft_io_snapshot_get *req,
-                  raft_io_snapshot_get_cb cb);
-
 /* Implementation of raft_io->time. */
 static raft_time uvTime(struct raft_io *io)
 {
@@ -640,8 +628,8 @@ int raft_uv_init(struct raft_io *io,
     io->append = uvAppend;
     io->truncate = uvTruncate;
     io->send = UvSend;
-    io->snapshot_put = uvSnapshotPut;
-    io->snapshot_get = uvSnapshotGet;
+    io->snapshot_put = UvSnapshotPut;
+    io->snapshot_get = UvSnapshotGet;
     io->time = uvTime;
     io->random = uvRandom;
 
