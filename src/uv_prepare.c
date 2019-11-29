@@ -7,9 +7,9 @@
 #include "uv_error.h"
 #include "uv_os.h"
 
-/* The happy path for a uvPrepare request is:
+/* The happy path for UvPrepare is:
  *
- * - If there is a prepared open segment available, fire the request's callback
+ * - If there is an unused open segment available, return its fd and counter
  *   immediately.
  *
  * - Otherwise, wait for the creation of a new open segment to complete,
@@ -25,7 +25,8 @@
  *
  * - Cancel all pending prepare requests.
  * - Remove unused prepared open segments.
- * - Cancel any pending internal create segment request.
+ * - Wait for any pending internal segment creation and then discard the newly
+ *   created segment.
  */
 
 /* At the moment the uv implementation of raft_io->append does not use
@@ -48,84 +49,6 @@ struct uvUnusedOpenSegment
     uv_file fd;                        /* File descriptor of prepared file */
     queue queue;                       /* Pool */
 };
-
-/* Flush all pending requests, invoking their callbacks with the given
- * status. */
-static void uvPrepareFlushRequests(struct uv *uv, int status)
-{
-    while (!QUEUE_IS_EMPTY(&uv->prepare_reqs)) {
-        queue *head;
-        struct uvPrepare *req;
-        head = QUEUE_HEAD(&uv->prepare_reqs);
-        req = QUEUE_DATA(head, struct uvPrepare, queue);
-        QUEUE_REMOVE(&req->queue);
-        req->cb(req, status);
-    }
-}
-
-/* Remove a prepared open segment */
-static void uvPrepareRemove(struct uvUnusedOpenSegment *s)
-{
-    assert(s->counter > 0);
-    assert(s->fd >= 0);
-    UvOsClose(s->fd);
-    UvFsRemoveFile(s->uv->dir, s->filename, s->errmsg);
-    raft_free(s);
-}
-
-void UvPrepareClose(struct uv *uv)
-{
-    assert(uv->closing);
-
-    /* Cancel all pending prepare requests. */
-    uvPrepareFlushRequests(uv, RAFT_CANCELED);
-
-    /* Remove any unused prepared segment. */
-    while (!QUEUE_IS_EMPTY(&uv->prepare_pool)) {
-        queue *head;
-        struct uvUnusedOpenSegment *s;
-        head = QUEUE_HEAD(&uv->prepare_pool);
-        s = QUEUE_DATA(head, struct uvUnusedOpenSegment, queue);
-        QUEUE_REMOVE(&s->queue);
-        uvPrepareRemove(s);
-    }
-}
-/* Pop the oldest prepared segment in the pool and return its fd and counter
- * through the given pointers. */
-static void uvPrepareConsume(struct uv *uv, uv_file *fd, uvCounter *counter)
-{
-    queue *head;
-    struct uvUnusedOpenSegment *segment;
-    /* Pop a segment from the pool. */
-    head = QUEUE_HEAD(&uv->prepare_pool);
-    segment = QUEUE_DATA(head, struct uvUnusedOpenSegment, queue);
-    assert(segment->fd >= 0);
-    QUEUE_REMOVE(&segment->queue);
-    *fd = segment->fd;
-    *counter = segment->counter;
-    HeapFree(segment);
-}
-
-/* Finish the oldest pending prepare request using the next available prepared
- * segment. */
-static void uvPrepareRequestFinish(struct uv *uv)
-{
-    queue *head;
-    struct uvPrepare *req;
-
-    assert(!uv->closing);
-    assert(!QUEUE_IS_EMPTY(&uv->prepare_reqs));
-    assert(!QUEUE_IS_EMPTY(&uv->prepare_pool));
-
-    /* Pop the head of the prepare requests queue. */
-    head = QUEUE_HEAD(&uv->prepare_reqs);
-    req = QUEUE_DATA(head, struct uvPrepare, queue);
-    QUEUE_REMOVE(&req->queue);
-
-    /* Finish the request */
-    uvPrepareConsume(uv, &req->fd, &req->counter);
-    req->cb(req, 0);
-}
 
 static void uvPrepareWorkCb(uv_work_t *work)
 {
@@ -155,8 +78,59 @@ err:
     return;
 }
 
+/* Flush all pending requests, invoking their callbacks with the given
+ * status. */
+static void uvPrepareFinishAllRequests(struct uv *uv, int status)
+{
+    while (!QUEUE_IS_EMPTY(&uv->prepare_reqs)) {
+        queue *head;
+        struct uvPrepare *req;
+        head = QUEUE_HEAD(&uv->prepare_reqs);
+        req = QUEUE_DATA(head, struct uvPrepare, queue);
+        QUEUE_REMOVE(&req->queue);
+        req->cb(req, status);
+    }
+}
+
+/* Pop the oldest prepared segment in the pool and return its fd and counter
+ * through the given pointers. */
+static void uvPrepareConsume(struct uv *uv, uv_file *fd, uvCounter *counter)
+{
+    queue *head;
+    struct uvUnusedOpenSegment *segment;
+    /* Pop a segment from the pool. */
+    head = QUEUE_HEAD(&uv->prepare_pool);
+    segment = QUEUE_DATA(head, struct uvUnusedOpenSegment, queue);
+    assert(segment->fd >= 0);
+    QUEUE_REMOVE(&segment->queue);
+    *fd = segment->fd;
+    *counter = segment->counter;
+    HeapFree(segment);
+}
+
+/* Finish the oldest pending prepare request using the next available prepared
+ * segment. */
+static void uvPrepareFinishOldestRequest(struct uv *uv)
+{
+    queue *head;
+    struct uvPrepare *req;
+
+    assert(!uv->closing);
+    assert(!QUEUE_IS_EMPTY(&uv->prepare_reqs));
+    assert(!QUEUE_IS_EMPTY(&uv->prepare_pool));
+
+    /* Pop the head of the prepare requests queue. */
+    head = QUEUE_HEAD(&uv->prepare_reqs);
+    req = QUEUE_DATA(head, struct uvPrepare, queue);
+    QUEUE_REMOVE(&req->queue);
+
+    /* Finish the request */
+    uvPrepareConsume(uv, &req->fd, &req->counter);
+    req->cb(req, 0);
+}
+
 /* Return the number of ready prepared open segments in the pool. */
-static unsigned uvPreparePoolCount(struct uv *uv)
+static unsigned uvPrepareCount(struct uv *uv)
 {
     queue *head;
     unsigned n;
@@ -240,7 +214,7 @@ static void uvPrepareAfterWorkCb(uv_work_t *work, int status)
 
     /* If the request has failed, mark this instance as errored. */
     if (segment->status != 0) {
-        uvPrepareFlushRequests(uv, RAFT_IOERR);
+        uvPrepareFinishAllRequests(uv, RAFT_IOERR);
         uv->errored = true;
         Tracef(uv->tracer, "create segment %s: %s", segment->filename,
                segment->errmsg);
@@ -255,7 +229,7 @@ static void uvPrepareAfterWorkCb(uv_work_t *work, int status)
 
     /* Let's process any pending request. */
     if (!QUEUE_IS_EMPTY(&uv->prepare_reqs)) {
-        uvPrepareRequestFinish(uv);
+        uvPrepareFinishOldestRequest(uv);
     }
 
     /* If we are already creating a segment, we're done. */
@@ -264,14 +238,14 @@ static void uvPrepareAfterWorkCb(uv_work_t *work, int status)
     }
 
     /* If we have already enough prepared open segments, we're done. */
-    if (uvPreparePoolCount(uv) >= TARGET_POOL_SIZE) {
+    if (uvPrepareCount(uv) >= TARGET_POOL_SIZE) {
         return;
     }
 
     /* Let's start preparing a new open segment. */
     rv = uvPrepareStart(uv);
     if (rv != 0) {
-        uvPrepareFlushRequests(uv, rv);
+        uvPrepareFinishAllRequests(uv, rv);
         uv->errored = true;
     }
 }
@@ -308,4 +282,32 @@ int UvPrepare(struct uv *uv,
     }
 
     return 0;
+}
+
+/* Remove a prepared open segment */
+static void uvPrepareRemove(struct uvUnusedOpenSegment *s)
+{
+    assert(s->counter > 0);
+    assert(s->fd >= 0);
+    UvOsClose(s->fd);
+    UvFsRemoveFile(s->uv->dir, s->filename, s->errmsg);
+    raft_free(s);
+}
+
+void UvPrepareClose(struct uv *uv)
+{
+    assert(uv->closing);
+
+    /* Cancel all pending prepare requests. */
+    uvPrepareFinishAllRequests(uv, RAFT_CANCELED);
+
+    /* Remove any unused prepared segment. */
+    while (!QUEUE_IS_EMPTY(&uv->prepare_pool)) {
+        queue *head;
+        struct uvUnusedOpenSegment *s;
+        head = QUEUE_HEAD(&uv->prepare_pool);
+        s = QUEUE_DATA(head, struct uvUnusedOpenSegment, queue);
+        QUEUE_REMOVE(&s->queue);
+        uvPrepareRemove(s);
+    }
 }
