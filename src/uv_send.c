@@ -464,7 +464,7 @@ err:
     return rv;
 }
 
-int uvSend(struct raft_io *io,
+int UvSend(struct raft_io *io,
            struct raft_io_send *req,
            const struct raft_message *message,
            raft_io_send_cb cb)
@@ -512,7 +512,7 @@ err:
     return rv;
 }
 
-void uvSendClose(struct uv *uv)
+void UvSendClose(struct uv *uv)
 {
     assert(uv->closing);
     while (!QUEUE_IS_EMPTY(&uv->clients)) {

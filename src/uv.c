@@ -89,7 +89,7 @@ static int uvStart(struct raft_io *io,
     uv->state = UV__ACTIVE;
     uv->tick_cb = tick_cb;
     uv->recv_cb = recv_cb;
-    rv = uvRecvStart(uv);
+    rv = UvRecvStart(uv);
     if (rv != 0) {
         return rv;
     }
@@ -167,8 +167,8 @@ static void uvClose(struct raft_io *io, raft_io_close_cb cb)
     assert(!uv->closing);
     uv->close_cb = cb;
     uv->closing = true;
-    uvSendClose(uv);
-    uvRecvClose(uv);
+    UvSendClose(uv);
+    UvRecvClose(uv);
     uvPrepareClose(uv);
     uvAppendClose(uv);
     uvTruncateClose(uv);
@@ -534,12 +534,6 @@ int uvAppend(struct raft_io *io,
 /* Implementation of raft_io->truncate (defined in uv_truncate.c). */
 int uvTruncate(struct raft_io *io, raft_index index);
 
-/* Implementation of raft_io->send (defined in uv_send.c). */
-int uvSend(struct raft_io *io,
-           struct raft_io_send *req,
-           const struct raft_message *message,
-           raft_io_send_cb cb);
-
 /* Implementation raft_io->snapshot_put (defined in uv_snapshot.c). */
 int uvSnapshotPut(struct raft_io *io,
                   unsigned trailing,
@@ -645,7 +639,7 @@ int raft_uv_init(struct raft_io *io,
     io->set_vote = uvSetVote;
     io->append = uvAppend;
     io->truncate = uvTruncate;
-    io->send = uvSend;
+    io->send = UvSend;
     io->snapshot_put = uvSnapshotPut;
     io->snapshot_get = uvSnapshotGet;
     io->time = uvTime;

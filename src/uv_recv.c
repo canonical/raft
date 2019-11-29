@@ -381,7 +381,7 @@ static void uvRecvAcceptCb(struct raft_uv_transport *transport,
     }
 }
 
-int uvRecvStart(struct uv *uv)
+int UvRecvStart(struct uv *uv)
 {
     int rv;
     rv = uv->transport->listen(uv->transport, uvRecvAcceptCb);
@@ -391,7 +391,7 @@ int uvRecvStart(struct uv *uv)
     return 0;
 }
 
-void uvRecvClose(struct uv *uv)
+void UvRecvClose(struct uv *uv)
 {
     while (!QUEUE_IS_EMPTY(&uv->servers)) {
         queue *head;

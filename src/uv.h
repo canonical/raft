@@ -318,16 +318,22 @@ void uvTruncateClose(struct uv *uv);
  * segment is left. */
 void uvTruncateMaybeProcessRequests(struct uv *uv);
 
+/* Implementation of raft_io->send. */
+int UvSend(struct raft_io *io,
+           struct raft_io_send *req,
+           const struct raft_message *message,
+           raft_io_send_cb cb);
+
 /* Stop all clients by closing the outbound stream handles and canceling all
  * pending send requests.  */
-void uvSendClose(struct uv *uv);
+void UvSendClose(struct uv *uv);
 
 /* Start receiving messages from new incoming connections. */
-int uvRecvStart(struct uv *uv);
+int UvRecvStart(struct uv *uv);
 
 /* Stop all servers by closing the inbound stream handles and aborting all
  * requests being received.  */
-void uvRecvClose(struct uv *uv);
+void UvRecvClose(struct uv *uv);
 
 /* Callback invoked after truncation has completed, possibly unblocking pending
  * snapshot put requests. */
