@@ -313,11 +313,7 @@ static void uvAppendProcessRequests(struct uv *uv)
 prepare:
     segment = uvGetCurrentOpenSegment(uv);
     assert(segment != NULL);
-
-    /* If the preparer hasn't provided the segment yet, let's wait. */
-    if (segment->counter == 0) {
-        return;
-    }
+    assert(segment->counter != 0);
 
     /* Let's add to the segment's write buffer all pending requests targeted to
      * this segment. */
@@ -612,7 +608,13 @@ int UvAppend(struct raft_io *io,
         goto err_after_req_alloc;
     }
 
-    uvAppendProcessRequests(uv);
+    assert(append->segment != NULL);
+
+    /* If the requet's segment has already been prepared, try to write
+     * immediately. */
+    if (append->segment->counter != 0) {
+        uvAppendProcessRequests(uv);
+    }
 
     return 0;
 
