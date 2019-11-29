@@ -407,11 +407,7 @@ static void uvOpenSegmentPrepareCb(struct uvPrepare *req, int status)
     /* If we have been closed, let's discard the segment. */
     if (uv->closing) {
         QUEUE_REMOVE(&segment->queue);
-        if (status == 0) {
-            UvOsClose(req->fd);
-            /* Ignore errors, as there's nothing we can do about it. */
-            uvFinalize(uv, req->counter, 0, 0, 0);
-        }
+        assert(status == RAFT_CANCELED); /* UvPrepare cancels pending reqs */
         uvSegmentBufferClose(&segment->pending);
         HeapFree(segment);
         return;
