@@ -42,7 +42,7 @@ struct uvOpenSegment
 {
     struct uv *uv;                  /* Our writer */
     struct uvPrepare prepare;       /* Prepare segment file request */
-    struct UvWriter *writer;        /* Writer to perform async I/O */
+    struct UvWriter writer;         /* Writer to perform async I/O */
     struct UvWriterReq write;       /* Write request */
     unsigned long long counter;     /* Open segment counter */
     raft_index first_index;         /* Index of the first entry written */
@@ -89,6 +89,15 @@ static void uvAppendInit(struct uvAppend *a,
     req->cb = cb;
 }
 
+static void uvOpenSegmentWriterCloseCb(struct UvWriter *writer)
+{
+    struct uvOpenSegment *segment = writer->data;
+    struct uv *uv = segment->uv;
+    uvSegmentBufferClose(&segment->pending);
+    HeapFree(segment);
+    uvMaybeFireCloseCb(uv);
+}
+
 /* Submit a request to close the current open segment. */
 static void finalizeSegment(struct uvOpenSegment *s)
 {
@@ -102,12 +111,8 @@ static void finalizeSegment(struct uvOpenSegment *s)
          * file handle and release the segment memory. */
     }
 
-    UvWriterClose(s->writer, (UvWriterCloseCb)raft_free);
-    uvSegmentBufferClose(&s->pending);
     QUEUE_REMOVE(&s->queue);
-
-    raft_free(s);
-    uvMaybeFireCloseCb(uv);
+    UvWriterClose(&s->writer, uvOpenSegmentWriterCloseCb);
 }
 
 /* Flush the append requests in the given queue, firing their callbacks with the
@@ -256,11 +261,12 @@ static void uvOpenSegmentWriteCb(struct UvWriterReq *write, const int status)
 static int uvOpenSegmentWrite(struct uvOpenSegment *s)
 {
     int rv;
-    assert(s->writer != NULL);
+    assert(s->counter != 0);
     assert(s->pending.n > 0);
     uvSegmentBufferFinalize(&s->pending, &s->buf);
-    rv = UvWriterSubmit(s->writer, &s->write, &s->buf, 1,
-                        s->next_block * s->uv->block_size, uvOpenSegmentWriteCb);
+    rv =
+        UvWriterSubmit(&s->writer, &s->write, &s->buf, 1,
+                       s->next_block * s->uv->block_size, uvOpenSegmentWriteCb);
     if (rv != 0) {
         return rv;
     }
@@ -309,7 +315,7 @@ prepare:
     assert(segment != NULL);
 
     /* If the preparer hasn't provided the segment yet, let's wait. */
-    if (segment->writer == NULL) {
+    if (segment->counter == 0) {
         return;
     }
 
@@ -380,26 +386,23 @@ static int uvOpenSegmentReady(struct uv *uv,
                               struct uvOpenSegment *segment)
 {
     int rv;
-    segment->writer = HeapMalloc(sizeof *segment->writer);
-    if (segment->writer == NULL) {
-        return RAFT_NOMEM;
-    }
-    rv = UvWriterInit(segment->writer, uv->loop, fd, uv->direct_io,
+    rv = UvWriterInit(&segment->writer, uv->loop, fd, uv->direct_io,
                       uv->async_io, 1, uv->io->errmsg);
     if (rv != 0) {
-        HeapFree(segment->writer);
         return rv;
     }
-
     segment->counter = counter;
     return 0;
 }
 
-static void appendPrepareCb(struct uvPrepare *req, int status)
+static void uvOpenSegmentPrepareCb(struct uvPrepare *req, int status)
 {
     struct uvOpenSegment *segment = req->data;
     struct uv *uv = segment->uv;
     int rv;
+
+    assert(segment->counter == 0);
+    assert(segment->written == 0);
 
     /* If we have been closed, let's discard the segment. */
     if (uv->closing) {
@@ -410,7 +413,7 @@ static void appendPrepareCb(struct uvPrepare *req, int status)
             uvFinalize(uv, req->counter, 0, 0, 0);
         }
         uvSegmentBufferClose(&segment->pending);
-        raft_free(segment);
+        HeapFree(segment);
         return;
     }
 
@@ -437,9 +440,9 @@ static void uvOpenSegmentInit(struct uvOpenSegment *s, struct uv *uv)
 {
     s->uv = uv;
     s->prepare.data = s;
+    s->writer.data = s;
     s->write.data = s;
     s->counter = 0;
-    s->writer = NULL;
     s->first_index = uv->append_next_index;
     s->last_index = s->first_index - 1;
     s->size = sizeof(uint64_t) /* Format version */;
@@ -468,7 +471,8 @@ static int uvAppendPushOpenSegment(struct uv *uv)
 
     QUEUE_PUSH(&uv->append_segments, &segment->queue);
 
-    rv = UvPrepare(uv, &fd, &counter, &segment->prepare, appendPrepareCb);
+    rv =
+        UvPrepare(uv, &fd, &counter, &segment->prepare, uvOpenSegmentPrepareCb);
     if (rv != 0) {
         goto err_after_alloc;
     }
