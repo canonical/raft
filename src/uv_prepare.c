@@ -36,14 +36,13 @@
 #define TARGET_POOL_SIZE 2
 
 /* An open segment being prepared or sitting in the pool */
-struct preparedSegment
+struct uvUnusedOpenSegment
 {
     struct uv *uv;                     /* Open segment file */
     size_t size;                       /* Segment size */
     struct uv_work_s work;             /* To execute logic in the threadpool */
     int status;                        /* Result of threadpool callback */
     char errmsg[RAFT_ERRMSG_BUF_SIZE]; /* Error of threadpool callback */
-    bool canceled;                     /* Cancellation flag */
     unsigned long long counter;        /* Segment counter */
     char filename[UV__FILENAME_LEN];   /* Filename of the segment */
     uv_file fd;                        /* File descriptor of prepared file */
@@ -65,20 +64,13 @@ static void uvPrepareFlushRequests(struct uv *uv, int status)
 }
 
 /* Remove a prepared open segment */
-static void uvPrepareRemove(struct preparedSegment *s)
+static void uvPrepareRemove(struct uvUnusedOpenSegment *s)
 {
     assert(s->counter > 0);
     assert(s->fd >= 0);
     UvOsClose(s->fd);
     UvFsRemoveFile(s->uv->dir, s->filename, s->errmsg);
     raft_free(s);
-}
-
-/* Cancel a prepared segment creation. */
-static void uvPrepareCancel(struct preparedSegment *s)
-{
-    assert(s->counter > 0);
-    s->canceled = true; /* Memory released in uvPrepareCreateFileAfterWorkCb */
 }
 
 void UvPrepareClose(struct uv *uv)
@@ -91,29 +83,22 @@ void UvPrepareClose(struct uv *uv)
     /* Remove any unused prepared segment. */
     while (!QUEUE_IS_EMPTY(&uv->prepare_pool)) {
         queue *head;
-        struct preparedSegment *s;
+        struct uvUnusedOpenSegment *s;
         head = QUEUE_HEAD(&uv->prepare_pool);
-        s = QUEUE_DATA(head, struct preparedSegment, queue);
+        s = QUEUE_DATA(head, struct uvUnusedOpenSegment, queue);
         QUEUE_REMOVE(&s->queue);
         uvPrepareRemove(s);
     }
-
-    /* Cancel any in-progress segment creation request. */
-    if (uv->prepare_inflight != NULL) {
-        struct preparedSegment *s = uv->prepare_inflight;
-        uvPrepareCancel(s);
-    }
 }
-
 /* Pop the oldest prepared segment in the pool and return its fd and counter
  * through the given pointers. */
 static void uvPrepareConsume(struct uv *uv, uv_file *fd, uvCounter *counter)
 {
     queue *head;
-    struct preparedSegment *segment;
+    struct uvUnusedOpenSegment *segment;
     /* Pop a segment from the pool. */
     head = QUEUE_HEAD(&uv->prepare_pool);
-    segment = QUEUE_DATA(head, struct preparedSegment, queue);
+    segment = QUEUE_DATA(head, struct uvUnusedOpenSegment, queue);
     assert(segment->fd >= 0);
     QUEUE_REMOVE(&segment->queue);
     *fd = segment->fd;
@@ -142,30 +127,31 @@ static void uvPrepareRequestFinish(struct uv *uv)
     req->cb(req, 0);
 }
 
-static void uvPrepareCreateFileWorkCb(uv_work_t *work)
+static void uvPrepareWorkCb(uv_work_t *work)
 {
-    struct preparedSegment *s = work->data;
-    struct uv *uv = s->uv;
+    struct uvUnusedOpenSegment *segment = work->data;
+    struct uv *uv = segment->uv;
     int rv;
 
-    rv = UvFsAllocateFile(uv->dir, s->filename, s->size, &s->fd, s->errmsg);
+    rv = UvFsAllocateFile(uv->dir, segment->filename, segment->size,
+                          &segment->fd, segment->errmsg);
     if (rv != 0) {
         goto err;
     }
 
-    rv = UvFsSyncDir(uv->dir, s->errmsg);
+    rv = UvFsSyncDir(uv->dir, segment->errmsg);
     if (rv != 0) {
         goto err_after_allocate;
     }
 
-    s->status = 0;
+    segment->status = 0;
     return;
 
 err_after_allocate:
-    UvOsClose(s->fd);
+    UvOsClose(segment->fd);
 err:
     assert(rv != 0);
-    s->status = rv;
+    segment->status = rv;
     return;
 }
 
@@ -179,91 +165,93 @@ static unsigned uvPreparePoolCount(struct uv *uv)
     return 0;
 }
 
-static void uvPrepareCreateFileAfterWorkCb(uv_work_t *work, int status);
+static void uvPrepareAfterWorkCb(uv_work_t *work, int status);
 
 /* Start creating a new segment file. */
-static int uvPrepareSegment(struct uv *uv)
+static int uvPrepareStart(struct uv *uv)
 {
-    struct preparedSegment *s;
+    struct uvUnusedOpenSegment *segment;
     int rv;
 
     assert(uv->prepare_inflight == NULL);
 
-    s = raft_malloc(sizeof *s);
-    if (s == NULL) {
+    segment = HeapMalloc(sizeof *segment);
+    if (segment == NULL) {
         rv = RAFT_NOMEM;
         goto err;
     }
-    memset(s, 0, sizeof *s);
-    s->uv = uv;
-    s->counter = uv->prepare_next_counter;
-    s->work.data = s;
-    s->fd = -1;
-    s->size = uv->block_size * uvSegmentBlocks(uv);
-    s->canceled = false;
 
-    sprintf(s->filename, UV__OPEN_TEMPLATE, s->counter);
+    memset(segment, 0, sizeof *segment);
+    segment->uv = uv;
+    segment->counter = uv->prepare_next_counter;
+    segment->work.data = segment;
+    segment->fd = -1;
+    segment->size = uv->block_size * uvSegmentBlocks(uv);
+    sprintf(segment->filename, UV__OPEN_TEMPLATE, segment->counter);
 
-    Tracef(uv->tracer, "create open segment %s", s->filename);
-    rv = uv_queue_work(uv->loop, &s->work, uvPrepareCreateFileWorkCb,
-                       uvPrepareCreateFileAfterWorkCb);
+    Tracef(uv->tracer, "create open segment %s", segment->filename);
+    rv = uv_queue_work(uv->loop, &segment->work, uvPrepareWorkCb,
+                       uvPrepareAfterWorkCb);
     if (rv != 0) {
         /* UNTESTED: with the current libuv implementation this can't fail. */
-        Tracef(uv->tracer, "can't create segment %s: %s", s->filename,
+        Tracef(uv->tracer, "can't create segment %s: %s", segment->filename,
                uv_strerror(rv));
         rv = RAFT_IOERR;
         goto err_after_segment_alloc;
     }
 
-    uv->prepare_inflight = s;
+    uv->prepare_inflight = segment;
     uv->prepare_next_counter++;
 
     return 0;
 
 err_after_segment_alloc:
-    raft_free(s);
+    HeapFree(segment);
 err:
     assert(rv != 0);
     return rv;
 }
 
-static void uvPrepareCreateFileAfterWorkCb(uv_work_t *work, int status)
+static void uvPrepareAfterWorkCb(uv_work_t *work, int status)
 {
-    struct preparedSegment *s = work->data;
-    struct uv *uv = s->uv;
+    struct uvUnusedOpenSegment *segment = work->data;
+    struct uv *uv = segment->uv;
     int rv;
     assert(status == 0);
 
     uv->prepare_inflight = NULL; /* Reset the creation in-progress marker. */
 
-    /* If we were canceled, let's mark the prepare request as canceled,
-     * regardless of the actual outcome. */
-    if (s->canceled) {
-        if (s->status == 0) {
+    /* If we are closing, let's discard the segment. All pending requests have
+     * already being fired with RAFT_CANCELED. */
+    if (uv->closing) {
+        assert(QUEUE_IS_EMPTY(&uv->prepare_pool));
+        assert(QUEUE_IS_EMPTY(&uv->prepare_reqs));
+        if (segment->status == 0) {
             char path[UV__PATH_SZ];
-            UvOsJoin(uv->dir, s->filename, path);
-            UvOsClose(s->fd);
+            UvOsJoin(uv->dir, segment->filename, path);
+            UvOsClose(segment->fd);
             UvOsUnlink(path);
         }
-        Tracef(uv->tracer, "canceled creation of %s", s->filename);
-        raft_free(s);
+        Tracef(uv->tracer, "canceled creation of %s", segment->filename);
+        HeapFree(segment);
         uvMaybeFireCloseCb(uv);
         return;
     }
 
     /* If the request has failed, mark this instance as errored. */
-    if (s->status != 0) {
+    if (segment->status != 0) {
         uvPrepareFlushRequests(uv, RAFT_IOERR);
         uv->errored = true;
-        Tracef(uv->tracer, "create segment %s: %s", s->filename, s->errmsg);
-        raft_free(s);
+        Tracef(uv->tracer, "create segment %s: %s", segment->filename,
+               segment->errmsg);
+        HeapFree(segment);
         return;
     }
 
-    assert(s->fd >= 0);
+    assert(segment->fd >= 0);
 
-    Tracef(uv->tracer, "completed creation of %s", s->filename);
-    QUEUE_PUSH(&uv->prepare_pool, &s->queue);
+    Tracef(uv->tracer, "completed creation of %s", segment->filename);
+    QUEUE_PUSH(&uv->prepare_pool, &segment->queue);
 
     /* Let's process any pending request. */
     if (!QUEUE_IS_EMPTY(&uv->prepare_reqs)) {
@@ -281,7 +269,7 @@ static void uvPrepareCreateFileAfterWorkCb(uv_work_t *work, int status)
     }
 
     /* Let's start preparing a new open segment. */
-    rv = uvPrepareSegment(uv);
+    rv = uvPrepareStart(uv);
     if (rv != 0) {
         uvPrepareFlushRequests(uv, rv);
         uv->errored = true;
@@ -313,7 +301,7 @@ int UvPrepare(struct uv *uv,
         return 0;
     }
 
-    rv = uvPrepareSegment(uv);
+    rv = uvPrepareStart(uv);
     if (rv != 0) {
         QUEUE_REMOVE(&req->queue);
         return rv;
