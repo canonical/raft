@@ -201,10 +201,9 @@ static void uvPrepareAfterWorkCb(uv_work_t *work, int status)
         assert(QUEUE_IS_EMPTY(&uv->prepare_pool));
         assert(QUEUE_IS_EMPTY(&uv->prepare_reqs));
         if (segment->status == 0) {
-            char path[UV__PATH_SZ];
-            UvOsJoin(uv->dir, segment->filename, path);
+            char errmsg[RAFT_ERRMSG_BUF_SIZE];
             UvOsClose(segment->fd);
-            UvOsUnlink(path);
+            UvFsRemoveFile(uv->dir, segment->filename, errmsg);
         }
         Tracef(uv->tracer, "canceled creation of %s", segment->filename);
         HeapFree(segment);
@@ -285,13 +284,13 @@ int UvPrepare(struct uv *uv,
 }
 
 /* Remove a prepared open segment */
-static void uvPrepareRemove(struct uvUnusedOpenSegment *s)
+static void uvPrepareRemove(struct uvUnusedOpenSegment *segment)
 {
-    assert(s->counter > 0);
-    assert(s->fd >= 0);
-    UvOsClose(s->fd);
-    UvFsRemoveFile(s->uv->dir, s->filename, s->errmsg);
-    raft_free(s);
+    assert(segment->counter > 0);
+    assert(segment->fd >= 0);
+    UvOsClose(segment->fd);
+    UvFsRemoveFile(segment->uv->dir, segment->filename, segment->errmsg);
+    HeapFree(segment);
 }
 
 void UvPrepareClose(struct uv *uv)
