@@ -29,12 +29,8 @@
  *   created segment.
  */
 
-/* At the moment the uv implementation of raft_io->append does not use
- * concurrent writes. */
-#define MAX_CONCURRENT_WRITES 1
-
 /* Number of open segments that we try to keep ready for writing. */
-#define TARGET_POOL_SIZE 2
+#define UV__TARGET_POOL_SIZE 2
 
 /* An open segment being prepared or sitting in the pool */
 struct uvUnusedOpenSegment
@@ -136,7 +132,7 @@ static unsigned uvPrepareCount(struct uv *uv)
     unsigned n;
     n = 0;
     QUEUE_FOREACH(head, &uv->prepare_pool) { n++; }
-    return 0;
+    return n;
 }
 
 static void uvPrepareAfterWorkCb(uv_work_t *work, int status);
@@ -148,6 +144,7 @@ static int uvPrepareStart(struct uv *uv)
     int rv;
 
     assert(uv->prepare_inflight == NULL);
+    assert(uvPrepareCount(uv) < UV__TARGET_POOL_SIZE);
 
     segment = HeapMalloc(sizeof *segment);
     if (segment == NULL) {
@@ -236,8 +233,12 @@ static void uvPrepareAfterWorkCb(uv_work_t *work, int status)
         return;
     }
 
-    /* If we have already enough prepared open segments, we're done. */
-    if (uvPrepareCount(uv) >= TARGET_POOL_SIZE) {
+    /* If we have already enough prepared open segments, we're done. There can't
+     * be any outstanding prepare requests, since if the request queue was not
+     * empty, we would have called uvPrepareFinishOldestRequest() above, thus
+     * reducing the pool size and making it smaller than the target size. */
+    if (uvPrepareCount(uv) >= UV__TARGET_POOL_SIZE) {
+        assert(QUEUE_IS_EMPTY(&uv->prepare_reqs));
         return;
     }
 
@@ -247,6 +248,19 @@ static void uvPrepareAfterWorkCb(uv_work_t *work, int status)
         uvPrepareFinishAllRequests(uv, rv);
         uv->errored = true;
     }
+}
+
+/* Discard a prepared open segment, closing its file descriptor and removing the
+ * underlying file. */
+static void uvPrepareDiscard(struct uv *uv, uv_file fd, uvCounter counter)
+{
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
+    char filename[UV__FILENAME_LEN];
+    assert(counter > 0);
+    assert(fd >= 0);
+    sprintf(filename, UV__OPEN_TEMPLATE, counter);
+    UvOsClose(fd);
+    UvFsRemoveFile(uv->dir, filename, errmsg);
 }
 
 int UvPrepare(struct uv *uv,
@@ -261,7 +275,7 @@ int UvPrepare(struct uv *uv,
 
     if (!QUEUE_IS_EMPTY(&uv->prepare_pool)) {
         uvPrepareConsume(uv, fd, counter);
-        return 0;
+        goto maybe_start;
     }
 
     *fd = -1;
@@ -269,6 +283,7 @@ int UvPrepare(struct uv *uv,
     req->cb = cb;
     QUEUE_PUSH(&uv->prepare_reqs, &req->queue);
 
+maybe_start:
     /* If we are already creating a segment, let's just wait. */
     if (uv->prepare_inflight != NULL) {
         return 0;
@@ -276,21 +291,19 @@ int UvPrepare(struct uv *uv,
 
     rv = uvPrepareStart(uv);
     if (rv != 0) {
-        QUEUE_REMOVE(&req->queue);
-        return rv;
+        goto err;
     }
 
     return 0;
-}
 
-/* Remove a prepared open segment */
-static void uvPrepareRemove(struct uvUnusedOpenSegment *segment)
-{
-    assert(segment->counter > 0);
-    assert(segment->fd >= 0);
-    UvOsClose(segment->fd);
-    UvFsRemoveFile(segment->uv->dir, segment->filename, segment->errmsg);
-    HeapFree(segment);
+err:
+    if (*fd != -1) {
+        uvPrepareDiscard(uv, *fd, *counter);
+    } else {
+        QUEUE_REMOVE(&req->queue);
+    }
+    assert(rv != 0);
+    return rv;
 }
 
 void UvPrepareClose(struct uv *uv)
@@ -303,10 +316,11 @@ void UvPrepareClose(struct uv *uv)
     /* Remove any unused prepared segment. */
     while (!QUEUE_IS_EMPTY(&uv->prepare_pool)) {
         queue *head;
-        struct uvUnusedOpenSegment *s;
+        struct uvUnusedOpenSegment *segment;
         head = QUEUE_HEAD(&uv->prepare_pool);
-        s = QUEUE_DATA(head, struct uvUnusedOpenSegment, queue);
-        QUEUE_REMOVE(&s->queue);
-        uvPrepareRemove(s);
+        segment = QUEUE_DATA(head, struct uvUnusedOpenSegment, queue);
+        QUEUE_REMOVE(&segment->queue);
+        uvPrepareDiscard(uv, segment->fd, segment->counter);
+        HeapFree(segment);
     }
 }
