@@ -306,7 +306,7 @@ static void uvAppendProcessRequests(struct uv *uv)
     }
 
     /* If we're truncating, let's wait. */
-    if (uv->truncate_work.data != NULL) {
+    if (!QUEUE_IS_EMPTY(&uv->truncate_reqs) || uv->truncate_work.data != NULL) {
         return;
     }
 
