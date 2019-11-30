@@ -50,8 +50,8 @@ static void appendCbAssertResult(struct raft_io_append *req, int status)
             entry->batch = NULL;                            \
             munit_assert_ptr_not_null(entry->buf.base);     \
             memset(entry->buf.base, 0, entry->buf.len);     \
-            *(uint64_t *)entry->buf.base = f->count;        \
             f->count++;                                     \
+            *(uint64_t *)entry->buf.base = f->count;        \
         }                                                   \
     } while (0)
 
@@ -118,8 +118,8 @@ static void tearDown(void *data)
 
 /* Shutdown the fixture's raft_io instance, then load all entries on disk using
  * a new raft_io instance, and assert that there are N entries with data
- * starting at DATA and a total size of TOTAL_DATA_SIZE bytes. */
-#define ASSERT_ENTRIES(N, DATA, TOTAL_DATA_SIZE)                  \
+ * matching the DATA array. */
+#define ASSERT_ENTRIES(N, ...)                                    \
     TEAR_DOWN_UV;                                                 \
     do {                                                          \
         struct uv_loop_s _loop;                                   \
@@ -134,7 +134,7 @@ static void tearDown(void *data)
         size_t _i;                                                \
         size_t _n;                                                \
         void *_batch = NULL;                                      \
-        size_t _total_data_size = 0;                              \
+        unsigned _data[N] = {__VA_ARGS__};                        \
         int _rv;                                                  \
                                                                   \
         _rv = uv_loop_init(&_loop);                               \
@@ -163,7 +163,7 @@ static void tearDown(void *data)
             uint64_t _value = *(uint64_t *)_entry->buf.base;      \
             munit_assert_int(_entry->term, ==, 1);                \
             munit_assert_int(_entry->type, ==, RAFT_COMMAND);     \
-            munit_assert_int(_value, ==, DATA + _i);              \
+            munit_assert_int(_value, ==, _data[_i]);              \
             munit_assert_ptr_not_null(_entry->batch);             \
         }                                                         \
         for (_i = 0; _i < _n; _i++) {                             \
@@ -172,10 +172,8 @@ static void tearDown(void *data)
                 _batch = _entry->batch;                           \
                 raft_free(_batch);                                \
             }                                                     \
-            _total_data_size += _entry->buf.len;                  \
         }                                                         \
         raft_free(_entries);                                      \
-        munit_assert_int(_total_data_size, ==, TOTAL_DATA_SIZE);  \
     } while (0);
 
 /******************************************************************************
@@ -194,30 +192,18 @@ TEST(truncate, wholeSegment, setUp, tearDownDeps, 0, NULL)
     APPEND(3);
     TRUNCATE(1, 0);
     APPEND(1);
-    ASSERT_ENTRIES(1 /* n entries */, 3 /* initial data */, 8 /* total size */);
+    ASSERT_ENTRIES(1 /* n entries */, 4 /* entries data */);
     return MUNIT_OK;
 }
 
 /* The index to truncate is the same as the last appended entry. */
-TEST(truncate, sameAsLastIndex, setUp, tearDown, 0, NULL)
+TEST(truncate, sameAsLastIndex, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
-
-    return MUNIT_SKIP; /* FIXME: flaky on Travis */
-
     APPEND(3);
     TRUNCATE(3, 0);
-    LOOP_RUN(2);
-
-    if (test_dir_has_file(f->dir, "1-3")) {
-        /* Run one more iteration */
-        LOOP_RUN(1);
-    }
-
-    munit_assert_false(test_dir_has_file(f->dir, "1-3"));
-    munit_assert_false(test_dir_has_file(f->dir, "4-4"));
-
+    APPEND(1);
+    ASSERT_ENTRIES(3 /* n entries */, 1, 2, 4 /* entries data */);
     return MUNIT_OK;
 }
 
