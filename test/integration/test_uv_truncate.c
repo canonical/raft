@@ -67,11 +67,14 @@ static void appendCbAssertResult(struct raft_io_append *req, int status)
                           appendCbAssertResult);                    \
     munit_assert_int(_rv##I, ==, 0)
 
+/* Wait for the append request identified by I to complete. */
+#define APPEND_WAIT(I) LOOP_RUN_UNTIL(&_result##I.done)
+
 /* Submit an append request and wait for it to successfully complete. */
-#define APPEND(N)                       \
-    do {                                \
-        APPEND_SUBMIT(0, N, 8);         \
-        LOOP_RUN_UNTIL(&_result0.done); \
+#define APPEND(N)               \
+    do {                        \
+        APPEND_SUBMIT(0, N, 8); \
+        APPEND_WAIT(0);         \
     } while (0)
 
 #define TRUNCATE(N, RV)                  \
@@ -217,5 +220,16 @@ TEST(truncate, partialSegment, setUp, tearDownDeps, 0, NULL)
     TRUNCATE(2, 0);
     APPEND(1);
     ASSERT_ENTRIES(2 /* n entries */, 1, 5 /* entries data */);
+    return MUNIT_OK;
+}
+
+/* Multiple truncate requests pending at the same time. */
+TEST(truncate, multiplePending, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    APPEND_SUBMIT(0, 3, 8);
+    TRUNCATE(2, 0);
+    APPEND_SUBMIT(1, 2, 8);
+    APPEND_WAIT(1);
     return MUNIT_OK;
 }
