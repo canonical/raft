@@ -11,6 +11,7 @@ struct fixture
 {
     FIXTURE_UV_DEPS;
     FIXTURE_UV;
+    int count; /* To generate deterministic entry data */
     bool appended;
 };
 
@@ -19,6 +20,7 @@ static void *setUp(const MunitParameter params[], void *user_data)
     struct fixture *f = munit_malloc(sizeof *f);
     SETUP_UV_DEPS;
     SETUP_UV;
+    f->count = 0;
     f->appended = false;
     return f;
 }
@@ -39,43 +41,48 @@ static void tearDown(void *data)
 
 static void appendCb(struct raft_io_append *req, int status)
 {
-    struct fixture *f = req->data;
+    bool *done = req->data;
     munit_assert_int(status, ==, 0);
-    f->appended = true;
+    *done = true;
 }
 
-/* Append N entries to the log. */
-#define APPEND(N)                                                         \
-    {                                                                     \
-        struct raft_io_append _req;                                       \
-        int _i;                                                           \
-        int _rv;                                                          \
-        struct raft_entry *_entries = munit_malloc(N * sizeof *_entries); \
-        for (_i = 0; _i < N; _i++) {                                      \
-            struct raft_entry *entry = &_entries[_i];                     \
-            entry->term = 1;                                              \
-            entry->type = RAFT_COMMAND;                                   \
-            entry->buf.base = munit_malloc(8);                            \
-            entry->buf.len = 8;                                           \
-            *(uint64_t *)entry->buf.base = _i + 1;                        \
-            entry->batch = NULL;                                          \
-        }                                                                 \
-        _req.data = f;                                                    \
-        _rv = f->io.append(&f->io, &_req, _entries, N, appendCb);         \
-        munit_assert_int(_rv, ==, 0);                                     \
-                                                                          \
-        for (_i = 0; _i < 5; _i++) {                                      \
-            LOOP_RUN(1);                                                  \
-            if (f->appended) {                                            \
-                break;                                                    \
-            }                                                             \
-        }                                                                 \
-        munit_assert(f->appended);                                        \
-        for (_i = 0; _i < N; _i++) {                                      \
-            struct raft_entry *entry = &_entries[_i];                     \
-            free(entry->buf.base);                                        \
-        }                                                                 \
-        free(_entries);                                                   \
+/* Declare and fill the entries array for the append request identified by
+ * I. The array will have N entries, and each entry will have a data buffer of
+ * SIZE bytes.*/
+#define ENTRIES(I, N, SIZE)                                 \
+    struct raft_entry _entries##I[N];                       \
+    uint8_t _entries_data##I[N * SIZE];                     \
+    {                                                       \
+        int _i;                                             \
+        for (_i = 0; _i < N; _i++) {                        \
+            struct raft_entry *entry = &_entries##I[_i];    \
+            entry->term = 1;                                \
+            entry->type = RAFT_COMMAND;                     \
+            entry->buf.base = &_entries_data##I[_i * SIZE]; \
+            entry->buf.len = SIZE;                          \
+            entry->batch = NULL;                            \
+            munit_assert_ptr_not_null(entry->buf.base);     \
+            memset(entry->buf.base, 0, entry->buf.len);     \
+            *(uint64_t *)entry->buf.base = f->count;        \
+            f->count++;                                     \
+        }                                                   \
+    }
+
+/* Submit an append request identified by I, with N_ENTRIES entries, each one of
+ * size ENTRY_SIZE). */
+#define APPEND_SUBMIT(I, N_ENTRIES, ENTRY_SIZE)                                \
+    struct raft_io_append _req##I;                                             \
+    int _rv##I;                                                                \
+    ENTRIES(I, N_ENTRIES, ENTRY_SIZE);                                         \
+    _req##I.data = &f->appended;                                               \
+    _rv##I = f->io.append(&f->io, &_req##I, _entries##I, N_ENTRIES, appendCb); \
+    munit_assert_int(_rv##I, ==, 0)
+
+/* Submit an append request and wait for it to successfully complete. */
+#define APPEND(N)                     \
+    {                                 \
+        APPEND_SUBMIT(0, N, 8);       \
+        LOOP_RUN_UNTIL(&f->appended); \
     }
 
 #define TRUNCATE(N, RV)                  \
