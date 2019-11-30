@@ -387,7 +387,6 @@ err:
 
 /* Implementation of raft_io->load. */
 static int uvLoad(struct raft_io *io,
-                  unsigned snapshot_trailing,
                   raft_term *term,
                   unsigned *voted_for,
                   struct raft_snapshot **snapshot,

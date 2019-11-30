@@ -452,7 +452,6 @@ static void ioMethodClose(struct raft_io *raft_io, raft_io_close_cb cb)
 }
 
 static int ioMethodLoad(struct raft_io *io,
-                        unsigned snapshot_trailing,
                         raft_term *term,
                         unsigned *voted_for,
                         struct raft_snapshot **snapshot,
@@ -668,6 +667,8 @@ static int ioMethodSnapshotPut(struct raft_io *raft_io,
 {
     struct io *io = raft_io->impl;
     struct snapshot_put *r;
+
+    (void)trailing;
 
     r = raft_malloc(sizeof *r);
     assert(r != NULL);

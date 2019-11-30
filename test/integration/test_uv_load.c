@@ -74,82 +74,82 @@ struct snapshot
  * entries, each containing one entry. DATA should be an integer that will be
  * used as base value for the data of the first entry, and will be then
  * incremented for subsequent entries. */
-#define APPEND(N, DATA)                                                   \
-    do {                                                                  \
-        struct raft_uv_transport _transport;                              \
-        struct raft_io _io;                                               \
-        raft_term _term;                                                  \
-        unsigned _voted_for;                                              \
-        struct raft_snapshot *_snapshot;                                  \
-        raft_index _start_index;                                          \
-        struct raft_entry *_entries;                                      \
-        size_t _i;                                                        \
-        size_t _n;                                                        \
-        void *_batch = NULL;                                              \
-        struct raft_entry _new_entry;                                     \
-        uint64_t _new_entry_data;                                         \
-        uint64_t _data = DATA;                                            \
-        struct raft_io_append _req;                                       \
-        bool _done = false;                                               \
-        int _rv;                                                          \
-                                                                          \
-        /* Initialize the instance, loading existing data, but discarding \
-         * it. This makes sure that the start index is correctly set. */  \
-        _rv = raft_uv_tcp_init(&_transport, &f->loop);                    \
-        munit_assert_int(_rv, ==, 0);                                     \
-        _rv = raft_uv_init(&_io, &f->loop, f->dir, &_transport);          \
-        munit_assert_int(_rv, ==, 0);                                     \
-        _rv = _io.init(&_io, 1, "1");                                     \
-        munit_assert_int(_rv, ==, 0);                                     \
-        raft_uv_set_block_size(&_io, SEGMENT_BLOCK_SIZE);                 \
-        raft_uv_set_segment_size(&_io, SEGMENT_SIZE);                     \
-        _rv = _io.load(&_io, 10, &_term, &_voted_for, &_snapshot,         \
-                       &_start_index, &_entries, &_n);                    \
-        munit_assert_int(_rv, ==, 0);                                     \
-        for (_i = 0; _i < _n; _i++) {                                     \
-            struct raft_entry *_entry = &_entries[_i];                    \
-            if (_entry->batch != _batch) {                                \
-                _batch = _entry->batch;                                   \
-                raft_free(_batch);                                        \
-            }                                                             \
-        }                                                                 \
-        if (_entries != NULL) {                                           \
-            raft_free(_entries);                                          \
-        }                                                                 \
-        if (_snapshot != NULL) {                                          \
-            raft_configuration_close(&_snapshot->configuration);          \
-            munit_assert_int(_snapshot->n_bufs, ==, 1);                   \
-            raft_free(_snapshot->bufs[0].base);                           \
-            raft_free(_snapshot->bufs);                                   \
-            raft_free(_snapshot);                                         \
-        }                                                                 \
-                                                                          \
-        /* Append the new entries. */                                     \
-        for (_i = 0; _i < N; _i++) {                                      \
-            struct raft_entry *entry = &_new_entry;                       \
-            entry->term = 1;                                              \
-            entry->type = RAFT_COMMAND;                                   \
-            entry->buf.base = &_new_entry_data;                           \
-            entry->buf.len = sizeof _new_entry_data;                      \
-            entry->batch = NULL;                                          \
-            munit_assert_ptr_not_null(entry->buf.base);                   \
-            memset(entry->buf.base, 0, entry->buf.len);                   \
-            *(uint64_t *)entry->buf.base = _data;                         \
-            _data++;                                                      \
-            _req.data = &_done;                                           \
-            _rv = _io.append(&_io, &_req, entry, 1, appendCb);            \
-            munit_assert_int(_rv, ==, 0);                                 \
-            LOOP_RUN_UNTIL(&_done);                                       \
-            _done = false;                                                \
-        }                                                                 \
-                                                                          \
-        /* Shutdown the standalone raft_io instance. */                   \
-        _done = false;                                                    \
-        _io.data = &_done;                                                \
-        _io.close(&_io, closeCb);                                         \
-        LOOP_RUN_UNTIL(&_done);                                           \
-        raft_uv_close(&_io);                                              \
-        raft_uv_tcp_close(&_transport);                                   \
+#define APPEND(N, DATA)                                                      \
+    do {                                                                     \
+        struct raft_uv_transport _transport;                                 \
+        struct raft_io _io;                                                  \
+        raft_term _term;                                                     \
+        unsigned _voted_for;                                                 \
+        struct raft_snapshot *_snapshot;                                     \
+        raft_index _start_index;                                             \
+        struct raft_entry *_entries;                                         \
+        size_t _i;                                                           \
+        size_t _n;                                                           \
+        void *_batch = NULL;                                                 \
+        struct raft_entry _new_entry;                                        \
+        uint64_t _new_entry_data;                                            \
+        uint64_t _data = DATA;                                               \
+        struct raft_io_append _req;                                          \
+        bool _done = false;                                                  \
+        int _rv;                                                             \
+                                                                             \
+        /* Initialize the instance, loading existing data, but discarding    \
+         * it. This makes sure that the start index is correctly set. */     \
+        _rv = raft_uv_tcp_init(&_transport, &f->loop);                       \
+        munit_assert_int(_rv, ==, 0);                                        \
+        _rv = raft_uv_init(&_io, &f->loop, f->dir, &_transport);             \
+        munit_assert_int(_rv, ==, 0);                                        \
+        _rv = _io.init(&_io, 1, "1");                                        \
+        munit_assert_int(_rv, ==, 0);                                        \
+        raft_uv_set_block_size(&_io, SEGMENT_BLOCK_SIZE);                    \
+        raft_uv_set_segment_size(&_io, SEGMENT_SIZE);                        \
+        _rv = _io.load(&_io, &_term, &_voted_for, &_snapshot, &_start_index, \
+                       &_entries, &_n);                                      \
+        munit_assert_int(_rv, ==, 0);                                        \
+        for (_i = 0; _i < _n; _i++) {                                        \
+            struct raft_entry *_entry = &_entries[_i];                       \
+            if (_entry->batch != _batch) {                                   \
+                _batch = _entry->batch;                                      \
+                raft_free(_batch);                                           \
+            }                                                                \
+        }                                                                    \
+        if (_entries != NULL) {                                              \
+            raft_free(_entries);                                             \
+        }                                                                    \
+        if (_snapshot != NULL) {                                             \
+            raft_configuration_close(&_snapshot->configuration);             \
+            munit_assert_int(_snapshot->n_bufs, ==, 1);                      \
+            raft_free(_snapshot->bufs[0].base);                              \
+            raft_free(_snapshot->bufs);                                      \
+            raft_free(_snapshot);                                            \
+        }                                                                    \
+                                                                             \
+        /* Append the new entries. */                                        \
+        for (_i = 0; _i < N; _i++) {                                         \
+            struct raft_entry *entry = &_new_entry;                          \
+            entry->term = 1;                                                 \
+            entry->type = RAFT_COMMAND;                                      \
+            entry->buf.base = &_new_entry_data;                              \
+            entry->buf.len = sizeof _new_entry_data;                         \
+            entry->batch = NULL;                                             \
+            munit_assert_ptr_not_null(entry->buf.base);                      \
+            memset(entry->buf.base, 0, entry->buf.len);                      \
+            *(uint64_t *)entry->buf.base = _data;                            \
+            _data++;                                                         \
+            _req.data = &_done;                                              \
+            _rv = _io.append(&_io, &_req, entry, 1, appendCb);               \
+            munit_assert_int(_rv, ==, 0);                                    \
+            LOOP_RUN_UNTIL(&_done);                                          \
+            _done = false;                                                   \
+        }                                                                    \
+                                                                             \
+        /* Shutdown the standalone raft_io instance. */                      \
+        _done = false;                                                       \
+        _io.data = &_done;                                                   \
+        _io.close(&_io, closeCb);                                            \
+        LOOP_RUN_UNTIL(&_done);                                              \
+        raft_uv_close(&_io);                                                 \
+        raft_uv_tcp_close(&_transport);                                      \
     } while (0);
 
 /* Initialize a standalone raft_io instance and use it to persist a new snapshot
@@ -184,8 +184,8 @@ struct snapshot
         munit_assert_int(_rv, ==, 0);                                         \
         raft_uv_set_block_size(&_io, SEGMENT_BLOCK_SIZE);                     \
         raft_uv_set_segment_size(&_io, SEGMENT_SIZE);                         \
-        _rv = _io.load(&_io, 10, &_term, &_voted_for, &_snapshot,             \
-                       &_start_index, &_entries, &_n);                        \
+        _rv = _io.load(&_io, &_term, &_voted_for, &_snapshot, &_start_index,  \
+                       &_entries, &_n);                                       \
         munit_assert_int(_rv, ==, 0);                                         \
         for (_i = 0; _i < _n; _i++) {                                         \
             struct raft_entry *_entry = &_entries[_i];                        \
@@ -248,20 +248,20 @@ struct snapshot
 
 /* Initialize the raft_io instance, then call raft_io->load() and assert that it
  * returns the given error code and message. */
-#define LOAD_ERROR(RV, ERRMSG)                                        \
-    do {                                                              \
-        int _rv;                                                      \
-        raft_term _term;                                              \
-        unsigned _voted_for;                                          \
-        struct raft_snapshot *_snapshot;                              \
-        raft_index _start_index;                                      \
-        struct raft_entry *_entries;                                  \
-        size_t _n;                                                    \
-        SETUP_UV;                                                     \
-        _rv = f->io.load(&f->io, 10, &_term, &_voted_for, &_snapshot, \
-                         &_start_index, &_entries, &_n);              \
-        munit_assert_int(_rv, ==, RV);                                \
-        munit_assert_string_equal(f->io.errmsg, ERRMSG);              \
+#define LOAD_ERROR(RV, ERRMSG)                                    \
+    do {                                                          \
+        int _rv;                                                  \
+        raft_term _term;                                          \
+        unsigned _voted_for;                                      \
+        struct raft_snapshot *_snapshot;                          \
+        raft_index _start_index;                                  \
+        struct raft_entry *_entries;                              \
+        size_t _n;                                                \
+        SETUP_UV;                                                 \
+        _rv = f->io.load(&f->io, &_term, &_voted_for, &_snapshot, \
+                         &_start_index, &_entries, &_n);          \
+        munit_assert_int(_rv, ==, RV);                            \
+        munit_assert_string_equal(f->io.errmsg, ERRMSG);          \
     } while (0)
 
 /* Initialize the raft_io instance, then tnvoke raft_io->load() and assert that
@@ -281,7 +281,7 @@ struct snapshot
         uint64_t _data = ENTRIES_DATA;                                        \
         unsigned _i;                                                          \
         SETUP_UV;                                                             \
-        _rv = f->io.load(&f->io, 10, &_term, &_voted_for, &_snapshot,         \
+        _rv = f->io.load(&f->io, &_term, &_voted_for, &_snapshot,             \
                          &_start_index, &_entries, &_n);                      \
         munit_assert_int(_rv, ==, 0);                                         \
         munit_assert_int(_term, ==, TERM);                                    \

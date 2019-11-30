@@ -513,16 +513,21 @@ struct raft_io
     void (*close)(struct raft_io *io, raft_io_close_cb cb);
 
     /**
-     * Read persisted state from storage.
+     * Load persisted state from storage.
      *
-     * The implementation must synchronously read the current state from
-     * disk.
+     * The implementation must synchronously load the current state from its
+     * storage backend and return information about it through the given
+     * pointers.
      *
-     * The entries array must be allocated with @raft_malloc. Once the request
-     * is completed ownership of such memory is transfered to the raft instance.
+     * The implementation can safely assume that this method will be invoked a
+     * single time right after init(), before any other method is invoked, and
+     * won't be invoked again.
+     *
+     * The snapshot object and entries array must be allocated and populated
+     * using @raft_malloc. If this function completes successfully, ownership of
+     * such memory is transfered to the caller.
      */
     int (*load)(struct raft_io *io,
-                unsigned trailing,
                 raft_term *term,
                 unsigned *voted_for,
                 struct raft_snapshot **snapshot,
