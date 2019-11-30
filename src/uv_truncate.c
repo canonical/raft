@@ -7,7 +7,7 @@
 #include "uv.h"
 #include "uv_encoding.h"
 
-struct truncate
+struct uvTruncate
 {
     struct uv *uv;
     raft_index index;
@@ -18,7 +18,7 @@ struct truncate
 /* Execute a truncate request in a thread. */
 static void workCb(uv_work_t *work)
 {
-    struct truncate *r = work->data;
+    struct uvTruncate *r = work->data;
     struct uv *uv = r->uv;
     struct uvSnapshotInfo *snapshots;
     struct uvSegmentInfo *segments;
@@ -108,7 +108,7 @@ err:
 
 static void afterWorkCb(uv_work_t *work, int status)
 {
-    struct truncate *r = work->data;
+    struct uvTruncate *r = work->data;
     struct uv *uv = r->uv;
 
     assert(status == 0);
@@ -133,7 +133,7 @@ static void afterWorkCb(uv_work_t *work, int status)
 /* Process pending truncate requests. */
 static void processRequests(struct uv *uv)
 {
-    struct truncate *r;
+    struct uvTruncate *r;
     queue *head;
     int rv;
 
@@ -149,7 +149,7 @@ static void processRequests(struct uv *uv)
 
     /* Pop the head of the queue */
     head = QUEUE_HEAD(&uv->truncate_reqs);
-    r = QUEUE_DATA(head, struct truncate, queue);
+    r = QUEUE_DATA(head, struct uvTruncate, queue);
     QUEUE_REMOVE(&r->queue);
 
     uv->truncate_work.data = r;
@@ -165,7 +165,7 @@ static void processRequests(struct uv *uv)
 int uvTruncate(struct raft_io *io, raft_index index)
 {
     struct uv *uv;
-    struct truncate *req;
+    struct uvTruncate *req;
     int rv;
 
     uv = io->impl;
@@ -218,11 +218,11 @@ void uvTruncateMaybeProcessRequests(struct uv *uv)
 void uvTruncateClose(struct uv *uv)
 {
     while (!QUEUE_IS_EMPTY(&uv->truncate_reqs)) {
-        struct truncate *r;
+        struct uvTruncate *r;
         queue *head;
         head = QUEUE_HEAD(&uv->truncate_reqs);
         QUEUE_REMOVE(head);
-        r = QUEUE_DATA(head, struct truncate, queue);
+        r = QUEUE_DATA(head, struct uvTruncate, queue);
         raft_free(r);
     }
 }
