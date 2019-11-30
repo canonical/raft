@@ -209,58 +209,13 @@ TEST(truncate, sameAsLastIndex, setUp, tearDownDeps, 0, NULL)
 
 /* If the index to truncate is not at the start of a segment, that segment gets
  * truncated. */
-TEST(truncate, partialSegment, setUp, tearDown, 0, NULL)
+TEST(truncate, partialSegment, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
-    raft_term term;
-    unsigned voted_for;
-    struct raft_snapshot *snapshot;
-    raft_index start_index;
-    struct raft_entry *entries;
-    size_t n;
-    int rv;
-
-    (void)params;
-
-    return MUNIT_SKIP; /* FIXME: flaky on Travis */
-
     APPEND(3);
     APPEND(1);
     TRUNCATE(2, 0);
-    LOOP_RUN(3);
-
-    munit_assert_false(test_dir_has_file(f->dir, "1-3"));
-    munit_assert_false(test_dir_has_file(f->dir, "4-4"));
-
-    munit_assert_true(test_dir_has_file(f->dir, "1-1"));
-
-    rv = f->io.load(&f->io, 10, &term, &voted_for, &snapshot, &start_index,
-                    &entries, &n);
-    munit_assert_int(rv, ==, 0);
-
-    munit_assert_int(n, ==, 1);
-    munit_assert_int(*(uint64_t *)entries[0].buf.base, ==, 1);
-
-    raft_free(entries[0].batch);
-    raft_free(entries);
-
-    return MUNIT_OK;
-}
-
-static char *error_oom_heap_fault_delay[] = {"0", NULL};
-static char *error_oom_heap_fault_repeat[] = {"1", NULL};
-
-static MunitParameterEnum error_oom_params[] = {
-    {TEST_HEAP_FAULT_DELAY, error_oom_heap_fault_delay},
-    {TEST_HEAP_FAULT_REPEAT, error_oom_heap_fault_repeat},
-    {NULL, NULL},
-};
-
-/* Out of memory conditions */
-TEST(truncate, oom, setUp, tearDown, 0, error_oom_params)
-{
-    struct fixture *f = data;
-    (void)params;
-    test_heap_fault_enable(&f->heap);
+    APPEND(1);
+    ASSERT_ENTRIES(2 /* n entries */, 1, 5 /* entries data */);
     return MUNIT_OK;
 }
