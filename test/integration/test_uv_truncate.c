@@ -47,35 +47,35 @@ static void appendCb(struct raft_io_append *req, int status)
 /* Append N entries to the log. */
 #define APPEND(N)                                                         \
     {                                                                     \
-        struct raft_io_append req_;                                       \
-        int i;                                                            \
-        int rv_;                                                          \
-        struct raft_entry *entries_ = munit_malloc(N * sizeof *entries_); \
-        for (i = 0; i < N; i++) {                                         \
-            struct raft_entry *entry = &entries_[i];                      \
+        struct raft_io_append _req;                                       \
+        int _i;                                                           \
+        int _rv;                                                          \
+        struct raft_entry *_entries = munit_malloc(N * sizeof *_entries); \
+        for (_i = 0; _i < N; _i++) {                                      \
+            struct raft_entry *entry = &_entries[_i];                     \
             entry->term = 1;                                              \
             entry->type = RAFT_COMMAND;                                   \
             entry->buf.base = munit_malloc(8);                            \
             entry->buf.len = 8;                                           \
-            *(uint64_t *)entry->buf.base = i + 1;                         \
+            *(uint64_t *)entry->buf.base = _i + 1;                        \
             entry->batch = NULL;                                          \
         }                                                                 \
-        req_.data = f;                                                    \
-        rv_ = f->io.append(&f->io, &req_, entries_, N, appendCb);         \
-        munit_assert_int(rv_, ==, 0);                                     \
+        _req.data = f;                                                    \
+        _rv = f->io.append(&f->io, &_req, _entries, N, appendCb);         \
+        munit_assert_int(_rv, ==, 0);                                     \
                                                                           \
-        for (i = 0; i < 5; i++) {                                         \
+        for (_i = 0; _i < 5; _i++) {                                      \
             LOOP_RUN(1);                                                  \
             if (f->appended) {                                            \
                 break;                                                    \
             }                                                             \
         }                                                                 \
         munit_assert(f->appended);                                        \
-        for (i = 0; i < N; i++) {                                         \
-            struct raft_entry *entry = &entries_[i];                      \
+        for (_i = 0; _i < N; _i++) {                                      \
+            struct raft_entry *entry = &_entries[_i];                     \
             free(entry->buf.base);                                        \
         }                                                                 \
-        free(entries_);                                                   \
+        free(_entries);                                                   \
     }
 
 #define TRUNCATE(N, RV)                  \
