@@ -98,9 +98,6 @@ SUITE(truncate)
 TEST(truncate, wholeSegment, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
-
-    return MUNIT_SKIP; /* FIXME: flaky on Travis */
 
     APPEND(3);
     TRUNCATE(1, 0);
