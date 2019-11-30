@@ -519,8 +519,8 @@ struct raft_io
      * storage backend and return information about it through the given
      * pointers.
      *
-     * The implementation can safely assume that this method will be invoked a
-     * single time right after init(), before any other method is invoked, and
+     * The implementation can safely assume that this method will be invoked
+     * exactly one time, before any call to append() or truncate(), and then
      * won't be invoked again.
      *
      * The snapshot object and entries array must be allocated and populated
@@ -554,7 +554,7 @@ struct raft_io
      * as the first entry of the log. The current persisted term must be set to
      * 1 and the vote to nil.
      *
-     * If an attempt is made to bootstrap a server that has already some sate,
+     * If an attempt is made to bootstrap a server that has already some state,
      * then #RAFT_CANTBOOTSTRAP must be returned.
      */
     int (*bootstrap)(struct raft_io *io, const struct raft_configuration *conf);

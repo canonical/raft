@@ -1,10 +1,10 @@
+#include "log.h"
+
 #include <string.h>
 
 #include "../include/raft.h"
-
 #include "assert.h"
 #include "configuration.h"
-#include "log.h"
 
 /* Calculate the reference count hash table key for the given log entry index in
  * an hash table of the given size.
@@ -408,6 +408,20 @@ void logClose(struct raft_log *l)
     }
 }
 
+void logStart(struct raft_log *l,
+              raft_index snapshot_index,
+              raft_term snapshot_term,
+              raft_index start_index)
+{
+    assert(logNumEntries(l) == 0);
+    assert(start_index > 0);
+    assert(start_index <= snapshot_index + 1);
+    assert(snapshot_index == 0 || snapshot_term != 0);
+    l->snapshot.last_index = snapshot_index;
+    l->snapshot.last_term = snapshot_term;
+    l->offset = start_index - 1;
+}
+
 /* Ensure that the entries array has enough free slots for adding a new enty. */
 static int ensureCapacity(struct raft_log *l)
 {
@@ -783,8 +797,8 @@ static void destroyEntry(struct raft_log *l, struct raft_entry *entry)
 /* Core logic of @logTruncate and @logDiscard, removing all log entries from
  * @index onward. If @destroy is true, also destroy the removed entries. */
 static void removeSuffix(struct raft_log *l,
-                          const raft_index index,
-                          bool destroy)
+                         const raft_index index,
+                         bool destroy)
 {
     size_t i;
     size_t n;
@@ -898,11 +912,4 @@ void logRestore(struct raft_log *l, raft_index last_index, raft_term last_term)
     l->snapshot.last_index = last_index;
     l->snapshot.last_term = last_term;
     l->offset = last_index;
-}
-
-void logSeek(struct raft_log *l, raft_index start_index)
-{
-    assert(start_index > 0);
-    assert(start_index - 1 <= l->snapshot.last_index);
-    l->offset = start_index - 1;
 }

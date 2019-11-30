@@ -14,6 +14,14 @@ void logInit(struct raft_log *l);
 /* Release all memory used by the given log object. */
 void logClose(struct raft_log *l);
 
+/* Called at startup when populating the log with entries loaded from disk. It
+ * sets the starting state of the log. The start index must be lower or equal
+ * than snapshot_index + 1. */
+void logStart(struct raft_log *l,
+              raft_index snapshot_index,
+              raft_term snapshot_term,
+              raft_index start_index);
+
 /* Get the number of entries the log currently contains. */
 size_t logNumEntries(struct raft_log *l);
 
@@ -70,14 +78,15 @@ void logRelease(struct raft_log *l,
                 struct raft_entry entries[],
                 const size_t n);
 
-/* Delete all entries from the given index (included) onwards. If the log is *
+/* Delete all entries from the given index (included) onwards. If the log is
  * empty this is a no-op. If @index is lower than or equal to the index of the
  * first entry in the log, then the log will become empty. */
 void logTruncate(struct raft_log *l, const raft_index index);
 
 /* Discard all entries from the given index (included) onwards. This is exactly
- * the same as truncate, but the memory of the entries does not gets released.
- */
+ * the same as truncate, but the memory of the entries does not gets
+ * released. This is called as part of error handling, when reverting the effect
+ * of previous logAppend calls. */
 void logDiscard(struct raft_log *l, const raft_index index);
 
 /* To be called when taking a new snapshot. The log must contain an entry at
@@ -87,19 +96,11 @@ void logDiscard(struct raft_log *l, const raft_index index);
  * a last_index - trailing, then no entry will be deleted. */
 void logSnapshot(struct raft_log *l, raft_index last_index, unsigned trailing);
 
-/* To be called when restoring a snapshot.
+/* To be called when installing a snapshot.
  *
  * The log can be in any state. All outstanding entries will be discarded, the
  * last index and last term of the most recent snapshot will be set to the given
  * values, and the offset adjusted accordingly. */
 void logRestore(struct raft_log *l, raft_index last_index, raft_term last_term);
-
-/* Change the current offset of outstanding entries.
- *
- * This is called at startup when populating the log with entries loaded from
- * disk. In case logRestore() was called and we also have trailing entries
- * preceeding the last index of the restored snapshot, we need to shift the
- * current offset back to start_index. */
-void logSeek(struct raft_log *l, raft_index start_index);
 
 #endif /* RAFT_LOG_H_ */

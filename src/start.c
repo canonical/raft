@@ -61,6 +61,8 @@ static int restoreMostRecentConfiguration(struct raft *r,
  * ready to roll back to the last committed configuration.
  */
 static int restoreEntries(struct raft *r,
+                          raft_index snapshot_index,
+                          raft_term snapshot_term,
                           raft_index start_index,
                           struct raft_entry *entries,
                           size_t n)
@@ -69,7 +71,7 @@ static int restoreEntries(struct raft *r,
     raft_index conf_index;
     size_t i;
     int rv;
-    logSeek(&r->log, start_index);
+    logStart(&r->log, snapshot_index, snapshot_term, start_index);
     r->last_stored = start_index - 1;
     for (i = 0; i < n; i++) {
         struct raft_entry *entry = &entries[i];
@@ -126,6 +128,8 @@ static int maybeSelfElect(struct raft *r)
 int raft_start(struct raft *r)
 {
     struct raft_snapshot *snapshot;
+    raft_index snapshot_index = 0;
+    raft_term snapshot_term = 0;
     raft_index start_index;
     struct raft_entry *entries;
     size_t n_entries;
@@ -157,7 +161,8 @@ int raft_start(struct raft *r)
             entryBatchesDestroy(entries, n_entries);
             return rv;
         }
-        logRestore(&r->log, snapshot->index, snapshot->term);
+        snapshot_index = snapshot->index;
+        snapshot_term = snapshot->term;
         raft_free(snapshot);
     } else if (n_entries > 0) {
         /* If we don't have a snapshot and the on-disk log is not empty, then
@@ -174,7 +179,8 @@ int raft_start(struct raft *r)
     /* Append the entries to the log, possibly restoring the last
      * configuration. */
     tracef("restore %lu entries starting at %llu", n_entries, start_index);
-    rv = restoreEntries(r, start_index, entries, n_entries);
+    rv = restoreEntries(r, snapshot_index, snapshot_term, start_index, entries,
+                        n_entries);
     if (rv != 0) {
         entryBatchesDestroy(entries, n_entries);
         return rv;
