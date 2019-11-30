@@ -3,10 +3,12 @@
 
 #include "assert.h"
 #include "byte.h"
+#include "heap.h"
 #include "logging.h"
 #include "uv.h"
 #include "uv_encoding.h"
 
+/* Track a truncate request. */
 struct uvTruncate
 {
     struct uv *uv;
@@ -36,7 +38,7 @@ static void workCb(uv_work_t *work)
         goto err;
     }
     if (snapshots != NULL) {
-        raft_free(snapshots);
+        HeapFree(snapshots);
     }
 
     /* Look for the segment that contains the truncate point. */
@@ -90,7 +92,7 @@ static void workCb(uv_work_t *work)
 
 out:
     if (segments != NULL) {
-        raft_free(segments);
+        HeapFree(segments);
     }
 
     r->status = 0;
@@ -98,7 +100,7 @@ out:
     return;
 
 err_after_list:
-    raft_free(segments);
+    HeapFree(segments);
 
 err:
     assert(rv != 0);
@@ -123,7 +125,7 @@ static void afterWorkCb(uv_work_t *work, int status)
     uv->finalize_last_index = r->index - 1;
 
     uv->truncate_work.data = NULL;
-    raft_free(r);
+    HeapFree(r);
 
     uvAppendMaybeProcessRequests(uv);
     uvSnapshotMaybeProcessRequests(uv);
@@ -176,7 +178,7 @@ int uvTruncate(struct raft_io *io, raft_index index)
      * first place. */
     assert(index <= uv->append_next_index);
 
-    req = raft_malloc(sizeof *req);
+    req = HeapMalloc(sizeof *req);
     if (req == NULL) {
         rv = RAFT_NOMEM;
         goto err;
@@ -200,7 +202,7 @@ int uvTruncate(struct raft_io *io, raft_index index)
     return 0;
 
 err_after_req_alloc:
-    raft_free(req);
+    HeapFree(req);
 err:
     assert(rv != 0);
     return rv;
@@ -223,6 +225,6 @@ void uvTruncateClose(struct uv *uv)
         head = QUEUE_HEAD(&uv->truncate_reqs);
         QUEUE_REMOVE(head);
         r = QUEUE_DATA(head, struct uvTruncate, queue);
-        raft_free(r);
+        HeapFree(r);
     }
 }
