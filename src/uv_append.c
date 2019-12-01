@@ -62,7 +62,6 @@ struct uvAppend
     const struct raft_entry *entries; /* Entries to write */
     unsigned n;                       /* Number of entries */
     struct uvOpenSegment *segment;    /* Segment to write to */
-    int status;
     queue queue;
 };
 
