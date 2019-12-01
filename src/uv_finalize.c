@@ -1,4 +1,5 @@
 #include "assert.h"
+#include "heap.h"
 #include "queue.h"
 #include "uv.h"
 #include "uv_os.h"
@@ -74,7 +75,7 @@ static void afterWorkCb(uv_work_t *work, int status)
     if (s->status != 0) {
         uv->errored = true;
     }
-    raft_free(s);
+    HeapFree(s);
     processRequests(uv);
     uvTruncateMaybeProcessRequests(uv);
     uvMaybeFireCloseCb(uv);
@@ -151,7 +152,7 @@ int uvFinalize(struct uv *uv,
         /* assert(first_index == uv->finalize_last_index + 1); */
     }
 
-    segment = raft_malloc(sizeof *segment);
+    segment = HeapMalloc(sizeof *segment);
     if (segment == NULL) {
         return RAFT_NOMEM;
     }
