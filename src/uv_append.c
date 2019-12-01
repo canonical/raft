@@ -633,8 +633,9 @@ err:
     return rv;
 }
 
-/* Start finalizing the current segment, if any. */
-static void uvFinalizeCurrentOpenSegment(struct uv *uv)
+/* Finalize the current segment as soon as all its pending or inflight append
+ * requests get completed. */
+static void uvFinalizeCurrentOpenSegmentOnceIdle(struct uv *uv)
 {
     struct uvOpenSegment *s;
     queue *head;
@@ -675,7 +676,7 @@ static void uvFinalizeCurrentOpenSegment(struct uv *uv)
 int uvAppendForceFinalizingCurrentSegment(struct uv *uv)
 {
     int rv;
-    uvFinalizeCurrentOpenSegment(uv);
+    uvFinalizeCurrentOpenSegmentOnceIdle(uv);
     rv = uvAppendPushOpenSegment(uv);
     if (rv != 0) {
         return rv;
@@ -695,7 +696,7 @@ void uvAppendClose(struct uv *uv)
     struct uvOpenSegment *segment;
 
     flushRequests(&uv->append_pending_reqs, RAFT_CANCELED);
-    uvFinalizeCurrentOpenSegment(uv);
+    uvFinalizeCurrentOpenSegmentOnceIdle(uv);
 
     /* Also finalize the segments that we didn't write at all and are just
      * sitting in the append_segments queue waiting for writes against the
