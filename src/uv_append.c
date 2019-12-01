@@ -61,7 +61,6 @@ struct uvAppend
     struct raft_io_append *req;       /* User request */
     const struct raft_entry *entries; /* Entries to write */
     unsigned n;                       /* Number of entries */
-    size_t size;                      /* Size of this batch on disk */
     struct uvOpenSegment *segment;    /* Segment to write to */
     int status;
     queue queue;
@@ -77,15 +76,9 @@ static void uvAppendInit(struct uvAppend *a,
                          unsigned n,
                          raft_io_append_cb cb)
 {
-    unsigned i;
     a->req = req;
     a->entries = entries;
     a->n = n;
-    a->size = sizeof(uint32_t) * 2;       /* CRC checksums */
-    a->size += uvSizeofBatchHeader(a->n); /* Batch header */
-    for (i = 0; i < a->n; i++) {          /* Entries data */
-        a->size += bytePad64(a->entries[i].buf.len);
-    }
     req->cb = cb;
 }
 
@@ -535,17 +528,33 @@ static void uvOpenSegmentReserveSegmentCapacity(struct uvOpenSegment *s,
     s->size += size;
 }
 
+/* Return the number of bytes needed to store the batch of entries of this
+ * append request on disk. */
+static size_t uvAppendSize(struct uvAppend *a)
+{
+    size_t size = sizeof(uint32_t) * 2; /* CRC checksums */
+    unsigned i;
+    size += uvSizeofBatchHeader(a->n); /* Batch header */
+    for (i = 0; i < a->n; i++) {       /* Entries data */
+        size += bytePad64(a->entries[i].buf.len);
+    }
+    return size;
+}
+
 /* Enqueue an append entries request, assigning it to the appropriate active
  * open segment. */
 static int uvAppendEnqueueRequest(struct uv *uv, struct uvAppend *append)
 {
     struct uvOpenSegment *segment;
+    size_t size;
     bool fits;
     int rv;
 
     assert(append->entries != NULL);
     assert(append->n > 0);
     assert(uv->append_next_index > 0);
+
+    size = uvAppendSize(append);
 
     /* If we have no segments yet, it means this is the very first append, and
      * we need to add a new segment. Otherwise we check if the last segment has
@@ -554,7 +563,7 @@ static int uvAppendEnqueueRequest(struct uv *uv, struct uvAppend *append)
     if (segment == NULL) {
         fits = false;
     } else {
-        fits = uvOpenSegmentHasEnoughSpareCapacity(segment, append->size);
+        fits = uvOpenSegmentHasEnoughSpareCapacity(segment, size);
         if (!fits) {
             segment->finalize = true; /* Finalize when all writes are done */
         }
@@ -570,7 +579,7 @@ static int uvAppendEnqueueRequest(struct uv *uv, struct uvAppend *append)
     }
 
     segment = uvGetLastOpenSegment(uv); /* Get the last added segment */
-    uvOpenSegmentReserveSegmentCapacity(segment, append->size);
+    uvOpenSegmentReserveSegmentCapacity(segment, size);
 
     append->segment = segment;
     QUEUE_PUSH(&uv->append_pending_reqs, &append->queue);
