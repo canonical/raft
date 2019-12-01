@@ -591,6 +591,7 @@ int raft_uv_init(struct raft_io *io,
     QUEUE_INIT(&uv->append_segments);
     QUEUE_INIT(&uv->append_pending_reqs);
     QUEUE_INIT(&uv->append_writing_reqs);
+    uv->barrier = NULL;
     QUEUE_INIT(&uv->finalize_reqs);
     uv->finalize_last_index = 0;
     uv->finalize_work.data = NULL;

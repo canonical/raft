@@ -72,6 +72,7 @@ struct uv
     queue append_segments;               /* Open segments in use. */
     queue append_pending_reqs;           /* Pending append requests. */
     queue append_writing_reqs;           /* Append requests in flight */
+    struct UvBarrier *barrier;           /* Inflight barrier request */
     queue finalize_reqs;                 /* Segments waiting to be closed */
     raft_index finalize_last_index;      /* Last index of last closed seg */
     struct uv_work_s finalize_work;      /* Resize and rename segments */
@@ -302,6 +303,41 @@ int UvAppend(struct raft_io *io,
              const struct raft_entry entries[],
              unsigned n,
              raft_io_append_cb cb);
+
+/* Pause request object and callback. */
+struct UvBarrier;
+typedef void (*UvBarrierCb)(struct UvBarrier *req);
+struct UvBarrier
+{
+    void *data;     /* User data */
+    UvBarrierCb cb; /* Completion callback */
+};
+
+/* Submit a barrier request to interrupt the normal flow of append
+ * operations.
+ *
+ * The following will happen:
+ *
+ * - Replace uv->append_next_index with the given next_index, so the next entry
+ *   that will be appended will have the new index.
+ *
+ * - Execution of new writes for subsequent append requests will be blocked
+ *   until UvUnblock is called.
+ *
+ * - Wait for all currently pending and inflight append requests against all
+ *   open segments to complete, and for those open segments to be finalized,
+ *   then invoke the barrier callback.
+ *
+ * This API is used to implement truncate and snapshot install operations, which
+ * need to wait until all pending writes have settled and modify the log state,
+ * changing the next index. */
+int UvBarrier(struct uv *uv,
+              raft_index next_index,
+              struct UvBarrier *barrier,
+              UvBarrierCb cb);
+
+/* Resume writing append requests after UvBarrier has been called. */
+void UvUnblock(struct uv *uv);
 
 /* Callback invoked after completing a truncate request. If there are append
  * requests that have accumulated in while the truncate request was executed,

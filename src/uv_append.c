@@ -53,6 +53,7 @@ struct uvOpenSegment
     uv_buf_t buf;                   /* Write buffer for current write */
     size_t written;                 /* Number of bytes actually written */
     queue queue;                    /* Segment queue */
+    struct UvBarrier *barrier;      /* Barrier waiting on this segment */
     bool finalize;                  /* Finalize the segment after writing */
 };
 
@@ -433,6 +434,7 @@ static void uvOpenSegmentInit(struct uvOpenSegment *s, struct uv *uv)
     s->next_block = 0;
     uvSegmentBufferInit(&s->pending, uv->block_size);
     s->written = 0;
+    s->barrier = NULL;
     s->finalize = false;
 }
 
