@@ -607,7 +607,12 @@ struct raft_io
     int (*truncate)(struct raft_io *io, raft_index index);
 
     /**
-     * Asynchronously persist a new snapshot.
+     * Asynchronously persist a new snapshot. If the @trailing parameter is
+     * greater than zero, then all entries older that @snapshot->index -
+     * @trailing must be deleted. If the @trailing parameter is 0, then the
+     * snapshot completely replaces all existing entries, which should all be
+     * deleted. Subsequent calls to append() should append entries starting at
+     * index @snapshot->index + 1.
      */
     int (*snapshot_put)(struct raft_io *io,
                         unsigned trailing,
