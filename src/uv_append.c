@@ -91,7 +91,7 @@ static void uvOpenSegmentWriterCloseCb(struct UvWriter *writer)
 }
 
 /* Submit a request to close the current open segment. */
-static void finalizeSegment(struct uvOpenSegment *s)
+static void uvOpenSegmentFinalize(struct uvOpenSegment *s)
 {
     struct uv *uv = s->uv;
     int rv;
@@ -336,7 +336,7 @@ prepare:
     if (n_reqs == 0) {
         assert(QUEUE_IS_EMPTY(&uv->append_writing_reqs));
         if (segment->finalize) {
-            finalizeSegment(segment);
+            uvOpenSegmentFinalize(segment);
             if (!QUEUE_IS_EMPTY(&uv->truncate_reqs)) {
                 return;
             }
@@ -666,7 +666,7 @@ static void uvFinalizeCurrentOpenSegment(struct uv *uv)
      * TODO: is it actually possible to have pending requests with no writing
      * requests? Probably no. */
     if (!has_pending_reqs && !has_writing_reqs) {
-        finalizeSegment(s);
+        uvOpenSegmentFinalize(s);
     } else {
         s->finalize = true;
     }
@@ -707,6 +707,6 @@ void uvAppendClose(struct uv *uv)
             break; /* We reached the head of the queue */
         }
         assert(segment->written == 0);
-        finalizeSegment(segment);
+        uvOpenSegmentFinalize(segment);
     }
 }
