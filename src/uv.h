@@ -89,6 +89,9 @@ struct uv
     raft_io_close_cb close_cb;           /* Invoked when finishing closing */
 };
 
+/* Implementation of raft_io->truncate. */
+int UvTruncate(struct raft_io *io, raft_index index);
+
 /* Load Raft metadata from disk, choosing the most recent version (either the
  * metadata1 or metadata2 file). */
 int uvMetadataLoad(const char *dir, struct uvMetadata *metadata, char *errmsg);

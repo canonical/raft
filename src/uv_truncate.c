@@ -158,7 +158,7 @@ static void uvTruncateBarrierCb(struct UvBarrier *barrier)
     }
 }
 
-int uvTruncate(struct raft_io *io, raft_index index)
+int UvTruncate(struct raft_io *io, raft_index index)
 {
     struct uv *uv;
     struct uvTruncate *req;

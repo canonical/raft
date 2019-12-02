@@ -520,9 +520,6 @@ static int uvRecover(struct raft_io *io, const struct raft_configuration *conf)
     return 0;
 }
 
-/* Implementation of raft_io->truncate (defined in uv_truncate.c). */
-int uvTruncate(struct raft_io *io, raft_index index);
-
 /* Implementation of raft_io->time. */
 static raft_time uvTime(struct raft_io *io)
 {
@@ -615,7 +612,7 @@ int raft_uv_init(struct raft_io *io,
     io->set_term = uvSetTerm;
     io->set_vote = uvSetVote;
     io->append = UvAppend;
-    io->truncate = uvTruncate;
+    io->truncate = UvTruncate;
     io->send = UvSend;
     io->snapshot_put = UvSnapshotPut;
     io->snapshot_get = UvSnapshotGet;
