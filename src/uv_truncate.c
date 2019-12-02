@@ -18,10 +18,10 @@ struct uvTruncate
 };
 
 /* Execute a truncate request in a thread. */
-static void workCb(uv_work_t *work)
+static void uvTruncateWorkCb(uv_work_t *work)
 {
-    struct uvTruncate *r = work->data;
-    struct uv *uv = r->uv;
+    struct uvTruncate *truncate = work->data;
+    struct uv *uv = truncate->uv;
     struct uvSnapshotInfo *snapshots;
     struct uvSegmentInfo *segments;
     struct uvSegmentInfo *segment;
@@ -47,8 +47,8 @@ static void workCb(uv_work_t *work)
         if (segment->is_open) {
             continue;
         }
-        if (r->index >= segment->first_index &&
-            r->index <= segment->end_index) {
+        if (truncate->index >= segment->first_index &&
+            truncate->index <= segment->end_index) {
             break;
         }
     }
@@ -60,8 +60,8 @@ static void workCb(uv_work_t *work)
 
     /* If the truncate index is not the first of the segment, we need to
      * truncate it. */
-    if (r->index > segment->first_index) {
-        rv = uvSegmentTruncate(uv, segment, r->index);
+    if (truncate->index > segment->first_index) {
+        rv = uvSegmentTruncate(uv, segment, truncate->index);
         if (rv != 0) {
             goto err_after_list;
         }
@@ -95,7 +95,7 @@ out:
         HeapFree(segments);
     }
 
-    r->status = 0;
+    truncate->status = 0;
 
     return;
 
@@ -105,10 +105,10 @@ err_after_list:
 err:
     assert(rv != 0);
 
-    r->status = rv;
+    truncate->status = rv;
 }
 
-static void afterWorkCb(uv_work_t *work, int status)
+static void uvTruncateAfterWorkCb(uv_work_t *work, int status)
 {
     struct uvTruncate *r = work->data;
     struct uv *uv = r->uv;
@@ -149,7 +149,8 @@ static void uvTruncateBarrierCb(struct UvBarrier *barrier)
     assert(uv->finalize_work.data == NULL);
 
     uv->truncate_work.data = truncate;
-    rv = uv_queue_work(uv->loop, &uv->truncate_work, workCb, afterWorkCb);
+    rv = uv_queue_work(uv->loop, &uv->truncate_work, uvTruncateWorkCb,
+                       uvTruncateAfterWorkCb);
     if (rv != 0) {
         Tracef(uv->tracer, "truncate index %lld: %s", truncate->index,
                uv_strerror(rv));
