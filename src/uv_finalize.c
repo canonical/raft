@@ -65,68 +65,26 @@ err:
     s->status = rv;
 }
 
-static void processRequests(struct uv *uv);
+static int uvFinalizeStart(struct segment *segment);
 static void uvFinalizeAfterWorkCb(uv_work_t *work, int status)
 {
-    struct segment *s = work->data;
-    struct uv *uv = s->uv;
-    assert(status == 0); /* We don't cancel worker requests */
-    uv->finalize_work.data = NULL;
-    if (s->status != 0) {
-        uv->errored = true;
-    }
-    HeapFree(s);
-
-    if (QUEUE_IS_EMPTY(&uv->finalize_reqs)) {
-        if (uv->closing) {
-            uvMaybeFireCloseCb(uv);
-            return;
-        }
-        if (uv->barrier != NULL) {
-            uv->barrier->cb(uv->barrier);
-            return;
-        }
-    }
-
-    processRequests(uv);
-}
-
-/* Start finalizing an open segment. */
-static int uvFinalizeStart(struct segment *s)
-{
-    struct uv *uv = s->uv;
-    int rv;
-
-    assert(uv->finalize_work.data == NULL);
-    assert(s->counter > 0);
-
-    uv->finalize_work.data = s;
-
-    rv = uv_queue_work(uv->loop, &uv->finalize_work, uvFinalizeWorkCb,
-                       uvFinalizeAfterWorkCb);
-    if (rv != 0) {
-        Tracef(uv->tracer, "start to truncate segment file %d: %s", s->counter,
-               uv_strerror(rv));
-        return RAFT_IOERR;
-    }
-
-    return 0;
-}
-
-/* Process pending requests to finalize open segments */
-static void processRequests(struct uv *uv)
-{
-    struct segment *segment;
+    struct segment *segment = work->data;
+    struct uv *uv = segment->uv;
     queue *head;
     int rv;
 
-    /* If we're already processing a segment, let's wait. */
-    if (uv->finalize_work.data != NULL) {
-        return;
+    assert(status == 0); /* We don't cancel worker requests */
+    uv->finalize_work.data = NULL;
+    if (segment->status != 0) {
+        uv->errored = true;
     }
+    HeapFree(segment);
 
-    /* If there's no pending request, we're done. */
     if (QUEUE_IS_EMPTY(&uv->finalize_reqs)) {
+        if (uv->barrier != NULL) {
+            uv->barrier->cb(uv->barrier);
+        }
+        uvMaybeFireCloseCb(uv);
         return;
     }
 
@@ -136,14 +94,31 @@ static void processRequests(struct uv *uv)
 
     rv = uvFinalizeStart(segment);
     if (rv != 0) {
-        goto err;
+        HeapFree(segment);
+        uv->errored = true;
+    }
+}
+
+/* Start finalizing an open segment. */
+static int uvFinalizeStart(struct segment *segment)
+{
+    struct uv *uv = segment->uv;
+    int rv;
+
+    assert(uv->finalize_work.data == NULL);
+    assert(segment->counter > 0);
+
+    uv->finalize_work.data = segment;
+
+    rv = uv_queue_work(uv->loop, &uv->finalize_work, uvFinalizeWorkCb,
+                       uvFinalizeAfterWorkCb);
+    if (rv != 0) {
+        Tracef(uv->tracer, "start to truncate segment file %d: %s",
+               segment->counter, uv_strerror(rv));
+        return RAFT_IOERR;
     }
 
-    return;
-err:
-    assert(rv != 0);
-
-    uv->errored = true;
+    return 0;
 }
 
 int UvFinalize(struct uv *uv,
@@ -153,6 +128,7 @@ int UvFinalize(struct uv *uv,
                raft_index last_index)
 {
     struct segment *segment;
+    int rv;
 
     if (used > 0) {
         assert(first_index > 0);
@@ -170,10 +146,18 @@ int UvFinalize(struct uv *uv,
     segment->first_index = first_index;
     segment->last_index = last_index;
 
-    QUEUE_INIT(&segment->queue);
-    QUEUE_PUSH(&uv->finalize_reqs, &segment->queue);
+    /* If we're already processing a segment, let's put the request in the queue
+     * and wait. */
+    if (uv->finalize_work.data != NULL) {
+        QUEUE_PUSH(&uv->finalize_reqs, &segment->queue);
+        return 0;
+    }
 
-    processRequests(uv);
+    rv = uvFinalizeStart(segment);
+    if (rv != 0) {
+        HeapFree(segment);
+        return rv;
+    }
 
     return 0;
 }
