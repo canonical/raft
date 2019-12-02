@@ -122,7 +122,7 @@ void uvMaybeFireCloseCb(struct uv *uv)
     if (uv->prepare_inflight != NULL) {
         return;
     }
-    if (uv->truncate_work.data != NULL) {
+    if (uv->barrier != NULL) {
         return;
     }
     if (!QUEUE_IS_EMPTY(&uv->snapshot_put_reqs)) {
@@ -134,6 +134,8 @@ void uvMaybeFireCloseCb(struct uv *uv)
     if (!QUEUE_IS_EMPTY(&uv->aborting)) {
         return;
     }
+
+    assert(uv->truncate_work.data == NULL);
 
     if (uv->close_cb != NULL) {
         uv->close_cb(uv->io);
