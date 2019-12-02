@@ -131,15 +131,13 @@ int uvSegmentInfoAppendIfMatch(const char *filename,
 void uvSegmentSort(struct uvSegmentInfo *infos, size_t n_infos);
 
 /* Keep only the closed segments whose entries are within the given trailing
- * amount past the given snapshot last index. If no error occurs the location
- * pointed by 'deleted' will contain the index of the last segment that got
- * deleted, or 'n' if no segment got deleted. */
+ * amount past the given snapshot last index. If the given trailing amount is 0,
+ * unconditionally delete all closed segments. */
 int uvSegmentKeepTrailing(struct uv *uv,
                           struct uvSegmentInfo *segments,
                           size_t n,
                           raft_index last_index,
-                          size_t trailing,
-                          size_t *deleted);
+                          size_t trailing);
 
 /* Load all entries contained in the given closed segment. */
 int uvSegmentLoadClosed(struct uv *uv,
@@ -345,10 +343,6 @@ void UvUnblock(struct uv *uv);
  * they will be processed now. */
 void uvAppendMaybeProcessRequests(struct uv *uv);
 
-/* Fix the first index of the last segment that we requested to prepare, to
- * reflect that we're restoring a snapshot. */
-void uvAppendFixPreparedSegmentFirstIndex(struct uv *uv);
-
 /* Cancel all pending write requests and request the current segment to be
  * finalized. Must be invoked at closing time. */
 void uvAppendClose(struct uv *uv);
@@ -389,10 +383,6 @@ int UvRecvStart(struct uv *uv);
 /* Stop all servers by closing the inbound stream handles and aborting all
  * requests being received.  */
 void UvRecvClose(struct uv *uv);
-
-/* Callback invoked after truncation has completed, possibly unblocking pending
- * snapshot put requests. */
-void uvSnapshotMaybeProcessRequests(struct uv *uv);
 
 void uvMaybeFireCloseCb(struct uv *uv);
 

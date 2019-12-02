@@ -108,7 +108,6 @@ static void uvTruncateAfterWorkCb(uv_work_t *work, int status)
     uv->truncate_work.data = NULL;
     HeapFree(truncate);
     UvUnblock(uv);
-    uvSnapshotMaybeProcessRequests(uv);
 }
 
 static void uvTruncateBarrierCb(struct UvBarrier *barrier)

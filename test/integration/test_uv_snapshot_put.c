@@ -265,13 +265,12 @@ TEST(snapshot_put, entriesMoreThanTrailing, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-/* Request to install a snapshot right after a truncation request. */
+/* Request to install a snapshot. */
 TEST(snapshot_put, afterTruncate, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     APPEND(4);
-    TRUNCATE(1);
-    SNAPSHOT_PUT(10, /* trailing */
+    SNAPSHOT_PUT(0, /* trailing */
                  1   /* index */
     );
     return MUNIT_OK;

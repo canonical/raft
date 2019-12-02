@@ -114,8 +114,7 @@ int uvSegmentKeepTrailing(struct uv *uv,
                           struct uvSegmentInfo *segments,
                           size_t n,
                           raft_index last_index,
-                          size_t trailing,
-                          size_t *deleted)
+                          size_t trailing)
 {
     raft_index retain_index;
     size_t i;
@@ -124,8 +123,6 @@ int uvSegmentKeepTrailing(struct uv *uv,
 
     assert(last_index > 0);
     assert(n > 0);
-
-    *deleted = n;
 
     if (last_index <= trailing) {
         return 0;
@@ -139,14 +136,13 @@ int uvSegmentKeepTrailing(struct uv *uv,
         if (segment->is_open) {
             break;
         }
-        if (segment->end_index < retain_index) {
+        if (trailing == 0 || segment->end_index < retain_index) {
             Tracef(uv->tracer, "deleting closed segment %s", segment->filename);
             rv = UvFsRemoveFile(uv->dir, segment->filename, errmsg);
             if (rv != 0) {
                 Tracef(uv->tracer, "unlink %s: %s", segment->filename, errmsg);
                 return rv;
             }
-            *deleted = i;
         } else {
             break;
         }

@@ -504,24 +504,6 @@ static struct uvOpenSegment *uvGetLastOpenSegment(struct uv *uv)
     return QUEUE_DATA(tail, struct uvOpenSegment, queue);
 }
 
-void uvAppendFixPreparedSegmentFirstIndex(struct uv *uv)
-{
-    struct uvOpenSegment *s = uvGetLastOpenSegment(uv);
-    if (s == NULL) {
-        /* Must be the first snapshot.
-         *
-         * TODO: verify assumption. */
-        return;
-    }
-    assert(s->first_index == 1);
-    assert(s->last_index == 0);
-    assert(s->size == sizeof(uint64_t));
-    assert(s->next_block == 0);
-    assert(s->written == 0);
-    s->first_index = uv->append_next_index;
-    s->last_index = s->first_index - 1;
-}
-
 /* Return #true if the remaining capacity of the given segment is equal or
  * greater than @size. */
 static bool uvOpenSegmentHasEnoughSpareCapacity(struct uvOpenSegment *s,

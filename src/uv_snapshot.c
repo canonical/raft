@@ -20,7 +20,8 @@
  * (snapshot-xxx-yyy-zzz.meta), and fill the given info structure if so.
  *
  * Return true if the filename matched, false otherwise. */
-static bool uvSnapshotInfoMatch(const char *filename, struct uvSnapshotInfo *info)
+static bool uvSnapshotInfoMatch(const char *filename,
+                                struct uvSnapshotInfo *info)
 {
     int consumed = 0;
     int matched;
@@ -291,6 +292,7 @@ struct put
         struct raft_buffer bufs[2]; /* Preamble and configuration */
     } meta;
     int status;
+    struct UvBarrier barrier;
     queue queue;
 };
 
@@ -327,9 +329,8 @@ static int removeOldSegmentsAndSnapshots(struct uv *uv,
     }
 
     if (segments != NULL) {
-        size_t deleted;
         rv = uvSegmentKeepTrailing(uv, segments, n_segments, last_index,
-                                   trailing, &deleted);
+                                   trailing);
         if (rv != 0) {
             goto out;
         }
@@ -430,23 +431,35 @@ static void uvSnapshotPutWorkCb(uv_work_t *work)
     return;
 }
 
-static void uvSnapshotPutAfterWorkCb(uv_work_t *work, int status)
+/* Finish the put request, releasing all associated memory and invoking its
+ * callback. */
+static void uvSnapshotPutFinish(struct put *put)
 {
-    struct put *put = work->data;
     struct raft_io_snapshot_put *req = put->req;
-    int put_status = put->status;
+    int status = put->status;
     struct uv *uv = put->uv;
-    assert(status == 0);
     QUEUE_REMOVE(&put->queue);
     uv->snapshot_put_work.data = NULL;
     HeapFree(put->meta.bufs[1].base);
     HeapFree(put);
-    req->cb(req, put_status);
+    req->cb(req, status);
+}
+
+static void uvSnapshotPutAfterWorkCb(uv_work_t *work, int status)
+{
+    struct put *put = work->data;
+    struct uv *uv = put->uv;
+    bool is_install = put->trailing == 0;
+    assert(status == 0);
+    uvSnapshotPutFinish(put);
+    if (is_install) {
+        UvUnblock(uv);
+    }
     uvMaybeFireCloseCb(uv);
 }
 
 /* Process pending put requests. */
-void uvSnapshotMaybeProcessRequests(struct uv *uv)
+static void uvSnapshotMaybeProcessRequests(struct uv *uv)
 {
     struct put *put;
     queue *head;
@@ -460,15 +473,16 @@ void uvSnapshotMaybeProcessRequests(struct uv *uv)
     if (uv->snapshot_put_work.data != NULL) {
         return;
     }
-    /* If there's a pending truncate request, let's wait. Typically the truncate
-     * request is initiated by the InstallSnapshot RPC handler. */
-    if (uv->barrier != NULL) {
-        return;
-    }
 
     /* Get the head of the queue */
     head = QUEUE_HEAD(&uv->snapshot_put_reqs);
     put = QUEUE_DATA(head, struct put, queue);
+
+    /* If this is an install request, let's check if the barrier callback has
+     * fired. */
+    if (put->trailing == 0 && put->barrier.data != NULL) {
+        return;
+    }
 
     uv->snapshot_put_work.data = put;
     rv = uv_queue_work(uv->loop, &uv->snapshot_put_work, uvSnapshotPutWorkCb,
@@ -478,6 +492,22 @@ void uvSnapshotMaybeProcessRequests(struct uv *uv)
                uv_strerror(rv));
         uv->errored = true;
     }
+}
+
+static void uvSnapshotPutBarrierCb(struct UvBarrier *barrier)
+{
+    struct put *put = barrier->data;
+    struct uv *uv = put->uv;
+    assert(put->trailing == 0);
+    put->barrier.data = NULL;
+    /* If we're closing, abort the request. */
+    if (uv->closing) {
+        put->status = RAFT_CANCELED;
+        uvSnapshotPutFinish(put);
+	uvMaybeFireCloseCb(uv);
+	return;
+    }
+    uvSnapshotMaybeProcessRequests(uv);
 }
 
 int UvSnapshotPut(struct raft_io *io,
@@ -491,8 +521,6 @@ int UvSnapshotPut(struct raft_io *io,
     void *cursor;
     unsigned crc;
     int rv;
-
-    assert(trailing > 0);
 
     uv = io->impl;
     assert(!uv->closing);
@@ -510,6 +538,7 @@ int UvSnapshotPut(struct raft_io *io,
     put->snapshot = snapshot;
     put->meta.timestamp = uv_now(uv->loop);
     put->trailing = trailing;
+    put->barrier.data = put;
 
     req->cb = cb;
 
@@ -522,16 +551,15 @@ int UvSnapshotPut(struct raft_io *io,
         goto err_after_req_alloc;
     }
 
-    /* If the next append index is set to 1, it means that we're restoring a
-     * snapshot after having trucated the log. Set the next append index to the
+    /* If the trailing parameter is set to 0, it means that we're restoring a
+     * snapshot. Submit a barrier request setting the next append index to the
      * snapshot's last index + 1. */
-    if (uv->append_next_index == 1) {
-        uv->append_next_index = snapshot->index + 1;
-        /* We expect that a new prepared segment has just been requested, we
-         * need to update its first index too.
-         *
-         * TODO: this should be cleaned up. */
-        uvAppendFixPreparedSegmentFirstIndex(uv);
+    if (trailing == 0) {
+        rv = UvBarrier(uv, snapshot->index + 1, &put->barrier,
+                       uvSnapshotPutBarrierCb);
+        if (rv != 0) {
+            goto err_after_configuration_encode;
+        }
     }
 
     cursor = put->meta.header;
@@ -551,6 +579,8 @@ int UvSnapshotPut(struct raft_io *io,
 
     return 0;
 
+err_after_configuration_encode:
+    HeapFree(put->meta.bufs[1].base);
 err_after_req_alloc:
     HeapFree(put);
 err:
