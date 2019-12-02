@@ -10,6 +10,9 @@ static bool shouldIgnore(const char *filename)
 {
     const char **cursor = ignored;
     bool result = false;
+    if (strlen(filename) >= UV__FILENAME_LEN) {
+        return true;
+    }
     while (*cursor != NULL) {
         if (strcmp(filename, *cursor) == 0) {
             result = true;
@@ -67,7 +70,7 @@ int uvList(struct uv *uv,
 
         /* Append to the snapshot list if it's a snapshot metadata filename and
          * a valid associated snapshot file exists. */
-        rv = uvSnapshotInfoAppendIfMatch(uv, filename, snapshots, n_snapshots,
+        rv = UvSnapshotInfoAppendIfMatch(uv, filename, snapshots, n_snapshots,
                                          &appended);
         if (appended || rv != 0) {
             if (rv == 0) {
@@ -98,7 +101,7 @@ int uvList(struct uv *uv,
     }
 
     if (*snapshots != NULL) {
-        uvSnapshotSort(*snapshots, *n_snapshots);
+        UvSnapshotSort(*snapshots, *n_snapshots);
     }
 
     if (*segments != NULL) {

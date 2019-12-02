@@ -225,9 +225,9 @@ struct uvSnapshotInfo
 };
 
 /* Append a new item to the given snapshot info list if the given filename
- * matches the one of a snapshot metadata file (snapshot-xxx-yyy-zzz.meta) and
- * there is actually a matching snapshot file on disk. */
-int uvSnapshotInfoAppendIfMatch(struct uv *uv,
+ * matches the pattern of a snapshot metadata file (snapshot-xxx-yyy-zzz.meta)
+ * and there is actually a matching snapshot file on disk. */
+int UvSnapshotInfoAppendIfMatch(struct uv *uv,
                                 const char *filename,
                                 struct uvSnapshotInfo *infos[],
                                 size_t *n_infos,
@@ -235,17 +235,12 @@ int uvSnapshotInfoAppendIfMatch(struct uv *uv,
 
 /* Sort the given list of snapshots by comparing their filenames. Older
  * snapshots will come first. */
-void uvSnapshotSort(struct uvSnapshotInfo *infos, size_t n_infos);
+void UvSnapshotSort(struct uvSnapshotInfo *infos, size_t n_infos);
 
 /* Load the snapshot associated with the given metadata. */
-int uvSnapshotLoad(struct uv *uv,
+int UvSnapshotLoad(struct uv *uv,
                    struct uvSnapshotInfo *meta,
                    struct raft_snapshot *snapshot);
-
-/* Remove all all snapshots except the last two. */
-int uvSnapshotKeepLastTwo(struct uv *uv,
-                          struct uvSnapshotInfo *snapshots,
-                          size_t n);
 
 /* Implementation raft_io->snapshot_put (defined in uv_snapshot.c). */
 int UvSnapshotPut(struct raft_io *io,
