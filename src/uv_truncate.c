@@ -15,7 +15,6 @@ struct uvTruncate
     struct UvBarrier barrier;
     raft_index index;
     int status;
-    queue queue;
 };
 
 /* Execute a truncate request in a thread. */
@@ -133,45 +132,30 @@ static void afterWorkCb(uv_work_t *work, int status)
     uvMaybeFireCloseCb(uv);
 }
 
-/* Process pending truncate requests. */
-static void processRequests(struct uv *uv)
+static void uvTruncateBarrierCb(struct UvBarrier *barrier)
 {
-    struct uvTruncate *r;
-    queue *head;
+    struct uvTruncate *truncate = barrier->data;
+    struct uv *uv = truncate->uv;
     int rv;
+
+    /* If we're closing, don't perform truncation at all and abort here. */
+    if (uv->closing) {
+        HeapFree(truncate);
+        return;
+    }
 
     assert(QUEUE_IS_EMPTY(&uv->append_writing_reqs));
     assert(QUEUE_IS_EMPTY(&uv->finalize_reqs));
     assert(uv->finalize_work.data == NULL);
 
-    /* Pop the head of the queue */
-    head = QUEUE_HEAD(&uv->truncate_reqs);
-    r = QUEUE_DATA(head, struct uvTruncate, queue);
-    QUEUE_REMOVE(&r->queue);
-
-    uv->truncate_work.data = r;
+    uv->truncate_work.data = truncate;
     rv = uv_queue_work(uv->loop, &uv->truncate_work, workCb, afterWorkCb);
     if (rv != 0) {
-        Tracef(uv->tracer, "truncate index %lld: %s", r->index,
+        Tracef(uv->tracer, "truncate index %lld: %s", truncate->index,
                uv_strerror(rv));
         uv->truncate_work.data = NULL;
         uv->errored = true;
     }
-}
-
-static void uvTruncateBarrierCb(struct UvBarrier *barrier)
-{
-    struct uvTruncate *truncate = barrier->data;
-    struct uv *uv = truncate->uv;
-
-    /* If we're closing, don't perform truncation at all and abort here. */
-    if (uv->closing) {
-        QUEUE_REMOVE(&truncate->queue);
-        HeapFree(truncate);
-        return;
-    }
-
-    processRequests(uv);
 }
 
 int uvTruncate(struct raft_io *io, raft_index index)
@@ -203,8 +187,6 @@ int uvTruncate(struct raft_io *io, raft_index index)
     if (rv != 0) {
         goto err_after_req_alloc;
     }
-
-    QUEUE_PUSH(&uv->truncate_reqs, &req->queue);
 
     return 0;
 

@@ -462,7 +462,7 @@ void uvSnapshotMaybeProcessRequests(struct uv *uv)
     }
     /* If there's a pending truncate request, let's wait. Typically the truncate
      * request is initiated by the InstallSnapshot RPC handler. */
-    if (uv->truncate_work.data != NULL || !QUEUE_IS_EMPTY(&uv->truncate_reqs)) {
+    if (uv->barrier != NULL) {
         return;
     }
 

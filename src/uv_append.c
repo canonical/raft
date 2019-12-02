@@ -301,7 +301,11 @@ static void uvAppendProcessRequests(struct uv *uv)
 prepare:
     segment = uvGetCurrentOpenSegment(uv);
     assert(segment != NULL);
-    assert(segment->counter != 0);
+
+    /* If the preparer isn't done yet, let's wait. */
+    if (segment->counter == 0) {
+        return;
+    }
 
     /* If there's a barrier in progress, and it's not waiting for this segment
      * to be finalized, let's wait. */
@@ -346,9 +350,6 @@ prepare:
         assert(QUEUE_IS_EMPTY(&uv->append_writing_reqs));
         if (segment->finalize) {
             uvOpenSegmentFinalize(segment);
-            if (!QUEUE_IS_EMPTY(&uv->truncate_reqs)) {
-                return;
-            }
             if (!QUEUE_IS_EMPTY(&uv->append_pending_reqs)) {
                 goto prepare;
             }
@@ -748,7 +749,8 @@ void uvAppendMaybeProcessRequests(struct uv *uv)
 }
 
 /* Fire all barrier requests, the handler will abort them. */
-void UvBarrierClose(struct uv *uv) {
+void UvBarrierClose(struct uv *uv)
+{
     struct UvBarrier *barrier = NULL;
     queue *head;
     assert(uv->closing);
@@ -761,7 +763,7 @@ void UvBarrierClose(struct uv *uv) {
             barrier = segment->barrier;
             barrier->cb(barrier);
         }
-	segment->barrier = NULL;
+        segment->barrier = NULL;
     }
     uv->barrier = NULL;
 }

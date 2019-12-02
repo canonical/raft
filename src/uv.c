@@ -122,9 +122,6 @@ void uvMaybeFireCloseCb(struct uv *uv)
     if (uv->prepare_inflight != NULL) {
         return;
     }
-    if (!QUEUE_IS_EMPTY(&uv->truncate_reqs)) {
-        return;
-    }
     if (uv->truncate_work.data != NULL) {
         return;
     }
@@ -596,7 +593,6 @@ int raft_uv_init(struct raft_io *io,
     QUEUE_INIT(&uv->finalize_reqs);
     uv->finalize_last_index = 0;
     uv->finalize_work.data = NULL;
-    QUEUE_INIT(&uv->truncate_reqs);
     uv->truncate_work.data = NULL;
     QUEUE_INIT(&uv->snapshot_put_reqs);
     QUEUE_INIT(&uv->snapshot_get_reqs);
