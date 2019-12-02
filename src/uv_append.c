@@ -727,6 +727,10 @@ void UvUnblock(struct uv *uv)
 {
     assert(uv->barrier != NULL);
     uv->barrier = NULL;
+    if (uv->closing) {
+        uvMaybeFireCloseCb(uv);
+        return;
+    }
     uvAppendMaybeProcessRequests(uv);
 }
 

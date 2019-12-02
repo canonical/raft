@@ -129,7 +129,6 @@ static void uvTruncateAfterWorkCb(uv_work_t *work, int status)
 
     UvUnblock(uv);
     uvSnapshotMaybeProcessRequests(uv);
-    uvMaybeFireCloseCb(uv);
 }
 
 static void uvTruncateBarrierCb(struct UvBarrier *barrier)
