@@ -4,7 +4,9 @@
 #include "uv.h"
 #include "uv_os.h"
 
-struct segment
+/* Metadata about an open segment not used anymore and that should be closed or
+ * remove (if not written at all). */
+struct uvDismissedSegment
 {
     struct uv *uv;
     uvCounter counter;      /* Segment counter */
@@ -21,21 +23,22 @@ struct segment
  * that were actually written into it and then renaming it. */
 static void uvFinalizeWorkCb(uv_work_t *work)
 {
-    struct segment *s = work->data;
-    struct uv *uv = s->uv;
+    struct uvDismissedSegment *segment = work->data;
+    struct uv *uv = segment->uv;
     char filename1[UV__FILENAME_LEN];
     char filename2[UV__FILENAME_LEN];
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int rv;
 
-    sprintf(filename1, UV__OPEN_TEMPLATE, s->counter);
-    sprintf(filename2, UV__CLOSED_TEMPLATE, s->first_index, s->last_index);
+    sprintf(filename1, UV__OPEN_TEMPLATE, segment->counter);
+    sprintf(filename2, UV__CLOSED_TEMPLATE, segment->first_index,
+            segment->last_index);
 
     Tracef(uv->tracer, "finalize %s into %s", filename1, filename2);
 
     /* If the segment hasn't actually been used (because the writer has been
      * closed or aborted before making any write), just remove it. */
-    if (s->used == 0) {
+    if (segment->used == 0) {
         rv = UvFsRemoveFile(uv->dir, filename1, errmsg);
         if (rv != 0) {
             goto err;
@@ -44,7 +47,7 @@ static void uvFinalizeWorkCb(uv_work_t *work)
     }
 
     /* Truncate and rename the segment.*/
-    rv = UvFsTruncateAndRenameFile(uv->dir, s->used, filename1, filename2,
+    rv = UvFsTruncateAndRenameFile(uv->dir, segment->used, filename1, filename2,
                                    errmsg);
     if (rv != 0) {
         goto err;
@@ -56,19 +59,19 @@ sync:
         goto err;
     }
 
-    s->status = 0;
+    segment->status = 0;
     return;
 
 err:
     Tracef(uv->tracer, "truncate segment %s: %s", filename1, errmsg);
     assert(rv != 0);
-    s->status = rv;
+    segment->status = rv;
 }
 
-static int uvFinalizeStart(struct segment *segment);
+static int uvFinalizeStart(struct uvDismissedSegment *segment);
 static void uvFinalizeAfterWorkCb(uv_work_t *work, int status)
 {
-    struct segment *segment = work->data;
+    struct uvDismissedSegment *segment = work->data;
     struct uv *uv = segment->uv;
     queue *head;
     int rv;
@@ -80,6 +83,8 @@ static void uvFinalizeAfterWorkCb(uv_work_t *work, int status)
     }
     HeapFree(segment);
 
+    /* If we have no more dismissed segments to close, check if there's a
+     * barrier to unblock or if we are done closing. */
     if (QUEUE_IS_EMPTY(&uv->finalize_reqs)) {
         if (uv->barrier != NULL) {
             uv->barrier->cb(uv->barrier);
@@ -88,8 +93,9 @@ static void uvFinalizeAfterWorkCb(uv_work_t *work, int status)
         return;
     }
 
+    /* Grab a new dismissed segment to close. */
     head = QUEUE_HEAD(&uv->finalize_reqs);
-    segment = QUEUE_DATA(head, struct segment, queue);
+    segment = QUEUE_DATA(head, struct uvDismissedSegment, queue);
     QUEUE_REMOVE(&segment->queue);
 
     rv = uvFinalizeStart(segment);
@@ -100,7 +106,7 @@ static void uvFinalizeAfterWorkCb(uv_work_t *work, int status)
 }
 
 /* Start finalizing an open segment. */
-static int uvFinalizeStart(struct segment *segment)
+static int uvFinalizeStart(struct uvDismissedSegment *segment)
 {
     struct uv *uv = segment->uv;
     int rv;
@@ -127,7 +133,7 @@ int UvFinalize(struct uv *uv,
                raft_index first_index,
                raft_index last_index)
 {
-    struct segment *segment;
+    struct uvDismissedSegment *segment;
     int rv;
 
     if (used > 0) {
