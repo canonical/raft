@@ -569,23 +569,23 @@ err:
 
 static void uvSnapshotGetWorkCb(uv_work_t *work)
 {
-    struct uvSnapshotGet *r = work->data;
-    struct uv *uv = r->uv;
+    struct uvSnapshotGet *get = work->data;
+    struct uv *uv = get->uv;
     struct uvSnapshotInfo *snapshots;
     size_t n_snapshots;
     struct uvSegmentInfo *segments;
     size_t n_segments;
     int rv;
-    r->status = 0;
+    get->status = 0;
     rv = uvList(uv, &snapshots, &n_snapshots, &segments, &n_segments);
     if (rv != 0) {
-        r->status = rv;
+        get->status = rv;
         goto out;
     }
     if (snapshots != NULL) {
-        rv = UvSnapshotLoad(uv, &snapshots[n_snapshots - 1], r->snapshot);
+        rv = UvSnapshotLoad(uv, &snapshots[n_snapshots - 1], get->snapshot);
         if (rv != 0) {
-            r->status = rv;
+            get->status = rv;
         }
         HeapFree(snapshots);
     }
