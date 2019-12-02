@@ -9,7 +9,7 @@
 #include "munit.h"
 
 /* Max n. of loop iterations ran by a single function call */
-#define LOOP_MAX_RUN 10
+#define LOOP_MAX_RUN 20
 
 #define FIXTURE_LOOP struct uv_loop_s loop
 

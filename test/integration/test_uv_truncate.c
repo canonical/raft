@@ -71,10 +71,10 @@ static void appendCbAssertResult(struct raft_io_append *req, int status)
 #define APPEND_WAIT(I) LOOP_RUN_UNTIL(&_result##I.done)
 
 /* Submit an append request and wait for it to successfully complete. */
-#define APPEND(N)               \
-    do {                        \
-        APPEND_SUBMIT(0, N, 8); \
-        APPEND_WAIT(0);         \
+#define APPEND(N)                  \
+    do {                           \
+        APPEND_SUBMIT(9999, N, 8); \
+        APPEND_WAIT(9999);         \
     } while (0)
 
 #define TRUNCATE(N)                      \
@@ -219,30 +219,45 @@ TEST(truncate, partialSegment, setUp, tearDownDeps, 0, NULL)
     APPEND(1);
     TRUNCATE(2);
     APPEND(1);
-    ASSERT_ENTRIES(2 /* n entries */, 1, 5 /* entries data */);
+    ASSERT_ENTRIES(2,   /* n entries */
+                   1, 5 /* entries data */
+    );
     return MUNIT_OK;
 }
 
 /* The truncate request is issued while an append request is still pending. */
-TEST(truncate, pendingAppend, setUp, tearDown, 0, NULL)
+TEST(truncate, pendingAppend, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
-    return MUNIT_SKIP; /* TODO */
-    APPEND_SUBMIT(0, 3, 8);
-    TRUNCATE(2);
-    APPEND_WAIT(0);
+    APPEND_SUBMIT(0, /* request ID */
+                  3, /* n entries */
+                  8  /* entry size */
+    );
+    TRUNCATE(2 /* truncation index */);
+    APPEND(1);
+    ASSERT_ENTRIES(2,   /* n entries */
+                   1, 4 /* entries data */
+    );
     return MUNIT_OK;
 }
 
 /* Multiple truncate requests pending at the same time. */
-TEST(truncate, multiplePending, setUp, tearDown, 0, NULL)
+TEST(truncate, multiplePending, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
-    return MUNIT_SKIP; /* TODO */
-    APPEND_SUBMIT(0, 3, 8);
-    TRUNCATE(2);
-    APPEND_SUBMIT(1, 2, 8);
-    TRUNCATE(3);
-    APPEND_WAIT(1);
+    APPEND_SUBMIT(0, /* request ID */
+                  3, /* n entries */
+                  8  /* entry size */
+    );
+    TRUNCATE(2 /* truncation index */);
+    APPEND_SUBMIT(1, /* request ID */
+                  2, /* n entries */
+                  8  /* entry size */
+    );
+    TRUNCATE(3 /* truncation index */);
+    APPEND(1);
+    ASSERT_ENTRIES(3,      /* n entries */
+                   1, 4, 6 /* entries data */
+    );
     return MUNIT_OK;
 }

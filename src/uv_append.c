@@ -298,11 +298,6 @@ static void uvAppendProcessRequests(struct uv *uv)
         return;
     }
 
-    /* If we're truncating, let's wait. */
-    if (!QUEUE_IS_EMPTY(&uv->truncate_reqs) || uv->truncate_work.data != NULL) {
-        return;
-    }
-
 prepare:
     segment = uvGetCurrentOpenSegment(uv);
     assert(segment != NULL);
@@ -312,6 +307,13 @@ prepare:
      * to be finalized, let's wait. */
     if (uv->barrier != NULL && segment->barrier != uv->barrier) {
         return;
+    }
+
+    /* If there's no barrier in progress and this segment is marked with a
+     * barrier, it means that this was a pending barrier, which we can become
+     * the current barrier now. */
+    if (uv->barrier == NULL && segment->barrier != NULL) {
+        uv->barrier = segment->barrier;
     }
 
     /* Let's add to the segment's write buffer all pending requests targeted to
@@ -688,28 +690,32 @@ int UvBarrier(struct uv *uv,
 {
     queue *head;
 
-    assert(uv->barrier == NULL); /* TODO: support queueing requests */
-
     /* The next entry will be appended at this index. */
     uv->append_next_index = next_index;
 
-    /* Finalize all open segments and mark them as involved in this barrier
-     * request, so we can block further append operations that will be targeting
-     * open segments not marked with this request.  */
+    /* Arrange for all open segments not already involved in other barriers to
+     * be finalized as soon as their append requests get completed and mark them
+     * as involved in this specific barrier request.  */
     QUEUE_FOREACH(head, &uv->append_segments)
     {
         struct uvOpenSegment *segment;
         segment = QUEUE_DATA(head, struct uvOpenSegment, queue);
+        if (segment->barrier != NULL) {
+            continue;
+        }
         segment->barrier = barrier;
         if (segment == uvGetCurrentOpenSegment(uv)) {
             uvFinalizeCurrentOpenSegmentOnceIdle(uv);
-            break;
+            continue;
         }
         segment->finalize = true;
     }
 
     barrier->cb = cb;
-    uv->barrier = barrier;
+
+    if (uv->barrier == NULL) {
+        uv->barrier = barrier;
+    }
 
     return 0;
 }

@@ -275,7 +275,8 @@ TEST_CASE(foreach, one, NULL)
     return MUNIT_OK;
 }
 
-/* Loop through a queue of two items. */
+/* Loop through a queue of two items. The order of the loop is from the head to
+ * the tail. */
 TEST_CASE(foreach, two, NULL)
 {
     struct fixture *f = data;
