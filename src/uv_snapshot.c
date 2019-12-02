@@ -470,16 +470,6 @@ void uvSnapshotMaybeProcessRequests(struct uv *uv)
     head = QUEUE_HEAD(&uv->snapshot_put_reqs);
     put = QUEUE_DATA(head, struct put, queue);
 
-    /* Detect if we're being run just after a truncate request in order to
-     * restore a snaphost, in that case we want to adjust the finalize last
-     * index accordingly.
-     *
-     * TODO: this doesn't work in all cases. Reason about exact sequence of
-     * events, make logic more elegant and robust.  */
-    if (uv->finalize_last_index == 0) {
-        uv->finalize_last_index = put->snapshot->index;
-    }
-
     uv->snapshot_put_work.data = put;
     rv = uv_queue_work(uv->loop, &uv->snapshot_put_work, uvSnapshotPutWorkCb,
                        uvSnapshotPutAfterWorkCb);

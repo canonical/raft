@@ -413,9 +413,6 @@ static int uvLoad(struct raft_io *io,
 
     last_index = *start_index + *n_entries - 1;
 
-    /* Set the index of the last entry that was persisted. */
-    uv->finalize_last_index = last_index;
-
     /* Set the index of the next entry that will be appended. */
     uv->append_next_index = last_index + 1;
 
@@ -587,7 +584,6 @@ int raft_uv_init(struct raft_io *io,
     QUEUE_INIT(&uv->append_writing_reqs);
     uv->barrier = NULL;
     QUEUE_INIT(&uv->finalize_reqs);
-    uv->finalize_last_index = 0;
     uv->finalize_work.data = NULL;
     uv->truncate_work.data = NULL;
     QUEUE_INIT(&uv->snapshot_put_reqs);

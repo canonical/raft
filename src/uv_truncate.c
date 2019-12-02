@@ -119,11 +119,6 @@ static void uvTruncateAfterWorkCb(uv_work_t *work, int status)
         uv->errored = true;
     }
 
-    /* Update the finalizer last index setting it to the truncation index minus
-     * one (i.e. the index of the last entry we truncated), since the next
-     * segment to be finalized should start at the truncation index. */
-    uv->finalize_last_index = r->index - 1;
-
     uv->truncate_work.data = NULL;
     HeapFree(r);
 

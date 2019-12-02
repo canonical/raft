@@ -74,7 +74,6 @@ struct uv
     queue append_writing_reqs;           /* Append requests in flight */
     struct UvBarrier *barrier;           /* Inflight barrier request */
     queue finalize_reqs;                 /* Segments waiting to be closed */
-    raft_index finalize_last_index;      /* Last index of last closed seg */
     struct uv_work_s finalize_work;      /* Resize and rename segments */
     struct uv_work_s truncate_work;      /* Execute truncate log requests */
     queue snapshot_put_reqs;             /* Inflight put snapshot requests */

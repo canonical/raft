@@ -158,8 +158,6 @@ int uvFinalize(struct uv *uv,
     if (used > 0) {
         assert(first_index > 0);
         assert(last_index >= first_index);
-        /* TODO: this assertion still fails sometimes */
-        /* assert(first_index == uv->finalize_last_index + 1); */
     }
 
     segment = HeapMalloc(sizeof *segment);
@@ -175,10 +173,6 @@ int uvFinalize(struct uv *uv,
 
     QUEUE_INIT(&segment->queue);
     QUEUE_PUSH(&uv->finalize_reqs, &segment->queue);
-
-    if (used > 0) {
-        uv->finalize_last_index = last_index;
-    }
 
     processRequests(uv);
 
