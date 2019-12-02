@@ -308,6 +308,12 @@ prepare:
     assert(segment != NULL);
     assert(segment->counter != 0);
 
+    /* If there's a barrier in progress, and it's not waiting for this segment
+     * to be finalized, let's wait. */
+    if (uv->barrier != NULL && segment->barrier != uv->barrier) {
+        return;
+    }
+
     /* Let's add to the segment's write buffer all pending requests targeted to
      * this segment. */
     QUEUE_INIT(&q);
@@ -673,6 +679,46 @@ static void uvFinalizeCurrentOpenSegmentOnceIdle(struct uv *uv)
     } else {
         s->finalize = true;
     }
+}
+
+int UvBarrier(struct uv *uv,
+              raft_index next_index,
+              struct UvBarrier *barrier,
+              UvBarrierCb cb)
+{
+    queue *head;
+
+    assert(uv->barrier == NULL); /* TODO: support queueing requests */
+
+    /* The next entry will be appended at this index. */
+    uv->append_next_index = next_index;
+
+    /* Finalize all open segments and mark them as involved in this barrier
+     * request, so we can block further append operations that will be targeting
+     * open segments not marked with this request.  */
+    QUEUE_FOREACH(head, &uv->append_segments)
+    {
+        struct uvOpenSegment *segment;
+        segment = QUEUE_DATA(head, struct uvOpenSegment, queue);
+        segment->barrier = barrier;
+        if (segment == uvGetCurrentOpenSegment(uv)) {
+            uvFinalizeCurrentOpenSegmentOnceIdle(uv);
+            break;
+        }
+        segment->finalize = true;
+    }
+
+    barrier->cb = cb;
+    uv->barrier = barrier;
+
+    return 0;
+}
+
+void UvUnblock(struct uv *uv)
+{
+    assert(uv->barrier != NULL);
+    uv->barrier = NULL;
+    uvAppendMaybeProcessRequests(uv);
 }
 
 int uvAppendForceFinalizingCurrentSegment(struct uv *uv)
