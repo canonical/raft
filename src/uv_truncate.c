@@ -159,9 +159,18 @@ static void processRequests(struct uv *uv)
     }
 }
 
-static void uvTruncateBarrierCb(struct UvBarrier *barrier) {
+static void uvTruncateBarrierCb(struct UvBarrier *barrier)
+{
     struct uvTruncate *truncate = barrier->data;
     struct uv *uv = truncate->uv;
+
+    /* If we're closing, don't perform truncation at all and abort here. */
+    if (uv->closing) {
+        QUEUE_REMOVE(&truncate->queue);
+        HeapFree(truncate);
+        return;
+    }
+
     processRequests(uv);
 }
 
@@ -208,12 +217,5 @@ err:
 
 void uvTruncateClose(struct uv *uv)
 {
-    while (!QUEUE_IS_EMPTY(&uv->truncate_reqs)) {
-        struct uvTruncate *r;
-        queue *head;
-        head = QUEUE_HEAD(&uv->truncate_reqs);
-        QUEUE_REMOVE(head);
-        r = QUEUE_DATA(head, struct uvTruncate, queue);
-        HeapFree(r);
-    }
+    (void)uv;
 }

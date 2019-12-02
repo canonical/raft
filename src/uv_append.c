@@ -690,6 +690,8 @@ int UvBarrier(struct uv *uv,
 {
     queue *head;
 
+    assert(!uv->closing);
+
     /* The next entry will be appended at this index. */
     uv->append_next_index = next_index;
 
@@ -745,11 +747,32 @@ void uvAppendMaybeProcessRequests(struct uv *uv)
     }
 }
 
+/* Fire all barrier requests, the handler will abort them. */
+void UvBarrierClose(struct uv *uv) {
+    struct UvBarrier *barrier = NULL;
+    queue *head;
+    assert(uv->closing);
+    /* Fire all barrier requests, the handler will abort them. */
+    QUEUE_FOREACH(head, &uv->append_segments)
+    {
+        struct uvOpenSegment *segment;
+        segment = QUEUE_DATA(head, struct uvOpenSegment, queue);
+        if (segment->barrier != NULL && segment->barrier != barrier) {
+            barrier = segment->barrier;
+            barrier->cb(barrier);
+        }
+	segment->barrier = NULL;
+    }
+    uv->barrier = NULL;
+}
+
 void uvAppendClose(struct uv *uv)
 {
     struct uvOpenSegment *segment;
+    assert(uv->closing);
 
     flushRequests(&uv->append_pending_reqs, RAFT_CANCELED);
+
     uvFinalizeCurrentOpenSegmentOnceIdle(uv);
 
     /* Also finalize the segments that we didn't write at all and are just

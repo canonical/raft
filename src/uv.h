@@ -339,6 +339,8 @@ int UvBarrier(struct uv *uv,
 /* Resume writing append requests after UvBarrier has been called. */
 void UvUnblock(struct uv *uv);
 
+void UvBarrierClose(struct uv *uv); /* TODO: should not be exposed */
+
 /* Callback invoked after completing a truncate request. If there are append
  * requests that have accumulated in while the truncate request was executed,
  * they will be processed now. */

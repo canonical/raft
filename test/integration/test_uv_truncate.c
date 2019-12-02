@@ -70,6 +70,8 @@ static void appendCbAssertResult(struct raft_io_append *req, int status)
 /* Wait for the append request identified by I to complete. */
 #define APPEND_WAIT(I) LOOP_RUN_UNTIL(&_result##I.done)
 
+#define APPEND_EXPECT(I, STATUS) _result##I.status = STATUS
+
 /* Submit an append request and wait for it to successfully complete. */
 #define APPEND(N)                  \
     do {                           \
@@ -261,3 +263,44 @@ TEST(truncate, multiplePending, setUp, tearDownDeps, 0, NULL)
     );
     return MUNIT_OK;
 }
+
+/* The truncate request gets canceled because we're closing. */
+TEST(truncate, closing, setUp, tearDownDeps, 0, NULL)
+{
+    struct fixture *f = data;
+    APPEND_SUBMIT(0, /* request ID */
+                  3, /* n entries */
+                  8  /* entry size */
+    );
+    TRUNCATE(2 /* truncation index */);
+    APPEND_EXPECT(0,            /* request ID */
+                  RAFT_CANCELED /* status */
+    );
+    TEAR_DOWN_UV;
+    return MUNIT_OK;
+}
+
+/* Multiple truncate requests get canceled because we're closing. */
+TEST(truncate, closingMultiple, setUp, tearDownDeps, 0, NULL)
+{
+    struct fixture *f = data;
+    APPEND_SUBMIT(0, /* request ID */
+                  3, /* n entries */
+                  8  /* entry size */
+    );
+    TRUNCATE(2 /* truncation index */);
+    APPEND_SUBMIT(1, /* request ID */
+                  2, /* n entries */
+                  8  /* entry size */
+    );
+    TRUNCATE(3 /* truncation index */);
+    APPEND_EXPECT(0,            /* request ID */
+                  RAFT_CANCELED /* status */
+    );
+    APPEND_EXPECT(1,            /* request ID */
+                  RAFT_CANCELED /* status */
+    );
+    TEAR_DOWN_UV;
+    return MUNIT_OK;
+}
+
