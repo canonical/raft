@@ -40,8 +40,9 @@ static void uvTruncateWorkCb(uv_work_t *work)
     if (snapshots != NULL) {
         HeapFree(snapshots);
     }
+    assert(segments != NULL);
 
-    /* Look for the segment that contains the truncate point. */
+    /* Find the segment that contains the truncate point. */
     for (i = 0; i < n_segments; i++) {
         segment = &segments[i];
         if (segment->is_open) {
@@ -52,11 +53,7 @@ static void uvTruncateWorkCb(uv_work_t *work)
             break;
         }
     }
-
-    /* If there's no segment at all to truncate, we're done. */
-    if (i == n_segments) {
-        goto out;
-    }
+    assert(i < n_segments);
 
     /* If the truncate index is not the first of the segment, we need to
      * truncate it. */
@@ -67,13 +64,12 @@ static void uvTruncateWorkCb(uv_work_t *work)
         }
     }
 
+    /* Remove all closed segments past the one containing the truncate index. */
     for (j = i; j < n_segments; j++) {
         segment = &segments[j];
-
         if (segment->is_open) {
             continue;
         }
-
         rv = UvFsRemoveFile(uv->dir, segment->filename, errmsg);
         if (rv != 0) {
             Tracef(uv->tracer, "unlink segment %s: %s", segment->filename,
@@ -82,7 +78,6 @@ static void uvTruncateWorkCb(uv_work_t *work)
             goto err_after_list;
         }
     }
-
     rv = UvFsSyncDir(uv->dir, errmsg);
     if (rv != 0) {
         Tracef(uv->tracer, "sync data directory: %s", errmsg);
@@ -90,38 +85,28 @@ static void uvTruncateWorkCb(uv_work_t *work)
         goto err_after_list;
     }
 
-out:
-    if (segments != NULL) {
-        HeapFree(segments);
-    }
-
+    HeapFree(segments);
     truncate->status = 0;
 
     return;
 
 err_after_list:
     HeapFree(segments);
-
 err:
     assert(rv != 0);
-
     truncate->status = rv;
 }
 
 static void uvTruncateAfterWorkCb(uv_work_t *work, int status)
 {
-    struct uvTruncate *r = work->data;
-    struct uv *uv = r->uv;
-
+    struct uvTruncate *truncate = work->data;
+    struct uv *uv = truncate->uv;
     assert(status == 0);
-
-    if (r->status != 0) {
+    if (truncate->status != 0) {
         uv->errored = true;
     }
-
     uv->truncate_work.data = NULL;
-    HeapFree(r);
-
+    HeapFree(truncate);
     UvUnblock(uv);
     uvSnapshotMaybeProcessRequests(uv);
 }
@@ -141,6 +126,7 @@ static void uvTruncateBarrierCb(struct UvBarrier *barrier)
     assert(QUEUE_IS_EMPTY(&uv->append_writing_reqs));
     assert(QUEUE_IS_EMPTY(&uv->finalize_reqs));
     assert(uv->finalize_work.data == NULL);
+    assert(uv->truncate_work.data == NULL);
 
     uv->truncate_work.data = truncate;
     rv = uv_queue_work(uv->loop, &uv->truncate_work, uvTruncateWorkCb,
@@ -156,29 +142,29 @@ static void uvTruncateBarrierCb(struct UvBarrier *barrier)
 int UvTruncate(struct raft_io *io, raft_index index)
 {
     struct uv *uv;
-    struct uvTruncate *req;
+    struct uvTruncate *truncate;
     int rv;
 
     uv = io->impl;
-
     assert(!uv->closing);
 
     /* We should truncate only entries that we were requested to append in the
      * first place. */
-    assert(index <= uv->append_next_index);
+    assert(index > 0);
+    assert(index < uv->append_next_index);
 
-    req = HeapMalloc(sizeof *req);
-    if (req == NULL) {
+    truncate = HeapMalloc(sizeof *truncate);
+    if (truncate == NULL) {
         rv = RAFT_NOMEM;
         goto err;
     }
-    req->uv = uv;
-    req->index = index;
-    req->barrier.data = req;
+    truncate->uv = uv;
+    truncate->index = index;
+    truncate->barrier.data = truncate;
 
     /* Make sure that we wait for any inflight writes to finish and then close
      * the current segment. */
-    rv = UvBarrier(uv, index, &req->barrier, uvTruncateBarrierCb);
+    rv = UvBarrier(uv, index, &truncate->barrier, uvTruncateBarrierCb);
     if (rv != 0) {
         goto err_after_req_alloc;
     }
@@ -186,7 +172,7 @@ int UvTruncate(struct raft_io *io, raft_index index)
     return 0;
 
 err_after_req_alloc:
-    HeapFree(req);
+    HeapFree(truncate);
 err:
     assert(rv != 0);
     return rv;
