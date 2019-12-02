@@ -332,24 +332,9 @@ int UvBarrier(struct uv *uv,
 /* Resume writing append requests after UvBarrier has been called. */
 void UvUnblock(struct uv *uv);
 
-/* Callback invoked after completing a truncate request. If there are append
- * requests that have accumulated in while the truncate request was executed,
- * they will be processed now. */
-void uvAppendMaybeProcessRequests(struct uv *uv);
-
 /* Cancel all pending write requests and request the current segment to be
  * finalized. Must be invoked at closing time. */
 void uvAppendClose(struct uv *uv);
-
-/* Tell the append implementation that the open segment currently being written
- * must be finalized, even if it's not full yet. The implementation will:
- *
- * - Request a new prepared segment and target all newly submitted append
- *   requests to it.
- *
- * - Wait for any inflight write against the current segment to complete and
- *   then submit a request to finalize it. */
-int uvAppendForceFinalizingCurrentSegment(struct uv *uv);
 
 /* Submit a request to finalize the open segment with the given counter.
  *

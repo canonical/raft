@@ -722,22 +722,6 @@ void UvUnblock(struct uv *uv)
         uvMaybeFireCloseCb(uv);
         return;
     }
-    uvAppendMaybeProcessRequests(uv);
-}
-
-int uvAppendForceFinalizingCurrentSegment(struct uv *uv)
-{
-    int rv;
-    uvFinalizeCurrentOpenSegmentOnceIdle(uv);
-    rv = uvAppendPushOpenSegment(uv);
-    if (rv != 0) {
-        return rv;
-    }
-    return 0;
-}
-
-void uvAppendMaybeProcessRequests(struct uv *uv)
-{
     if (!QUEUE_IS_EMPTY(&uv->append_pending_reqs)) {
         uvAppendProcessRequests(uv);
     }
