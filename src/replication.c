@@ -1202,11 +1202,6 @@ int replicationInstallSnapshot(struct raft *r,
     /* Premptively update our in-memory state. */
     logRestore(&r->log, args->last_index, args->last_term);
 
-    /* We need to truncate our entire log */
-    rv = r->io->truncate(r->io, 1);
-    if (rv != 0) {
-        goto err;
-    }
     r->last_stored = 0;
 
     request = raft_malloc(sizeof *request);
@@ -1232,8 +1227,9 @@ int replicationInstallSnapshot(struct raft *r,
 
     assert(r->snapshot.put.data == NULL);
     r->snapshot.put.data = request;
-    rv = r->io->snapshot_put(r->io, r->snapshot.trailing, &r->snapshot.put,
-                             snapshot, installSnapshotCb);
+    rv = r->io->snapshot_put(r->io,
+                             0 /* zero trailing means replace everything */,
+                             &r->snapshot.put, snapshot, installSnapshotCb);
     if (rv != 0) {
         goto err_after_bufs_alloc;
     }

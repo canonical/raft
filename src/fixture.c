@@ -101,6 +101,7 @@ struct send
 struct snapshot_put
 {
     REQUEST;
+    unsigned trailing;
     struct raft_io_snapshot_put *req;
     const struct raft_snapshot *snapshot;
 };
@@ -284,6 +285,11 @@ static void ioFlushSnapshotPut(struct io *s, struct snapshot_put *r)
 
     rv = snapshotCopy(r->snapshot, s->snapshot);
     assert(rv == 0);
+
+    if (r->trailing == 0) {
+        rv = s->io->truncate(s->io, 1);
+        assert(rv == 0);
+    }
 
     if (r->req->cb != NULL) {
         r->req->cb(r->req, 0);
@@ -615,8 +621,6 @@ static int ioMethodTruncate(struct raft_io *raft_io, raft_index index)
         start_index = io->snapshot->index;
     }
 
-    assert(index >= start_index);
-
     if (ioFaultTick(io)) {
         return RAFT_IOERR;
     }
@@ -668,8 +672,6 @@ static int ioMethodSnapshotPut(struct raft_io *raft_io,
     struct io *io = raft_io->impl;
     struct snapshot_put *r;
 
-    (void)trailing;
-
     r = raft_malloc(sizeof *r);
     assert(r != NULL);
 
@@ -678,6 +680,7 @@ static int ioMethodSnapshotPut(struct raft_io *raft_io,
     r->req->cb = cb;
     r->snapshot = snapshot;
     r->completion_time = *io->time + io->disk_latency;
+    r->trailing = trailing;
 
     QUEUE_PUSH(&io->requests, &r->queue);
 
