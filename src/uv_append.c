@@ -748,13 +748,19 @@ void uvAppendMaybeProcessRequests(struct uv *uv)
     }
 }
 
-/* Fire all barrier requests, the handler will abort them. */
-void UvBarrierClose(struct uv *uv)
+/* Fire all pending barrier requests that are associated with unfinalized open
+ * segments, the barrier callback will notice that we're closing and abort
+ * there.
+ *
+ * Note that after this function returns there might still still be a current
+ * barrier set via uv->barrier, meaning that the open segment it was associated
+ * with has started to be finalized and is not anymore in the append_segments
+ * queue. The finalizer will take care of firing that one. */
+static void uvBarrierClose(struct uv *uv)
 {
     struct UvBarrier *barrier = NULL;
     queue *head;
     assert(uv->closing);
-    /* Fire all barrier requests, the handler will abort them. */
     QUEUE_FOREACH(head, &uv->append_segments)
     {
         struct uvOpenSegment *segment;
@@ -762,16 +768,21 @@ void UvBarrierClose(struct uv *uv)
         if (segment->barrier != NULL && segment->barrier != barrier) {
             barrier = segment->barrier;
             barrier->cb(barrier);
+            if (segment->barrier == uv->barrier) {
+                uv->barrier = NULL;
+            }
         }
         segment->barrier = NULL;
     }
-    uv->barrier = NULL;
 }
 
 void uvAppendClose(struct uv *uv)
 {
     struct uvOpenSegment *segment;
     assert(uv->closing);
+
+    uvBarrierClose(uv);
+    UvPrepareClose(uv);
 
     flushRequests(&uv->append_pending_reqs, RAFT_CANCELED);
 

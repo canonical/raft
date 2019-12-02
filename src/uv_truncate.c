@@ -196,8 +196,3 @@ err:
     assert(rv != 0);
     return rv;
 }
-
-void uvTruncateClose(struct uv *uv)
-{
-    (void)uv;
-}
