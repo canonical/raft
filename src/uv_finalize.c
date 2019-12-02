@@ -76,9 +76,19 @@ static void afterWorkCb(uv_work_t *work, int status)
         uv->errored = true;
     }
     HeapFree(s);
+
+    if (QUEUE_IS_EMPTY(&uv->finalize_reqs)) {
+        if (uv->closing) {
+            uvMaybeFireCloseCb(uv);
+            return;
+        }
+        if (uv->barrier != NULL) {
+            uv->barrier->cb(uv->barrier);
+            return;
+        }
+    }
+
     processRequests(uv);
-    uvTruncateMaybeProcessRequests(uv);
-    uvMaybeFireCloseCb(uv);
 }
 
 /* Schedule finalizing an open segment. */

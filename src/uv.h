@@ -375,12 +375,6 @@ int uvFinalize(struct uv *uv,
 /* Cancel all pending truncate requests. */
 void uvTruncateClose(struct uv *uv);
 
-/* Callback invoked after a segment has been finalized. It will check if there
- * are pending truncate requests waiting for open segments to be finalized, and
- * possibly start executing the oldest one of them if no unfinalized open
- * segment is left. */
-void uvTruncateMaybeProcessRequests(struct uv *uv);
-
 /* Implementation of raft_io->send. */
 int UvSend(struct raft_io *io,
            struct raft_io_send *req,

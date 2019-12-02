@@ -567,7 +567,7 @@ static int uvAppendEnqueueRequest(struct uv *uv, struct uvAppend *append)
      * we need to add a new segment. Otherwise we check if the last segment has
      * enough room for this batch of entries. */
     segment = uvGetCurrentOpenSegment(uv);
-    if (segment == NULL) {
+    if (segment == NULL || segment->finalize) {
         fits = false;
     } else {
         fits = uvOpenSegmentHasEnoughSpareCapacity(segment, size);

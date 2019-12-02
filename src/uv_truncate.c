@@ -12,6 +12,7 @@
 struct uvTruncate
 {
     struct uv *uv;
+    struct UvBarrier barrier;
     raft_index index;
     int status;
     queue queue;
@@ -127,7 +128,7 @@ static void afterWorkCb(uv_work_t *work, int status)
     uv->truncate_work.data = NULL;
     HeapFree(r);
 
-    uvAppendMaybeProcessRequests(uv);
+    UvUnblock(uv);
     uvSnapshotMaybeProcessRequests(uv);
     uvMaybeFireCloseCb(uv);
 }
@@ -139,15 +140,9 @@ static void processRequests(struct uv *uv)
     queue *head;
     int rv;
 
-    /* If there are pending writes in progress, let's wait. */
-    if (!QUEUE_IS_EMPTY(&uv->append_writing_reqs)) {
-        return;
-    }
-
-    /* If there are segments being closed, let's wait. */
-    if (!QUEUE_IS_EMPTY(&uv->finalize_reqs) || uv->finalize_work.data != NULL) {
-        return;
-    }
+    assert(QUEUE_IS_EMPTY(&uv->append_writing_reqs));
+    assert(QUEUE_IS_EMPTY(&uv->finalize_reqs));
+    assert(uv->finalize_work.data == NULL);
 
     /* Pop the head of the queue */
     head = QUEUE_HEAD(&uv->truncate_reqs);
@@ -162,6 +157,12 @@ static void processRequests(struct uv *uv)
         uv->truncate_work.data = NULL;
         uv->errored = true;
     }
+}
+
+static void uvTruncateBarrierCb(struct UvBarrier *barrier) {
+    struct uvTruncate *truncate = barrier->data;
+    struct uv *uv = truncate->uv;
+    processRequests(uv);
 }
 
 int uvTruncate(struct raft_io *io, raft_index index)
@@ -185,19 +186,16 @@ int uvTruncate(struct raft_io *io, raft_index index)
     }
     req->uv = uv;
     req->index = index;
-
-    /* The next entry will be appended at the truncation index. */
-    uv->append_next_index = index;
+    req->barrier.data = req;
 
     /* Make sure that we wait for any inflight writes to finish and then close
      * the current segment. */
-    rv = uvAppendForceFinalizingCurrentSegment(uv);
+    rv = UvBarrier(uv, index, &req->barrier, uvTruncateBarrierCb);
     if (rv != 0) {
         goto err_after_req_alloc;
     }
 
     QUEUE_PUSH(&uv->truncate_reqs, &req->queue);
-    processRequests(uv);
 
     return 0;
 
@@ -206,15 +204,6 @@ err_after_req_alloc:
 err:
     assert(rv != 0);
     return rv;
-}
-
-void uvTruncateMaybeProcessRequests(struct uv *uv)
-{
-    /* If there are no truncate requests, there's nothing to do. */
-    if (QUEUE_IS_EMPTY(&uv->truncate_reqs)) {
-        return;
-    }
-    processRequests(uv);
 }
 
 void uvTruncateClose(struct uv *uv)
