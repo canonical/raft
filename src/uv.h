@@ -340,7 +340,7 @@ void uvAppendClose(struct uv *uv);
  *
  * Requests are processed one at a time, to avoid ending up closing open segment
  * N + 1 before closing open segment N. */
-int uvFinalize(struct uv *uv,
+int UvFinalize(struct uv *uv,
                unsigned long long counter,
                size_t used,
                raft_index first_index,

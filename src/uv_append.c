@@ -97,7 +97,7 @@ static void uvOpenSegmentFinalize(struct uvOpenSegment *s)
     struct uv *uv = s->uv;
     int rv;
 
-    rv = uvFinalize(uv, s->counter, s->written, s->first_index, s->last_index);
+    rv = UvFinalize(uv, s->counter, s->written, s->first_index, s->last_index);
     if (rv != 0) {
         uv->errored = true;
         /* We failed to submit the finalize request, but let's still close the
@@ -484,7 +484,7 @@ static int uvAppendPushOpenSegment(struct uv *uv)
 
 err_after_prepare:
     UvOsClose(fd);
-    uvFinalize(uv, counter, 0, 0, 0);
+    UvFinalize(uv, counter, 0, 0, 0);
 err_after_alloc:
     QUEUE_REMOVE(&segment->queue);
     HeapFree(segment);

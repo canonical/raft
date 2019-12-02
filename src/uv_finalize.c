@@ -19,7 +19,7 @@ struct segment
  *
  * An open segment is closed by truncating its length to the number of bytes
  * that were actually written into it and then renaming it. */
-static void workCb(uv_work_t *work)
+static void uvFinalizeWorkCb(uv_work_t *work)
 {
     struct segment *s = work->data;
     struct uv *uv = s->uv;
@@ -66,7 +66,7 @@ err:
 }
 
 static void processRequests(struct uv *uv);
-static void afterWorkCb(uv_work_t *work, int status)
+static void uvFinalizeAfterWorkCb(uv_work_t *work, int status)
 {
     struct segment *s = work->data;
     struct uv *uv = s->uv;
@@ -91,8 +91,8 @@ static void afterWorkCb(uv_work_t *work, int status)
     processRequests(uv);
 }
 
-/* Schedule finalizing an open segment. */
-static int finalizeSegment(struct segment *s)
+/* Start finalizing an open segment. */
+static int uvFinalizeStart(struct segment *s)
 {
     struct uv *uv = s->uv;
     int rv;
@@ -102,7 +102,8 @@ static int finalizeSegment(struct segment *s)
 
     uv->finalize_work.data = s;
 
-    rv = uv_queue_work(uv->loop, &uv->finalize_work, workCb, afterWorkCb);
+    rv = uv_queue_work(uv->loop, &uv->finalize_work, uvFinalizeWorkCb,
+                       uvFinalizeAfterWorkCb);
     if (rv != 0) {
         Tracef(uv->tracer, "start to truncate segment file %d: %s", s->counter,
                uv_strerror(rv));
@@ -133,7 +134,7 @@ static void processRequests(struct uv *uv)
     segment = QUEUE_DATA(head, struct segment, queue);
     QUEUE_REMOVE(&segment->queue);
 
-    rv = finalizeSegment(segment);
+    rv = uvFinalizeStart(segment);
     if (rv != 0) {
         goto err;
     }
@@ -145,7 +146,7 @@ err:
     uv->errored = true;
 }
 
-int uvFinalize(struct uv *uv,
+int UvFinalize(struct uv *uv,
                unsigned long long counter,
                size_t used,
                raft_index first_index,
@@ -153,8 +154,6 @@ int uvFinalize(struct uv *uv,
 {
     struct segment *segment;
 
-    /* If the open segment is not empty, we expect its first index to be the
-     * successor of the end index of the last segment we closed. */
     if (used > 0) {
         assert(first_index > 0);
         assert(last_index >= first_index);
