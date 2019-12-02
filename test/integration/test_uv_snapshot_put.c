@@ -266,10 +266,20 @@ TEST(snapshot_put, entriesMoreThanTrailing, setUp, tearDown, 0, NULL)
 }
 
 /* Request to install a snapshot. */
-TEST(snapshot_put, afterTruncate, setUp, tearDown, 0, NULL)
+TEST(snapshot_put, install, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     APPEND(4);
+    SNAPSHOT_PUT(0, /* trailing */
+                 1   /* index */
+    );
+    return MUNIT_OK;
+}
+
+/* Request to install a snapshot, no previous entry is present. */
+TEST(snapshot_put, installWithoutPreviousEntries, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
     SNAPSHOT_PUT(0, /* trailing */
                  1   /* index */
     );

@@ -700,6 +700,15 @@ int UvBarrier(struct uv *uv,
 
     if (uv->barrier == NULL) {
         uv->barrier = barrier;
+        /* If there's no pending append-related activity, we can fire the
+         * callback immediately.
+         *
+         * TODO: find a way to avoid invoking this synchronously. */
+        if (QUEUE_IS_EMPTY(&uv->append_segments) &&
+            QUEUE_IS_EMPTY(&uv->finalize_reqs) &&
+            uv->finalize_work.data == NULL) {
+            barrier->cb(barrier);
+        }
     }
 
     return 0;

@@ -504,8 +504,8 @@ static void uvSnapshotPutBarrierCb(struct UvBarrier *barrier)
     if (uv->closing) {
         put->status = RAFT_CANCELED;
         uvSnapshotPutFinish(put);
-	uvMaybeFireCloseCb(uv);
-	return;
+        uvMaybeFireCloseCb(uv);
+        return;
     }
     uvSnapshotMaybeProcessRequests(uv);
 }
@@ -551,17 +551,6 @@ int UvSnapshotPut(struct raft_io *io,
         goto err_after_req_alloc;
     }
 
-    /* If the trailing parameter is set to 0, it means that we're restoring a
-     * snapshot. Submit a barrier request setting the next append index to the
-     * snapshot's last index + 1. */
-    if (trailing == 0) {
-        rv = UvBarrier(uv, snapshot->index + 1, &put->barrier,
-                       uvSnapshotPutBarrierCb);
-        if (rv != 0) {
-            goto err_after_configuration_encode;
-        }
-    }
-
     cursor = put->meta.header;
     bytePut64(&cursor, UV__DISK_FORMAT);
     bytePut64(&cursor, 0);
@@ -575,7 +564,19 @@ int UvSnapshotPut(struct raft_io *io,
     bytePut64(&cursor, crc);
 
     QUEUE_PUSH(&uv->snapshot_put_reqs, &put->queue);
-    uvSnapshotMaybeProcessRequests(uv);
+
+    /* If the trailing parameter is set to 0, it means that we're restoring a
+     * snapshot. Submit a barrier request setting the next append index to the
+     * snapshot's last index + 1. */
+    if (trailing == 0) {
+        rv = UvBarrier(uv, snapshot->index + 1, &put->barrier,
+                       uvSnapshotPutBarrierCb);
+        if (rv != 0) {
+            goto err_after_configuration_encode;
+        }
+    } else {
+        uvSnapshotMaybeProcessRequests(uv);
+    }
 
     return 0;
 
