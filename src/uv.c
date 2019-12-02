@@ -125,7 +125,7 @@ void uvMaybeFireCloseCb(struct uv *uv)
     if (uv->barrier != NULL) {
         return;
     }
-    if (!QUEUE_IS_EMPTY(&uv->snapshot_put_reqs)) {
+    if (uv->snapshot_put_work.data != NULL) {
         return;
     }
     if (!QUEUE_IS_EMPTY(&uv->snapshot_get_reqs)) {
@@ -582,7 +582,6 @@ int raft_uv_init(struct raft_io *io,
     QUEUE_INIT(&uv->finalize_reqs);
     uv->finalize_work.data = NULL;
     uv->truncate_work.data = NULL;
-    QUEUE_INIT(&uv->snapshot_put_reqs);
     QUEUE_INIT(&uv->snapshot_get_reqs);
     uv->snapshot_put_work.data = NULL;
     uv->timer.data = NULL;

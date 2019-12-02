@@ -613,6 +613,9 @@ struct raft_io
      * snapshot completely replaces all existing entries, which should all be
      * deleted. Subsequent calls to append() should append entries starting at
      * index @snapshot->index + 1.
+     *
+     * If a request is submitted, the raft engine won't submit any other request
+     * until the original one has completed.
      */
     int (*snapshot_put)(struct raft_io *io,
                         unsigned trailing,

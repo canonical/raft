@@ -76,7 +76,6 @@ struct uv
     queue finalize_reqs;                 /* Segments waiting to be closed */
     struct uv_work_s finalize_work;      /* Resize and rename segments */
     struct uv_work_s truncate_work;      /* Execute truncate log requests */
-    queue snapshot_put_reqs;             /* Inflight put snapshot requests */
     queue snapshot_get_reqs;             /* Inflight get snapshot requests */
     struct uv_work_s snapshot_put_work;  /* Execute snapshot put requests */
     struct uvMetadata metadata;          /* Cache of metadata on disk */

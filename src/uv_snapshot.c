@@ -290,7 +290,6 @@ struct uvSnapshotPut
     } meta;
     int status;
     struct UvBarrier barrier;
-    queue queue;
 };
 
 struct uvSnapshotGet
@@ -433,8 +432,7 @@ static void uvSnapshotPutFinish(struct uvSnapshotPut *put)
     struct raft_io_snapshot_put *req = put->req;
     int status = put->status;
     struct uv *uv = put->uv;
-    QUEUE_REMOVE(&put->queue);
-    uv->snapshot_put_work.data = NULL;
+    assert(uv->snapshot_put_work.data == NULL);
     HeapFree(put->meta.bufs[1].base);
     HeapFree(put);
     req->cb(req, status);
@@ -446,6 +444,7 @@ static void uvSnapshotPutAfterWorkCb(uv_work_t *work, int status)
     struct uv *uv = put->uv;
     bool is_install = put->trailing == 0;
     assert(status == 0);
+    uv->snapshot_put_work.data = NULL;
     uvSnapshotPutFinish(put);
     if (is_install) {
         UvUnblock(uv);
@@ -453,30 +452,15 @@ static void uvSnapshotPutAfterWorkCb(uv_work_t *work, int status)
     uvMaybeFireCloseCb(uv);
 }
 
-/* Process pending put requests. */
-static void uvSnapshotMaybeProcessRequests(struct uv *uv)
+/* Start processing the given put request. */
+static void uvSnapshotPutStart(struct uvSnapshotPut *put)
 {
-    struct uvSnapshotPut *put;
-    queue *head;
+    struct uv *uv = put->uv;
     int rv;
 
-    /* If there aren't pending snapshot put requests, there's nothing to do. */
-    if (QUEUE_IS_EMPTY(&uv->snapshot_put_reqs)) {
-        return;
-    }
-    /* If we're already writing a snapshot, let's wait. */
-    if (uv->snapshot_put_work.data != NULL) {
-        return;
-    }
-
-    /* Get the head of the queue */
-    head = QUEUE_HEAD(&uv->snapshot_put_reqs);
-    put = QUEUE_DATA(head, struct uvSnapshotPut, queue);
-
-    /* If this is an install request, let's check if the barrier callback has
-     * fired. */
-    if (put->trailing == 0 && put->barrier.data != NULL) {
-        return;
+    /* If this is an install request, the barrier callback must have fired. */
+    if (put->trailing == 0) {
+        assert(put->barrier.data == NULL);
     }
 
     uv->snapshot_put_work.data = put;
@@ -502,7 +486,7 @@ static void uvSnapshotPutBarrierCb(struct UvBarrier *barrier)
         uvMaybeFireCloseCb(uv);
         return;
     }
-    uvSnapshotMaybeProcessRequests(uv);
+    uvSnapshotPutStart(put);
 }
 
 int UvSnapshotPut(struct raft_io *io,
@@ -519,6 +503,7 @@ int UvSnapshotPut(struct raft_io *io,
 
     uv = io->impl;
     assert(!uv->closing);
+    assert(uv->snapshot_put_work.data == NULL);
 
     Tracef(uv->tracer, "put snapshot at %lld, keeping %d", snapshot->index,
            trailing);
@@ -558,8 +543,6 @@ int UvSnapshotPut(struct raft_io *io,
     cursor = &put->meta.header[1];
     bytePut64(&cursor, crc);
 
-    QUEUE_PUSH(&uv->snapshot_put_reqs, &put->queue);
-
     /* If the trailing parameter is set to 0, it means that we're restoring a
      * snapshot. Submit a barrier request setting the next append index to the
      * snapshot's last index + 1. */
@@ -570,7 +553,7 @@ int UvSnapshotPut(struct raft_io *io,
             goto err_after_configuration_encode;
         }
     } else {
-        uvSnapshotMaybeProcessRequests(uv);
+        uvSnapshotPutStart(put);
     }
 
     return 0;
