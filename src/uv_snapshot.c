@@ -287,6 +287,7 @@ struct uvSnapshotPut
         uint64_t header[4];         /* Format, CRC, configuration index/len */
         struct raft_buffer bufs[2]; /* Preamble and configuration */
     } meta;
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int status;
     struct UvBarrier barrier;
 };
@@ -297,6 +298,7 @@ struct uvSnapshotGet
     struct raft_io_snapshot_get *req;
     struct raft_snapshot *snapshot;
     struct uv_work_s work;
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int status;
     queue queue;
 };
@@ -337,16 +339,16 @@ static int uvSnapshotKeepLastTwo(struct uv *uv,
    past the trailing amount. */
 static int uvRemoveOldSegmentsAndSnapshots(struct uv *uv,
                                            raft_index last_index,
-                                           size_t trailing)
+                                           size_t trailing,
+                                           char *errmsg)
 {
     struct uvSnapshotInfo *snapshots;
     struct uvSegmentInfo *segments;
     size_t n_snapshots;
     size_t n_segments;
-    char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int rv = 0;
 
-    rv = UvList(uv, &snapshots, &n_snapshots, &segments, &n_segments);
+    rv = UvList(uv, &snapshots, &n_snapshots, &segments, &n_segments, errmsg);
     if (rv != 0) {
         goto out;
     }
@@ -356,14 +358,14 @@ static int uvRemoveOldSegmentsAndSnapshots(struct uv *uv,
     }
     if (segments != NULL) {
         rv = uvSegmentKeepTrailing(uv, segments, n_segments, last_index,
-                                   trailing);
+                                   trailing, errmsg);
         if (rv != 0) {
             goto out;
         }
     }
     rv = UvFsSyncDir(uv->dir, errmsg);
     if (rv != 0) {
-        Tracef(uv->tracer, "sync %s: %s", uv->dir, errmsg);
+        ErrMsgWrapf(errmsg, "sync %s", uv->dir);
     }
 
 out:
@@ -380,16 +382,15 @@ static void uvSnapshotPutWorkCb(uv_work_t *work)
 {
     struct uvSnapshotPut *put = work->data;
     struct uv *uv = put->uv;
-    char errmsg[RAFT_ERRMSG_BUF_SIZE];
     char filename[UV__FILENAME_LEN];
     int rv;
 
     sprintf(filename, UV__SNAPSHOT_META_TEMPLATE, put->snapshot->term,
             put->snapshot->index, put->meta.timestamp);
 
-    rv = UvFsMakeFile(uv->dir, filename, put->meta.bufs, 2, errmsg);
+    rv = UvFsMakeFile(uv->dir, filename, put->meta.bufs, 2, put->errmsg);
     if (rv != 0) {
-        Tracef(uv->tracer, "write %s: %s", filename, errmsg);
+        ErrMsgWrapf(put->errmsg, "write %s: %s", filename);
         put->status = RAFT_IOERR;
         return;
     }
@@ -398,22 +399,22 @@ static void uvSnapshotPutWorkCb(uv_work_t *work)
             put->snapshot->index, put->meta.timestamp);
 
     rv = UvFsMakeFile(uv->dir, filename, put->snapshot->bufs,
-                      put->snapshot->n_bufs, errmsg);
+                      put->snapshot->n_bufs, put->errmsg);
     if (rv != 0) {
-        Tracef(uv->tracer, "write %s: %s", filename, errmsg);
+        ErrMsgWrapf(put->errmsg, "write %s", filename);
         put->status = RAFT_IOERR;
         return;
     }
 
-    rv = UvFsSyncDir(uv->dir, errmsg);
+    rv = UvFsSyncDir(uv->dir, put->errmsg);
     if (rv != 0) {
-        Tracef(uv->tracer, "sync %s: %s", uv->dir, errmsg);
+        ErrMsgWrapf(put->errmsg, "sync %s", uv->dir);
         put->status = RAFT_IOERR;
         return;
     }
 
     rv = uvRemoveOldSegmentsAndSnapshots(uv, put->snapshot->index,
-                                         put->trailing);
+                                         put->trailing, put->errmsg);
     if (rv != 0) {
         put->status = rv;
         return;
@@ -576,7 +577,8 @@ static void uvSnapshotGetWorkCb(uv_work_t *work)
     size_t n_segments;
     int rv;
     get->status = 0;
-    rv = UvList(uv, &snapshots, &n_snapshots, &segments, &n_segments);
+    rv = UvList(uv, &snapshots, &n_snapshots, &segments, &n_segments,
+                get->errmsg);
     if (rv != 0) {
         get->status = rv;
         goto out;

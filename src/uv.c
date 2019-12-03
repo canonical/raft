@@ -298,7 +298,8 @@ static int uvLoadSnapshotAndEntries(struct uv *uv,
     *n = 0;
 
     /* List available snapshots and segments. */
-    rv = UvList(uv, &snapshots, &n_snapshots, &segments, &n_segments);
+    rv = UvList(uv, &snapshots, &n_snapshots, &segments, &n_segments,
+                uv->io->errmsg);
     if (rv != 0) {
         goto err;
     }

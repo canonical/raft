@@ -136,7 +136,8 @@ int uvSegmentKeepTrailing(struct uv *uv,
                           struct uvSegmentInfo *segments,
                           size_t n,
                           raft_index last_index,
-                          size_t trailing);
+                          size_t trailing,
+                          char *errmsg);
 
 /* Load all entries contained in the given closed segment. */
 int uvSegmentLoadClosed(struct uv *uv,
@@ -263,7 +264,8 @@ int UvList(struct uv *uv,
            struct uvSnapshotInfo *snapshots[],
            size_t *n_snapshots,
            struct uvSegmentInfo *segments[],
-           size_t *n_segments);
+           size_t *n_segments,
+	   char *errmsg);
 
 /* Request to obtain a newly prepared open segment. */
 struct uvPrepare;

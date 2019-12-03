@@ -27,17 +27,19 @@ int UvList(struct uv *uv,
            struct uvSnapshotInfo *snapshots[],
            size_t *n_snapshots,
            struct uvSegmentInfo *segments[],
-           size_t *n_segments)
+           size_t *n_segments,
+           char *errmsg)
 {
     struct uv_fs_s req;
     struct uv_dirent_s entry;
     int n;
     int i;
     int rv;
+    int rv2;
 
     n = uv_fs_scandir(NULL, &req, uv->dir, 0, NULL);
     if (n < 0) {
-        Tracef(uv->tracer, "scan %s: %s", uv->dir, uv_strerror(n));
+        ErrMsgPrintf(errmsg, "scan %s: %s", uv->dir, uv_strerror(n));
         return RAFT_IOERR;
     }
 
@@ -92,9 +94,8 @@ int UvList(struct uv *uv,
         Tracef(uv->tracer, "ignore %s", filename);
     }
 
-    rv = uv_fs_scandir_next(&req, &entry);
-    assert(rv == UV_EOF);
-    rv = 0;
+    rv2 = uv_fs_scandir_next(&req, &entry);
+    assert(rv2 == UV_EOF);
 
     if (rv != 0 && *segments != NULL) {
         raft_free(*segments);
