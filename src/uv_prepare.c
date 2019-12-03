@@ -33,7 +33,7 @@
 #define UV__TARGET_POOL_SIZE 2
 
 /* An open segment being prepared or sitting in the pool */
-struct uvUnusedOpenSegment
+struct uvIdleSegment
 {
     struct uv *uv;                     /* Open segment file */
     size_t size;                       /* Segment size */
@@ -48,7 +48,7 @@ struct uvUnusedOpenSegment
 
 static void uvPrepareWorkCb(uv_work_t *work)
 {
-    struct uvUnusedOpenSegment *segment = work->data;
+    struct uvIdleSegment *segment = work->data;
     struct uv *uv = segment->uv;
     int rv;
 
@@ -93,10 +93,10 @@ static void uvPrepareFinishAllRequests(struct uv *uv, int status)
 static void uvPrepareConsume(struct uv *uv, uv_file *fd, uvCounter *counter)
 {
     queue *head;
-    struct uvUnusedOpenSegment *segment;
+    struct uvIdleSegment *segment;
     /* Pop a segment from the pool. */
     head = QUEUE_HEAD(&uv->prepare_pool);
-    segment = QUEUE_DATA(head, struct uvUnusedOpenSegment, queue);
+    segment = QUEUE_DATA(head, struct uvIdleSegment, queue);
     assert(segment->fd >= 0);
     QUEUE_REMOVE(&segment->queue);
     *fd = segment->fd;
@@ -140,7 +140,7 @@ static void uvPrepareAfterWorkCb(uv_work_t *work, int status);
 /* Start creating a new segment file. */
 static int uvPrepareStart(struct uv *uv)
 {
-    struct uvUnusedOpenSegment *segment;
+    struct uvIdleSegment *segment;
     int rv;
 
     assert(uv->prepare_inflight == NULL);
@@ -185,7 +185,7 @@ err:
 
 static void uvPrepareAfterWorkCb(uv_work_t *work, int status)
 {
-    struct uvUnusedOpenSegment *segment = work->data;
+    struct uvIdleSegment *segment = work->data;
     struct uv *uv = segment->uv;
     int rv;
     assert(status == 0);
@@ -316,9 +316,9 @@ void UvPrepareClose(struct uv *uv)
     /* Remove any unused prepared segment. */
     while (!QUEUE_IS_EMPTY(&uv->prepare_pool)) {
         queue *head;
-        struct uvUnusedOpenSegment *segment;
+        struct uvIdleSegment *segment;
         head = QUEUE_HEAD(&uv->prepare_pool);
-        segment = QUEUE_DATA(head, struct uvUnusedOpenSegment, queue);
+        segment = QUEUE_DATA(head, struct uvIdleSegment, queue);
         QUEUE_REMOVE(&segment->queue);
         uvPrepareDiscard(uv, segment->fd, segment->counter);
         HeapFree(segment);

@@ -6,7 +6,7 @@
 
 /* Metadata about an open segment not used anymore and that should be closed or
  * remove (if not written at all). */
-struct uvDismissedSegment
+struct uvDyingSegment
 {
     struct uv *uv;
     uvCounter counter;      /* Segment counter */
@@ -23,7 +23,7 @@ struct uvDismissedSegment
  * that were actually written into it and then renaming it. */
 static void uvFinalizeWorkCb(uv_work_t *work)
 {
-    struct uvDismissedSegment *segment = work->data;
+    struct uvDyingSegment *segment = work->data;
     struct uv *uv = segment->uv;
     char filename1[UV__FILENAME_LEN];
     char filename2[UV__FILENAME_LEN];
@@ -68,10 +68,10 @@ err:
     segment->status = rv;
 }
 
-static int uvFinalizeStart(struct uvDismissedSegment *segment);
+static int uvFinalizeStart(struct uvDyingSegment *segment);
 static void uvFinalizeAfterWorkCb(uv_work_t *work, int status)
 {
-    struct uvDismissedSegment *segment = work->data;
+    struct uvDyingSegment *segment = work->data;
     struct uv *uv = segment->uv;
     queue *head;
     int rv;
@@ -95,7 +95,7 @@ static void uvFinalizeAfterWorkCb(uv_work_t *work, int status)
 
     /* Grab a new dismissed segment to close. */
     head = QUEUE_HEAD(&uv->finalize_reqs);
-    segment = QUEUE_DATA(head, struct uvDismissedSegment, queue);
+    segment = QUEUE_DATA(head, struct uvDyingSegment, queue);
     QUEUE_REMOVE(&segment->queue);
 
     rv = uvFinalizeStart(segment);
@@ -106,7 +106,7 @@ static void uvFinalizeAfterWorkCb(uv_work_t *work, int status)
 }
 
 /* Start finalizing an open segment. */
-static int uvFinalizeStart(struct uvDismissedSegment *segment)
+static int uvFinalizeStart(struct uvDyingSegment *segment)
 {
     struct uv *uv = segment->uv;
     int rv;
@@ -133,7 +133,7 @@ int UvFinalize(struct uv *uv,
                raft_index first_index,
                raft_index last_index)
 {
-    struct uvDismissedSegment *segment;
+    struct uvDyingSegment *segment;
     int rv;
 
     if (used > 0) {

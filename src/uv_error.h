@@ -10,7 +10,6 @@
 /* Error codes. */
 enum {
     UV__ERROR = 1, /* Generic system error. */
-    UV__CANCELED,  /* Request was canceled */
 };
 
 /* Format an error message caused by a failed system call or stdlib function. */
