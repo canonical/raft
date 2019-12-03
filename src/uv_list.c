@@ -23,7 +23,7 @@ static bool shouldIgnore(const char *filename)
     return result;
 }
 
-int uvList(struct uv *uv,
+int UvList(struct uv *uv,
            struct uvSnapshotInfo *snapshots[],
            size_t *n_snapshots,
            struct uvSegmentInfo *segments[],

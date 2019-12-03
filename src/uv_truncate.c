@@ -33,7 +33,7 @@ static void uvTruncateWorkCb(uv_work_t *work)
     int rv;
 
     /* Load all segments on disk. */
-    rv = uvList(uv, &snapshots, &n_snapshots, &segments, &n_segments);
+    rv = UvList(uv, &snapshots, &n_snapshots, &segments, &n_segments);
     if (rv != 0) {
         goto err;
     }

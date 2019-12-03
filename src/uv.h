@@ -256,7 +256,7 @@ int UvSnapshotGet(struct raft_io *io,
 /* Return a list of all snapshots and segments found in the data directory. Both
  * snapshots and segments are ordered by filename (closed segments come before
  * open ones). */
-int uvList(struct uv *uv,
+int UvList(struct uv *uv,
            struct uvSnapshotInfo *snapshots[],
            size_t *n_snapshots,
            struct uvSegmentInfo *segments[],

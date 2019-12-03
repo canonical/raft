@@ -347,7 +347,7 @@ static int uvRemoveOldSegmentsAndSnapshots(struct uv *uv,
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int rv = 0;
 
-    rv = uvList(uv, &snapshots, &n_snapshots, &segments, &n_segments);
+    rv = UvList(uv, &snapshots, &n_snapshots, &segments, &n_segments);
     if (rv != 0) {
         goto out;
     }
@@ -577,7 +577,7 @@ static void uvSnapshotGetWorkCb(uv_work_t *work)
     size_t n_segments;
     int rv;
     get->status = 0;
-    rv = uvList(uv, &snapshots, &n_snapshots, &segments, &n_segments);
+    rv = UvList(uv, &snapshots, &n_snapshots, &segments, &n_segments);
     if (rv != 0) {
         get->status = rv;
         goto out;
