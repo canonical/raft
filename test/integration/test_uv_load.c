@@ -701,7 +701,9 @@ TEST(load, openSegmentWithEntriesBehindSnapshot, setUp, tearDown, 0, NULL)
     APPEND(1, 2);
     SNAPSHOT_PUT(1, 3, 1);
     UNFINALIZE(2, 2, 1);
-    LOAD_ERROR(RAFT_CORRUPT, "");
+    LOAD_ERROR(RAFT_CORRUPT,
+               "last entry on disk has index 2, which is behind last "
+               "snapshot's index 3");
     return MUNIT_OK;
 }
 
@@ -759,11 +761,19 @@ TEST(load, nonContiguousClosedSegments, setUp, tearDown, 0, NULL)
 TEST(load, closedSegmentWithEntriesPastSnapshot, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
+    uint64_t now;
+    char errmsg[128];
     APPEND(5, 1);
     APPEND(1, 5);
+    uv_update_time(&f->loop);
+    now = uv_now(&f->loop);
+    sprintf(errmsg,
+            "closed segment 0000000000000006-0000000000000006 is past last "
+            "snapshot snapshot-1-4-%lu",
+            now);
     SNAPSHOT_PUT(1, 4, 1);
     test_dir_remove_file(f->dir, CLOSED_SEGMENT_FILENAME(1, 5));
-    LOAD_ERROR(RAFT_CORRUPT, "");
+    LOAD_ERROR(RAFT_CORRUPT, errmsg);
     return MUNIT_OK;
 }
 
@@ -772,7 +782,9 @@ TEST(load, openSegmentWithIncompleteFormat, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     test_dir_write_file_with_zeros(f->dir, "open-1", WORD_SIZE / 2);
-    LOAD_ERROR(RAFT_IOERR, "");
+    LOAD_ERROR(RAFT_IOERR,
+               "load open segment open-1: read format: short read: 4 bytes "
+               "instead of 8");
     return MUNIT_OK;
 }
 
@@ -785,7 +797,9 @@ TEST(load, openSegmentWithIncompletePreamble, setUp, tearDown, 0, NULL)
     APPEND(1, 1);
     UNFINALIZE(1, 1, 1);
     test_dir_truncate_file(f->dir, "open-1", offset);
-    LOAD_ERROR(RAFT_IOERR, "");
+    LOAD_ERROR(RAFT_IOERR,
+               "load open segment open-1: entries batch 1 starting at byte 8: "
+               "read preamble: short read: 8 bytes instead of 16");
     return MUNIT_OK;
 }
 
@@ -801,7 +815,9 @@ TEST(load, openSegmentWithIncompleteBatchHeader, setUp, tearDown, 0, NULL)
     APPEND(1, 1);
     UNFINALIZE(1, 1, 1);
     test_dir_truncate_file(f->dir, "open-1", offset);
-    LOAD_ERROR(RAFT_IOERR, "");
+    LOAD_ERROR(RAFT_IOERR,
+               "load open segment open-1: entries batch 1 starting at byte 8: "
+               "read header: short read: 8 bytes instead of 16");
     return MUNIT_OK;
 }
 
@@ -819,7 +835,9 @@ TEST(load, openSegmentWithIncompleteBatchData, setUp, tearDown, 0, NULL)
     APPEND(1, 1);
     UNFINALIZE(1, 1, 1);
     test_dir_truncate_file(f->dir, "open-1", offset);
-    LOAD_ERROR(RAFT_IOERR, "");
+    LOAD_ERROR(RAFT_IOERR,
+               "load open segment open-1: entries batch 1 starting at byte 8: "
+               "read data: short read: 4 bytes instead of 8");
     return MUNIT_OK;
 }
 
@@ -832,7 +850,9 @@ TEST(load, closedSegmentWithCorruptedBatchHeader, setUp, tearDown, 0, NULL)
     APPEND(1, 1);
     test_dir_overwrite_file(f->dir, CLOSED_SEGMENT_FILENAME(1, 1), &corrupted,
                             sizeof corrupted, offset);
-    LOAD_ERROR(RAFT_CORRUPT, "");
+    LOAD_ERROR(RAFT_CORRUPT,
+               "load closed segment 0000000000000001-0000000000000001: entries "
+               "batch 1 starting at byte 8: header checksum mismatch");
     return MUNIT_OK;
 }
 
@@ -846,7 +866,9 @@ TEST(load, closedSegmentWithCorruptedBatchData, setUp, tearDown, 0, NULL)
     APPEND(1, 1);
     test_dir_overwrite_file(f->dir, CLOSED_SEGMENT_FILENAME(1, 1), &corrupted,
                             sizeof corrupted, offset);
-    LOAD_ERROR(RAFT_CORRUPT, "");
+    LOAD_ERROR(RAFT_CORRUPT,
+               "load closed segment 0000000000000001-0000000000000001: entries "
+               "batch 1 starting at byte 8: data checksum mismatch");
     return MUNIT_OK;
 }
 
@@ -858,7 +880,9 @@ TEST(load, closedSegmentWithBadIndex, setUp, tearDown, 0, NULL)
     APPEND(1, 1);
     APPEND(1, 2);
     test_dir_remove_file(f->dir, CLOSED_SEGMENT_FILENAME(1, 1));
-    LOAD_ERROR(RAFT_CORRUPT, "");
+    LOAD_ERROR(RAFT_CORRUPT,
+               "unexpected closed segment 0000000000000002-0000000000000002: "
+               "first index should have been 1");
     return MUNIT_OK;
 }
 
@@ -867,7 +891,9 @@ TEST(load, emptyClosedSegment, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     test_dir_write_file(f->dir, CLOSED_SEGMENT_FILENAME(1, 1), NULL, 0);
-    LOAD_ERROR(RAFT_CORRUPT, "");
+    LOAD_ERROR(
+        RAFT_CORRUPT,
+        "load closed segment 0000000000000001-0000000000000001: file is empty");
     return MUNIT_OK;
 }
 
@@ -877,7 +903,9 @@ TEST(load, closedSegmentWithBadFormat, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
     uint8_t buf[8] = {2, 0, 0, 0, 0, 0, 0, 0};
     test_dir_write_file(f->dir, CLOSED_SEGMENT_FILENAME(1, 1), buf, sizeof buf);
-    LOAD_ERROR(RAFT_IOERR, "");
+    LOAD_ERROR(RAFT_CORRUPT,
+               "load closed segment 0000000000000001-0000000000000001: "
+               "unexpected format version 2");
     return MUNIT_OK;
 }
 
@@ -888,7 +916,8 @@ TEST(load, openSegmentWithNoAccessPermission, setUp, tearDown, 0, NULL)
     APPEND(1, 1);
     UNFINALIZE(1, 1, 1);
     test_dir_unreadable_file(f->dir, "open-1");
-    LOAD_ERROR(RAFT_IOERR, "");
+    LOAD_ERROR(RAFT_IOERR,
+               "load open segment open-1: open file: open: permission denied");
     return MUNIT_OK;
 }
 
@@ -901,7 +930,8 @@ TEST(load, openSegmentWithZeroFormatAndThenData, setUp, tearDown, 0, NULL)
     APPEND(1, 1);
     UNFINALIZE(1, 1, 1);
     test_dir_overwrite_file(f->dir, "open-1", &version, sizeof version, 0);
-    LOAD_ERROR(RAFT_MALFORMED, "");
+    LOAD_ERROR(RAFT_CORRUPT,
+               "load open segment open-1: unexpected format version 0");
     return MUNIT_OK;
 }
 
@@ -913,6 +943,7 @@ TEST(load, openSegmentWithBadFormat, setUp, tearDown, 0, NULL)
     APPEND(1, 1);
     UNFINALIZE(1, 1, 1);
     test_dir_overwrite_file(f->dir, "open-1", &version, sizeof version, 0);
-    LOAD_ERROR(RAFT_MALFORMED, "");
+    LOAD_ERROR(RAFT_CORRUPT,
+               "load open segment open-1: unexpected format version 2");
     return MUNIT_OK;
 }

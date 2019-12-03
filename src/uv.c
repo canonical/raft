@@ -12,6 +12,7 @@
 #include "byte.h"
 #include "configuration.h"
 #include "entry.h"
+#include "heap.h"
 #include "logging.h"
 #include "snapshot.h"
 #include "tracing.h"
@@ -182,6 +183,7 @@ static void uvClose(struct raft_io *io, raft_io_close_cb cb)
  * closed segments that overlaps with the given snapshot last index. */
 static int uvFilterSegments(struct uv *uv,
                             raft_index last_index,
+                            const char *snapshot_filename,
                             struct uvSegmentInfo **segments,
                             size_t *n)
 {
@@ -254,8 +256,9 @@ static int uvFilterSegments(struct uv *uv,
      * missing entries). */
     segment = &(*segments)[i];
     if (segment->first_index > last_index + 1) {
-        Tracef(uv->tracer, "found closed segment past last snapshot: %s",
-               segment->filename);
+        ErrMsgPrintf(uv->io->errmsg,
+                     "closed segment %s is past last snapshot %s",
+                     segment->filename, snapshot_filename);
         return RAFT_CORRUPT;
     }
 
@@ -302,7 +305,8 @@ static int uvLoadSnapshotAndEntries(struct uv *uv,
 
     /* Load the most recent snapshot, if any. */
     if (snapshots != NULL) {
-        *snapshot = raft_malloc(sizeof **snapshot);
+        char snapshot_filename[UV__FILENAME_LEN];
+        *snapshot = HeapMalloc(sizeof **snapshot);
         if (*snapshot == NULL) {
             rv = RAFT_NOMEM;
             goto err;
@@ -311,15 +315,17 @@ static int uvLoadSnapshotAndEntries(struct uv *uv,
         if (rv != 0) {
             goto err;
         }
+        uvSnapshotFilenameOf(&snapshots[n_snapshots - 1], snapshot_filename);
         Tracef(uv->tracer, "most recent snapshot at %lld", (*snapshot)->index);
-        raft_free(snapshots);
+        HeapFree(snapshots);
         snapshots = NULL;
 
         /* Update the start index. If there are closed segments on disk let's
          * make sure that the first index of the first closed segment is not
          * greater than the snapshot's last index plus one (so there are no
          * missing entries), and update the start index accordingly. */
-        rv = uvFilterSegments(uv, (*snapshot)->index, &segments, &n_segments);
+        rv = uvFilterSegments(uv, (*snapshot)->index, snapshot_filename,
+                              &segments, &n_segments);
         if (rv != 0) {
             goto err;
         }
@@ -345,9 +351,10 @@ static int uvLoadSnapshotAndEntries(struct uv *uv,
          * open segments turned out to be behind the snapshot as well.  */
         last_index = *start_index + *n - 1;
         if (*snapshot != NULL && last_index < (*snapshot)->index) {
-            Tracef(uv->tracer,
-                   "index of last entry %lld is behind last snapshot %lld",
-                   last_index, (*snapshot)->index);
+            ErrMsgPrintf(uv->io->errmsg,
+                         "last entry on disk has index %llu, which is behind "
+                         "last snapshot's index %llu",
+                         last_index, (*snapshot)->index);
             rv = RAFT_CORRUPT;
             goto err;
         }

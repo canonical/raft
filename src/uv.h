@@ -223,6 +223,9 @@ struct uvSnapshotInfo
     char filename[UV__FILENAME_LEN];
 };
 
+/* Render the filename of the data file of a snapshot */
+void uvSnapshotFilenameOf(struct uvSnapshotInfo *info, char *filename);
+
 /* Append a new item to the given snapshot info list if the given filename
  * matches the pattern of a snapshot metadata file (snapshot-xxx-yyy-zzz.meta)
  * and there is actually a matching snapshot file on disk. */

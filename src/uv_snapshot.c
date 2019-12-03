@@ -37,8 +37,7 @@ static bool uvSnapshotInfoMatch(const char *filename,
     return true;
 }
 
-/* Render the filename of the data file of a snapshot */
-static void uvSnapshotFilenameOf(struct uvSnapshotInfo *info, char *filename)
+void uvSnapshotFilenameOf(struct uvSnapshotInfo *info, char *filename)
 {
     size_t len = strlen(info->filename) - strlen(".meta");
     assert(len < UV__FILENAME_LEN);
