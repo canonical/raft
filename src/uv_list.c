@@ -3,12 +3,13 @@
 #include "assert.h"
 #include "uv.h"
 
-static const char *ignored[] = {".", "..", "metadata1", "metadata2", NULL};
+static const char *uvListIgnored[] = {".", "..", "metadata1", "metadata2",
+                                      NULL};
 
 /* Return true if the given filename should be ignored. */
-static bool shouldIgnore(const char *filename)
+static bool uvListShouldIgnore(const char *filename)
 {
-    const char **cursor = ignored;
+    const char **cursor = uvListIgnored;
     bool result = false;
     if (strlen(filename) >= UV__FILENAME_LEN) {
         return true;
@@ -63,7 +64,7 @@ int UvList(struct uv *uv,
         /* If an error occurred while processing a preceeding entry or if we
          * know that this is not a segment filename, just free it and skip to
          * the next one. */
-        if (rv != 0 || shouldIgnore(filename)) {
+        if (rv != 0 || uvListShouldIgnore(filename)) {
             if (rv == 0) {
                 Tracef(uv->tracer, "ignore %s", filename);
             }
