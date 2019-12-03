@@ -22,9 +22,7 @@ static bool uvSegmentInfoMatch(const char *filename, struct uvSegmentInfo *info)
     int matched;
     size_t filename_len = strnlen(filename, UV__FILENAME_LEN + 1);
 
-    if (filename_len > UV__FILENAME_LEN) {
-        return false;
-    }
+    assert(filename_len < UV__FILENAME_LEN);
 
     matched = sscanf(filename, UV__CLOSED_TEMPLATE "%n", &info->first_index,
                      &info->end_index, &consumed);
