@@ -16,7 +16,7 @@
  * of an open segment (open-xxx), and fill the given info structure if so.
  *
  * Return true if the filename matched, false otherwise. */
-static bool infoMatch(const char *filename, struct uvSegmentInfo *info)
+static bool uvSegmentInfoMatch(const char *filename, struct uvSegmentInfo *info)
 {
     int consumed;
     int matched;
@@ -57,7 +57,7 @@ int uvSegmentInfoAppendIfMatch(const char *filename,
     int rv;
 
     /* Check if it's a closed or open filename */
-    matched = infoMatch(filename, &info);
+    matched = uvSegmentInfoMatch(filename, &info);
 
     /* If fhis is neither a closed or an open segment, return. */
     if (!matched) {
@@ -76,7 +76,7 @@ int uvSegmentInfoAppendIfMatch(const char *filename,
 }
 
 /* Compare two segments to decide which one is more recent. */
-static int compare(const void *p1, const void *p2)
+static int uvSegmentInfoCompare(const void *p1, const void *p2)
 {
     struct uvSegmentInfo *s1 = (struct uvSegmentInfo *)p1;
     struct uvSegmentInfo *s2 = (struct uvSegmentInfo *)p2;
@@ -107,7 +107,7 @@ static int compare(const void *p1, const void *p2)
 
 void uvSegmentSort(struct uvSegmentInfo *infos, size_t n_infos)
 {
-    qsort(infos, n_infos, sizeof *infos, compare);
+    qsort(infos, n_infos, sizeof *infos, uvSegmentInfoCompare);
 }
 
 int uvSegmentKeepTrailing(struct uv *uv,
@@ -152,10 +152,10 @@ int uvSegmentKeepTrailing(struct uv *uv,
 }
 
 /* Open a segment file and read its format version. */
-static int openSegment(struct uv *uv,
-                       const char *filename,
-                       uv_file *fd,
-                       uint64_t *format)
+static int uvOpenSegmentFile(struct uv *uv,
+                             const char *filename,
+                             uv_file *fd,
+                             uint64_t *format)
 {
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
     struct raft_buffer buf;
@@ -180,11 +180,11 @@ static int openSegment(struct uv *uv,
 /* Load a single batch of entries from a segment.
  *
  * Set @last to #true if the loaded batch is the last one. */
-static int loadEntriesBatch(struct uv *uv,
-                            const int fd,
-                            struct raft_entry **entries,
-                            unsigned *n_entries,
-                            bool *last)
+static int uvLoadEntriesBatch(struct uv *uv,
+                              const int fd,
+                              struct raft_entry **entries,
+                              unsigned *n_entries,
+                              bool *last)
 {
     uint64_t preamble[2];      /* CRC32 checksums and number of raft entries */
     unsigned n;                /* Number of entries in the batch */
@@ -370,7 +370,7 @@ int uvSegmentLoadClosed(struct uv *uv,
     }
 
     /* Open the segment file. */
-    rv = openSegment(uv, info->filename, &fd, &format);
+    rv = uvOpenSegmentFile(uv, info->filename, &fd, &format);
     if (rv != 0) {
         goto err;
     }
@@ -387,7 +387,7 @@ int uvSegmentLoadClosed(struct uv *uv,
 
     last = false;
     for (i = 1; !last; i++) {
-        rv = loadEntriesBatch(uv, fd, &tmp_entries, &tmp_n, &last);
+        rv = uvLoadEntriesBatch(uv, fd, &tmp_entries, &tmp_n, &last);
         if (rv != 0) {
             goto err_after_open;
         }
@@ -431,11 +431,11 @@ err:
 }
 
 /* Load all entries contained in an open segment. */
-static int loadOpen(struct uv *uv,
-                    struct uvSegmentInfo *info,
-                    struct raft_entry *entries[],
-                    size_t *n,
-                    raft_index *next_index)
+static int uvLoadOpenSegment(struct uv *uv,
+                             struct uvSegmentInfo *info,
+                             struct raft_entry *entries[],
+                             size_t *n,
+                             raft_index *next_index)
 {
     raft_index first_index;         /* Index of first entry in segment */
     bool all_zeros;                 /* Whether the file is zero'ed */
@@ -468,7 +468,7 @@ static int loadOpen(struct uv *uv,
         goto done;
     }
 
-    rv = openSegment(uv, info->filename, &fd, &format);
+    rv = uvOpenSegmentFile(uv, info->filename, &fd, &format);
     if (rv != 0) {
         goto err;
     }
@@ -511,7 +511,7 @@ static int loadOpen(struct uv *uv,
             return RAFT_IOERR;
         }
 
-        rv = loadEntriesBatch(uv, fd, &tmp_entries, &tmp_n_entries, &last);
+        rv = uvLoadEntriesBatch(uv, fd, &tmp_entries, &tmp_n_entries, &last);
         if (rv != 0) {
             int rv2;
 
@@ -616,8 +616,8 @@ err:
 
 /* Ensure that the write buffer of the given segment is large enough to hold the
  * the given number of bytes size. */
-static int ensureSegmentBufferIsLargeEnough(struct uvSegmentBuffer *b,
-                                            size_t size)
+static int uvEnsureSegmentBufferIsLargeEnough(struct uvSegmentBuffer *b,
+                                              size_t size)
 {
     unsigned n = (size / b->block_size);
     void *base;
@@ -675,7 +675,7 @@ int uvSegmentBufferFormat(struct uvSegmentBuffer *b)
     size_t n;
     assert(b->n == 0);
     n = sizeof(uint64_t);
-    rv = ensureSegmentBufferIsLargeEnough(b, n);
+    rv = uvEnsureSegmentBufferIsLargeEnough(b, n);
     if (rv != 0) {
         return rv;
     }
@@ -705,7 +705,7 @@ int uvSegmentBufferAppend(struct uvSegmentBuffer *b,
         size += bytePad64(entries[i].buf.len);
     }
 
-    rv = ensureSegmentBufferIsLargeEnough(b, b->n + size);
+    rv = uvEnsureSegmentBufferIsLargeEnough(b, b->n + size);
     if (rv != 0) {
         return rv;
     }
@@ -805,7 +805,7 @@ int uvSegmentLoadAll(struct uv *uv,
         Tracef(uv->tracer, "load segment %s", info->filename);
 
         if (info->is_open) {
-            rv = loadOpen(uv, info, entries, n_entries, &next_index);
+            rv = uvLoadOpenSegment(uv, info, entries, n_entries, &next_index);
             if (rv != 0) {
                 goto err;
             }
@@ -865,10 +865,10 @@ err:
 }
 
 /* Write a closed segment */
-static int writeClosedSegment(struct uv *uv,
-                              raft_index first_index,
-                              raft_index last_index,
-                              const struct raft_buffer *conf)
+static int uvWriteClosedSegment(struct uv *uv,
+                                raft_index first_index,
+                                raft_index last_index,
+                                const struct raft_buffer *conf)
 {
     char filename[UV__FILENAME_LEN];
     struct uvSegmentBuffer buf;
@@ -947,7 +947,7 @@ int uvSegmentCreateClosedWithConfiguration(
     }
 
     /* Write the file */
-    rv = writeClosedSegment(uv, index, index, &buf);
+    rv = uvWriteClosedSegment(uv, index, index, &buf);
     if (rv != 0) {
         goto err_after_configuration_encode;
     }
