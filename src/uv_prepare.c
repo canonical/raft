@@ -212,8 +212,8 @@ static void uvPrepareAfterWorkCb(uv_work_t *work, int status)
     if (segment->status != 0) {
         uvPrepareFinishAllRequests(uv, RAFT_IOERR);
         uv->errored = true;
-        Tracef(uv->tracer, "create segment %s: %s", segment->filename,
-               segment->errmsg);
+        ErrMsgPrintf(uv->io->errmsg, "create segment %s: %s", segment->filename,
+                     segment->errmsg);
         HeapFree(segment);
         return;
     }

@@ -102,12 +102,12 @@ static void appendCbAssertResult(struct raft_io_append *req, int status)
 
 /* Submit an append request with the given parameters and wait for the operation
  * to fail with the given code and message. */
-#define APPEND_FAILURE(N_ENTRIES, ENTRY_SIZE, STATUS, ERRMSG)       \
-    {                                                               \
-        APPEND_SUBMIT(0, N_ENTRIES, ENTRY_SIZE);                    \
-        APPEND_EXPECT(0, STATUS);                                   \
-        APPEND_WAIT(0);                                             \
-        /*munit_assert_string_equal(f->transport.errmsg, ERRMSG);*/ \
+#define APPEND_FAILURE(N_ENTRIES, ENTRY_SIZE, STATUS, ERRMSG) \
+    {                                                         \
+        APPEND_SUBMIT(0, N_ENTRIES, ENTRY_SIZE);              \
+        APPEND_EXPECT(0, STATUS);                             \
+        APPEND_WAIT(0);                                       \
+        munit_assert_string_equal(f->io.errmsg, ERRMSG);      \
     }
 
 /******************************************************************************
@@ -478,7 +478,9 @@ TEST(append, noSpace, setUp, tearDown, 0, dir_tmpfs_params)
     return MUNIT_SKIP;
 #endif
     raft_uv_set_segment_size(&f->io, SEGMENT_BLOCK_SIZE * 32768);
-    APPEND_FAILURE(1, 64, RAFT_IOERR, "");
+    APPEND_FAILURE(
+        1, 64, RAFT_IOERR,
+        "create segment open-1: posix_fallocate: no space left on device");
     return MUNIT_OK;
 }
 
@@ -570,5 +572,21 @@ TEST(append, currentSegment, setUp, tearDownDeps, 0, NULL)
     munit_assert_true(
         test_dir_has_file(f->dir, "0000000000000001-0000000000000001"));
 
+    return MUNIT_OK;
+}
+
+/* The kernel has ran out of available AIO events. */
+TEST(append, ioSetupError, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    aio_context_t ctx = 0;
+    int rv;
+    rv = test_aio_fill(&ctx, 0);
+    if (rv != 0) {
+        return MUNIT_SKIP;
+    }
+    APPEND_FAILURE(
+        1, 64, RAFT_IOERR,
+        "setup writer for open-1: io_setup: resource temporarily unavailable");
     return MUNIT_OK;
 }

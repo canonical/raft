@@ -377,6 +377,7 @@ static int uvAliveSegmentReady(struct uv *uv,
     rv = UvWriterInit(&segment->writer, uv->loop, fd, uv->direct_io,
                       uv->async_io, 1, uv->io->errmsg);
     if (rv != 0) {
+        ErrMsgWrapf(uv->io->errmsg, "setup writer for open-%llu", counter);
         return rv;
     }
     segment->counter = counter;
@@ -402,11 +403,8 @@ static void uvAliveSegmentPrepareCb(struct uvPrepare *req, int status)
     }
 
     if (status != 0) {
-        QUEUE_REMOVE(&segment->queue);
-        HeapFree(segment);
-        uv->errored = true;
-        uvAppendFinishAllRequests(&uv->append_pending_reqs, RAFT_IOERR);
-        return;
+        rv = status;
+        goto err;
     }
 
     assert(req->counter > 0);
@@ -417,13 +415,22 @@ static void uvAliveSegmentPrepareCb(struct uvPrepare *req, int status)
     assert(!QUEUE_IS_EMPTY(&uv->append_pending_reqs));
 
     rv = uvAliveSegmentReady(uv, req->fd, req->counter, segment);
-    /* TODO: check for errors. */
-    assert(rv == 0);
+    if (rv != 0) {
+        goto err;
+    }
 
     rv = uvAppendMaybeStart(uv);
     if (rv != 0) {
-        uv->errored = true;
+        goto err;
     }
+
+    return;
+
+err:
+    QUEUE_REMOVE(&segment->queue);
+    HeapFree(segment);
+    uv->errored = true;
+    uvAppendFinishAllRequests(&uv->append_pending_reqs, RAFT_IOERR);
 }
 
 /* Initialize a new open segment object. */
