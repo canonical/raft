@@ -434,6 +434,29 @@ static size_t updateLastStored(struct raft *r,
     return i;
 }
 
+/* Get the request matching the given index and type, if any. */
+static struct request *getRequest(struct raft *r,
+                                  const raft_index index,
+                                  int type)
+{
+    queue *head;
+    struct request *req;
+
+    if (r->state != RAFT_LEADER) {
+        return NULL;
+    }
+    QUEUE_FOREACH(head, &r->leader_state.requests)
+    {
+        req = QUEUE_DATA(head, struct request, queue);
+        if (req->index == index) {
+            assert(req->type == type);
+            QUEUE_REMOVE(head);
+            return req;
+        }
+    }
+    return NULL;
+}
+
 /* Invoked once a disk write request for new entries has been completed. */
 static void appendLeaderCb(struct raft_io_append *req, int status)
 {
@@ -449,6 +472,13 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
      * these entries in the first place, should we truncate our log too? since
      * we have appended these entries to it. */
     if (status != 0) {
+        struct raft_apply *apply;
+        ErrMsgPrintf(r->errmsg, "io: %s", r->io->errmsg);
+        apply =
+            (struct raft_apply *)getRequest(r, request->index, RAFT_COMMAND);
+        if (apply != NULL && apply->cb != NULL) {
+            apply->cb(apply, status, NULL);
+        }
         goto out;
     }
 
@@ -1247,29 +1277,6 @@ err_after_request_alloc:
 err:
     assert(rv != 0);
     return rv;
-}
-
-/* Get the request matching the given index and type, if any. */
-static struct request *getRequest(struct raft *r,
-                                  const raft_index index,
-                                  int type)
-{
-    queue *head;
-    struct request *req;
-
-    if (r->state != RAFT_LEADER) {
-        return NULL;
-    }
-    QUEUE_FOREACH(head, &r->leader_state.requests)
-    {
-        req = QUEUE_DATA(head, struct request, queue);
-        if (req->index == index) {
-            assert(req->type == type);
-            QUEUE_REMOVE(head);
-            return req;
-        }
-    }
-    return NULL;
 }
 
 /* Apply a RAFT_COMMAND entry that has been committed. */
