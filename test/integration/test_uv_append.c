@@ -484,6 +484,31 @@ TEST(append, noSpace, setUp, tearDown, 0, dir_tmpfs_params)
     return MUNIT_OK;
 }
 
+/* A few requests fail because not enough disk space is available. Eventually
+ * the space is released and the request succeeds. */
+TEST(append, noSpaceResolved, setUp, tearDownDeps, 0, dir_tmpfs_params)
+{
+    struct fixture *f = data;
+    TEAR_DOWN_UV;
+    return MUNIT_SKIP; /* TODO: handle resetting next index */
+    SKIP_IF_NO_FIXTURE;
+#if !HAVE_DECL_UV_FS_O_CREAT
+    /* This test appears to leak memory on older libuv versions. */
+    return MUNIT_SKIP;
+#endif
+    test_dir_fill(f->dir, SEGMENT_BLOCK_SIZE);
+    APPEND_FAILURE(
+        1, 64, RAFT_NOSPACE,
+        "create segment open-1: not enough space to allocate 16384 bytes");
+    APPEND_FAILURE(
+        1, 64, RAFT_NOSPACE,
+        "create segment open-2: not enough space to allocate 16384 bytes");
+    test_dir_remove_file(f->dir, ".fill");
+    APPEND(1, 64);
+    ASSERT_ENTRIES(1, 64);
+    return MUNIT_OK;
+}
+
 /* An error occurs while performing a write. */
 TEST(append, writeError, setUp, tearDown, 0, NULL)
 {
