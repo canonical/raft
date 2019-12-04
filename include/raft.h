@@ -960,6 +960,11 @@ RAFT_API void raft_set_snapshot_threshold(struct raft *r, unsigned n);
 RAFT_API void raft_set_snapshot_trailing(struct raft *r, unsigned n);
 
 /**
+ * Return a human-readable description of the last error occured.
+ */
+RAFT_API const char *raft_errmsg(struct raft *r);
+
+/**
  * Return the code of the current raft state.
  */
 RAFT_API int raft_state(struct raft *r);

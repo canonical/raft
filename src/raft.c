@@ -109,6 +109,11 @@ void raft_set_snapshot_trailing(struct raft *r, unsigned n)
     r->snapshot.trailing = n;
 }
 
+const char *raft_errmsg(struct raft *r)
+{
+    return r->errmsg;
+}
+
 int raft_bootstrap(struct raft *r, const struct raft_configuration *conf)
 {
     int rv;
