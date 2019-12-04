@@ -3,6 +3,7 @@
 #include "configuration.h"
 #include "convert.h"
 #include "entry.h"
+#include "err.h"
 #include "log.h"
 #include "logging.h"
 #include "recv.h"
@@ -147,6 +148,7 @@ int raft_start(struct raft *r)
     rv = r->io->load(r->io, &r->current_term, &r->voted_for, &snapshot,
                      &start_index, &entries, &n_entries);
     if (rv != 0) {
+        ErrMsgPrintf(r->errmsg, "io: %s", r->io->errmsg);
         return rv;
     }
     assert(start_index >= 1);
