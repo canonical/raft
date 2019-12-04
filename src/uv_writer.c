@@ -6,7 +6,6 @@
 #include "../include/raft.h"
 #include "assert.h"
 #include "heap.h"
-#include "uv_error.h"
 
 /* Copy the error message from the request object to the writer object. */
 static void uvWriterReqTransferErrMsg(struct UvWriterReq *req)
@@ -18,11 +17,11 @@ static void uvWriterReqTransferErrMsg(struct UvWriterReq *req)
 static void uvWriterReqSetStatus(struct UvWriterReq *req, int result)
 {
     if (result < 0) {
-        req->status = UV__ERROR;
+        req->status = RAFT_IOERR;
     } else if ((size_t)result < req->len) {
         ErrMsgPrintf(req->errmsg, "short write: %d bytes instead of %ld",
                      result, req->len);
-        req->status = UV__ERROR;
+        req->status = RAFT_IOERR;
     } else {
         req->status = 0;
     }
@@ -190,7 +189,7 @@ static void uvWriterPollCb(uv_poll_t *poller, int status, int events)
                 /* UNTESTED: with the current libuv implementation this should
                  * never fail. */
                 UvErrMsgSys(req->errmsg, "uv_queue_work", rv);
-                req->status = UV__ERROR;
+                req->status = RAFT_IOERR;
                 goto finish;
             }
             return;
@@ -251,7 +250,7 @@ int UvWriterInit(struct UvWriter *w,
     if (w->events == NULL) {
         /* UNTESTED: todo */
         ErrMsgPrintf(errmsg, "failed to alloc events array");
-        rv = UV__ERROR;
+        rv = RAFT_NOMEM;
         goto err_after_io_setup;
     }
 
@@ -261,7 +260,7 @@ int UvWriterInit(struct UvWriter *w,
     if (rv < 0) {
         /* UNTESTED: should fail only with ENOMEM */
         UvErrMsgSys(errmsg, "eventfd", rv);
-        rv = UV__ERROR;
+        rv = RAFT_IOERR;
         goto err_after_events_alloc;
     }
     w->event_fd = rv;
@@ -271,7 +270,7 @@ int UvWriterInit(struct UvWriter *w,
         /* UNTESTED: with the current libuv implementation this should never
          * fail. */
         UvErrMsgSys(errmsg, "uv_poll_init", rv);
-        rv = UV__ERROR;
+        rv = RAFT_IOERR;
         goto err_after_event_fd;
     }
     w->event_poller.data = w;
@@ -281,7 +280,7 @@ int UvWriterInit(struct UvWriter *w,
         /* UNTESTED: with the current libuv implementation this should never
          * fail. */
         UvErrMsgSys(errmsg, "uv_check_init", rv);
-        rv = UV__ERROR;
+        rv = RAFT_IOERR;
         goto err_after_event_fd;
     }
     w->check.data = w;
@@ -291,7 +290,7 @@ int UvWriterInit(struct UvWriter *w,
         /* UNTESTED: with the current libuv implementation this should never
          * fail. */
         UvErrMsgSys(errmsg, "uv_poll_start", rv);
-        rv = UV__ERROR;
+        rv = RAFT_IOERR;
         goto err_after_event_fd;
     }
 
@@ -490,7 +489,7 @@ int UvWriterSubmit(struct UvWriter *w,
             default:
                 /* Unexpected error */
                 UvErrMsgSys(w->errmsg, "io_submit", rv);
-                rv = UV__ERROR;
+                rv = RAFT_IOERR;
                 goto err;
         }
 
@@ -512,7 +511,7 @@ int UvWriterSubmit(struct UvWriter *w,
         req->work.data = NULL;
         QUEUE_REMOVE(&req->queue);
         UvErrMsgSys(w->errmsg, "uv_queue_work", rv);
-        rv = UV__ERROR;
+        rv = RAFT_IOERR;
         goto err;
     }
 

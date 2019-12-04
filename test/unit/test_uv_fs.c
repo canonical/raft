@@ -1,4 +1,3 @@
-#include "../../src/uv_error.h"
 #include "../../src/uv_fs.h"
 #include "../../src/uv_os.h"
 #include "../lib/dir.h"
@@ -111,7 +110,7 @@ SUITE(UvFsSyncDir)
 /* If the directory doesn't exist, an error is returned. */
 TEST(UvFsSyncDir, noExists, NULL, NULL, 0, NULL)
 {
-    SYNC_DIR_ERROR("/abcdef", UV__ERROR,
+    SYNC_DIR_ERROR("/abcdef", RAFT_IOERR,
                    "open directory: no such file or directory");
     return MUNIT_OK;
 }
@@ -138,7 +137,7 @@ SUITE(UvFsOpenFileForReading)
 TEST(UvFsOpenFileForReading, noExists, setupDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
-    OPEN_FILE_FOR_READING_ERROR(dir, "foo", UV__ERROR,
+    OPEN_FILE_FOR_READING_ERROR(dir, "foo", RAFT_IOERR,
                                 "open: no such file or directory");
     return MUNIT_OK;
 }
@@ -192,7 +191,7 @@ TEST(UvFsAllocateFile, dirNoExists, NULL, NULL, 0, NULL)
     ALLOCATE_FILE_ERROR("/non/existing/dir", /* dir */
                         "foo",               /* filename */
                         64,                  /* size */
-                        UV__ERROR,           /* status */
+                        RAFT_IOERR,          /* status */
                         "open: no such file or directory");
     return MUNIT_OK;
 }
@@ -203,10 +202,10 @@ TEST(UvFsAllocateFile, fileAlreadyExists, setupDir, tearDownDir, 0, NULL)
     const char *dir = data;
     char buf[8];
     test_dir_write_file(dir, "foo", buf, sizeof buf);
-    ALLOCATE_FILE_ERROR(dir,       /* dir */
-                        "foo",     /* filename */
-                        64,        /* size */
-                        UV__ERROR, /* status */
+    ALLOCATE_FILE_ERROR(dir,        /* dir */
+                        "foo",      /* filename */
+                        64,         /* size */
+                        RAFT_IOERR, /* status */
                         "open: file already exists");
     return MUNIT_OK;
 }

@@ -15,7 +15,6 @@
 #include "assert.h"
 #include "err.h"
 #include "syscall.h"
-#include "uv_error.h"
 
 /* Default permissions when creating a directory. */
 #define DEFAULT_DIR_PERM 0700

@@ -10,7 +10,6 @@
 #include "logging.h"
 #include "uv.h"
 #include "uv_encoding.h"
-#include "uv_error.h"
 #include "uv_os.h"
 
 /* Arbitrary maximum configuration size. Should be practically be enough */

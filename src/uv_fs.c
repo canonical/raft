@@ -8,7 +8,6 @@
 #include "assert.h"
 #include "err.h"
 #include "heap.h"
-#include "uv_error.h"
 #include "uv_os.h"
 
 int UvFsCheckDir(const char *dir, char *errmsg)
@@ -64,13 +63,13 @@ int UvFsSyncDir(const char *dir, char *errmsg)
     rv = UvOsOpen(dir, UV_FS_O_RDONLY | UV_FS_O_DIRECTORY, 0, &fd);
     if (rv != 0) {
         UvErrMsgSys(errmsg, "open directory", rv);
-        return UV__ERROR;
+        return RAFT_IOERR;
     }
     rv = UvOsFsync(fd);
     UvOsClose(fd);
     if (rv != 0) {
-        UvErrMsgSys(errmsg, "fsync directory", fd);
-        return UV__ERROR;
+        UvErrMsgSys(errmsg, "fsync directory", rv);
+        return RAFT_IOERR;
     }
     return 0;
 }
@@ -154,7 +153,7 @@ static int uvFsOpenFile(const char *dir,
     rv = UvOsOpen(path, flags, mode, fd);
     if (rv != 0) {
         UvErrMsgSys(errmsg, "open", rv);
-        return UV__ERROR;
+        return RAFT_IOERR;
     }
     return 0;
 }
@@ -358,7 +357,7 @@ int UvFsFileHasOnlyTrailingZeros(uv_file fd, bool *flag, char *errmsg)
     size = lseek(fd, 0, SEEK_END);
     if (size == -1) {
         UvErrMsgSys(errmsg, "lseek", -errno);
-        return UV__ERROR;
+        return RAFT_IOERR;
     }
     size -= offset;
 
@@ -366,14 +365,14 @@ int UvFsFileHasOnlyTrailingZeros(uv_file fd, bool *flag, char *errmsg)
     offset = lseek(fd, offset, SEEK_SET);
     if (offset == -1) {
         UvErrMsgSys(errmsg, "lseek", -errno);
-        return UV__ERROR;
+        return RAFT_IOERR;
     }
 
     buf.len = size;
-    buf.base = raft_malloc(buf.len);
+    buf.base = HeapMalloc(buf.len);
     if (buf.base == NULL) {
         ErrMsgPrintf(errmsg, "can't allocate read buffer");
-        return UV__ERROR;
+        return RAFT_NOMEM;
     }
 
     rv = UvFsReadInto(fd, &buf, errmsg);
@@ -391,7 +390,7 @@ int UvFsFileHasOnlyTrailingZeros(uv_file fd, bool *flag, char *errmsg)
     *flag = true;
 
 done:
-    raft_free(buf.base);
+    HeapFree(buf.base);
 
     return 0;
 }
@@ -560,7 +559,7 @@ int UvFsTruncateAndRenameFile(const char *dir,
 err_after_open:
     UvOsClose(fd);
 err:
-    return UV__ERROR;
+    return RAFT_IOERR;
 }
 
 /* Check if direct I/O is possible on the given fd. */

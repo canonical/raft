@@ -2,7 +2,6 @@
 #include "byte.h"
 #include "uv.h"
 #include "uv_encoding.h"
-#include "uv_error.h"
 
 /* We have metadata1 and metadata2. */
 #define METADATA_FILENAME_PREFIX "metadata"

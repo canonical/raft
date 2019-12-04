@@ -4,7 +4,6 @@
 #include "assert.h"
 #include "heap.h"
 #include "uv.h"
-#include "uv_error.h"
 #include "uv_os.h"
 
 /* The happy path for UvPrepare is:
