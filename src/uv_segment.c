@@ -308,6 +308,8 @@ err_after_header_decode:
 err_after_header_alloc:
     raft_free(header.base);
 err:
+    *entries = NULL;
+    *n_entries = 0;
     assert(rv != 0);
     return rv;
 }
@@ -858,6 +860,8 @@ err:
         }
 
         raft_free(*entries);
+        *entries = NULL;
+        *n_entries = 0;
     }
 
     return rv;
