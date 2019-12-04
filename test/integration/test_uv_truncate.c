@@ -108,13 +108,6 @@ static void tearDownDeps(void *data)
     free(f);
 }
 
-static void tearDown(void *data)
-{
-    struct fixture *f = data;
-    TEAR_DOWN_UV;
-    tearDownDeps(f);
-}
-
 /******************************************************************************
  *
  * Assertions
