@@ -198,7 +198,9 @@ static void uvWriterPollCb(uv_poll_t *poller, int status, int events)
 
         uvWriterReqSetStatus(req, event->res);
 
+#if defined(RWF_NOWAIT)
     finish:
+#endif /* RWF_NOWAIT */
         uvWriterReqFinish(req);
     }
 }
