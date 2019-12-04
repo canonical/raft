@@ -63,6 +63,11 @@ void *HeapCalloc(size_t nmemb, size_t size)
     return currentHeap->calloc(currentHeap->data, nmemb, size);
 }
 
+void *HeapRealloc(void *ptr, size_t size)
+{
+    return currentHeap->realloc(currentHeap->data, ptr, size);
+}
+
 void *raft_malloc(size_t size)
 {
     return HeapMalloc(size);
@@ -80,7 +85,7 @@ void *raft_calloc(size_t nmemb, size_t size)
 
 void *raft_realloc(void *ptr, size_t size)
 {
-    return currentHeap->realloc(currentHeap->data, ptr, size);
+    return HeapRealloc(ptr, size);
 }
 
 void *raft_aligned_alloc(size_t alignment, size_t size)

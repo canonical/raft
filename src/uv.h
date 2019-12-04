@@ -4,7 +4,9 @@
 #define UV_H_
 
 #include "../include/raft.h"
+#include "err.h"
 #include "queue.h"
+#include "tracing.h"
 #include "uv_fs.h"
 #include "uv_os.h"
 
@@ -13,7 +15,7 @@
 
 /* Template string for closed segment filenames: start index (inclusive), end
  * index (inclusive). */
-#define UV__CLOSED_TEMPLATE "%llu-%llu"
+#define UV__CLOSED_TEMPLATE "%016llu-%016llu"
 
 /* Template string for open segment filenames: incrementing counter. */
 #define UV__OPEN_TEMPLATE "open-%llu"
@@ -27,7 +29,11 @@
 #define UV__SNAPSHOT_META_TEMPLATE UV__SNAPSHOT_TEMPLATE ".meta"
 
 /* State codes. */
-enum { UV__ACTIVE = 1, UV__CLOSED };
+enum {
+    UV__PRISTINE, /* Metadata cache populated and I/O capabilities probed */
+    UV__ACTIVE,
+    UV__CLOSED
+};
 
 /* Open segment counter type */
 typedef unsigned long long uvCounter;
@@ -40,70 +46,53 @@ struct uvMetadata
     unsigned voted_for;         /* Server ID of last vote, or 0 */
 };
 
-/* Hold state associated with an outbound connection. */
-struct uvClient;
-
-/* Hold state associated with an inbound connection. */
-struct uvServer;
-
 /* Hold state of a libuv-based raft_io implementation. */
 struct uv
 {
-    struct raft_io *io;                    /* I/O object we're implementing */
-    struct uv_loop_s *loop;                /* UV event loop */
-    char dir[UV__DIR_LEN];                 /* Data directory */
-    struct raft_uv_transport *transport;   /* Network transport */
-    struct raft_logger *logger;            /* Logger implementation */
-    unsigned id;                           /* Server ID */
-    struct UvFs fs;                        /* File system abstraction */
-    int state;                             /* Current state */
-    bool errored;                          /* If a disk I/O error was hit */
-    bool direct_io;                        /* Whether direct I/O is supported */
-    bool async_io;                         /* Whether async I/O is supported */
-    size_t block_size;                     /* Block size of the data dir */
-    unsigned n_blocks;                     /* N. of blocks in a segment */
-    struct uvClient **clients;             /* Outbound connections */
-    unsigned n_clients;                    /* Length of the clients array */
-    struct uvServer **servers;             /* Inbound connections */
-    unsigned n_servers;                    /* Length of the servers array */
-    unsigned connect_retry_delay;          /* Client connection retry delay */
-    struct UvFsCreateFile *prepare_create; /* Segment being prepared */
-    queue prepare_reqs;                    /* Pending prepare requests. */
-    queue prepare_pool;                    /* Prepared open segments */
-    uvCounter prepare_next_counter;        /* Counter of next open segment */
-    raft_index append_next_index;          /* Index of next entry to append */
-    queue append_segments;                 /* Open segments in use. */
-    queue append_pending_reqs;             /* Pending append requests. */
-    queue append_writing_reqs;             /* Append requests in flight */
-    queue finalize_reqs;                   /* Segments waiting to be closed */
-    raft_index finalize_last_index;        /* Last index of last closed seg */
-    struct uv_work_s finalize_work;        /* Resize and rename segments */
-    queue truncate_reqs;                   /* Pending truncate requests */
-    struct uv_work_s truncate_work;        /* Execute truncate log requests */
-    queue snapshot_put_reqs;               /* Inflight put snapshot requests */
-    queue snapshot_get_reqs;               /* Inflight get snapshot requests */
-    struct uv_work_s snapshot_put_work;    /* Execute snapshot put requests */
-    struct uvMetadata metadata;            /* Cache of metadata on disk */
-    struct uv_timer_s timer;               /* Timer for periodic ticks */
-    raft_io_tick_cb tick_cb;               /* Invoked when the timer expires */
-    raft_io_recv_cb recv_cb;               /* Invoked when upon RPC messages */
-    bool closing;                          /* True if we are closing */
-    raft_io_close_cb close_cb;             /* Invoked when finishing closing */
-    unsigned short log_level;              /* Logging level */
+    struct raft_io *io;                  /* I/O object we're implementing */
+    struct uv_loop_s *loop;              /* UV event loop */
+    char dir[UV__DIR_LEN];               /* Data directory */
+    struct raft_uv_transport *transport; /* Network transport */
+    struct raft_tracer *tracer;          /* Debug tracing */
+    unsigned id;                         /* Server ID */
+    int state;                           /* Current state */
+    bool errored;                        /* If a disk I/O error was hit */
+    bool direct_io;                      /* Whether direct I/O is supported */
+    bool async_io;                       /* Whether async I/O is supported */
+    size_t segment_size;                 /* Initial size of open segments. */
+    size_t block_size;                   /* Block size of the data dir */
+    queue clients;                       /* Outbound connections */
+    queue servers;                       /* Inbound connections */
+    unsigned connect_retry_delay;        /* Client connection retry delay */
+    void *prepare_inflight;              /* Segment being prepared */
+    queue prepare_reqs;                  /* Pending prepare requests. */
+    queue prepare_pool;                  /* Prepared open segments */
+    uvCounter prepare_next_counter;      /* Counter of next open segment */
+    raft_index append_next_index;        /* Index of next entry to append */
+    queue append_segments;               /* Open segments in use. */
+    queue append_pending_reqs;           /* Pending append requests. */
+    queue append_writing_reqs;           /* Append requests in flight */
+    struct UvBarrier *barrier;           /* Inflight barrier request */
+    queue finalize_reqs;                 /* Segments waiting to be closed */
+    struct uv_work_s finalize_work;      /* Resize and rename segments */
+    struct uv_work_s truncate_work;      /* Execute truncate log requests */
+    queue snapshot_get_reqs;             /* Inflight get snapshot requests */
+    struct uv_work_s snapshot_put_work;  /* Execute snapshot put requests */
+    struct uvMetadata metadata;          /* Cache of metadata on disk */
+    struct uv_timer_s timer;             /* Timer for periodic ticks */
+    raft_io_tick_cb tick_cb;             /* Invoked when the timer expires */
+    raft_io_recv_cb recv_cb;             /* Invoked when upon RPC messages */
+    queue aborting;                      /* Cleanups upon errors or shutdown */
+    bool closing;                        /* True if we are closing */
+    raft_io_close_cb close_cb;           /* Invoked when finishing closing */
 };
 
-/* Emit a log message with a certain level. */
-#define uvEmitf(LEVEL, UV, ...)                                         \
-    UV->logger->emit(UV->logger, LEVEL, UV->io->time(UV->io), __FILE__, \
-                     __LINE__, ##__VA_ARGS__);
-#define uvDebugf(UV, ...) uvEmitf(RAFT_DEBUG, UV, ##__VA_ARGS__);
-#define uvInfof(UV, ...) uvEmitf(RAFT_INFO, UV, ##__VA_ARGS__);
-#define uvWarnf(UV, ...) uvEmitf(RAFT_WARN, UV, ##__VA_ARGS__);
-#define uvErrorf(UV, ...) uvEmitf(RAFT_ERROR, UV, ##__VA_ARGS__);
+/* Implementation of raft_io->truncate. */
+int UvTruncate(struct raft_io *io, raft_index index);
 
 /* Load Raft metadata from disk, choosing the most recent version (either the
  * metadata1 or metadata2 file). */
-int uvMetadataLoad(struct uv *uv, struct uvMetadata *metadata);
+int uvMetadataLoad(const char *dir, struct uvMetadata *metadata, char *errmsg);
 
 /* Store the given metadata to disk, writing the appropriate metadata file
  * according to the metadata version (if the version is odd, write metadata1,
@@ -141,15 +130,14 @@ int uvSegmentInfoAppendIfMatch(const char *filename,
 void uvSegmentSort(struct uvSegmentInfo *infos, size_t n_infos);
 
 /* Keep only the closed segments whose entries are within the given trailing
- * amount past the given snapshot last index. If no error occurs the location
- * pointed by 'deleted' will contain the index of the last segment that got
- * deleted, or 'n' if no segment got deleted. */
+ * amount past the given snapshot last index. If the given trailing amount is 0,
+ * unconditionally delete all closed segments. */
 int uvSegmentKeepTrailing(struct uv *uv,
                           struct uvSegmentInfo *segments,
                           size_t n,
                           raft_index last_index,
                           size_t trailing,
-                          size_t *deleted);
+                          char *errmsg);
 
 /* Load all entries contained in the given closed segment. */
 int uvSegmentLoadClosed(struct uv *uv,
@@ -165,6 +153,9 @@ int uvSegmentLoadAll(struct uv *uv,
                      size_t n_segments,
                      struct raft_entry **entries,
                      size_t *n_entries);
+
+/* Return the number of blocks in a segments. */
+#define uvSegmentBlocks(UV) (UV->segment_size / UV->block_size)
 
 /* A dynamically allocated buffer holding data to be written into a segment
  * file.
@@ -233,10 +224,13 @@ struct uvSnapshotInfo
     char filename[UV__FILENAME_LEN];
 };
 
+/* Render the filename of the data file of a snapshot */
+void uvSnapshotFilenameOf(struct uvSnapshotInfo *info, char *filename);
+
 /* Append a new item to the given snapshot info list if the given filename
- * matches the one of a snapshot metadata file (snapshot-xxx-yyy-zzz.meta) and
- * there is actually a matching snapshot file on disk. */
-int uvSnapshotInfoAppendIfMatch(struct uv *uv,
+ * matches the pattern of a snapshot metadata file (snapshot-xxx-yyy-zzz.meta)
+ * and there is actually a matching snapshot file on disk. */
+int UvSnapshotInfoAppendIfMatch(struct uv *uv,
                                 const char *filename,
                                 struct uvSnapshotInfo *infos[],
                                 size_t *n_infos,
@@ -244,26 +238,34 @@ int uvSnapshotInfoAppendIfMatch(struct uv *uv,
 
 /* Sort the given list of snapshots by comparing their filenames. Older
  * snapshots will come first. */
-void uvSnapshotSort(struct uvSnapshotInfo *infos, size_t n_infos);
+void UvSnapshotSort(struct uvSnapshotInfo *infos, size_t n_infos);
 
 /* Load the snapshot associated with the given metadata. */
-int uvSnapshotLoad(struct uv *uv,
+int UvSnapshotLoad(struct uv *uv,
                    struct uvSnapshotInfo *meta,
                    struct raft_snapshot *snapshot);
 
-/* Remove all all snapshots except the last two. */
-int uvSnapshotKeepLastTwo(struct uv *uv,
-                          struct uvSnapshotInfo *snapshots,
-                          size_t n);
+/* Implementation raft_io->snapshot_put (defined in uv_snapshot.c). */
+int UvSnapshotPut(struct raft_io *io,
+                  unsigned trailing,
+                  struct raft_io_snapshot_put *req,
+                  const struct raft_snapshot *snapshot,
+                  raft_io_snapshot_put_cb cb);
+
+/* Implementation of raft_io->snapshot_get (defined in uv_snapshot.c). */
+int UvSnapshotGet(struct raft_io *io,
+                  struct raft_io_snapshot_get *req,
+                  raft_io_snapshot_get_cb cb);
 
 /* Return a list of all snapshots and segments found in the data directory. Both
  * snapshots and segments are ordered by filename (closed segments come before
  * open ones). */
-int uvList(struct uv *uv,
+int UvList(struct uv *uv,
            struct uvSnapshotInfo *snapshots[],
            size_t *n_snapshots,
            struct uvSegmentInfo *segments[],
-           size_t *n_segments);
+           size_t *n_segments,
+	   char *errmsg);
 
 /* Request to obtain a newly prepared open segment. */
 struct uvPrepare;
@@ -277,71 +279,95 @@ struct uvPrepare
     queue queue;                /* Links in uv_io->prepare_reqs */
 };
 
-/* Submit a request to get a prepared open segment ready for writing. */
-void uvPrepare(struct uv *uv, struct uvPrepare *req, uvPrepareCb cb);
+/* Get a prepared open segment ready for writing. If a prepared open segment is
+ * already available in the pool, it will be returned immediately using the fd
+ * and counter pointers and the request callback won't be invoked. Otherwise the
+ * request will be queued and its callback invoked once a newly prepared segment
+ * is available. */
+int UvPrepare(struct uv *uv,
+              uv_file *fd,
+              uvCounter *counter,
+              struct uvPrepare *req,
+              uvPrepareCb cb);
 
 /* Cancel all pending prepare requests and start removing all unused prepared
  * open segments. If a segment currently being created, wait for it to complete
  * and then remove it immediately. */
-void uvPrepareClose(struct uv *uv);
+void UvPrepareClose(struct uv *uv);
 
-/* Callback invoked after completing a truncate request. If there are append
- * requests that have accumulated in while the truncate request was executed,
- * they will be processed now. */
-void uvAppendMaybeProcessRequests(struct uv *uv);
+/* Implementation of raft_io->append.*/
+int UvAppend(struct raft_io *io,
+             struct raft_io_append *req,
+             const struct raft_entry entries[],
+             unsigned n,
+             raft_io_append_cb cb);
 
-/* Fix the first index of the last segment that we requested to prepare, to
- * reflect that we're restoring a snapshot. */
-void uvAppendFixPreparedSegmentFirstIndex(struct uv *uv);
+/* Pause request object and callback. */
+struct UvBarrier;
+typedef void (*UvBarrierCb)(struct UvBarrier *req);
+struct UvBarrier
+{
+    void *data;     /* User data */
+    UvBarrierCb cb; /* Completion callback */
+};
+
+/* Submit a barrier request to interrupt the normal flow of append
+ * operations.
+ *
+ * The following will happen:
+ *
+ * - Replace uv->append_next_index with the given next_index, so the next entry
+ *   that will be appended will have the new index.
+ *
+ * - Execution of new writes for subsequent append requests will be blocked
+ *   until UvUnblock is called.
+ *
+ * - Wait for all currently pending and inflight append requests against all
+ *   open segments to complete, and for those open segments to be finalized,
+ *   then invoke the barrier callback.
+ *
+ * This API is used to implement truncate and snapshot install operations, which
+ * need to wait until all pending writes have settled and modify the log state,
+ * changing the next index. */
+int UvBarrier(struct uv *uv,
+              raft_index next_index,
+              struct UvBarrier *barrier,
+              UvBarrierCb cb);
+
+/* Resume writing append requests after UvBarrier has been called. */
+void UvUnblock(struct uv *uv);
 
 /* Cancel all pending write requests and request the current segment to be
  * finalized. Must be invoked at closing time. */
 void uvAppendClose(struct uv *uv);
 
-/* Tell the append implementation that the open segment currently being written
- * must be finalized, even if it's not full yet. The implementation will:
- *
- * - Request a new prepared segment and target all newly submitted append
- *   requests to it.
- *
- * - Wait for any inflight write against the current segment to complete and
- *   then submit a request to finalize it. */
-int uvAppendForceFinalizingCurrentSegment(struct uv *uv);
-
 /* Submit a request to finalize the open segment with the given counter.
  *
  * Requests are processed one at a time, to avoid ending up closing open segment
  * N + 1 before closing open segment N. */
-int uvFinalize(struct uv *uv,
+int UvFinalize(struct uv *uv,
                unsigned long long counter,
                size_t used,
                raft_index first_index,
                raft_index last_index);
 
-/* Cancel all pending truncate requests. */
-void uvTruncateClose(struct uv *uv);
-
-/* Callback invoked after a segment has been finalized. It will check if there
- * are pending truncate requests waiting for open segments to be finalized, and
- * possibly start executing the oldest one of them if no unfinalized open
- * segment is left. */
-void uvTruncateMaybeProcessRequests(struct uv *uv);
+/* Implementation of raft_io->send. */
+int UvSend(struct raft_io *io,
+           struct raft_io_send *req,
+           const struct raft_message *message,
+           raft_io_send_cb cb);
 
 /* Stop all clients by closing the outbound stream handles and canceling all
  * pending send requests.  */
-void uvSendClose(struct uv *uv);
+void UvSendClose(struct uv *uv);
 
 /* Start receiving messages from new incoming connections. */
-int uvRecv(struct uv *uv);
+int UvRecvStart(struct uv *uv);
 
 /* Stop all servers by closing the inbound stream handles and aborting all
  * requests being received.  */
-void uvRecvClose(struct uv *uv);
+void UvRecvClose(struct uv *uv);
 
-/* Callback invoked after truncation has completed, possibly unblocking pending
- * snapshot put requests. */
-void uvSnapshotMaybeProcessRequests(struct uv *uv);
-
-void uvMaybeClose(struct uv *uv);
+void uvMaybeFireCloseCb(struct uv *uv);
 
 #endif /* UV_H_ */

@@ -3,13 +3,17 @@
 #include "assert.h"
 #include "uv.h"
 
-static const char *ignored[] = {".", "..", "metadata1", "metadata2", NULL};
+static const char *uvListIgnored[] = {".", "..", "metadata1", "metadata2",
+                                      NULL};
 
 /* Return true if the given filename should be ignored. */
-static bool shouldIgnore(const char *filename)
+static bool uvListShouldIgnore(const char *filename)
 {
-    const char **cursor = ignored;
+    const char **cursor = uvListIgnored;
     bool result = false;
+    if (strlen(filename) >= UV__FILENAME_LEN) {
+        return true;
+    }
     while (*cursor != NULL) {
         if (strcmp(filename, *cursor) == 0) {
             result = true;
@@ -20,21 +24,23 @@ static bool shouldIgnore(const char *filename)
     return result;
 }
 
-int uvList(struct uv *uv,
+int UvList(struct uv *uv,
            struct uvSnapshotInfo *snapshots[],
            size_t *n_snapshots,
            struct uvSegmentInfo *segments[],
-           size_t *n_segments)
+           size_t *n_segments,
+           char *errmsg)
 {
     struct uv_fs_s req;
     struct uv_dirent_s entry;
     int n;
     int i;
     int rv;
+    int rv2;
 
     n = uv_fs_scandir(NULL, &req, uv->dir, 0, NULL);
     if (n < 0) {
-        uvErrorf(uv, "scan %s: %s", uv->dir, uv_strerror(n));
+        ErrMsgPrintf(errmsg, "scan %s: %s", uv->dir, uv_strerror(n));
         return RAFT_IOERR;
     }
 
@@ -58,20 +64,20 @@ int uvList(struct uv *uv,
         /* If an error occurred while processing a preceeding entry or if we
          * know that this is not a segment filename, just free it and skip to
          * the next one. */
-        if (rv != 0 || shouldIgnore(filename)) {
+        if (rv != 0 || uvListShouldIgnore(filename)) {
             if (rv == 0) {
-                uvDebugf(uv, "ignore %s", filename);
+                Tracef(uv->tracer, "ignore %s", filename);
             }
             continue;
         }
 
         /* Append to the snapshot list if it's a snapshot metadata filename and
          * a valid associated snapshot file exists. */
-        rv = uvSnapshotInfoAppendIfMatch(uv, filename, snapshots, n_snapshots,
+        rv = UvSnapshotInfoAppendIfMatch(uv, filename, snapshots, n_snapshots,
                                          &appended);
         if (appended || rv != 0) {
             if (rv == 0) {
-                uvDebugf(uv, "snapshot %s", filename);
+                Tracef(uv->tracer, "snapshot %s", filename);
             }
             continue;
         }
@@ -81,24 +87,23 @@ int uvList(struct uv *uv,
                                         &appended);
         if (appended || rv != 0) {
             if (rv == 0) {
-                uvDebugf(uv, "segment %s", filename);
+                Tracef(uv->tracer, "segment %s", filename);
             }
             continue;
         }
 
-        uvDebugf(uv, "ignore %s", filename);
+        Tracef(uv->tracer, "ignore %s", filename);
     }
 
-    rv = uv_fs_scandir_next(&req, &entry);
-    assert(rv == UV_EOF);
-    rv = 0;
+    rv2 = uv_fs_scandir_next(&req, &entry);
+    assert(rv2 == UV_EOF);
 
     if (rv != 0 && *segments != NULL) {
         raft_free(*segments);
     }
 
     if (*snapshots != NULL) {
-        uvSnapshotSort(*snapshots, *n_snapshots);
+        UvSnapshotSort(*snapshots, *n_snapshots);
     }
 
     if (*segments != NULL) {

@@ -19,10 +19,11 @@
  * greater. The default is 1, and -1 means "keep failing forever". */
 #define TEST_HEAP_FAULT_REPEAT "heap-fault-repeat"
 
-/* Fixture helpers. */
+/* Macro helpers. */
 #define FIXTURE_HEAP struct raft_heap heap
 #define SETUP_HEAP test_heap_setup(params, &f->heap)
 #define TEAR_DOWN_HEAP test_heap_tear_down(&f->heap)
+#define HEAP_FAULT_ENABLE test_heap_fault_enable(&f->heap)
 
 void test_heap_setup(const MunitParameter params[], struct raft_heap *h);
 void test_heap_tear_down(struct raft_heap *h);

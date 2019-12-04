@@ -1,5 +1,4 @@
 #include "../../src/queue.h"
-
 #include "../lib/runner.h"
 
 TEST_MODULE(queue)
@@ -276,16 +275,25 @@ TEST_CASE(foreach, one, NULL)
     return MUNIT_OK;
 }
 
-/* Loop through a queue of two items. */
+/* Loop through a queue of two items. The order of the loop is from the head to
+ * the tail. */
 TEST_CASE(foreach, two, NULL)
 {
     struct fixture *f = data;
     struct item items[2];
     queue *head;
-    int count = 0;
+    int values[2] = {0, 0};
+    int i = 0;
     (void)params;
     PUSH(items);
-    QUEUE_FOREACH(head, &f->queue) { count++; }
-    munit_assert_int(count, ==, 2);
+    QUEUE_FOREACH(head, &f->queue)
+    {
+        struct item *item;
+        item = QUEUE_DATA(head, struct item, queue);
+        values[i] = item->value;
+        i++;
+    }
+    munit_assert_int(values[0], ==, 1);
+    munit_assert_int(values[1], ==, 2);
     return MUNIT_OK;
 }

@@ -1,4 +1,5 @@
 #include "election.h"
+
 #include "assert.h"
 #include "configuration.h"
 #include "log.h"

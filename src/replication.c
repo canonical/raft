@@ -4,8 +4,9 @@
 #include "configuration.h"
 #include "convert.h"
 #ifdef __GLIBC__
-#    include "error.h"
+#include "error.h"
 #endif
+#include "err.h"
 #include "log.h"
 #include "logging.h"
 #include "membership.h"
@@ -17,17 +18,17 @@
 
 /* Set to 1 to enable tracing. */
 #if 0
-#    define tracef(...) debugf(r, ##__VA_ARGS__)
+#define tracef(...) debugf(r, ##__VA_ARGS__)
 #else
-#    define tracef(...)
+#define tracef(...)
 #endif
 
 #ifndef max
-#    define max(a, b) ((a) < (b) ? (b) : (a))
+#define max(a, b) ((a) < (b) ? (b) : (a))
 #endif
 
 #ifndef min
-#    define min(a, b) ((a) < (b) ? (a) : (b))
+#define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
 /* Context of a RAFT_IO_APPEND_ENTRIES request that was submitted with
@@ -243,7 +244,7 @@ static void sendSnapshotGetCb(struct raft_io_snapshot_get *get,
         goto abort_with_snapshot;
     }
 
-    return;
+    goto out;
 
 abort_with_snapshot:
     snapshotClose(snapshot);
@@ -254,6 +255,7 @@ abort:
         progressAbortSnapshot(r, i);
     }
     raft_free(req);
+out:
     return;
 }
 
@@ -432,6 +434,29 @@ static size_t updateLastStored(struct raft *r,
     return i;
 }
 
+/* Get the request matching the given index and type, if any. */
+static struct request *getRequest(struct raft *r,
+                                  const raft_index index,
+                                  int type)
+{
+    queue *head;
+    struct request *req;
+
+    if (r->state != RAFT_LEADER) {
+        return NULL;
+    }
+    QUEUE_FOREACH(head, &r->leader_state.requests)
+    {
+        req = QUEUE_DATA(head, struct request, queue);
+        if (req->index == index) {
+            assert(req->type == type);
+            QUEUE_REMOVE(head);
+            return req;
+        }
+    }
+    return NULL;
+}
+
 /* Invoked once a disk write request for new entries has been completed. */
 static void appendLeaderCb(struct raft_io_append *req, int status)
 {
@@ -447,6 +472,13 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
      * these entries in the first place, should we truncate our log too? since
      * we have appended these entries to it. */
     if (status != 0) {
+        struct raft_apply *apply;
+        ErrMsgPrintf(r->errmsg, "io: %s", r->io->errmsg);
+        apply =
+            (struct raft_apply *)getRequest(r, request->index, RAFT_COMMAND);
+        if (apply != NULL && apply->cb != NULL) {
+            apply->cb(apply, status, NULL);
+        }
         goto out;
     }
 
@@ -529,6 +561,7 @@ static int appendLeader(struct raft *r, raft_index index)
 
     rv = r->io->append(r->io, &request->req, entries, n, appendLeaderCb);
     if (rv != 0) {
+        ErrMsgPrintf(r->errmsg, "io: %s", r->io->errmsg);
         goto err_after_request_alloc;
     }
 
@@ -728,6 +761,7 @@ int replicationUpdate(struct raft *r,
 
 static void sendAppendEntriesResultCb(struct raft_io_send *req, int status)
 {
+    struct raft *r = req->data;
     (void)status;
     raft_free(req);
 }
@@ -749,6 +783,7 @@ static void sendAppendEntriesResult(
     if (req == NULL) {
         return;
     }
+    req->data = r;
 
     rv = r->io->send(r->io, req, &message, sendAppendEntriesResultCb);
     if (rv != 0) {
@@ -1073,6 +1108,7 @@ int replicationAppend(struct raft *r,
     rv = r->io->append(r->io, &request->req, request->args.entries,
                        request->args.n_entries, appendFollowerCb);
     if (rv != 0) {
+        ErrMsgPrintf(r->errmsg, "io: %s", r->io->errmsg);
         goto err_after_acquire_entries;
     }
 
@@ -1110,13 +1146,17 @@ static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
 
     result.term = r->current_term;
 
-    /* TODO: check the current state to see if we are still followers */
+    /* If we are shutting down, let's discard the result. TODO: what about other
+     * states? */
+    if (r->state == RAFT_UNAVAILABLE) {
+        goto discard;
+    }
 
     if (status != 0) {
         result.rejected = snapshot->index;
         errorf(r, "save snapshot %d: %s", snapshot->index,
                raft_strerror(status));
-        goto err;
+        goto discard;
     }
 
     /* From Figure 5.3:
@@ -1130,7 +1170,7 @@ static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
         result.rejected = snapshot->index;
         errorf(r, "restore snapshot %d: %s", snapshot->index,
                raft_strerror(status));
-        goto err;
+        goto discard;
     }
 
     debugf(r, "restored snapshot with last index %llu", snapshot->index);
@@ -1139,15 +1179,18 @@ static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
 
     goto respond;
 
-err:
+discard:
     /* In case of error we must also free the snapshot data buffer and free the
      * configuration. */
     raft_free(snapshot->bufs[0].base);
     raft_configuration_close(&snapshot->configuration);
 
 respond:
-    result.last_log_index = r->last_stored;
-    sendAppendEntriesResult(r, &result);
+    if (r->state != RAFT_UNAVAILABLE) {
+        result.last_log_index = r->last_stored;
+        sendAppendEntriesResult(r, &result);
+    }
+
     raft_free(request);
 }
 
@@ -1192,11 +1235,6 @@ int replicationInstallSnapshot(struct raft *r,
     /* Premptively update our in-memory state. */
     logRestore(&r->log, args->last_index, args->last_term);
 
-    /* We need to truncate our entire log */
-    rv = r->io->truncate(r->io, 1);
-    if (rv != 0) {
-        goto err;
-    }
     r->last_stored = 0;
 
     request = raft_malloc(sizeof *request);
@@ -1222,8 +1260,9 @@ int replicationInstallSnapshot(struct raft *r,
 
     assert(r->snapshot.put.data == NULL);
     r->snapshot.put.data = request;
-    rv = r->io->snapshot_put(r->io, r->snapshot.trailing, &r->snapshot.put,
-                             snapshot, installSnapshotCb);
+    rv = r->io->snapshot_put(r->io,
+                             0 /* zero trailing means replace everything */,
+                             &r->snapshot.put, snapshot, installSnapshotCb);
     if (rv != 0) {
         goto err_after_bufs_alloc;
     }
@@ -1238,29 +1277,6 @@ err_after_request_alloc:
 err:
     assert(rv != 0);
     return rv;
-}
-
-/* Get the request matching the given index and type, if any. */
-static struct request *getRequest(struct raft *r,
-                                  const raft_index index,
-                                  int type)
-{
-    queue *head;
-    struct request *req;
-
-    if (r->state != RAFT_LEADER) {
-        return NULL;
-    }
-    QUEUE_FOREACH(head, &r->leader_state.requests)
-    {
-        req = QUEUE_DATA(head, struct request, queue);
-        if (req->index == index) {
-            assert(req->type == type);
-            QUEUE_REMOVE(head);
-            return req;
-        }
-    }
-    return NULL;
 }
 
 /* Apply a RAFT_COMMAND entry that has been committed. */
@@ -1333,6 +1349,11 @@ static void applyChange(struct raft *r, const raft_index index)
 
 static bool shouldTakeSnapshot(struct raft *r)
 {
+    /* If we are shutting down, let's not do anything. */
+    if (r->state == RAFT_UNAVAILABLE) {
+        return false;
+    }
+
     /* If a snapshot is already in progress, we don't want to start another
      *  one. */
     if (r->snapshot.pending.term != 0) {

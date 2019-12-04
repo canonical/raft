@@ -35,7 +35,8 @@ libraft_la_SOURCES = \
   src/start.c \
   src/state.c \
   src/syscall.c \
-  src/tick.c
+  src/tick.c \
+  src/tracing.c
 
 bin_PROGRAMS =
 
@@ -53,6 +54,7 @@ libtest_la_SOURCES = \
   test/lib/fsm.c \
   test/lib/heap.c \
   test/lib/munit.c \
+  test/lib/tracer.c \
   test/lib/tcp.c
 
 test_unit_core_SOURCES = \
@@ -86,7 +88,7 @@ test_integration_core_SOURCES = \
   test/integration/test_tick.c \
   test/integration/test_start.c
 test_integration_core_LDADD = libtest.la libraft.la
-test_integration_core_LDFLAGS =
+test_integration_core_LDFLAGS = -no-install
 
 fuzzy_test_SOURCES = \
   test/lib/cluster.c \
@@ -96,11 +98,11 @@ fuzzy_test_SOURCES = \
   test/fuzzy/test_membership.c \
   test/fuzzy/test_replication.c
 fuzzy_test_LDADD = libtest.la libraft.la
-fuzzy_test_LDFLAGS =
+fuzzy_test_LDFLAGS = -no-install
 
 if UV_ENABLED
 
-raft_uv_SOURCES = \
+libraft_la_SOURCES += \
   src/uv.c \
   src/uv_append.c \
   src/uv_encoding.c \
@@ -116,54 +118,53 @@ raft_uv_SOURCES = \
   src/uv_send.c \
   src/uv_snapshot.c \
   src/uv_tcp.c \
-  src/uv_tcp_connect.c \
   src/uv_tcp_listen.c \
+  src/uv_tcp_connect.c \
   src/uv_truncate.c \
   src/uv_writer.c
-
-libraft_la_SOURCES += $(raft_uv_SOURCES)
 libraft_la_LDFLAGS += $(UV_LIBS)
 
 raftinclude_HEADERS += include/raft/uv.h
 
 check_PROGRAMS += \
-  test/unit/uv
+  test/unit/uv \
+  test/integration/uv
 
 libtest_la_SOURCES += \
   test/lib/dir.c \
   test/lib/tcp.c \
   test/lib/loop.c
 
-test_unit_uv_SOURCES = $(raft_uv_SOURCES)
-test_unit_uv_SOURCES += \
-  src/byte.c \
-  src/configuration.c \
-  src/logger_stream.c \
-  src/entry.c \
+test_unit_uv_SOURCES = \
   src/err.c \
   src/heap.c \
-  src/snapshot.c \
   src/syscall.c \
+  src/tracing.c \
+  src/uv_fs.c \
+  src/uv_os.c \
+  src/uv_writer.c \
   test/unit/main_uv.c \
-  test/unit/test_uv_os.c \
   test/unit/test_uv_fs.c \
-  test/unit/test_uv_init.c \
-  test/unit/test_uv_list.c \
-  test/unit/test_uv_load.c \
-  test/unit/test_uv_prepare.c \
-  test/unit/test_uv_recover.c \
-  test/unit/test_uv_append.c \
-  test/unit/test_uv_finalize.c \
-  test/unit/test_uv_snapshot.c \
-  test/unit/test_uv_truncate.c \
-  test/unit/test_uv_tcp_connect.c \
-  test/unit/test_uv_tcp_listen.c \
-  test/unit/test_uv_recv.c \
-  test/unit/test_uv_send.c \
-  test/unit/test_uv_writer.c \
-  test/unit/test_uv.c
+  test/unit/test_uv_writer.c
 test_unit_uv_LDADD = libtest.la
 test_unit_uv_LDFLAGS = $(UV_LIBS)
+
+test_integration_uv_SOURCES = \
+  test/integration/main_uv.c \
+  test/integration/test_uv_init.c \
+  test/integration/test_uv_append.c \
+  test/integration/test_uv_bootstrap.c \
+  test/integration/test_uv_load.c \
+  test/integration/test_uv_recover.c \
+  test/integration/test_uv_recv.c \
+  test/integration/test_uv_send.c \
+  test/integration/test_uv_set_term.c \
+  test/integration/test_uv_tcp_connect.c \
+  test/integration/test_uv_tcp_listen.c \
+  test/integration/test_uv_snapshot_put.c \
+  test/integration/test_uv_truncate.c
+test_integration_uv_LDADD = libtest.la libraft.la
+test_integration_uv_LDFLAGS = -no-install $(UV_LIBS)
 
 AM_CFLAGS += $(UV_CFLAGS)
 
@@ -183,11 +184,9 @@ bin_PROGRAMS += \
 
 example_server_SOURCES = example/server.c
 example_server_LDADD = libraft.la
-example_server_LDFLAGS = $(UV_LIBS)
+example_server_LDFLAGS = -no-install $(UV_LIBS)
 
 example_cluster_SOURCES = example/cluster.c
-example_cluster_LDADD = libraft.la
-example_cluster_LDFLAGS = $(UV_LIBS)
 
 endif # EXAMPLE_ENABLED
 

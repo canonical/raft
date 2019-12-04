@@ -1,17 +1,41 @@
+#include "tcp.h"
+
 #include <arpa/inet.h>
 #include <errno.h>
 #include <stdio.h>
 #include <unistd.h>
 
-#include "tcp.h"
-
 void test_tcp_setup(const MunitParameter params[], struct test_tcp *t)
+{
+    (void)params;
+    t->server.socket = -1;
+    t->client.socket = -1;
+}
+
+void test_tcp_tear_down(struct test_tcp *t)
+{
+    int rv;
+
+    if (t->server.socket != -1) {
+        rv = close(t->server.socket);
+        if (rv == -1) {
+            munit_errorf("tcp: close(): %s", strerror(errno));
+        }
+    }
+
+    if (t->client.socket != -1) {
+        rv = close(t->client.socket);
+        if (rv == -1) {
+            munit_errorf("tcp: close(): %s", strerror(errno));
+        }
+    }
+}
+
+void test_tcp_listen(struct test_tcp *t)
 {
     struct sockaddr_in addr;
     socklen_t size = sizeof addr;
     int rv;
-
-    (void)params;
 
     /* Initialize the socket address structure. */
     memset(&addr, 0, size);
@@ -46,27 +70,11 @@ void test_tcp_setup(const MunitParameter params[], struct test_tcp *t)
     }
 
     sprintf(t->server.address, "127.0.0.1:%d", htons(addr.sin_port));
-
-    t->client.socket = -1;
 }
 
-void test_tcp_tear_down(struct test_tcp *t)
+const char *test_tcp_address(struct test_tcp *t)
 {
-    int rv;
-
-    if (t->server.socket != -1) {
-        rv = close(t->server.socket);
-        if (rv == -1) {
-            munit_errorf("tcp: close(): %s", strerror(errno));
-        }
-    }
-
-    if (t->client.socket != -1) {
-        rv = close(t->client.socket);
-        if (rv == -1) {
-            munit_errorf("tcp: close(): %s", strerror(errno));
-        }
-    }
+    return t->server.address;
 }
 
 void test_tcp_connect(struct test_tcp *t, int port)

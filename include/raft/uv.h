@@ -1,5 +1,5 @@
-#ifndef RAFT_IO_UV_H
-#define RAFT_IO_UV_H
+#ifndef RAFT_UV_H
+#define RAFT_UV_H
 
 #include <uv.h>
 
@@ -13,6 +13,13 @@ struct raft_uv_transport;
  *
  * The @dir path will be copied, and its memory can possibly be released once
  * this function returns.
+ *
+ * Return #RAFT_NAMETOOLONG if @dir exceeds the size of the internal buffer
+ * that should hold it
+ *
+ * Return #RAFT_NOTFOUND if @dir does not exist.
+ *
+ * Return #RAFT_INVALID if @dir exists but it's not a directory.
  *
  * The implementation of metadata and log persistency is virtually the same as
  * the one found in LogCabin [0].
@@ -77,7 +84,40 @@ RAFT_API int raft_uv_init(struct raft_io *io,
                           const char *dir,
                           struct raft_uv_transport *transport);
 
+/**
+ * Release any memory allocated internally.
+ */
 RAFT_API void raft_uv_close(struct raft_io *io);
+
+/**
+ * Set the block size that will be used for direct I/O.
+ *
+ * The default is to automatically detect the appropriate block size.
+ */
+RAFT_API void raft_uv_set_block_size(struct raft_io *io, size_t size);
+
+/**
+ * Set the maximum initial size of newly created open segments.
+ *
+ * If the given size is not a multiple of the block size, the actual size will
+ * be reduced to the closest multiple.
+ *
+ * The default is 8 megabytes.
+ */
+RAFT_API void raft_uv_set_segment_size(struct raft_io *io, size_t size);
+
+/**
+ * Set how many milliseconds to wait between subsequent retries when
+ * establishing a connection with another server. The default is 1000
+ * milliseconds.
+ */
+RAFT_API void raft_uv_set_connect_retry_delay(struct raft_io *io, unsigned msecs);
+
+/**
+ * Emit low-level debug messages using the given tracer.
+ */
+RAFT_API void raft_uv_set_tracer(struct raft_io *io,
+                                 struct raft_tracer *tracer);
 
 /**
  * Callback invoked by the transport implementation when a new incoming
@@ -135,12 +175,18 @@ struct raft_uv_transport
     void *impl;
 
     /**
+     * Human-readable message providing diagnostic information about the last
+     * error occurred.
+     */
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
+
+    /**
      * Initialize the transport with the given server's identity.
      */
     int (*init)(struct raft_uv_transport *t, unsigned id, const char *address);
 
     /**
-     * Listen for incoming connections.
+     * Start listening for incoming connections.
      *
      * Once a new connection is accepted, the @cb callback passed in the
      * initializer must be invoked with the relevant details of the connecting
@@ -169,8 +215,7 @@ struct raft_uv_transport
      * - Stop accepting incoming connections. The @cb callback passed to @listen
      *   must not be invoked anymore.
      *
-     * - Abort all pending @connect requests. The callback of each pending
-     *   request must be invoked with #RAFT_CANCELED.
+     * - Cancel all pending @connect requests.
      *
      * - Invoke the @cb callback passed to this method once it's safe to release
      *   the memory of the transport object.
@@ -184,6 +229,9 @@ struct raft_uv_transport
 RAFT_API int raft_uv_tcp_init(struct raft_uv_transport *t,
                               struct uv_loop_s *loop);
 
+/**
+ * Release any memory allocated internally.
+ */
 RAFT_API void raft_uv_tcp_close(struct raft_uv_transport *t);
 
-#endif /* RAFT_IO_UV_H */
+#endif /* RAFT_UV_H */

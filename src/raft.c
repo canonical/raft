@@ -9,6 +9,7 @@
 #include "err.h"
 #include "log.h"
 #include "logging.h"
+#include "tracing.h"
 
 #define DEFAULT_ELECTION_TIMEOUT 1000 /* One second */
 #define DEFAULT_HEARTBEAT_TIMEOUT 100 /* One tenth of a second */
@@ -25,18 +26,15 @@
 int raft_init(struct raft *r,
               struct raft_io *io,
               struct raft_fsm *fsm,
-              struct raft_logger *logger,
               const unsigned id,
               const char *address)
 {
     int rv;
-
     assert(r != NULL);
-
     r->io = io;
     r->io->data = r;
     r->fsm = fsm;
-    r->logger = logger;
+    r->tracer = &NoopTracer;
     r->id = id;
     /* Make a copy of the address */
     r->address = raft_malloc(strlen(address) + 1);
@@ -61,22 +59,21 @@ int raft_init(struct raft *r,
     r->snapshot.trailing = DEFAULT_SNAPSHOT_TRAILING;
     r->snapshot.put.data = NULL;
     r->close_cb = NULL;
-    rv = r->io->init(r->io, r->logger, r->id, r->address);
+    memset(r->errmsg, 0, sizeof r->errmsg);
+    rv = r->io->init(r->io, r->id, r->address);
     if (rv != 0) {
+        ErrMsgPrintf(r->errmsg, "io: %s", r->io->errmsg);
         return rv;
     }
     return 0;
 }
 
-static void io_close_cb(struct raft_io *io)
+static void ioCloseCb(struct raft_io *io)
 {
     struct raft *r = io->data;
-    infof(r, "stopped");
-
     raft_free(r->address);
     logClose(&r->log);
     raft_configuration_close(&r->configuration);
-
     if (r->close_cb != NULL) {
         r->close_cb(r);
     }
@@ -84,13 +81,12 @@ static void io_close_cb(struct raft_io *io)
 
 void raft_close(struct raft *r, void (*cb)(struct raft *r))
 {
-    assert(r != NULL);
     assert(r->close_cb == NULL);
     if (r->state != RAFT_UNAVAILABLE) {
         convertToUnavailable(r);
     }
     r->close_cb = cb;
-    r->io->close(r->io, io_close_cb);
+    r->io->close(r->io, ioCloseCb);
 }
 
 void raft_set_election_timeout(struct raft *r, const unsigned msecs)
@@ -111,6 +107,11 @@ void raft_set_snapshot_threshold(struct raft *r, unsigned n)
 void raft_set_snapshot_trailing(struct raft *r, unsigned n)
 {
     r->snapshot.trailing = n;
+}
+
+const char *raft_errmsg(struct raft *r)
+{
+    return r->errmsg;
 }
 
 int raft_bootstrap(struct raft *r, const struct raft_configuration *conf)

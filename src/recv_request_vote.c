@@ -1,4 +1,5 @@
 #include "recv_request_vote.h"
+
 #include "assert.h"
 #include "election.h"
 #include "logging.h"
@@ -84,6 +85,7 @@ reply:
     if (req == NULL) {
         return RAFT_NOMEM;
     }
+    req->data = r;
 
     rv = r->io->send(r->io, req, &message, sendCb);
     if (rv != 0) {

@@ -1,42 +1,45 @@
 #ifndef UV_TCP_H_
 #define UV_TCP_H_
 
-#include "../include/raft.h"
 #include "../include/raft/uv.h"
-
 #include "queue.h"
 
 /* Protocol version. */
 #define UV__TCP_HANDSHAKE_PROTOCOL 1
 
-struct uvTcp
+struct UvTcp
 {
     struct raft_uv_transport *transport; /* Interface object we implement */
-    struct uv_loop_s *loop;              /* UV loop */
+    struct uv_loop_s *loop;              /* Event loop */
     unsigned id;                         /* ID of this raft server */
     const char *address;                 /* Address of this raft server */
     struct uv_tcp_s listener;            /* Listening TCP socket handle */
-    raft_uv_accept_cb accept_cb;         /* After accepting a connection */
-    raft_uv_transport_close_cb close_cb; /* When it's safe to free us */
-    queue accept_conns;                  /* Connections being accepted */
-    queue connect_reqs;                  /* Pending connection requests */
+    raft_uv_accept_cb accept_cb;         /* Call after accepting a connection */
+    queue accepting;                     /* Connections being accepted */
+    queue connecting;                    /* Pending connection requests */
+    queue aborting;                      /* Connections being aborted */
+    bool closing;                        /* True after close() is called */
+    raft_uv_transport_close_cb close_cb; /* Call when it's safe to free us */
 };
 
 /* Implementation of raft_uv_transport->listen. */
-int uvTcpListen(struct raft_uv_transport *t, raft_uv_accept_cb cb);
+int UvTcpListen(struct raft_uv_transport *transport, raft_uv_accept_cb cb);
 
-/* Close the listener handle and all pending incoming connections being
- * accepted. */
-void uvTcpListenClose(struct uvTcp *t);
+/* Stop accepting new connection and close all connections being accepted. */
+void UvTcpListenClose(struct UvTcp *t);
 
 /* Implementation of raft_uv_transport->connect. */
-int uvTcpConnect(struct raft_uv_transport *transport,
+int UvTcpConnect(struct raft_uv_transport *transport,
                  struct raft_uv_connect *req,
                  unsigned id,
                  const char *address,
                  raft_uv_connect_cb cb);
 
-/* Cancel all pending connection requests. */
-void uvTcpConnectClose(struct uvTcp *t);
+/* Abort all pending connection requests. */
+void UvTcpConnectClose(struct UvTcp *t);
+
+/* Fire the transport close callback if the transport is closing and there's no
+ * more pending callback. */
+void UvTcpMaybeFireCloseCb(struct UvTcp *t);
 
 #endif /* UV_TCP_H_ */

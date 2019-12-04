@@ -1,13 +1,9 @@
-#include <stdlib.h>
-#include <string.h>
-
-#include "../include/raft/uv.h"
 #include "assert.h"
 #include "byte.h"
+#include "heap.h"
 #include "queue.h"
 #include "uv.h"
 #include "uv_encoding.h"
-#include "uv_error.h"
 #include "uv_writer.h"
 
 /* The happy path for an append request is:
@@ -21,11 +17,14 @@
  *   queue the request and link it to the newly requested segment.
  *
  * - Wait for any pending write against the current segment to complete, and
- *   also for the prepare request if we asked for a new segment.
+ *   also for the prepare request if we asked for a new segment. Also wait for
+ *   any in progress barrier to be removed.
  *
  * - Submit a write request for the entries in this append request. The write
- *   request might contain other entries that might have accumulated in the
- *   meantime.
+ *   request might contain other append requests targeted to the current segment
+ *   that might have accumulated in the meantime, if we have been waiting for a
+ *   segment to be prepared, or for the previous write to complete or for a
+ *   barrier to be removed.
  *
  * - Wait for the write request to finish and fire the append request's
  *   callback.
@@ -40,11 +39,12 @@
  * callbacks.
  **/
 
-struct openSegment
+/* An open segment being written or waiting to be written. */
+struct uvAliveSegment
 {
     struct uv *uv;                  /* Our writer */
     struct uvPrepare prepare;       /* Prepare segment file request */
-    struct UvWriter *writer;        /* Writer to perform async I/O */
+    struct UvWriter writer;         /* Writer to perform async I/O */
     struct UvWriterReq write;       /* Write request */
     unsigned long long counter;     /* Open segment counter */
     raft_index first_index;         /* Index of the first entry written */
@@ -55,6 +55,7 @@ struct openSegment
     uv_buf_t buf;                   /* Write buffer for current write */
     size_t written;                 /* Number of bytes actually written */
     queue queue;                    /* Segment queue */
+    struct UvBarrier *barrier;      /* Barrier waiting on this segment */
     bool finalize;                  /* Finalize the segment after writing */
 };
 
@@ -63,103 +64,39 @@ struct uvAppend
     struct raft_io_append *req;       /* User request */
     const struct raft_entry *entries; /* Entries to write */
     unsigned n;                       /* Number of entries */
-    size_t size;                      /* Size of this batch on disk */
-    struct openSegment *segment;      /* Segment to write to */
-    int status;
+    struct uvAliveSegment *segment;   /* Segment to write to */
     queue queue;
 };
 
-/* Initialize an append request object.
- *
- * In particular, calculate the number of bytes needed to store this batch in on
- * disk. */
-static void uvAppendInit(struct uvAppend *a,
-                       struct raft_io_append *req,
-                       const struct raft_entry entries[],
-                       unsigned n,
-                       raft_io_append_cb cb)
+static void uvAliveSegmentWriterCloseCb(struct UvWriter *writer)
 {
-    unsigned i;
-    a->req = req;
-    a->entries = entries;
-    a->n = n;
-    a->size = sizeof(uint32_t) * 2;       /* CRC checksums */
-    a->size += uvSizeofBatchHeader(a->n); /* Batch header */
-    for (i = 0; i < a->n; i++) {          /* Entries data */
-        a->size += bytePad64(a->entries[i].buf.len);
-    }
-    req->cb = cb;
-}
-
-/* Return #true if the remaining capacity of the given segment is equal or
- * greater than @size. */
-static bool openSegmentHasEnoughSpareCapacity(struct openSegment *s,
-                                              size_t size)
-{
-    size_t cap = s->uv->block_size * s->uv->n_blocks;
-    return s->size + size <= cap;
-}
-
-/* Add @size bytes to the number of bytes that the segment will hold. The actual
- * write will happen when the previous write completes, if any. */
-static void openSegmentReserveSegmentCapacity(struct openSegment *s,
-                                              size_t size)
-{
-    s->size += size;
-}
-
-/* Extend the segment's write buffer by encoding the entries in the given
- * request into it. IOW, previous data in the write buffer will be retained, and
- * data for these new entries will be appended. */
-static int openSegmentEncodeEntriesToWriteBuf(struct openSegment *s,
-                                          struct uvAppend *req)
-{
-    int rv;
-    assert(req->segment == s);
-
-    /* If this is the very first write to the segment, we need to include the
-     * format version */
-    if (s->pending.n == 0 && s->next_block == 0) {
-        rv = uvSegmentBufferFormat(&s->pending);
-        if (rv != 0) {
-            return rv;
-        }
-    }
-
-    rv = uvSegmentBufferAppend(&s->pending, req->entries, req->n);
-    if (rv != 0) {
-        return rv;
-    }
-
-    s->last_index += req->n;
-
-    return 0;
+    struct uvAliveSegment *segment = writer->data;
+    struct uv *uv = segment->uv;
+    uvSegmentBufferClose(&segment->pending);
+    HeapFree(segment);
+    uvMaybeFireCloseCb(uv);
 }
 
 /* Submit a request to close the current open segment. */
-static void finalizeSegment(struct openSegment *s)
+static void uvAliveSegmentFinalize(struct uvAliveSegment *s)
 {
     struct uv *uv = s->uv;
     int rv;
 
-    rv = uvFinalize(uv, s->counter, s->written, s->first_index, s->last_index);
+    rv = UvFinalize(uv, s->counter, s->written, s->first_index, s->last_index);
     if (rv != 0) {
         uv->errored = true;
         /* We failed to submit the finalize request, but let's still close the
          * file handle and release the segment memory. */
     }
 
-    UvWriterClose(s->writer, (UvWriterCloseCb)raft_free);
-    uvSegmentBufferClose(&s->pending);
     QUEUE_REMOVE(&s->queue);
-
-    raft_free(s);
-    uvMaybeClose(uv);
+    UvWriterClose(&s->writer, uvAliveSegmentWriterCloseCb);
 }
 
 /* Flush the append requests in the given queue, firing their callbacks with the
  * given status. */
-static void flushRequests(queue *q, int status)
+static void uvAppendFinishAllRequests(queue *q, int status)
 {
     queue queue_copy;
     QUEUE_INIT(&queue_copy);
@@ -176,17 +113,58 @@ static void flushRequests(queue *q, int status)
         QUEUE_REMOVE(head);
         r = QUEUE_DATA(head, struct uvAppend, queue);
         r->req->cb(r->req, status);
-        raft_free(r);
+        HeapFree(r);
     }
 }
 
-static void uvAppendProcessRequests(struct uv *uv);
-static void writeSegmentCb(struct UvWriterReq *write, const int status)
+/* Return the segment currently being written, or NULL when no segment has been
+ * written yet. */
+static struct uvAliveSegment *uvGetCurrentAliveSegment(struct uv *uv)
 {
-    struct openSegment *s = write->data;
+    queue *head;
+    if (QUEUE_IS_EMPTY(&uv->append_segments)) {
+        return NULL;
+    }
+    head = QUEUE_HEAD(&uv->append_segments);
+    return QUEUE_DATA(head, struct uvAliveSegment, queue);
+}
+
+/* Extend the segment's write buffer by encoding the entries in the given
+ * request into it. IOW, previous data in the write buffer will be retained, and
+ * data for these new entries will be appended. */
+static int uvAliveSegmentEncodeEntriesToWriteBuf(struct uvAliveSegment *segment,
+                                                 struct uvAppend *append)
+{
+    int rv;
+    assert(append->segment == segment);
+
+    /* If this is the very first write to the segment, we need to include the
+     * format version */
+    if (segment->pending.n == 0 && segment->next_block == 0) {
+        rv = uvSegmentBufferFormat(&segment->pending);
+        if (rv != 0) {
+            return rv;
+        }
+    }
+
+    rv = uvSegmentBufferAppend(&segment->pending, append->entries, append->n);
+    if (rv != 0) {
+        return rv;
+    }
+
+    segment->last_index += append->n;
+
+    return 0;
+}
+
+static int uvAppendMaybeStart(struct uv *uv);
+static void uvAliveSegmentWriteCb(struct UvWriterReq *write, const int status)
+{
+    struct uvAliveSegment *s = write->data;
     struct uv *uv = s->uv;
     unsigned n_blocks;
     int result = 0;
+    int rv;
 
     assert(uv->state != UV__CLOSED);
 
@@ -195,8 +173,7 @@ static void writeSegmentCb(struct UvWriterReq *write, const int status)
 
     /* Check if the write was successful. */
     if (status != 0) {
-        assert(status != UV__CANCELED); /* We never cancel write requests */
-        uvErrorf(uv, "write: %s", UvWriterErrMsg(s->writer));
+        Tracef(uv->tracer, "write: %s", uv->io->errmsg);
         result = RAFT_IOERR;
         uv->errored = true;
     }
@@ -252,79 +229,83 @@ static void writeSegmentCb(struct UvWriterReq *write, const int status)
 
     /* Fire the callbacks of all requests that were fulfilled with this
      * write. */
-    flushRequests(&uv->append_writing_reqs, result);
+    uvAppendFinishAllRequests(&uv->append_writing_reqs, result);
+
+    /* During the closing sequence we should have already canceled all pending
+     * request. */
+    if (uv->closing) {
+        assert(QUEUE_IS_EMPTY(&uv->append_pending_reqs));
+        assert(s->finalize);
+        uvAliveSegmentFinalize(s);
+        return;
+    }
 
     /* Possibly process waiting requests. */
-    uvAppendProcessRequests(uv);
+    if (!QUEUE_IS_EMPTY(&uv->append_pending_reqs)) {
+        rv = uvAppendMaybeStart(uv);
+        if (rv != 0) {
+            uv->errored = true;
+        }
+    }
 }
 
 /* Submit a file write request to append the entries encoded in the write buffer
  * of the given segment. */
-static int writeSegment(struct openSegment *s)
+static int uvAliveSegmentWrite(struct uvAliveSegment *s)
 {
     int rv;
-    assert(s->writer != NULL);
+    assert(s->counter != 0);
     assert(s->pending.n > 0);
     uvSegmentBufferFinalize(&s->pending, &s->buf);
-    rv = UvWriterSubmit(s->writer, &s->write, &s->buf, 1,
-                        s->next_block * s->uv->block_size, writeSegmentCb);
+    rv = UvWriterSubmit(&s->writer, &s->write, &s->buf, 1,
+                        s->next_block * s->uv->block_size,
+                        uvAliveSegmentWriteCb);
     if (rv != 0) {
         return rv;
     }
     return 0;
 }
 
-/* Return the segment currently being written, or NULL when no segment has been
- * written yet. */
-static struct openSegment *getCurrentOpenSegment(struct uv *uv)
+/* Start writing all pending append requests for the current segment, unless we
+ * are already writing, or the segment itself has not yet been prepared or we
+ * are blocked on a barrier. If there are no more requests targeted at the
+ * current segment, make sure it's marked to be finalize and try with the next
+ * segment. */
+static int uvAppendMaybeStart(struct uv *uv)
 {
-    queue *head;
-    if (QUEUE_IS_EMPTY(&uv->append_segments)) {
-        return NULL;
-    }
-    head = QUEUE_HEAD(&uv->append_segments);
-    return QUEUE_DATA(head, struct openSegment, queue);
-}
-
-/* Process pending append requests.
- *
- * Submit the relevant write request if the target open segment is available. */
-static void uvAppendProcessRequests(struct uv *uv)
-{
-    struct openSegment *segment;
-    struct uvAppend *req;
+    struct uvAliveSegment *segment;
+    struct uvAppend *append;
+    unsigned n_reqs;
     queue *head;
     queue q;
-    unsigned n_reqs;
     int rv;
 
-    /* During the closing sequence we should only get called by the
-     * segmentWriteCb callback after an in-flight write has been completed. */
-    if (uv->closing) {
-        assert(QUEUE_IS_EMPTY(&uv->append_pending_reqs));
-        assert(QUEUE_IS_EMPTY(&uv->append_writing_reqs));
-        segment = getCurrentOpenSegment(uv);
-        assert(segment != NULL);
-        assert(segment->finalize);
-    }
+    assert(!uv->closing);
 
     /* If we are already writing, let's wait. */
     if (!QUEUE_IS_EMPTY(&uv->append_writing_reqs)) {
-        return;
+        return 0;
     }
 
-    /* If we're truncating, let's wait. */
-    if (uv->truncate_work.data != NULL) {
-        return;
-    }
-
-prepare:
-    segment = getCurrentOpenSegment(uv);
+start:
+    segment = uvGetCurrentAliveSegment(uv);
     assert(segment != NULL);
+    /* If the preparer isn't done yet, let's wait. */
+    if (segment->counter == 0) {
+        return 0;
+    }
 
-    /* If the preparer hasn't provided the segment yet, let's wait. */
-    if (segment->writer == NULL) {
-        return;
+    /* If there's a barrier in progress, and it's not waiting for this segment
+     * to be finalized, let's wait. */
+    if (uv->barrier != NULL && segment->barrier != uv->barrier) {
+        return 0;
+    }
+
+    /* If there's no barrier in progress and this segment is marked with a
+     * barrier, it means that this was a pending barrier, which we can become
+     * the current barrier now. */
+    if (uv->barrier == NULL && segment->barrier != NULL) {
+        uv->barrier = segment->barrier;
     }
 
     /* Let's add to the segment's write buffer all pending requests targeted to
@@ -334,15 +315,15 @@ prepare:
     n_reqs = 0;
     while (!QUEUE_IS_EMPTY(&uv->append_pending_reqs)) {
         head = QUEUE_HEAD(&uv->append_pending_reqs);
-        req = QUEUE_DATA(head, struct uvAppend, queue);
-        assert(req->segment != NULL);
-        if (req->segment != segment) {
+        append = QUEUE_DATA(head, struct uvAppend, queue);
+        assert(append->segment != NULL);
+        if (append->segment != segment) {
             break; /* Not targeted to this segment */
         }
         QUEUE_REMOVE(head);
         QUEUE_PUSH(&q, head);
         n_reqs++;
-        rv = openSegmentEncodeEntriesToWriteBuf(segment, req);
+        rv = uvAliveSegmentEncodeEntriesToWriteBuf(segment, append);
         if (rv != 0) {
             goto err;
         }
@@ -356,16 +337,13 @@ prepare:
     if (n_reqs == 0) {
         assert(QUEUE_IS_EMPTY(&uv->append_writing_reqs));
         if (segment->finalize) {
-            finalizeSegment(segment);
-            if (!QUEUE_IS_EMPTY(&uv->truncate_reqs)) {
-                return;
-            }
+            uvAliveSegmentFinalize(segment);
             if (!QUEUE_IS_EMPTY(&uv->append_pending_reqs)) {
-                goto prepare;
+                goto start;
             }
         }
         assert(QUEUE_IS_EMPTY(&uv->append_pending_reqs));
-        return;
+        return 0;
     }
 
     while (!QUEUE_IS_EMPTY(&q)) {
@@ -374,7 +352,73 @@ prepare:
         QUEUE_PUSH(&uv->append_writing_reqs, head);
     }
 
-    rv = writeSegment(segment);
+    rv = uvAliveSegmentWrite(segment);
+    if (rv != 0) {
+        goto err;
+    }
+
+    return 0;
+
+err:
+    assert(rv != 0);
+    return rv;
+}
+
+/* Invoked when a newly added open segment becomes ready for writing, after the
+ * associated UvPrepare request completes (either synchronously or
+ * asynchronously). */
+static int uvAliveSegmentReady(struct uv *uv,
+                               uv_file fd,
+                               uvCounter counter,
+                               struct uvAliveSegment *segment)
+{
+    int rv;
+    rv = UvWriterInit(&segment->writer, uv->loop, fd, uv->direct_io,
+                      uv->async_io, 1, uv->io->errmsg);
+    if (rv != 0) {
+        ErrMsgWrapf(uv->io->errmsg, "setup writer for open-%llu", counter);
+        return rv;
+    }
+    segment->counter = counter;
+    return 0;
+}
+
+static void uvAliveSegmentPrepareCb(struct uvPrepare *req, int status)
+{
+    struct uvAliveSegment *segment = req->data;
+    struct uv *uv = segment->uv;
+    int rv;
+
+    assert(segment->counter == 0);
+    assert(segment->written == 0);
+
+    /* If we have been closed, let's discard the segment. */
+    if (uv->closing) {
+        QUEUE_REMOVE(&segment->queue);
+        assert(status == RAFT_CANCELED); /* UvPrepare cancels pending reqs */
+        uvSegmentBufferClose(&segment->pending);
+        HeapFree(segment);
+        return;
+    }
+
+    if (status != 0) {
+        rv = status;
+        goto err;
+    }
+
+    assert(req->counter > 0);
+    assert(req->fd >= 0);
+
+    /* There must be pending appends that were waiting for this prepare
+     * requests. */
+    assert(!QUEUE_IS_EMPTY(&uv->append_pending_reqs));
+
+    rv = uvAliveSegmentReady(uv, req->fd, req->counter, segment);
+    if (rv != 0) {
+        goto err;
+    }
+
+    rv = uvAppendMaybeStart(uv);
     if (rv != 0) {
         goto err;
     }
@@ -382,121 +426,122 @@ prepare:
     return;
 
 err:
+    QUEUE_REMOVE(&segment->queue);
+    HeapFree(segment);
     uv->errored = true;
-}
-
-static void appendPrepareCb(struct uvPrepare *req, int status)
-{
-    struct openSegment *segment = req->data;
-    struct uv *uv = segment->uv;
-    int rv;
-
-    /* If we have been closed, let's discard the segment. */
-    if (uv->closing) {
-        QUEUE_REMOVE(&segment->queue);
-        if (status == 0) {
-            UvOsClose(req->fd);
-            /* Ignore errors, as there's nothing we can do about it. */
-            uvFinalize(uv, req->counter, 0, 0, 0);
-        }
-        uvSegmentBufferClose(&segment->pending);
-        raft_free(segment);
-        return;
-    }
-
-    if (status != 0) {
-        QUEUE_REMOVE(&segment->queue);
-        raft_free(segment);
-        uv->errored = true;
-        flushRequests(&uv->append_writing_reqs, RAFT_IOERR);
-        return;
-    }
-
-    assert(req->counter > 0);
-    assert(req->fd >= 0);
-
-    /* TODO: check for errors. */
-    segment->writer = raft_malloc(sizeof *segment->writer);
-    assert(segment->writer != NULL);
-    rv = UvWriterInit(&uv->fs, segment->writer, req->fd, uv->direct_io,
-                      uv->async_io, 1);
-    assert(rv == 0);
-
-    segment->counter = req->counter;
-    uvAppendProcessRequests(uv);
+    uvAppendFinishAllRequests(&uv->append_pending_reqs, rv);
 }
 
 /* Initialize a new open segment object. */
-static void openSegmentInit(struct openSegment *s, struct uv *uv)
+static void uvAliveSegmentInit(struct uvAliveSegment *s, struct uv *uv)
 {
     s->uv = uv;
     s->prepare.data = s;
+    s->writer.data = s;
     s->write.data = s;
     s->counter = 0;
-    s->writer = NULL;
     s->first_index = uv->append_next_index;
     s->last_index = s->first_index - 1;
     s->size = sizeof(uint64_t) /* Format version */;
     s->next_block = 0;
     uvSegmentBufferInit(&s->pending, uv->block_size);
     s->written = 0;
+    s->barrier = NULL;
     s->finalize = false;
 }
 
-/* Submit a prepare request in order to get a new segment, since the append
- * request being submitted does not fit in the last segment we scheduled writes
- * for, or no segment had been previously requested at all. */
-static int submitPrepareSegmentRequest(struct uv *uv)
+/* Add a new active open segment, since the append request being submitted does
+ * not fit in the last segment we scheduled writes for, or no segment had been
+ * previously requested at all. */
+static int uvAppendPushAliveSegment(struct uv *uv)
 {
-    struct openSegment *segment;
+    struct uvAliveSegment *segment;
+    uv_file fd;
+    uvCounter counter;
     int rv;
-    segment = raft_malloc(sizeof *segment);
+
+    segment = HeapMalloc(sizeof *segment);
     if (segment == NULL) {
         rv = RAFT_NOMEM;
         goto err;
     }
-    openSegmentInit(segment, uv);
+    uvAliveSegmentInit(segment, uv);
+
     QUEUE_PUSH(&uv->append_segments, &segment->queue);
-    uvPrepare(uv, &segment->prepare, appendPrepareCb);
+
+    rv = UvPrepare(uv, &fd, &counter, &segment->prepare,
+                   uvAliveSegmentPrepareCb);
+    if (rv != 0) {
+        goto err_after_alloc;
+    }
+
+    /* If we've been returned a ready prepared segment right away, start writing
+     * to it immediately. */
+    if (fd != -1) {
+        rv = uvAliveSegmentReady(uv, fd, counter, segment);
+        if (rv != 0) {
+            goto err_after_prepare;
+        }
+    }
     return 0;
+
+err_after_prepare:
+    UvOsClose(fd);
+    UvFinalize(uv, counter, 0, 0, 0);
+err_after_alloc:
+    QUEUE_REMOVE(&segment->queue);
+    HeapFree(segment);
 err:
     assert(rv != 0);
     return rv;
 }
 
 /* Return the last segment that we have requested to prepare. */
-static struct openSegment *getLastOpenSegment(struct uv *uv)
+static struct uvAliveSegment *uvGetLastAliveSegment(struct uv *uv)
 {
     queue *tail;
     if (QUEUE_IS_EMPTY(&uv->append_segments)) {
         return NULL;
     }
     tail = QUEUE_TAIL(&uv->append_segments);
-    return QUEUE_DATA(tail, struct openSegment, queue);
+    return QUEUE_DATA(tail, struct uvAliveSegment, queue);
 }
 
-void uvAppendFixPreparedSegmentFirstIndex(struct uv *uv)
+/* Return #true if the remaining capacity of the given segment is equal or
+ * greater than @size. */
+static bool uvAliveSegmentHasEnoughSpareCapacity(struct uvAliveSegment *s,
+                                                 size_t size)
 {
-    struct openSegment *s = getLastOpenSegment(uv);
-    if (s == NULL) {
-        /* Must be the first snapshot.
-         *
-         * TODO: verify assumption. */
-        return;
-    }
-    assert(s->first_index == 1);
-    assert(s->last_index == 0);
-    assert(s->size == sizeof(uint64_t));
-    assert(s->next_block == 0);
-    assert(s->written == 0);
-    s->first_index = uv->append_next_index;
-    s->last_index = s->first_index - 1;
+    return s->size + size <= s->uv->segment_size;
 }
 
-/* Enqueue an append entries request */
+/* Add @size bytes to the number of bytes that the segment will hold. The actual
+ * write will happen when the previous write completes, if any. */
+static void uvAliveSegmentReserveSegmentCapacity(struct uvAliveSegment *s,
+                                                 size_t size)
+{
+    s->size += size;
+}
+
+/* Return the number of bytes needed to store the batch of entries of this
+ * append request on disk. */
+static size_t uvAppendSize(struct uvAppend *a)
+{
+    size_t size = sizeof(uint32_t) * 2; /* CRC checksums */
+    unsigned i;
+    size += uvSizeofBatchHeader(a->n); /* Batch header */
+    for (i = 0; i < a->n; i++) {       /* Entries data */
+        size += bytePad64(a->entries[i].buf.len);
+    }
+    return size;
+}
+
+/* Enqueue an append entries request, assigning it to the appropriate active
+ * open segment. */
 static int uvAppendEnqueueRequest(struct uv *uv, struct uvAppend *append)
 {
-    struct openSegment *segment;
+    struct uvAliveSegment *segment;
+    size_t size;
     bool fits;
     int rv;
 
@@ -504,14 +549,16 @@ static int uvAppendEnqueueRequest(struct uv *uv, struct uvAppend *append)
     assert(append->n > 0);
     assert(uv->append_next_index > 0);
 
+    size = uvAppendSize(append);
+
     /* If we have no segments yet, it means this is the very first append, and
      * we need to add a new segment. Otherwise we check if the last segment has
      * enough room for this batch of entries. */
-    segment = getCurrentOpenSegment(uv);
-    if (segment == NULL) {
+    segment = uvGetCurrentAliveSegment(uv);
+    if (segment == NULL || segment->finalize) {
         fits = false;
     } else {
-        fits = openSegmentHasEnoughSpareCapacity(segment, append->size);
+        fits = uvAliveSegmentHasEnoughSpareCapacity(segment, size);
         if (!fits) {
             segment->finalize = true; /* Finalize when all writes are done */
         }
@@ -520,14 +567,14 @@ static int uvAppendEnqueueRequest(struct uv *uv, struct uvAppend *append)
     /* If there's no segment or if this batch does not fit in this segment, we
      * need to add a new one. */
     if (!fits) {
-        rv = submitPrepareSegmentRequest(uv);
+        rv = uvAppendPushAliveSegment(uv);
         if (rv != 0) {
             goto err;
         }
     }
 
-    segment = getLastOpenSegment(uv); /* Get the last added segment */
-    openSegmentReserveSegmentCapacity(segment, append->size);
+    segment = uvGetLastAliveSegment(uv); /* Get the last added segment */
+    uvAliveSegmentReserveSegmentCapacity(segment, size);
 
     append->segment = segment;
     QUEUE_PUSH(&uv->append_pending_reqs, &append->queue);
@@ -540,7 +587,7 @@ err:
     return rv;
 }
 
-int uvAppend(struct raft_io *io,
+int UvAppend(struct raft_io *io,
              struct raft_io_append *req,
              const struct raft_entry entries[],
              unsigned n,
@@ -551,40 +598,50 @@ int uvAppend(struct raft_io *io,
     int rv;
 
     uv = io->impl;
-    assert(uv->state == UV__ACTIVE);
+    assert(!uv->closing);
 
-    append = raft_malloc(sizeof *append);
+    append = HeapMalloc(sizeof *append);
     if (append == NULL) {
         rv = RAFT_NOMEM;
         goto err;
     }
-    uvAppendInit(append, req, entries, n, cb);
+    append->req = req;
+    append->entries = entries;
+    append->n = n;
+    req->cb = cb;
 
     rv = uvAppendEnqueueRequest(uv, append);
     if (rv != 0) {
         goto err_after_req_alloc;
     }
 
-    uvAppendProcessRequests(uv);
+    assert(append->segment != NULL);
+
+    /* Try to write immediately. */
+    rv = uvAppendMaybeStart(uv);
+    if (rv != 0) {
+        return rv;
+    }
 
     return 0;
 
 err_after_req_alloc:
-    raft_free(append);
+    HeapFree(append);
 err:
     assert(rv != 0);
     return rv;
 }
 
-/* Start finalizing the current segment, if any. */
-static void finalizeCurrentSegment(struct uv *uv)
+/* Finalize the current segment as soon as all its pending or inflight append
+ * requests get completed. */
+static void uvFinalizeCurrentAliveSegmentOnceIdle(struct uv *uv)
 {
-    struct openSegment *s;
+    struct uvAliveSegment *s;
     queue *head;
     bool has_pending_reqs;
     bool has_writing_reqs;
 
-    s = getCurrentOpenSegment(uv);
+    s = uvGetCurrentAliveSegment(uv);
     if (s == NULL) {
         return;
     }
@@ -609,47 +666,130 @@ static void finalizeCurrentSegment(struct uv *uv)
      * TODO: is it actually possible to have pending requests with no writing
      * requests? Probably no. */
     if (!has_pending_reqs && !has_writing_reqs) {
-        finalizeSegment(s);
+        uvAliveSegmentFinalize(s);
     } else {
         s->finalize = true;
     }
 }
 
-int uvAppendForceFinalizingCurrentSegment(struct uv *uv)
+int UvBarrier(struct uv *uv,
+              raft_index next_index,
+              struct UvBarrier *barrier,
+              UvBarrierCb cb)
 {
-    int rv;
-    finalizeCurrentSegment(uv);
-    rv = submitPrepareSegmentRequest(uv);
-    if (rv != 0) {
-        return rv;
+    queue *head;
+
+    assert(!uv->closing);
+
+    /* The next entry will be appended at this index. */
+    uv->append_next_index = next_index;
+
+    /* Arrange for all open segments not already involved in other barriers to
+     * be finalized as soon as their append requests get completed and mark them
+     * as involved in this specific barrier request.  */
+    QUEUE_FOREACH(head, &uv->append_segments)
+    {
+        struct uvAliveSegment *segment;
+        segment = QUEUE_DATA(head, struct uvAliveSegment, queue);
+        if (segment->barrier != NULL) {
+            continue;
+        }
+        segment->barrier = barrier;
+        if (segment == uvGetCurrentAliveSegment(uv)) {
+            uvFinalizeCurrentAliveSegmentOnceIdle(uv);
+            continue;
+        }
+        segment->finalize = true;
     }
+
+    barrier->cb = cb;
+
+    if (uv->barrier == NULL) {
+        uv->barrier = barrier;
+        /* If there's no pending append-related activity, we can fire the
+         * callback immediately.
+         *
+         * TODO: find a way to avoid invoking this synchronously. */
+        if (QUEUE_IS_EMPTY(&uv->append_segments) &&
+            QUEUE_IS_EMPTY(&uv->finalize_reqs) &&
+            uv->finalize_work.data == NULL) {
+            barrier->cb(barrier);
+        }
+    }
+
     return 0;
 }
 
-void uvAppendMaybeProcessRequests(struct uv *uv)
+void UvUnblock(struct uv *uv)
 {
+    assert(uv->barrier != NULL);
+    uv->barrier = NULL;
+    if (uv->closing) {
+        uvMaybeFireCloseCb(uv);
+        return;
+    }
     if (!QUEUE_IS_EMPTY(&uv->append_pending_reqs)) {
-        uvAppendProcessRequests(uv);
+        int rv;
+        rv = uvAppendMaybeStart(uv);
+        if (rv != 0) {
+            uv->errored = true;
+        }
+    }
+}
+
+/* Fire all pending barrier requests, the barrier callback will notice that
+ * we're closing and abort there. */
+static void uvBarrierClose(struct uv *uv)
+{
+    struct UvBarrier *barrier = NULL;
+    queue *head;
+    assert(uv->closing);
+    QUEUE_FOREACH(head, &uv->append_segments)
+    {
+        struct uvAliveSegment *segment;
+        segment = QUEUE_DATA(head, struct uvAliveSegment, queue);
+        if (segment->barrier != NULL && segment->barrier != barrier) {
+            barrier = segment->barrier;
+            barrier->cb(barrier);
+            if (segment->barrier == uv->barrier) {
+                uv->barrier = NULL;
+            }
+        }
+        segment->barrier = NULL;
+    }
+
+    /* There might still still be a current barrier set on uv->barrier, meaning
+     * that the open segment it was associated with has started to be finalized
+     * and is not anymore in the append_segments queue. Let's cancel that
+     * too. */
+    if (uv->barrier != NULL) {
+        uv->barrier->cb(uv->barrier);
+        uv->barrier = NULL;
     }
 }
 
 void uvAppendClose(struct uv *uv)
 {
-    struct openSegment *s;
+    struct uvAliveSegment *segment;
+    assert(uv->closing);
 
-    flushRequests(&uv->append_pending_reqs, RAFT_CANCELED);
-    finalizeCurrentSegment(uv);
+    uvBarrierClose(uv);
+    UvPrepareClose(uv);
+
+    uvAppendFinishAllRequests(&uv->append_pending_reqs, RAFT_CANCELED);
+
+    uvFinalizeCurrentAliveSegmentOnceIdle(uv);
 
     /* Also finalize the segments that we didn't write at all and are just
      * sitting in the append_segments queue waiting for writes against the
      * current segment to complete. */
     while (!QUEUE_IS_EMPTY(&uv->append_segments)) {
-        s = getLastOpenSegment(uv);
-        assert(s != NULL);
-        if (s == getCurrentOpenSegment(uv)) {
+        segment = uvGetLastAliveSegment(uv);
+        assert(segment != NULL);
+        if (segment == uvGetCurrentAliveSegment(uv)) {
             break; /* We reached the head of the queue */
         }
-        assert(s->written == 0);
-        finalizeSegment(s);
+        assert(segment->written == 0);
+        uvAliveSegmentFinalize(segment);
     }
 }

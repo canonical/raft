@@ -1,4 +1,5 @@
 #include "recv_install_snapshot.h"
+
 #include "assert.h"
 #include "convert.h"
 #include "log.h"
@@ -83,6 +84,7 @@ reply:
     if (req == NULL) {
         return RAFT_NOMEM;
     }
+    req->data = r;
 
     rv = r->io->send(r->io, req, &message, sendCb);
     if (rv != 0) {

@@ -2,7 +2,6 @@
 #include "byte.h"
 #include "uv.h"
 #include "uv_encoding.h"
-#include "uv_error.h"
 
 /* We have metadata1 and metadata2. */
 #define METADATA_FILENAME_PREFIX "metadata"
@@ -12,7 +11,7 @@
 #define METADATA_CONTENT_SIZE (8 * 4)
 
 /* Encode the content of a metadata file. */
-static void encode(const struct uvMetadata *metadata, void *buf)
+static void uvMetadataEncode(const struct uvMetadata *metadata, void *buf)
 {
     void *cursor = buf;
     bytePut64(&cursor, UV__DISK_FORMAT);
@@ -22,153 +21,126 @@ static void encode(const struct uvMetadata *metadata, void *buf)
 }
 
 /* Decode the content of a metadata file. */
-static int decode(const void *buf, struct uvMetadata *metadata)
+static int uvMetadataDecode(const void *buf,
+                            struct uvMetadata *metadata,
+                            char *errmsg)
 {
     const void *cursor = buf;
     unsigned format;
     format = byteGet64(&cursor);
     if (format != UV__DISK_FORMAT) {
+        ErrMsgPrintf(errmsg, "bad format version %d", format);
         return RAFT_MALFORMED;
     }
     metadata->version = byteGet64(&cursor);
     metadata->term = byteGet64(&cursor);
     metadata->voted_for = byteGet64(&cursor);
-    return 0;
-}
-
-/* Render the filename of the metadata file with index @n. */
-static void filenameOf(const unsigned short n, char *filename)
-{
-    sprintf(filename, METADATA_FILENAME_PREFIX "%d", n);
-}
-
-/* Read the n'th metadata file (with n equal to 1 or 2) and decode the content
- * of the file, populating the given metadata buffer accordingly. */
-static int loadFile(struct uv *uv,
-                    const unsigned short n,
-                    struct uvMetadata *metadata)
-{
-    char filename[METADATA_FILENAME_SIZE]; /* Filename of the metadata file */
-    uint8_t buf[METADATA_CONTENT_SIZE];    /* Content of metadata file */
-    int fd;
-    char errmsg_[2048];
-    char *errmsg = errmsg_;
-    int rv;
-
-    assert(n == 1 || n == 2);
-
-    /* Render the metadata path */
-    filenameOf(n, filename);
-
-    memset(metadata, 0, sizeof *metadata);
-
-    /* Open the metadata file, if it exists. */
-    rv = uvOpenFile(uv->dir, filename, O_RDONLY, &fd, &errmsg);
-    if (rv != 0) {
-        if (rv != UV__NOENT) {
-            uvErrorf(uv, "open %s: %s", filename, errmsg);
-            rv = RAFT_IOERR;
-        } else {
-            rv = 0;
-        }
-        raft_free(errmsg);
-        /* The file does not exist, just return. */
-        return rv;
-    }
-
-    /* Read the content of the metadata file. */
-    rv = uvReadFully(fd, buf, sizeof buf, &errmsg);
-    if (rv != 0) {
-        if (rv != UV__NODATA) {
-            uvErrorf(uv, "read %s: %s", filename, errmsg);
-            rv = RAFT_IOERR;
-        } else {
-            /* Assume that the server crashed while writing this metadata file,
-             * and pretend it has not been written at all. */
-            uvWarnf(uv, "read %s: ignore incomplete data", filename);
-            close(fd);
-            rv = 0;
-        }
-        raft_free(errmsg);
-        return rv;
-    };
-
-    close(fd);
-
-    /* Decode the content of the metadata file. */
-    rv = decode(buf, metadata);
-    if (rv != 0) {
-        assert(rv == RAFT_MALFORMED);
-        uvErrorf(uv, "load %s: bad format version", filename);
-        return rv;
-    }
 
     /* Sanity checks that values make sense */
     if (metadata->version == 0) {
-        uvErrorf(uv, "load %s: version is set to zero", filename);
+        ErrMsgPrintf(errmsg, "version is set to zero");
         return RAFT_CORRUPT;
     }
 
     return 0;
 }
 
-/* Update both metadata files using the given one as seed, so they are created
- * if they didn't exist. */
-static int ensure(struct uv *uv, struct uvMetadata *metadata)
+/* Render the filename of the metadata file with index @n. */
+static void uvMetadataFilename(const unsigned short n, char *filename)
 {
-    int i;
-    char *errmsg;
+    sprintf(filename, METADATA_FILENAME_PREFIX "%d", n);
+}
+
+/* Read the n'th metadata file (with n equal to 1 or 2) and decode the content
+ * of the file, populating the given metadata buffer accordingly. */
+static int uvMetadataLoadN(const char *dir,
+                           const unsigned short n,
+                           struct uvMetadata *metadata,
+                           char *errmsg)
+{
+    char filename[METADATA_FILENAME_SIZE];  /* Filename of the metadata file */
+    uint8_t content[METADATA_CONTENT_SIZE]; /* Content of metadata file */
+    off_t size;
+    struct raft_buffer buf;
+    bool exists;
     int rv;
 
-    /* Update both metadata files, so they are created if they didn't
-     * exist. Also sync the data directory so the entries get created. */
-    for (i = 0; i < 2; i++) {
-        metadata->version++;
-        rv = uvMetadataStore(uv, metadata);
-        if (rv != 0) {
-            return rv;
-        }
+    assert(n == 1 || n == 2);
+
+    /* Render the metadata path */
+    uvMetadataFilename(n, filename);
+
+    rv = UvFsFileExists(dir, filename, &exists, errmsg);
+    if (rv != 0) {
+        ErrMsgWrapf(errmsg, "check if %s exists", filename);
+        return rv;
     }
 
-    /* Also sync the data directory so the entries get created. */
-    rv = uvSyncDir(uv->dir, &errmsg);
+    memset(metadata, 0, sizeof *metadata);
+
+    /* If the file does not exist, just return. */
+    if (!exists) {
+        return 0;
+    }
+
+    /* If the file exists but has less bytes than expected assume that the
+     * server crashed while writing this metadata file, and pretend it has not
+     * been written at all. If it has more file than expected, return an
+     * error. */
+    rv = UvFsFileSize(dir, filename, &size, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "sync %s: %s", uv->dir, errmsg);
-        raft_free(errmsg);
-        return RAFT_IOERR;
+        ErrMsgWrapf(errmsg, "check size of %s", filename);
+        return rv;
+    }
+
+    if (size != sizeof content) {
+        if ((size_t)size < sizeof content) {
+            rv = UvFsRemoveFile(dir, filename, errmsg);
+            if (rv != 0) {
+                return rv;
+            }
+            return 0;
+        }
+        ErrMsgPrintf(errmsg, "%s has size %ld instead of %ld", size,
+                     sizeof content, filename);
+        return RAFT_CORRUPT;
+    }
+
+    /* Read the content of the metadata file. */
+    buf.base = content;
+    buf.len = sizeof content;
+
+    rv = UvFsReadFileInto(dir, filename, &buf, errmsg);
+    if (rv != 0) {
+        ErrMsgWrapf(errmsg, "read content of %s", filename);
+        return rv;
+    };
+
+    /* Decode the content of the metadata file. */
+    rv = uvMetadataDecode(content, metadata, errmsg);
+    if (rv != 0) {
+        ErrMsgWrapf(errmsg, "decode content of %s", filename);
+        return rv;
     }
 
     return 0;
 }
 
-/* Return the metadata file index associated with the given version. */
-static int indexOf(int version)
-{
-    return version % 2 == 1 ? 1 : 2;
-}
-
-#define logMetadata(PREFIX, M)                                                 \
-    uvDebugf(uv, "metadata" #PREFIX ": version %lld, term %lld, voted for %d", \
-             (M)->version, (M)->term, (M)->voted_for);
-
-int uvMetadataLoad(struct uv *uv, struct uvMetadata *metadata)
+int uvMetadataLoad(const char *dir, struct uvMetadata *metadata, char *errmsg)
 {
     struct uvMetadata metadata1;
     struct uvMetadata metadata2;
     int rv;
 
     /* Read the two metadata files (if available). */
-    rv = loadFile(uv, 1, &metadata1);
+    rv = uvMetadataLoadN(dir, 1, &metadata1, errmsg);
     if (rv != 0) {
         return rv;
     }
-    logMetadata(1, &metadata1);
-
-    rv = loadFile(uv, 2, &metadata2);
+    rv = uvMetadataLoadN(dir, 2, &metadata2, errmsg);
     if (rv != 0) {
         return rv;
     }
-    logMetadata(2, &metadata2);
 
     /* Check the versions. */
     if (metadata1.version == 0 && metadata2.version == 0) {
@@ -178,8 +150,8 @@ int uvMetadataLoad(struct uv *uv, struct uvMetadata *metadata)
         metadata->voted_for = 0;
     } else if (metadata1.version == metadata2.version) {
         /* The two metadata files can't have the same version. */
-        uvErrorf(uv, "metadata1 and metadata2 are both at version %d",
-                 metadata1.version);
+        ErrMsgPrintf(errmsg, "metadata1 and metadata2 are both at version %d",
+                     metadata1.version);
         return RAFT_CORRUPT;
     } else {
         /* Pick the metadata with the grater version. */
@@ -190,48 +162,39 @@ int uvMetadataLoad(struct uv *uv, struct uvMetadata *metadata)
         }
     }
 
-    /* Update the metadata files, so they are created if they did not exist. */
-    rv = ensure(uv, metadata);
-    if (rv != 0) {
-        return rv;
-    }
-
     return 0;
+}
+
+/* Return the metadata file index associated with the given version. */
+static int uvMetadataFileIndex(int version)
+{
+    return version % 2 == 1 ? 1 : 2;
 }
 
 int uvMetadataStore(struct uv *uv, const struct uvMetadata *metadata)
 {
-    char filename[METADATA_FILENAME_SIZE]; /* Filename of the metadata file */
-    uint8_t buf[METADATA_CONTENT_SIZE];    /* Content of metadata file */
-    const int flags = O_WRONLY | O_CREAT | O_SYNC | O_TRUNC;
+    char filename[METADATA_FILENAME_SIZE];  /* Filename of the metadata file */
+    uint8_t content[METADATA_CONTENT_SIZE]; /* Content of metadata file */
+    struct raft_buffer buf;
     unsigned short n;
-    int fd;
-    char *errmsg;
     int rv;
 
     assert(metadata->version > 0);
 
     /* Encode the given metadata. */
-    encode(metadata, buf);
+    uvMetadataEncode(metadata, content);
 
     /* Render the metadata file name. */
-    n = indexOf(metadata->version);
-    filenameOf(n, filename);
+    n = uvMetadataFileIndex(metadata->version);
+    uvMetadataFilename(n, filename);
 
     /* Write the metadata file, creating it if it does not exist. */
-    rv = uvOpenFile(uv->dir, filename, flags, &fd, &errmsg);
+    buf.base = content;
+    buf.len = sizeof content;
+    rv = UvFsMakeOrOverwriteFile(uv->dir, filename, &buf, uv->io->errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "open %s: %s", filename, errmsg);
-        raft_free(errmsg);
-        return RAFT_IOERR;
-    }
-
-    rv = uvWriteFully(fd, buf, sizeof buf, &errmsg);
-    close(fd);
-    if (rv != 0) {
-        uvErrorf(uv, "write %s: %s", filename, errmsg);
-        raft_free(errmsg);
-        return RAFT_IOERR;
+        ErrMsgWrapf(uv->io->errmsg, "persist %s", filename);
+        return rv;
     }
 
     return 0;

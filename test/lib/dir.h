@@ -106,13 +106,8 @@ void *setupXfsDir(const MunitParameter params[], void *user_data);
 /* Recursively remove a temporary directory. */
 void tearDownDir(void *data);
 
-/* Create a temporary test directory backed by the file system specified in the
- * TEST_DIR_FS parameter. If no parameter is given the default is to use
- * tmpfs. */
-char *test_dir_setup(const MunitParameter params[]);
-
 /* Recursively remove a temporary directory. */
-void test_dir_tear_down(char *dir);
+void test_dir_remove(char *dir);
 
 /* Write the given @buf to the given @filename in the given @dir. */
 void test_dir_write_file(const char *dir,
@@ -154,6 +149,17 @@ void test_dir_truncate_file(const char *dir,
                             const char *filename,
                             const size_t n);
 
+/* Grow the given file to the given size, filling the new bytes with zeros. */
+void test_dir_grow_file(const char *dir, const char *filename, const size_t n);
+
+/* Rename a file in the given directory from filename1 to filename2. */
+void test_dir_rename_file(const char *dir,
+                          const char *filename1,
+                          const char *filename2);
+
+/* Remove a file. */
+void test_dir_remove_file(const char *dir, const char *filename);
+
 /* Read into @buf the content of the given @filename in the given @dir. */
 void test_dir_read_file(const char *dir,
                         const char *filename,
@@ -165,6 +171,9 @@ bool test_dir_exists(const char *dir);
 
 /* Make the given directory not executable, so files can't be open. */
 void test_dir_unexecutable(const char *dir);
+
+/* Make the given directory not writable. */
+void test_dir_unwritable(const char *dir);
 
 /* Make the given file not readable. */
 void test_dir_unreadable_file(const char *dir, const char *filename);

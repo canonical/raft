@@ -8,81 +8,53 @@
 #define WRAP_SEP ": "
 #define WRAP_SEP_LEN (int)strlen(WRAP_SEP)
 
-char *errMsgPrintf(const char *format, ...)
+void ErrMsgPrintf(char *e, const char *format, ...)
 {
-    int size;
-    char *e;
     va_list args;
-    int rv;
-
     va_start(args, format);
-    size = vsnprintf(NULL, 0, format, args);
+    vsnprintf(e, RAFT_ERRMSG_BUF_SIZE, format, args);
     va_end(args);
-
-    if (size == -1) {
-        return NULL;
-    }
-    size++;
-
-    e = raft_malloc(size);
-    if (e == NULL) {
-        return NULL;
-    }
-
-    va_start(args, format);
-    rv = vsnprintf(e, size, format, args);
-    va_end(args);
-
-    assert(rv == size - 1);
-
-    return e;
 }
 
-char *errMsgWrapf(char *e, const char *format, ...)
+void ErrMsgWrapf(char *e, const char *format, ...)
 {
-    int size;
-    char *prefix;
-    char *result;
+    size_t n = RAFT_ERRMSG_BUF_SIZE;
+    size_t prefix_n;
+    size_t prefix_and_sep_n;
+    size_t trail_n;
     va_list args;
-    int rv;
+    size_t i;
 
     /* Calculate the lenght of the prefix. */
     va_start(args, format);
-    size = vsnprintf(NULL, 0, format, args);
+    prefix_n = vsnprintf(NULL, 0, format, args);
     va_end(args);
 
-    if (size == -1) {
-        return e;
-    }
-    size++;
-
-    prefix = raft_malloc(size);
-    if (prefix == NULL) {
-        return e;
+    /* If there isn't enough space for the ": " separator and at least one
+     * character of the wrapped error message, then just print the prefix. */
+    if (prefix_n >= n - (WRAP_SEP_LEN + 1)) {
+        vsnprintf(e, n, format, args);
+        return;
     }
 
+    /* Right-shift the wrapped message, to make room for the prefix. */
+    prefix_and_sep_n = prefix_n + WRAP_SEP_LEN;
+    trail_n = strnlen(e, n - prefix_and_sep_n - 1);
+    memmove(e + prefix_and_sep_n, e, trail_n);
+    e[prefix_and_sep_n + trail_n] = 0;
+
+    /* Print the prefix. */
     va_start(args, format);
-    rv = vsnprintf(prefix, size, format, args);
+    vsnprintf(e, prefix_n + 1, format, args);
     va_end(args);
 
-    assert(rv == size - 1);
-
-    /* Total size of the new message. */
-    size += WRAP_SEP_LEN + strlen(e);
-
-    result = raft_malloc(size);
-    if (result == NULL) {
-        raft_free(prefix);
-        return e;
+    /* Print the separator.
+     *
+     * Avoid using strncpy(e->msg + prefix_n, WRAP_SEP, WRAP_SEP_LEN) since it
+     * generates a warning. */
+    for (i = 0; i < WRAP_SEP_LEN; i++) {
+        e[prefix_n + i] = WRAP_SEP[i];
     }
-
-    rv = snprintf(result, size, "%s" WRAP_SEP "%s", prefix, e);
-    assert(rv == size - 1);
-
-    raft_free(prefix);
-    raft_free(e);
-
-    return result;
 }
 
 #define ERR_CODE_TO_STRING_MAP(X)                                       \
@@ -99,7 +71,7 @@ char *errMsgWrapf(char *e, const char *format, ...)
     X(RAFT_CANTCHANGE, "a configuration change is already in progress") \
     X(RAFT_CORRUPT, "persisted data is corrupted")                      \
     X(RAFT_CANCELED, "operation canceled")                              \
-    X(RAFT_NAMETOOLONG, "data directory path is too long")              \
+    X(RAFT_NAMETOOLONG, "resource name too long")                       \
     X(RAFT_TOOBIG, "data is too big")                                   \
     X(RAFT_NOCONNECTION, "no connection to remote server available")    \
     X(RAFT_BUSY, "operation can't be performed at this time")           \

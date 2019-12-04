@@ -101,6 +101,7 @@ struct send
 struct snapshot_put
 {
     REQUEST;
+    unsigned trailing;
     struct raft_io_snapshot_put *req;
     const struct raft_snapshot *snapshot;
 };
@@ -217,12 +218,10 @@ static bool ioFaultTick(struct io *io)
 }
 
 static int ioMethodInit(struct raft_io *raft_io,
-                        struct raft_logger *logger,
                         unsigned id,
                         const char *address)
 {
     struct io *io = raft_io->impl;
-    (void)logger;
     io->id = id;
     io->address = address;
     return 0;
@@ -286,6 +285,11 @@ static void ioFlushSnapshotPut(struct io *s, struct snapshot_put *r)
 
     rv = snapshotCopy(r->snapshot, s->snapshot);
     assert(rv == 0);
+
+    if (r->trailing == 0) {
+        rv = s->io->truncate(s->io, 1);
+        assert(rv == 0);
+    }
 
     if (r->req->cb != NULL) {
         r->req->cb(r->req, 0);
@@ -446,30 +450,14 @@ static void ioFlushAll(struct io *io)
     }
 }
 
-static int ioMethodClose(struct raft_io *raft_io,
-                         void (*cb)(struct raft_io *io))
+static void ioMethodClose(struct raft_io *raft_io, raft_io_close_cb cb)
 {
-    struct io *io = raft_io->impl;
-    size_t i;
-    for (i = 0; i < io->n; i++) {
-        struct raft_entry *entry = &io->entries[i];
-        raft_free(entry->buf.base);
-    }
-    if (io->entries != NULL) {
-        raft_free(io->entries);
-    }
-    if (io->snapshot != NULL) {
-        snapshotClose(io->snapshot);
-        raft_free(io->snapshot);
-    }
     if (cb != NULL) {
         cb(raft_io);
     }
-    return 0;
 }
 
 static int ioMethodLoad(struct raft_io *io,
-                        unsigned snapshot_trailing,
                         raft_term *term,
                         unsigned *voted_for,
                         struct raft_snapshot **snapshot,
@@ -633,8 +621,6 @@ static int ioMethodTruncate(struct raft_io *raft_io, raft_index index)
         start_index = io->snapshot->index;
     }
 
-    assert(index >= start_index);
-
     if (ioFaultTick(io)) {
         return RAFT_IOERR;
     }
@@ -694,6 +680,7 @@ static int ioMethodSnapshotPut(struct raft_io *raft_io,
     r->req->cb = cb;
     r->snapshot = snapshot;
     r->completion_time = *io->time + io->disk_latency;
+    r->trailing = trailing;
 
     QUEUE_PUSH(&io->requests, &r->queue);
 
@@ -911,8 +898,8 @@ static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
 
     raft_io->impl = io;
     raft_io->init = ioMethodInit;
-    raft_io->start = ioMethodStart;
     raft_io->close = ioMethodClose;
+    raft_io->start = ioMethodStart;
     raft_io->load = ioMethodLoad;
     raft_io->bootstrap = ioMethodBootstrap;
     raft_io->recover = ioMethodRecover;
@@ -930,9 +917,22 @@ static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
 }
 
 /* Release all memory held by the given stub I/O implementation. */
-void ioClose(struct raft_io *io)
+void ioClose(struct raft_io *raft_io)
 {
-    raft_free(io->impl);
+    struct io *io = raft_io->impl;
+    size_t i;
+    for (i = 0; i < io->n; i++) {
+        struct raft_entry *entry = &io->entries[i];
+        raft_free(entry->buf.base);
+    }
+    if (io->entries != NULL) {
+        raft_free(io->entries);
+    }
+    if (io->snapshot != NULL) {
+        snapshotClose(io->snapshot);
+        raft_free(io->snapshot);
+    }
+    raft_free(io);
 }
 
 /* Custom logging function which include the server ID. */
@@ -969,7 +969,7 @@ static int serverInit(struct raft_fixture *f, unsigned i, struct raft_fsm *fsm)
     if (rv != 0) {
         return rv;
     }
-    rv = raft_init(&s->raft, &s->io, fsm, &s->logger, s->id, s->address);
+    rv = raft_init(&s->raft, &s->io, fsm, s->id, s->address);
     if (rv != 0) {
         return rv;
     }

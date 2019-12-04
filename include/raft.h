@@ -28,7 +28,17 @@
 #define RAFT_TOOBIG 15
 #define RAFT_NOCONNECTION 16
 #define RAFT_BUSY 17
-#define RAFT_IOERR 18
+#define RAFT_IOERR 18        /* File system or storage error */
+#define RAFT_NOTFOUND 19     /* Resource not found */
+#define RAFT_INVALID 20      /* Invalid parameter */
+#define RAFT_UNAUTHORIZED 21 /* No access to a resource */
+#define RAFT_NOSPACE 22      /* Not enough space on disk */
+#define RAFT_TOOMANY 23      /* Some system or raft limit was hit */
+
+/**
+ * Size of human-readable error message buffers.
+ */
+#define RAFT_ERRMSG_BUF_SIZE 256
 
 /**
  * Return the error message describing the given error code.
@@ -356,6 +366,26 @@ struct raft_io_snapshot_get
 };
 
 /**
+ * Customizable tracer, for debugging purposes.
+ */
+struct raft_tracer
+{
+    /**
+     * Implementation-defined state object.
+     */
+    void *impl;
+
+    /**
+     * Emit a single trace message.
+     */
+    void (*emit)(struct raft_tracer *t,
+                 const char *file,
+                 int line,
+                 const char *format,
+                 ...);
+};
+
+/**
  * Logger interface.
  */
 struct raft_logger
@@ -462,24 +492,43 @@ struct raft_io
     void *impl;
 
     /**
-     * Initialize the backend.
+     * Human-readable message providing diagnostic information about the last
+     * error occurred.
      */
-    int (*init)(struct raft_io *io,
-                struct raft_logger *logger,
-                unsigned id,
-                const char *address);
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
 
     /**
-     * Read persisted state from storage.
+     * Initialize the backend with operational parameters such as server ID and
+     * address.
+     */
+    int (*init)(struct raft_io *io, unsigned id, const char *address);
+
+    /**
+     * Release all resources used by the backend.
      *
-     * The implementation must synchronously read the current state from
-     * disk.
+     * The @tick and @recv callbacks must not be invoked anymore, and pending
+     * asynchronous requests be completed or canceled as soon as
+     * possible. Invoke the close callback once the #raft_io instance can be
+     * freed.
+     */
+    void (*close)(struct raft_io *io, raft_io_close_cb cb);
+
+    /**
+     * Load persisted state from storage.
      *
-     * The entries array must be allocated with @raft_malloc. Once the request
-     * is completed ownership of such memory is transfered to the raft instance.
+     * The implementation must synchronously load the current state from its
+     * storage backend and return information about it through the given
+     * pointers.
+     *
+     * The implementation can safely assume that this method will be invoked
+     * exactly one time, before any call to append() or truncate(), and then
+     * won't be invoked again.
+     *
+     * The snapshot object and entries array must be allocated and populated
+     * using @raft_malloc. If this function completes successfully, ownership of
+     * such memory is transfered to the caller.
      */
     int (*load)(struct raft_io *io,
-                unsigned trailing,
                 raft_term *term,
                 unsigned *voted_for,
                 struct raft_snapshot **snapshot,
@@ -500,20 +549,13 @@ struct raft_io
                  raft_io_recv_cb recv_cb);
 
     /**
-     * Stop calling the @tick and @recv callbacks, and complete or cancel any
-     * in-progress I/O as soon as possible. Invoke the close callback once the
-     * #raft_io instance can be freed.
-     */
-    int (*close)(struct raft_io *io, raft_io_close_cb cb);
-
-    /**
      * Bootstrap a server belonging to a new cluster.
      *
      * The I/O implementation must synchronously persist the given configuration
      * as the first entry of the log. The current persisted term must be set to
      * 1 and the vote to nil.
      *
-     * If an attempt is made to bootstrap a server that has already some sate,
+     * If an attempt is made to bootstrap a server that has already some state,
      * then #RAFT_CANTBOOTSTRAP must be returned.
      */
     int (*bootstrap)(struct raft_io *io, const struct raft_configuration *conf);
@@ -566,7 +608,15 @@ struct raft_io
     int (*truncate)(struct raft_io *io, raft_index index);
 
     /**
-     * Asynchronously persist a new snapshot.
+     * Asynchronously persist a new snapshot. If the @trailing parameter is
+     * greater than zero, then all entries older that @snapshot->index -
+     * @trailing must be deleted. If the @trailing parameter is 0, then the
+     * snapshot completely replaces all existing entries, which should all be
+     * deleted. Subsequent calls to append() should append entries starting at
+     * index @snapshot->index + 1.
+     *
+     * If a request is submitted, the raft engine won't submit any other request
+     * until the original one has completed.
      */
     int (*snapshot_put)(struct raft_io *io,
                         unsigned trailing,
@@ -661,7 +711,7 @@ typedef void (*raft_close_cb)(struct raft *raft);
 struct raft
 {
     void *data;                 /* Custom user data. */
-    struct raft_logger *logger; /* Logging implementation. */
+    struct raft_tracer *tracer; /* Tracer implementation. */
     struct raft_io *io;         /* Disk and network I/O implementation. */
     struct raft_fsm *fsm;       /* User-defined FSM to apply commands to. */
     unsigned id;                /* Server ID of this raft instance. */
@@ -805,6 +855,12 @@ struct raft
      * Callback to invoke once a close request has completed.
      */
     raft_close_cb close_cb;
+
+    /*
+     * Human-readable message providing diagnostic information about the last
+     * error occurred.
+     */
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
 };
 
 /**
@@ -813,7 +869,6 @@ struct raft
 RAFT_API int raft_init(struct raft *r,
                        struct raft_io *io,
                        struct raft_fsm *fsm,
-                       struct raft_logger *logger,
                        unsigned id,
                        const char *address);
 
@@ -905,10 +960,9 @@ RAFT_API void raft_set_snapshot_threshold(struct raft *r, unsigned n);
 RAFT_API void raft_set_snapshot_trailing(struct raft *r, unsigned n);
 
 /**
- * Set the logging level. Only messages with at this level or above will be
- * emitted.
+ * Return a human-readable description of the last error occured.
  */
-RAFT_API void raft_set_logger_level(struct raft *r, unsigned level);
+RAFT_API const char *raft_errmsg(struct raft *r);
 
 /**
  * Return the code of the current raft state.

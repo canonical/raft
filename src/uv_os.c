@@ -5,6 +5,7 @@
 #include <libgen.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/eventfd.h>
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <sys/vfs.h>
@@ -14,27 +15,26 @@
 #include "assert.h"
 #include "err.h"
 #include "syscall.h"
-#include "uv_error.h"
 
 /* Default permissions when creating a directory. */
 #define DEFAULT_DIR_PERM 0700
 
-int UvOsOpen(const char *path, int flags, int mode)
+int UvOsOpen(const char *path, int flags, int mode, uv_file *fd)
 {
     struct uv_fs_s req;
-    return uv_fs_open(NULL, &req, path, flags, mode, NULL);
+    int rv;
+    rv = uv_fs_open(NULL, &req, path, flags, mode, NULL);
+    if (rv < 0) {
+        return rv;
+    }
+    *fd = rv;
+    return 0;
 }
 
 int UvOsClose(uv_file fd)
 {
     struct uv_fs_s req;
     return uv_fs_close(NULL, &req, fd, NULL);
-}
-
-int UvOsFsync(uv_file fd)
-{
-    struct uv_fs_s req;
-    return uv_fs_fsync(NULL, &req, fd, NULL);
 }
 
 int UvOsFallocate(uv_file fd, off_t offset, off_t len)
@@ -52,10 +52,54 @@ int UvOsFallocate(uv_file fd, off_t offset, off_t len)
     return 0;
 }
 
+int UvOsTruncate(uv_file fd, off_t offset)
+{
+    struct uv_fs_s req;
+    return uv_fs_ftruncate(NULL, &req, fd, offset, NULL);
+}
+
+int UvOsFsync(uv_file fd)
+{
+    struct uv_fs_s req;
+    return uv_fs_fsync(NULL, &req, fd, NULL);
+}
+
+int UvOsFdatasync(uv_file fd) {
+    struct uv_fs_s req;
+    return uv_fs_fdatasync(NULL, &req, fd, NULL);
+}
+
+int UvOsStat(const char *path, uv_stat_t *sb)
+{
+    struct uv_fs_s req;
+    int rv;
+    rv = uv_fs_stat(NULL, &req, path, NULL);
+    if (rv != 0) {
+        return rv;
+    }
+    memcpy(sb, &req.statbuf, sizeof *sb);
+    return 0;
+}
+
+int UvOsWrite(uv_file fd,
+              const uv_buf_t bufs[],
+              unsigned int nbufs,
+              int64_t offset)
+{
+    struct uv_fs_s req;
+    return uv_fs_write(NULL, &req, fd, bufs, nbufs, offset, NULL);
+}
+
 int UvOsUnlink(const char *path)
 {
     struct uv_fs_s req;
     return uv_fs_unlink(NULL, &req, path, NULL);
+}
+
+int UvOsRename(const char *path1, const char *path2)
+{
+    struct uv_fs_s req;
+    return uv_fs_rename(NULL, &req, path1, path2, NULL);
 }
 
 void UvOsJoin(const char *dir, const char *filename, char *path)
@@ -120,6 +164,9 @@ int UvOsIoGetevents(aio_context_t ctx,
 int UvOsEventfd(unsigned int initval, int flags)
 {
     int rv;
+    /* At the moment only UV_FS_O_NONBLOCK is supported */
+    assert(flags == UV_FS_O_NONBLOCK);
+    flags = EFD_NONBLOCK;
     rv = eventfd(initval, flags);
     if (rv == -1) {
         return -errno;
@@ -137,569 +184,4 @@ int UvOsSetDirectIo(uv_file fd)
         return -errno;
     }
     return 0;
-}
-
-int uvEnsureDir(const char *dir, char **errmsg)
-{
-    struct uv_fs_s req;
-    int rv;
-
-    /* Make sure we have a directory we can write into. */
-    rv = uv_fs_stat(NULL, &req, dir, NULL);
-    if (rv != 0) {
-        if (rv == UV_ENOENT) {
-            rv = uv_fs_mkdir(NULL, &req, dir, DEFAULT_DIR_PERM, NULL);
-            if (rv != 0) {
-                *errmsg = uvSysErrMsg("mkdir", rv);
-                return UV__ERROR;
-            }
-        } else {
-            *errmsg = uvSysErrMsg("stat", rv);
-            return UV__ERROR;
-        }
-    } else if ((req.statbuf.st_mode & S_IFMT) != S_IFDIR) {
-        *errmsg = errMsgPrintf("%s", uv_strerror(UV_ENOTDIR));
-        return UV__ERROR;
-    }
-
-    return 0;
-}
-
-int uvSyncDir(const char *dir, char **errmsg)
-{
-    struct uv_fs_s req;
-    uv_file fd;
-    int rv;
-    fd = uv_fs_open(NULL, &req, dir, UV_FS_O_RDONLY | UV_FS_O_DIRECTORY, 0,
-                    NULL);
-    if (fd < 0) {
-        *errmsg = uvSysErrMsg("open", fd);
-        return UV__ERROR;
-    }
-    rv = uv_fs_fsync(NULL, &req, fd, NULL);
-    uv_fs_close(NULL, &req, fd, NULL);
-    if (rv != 0) {
-        *errmsg = uvSysErrMsg("fsync", rv);
-        return UV__ERROR;
-    }
-    return 0;
-}
-
-int uvOpenFile(const char *dir,
-               const char *filename,
-               int flags,
-               uv_file *fd,
-               char **errmsg)
-{
-    struct uv_fs_s req;
-    char path[UV__PATH_SZ];
-
-    assert(UV__DIR_HAS_VALID_LEN(dir));
-    assert(UV__FILENAME_HAS_VALID_LEN(filename));
-
-    UvOsJoin(dir, filename, path);
-    *fd = uv_fs_open(NULL, &req, path, flags, S_IRUSR | S_IWUSR, NULL);
-    if (*fd < 0) {
-        int rv = *fd;
-        *fd = -1;
-        *errmsg = uvSysErrMsg("open", rv);
-        return rv == UV_ENOENT ? UV__NOENT : UV__ERROR;
-    }
-    return 0;
-}
-
-int uvStatFile(const char *dir,
-               const char *filename,
-               uv_stat_t *sb,
-               char **errmsg)
-{
-    char path[UV__PATH_SZ];
-    struct uv_fs_s req;
-    int rv;
-
-    assert(UV__DIR_HAS_VALID_LEN(dir));
-    assert(UV__FILENAME_HAS_VALID_LEN(filename));
-
-    UvOsJoin(dir, filename, path);
-    rv = uv_fs_stat(NULL, &req, path, NULL);
-    if (rv != 0) {
-        *errmsg = uvSysErrMsg("stat", rv);
-        return rv == UV_ENOENT ? UV__NOENT : UV__ERROR;
-    }
-    memcpy(sb, &req.statbuf, sizeof *sb);
-    return 0;
-}
-
-int uvMakeFile(const char *dir,
-               const char *filename,
-               struct raft_buffer *bufs,
-               unsigned n_bufs,
-               char **errmsg)
-{
-    int flags = UV_FS_O_WRONLY | UV_FS_O_CREAT | UV_FS_O_EXCL;
-    struct uv_fs_s req;
-    uv_file fd;
-    int rv;
-    size_t size;
-    unsigned i;
-    size = 0;
-    for (i = 0; i < n_bufs; i++) {
-        size += bufs[i].len;
-    }
-    rv = uvOpenFile(dir, filename, flags, &fd, errmsg);
-    if (rv != 0) {
-        return rv;
-    }
-    rv = uv_fs_write(NULL, &req, fd, (const uv_buf_t *)bufs, n_bufs, 0, NULL);
-    if (rv != (int)(size)) {
-        if (rv < 0) {
-            *errmsg = uvSysErrMsg("write", rv);
-        } else {
-            assert(rv >= 0);
-            *errmsg = errMsgPrintf("short write: %d only bytes written", rv);
-        }
-        goto err_after_file_open;
-    }
-    rv = uv_fs_fsync(NULL, &req, fd, NULL);
-    if (rv != 0) {
-        *errmsg = uvSysErrMsg("fsync", rv);
-        goto err_after_file_open;
-    }
-    rv = uv_fs_close(NULL, &req, fd, NULL);
-    if (rv != 0) {
-        *errmsg = uvSysErrMsg("close", rv);
-        goto err;
-    }
-    return 0;
-
-err_after_file_open:
-    uv_fs_close(NULL, &req, fd, NULL);
-err:
-    return UV__ERROR;
-}
-
-int uvUnlinkFile(const char *dir, const char *filename, char **errmsg)
-{
-    struct uv_fs_s req;
-    char path[UV__PATH_SZ];
-    int rv;
-
-    assert(UV__DIR_HAS_VALID_LEN(dir));
-    assert(UV__FILENAME_HAS_VALID_LEN(filename));
-
-    UvOsJoin(dir, filename, path);
-    rv = uv_fs_unlink(NULL, &req, path, NULL);
-    if (rv != 0) {
-        *errmsg = uvSysErrMsg("unlink", rv);
-        return UV__ERROR;
-    }
-    return 0;
-}
-
-void uvTryUnlinkFile(const char *dir, const char *filename)
-{
-    char *errmsg;
-    int rv;
-    rv = uvUnlinkFile(dir, filename, &errmsg);
-    if (rv != 0) {
-        raft_free(errmsg);
-    }
-}
-
-int uvTruncateFile(const char *dir,
-                   const char *filename,
-                   size_t offset,
-                   char **errmsg)
-{
-    struct uv_fs_s req;
-    char path[UV__PATH_SZ];
-    uv_file fd;
-    int rv;
-
-    assert(UV__DIR_HAS_VALID_LEN(dir));
-    assert(UV__FILENAME_HAS_VALID_LEN(filename));
-
-    UvOsJoin(dir, filename, path);
-
-    rv = uvOpenFile(dir, filename, O_RDWR, &fd, errmsg);
-    if (rv != 0) {
-        goto err;
-    }
-    rv = uv_fs_ftruncate(NULL, &req, fd, offset, NULL);
-    if (rv != 0) {
-        *errmsg = uvSysErrMsg("ftruncate", rv);
-        goto err_after_open;
-    }
-    rv = uv_fs_fsync(NULL, &req, fd, NULL);
-    if (rv == -1) {
-        *errmsg = uvSysErrMsg("fsync", rv);
-        goto err_after_open;
-    }
-    close(fd);
-    return 0;
-
-err_after_open:
-    close(fd);
-err:
-    return UV__ERROR;
-}
-
-int uvRenameFile(const char *dir,
-                 const char *filename1,
-                 const char *filename2,
-                 char **errmsg)
-{
-    struct uv_fs_s req;
-    char path1[UV__PATH_SZ];
-    char path2[UV__PATH_SZ];
-    int rv;
-
-    assert(UV__DIR_HAS_VALID_LEN(dir));
-    assert(UV__FILENAME_HAS_VALID_LEN(filename1));
-    assert(UV__FILENAME_HAS_VALID_LEN(filename2));
-
-    UvOsJoin(dir, filename1, path1);
-    UvOsJoin(dir, filename2, path2);
-    /* TODO: double check that filename2 does not exist. */
-    rv = uv_fs_rename(NULL, &req, path1, path2, NULL);
-    if (rv != 0) {
-        *errmsg = uvSysErrMsg("rename", rv);
-        return UV__ERROR;
-    }
-    rv = uvSyncDir(dir, errmsg);
-    if (rv != 0) {
-        return rv;
-    }
-    return 0;
-}
-
-int uvIsEmptyFile(const char *dir,
-                  const char *filename,
-                  bool *empty,
-                  char **errmsg)
-{
-    uv_stat_t sb;
-    int rv;
-    rv = uvStatFile(dir, filename, &sb, errmsg);
-    if (rv != 0) {
-        return rv;
-    }
-    *empty = sb.st_size == 0 ? true : false;
-    return 0;
-}
-
-int uvReadFully(const int fd, void *buf, const size_t n, char **errmsg)
-{
-    int rv;
-    rv = read(fd, buf, n);
-    if (rv == -1) {
-        *errmsg = uvSysErrMsg("read", -errno);
-        return UV__ERROR;
-    }
-    assert(rv >= 0);
-    if ((size_t)rv < n) {
-        *errmsg = errMsgPrintf("short read: %d bytes instead of %ld", rv, n);
-        return UV__NODATA;
-    }
-    return 0;
-}
-
-int uvWriteFully(const int fd, void *buf, const size_t n, char **errmsg)
-{
-    int rv;
-    rv = write(fd, buf, n);
-    if (rv == -1) {
-        *errmsg = uvSysErrMsg("write", -errno);
-        return UV__ERROR;
-    }
-    assert(rv >= 0);
-    if ((size_t)rv < n) {
-        *errmsg = errMsgPrintf("short write: %d bytes instead of %ld", rv, n);
-        return UV__ERROR;
-    }
-    return 0;
-}
-
-int uvIsFilledWithTrailingZeros(const int fd, bool *flag, char **errmsg)
-{
-    off_t size;
-    off_t offset;
-    char *data;
-    size_t i;
-    int rv;
-
-    /* Save the current offset. */
-    offset = lseek(fd, 0, SEEK_CUR);
-
-    /* Figure the size of the rest of the file. */
-    size = lseek(fd, 0, SEEK_END);
-    if (size == -1) {
-        *errmsg = uvSysErrMsg("lseek", -errno);
-        return UV__ERROR;
-    }
-    size -= offset;
-
-    /* Reposition the file descriptor offset to the original offset. */
-    offset = lseek(fd, offset, SEEK_SET);
-    if (offset == -1) {
-        *errmsg = uvSysErrMsg("lseek", -errno);
-        return UV__ERROR;
-    }
-
-    data = raft_malloc(size);
-    if (data == NULL) {
-        *errmsg = errMsgPrintf("can't allocate read buffer");
-        return UV__ERROR;
-    }
-
-    rv = uvReadFully(fd, data, size, errmsg);
-    if (rv != 0) {
-        return rv;
-    }
-
-    for (i = 0; i < (size_t)size; i++) {
-        if (data[i] != 0) {
-            *flag = false;
-            goto done;
-        }
-    }
-
-    *flag = true;
-
-done:
-    raft_free(data);
-
-    return 0;
-}
-
-bool uvIsAtEof(const int fd)
-{
-    off_t offset;
-    off_t size;
-    offset = lseek(fd, 0, SEEK_CUR); /* Get the current offset */
-    size = lseek(fd, 0, SEEK_END);   /* Get file size */
-    lseek(fd, offset, SEEK_SET);     /* Restore current offset */
-    return offset == size;           /* Compare current offset and size */
-}
-
-/* Check if direct I/O is possible on the given fd. */
-static int probeDirectIO(int fd, size_t *size, char **errmsg)
-{
-    int flags;             /* Current fcntl flags. */
-    struct statfs fs_info; /* To check the file system type. */
-    void *buf;             /* Buffer to use for the probe write. */
-    int rv;
-
-    flags = fcntl(fd, F_GETFL);
-    rv = fcntl(fd, F_SETFL, flags | O_DIRECT);
-
-    if (rv == -1) {
-        if (errno != EINVAL) {
-            /* UNTESTED: the parameters are ok, so this should never happen. */
-            *errmsg = uvSysErrMsg("fnctl", -errno);
-            return UV__ERROR;
-        }
-        rv = fstatfs(fd, &fs_info);
-        if (rv == -1) {
-            /* UNTESTED: in practice ENOMEM should be the only failure mode */
-            *errmsg = uvSysErrMsg("fstatfs", -errno);
-            return UV__ERROR;
-        }
-        switch (fs_info.f_type) {
-            case 0x01021994: /* TMPFS_MAGIC */
-            case 0x2fc12fc1: /* ZFS magic */
-                *size = 0;
-                return 0;
-            default:
-                /* UNTESTED: this is an unsupported file system. */
-                *errmsg = errMsgPrintf("unsupported file system: %lx",
-                                       fs_info.f_type);
-                return UV__ERROR;
-        }
-    }
-
-    /* Try to peform direct I/O, using various buffer size. */
-    *size = 4096;
-    while (*size >= 512) {
-        buf = raft_aligned_alloc(*size, *size);
-        if (buf == NULL) {
-            /* UNTESTED: TODO */
-            *errmsg = errMsgPrintf("can't allocate write buffer");
-            return UV__ERROR;
-        }
-        memset(buf, 0, *size);
-        rv = write(fd, buf, *size);
-        raft_free(buf);
-        if (rv > 0) {
-            /* Since we fallocate'ed the file, we should never fail because of
-             * lack of disk space, and all bytes should have been written. */
-            assert(rv == (int)(*size));
-            return 0;
-        }
-        assert(rv == -1);
-        if (errno != EIO && errno != EOPNOTSUPP) {
-            /* UNTESTED: this should basically fail only because of disk errors,
-             * since we allocated the file with posix_fallocate. */
-
-            /* FIXME: this is a workaround because shiftfs doesn't return EINVAL
-             * in the fnctl call above, for example when the underlying fs is
-             * ZFS. */
-            if (errno == EINVAL && *size == 4096) {
-                *size = 0;
-                return 0;
-            }
-
-            *errmsg = uvSysErrMsg("write", -errno);
-            return UV__ERROR;
-        }
-        *size = *size / 2;
-    }
-
-    *size = 0;
-    return 0;
-}
-
-#if defined(RWF_NOWAIT)
-/* Check if fully non-blocking async I/O is possible on the given fd. */
-static int probeAsyncIO(int fd, size_t size, bool *ok, char **errmsg)
-{
-    void *buf;                  /* Buffer to use for the probe write */
-    aio_context_t ctx = 0;      /* KAIO context handle */
-    struct iocb iocb;           /* KAIO request object */
-    struct iocb *iocbs = &iocb; /* Because the io_submit() API sucks */
-    struct io_event event;      /* KAIO response object */
-    int n_events;
-    int rv;
-
-    /* Setup the KAIO context handle */
-    rv = UvOsIoSetup(1, &ctx);
-    if (rv != 0) {
-        *errmsg = uvSysErrMsg("io_setup", rv);
-        /* UNTESTED: in practice this should fail only with ENOMEM */
-        return rv;
-    }
-
-    /* Allocate the write buffer */
-    buf = raft_aligned_alloc(size, size);
-    if (buf == NULL) {
-        /* UNTESTED: define a configurable allocator that can fail? */
-        *errmsg = errMsgPrintf("can't allocate write buffer");
-        return UV__ERROR;
-    }
-    memset(buf, 0, size);
-
-    /* Prepare the KAIO request object */
-    memset(&iocb, 0, sizeof iocb);
-    iocb.aio_lio_opcode = IOCB_CMD_PWRITE;
-    *((void **)(&iocb.aio_buf)) = buf;
-    iocb.aio_nbytes = size;
-    iocb.aio_offset = 0;
-    iocb.aio_fildes = fd;
-    iocb.aio_reqprio = 0;
-    iocb.aio_rw_flags |= RWF_NOWAIT | RWF_DSYNC;
-
-    /* Submit the KAIO request */
-    rv = UvOsIoSubmit(ctx, 1, &iocbs);
-    if (rv != 0) {
-        /* UNTESTED: in practice this should fail only with ENOMEM */
-        raft_free(buf);
-        UvOsIoDestroy(ctx);
-        /* On ZFS 0.8 this is not properly supported yet. */
-        if (errno == EOPNOTSUPP) {
-            *ok = false;
-            return 0;
-        }
-        *errmsg = errMsgPrintf("can't allocate write buffer");
-        return rv;
-    }
-
-    /* Fetch the response: will block until done. */
-    n_events = UvOsIoGetevents(ctx, 1, 1, &event, NULL);
-    assert(n_events == 1);
-
-    /* Release the write buffer. */
-    raft_free(buf);
-
-    /* Release the KAIO context handle. */
-    rv = UvOsIoDestroy(ctx);
-    if (rv != 0) {
-        *errmsg = uvSysErrMsg("io_destroy", rv);
-        return rv;
-    }
-
-    if (event.res > 0) {
-        assert(event.res == (int)size);
-        *ok = true;
-    } else {
-        /* UNTESTED: this should basically fail only because of disk errors,
-         * since we allocated the file with posix_fallocate and the block size
-         * is supposed to be correct. */
-        assert(event.res != EAGAIN);
-        *ok = false;
-    }
-
-    return 0;
-}
-#endif /* RWF_NOWAIT */
-
-int uvProbeIoCapabilities(const char *dir,
-                          size_t *direct,
-                          bool *async,
-                          char **errmsg)
-{
-    char filename[UV__FILENAME_LEN]; /* Filename of the probe file */
-    char path[UV__PATH_SZ];          /* Full path of the probe file */
-    int fd;                          /* File descriptor of the probe file */
-    int rv;
-
-    assert(UV__DIR_HAS_VALID_LEN(dir));
-
-    /* Create a temporary probe file. */
-    strcpy(filename, ".probe-XXXXXX");
-    UvOsJoin(dir, filename, path);
-    fd = mkstemp(path);
-    if (fd == -1) {
-        *errmsg = uvSysErrMsg("mkstemp", -errno);
-        goto err;
-    }
-    rv = posix_fallocate(fd, 0, 4096);
-    if (rv != 0) {
-        *errmsg = uvSysErrMsg("posix_fallocate", -rv);
-        goto err_after_file_open;
-    }
-    unlink(path);
-
-    /* Check if we can use direct I/O. */
-    rv = probeDirectIO(fd, direct, errmsg);
-    if (rv != 0) {
-        goto err_after_file_open;
-    }
-
-#if !defined(RWF_NOWAIT)
-    /* We can't have fully async I/O, since io_submit might potentially block.
-     */
-    *async = false;
-#else
-    /* If direct I/O is not possible, we can't perform fully asynchronous
-     * I/O, because io_submit might potentially block. */
-    if (*direct == 0) {
-        *async = false;
-        goto out;
-    }
-    rv = probeAsyncIO(fd, *direct, async, errmsg);
-    if (rv != 0) {
-        goto err_after_file_open;
-    }
-#endif /* RWF_NOWAIT */
-
-#if defined(RWF_NOWAIT)
-out:
-#endif /* RWF_NOWAIT */
-    close(fd);
-    return 0;
-
-err_after_file_open:
-    close(fd);
-err:
-    return UV__ERROR;
 }

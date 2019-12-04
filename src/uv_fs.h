@@ -3,67 +3,115 @@
 #ifndef UV_FS_H_
 #define UV_FS_H_
 
-#include <stdbool.h>
 #include <uv.h>
 
-#include "uv_os.h"
+#include "../include/raft.h"
+#include "err.h"
 
-/* Abstract file system operations. */
-struct UvFs
-{
-    struct uv_loop_s *loop; /* Event loop. */
-    char *errmsg;           /* Description of last error occurred. */
-};
+/* Check that the given directory can be used. */
+int UvFsCheckDir(const char *dir, char *errmsg);
 
-/* Initialize a file system object. */
-void UvFsInit(struct UvFs *fs, struct uv_loop_s *loop);
+/* Sync the given directory by calling fsync(). */
+int UvFsSyncDir(const char *dir, char *errmsg);
 
-/* Release all reasources used by file system. */
-void UvFsClose(struct UvFs *fs);
-
-/* Return an error message describing the last error occurred. The pointer is
- * valid until a different error occurs or uvFsClose is called. */
-const char *UvFsErrMsg(struct UvFs *fs);
-
-/* Set the last error message, possibly replacing the former one. */
-void UvFsSetErrMsg(struct UvFs *fs, char *errmsg);
-
-/* Create file request. */
-struct UvFsCreateFile;
-
-/* Callback called after a create file request has been completed. */
-typedef void (*UvFsCreateFileCb)(struct UvFsCreateFile *req, int status);
-
-struct UvFsCreateFile
-{
-    void *data;            /* User data */
-    int status;            /* Request result code */
-    uv_file fd;            /* File handle */
-    struct UvFs *fs;       /* Fs object the request was submitted to */
-    struct uv_work_s work; /* To execute logic in the threadpool */
-    const char *dir;       /* Directory */
-    const char *filename;  /* Filename */
-    size_t size;           /* File size */
-    bool canceled;         /* Cancellation flag */
-    char *errmsg;          /* Description of last error */
-    UvFsCreateFileCb cb;   /* Callback to invoke upon request completion */
-};
-
-/* Asynchronously create the given file in the given directory and allocate the
- * given size to it. The file must not exist yet. */
-int UvFsCreateFile(struct UvFs *fs,
-                   struct UvFsCreateFile *req,
-                   const char *dir,
+/* Check whether a the given file exists. */
+int UvFsFileExists(const char *dir,
                    const char *filename,
-                   size_t size,
-                   UvFsCreateFileCb cb);
+                   bool *exists,
+                   char *errmsg);
 
-/* Cancel a create file request after it has been submitted. */
-void UvFsCreateFileCancel(struct UvFsCreateFile *req);
+/* Get the size of the given file. */
+int UvFsFileSize(const char *dir,
+                 const char *filename,
+                 off_t *size,
+                 char *errmsg);
+
+/* Check whether the given file in the given directory is empty. */
+int UvFsFileIsEmpty(const char *dir,
+                    const char *filename,
+                    bool *empty,
+                    char *errmsg);
+
+/* Create the given file in the given directory and allocate the given size to
+ * it, returning its file descriptor. The file must not exist yet. */
+int UvFsAllocateFile(const char *dir,
+                     const char *filename,
+                     size_t size,
+                     uv_file *fd,
+                     char *errmsg);
+
+/* Create a file and write the given content into it. */
+int UvFsMakeFile(const char *dir,
+                 const char *filename,
+                 struct raft_buffer *bufs,
+                 unsigned n_bufs,
+                 char *errmsg);
+
+/* Create or overwrite a file.
+ *
+ * If the file does not exists yet, it gets created, the given content written
+ * to it, and then fully persisted to disk by fsync()'ing the file and the
+ * dir.
+ *
+ * If the file already exists, it gets overwritten. The assumption is that the
+ * file size will stay the same and its content will change, so only fdatasync()
+ * will be used */
+int UvFsMakeOrOverwriteFile(const char *dir,
+                            const char *filename,
+                            const struct raft_buffer *buf,
+                            char *errmsg);
+
+/* Check if the content of the file associated with the given file descriptor
+ * contains all zeros from the current offset onward. */
+int UvFsFileHasOnlyTrailingZeros(uv_file fd, bool *flag, char *errmsg);
+
+/* Check if the given file descriptor has reached the end of the file. */
+bool UvFsIsAtEof(uv_file fd);
+
+/* Open a file for reading. */
+int UvFsOpenFileForReading(const char *dir,
+                           const char *filename,
+                           uv_file *fd,
+                           char *errmsg);
+
+/* Read exactly buf->len bytes from the given file descriptor into
+   buf->base. Fail if less than buf->len bytes are read. */
+int UvFsReadInto(uv_file fd, struct raft_buffer *buf, char *errmsg);
+
+/* Read all the content of the given file. */
+int UvFsReadFile(const char *dir,
+                 const char *filename,
+                 struct raft_buffer *buf,
+                 char *errmsg);
+
+/* Read exactly buf->len bytes from the given file into buf->base. Fail if less
+ * than buf->len bytes are read. */
+int UvFsReadFileInto(const char *dir,
+                     const char *filename,
+                     struct raft_buffer *buf,
+                     char *errmsg);
 
 /* Synchronously remove a file, calling the unlink() system call. */
-int UvFsRemoveFile(struct UvFs *fs,
-                   const char *dir,
-                   const char *filename);
+int UvFsRemoveFile(const char *dir, const char *filename, char *errmsg);
+
+/* Synchronously truncate a file to the given size and then rename it. */
+int UvFsTruncateAndRenameFile(const char *dir,
+                              size_t size,
+                              const char *filename1,
+                              const char *filename2,
+                              char *errmsg);
+
+/* Return information about the I/O capabilities of the underlying file
+ * system.
+ *
+ * The @direct parameter will be set to zero if direct I/O is not possible, or
+ * to the block size to use for direct I/O otherwise.
+ *
+ * The @async parameter will be set to true if fully asynchronous I/O is
+ * possible using the KAIO API. */
+int UvFsProbeCapabilities(const char *dir,
+                          size_t *direct,
+                          bool *async,
+                          char *errmsg);
 
 #endif /* UV_FS_H_ */

@@ -1,9 +1,12 @@
 #include "assert.h"
+#include "heap.h"
 #include "queue.h"
 #include "uv.h"
 #include "uv_os.h"
 
-struct segment
+/* Metadata about an open segment not used anymore and that should be closed or
+ * remove (if not written at all). */
+struct uvDyingSegment
 {
     struct uv *uv;
     uvCounter counter;      /* Segment counter */
@@ -18,144 +21,127 @@ struct segment
  *
  * An open segment is closed by truncating its length to the number of bytes
  * that were actually written into it and then renaming it. */
-static void workCb(uv_work_t *work)
+static void uvFinalizeWorkCb(uv_work_t *work)
 {
-    struct segment *s = work->data;
-    struct uv *uv = s->uv;
+    struct uvDyingSegment *segment = work->data;
+    struct uv *uv = segment->uv;
     char filename1[UV__FILENAME_LEN];
     char filename2[UV__FILENAME_LEN];
-    char errmsg_[2048];
-    char *errmsg = errmsg_;
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int rv;
 
-    sprintf(filename1, UV__OPEN_TEMPLATE, s->counter);
-    sprintf(filename2, UV__CLOSED_TEMPLATE, s->first_index, s->last_index);
+    sprintf(filename1, UV__OPEN_TEMPLATE, segment->counter);
+    sprintf(filename2, UV__CLOSED_TEMPLATE, segment->first_index,
+            segment->last_index);
 
-    uvDebugf(uv, "finalize %s into %s", filename1, filename2);
+    Tracef(uv->tracer, "finalize %s into %s", filename1, filename2);
 
     /* If the segment hasn't actually been used (because the writer has been
-     * closed or aborted before making any write), then let's just remove it. */
-    if (s->used == 0) {
-        uvTryUnlinkFile(uv->dir, filename1);
-        goto out;
+     * closed or aborted before making any write), just remove it. */
+    if (segment->used == 0) {
+        rv = UvFsRemoveFile(uv->dir, filename1, errmsg);
+        if (rv != 0) {
+            goto err;
+        }
+        goto sync;
     }
 
-    /* Truncate and rename the segment */
-    rv = uvTruncateFile(uv->dir, filename1, s->used, &errmsg);
+    /* Truncate and rename the segment.*/
+    rv = UvFsTruncateAndRenameFile(uv->dir, segment->used, filename1, filename2,
+                                   errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "truncate segment %s: %s", filename1, errmsg);
-	raft_free(errmsg);
-        rv = RAFT_IOERR;
-        goto abort;
+        goto err;
     }
 
-    rv = uvRenameFile(uv->dir, filename1, filename2, &errmsg);
+sync:
+    rv = UvFsSyncDir(uv->dir, errmsg);
     if (rv != 0) {
-        uvErrorf(uv, "rename segment %d: %s", s->counter, errmsg);
-	raft_free(errmsg);
-        rv = RAFT_IOERR;
-        goto abort;
+        goto err;
     }
 
-out:
-    s->status = 0;
+    segment->status = 0;
     return;
 
-abort:
+err:
+    Tracef(uv->tracer, "truncate segment %s: %s", filename1, errmsg);
     assert(rv != 0);
-    s->status = rv;
+    segment->status = rv;
 }
 
-static void processRequests(struct uv *uv);
-static void afterWorkCb(uv_work_t *work, int status)
+static int uvFinalizeStart(struct uvDyingSegment *segment);
+static void uvFinalizeAfterWorkCb(uv_work_t *work, int status)
 {
-    struct segment *s = work->data;
-    struct uv *uv = s->uv;
+    struct uvDyingSegment *segment = work->data;
+    struct uv *uv = segment->uv;
+    queue *head;
+    int rv;
+
     assert(status == 0); /* We don't cancel worker requests */
     uv->finalize_work.data = NULL;
-    if (s->status != 0) {
+    if (segment->status != 0) {
         uv->errored = true;
     }
-    raft_free(s);
-    processRequests(uv);
-    uvTruncateMaybeProcessRequests(uv);
-    uvMaybeClose(uv);
+    HeapFree(segment);
+
+    /* If we have no more dismissed segments to close, check if there's a
+     * barrier to unblock or if we are done closing. */
+    if (QUEUE_IS_EMPTY(&uv->finalize_reqs)) {
+        if (uv->barrier != NULL) {
+            uv->barrier->cb(uv->barrier);
+        }
+        uvMaybeFireCloseCb(uv);
+        return;
+    }
+
+    /* Grab a new dismissed segment to close. */
+    head = QUEUE_HEAD(&uv->finalize_reqs);
+    segment = QUEUE_DATA(head, struct uvDyingSegment, queue);
+    QUEUE_REMOVE(&segment->queue);
+
+    rv = uvFinalizeStart(segment);
+    if (rv != 0) {
+        HeapFree(segment);
+        uv->errored = true;
+    }
 }
 
-/* Schedule finalizing an open segment. */
-static int finalizeSegment(struct segment *s)
+/* Start finalizing an open segment. */
+static int uvFinalizeStart(struct uvDyingSegment *segment)
 {
-    struct uv *uv = s->uv;
+    struct uv *uv = segment->uv;
     int rv;
 
     assert(uv->finalize_work.data == NULL);
-    assert(s->counter > 0);
+    assert(segment->counter > 0);
 
-    uv->finalize_work.data = s;
+    uv->finalize_work.data = segment;
 
-    rv = uv_queue_work(uv->loop, &uv->finalize_work, workCb, afterWorkCb);
+    rv = uv_queue_work(uv->loop, &uv->finalize_work, uvFinalizeWorkCb,
+                       uvFinalizeAfterWorkCb);
     if (rv != 0) {
-        uvErrorf(uv, "start to truncate segment file %d: %s", s->counter,
-                 uv_strerror(rv));
+        Tracef(uv->tracer, "start to truncate segment file %d: %s",
+               segment->counter, uv_strerror(rv));
         return RAFT_IOERR;
     }
 
     return 0;
 }
 
-/* Process pending requests to finalize open segments */
-static void processRequests(struct uv *uv)
-{
-    struct segment *segment;
-    queue *head;
-    int rv;
-
-    /* If we're already processing a segment, let's wait. */
-    if (uv->finalize_work.data != NULL) {
-        return;
-    }
-
-    /* If there's no pending request, we're done. */
-    if (QUEUE_IS_EMPTY(&uv->finalize_reqs)) {
-        return;
-    }
-
-    head = QUEUE_HEAD(&uv->finalize_reqs);
-    segment = QUEUE_DATA(head, struct segment, queue);
-    QUEUE_REMOVE(&segment->queue);
-
-    rv = finalizeSegment(segment);
-    if (rv != 0) {
-        goto err;
-    }
-
-    return;
-err:
-    assert(rv != 0);
-
-    uv->errored = true;
-}
-
-int uvFinalize(struct uv *uv,
+int UvFinalize(struct uv *uv,
                unsigned long long counter,
                size_t used,
                raft_index first_index,
                raft_index last_index)
 {
-    struct segment *segment;
+    struct uvDyingSegment *segment;
+    int rv;
 
-    assert(uv->state == UV__ACTIVE || uv->closing);
-
-    /* If the open segment is not empty, we expect its first index to be the
-     * successor of the end index of the last segment we closed. */
     if (used > 0) {
         assert(first_index > 0);
         assert(last_index >= first_index);
-        /* TODO: this assertion still fails sometimes */
-        /* assert(first_index == uv->finalize_last_index + 1); */
     }
 
-    segment = raft_malloc(sizeof *segment);
+    segment = HeapMalloc(sizeof *segment);
     if (segment == NULL) {
         return RAFT_NOMEM;
     }
@@ -166,14 +152,18 @@ int uvFinalize(struct uv *uv,
     segment->first_index = first_index;
     segment->last_index = last_index;
 
-    QUEUE_INIT(&segment->queue);
-    QUEUE_PUSH(&uv->finalize_reqs, &segment->queue);
-
-    if (used > 0) {
-        uv->finalize_last_index = last_index;
+    /* If we're already processing a segment, let's put the request in the queue
+     * and wait. */
+    if (uv->finalize_work.data != NULL) {
+        QUEUE_PUSH(&uv->finalize_reqs, &segment->queue);
+        return 0;
     }
 
-    processRequests(uv);
+    rv = uvFinalizeStart(segment);
+    if (rv != 0) {
+        HeapFree(segment);
+        return rv;
+    }
 
     return 0;
 }
