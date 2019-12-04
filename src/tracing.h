@@ -10,6 +10,6 @@ extern struct raft_tracer NoopTracer;
 
 /* Emit a debug message with the given tracer. */
 #define Tracef(TRACER, ...) \
-    TRACER->emit(TRACER, __FILE__, __LINE__, ##__VA_ARGS__)
+    TRACER->emit(TRACER, __FILE__, __LINE__, __VA_ARGS__)
 
 #endif /* TRACING_H_ */
