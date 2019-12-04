@@ -39,6 +39,27 @@ static void uvWriterReqFinish(struct UvWriterReq *req)
     req->cb(req, req->status);
 }
 
+/* Wrapper around the low-level OS syscall, providing a better error message. */
+static int uvWriterIoSetup(unsigned n, aio_context_t *ctx, char *errmsg)
+{
+    int rv;
+    rv = UvOsIoSetup(n, ctx);
+    if (rv != 0) {
+        switch (rv) {
+            case UV_EAGAIN:
+                ErrMsgPrintf(errmsg, "AIO events user limit exceeded");
+                rv = RAFT_TOOMANY;
+                break;
+            default:
+                UvErrMsgSys(errmsg, "io_setup", rv);
+                rv = RAFT_IOERR;
+                break;
+        }
+        return rv;
+    }
+    return 0;
+}
+
 /* Run blocking syscalls involved in a file write request.
  *
  * Perform a KAIO write request and synchronously wait for it to complete. */
@@ -64,9 +85,9 @@ static void uvWriterWorkCb(uv_work_t *work)
      * with proper async write support. */
     if (w->n_events > 1) {
         ctx = 0;
-        rv = UvOsIoSetup(1 /* Maximum concurrent requests */, &ctx);
+        rv = uvWriterIoSetup(1 /* Maximum concurrent requests */, &ctx,
+                             req->errmsg);
         if (rv != 0) {
-            UvErrMsgSys(req->errmsg, "io_setup", rv);
             goto out;
         }
     } else {
@@ -79,6 +100,7 @@ static void uvWriterWorkCb(uv_work_t *work)
         /* UNTESTED: since we're not using NOWAIT and the parameters are valid,
          * this shouldn't fail. */
         UvErrMsgSys(req->errmsg, "io_submit", rv);
+	rv = RAFT_IOERR;
         goto out_after_io_setup;
     }
 
@@ -94,7 +116,7 @@ out_after_io_setup:
 
 out:
     if (rv != 0) {
-        req->status = UV__ERROR;
+        req->status = rv;
     } else {
         uvWriterReqSetStatus(req, event.res);
     }
@@ -219,10 +241,8 @@ int UvWriterInit(struct UvWriter *w,
     }
 
     /* Setup the AIO context. */
-    rv = UvOsIoSetup(w->n_events, &w->ctx);
+    rv = uvWriterIoSetup(w->n_events, &w->ctx, errmsg);
     if (rv != 0) {
-        UvErrMsgSys(errmsg, "io_setup", rv);
-        rv = UV__ERROR;
         goto err;
     }
 
@@ -489,7 +509,7 @@ int UvWriterSubmit(struct UvWriter *w,
         uv_queue_work(w->loop, &req->work, uvWriterWorkCb, uvWriterAfterWorkCb);
     if (rv != 0) {
         /* UNTESTED: with the current libuv implementation this can't fail. */
-	req->work.data = NULL;
+        req->work.data = NULL;
         QUEUE_REMOVE(&req->queue);
         UvErrMsgSys(w->errmsg, "uv_queue_work", rv);
         rv = UV__ERROR;

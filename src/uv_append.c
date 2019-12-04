@@ -430,7 +430,7 @@ err:
     QUEUE_REMOVE(&segment->queue);
     HeapFree(segment);
     uv->errored = true;
-    uvAppendFinishAllRequests(&uv->append_pending_reqs, RAFT_IOERR);
+    uvAppendFinishAllRequests(&uv->append_pending_reqs, rv);
 }
 
 /* Initialize a new open segment object. */

@@ -253,7 +253,7 @@ TEST(UvWriterInit, noResources, setUpDeps, tearDownDeps, 0, NULL)
     if (rv != 0) {
         return MUNIT_SKIP;
     }
-    INIT_ERROR(UV__ERROR, "io_setup: resource temporarily unavailable");
+    INIT_ERROR(RAFT_TOOMANY, "AIO events user limit exceeded");
     test_aio_destroy(ctx);
     return MUNIT_OK;
 }
@@ -357,8 +357,8 @@ TEST(UvWriterSubmit, noResources, setUpDeps, tearDown, 0, dir_no_aio_params)
     if (rv != 0) {
         return MUNIT_SKIP;
     }
-    WRITE_FAILURE(1, 0, 0, UV__ERROR,
-                  "io_setup: resource temporarily unavailable");
+    WRITE_FAILURE(1, 0, 0, RAFT_TOOMANY,
+                  "AIO events user limit exceeded");
     test_aio_destroy(ctx);
     return MUNIT_OK;
 }

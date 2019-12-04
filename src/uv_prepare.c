@@ -210,7 +210,7 @@ static void uvPrepareAfterWorkCb(uv_work_t *work, int status)
 
     /* If the request has failed, mark this instance as errored. */
     if (segment->status != 0) {
-        uvPrepareFinishAllRequests(uv, RAFT_IOERR);
+        uvPrepareFinishAllRequests(uv, segment->status);
         uv->errored = true;
         ErrMsgPrintf(uv->io->errmsg, "create segment %s: %s", segment->filename,
                      segment->errmsg);

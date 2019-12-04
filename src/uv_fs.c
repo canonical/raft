@@ -192,13 +192,17 @@ int UvFsAllocateFile(const char *dir,
     /* Allocate the desired size. */
     rv = UvOsFallocate(*fd, 0, size);
     if (rv != 0) {
-        /* From the manual page:
-         *
-         *   posix_fallocate() returns zero on success, or an error number on
-         *   failure.  Note that errno is not set.
-         */
-        UvErrMsgSys(errmsg, "posix_fallocate", rv);
-        rv = UV__ERROR;
+        switch (rv) {
+            case UV_ENOSPC:
+                ErrMsgPrintf(errmsg, "not enough space to allocate %lu bytes",
+                             size);
+                rv = RAFT_NOSPACE;
+                break;
+            default:
+                UvErrMsgSys(errmsg, "posix_allocate", rv);
+                rv = RAFT_IOERR;
+                break;
+        }
         goto err_after_open;
     }
 
@@ -652,7 +656,7 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
     if (rv != 0) {
         UvErrMsgSys(errmsg, "io_setup", rv);
         /* UNTESTED: in practice this should fail only with ENOMEM */
-        return rv;
+        return RAFT_IOERR;
     }
 
     /* Allocate the write buffer */

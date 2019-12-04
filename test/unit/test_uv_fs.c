@@ -221,8 +221,8 @@ TEST(UvFsAllocateFile, noSpace, setupDir, tearDownDir, 0, dir_tmpfs_params)
     ALLOCATE_FILE_ERROR(dir,          /* dir */
                         "foo",        /* filename */
                         4096 * 32768, /* size */
-                        UV__ERROR,    /* status */
-                        "posix_fallocate: no space left on device");
+                        RAFT_NOSPACE, /* status */
+                        "not enough space to allocate 134217728 bytes");
     munit_assert_false(test_dir_has_file(dir, "foo"));
     return MUNIT_OK;
 }
@@ -346,7 +346,7 @@ TEST(UvFsProbeCapabilities, noResources, setupBtrfsDir, tearDownDir, 0, NULL)
         return MUNIT_SKIP;
     }
     PROBE_CAPABILITIES_ERROR(dir, RAFT_IOERR,
-                             "io_setup: Resource temporarily unavailable");
+                             "io_setup: resource temporarily unavailable");
     test_aio_destroy(ctx);
     return MUNIT_OK;
 }

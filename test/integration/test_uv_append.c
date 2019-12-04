@@ -479,8 +479,8 @@ TEST(append, noSpace, setUp, tearDown, 0, dir_tmpfs_params)
 #endif
     raft_uv_set_segment_size(&f->io, SEGMENT_BLOCK_SIZE * 32768);
     APPEND_FAILURE(
-        1, 64, RAFT_IOERR,
-        "create segment open-1: posix_fallocate: no space left on device");
+        1, 64, RAFT_NOSPACE,
+        "create segment open-1: not enough space to allocate 134217728 bytes");
     return MUNIT_OK;
 }
 
@@ -585,8 +585,7 @@ TEST(append, ioSetupError, setUp, tearDown, 0, NULL)
     if (rv != 0) {
         return MUNIT_SKIP;
     }
-    APPEND_FAILURE(
-        1, 64, RAFT_IOERR,
-        "setup writer for open-1: io_setup: resource temporarily unavailable");
+    APPEND_FAILURE(1, 64, RAFT_TOOMANY,
+                   "setup writer for open-1: AIO events user limit exceeded");
     return MUNIT_OK;
 }
