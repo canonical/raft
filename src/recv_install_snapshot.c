@@ -3,9 +3,15 @@
 #include "assert.h"
 #include "convert.h"
 #include "log.h"
-#include "logging.h"
 #include "recv.h"
 #include "replication.h"
+
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
+#else
+#define tracef(...)
+#endif
 
 static void sendCb(struct raft_io_send *req, int status)
 {
@@ -36,7 +42,7 @@ int rpcRecvInstallSnapshot(struct raft *r,
     }
 
     if (match < 0) {
-        debugf(r, "local term is higher -> reject ");
+        tracef("local term is higher -> reject ");
         goto reply;
     }
 
@@ -45,7 +51,7 @@ int rpcRecvInstallSnapshot(struct raft *r,
     assert(r->current_term == args->term);
     if (r->state == RAFT_CANDIDATE) {
         assert(match == 0);
-        debugf(r, "discovered leader -> step down ");
+        tracef("discovered leader -> step down ");
         convertToFollower(r);
     }
 

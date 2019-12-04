@@ -7,7 +7,6 @@
 #include "byte.h"
 #include "configuration.h"
 #include "heap.h"
-#include "logging.h"
 #include "uv.h"
 #include "uv_encoding.h"
 #include "uv_os.h"

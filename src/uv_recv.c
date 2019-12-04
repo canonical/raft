@@ -5,7 +5,6 @@
 #include "byte.h"
 #include "err.h"
 #include "heap.h"
-#include "logging.h"
 #include "uv.h"
 #include "uv_encoding.h"
 

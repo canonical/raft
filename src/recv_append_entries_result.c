@@ -1,13 +1,13 @@
 #include "recv_append_entries_result.h"
 #include "assert.h"
 #include "configuration.h"
-#include "logging.h"
+#include "tracing.h"
 #include "recv.h"
 #include "replication.h"
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(...) debugf(r, ##__VA_ARGS__)
+#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
 #else
 #define tracef(...)
 #endif
@@ -58,7 +58,7 @@ int recvAppendEntriesResult(struct raft *r,
     /* Ignore responses from servers that have been removed */
     server = configurationGet(&r->configuration, id);
     if (server == NULL) {
-        warnf(r, "unknown server -> ignore");
+        tracef("unknown server -> ignore");
         return 0;
     }
 

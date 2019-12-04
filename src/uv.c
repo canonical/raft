@@ -13,7 +13,6 @@
 #include "configuration.h"
 #include "entry.h"
 #include "heap.h"
-#include "logging.h"
 #include "snapshot.h"
 #include "tracing.h"
 #include "uv.h"

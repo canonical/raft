@@ -1,15 +1,16 @@
 #include "recv.h"
+
 #include "assert.h"
 #include "convert.h"
 #include "entry.h"
 #include "log.h"
-#include "logging.h"
 #include "recv_append_entries.h"
 #include "recv_append_entries_result.h"
 #include "recv_install_snapshot.h"
 #include "recv_request_vote.h"
 #include "recv_request_vote_result.h"
 #include "string.h"
+#include "tracing.h"
 
 static const char *message_descs[] = {"append entries", "append entries result",
                                       "request vote", "request vote result",
@@ -17,7 +18,7 @@ static const char *message_descs[] = {"append entries", "append entries result",
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(MSG, ...) debugf(r, "recv: " MSG, ##__VA_ARGS__)
+#define tracef(MSG, ...) Tracef(r->tracer, "recv: " MSG, __VA_ARGS__)
 #else
 #define tracef(MSG, ...)
 #endif
@@ -29,7 +30,7 @@ static int recv(struct raft *r, struct raft_message *message)
 
     if (message->type < RAFT_IO_APPEND_ENTRIES ||
         message->type > RAFT_IO_INSTALL_SNAPSHOT) {
-        warnf(r, "received unknown message type type: %d", message->type);
+        tracef("received unknown message type type: %d", message->type);
         return 0;
     }
 
@@ -68,7 +69,7 @@ static int recv(struct raft *r, struct raft_message *message)
     };
 
     if (rv != 0 && rv != RAFT_NOCONNECTION) {
-        errorf(r, "recv: %s: %s", message_descs[message->type - 1],
+        tracef("recv: %s: %s", message_descs[message->type - 1],
                raft_strerror(rv));
         return rv;
     }
@@ -87,7 +88,7 @@ void recvCb(struct raft_io *io, struct raft_message *message)
                 break;
             case RAFT_IO_INSTALL_SNAPSHOT:
                 raft_configuration_close(&message->install_snapshot.conf);
-		raft_free(message->install_snapshot.data.base);
+                raft_free(message->install_snapshot.data.base);
                 break;
         }
         return;

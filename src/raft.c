@@ -8,7 +8,6 @@
 #include "election.h"
 #include "err.h"
 #include "log.h"
-#include "logging.h"
 #include "tracing.h"
 
 #define DEFAULT_ELECTION_TIMEOUT 1000 /* One second */
@@ -18,7 +17,7 @@
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(MSG, ...) debugf(r, MSG, ##__VA_ARGS__)
+#define tracef(MSG, ...) Tracef(r->tracer, MSG, __VA_ARGS__)
 #else
 #define tracef(MSG, ...)
 #endif

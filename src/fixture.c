@@ -9,9 +9,9 @@
 #include "configuration.h"
 #include "entry.h"
 #include "log.h"
-#include "logging.h"
 #include "queue.h"
 #include "snapshot.h"
+#include "tracing.h"
 
 /* Defaults */
 #define HEARTBEAT_TIMEOUT 100
@@ -54,7 +54,7 @@ static char *describeMessage(const struct raft_message *m)
     }
     return d;
 }
-#define tracef(MSG, ...) debugf(io->io, MSG, ##__VA_ARGS__)
+#define tracef(MSG, ...) Tracef(io->tracer, MSG, ##__VA_ARGS__)
 #else
 #define tracef(MSG, ...)
 #endif

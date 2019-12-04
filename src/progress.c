@@ -1,12 +1,13 @@
 #include "progress.h"
+
 #include "assert.h"
 #include "configuration.h"
 #include "log.h"
-#include "logging.h"
+#include "tracing.h"
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(...) debugf(r, ##__VA_ARGS__)
+#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
 #else
 #define tracef(...)
 #endif
