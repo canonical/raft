@@ -114,7 +114,7 @@ int UvOsEventfd(unsigned int initval, int flags);
 int UvOsSetDirectIo(uv_file fd);
 
 /* Format an error message caused by a failed system call or stdlib function. */
-#define UvErrMsgSys(ERRMSG, SYSCALL, ERRNUM)             \
+#define UvOsErrMsg(ERRMSG, SYSCALL, ERRNUM)             \
     {                                                    \
         ErrMsgPrintf(ERRMSG, "%s", uv_strerror(ERRNUM)); \
         ErrMsgWrapf(ERRMSG, SYSCALL);                    \

@@ -62,13 +62,13 @@ int UvFsSyncDir(const char *dir, char *errmsg)
     int rv;
     rv = UvOsOpen(dir, UV_FS_O_RDONLY | UV_FS_O_DIRECTORY, 0, &fd);
     if (rv != 0) {
-        UvErrMsgSys(errmsg, "open directory", rv);
+        UvOsErrMsg(errmsg, "open directory", rv);
         return RAFT_IOERR;
     }
     rv = UvOsFsync(fd);
     UvOsClose(fd);
     if (rv != 0) {
-        UvErrMsgSys(errmsg, "fsync directory", rv);
+        UvOsErrMsg(errmsg, "fsync directory", rv);
         return RAFT_IOERR;
     }
     return 0;
@@ -91,7 +91,7 @@ int UvFsFileExists(const char *dir,
             *exists = false;
             goto out;
         }
-        UvErrMsgSys(errmsg, "stat", rv);
+        UvOsErrMsg(errmsg, "stat", rv);
         return RAFT_IOERR;
     }
 
@@ -115,7 +115,7 @@ int UvFsFileSize(const char *dir,
 
     rv = UvOsStat(path, &sb);
     if (rv != 0) {
-        UvErrMsgSys(errmsg, "stat", rv);
+        UvOsErrMsg(errmsg, "stat", rv);
         return RAFT_IOERR;
     }
     *size = sb.st_size;
@@ -152,7 +152,7 @@ static int uvFsOpenFile(const char *dir,
     UvOsJoin(dir, filename, path);
     rv = UvOsOpen(path, flags, mode, fd);
     if (rv != 0) {
-        UvErrMsgSys(errmsg, "open", rv);
+        UvOsErrMsg(errmsg, "open", rv);
         return RAFT_IOERR;
     }
     return 0;
@@ -198,7 +198,7 @@ int UvFsAllocateFile(const char *dir,
                 rv = RAFT_NOSPACE;
                 break;
             default:
-                UvErrMsgSys(errmsg, "posix_allocate", rv);
+                UvOsErrMsg(errmsg, "posix_allocate", rv);
                 rv = RAFT_IOERR;
                 break;
         }
@@ -237,7 +237,7 @@ static int uvFsWriteFile(const char *dir,
     rv = UvOsWrite(fd, (const uv_buf_t *)bufs, n_bufs, 0);
     if (rv != (int)(size)) {
         if (rv < 0) {
-            UvErrMsgSys(errmsg, "write", rv);
+            UvOsErrMsg(errmsg, "write", rv);
         } else {
             ErrMsgPrintf(errmsg, "short write: %d only bytes written", rv);
         }
@@ -245,12 +245,12 @@ static int uvFsWriteFile(const char *dir,
     }
     rv = UvOsFsync(fd);
     if (rv != 0) {
-        UvErrMsgSys(errmsg, "fsync", rv);
+        UvOsErrMsg(errmsg, "fsync", rv);
         goto err_after_file_open;
     }
     rv = UvOsClose(fd);
     if (rv != 0) {
-        UvErrMsgSys(errmsg, "close", rv);
+        UvOsErrMsg(errmsg, "close", rv);
         goto err;
     }
     return 0;
@@ -300,7 +300,7 @@ open:
     rv = UvOsWrite(fd, (const uv_buf_t *)buf, 1, 0);
     if (rv != (int)(buf->len)) {
         if (rv < 0) {
-            UvErrMsgSys(errmsg, "write", rv);
+            UvOsErrMsg(errmsg, "write", rv);
         } else {
             ErrMsgPrintf(errmsg, "short write: %d only bytes written", rv);
         }
@@ -310,20 +310,20 @@ open:
     if (exists) {
         rv = UvOsFdatasync(fd);
         if (rv != 0) {
-            UvErrMsgSys(errmsg, "fsync", rv);
+            UvOsErrMsg(errmsg, "fsync", rv);
             goto err_after_file_open;
         }
     } else {
         rv = UvOsFsync(fd);
         if (rv != 0) {
-            UvErrMsgSys(errmsg, "fsync", rv);
+            UvOsErrMsg(errmsg, "fsync", rv);
             goto err_after_file_open;
         }
     }
 
     rv = UvOsClose(fd);
     if (rv != 0) {
-        UvErrMsgSys(errmsg, "close", rv);
+        UvOsErrMsg(errmsg, "close", rv);
         goto err;
     }
 
@@ -356,7 +356,7 @@ int UvFsFileHasOnlyTrailingZeros(uv_file fd, bool *flag, char *errmsg)
     /* Figure the size of the rest of the file. */
     size = lseek(fd, 0, SEEK_END);
     if (size == -1) {
-        UvErrMsgSys(errmsg, "lseek", -errno);
+        UvOsErrMsg(errmsg, "lseek", -errno);
         return RAFT_IOERR;
     }
     size -= offset;
@@ -364,7 +364,7 @@ int UvFsFileHasOnlyTrailingZeros(uv_file fd, bool *flag, char *errmsg)
     /* Reposition the file descriptor offset to the original offset. */
     offset = lseek(fd, offset, SEEK_SET);
     if (offset == -1) {
-        UvErrMsgSys(errmsg, "lseek", -errno);
+        UvOsErrMsg(errmsg, "lseek", -errno);
         return RAFT_IOERR;
     }
 
@@ -411,7 +411,7 @@ int UvFsReadInto(uv_file fd, struct raft_buffer *buf, char *errmsg)
     /* TODO: use uv_fs_read() */
     rv = read(fd, buf->base, buf->len);
     if (rv == -1) {
-        UvErrMsgSys(errmsg, "read", -errno);
+        UvOsErrMsg(errmsg, "read", -errno);
         return RAFT_IOERR;
     }
     assert(rv >= 0);
@@ -437,7 +437,7 @@ int UvFsReadFile(const char *dir,
 
     rv = UvOsStat(path, &sb);
     if (rv != 0) {
-        UvErrMsgSys(errmsg, "stat", rv);
+        UvOsErrMsg(errmsg, "stat", rv);
         rv = RAFT_IOERR;
         goto err;
     }
@@ -510,7 +510,7 @@ int UvFsRemoveFile(const char *dir, const char *filename, char *errmsg)
     UvOsJoin(dir, filename, path);
     rv = UvOsUnlink(path);
     if (rv != 0) {
-        UvErrMsgSys(errmsg, "unlink", rv);
+        UvOsErrMsg(errmsg, "unlink", rv);
         return RAFT_IOERR;
     }
     return 0;
@@ -533,24 +533,24 @@ int UvFsTruncateAndRenameFile(const char *dir,
     /* Truncate and rename. */
     rv = UvOsOpen(path1, UV_FS_O_RDWR, 0, &fd);
     if (rv != 0) {
-        UvErrMsgSys(errmsg, "open", rv);
+        UvOsErrMsg(errmsg, "open", rv);
         goto err;
     }
     rv = UvOsTruncate(fd, size);
     if (rv != 0) {
-        UvErrMsgSys(errmsg, "truncate", rv);
+        UvOsErrMsg(errmsg, "truncate", rv);
         goto err_after_open;
     }
     rv = UvOsFsync(fd);
     if (rv != 0) {
-        UvErrMsgSys(errmsg, "fsync", rv);
+        UvOsErrMsg(errmsg, "fsync", rv);
         goto err_after_open;
     }
     UvOsClose(fd);
 
     rv = UvOsRename(path1, path2);
     if (rv != 0) {
-        UvErrMsgSys(errmsg, "rename", rv);
+        UvOsErrMsg(errmsg, "rename", rv);
         goto err;
     }
 
@@ -576,13 +576,13 @@ static int probeDirectIO(int fd, size_t *size, char *errmsg)
     if (rv == -1) {
         if (errno != EINVAL) {
             /* UNTESTED: the parameters are ok, so this should never happen. */
-            UvErrMsgSys(errmsg, "fnctl", -errno);
+            UvOsErrMsg(errmsg, "fnctl", -errno);
             return RAFT_IOERR;
         }
         rv = fstatfs(fd, &fs_info);
         if (rv == -1) {
             /* UNTESTED: in practice ENOMEM should be the only failure mode */
-            UvErrMsgSys(errmsg, "fstatfs", -errno);
+            UvOsErrMsg(errmsg, "fstatfs", -errno);
             return RAFT_IOERR;
         }
         switch (fs_info.f_type) {
@@ -628,7 +628,7 @@ static int probeDirectIO(int fd, size_t *size, char *errmsg)
                 return 0;
             }
 
-            UvErrMsgSys(errmsg, "write", -errno);
+            UvOsErrMsg(errmsg, "write", -errno);
             return RAFT_IOERR;
         }
         *size = *size / 2;
@@ -653,7 +653,7 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
     /* Setup the KAIO context handle */
     rv = UvOsIoSetup(1, &ctx);
     if (rv != 0) {
-        UvErrMsgSys(errmsg, "io_setup", rv);
+        UvOsErrMsg(errmsg, "io_setup", rv);
         /* UNTESTED: in practice this should fail only with ENOMEM */
         return RAFT_IOERR;
     }
@@ -687,7 +687,7 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
             *ok = false;
             return 0;
         }
-        UvErrMsgSys(errmsg, "io_submit", rv);
+        UvOsErrMsg(errmsg, "io_submit", rv);
         return RAFT_IOERR;
     }
 
@@ -701,7 +701,7 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
     /* Release the KAIO context handle. */
     rv = UvOsIoDestroy(ctx);
     if (rv != 0) {
-        UvErrMsgSys(errmsg, "io_destroy", rv);
+        UvOsErrMsg(errmsg, "io_destroy", rv);
         return RAFT_IOERR;
     }
 
@@ -735,7 +735,7 @@ int UvFsProbeCapabilities(const char *dir,
     UvOsJoin(dir, filename, path);
     fd = mkstemp(path);
     if (fd == -1) {
-        UvErrMsgSys(errmsg, "mkstemp", -errno);
+        UvOsErrMsg(errmsg, "mkstemp", -errno);
         rv = RAFT_IOERR;
         goto err;
     }
@@ -749,7 +749,7 @@ int UvFsProbeCapabilities(const char *dir,
                 rv = RAFT_NOSPACE;
                 break;
             default:
-                UvErrMsgSys(errmsg, "posix_allocate", -rv);
+                UvOsErrMsg(errmsg, "posix_allocate", -rv);
                 rv = RAFT_IOERR;
                 break;
         }
