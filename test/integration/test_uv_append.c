@@ -7,6 +7,9 @@
 /* This block size should work fine for all file systems. */
 #define SEGMENT_BLOCK_SIZE 4096
 
+/* Default segment size */
+#define SEGMENT_SIZE 4096 * MAX_SEGMENT_BLOCKS
+
 /******************************************************************************
  *
  * Fixture with a libuv-based raft_io instance.
@@ -122,7 +125,7 @@ static void *setUp(const MunitParameter params[], void *user_data)
     SETUP_UV_DEPS;
     SETUP_UV;
     raft_uv_set_block_size(&f->io, SEGMENT_BLOCK_SIZE);
-    raft_uv_set_segment_size(&f->io, SEGMENT_BLOCK_SIZE * MAX_SEGMENT_BLOCKS);
+    raft_uv_set_segment_size(&f->io, SEGMENT_SIZE);
     f->count = 0;
     return f;
 }
@@ -481,6 +484,24 @@ TEST(append, noSpace, setUp, tearDown, 0, dir_tmpfs_params)
     APPEND_FAILURE(
         1, 64, RAFT_NOSPACE,
         "create segment open-1: not enough space to allocate 134217728 bytes");
+    return MUNIT_OK;
+}
+
+/* The creation of a spare open segment fails because there's no space. */
+TEST(append, noSpaceForSpareSegment, setUp, tearDown, 0, dir_tmpfs_params)
+{
+    struct fixture *f = data;
+    SKIP_IF_NO_FIXTURE;
+#if !HAVE_DECL_UV_FS_O_CREAT
+    /* This test appears to leak memory on older libuv versions. */
+    return MUNIT_SKIP;
+#endif
+    raft_uv_set_segment_size(&f->io, SEGMENT_BLOCK_SIZE * 2);
+    test_dir_fill(f->dir, SEGMENT_BLOCK_SIZE * 3);
+    APPEND(1, SEGMENT_BLOCK_SIZE);
+    APPEND_SUBMIT(0, 1, SEGMENT_BLOCK_SIZE);
+    APPEND_EXPECT(0, RAFT_NOSPACE);
+    APPEND_WAIT(0);
     return MUNIT_OK;
 }
 

@@ -450,7 +450,7 @@ void test_dir_fill(const char *dir, const size_t n)
     fd = open(path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
     munit_assert_int(fd, !=, -1);
 
-    rv = posix_fallocate(fd, 0, size);
+    rv = posix_fallocate(fd, 0, size - n);
     munit_assert_int(rv, ==, 0);
 
     /* If n is zero, make sure any further write fails with ENOSPC */
