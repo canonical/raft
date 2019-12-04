@@ -12,12 +12,11 @@
 #include "string.h"
 #include "tracing.h"
 
+/* Set to 1 to enable tracing. */
+#if 0
 static const char *message_descs[] = {"append entries", "append entries result",
                                       "request vote", "request vote result",
                                       "install snapshot"};
-
-/* Set to 1 to enable tracing. */
-#if 0
 #define tracef(MSG, ...) Tracef(r->tracer, "recv: " MSG, __VA_ARGS__)
 #else
 #define tracef(MSG, ...)

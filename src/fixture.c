@@ -613,13 +613,6 @@ static int ioMethodTruncate(struct raft_io *raft_io, raft_index index)
 {
     struct io *io = raft_io->impl;
     size_t n;
-    raft_index start_index;
-
-    if (io->snapshot == NULL) {
-        start_index = 1;
-    } else {
-        start_index = io->snapshot->index;
-    }
 
     if (ioFaultTick(io)) {
         return RAFT_IOERR;
