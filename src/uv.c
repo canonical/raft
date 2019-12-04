@@ -56,7 +56,7 @@ static int uvInit(struct raft_io *io, unsigned id, const char *address)
 
     rv = uv->transport->init(uv->transport, id, address);
     if (rv != 0) {
-        strncpy(io->errmsg, uv->transport->errmsg, RAFT_ERRMSG_BUF_SIZE);
+        ErrMsgPrintf(io->errmsg, "transport: %s", uv->transport->errmsg);
         return rv;
     }
     uv->transport->data = uv;

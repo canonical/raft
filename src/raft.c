@@ -59,8 +59,10 @@ int raft_init(struct raft *r,
     r->snapshot.trailing = DEFAULT_SNAPSHOT_TRAILING;
     r->snapshot.put.data = NULL;
     r->close_cb = NULL;
+    memset(r->errmsg, 0, sizeof r->errmsg);
     rv = r->io->init(r->io, r->id, r->address);
     if (rv != 0) {
+        ErrMsgPrintf(r->errmsg, "io: %s", r->io->errmsg);
         return rv;
     }
     return 0;

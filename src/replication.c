@@ -6,6 +6,7 @@
 #ifdef __GLIBC__
 #include "error.h"
 #endif
+#include "err.h"
 #include "log.h"
 #include "logging.h"
 #include "membership.h"
@@ -530,6 +531,7 @@ static int appendLeader(struct raft *r, raft_index index)
 
     rv = r->io->append(r->io, &request->req, entries, n, appendLeaderCb);
     if (rv != 0) {
+        ErrMsgPrintf(r->errmsg, "io: %s", r->io->errmsg);
         goto err_after_request_alloc;
     }
 
@@ -1076,6 +1078,7 @@ int replicationAppend(struct raft *r,
     rv = r->io->append(r->io, &request->req, request->args.entries,
                        request->args.n_entries, appendFollowerCb);
     if (rv != 0) {
+        ErrMsgPrintf(r->errmsg, "io: %s", r->io->errmsg);
         goto err_after_acquire_entries;
     }
 

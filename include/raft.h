@@ -855,6 +855,12 @@ struct raft
      * Callback to invoke once a close request has completed.
      */
     raft_close_cb close_cb;
+
+    /*
+     * Human-readable message providing diagnostic information about the last
+     * error occurred.
+     */
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
 };
 
 /**
