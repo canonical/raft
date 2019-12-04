@@ -1,8 +1,6 @@
 #include "../lib/cluster.h"
 #include "../lib/runner.h"
 
-TEST_MODULE(liveness)
-
 /******************************************************************************
  *
  * Fixture
@@ -119,9 +117,7 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-TEST_SUITE(network)
-TEST_SETUP(network, setup)
-TEST_TEAR_DOWN(network, tear_down)
+SUITE(liveness)
 
 static void apply_cb(struct raft_apply *req, int status, void *result)
 {
@@ -131,7 +127,7 @@ static void apply_cb(struct raft_apply *req, int status, void *result)
 }
 
 /* The system makes progress even in case of network disruptions. */
-TEST_CASE(network, disconnect, _params)
+TEST(liveness, networkDisconnect, setup, tear_down, 0, _params)
 {
     struct fixture *f = data;
     int i = 0;

@@ -1,8 +1,6 @@
 #include "../lib/cluster.h"
 #include "../lib/runner.h"
 
-TEST_MODULE(membership)
-
 /******************************************************************************
  *
  * Fixture
@@ -47,11 +45,9 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-TEST_SUITE(add)
-TEST_SETUP(add, setup)
-TEST_TEAR_DOWN(add, tear_down)
+SUITE(membership)
 
-TEST_CASE(add, non_voting, _params)
+TEST(membership, addNonVoting, setup, tear_down, 0, _params)
 {
     struct fixture *f = data;
     const struct raft_server *server;
@@ -70,7 +66,7 @@ TEST_CASE(add, non_voting, _params)
     return MUNIT_OK;
 }
 
-TEST_CASE(add, voting, _params)
+TEST(membership, addVoting, setup, tear_down, 0, _params)
 {
     struct fixture *f = data;
     const struct raft_server *server;
@@ -94,11 +90,7 @@ TEST_CASE(add, voting, _params)
     return MUNIT_OK;
 }
 
-TEST_SUITE(remove)
-TEST_SETUP(remove, setup)
-TEST_TEAR_DOWN(remove, tear_down)
-
-TEST_CASE(remove, voting, _params)
+TEST(membership, removeVoting, setup, tear_down, 0, _params)
 {
     struct fixture *f = data;
     struct raft *raft;
