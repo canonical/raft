@@ -1,8 +1,6 @@
 #include "../../src/queue.h"
 #include "../lib/runner.h"
 
-TEST_MODULE(queue)
-
 /******************************************************************************
  *
  * Fixture
