@@ -193,7 +193,7 @@ int UvFsAllocateFile(const char *dir,
     if (rv != 0) {
         switch (rv) {
             case UV_ENOSPC:
-                ErrMsgPrintf(errmsg, "not enough space to allocate %lu bytes",
+                ErrMsgPrintf(errmsg, "not enough space to allocate %zu bytes",
                              size);
                 rv = RAFT_NOSPACE;
                 break;
@@ -416,7 +416,7 @@ int UvFsReadInto(uv_file fd, struct raft_buffer *buf, char *errmsg)
     }
     assert(rv >= 0);
     if ((size_t)rv < buf->len) {
-        ErrMsgPrintf(errmsg, "short read: %d bytes instead of %ld", rv,
+        ErrMsgPrintf(errmsg, "short read: %d bytes instead of %zu", rv,
                      buf->len);
         return RAFT_IOERR;
     }
@@ -592,7 +592,7 @@ static int probeDirectIO(int fd, size_t *size, char *errmsg)
                 return 0;
             default:
                 /* UNTESTED: this is an unsupported file system. */
-                ErrMsgPrintf(errmsg, "unsupported file system: %lx",
+                ErrMsgPrintf(errmsg, "unsupported file system: %zx",
                              fs_info.f_type);
                 return RAFT_IOERR;
         }

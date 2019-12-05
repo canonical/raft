@@ -376,7 +376,7 @@ int uvSegmentLoadClosed(struct uv *uv,
         goto err;
     }
     if (format != UV__DISK_FORMAT) {
-        ErrMsgPrintf(uv->io->errmsg, "unexpected format version %lu", format);
+        ErrMsgPrintf(uv->io->errmsg, "unexpected format version %ju", format);
         rv = RAFT_CORRUPT;
         goto err_after_open;
     }
@@ -390,7 +390,7 @@ int uvSegmentLoadClosed(struct uv *uv,
         off_t offset;
         rv = uvLoadEntriesBatch(uv, fd, &tmp_entries, &tmp_n, &offset, &last);
         if (rv != 0) {
-            ErrMsgWrapf(uv->io->errmsg, "entries batch %u starting at byte %lu",
+            ErrMsgWrapf(uv->io->errmsg, "entries batch %u starting at byte %ju",
                         i, offset);
             goto err_after_open;
         }
@@ -402,7 +402,7 @@ int uvSegmentLoadClosed(struct uv *uv,
     }
 
     if (*n != expected_n) {
-        Tracef(uv->tracer, "segment %s has %lu entries (expected %u)",
+        Tracef(uv->tracer, "segment %s has %zu entries (expected %u)",
                info->filename, *n, expected_n);
         rv = RAFT_CORRUPT;
         goto err_after_extend_entries;
@@ -496,7 +496,7 @@ static int uvLoadOpenSegment(struct uv *uv,
                 goto done;
             }
         }
-        ErrMsgPrintf(uv->io->errmsg, "unexpected format version %lu", format);
+        ErrMsgPrintf(uv->io->errmsg, "unexpected format version %ju", format);
         rv = RAFT_CORRUPT;
         goto err_after_open;
     }
@@ -511,7 +511,7 @@ static int uvLoadOpenSegment(struct uv *uv,
             /* If this isn't a decoding error, just bail out. */
             if (rv != RAFT_CORRUPT) {
                 ErrMsgWrapf(uv->io->errmsg,
-                            "entries batch %u starting at byte %lu", i, offset);
+                            "entries batch %u starting at byte %ju", i, offset);
                 goto err_after_open;
             }
 
@@ -534,7 +534,7 @@ static int uvLoadOpenSegment(struct uv *uv,
             }
 
             Tracef(uv->tracer,
-                   "truncate open segment %s at %ld (batch %d), since it has "
+                   "truncate open segment %s at %jd (batch %d), since it has "
                    "corrupted "
                    "entries",
                    info->filename, offset, i);

@@ -408,7 +408,7 @@ static int uvLoad(struct raft_io *io,
     if (rv != 0) {
         return rv;
     }
-    Tracef(uv->tracer, "start index %lld, %ld entries", *start_index,
+    Tracef(uv->tracer, "start index %lld, %zu entries", *start_index,
            *n_entries);
     if (*snapshot == NULL) {
         Tracef(uv->tracer, "no snapshot");

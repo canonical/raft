@@ -618,7 +618,7 @@ TEST(load, manySnapshots, setUp, tearDown, 0, NULL)
      * before it could complete writing it. */
     uv_update_time(&f->loop);
     now = uv_now(&f->loop);
-    sprintf(filename, "snapshot-1-8-%lu", now);
+    sprintf(filename, "snapshot-1-8-%ju", now);
     SNAPSHOT_PUT(1, 8, 1);
     test_dir_remove_file(f->dir, filename);
 
@@ -764,7 +764,7 @@ TEST(load, closedSegmentWithEntriesPastSnapshot, setUp, tearDown, 0, NULL)
     now = uv_now(&f->loop);
     sprintf(errmsg,
             "closed segment 0000000000000006-0000000000000006 is past last "
-            "snapshot snapshot-1-4-%lu",
+            "snapshot snapshot-1-4-%ju",
             now);
     SNAPSHOT_PUT(1, 4, 1);
     test_dir_remove_file(f->dir, CLOSED_SEGMENT_FILENAME(1, 5));

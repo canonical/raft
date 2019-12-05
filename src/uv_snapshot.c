@@ -154,7 +154,7 @@ static int uvSnapshotLoadMeta(struct uv *uv,
 
     format = byteFlip64(header[0]);
     if (format != UV__DISK_FORMAT) {
-        Tracef(uv->tracer, "load %s: unsupported format %lu", info->filename,
+        Tracef(uv->tracer, "load %s: unsupported format %ju", info->filename,
                format);
         rv = RAFT_MALFORMED;
         goto err_after_open;
@@ -165,7 +165,7 @@ static int uvSnapshotLoadMeta(struct uv *uv,
     snapshot->configuration_index = byteFlip64(header[2]);
     buf.len = byteFlip64(header[3]);
     if (buf.len > UV__META_MAX_CONFIGURATION_SIZE) {
-        Tracef(uv->tracer, "load %s: configuration data too big (%ld)",
+        Tracef(uv->tracer, "load %s: configuration data too big (%zd)",
                info->filename, buf.len);
         rv = RAFT_CORRUPT;
         goto err_after_open;
