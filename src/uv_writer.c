@@ -19,7 +19,7 @@ static void uvWriterReqSetStatus(struct UvWriterReq *req, int result)
     if (result < 0) {
         req->status = RAFT_IOERR;
     } else if ((size_t)result < req->len) {
-        ErrMsgPrintf(req->errmsg, "short write: %d bytes instead of %ld",
+        ErrMsgPrintf(req->errmsg, "short write: %d bytes instead of %zu",
                      result, req->len);
         req->status = RAFT_IOERR;
     } else {
@@ -198,7 +198,9 @@ static void uvWriterPollCb(uv_poll_t *poller, int status, int events)
 
         uvWriterReqSetStatus(req, event->res);
 
+#if defined(RWF_NOWAIT)
     finish:
+#endif /* RWF_NOWAIT */
         uvWriterReqFinish(req);
     }
 }
@@ -249,7 +251,7 @@ int UvWriterInit(struct UvWriter *w,
     w->events = HeapCalloc(w->n_events, sizeof *w->events);
     if (w->events == NULL) {
         /* UNTESTED: todo */
-        ErrMsgPrintf(errmsg, "failed to alloc events array");
+        ErrMsgOom(errmsg);
         rv = RAFT_NOMEM;
         goto err_after_io_setup;
     }

@@ -1,8 +1,6 @@
 #include "../lib/cluster.h"
 #include "../lib/runner.h"
 
-TEST_MODULE(snapshot)
-
 /******************************************************************************
  *
  * Fixture
@@ -62,13 +60,10 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-TEST_SUITE(install)
-
-TEST_SETUP(install, setup)
-TEST_TEAR_DOWN(install, tear_down)
+SUITE(snapshot)
 
 /* Install a snapshot on a follower that has fallen behind. */
-TEST_CASE(install, one, NULL)
+TEST(snapshot, installOne, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;

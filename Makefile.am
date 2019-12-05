@@ -19,8 +19,6 @@ libraft_la_SOURCES = \
   src/err.c \
   src/heap.c \
   src/log.c \
-  src/logger_ring.c \
-  src/logger_stream.c \
   src/membership.c \
   src/progress.c \
   src/raft.c \
@@ -48,7 +46,7 @@ TESTS = $(check_PROGRAMS)
 
 check_LTLIBRARIES = libtest.la
 
-libtest_la_CFLAGS = $(AM_CFLAGS) -DMUNIT_TEST_NAME_LEN=60
+libtest_la_CFLAGS = $(AM_CFLAGS) -DMUNIT_TEST_NAME_LEN=60 -Wno-unused-result
 libtest_la_SOURCES = \
   test/lib/fault.c \
   test/lib/fsm.c \
@@ -63,15 +61,13 @@ test_unit_core_SOURCES = \
   src/err.c \
   src/heap.c \
   src/log.c \
-  src/logger_ring.c \
   test/unit/main_core.c \
   test/unit/test_byte.c \
   test/unit/test_configuration.c \
   test/unit/test_err.c \
   test/unit/test_heap.c \
   test/unit/test_log.c \
-  test/unit/test_queue.c \
-  test/unit/test_logger_ring.c
+  test/unit/test_queue.c
 test_unit_core_LDADD = libtest.la
 
 test_integration_core_SOURCES = \
@@ -87,8 +83,8 @@ test_integration_core_SOURCES = \
   test/integration/test_strerror.c \
   test/integration/test_tick.c \
   test/integration/test_start.c
-test_integration_core_LDADD = libtest.la libraft.la
 test_integration_core_LDFLAGS = -no-install
+test_integration_core_LDADD = libtest.la libraft.la
 
 fuzzy_test_SOURCES = \
   test/lib/cluster.c \
@@ -97,8 +93,8 @@ fuzzy_test_SOURCES = \
   test/fuzzy/test_liveness.c \
   test/fuzzy/test_membership.c \
   test/fuzzy/test_replication.c
-fuzzy_test_LDADD = libtest.la libraft.la
 fuzzy_test_LDFLAGS = -no-install
+fuzzy_test_LDADD = libtest.la libraft.la
 
 if UV_ENABLED
 
@@ -146,8 +142,8 @@ test_unit_uv_SOURCES = \
   test/unit/main_uv.c \
   test/unit/test_uv_fs.c \
   test/unit/test_uv_writer.c
-test_unit_uv_LDADD = libtest.la
 test_unit_uv_LDFLAGS = $(UV_LIBS)
+test_unit_uv_LDADD = libtest.la
 
 test_integration_uv_SOURCES = \
   test/integration/main_uv.c \
@@ -163,8 +159,9 @@ test_integration_uv_SOURCES = \
   test/integration/test_uv_tcp_listen.c \
   test/integration/test_uv_snapshot_put.c \
   test/integration/test_uv_truncate.c
-test_integration_uv_LDADD = libtest.la libraft.la
+test_integration_uv_CFLAGS = $(AM_CFLAGS) -Wno-type-limits
 test_integration_uv_LDFLAGS = -no-install $(UV_LIBS)
+test_integration_uv_LDADD = libtest.la libraft.la
 
 AM_CFLAGS += $(UV_CFLAGS)
 
@@ -183,8 +180,8 @@ bin_PROGRAMS += \
  example/cluster
 
 example_server_SOURCES = example/server.c
-example_server_LDADD = libraft.la
 example_server_LDFLAGS = -no-install $(UV_LIBS)
+example_server_LDADD = libraft.la
 
 example_cluster_SOURCES = example/cluster.c
 
@@ -200,7 +197,9 @@ benchmark_os_disk_write_LDFLAGS = -luring
 
 endif # BENCHMARK_ENABLED
 
-if !DEBUG_ENABLED
+if DEBUG_ENABLED
+  AM_CFLAGS += -Werror
+else
   AM_CFLAGS += -DNDEBUG
 endif
 

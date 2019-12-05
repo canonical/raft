@@ -17,7 +17,7 @@ int UvFsCheckDir(const char *dir, char *errmsg)
 
     /* Ensure that the given path doesn't exceed our static buffer limit. */
     if (!UV__DIR_HAS_VALID_LEN(dir)) {
-        ErrMsgPrintf((char *)errmsg, "directory path too long");
+        ErrMsgPrintf(errmsg, "directory path too long");
         return RAFT_NAMETOOLONG;
     }
 
@@ -193,7 +193,7 @@ int UvFsAllocateFile(const char *dir,
     if (rv != 0) {
         switch (rv) {
             case UV_ENOSPC:
-                ErrMsgPrintf(errmsg, "not enough space to allocate %lu bytes",
+                ErrMsgPrintf(errmsg, "not enough space to allocate %zu bytes",
                              size);
                 rv = RAFT_NOSPACE;
                 break;
@@ -371,7 +371,7 @@ int UvFsFileHasOnlyTrailingZeros(uv_file fd, bool *flag, char *errmsg)
     buf.len = size;
     buf.base = HeapMalloc(buf.len);
     if (buf.base == NULL) {
-        ErrMsgPrintf(errmsg, "can't allocate read buffer");
+        ErrMsgOom(errmsg);
         return RAFT_NOMEM;
     }
 
@@ -416,7 +416,7 @@ int UvFsReadInto(uv_file fd, struct raft_buffer *buf, char *errmsg)
     }
     assert(rv >= 0);
     if ((size_t)rv < buf->len) {
-        ErrMsgPrintf(errmsg, "short read: %d bytes instead of %ld", rv,
+        ErrMsgPrintf(errmsg, "short read: %d bytes instead of %zu", rv,
                      buf->len);
         return RAFT_IOERR;
     }
@@ -450,7 +450,7 @@ int UvFsReadFile(const char *dir,
     buf->len = sb.st_size;
     buf->base = HeapMalloc(buf->len);
     if (buf->base == NULL) {
-        ErrMsgPrintf(errmsg, "out of memory");
+        ErrMsgOom(errmsg);
         rv = RAFT_NOMEM;
         goto err_after_open;
     }
@@ -592,7 +592,7 @@ static int probeDirectIO(int fd, size_t *size, char *errmsg)
                 return 0;
             default:
                 /* UNTESTED: this is an unsupported file system. */
-                ErrMsgPrintf(errmsg, "unsupported file system: %lx",
+                ErrMsgPrintf(errmsg, "unsupported file system: %zx",
                              fs_info.f_type);
                 return RAFT_IOERR;
         }
@@ -603,7 +603,7 @@ static int probeDirectIO(int fd, size_t *size, char *errmsg)
     while (*size >= 512) {
         buf = raft_aligned_alloc(*size, *size);
         if (buf == NULL) {
-            ErrMsgPrintf(errmsg, "out of memory");
+            ErrMsgOom(errmsg);
             return RAFT_NOMEM;
         }
         memset(buf, 0, *size);
@@ -661,7 +661,7 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
     /* Allocate the write buffer */
     buf = raft_aligned_alloc(size, size);
     if (buf == NULL) {
-        ErrMsgPrintf(errmsg, "out of memory");
+        ErrMsgOom(errmsg);
         return RAFT_NOMEM;
     }
     memset(buf, 0, size);
@@ -720,42 +720,27 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
 }
 #endif /* RWF_NOWAIT */
 
+#define UV__FS_PROBE_FILE ".probe"
+#define UV__FS_PROBE_FILE_SIZE 4096
+
 int UvFsProbeCapabilities(const char *dir,
                           size_t *direct,
                           bool *async,
                           char *errmsg)
 {
-    char filename[UV__FILENAME_LEN]; /* Filename of the probe file */
-    char path[UV__PATH_SZ];          /* Full path of the probe file */
-    int fd;                          /* File descriptor of the probe file */
+    int fd; /* File descriptor of the probe file */
     int rv;
+    char ignored[RAFT_ERRMSG_BUF_SIZE];
 
     /* Create a temporary probe file. */
-    strcpy(filename, ".probe-XXXXXX");
-    UvOsJoin(dir, filename, path);
-    fd = mkstemp(path);
-    if (fd == -1) {
-        UvOsErrMsg(errmsg, "mkstemp", -errno);
-        rv = RAFT_IOERR;
+    UvFsRemoveFile(dir, UV__FS_PROBE_FILE, ignored);
+    rv = UvFsAllocateFile(dir, UV__FS_PROBE_FILE, UV__FS_PROBE_FILE_SIZE, &fd,
+                          errmsg);
+    if (rv != 0) {
+        ErrMsgWrapf(errmsg, "create I/O capabilities probe file");
         goto err;
     }
-    rv = posix_fallocate(fd, 0, 4096);
-    if (rv != 0) {
-        switch (rv) {
-            case ENOSPC:
-                ErrMsgPrintf(
-                    errmsg,
-                    "not enough space to create I/O capabilities probe file");
-                rv = RAFT_NOSPACE;
-                break;
-            default:
-                UvOsErrMsg(errmsg, "posix_allocate", -rv);
-                rv = RAFT_IOERR;
-                break;
-        }
-        goto err_after_file_open;
-    }
-    UvOsUnlink(path);
+    UvFsRemoveFile(dir, UV__FS_PROBE_FILE, ignored);
 
     /* Check if we can use direct I/O. */
     rv = probeDirectIO(fd, direct, errmsg);

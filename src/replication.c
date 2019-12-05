@@ -8,17 +8,17 @@
 #endif
 #include "err.h"
 #include "log.h"
-#include "logging.h"
 #include "membership.h"
 #include "progress.h"
 #include "queue.h"
 #include "replication.h"
 #include "request.h"
 #include "snapshot.h"
+#include "tracing.h"
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(...) debugf(r, ##__VA_ARGS__)
+#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
 #else
 #define tracef(...)
 #endif
@@ -52,7 +52,7 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
 
     if (r->state == RAFT_LEADER && i < r->configuration.n) {
         if (status != 0) {
-            debugf(r, "failed to send append entries to server %ld: %s",
+            tracef("failed to send append entries to server %ld: %s",
                    req->server_id, raft_strerror(status));
             /* Go back to probe mode. */
             progressToProbe(r, i);
@@ -171,7 +171,7 @@ static void sendInstallSnapshotCb(struct raft_io_send *send, int status)
     server = configurationGet(&r->configuration, req->server_id);
 
     if (status != 0) {
-        debugf(r, "send install snapshot: %s", raft_strerror(status));
+        tracef("send install snapshot: %s", raft_strerror(status));
         if (r->state == RAFT_LEADER && server != NULL) {
             unsigned i;
             i = configurationIndexOf(&r->configuration, req->server_id);
@@ -198,7 +198,7 @@ static void sendSnapshotGetCb(struct raft_io_snapshot_get *get,
     int rv;
 
     if (status != 0) {
-        errorf(r, "get snapshot %s", raft_strerror(status));
+        tracef("get snapshot %s", raft_strerror(status));
         goto abort;
     }
     if (r->state != RAFT_LEADER) {
@@ -236,7 +236,7 @@ static void sendSnapshotGetCb(struct raft_io_snapshot_get *get,
     req->snapshot = snapshot;
     req->send.data = req;
 
-    debugf(r, "sending snapshot with last index %ld to %ld", snapshot->index,
+    tracef("sending snapshot with last index %ld to %ld", snapshot->index,
            server->id);
 
     rv = r->io->send(r->io, &req->send, &message, sendInstallSnapshotCb);
@@ -379,7 +379,7 @@ static int triggerAll(struct raft *r)
         rv = replicationProgress(r, i);
         if (rv != 0 && rv != RAFT_NOCONNECTION) {
             /* This is not a critical failure, let's just log it. */
-            debugf(r, "failed to send append entries to server %ld: %s (%d)",
+            tracef("failed to send append entries to server %ld: %s (%d)",
                    server->id, raft_strerror(rv), rv);
         }
     }
@@ -473,7 +473,7 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
      * we have appended these entries to it. */
     if (status != 0) {
         struct raft_apply *apply;
-        ErrMsgPrintf(r->errmsg, "io: %s", r->io->errmsg);
+        ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
         apply =
             (struct raft_apply *)getRequest(r, request->index, RAFT_COMMAND);
         if (apply != NULL && apply->cb != NULL) {
@@ -561,7 +561,7 @@ static int appendLeader(struct raft *r, raft_index index)
 
     rv = r->io->append(r->io, &request->req, entries, n, appendLeaderCb);
     if (rv != 0) {
-        ErrMsgPrintf(r->errmsg, "io: %s", r->io->errmsg);
+        ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
         goto err_after_request_alloc;
     }
 
@@ -761,7 +761,6 @@ int replicationUpdate(struct raft *r,
 
 static void sendAppendEntriesResultCb(struct raft_io_send *req, int status)
 {
-    struct raft *r = req->data;
     (void)status;
     raft_free(req);
 }
@@ -921,11 +920,11 @@ static int checkLogMatchingProperty(struct raft *r,
     if (local_prev_term != args->prev_log_term) {
         if (args->prev_log_index <= r->commit_index) {
             /* Should never happen; something is seriously wrong! */
-            errorf(r,
-                   "conflicting terms %llu and %llu for entry %llu (commit "
-                   "index %llu) -> shutdown",
-                   local_prev_term, args->prev_log_term, args->prev_log_index,
-                   r->commit_index);
+            tracef(
+                "conflicting terms %llu and %llu for entry %llu (commit "
+                "index %llu) -> shutdown",
+                local_prev_term, args->prev_log_term, args->prev_log_index,
+                r->commit_index);
             return -1;
         }
         tracef("previous term mismatch -> reject");
@@ -963,9 +962,7 @@ static int deleteConflictingEntries(struct raft *r,
         if (local_term > 0 && local_term != entry->term) {
             if (entry_index <= r->commit_index) {
                 /* Should never happen; something is seriously wrong! */
-                errorf(r,
-                       "new index conflicts with "
-                       "committed entry -> shutdown");
+                tracef("new index conflicts with committed entry -> shutdown");
 
                 return RAFT_SHUTDOWN;
             }
@@ -1108,7 +1105,7 @@ int replicationAppend(struct raft *r,
     rv = r->io->append(r->io, &request->req, request->args.entries,
                        request->args.n_entries, appendFollowerCb);
     if (rv != 0) {
-        ErrMsgPrintf(r->errmsg, "io: %s", r->io->errmsg);
+        ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
         goto err_after_acquire_entries;
     }
 
@@ -1154,8 +1151,7 @@ static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
 
     if (status != 0) {
         result.rejected = snapshot->index;
-        errorf(r, "save snapshot %d: %s", snapshot->index,
-               raft_strerror(status));
+        tracef("save snapshot %d: %s", snapshot->index, raft_strerror(status));
         goto discard;
     }
 
@@ -1168,12 +1164,12 @@ static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
     rv = snapshotRestore(r, snapshot);
     if (rv != 0) {
         result.rejected = snapshot->index;
-        errorf(r, "restore snapshot %d: %s", snapshot->index,
+        tracef("restore snapshot %d: %s", snapshot->index,
                raft_strerror(status));
         goto discard;
     }
 
-    debugf(r, "restored snapshot with last index %llu", snapshot->index);
+    tracef("restored snapshot with last index %llu", snapshot->index);
 
     result.rejected = 0;
 
@@ -1377,7 +1373,7 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
     snapshot = &r->snapshot.pending;
 
     if (status != 0) {
-        debugf(r, "snapshot %lld at term %lld: %s", snapshot->index,
+        tracef("snapshot %lld at term %lld: %s", snapshot->index,
                snapshot->term, raft_strerror(status));
         goto out;
     }
@@ -1395,7 +1391,7 @@ static int takeSnapshot(struct raft *r)
     unsigned i;
     int rv;
 
-    debugf(r, "take snapshot at %lld", r->last_applied);
+    tracef("take snapshot at %lld", r->last_applied);
 
     snapshot = &r->snapshot.pending;
     snapshot->index = r->last_applied;

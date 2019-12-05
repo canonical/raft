@@ -7,7 +7,13 @@
 #include "configuration.h"
 #include "err.h"
 #include "log.h"
-#include "logging.h"
+
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
+#else
+#define tracef(...)
+#endif
 
 void snapshotClose(struct raft_snapshot *s)
 {
@@ -33,7 +39,7 @@ int snapshotRestore(struct raft *r, struct raft_snapshot *snapshot)
 
     rv = r->fsm->restore(r->fsm, &snapshot->bufs[0]);
     if (rv != 0) {
-        errorf(r, "restore snapshot %d: %s", snapshot->index,
+        tracef("restore snapshot %d: %s", snapshot->index,
                errCodeToString(rv));
         return rv;
     }

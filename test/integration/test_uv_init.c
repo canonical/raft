@@ -172,7 +172,8 @@ TEST(init, noSpace, setUp, tearDown, 0, dir_tmpfs_params)
     SKIP_IF_NO_FIXTURE;
     test_dir_fill(f->dir, 4);
     INIT_ERROR(f->dir, RAFT_NOSPACE,
-               "not enough space to create I/O capabilities probe file");
+               "create I/O capabilities probe file: not enough space to "
+               "allocate 4096 bytes");
     return MUNIT_OK;
 }
 

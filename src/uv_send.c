@@ -281,7 +281,6 @@ static void uvClientConnectCb(struct raft_uv_connect *req,
 {
     struct uvClient *c = req->data;
     unsigned n_pending;
-    int level = RAFT_DEBUG;
     int rv;
 
     tracef(c, "connect attempt completed -> status %s",
@@ -337,17 +336,6 @@ static void uvClientConnectCb(struct raft_uv_connect *req,
             }
         }
     }
-
-    /* Use debug level for logging the first few attempts, then switch to
-     * warn, but not too agressively. */
-    if (c->n_connect_attempt >= 100 && c->n_connect_attempt % 30 == 0) {
-        level = RAFT_WARN;
-    }
-
-    /*c->uv->logger->emit(c->uv->logger, level,
-                        c->uv->io->time(c->uv->io), "connect to %d (%s): %s",
-                        c->id, c->address, raft_strerror(status));*/
-    (void)level;
 
     /* Let's schedule another attempt. */
     rv = uv_timer_start(&c->timer, uvClientTimerCb, c->uv->connect_retry_delay,

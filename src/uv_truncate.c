@@ -4,7 +4,6 @@
 #include "assert.h"
 #include "byte.h"
 #include "heap.h"
-#include "logging.h"
 #include "uv.h"
 #include "uv_encoding.h"
 

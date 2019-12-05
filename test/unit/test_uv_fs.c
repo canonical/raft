@@ -311,7 +311,9 @@ TEST(UvFsProbeCapabilities, noAccess, setupDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
     test_dir_unexecutable(dir);
-    PROBE_CAPABILITIES_ERROR(dir, RAFT_IOERR, "mkstemp: permission denied");
+    PROBE_CAPABILITIES_ERROR(
+        dir, RAFT_IOERR,
+        "create I/O capabilities probe file: open: permission denied");
     return MUNIT_OK;
 }
 
@@ -323,9 +325,9 @@ TEST(UvFsProbeCapabilities, noSpace, setupTmpfsDir, tearDownDir, 0, NULL)
         return MUNIT_SKIP;
     }
     test_dir_fill(dir, 0);
-    PROBE_CAPABILITIES_ERROR(
-        dir, RAFT_NOSPACE,
-        "not enough space to create I/O capabilities probe file");
+    PROBE_CAPABILITIES_ERROR(dir, RAFT_NOSPACE,
+                             "create I/O capabilities probe file: not enough "
+                             "space to allocate 4096 bytes");
     return MUNIT_OK;
 }
 

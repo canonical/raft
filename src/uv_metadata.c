@@ -101,8 +101,8 @@ static int uvMetadataLoadN(const char *dir,
             }
             return 0;
         }
-        ErrMsgPrintf(errmsg, "%s has size %ld instead of %ld", size,
-                     sizeof content, filename);
+        ErrMsgPrintf(errmsg, "%s has size %ju instead of %zu", filename, size,
+                     sizeof content);
         return RAFT_CORRUPT;
     }
 
@@ -150,7 +150,7 @@ int uvMetadataLoad(const char *dir, struct uvMetadata *metadata, char *errmsg)
         metadata->voted_for = 0;
     } else if (metadata1.version == metadata2.version) {
         /* The two metadata files can't have the same version. */
-        ErrMsgPrintf(errmsg, "metadata1 and metadata2 are both at version %d",
+        ErrMsgPrintf(errmsg, "metadata1 and metadata2 are both at version %llu",
                      metadata1.version);
         return RAFT_CORRUPT;
     } else {

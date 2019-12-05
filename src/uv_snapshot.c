@@ -7,7 +7,6 @@
 #include "byte.h"
 #include "configuration.h"
 #include "heap.h"
-#include "logging.h"
 #include "uv.h"
 #include "uv_encoding.h"
 #include "uv_os.h"
@@ -128,9 +127,9 @@ static int uvSnapshotLoadMeta(struct uv *uv,
                     1 + /* Configuration index */
                     1 /* Configuration length */];
     struct raft_buffer buf;
-    unsigned format;
-    unsigned crc1;
-    unsigned crc2;
+    uint64_t format;
+    uint32_t crc1;
+    uint32_t crc2;
     uv_file fd;
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int rv;
@@ -155,7 +154,7 @@ static int uvSnapshotLoadMeta(struct uv *uv,
 
     format = byteFlip64(header[0]);
     if (format != UV__DISK_FORMAT) {
-        Tracef(uv->tracer, "load %s: unsupported format %lu", info->filename,
+        Tracef(uv->tracer, "load %s: unsupported format %ju", info->filename,
                format);
         rv = RAFT_MALFORMED;
         goto err_after_open;
@@ -166,14 +165,13 @@ static int uvSnapshotLoadMeta(struct uv *uv,
     snapshot->configuration_index = byteFlip64(header[2]);
     buf.len = byteFlip64(header[3]);
     if (buf.len > UV__META_MAX_CONFIGURATION_SIZE) {
-        Tracef(uv->tracer, "load %s: configuration data too big (%ld)",
+        Tracef(uv->tracer, "load %s: configuration data too big (%zd)",
                info->filename, buf.len);
         rv = RAFT_CORRUPT;
         goto err_after_open;
     }
     if (buf.len == 0) {
-        Tracef(uv->tracer, "load %s: no configuration data", info->filename,
-               buf.len);
+        Tracef(uv->tracer, "load %s: no configuration data", info->filename);
         rv = RAFT_CORRUPT;
         goto err_after_open;
     }
@@ -363,9 +361,6 @@ static int uvRemoveOldSegmentsAndSnapshots(struct uv *uv,
         }
     }
     rv = UvFsSyncDir(uv->dir, errmsg);
-    if (rv != 0) {
-        ErrMsgWrapf(errmsg, "sync %s", uv->dir);
-    }
 
 out:
     if (snapshots != NULL) {
@@ -389,7 +384,7 @@ static void uvSnapshotPutWorkCb(uv_work_t *work)
 
     rv = UvFsMakeFile(uv->dir, filename, put->meta.bufs, 2, put->errmsg);
     if (rv != 0) {
-        ErrMsgWrapf(put->errmsg, "write %s: %s", filename);
+        ErrMsgWrapf(put->errmsg, "write %s", filename);
         put->status = RAFT_IOERR;
         return;
     }
@@ -407,7 +402,6 @@ static void uvSnapshotPutWorkCb(uv_work_t *work)
 
     rv = UvFsSyncDir(uv->dir, put->errmsg);
     if (rv != 0) {
-        ErrMsgWrapf(put->errmsg, "sync %s", uv->dir);
         put->status = RAFT_IOERR;
         return;
     }

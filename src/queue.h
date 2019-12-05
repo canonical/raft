@@ -51,6 +51,6 @@ typedef void *queue[2];
     for ((q) = QUEUE_NEXT(e); (q) != (e); (q) = QUEUE_NEXT(q))
 
 /* Return the structure holding the given element. */
-#define QUEUE_DATA(e, type, field) ((type *)((char *)(e)-offsetof(type, field)))
+#define QUEUE_DATA(e, type, field) ((type *)((void*)((char *)(e)-offsetof(type, field))))
 
 #endif /* QUEUE_H_*/

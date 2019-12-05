@@ -160,14 +160,14 @@ static int uvOpenSegmentFile(struct uv *uv,
     int rv;
     rv = UvFsOpenFileForReading(uv->dir, filename, fd, errmsg);
     if (rv != 0) {
-        ErrMsgPrintf(uv->io->errmsg, "open file: %s", errmsg);
+        ErrMsgTransfer(errmsg, uv->io->errmsg, "open file");
         return RAFT_IOERR;
     }
     buf.base = format;
     buf.len = sizeof *format;
     rv = UvFsReadInto(*fd, &buf, errmsg);
     if (rv != 0) {
-        ErrMsgPrintf(uv->io->errmsg, "read format: %s", errmsg);
+        ErrMsgTransfer(errmsg, uv->io->errmsg, "read format");
         UvOsClose(*fd);
         return RAFT_IOERR;
     }
@@ -207,7 +207,7 @@ static int uvLoadEntriesBatch(struct uv *uv,
     buf.len = sizeof preamble;
     rv = UvFsReadInto(fd, &buf, errmsg);
     if (rv != 0) {
-        ErrMsgPrintf(uv->io->errmsg, "read preamble: %s", errmsg);
+        ErrMsgTransfer(errmsg, uv->io->errmsg, "read preamble");
         return RAFT_IOERR;
     }
 
@@ -245,7 +245,7 @@ static int uvLoadEntriesBatch(struct uv *uv,
     buf.len = header.len - sizeof(uint64_t);
     rv = UvFsReadInto(fd, &buf, errmsg);
     if (rv != 0) {
-        ErrMsgPrintf(uv->io->errmsg, "read header: %s", errmsg);
+        ErrMsgTransfer(errmsg, uv->io->errmsg, "read header");
         rv = RAFT_IOERR;
         goto err_after_header_alloc;
     }
@@ -279,7 +279,7 @@ static int uvLoadEntriesBatch(struct uv *uv,
     }
     rv = UvFsReadInto(fd, &data, errmsg);
     if (rv != 0) {
-        ErrMsgPrintf(uv->io->errmsg, "read data: %s", errmsg);
+        ErrMsgTransfer(errmsg, uv->io->errmsg, "read data");
         rv = RAFT_IOERR;
         goto err_after_data_alloc;
     }
@@ -365,7 +365,7 @@ int uvSegmentLoadClosed(struct uv *uv,
         goto err;
     }
     if (empty) {
-        ErrMsgPrintf(uv->io->errmsg, "file is empty", info->filename);
+        ErrMsgPrintf(uv->io->errmsg, "file is empty");
         rv = RAFT_CORRUPT;
         goto err;
     }
@@ -376,7 +376,7 @@ int uvSegmentLoadClosed(struct uv *uv,
         goto err;
     }
     if (format != UV__DISK_FORMAT) {
-        ErrMsgPrintf(uv->io->errmsg, "unexpected format version %lu", format);
+        ErrMsgPrintf(uv->io->errmsg, "unexpected format version %ju", format);
         rv = RAFT_CORRUPT;
         goto err_after_open;
     }
@@ -390,8 +390,8 @@ int uvSegmentLoadClosed(struct uv *uv,
         off_t offset;
         rv = uvLoadEntriesBatch(uv, fd, &tmp_entries, &tmp_n, &offset, &last);
         if (rv != 0) {
-            ErrMsgWrapf(uv->io->errmsg,
-                        "entries batch %u starting at byte %llu", i, offset);
+            ErrMsgWrapf(uv->io->errmsg, "entries batch %u starting at byte %ju",
+                        i, offset);
             goto err_after_open;
         }
         rv = extendEntries(tmp_entries, tmp_n, entries, n);
@@ -402,7 +402,7 @@ int uvSegmentLoadClosed(struct uv *uv,
     }
 
     if (*n != expected_n) {
-        Tracef(uv->tracer, "segment %s has %lu entries (expected %u)",
+        Tracef(uv->tracer, "segment %s has %zu entries (expected %u)",
                info->filename, *n, expected_n);
         rv = RAFT_CORRUPT;
         goto err_after_extend_entries;
@@ -496,7 +496,7 @@ static int uvLoadOpenSegment(struct uv *uv,
                 goto done;
             }
         }
-        ErrMsgPrintf(uv->io->errmsg, "unexpected format version %lu", format);
+        ErrMsgPrintf(uv->io->errmsg, "unexpected format version %ju", format);
         rv = RAFT_CORRUPT;
         goto err_after_open;
     }
@@ -511,8 +511,7 @@ static int uvLoadOpenSegment(struct uv *uv,
             /* If this isn't a decoding error, just bail out. */
             if (rv != RAFT_CORRUPT) {
                 ErrMsgWrapf(uv->io->errmsg,
-                            "entries batch %u starting at byte %llu", i,
-                            offset);
+                            "entries batch %u starting at byte %ju", i, offset);
                 goto err_after_open;
             }
 
@@ -522,10 +521,10 @@ static int uvLoadOpenSegment(struct uv *uv,
              * incomplete data. */
             lseek(fd, offset, SEEK_SET);
 
-            rv2 = UvFsFileHasOnlyTrailingZeros(fd, &all_zeros, errmsg);
+            rv2 = UvFsFileHasOnlyTrailingZeros(fd, &all_zeros, uv->io->errmsg);
             if (rv2 != 0) {
-                Tracef(uv->tracer, "check if %s is zeroed: %s", info->filename,
-                       i, errmsg);
+                ErrMsgWrapf(uv->io->errmsg, "check if %s is zeroed",
+                            info->filename);
                 rv = RAFT_IOERR;
                 goto err_after_open;
             }
@@ -535,7 +534,7 @@ static int uvLoadOpenSegment(struct uv *uv,
             }
 
             Tracef(uv->tracer,
-                   "truncate open segment %s at %ld (batch %d), since it has "
+                   "truncate open segment %s at %jd (batch %d), since it has "
                    "corrupted "
                    "entries",
                    info->filename, offset, i);
@@ -937,7 +936,6 @@ int uvSegmentCreateClosedWithConfiguration(
 {
     struct raft_buffer buf;
     char filename[UV__FILENAME_LEN];
-    char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int rv;
 
     /* Render the path */
@@ -957,9 +955,8 @@ int uvSegmentCreateClosedWithConfiguration(
 
     raft_free(buf.base);
 
-    rv = UvFsSyncDir(uv->dir, errmsg);
+    rv = UvFsSyncDir(uv->dir, uv->io->errmsg);
     if (rv != 0) {
-        Tracef(uv->tracer, "sync %s: %s", uv->dir, errmsg);
         return RAFT_IOERR;
     }
 
@@ -987,7 +984,7 @@ int uvSegmentTruncate(struct uv *uv,
 
     assert(!segment->is_open);
 
-    Tracef(uv->tracer, "truncate %u-%u at %u", segment->first_index,
+    Tracef(uv->tracer, "truncate %llu-%llu at %llu", segment->first_index,
            segment->end_index, index);
 
     rv = uvSegmentLoadClosed(uv, segment, &entries, &n);

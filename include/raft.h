@@ -376,81 +376,14 @@ struct raft_tracer
     void *impl;
 
     /**
-     * Emit a single trace message.
+     * Emit the given trace message, possibly decorating it with the provided
+     * metadata.
      */
     void (*emit)(struct raft_tracer *t,
                  const char *file,
                  int line,
-                 const char *format,
-                 ...);
+                 const char *message);
 };
-
-/**
- * Logger interface.
- */
-struct raft_logger
-{
-    /**
-     * Implementation-defined state object.
-     */
-    void *impl;
-
-    /**
-     * Emit only messages at this level or above.
-     */
-    int level;
-
-    /**
-     * Emit a single message at the given level. The implementation should honor
-     * the level set on the logger.
-     */
-    void (*emit)(struct raft_logger *l,
-                 int level,
-                 raft_time time,
-                 const char *file,
-                 int line,
-                 const char *format,
-                 ...);
-};
-
-/**
- * Implementation of the logger interface, emitting messages to the given
- * stream.
- */
-RAFT_API int raft_stream_logger_init(struct raft_logger *l, FILE *stream);
-
-/**
- * Initialize the given logger with an implementation that saves messages into a
- * circular ring buffer of the given @size.
- */
-RAFT_API int raft_ring_logger_init(struct raft_logger *l, size_t size);
-
-/**
- * Close a logger with a ring buffer implementation.
- */
-RAFT_API void raft_ring_logger_close(struct raft_logger *l);
-
-/**
- * Callback invoked by raft_ring_logger_walk() when iterating through messages.
- */
-typedef void (*raft_ring_logger_walk_cb)(void *data,
-                                         raft_time time,
-                                         int level,
-                                         const char *message);
-
-/**
- * Iterate through all messages in the given ring buffer logger, calling the
- * given hook each time. The @data argument will be passed back as first
- * argument of the callback.
- */
-RAFT_API void raft_ring_logger_walk(const struct raft_logger *l,
-                                    raft_ring_logger_walk_cb cb,
-                                    void *data);
-
-/**
- * Logging levels.
- */
-enum { RAFT_DEBUG = 1, RAFT_INFO, RAFT_WARN, RAFT_ERROR };
 
 struct raft_io; /* Forward declaration. */
 

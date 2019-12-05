@@ -1,8 +1,6 @@
 #include "../lib/cluster.h"
 #include "../lib/runner.h"
 
-TEST_MODULE(election)
-
 /******************************************************************************
  *
  * Fixture
@@ -45,12 +43,10 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-TEST_SUITE(run)
-TEST_SETUP(run, setup)
-TEST_TEAR_DOWN(run, tear_down)
+SUITE(election)
 
 /* A leader is eventually elected */
-TEST_CASE(run, win, _params)
+TEST(election, win, setup, tear_down, 0, _params)
 {
     struct fixture *f = data;
     (void)params;
@@ -59,7 +55,7 @@ TEST_CASE(run, win, _params)
 }
 
 /* A new leader is elected if the current one dies. */
-TEST_CASE(run, change, _params)
+TEST(election, change, setup, tear_down, 0, _params)
 {
     struct fixture *f = data;
     (void)params;
@@ -71,7 +67,7 @@ TEST_CASE(run, change, _params)
 }
 
 /* If no majority of servers is online, no leader is elected. */
-TEST_CASE(run, no_quorum, _params)
+TEST(election, noQuorum, setup, tear_down, 0, _params)
 {
     struct fixture *f = data;
     (void)params;

@@ -1,18 +1,17 @@
 #include "../include/raft.h"
-
 #include "assert.h"
 #include "configuration.h"
 #include "log.h"
-#include "logging.h"
 #include "membership.h"
 #include "progress.h"
 #include "queue.h"
 #include "replication.h"
 #include "request.h"
+#include "tracing.h"
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(MSG, ...) debugf(r, "apply: " MSG, __VA_ARGS__)
+#define tracef(MSG, ...) Tracef(r->tracer, "apply: " MSG, __VA_ARGS__)
 #else
 #define tracef(MSG, ...)
 #endif
@@ -230,7 +229,7 @@ int raft_promote(struct raft *r,
         return rv;
     }
 
-    debugf(r, "promote server: id %d", id);
+    tracef("promote server: id %d", id);
 
     server = configurationGet(&r->configuration, id);
     if (server == NULL) {
@@ -278,7 +277,7 @@ int raft_promote(struct raft *r,
     rv = replicationProgress(r, server_index);
     if (rv != 0 && rv != RAFT_NOCONNECTION) {
         /* This error is not fatal. */
-        debugf(r, "failed to send append entries to server %ld: %s (%d)",
+        tracef("failed to send append entries to server %ld: %s (%d)",
                server->id, raft_strerror(rv), rv);
     }
 
@@ -310,7 +309,7 @@ int raft_remove(struct raft *r,
         goto err;
     }
 
-    debugf(r, "remove server: id %d", id);
+    tracef("remove server: id %d", id);
 
     /* Make a copy of the current configuration, and remove the given server
      * from it. */

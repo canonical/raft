@@ -4,9 +4,15 @@
 #include "configuration.h"
 #include "convert.h"
 #include "election.h"
-#include "logging.h"
 #include "progress.h"
 #include "replication.h"
+
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(MSG, ...) Tracef(r->tracer, __VA_ARGS__)
+#else
+#define tracef(...)
+#endif
 
 /* Number of milliseconds after which a server promotion will be aborted if the
  * server hasn't caught up with the logs yet. */
@@ -43,10 +49,10 @@ static int tickFollower(struct raft *r)
      *   current leader or granting vote to candidate, convert to candidate.
      */
     if (electionTimerExpired(r) && server->voting) {
-        infof(r, "convert to candidate and start new election");
+        tracef("convert to candidate and start new election");
         rv = convertToCandidate(r);
         if (rv != 0) {
-            errorf(r, "convert to candidate: %s", raft_strerror(rv));
+            tracef("convert to candidate: %s", raft_strerror(rv));
             return rv;
         }
     }
@@ -71,7 +77,7 @@ static int tickCandidate(struct raft *r)
      *   incrementing its term and initiating another round of RequestVote RPCs
      */
     if (electionTimerExpired(r)) {
-        infof(r, "start new election");
+        tracef("start new election");
         return electionStart(r);
     }
 
@@ -118,7 +124,7 @@ static int tickLeader(struct raft *r)
      */
     if (now - r->election_timer_start >= r->election_timeout) {
         if (!checkContactQuorum(r)) {
-            warnf(r, "unable to contact majority of cluster -> step down");
+            tracef("unable to contact majority of cluster -> step down");
             convertToFollower(r);
             return 0;
         }

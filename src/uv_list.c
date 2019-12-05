@@ -40,7 +40,7 @@ int UvList(struct uv *uv,
 
     n = uv_fs_scandir(NULL, &req, uv->dir, 0, NULL);
     if (n < 0) {
-        ErrMsgPrintf(errmsg, "scan %s: %s", uv->dir, uv_strerror(n));
+        ErrMsgPrintf(errmsg, "scan data directory: %s", uv_strerror(n));
         return RAFT_IOERR;
     }
 

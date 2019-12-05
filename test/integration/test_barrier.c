@@ -1,8 +1,6 @@
 #include "../lib/cluster.h"
 #include "../lib/runner.h"
 
-TEST_MODULE(barrier)
-
 /******************************************************************************
  *
  * Fixture
@@ -67,14 +65,11 @@ static void barrier_cb(struct raft_barrier *req, int status)
  *
  *****************************************************************************/
 
-TEST_SUITE(success)
-TEST_SETUP(success, setup)
-TEST_TEAR_DOWN(success, tear_down)
+SUITE(raft_barrier)
 
-TEST_CASE(success, cb, NULL)
+TEST(raft_barrier, cb, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     BARRIER(0, 0);
     CLUSTER_STEP_UNTIL_APPLIED(0, 2, 2000);
     munit_assert_true(f->invoked);

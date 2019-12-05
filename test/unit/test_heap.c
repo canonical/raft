@@ -2,32 +2,26 @@
 
 #include "../lib/runner.h"
 
-TEST_MODULE(heap)
-
 /******************************************************************************
  *
  * Default heap functions
  *
  *****************************************************************************/
 
-TEST_SUITE(default)
+SUITE(heap)
 
-TEST_CASE(default, malloc, NULL)
+TEST(heap, malloc, NULL, NULL, 0, NULL)
 {
     void *p;
-    (void)data;
-    (void)params;
     p = raft_malloc(8);
     munit_assert_ptr_not_null(p);
     raft_free(p);
     return MUNIT_OK;
 }
 
-TEST_CASE(default, calloc, NULL)
+TEST(heap, calloc, NULL, NULL, 0, NULL)
 {
     void *p;
-    (void)data;
-    (void)params;
     p = raft_calloc(1, 8);
     munit_assert_ptr_not_null(p);
     munit_assert_int(*(uint64_t*)p, ==, 0);
@@ -35,11 +29,9 @@ TEST_CASE(default, calloc, NULL)
     return MUNIT_OK;
 }
 
-TEST_CASE(default, realloc, NULL)
+TEST(heap, realloc, NULL, NULL, 0, NULL)
 {
     void *p;
-    (void)data;
-    (void)params;
     p = raft_realloc(NULL, 8);
     munit_assert_ptr_not_null(p);
     *(uint64_t*)p = 1;
@@ -50,11 +42,9 @@ TEST_CASE(default, realloc, NULL)
     return MUNIT_OK;
 }
 
-TEST_CASE(default, aligned_alloc, NULL)
+TEST(heap, aligned_alloc, NULL, NULL, 0, NULL)
 {
     void *p;
-    (void)data;
-    (void)params;
     p = raft_aligned_alloc(1024, 2048);
     munit_assert_ptr_not_null(p);
     munit_assert_int((uintptr_t)p % 1024, ==, 0);

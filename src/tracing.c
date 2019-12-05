@@ -4,13 +4,12 @@
 static inline void noopTracerEmit(struct raft_tracer *t,
                                   const char *file,
                                   int line,
-                                  const char *format,
-                                  ...)
+                                  const char *message)
 {
     (void)t;
     (void)file;
     (void)line;
-    (void)format;
+    (void)message;
 }
 
 /* Default no-op tracer. */

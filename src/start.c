@@ -5,16 +5,16 @@
 #include "entry.h"
 #include "err.h"
 #include "log.h"
-#include "logging.h"
 #include "recv.h"
 #include "snapshot.h"
 #include "tick.h"
+#include "tracing.h"
 
 /* Set to 1 to enable tracing. */
 #if 0
-#define tracef(MSG, ...) debugf(r, "start: " MSG, ##__VA_ARGS__)
+#define tracef(MSG, ...) Tracef(r->tracer, "start: " MSG, __VA_ARGS__)
 #else
-#define tracef(MSG, ...)
+#define tracef(...)
 #endif
 
 /* Restore the most recent configuration. */
@@ -114,7 +114,7 @@ static int maybeSelfElect(struct raft *r)
         configurationNumVoting(&r->configuration) > 1) {
         return 0;
     }
-    debugf(r, "self elect and convert to leader");
+    tracef("self elect and convert to leader");
     rv = convertToCandidate(r);
     if (rv != 0) {
         return rv;
@@ -144,11 +144,11 @@ int raft_start(struct raft *r)
     assert(logSnapshotIndex(&r->log) == 0);
     assert(r->last_stored == 0);
 
-    infof(r, "starting");
+    tracef("starting");
     rv = r->io->load(r->io, &r->current_term, &r->voted_for, &snapshot,
                      &start_index, &entries, &n_entries);
     if (rv != 0) {
-        ErrMsgPrintf(r->errmsg, "io: %s", r->io->errmsg);
+        ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
         return rv;
     }
     assert(start_index >= 1);
