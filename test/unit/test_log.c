@@ -166,35 +166,29 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-TEST_SUITE(num_entries)
-
-TEST_SETUP(num_entries, setup)
-TEST_TEAR_DOWN(num_entries, tear_down)
+SUITE(logNumEntries)
 
 /* If the log is empty, the return value is zero. */
-TEST_CASE(num_entries, empty, NULL)
+TEST(logNumEntries, empty, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     munit_assert_int(NUM_ENTRIES, ==, 0);
     return MUNIT_OK;
 }
 
 /* The log is not wrapped. */
-TEST_CASE(num_entries, not_wrapped, NULL)
+TEST(logNumEntries, not_wrapped, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     APPEND(1 /* term */);
     munit_assert_int(NUM_ENTRIES, ==, 1);
     return MUNIT_OK;
 }
 
 /* The log is wrapped. */
-TEST_CASE(num_entries, wrapped, NULL)
+TEST(logNumEntries, wrapped, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     APPEND_MANY(1 /* term */, 5 /* n entries */);
     SNAPSHOT(4 /* last_index */, 1 /* trailing */);
     APPEND_MANY(1 /* term */, 2 /* n entries */);
@@ -203,10 +197,9 @@ TEST_CASE(num_entries, wrapped, NULL)
 }
 
 /* The log has an offset and is empty. */
-TEST_CASE(num_entries, offset, NULL)
+TEST(logNumEntries, offset, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     APPEND_MANY(1 /* term */, 5 /* n entries */);
     SNAPSHOT(5 /* last index */, 0 /* trailing */);
     munit_assert_int(NUM_ENTRIES, ==, 0);
@@ -214,10 +207,9 @@ TEST_CASE(num_entries, offset, NULL)
 }
 
 /* The log has an offset and is not empty. */
-TEST_CASE(num_entries, offset_not_empty, NULL)
+TEST(logNumEntries, offset_not_empty, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     APPEND_MANY(1 /* term */, 5 /* n entries */);
     SNAPSHOT(4 /* last index */, 2 /* trailing */);
     munit_assert_int(NUM_ENTRIES, ==, 3);
@@ -230,26 +222,21 @@ TEST_CASE(num_entries, offset_not_empty, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(last_index)
-
-TEST_SETUP(last_index, setup)
-TEST_TEAR_DOWN(last_index, tear_down)
+SUITE(logLastIndex)
 
 /* If the log is empty, last index is 0. */
-TEST_CASE(last_index, empty, NULL)
+TEST(logLastIndex, empty, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     munit_assert_int(LAST_INDEX, ==, 0);
     return MUNIT_OK;
 }
 
 /* If the log is empty and has an offset, last index is calculated
    accordingly. */
-TEST_CASE(last_index, empty_with_offset, NULL)
+TEST(logLastIndex, empty_with_offset, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     APPEND(1);
     SNAPSHOT(1, 0);
     munit_assert_int(LAST_INDEX, ==, 1);
@@ -257,21 +244,18 @@ TEST_CASE(last_index, empty_with_offset, NULL)
 }
 
 /* The log has one entry. */
-TEST_CASE(last_index, one, NULL)
+TEST(logLastIndex, one, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-
-    (void)params;
     APPEND(1 /* term */);
     munit_assert_int(LAST_INDEX, ==, 1);
     return MUNIT_OK;
 }
 
 /* The log has two entries. */
-TEST_CASE(last_index, two, NULL)
+TEST(logLastIndex, two, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     APPEND_MANY(1 /* term */, 2 /* n */);
     munit_assert_int(LAST_INDEX, ==, 2);
     return MUNIT_OK;
@@ -279,10 +263,9 @@ TEST_CASE(last_index, two, NULL)
 
 /* If the log starts at a certain offset, the last index is bumped
  * accordingly. */
-TEST_CASE(last_index, two_with_offset, NULL)
+TEST(logLastIndex, two_with_offset, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     APPEND_MANY(1 /* term */, 5 /* n */);
     SNAPSHOT(5 /* last index */, 2 /* trailing */);
     munit_assert_int(LAST_INDEX, ==, 5);
@@ -295,26 +278,21 @@ TEST_CASE(last_index, two_with_offset, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(last_term)
-
-TEST_SETUP(last_term, setup)
-TEST_TEAR_DOWN(last_term, tear_down)
+SUITE(logLastTerm)
 
 /* If the log is empty, return zero. */
-TEST_CASE(last_term, empty, NULL)
+TEST(logLastTerm, empty, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     munit_assert_int(LAST_TERM, ==, 0);
     return MUNIT_OK;
 }
 
 /* If the log has a snapshot and no outstanding entries, return the last term of
  * the snapshot. */
-TEST_CASE(last_term, snapshot, NULL)
+TEST(logLastTerm, snapshot, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     APPEND(1 /* term */);
     SNAPSHOT(1 /* last index */, 0 /* trailing */);
     munit_assert_int(LAST_TERM, ==, 1);
@@ -327,17 +305,13 @@ TEST_CASE(last_term, snapshot, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(term_of)
-
-TEST_SETUP(term_of, setup)
-TEST_TEAR_DOWN(term_of, tear_down)
+SUITE(logTermOf)
 
 /* If the given index is beyond the last index, return 0. */
-TEST_CASE(term_of, beyond_last, NULL)
+TEST(logTermOf, beyond_last, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
-    APPEND(1);
     munit_assert_int(TERM_OF(2), ==, 0);
     munit_assert_int(TERM_OF(10), ==, 0);
     return MUNIT_OK;
@@ -345,10 +319,9 @@ TEST_CASE(term_of, beyond_last, NULL)
 
 /* If the log is empty but has a snapshot, and the given index matches the last
  * index of the snapshot, return the snapshot last term. */
-TEST_CASE(term_of, snapshot_last_index, NULL)
+TEST(logTermOf, snapshot_last_index, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     APPEND_MANY(1 /* term */, 5 /* n entries */);
     SNAPSHOT(5 /* last entry */, 0 /* trailing */);
     munit_assert_int(TERM_OF(5), ==, 1);
@@ -356,20 +329,18 @@ TEST_CASE(term_of, snapshot_last_index, NULL)
 }
 
 /* The log has one entry. */
-TEST_CASE(term_of, one, NULL)
+TEST(logTermOf, one, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     APPEND(3 /* term */);
     munit_assert_int(TERM_OF(1), ==, 3);
     return MUNIT_OK;
 }
 
 /* The log has two entries. */
-TEST_CASE(term_of, two, NULL)
+TEST(logTermOf, two, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     APPEND_MANY(4 /* term */, 2 /* n */);
     munit_assert_int(TERM_OF(1), ==, 4);
     munit_assert_int(TERM_OF(2), ==, 4);
@@ -377,10 +348,9 @@ TEST_CASE(term_of, two, NULL)
 }
 
 /* The log has a snapshot and hence has an offset. */
-TEST_CASE(term_of, with_snapshot, NULL)
+TEST(logTermOf, with_snapshot, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     APPEND_MANY(1 /* term */, 5 /* n entries */);
     SNAPSHOT(3 /* last index */, 0 /* trailing */);
     munit_assert_int(TERM_OF(1), ==, 0);
@@ -392,10 +362,9 @@ TEST_CASE(term_of, with_snapshot, NULL)
 }
 
 /* The log has a snapshot with trailing entries. */
-TEST_CASE(term_of, snapshot_trailing, NULL)
+TEST(logTermOf, snapshot_trailing, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     APPEND_MANY(1 /* term */, 5 /* n entries */);
     SNAPSHOT(3 /* last index */, 2 /* trailing */);
     munit_assert_int(TERM_OF(1), ==, 0);
@@ -413,25 +382,20 @@ TEST_CASE(term_of, snapshot_trailing, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(get)
-
-TEST_SETUP(get, setup)
-TEST_TEAR_DOWN(get, tear_down)
+SUITE(logGet)
 
 /* The log is empty. */
-TEST_CASE(get, empty_log, NULL)
+TEST(logGet, empty_log, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     munit_assert_ptr_null(GET(1));
     return MUNIT_OK;
 }
 
 /* The log is empty but has an offset. */
-TEST_CASE(get, empty_with_offset, NULL)
+TEST(logGet, empty_with_offset, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     APPEND_MANY(4 /* term */, 10 /* n */);
     SNAPSHOT(10 /* last index */, 0 /* trailing */);
     munit_assert_ptr_null(GET(1));
@@ -441,10 +405,9 @@ TEST_CASE(get, empty_with_offset, NULL)
 }
 
 /* The log has one entry. */
-TEST_CASE(get, one, NULL)
+TEST(logGet, one, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     APPEND(3 /* term */);
     munit_assert_int(GET(1)->term, ==, 3);
     munit_assert_ptr_null(GET(2));
@@ -452,10 +415,9 @@ TEST_CASE(get, one, NULL)
 }
 
 /* The log has two entries. */
-TEST_CASE(get, two, NULL)
+TEST(logGet, two, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     APPEND_MANY(4 /* term */, 2 /* n */);
     munit_assert_int(GET(1)->term, ==, 4);
     munit_assert_int(GET(2)->term, ==, 4);
@@ -464,10 +426,9 @@ TEST_CASE(get, two, NULL)
 }
 
 /* The log starts at a certain offset. */
-TEST_CASE(get, two_with_offset, NULL)
+TEST(logGet, two_with_offset, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     APPEND_MANY(1 /* term */, 3 /* n */);
     APPEND(2 /* term */);
     APPEND(3 /* term */);
@@ -486,16 +447,12 @@ TEST_CASE(get, two_with_offset, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(append)
-
-TEST_SETUP(append, setup)
-TEST_TEAR_DOWN(append, tear_down)
+SUITE(logAppend)
 
 /* Append one entry to an empty log. */
-TEST_CASE(append, one, NULL)
+TEST(logAppend, one, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     APPEND(1 /* term */);
     ASSERT(2 /* size                                                    */,
            0 /* front                                                   */,
@@ -508,10 +465,9 @@ TEST_CASE(append, one, NULL)
 }
 
 /* Append two entries to to an empty log. */
-TEST_CASE(append, two, NULL)
+TEST(logAppend, two, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     APPEND(1 /* term */);
     APPEND(1 /* term */);
     ASSERT(6 /* size                                                    */,
@@ -527,10 +483,9 @@ TEST_CASE(append, two, NULL)
 }
 
 /* Append three entries in sequence. */
-TEST_CASE(append, three, NULL)
+TEST(logAppend, three, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
 
     /* One -> [e1, NULL] */
     APPEND(1 /* term */);
@@ -558,11 +513,10 @@ TEST_CASE(append, three, NULL)
 
 /* Append enough entries to force the reference count hash table to be
  * resized. */
-TEST_CASE(append, many, NULL)
+TEST(logAppend, many, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     int i;
-    (void)params;
     for (i = 0; i < 3000; i++) {
         APPEND(1 /* term */);
     }
@@ -571,10 +525,9 @@ TEST_CASE(append, many, NULL)
 }
 
 /* Append to wrapped log that needs to be grown. */
-TEST_CASE(append, wrap, NULL)
+TEST(logAppend, wrap, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
 
     APPEND_MANY(1 /* term */, 5 /* n */);
 
@@ -619,10 +572,9 @@ TEST_CASE(append, wrap, NULL)
 }
 
 /* Append a batch of entries to an empty log. */
-TEST_CASE(append, batch, NULL)
+TEST(logAppend, batch, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     APPEND_BATCH(3);
     ASSERT(6 /* size                                                 */,
            0 /* front                                                 */,
@@ -631,8 +583,6 @@ TEST_CASE(append, batch, NULL)
            3 /* n */);
     return MUNIT_OK;
 }
-
-TEST_GROUP(append, error)
 
 static char *append_oom_heap_fault_delay[] = {"0", "1", NULL};
 static char *append_oom_heap_fault_repeat[] = {"1", NULL};
@@ -644,12 +594,11 @@ static MunitParameterEnum append_oom_params[] = {
 };
 
 /* Out of memory. */
-TEST_CASE(append, error, oom, append_oom_params)
+TEST(logAppend, oom, setup, tear_down, 0, append_oom_params)
 {
     struct fixture *f = data;
     struct raft_buffer buf;
     int rv;
-    (void)params;
     buf.base = NULL;
     buf.len = 0;
     test_heap_fault_enable(&f->heap);
@@ -659,10 +608,9 @@ TEST_CASE(append, error, oom, append_oom_params)
 }
 
 /* Out of memory when trying to grow the refs count table. */
-TEST_CASE(append, error, oom_refs, NULL)
+TEST(logAppend, oomRefs, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     APPEND_MANY(1, LOG__REFS_INITIAL_SIZE);
     test_heap_fault_config(&f->heap, 1, 1);
     test_heap_fault_enable(&f->heap);
@@ -676,12 +624,7 @@ TEST_CASE(append, error, oom_refs, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(append_configuration)
-
-TEST_SETUP(append_configuration, setup)
-TEST_TEAR_DOWN(append_configuration, tear_down)
-
-TEST_GROUP(append_configuration, error)
+SUITE(logAppendConfiguration)
 
 static char *append_configuration_oom_heap_fault_delay[] = {"0", "1", NULL};
 static char *append_configuration_oom_heap_fault_repeat[] = {"1", NULL};
@@ -693,7 +636,7 @@ static MunitParameterEnum append_configuration_oom_params[] = {
 };
 
 /* Out of memory. */
-TEST_CASE(append_configuration, error, oom, append_configuration_oom_params)
+TEST(logAppendConfiguration, oom, setup, tear_down, 0, append_configuration_oom_params)
 {
     struct fixture *f = data;
     struct raft_configuration configuration;
@@ -720,18 +663,14 @@ TEST_CASE(append_configuration, error, oom, append_configuration_oom_params)
  *
  *****************************************************************************/
 
-TEST_SUITE(acquire)
-
-TEST_SETUP(acquire, setup)
-TEST_TEAR_DOWN(acquire, tear_down)
+SUITE(logAcquire)
 
 /* Acquire a single log entry. */
-TEST_CASE(acquire, one, NULL)
+TEST(logAcquire, one, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry *entries;
     unsigned n;
-    (void)params;
     APPEND(1 /* term */);
     ACQUIRE(1 /* index */);
     munit_assert_ptr_not_null(entries);
@@ -744,12 +683,11 @@ TEST_CASE(acquire, one, NULL)
 }
 
 /* Acquire two log entries. */
-TEST_CASE(acquire, two, NULL)
+TEST(logAcquire, two, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry *entries;
     unsigned n;
-    (void)params;
     APPEND(1 /* term */);
     APPEND(1 /* term */);
     ACQUIRE(1 /* index */);
@@ -766,12 +704,11 @@ TEST_CASE(acquire, two, NULL)
 }
 
 /* Acquire two log entries in a wrapped log. */
-TEST_CASE(acquire, wrap, NULL)
+TEST(logAcquire, wrap, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry *entries;
     unsigned n;
-    (void)params;
 
     APPEND_MANY(1 /* term */, 5 /* n */);
 
@@ -810,12 +747,11 @@ TEST_CASE(acquire, wrap, NULL)
 }
 
 /* Acquire several entries some of which belong to batches. */
-TEST_CASE(acquire, batch, NULL)
+TEST(logAcquire, batch, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry *entries;
     unsigned n;
-    (void)params;
 
     APPEND(1 /* term */);
     APPEND_BATCH(2 /* n entries */);
@@ -838,15 +774,12 @@ TEST_CASE(acquire, batch, NULL)
     return MUNIT_OK;
 }
 
-TEST_GROUP(acquire, error)
-
 /* Trying to acquire entries out of range results in a NULL pointer. */
-TEST_CASE(acquire, error, out_of_range, NULL)
+TEST(logAcquire, outOfRange, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry *entries;
     unsigned n;
-    (void)params;
 
     APPEND(1 /* term */);
     APPEND(1 /* term */);
@@ -861,7 +794,7 @@ TEST_CASE(acquire, error, out_of_range, NULL)
 }
 
 /* Out of memory. */
-TEST_CASE(acquire, error, oom, NULL)
+TEST(logAcquire, oom, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry *entries;
@@ -886,13 +819,10 @@ TEST_CASE(acquire, error, oom, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(truncate)
-
-TEST_SETUP(truncate, setup)
-TEST_TEAR_DOWN(truncate, tear_down)
+SUITE(logTruncate)
 
 /* Truncate the last entry of a log with a single entry. */
-TEST_CASE(truncate, 1_last, NULL)
+TEST(logTruncate, 1_last, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -910,7 +840,7 @@ TEST_CASE(truncate, 1_last, NULL)
 }
 
 /* Truncate the last entry of a log with a two entries. */
-TEST_CASE(truncate, 2_last, NULL)
+TEST(logTruncate, 2_last, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -931,10 +861,9 @@ TEST_CASE(truncate, 2_last, NULL)
 }
 
 /* Truncate from an entry which makes the log wrap. */
-TEST_CASE(truncate, wrap, NULL)
+TEST(logTruncate, wrap, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
 
     APPEND_MANY(1 /* term */, 5 /* n entries */);
 
@@ -980,13 +909,11 @@ TEST_CASE(truncate, wrap, NULL)
 
 /* Truncate the last entry of a log with a single entry, which still has an
  * outstanding reference created by a call to logAcquire(). */
-TEST_CASE(truncate, referenced, NULL)
+TEST(logTruncate, referenced, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry *entries;
     unsigned n;
-
-    (void)params;
 
     APPEND(1 /* term */);
     ACQUIRE(1 /* index */);
@@ -1010,27 +937,23 @@ TEST_CASE(truncate, referenced, NULL)
 }
 
 /* Truncate all entries belonging to a batch. */
-TEST_CASE(truncate, batch, NULL)
+TEST(logTruncate, batch, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
-
     APPEND_BATCH(3 /* n entries */);
     TRUNCATE(1 /* index */);
     munit_assert_int(f->log.size, ==, 0);
-
     return MUNIT_OK;
 }
 
 /* Acquire entries at a certain index. Truncate the log at that index. The
  * truncated entries are still referenced. Then append a new entry, which will
  * have the same index but different term. */
-TEST_CASE(truncate, acquired, NULL)
+TEST(logTruncate, acquired, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry *entries;
     unsigned n;
-    (void)params;
 
     APPEND(1 /* term */);
     APPEND(1 /* term */);
@@ -1048,13 +971,12 @@ TEST_CASE(truncate, acquired, NULL)
 
 /* Acquire some entries, truncate the log and then append new ones forcing the
    log to be grown and the reference count hash table to be re-built. */
-TEST_CASE(truncate, acquire_append, NULL)
+TEST(logTruncate, acquire_append, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry *entries;
     unsigned n;
     size_t i;
-    (void)params;
 
     APPEND(1 /* term */);
     APPEND(1 /* term */);
@@ -1074,8 +996,6 @@ TEST_CASE(truncate, acquire_append, NULL)
     return MUNIT_OK;
 }
 
-TEST_GROUP(truncate, error)
-
 static char *truncate_acquired_heap_fault_delay[] = {"0", NULL};
 static char *truncate_acquired_fault_repeat[] = {"1", NULL};
 
@@ -1088,7 +1008,7 @@ static MunitParameterEnum truncate_acquired_oom_params[] = {
 /* Acquire entries at a certain index. Truncate the log at that index. The
  * truncated entries are still referenced. Then append a new entry, which fails
  * to be appended due to OOM. */
-TEST_CASE(truncate, error, acquired_oom, truncate_acquired_oom_params)
+TEST(logTruncate, acquiredOom, setup, tear_down, 0, truncate_acquired_oom_params)
 {
     struct fixture *f = data;
     struct raft_entry *entries;
@@ -1124,16 +1044,12 @@ TEST_CASE(truncate, error, acquired_oom, truncate_acquired_oom_params)
  *
  *****************************************************************************/
 
-TEST_SUITE(snapshot)
-
-TEST_SETUP(snapshot, setup)
-TEST_TEAR_DOWN(snapshot, tear_down)
+SUITE(logSnapshot)
 
 /* Take a snapshot at entry 3, keeping 2 trailing entries. */
-TEST_CASE(snapshot, trailing, NULL)
+TEST(logSnapshot, trailing, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
 
     APPEND(1 /* term */);
     APPEND(2 /* term */);
@@ -1157,10 +1073,9 @@ TEST_CASE(snapshot, trailing, NULL)
 
 /* Take a snapshot when the number of outstanding entries is lower than the
  * desired trail (so no entry will be deleted). */
-TEST_CASE(snapshot, trailing_higher_tha_num_entries, NULL)
+TEST(logSnapshot, trailing_higher_tha_num_entries, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
 
     /* Take a snapshot leaving just one entry in the log. */
     APPEND_MANY(1 /* term */, 3 /* n entries */);
@@ -1188,10 +1103,9 @@ TEST_CASE(snapshot, trailing_higher_tha_num_entries, NULL)
 
 /* Take a snapshot when the number of outstanding entries is exactly equal to
  * the desired trail (so no entry will be deleted). */
-TEST_CASE(snapshot, trailing_matches_outstanding, NULL)
+TEST(logSnapshot, trailing_matches_outstanding, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
 
     /* Take a snapshot leaving just one entry in the log. */
     APPEND_MANY(1 /* term */, 3 /* n entries */);
@@ -1217,10 +1131,9 @@ TEST_CASE(snapshot, trailing_matches_outstanding, NULL)
 }
 
 /* Take a snapshot at an index which is not the last one. */
-TEST_CASE(snapshot, less_than_highest_index, NULL)
+TEST(logSnapshot, less_than_highest_index, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
 
     /* Take a snapshot leaving three entries in the log. */
     APPEND_MANY(1 /* term */, 5 /* n entries */);
@@ -1241,10 +1154,9 @@ TEST_CASE(snapshot, less_than_highest_index, NULL)
 }
 
 /* Take a snapshot at a point where the log needs to wrap. */
-TEST_CASE(snapshot, wrap, NULL)
+TEST(logSnapshot, wrap, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
 
     APPEND_MANY(1 /* term */, 5 /* n entries */);
 
@@ -1298,14 +1210,11 @@ TEST_CASE(snapshot, wrap, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(restore)
-
-TEST_SETUP(restore, setup)
-TEST_TEAR_DOWN(restore, tear_down)
+SUITE(logRestore)
 
 /* Mimick the initial restore of a snapshot after loading state from disk, when
  * there are no outstanding entries. */
-TEST_CASE(restore, initial, NULL)
+TEST(logRestore, initial, setup, tear_down, 0, NULL)
 {
     (void)params;
     struct fixture *f = data;
@@ -1316,7 +1225,7 @@ TEST_CASE(restore, initial, NULL)
 }
 
 /* If there are existing entries they are wiped out. */
-TEST_CASE(restore, wipe, NULL)
+TEST(logRestore, wipe, setup, tear_down, 0, NULL)
 {
     (void)params;
     struct fixture *f = data;
