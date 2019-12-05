@@ -522,10 +522,10 @@ static int uvLoadOpenSegment(struct uv *uv,
              * incomplete data. */
             lseek(fd, offset, SEEK_SET);
 
-            rv2 = UvFsFileHasOnlyTrailingZeros(fd, &all_zeros, errmsg);
+            rv2 = UvFsFileHasOnlyTrailingZeros(fd, &all_zeros, uv->io->errmsg);
             if (rv2 != 0) {
-                Tracef(uv->tracer, "check if %s is zeroed: %s", info->filename,
-                       i, errmsg);
+                ErrMsgWrapf(uv->io->errmsg, "check if %s is zeroed",
+                            info->filename);
                 rv = RAFT_IOERR;
                 goto err_after_open;
             }
@@ -937,7 +937,6 @@ int uvSegmentCreateClosedWithConfiguration(
 {
     struct raft_buffer buf;
     char filename[UV__FILENAME_LEN];
-    char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int rv;
 
     /* Render the path */
@@ -957,9 +956,8 @@ int uvSegmentCreateClosedWithConfiguration(
 
     raft_free(buf.base);
 
-    rv = UvFsSyncDir(uv->dir, errmsg);
+    rv = UvFsSyncDir(uv->dir, uv->io->errmsg);
     if (rv != 0) {
-        Tracef(uv->tracer, "sync %s: %s", uv->dir, errmsg);
         return RAFT_IOERR;
     }
 
@@ -987,7 +985,7 @@ int uvSegmentTruncate(struct uv *uv,
 
     assert(!segment->is_open);
 
-    Tracef(uv->tracer, "truncate %u-%u at %u", segment->first_index,
+    Tracef(uv->tracer, "truncate %llu-%llu at %llu", segment->first_index,
            segment->end_index, index);
 
     rv = uvSegmentLoadClosed(uv, segment, &entries, &n);

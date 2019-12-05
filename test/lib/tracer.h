@@ -13,7 +13,6 @@
 void test_tracer_emit(struct raft_tracer *t,
                       const char *file,
                       int line,
-                      const char *format,
-                      ...);
+                      const char *message);
 
 #endif /* TEST_TRACER_H_ */

@@ -376,13 +376,13 @@ struct raft_tracer
     void *impl;
 
     /**
-     * Emit a single trace message.
+     * Emit the given trace message, possibly decorating it with the provided
+     * metadata.
      */
     void (*emit)(struct raft_tracer *t,
                  const char *file,
                  int line,
-                 const char *format,
-                 ...);
+                 const char *message);
 };
 
 /**

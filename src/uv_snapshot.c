@@ -127,9 +127,9 @@ static int uvSnapshotLoadMeta(struct uv *uv,
                     1 + /* Configuration index */
                     1 /* Configuration length */];
     struct raft_buffer buf;
-    unsigned format;
-    unsigned crc1;
-    unsigned crc2;
+    uint64_t format;
+    uint32_t crc1;
+    uint32_t crc2;
     uv_file fd;
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int rv;
@@ -171,8 +171,7 @@ static int uvSnapshotLoadMeta(struct uv *uv,
         goto err_after_open;
     }
     if (buf.len == 0) {
-        Tracef(uv->tracer, "load %s: no configuration data", info->filename,
-               buf.len);
+        Tracef(uv->tracer, "load %s: no configuration data", info->filename);
         rv = RAFT_CORRUPT;
         goto err_after_open;
     }
