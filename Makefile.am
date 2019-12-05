@@ -19,8 +19,6 @@ libraft_la_SOURCES = \
   src/err.c \
   src/heap.c \
   src/log.c \
-  src/logger_ring.c \
-  src/logger_stream.c \
   src/membership.c \
   src/progress.c \
   src/raft.c \
@@ -63,15 +61,13 @@ test_unit_core_SOURCES = \
   src/err.c \
   src/heap.c \
   src/log.c \
-  src/logger_ring.c \
   test/unit/main_core.c \
   test/unit/test_byte.c \
   test/unit/test_configuration.c \
   test/unit/test_err.c \
   test/unit/test_heap.c \
   test/unit/test_log.c \
-  test/unit/test_queue.c \
-  test/unit/test_logger_ring.c
+  test/unit/test_queue.c
 test_unit_core_LDADD = libtest.la
 
 test_integration_core_SOURCES = \
