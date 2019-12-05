@@ -5,10 +5,10 @@
 #include "entry.h"
 #include "err.h"
 #include "log.h"
-#include "tracing.h"
 #include "recv.h"
 #include "snapshot.h"
 #include "tick.h"
+#include "tracing.h"
 
 /* Set to 1 to enable tracing. */
 #if 0
@@ -148,7 +148,7 @@ int raft_start(struct raft *r)
     rv = r->io->load(r->io, &r->current_term, &r->voted_for, &snapshot,
                      &start_index, &entries, &n_entries);
     if (rv != 0) {
-        ErrMsgPrintf(r->errmsg, "io: %s", r->io->errmsg);
+        ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
         return rv;
     }
     assert(start_index >= 1);

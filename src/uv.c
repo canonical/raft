@@ -55,7 +55,7 @@ static int uvInit(struct raft_io *io, unsigned id, const char *address)
 
     rv = uv->transport->init(uv->transport, id, address);
     if (rv != 0) {
-        ErrMsgPrintf(io->errmsg, "transport: %s", uv->transport->errmsg);
+        ErrMsgTransfer(uv->transport->errmsg, io->errmsg, "transport");
         return rv;
     }
     uv->transport->data = uv;
@@ -622,7 +622,7 @@ int raft_uv_init(struct raft_io *io,
 err:
     assert(rv != 0);
     if (rv == RAFT_NOMEM) {
-        ErrMsgPrintf(io->errmsg, "out of memory");
+        ErrMsgOom(io->errmsg);
     }
     return rv;
 }

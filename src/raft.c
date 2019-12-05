@@ -61,7 +61,7 @@ int raft_init(struct raft *r,
     memset(r->errmsg, 0, sizeof r->errmsg);
     rv = r->io->init(r->io, r->id, r->address);
     if (rv != 0) {
-        ErrMsgPrintf(r->errmsg, "io: %s", r->io->errmsg);
+        ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
         return rv;
     }
     return 0;

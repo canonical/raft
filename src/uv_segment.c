@@ -160,14 +160,14 @@ static int uvOpenSegmentFile(struct uv *uv,
     int rv;
     rv = UvFsOpenFileForReading(uv->dir, filename, fd, errmsg);
     if (rv != 0) {
-        ErrMsgPrintf(uv->io->errmsg, "open file: %s", errmsg);
+        ErrMsgTransfer(errmsg, uv->io->errmsg, "open file");
         return RAFT_IOERR;
     }
     buf.base = format;
     buf.len = sizeof *format;
     rv = UvFsReadInto(*fd, &buf, errmsg);
     if (rv != 0) {
-        ErrMsgPrintf(uv->io->errmsg, "read format: %s", errmsg);
+        ErrMsgTransfer(errmsg, uv->io->errmsg, "read format");
         UvOsClose(*fd);
         return RAFT_IOERR;
     }
@@ -207,13 +207,13 @@ static int uvLoadEntriesBatch(struct uv *uv,
     buf.len = sizeof preamble;
     rv = UvFsReadInto(fd, &buf, errmsg);
     if (rv != 0) {
-        ErrMsgPrintf(uv->io->errmsg, "read preamble: %s", errmsg);
+        ErrMsgTransfer(errmsg, uv->io->errmsg, "read preamble");
         return RAFT_IOERR;
     }
 
     n = byteFlip64(preamble[1]);
     if (n == 0) {
-        ErrMsgPrintf(uv->io->errmsg, "entries count in preamble is zero");
+        ErrMsgPrint(uv->io->errmsg, "entries count in preamble is zero");
         rv = RAFT_CORRUPT;
         goto err;
     }
@@ -245,7 +245,7 @@ static int uvLoadEntriesBatch(struct uv *uv,
     buf.len = header.len - sizeof(uint64_t);
     rv = UvFsReadInto(fd, &buf, errmsg);
     if (rv != 0) {
-        ErrMsgPrintf(uv->io->errmsg, "read header: %s", errmsg);
+        ErrMsgTransfer(errmsg, uv->io->errmsg, "read header");
         rv = RAFT_IOERR;
         goto err_after_header_alloc;
     }
@@ -254,7 +254,7 @@ static int uvLoadEntriesBatch(struct uv *uv,
     crc1 = byteFlip32(*(uint32_t *)preamble);
     crc2 = byteCrc32(header.base, header.len, 0);
     if (crc1 != crc2) {
-        ErrMsgPrintf(uv->io->errmsg, "header checksum mismatch");
+        ErrMsgPrint(uv->io->errmsg, "header checksum mismatch");
         rv = RAFT_CORRUPT;
         goto err_after_header_alloc;
     }
@@ -279,7 +279,7 @@ static int uvLoadEntriesBatch(struct uv *uv,
     }
     rv = UvFsReadInto(fd, &data, errmsg);
     if (rv != 0) {
-        ErrMsgPrintf(uv->io->errmsg, "read data: %s", errmsg);
+        ErrMsgTransfer(errmsg, uv->io->errmsg, "read data");
         rv = RAFT_IOERR;
         goto err_after_data_alloc;
     }
@@ -288,7 +288,7 @@ static int uvLoadEntriesBatch(struct uv *uv,
     crc1 = byteFlip32(*((uint32_t *)preamble + 1));
     crc2 = byteCrc32(data.base, data.len, 0);
     if (crc1 != crc2) {
-        ErrMsgPrintf(uv->io->errmsg, "data checksum mismatch");
+        ErrMsgPrint(uv->io->errmsg, "data checksum mismatch");
         rv = RAFT_CORRUPT;
         goto err_after_data_alloc;
     }
@@ -365,7 +365,7 @@ int uvSegmentLoadClosed(struct uv *uv,
         goto err;
     }
     if (empty) {
-        ErrMsgPrintf(uv->io->errmsg, "file is empty", info->filename);
+        ErrMsgPrint(uv->io->errmsg, "file is empty");
         rv = RAFT_CORRUPT;
         goto err;
     }

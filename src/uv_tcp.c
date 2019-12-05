@@ -68,7 +68,7 @@ int raft_uv_tcp_init(struct raft_uv_transport *transport,
     transport->data = data;
     t = raft_malloc(sizeof *t);
     if (t == NULL) {
-        ErrMsgPrintf(transport->errmsg, "out of memory");
+        ErrMsgOom(transport->errmsg);
         return RAFT_NOMEM;
     }
     t->transport = transport;

@@ -24,7 +24,7 @@ SUITE(ErrMsgPrintf)
 TEST(ErrMsgPrintf, noParams, NULL, NULL, 0, NULL)
 {
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
-    ErrMsgPrintf(errmsg, "boom");
+    ErrMsgPrint(errmsg, "boom");
     munit_assert_string_equal(errmsg, "boom");
     return MUNIT_OK;
 }
@@ -59,7 +59,7 @@ SUITE(ErrMsgWrapf)
 TEST(ErrMsgWrapf, noParams, NULL, NULL, 0, NULL)
 {
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
-    ErrMsgPrintf(errmsg, "boom");
+    ErrMsgPrint(errmsg, "boom");
     ErrMsgWrapf(errmsg, "no luck");
     munit_assert_string_equal(errmsg, "no luck: boom");
     return MUNIT_OK;
@@ -69,7 +69,7 @@ TEST(ErrMsgWrapf, noParams, NULL, NULL, 0, NULL)
 TEST(ErrMsgWrapf, params, NULL, NULL, 0, NULL)
 {
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
-    ErrMsgPrintf(errmsg, "boom");
+    ErrMsgPrint(errmsg, "boom");
     ErrMsgWrapf(errmsg, "no luck, %s", "joe");
     munit_assert_string_equal(errmsg, "no luck, joe: boom");
     return MUNIT_OK;
@@ -79,7 +79,7 @@ TEST(ErrMsgWrapf, params, NULL, NULL, 0, NULL)
 TEST(ErrMsgWrapf, partialTruncate, NULL, NULL, 0, NULL)
 {
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
-    ErrMsgPrintf(errmsg, "no luck");
+    ErrMsgPrint(errmsg, "no luck");
     ErrMsgWrapf(errmsg, LONG_ERRMSG);
     munit_assert_string_equal(errmsg, LONG_ERRMSG ": no l");
     return MUNIT_OK;
@@ -89,7 +89,7 @@ TEST(ErrMsgWrapf, partialTruncate, NULL, NULL, 0, NULL)
 TEST(ErrMsgWrapf, fullTruncate, NULL, NULL, 0, NULL)
 {
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
-    ErrMsgPrintf(errmsg, "no luck");
+    ErrMsgPrint(errmsg, "no luck");
     ErrMsgWrapf(errmsg, LONG_ERRMSG " boom");
     munit_assert_string_equal(errmsg, LONG_ERRMSG " boom");
     return MUNIT_OK;

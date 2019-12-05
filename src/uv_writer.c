@@ -46,7 +46,7 @@ static int uvWriterIoSetup(unsigned n, aio_context_t *ctx, char *errmsg)
     if (rv != 0) {
         switch (rv) {
             case UV_EAGAIN:
-                ErrMsgPrintf(errmsg, "AIO events user limit exceeded");
+                ErrMsgPrint(errmsg, "AIO events user limit exceeded");
                 rv = RAFT_TOOMANY;
                 break;
             default:
@@ -251,7 +251,7 @@ int UvWriterInit(struct UvWriter *w,
     w->events = HeapCalloc(w->n_events, sizeof *w->events);
     if (w->events == NULL) {
         /* UNTESTED: todo */
-        ErrMsgPrintf(errmsg, "failed to alloc events array");
+        ErrMsgOom(errmsg);
         rv = RAFT_NOMEM;
         goto err_after_io_setup;
     }

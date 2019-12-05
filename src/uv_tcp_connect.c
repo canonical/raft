@@ -162,13 +162,13 @@ static int uvTcpConnectStart(struct uvTcpConnect *r, const char *address)
     rv = uvTcpEncodeHandshake(t->id, t->address, &r->handshake);
     if (rv != 0) {
         assert(rv == RAFT_NOMEM);
-        ErrMsgPrintf(r->t->transport->errmsg, "out of memory");
+        ErrMsgOom(r->t->transport->errmsg);
         goto err;
     }
 
     r->tcp = HeapMalloc(sizeof *r->tcp);
     if (r->tcp == NULL) {
-        ErrMsgPrintf(t->transport->errmsg, "out of memory");
+        ErrMsgOom(t->transport->errmsg);
         rv = RAFT_NOMEM;
         goto err_after_encode_handshake;
     }
@@ -214,7 +214,7 @@ int UvTcpConnect(struct raft_uv_transport *transport,
     r = HeapMalloc(sizeof *r);
     if (r == NULL) {
         rv = RAFT_NOMEM;
-        ErrMsgPrintf(transport->errmsg, "out of memory");
+        ErrMsgOom(transport->errmsg);
         goto err;
     }
     r->t = t;

@@ -473,7 +473,7 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
      * we have appended these entries to it. */
     if (status != 0) {
         struct raft_apply *apply;
-        ErrMsgPrintf(r->errmsg, "io: %s", r->io->errmsg);
+        ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
         apply =
             (struct raft_apply *)getRequest(r, request->index, RAFT_COMMAND);
         if (apply != NULL && apply->cb != NULL) {
@@ -561,7 +561,7 @@ static int appendLeader(struct raft *r, raft_index index)
 
     rv = r->io->append(r->io, &request->req, entries, n, appendLeaderCb);
     if (rv != 0) {
-        ErrMsgPrintf(r->errmsg, "io: %s", r->io->errmsg);
+        ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
         goto err_after_request_alloc;
     }
 
@@ -1105,7 +1105,7 @@ int replicationAppend(struct raft *r,
     rv = r->io->append(r->io, &request->req, request->args.entries,
                        request->args.n_entries, appendFollowerCb);
     if (rv != 0) {
-        ErrMsgPrintf(r->errmsg, "io: %s", r->io->errmsg);
+        ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
         goto err_after_acquire_entries;
     }
 

@@ -8,14 +8,6 @@
 #define WRAP_SEP ": "
 #define WRAP_SEP_LEN (int)strlen(WRAP_SEP)
 
-void ErrMsgPrintf(char *e, const char *format, ...)
-{
-    va_list args;
-    va_start(args, format);
-    vsnprintf(e, RAFT_ERRMSG_BUF_SIZE, format, args);
-    va_end(args);
-}
-
 void ErrMsgWrapf(char *e, const char *format, ...)
 {
     size_t n = RAFT_ERRMSG_BUF_SIZE;
