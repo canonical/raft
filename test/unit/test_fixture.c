@@ -3,8 +3,6 @@
 #include "../lib/fsm.h"
 #include "../lib/runner.h"
 
-TEST_MODULE(fixture)
-
 #define N_SERVERS 3
 
 /******************************************************************************
@@ -112,13 +110,11 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-TEST_SUITE(step)
-TEST_SETUP(step, setup)
-TEST_TEAR_DOWN(step, tear_down)
+SUITE(raft_fixture_step)
 
 /* If there is no disk I/O in progress or network messages in flight, the tick
  * callbacks are called. */
-TEST_CASE(step, tick, NULL)
+TEST(raft_fixture_step, tick, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_fixture_event *event;
@@ -150,7 +146,7 @@ TEST_CASE(step, tick, NULL)
 }
 
 /* By default the election timeout of server 0 is the first to expire . */
-TEST_CASE(step, election_timeout, NULL)
+TEST(raft_fixture_step, election_timeout, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_fixture_event *event;
@@ -167,7 +163,7 @@ TEST_CASE(step, election_timeout, NULL)
 }
 
 /* Send requests are flushed immediately. */
-TEST_CASE(step, flush_send, NULL)
+TEST(raft_fixture_step, flush_send, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_fixture_event *event;
@@ -185,7 +181,7 @@ TEST_CASE(step, flush_send, NULL)
 }
 
 /* Messages are delivered according to the current network latency. */
-TEST_CASE(step, deliver, NULL)
+TEST(raft_fixture_step, deliver, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_fixture_event *event;
@@ -207,15 +203,12 @@ TEST_CASE(step, deliver, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(elect)
-TEST_SETUP(elect, setup)
-TEST_TEAR_DOWN(elect, tear_down)
+TEST_SUITE(raft_fixture_elect)
 
 /* Trigger the election of the first server. */
-TEST_CASE(elect, first, NULL)
+TEST(raft_fixture_elect, first, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     ELECT(0);
     ASSERT_STATE(0, RAFT_LEADER);
     ASSERT_STATE(1, RAFT_FOLLOWER);
@@ -224,10 +217,9 @@ TEST_CASE(elect, first, NULL)
 }
 
 /* Trigger the election of the second server. */
-TEST_CASE(elect, second, NULL)
+TEST(raft_fixture_elect, second, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     ELECT(1);
     ASSERT_STATE(0, RAFT_FOLLOWER);
     ASSERT_STATE(1, RAFT_LEADER);
@@ -236,10 +228,9 @@ TEST_CASE(elect, second, NULL)
 }
 
 /* Trigger an election change. */
-TEST_CASE(elect, change, NULL)
+TEST(raft_fixture_elect, change, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     ELECT(0);
     DEPOSE;
     ASSERT_STATE(0, RAFT_FOLLOWER);
@@ -253,10 +244,9 @@ TEST_CASE(elect, change, NULL)
 }
 
 /* Trigger an election that re-elects the same node. */
-TEST_CASE(elect, again, NULL)
+TEST(raft_fixture_elect, again, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     ELECT(0);
     DEPOSE;
     ASSERT_STATE(0, RAFT_FOLLOWER);
@@ -275,16 +265,13 @@ TEST_CASE(elect, again, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(step_until_applied)
-TEST_SETUP(step_until_applied, setup)
-TEST_TEAR_DOWN(step_until_applied, tear_down)
+SUITE(raft_fixture_step_until_applied)
 
 /* Wait for one entry to be applied. */
-TEST_CASE(step_until_applied, one, NULL)
+TEST(raft_fixture_step_until_applied, one, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_apply *req = munit_malloc(sizeof *req);
-    (void)params;
     ELECT(0);
     APPLY(0, req);
     STEP_UNTIL_APPLIED(2);
@@ -296,12 +283,11 @@ TEST_CASE(step_until_applied, one, NULL)
 }
 
 /* Wait for two entries to be applied. */
-TEST_CASE(step_until_applied, two, NULL)
+TEST(raft_fixture_step_until_applied, two, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_apply *req1 = munit_malloc(sizeof *req1);
     struct raft_apply *req2 = munit_malloc(sizeof *req2);
-    (void)params;
     ELECT(0);
     APPLY(0, req1);
     APPLY(0, req2);
