@@ -84,7 +84,7 @@ int UvOsFsync(uv_file fd);
 int UvOsFdatasync(uv_file fd);
 
 /* Portable stat() */
-int UvOsStat(const char* path, uv_stat_t *sb);
+int UvOsStat(const char *path, uv_stat_t *sb);
 
 /* Portable write() */
 int UvOsWrite(uv_file fd,
@@ -114,10 +114,10 @@ int UvOsEventfd(unsigned int initval, int flags);
 int UvOsSetDirectIo(uv_file fd);
 
 /* Format an error message caused by a failed system call or stdlib function. */
-#define UvOsErrMsg(ERRMSG, SYSCALL, ERRNUM)             \
+#define UvOsErrMsg(ERRMSG, SYSCALL, ERRNUM)              \
     {                                                    \
         ErrMsgPrintf(ERRMSG, "%s", uv_strerror(ERRNUM)); \
-        ErrMsgWrapf(ERRMSG, SYSCALL);                    \
+        ErrMsgWrapf(ERRMSG, SYSCALL);                     \
     }
 
 #endif /* UV_OS_H_ */

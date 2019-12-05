@@ -46,7 +46,7 @@ static int uvWriterIoSetup(unsigned n, aio_context_t *ctx, char *errmsg)
     if (rv != 0) {
         switch (rv) {
             case UV_EAGAIN:
-                ErrMsgPrint(errmsg, "AIO events user limit exceeded");
+                ErrMsgPrintf(errmsg, "AIO events user limit exceeded");
                 rv = RAFT_TOOMANY;
                 break;
             default:

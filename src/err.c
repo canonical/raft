@@ -8,24 +8,21 @@
 #define WRAP_SEP ": "
 #define WRAP_SEP_LEN (int)strlen(WRAP_SEP)
 
-void ErrMsgWrapf(char *e, const char *format, ...)
+void errMsgWrap(char *e, const char *format)
 {
     size_t n = RAFT_ERRMSG_BUF_SIZE;
     size_t prefix_n;
     size_t prefix_and_sep_n;
     size_t trail_n;
-    va_list args;
     size_t i;
 
     /* Calculate the lenght of the prefix. */
-    va_start(args, format);
-    prefix_n = vsnprintf(NULL, 0, format, args);
-    va_end(args);
+    prefix_n = strlen(format);
 
     /* If there isn't enough space for the ": " separator and at least one
      * character of the wrapped error message, then just print the prefix. */
     if (prefix_n >= n - (WRAP_SEP_LEN + 1)) {
-        vsnprintf(e, n, format, args);
+        ErrMsgPrintf(e, "%s", format);
         return;
     }
 
@@ -36,9 +33,7 @@ void ErrMsgWrapf(char *e, const char *format, ...)
     e[prefix_and_sep_n + trail_n] = 0;
 
     /* Print the prefix. */
-    va_start(args, format);
-    vsnprintf(e, prefix_n + 1, format, args);
-    va_end(args);
+    ErrMsgPrintf(e, "%s", format);
 
     /* Print the separator.
      *

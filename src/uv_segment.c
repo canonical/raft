@@ -213,7 +213,7 @@ static int uvLoadEntriesBatch(struct uv *uv,
 
     n = byteFlip64(preamble[1]);
     if (n == 0) {
-        ErrMsgPrint(uv->io->errmsg, "entries count in preamble is zero");
+        ErrMsgPrintf(uv->io->errmsg, "entries count in preamble is zero");
         rv = RAFT_CORRUPT;
         goto err;
     }
@@ -254,7 +254,7 @@ static int uvLoadEntriesBatch(struct uv *uv,
     crc1 = byteFlip32(*(uint32_t *)preamble);
     crc2 = byteCrc32(header.base, header.len, 0);
     if (crc1 != crc2) {
-        ErrMsgPrint(uv->io->errmsg, "header checksum mismatch");
+        ErrMsgPrintf(uv->io->errmsg, "header checksum mismatch");
         rv = RAFT_CORRUPT;
         goto err_after_header_alloc;
     }
@@ -288,7 +288,7 @@ static int uvLoadEntriesBatch(struct uv *uv,
     crc1 = byteFlip32(*((uint32_t *)preamble + 1));
     crc2 = byteCrc32(data.base, data.len, 0);
     if (crc1 != crc2) {
-        ErrMsgPrint(uv->io->errmsg, "data checksum mismatch");
+        ErrMsgPrintf(uv->io->errmsg, "data checksum mismatch");
         rv = RAFT_CORRUPT;
         goto err_after_data_alloc;
     }
@@ -365,7 +365,7 @@ int uvSegmentLoadClosed(struct uv *uv,
         goto err;
     }
     if (empty) {
-        ErrMsgPrint(uv->io->errmsg, "file is empty");
+        ErrMsgPrintf(uv->io->errmsg, "file is empty");
         rv = RAFT_CORRUPT;
         goto err;
     }
@@ -390,8 +390,8 @@ int uvSegmentLoadClosed(struct uv *uv,
         off_t offset;
         rv = uvLoadEntriesBatch(uv, fd, &tmp_entries, &tmp_n, &offset, &last);
         if (rv != 0) {
-            ErrMsgWrapf(uv->io->errmsg,
-                        "entries batch %u starting at byte %llu", i, offset);
+            ErrMsgWrapf(uv->io->errmsg, "entries batch %u starting at byte %lu",
+                        i, offset);
             goto err_after_open;
         }
         rv = extendEntries(tmp_entries, tmp_n, entries, n);
@@ -511,8 +511,7 @@ static int uvLoadOpenSegment(struct uv *uv,
             /* If this isn't a decoding error, just bail out. */
             if (rv != RAFT_CORRUPT) {
                 ErrMsgWrapf(uv->io->errmsg,
-                            "entries batch %u starting at byte %llu", i,
-                            offset);
+                            "entries batch %u starting at byte %lu", i, offset);
                 goto err_after_open;
             }
 

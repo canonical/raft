@@ -119,8 +119,8 @@ static int uvFinalizeStart(struct uvDyingSegment *segment)
     rv = uv_queue_work(uv->loop, &uv->finalize_work, uvFinalizeWorkCb,
                        uvFinalizeAfterWorkCb);
     if (rv != 0) {
-        Tracef(uv->tracer, "start to truncate segment file %d: %s",
-               segment->counter, uv_strerror(rv));
+        ErrMsgPrintf(uv->io->errmsg, "start to truncate segment file %llu: %s",
+                     segment->counter, uv_strerror(rv));
         return RAFT_IOERR;
     }
 

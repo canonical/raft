@@ -17,7 +17,7 @@ int UvFsCheckDir(const char *dir, char *errmsg)
 
     /* Ensure that the given path doesn't exceed our static buffer limit. */
     if (!UV__DIR_HAS_VALID_LEN(dir)) {
-        ErrMsgPrint(errmsg, "directory path too long");
+        ErrMsgPrintf(errmsg, "directory path too long");
         return RAFT_NAMETOOLONG;
     }
 

@@ -38,7 +38,7 @@ static int uvMetadataDecode(const void *buf,
 
     /* Sanity checks that values make sense */
     if (metadata->version == 0) {
-        ErrMsgPrint(errmsg, "version is set to zero");
+        ErrMsgPrintf(errmsg, "version is set to zero");
         return RAFT_CORRUPT;
     }
 

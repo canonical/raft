@@ -387,7 +387,7 @@ static void uvSnapshotPutWorkCb(uv_work_t *work)
 
     rv = UvFsMakeFile(uv->dir, filename, put->meta.bufs, 2, put->errmsg);
     if (rv != 0) {
-        ErrMsgWrapf(put->errmsg, "write %s: %s", filename);
+        ErrMsgWrapf(put->errmsg, "write %s", filename);
         put->status = RAFT_IOERR;
         return;
     }
