@@ -83,7 +83,6 @@ AX_CHECK_COMPILE_FLAG([-fstack-clash-protection], [AM_CFLAGS="$AM_CFLAGS -fstack
 AX_CHECK_COMPILE_FLAG([-fstack-protector-strong], [AM_CFLAGS="$AM_CFLAGS -fstack-protector-strong"], [], [-Werror])
 AX_CHECK_COMPILE_FLAG([-fasynchronous-unwind-tables], [AM_CFLAGS="$AM_CFLAGS -fasynchronous-unwind-tables"], [], [-Werror])
 AX_CHECK_COMPILE_FLAG([-fdiagnostics-show-option], [AM_CFLAGS="$AM_CFLAGS -fdiagnostics-show-option"], [], [-Werror])
-AX_CHECK_COMPILE_FLAG([-Werror], [AM_CFLAGS="$AM_CFLAGS -Werror"], [], [-Werror])
 AX_CHECK_COMPILE_FLAG([-Wall], [AM_CFLAGS="$AM_CFLAGS -Wall"], [], [-Werror])
 AX_CHECK_COMPILE_FLAG([-Wextra], [AM_CFLAGS="$AM_CFLAGS -Wextra"], [], [-Werror])
 AX_CHECK_COMPILE_FLAG([-Wpedantic], [AM_CFLAGS="$AM_CFLAGS -Wpedantic"], [], [-Werror])
