@@ -115,18 +115,15 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-TEST_SUITE(add)
-TEST_SETUP(add, setup)
-TEST_TEAR_DOWN(add, tear_down)
+SUITE(raft_add)
 
 /* After a request to add a new non-voting server is committed, the new
  * configuration is not marked as uncommitted anymore */
-TEST_CASE(add, committed, NULL)
+TEST(raft_add, committed, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft *raft = CLUSTER_RAFT(0);
     const struct raft_server *server;
-    (void)params;
     ADD(0 /*   I                                                     */,
         3 /*   ID                                                    */, 0);
 
@@ -152,14 +149,11 @@ TEST_CASE(add, committed, NULL)
     return MUNIT_OK;
 }
 
-TEST_GROUP(add, error)
-
 /* Trying to add a server on a node which is not the leader results in an
  * error. */
-TEST_CASE(add, error, not_leader, NULL)
+TEST(raft_add, notLeader, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     ADD(1 /*   I                                                     */,
         3 /*   ID                                                    */,
         RAFT_NOTLEADER);
@@ -168,10 +162,9 @@ TEST_CASE(add, error, not_leader, NULL)
 
 /* Trying to add a server while a configuration change is already in progress
  * results in an error. */
-TEST_CASE(add, error, busy, NULL)
+TEST(raft_add, busy, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     ADD(0 /*   I                                                     */,
         3 /*   ID                                                    */, 0);
     ADD(0 /*   I                                                     */,
@@ -183,10 +176,9 @@ TEST_CASE(add, error, busy, NULL)
 
 /* Trying to add a server with an ID which is already in use results in an
  * error. */
-TEST_CASE(add, error, dup_id, NULL)
+TEST(raft_add, duplicateId, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     ADD(0 /*   I                                                     */,
         2 /*   ID                                                    */,
         RAFT_DUPLICATEID);
@@ -199,18 +191,15 @@ TEST_CASE(add, error, dup_id, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(promote)
-TEST_SETUP(promote, setup)
-TEST_TEAR_DOWN(promote, tear_down)
+SUITE(raft_promote)
 
 /* Promoting a server whose log is already up-to-date results in the relevant
  * configuration change to be submitted immediately. */
-TEST_CASE(promote, up_to_date, NULL)
+TEST(raft_promote, up_to_date, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft *raft;
     const struct raft_server *server;
-    (void)params;
     GROW;
     ADD(0, 3, 0);
     CLUSTER_STEP_UNTIL_APPLIED(2, 1, 2000);
@@ -240,12 +229,11 @@ static bool third_server_has_caught_up(struct raft_fixture *f, void *arg)
 /* Promoting a server whose log is not up-to-date results in catch-up rounds to
  * start. When the server has caught up, the configuration change request gets
  * submitted. */
-TEST_CASE(promote, catch_up, NULL)
+TEST(raft_promote, catch_up, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft *raft;
     const struct raft_server *server;
-    (void)params;
     CLUSTER_MAKE_PROGRESS;
     GROW;
     ADD(0, 3, 0);
@@ -295,12 +283,11 @@ static bool third_server_has_completed_first_round(struct raft_fixture *f,
 /* Promoting a server whose log is not up-to-date results in catch-up rounds to
  * start. If new entries are appended after a round is started, a new round is
  * initiated once the former one completes. */
-TEST_CASE(promote, new_round, NULL)
+TEST(raft_promote, new_round, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     unsigned election_timeout = CLUSTER_RAFT(0)->election_timeout;
     struct raft_apply *req = munit_malloc(sizeof *req);
-    (void)params;
     CLUSTER_MAKE_PROGRESS;
     GROW;
     ADD(0, 3, 0);
@@ -347,10 +334,9 @@ static bool second_server_has_new_configuration(struct raft_fixture *f,
  * which promotes a non-voting server, the configuration change is immediately
  * applied locally, even if the entry is not yet committed. Once the entry is
  * committed, the change becomes permanent.*/
-TEST_CASE(promote, change_is_immediate, NULL)
+TEST(raft_promote, change_is_immediate, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     GROW;
     CLUSTER_MAKE_PROGRESS;
     ADD(0, 3, 0);
@@ -364,43 +350,37 @@ TEST_CASE(promote, change_is_immediate, NULL)
     return MUNIT_OK;
 }
 
-TEST_GROUP(promote, error)
-
 /* Trying to promote a server on a node which is not the leader results in an
  * error. */
-TEST_CASE(promote, error, not_leader, NULL)
+TEST(raft_promote, notLeader, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     PROMOTE(1, 3, RAFT_NOTLEADER);
     return MUNIT_OK;
 }
 
 /* Trying to promote a server whose ID is unknown results in an
  * error. */
-TEST_CASE(promote, error, bad_id, NULL)
+TEST(raft_promote, badId, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     PROMOTE(0, 3, RAFT_BADID);
     return MUNIT_OK;
 }
 
 /* Promoting a server which is already a voting results in an error. */
-TEST_CASE(promote, error, already_voting, NULL)
+TEST(raft_promote, alreadVoting, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     PROMOTE(0, 1, RAFT_ALREADYVOTING);
     return MUNIT_OK;
 }
 
 /* Trying to promote a server while another server is being promoted results in
  * an error. */
-TEST_CASE(promote, error, in_progress, NULL)
+TEST(raft_promote, inProgress, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     ADD(0, 3, 0);
     CLUSTER_STEP_UNTIL_APPLIED(0, 2, 2000);
 
@@ -413,11 +393,10 @@ TEST_CASE(promote, error, in_progress, NULL)
 /* If leadership is lost before the configuration change log entry for promoting
  * the new server is committed, the leader configuration gets rolled back and
  * the server being promoted is not considered any more as voting. */
-TEST_CASE(promote, error, leadership_lost, NULL)
+TEST(raft_promote, leadershipLost, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     const struct raft_server *server;
-    (void)params;
     /* TODO: fix */
     return MUNIT_SKIP;
     GROW;
@@ -454,16 +433,13 @@ TEST_CASE(promote, error, leadership_lost, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(remove)
-TEST_SETUP(remove, setup)
-TEST_TEAR_DOWN(remove, tear_down)
+SUITE(raft_remove)
 
 /* After a request to remove server is committed, the new configuration is not
  * marked as uncommitted anymore */
-TEST_CASE(remove, committed, NULL)
+TEST(raft_remove, committed, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     GROW;
     ADD(0, 3, 0);
     CLUSTER_STEP_UNTIL_APPLIED(2, 1, 2000);
@@ -477,10 +453,9 @@ TEST_CASE(remove, committed, NULL)
 }
 
 /* A leader gets a request to remove itself. */
-TEST_CASE(remove, self, NULL)
+TEST(raft_remove, self, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     REMOVE(0, 1, 0);
     CLUSTER_STEP_UNTIL_APPLIED(0, 2, 2000);
     /* TODO: the second server does not get notified */
@@ -489,14 +464,11 @@ TEST_CASE(remove, self, NULL)
     return MUNIT_OK;
 }
 
-TEST_GROUP(remove, error)
-
 /* Trying to remove a server on a node which is not the leader results in an
  * error. */
-TEST_CASE(remove, error, not_leader, NULL)
+  TEST(raft_remove, notLeader, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     REMOVE(1 /*   I                                                     */,
            3 /*   ID                                                    */,
            RAFT_NOTLEADER);
@@ -505,20 +477,18 @@ TEST_CASE(remove, error, not_leader, NULL)
 
 /* Trying to remove a server while a configuration change is already in progress
  * results in an error. */
-TEST_CASE(remove, error, in_progress, NULL)
+TEST(raft_remove, inProgress, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     ADD(0, 3, 0);
     REMOVE(0, 3, RAFT_CANTCHANGE);
     return MUNIT_OK;
 }
 
 /* Trying to remove a server with an unknwon ID results in an error. */
-TEST_CASE(remove, error, bad_id, NULL)
+TEST(raft_remove, badId, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     REMOVE(0, 3, RAFT_BADID);
     return MUNIT_OK;
 }
