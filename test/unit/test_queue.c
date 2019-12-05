@@ -116,7 +116,7 @@ TEST(QUEUE_IS_EMPTY, no, setup, tear_down, 0, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(QUEUE_PUSH)
+SUITE(QUEUE_PUSH)
 
 TEST(QUEUE_PUSH, one, setup, tear_down, 0, NULL)
 {
@@ -149,7 +149,7 @@ TEST(QUEUE_PUSH, two, setup, tear_down, 0, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(QUEUE_REMOVE)
+SUITE(QUEUE_REMOVE)
 
 TEST(QUEUE_REMOVE, first, setup, tear_down, 0, NULL)
 {

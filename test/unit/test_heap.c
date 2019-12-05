@@ -2,8 +2,6 @@
 
 #include "../lib/runner.h"
 
-TEST_MODULE(heap)
-
 /******************************************************************************
  *
  * Default heap functions

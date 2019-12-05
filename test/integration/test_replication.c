@@ -78,7 +78,7 @@ static MunitParameterEnum cluster_3_params[] = {
  *
  *****************************************************************************/
 
-TEST_SUITE(send)
+SUITE(send)
 
 /* A leader sends a heartbeat message as soon as it gets elected. */
 TEST(send, initialHeartbeat, setup, tear_down, 0, NULL)

@@ -203,7 +203,7 @@ TEST(raft_fixture_step, deliver, setup, tear_down, 0, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(raft_fixture_elect)
+SUITE(raft_fixture_elect)
 
 /* Trigger the election of the first server. */
 TEST(raft_fixture_elect, first, setup, tear_down, 0, NULL)

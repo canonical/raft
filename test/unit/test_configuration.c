@@ -268,7 +268,7 @@ TEST(configurationCopy, oom, setup, tear_down, 0, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(configurationAdd)
+SUITE(configurationAdd)
 
 /* Add a server to the configuration. */
 TEST(configurationAdd, one, setup, tear_down, 0, NULL)

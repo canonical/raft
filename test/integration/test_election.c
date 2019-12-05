@@ -3,8 +3,6 @@
 
 #include "../../src/configuration.h"
 
-TEST_MODULE(election)
-
 /******************************************************************************
  *
  * Fixture
