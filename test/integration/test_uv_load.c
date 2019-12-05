@@ -287,7 +287,7 @@ struct snapshot
         munit_assert_int(_term, ==, TERM);                                    \
         munit_assert_int(_voted_for, ==, VOTED_FOR);                          \
         munit_assert_int(_start_index, ==, START_INDEX);                      \
-        if (SNAPSHOT != NULL) {                                               \
+        if (_snapshot != NULL) {                                              \
             struct snapshot *_expected = (struct snapshot *)(SNAPSHOT);       \
             munit_assert_ptr_not_null(_snapshot);                             \
             munit_assert_int(_snapshot->term, ==, _expected->term);           \
@@ -299,10 +299,8 @@ struct snapshot
             raft_free(_snapshot->bufs[0].base);                               \
             raft_free(_snapshot->bufs);                                       \
             raft_free(_snapshot);                                             \
-        } else {                                                              \
-            munit_assert_ptr_null(_snapshot);                                 \
         }                                                                     \
-        if (N_ENTRIES != 0) {                                                 \
+        if (_n != 0) {                                                        \
             munit_assert_int(_n, ==, N_ENTRIES);                              \
             for (_i = 0; _i < _n; _i++) {                                     \
                 struct raft_entry *_entry = &_entries[_i];                    \
@@ -318,9 +316,6 @@ struct snapshot
                 }                                                             \
             }                                                                 \
             raft_free(_entries);                                              \
-        } else {                                                              \
-            munit_assert_int(_n, ==, 0);                                      \
-            munit_assert_ptr_null(_entries);                                  \
         }                                                                     \
     } while (0)
 
