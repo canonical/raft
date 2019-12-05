@@ -94,24 +94,19 @@ struct item
  *
  *****************************************************************************/
 
-TEST_SUITE(is_empty)
+SUITE(QUEUE_IS_EMPTY)
 
-TEST_SETUP(is_empty, setup)
-TEST_TEAR_DOWN(is_empty, tear_down)
-
-TEST_CASE(is_empty, yes, NULL)
+TEST(QUEUE_IS_EMPTY, yes, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     ASSERT_EMPTY;
     return MUNIT_OK;
 }
 
-TEST_CASE(is_empty, no, NULL)
+TEST(QUEUE_IS_EMPTY, no, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct item items[1];
-    (void)params;
     PUSH(items);
     ASSERT_NOT_EMPTY;
     return MUNIT_OK;
@@ -123,12 +118,9 @@ TEST_CASE(is_empty, no, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(push)
+TEST_SUITE(QUEUE_PUSH)
 
-TEST_SETUP(push, setup)
-TEST_TEAR_DOWN(push, tear_down)
-
-TEST_CASE(push, one, NULL)
+TEST(QUEUE_PUSH, one, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct item items[1];
@@ -138,7 +130,7 @@ TEST_CASE(push, one, NULL)
     return MUNIT_OK;
 }
 
-TEST_CASE(push, two, NULL)
+TEST(QUEUE_PUSH, two, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct item items[2];
@@ -159,12 +151,9 @@ TEST_CASE(push, two, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(remove)
+TEST_SUITE(QUEUE_REMOVE)
 
-TEST_SETUP(remove, setup)
-TEST_TEAR_DOWN(remove, tear_down)
-
-TEST_CASE(remove, first, NULL)
+TEST(QUEUE_REMOVE, first, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct item items[3];
@@ -175,7 +164,7 @@ TEST_CASE(remove, first, NULL)
     return MUNIT_OK;
 }
 
-TEST_CASE(remove, second, NULL)
+TEST(QUEUE_REMOVE, second, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct item items[3];
@@ -186,7 +175,7 @@ TEST_CASE(remove, second, NULL)
     return MUNIT_OK;
 }
 
-TEST_CASE(remove, success, NULL)
+TEST(QUEUE_REMOVE, success, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct item items[3];
@@ -203,36 +192,30 @@ TEST_CASE(remove, success, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(tail)
+SUITE(QUEUE_TAIL)
 
-TEST_SETUP(tail, setup)
-TEST_TEAR_DOWN(tail, tear_down)
-
-TEST_CASE(tail, one, NULL)
+TEST(QUEUE_TAIL, one, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct item items[1];
-    (void)params;
     PUSH(items);
     ASSERT_TAIL(1);
     return MUNIT_OK;
 }
 
-TEST_CASE(tail, two, NULL)
+TEST(QUEUE_TAIL, two, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct item items[2];
-    (void)params;
     PUSH(items);
     ASSERT_TAIL(2);
     return MUNIT_OK;
 }
 
-TEST_CASE(tail, three, NULL)
+TEST(QUEUE_TAIL, three, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct item items[3];
-    (void)params;
     PUSH(items);
     ASSERT_TAIL(3);
     return MUNIT_OK;
@@ -244,31 +227,26 @@ TEST_CASE(tail, three, NULL)
  *
  *****************************************************************************/
 
-TEST_SUITE(foreach)
-
-TEST_SETUP(foreach, setup)
-TEST_TEAR_DOWN(foreach, tear_down)
+SUITE(QUEUE_FOREACH)
 
 /* Loop through a queue of zero items. */
-TEST_CASE(foreach, zero, NULL)
+TEST(QUEUE_FOREACH, zero, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     queue *head;
     int count = 0;
-    (void)params;
     QUEUE_FOREACH(head, &f->queue) { count++; }
     munit_assert_int(count, ==, 0);
     return MUNIT_OK;
 }
 
 /* Loop through a queue of one item. */
-TEST_CASE(foreach, one, NULL)
+TEST(QUEUE_FOREACH, one, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct item items[1];
     queue *head;
     int count = 0;
-    (void)params;
     PUSH(items);
     QUEUE_FOREACH(head, &f->queue) { count++; }
     munit_assert_int(count, ==, 1);
@@ -277,14 +255,13 @@ TEST_CASE(foreach, one, NULL)
 
 /* Loop through a queue of two items. The order of the loop is from the head to
  * the tail. */
-TEST_CASE(foreach, two, NULL)
+TEST(QUEUE_FOREACH, two, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct item items[2];
     queue *head;
     int values[2] = {0, 0};
     int i = 0;
-    (void)params;
     PUSH(items);
     QUEUE_FOREACH(head, &f->queue)
     {
