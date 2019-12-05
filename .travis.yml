@@ -12,6 +12,9 @@ addons:
 compiler:
   - clang
   - gcc
+arch:
+  - amd64
+  - arm64
 script:
   - autoreconf -i
   - ./configure --enable-example --enable-debug --enable-code-coverage --enable-sanitize
