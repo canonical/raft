@@ -141,12 +141,11 @@ static void submitCbAssertResult(struct UvWriterReq *req, int status)
         DESTROY_BUFS(_bufs, N_BUFS);                            \
     } while (0)
 
-/* Submit a write request with the given parameters, close the writer after
- * N loop iterations and assert that the request got canceled. */
-#define WRITE_CLOSE(N_BUFS, CONTENT, OFFSET, N, STATUS)         \
+/* Submit a write request with the given parameters, close the writer right
+ * after and assert that the request got canceled. */
+#define WRITE_CLOSE(N_BUFS, CONTENT, OFFSET, STATUS)            \
     do {                                                        \
         WRITE_REQ(N_BUFS, CONTENT, OFFSET, 0 /* rv */, STATUS); \
-        LOOP_RUN(N);                                            \
         CLOSE_SUBMIT;                                           \
         munit_assert_false(_result.done);                       \
         LOOP_RUN_UNTIL(&_result.done);                          \
@@ -356,8 +355,7 @@ TEST(UvWriterSubmit, noResources, setUpDeps, tearDown, 0, dir_no_aio_params)
     if (rv != 0) {
         return MUNIT_SKIP;
     }
-    WRITE_FAILURE(1, 0, 0, RAFT_TOOMANY,
-                  "AIO events user limit exceeded");
+    WRITE_FAILURE(1, 0, 0, RAFT_TOOMANY, "AIO events user limit exceeded");
     test_aio_destroy(ctx);
     return MUNIT_OK;
 }
@@ -375,7 +373,7 @@ TEST(UvWriterClose, threadpool, setUp, tearDownDeps, 0, dir_no_aio_params)
 {
     struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;
-    WRITE_CLOSE(1, 0, 0, 0, 0);
+    WRITE_CLOSE(1, 0, 0, 0);
     return MUNIT_OK;
 }
 
@@ -386,7 +384,7 @@ TEST(UvWriterClose, aio, setUp, tearDownDeps, 0, dir_aio_params)
 {
     struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;
-    WRITE_CLOSE(1, 0, 0, 0, RAFT_CANCELED);
+    WRITE_CLOSE(1, 0, 0, RAFT_CANCELED);
     return MUNIT_OK;
 }
 
