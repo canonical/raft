@@ -5,8 +5,6 @@
 
 #include "../../src/configuration.h"
 
-TEST_MODULE(membership)
-
 /******************************************************************************
  *
  * Fixture

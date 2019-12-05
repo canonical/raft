@@ -109,13 +109,10 @@ static MunitParameterEnum cluster_3_params[] = {
  *
  *****************************************************************************/
 
-TEST_SUITE(win)
-
-TEST_SETUP(win, setup)
-TEST_TEAR_DOWN(win, tear_down)
+SUITE(win)
 
 /* Test an election round with two voters. */
-TEST_CASE(win, two_voters, NULL)
+TEST(win, two_voters, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -143,7 +140,7 @@ TEST_CASE(win, two_voters, NULL)
 
 /* If we have already voted and the same candidate requests the vote again, the
  * vote is granted. */
-TEST_CASE(win, dupe_vote, NULL)
+TEST(win, dupe_vote, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -175,7 +172,7 @@ TEST_CASE(win, dupe_vote, NULL)
 }
 
 /* If the requester last log entry index is the same, the vote is granted. */
-TEST_CASE(win, last_index_is_same, NULL)
+TEST(win, last_index_is_same, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry1;
@@ -208,7 +205,7 @@ TEST_CASE(win, last_index_is_same, NULL)
 }
 
 /* If the requester last log entry index is higher, the vote is granted. */
-TEST_CASE(win, last_index_is_higher, NULL)
+TEST(win, last_index_is_higher, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry;
@@ -239,7 +236,7 @@ TEST_CASE(win, last_index_is_higher, NULL)
 
 /* If a candidate receives a vote request response granting the vote but the
  * quorum is not reached, it stays candidate. */
-TEST_CASE(win, wait_quorum, cluster_5_params)
+TEST(win, wait_quorum, setup, tear_down, 0, cluster_5_params)
 {
     struct fixture *f = data;
     (void)params;
@@ -276,12 +273,9 @@ TEST_CASE(win, wait_quorum, cluster_5_params)
  *
  *****************************************************************************/
 
-TEST_SUITE(reject)
+SUITE(reject)
 
-TEST_SETUP(reject, setup)
-TEST_TEAR_DOWN(reject, tear_down)
-
-TEST_CASE(reject, higher_term, NULL)
+TEST(reject, higher_term, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -309,7 +303,7 @@ TEST_CASE(reject, higher_term, NULL)
 
 /* If the server already has a leader, the vote is not granted (even if the
  * request has a higher term). */
-TEST_CASE(reject, has_leader, cluster_3_params)
+TEST(reject, has_leader, setup, tear_down, 0, cluster_3_params)
 {
     struct fixture *f = data;
     (void)params;
@@ -330,7 +324,7 @@ TEST_CASE(reject, has_leader, cluster_3_params)
 }
 
 /* If a server has already voted, vote is not granted. */
-TEST_CASE(reject, already_voted, cluster_3_params)
+TEST(reject, already_voted, setup, tear_down, 0, cluster_3_params)
 {
     struct fixture *f = data;
     (void)params;
@@ -364,7 +358,7 @@ TEST_CASE(reject, already_voted, cluster_3_params)
 
 /* If the requester last log entry term is lower than ours, the vote is not
  * granted. */
-TEST_CASE(reject, last_term_is_lower, NULL)
+TEST(reject, last_term_is_lower, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry1;
@@ -409,7 +403,7 @@ TEST_CASE(reject, last_term_is_lower, NULL)
 
 /* If the requester last log entry index is the lower, the vote is not
  * granted. */
-TEST_CASE(reject, last_index_is_lower, NULL)
+TEST(reject, last_index_is_lower, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry;
@@ -456,7 +450,7 @@ static MunitParameterEnum reject_not_voting_params[] = {
 };
 
 /* If we are not a voting server, the vote is not granted. */
-TEST_CASE(reject, non_voting, reject_not_voting_params)
+TEST(reject, non_voting, setup, tear_down, 0, reject_not_voting_params)
 {
     struct fixture *f = data;
     (void)params;
@@ -482,7 +476,7 @@ TEST_CASE(reject, non_voting, reject_not_voting_params)
 /* If a candidate server receives a response indicating that the vote was not
  * granted, nothing happens (e.g. the server has already voted for someone
  * else). */
-TEST_CASE(reject, not_granted, cluster_5_params)
+TEST(reject, not_granted, setup, tear_down, 0, cluster_5_params)
 {
     struct fixture *f = data;
     (void)params;
@@ -540,10 +534,7 @@ TEST_CASE(reject, not_granted, cluster_5_params)
  *
  *****************************************************************************/
 
-TEST_SUITE(io_error)
-
-TEST_SETUP(io_error, setup)
-TEST_TEAR_DOWN(io_error, tear_down)
+SUITE(io_error)
 
 static char *io_error_candidate_delay[] = {"0", "1", NULL};
 static MunitParameterEnum io_error_candidate_params[] = {
@@ -552,7 +543,7 @@ static MunitParameterEnum io_error_candidate_params[] = {
 };
 
 /* The I/O error occurs when converting to candidate. */
-TEST_CASE(io_error, candidate, io_error_candidate_params)
+TEST(io_error, candidate, setup, tear_down, 0, io_error_candidate_params)
 {
     struct fixture *f = data;
     const char *delay = munit_parameters_get(params, "delay");
@@ -568,7 +559,7 @@ TEST_CASE(io_error, candidate, io_error_candidate_params)
 }
 
 /* The I/O error occurs when sending a vote request, and gets ignored. */
-TEST_CASE(io_error, send_vote_request, NULL)
+TEST(io_error, send_vote_request, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -587,7 +578,7 @@ TEST_CASE(io_error, send_vote_request, NULL)
 }
 
 /* The I/O error occurs when the second node tries to persist its vote. */
-TEST_CASE(io_error, persist_vote, NULL)
+TEST(io_error, persist_vote, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;

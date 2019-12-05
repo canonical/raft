@@ -1,8 +1,6 @@
 #include "../lib/cluster.h"
 #include "../lib/runner.h"
 
-TEST_MODULE(start)
-
 /******************************************************************************
  *
  * Start with a snapshot present on disk.
@@ -14,9 +12,9 @@ struct snapshot_fixture
     FIXTURE_CLUSTER;
 };
 
-TEST_SUITE(snapshot)
+SUITE(snapshot)
 
-TEST_SETUP(snapshot)
+static void *setup(const MunitParameter params[], void *user_data)
 {
     struct snapshot_fixture *f = munit_malloc(sizeof *f);
     struct raft_configuration configuration;
@@ -35,7 +33,7 @@ TEST_SETUP(snapshot)
     return f;
 }
 
-TEST_TEAR_DOWN(snapshot)
+static void tear_down(void *data)
 {
     struct snapshot_fixture *f = data;
     TEAR_DOWN_CLUSTER;
@@ -43,7 +41,7 @@ TEST_TEAR_DOWN(snapshot)
 }
 
 /* Only the snapshot is present and no other entries. */
-TEST_CASE(snapshot, no_entries, NULL)
+TEST(snapshot, no_entries, setup, tear_down, 0, NULL)
 {
     struct snapshot_fixture *f = data;
     (void)params;
@@ -60,7 +58,7 @@ TEST_CASE(snapshot, no_entries, NULL)
 }
 
 /* There's a snapshot along with some follow-up entries. */
-TEST_CASE(snapshot, followup_entries, NULL)
+TEST(snapshot, followup_entries, setup, tear_down, 0, NULL)
 {
     struct snapshot_fixture *f = data;
     struct raft_entry entries[2];
@@ -105,9 +103,9 @@ struct entries_fixture
     struct raft_configuration configuration;
 };
 
-TEST_SUITE(entries)
+SUITE(entries)
 
-TEST_SETUP(entries)
+static void *setUpEntries(const MunitParameter params[], void *user_data)
 {
     struct entries_fixture *f = munit_malloc(sizeof *f);
     struct raft *raft;
@@ -126,7 +124,7 @@ TEST_SETUP(entries)
     return f;
 }
 
-TEST_TEAR_DOWN(entries)
+static void tearDownEntries(void *data)
 {
     struct entries_fixture *f = data;
     raft_configuration_close(&f->configuration);
@@ -135,7 +133,7 @@ TEST_TEAR_DOWN(entries)
 }
 
 /* No entries are present at all */
-TEST_CASE(entries, empty, NULL)
+TEST(entries, empty, setUpEntries, tearDownEntries, 0, NULL)
 {
     struct entries_fixture *f = data;
     (void)params;
@@ -145,7 +143,7 @@ TEST_CASE(entries, empty, NULL)
 }
 
 /* Two entries are present. */
-TEST_CASE(entries, two, NULL)
+TEST(entries, two, setUpEntries, tearDownEntries, 0, NULL)
 {
     struct entries_fixture *f = data;
     struct raft_entry entry;
@@ -189,9 +187,9 @@ struct single_voting_fixture
     FIXTURE_CLUSTER;
 };
 
-TEST_SUITE(single_voting)
+SUITE(single_voting)
 
-TEST_SETUP(single_voting)
+static void *setUpSingleVoting(const MunitParameter params[], void *user_data)
 {
     struct single_voting_fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
@@ -201,7 +199,7 @@ TEST_SETUP(single_voting)
     return f;
 }
 
-TEST_TEAR_DOWN(single_voting)
+static void tearDownSingleVoting(void *data)
 {
     struct single_voting_fixture *f = data;
     TEAR_DOWN_CLUSTER;
@@ -209,7 +207,12 @@ TEST_TEAR_DOWN(single_voting)
 }
 
 /* The server immediately elects itself */
-TEST_CASE(single_voting, self_elect, NULL)
+TEST(single_voting,
+     self_elect,
+     setUpSingleVoting,
+     tearDownSingleVoting,
+     0,
+     NULL)
 {
     struct single_voting_fixture *f = data;
     (void)params;
@@ -229,9 +232,10 @@ struct single_voting_not_us_fixture
     FIXTURE_CLUSTER;
 };
 
-TEST_SUITE(single_voting_not_us)
+SUITE(single_voting_not_us)
 
-TEST_SETUP(single_voting_not_us)
+static void *setUpSingleVotingNotUs(const MunitParameter params[],
+                                    void *user_data)
 {
     struct single_voting_not_us_fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
@@ -241,7 +245,7 @@ TEST_SETUP(single_voting_not_us)
     return f;
 }
 
-TEST_TEAR_DOWN(single_voting_not_us)
+static void tearDownSingleVotingNotUs(void *data)
 {
     struct single_voting_not_us_fixture *f = data;
     TEAR_DOWN_CLUSTER;
@@ -249,7 +253,12 @@ TEST_TEAR_DOWN(single_voting_not_us)
 }
 
 /* The server immediately elects itself */
-TEST_CASE(single_voting_not_us, dont_self_elect, NULL)
+TEST(single_voting_not_us,
+     dont_self_elect,
+     setUpSingleVotingNotUs,
+     tearDownSingleVotingNotUs,
+     0,
+     NULL)
 {
     struct single_voting_not_us_fixture *f = data;
     (void)params;
