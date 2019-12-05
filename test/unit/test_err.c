@@ -38,15 +38,6 @@ TEST(ErrMsgPrintf, params, NULL, NULL, 0, NULL)
     return MUNIT_OK;
 }
 
-/* The resulting message gets truncated. */
-TEST(ErrMsgPrintf, truncate, NULL, NULL, 0, NULL)
-{
-    char errmsg[RAFT_ERRMSG_BUF_SIZE];
-    ErrMsgPrintf(errmsg, LONG_ERRMSG " %d", 123456);
-    munit_assert_string_equal(errmsg, LONG_ERRMSG " 12345");
-    return MUNIT_OK;
-}
-
 /******************************************************************************
  *
  * ErrMsgWrapf
