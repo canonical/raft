@@ -361,9 +361,6 @@ static int uvRemoveOldSegmentsAndSnapshots(struct uv *uv,
         }
     }
     rv = UvFsSyncDir(uv->dir, errmsg);
-    if (rv != 0) {
-        ErrMsgWrapf(errmsg, "sync %s", uv->dir);
-    }
 
 out:
     if (snapshots != NULL) {
@@ -405,7 +402,6 @@ static void uvSnapshotPutWorkCb(uv_work_t *work)
 
     rv = UvFsSyncDir(uv->dir, put->errmsg);
     if (rv != 0) {
-        ErrMsgWrapf(put->errmsg, "sync %s", uv->dir);
         put->status = RAFT_IOERR;
         return;
     }
