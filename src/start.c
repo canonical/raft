@@ -115,6 +115,8 @@ static int maybeSelfElect(struct raft *r)
         return 0;
     }
     tracef("self elect and convert to leader");
+    /* TODO: converting to candidate has the side effect of bumping the term, we
+     * should avoid that. */
     rv = convertToCandidate(r);
     if (rv != 0) {
         return rv;
