@@ -163,7 +163,6 @@ static void uvAliveSegmentWriteCb(struct UvWriterReq *write, const int status)
     struct uvAliveSegment *s = write->data;
     struct uv *uv = s->uv;
     unsigned n_blocks;
-    int result = 0;
     int rv;
 
     assert(uv->state != UV__CLOSED);
@@ -174,8 +173,8 @@ static void uvAliveSegmentWriteCb(struct UvWriterReq *write, const int status)
     /* Check if the write was successful. */
     if (status != 0) {
         Tracef(uv->tracer, "write: %s", uv->io->errmsg);
-        result = RAFT_IOERR;
         uv->errored = true;
+	goto out;
     }
 
     s->written = s->next_block * uv->block_size + s->pending.n;
@@ -227,9 +226,10 @@ static void uvAliveSegmentWriteCb(struct UvWriterReq *write, const int status)
         }
     }
 
+ out:
     /* Fire the callbacks of all requests that were fulfilled with this
      * write. */
-    uvAppendFinishAllRequests(&uv->append_writing_reqs, result);
+    uvAppendFinishAllRequests(&uv->append_writing_reqs, status);
 
     /* During the closing sequence we should have already canceled all pending
      * request. */
