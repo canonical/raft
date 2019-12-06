@@ -97,7 +97,7 @@ static void uvAliveSegmentFinalize(struct uvAliveSegment *s)
 
 /* Flush the append requests in the given queue, firing their callbacks with the
  * given status. */
-static void uvAppendFinishAllRequests(queue *q, int status)
+static void uvAppendFinishRequestsInQueue(queue *q, int status)
 {
     queue queue_copy;
     QUEUE_INIT(&queue_copy);
@@ -116,6 +116,20 @@ static void uvAppendFinishAllRequests(queue *q, int status)
         r->req->cb(r->req, status);
         HeapFree(r);
     }
+}
+
+/* Flush the append requests in the writing queue, firing their callbacks with
+ * the given status. */
+static void uvAppendFinishWritingRequests(struct uv *uv, int status)
+{
+    uvAppendFinishRequestsInQueue(&uv->append_writing_reqs, status);
+}
+
+/* Flush the append requests in the pending queue, firing their callbacks with
+ * the given status. */
+static void uvAppendFinishPendingRequests(struct uv *uv, int status)
+{
+    uvAppendFinishRequestsInQueue(&uv->append_pending_reqs, status);
 }
 
 /* Return the segment currently being written, or NULL when no segment has been
@@ -175,7 +189,7 @@ static void uvAliveSegmentWriteCb(struct UvWriterReq *write, const int status)
     if (status != 0) {
         Tracef(uv->tracer, "write: %s", uv->io->errmsg);
         uv->errored = true;
-	goto out;
+        goto out;
     }
 
     s->written = s->next_block * uv->block_size + s->pending.n;
@@ -228,10 +242,10 @@ static void uvAliveSegmentWriteCb(struct UvWriterReq *write, const int status)
         }
     }
 
- out:
+out:
     /* Fire the callbacks of all requests that were fulfilled with this
      * write. */
-    uvAppendFinishAllRequests(&uv->append_writing_reqs, status);
+    uvAppendFinishWritingRequests(uv, status);
 
     /* During the closing sequence we should have already canceled all pending
      * request. */
@@ -431,7 +445,7 @@ err:
     QUEUE_REMOVE(&segment->queue);
     HeapFree(segment);
     uv->errored = true;
-    uvAppendFinishAllRequests(&uv->append_pending_reqs, rv);
+    uvAppendFinishPendingRequests(uv, rv);
 }
 
 /* Initialize a new open segment object. */
@@ -779,7 +793,7 @@ void uvAppendClose(struct uv *uv)
     uvBarrierClose(uv);
     UvPrepareClose(uv);
 
-    uvAppendFinishAllRequests(&uv->append_pending_reqs, RAFT_CANCELED);
+    uvAppendFinishPendingRequests(uv, RAFT_CANCELED);
 
     uvFinalizeCurrentAliveSegmentOnceIdle(uv);
 
