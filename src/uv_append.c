@@ -97,24 +97,31 @@ static void uvAliveSegmentFinalize(struct uvAliveSegment *s)
 
 /* Flush the append requests in the given queue, firing their callbacks with the
  * given status. */
-static void uvAppendFinishRequestsInQueue(queue *q, int status)
+static void uvAppendFinishRequestsInQueue(struct uv *uv, queue *q, int status)
 {
     queue queue_copy;
+    struct uvAppend *append;
     QUEUE_INIT(&queue_copy);
     while (!QUEUE_IS_EMPTY(q)) {
         queue *head;
         head = QUEUE_HEAD(q);
+        append = QUEUE_DATA(head, struct uvAppend, queue);
+        /* Rollback the append next index if the result was unsuccessful. */
+        if (status != 0) {
+            uv->append_next_index -= append->n;
+        }
         QUEUE_REMOVE(head);
         QUEUE_PUSH(&queue_copy, head);
     }
     while (!QUEUE_IS_EMPTY(&queue_copy)) {
-        struct uvAppend *r;
         queue *head;
+        struct raft_io_append *req;
         head = QUEUE_HEAD(&queue_copy);
+        append = QUEUE_DATA(head, struct uvAppend, queue);
         QUEUE_REMOVE(head);
-        r = QUEUE_DATA(head, struct uvAppend, queue);
-        r->req->cb(r->req, status);
-        HeapFree(r);
+        req = append->req;
+        HeapFree(append);
+        req->cb(req, status);
     }
 }
 
@@ -122,14 +129,14 @@ static void uvAppendFinishRequestsInQueue(queue *q, int status)
  * the given status. */
 static void uvAppendFinishWritingRequests(struct uv *uv, int status)
 {
-    uvAppendFinishRequestsInQueue(&uv->append_writing_reqs, status);
+    uvAppendFinishRequestsInQueue(uv, &uv->append_writing_reqs, status);
 }
 
 /* Flush the append requests in the pending queue, firing their callbacks with
  * the given status. */
 static void uvAppendFinishPendingRequests(struct uv *uv, int status)
 {
-    uvAppendFinishRequestsInQueue(&uv->append_pending_reqs, status);
+    uvAppendFinishRequestsInQueue(uv, &uv->append_pending_reqs, status);
 }
 
 /* Return the segment currently being written, or NULL when no segment has been

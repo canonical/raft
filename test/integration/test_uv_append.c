@@ -536,11 +536,13 @@ TEST(append, noSpaceUponWrite, setUp, tearDownDeps, 0, dir_tmpfs_params)
 TEST(append, noSpaceResolved, setUp, tearDownDeps, 0, dir_tmpfs_params)
 {
     struct fixture *f = data;
-    TEAR_DOWN_UV;
-    return MUNIT_SKIP; /* TODO: handle resetting next index */
-    SKIP_IF_NO_FIXTURE;
+    if (f == NULL) {
+        TEAR_DOWN_UV;
+        return MUNIT_SKIP;
+    }
 #if !HAVE_DECL_UV_FS_O_CREAT
     /* This test appears to leak memory on older libuv versions. */
+    TEAR_DOWN_UV;
     return MUNIT_SKIP;
 #endif
     test_dir_fill(f->dir, SEGMENT_BLOCK_SIZE);
@@ -551,6 +553,7 @@ TEST(append, noSpaceResolved, setUp, tearDownDeps, 0, dir_tmpfs_params)
         1, 64, RAFT_NOSPACE,
         "create segment open-2: not enough space to allocate 16384 bytes");
     test_dir_remove_file(f->dir, ".fill");
+    f->count = 0; /* Reset the data counter */
     APPEND(1, 64);
     ASSERT_ENTRIES(1, 64);
     return MUNIT_OK;
