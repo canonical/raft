@@ -475,8 +475,8 @@ TEST(append, cancel, setUp, tearDownDeps, 0, NULL)
     return MUNIT_OK;
 }
 
-/* The creation of the first segment fails because there's no space. */
-TEST(append, noSpace, setUp, tearDown, 0, dir_tmpfs_params)
+/* The creation of the current open segment fails because there's no space. */
+TEST(append, noSpaceUponPrepareCurrent, setUp, tearDown, 0, dir_tmpfs_params)
 {
     struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;
@@ -492,7 +492,7 @@ TEST(append, noSpace, setUp, tearDown, 0, dir_tmpfs_params)
 }
 
 /* The creation of a spare open segment fails because there's no space. */
-TEST(append, noSpaceForSpareSegment, setUp, tearDown, 0, dir_tmpfs_params)
+TEST(append, noSpaceUponPrepareSpare, setUp, tearDown, 0, dir_tmpfs_params)
 {
     struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;
@@ -506,6 +506,28 @@ TEST(append, noSpaceForSpareSegment, setUp, tearDown, 0, dir_tmpfs_params)
     APPEND_SUBMIT(0, 1, SEGMENT_BLOCK_SIZE);
     APPEND_EXPECT(0, RAFT_NOSPACE);
     APPEND_WAIT(0);
+    return MUNIT_OK;
+}
+
+/* The write request fails because there's not enough space. */
+TEST(append, noSpaceUponWrite, setUp, tearDownDeps, 0, dir_tmpfs_params)
+{
+    struct fixture *f = data;
+    if (f == NULL) {
+        TEAR_DOWN_UV;
+        return MUNIT_SKIP;
+    }
+#if !HAVE_DECL_UV_FS_O_CREAT
+    /* This test appears to leak memory on older libuv versions. */
+    TEAR_DOWN_UV;
+    return MUNIT_SKIP;
+#endif
+    raft_uv_set_segment_size(&f->io, SEGMENT_BLOCK_SIZE);
+    test_dir_fill(f->dir, SEGMENT_BLOCK_SIZE * 2);
+    APPEND(1, 64);
+    APPEND_FAILURE(1, (SEGMENT_BLOCK_SIZE + 128), RAFT_NOSPACE, "short write: 4096 bytes instead of 8192");
+    test_dir_remove_file(f->dir, ".fill");
+    ASSERT_ENTRIES(1, 64);
     return MUNIT_OK;
 }
 
