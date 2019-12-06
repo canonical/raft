@@ -177,10 +177,14 @@ static void tearDown(void *data)
         _rv = raft_uv_init(&_io, &_loop, f->dir, &_transport);               \
         munit_assert_int(_rv, ==, 0);                                        \
         _rv = _io.init(&_io, 1, "1");                                        \
-        munit_assert_int(_rv, ==, 0);                                        \
+        if (_rv != 0) {                                                      \
+            munit_errorf("io->init(): %s (%d)", _io.errmsg, _rv);            \
+        }                                                                    \
         _rv = _io.load(&_io, &_term, &_voted_for, &_snapshot, &_start_index, \
                        &_entries, &_n);                                      \
-        munit_assert_int(_rv, ==, 0);                                        \
+        if (_rv != 0) {                                                      \
+            munit_errorf("io->load(): %s (%d)", _io.errmsg, _rv);            \
+        }                                                                    \
         _io.close(&_io, NULL);                                               \
         uv_run(&_loop, UV_RUN_NOWAIT);                                       \
         raft_uv_close(&_io);                                                 \
