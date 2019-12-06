@@ -231,7 +231,8 @@ static void serverApplyCb(struct raft_apply *req, int status, void *result)
     raft_free(req);
     if (status != 0) {
         if (status != RAFT_LEADERSHIPLOST) {
-            Logf(s->id, "raft_apply(): %s", raft_strerror(status));
+            Logf(s->id, "raft_apply() callback: %s (%d)", raft_errmsg(&s->raft),
+                 status);
         }
         return;
     }
@@ -271,7 +272,7 @@ static void serverTimerCb(uv_timer_t *timer)
 
     rv = raft_apply(&s->raft, req, &buf, 1, serverApplyCb);
     if (rv != 0) {
-        Logf(s->id, "raft_apply(): %s", raft_strerror(rv));
+        Logf(s->id, "raft_apply(): %s", raft_errmsg(&s->raft));
         return;
     }
 }
@@ -285,7 +286,7 @@ static int ServerStart(struct Server *s)
 
     rv = raft_start(&s->raft);
     if (rv != 0) {
-        Logf(s->id, "raft_start(): %s", raft_strerror(rv));
+        Logf(s->id, "raft_start(): %s", raft_errmsg(&s->raft));
         goto err;
     }
     rv = uv_timer_start(&s->timer, serverTimerCb, 0, 125);
