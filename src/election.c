@@ -17,7 +17,6 @@ struct request
 {
     struct raft *raft;
     struct raft_io_send send;
-    unsigned server_id;
 };
 
 /* Common fields between follower and candidate state.
@@ -96,7 +95,6 @@ static int sendRequestVote(struct raft *r, const struct raft_server *server)
 
     req->raft = r;
     req->send.data = req;
-    req->server_id = server->id;
 
     rv = r->io->send(r->io, &req->send, &message, sendRequestVoteCb);
     if (rv != 0) {
