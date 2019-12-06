@@ -21,7 +21,7 @@ static void uvWriterReqSetStatus(struct UvWriterReq *req, int result)
     } else if ((size_t)result < req->len) {
         ErrMsgPrintf(req->errmsg, "short write: %d bytes instead of %zu",
                      result, req->len);
-        req->status = RAFT_IOERR;
+        req->status = RAFT_NOSPACE;
     } else {
         req->status = 0;
     }
