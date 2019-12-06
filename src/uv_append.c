@@ -48,11 +48,12 @@ struct uvAliveSegment
     struct UvWriterReq write;       /* Write request */
     unsigned long long counter;     /* Open segment counter */
     raft_index first_index;         /* Index of the first entry written */
-    raft_index last_index;          /* Index of the last entry written */
+    raft_index pending_last_index;  /* Index of the last entry written */
     size_t size;                    /* Total number of bytes used */
     unsigned next_block;            /* Next segment block to write */
     struct uvSegmentBuffer pending; /* Buffer for data yet to be written */
     uv_buf_t buf;                   /* Write buffer for current write */
+    raft_index last_index;          /* Last entry actually written */
     size_t written;                 /* Number of bytes actually written */
     queue queue;                    /* Segment queue */
     struct UvBarrier *barrier;      /* Barrier waiting on this segment */
@@ -152,7 +153,7 @@ static int uvAliveSegmentEncodeEntriesToWriteBuf(struct uvAliveSegment *segment,
         return rv;
     }
 
-    segment->last_index += append->n;
+    segment->pending_last_index += append->n;
 
     return 0;
 }
@@ -178,6 +179,7 @@ static void uvAliveSegmentWriteCb(struct UvWriterReq *write, const int status)
     }
 
     s->written = s->next_block * uv->block_size + s->pending.n;
+    s->last_index = s->pending_last_index;
 
     /* Update our write markers.
      *
@@ -441,7 +443,8 @@ static void uvAliveSegmentInit(struct uvAliveSegment *s, struct uv *uv)
     s->write.data = s;
     s->counter = 0;
     s->first_index = uv->append_next_index;
-    s->last_index = s->first_index - 1;
+    s->pending_last_index = s->first_index - 1;
+    s->last_index = 0;
     s->size = sizeof(uint64_t) /* Format version */;
     s->next_block = 0;
     uvSegmentBufferInit(&s->pending, uv->block_size);
