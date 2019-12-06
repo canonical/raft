@@ -4,6 +4,7 @@
 #include "configuration.h"
 #include "log.h"
 #include "tracing.h"
+#include "heap.h"
 
 /* Set to 1 to enable tracing. */
 #if 0
@@ -11,13 +12,6 @@
 #else
 #define tracef(...)
 #endif
-
-/* Vote request context */
-struct request
-{
-    struct raft *raft;
-    struct raft_io_send send;
-};
 
 /* Common fields between follower and candidate state.
  *
@@ -61,21 +55,15 @@ bool electionTimerExpired(struct raft *r)
 
 static void sendRequestVoteCb(struct raft_io_send *send, int status)
 {
-    struct request *req = send->data;
-    struct raft *r = req->raft;
-    (void)r;
-    if (status != 0) {
-        tracef("failed to send vote request to server %ld: %s", req->server_id,
-               raft_strerror(status));
-    }
-    raft_free(req);
+    (void)status;
+    HeapFree(send);
 }
 
 /* Send a RequestVote RPC to the given server. */
 static int sendRequestVote(struct raft *r, const struct raft_server *server)
 {
     struct raft_message message;
-    struct request *req;
+    struct raft_io_send *send;
     int rv;
     assert(server->id != r->id);
     assert(server->id != 0);
@@ -88,17 +76,16 @@ static int sendRequestVote(struct raft *r, const struct raft_server *server)
     message.server_id = server->id;
     message.server_address = server->address;
 
-    req = raft_malloc(sizeof *req);
-    if (req == NULL) {
+    send = HeapMalloc(sizeof *send);
+    if (send == NULL) {
         return RAFT_NOMEM;
     }
 
-    req->raft = r;
-    req->send.data = req;
+    send->data = r;
 
-    rv = r->io->send(r->io, &req->send, &message, sendRequestVoteCb);
+    rv = r->io->send(r->io, send, &message, sendRequestVoteCb);
     if (rv != 0) {
-        raft_free(req);
+        HeapFree(send);
         return rv;
     }
 
