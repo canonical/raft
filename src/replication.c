@@ -468,16 +468,18 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
     tracef("leader: written %u entries starting at %lld: status %d", request->n,
            request->index, status);
 
-    /* TODO: in case this is a failed disk write and we were the leader creating
-     * these entries in the first place, should we truncate our log too? since
-     * we have appended these entries to it. */
+    /* In case of a failed disk write, if we were the leader creating these
+     * entries in the first place, truncate our log too (since we have appended
+     * these entries to it) and fire the request callback. */
     if (status != 0) {
         struct raft_apply *apply;
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
         apply =
             (struct raft_apply *)getRequest(r, request->index, RAFT_COMMAND);
-        if (apply != NULL && apply->cb != NULL) {
-            apply->cb(apply, status, NULL);
+        if (apply != NULL) {
+            if (apply->cb != NULL) {
+                apply->cb(apply, status, NULL);
+            }
         }
         goto out;
     }
@@ -521,6 +523,9 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
 out:
     /* Tell the log that we're done referencing these entries. */
     logRelease(&r->log, request->index, request->entries, request->n);
+    if (status != 0) {
+        logTruncate(&r->log, request->index);
+    }
     raft_free(request);
 }
 
