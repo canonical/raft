@@ -2,21 +2,16 @@
 
 #include "assert.h"
 #include "convert.h"
+#include "heap.h"
 #include "log.h"
 #include "recv.h"
 #include "replication.h"
+#include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
-#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
-
-static void sendCb(struct raft_io_send *req, int status)
+static void recvSendAppendEntriesResultCb(struct raft_io_send *req, int status)
 {
     (void)status;
-    raft_free(req);
+    HeapFree(req);
 }
 
 int recvAppendEntries(struct raft *r,
@@ -141,13 +136,13 @@ reply:
     message.server_id = id;
     message.server_address = address;
 
-    req = raft_malloc(sizeof *req);
+    req = HeapMalloc(sizeof *req);
     if (req == NULL) {
         return RAFT_NOMEM;
     }
     req->data = r;
 
-    rv = r->io->send(r->io, req, &message, sendCb);
+    rv = r->io->send(r->io, req, &message, recvSendAppendEntriesResultCb);
     if (rv != 0) {
         raft_free(req);
         return rv;

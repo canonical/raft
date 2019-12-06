@@ -6,13 +6,7 @@
 #include "election.h"
 #include "progress.h"
 #include "replication.h"
-
-/* Set to 1 to enable tracing. */
-#if 0
-#define tracef(MSG, ...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
+#include "tracing.h"
 
 /* Number of milliseconds after which a server promotion will be aborted if the
  * server hasn't caught up with the logs yet. */

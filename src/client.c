@@ -9,13 +9,6 @@
 #include "request.h"
 #include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
-#define tracef(MSG, ...) Tracef(r->tracer, "apply: " MSG, __VA_ARGS__)
-#else
-#define tracef(MSG, ...)
-#endif
-
 int raft_apply(struct raft *r,
                struct raft_apply *req,
                const struct raft_buffer bufs[],
@@ -114,9 +107,10 @@ err:
     return rv;
 }
 
-static int changeConfiguration(struct raft *r,
-                               struct raft_change *req,
-                               const struct raft_configuration *configuration)
+static int clientChangeConfiguration(
+    struct raft *r,
+    struct raft_change *req,
+    const struct raft_configuration *configuration)
 {
     raft_index index;
     raft_term term = r->current_term;
@@ -197,7 +191,7 @@ int raft_add(struct raft *r,
 
     req->cb = cb;
 
-    rv = changeConfiguration(r, req, &configuration);
+    rv = clientChangeConfiguration(r, req, &configuration);
     if (rv != 0) {
         goto err_after_configuration_copy;
     }
@@ -257,7 +251,7 @@ int raft_promote(struct raft *r,
     if (progressMatchIndex(r, server_index) == last_index) {
         r->configuration.servers[server_index].voting = true;
 
-        rv = changeConfiguration(r, req, &r->configuration);
+        rv = clientChangeConfiguration(r, req, &r->configuration);
         if (rv != 0) {
             r->configuration.servers[server_index].voting = false;
             return rv;
@@ -325,7 +319,7 @@ int raft_remove(struct raft *r,
 
     req->cb = cb;
 
-    rv = changeConfiguration(r, req, &configuration);
+    rv = clientChangeConfiguration(r, req, &configuration);
     if (rv != 0) {
         goto err_after_configuration_copy;
     }

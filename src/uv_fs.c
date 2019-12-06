@@ -571,7 +571,7 @@ static int probeDirectIO(int fd, size_t *size, char *errmsg)
     int rv;
 
     flags = fcntl(fd, F_GETFL);
-    rv = fcntl(fd, F_SETFL, flags | O_DIRECT);
+    rv = fcntl(fd, F_SETFL, flags | UV_FS_O_DIRECT);
 
     if (rv == -1) {
         if (errno != EINVAL) {

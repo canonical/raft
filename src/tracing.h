@@ -16,4 +16,11 @@ extern struct raft_tracer NoopTracer;
         TRACER->emit(TRACER, __FILE__, __LINE__, msg); \
     } while (0)
 
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
+#else
+#define tracef(...)
+#endif
+
 #endif /* TRACING_H_ */

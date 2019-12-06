@@ -5,14 +5,7 @@
 #include "tracing.h"
 #include "recv.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
-#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
-
-static void sendCb(struct raft_io_send *req, int status)
+static void requestVoteSendCb(struct raft_io_send *req, int status)
 {
     (void)status;
     raft_free(req);
@@ -87,7 +80,7 @@ reply:
     }
     req->data = r;
 
-    rv = r->io->send(r->io, req, &message, sendCb);
+    rv = r->io->send(r->io, req, &message, requestVoteSendCb);
     if (rv != 0) {
         raft_free(req);
         return rv;

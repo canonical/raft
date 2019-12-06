@@ -8,13 +8,6 @@
 #include "replication.h"
 #include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
-#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
-
 int recvRequestVoteResult(struct raft *r,
                           unsigned id,
                           const char *address,

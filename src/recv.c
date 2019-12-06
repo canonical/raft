@@ -3,6 +3,7 @@
 #include "assert.h"
 #include "convert.h"
 #include "entry.h"
+#include "heap.h"
 #include "log.h"
 #include "recv_append_entries.h"
 #include "recv_append_entries_result.h"
@@ -12,18 +13,8 @@
 #include "string.h"
 #include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
-static const char *message_descs[] = {"append entries", "append entries result",
-                                      "request vote", "request vote result",
-                                      "install snapshot"};
-#define tracef(MSG, ...) Tracef(r->tracer, "recv: " MSG, __VA_ARGS__)
-#else
-#define tracef(MSG, ...)
-#endif
-
 /* Dispatch a single RPC message to the appropriate handler. */
-static int recv(struct raft *r, struct raft_message *message)
+static int recvMessage(struct raft *r, struct raft_message *message)
 {
     int rv = 0;
 
@@ -92,7 +83,7 @@ void recvCb(struct raft_io *io, struct raft_message *message)
         }
         return;
     }
-    rv = recv(r, message);
+    rv = recvMessage(r, message);
     if (rv != 0) {
         convertToUnavailable(r);
     }
@@ -170,28 +161,27 @@ int recvEnsureMatchingTerms(struct raft *r, raft_term term, int *match)
     return 0;
 }
 
-static void copyAddress(const char *address1, char **address2)
-{
-    *address2 = raft_malloc(strlen(address1) + 1);
-    if (*address2 == NULL) {
-        return;
-    }
-    strcpy(*address2, address1);
-}
-
 int recvUpdateLeader(struct raft *r, unsigned id, const char *address)
 {
     assert(r->state == RAFT_FOLLOWER);
+
     r->follower_state.current_leader.id = id;
-    if (r->follower_state.current_leader.address == NULL ||
-        strcmp(address, r->follower_state.current_leader.address) != 0) {
-        if (r->follower_state.current_leader.address != NULL) {
-            raft_free(r->follower_state.current_leader.address);
-        }
-        copyAddress(address, &r->follower_state.current_leader.address);
-        if (r->follower_state.current_leader.address == NULL) {
-            return RAFT_NOMEM;
-        }
+
+    /* If the address of the current leader is the same as the given one, we're
+     * done. */
+    if (r->follower_state.current_leader.address != NULL &&
+        strcmp(address, r->follower_state.current_leader.address) == 0) {
+        return 0;
     }
+
+    if (r->follower_state.current_leader.address != NULL) {
+        HeapFree(r->follower_state.current_leader.address);
+    }
+    r->follower_state.current_leader.address = HeapMalloc(strlen(address) + 1);
+    if (r->follower_state.current_leader.address == NULL) {
+        return RAFT_NOMEM;
+    }
+    strcpy(r->follower_state.current_leader.address, address);
+
     return 0;
 }

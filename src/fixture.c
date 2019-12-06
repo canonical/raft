@@ -22,43 +22,6 @@
 /* To keep in sync with raft.h */
 #define N_MESSAGE_TYPES 5
 
-/* Set to 1 to enable tracing. */
-#if 0
-static char messageDescription[1024];
-
-/* Return a human-readable description of the given message */
-static char *describeMessage(const struct raft_message *m)
-{
-    char *d = messageDescription;
-    switch (m->type) {
-        case RAFT_IO_REQUEST_VOTE:
-            sprintf(d, "request vote");
-            break;
-        case RAFT_IO_REQUEST_VOTE_RESULT:
-            sprintf(d, "request vote result");
-            break;
-        case RAFT_IO_APPEND_ENTRIES:
-            sprintf(d, "append entries (n %u prev %llu/%llu)",
-                    m->append_entries.n_entries,
-                    m->append_entries.prev_log_index,
-                    m->append_entries.prev_log_term);
-            break;
-        case RAFT_IO_APPEND_ENTRIES_RESULT:
-            sprintf(d, "append entries result");
-            break;
-        case RAFT_IO_INSTALL_SNAPSHOT:
-            sprintf(d, "install snapshot");
-            break;
-        default:
-            assert(0);
-    }
-    return d;
-}
-#define tracef(MSG, ...) Tracef(io->tracer, MSG, ##__VA_ARGS__)
-#else
-#define tracef(MSG, ...)
-#endif
-
 /* Maximum number of peer stub instances connected to a certain stub
  * instance. This should be enough for testing purposes. */
 #define MAX_PEERS 8
@@ -74,7 +37,7 @@ enum { APPEND = 1, SEND, TRANSMIT, SNAPSHOT_PUT, SNAPSHOT_GET };
 
 /* Abstract base type for an asynchronous request submitted to the stub I/o
  * implementation. */
-struct request
+struct ioRequest
 {
     REQUEST;
 };
@@ -422,12 +385,12 @@ static void ioFlushAll(struct io *io)
 {
     while (!QUEUE_IS_EMPTY(&io->requests)) {
         queue *head;
-        struct request *r;
+        struct ioRequest *r;
 
         head = QUEUE_HEAD(&io->requests);
         QUEUE_REMOVE(head);
 
-        r = QUEUE_DATA(head, struct request, queue);
+        r = QUEUE_DATA(head, struct ioRequest, queue);
         switch (r->type) {
             case APPEND:
                 ioFlushAppend(io, (struct append *)r);
@@ -1326,7 +1289,7 @@ static void getLowestRequestCompletionTime(struct raft_fixture *f,
         queue *head;
         QUEUE_FOREACH(head, &io->requests)
         {
-            struct request *r = QUEUE_DATA(head, struct request, queue);
+            struct ioRequest *r = QUEUE_DATA(head, struct ioRequest, queue);
             if (r->completion_time < *t) {
                 *t = r->completion_time;
                 *i = j;
@@ -1351,13 +1314,13 @@ static void completeRequest(struct raft_fixture *f, unsigned i, raft_time t)
 {
     struct io *io = f->servers[i].io.impl;
     queue *head;
-    struct request *r = NULL;
+    struct ioRequest *r = NULL;
     bool found = false;
     f->time = t;
     f->event.server_index = i;
     QUEUE_FOREACH(head, &io->requests)
     {
-        r = QUEUE_DATA(head, struct request, queue);
+        r = QUEUE_DATA(head, struct ioRequest, queue);
         if (r->completion_time == t) {
             found = true;
             break;
@@ -1719,8 +1682,8 @@ static bool hasDelivered(struct raft_fixture *f, void *arg)
     io = raft->io->impl;
     QUEUE_FOREACH(head, &io->requests)
     {
-        struct request *r;
-        r = QUEUE_DATA(head, struct request, queue);
+        struct ioRequest *r;
+        r = QUEUE_DATA(head, struct ioRequest, queue);
         message = NULL;
         switch (r->type) {
             case SEND:

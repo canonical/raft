@@ -16,13 +16,6 @@
 #define DEFAULT_SNAPSHOT_THRESHOLD 1024
 #define DEFAULT_SNAPSHOT_TRAILING 2048
 
-/* Set to 1 to enable tracing. */
-#if 0
-#define tracef(MSG, ...) Tracef(r->tracer, MSG, __VA_ARGS__)
-#else
-#define tracef(MSG, ...)
-#endif
-
 int raft_init(struct raft *r,
               struct raft_io *io,
               struct raft_fsm *fsm,

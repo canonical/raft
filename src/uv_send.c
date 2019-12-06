@@ -30,13 +30,6 @@
  *   stream, and start a re-connection attempt.
  */
 
-/* Set to 1 to enable tracing. */
-#if 0
-#define tracef(C, ...) Tracef(C->uv->tracer, __VA_ARGS__)
-#else
-#define tracef(C, ...)
-#endif
-
 /* Maximum number of requests that can be buffered.  */
 #define UV__CLIENT_MAX_PENDING 3
 

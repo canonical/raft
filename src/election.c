@@ -2,16 +2,9 @@
 
 #include "assert.h"
 #include "configuration.h"
+#include "heap.h"
 #include "log.h"
 #include "tracing.h"
-#include "heap.h"
-
-/* Set to 1 to enable tracing. */
-#if 0
-#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
 
 /* Common fields between follower and candidate state.
  *
@@ -60,7 +53,7 @@ static void sendRequestVoteCb(struct raft_io_send *send, int status)
 }
 
 /* Send a RequestVote RPC to the given server. */
-static int sendRequestVote(struct raft *r, const struct raft_server *server)
+static int electionSend(struct raft *r, const struct raft_server *server)
 {
     struct raft_message message;
     struct raft_io_send *send;
@@ -149,7 +142,7 @@ int electionStart(struct raft *r)
         if (server->id == r->id || !server->voting) {
             continue;
         }
-        rv = sendRequestVote(r, server);
+        rv = electionSend(r, server);
         if (rv != 0) {
             /* This is not a critical failure, let's just log it. */
             tracef("failed to send vote request to server %ld: %s", server->id,
