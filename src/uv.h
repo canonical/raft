@@ -20,6 +20,9 @@
 /* Template string for open segment filenames: incrementing counter. */
 #define UV__OPEN_TEMPLATE "open-%llu"
 
+/* Enough to hold a segment filename (either open or closed) */
+#define UV__SEGMENT_FILENAME_BUF_SIZE 34
+
 /* Template string for snapshot filenames: snapshot term, snapshot index,
  * creation timestamp (milliseconds since epoch). */
 #define UV__SNAPSHOT_TEMPLATE "snapshot-%llu-%llu-%llu"
@@ -114,7 +117,7 @@ struct uvSegmentInfo
             unsigned long long counter; /* Open segment counter */
         };
     };
-    char filename[UV__FILENAME_LEN]; /* Segment filename */
+    char filename[UV__SEGMENT_FILENAME_BUF_SIZE]; /* Segment filename */
 };
 
 /* Append a new item to the given segment info list if the given filename

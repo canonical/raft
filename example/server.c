@@ -130,7 +130,9 @@ static void serverRaftCloseCb(struct raft *raft)
 static void serverTimerCloseCb(struct uv_handle_s *handle)
 {
     struct Server *s = handle->data;
-    raft_close(&s->raft, serverRaftCloseCb);
+    if (s->raft.data != NULL) {
+        raft_close(&s->raft, serverRaftCloseCb);
+    }
 }
 
 /* Initialize the example server struct, without starting it yet. */
@@ -170,14 +172,14 @@ static int ServerInit(struct Server *s,
     rv = raft_uv_init(&s->io, s->loop, dir, &s->transport);
     if (rv != 0) {
         Logf(s->id, "raft_uv_init(): %s", s->io.errmsg);
-        goto err;
+        goto err_after_uv_tcp_init;
     }
 
     /* Initialize the finite state machine. */
     rv = FsmInit(&s->fsm);
     if (rv != 0) {
         Logf(s->id, "FsmInit(): %s", raft_strerror(rv));
-        goto err;
+        goto err_after_uv_init;
     }
 
     /* Save the server ID. */
@@ -189,7 +191,8 @@ static int ServerInit(struct Server *s,
     /* Initialize and start the engine, using the libuv-based I/O backend. */
     rv = raft_init(&s->raft, &s->io, &s->fsm, id, s->address);
     if (rv != 0) {
-        goto err;
+        Logf(s->id, "raft_init(): %s", raft_errmsg(&s->raft));
+        goto err_after_fsm_init;
     }
     s->raft.data = s;
 
@@ -218,6 +221,12 @@ static int ServerInit(struct Server *s,
 
 err_after_configuration_init:
     raft_configuration_close(&configuration);
+err_after_fsm_init:
+    FsmClose(&s->fsm);
+err_after_uv_init:
+    raft_uv_close(&s->io);
+err_after_uv_tcp_init:
+    raft_uv_tcp_close(&s->transport);
 err:
     return rv;
 }
@@ -231,7 +240,8 @@ static void serverApplyCb(struct raft_apply *req, int status, void *result)
     raft_free(req);
     if (status != 0) {
         if (status != RAFT_LEADERSHIPLOST) {
-            Logf(s->id, "raft_apply(): %s", raft_strerror(status));
+            Logf(s->id, "raft_apply() callback: %s (%d)", raft_errmsg(&s->raft),
+                 status);
         }
         return;
     }
@@ -271,7 +281,7 @@ static void serverTimerCb(uv_timer_t *timer)
 
     rv = raft_apply(&s->raft, req, &buf, 1, serverApplyCb);
     if (rv != 0) {
-        Logf(s->id, "raft_apply(): %s", raft_strerror(rv));
+        Logf(s->id, "raft_apply(): %s", raft_errmsg(&s->raft));
         return;
     }
 }
@@ -285,7 +295,7 @@ static int ServerStart(struct Server *s)
 
     rv = raft_start(&s->raft);
     if (rv != 0) {
-        Logf(s->id, "raft_start(): %s", raft_strerror(rv));
+        Logf(s->id, "raft_start(): %s", raft_errmsg(&s->raft));
         goto err;
     }
     rv = uv_timer_start(&s->timer, serverTimerCb, 0, 125);

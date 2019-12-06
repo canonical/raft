@@ -39,7 +39,7 @@ void uvSnapshotFilenameOf(struct uvSnapshotInfo *info, char *filename)
 {
     size_t len = strlen(info->filename) - strlen(".meta");
     assert(len < UV__FILENAME_LEN);
-    strncpy(filename, info->filename, len);
+    strcpy(filename, info->filename);
     filename[len] = 0;
 }
 

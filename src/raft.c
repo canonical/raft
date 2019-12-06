@@ -7,6 +7,7 @@
 #include "convert.h"
 #include "election.h"
 #include "err.h"
+#include "heap.h"
 #include "log.h"
 #include "tracing.h"
 
@@ -36,9 +37,10 @@ int raft_init(struct raft *r,
     r->tracer = &NoopTracer;
     r->id = id;
     /* Make a copy of the address */
-    r->address = raft_malloc(strlen(address) + 1);
+    r->address = HeapMalloc(strlen(address) + 1);
     if (r->address == NULL) {
-        return RAFT_NOMEM;
+        rv = RAFT_NOMEM;
+        goto err;
     }
     strcpy(r->address, address);
     r->current_term = 0;
@@ -62,9 +64,15 @@ int raft_init(struct raft *r,
     rv = r->io->init(r->io, r->id, r->address);
     if (rv != 0) {
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
-        return rv;
+        goto err_after_address_alloc;
     }
     return 0;
+
+err_after_address_alloc:
+    HeapFree(r->address);
+err:
+    assert(rv != 0);
+    return rv;
 }
 
 static void ioCloseCb(struct raft_io *io)
