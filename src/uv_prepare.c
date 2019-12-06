@@ -210,10 +210,10 @@ static void uvPrepareAfterWorkCb(uv_work_t *work, int status)
     /* If the request has failed, mark all pending requests as failed and don't
      * try to create any further segment. */
     if (segment->status != 0) {
-        uvPrepareFinishAllRequests(uv, segment->status);
-        uv->errored = true;
         ErrMsgTransferf(segment->errmsg, uv->io->errmsg, "create segment %s",
                         segment->filename);
+        uvPrepareFinishAllRequests(uv, segment->status);
+        uv->errored = true;
         HeapFree(segment);
         return;
     }
