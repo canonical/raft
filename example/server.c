@@ -130,7 +130,9 @@ static void serverRaftCloseCb(struct raft *raft)
 static void serverTimerCloseCb(struct uv_handle_s *handle)
 {
     struct Server *s = handle->data;
-    raft_close(&s->raft, serverRaftCloseCb);
+    if (s->raft.data != NULL) {
+        raft_close(&s->raft, serverRaftCloseCb);
+    }
 }
 
 /* Initialize the example server struct, without starting it yet. */
@@ -170,14 +172,14 @@ static int ServerInit(struct Server *s,
     rv = raft_uv_init(&s->io, s->loop, dir, &s->transport);
     if (rv != 0) {
         Logf(s->id, "raft_uv_init(): %s", s->io.errmsg);
-        goto err;
+        goto err_after_uv_tcp_init;
     }
 
     /* Initialize the finite state machine. */
     rv = FsmInit(&s->fsm);
     if (rv != 0) {
         Logf(s->id, "FsmInit(): %s", raft_strerror(rv));
-        goto err;
+        goto err_after_uv_init;
     }
 
     /* Save the server ID. */
@@ -189,7 +191,8 @@ static int ServerInit(struct Server *s,
     /* Initialize and start the engine, using the libuv-based I/O backend. */
     rv = raft_init(&s->raft, &s->io, &s->fsm, id, s->address);
     if (rv != 0) {
-        goto err;
+        Logf(s->id, "raft_init(): %s", raft_errmsg(&s->raft));
+        goto err_after_fsm_init;
     }
     s->raft.data = s;
 
@@ -218,6 +221,12 @@ static int ServerInit(struct Server *s,
 
 err_after_configuration_init:
     raft_configuration_close(&configuration);
+err_after_fsm_init:
+    FsmClose(&s->fsm);
+err_after_uv_init:
+    raft_uv_close(&s->io);
+err_after_uv_tcp_init:
+    raft_uv_tcp_close(&s->transport);
 err:
     return rv;
 }
