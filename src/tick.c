@@ -31,7 +31,7 @@ static int tickFollower(struct raft *r)
 
     /* Check if we need to start an election.
      *
-     * From Section §3.3:
+     * From Section 3.3:
      *
      *   If a follower receives no communication over a period of time called
      *   the election timeout, then it assumes there is no viable leader and
@@ -62,7 +62,7 @@ static int tickCandidate(struct raft *r)
 
     /* Check if we need to start an election.
      *
-     * From Section §3.4:
+     * From Section 3.4:
      *
      *   The third possible outcome is that a candidate neither wins nor loses
      *   the election: if many followers become candidates at the same time,

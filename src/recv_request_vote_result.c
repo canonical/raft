@@ -59,7 +59,7 @@ int recvRequestVoteResult(struct raft *r,
      *
      *   [candidate]: receives votes from majority of servers -> [leader]
      *
-     * From Section §3.4:
+     * From Section 3.4:
      *
      *   A candidate wins an election if it receives votes from a majority of
      *   the servers in the full cluster for the same term. Each server will

@@ -30,13 +30,13 @@ int convertToCandidate(struct raft *r);
  *   Upon election: send initial empty AppendEntries RPC (heartbeat) to each
  *   server.
  *
- * From Section §3.4:
+ * From Section 3.4:
  *
  *   Once a candidate wins an election, it becomes leader. It then sends
  *   heartbeat messages to all of the other servers to establish its authority
  *   and prevent new elections.
  *
- * From Section §3.3:
+ * From Section 3.3:
  *
  *   The leader maintains a nextIndex for each follower, which is the index
  *   of the next log entry the leader will send to that follower. When a

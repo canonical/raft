@@ -4,10 +4,18 @@
 #define ASSERT_H_
 
 #if defined(RAFT_TEST)
-  #include "../test/lib/munit.h"
-  #define assert(expr) munit_assert(expr)
+extern void munit_errorf_ex(const char *filename,
+                            int line,
+                            const char *format,
+                            ...);
+#define assert(expr)                                                          \
+    do {                                                                      \
+        if (!expr) {                                                          \
+            munit_errorf_ex(__FILE__, __LINE__, "assertion failed: ", #expr); \
+        }                                                                     \
+    } while (0)
 #else
-  #include <assert.h>
+#include <assert.h>
 #endif
 
 #endif /* ASSERT_H_ */

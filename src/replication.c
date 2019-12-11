@@ -94,7 +94,7 @@ static int sendAppendEntries(struct raft *r,
         goto err;
     }
 
-    /* From Section §3.5:
+    /* From Section 3.5:
      *
      *   The leader keeps track of the highest index it knows to be committed,
      *   and it includes that index in future AppendEntries RPCs (including
@@ -306,7 +306,7 @@ int replicationProgress(struct raft *r, unsigned i)
         return 0;
     }
 
-    /* From Section §3.5:
+    /* From Section 3.5:
      *
      *   When sending an AppendEntries RPC, the leader includes the index and
      *   term of the entry in its log that immediately precedes the new
@@ -316,7 +316,7 @@ int replicationProgress(struct raft *r, unsigned i)
      *   satisfies the Log Matching Property, and the consistency check
      *   preserves the Log Matching Property whenever logs are extended. As a
      *   result, whenever AppendEntries returns successfully, the leader knows
-     *   that the follower’s log is identical to its own log up through the new
+     *   that the follower's log is identical to its own log up through the new
      *   entries (Log Matching Property in Figure 3.2).
      */
     if (next_index == 1) {

@@ -30,7 +30,7 @@ int recvRequestVote(struct raft *r,
 
     /* Reject the request if we have a leader.
      *
-     * From Section §4.2.3:
+     * From Section 4.2.3:
      *
      *   [Removed] servers should not be able to disrupt a leader whose cluster
      *   is receiving heartbeats. [...] If a server receives a RequestVote

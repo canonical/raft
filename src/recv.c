@@ -132,7 +132,7 @@ int recvEnsureMatchingTerms(struct raft *r, raft_term term, int *match)
      *
      *   [leader]: discovers server with higher term -> [follower]
      *
-     * From Section §3.3:
+     * From Section 3.3:
      *
      *   If a candidate or leader discovers that its term is out of date, it
      *   immediately reverts to follower state.
