@@ -30,32 +30,32 @@ char *test_dir_aio[] = {"btrfs", "ext4", "xfs", NULL};
 char *test_dir_no_aio[] = {"tmpfs", "zfs", NULL};
 
 MunitParameterEnum dir_tmpfs_params[] = {
-    {TEST_DIR_FS, test_dir_tmpfs},
+    {DIR_FS_PARAM, test_dir_tmpfs},
     {NULL, NULL},
 };
 
 MunitParameterEnum dir_btrfs_params[] = {
-    {TEST_DIR_FS, test_dir_btrfs},
+    {DIR_FS_PARAM, test_dir_btrfs},
     {NULL, NULL},
 };
 
 MunitParameterEnum dir_zfs_params[] = {
-    {TEST_DIR_FS, test_dir_zfs},
+    {DIR_FS_PARAM, test_dir_zfs},
     {NULL, NULL},
 };
 
 MunitParameterEnum dir_all_params[] = {
-    {TEST_DIR_FS, test_dir_all},
+    {DIR_FS_PARAM, test_dir_all},
     {NULL, NULL},
 };
 
 MunitParameterEnum dir_aio_params[] = {
-    {TEST_DIR_FS, test_dir_aio},
+    {DIR_FS_PARAM, test_dir_aio},
     {NULL, NULL},
 };
 
 MunitParameterEnum dir_no_aio_params[] = {
-    {TEST_DIR_FS, test_dir_no_aio},
+    {DIR_FS_PARAM, test_dir_no_aio},
     {NULL, NULL},
 };
 
@@ -77,7 +77,7 @@ static char *mkTempDir(const char *parent)
 void *setUpDir(MUNIT_UNUSED const MunitParameter params[],
                MUNIT_UNUSED void *user_data)
 {
-    const char *fs = munit_parameters_get(params, TEST_DIR_FS);
+    const char *fs = munit_parameters_get(params, DIR_FS_PARAM);
     if (fs == NULL) {
         return mkTempDir("/tmp");
     } else if (strcmp(fs, "tmpfs") == 0) {
