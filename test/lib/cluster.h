@@ -19,33 +19,31 @@
 
 /* N is the default number of servers, but can be tweaked with the cluster-n
  * parameter. */
-#define SETUP_CLUSTER(N)                                              \
+#define SETUP_CLUSTER(DEFAULT_N)                                      \
     SETUP_HEAP;                                                       \
-    {                                                                 \
-        unsigned n_;                                                  \
-        unsigned i_;                                                  \
-        int rv_;                                                      \
-        n_ = N;                                                       \
+    do {                                                              \
+        unsigned _n = DEFAULT_N;                                      \
+        unsigned _i;                                                  \
+        int _rv;                                                      \
         if (munit_parameters_get(params, CLUSTER_N_PARAM) != NULL) {  \
-            n_ = atoi(munit_parameters_get(params, CLUSTER_N_PARAM)); \
+            _n = atoi(munit_parameters_get(params, CLUSTER_N_PARAM)); \
         }                                                             \
-        munit_assert_int(n_, >, 0);                                   \
-        for (i_ = 0; i_ < n_; i_++) {                                 \
-            test_fsm_setup(NULL, &f->fsms[i_]);                       \
+        munit_assert_int(_n, >, 0);                                   \
+        for (_i = 0; _i < _n; _i++) {                                 \
+            test_fsm_setup(NULL, &f->fsms[_i]);                       \
         }                                                             \
-        rv_ = raft_fixture_init(&f->cluster, n_, f->fsms);            \
-        munit_assert_int(rv_, ==, 0);                                 \
-    }
+        _rv = raft_fixture_init(&f->cluster, _n, f->fsms);            \
+        munit_assert_int(_rv, ==, 0);                                 \
+    } while (0)
 
 #define TEAR_DOWN_CLUSTER                    \
-    {                                        \
-        unsigned n = CLUSTER_N;              \
+    do {                                     \
         unsigned i;                          \
         raft_fixture_close(&f->cluster);     \
-        for (i = 0; i < n; i++) {            \
+        for (i = 0; i < CLUSTER_N; i++) {    \
             test_fsm_tear_down(&f->fsms[i]); \
         }                                    \
-    }                                        \
+    } while (0);                             \
     TEAR_DOWN_HEAP;
 
 /* Munit parameter for setting the number of servers */

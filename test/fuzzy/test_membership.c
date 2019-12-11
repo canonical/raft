@@ -20,10 +20,9 @@ static MunitParameterEnum _params[] = {
     {NULL, NULL},
 };
 
-static void *setup(const MunitParameter params[], void *user_data)
+static void *setup(const MunitParameter params[], MUNIT_UNUSED void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    (void)user_data;
     SETUP_CLUSTER(0);
     CLUSTER_BOOTSTRAP;
     CLUSTER_RANDOMIZE;

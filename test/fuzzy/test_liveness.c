@@ -72,12 +72,11 @@ static void __update_connectivity(struct fixture *f, int i)
     }
 }
 
-static void *setup(const MunitParameter params[], void *user_data)
+static void *setup(const MunitParameter params[], MUNIT_UNUSED void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     int pairs;
     size_t i, j, k;
-    (void)user_data;
     SETUP_CLUSTER(0);
     CLUSTER_BOOTSTRAP;
     CLUSTER_RANDOMIZE;

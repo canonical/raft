@@ -1,7 +1,6 @@
+#include "../../src/configuration.h"
 #include "../lib/cluster.h"
 #include "../lib/runner.h"
-
-#include "../../src/configuration.h"
 
 /******************************************************************************
  *
@@ -14,11 +13,10 @@ struct fixture
     FIXTURE_CLUSTER;
 };
 
-static void *setup(const MunitParameter params[], void *user_data)
+static void *setup(const MunitParameter params[], MUNIT_UNUSED void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     unsigned i;
-    (void)user_data;
     SETUP_CLUSTER(2);
     CLUSTER_BOOTSTRAP;
     for (i = 0; i < CLUSTER_N; i++) {
@@ -44,14 +42,14 @@ static void tear_down(void *data)
 static char *cluster_5[] = {"5", NULL};
 
 static MunitParameterEnum cluster_5_params[] = {
-    {"cluster-n", cluster_5},
+    {CLUSTER_N_PARAM, cluster_5},
     {NULL, NULL},
 };
 
 static char *cluster_3[] = {"3", NULL};
 
 static MunitParameterEnum cluster_3_params[] = {
-    {"cluster-n", cluster_3},
+    {CLUSTER_N_PARAM, cluster_3},
     {NULL, NULL},
 };
 
@@ -442,8 +440,8 @@ static char *reject_not_voting_n[] = {"3", NULL};
 static char *reject_not_voting_n_voting[] = {"2", NULL};
 
 static MunitParameterEnum reject_not_voting_params[] = {
-    {"cluster-n", reject_not_voting_n},
-    {"cluster-n-voting", reject_not_voting_n_voting},
+    {CLUSTER_N_PARAM, reject_not_voting_n},
+    {CLUSTER_N_VOTING_PARAM, reject_not_voting_n_voting},
     {NULL, NULL},
 };
 
@@ -451,7 +449,6 @@ static MunitParameterEnum reject_not_voting_params[] = {
 TEST(reject, non_voting, setup, tear_down, 0, reject_not_voting_params)
 {
     struct fixture *f = data;
-    (void)params;
 
     /* Disconnect server 0 from server 1, so server 0 can't win the elections
      * (since there are only 2 voting servers). */

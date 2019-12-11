@@ -36,7 +36,7 @@ static void tear_down(void *data)
 static char *cluster_3[] = {"3", NULL};
 
 static MunitParameterEnum cluster_3_params[] = {
-    {"cluster-n", cluster_3},
+    {CLUSTER_N_PARAM, cluster_3},
     {NULL, NULL},
 };
 
