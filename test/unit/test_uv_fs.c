@@ -275,7 +275,7 @@ TEST(UvFsProbeCapabilities, tmpfs, setupTmpfsDir, tearDownDir, 0, NULL)
 }
 
 /* ZFS 0.8 reports that it supports direct I/O, but does not support fully
- * asynchronous kernel AIO. */
+ * support asynchronous kernel AIO. */
 TEST(UvFsProbeCapabilities, zfsDirectIO, setupZfsDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;

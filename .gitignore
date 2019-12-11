@@ -24,9 +24,9 @@ test/unit/core
 test/unit/uv
 test/integration/core
 test/integration/uv
+test/fuzzy/core
 test/*/*.log
 test/*/*.trs
-fuzzy-test*
 os-test*
 test-suite.log
 coverage/

@@ -41,7 +41,7 @@ bin_PROGRAMS =
 check_PROGRAMS = \
   test/unit/core \
   test/integration/core \
-  fuzzy-test
+  test/fuzzy/core
 TESTS = $(check_PROGRAMS)
 
 check_LTLIBRARIES = libtest.la
@@ -86,15 +86,15 @@ test_integration_core_SOURCES = \
 test_integration_core_LDFLAGS = -no-install
 test_integration_core_LDADD = libtest.la libraft.la
 
-fuzzy_test_SOURCES = \
+test_fuzzy_core_SOURCES = \
   test/lib/cluster.c \
-  test/fuzzy/main.c \
+  test/fuzzy/main_core.c \
   test/fuzzy/test_election.c \
   test/fuzzy/test_liveness.c \
   test/fuzzy/test_membership.c \
   test/fuzzy/test_replication.c
-fuzzy_test_LDFLAGS = -no-install
-fuzzy_test_LDADD = libtest.la libraft.la
+test_fuzzy_core_LDFLAGS = -no-install
+test_fuzzy_core_LDADD = libtest.la libraft.la
 
 if UV_ENABLED
 
