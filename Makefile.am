@@ -39,9 +39,7 @@ libraft_la_SOURCES = \
 bin_PROGRAMS =
 
 check_PROGRAMS = \
-  test/unit/core \
-  test/integration/core \
-  test/fuzzy/core
+  test/unit/core
 TESTS = $(check_PROGRAMS)
 
 check_LTLIBRARIES = libtest.la
@@ -70,12 +68,25 @@ test_unit_core_SOURCES = \
   test/unit/test_queue.c
 test_unit_core_LDADD = libtest.la
 
+if FIXTURE_ENABLED
+
+libraft_la_SOURCES += src/fixture.c
+raftinclude_HEADERS += include/raft/fixture.h
+
+check_PROGRAMS += \
+  test/integration/core \
+  test/fuzzy/core
+
+libtest_la_SOURCES += \
+  test/lib/cluster.c
+
 test_integration_core_SOURCES = \
   test/integration/main_core.c \
   test/integration/test_apply.c \
   test/integration/test_barrier.c \
   test/integration/test_bootstrap.c \
   test/integration/test_election.c \
+  test/integration/test_fixture.c \
   test/integration/test_membership.c \
   test/integration/test_recover.c \
   test/integration/test_replication.c \
@@ -87,7 +98,6 @@ test_integration_core_LDFLAGS = -no-install
 test_integration_core_LDADD = libtest.la libraft.la
 
 test_fuzzy_core_SOURCES = \
-  test/lib/cluster.c \
   test/fuzzy/main_core.c \
   test/fuzzy/test_election.c \
   test/fuzzy/test_liveness.c \
@@ -95,6 +105,8 @@ test_fuzzy_core_SOURCES = \
   test/fuzzy/test_replication.c
 test_fuzzy_core_LDFLAGS = -no-install
 test_fuzzy_core_LDADD = libtest.la libraft.la
+
+endif # FIXTURE_ENABLED
 
 if UV_ENABLED
 
@@ -166,12 +178,6 @@ test_integration_uv_LDADD = libtest.la libraft.la
 AM_CFLAGS += $(UV_CFLAGS)
 
 endif # UV_ENABLED
-
-if FIXTURE_ENABLED
-libraft_la_SOURCES += src/fixture.c
-raftinclude_HEADERS += include/raft/fixture.h
-test_integration_core_SOURCES += test/unit/test_fixture.c
-endif
 
 if EXAMPLE_ENABLED
 
