@@ -865,7 +865,7 @@ RAFT_API int raft_start(struct raft *r);
  *
  * From Chapter 9:
  *
- *   We recommend a range that is 10–20 times the one-way network latency, which
+ *   We recommend a range that is 10-20 times the one-way network latency, which
  *   keeps split votes rates under 40% in all cases for reasonably sized
  *   clusters, and typically results in much lower rates.
  *

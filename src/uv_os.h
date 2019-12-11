@@ -3,7 +3,10 @@
 #ifndef UV_OS_H_
 #define UV_OS_H_
 
+#include <fcntl.h>
 #include <linux/aio_abi.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <uv.h>
 
 /* For backward compat with older libuv */
@@ -117,7 +120,7 @@ int UvOsSetDirectIo(uv_file fd);
 #define UvOsErrMsg(ERRMSG, SYSCALL, ERRNUM)              \
     {                                                    \
         ErrMsgPrintf(ERRMSG, "%s", uv_strerror(ERRNUM)); \
-        ErrMsgWrapf(ERRMSG, SYSCALL);                     \
+        ErrMsgWrapf(ERRMSG, SYSCALL);                    \
     }
 
 #endif /* UV_OS_H_ */

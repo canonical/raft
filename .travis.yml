@@ -12,9 +12,14 @@ addons:
 compiler:
   - clang
   - gcc
+before_script:
+  - git clone --depth 1 https://github.com/edlund/amalgamate.git
+  - export PATH=$PATH:$PWD/amalgamate
 script:
   - autoreconf -i
   - ./configure --enable-example --enable-debug --enable-code-coverage --enable-sanitize
+  - amalgamate.py --config=amalgamation.json --source=$(pwd)
+  - $CC raft.c -c -D_GNU_SOURCE -Wall -Wextra -Wpedantic -fpic
   - ./test/lib/fs.sh setup
   - make check CFLAGS=-O0
                RAFT_TMP_TMPFS=./tmp/tmpfs

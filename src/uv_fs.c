@@ -565,18 +565,15 @@ err:
 /* Check if direct I/O is possible on the given fd. */
 static int probeDirectIO(int fd, size_t *size, char *errmsg)
 {
-    int flags;             /* Current fcntl flags. */
     struct statfs fs_info; /* To check the file system type. */
     void *buf;             /* Buffer to use for the probe write. */
     int rv;
 
-    flags = fcntl(fd, F_GETFL);
-    rv = fcntl(fd, F_SETFL, flags | O_DIRECT);
-
-    if (rv == -1) {
-        if (errno != EINVAL) {
+    rv = UvOsSetDirectIo(fd);
+    if (rv != 0) {
+        if (rv != UV_EINVAL) {
             /* UNTESTED: the parameters are ok, so this should never happen. */
-            UvOsErrMsg(errmsg, "fnctl", -errno);
+            UvOsErrMsg(errmsg, "fnctl", rv);
             return RAFT_IOERR;
         }
         rv = fstatfs(fd, &fs_info);

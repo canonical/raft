@@ -7,6 +7,7 @@
 #include "error.h"
 #endif
 #include "err.h"
+#include "heap.h"
 #include "log.h"
 #include "membership.h"
 #include "progress.h"
@@ -15,13 +16,6 @@
 #include "request.h"
 #include "snapshot.h"
 #include "tracing.h"
-
-/* Set to 1 to enable tracing. */
-#if 0
-#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
 
 #ifndef max
 #define max(a, b) ((a) < (b) ? (b) : (a))
@@ -100,7 +94,7 @@ static int sendAppendEntries(struct raft *r,
         goto err;
     }
 
-    /* From Section §3.5:
+    /* From Section 3.5:
      *
      *   The leader keeps track of the highest index it knows to be committed,
      *   and it includes that index in future AppendEntries RPCs (including
@@ -312,7 +306,7 @@ int replicationProgress(struct raft *r, unsigned i)
         return 0;
     }
 
-    /* From Section §3.5:
+    /* From Section 3.5:
      *
      *   When sending an AppendEntries RPC, the leader includes the index and
      *   term of the entry in its log that immediately precedes the new
@@ -322,7 +316,7 @@ int replicationProgress(struct raft *r, unsigned i)
      *   satisfies the Log Matching Property, and the consistency check
      *   preserves the Log Matching Property whenever logs are extended. As a
      *   result, whenever AppendEntries returns successfully, the leader knows
-     *   that the follower’s log is identical to its own log up through the new
+     *   that the follower's log is identical to its own log up through the new
      *   entries (Log Matching Property in Figure 3.2).
      */
     if (next_index == 1) {
@@ -767,7 +761,7 @@ int replicationUpdate(struct raft *r,
 static void sendAppendEntriesResultCb(struct raft_io_send *req, int status)
 {
     (void)status;
-    raft_free(req);
+    HeapFree(req);
 }
 
 static void sendAppendEntriesResult(
