@@ -74,52 +74,52 @@ static char *mkTempDir(const char *parent)
     return dir;
 }
 
-void *setupDir(MUNIT_UNUSED const MunitParameter params[],
+void *setUpDir(MUNIT_UNUSED const MunitParameter params[],
                MUNIT_UNUSED void *user_data)
 {
     const char *fs = munit_parameters_get(params, TEST_DIR_FS);
     if (fs == NULL) {
         return mkTempDir("/tmp");
     } else if (strcmp(fs, "tmpfs") == 0) {
-        return setupTmpfsDir(params, user_data);
+        return setUpTmpfsDir(params, user_data);
     } else if (strcmp(fs, "ext4") == 0) {
-        return setupExt4Dir(params, user_data);
+        return setUpExt4Dir(params, user_data);
     } else if (strcmp(fs, "btrfs") == 0) {
-        return setupBtrfsDir(params, user_data);
+        return setUpBtrfsDir(params, user_data);
     } else if (strcmp(fs, "zfs") == 0) {
-        return setupZfsDir(params, user_data);
+        return setUpZfsDir(params, user_data);
     } else if (strcmp(fs, "xfs") == 0) {
-        return setupXfsDir(params, user_data);
+        return setUpXfsDir(params, user_data);
     }
     munit_errorf("Unsupported file system %s", fs);
     return NULL;
 }
 
-void *setupTmpfsDir(MUNIT_UNUSED const MunitParameter params[],
+void *setUpTmpfsDir(MUNIT_UNUSED const MunitParameter params[],
                     MUNIT_UNUSED void *user_data)
 {
     return mkTempDir(getenv("RAFT_TMP_TMPFS"));
 }
 
-void *setupExt4Dir(MUNIT_UNUSED const MunitParameter params[],
+void *setUpExt4Dir(MUNIT_UNUSED const MunitParameter params[],
                    MUNIT_UNUSED void *user_data)
 {
     return mkTempDir(getenv("RAFT_TMP_EXT4"));
 }
 
-void *setupBtrfsDir(MUNIT_UNUSED const MunitParameter params[],
+void *setUpBtrfsDir(MUNIT_UNUSED const MunitParameter params[],
                     MUNIT_UNUSED void *user_data)
 {
     return mkTempDir(getenv("RAFT_TMP_BTRFS"));
 }
 
-void *setupZfsDir(MUNIT_UNUSED const MunitParameter params[],
+void *setUpZfsDir(MUNIT_UNUSED const MunitParameter params[],
                   MUNIT_UNUSED void *user_data)
 {
     return mkTempDir(getenv("RAFT_TMP_ZFS"));
 }
 
-void *setupXfsDir(MUNIT_UNUSED const MunitParameter params[],
+void *setUpXfsDir(MUNIT_UNUSED const MunitParameter params[],
                   MUNIT_UNUSED void *user_data)
 {
     return mkTempDir(getenv("RAFT_TMP_XFS"));
