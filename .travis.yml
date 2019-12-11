@@ -28,5 +28,6 @@ script:
     || (cat ./test-suite.log && false)
   - if [ $TRAVIS_COMPILER = gcc ]; then make code-coverage-capture; fi
   - ./test/lib/fs.sh teardown
+  - amalgamate.py --config=amalgamation.json --source=$(pwd)
 after_success:
   - bash <(curl -s https://codecov.io/bash) -G "./src*"
