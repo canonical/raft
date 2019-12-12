@@ -12,7 +12,7 @@ struct fixture
     FIXTURE_CLUSTER;
 };
 
-static void *setup(const MunitParameter params[], MUNIT_UNUSED void *user_data)
+static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     const char *n_voting_param = munit_parameters_get(params, "n_voting");
@@ -27,7 +27,7 @@ static void *setup(const MunitParameter params[], MUNIT_UNUSED void *user_data)
     return f;
 }
 
-static void tear_down(void *data)
+static void tearDown(void *data)
 {
     struct fixture *f = data;
     TEAR_DOWN_CLUSTER;
@@ -58,10 +58,10 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-SUITE(elapse)
+SUITE(tick)
 
 /* Internal timers are updated according to the given time delta. */
-TEST(elapse, election_timer, setup, tear_down, 0, NULL)
+TEST(tick, electionTimer, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -84,7 +84,7 @@ TEST(elapse, election_timer, setup, tear_down, 0, NULL)
 /* If the election timeout expires, the follower is a voting server, and it
  * hasn't voted yet in this term, then become candidate and start a new
  * election. */
-TEST(elapse, candidate, setup, tear_down, 0, NULL)
+TEST(tick, candidate, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct raft *raft = CLUSTER_RAFT(0);
@@ -111,7 +111,7 @@ TEST(elapse, candidate, setup, tear_down, 0, NULL)
 }
 
 /* If the election timeout has not elapsed, stay follower. */
-TEST(elapse, timer_not_expired, setup, tear_down, 0, NULL)
+TEST(tick, electionTimerNotExpired, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct raft *raft = CLUSTER_RAFT(0);
@@ -132,7 +132,7 @@ static MunitParameterEnum elapse_non_voter_params[] = {
 };
 
 /* If the election timeout has elapsed, but we're not voters, stay follower. */
-TEST(elapse, not_voter, setup, tear_down, 0, elapse_non_voter_params)
+TEST(tick, not_voter, setUp, tearDown, 0, elapse_non_voter_params)
 {
     struct fixture *f = data;
     struct raft *raft = CLUSTER_RAFT(1);
@@ -151,7 +151,7 @@ TEST(elapse, not_voter, setup, tear_down, 0, elapse_non_voter_params)
 
 /* If we're leader election timeout elapses without hearing from a majority of
  * the cluster, step down. */
-TEST(elapse, no_contact, setup, tear_down, 0, NULL)
+TEST(tick, no_contact, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -168,7 +168,7 @@ TEST(elapse, no_contact, setup, tear_down, 0, NULL)
 
 /* If we're candidate and the election timeout has elapsed, start a new
  * election. */
-TEST(elapse, new_election, setup, tear_down, 0, NULL)
+TEST(tick, new_election, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct raft *raft = CLUSTER_RAFT(0);
@@ -204,7 +204,7 @@ TEST(elapse, new_election, setup, tear_down, 0, NULL)
 }
 
 /* If the election timeout has not elapsed, stay candidate. */
-TEST(elapse, during_election, setup, tear_down, 0, NULL)
+TEST(tick, during_election, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct raft *raft = CLUSTER_RAFT(0);
@@ -236,10 +236,10 @@ static MunitParameterEnum elapse_request_vote_only_to_voters_params[] = {
 };
 
 /* Vote requests are sent only to voting servers. */
-TEST(elapse,
+TEST(tick,
      request_vote_only_to_voters,
-     setup,
-     tear_down,
+     setUp,
+     tearDown,
      0,
      elapse_request_vote_only_to_voters_params)
 {
