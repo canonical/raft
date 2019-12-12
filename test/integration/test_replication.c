@@ -184,6 +184,22 @@ TEST(replication, sendSkipHeartbeat, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
+/* The leader doesn't send replication messages to idle servers. */
+TEST(replication, skipIdle, setUp, tearDown, 0, NULL) {
+    struct fixture *f = data;
+    struct raft_change req1;
+    struct raft_apply req2;
+    BOOTSTRAP_START_AND_ELECT;
+    CLUSTER_ADD(&req1);
+    CLUSTER_STEP_UNTIL_APPLIED(0, 2, 1000);
+    CLUSTER_APPLY_ADD_X(CLUSTER_LEADER, &req2, 1, NULL);
+    CLUSTER_STEP_UNTIL_ELAPSED(1000);
+    munit_assert_int(CLUSTER_LAST_APPLIED(0), ==, 3);
+    munit_assert_int(CLUSTER_LAST_APPLIED(1), ==, 3);
+    munit_assert_int(CLUSTER_LAST_APPLIED(2), ==, 0);
+    return MUNIT_OK;
+}
+
 /* A follower remains in probe mode until the leader receives a successful
  * AppendEntries response. */
 TEST(replication, sendProbe, setUp, tearDown, 0, NULL)

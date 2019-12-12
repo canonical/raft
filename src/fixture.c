@@ -1129,9 +1129,20 @@ static bool updateLeaderAndCheckElectionSafety(struct raft_fixture *f)
     if (leader_id != 0) {
         unsigned n_acks = 0;
         bool acked = true;
+        unsigned n_quorum = 0;
 
         for (i = 0; i < f->n; i++) {
             struct raft *raft = raft_fixture_get(f, i);
+            const struct raft_server *server =
+                configurationGet(&raft->configuration, raft->id);
+
+            /* If the server is not in the configuration or is idle, then don't
+             * count it. */
+            if (server == NULL || server->role == RAFT_IDLE) {
+                continue;
+            }
+
+            n_quorum++;
 
             /* If this server is itself the leader, or it's not alive or it's
              * not connected to the leader, then don't count it in for
@@ -1164,7 +1175,7 @@ static bool updateLeaderAndCheckElectionSafety(struct raft_fixture *f)
             n_acks++;
         }
 
-        if (!acked || n_acks < (f->n / 2)) {
+        if (!acked || n_acks < (n_quorum / 2)) {
             leader_id = 0;
         }
     }

@@ -370,6 +370,11 @@ static int triggerAll(struct raft *r)
         if (server->id == r->id) {
             continue;
         }
+	/* Skip idle servers, unless they're being promoted. */
+        if (server->role == RAFT_IDLE &&
+            server->id != r->leader_state.promotee_id) {
+            continue;
+        }
         rv = replicationProgress(r, i);
         if (rv != 0 && rv != RAFT_NOCONNECTION) {
             /* This is not a critical failure, let's just log it. */

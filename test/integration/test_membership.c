@@ -58,6 +58,15 @@ static void tear_down(void *data)
         munit_assert_int(rv_, ==, RV);                                \
     }
 
+/* Submit a request to promote the server with the given ID to the given
+ * ROLE. */
+#define PROMOTE(I, ID, ROLE)                                                \
+    {                                                                 \
+        int _rv;                                                      \
+        _rv = raft_promote(CLUSTER_RAFT(I), &f->req, ID, ROLE, NULL); \
+        munit_assert_int(_rv, ==, 0);                                \
+    }
+
 /* Invoke raft_remove against the I'th node and assert it returns the given
  * value. */
 #define REMOVE(I, ID, RV)                                      \
@@ -174,12 +183,14 @@ TEST(raft_remove, committed, setup, tear_down, 0, NULL)
     struct fixture *f = data;
     GROW;
     ADD(0, 3, 0);
+    CLUSTER_STEP_UNTIL_APPLIED(0, 2, 2000);
+    PROMOTE(0, 3, RAFT_STANDBY);
     CLUSTER_STEP_UNTIL_APPLIED(2, 1, 2000);
     CLUSTER_STEP_N(2);
     REMOVE(0, 3, 0);
-    ASSERT_CONFIGURATION_INDEXES(0, 2, 3);
-    CLUSTER_STEP_UNTIL_APPLIED(0, 3, 2000);
-    ASSERT_CONFIGURATION_INDEXES(0, 3, 0);
+    ASSERT_CONFIGURATION_INDEXES(0, 3, 4);
+    CLUSTER_STEP_UNTIL_APPLIED(0, 4, 2000);
+    ASSERT_CONFIGURATION_INDEXES(0, 4, 0);
     munit_assert_int(CLUSTER_RAFT(0)->configuration.n, ==, 2);
     return MUNIT_OK;
 }
