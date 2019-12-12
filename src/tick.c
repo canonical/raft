@@ -99,7 +99,7 @@ static bool checkContactQuorum(struct raft *r)
         }
     }
 
-    return contacts > configurationNumVoting(&r->configuration) / 2;
+    return contacts > configurationVoterCount(&r->configuration) / 2;
 }
 
 /* Apply time-dependent rules for leaders (Figure 3.1). */

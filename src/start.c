@@ -104,7 +104,7 @@ static int maybeSelfElect(struct raft *r)
     int rv;
     server = configurationGet(&r->configuration, r->id);
     if (server == NULL || server->role != RAFT_VOTER ||
-        configurationNumVoting(&r->configuration) > 1) {
+        configurationVoterCount(&r->configuration) > 1) {
         return 0;
     }
     tracef("self elect and convert to leader");

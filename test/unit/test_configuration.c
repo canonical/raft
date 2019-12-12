@@ -39,7 +39,7 @@ static void tear_down(void *data)
  *****************************************************************************/
 
 /* Accessors */
-#define N_VOTING configurationNumVoting(&f->configuration)
+#define VOTER_COUNT configurationVoterCount(&f->configuration)
 #define INDEX_OF(ID) configurationIndexOf(&f->configuration, ID)
 #define INDEX_OF_VOTING(ID) configurationIndexOfVoting(&f->configuration, ID)
 #define GET(ID) configurationGet(&f->configuration, ID)
@@ -101,29 +101,29 @@ static void tear_down(void *data)
 
 /******************************************************************************
  *
- * configurationNumVoting
+ * configurationVoterCount
  *
  *****************************************************************************/
 
-SUITE(configurationNumVoting)
+SUITE(configurationVoterCount)
 
 /* All servers are voting. */
-TEST(configurationNumVoting, all_voters, setup, tear_down, 0, NULL)
+TEST(configurationVoterCount, all_voters, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     ADD(1, "192.168.1.1:666", RAFT_VOTER);
     ADD(2, "192.168.1.2:666", RAFT_VOTER);
-    munit_assert_int(N_VOTING, ==, 2);
+    munit_assert_int(VOTER_COUNT, ==, 2);
     return MUNIT_OK;
 }
 
 /* Return only voting servers. */
-TEST(configurationNumVoting, filter, setup, tear_down, 0, NULL)
+TEST(configurationVoterCount, filter, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     ADD(1, "192.168.1.1:666", RAFT_VOTER);
     ADD(2, "192.168.1.2:666", RAFT_STANDBY);
-    munit_assert_int(N_VOTING, ==, 1);
+    munit_assert_int(VOTER_COUNT, ==, 1);
     return MUNIT_OK;
 }
 

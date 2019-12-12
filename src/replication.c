@@ -1512,7 +1512,7 @@ void replicationQuorum(struct raft *r, const raft_index index)
         }
     }
 
-    if (votes > configurationNumVoting(&r->configuration) / 2) {
+    if (votes > configurationVoterCount(&r->configuration) / 2) {
         r->commit_index = index;
         tracef("new commit index %ld", r->commit_index);
     }

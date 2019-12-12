@@ -80,7 +80,7 @@ const struct raft_server *configurationGet(const struct raft_configuration *c,
     return &c->servers[i];
 }
 
-size_t configurationNumVoting(const struct raft_configuration *c)
+size_t configurationVoterCount(const struct raft_configuration *c)
 {
     size_t i;
     size_t n = 0;

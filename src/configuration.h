@@ -5,8 +5,8 @@
 
 #include "../include/raft.h"
 
-/* Return the number of voting servers. */
-size_t configurationNumVoting(const struct raft_configuration *c);
+/* Return the number of servers with the RAFT_VOTER role. */
+size_t configurationVoterCount(const struct raft_configuration *c);
 
 /* Return the index of the server with the given ID (relative to the c->servers
  * array). If there's no server with the given ID, return the number of
