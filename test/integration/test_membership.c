@@ -1,9 +1,8 @@
 #include <stdio.h>
 
+#include "../../src/configuration.h"
 #include "../lib/cluster.h"
 #include "../lib/runner.h"
-
-#include "../../src/configuration.h"
 
 /******************************************************************************
  *
@@ -17,10 +16,10 @@ struct fixture
     struct raft_change req;
 };
 
-static void *setup(const MunitParameter params[], void *user_data)
+/* Set up a cluster of 2 servers, with the first as leader. */
+static void *setup(const MunitParameter params[], MUNIT_UNUSED void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    (void)user_data;
     SETUP_CLUSTER(2);
     CLUSTER_BOOTSTRAP;
     CLUSTER_START;
@@ -464,7 +463,7 @@ TEST(raft_remove, self, setup, tear_down, 0, NULL)
 
 /* Trying to remove a server on a node which is not the leader results in an
  * error. */
-  TEST(raft_remove, notLeader, setup, tear_down, 0, NULL)
+TEST(raft_remove, notLeader, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     REMOVE(1 /*   I                                                     */,
