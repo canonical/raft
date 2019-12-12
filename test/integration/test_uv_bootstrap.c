@@ -93,6 +93,6 @@ TEST(bootstrap, termIsNonZero, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
     CONFIGURATION_ADD(1, "1");
     BOOTSTRAP;
-    BOOTSTRAP_ERROR(RAFT_CANTBOOTSTRAP, "metadata contain term 1");
+    BOOTSTRAP_ERROR(RAFT_CANTBOOTSTRAP, "metadata contains term 1");
     return MUNIT_OK;
 }

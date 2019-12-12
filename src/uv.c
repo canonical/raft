@@ -463,7 +463,7 @@ static int uvBootstrap(struct raft_io *io,
 
     /* We shouldn't have written anything else yet. */
     if (uv->metadata.term != 0) {
-        ErrMsgPrintf(io->errmsg, "metadata contain term %lld",
+        ErrMsgPrintf(io->errmsg, "metadata contains term %lld",
                      uv->metadata.term);
         return RAFT_CANTBOOTSTRAP;
     }
