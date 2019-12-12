@@ -685,6 +685,20 @@ TEST(load, openSegmentWithEntriesPastSnapshot, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
+/* The data directory has a closed segment whose filename encodes a number of
+ * entries which is different then ones it actually contains. */
+TEST(load, closedSegmentWithInconsistentFilename, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    APPEND(3, 1);
+    test_dir_rename_file(f->dir, "0000000000000001-0000000000000003",
+                         "0000000000000001-0000000000000004");
+    LOAD_ERROR(RAFT_CORRUPT,
+               "load closed segment 0000000000000001-0000000000000004: found 3 "
+               "entries (expected 4)");
+    return MUNIT_OK;
+}
+
 /* The data directory has a closed segment with entries that are no longer
  * needed, since they are included in a snapshot. It also has an open segment,
  * however that does not have enough entries to reach the snapshot last
