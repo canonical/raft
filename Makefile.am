@@ -88,6 +88,7 @@ test_integration_core_SOURCES = \
   test/integration/test_election.c \
   test/integration/test_fixture.c \
   test/integration/test_membership.c \
+  test/integration/test_promote.c \
   test/integration/test_recover.c \
   test/integration/test_replication.c \
   test/integration/test_snapshot.c \
