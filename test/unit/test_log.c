@@ -1,6 +1,6 @@
 #include "../../src/configuration.h"
+#include "../../src/log.h"
 #include "../lib/heap.h"
-#include "../lib/log.h"
 #include "../lib/runner.h"
 
 /******************************************************************************
@@ -12,7 +12,7 @@
 struct fixture
 {
     FIXTURE_HEAP;
-    FIXTURE_LOG;
+    struct raft_log log;
 };
 
 static void *setup(const MunitParameter params[], void *user_data)
@@ -20,14 +20,14 @@ static void *setup(const MunitParameter params[], void *user_data)
     struct fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
     SETUP_HEAP;
-    SETUP_LOG;
+    logInit(&f->log);
     return f;
 }
 
 static void tear_down(void *data)
 {
     struct fixture *f = data;
-    TEAR_DOWN_LOG;
+    logClose(&f->log);
     TEAR_DOWN_HEAP;
     free(f);
 }
