@@ -92,7 +92,7 @@ static void recvCb(struct raft_io *io, struct raft_message *m1)
                 struct raft_server *s2 = &m2->install_snapshot.conf.servers[i];
                 munit_assert_int(s1->id, ==, s2->id);
                 munit_assert_string_equal(s1->address, s2->address);
-                munit_assert_int(s1->voting, ==, s2->voting);
+                munit_assert_int(s1->role, ==, s2->role);
             }
             munit_assert_int(m1->install_snapshot.data.len, ==,
                              m2->install_snapshot.data.len);
@@ -372,7 +372,8 @@ TEST(recv, installSnapshot, setUp, tearDown, 0, NULL)
     message.install_snapshot.last_index = 123;
     message.install_snapshot.last_term = 1;
     raft_configuration_init(&message.install_snapshot.conf);
-    rv = raft_configuration_add(&message.install_snapshot.conf, 1, "1", true);
+    rv = raft_configuration_add(&message.install_snapshot.conf, 1, "1",
+                                RAFT_VOTER);
     munit_assert_int(rv, ==, 0);
     message.install_snapshot.data.len = sizeof snapshot_data;
     message.install_snapshot.data.base = snapshot_data;

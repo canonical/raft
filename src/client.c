@@ -1,6 +1,7 @@
 #include "../include/raft.h"
 #include "assert.h"
 #include "configuration.h"
+#include "err.h"
 #include "log.h"
 #include "membership.h"
 #include "progress.h"
@@ -184,7 +185,7 @@ int raft_add(struct raft *r,
         goto err;
     }
 
-    rv = raft_configuration_add(&configuration, id, address, false);
+    rv = raft_configuration_add(&configuration, id, address, RAFT_IDLE);
     if (rv != 0) {
         goto err_after_configuration_copy;
     }
@@ -211,12 +212,19 @@ err:
 int raft_promote(struct raft *r,
                  struct raft_change *req,
                  unsigned id,
+                 int role,
                  raft_change_cb cb)
 {
     const struct raft_server *server;
     size_t server_index;
     raft_index last_index;
     int rv;
+
+    if (role != RAFT_STANDBY && role != RAFT_VOTER) {
+        rv = RAFT_BADROLE;
+        ErrMsgFromCode(r->errmsg, rv);
+        return rv;
+    }
 
     rv = membershipCanChangeConfiguration(r);
     if (rv != 0) {
@@ -227,12 +235,21 @@ int raft_promote(struct raft *r,
 
     server = configurationGet(&r->configuration, id);
     if (server == NULL) {
-        rv = RAFT_BADID;
+        rv = RAFT_NOTFOUND;
+        ErrMsgPrintf(r->errmsg, "no server has ID %u", id);
         goto err;
     }
 
-    if (server->voting) {
-        rv = RAFT_ALREADYVOTING;
+    /* Check if we have already the desired role. */
+    if (server->role == role) {
+        const char *name;
+        rv = RAFT_BADROLE;
+        if (role == RAFT_VOTER) {
+            name = "voter";
+        } else {
+            name = "stand-by";
+        }
+        ErrMsgPrintf(r->errmsg, "server is already %s", name);
         goto err;
     }
 
@@ -246,14 +263,16 @@ int raft_promote(struct raft *r,
     assert(r->leader_state.change == NULL);
     r->leader_state.change = req;
 
-    /* If the log of this non-voting server is already up-to-date, we can ask
-     * its promotion immediately. */
-    if (progressMatchIndex(r, server_index) == last_index) {
-        r->configuration.servers[server_index].voting = true;
+    /* If the log of this server is already up-to-date, or if we're promoting to
+     * stand-by, we can ask its promotion immediately. */
+    if (role == RAFT_STANDBY ||
+        progressMatchIndex(r, server_index) == last_index) {
+        int old_role = r->configuration.servers[server_index].role;
+        r->configuration.servers[server_index].role = role;
 
         rv = clientChangeConfiguration(r, req, &r->configuration);
         if (rv != 0) {
-            r->configuration.servers[server_index].voting = false;
+            r->configuration.servers[server_index].role = old_role;
             return rv;
         }
 

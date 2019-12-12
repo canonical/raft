@@ -5,20 +5,20 @@
 
 #include "../include/raft.h"
 
-/* Return the number of voting servers. */
-size_t configurationNumVoting(const struct raft_configuration *c);
+/* Return the number of servers with the RAFT_VOTER role. */
+size_t configurationVoterCount(const struct raft_configuration *c);
 
 /* Return the index of the server with the given ID (relative to the c->servers
  * array). If there's no server with the given ID, return the number of
  * servers. */
 size_t configurationIndexOf(const struct raft_configuration *c, unsigned id);
 
-/* Return the index of the voting server with the given ID (relative to the sub
- * array of c->servers that has only voting servers). If there's no server with
- * the given ID, or if it's not flagged as voting, return the number of
+/* Return the index of the RAFT_VOTER server with the given ID (relative to the
+ * sub array of c->servers that has only voting servers). If there's no server
+ * with the given ID, or if it's not flagged as voting, return the number of
  * servers. */
-size_t configurationIndexOfVoting(const struct raft_configuration *c,
-                                  unsigned id);
+size_t configurationIndexOfVoter(const struct raft_configuration *c,
+                                 unsigned id);
 
 /* Get the server with the given ID, or #NULL if no matching server is found. */
 const struct raft_server *configurationGet(const struct raft_configuration *c,

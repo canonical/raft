@@ -20,10 +20,9 @@ static MunitParameterEnum _params[] = {
     {NULL, NULL},
 };
 
-static void *setup(const MunitParameter params[], void *user_data)
+static void *setup(const MunitParameter params[], MUNIT_UNUSED void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    (void)user_data;
     SETUP_CLUSTER(0);
     CLUSTER_BOOTSTRAP;
     CLUSTER_RANDOMIZE;
@@ -53,10 +52,13 @@ TEST(membership, addNonVoting, setup, tear_down, 0, _params)
     const struct raft_server *server;
     struct raft *raft;
 
-    (void)params;
-
     CLUSTER_ADD(&f->req);
-    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_N, 2, 2000);
+    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_LEADER, 2, 2000);
+
+    /* Then promote it. */
+    CLUSTER_PROMOTE(&f->req, RAFT_STANDBY);
+
+    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_N, 3, 2000);
 
     raft = CLUSTER_RAFT(CLUSTER_LEADER);
 
@@ -75,17 +77,17 @@ TEST(membership, addVoting, setup, tear_down, 0, _params)
     (void)params;
 
     CLUSTER_ADD(&f->req);
-    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_N, 2, 2000);
+    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_LEADER, 2, 2000);
 
     /* Then promote it. */
-    CLUSTER_PROMOTE(&f->req);
+    CLUSTER_PROMOTE(&f->req, RAFT_VOTER);
 
     CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_N, 3, 2000);
 
     raft = CLUSTER_RAFT(CLUSTER_LEADER);
 
     server = &raft->configuration.servers[CLUSTER_N - 1];
-    munit_assert_true(server->voting);
+    munit_assert_int(server->role, ==, RAFT_VOTER);
 
     return MUNIT_OK;
 }

@@ -32,7 +32,7 @@
 SUITE(UvFsCheckDir)
 
 /* If the directory exists, the function suceeds. */
-TEST(UvFsCheckDir, exists, setupDir, tearDownDir, 0, NULL)
+TEST(UvFsCheckDir, exists, setUpDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
     CHECK_DIR(dir);
@@ -40,7 +40,7 @@ TEST(UvFsCheckDir, exists, setupDir, tearDownDir, 0, NULL)
 }
 
 /* If the directory doesn't exist, it an error is returned. */
-TEST(UvFsCheckDir, doesNotExist, setupDir, tearDownDir, 0, NULL)
+TEST(UvFsCheckDir, doesNotExist, setUpDir, tearDownDir, 0, NULL)
 {
     const char *parent = data;
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
@@ -81,7 +81,7 @@ TEST(UvFsCheckDir, notDir, NULL, NULL, 0, NULL)
 }
 
 /* If the given directory is not writable, an error is returned. */
-TEST(UvFsCheckDir, notWritable, setupDir, tearDownDir, 0, NULL)
+TEST(UvFsCheckDir, notWritable, setUpDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
@@ -134,7 +134,7 @@ TEST(UvFsSyncDir, noExists, NULL, NULL, 0, NULL)
 SUITE(UvFsOpenFileForReading)
 
 /* If the directory doesn't exist, an error is returned. */
-TEST(UvFsOpenFileForReading, noExists, setupDir, tearDownDir, 0, NULL)
+TEST(UvFsOpenFileForReading, noExists, setUpDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
     OPEN_FILE_FOR_READING_ERROR(dir, "foo", RAFT_IOERR,
@@ -175,7 +175,7 @@ TEST(UvFsOpenFileForReading, noExists, setupDir, tearDownDir, 0, NULL)
 SUITE(UvFsAllocateFile)
 
 /* If the given path is valid, the file gets created. */
-TEST(UvFsAllocateFile, success, setupDir, tearDownDir, 0, NULL)
+TEST(UvFsAllocateFile, success, setUpDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
     ALLOCATE_FILE(dir,   /* dir */
@@ -197,7 +197,7 @@ TEST(UvFsAllocateFile, dirNoExists, NULL, NULL, 0, NULL)
 }
 
 /* If the given path already exists, an error is returned. */
-TEST(UvFsAllocateFile, fileAlreadyExists, setupDir, tearDownDir, 0, NULL)
+TEST(UvFsAllocateFile, fileAlreadyExists, setUpDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
     char buf[8];
@@ -211,7 +211,7 @@ TEST(UvFsAllocateFile, fileAlreadyExists, setupDir, tearDownDir, 0, NULL)
 }
 
 /* The file system has run out of space. */
-TEST(UvFsAllocateFile, noSpace, setupDir, tearDownDir, 0, dir_tmpfs_params)
+TEST(UvFsAllocateFile, noSpace, setUpDir, tearDownDir, 0, dir_tmpfs_params)
 {
     const char *dir = data;
     if (dir == NULL) {
@@ -264,7 +264,7 @@ TEST(UvFsAllocateFile, noSpace, setupDir, tearDownDir, 0, dir_tmpfs_params)
 
 SUITE(UvFsProbeCapabilities)
 
-TEST(UvFsProbeCapabilities, tmpfs, setupTmpfsDir, tearDownDir, 0, NULL)
+TEST(UvFsProbeCapabilities, tmpfs, setUpTmpfsDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
     if (dir == NULL) {
@@ -275,8 +275,8 @@ TEST(UvFsProbeCapabilities, tmpfs, setupTmpfsDir, tearDownDir, 0, NULL)
 }
 
 /* ZFS 0.8 reports that it supports direct I/O, but does not support fully
- * asynchronous kernel AIO. */
-TEST(UvFsProbeCapabilities, zfsDirectIO, setupZfsDir, tearDownDir, 0, NULL)
+ * support asynchronous kernel AIO. */
+TEST(UvFsProbeCapabilities, zfsDirectIO, setUpZfsDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
     size_t direct_io = 0;
@@ -293,7 +293,7 @@ TEST(UvFsProbeCapabilities, zfsDirectIO, setupZfsDir, tearDownDir, 0, NULL)
 #if defined(RWF_NOWAIT)
 
 /* File systems that fully support DIO. */
-TEST(UvFsProbeCapabilities, aio, setupDir, tearDownDir, 0, dir_aio_params)
+TEST(UvFsProbeCapabilities, aio, setUpDir, tearDownDir, 0, dir_aio_params)
 {
     const char *dir = data;
     if (dir == NULL) {
@@ -307,7 +307,7 @@ TEST(UvFsProbeCapabilities, aio, setupDir, tearDownDir, 0, dir_aio_params)
 
 /* If the given path is not executable, the block size of the underlying file
  * system can't be determined and an error is returned. */
-TEST(UvFsProbeCapabilities, noAccess, setupDir, tearDownDir, 0, NULL)
+TEST(UvFsProbeCapabilities, noAccess, setUpDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
     test_dir_unexecutable(dir);
@@ -318,7 +318,7 @@ TEST(UvFsProbeCapabilities, noAccess, setupDir, tearDownDir, 0, NULL)
 }
 
 /* No space is left on the target device. */
-TEST(UvFsProbeCapabilities, noSpace, setupTmpfsDir, tearDownDir, 0, NULL)
+TEST(UvFsProbeCapabilities, noSpace, setUpTmpfsDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
     if (dir == NULL) {
@@ -334,7 +334,7 @@ TEST(UvFsProbeCapabilities, noSpace, setupTmpfsDir, tearDownDir, 0, NULL)
 #if defined(RWF_NOWAIT)
 
 /* The uvIoSetup() call fails with EAGAIN. */
-TEST(UvFsProbeCapabilities, noResources, setupBtrfsDir, tearDownDir, 0, NULL)
+TEST(UvFsProbeCapabilities, noResources, setUpBtrfsDir, tearDownDir, 0, NULL)
 {
     const char *dir = data;
     aio_context_t ctx = 0;

@@ -996,10 +996,10 @@ int raft_fixture_configuration(struct raft_fixture *f,
     raft_configuration_init(configuration);
     for (i = 0; i < f->n; i++) {
         struct raft_fixture_server *s;
-        bool voting = i < n_voting;
+        int role = i < n_voting ? RAFT_VOTER : RAFT_STANDBY;
         int rv;
         s = &f->servers[i];
-        rv = raft_configuration_add(configuration, s->id, s->address, voting);
+        rv = raft_configuration_add(configuration, s->id, s->address, role);
         if (rv != 0) {
             return rv;
         }
@@ -1129,9 +1129,20 @@ static bool updateLeaderAndCheckElectionSafety(struct raft_fixture *f)
     if (leader_id != 0) {
         unsigned n_acks = 0;
         bool acked = true;
+        unsigned n_quorum = 0;
 
         for (i = 0; i < f->n; i++) {
             struct raft *raft = raft_fixture_get(f, i);
+            const struct raft_server *server =
+                configurationGet(&raft->configuration, raft->id);
+
+            /* If the server is not in the configuration or is idle, then don't
+             * count it. */
+            if (server == NULL || server->role == RAFT_IDLE) {
+                continue;
+            }
+
+            n_quorum++;
 
             /* If this server is itself the leader, or it's not alive or it's
              * not connected to the leader, then don't count it in for
@@ -1164,7 +1175,7 @@ static bool updateLeaderAndCheckElectionSafety(struct raft_fixture *f)
             n_acks++;
         }
 
-        if (!acked || n_acks < (f->n / 2)) {
+        if (!acked || n_acks < (n_quorum / 2)) {
             leader_id = 0;
         }
     }
@@ -1520,7 +1531,8 @@ void raft_fixture_elect(struct raft_fixture *f, unsigned i)
     assert(f->leader_id == 0);
 
     /* Make sure that the given server is voting. */
-    assert(configurationGet(&raft->configuration, raft->id)->voting);
+    assert(configurationGet(&raft->configuration, raft->id)->role ==
+           RAFT_VOTER);
 
     /* Make sure all servers are currently followers. */
     for (j = 0; j < f->n; j++) {

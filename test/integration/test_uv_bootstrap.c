@@ -21,11 +21,11 @@ struct fixture
  *****************************************************************************/
 
 /* Add a server to the fixture's configuration. */
-#define CONFIGURATION_ADD(ID, ADDRESS)                             \
-    {                                                              \
-        int rv_;                                                   \
-        rv_ = raft_configuration_add(&f->conf, ID, ADDRESS, true); \
-        munit_assert_int(rv_, ==, 0);                              \
+#define CONFIGURATION_ADD(ID, ADDRESS)                                   \
+    {                                                                    \
+        int rv_;                                                         \
+        rv_ = raft_configuration_add(&f->conf, ID, ADDRESS, RAFT_VOTER); \
+        munit_assert_int(rv_, ==, 0);                                    \
     }
 
 /* Invoke f->io->bootstrap() and assert that no error occurs. */

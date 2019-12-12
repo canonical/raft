@@ -370,6 +370,11 @@ static int triggerAll(struct raft *r)
         if (server->id == r->id) {
             continue;
         }
+	/* Skip idle servers, unless they're being promoted. */
+        if (server->role == RAFT_IDLE &&
+            server->id != r->leader_state.promotee_id) {
+            continue;
+        }
         rv = replicationProgress(r, i);
         if (rv != 0 && rv != RAFT_NOCONNECTION) {
             /* This is not a critical failure, let's just log it. */
@@ -600,6 +605,7 @@ static int triggerActualPromotion(struct raft *r)
     size_t server_index;
     struct raft_server *server;
     struct raft_change *req;
+    int old_role;
     int rv;
 
     assert(r->state == RAFT_LEADER);
@@ -611,10 +617,11 @@ static int triggerActualPromotion(struct raft *r)
 
     server = &r->configuration.servers[server_index];
 
-    assert(!server->voting);
+    assert(server->role != RAFT_VOTER);
 
     /* Update our current configuration. */
-    server->voting = true;
+    old_role = server->role;
+    server->role = RAFT_VOTER;
 
     /* Index of the entry being appended. */
     index = logLastIndex(&r->log) + 1;
@@ -647,7 +654,7 @@ err_after_log_append:
     logTruncate(&r->log, index);
 
 err:
-    server->voting = false;
+    server->role = old_role;
 
     assert(rv != 0);
     return rv;
@@ -1502,7 +1509,7 @@ void replicationQuorum(struct raft *r, const raft_index index)
 
     for (i = 0; i < r->configuration.n; i++) {
         struct raft_server *server = &r->configuration.servers[i];
-        if (!server->voting) {
+        if (server->role != RAFT_VOTER) {
             continue;
         }
         if (r->leader_state.progress[i].match_index >= index) {
@@ -1510,7 +1517,7 @@ void replicationQuorum(struct raft *r, const raft_index index)
         }
     }
 
-    if (votes > configurationNumVoting(&r->configuration) / 2) {
+    if (votes > configurationVoterCount(&r->configuration) / 2) {
         r->commit_index = index;
         tracef("new commit index %ld", r->commit_index);
     }

@@ -202,7 +202,8 @@ static int ServerInit(struct Server *s,
         char address[64];
         unsigned server_id = i + 1;
         sprintf(address, "127.0.0.1:900%d", server_id);
-        rv = raft_configuration_add(&configuration, server_id, address, true);
+        rv = raft_configuration_add(&configuration, server_id, address,
+                                    RAFT_VOTER);
         if (rv != 0) {
             Logf(s->id, "raft_configuration_add(): %s", raft_strerror(rv));
             goto err_after_configuration_init;

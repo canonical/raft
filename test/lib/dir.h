@@ -16,10 +16,10 @@
  *
  * The various file systems must have been previously setup with the fs.sh
  * script. */
-#define TEST_DIR_FS "dir-fs"
+#define DIR_FS_PARAM "dir-fs"
 
 #define FIXTURE_DIR char *dir
-#define SETUP_DIR f->dir = setupDir(params, user_data)
+#define SETUP_DIR f->dir = setUpDir(params, user_data)
 #define SETUP_DIR_OR_SKIP                                            \
     SETUP_DIR;                                                       \
     if (f->dir == NULL) { /* Desired fs not available, skip test. */ \
@@ -47,61 +47,61 @@ extern char *test_dir_aio[];
 /* List containing all fs types that do not properly support AIO. */
 extern char *test_dir_no_aio[];
 
-/* Contain a single TEST_DIR_FS parameter set to all supported file system
+/* Contain a single DIR_FS_PARAM parameter set to all supported file system
  * types. */
 extern MunitParameterEnum dir_all_params[];
 
-/* Contain a single TEST_DIR_FS parameter set to tmpfs. */
+/* Contain a single DIR_FS_PARAM parameter set to tmpfs. */
 extern MunitParameterEnum dir_tmpfs_params[];
 
-/* Contain a single TEST_DIR_FS parameter set to btrfs. */
+/* Contain a single DIR_FS_PARAM parameter set to btrfs. */
 extern MunitParameterEnum dir_btrfs_params[];
 
-/* Contain a single TEST_DIR_FS parameter set to zfs. */
+/* Contain a single DIR_FS_PARAM parameter set to zfs. */
 extern MunitParameterEnum dir_zfs_params[];
 
-/* Contain a single TEST_DIR_FS parameter set to all file systems with
+/* Contain a single DIR_FS_PARAM parameter set to all file systems with
  * proper AIO support (i.e. NOWAIT works). */
 extern MunitParameterEnum dir_aio_params[];
 
-/* Contain a single TEST_DIR_FS parameter set to all file systems without proper
- * AIO support (i.e. NOWAIT does not work). */
+/* Contain a single DIR_FS_PARAM parameter set to all file systems without
+ * proper AIO support (i.e. NOWAIT does not work). */
 extern MunitParameterEnum dir_no_aio_params[];
 
 /* Create a temporary test directory.
  *
  * Return a pointer the path of the created directory. */
-void *setupDir(const MunitParameter params[], void *user_data);
+void *setUpDir(const MunitParameter params[], void *user_data);
 
 /* Create a temporary test directory backed by tmpfs.
  *
  * Return a pointer the path of the created directory, or NULL if no tmpfs file
  * system is available. */
-void *setupTmpfsDir(const MunitParameter params[], void *user_data);
+void *setUpTmpfsDir(const MunitParameter params[], void *user_data);
 
 /* Create a temporary test directory backed by ext4.
  *
  * Return a pointer the path of the created directory, or NULL if no ext4 file
  * system is available. */
-void *setupExt4Dir(const MunitParameter params[], void *user_data);
+void *setUpExt4Dir(const MunitParameter params[], void *user_data);
 
 /* Create a temporary test directory backed by btrfs.
  *
  * Return a pointer the path of the created directory, or NULL if no btrfs file
  * system is available. */
-void *setupBtrfsDir(const MunitParameter params[], void *user_data);
+void *setUpBtrfsDir(const MunitParameter params[], void *user_data);
 
 /* Create a temporary test directory backed by zfs.
  *
  * Return a pointer the path of the created directory, or NULL if no zfs file
  * system is available. */
-void *setupZfsDir(const MunitParameter params[], void *user_data);
+void *setUpZfsDir(const MunitParameter params[], void *user_data);
 
 /* Create a temporary test directory backed by xfs.
  *
  * Return a pointer the path of the created directory, or NULL if no xfs file
  * system is available. */
-void *setupXfsDir(const MunitParameter params[], void *user_data);
+void *setUpXfsDir(const MunitParameter params[], void *user_data);
 
 /* Recursively remove a temporary directory. */
 void tearDownDir(void *data);

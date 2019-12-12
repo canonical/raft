@@ -19,10 +19,9 @@ static MunitParameterEnum _params[] = {
     {NULL, NULL},
 };
 
-static void *setup(const MunitParameter params[], void *user_data)
+static void *setup(const MunitParameter params[], MUNIT_UNUSED void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    (void)user_data;
     SETUP_CLUSTER(0);
     CLUSTER_BOOTSTRAP;
     CLUSTER_RANDOMIZE;
@@ -49,7 +48,6 @@ SUITE(election)
 TEST(election, win, setup, tear_down, 0, _params)
 {
     struct fixture *f = data;
-    (void)params;
     CLUSTER_STEP_UNTIL_HAS_LEADER(10000);
     return MUNIT_OK;
 }
@@ -58,7 +56,6 @@ TEST(election, win, setup, tear_down, 0, _params)
 TEST(election, change, setup, tear_down, 0, _params)
 {
     struct fixture *f = data;
-    (void)params;
     CLUSTER_STEP_UNTIL_HAS_LEADER(10000);
     CLUSTER_KILL_LEADER;
     CLUSTER_STEP_UNTIL_HAS_NO_LEADER(10000);
@@ -70,7 +67,6 @@ TEST(election, change, setup, tear_down, 0, _params)
 TEST(election, noQuorum, setup, tear_down, 0, _params)
 {
     struct fixture *f = data;
-    (void)params;
     CLUSTER_KILL_MAJORITY;
     CLUSTER_STEP_UNTIL_ELAPSED(30000);
     munit_assert_false(CLUSTER_HAS_LEADER);

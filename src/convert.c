@@ -138,14 +138,14 @@ void convertToFollower(struct raft *r)
 
 int convertToCandidate(struct raft *r)
 {
-    size_t n_voting = configurationNumVoting(&r->configuration);
+    size_t n_voters = configurationVoterCount(&r->configuration);
     int rv;
 
     convertClear(r);
     convertSetState(r, RAFT_CANDIDATE);
 
     /* Allocate the votes array. */
-    r->candidate_state.votes = raft_malloc(n_voting * sizeof(bool));
+    r->candidate_state.votes = raft_malloc(n_voters * sizeof(bool));
     if (r->candidate_state.votes == NULL) {
         return RAFT_NOMEM;
     }

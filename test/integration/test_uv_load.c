@@ -210,7 +210,7 @@ struct snapshot
         _new_snapshot.term = TERM;                                            \
         raft_configuration_init(&_new_snapshot.configuration);                \
         _rv = raft_configuration_add(&_new_snapshot.configuration, 1, "1",    \
-                                     true);                                   \
+                                     RAFT_VOTER);                             \
         munit_assert_int(_rv, ==, 0);                                         \
         _new_snapshot.bufs = &_new_snapshot_buf;                              \
         _new_snapshot.n_bufs = 1;                                             \
@@ -682,6 +682,20 @@ TEST(load, openSegmentWithEntriesPastSnapshot, setUp, tearDown, 0, NULL)
          1,         /* data for first loaded entry */
          2          /* n entries */
     );
+    return MUNIT_OK;
+}
+
+/* The data directory has a closed segment whose filename encodes a number of
+ * entries which is different then ones it actually contains. */
+TEST(load, closedSegmentWithInconsistentFilename, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    APPEND(3, 1);
+    test_dir_rename_file(f->dir, "0000000000000001-0000000000000003",
+                         "0000000000000001-0000000000000004");
+    LOAD_ERROR(RAFT_CORRUPT,
+               "load closed segment 0000000000000001-0000000000000004: found 3 "
+               "entries (expected 4)");
     return MUNIT_OK;
 }
 

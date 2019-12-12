@@ -12,34 +12,6 @@ struct fixture
     FIXTURE_CLUSTER;
 };
 
-static void *setup(const MunitParameter params[], void *user_data)
-{
-    struct fixture *f = munit_malloc(sizeof *f);
-    (void)user_data;
-    SETUP_CLUSTER(2);
-    return f;
-}
-
-static void tear_down(void *data)
-{
-    struct fixture *f = data;
-    TEAR_DOWN_CLUSTER;
-    free(f);
-}
-
-/******************************************************************************
- *
- * Parameters
- *
- *****************************************************************************/
-
-static char *cluster_3[] = {"3", NULL};
-
-static MunitParameterEnum cluster_3_params[] = {
-    {"cluster-n", cluster_3},
-    {NULL, NULL},
-};
-
 /******************************************************************************
  *
  * Helper macros
@@ -52,6 +24,26 @@ static MunitParameterEnum cluster_3_params[] = {
     CLUSTER_START;                \
     CLUSTER_ELECT(0);             \
     ASSERT_TIME(1045)
+
+/******************************************************************************
+ *
+ * Set up a cluster with a two servers.
+ *
+ *****************************************************************************/
+
+static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
+{
+    struct fixture *f = munit_malloc(sizeof *f);
+    SETUP_CLUSTER(2);
+    return f;
+}
+
+static void tearDown(void *data)
+{
+    struct fixture *f = data;
+    TEAR_DOWN_CLUSTER;
+    free(f);
+}
 
 /******************************************************************************
  *
@@ -74,14 +66,14 @@ static MunitParameterEnum cluster_3_params[] = {
 
 /******************************************************************************
  *
- * Send AppendEntries messages
+ * Log replication.
  *
  *****************************************************************************/
 
-SUITE(send)
+SUITE(replication)
 
 /* A leader sends a heartbeat message as soon as it gets elected. */
-TEST(send, initialHeartbeat, setup, tear_down, 0, NULL)
+TEST(replication, sendInitialHeartbeat, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct raft *raft;
@@ -117,11 +109,10 @@ TEST(send, initialHeartbeat, setup, tear_down, 0, NULL)
 
 /* A leader keeps sending heartbeat messages at regular intervals to
  * maintain leadership. */
-TEST(send, followupHeartbeat, setup, tear_down, 0, NULL)
+TEST(replication, sendFollowupHeartbeat, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct raft *raft;
-    (void)params;
     CLUSTER_BOOTSTRAP;
     CLUSTER_START;
 
@@ -158,12 +149,11 @@ TEST(send, followupHeartbeat, setup, tear_down, 0, NULL)
 
 /* If a leader replicates some entries during a given heartbeat interval, it
  * skips sending the heartbeat for that interval. */
-TEST(send, skipHeartbeat, setup, tear_down, 0, NULL)
+TEST(replication, sendSkipHeartbeat, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct raft *raft;
     struct raft_apply req;
-    (void)params;
     CLUSTER_BOOTSTRAP;
     CLUSTER_START;
 
@@ -194,14 +184,29 @@ TEST(send, skipHeartbeat, setup, tear_down, 0, NULL)
     return MUNIT_OK;
 }
 
+/* The leader doesn't send replication messages to idle servers. */
+TEST(replication, skipIdle, setUp, tearDown, 0, NULL) {
+    struct fixture *f = data;
+    struct raft_change req1;
+    struct raft_apply req2;
+    BOOTSTRAP_START_AND_ELECT;
+    CLUSTER_ADD(&req1);
+    CLUSTER_STEP_UNTIL_APPLIED(0, 2, 1000);
+    CLUSTER_APPLY_ADD_X(CLUSTER_LEADER, &req2, 1, NULL);
+    CLUSTER_STEP_UNTIL_ELAPSED(1000);
+    munit_assert_int(CLUSTER_LAST_APPLIED(0), ==, 3);
+    munit_assert_int(CLUSTER_LAST_APPLIED(1), ==, 3);
+    munit_assert_int(CLUSTER_LAST_APPLIED(2), ==, 0);
+    return MUNIT_OK;
+}
+
 /* A follower remains in probe mode until the leader receives a successful
  * AppendEntries response. */
-TEST(send, probe, setup, tear_down, 0, NULL)
+TEST(replication, sendProbe, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_apply req1;
     struct raft_apply req2;
-    (void)params;
     CLUSTER_BOOTSTRAP;
     CLUSTER_START;
 
@@ -246,13 +251,12 @@ TEST(send, probe, setup, tear_down, 0, NULL)
 
 /* A follower transitions to pipeline mode after the leader receives a
  * successful AppendEntries response from it. */
-TEST(send, pipeline, setup, tear_down, 0, NULL)
+TEST(replication, sendPipeline, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct raft *raft;
     struct raft_apply req1;
     struct raft_apply req2;
-    (void)params;
     CLUSTER_BOOTSTRAP;
     CLUSTER_START;
 
@@ -289,10 +293,9 @@ TEST(send, pipeline, setup, tear_down, 0, NULL)
 }
 
 /* A follower disconnects while in probe mode. */
-TEST(send, disconnect, setup, tear_down, 0, NULL)
+TEST(replication, sendDisconnect, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     CLUSTER_BOOTSTRAP;
     CLUSTER_START;
 
@@ -320,7 +323,7 @@ TEST(send, disconnect, setup, tear_down, 0, NULL)
 }
 
 /* A follower disconnects while in pipeline mode. */
-TEST(send, disconnectPipeline, setup, tear_down, 0, NULL)
+TEST(replication, sendDisconnectPipeline, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_apply req1;
@@ -367,7 +370,7 @@ static MunitParameterEnum send_oom_params[] = {
 };
 
 /* Out of memory failures. */
-TEST(send, oom, setup, tear_down, 0, send_oom_params)
+TEST(replication, sendOom, setUp, tearDown, 0, send_oom_params)
 {
     struct fixture *f = data;
     return MUNIT_SKIP;
@@ -383,7 +386,7 @@ TEST(send, oom, setup, tear_down, 0, send_oom_params)
 }
 
 /* A failure occurs upon submitting the I/O request. */
-TEST(send, ioError, setup, tear_down, 0, NULL)
+TEST(replication, sendIoError, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     return MUNIT_SKIP;
@@ -398,16 +401,8 @@ TEST(send, ioError, setup, tear_down, 0, NULL)
     return MUNIT_OK;
 }
 
-/******************************************************************************
- *
- * Receive AppendEntries requests
- *
- *****************************************************************************/
-
-SUITE(receive)
-
 /* Receive the same entry a second time, before the first has been persisted. */
-TEST(receive, twice, setup, tear_down, 0, NULL)
+TEST(replication, recvTwice, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_apply *req = munit_malloc(sizeof *req);
@@ -432,9 +427,10 @@ TEST(receive, twice, setup, tear_down, 0, NULL)
 }
 
 /* If the term in the request is stale, the server rejects it. */
-TEST(receive, stale_term, setup, tear_down, 0, cluster_3_params)
+TEST(replication, recvStaleTerm, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
+    CLUSTER_GROW;
     BOOTSTRAP_START_AND_ELECT;
 
     /* Set a very high election timeout and the disconnect the leader so it will
@@ -460,7 +456,7 @@ TEST(receive, stale_term, setup, tear_down, 0, cluster_3_params)
 }
 
 /* If server's log is shorter than prevLogIndex, the request is rejected . */
-TEST(receive, missing_entries, setup, tear_down, 0, NULL)
+TEST(replication, recvMissingEntries, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry;
@@ -486,7 +482,7 @@ TEST(receive, missing_entries, setup, tear_down, 0, NULL)
 /* If the term of the last log entry on the server is different from the one
  * prevLogTerm, and value of prevLogIndex is greater than server's commit commit
  * index (i.e. this is a normal inconsistency), we reject the request. */
-TEST(receive, prev_log_term_mismatch, setup, tear_down, 0, NULL)
+TEST(replication, recvPrevLogTermMismatch, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry1;
@@ -516,7 +512,7 @@ TEST(receive, prev_log_term_mismatch, setup, tear_down, 0, NULL)
 /* If any of the new entry has the same index of an existing entry in our log,
  * but different term, and that entry index is already committed, we bail out
  * with an error. */
-TEST(receive, prev_index_conflict, setup, tear_down, 0, NULL)
+TEST(replication, recvPrevIndexConflict, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry1;
@@ -547,7 +543,7 @@ TEST(receive, prev_index_conflict, setup, tear_down, 0, NULL)
 
 /* A write log request is submitted for outstanding log entries. If some entries
  * are already existing in the log, they will be skipped. */
-TEST(receive, skip, setup, tear_down, 0, NULL)
+TEST(replication, recvSkip, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_apply *req = munit_malloc(sizeof *req);
@@ -574,7 +570,7 @@ TEST(receive, skip, setup, tear_down, 0, NULL)
 
 /* If the index and term of the last snapshot on the server match prevLogIndex
  * and prevLogTerm the request is accepted. */
-TEST(receive, match_last_snapshot, setup, tear_down, 0, NULL)
+TEST(replication, recvMatch_last_snapshot, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry;
@@ -613,9 +609,10 @@ TEST(receive, match_last_snapshot, setup, tear_down, 0, NULL)
 }
 /* If a candidate server receives a request contaning the same term as its
  * own, it it steps down to follower and accept the request . */
-TEST(receive, candidateSameTerm, setup, tear_down, 0, cluster_3_params)
+TEST(replication, recvCandidateSameTerm, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
+    CLUSTER_GROW;
     CLUSTER_BOOTSTRAP;
 
     /* Disconnect server 2 from the other two and set a low election timeout on
@@ -651,10 +648,10 @@ TEST(receive, candidateSameTerm, setup, tear_down, 0, cluster_3_params)
 
 /* If a candidate server receives a request contaning an higher term as its
  * own, it it steps down to follower and accept the request . */
-TEST(receive, candidateHigherTerm, setup, tear_down, 0, cluster_3_params)
+TEST(replication, recvCandidateHigherTerm, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
+    CLUSTER_GROW;
     CLUSTER_BOOTSTRAP;
 
     /* Set a high election timeout on server 1, so it won't become candidate */
@@ -703,17 +700,9 @@ TEST(receive, candidateHigherTerm, setup, tear_down, 0, cluster_3_params)
     return MUNIT_OK;
 }
 
-/******************************************************************************
- *
- * Receive AppendEntries responses
- *
- *****************************************************************************/
-
-SUITE(result)
-
 /* If the server handling the response is not the leader, the result
  * is ignored. */
-TEST(result, notLeader, setup, tear_down, 0, NULL)
+TEST(replication, resultNotLeader, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     BOOTSTRAP_START_AND_ELECT;
@@ -739,9 +728,10 @@ TEST(result, notLeader, setup, tear_down, 0, NULL)
 
 /* If the response has a term which is lower than the server's one, it's
  * ignored. */
-TEST(result, lowerTerm, setup, tear_down, 0, cluster_3_params)
+TEST(replication, resultLowerTerm, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
+    CLUSTER_GROW;
     BOOTSTRAP_START_AND_ELECT;
 
     /* Set a very high-latency for the second server's outgoing messages, so the
@@ -771,9 +761,10 @@ TEST(result, lowerTerm, setup, tear_down, 0, cluster_3_params)
 
 /* If the response has a term which is higher than the server's one, step down
  * to follower. */
-TEST(result, higherTerm, setup, tear_down, 0, cluster_3_params)
+TEST(replication, resultHigherTerm, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
+    CLUSTER_GROW;
     BOOTSTRAP_START_AND_ELECT;
 
     /* Set a very high election timeout for server 0 so it won't step down. */
@@ -799,7 +790,7 @@ TEST(result, higherTerm, setup, tear_down, 0, cluster_3_params)
 
 /* If the response fails because a log mismatch, the nextIndex for the server is
  * updated and the relevant older entries are resent. */
-TEST(result, retry, setup, tear_down, 0, NULL)
+TEST(replication, resultRetry, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry;

@@ -11,11 +11,11 @@
 /**
  * Error codes.
  */
-#define RAFT_NOMEM 1
-#define RAFT_BADID 2
-#define RAFT_DUPLICATEID 3
-#define RAFT_DUPLICATEADDRESS 4
-#define RAFT_ALREADYVOTING 5
+#define RAFT_NOMEM 1            /* Out of memory */
+#define RAFT_BADID 2            /* Server ID is not valid */
+#define RAFT_DUPLICATEID 3      /* Server ID already in use */
+#define RAFT_DUPLICATEADDRESS 4 /* Server address already in use */
+#define RAFT_BADROLE 5          /* Server role is not valid */
 #define RAFT_MALFORMED 6
 #define RAFT_NOTLEADER 7
 #define RAFT_LEADERSHIPLOST 8
@@ -70,13 +70,21 @@ struct raft_buffer
 };
 
 /**
+ * Server role codes.
+ */
+
+#define RAFT_STANDBY 0 /* Replicate log, does not participate in quorum. */
+#define RAFT_VOTER 1   /* Replicate log, does participate in quorum. */
+#define RAFT_IDLE 2    /* Does not replicate log, or participate in quorum. */
+
+/**
  * Hold information about a single server in the cluster configuration.
  */
 struct raft_server
 {
     unsigned id;   /* Server ID, must be greater than zero. */
     char *address; /* Server address. User defined. */
-    bool voting;   /* Whether this is a voting server. */
+    int role;      /* Server role. */
 };
 
 /**
@@ -103,6 +111,8 @@ RAFT_API void raft_configuration_close(struct raft_configuration *c);
  *
  * The @id must be greater than zero and @address point to a valid string.
  *
+ * The @role must be either #RAFT_VOTER, #RAFT_STANDBY, #RAFT_IDLE.
+ *
  * If @id or @address are already in use by another server in the configuration,
  * an error is returned.
  *
@@ -110,9 +120,9 @@ RAFT_API void raft_configuration_close(struct raft_configuration *c);
  * returns.
  */
 RAFT_API int raft_configuration_add(struct raft_configuration *c,
-                                    const unsigned id,
+                                    unsigned id,
                                     const char *address,
-                                    const bool voting);
+                                    int role);
 
 /**
  * Encode the given configuration object.
@@ -994,7 +1004,8 @@ struct raft_change
 };
 
 /**
- * Add a new non-voting server to the cluster configuration.
+ * Add a new server to the cluster configuration. Its initial role will be
+ * #RAFT_IDLE.
  */
 RAFT_API int raft_add(struct raft *r,
                       struct raft_change *req,
@@ -1003,11 +1014,20 @@ RAFT_API int raft_add(struct raft *r,
                       raft_change_cb cb);
 
 /**
- * Promote the given new non-voting server to be a voting one.
+ * Promote the given server to a more important role.
+ *
+ * If the server's current role is #RAFT_IDLE, the server can be promoted either
+ * to #RAFT_STANDBY or #RAFT_VOTER.
+ *
+ * If the server's current role is #RAFT_STANDBY, the server can be promoted to
+ * #RAFT_VOTER.
+ *
+ * In all other cases, #RAFT_BADROLE is returned.
  */
 RAFT_API int raft_promote(struct raft *r,
                           struct raft_change *req,
                           unsigned id,
+                          int role,
                           raft_change_cb cb);
 
 /**

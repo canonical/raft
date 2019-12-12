@@ -1,9 +1,10 @@
-#include "../include/raft.h"
+#include "membership.h"
 
+#include "../include/raft.h"
 #include "assert.h"
 #include "configuration.h"
+#include "err.h"
 #include "log.h"
-#include "membership.h"
 #include "progress.h"
 
 int membershipCanChangeConfiguration(struct raft *r)
@@ -12,17 +13,17 @@ int membershipCanChangeConfiguration(struct raft *r)
 
     if (r->state != RAFT_LEADER) {
         rv = RAFT_NOTLEADER;
-        return rv;
+        goto err;
     }
 
     if (r->configuration_uncommitted_index != 0) {
         rv = RAFT_CANTCHANGE;
-        return rv;
+        goto err;
     }
 
     if (r->leader_state.promotee_id != 0) {
         rv = RAFT_CANTCHANGE;
-        return rv;
+        goto err;
     }
 
     /* In order to become leader at all we are supposed to have committed at
@@ -39,6 +40,11 @@ int membershipCanChangeConfiguration(struct raft *r)
     assert(r->leader_state.round_start == 0);
 
     return 0;
+
+err:
+    assert(rv != 0);
+    ErrMsgFromCode(r->errmsg, rv);
+    return rv;
 }
 
 bool membershipUpdateCatchUpRound(struct raft *r)

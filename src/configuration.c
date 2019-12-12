@@ -1,6 +1,7 @@
+#include "configuration.h"
+
 #include "assert.h"
 #include "byte.h"
-#include "configuration.h"
 
 /* Current encoding format version. */
 #define ENCODING_FORMAT 1
@@ -37,8 +38,8 @@ size_t configurationIndexOf(const struct raft_configuration *c,
     return c->n;
 }
 
-size_t configurationIndexOfVoting(const struct raft_configuration *c,
-                                  const unsigned id)
+size_t configurationIndexOfVoter(const struct raft_configuration *c,
+                                 const unsigned id)
 {
     size_t i;
     size_t j = 0;
@@ -47,12 +48,12 @@ size_t configurationIndexOfVoting(const struct raft_configuration *c,
 
     for (i = 0; i < c->n; i++) {
         if (c->servers[i].id == id) {
-            if (c->servers[i].voting) {
+            if (c->servers[i].role == RAFT_VOTER) {
                 return j;
             }
             return c->n;
         }
-        if (c->servers[i].voting) {
+        if (c->servers[i].role == RAFT_VOTER) {
             j++;
         }
     }
@@ -79,13 +80,13 @@ const struct raft_server *configurationGet(const struct raft_configuration *c,
     return &c->servers[i];
 }
 
-size_t configurationNumVoting(const struct raft_configuration *c)
+size_t configurationVoterCount(const struct raft_configuration *c)
 {
     size_t i;
     size_t n = 0;
     assert(c != NULL);
     for (i = 0; i < c->n; i++) {
-        if (c->servers[i].voting) {
+        if (c->servers[i].role == RAFT_VOTER) {
             n++;
         }
     }
@@ -101,7 +102,7 @@ int configurationCopy(const struct raft_configuration *src,
     for (i = 0; i < src->n; i++) {
         struct raft_server *server = &src->servers[i];
         rv = raft_configuration_add(dst, server->id, server->address,
-                                    server->voting);
+                                    server->role);
         if (rv != 0) {
             return rv;
         }
@@ -112,13 +113,17 @@ int configurationCopy(const struct raft_configuration *src,
 int raft_configuration_add(struct raft_configuration *c,
                            const unsigned id,
                            const char *address,
-                           const bool voting)
+                           const int role)
 {
     struct raft_server *servers;
     struct raft_server *server;
     size_t i;
     assert(c != NULL);
     assert(id != 0);
+
+    if (role != RAFT_STANDBY && role != RAFT_VOTER && role != RAFT_IDLE) {
+        return RAFT_BADROLE;
+    }
 
     /* Check that neither the given id or address is already in use */
     for (i = 0; i < c->n; i++) {
@@ -146,7 +151,7 @@ int raft_configuration_add(struct raft_configuration *c,
         return RAFT_NOMEM;
     }
     strcpy(server->address, address);
-    server->voting = voting;
+    server->role = role;
 
     c->n++;
 
@@ -243,8 +248,8 @@ void configurationEncodeToBuf(const struct raft_configuration *c, void *buf)
         struct raft_server *server = &c->servers[i];
         assert(server->address != NULL);
         bytePut64Unaligned(&cursor, server->id); /* might not be aligned */
-	bytePutString(&cursor, server->address);
-        bytePut8(&cursor, server->voting);
+        bytePutString(&cursor, server->address);
+        bytePut8(&cursor, server->role);
     };
 }
 
@@ -299,22 +304,23 @@ int configurationDecode(const struct raft_buffer *buf,
     for (i = 0; i < n; i++) {
         unsigned id;
         const char *address;
-        bool voting;
+        int role;
         int rv;
 
         /* Server ID. */
         id = byteGet64Unaligned(&cursor);
 
         /* Server Address. */
-        address = byteGetString(&cursor, buf->len - ((uint8_t*)cursor - (uint8_t*)buf->base));
+        address = byteGetString(
+            &cursor, buf->len - ((uint8_t *)cursor - (uint8_t *)buf->base));
         if (address == NULL) {
             return RAFT_MALFORMED;
         }
 
-        /* Voting flag. */
-        voting = byteGet8(&cursor);
+        /* Role code. */
+        role = byteGet8(&cursor);
 
-        rv = raft_configuration_add(c, id, address, voting);
+        rv = raft_configuration_add(c, id, address, role);
         if (rv != 0) {
             return rv;
         }
