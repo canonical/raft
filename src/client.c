@@ -25,6 +25,7 @@ int raft_apply(struct raft *r,
 
     if (r->state != RAFT_LEADER) {
         rv = RAFT_NOTLEADER;
+        ErrMsgFromCode(r->errmsg, rv);
         goto err;
     }
 

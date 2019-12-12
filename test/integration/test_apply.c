@@ -10,10 +10,6 @@
 struct fixture
 {
     FIXTURE_CLUSTER;
-    struct raft_buffer buf;
-    struct raft_apply req;
-    bool invoked;
-    int status;
 };
 
 static void *setup(const MunitParameter params[], void *user_data)
@@ -21,8 +17,6 @@ static void *setup(const MunitParameter params[], void *user_data)
     struct fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
     SETUP_CLUSTER(2);
-    f->invoked = false;
-    f->status = -1;
     CLUSTER_BOOTSTRAP;
     CLUSTER_START;
     CLUSTER_ELECT(0);
@@ -42,27 +36,65 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-static void apply_cb(struct raft_apply *req, int status, void *result)
+struct result
 {
-    struct fixture *f = req->data;
-    (void)result;
-    f->invoked = true;
-    f->status = status;
+    int status;
+    bool done;
+};
+
+static void applyCbAssertResult(struct raft_apply *req, int status, void *_)
+{
+    struct result *result = req->data;
+    (void)_;
+    munit_assert_int(status, ==, result->status);
+    result->done = true;
 }
 
-/* Submit a request to apply a new RAFT_COMMAND entry and assert that it returns
- * the given value. */
-#define APPLY(I, RV)                                                      \
-    {                                                                     \
-        int rv_;                                                          \
-        test_fsm_encode_set_x(123, &f->buf);                              \
-        f->req.data = f;                                                  \
-        rv_ = raft_apply(CLUSTER_RAFT(I), &f->req, &f->buf, 1, apply_cb); \
-        munit_assert_int(rv_, ==, RV);                                    \
-        if (rv_ != 0) {                                                   \
-            raft_free(f->buf.base);                                       \
-        }                                                                 \
-    }
+static bool applyCbHasFired(struct raft_fixture *f, void *arg)
+{
+    struct result *result = arg;
+    (void)f;
+    return result->done;
+}
+
+/* Submit an apply request. */
+#define APPLY_SUBMIT(I)                                                      \
+    struct raft_buffer _buf;                                                 \
+    struct raft_apply _req;                                                  \
+    struct result _result = {0, false};                                      \
+    int _rv;                                                                 \
+    test_fsm_encode_set_x(123, &_buf);                                       \
+    _req.data = &_result;                                                    \
+    _rv = raft_apply(CLUSTER_RAFT(I), &_req, &_buf, 1, applyCbAssertResult); \
+    munit_assert_int(_rv, ==, 0);
+
+/* Expect the apply callback to fire with the given status. */
+#define APPLY_EXPECT(STATUS) _result.status = STATUS
+
+/* Wait until an apply request comletes. */
+#define APPLY_WAIT CLUSTER_STEP_UNTIL(applyCbHasFired, &_result, 2000)
+
+/* Submit to the I'th server a request to apply a new RAFT_COMMAND entry and
+ * wait for the operation to succeed. */
+#define APPLY(I)         \
+    do {                 \
+        APPLY_SUBMIT(I); \
+        APPLY_WAIT;      \
+    } while (0)
+
+/* Submit to the I'th server a request to apply a new RAFT_COMMAND entry and
+ * assert that the given error is returned. */
+#define APPLY_ERROR(I, RV, ERRMSG)                                \
+    do {                                                          \
+        struct raft_buffer _buf;                                  \
+        struct raft_apply _req;                                   \
+        int _rv;                                                  \
+        test_fsm_encode_set_x(123, &_buf);                        \
+        _rv = raft_apply(CLUSTER_RAFT(I), &_req, &_buf, 1, NULL); \
+        munit_assert_int(_rv, ==, RV);                            \
+        munit_assert_string_equal(CLUSTER_ERRMSG(I), ERRMSG);     \
+        raft_free(_buf.base);                                     \
+    } while (0)
 
 /******************************************************************************
  *
@@ -76,9 +108,7 @@ SUITE(raft_apply)
 TEST(raft_apply, first, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
-    APPLY(0, 0);
-    CLUSTER_STEP_UNTIL_APPLIED(0, 2, 1000);
+    APPLY(0);
     munit_assert_int(test_fsm_get_x(CLUSTER_FSM(0)), ==, 123);
     return MUNIT_OK;
 }
@@ -93,9 +123,7 @@ TEST(raft_apply, first, setup, tear_down, 0, NULL)
 TEST(raft_apply, notLeader, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
-    APPLY(1, RAFT_NOTLEADER);
-    munit_assert_false(f->invoked);
+    APPLY_ERROR(1, RAFT_NOTLEADER, "server is not the leader");
     return MUNIT_OK;
 }
 
@@ -104,10 +132,9 @@ TEST(raft_apply, notLeader, setup, tear_down, 0, NULL)
 TEST(raft_apply, leadershipLost, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
-    APPLY(0, 0);
+    APPLY_SUBMIT(0);
+    APPLY_EXPECT(RAFT_LEADERSHIPLOST);
     CLUSTER_DEPOSE;
-    munit_assert_true(f->invoked);
-    munit_assert_int(f->status, ==, RAFT_LEADERSHIPLOST);
+    APPLY_WAIT;
     return MUNIT_OK;
 }

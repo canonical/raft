@@ -10,7 +10,6 @@
 struct fixture
 {
     FIXTURE_CLUSTER;
-    struct raft_change req;
 };
 
 /******************************************************************************
@@ -70,8 +69,6 @@ static bool changeCbHasFired(struct raft_fixture *f, void *arg)
 #define PROMOTE_SUBMIT(I, ID, ROLE)                                           \
     struct raft_change _req;                                                  \
     struct result _result = {0, false};                                       \
-    (void)_result;                                                            \
-    (void)_req;                                                               \
     int _rv;                                                                  \
     _req.data = &_result;                                                     \
     _rv =                                                                     \
@@ -81,8 +78,8 @@ static bool changeCbHasFired(struct raft_fixture *f, void *arg)
 /* Wait until a promote request comletes. */
 #define PROMOTE_WAIT CLUSTER_STEP_UNTIL(changeCbHasFired, &_result, 2000)
 
-/* Promote the I'th server to the given role and wait for the operation to
- * succeed. */
+/* Submit a request to promote the I'th server to the given role and wait for
+ * the operation to succeed. */
 #define PROMOTE(I, ID, ROLE)         \
     do {                             \
         PROMOTE_SUBMIT(I, ID, ROLE); \
@@ -91,13 +88,13 @@ static bool changeCbHasFired(struct raft_fixture *f, void *arg)
 
 /* Invoke raft_promote() against the I'th server and assert it the given error
  * code. */
-#define PROMOTE_ERROR(I, ID, ROLE, RV, ERRMSG)                           \
-    {                                                                    \
-        struct raft_change __req;                                        \
-        int __rv;                                                        \
-        __rv = raft_promote(CLUSTER_RAFT(I), &__req, ID, ROLE, NULL);    \
-        munit_assert_int(__rv, ==, RV);                                  \
-        munit_assert_string_equal(ERRMSG, raft_errmsg(CLUSTER_RAFT(I))); \
+#define PROMOTE_ERROR(I, ID, ROLE, RV, ERRMSG)                        \
+    {                                                                 \
+        struct raft_change __req;                                     \
+        int __rv;                                                     \
+        __rv = raft_promote(CLUSTER_RAFT(I), &__req, ID, ROLE, NULL); \
+        munit_assert_int(__rv, ==, RV);                               \
+        munit_assert_string_equal(ERRMSG, CLUSTER_ERRMSG(I));         \
     }
 
 /******************************************************************************
@@ -313,7 +310,8 @@ TEST(raft_promote, changeIsImmediate, setUp, tearDown, 0, NULL)
 }
 
 /* Promote an idle node to stand-by. */
-TEST(raft_promote, standBy, setUp, tearDown, 0, NULL) {
+TEST(raft_promote, standBy, setUp, tearDown, 0, NULL)
+{
     struct fixture *f = data;
     GROW;
     ADD(0, 3);
