@@ -121,6 +121,10 @@ int raft_configuration_add(struct raft_configuration *c,
     assert(c != NULL);
     assert(id != 0);
 
+    if (role != RAFT_STANDBY && role != RAFT_VOTER && role != RAFT_IDLE) {
+        return RAFT_BADROLE;
+    }
+
     /* Check that neither the given id or address is already in use */
     for (i = 0; i < c->n; i++) {
         server = &c->servers[i];

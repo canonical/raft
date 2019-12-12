@@ -34,6 +34,7 @@
 #define RAFT_UNAUTHORIZED 21 /* No access to a resource */
 #define RAFT_NOSPACE 22      /* Not enough space on disk */
 #define RAFT_TOOMANY 23      /* Some system or raft limit was hit */
+#define RAFT_BADROLE 24      /* Role code is invalid */
 
 /**
  * Size of human-readable error message buffers.
@@ -1022,7 +1023,7 @@ RAFT_API int raft_add(struct raft *r,
  * If the server's current role is #RAFT_STANDBY, the server can be promoted to
  * #RAFT_VOTER.
  *
- * In all other cases, #RAFT_INVALID is returned.
+ * In all other cases, #RAFT_BADROLE is returned.
  */
 RAFT_API int raft_promote(struct raft *r,
                           struct raft_change *req,

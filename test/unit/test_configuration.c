@@ -309,6 +309,15 @@ TEST(configurationAdd, duplicateAddress, setup, tear_down, 0, NULL)
     return MUNIT_OK;
 }
 
+/* Add a server with an invalid role. */
+TEST(configurationAdd, invalidRole, setup, tear_down, 0, NULL)
+{
+    struct fixture *f = data;
+    ADD_ERROR(RAFT_BADROLE, 2, "127.0.0.1:666", 666);
+    return MUNIT_OK;
+}
+
+
 static char *add_oom_heap_fault_delay[] = {"0", "1", NULL};
 static char *add_oom_heap_fault_repeat[] = {"1", NULL};
 
