@@ -225,7 +225,7 @@ TEST(send, installSnapshot, setUp, tearDown, 0, NULL)
     MESSAGE(0)->type = RAFT_IO_INSTALL_SNAPSHOT;
 
     raft_configuration_init(&p->conf);
-    rv = raft_configuration_add(&p->conf, 1, "1", true);
+    rv = raft_configuration_add(&p->conf, 1, "1", RAFT_VOTER);
     munit_assert_int(rv, ==, 0);
 
     p->data.len = 8;

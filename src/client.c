@@ -184,7 +184,7 @@ int raft_add(struct raft *r,
         goto err;
     }
 
-    rv = raft_configuration_add(&configuration, id, address, false);
+    rv = raft_configuration_add(&configuration, id, address, RAFT_STANDBY);
     if (rv != 0) {
         goto err_after_configuration_copy;
     }
@@ -231,7 +231,7 @@ int raft_promote(struct raft *r,
         goto err;
     }
 
-    if (server->voting) {
+    if (server->role == RAFT_VOTER) {
         rv = RAFT_ALREADYVOTING;
         goto err;
     }
@@ -249,11 +249,12 @@ int raft_promote(struct raft *r,
     /* If the log of this non-voting server is already up-to-date, we can ask
      * its promotion immediately. */
     if (progressMatchIndex(r, server_index) == last_index) {
-        r->configuration.servers[server_index].voting = true;
+        int old_role = r->configuration.servers[server_index].role;
+        r->configuration.servers[server_index].role = RAFT_VOTER;
 
         rv = clientChangeConfiguration(r, req, &r->configuration);
         if (rv != 0) {
-            r->configuration.servers[server_index].voting = false;
+            r->configuration.servers[server_index].role = old_role;
             return rv;
         }
 

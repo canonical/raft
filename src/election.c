@@ -139,7 +139,7 @@ int electionStart(struct raft *r)
     }
     for (i = 0; i < r->configuration.n; i++) {
         const struct raft_server *server = &r->configuration.servers[i];
-        if (server->id == r->id || !server->voting) {
+        if (server->id == r->id || server->role != RAFT_VOTER) {
             continue;
         }
         rv = electionSend(r, server);
@@ -174,7 +174,7 @@ int electionVote(struct raft *r,
 
     *granted = false;
 
-    if (local_server == NULL || !local_server->voting) {
+    if (local_server == NULL || local_server->role != RAFT_VOTER) {
         tracef("local server is not voting -> not granting vote");
         return 0;
     }

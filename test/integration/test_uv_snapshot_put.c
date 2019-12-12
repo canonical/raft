@@ -100,25 +100,26 @@ static void snapshotGetCbAssertResult(struct raft_io_snapshot_get *req,
         munit_assert_int(_rv, ==, 0);    \
     }
 
-#define SNAPSHOT_PUT_REQ(TRAILING, INDEX, RV, STATUS)                      \
-    struct raft_snapshot _snapshot;                                        \
-    struct raft_buffer _snapshot_buf;                                      \
-    uint64_t _snapshot_data;                                               \
-    struct raft_io_snapshot_put _req;                                      \
-    struct result _result = {STATUS, false};                               \
-    int _rv;                                                               \
-    _snapshot.term = 1;                                                    \
-    _snapshot.index = INDEX;                                               \
-    raft_configuration_init(&_snapshot.configuration);                     \
-    _rv = raft_configuration_add(&_snapshot.configuration, 1, "1", false); \
-    munit_assert_int(_rv, ==, 0);                                          \
-    _snapshot.bufs = &_snapshot_buf;                                       \
-    _snapshot.n_bufs = 1;                                                  \
-    _snapshot_buf.base = &_snapshot_data;                                  \
-    _snapshot_buf.len = sizeof _snapshot_data;                             \
-    _req.data = &_result;                                                  \
-    _rv = f->io.snapshot_put(&f->io, TRAILING, &_req, &_snapshot,          \
-                             snapshotPutCbAssertResult);                   \
+#define SNAPSHOT_PUT_REQ(TRAILING, INDEX, RV, STATUS)              \
+    struct raft_snapshot _snapshot;                                \
+    struct raft_buffer _snapshot_buf;                              \
+    uint64_t _snapshot_data;                                       \
+    struct raft_io_snapshot_put _req;                              \
+    struct result _result = {STATUS, false};                       \
+    int _rv;                                                       \
+    _snapshot.term = 1;                                            \
+    _snapshot.index = INDEX;                                       \
+    raft_configuration_init(&_snapshot.configuration);             \
+    _rv = raft_configuration_add(&_snapshot.configuration, 1, "1", \
+                                 RAFT_STANDBY);                    \
+    munit_assert_int(_rv, ==, 0);                                  \
+    _snapshot.bufs = &_snapshot_buf;                               \
+    _snapshot.n_bufs = 1;                                          \
+    _snapshot_buf.base = &_snapshot_data;                          \
+    _snapshot_buf.len = sizeof _snapshot_data;                     \
+    _req.data = &_result;                                          \
+    _rv = f->io.snapshot_put(&f->io, TRAILING, &_req, &_snapshot,  \
+                             snapshotPutCbAssertResult);           \
     munit_assert_int(_rv, ==, RV)
 
 /* Submit a snapshot put request for the given snapshot and wait for the
@@ -271,7 +272,7 @@ TEST(snapshot_put, install, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
     APPEND(4);
     SNAPSHOT_PUT(0, /* trailing */
-                 1   /* index */
+                 1  /* index */
     );
     return MUNIT_OK;
 }
@@ -281,7 +282,7 @@ TEST(snapshot_put, installWithoutPreviousEntries, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     SNAPSHOT_PUT(0, /* trailing */
-                 1   /* index */
+                 1  /* index */
     );
     return MUNIT_OK;
 }

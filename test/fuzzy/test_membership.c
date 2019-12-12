@@ -84,7 +84,7 @@ TEST(membership, addVoting, setup, tear_down, 0, _params)
     raft = CLUSTER_RAFT(CLUSTER_LEADER);
 
     server = &raft->configuration.servers[CLUSTER_N - 1];
-    munit_assert_true(server->voting);
+    munit_assert_int(server->role, ==, RAFT_VOTER);
 
     return MUNIT_OK;
 }

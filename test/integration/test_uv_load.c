@@ -210,7 +210,7 @@ struct snapshot
         _new_snapshot.term = TERM;                                            \
         raft_configuration_init(&_new_snapshot.configuration);                \
         _rv = raft_configuration_add(&_new_snapshot.configuration, 1, "1",    \
-                                     true);                                   \
+                                     RAFT_VOTER);                             \
         munit_assert_int(_rv, ==, 0);                                         \
         _new_snapshot.bufs = &_new_snapshot_buf;                              \
         _new_snapshot.n_bufs = 1;                                             \

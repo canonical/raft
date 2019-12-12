@@ -129,7 +129,7 @@ TEST(raft_add, committed, setup, tear_down, 0, NULL)
     server = &raft->configuration.servers[2];
     munit_assert_int(server->id, ==, 3);
     munit_assert_string_equal(server->address, "3");
-    munit_assert_false(server->voting);
+    munit_assert_int(server->role, ==, RAFT_STANDBY);
 
     /* The new configuration is marked as uncommitted. */
     ASSERT_CONFIGURATION_INDEXES(0, 1, 2);
@@ -208,7 +208,7 @@ TEST(raft_promote, up_to_date, setup, tear_down, 0, NULL)
      * change is not committed yet. */
     raft = CLUSTER_RAFT(0);
     server = &raft->configuration.servers[2];
-    munit_assert_true(server->voting);
+    munit_assert_int(server->role, ==, RAFT_VOTER);
 
     /* The configuration change request eventually succeeds. */
     CLUSTER_STEP_UNTIL_APPLIED(0, 2, 2000);
@@ -241,7 +241,7 @@ TEST(raft_promote, catch_up, setup, tear_down, 0, NULL)
     /* Server 3 is not being considered as voting, since its log is behind. */
     raft = CLUSTER_RAFT(0);
     server = &raft->configuration.servers[2];
-    munit_assert_false(server->voting);
+    munit_assert_int(server->role, ==, RAFT_STANDBY);
 
     /* Advance the match index of server 3, by acknowledging the AppendEntries
      * request that the leader has sent to it. */
@@ -324,7 +324,7 @@ static bool second_server_has_new_configuration(struct raft_fixture *f,
 {
     struct raft *raft = raft_fixture_get(f, 1);
     (void)arg;
-    return raft->configuration.servers[2].voting;
+    return raft->configuration.servers[2].role == RAFT_VOTER;
 }
 
 /* If a follower receives an AppendEntries RPC containing a RAFT_CHANGE entry
@@ -408,7 +408,7 @@ TEST(raft_promote, leadershipLost, setup, tear_down, 0, NULL)
     ASSERT_CATCH_UP_ROUND(0, 0, 0, 0);
     ASSERT_CONFIGURATION_INDEXES(0, 2, 3);
     server = configurationGet(&CLUSTER_RAFT(0)->configuration, 3);
-    munit_assert_true(server->voting);
+    munit_assert_int(server->role, ==, RAFT_VOTER);
 
     /* Lose leadership. */
     CLUSTER_DEPOSE;
@@ -419,7 +419,7 @@ TEST(raft_promote, leadershipLost, setup, tear_down, 0, NULL)
 
     /* Server 3 is not being considered voting anymore. */
     server = configurationGet(&CLUSTER_RAFT(0)->configuration, 3);
-    munit_assert_false(server->voting);
+    munit_assert_int(server->role, ==, RAFT_STANDBY);
 
     return MUNIT_OK;
 }

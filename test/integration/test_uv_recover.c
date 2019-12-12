@@ -59,16 +59,16 @@ TEST(recover, newConfiguration, setUp, tearDown, 0, NULL)
 
     /* Boostrap using an initial configuration */
     raft_configuration_init(&configuration1);
-    rv = raft_configuration_add(&configuration1, 1, "1", true);
+    rv = raft_configuration_add(&configuration1, 1, "1", RAFT_VOTER);
     munit_assert_int(rv, ==, 0);
-    rv = raft_configuration_add(&configuration1, 2, "2", true);
+    rv = raft_configuration_add(&configuration1, 2, "2", RAFT_VOTER);
     munit_assert_int(rv, ==, 0);
     rv = f->io.bootstrap(&f->io, &configuration1);
     munit_assert_int(rv, ==, 0);
 
     /* Boostrap using a different configuration */
     raft_configuration_init(&configuration2);
-    rv = raft_configuration_add(&configuration2, 1, "1", true);
+    rv = raft_configuration_add(&configuration2, 1, "1", RAFT_VOTER);
     munit_assert_int(rv, ==, 0);
 
     RECOVER(&configuration2);

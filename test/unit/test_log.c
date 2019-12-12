@@ -642,7 +642,7 @@ TEST(logAppendConfiguration, oom, setup, tear_down, 0, append_configuration_oom_
     (void)params;
 
     raft_configuration_init(&configuration);
-    rv = raft_configuration_add(&configuration, 1, "1", true);
+    rv = raft_configuration_add(&configuration, 1, "1", RAFT_VOTER);
     munit_assert_int(rv, ==, 0);
 
     test_heap_fault_enable(&f->heap);

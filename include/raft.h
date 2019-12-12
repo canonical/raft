@@ -70,13 +70,21 @@ struct raft_buffer
 };
 
 /**
+ * Server role codes.
+ */
+
+#define RAFT_STANDBY 0 /* Replicate log, does not vote for quorum. */
+#define RAFT_VOTER 1   /* Replicate log, does vote for quorum. */
+#define RAFT_IDLE 1    /* Does not replicate log, does not vote for quorum. */
+
+/**
  * Hold information about a single server in the cluster configuration.
  */
 struct raft_server
 {
     unsigned id;   /* Server ID, must be greater than zero. */
     char *address; /* Server address. User defined. */
-    bool voting;   /* Whether this is a voting server. */
+    int role;      /* Server role. */
 };
 
 /**
@@ -103,6 +111,8 @@ RAFT_API void raft_configuration_close(struct raft_configuration *c);
  *
  * The @id must be greater than zero and @address point to a valid string.
  *
+ * The @role must be either #RAFT_VOTER, #RAFT_STANDBY, #RAFT_IDLE.
+ *
  * If @id or @address are already in use by another server in the configuration,
  * an error is returned.
  *
@@ -110,9 +120,9 @@ RAFT_API void raft_configuration_close(struct raft_configuration *c);
  * returns.
  */
 RAFT_API int raft_configuration_add(struct raft_configuration *c,
-                                    const unsigned id,
+                                    unsigned id,
                                     const char *address,
-                                    const bool voting);
+                                    int role);
 
 /**
  * Encode the given configuration object.

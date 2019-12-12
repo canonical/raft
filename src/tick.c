@@ -42,7 +42,7 @@ static int tickFollower(struct raft *r)
      *   If election timeout elapses without receiving AppendEntries RPC from
      *   current leader or granting vote to candidate, convert to candidate.
      */
-    if (electionTimerExpired(r) && server->voting) {
+    if (electionTimerExpired(r) && server->role == RAFT_VOTER) {
         tracef("convert to candidate and start new election");
         rv = convertToCandidate(r);
         if (rv != 0) {
@@ -94,7 +94,7 @@ static bool checkContactQuorum(struct raft *r)
     for (i = 0; i < r->configuration.n; i++) {
         struct raft_server *server = &r->configuration.servers[i];
         bool recent_recv = progressResetRecentRecv(r, i);
-        if ((server->voting && recent_recv) || server->id == r->id) {
+        if ((server->role == RAFT_VOTER && recent_recv) || server->id == r->id) {
             contacts++;
         }
     }
@@ -158,7 +158,7 @@ static int tickLeader(struct raft *r)
          * is not yet considered as voting. */
         server_index = configurationIndexOf(&r->configuration, id);
         assert(server_index < r->configuration.n);
-        assert(!r->configuration.servers[server_index].voting);
+        assert(r->configuration.servers[server_index].role != RAFT_VOTER);
 
         is_too_slow = (r->leader_state.round_number == 10 &&
                        round_duration > r->election_timeout);

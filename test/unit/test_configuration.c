@@ -1,5 +1,4 @@
 #include "../../src/byte.h"
-
 #include "../lib/configuration.h"
 #include "../lib/heap.h"
 #include "../lib/runner.h"
@@ -46,8 +45,8 @@ static void tear_down(void *data)
 #define GET(ID) configurationGet(&f->configuration, ID)
 
 /* Add a server to the fixture's configuration. */
-#define ADD_RV(ID, ADDRESS, VOTING) \
-    raft_configuration_add(&f->configuration, ID, ADDRESS, VOTING)
+#define ADD_RV(ID, ADDRESS, ROLE) \
+    raft_configuration_add(&f->configuration, ID, ADDRESS, ROLE)
 #define ADD(...) munit_assert_int(ADD_RV(__VA_ARGS__), ==, 0)
 #define ADD_ERROR(RV, ...) munit_assert_int(ADD_RV(__VA_ARGS__), ==, RV)
 
@@ -90,14 +89,14 @@ static void tear_down(void *data)
 
 /* Assert that the attributes of the I'th server in the fixture's configuration
  * match the given values. */
-#define ASSERT_SERVER(I, ID, ADDRESS, VOTING)                \
+#define ASSERT_SERVER(I, ID, ADDRESS, ROLE)                  \
     {                                                        \
         struct raft_server *server;                          \
         munit_assert_int(I, <, f->configuration.n);          \
         server = &f->configuration.servers[I];               \
         munit_assert_int(server->id, ==, ID);                \
         munit_assert_string_equal(server->address, ADDRESS); \
-        munit_assert_int(server->voting, ==, VOTING);        \
+        munit_assert_int(server->role, ==, ROLE);            \
     }
 
 /******************************************************************************
@@ -112,8 +111,8 @@ SUITE(configurationNumVoting)
 TEST(configurationNumVoting, all_voters, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    ADD(1, "192.168.1.1:666", true);
-    ADD(2, "192.168.1.2:666", true);
+    ADD(1, "192.168.1.1:666", RAFT_VOTER);
+    ADD(2, "192.168.1.2:666", RAFT_VOTER);
     munit_assert_int(N_VOTING, ==, 2);
     return MUNIT_OK;
 }
@@ -122,8 +121,8 @@ TEST(configurationNumVoting, all_voters, setup, tear_down, 0, NULL)
 TEST(configurationNumVoting, filter, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    ADD(1, "192.168.1.1:666", true);
-    ADD(2, "192.168.1.2:666", false);
+    ADD(1, "192.168.1.1:666", RAFT_VOTER);
+    ADD(2, "192.168.1.2:666", RAFT_STANDBY);
     munit_assert_int(N_VOTING, ==, 1);
     return MUNIT_OK;
 }
@@ -140,8 +139,8 @@ SUITE(configurationIndexOf)
 TEST(configurationIndexOf, match, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    ADD(1, "192.168.1.1:666", true);
-    ADD(2, "192.168.1.2:666", false);
+    ADD(1, "192.168.1.1:666", RAFT_VOTER);
+    ADD(2, "192.168.1.2:666", RAFT_STANDBY);
     munit_assert_int(INDEX_OF(2), ==, 1);
     return MUNIT_OK;
 }
@@ -151,7 +150,7 @@ TEST(configurationIndexOf, match, setup, tear_down, 0, NULL)
 TEST(configurationIndexOf, no_match, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    ADD(1, "127.0.0.1:666", true);
+    ADD(1, "127.0.0.1:666", RAFT_VOTER);
     munit_assert_int(INDEX_OF(3), ==, f->configuration.n);
     return MUNIT_OK;
 }
@@ -169,9 +168,9 @@ SUITE(configurationIndexOfVoting)
 TEST(configurationIndexOfVoting, match, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    ADD(1, "192.168.1.1:666", false);
-    ADD(2, "192.168.1.2:666", true);
-    ADD(3, "192.168.1.3:666", true);
+    ADD(1, "192.168.1.1:666", RAFT_STANDBY);
+    ADD(2, "192.168.1.2:666", RAFT_VOTER);
+    ADD(3, "192.168.1.3:666", RAFT_VOTER);
     munit_assert_int(INDEX_OF_VOTING(3), ==, 1);
     return MUNIT_OK;
 }
@@ -181,7 +180,7 @@ TEST(configurationIndexOfVoting, match, setup, tear_down, 0, NULL)
 TEST(configurationIndexOfVoting, no_match, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    ADD(1, "192.168.1.1:666", true);
+    ADD(1, "192.168.1.1:666", RAFT_VOTER);
     munit_assert_int(INDEX_OF_VOTING(3), ==, 1);
     return MUNIT_OK;
 }
@@ -191,7 +190,7 @@ TEST(configurationIndexOfVoting, no_match, setup, tear_down, 0, NULL)
 TEST(configurationIndexOfVoting, non_voting, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    ADD(1, "192.168.1.1:666", false);
+    ADD(1, "192.168.1.1:666", RAFT_STANDBY);
     munit_assert_int(INDEX_OF_VOTING(1), ==, 1);
     return MUNIT_OK;
 }
@@ -209,8 +208,8 @@ TEST(configurationGet, match, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     const struct raft_server *server;
-    ADD(1, "192.168.1.1:666", true);
-    ADD(2, "192.168.1.2:666", false);
+    ADD(1, "192.168.1.1:666", RAFT_VOTER);
+    ADD(2, "192.168.1.2:666", RAFT_STANDBY);
     server = GET(2);
     munit_assert_ptr_not_null(server);
     munit_assert_int(server->id, ==, 2);
@@ -222,7 +221,7 @@ TEST(configurationGet, match, setup, tear_down, 0, NULL)
 TEST(configurationGet, no_match, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    ADD(1, "127.0.0.1:666", true);
+    ADD(1, "127.0.0.1:666", RAFT_VOTER);
     munit_assert_ptr_null(GET(3));
     return MUNIT_OK;
 }
@@ -240,8 +239,8 @@ TEST(configurationCopy, two, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_configuration configuration;
-    ADD(1, "192.168.1.1:666", false);
-    ADD(2, "192.168.1.2:666", true);
+    ADD(1, "192.168.1.1:666", RAFT_STANDBY);
+    ADD(2, "192.168.1.2:666", RAFT_VOTER);
     COPY(&configuration);
     munit_assert_int(configuration.n, ==, 2);
     munit_assert_int(configuration.servers[0].id, ==, 1);
@@ -255,7 +254,7 @@ TEST(configurationCopy, oom, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_configuration configuration;
-    ADD(1, "192.168.1.1:666", false);
+    ADD(1, "192.168.1.1:666", RAFT_STANDBY);
     test_heap_fault_config(&f->heap, 0, 1);
     test_heap_fault_enable(&f->heap);
     COPY_ERROR(RAFT_NOMEM, &configuration);
@@ -274,9 +273,9 @@ SUITE(configurationAdd)
 TEST(configurationAdd, one, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    ADD(1, "127.0.0.1:666", true);
+    ADD(1, "127.0.0.1:666", RAFT_VOTER);
     ASSERT_N(1);
-    ASSERT_SERVER(0, 1, "127.0.0.1:666", true);
+    ASSERT_SERVER(0, 1, "127.0.0.1:666", RAFT_VOTER);
     return MUNIT_OK;
 }
 
@@ -284,11 +283,11 @@ TEST(configurationAdd, one, setup, tear_down, 0, NULL)
 TEST(configurationAdd, two, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    ADD(1, "127.0.0.1:666", true);
-    ADD(2, "192.168.1.1:666", false);
+    ADD(1, "127.0.0.1:666", RAFT_VOTER);
+    ADD(2, "192.168.1.1:666", RAFT_STANDBY);
     ASSERT_N(2);
-    ASSERT_SERVER(0, 1, "127.0.0.1:666", true);
-    ASSERT_SERVER(1, 2, "192.168.1.1:666", false);
+    ASSERT_SERVER(0, 1, "127.0.0.1:666", RAFT_VOTER);
+    ASSERT_SERVER(1, 2, "192.168.1.1:666", RAFT_STANDBY);
     return MUNIT_OK;
 }
 
@@ -296,8 +295,8 @@ TEST(configurationAdd, two, setup, tear_down, 0, NULL)
 TEST(configurationAdd, duplicateId, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    ADD(1, "127.0.0.1:666", true);
-    ADD_ERROR(RAFT_DUPLICATEID, 1, "192.168.1.1:666", false);
+    ADD(1, "127.0.0.1:666", RAFT_VOTER);
+    ADD_ERROR(RAFT_DUPLICATEID, 1, "192.168.1.1:666", RAFT_STANDBY);
     return MUNIT_OK;
 }
 
@@ -305,8 +304,8 @@ TEST(configurationAdd, duplicateId, setup, tear_down, 0, NULL)
 TEST(configurationAdd, duplicateAddress, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    ADD(1, "127.0.0.1:666", true);
-    ADD_ERROR(RAFT_DUPLICATEADDRESS, 2, "127.0.0.1:666", false);
+    ADD(1, "127.0.0.1:666", RAFT_VOTER);
+    ADD_ERROR(RAFT_DUPLICATEADDRESS, 2, "127.0.0.1:666", RAFT_STANDBY);
     return MUNIT_OK;
 }
 
@@ -324,7 +323,7 @@ TEST(configurationAdd, oom, setup, tear_down, 0, add_oom_params)
 {
     struct fixture *f = data;
     test_heap_fault_enable(&f->heap);
-    ADD_ERROR(RAFT_NOMEM, 1, "127.0.0.1:666", true);
+    ADD_ERROR(RAFT_NOMEM, 1, "127.0.0.1:666", RAFT_VOTER);
     return MUNIT_OK;
 }
 
@@ -340,7 +339,7 @@ SUITE(configurationRemove)
 TEST(configurationRemove, last, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    ADD(1, "127.0.0.1:666", true);
+    ADD(1, "127.0.0.1:666", RAFT_VOTER);
     REMOVE(1);
     ASSERT_N(0);
     return MUNIT_OK;
@@ -350,11 +349,11 @@ TEST(configurationRemove, last, setup, tear_down, 0, NULL)
 TEST(configurationRemove, first, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    ADD(1, "127.0.0.1:666", true);
-    ADD(2, "192.168.1.1:666", false);
+    ADD(1, "127.0.0.1:666", RAFT_VOTER);
+    ADD(2, "192.168.1.1:666", RAFT_STANDBY);
     REMOVE(1);
     ASSERT_N(1);
-    ASSERT_SERVER(0, 2, "192.168.1.1:666", false);
+    ASSERT_SERVER(0, 2, "192.168.1.1:666", RAFT_STANDBY);
     return MUNIT_OK;
 }
 
@@ -362,13 +361,13 @@ TEST(configurationRemove, first, setup, tear_down, 0, NULL)
 TEST(configurationRemove, middle, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    ADD(1, "127.0.0.1:666", true);
-    ADD(2, "192.168.1.1:666", false);
-    ADD(3, "10.0.1.1:666", true);
+    ADD(1, "127.0.0.1:666", RAFT_VOTER);
+    ADD(2, "192.168.1.1:666", RAFT_STANDBY);
+    ADD(3, "10.0.1.1:666", RAFT_VOTER);
     REMOVE(2);
     ASSERT_N(2);
-    ASSERT_SERVER(0, 1, "127.0.0.1:666", true);
-    ASSERT_SERVER(1, 3, "10.0.1.1:666", true);
+    ASSERT_SERVER(0, 1, "127.0.0.1:666", RAFT_VOTER);
+    ASSERT_SERVER(1, 3, "10.0.1.1:666", RAFT_VOTER);
     return MUNIT_OK;
 }
 
@@ -384,8 +383,8 @@ TEST(configurationRemove, unknownId, setup, tear_down, 0, NULL)
 TEST(configurationRemove, oom, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    ADD(1, "127.0.0.1:666", true);
-    ADD(2, "192.168.1.1:666", false);
+    ADD(1, "127.0.0.1:666", RAFT_VOTER);
+    ADD(2, "192.168.1.1:666", RAFT_STANDBY);
     test_heap_fault_config(&f->heap, 0, 1);
     test_heap_fault_enable(&f->heap);
     REMOVE_ERROR(RAFT_NOMEM, 1);
@@ -408,7 +407,7 @@ TEST(configurationEncode, one_server, setup, tear_down, 0, NULL)
     size_t len;
     const void *cursor;
     const char *address = "127.0.0.1:666";
-    ADD(1, address, true);
+    ADD(1, address, RAFT_VOTER);
     ENCODE(&buf);
 
     len = 1 + 8 +                  /* Version and n of servers */
@@ -425,7 +424,7 @@ TEST(configurationEncode, one_server, setup, tear_down, 0, NULL)
     munit_assert_int(byteGet64Unaligned(&cursor), ==, 1);
     munit_assert_string_equal(byteGetString(&cursor, strlen(address) + 1),
                               address);
-    munit_assert_int(byteGet8(&cursor), ==, 1);
+    munit_assert_int(byteGet8(&cursor), ==, RAFT_VOTER);
 
     raft_free(buf.base);
 
@@ -442,8 +441,8 @@ TEST(configurationEncode, two_servers, setup, tear_down, 0, NULL)
     const char *address1 = "127.0.0.1:666";
     const char *address2 = "192.168.1.1:666";
 
-    ADD(1, address1, false);
-    ADD(2, address2, true);
+    ADD(1, address1, RAFT_STANDBY);
+    ADD(2, address2, RAFT_VOTER);
     ENCODE(&buf);
 
     len = 1 + 8 +                        /* Version and n of servers */
@@ -461,12 +460,12 @@ TEST(configurationEncode, two_servers, setup, tear_down, 0, NULL)
     munit_assert_int(byteGet64Unaligned(&cursor), ==, 1);
     munit_assert_string_equal(byteGetString(&cursor, strlen(address1) + 1),
                               address1);
-    munit_assert_int(byteGet8(&cursor), ==, 0);
+    munit_assert_int(byteGet8(&cursor), ==, RAFT_STANDBY);
 
     munit_assert_int(byteGet64Unaligned(&cursor), ==, 2);
     munit_assert_string_equal(byteGetString(&cursor, strlen(address2) + 1),
                               address2);
-    munit_assert_int(byteGet8(&cursor), ==, 1);
+    munit_assert_int(byteGet8(&cursor), ==, RAFT_VOTER);
 
     raft_free(buf.base);
 
@@ -480,7 +479,7 @@ TEST(configurationEncode, oom, setup, tear_down, 0, NULL)
     struct raft_buffer buf;
     test_heap_fault_config(&f->heap, 2, 1);
     test_heap_fault_enable(&f->heap);
-    ADD(1, "127.0.0.1:666", true);
+    ADD(1, "127.0.0.1:666", RAFT_VOTER);
     ENCODE_ERROR(RAFT_NOMEM, &buf);
     return MUNIT_OK;
 }
@@ -501,7 +500,7 @@ TEST(configurationDecode, one_server, setup, tear_down, 0, NULL)
                        1,   0,   0,   0, 0, 0, 0, 0, /* Number of servers */
                        5,   0,   0,   0, 0, 0, 0, 0, /* Server ID */
                        'x', '.', 'y', 0,             /* Server address */
-                       1};                           /* Voting flag */
+                       1};                           /* Role code */
     struct raft_buffer buf;
     int rv;
 
@@ -512,7 +511,7 @@ TEST(configurationDecode, one_server, setup, tear_down, 0, NULL)
     munit_assert_int(rv, ==, 0);
 
     ASSERT_N(1);
-    ASSERT_SERVER(0, 5, "x.y", true);
+    ASSERT_SERVER(0, 5, "x.y", RAFT_VOTER);
 
     return MUNIT_OK;
 }
@@ -526,17 +525,17 @@ TEST(configurationDecode, two_servers, setup, tear_down, 0, NULL)
                        2,   0,   0,   0,   0,   0, 0, 0, /* Number of servers */
                        5,   0,   0,   0,   0,   0, 0, 0, /* Server ID */
                        'x', '.', 'y', 0,                 /* Server address */
-                       1,                                /* Voting flag */
+                       1,                                /* Role code */
                        3,   0,   0,   0,   0,   0, 0, 0, /* Server ID */
                        '1', '9', '2', '.', '2', 0,       /* Server address */
-                       0};                               /* Voting flag */
+                       0};                               /* Role code */
     struct raft_buffer buf;
     buf.base = bytes;
     buf.len = sizeof bytes;
     DECODE(&buf);
     ASSERT_N(2);
-    ASSERT_SERVER(0, 5, "x.y", true);
-    ASSERT_SERVER(1, 3, "192.2", false);
+    ASSERT_SERVER(0, 5, "x.y", RAFT_VOTER);
+    ASSERT_SERVER(1, 3, "192.2", RAFT_STANDBY);
     return MUNIT_OK;
 }
 
