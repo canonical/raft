@@ -13,29 +13,17 @@ struct fixture
     struct raft_change req;
 };
 
-/* Set up a cluster of 2 servers, with the first as leader. */
-static void *setup(const MunitParameter params[], MUNIT_UNUSED void *user_data)
-{
-    struct fixture *f = munit_malloc(sizeof *f);
-    SETUP_CLUSTER(2);
-    CLUSTER_BOOTSTRAP;
-    CLUSTER_START;
-    CLUSTER_ELECT(0);
-    return f;
-}
-
-static void tear_down(void *data)
-{
-    struct fixture *f = data;
-    TEAR_DOWN_CLUSTER;
-    free(f);
-}
-
 /******************************************************************************
  *
  * Helper macros
  *
  *****************************************************************************/
+
+struct result
+{
+    int status;
+    bool done;
+};
 
 /* Add a an empty server to the cluster and start it. */
 #define GROW                                \
@@ -46,25 +34,93 @@ static void tear_down(void *data)
         munit_assert_int(rv__, ==, 0);      \
     }
 
-/* Invoke raft_add against the I'th node and assert it returns the given
- * value. */
-#define ADD(I, ID, RV)                                                \
+static void changeCbAssertResult(struct raft_change *req, int status)
+{
+    struct result *result = req->data;
+    munit_assert_int(status, ==, result->status);
+    result->done = true;
+}
+
+static bool changeCbHasFired(struct raft_fixture *f, void *arg)
+{
+    struct result *result = arg;
+    (void)f;
+    return result->done;
+}
+
+/* Submit an add request. */
+#define ADD_SUBMIT(I, ID)                                                     \
+    struct raft_change _req;                                                  \
+    char _address[16];                                                        \
+    struct result _result = {0, false};                                       \
+    int _rv;                                                                  \
+    _req.data = &_result;                                                     \
+    sprintf(_address, "%d", ID);                                              \
+    _rv =                                                                     \
+        raft_add(CLUSTER_RAFT(I), &_req, ID, _address, changeCbAssertResult); \
+    munit_assert_int(_rv, ==, 0);
+
+#define ADD(I, ID)                                            \
+    do {                                                      \
+        ADD_SUBMIT(I, ID);                                    \
+        CLUSTER_STEP_UNTIL(changeCbHasFired, &_result, 2000); \
+    } while (0)
+
+/* Submit a promote request. */
+#define PROMOTE_SUBMIT(I, ID, ROLE)                                           \
+    struct raft_change _req;                                                  \
+    struct result _result = {0, false};                                       \
+    (void)_result;                                                            \
+    (void)_req;                                                               \
+    int _rv;                                                                  \
+    _req.data = &_result;                                                     \
+    _rv =                                                                     \
+        raft_promote(CLUSTER_RAFT(I), &_req, ID, ROLE, changeCbAssertResult); \
+    munit_assert_int(_rv, ==, 0);
+
+/* Wait until a promote request comletes. */
+#define PROMOTE_WAIT CLUSTER_STEP_UNTIL(changeCbHasFired, &_result, 2000)
+
+/* Promote the I'th server to the given role and wait for the operation to
+ * succeed. */
+#define PROMOTE(I, ID, ROLE)         \
+    do {                             \
+        PROMOTE_SUBMIT(I, ID, ROLE); \
+        PROMOTE_WAIT;                \
+    } while (0)
+
+/* Invoke raft_promote() against the I'th server and assert it the given error
+ * code. */
+#define PROMOTE_ERROR(I, ID, ROLE, RV)                                \
     {                                                                 \
-        int rv_;                                                      \
-        char address_[16];                                            \
-        sprintf(address_, "%d", ID);                                  \
-        rv_ = raft_add(CLUSTER_RAFT(I), &f->req, ID, address_, NULL); \
-        munit_assert_int(rv_, ==, RV);                                \
+        struct raft_change __req;                                     \
+        int __rv;                                                     \
+        __rv = raft_promote(CLUSTER_RAFT(I), &__req, ID, ROLE, NULL); \
+        munit_assert_int(__rv, ==, RV);                               \
     }
 
-/* Invoke raft_promote against the I'th node and assert it returns the given
- * value. */
-#define PROMOTE(I, ID, RV)                                                  \
-    {                                                                       \
-        int rv_;                                                            \
-        rv_ = raft_promote(CLUSTER_RAFT(I), &f->req, ID, RAFT_VOTER, NULL); \
-        munit_assert_int(rv_, ==, RV);                                      \
-    }
+/******************************************************************************
+ *
+ * Set Set up a cluster of 2 servers, with the first as leader.
+ *
+ *****************************************************************************/
+
+static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
+{
+    struct fixture *f = munit_malloc(sizeof *f);
+    SETUP_CLUSTER(2);
+    CLUSTER_BOOTSTRAP;
+    CLUSTER_START;
+    CLUSTER_ELECT(0);
+    return f;
+}
+
+static void tearDown(void *data)
+{
+    struct fixture *f = data;
+    TEAR_DOWN_CLUSTER;
+    free(f);
+}
 
 /******************************************************************************
  *
@@ -104,17 +160,16 @@ SUITE(raft_promote)
 
 /* Promoting a server whose log is already up-to-date results in the relevant
  * configuration change to be submitted immediately. */
-TEST(raft_promote, up_to_date, setup, tear_down, 0, NULL)
+TEST(raft_promote, upToDate, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct raft *raft;
     const struct raft_server *server;
     GROW;
-    ADD(0, 3, 0);
-    CLUSTER_STEP_UNTIL_APPLIED(2, 1, 2000);
+    ADD(0, 3);
     CLUSTER_STEP_N(3);
 
-    PROMOTE(0, 3, 0);
+    PROMOTE(0, 3, RAFT_VOTER);
 
     /* Server 3 is being considered as voting, even though the configuration
      * change is not committed yet. */
@@ -128,7 +183,7 @@ TEST(raft_promote, up_to_date, setup, tear_down, 0, NULL)
     return MUNIT_OK;
 }
 
-static bool third_server_has_caught_up(struct raft_fixture *f, void *arg)
+static bool thirdServerHasCaughtUp(struct raft_fixture *f, void *arg)
 {
     struct raft *raft = raft_fixture_get(f, 0);
     (void)arg;
@@ -138,17 +193,16 @@ static bool third_server_has_caught_up(struct raft_fixture *f, void *arg)
 /* Promoting a server whose log is not up-to-date results in catch-up rounds to
  * start. When the server has caught up, the configuration change request gets
  * submitted. */
-TEST(raft_promote, catch_up, setup, tear_down, 0, NULL)
+TEST(raft_promote, catchUp, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct raft *raft;
     const struct raft_server *server;
     CLUSTER_MAKE_PROGRESS;
     GROW;
-    ADD(0, 3, 0);
-    CLUSTER_STEP_UNTIL_APPLIED(0, 3, 2000);
+    ADD(0, 3);
 
-    PROMOTE(0, 3, 0);
+    PROMOTE_SUBMIT(0, 3, RAFT_VOTER);
 
     /* Server 3 is not being considered as voting, since its log is behind. */
     raft = CLUSTER_RAFT(0);
@@ -163,7 +217,7 @@ TEST(raft_promote, catch_up, setup, tear_down, 0, NULL)
     CLUSTER_SATURATE_BOTHWAYS(0, 1);
 
     /* Eventually the leader notices that the third server has caught. */
-    CLUSTER_STEP_UNTIL(third_server_has_caught_up, NULL, 2000);
+    CLUSTER_STEP_UNTIL(thirdServerHasCaughtUp, NULL, 2000);
 
     /* The leader has submitted a onfiguration change request, but it's
      * uncommitted. */
@@ -181,8 +235,7 @@ TEST(raft_promote, catch_up, setup, tear_down, 0, NULL)
     return MUNIT_OK;
 }
 
-static bool third_server_has_completed_first_round(struct raft_fixture *f,
-                                                   void *arg)
+static bool thirdServerHasCompletedFirstRound(struct raft_fixture *f, void *arg)
 {
     struct raft *raft = raft_fixture_get(f, 0);
     (void)arg;
@@ -192,17 +245,16 @@ static bool third_server_has_completed_first_round(struct raft_fixture *f,
 /* Promoting a server whose log is not up-to-date results in catch-up rounds to
  * start. If new entries are appended after a round is started, a new round is
  * initiated once the former one completes. */
-TEST(raft_promote, new_round, setup, tear_down, 0, NULL)
+TEST(raft_promote, newRound, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     unsigned election_timeout = CLUSTER_RAFT(0)->election_timeout;
     struct raft_apply *req = munit_malloc(sizeof *req);
     CLUSTER_MAKE_PROGRESS;
     GROW;
-    ADD(0, 3, 0);
-    CLUSTER_STEP_UNTIL_APPLIED(0, 3, 2000);
+    ADD(0, 3);
 
-    PROMOTE(0, 3, 0);
+    PROMOTE_SUBMIT(0, 3, RAFT_VOTER);
     ASSERT_CATCH_UP_ROUND(0, 3, 1, 0);
 
     /* Now that the catch-up round started, submit a new entry and set a very
@@ -217,7 +269,7 @@ TEST(raft_promote, new_round, setup, tear_down, 0, NULL)
     /* The leader eventually receives the AppendEntries result from the
      * promotee, acknowledging all entries except the last one. The first round
      * has completes and a new one has starts. */
-    CLUSTER_STEP_UNTIL(third_server_has_completed_first_round, NULL, 2000);
+    CLUSTER_STEP_UNTIL(thirdServerHasCompletedFirstRound, NULL, 2000);
 
     /* Eventually the server is promoted and everyone applies the entry. */
     CLUSTER_STEP_UNTIL_APPLIED(0, req->index, 5000);
@@ -231,8 +283,7 @@ TEST(raft_promote, new_round, setup, tear_down, 0, NULL)
     return MUNIT_SKIP;
 }
 
-static bool second_server_has_new_configuration(struct raft_fixture *f,
-                                                void *arg)
+static bool secondServerHasNewConfiguration(struct raft_fixture *f, void *arg)
 {
     struct raft *raft = raft_fixture_get(f, 1);
     (void)arg;
@@ -243,77 +294,76 @@ static bool second_server_has_new_configuration(struct raft_fixture *f,
  * which promotes a non-voting server, the configuration change is immediately
  * applied locally, even if the entry is not yet committed. Once the entry is
  * committed, the change becomes permanent.*/
-TEST(raft_promote, change_is_immediate, setup, tear_down, 0, NULL)
+TEST(raft_promote, changeIsImmediate, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     GROW;
     CLUSTER_MAKE_PROGRESS;
-    ADD(0, 3, 0);
-    CLUSTER_STEP_UNTIL_APPLIED(0, 3, 2000);
+    ADD(0, 3);
     CLUSTER_STEP_UNTIL_APPLIED(1, 3, 2000);
 
-    PROMOTE(0, 3, 0);
-    CLUSTER_STEP_UNTIL(second_server_has_new_configuration, NULL, 3000);
+    PROMOTE_SUBMIT(0, 3, RAFT_VOTER);
+    CLUSTER_STEP_UNTIL(secondServerHasNewConfiguration, NULL, 3000);
     ASSERT_CONFIGURATION_INDEXES(1, 3, 4);
+
+    PROMOTE_WAIT;
 
     return MUNIT_OK;
 }
 
 /* Trying to promote a server on a node which is not the leader results in an
  * error. */
-TEST(raft_promote, notLeader, setup, tear_down, 0, NULL)
+TEST(raft_promote, notLeader, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    PROMOTE(1, 3, RAFT_NOTLEADER);
+    PROMOTE_ERROR(1, 3, RAFT_VOTER, RAFT_NOTLEADER);
     return MUNIT_OK;
 }
 
 /* Trying to promote a server whose ID is unknown results in an
  * error. */
-TEST(raft_promote, badId, setup, tear_down, 0, NULL)
+TEST(raft_promote, badId, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    PROMOTE(0, 3, RAFT_BADID);
+    PROMOTE_ERROR(0, 3, RAFT_VOTER, RAFT_BADID);
     return MUNIT_OK;
 }
 
 /* Promoting a server which is already a voting results in an error. */
-TEST(raft_promote, alreadVoting, setup, tear_down, 0, NULL)
+TEST(raft_promote, alreadVoting, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    PROMOTE(0, 1, RAFT_ALREADYVOTING);
+    PROMOTE_ERROR(0, 1, RAFT_VOTER, RAFT_ALREADYVOTING);
     return MUNIT_OK;
 }
 
 /* Trying to promote a server while another server is being promoted results in
  * an error. */
-TEST(raft_promote, inProgress, setup, tear_down, 0, NULL)
+TEST(raft_promote, changeRequestAlreadyInProgress, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    ADD(0, 3, 0);
-    CLUSTER_STEP_UNTIL_APPLIED(0, 2, 2000);
-
-    PROMOTE(0, 3, 0);
-    PROMOTE(0, 3, RAFT_CANTCHANGE);
-
+    GROW;
+    ADD(0, 3);
+    PROMOTE_SUBMIT(0, 3, RAFT_VOTER);
+    PROMOTE_ERROR(0, 3, RAFT_VOTER, RAFT_CANTCHANGE);
+    PROMOTE_WAIT;
     return MUNIT_OK;
 }
 
 /* If leadership is lost before the configuration change log entry for promoting
  * the new server is committed, the leader configuration gets rolled back and
  * the server being promoted is not considered any more as voting. */
-TEST(raft_promote, leadershipLost, setup, tear_down, 0, NULL)
+TEST(raft_promote, leadershipLost, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     const struct raft_server *server;
     /* TODO: fix */
     return MUNIT_SKIP;
     GROW;
-    ADD(0, 3, 0);
-    CLUSTER_STEP_UNTIL_APPLIED(2, 1, 2000);
+    ADD(0, 3);
     CLUSTER_STEP_N(2);
 
-    PROMOTE(0, 3, 0);
+    PROMOTE_SUBMIT(0, 3, RAFT_LEADER);
 
     /* Server 3 is being considered as voting, even though the configuration
      * change is not committed yet. */
