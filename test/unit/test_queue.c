@@ -3,7 +3,7 @@
 
 /******************************************************************************
  *
- * Fixture
+ * Fixture with a single queue.
  *
  *****************************************************************************/
 
@@ -12,7 +12,7 @@ struct fixture
     void *queue[2];
 };
 
-static void *setup(const MunitParameter params[], void *user_data)
+static void *setUp(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     (void)params;
@@ -21,23 +21,23 @@ static void *setup(const MunitParameter params[], void *user_data)
     return f;
 }
 
-static void tear_down(void *data)
+static void tearDown(void *data)
 {
     struct fixture *f = data;
     free(f);
 }
-
-struct item
-{
-    int value;
-    void *queue[2];
-};
 
 /******************************************************************************
  *
  * Helper macros
  *
  *****************************************************************************/
+
+struct item
+{
+    int value;
+    void *queue[2];
+};
 
 /* Initialize and push the given items to the fixture's queue. Each item will
  * have a value equal to its index plus one. */
@@ -94,14 +94,14 @@ struct item
 
 SUITE(QUEUE_IS_EMPTY)
 
-TEST(QUEUE_IS_EMPTY, yes, setup, tear_down, 0, NULL)
+TEST(QUEUE_IS_EMPTY, yes, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     ASSERT_EMPTY;
     return MUNIT_OK;
 }
 
-TEST(QUEUE_IS_EMPTY, no, setup, tear_down, 0, NULL)
+TEST(QUEUE_IS_EMPTY, no, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct item items[1];
@@ -118,22 +118,20 @@ TEST(QUEUE_IS_EMPTY, no, setup, tear_down, 0, NULL)
 
 SUITE(QUEUE_PUSH)
 
-TEST(QUEUE_PUSH, one, setup, tear_down, 0, NULL)
+TEST(QUEUE_PUSH, one, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct item items[1];
-    (void)params;
     PUSH(items);
     ASSERT_HEAD(1);
     return MUNIT_OK;
 }
 
-TEST(QUEUE_PUSH, two, setup, tear_down, 0, NULL)
+TEST(QUEUE_PUSH, two, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct item items[2];
     int i;
-    (void)params;
     PUSH(items);
     for (i = 0; i < 2; i++) {
         ASSERT_HEAD(i + 1);
@@ -151,33 +149,30 @@ TEST(QUEUE_PUSH, two, setup, tear_down, 0, NULL)
 
 SUITE(QUEUE_REMOVE)
 
-TEST(QUEUE_REMOVE, first, setup, tear_down, 0, NULL)
+TEST(QUEUE_REMOVE, first, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct item items[3];
-    (void)params;
     PUSH(items);
     REMOVE(items, 0);
     ASSERT_HEAD(2);
     return MUNIT_OK;
 }
 
-TEST(QUEUE_REMOVE, second, setup, tear_down, 0, NULL)
+TEST(QUEUE_REMOVE, second, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct item items[3];
-    (void)params;
     PUSH(items);
     REMOVE(items, 1);
     ASSERT_HEAD(1);
     return MUNIT_OK;
 }
 
-TEST(QUEUE_REMOVE, success, setup, tear_down, 0, NULL)
+TEST(QUEUE_REMOVE, success, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct item items[3];
-    (void)params;
     PUSH(items);
     REMOVE(items, 2);
     ASSERT_HEAD(1);
@@ -192,7 +187,7 @@ TEST(QUEUE_REMOVE, success, setup, tear_down, 0, NULL)
 
 SUITE(QUEUE_TAIL)
 
-TEST(QUEUE_TAIL, one, setup, tear_down, 0, NULL)
+TEST(QUEUE_TAIL, one, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct item items[1];
@@ -201,7 +196,7 @@ TEST(QUEUE_TAIL, one, setup, tear_down, 0, NULL)
     return MUNIT_OK;
 }
 
-TEST(QUEUE_TAIL, two, setup, tear_down, 0, NULL)
+TEST(QUEUE_TAIL, two, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct item items[2];
@@ -210,7 +205,7 @@ TEST(QUEUE_TAIL, two, setup, tear_down, 0, NULL)
     return MUNIT_OK;
 }
 
-TEST(QUEUE_TAIL, three, setup, tear_down, 0, NULL)
+TEST(QUEUE_TAIL, three, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct item items[3];
@@ -228,7 +223,7 @@ TEST(QUEUE_TAIL, three, setup, tear_down, 0, NULL)
 SUITE(QUEUE_FOREACH)
 
 /* Loop through a queue of zero items. */
-TEST(QUEUE_FOREACH, zero, setup, tear_down, 0, NULL)
+TEST(QUEUE_FOREACH, zero, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     queue *head;
@@ -239,7 +234,7 @@ TEST(QUEUE_FOREACH, zero, setup, tear_down, 0, NULL)
 }
 
 /* Loop through a queue of one item. */
-TEST(QUEUE_FOREACH, one, setup, tear_down, 0, NULL)
+TEST(QUEUE_FOREACH, one, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct item items[1];
@@ -253,7 +248,7 @@ TEST(QUEUE_FOREACH, one, setup, tear_down, 0, NULL)
 
 /* Loop through a queue of two items. The order of the loop is from the head to
  * the tail. */
-TEST(QUEUE_FOREACH, two, setup, tear_down, 0, NULL)
+TEST(QUEUE_FOREACH, two, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct item items[2];
