@@ -1,5 +1,5 @@
 #include "../../src/byte.h"
-#include "../lib/configuration.h"
+#include "../../src/configuration.h"
 #include "../lib/heap.h"
 #include "../lib/runner.h"
 
@@ -12,7 +12,7 @@
 struct fixture
 {
     FIXTURE_HEAP;
-    FIXTURE_CONFIGURATION
+    struct raft_configuration configuration;
 };
 
 static void *setup(const MunitParameter params[], void *user_data)
@@ -20,14 +20,14 @@ static void *setup(const MunitParameter params[], void *user_data)
     struct fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
     SETUP_HEAP;
-    SETUP_CONFIGURATION;
+    configurationInit(&f->configuration);
     return f;
 }
 
 static void tear_down(void *data)
 {
     struct fixture *f = data;
-    TEAR_DOWN_CONFIGURATION;
+    configurationClose(&f->configuration);
     TEAR_DOWN_HEAP;
     free(f);
 }
@@ -46,7 +46,7 @@ static void tear_down(void *data)
 
 /* Add a server to the fixture's configuration. */
 #define ADD_RV(ID, ADDRESS, ROLE) \
-    raft_configuration_add(&f->configuration, ID, ADDRESS, ROLE)
+    configurationAdd(&f->configuration, ID, ADDRESS, ROLE)
 #define ADD(...) munit_assert_int(ADD_RV(__VA_ARGS__), ==, 0)
 #define ADD_ERROR(RV, ...) munit_assert_int(ADD_RV(__VA_ARGS__), ==, RV)
 
@@ -245,7 +245,7 @@ TEST(configurationCopy, two, setup, tear_down, 0, NULL)
     munit_assert_int(configuration.n, ==, 2);
     munit_assert_int(configuration.servers[0].id, ==, 1);
     munit_assert_int(configuration.servers[1].id, ==, 2);
-    raft_configuration_close(&configuration);
+    configurationClose(&configuration);
     return MUNIT_OK;
 }
 
@@ -316,7 +316,6 @@ TEST(configurationAdd, invalidRole, setup, tear_down, 0, NULL)
     ADD_ERROR(RAFT_BADROLE, 2, "127.0.0.1:666", 666);
     return MUNIT_OK;
 }
-
 
 static char *add_oom_heap_fault_delay[] = {"0", "1", NULL};
 static char *add_oom_heap_fault_repeat[] = {"1", NULL};

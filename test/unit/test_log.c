@@ -1,3 +1,4 @@
+#include "../../src/configuration.h"
 #include "../lib/heap.h"
 #include "../lib/log.h"
 #include "../lib/runner.h"
@@ -634,15 +635,20 @@ static MunitParameterEnum append_configuration_oom_params[] = {
 };
 
 /* Out of memory. */
-TEST(logAppendConfiguration, oom, setup, tear_down, 0, append_configuration_oom_params)
+TEST(logAppendConfiguration,
+     oom,
+     setup,
+     tear_down,
+     0,
+     append_configuration_oom_params)
 {
     struct fixture *f = data;
     struct raft_configuration configuration;
     int rv;
     (void)params;
 
-    raft_configuration_init(&configuration);
-    rv = raft_configuration_add(&configuration, 1, "1", RAFT_VOTER);
+    configurationInit(&configuration);
+    rv = configurationAdd(&configuration, 1, "1", RAFT_VOTER);
     munit_assert_int(rv, ==, 0);
 
     test_heap_fault_enable(&f->heap);
@@ -650,7 +656,7 @@ TEST(logAppendConfiguration, oom, setup, tear_down, 0, append_configuration_oom_
     rv = logAppendConfiguration(&f->log, 1, &configuration);
     munit_assert_int(rv, ==, RAFT_NOMEM);
 
-    raft_configuration_close(&configuration);
+    configurationClose(&configuration);
 
     return MUNIT_OK;
 }
@@ -1006,7 +1012,12 @@ static MunitParameterEnum truncate_acquired_oom_params[] = {
 /* Acquire entries at a certain index. Truncate the log at that index. The
  * truncated entries are still referenced. Then append a new entry, which fails
  * to be appended due to OOM. */
-TEST(logTruncate, acquiredOom, setup, tear_down, 0, truncate_acquired_oom_params)
+TEST(logTruncate,
+     acquiredOom,
+     setup,
+     tear_down,
+     0,
+     truncate_acquired_oom_params)
 {
     struct fixture *f = data;
     struct raft_entry *entries;
