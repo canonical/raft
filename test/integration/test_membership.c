@@ -106,7 +106,7 @@ TEST(raft_add, committed, setup, tear_down, 0, NULL)
     server = &raft->configuration.servers[2];
     munit_assert_int(server->id, ==, 3);
     munit_assert_string_equal(server->address, "3");
-    munit_assert_int(server->role, ==, RAFT_STANDBY);
+    munit_assert_int(server->role, ==, RAFT_IDLE);
 
     /* The new configuration is marked as uncommitted. */
     ASSERT_CONFIGURATION_INDEXES(0, 1, 2);

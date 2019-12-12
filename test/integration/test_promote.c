@@ -208,7 +208,7 @@ TEST(raft_promote, catchUp, setUp, tearDown, 0, NULL)
     /* Server 3 is not being considered as voting, since its log is behind. */
     raft = CLUSTER_RAFT(0);
     server = &raft->configuration.servers[2];
-    munit_assert_int(server->role, ==, RAFT_STANDBY);
+    munit_assert_int(server->role, ==, RAFT_IDLE);
 
     /* Advance the match index of server 3, by acknowledging the AppendEntries
      * request that the leader has sent to it. */
@@ -309,6 +309,15 @@ TEST(raft_promote, changeIsImmediate, setUp, tearDown, 0, NULL)
 
     PROMOTE_WAIT;
 
+    return MUNIT_OK;
+}
+
+/* Promote an idle node to stand-by. */
+TEST(raft_promote, standBy, setUp, tearDown, 0, NULL) {
+    struct fixture *f = data;
+    GROW;
+    ADD(0, 3);
+    PROMOTE(0, 3, RAFT_STANDBY);
     return MUNIT_OK;
 }
 

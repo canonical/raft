@@ -185,7 +185,7 @@ int raft_add(struct raft *r,
         goto err;
     }
 
-    rv = raft_configuration_add(&configuration, id, address, RAFT_STANDBY);
+    rv = raft_configuration_add(&configuration, id, address, RAFT_IDLE);
     if (rv != 0) {
         goto err_after_configuration_copy;
     }
@@ -263,11 +263,12 @@ int raft_promote(struct raft *r,
     assert(r->leader_state.change == NULL);
     r->leader_state.change = req;
 
-    /* If the log of this non-voting server is already up-to-date, we can ask
-     * its promotion immediately. */
-    if (progressMatchIndex(r, server_index) == last_index) {
+    /* If the log of this server is already up-to-date, or if we're promoting to
+     * stand-by, we can ask its promotion immediately. */
+    if (role == RAFT_STANDBY ||
+        progressMatchIndex(r, server_index) == last_index) {
         int old_role = r->configuration.servers[server_index].role;
-        r->configuration.servers[server_index].role = RAFT_VOTER;
+        r->configuration.servers[server_index].role = role;
 
         rv = clientChangeConfiguration(r, req, &r->configuration);
         if (rv != 0) {
