@@ -10,26 +10,20 @@
 struct fixture
 {
     FIXTURE_CLUSTER;
-    struct raft_buffer buf;
-    struct raft_barrier req;
-    bool invoked;
-    int status;
 };
 
-static void *setup(const MunitParameter params[], void *user_data)
+static void *setUp(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     (void)user_data;
     SETUP_CLUSTER(2);
-    f->invoked = false;
-    f->status = -1;
     CLUSTER_BOOTSTRAP;
     CLUSTER_START;
     CLUSTER_ELECT(0);
     return f;
 }
 
-static void tear_down(void *data)
+static void tearDown(void *data)
 {
     struct fixture *f = data;
     TEAR_DOWN_CLUSTER;
@@ -42,22 +36,48 @@ static void tear_down(void *data)
  *
  *****************************************************************************/
 
-static void barrier_cb(struct raft_barrier *req, int status)
+struct result
 {
-    struct fixture *f = req->data;
-    f->invoked = true;
-    f->status = status;
+    int status;
+    bool done;
+};
+
+static void barrierCbAssertResult(struct raft_barrier *req, int status)
+{
+    struct result *result = req->data;
+    munit_assert_int(status, ==, result->status);
+    result->done = true;
 }
 
-/* Submit a request to apply a new RAFT_BARRIER entry and assert that it returns
- * the given value. */
-#define BARRIER(I, RV)                                            \
-    {                                                             \
-        int rv_;                                                  \
-        f->req.data = f;                                          \
-        rv_ = raft_barrier(CLUSTER_RAFT(I), &f->req, barrier_cb); \
-        munit_assert_int(rv_, ==, RV);                            \
-    }
+static bool barrierCbHasFired(struct raft_fixture *f, void *arg)
+{
+    struct result *result = arg;
+    (void)f;
+    return result->done;
+}
+
+/* Submit a barrier request. */
+#define BARRIER_SUBMIT(I)                                              \
+    struct raft_barrier _req;                                          \
+    struct result _result = {0, false};                                \
+    int _rv;                                                           \
+    _req.data = &_result;                                              \
+    _rv = raft_barrier(CLUSTER_RAFT(I), &_req, barrierCbAssertResult); \
+    munit_assert_int(_rv, ==, 0);
+
+/* Expect the barrier callback to fire with the given status. */
+#define BARRIER_EXPECT(STATUS) _result.status = STATUS
+
+/* Wait until the barrier request comletes. */
+#define BARRIER_WAIT CLUSTER_STEP_UNTIL(barrierCbHasFired, &_result, 2000)
+
+/* Submit to the I'th server a barrier request and wait for the operation to
+ * succeed. */
+#define BARRIER(I)         \
+    do {                   \
+        BARRIER_SUBMIT(I); \
+        BARRIER_WAIT;      \
+    } while (0)
 
 /******************************************************************************
  *
@@ -67,12 +87,9 @@ static void barrier_cb(struct raft_barrier *req, int status)
 
 SUITE(raft_barrier)
 
-TEST(raft_barrier, cb, setup, tear_down, 0, NULL)
+TEST(raft_barrier, cb, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    BARRIER(0, 0);
-    CLUSTER_STEP_UNTIL_APPLIED(0, 2, 2000);
-    munit_assert_true(f->invoked);
-    munit_assert_int(f->status, ==, 0);
+    BARRIER(0);
     return MUNIT_OK;
 }
