@@ -9,12 +9,12 @@
 
 SUITE(raft_strerror)
 
-#define ERR_CODE_MAP(X)          \
+#define ERR_CODE_MAP(X)      \
     X(RAFT_NOMEM)            \
     X(RAFT_BADID)            \
     X(RAFT_DUPLICATEID)      \
     X(RAFT_DUPLICATEADDRESS) \
-    X(RAFT_ALREADYVOTING)    \
+    X(RAFT_BADROLE)          \
     X(RAFT_MALFORMED)        \
     X(RAFT_NOTLEADER)        \
     X(RAFT_LEADERSHIPLOST)   \

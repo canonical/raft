@@ -1,6 +1,7 @@
 #include "../include/raft.h"
 #include "assert.h"
 #include "configuration.h"
+#include "err.h"
 #include "log.h"
 #include "membership.h"
 #include "progress.h"
@@ -211,7 +212,7 @@ err:
 int raft_promote(struct raft *r,
                  struct raft_change *req,
                  unsigned id,
-		 int role,
+                 int role,
                  raft_change_cb cb)
 {
     const struct raft_server *server;
@@ -219,8 +220,11 @@ int raft_promote(struct raft *r,
     raft_index last_index;
     int rv;
 
-    /* TODO: support promoting to RAFT_STANDBY. */
-    assert(role == RAFT_VOTER);
+    if (role != RAFT_STANDBY && role != RAFT_VOTER) {
+        rv = RAFT_BADROLE;
+        ErrMsgFromCode(r->errmsg, rv);
+        return rv;
+    }
 
     rv = membershipCanChangeConfiguration(r);
     if (rv != 0) {
@@ -231,12 +235,21 @@ int raft_promote(struct raft *r,
 
     server = configurationGet(&r->configuration, id);
     if (server == NULL) {
-        rv = RAFT_BADID;
+        rv = RAFT_NOTFOUND;
+        ErrMsgPrintf(r->errmsg, "no server has ID %u", id);
         goto err;
     }
 
-    if (server->role == RAFT_VOTER) {
-        rv = RAFT_ALREADYVOTING;
+    /* Check if we have already the desired role. */
+    if (server->role == role) {
+        const char *name;
+        rv = RAFT_BADROLE;
+        if (role == RAFT_VOTER) {
+            name = "voter";
+        } else {
+            name = "stand-by";
+        }
+        ErrMsgPrintf(r->errmsg, "server is already %s", name);
         goto err;
     }
 

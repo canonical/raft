@@ -91,12 +91,13 @@ static bool changeCbHasFired(struct raft_fixture *f, void *arg)
 
 /* Invoke raft_promote() against the I'th server and assert it the given error
  * code. */
-#define PROMOTE_ERROR(I, ID, ROLE, RV)                                \
-    {                                                                 \
-        struct raft_change __req;                                     \
-        int __rv;                                                     \
-        __rv = raft_promote(CLUSTER_RAFT(I), &__req, ID, ROLE, NULL); \
-        munit_assert_int(__rv, ==, RV);                               \
+#define PROMOTE_ERROR(I, ID, ROLE, RV, ERRMSG)                           \
+    {                                                                    \
+        struct raft_change __req;                                        \
+        int __rv;                                                        \
+        __rv = raft_promote(CLUSTER_RAFT(I), &__req, ID, ROLE, NULL);    \
+        munit_assert_int(__rv, ==, RV);                                  \
+        munit_assert_string_equal(ERRMSG, raft_errmsg(CLUSTER_RAFT(I))); \
     }
 
 /******************************************************************************
@@ -316,24 +317,32 @@ TEST(raft_promote, changeIsImmediate, setUp, tearDown, 0, NULL)
 TEST(raft_promote, notLeader, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    PROMOTE_ERROR(1, 3, RAFT_VOTER, RAFT_NOTLEADER);
+    PROMOTE_ERROR(1, 3, RAFT_VOTER, RAFT_NOTLEADER, "server is not the leader");
     return MUNIT_OK;
 }
 
 /* Trying to promote a server whose ID is unknown results in an
  * error. */
-TEST(raft_promote, badId, setUp, tearDown, 0, NULL)
+TEST(raft_promote, unknownId, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    PROMOTE_ERROR(0, 3, RAFT_VOTER, RAFT_BADID);
+    PROMOTE_ERROR(0, 3, RAFT_VOTER, RAFT_NOTFOUND, "no server has ID 3");
     return MUNIT_OK;
 }
 
-/* Promoting a server which is already a voting results in an error. */
-TEST(raft_promote, alreadVoting, setUp, tearDown, 0, NULL)
+/* Trying to promote a server to the idle role results in an * error. */
+TEST(raft_promote, badRole, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    PROMOTE_ERROR(0, 1, RAFT_VOTER, RAFT_ALREADYVOTING);
+    PROMOTE_ERROR(0, 3, RAFT_IDLE, RAFT_BADROLE, "server role is not valid");
+    return MUNIT_OK;
+}
+
+/* Promoting a server which has already the RAFT_VOTER results in an error. */
+TEST(raft_promote, alreadyVoter, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    PROMOTE_ERROR(0, 1, RAFT_VOTER, RAFT_BADROLE, "server is already voter");
     return MUNIT_OK;
 }
 
@@ -345,7 +354,8 @@ TEST(raft_promote, changeRequestAlreadyInProgress, setUp, tearDown, 0, NULL)
     GROW;
     ADD(0, 3);
     PROMOTE_SUBMIT(0, 3, RAFT_VOTER);
-    PROMOTE_ERROR(0, 3, RAFT_VOTER, RAFT_CANTCHANGE);
+    PROMOTE_ERROR(0, 3, RAFT_VOTER, RAFT_CANTCHANGE,
+                  "a configuration change is already in progress");
     PROMOTE_WAIT;
     return MUNIT_OK;
 }

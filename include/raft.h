@@ -11,11 +11,11 @@
 /**
  * Error codes.
  */
-#define RAFT_NOMEM 1
-#define RAFT_BADID 2
-#define RAFT_DUPLICATEID 3
-#define RAFT_DUPLICATEADDRESS 4
-#define RAFT_ALREADYVOTING 5
+#define RAFT_NOMEM 1            /* Out of memory */
+#define RAFT_BADID 2            /* Server ID is not valid */
+#define RAFT_DUPLICATEID 3      /* Server ID already in use */
+#define RAFT_DUPLICATEADDRESS 4 /* Server address already in use */
+#define RAFT_BADROLE 5          /* Server role is not valid */
 #define RAFT_MALFORMED 6
 #define RAFT_NOTLEADER 7
 #define RAFT_LEADERSHIPLOST 8
@@ -34,7 +34,6 @@
 #define RAFT_UNAUTHORIZED 21 /* No access to a resource */
 #define RAFT_NOSPACE 22      /* Not enough space on disk */
 #define RAFT_TOOMANY 23      /* Some system or raft limit was hit */
-#define RAFT_BADROLE 24      /* Role code is invalid */
 
 /**
  * Size of human-readable error message buffers.
@@ -76,7 +75,7 @@ struct raft_buffer
 
 #define RAFT_STANDBY 0 /* Replicate log, does not participate in quorum. */
 #define RAFT_VOTER 1   /* Replicate log, does participate in quorum. */
-#define RAFT_IDLE 1    /* Does not replicate log, or participate in quorum. */
+#define RAFT_IDLE 2    /* Does not replicate log, or participate in quorum. */
 
 /**
  * Hold information about a single server in the cluster configuration.
@@ -1028,7 +1027,7 @@ RAFT_API int raft_add(struct raft *r,
 RAFT_API int raft_promote(struct raft *r,
                           struct raft_change *req,
                           unsigned id,
-			  int role,
+                          int role,
                           raft_change_cb cb);
 
 /**
