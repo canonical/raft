@@ -95,14 +95,14 @@ int electionStart(struct raft *r)
     assert(r->state == RAFT_CANDIDATE);
 
     n_voters = configurationVoterCount(&r->configuration);
-    voting_index = configurationIndexOfVoting(&r->configuration, r->id);
+    voting_index = configurationIndexOfVoter(&r->configuration, r->id);
 
     /* This function should not be invoked if we are not a voting server, hence
      * voting_index must be lower than the number of servers in the
      * configuration (meaning that we are a voting server). */
     assert(voting_index < r->configuration.n);
 
-    /* Sanity check that configurationVoterCount and configurationIndexOfVoting
+    /* Sanity check that configurationVoterCount and configurationIndexOfVoter
      * have returned somethig that makes sense. */
     assert(n_voters <= r->configuration.n);
     assert(voting_index < n_voters);

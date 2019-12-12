@@ -1,6 +1,7 @@
+#include "configuration.h"
+
 #include "assert.h"
 #include "byte.h"
-#include "configuration.h"
 
 /* Current encoding format version. */
 #define ENCODING_FORMAT 1
@@ -37,8 +38,8 @@ size_t configurationIndexOf(const struct raft_configuration *c,
     return c->n;
 }
 
-size_t configurationIndexOfVoting(const struct raft_configuration *c,
-                                  const unsigned id)
+size_t configurationIndexOfVoter(const struct raft_configuration *c,
+                                 const unsigned id)
 {
     size_t i;
     size_t j = 0;
@@ -52,8 +53,7 @@ size_t configurationIndexOfVoting(const struct raft_configuration *c,
             }
             return c->n;
         }
-        if (c->servers[i].role == RAFT_VOTER
-	    ) {
+        if (c->servers[i].role == RAFT_VOTER) {
             j++;
         }
     }
@@ -244,7 +244,7 @@ void configurationEncodeToBuf(const struct raft_configuration *c, void *buf)
         struct raft_server *server = &c->servers[i];
         assert(server->address != NULL);
         bytePut64Unaligned(&cursor, server->id); /* might not be aligned */
-	bytePutString(&cursor, server->address);
+        bytePutString(&cursor, server->address);
         bytePut8(&cursor, server->role);
     };
 }
@@ -307,7 +307,8 @@ int configurationDecode(const struct raft_buffer *buf,
         id = byteGet64Unaligned(&cursor);
 
         /* Server Address. */
-        address = byteGetString(&cursor, buf->len - ((uint8_t*)cursor - (uint8_t*)buf->base));
+        address = byteGetString(
+            &cursor, buf->len - ((uint8_t *)cursor - (uint8_t *)buf->base));
         if (address == NULL) {
             return RAFT_MALFORMED;
         }

@@ -41,7 +41,7 @@ static void tear_down(void *data)
 /* Accessors */
 #define VOTER_COUNT configurationVoterCount(&f->configuration)
 #define INDEX_OF(ID) configurationIndexOf(&f->configuration, ID)
-#define INDEX_OF_VOTING(ID) configurationIndexOfVoting(&f->configuration, ID)
+#define INDEX_OF_VOTER(ID) configurationIndexOfVoter(&f->configuration, ID)
 #define GET(ID) configurationGet(&f->configuration, ID)
 
 /* Add a server to the fixture's configuration. */
@@ -157,41 +157,41 @@ TEST(configurationIndexOf, no_match, setup, tear_down, 0, NULL)
 
 /******************************************************************************
  *
- * configurationIndexOfVoting
+ * configurationIndexOfVoter
  *
  *****************************************************************************/
 
-SUITE(configurationIndexOfVoting)
+SUITE(configurationIndexOfVoter)
 
 /* The index of the matching voting server (relative to the number of voting
    servers) is returned. */
-TEST(configurationIndexOfVoting, match, setup, tear_down, 0, NULL)
+TEST(configurationIndexOfVoter, match, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     ADD(1, "192.168.1.1:666", RAFT_STANDBY);
     ADD(2, "192.168.1.2:666", RAFT_VOTER);
     ADD(3, "192.168.1.3:666", RAFT_VOTER);
-    munit_assert_int(INDEX_OF_VOTING(3), ==, 1);
+    munit_assert_int(INDEX_OF_VOTER(3), ==, 1);
     return MUNIT_OK;
 }
 
 /* If no matching server is found, the length of the configuration is
  * returned. */
-TEST(configurationIndexOfVoting, no_match, setup, tear_down, 0, NULL)
+TEST(configurationIndexOfVoter, no_match, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     ADD(1, "192.168.1.1:666", RAFT_VOTER);
-    munit_assert_int(INDEX_OF_VOTING(3), ==, 1);
+    munit_assert_int(INDEX_OF_VOTER(3), ==, 1);
     return MUNIT_OK;
 }
 
 /* If the server exists but is non-voting, the length of the configuration is
  * returned. */
-TEST(configurationIndexOfVoting, non_voting, setup, tear_down, 0, NULL)
+TEST(configurationIndexOfVoter, non_voting, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     ADD(1, "192.168.1.1:666", RAFT_STANDBY);
-    munit_assert_int(INDEX_OF_VOTING(1), ==, 1);
+    munit_assert_int(INDEX_OF_VOTER(1), ==, 1);
     return MUNIT_OK;
 }
 

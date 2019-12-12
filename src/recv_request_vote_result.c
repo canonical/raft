@@ -22,7 +22,7 @@ int recvRequestVoteResult(struct raft *r,
     assert(r != NULL);
     assert(id > 0);
 
-    votes_index = configurationIndexOfVoting(&r->configuration, id);
+    votes_index = configurationIndexOfVoter(&r->configuration, id);
     if (votes_index == r->configuration.n) {
         tracef("non-voting or unknown server -> reject");
         return 0;
