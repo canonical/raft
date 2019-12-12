@@ -73,9 +73,9 @@ struct raft_buffer
  * Server role codes.
  */
 
-#define RAFT_STANDBY 0 /* Replicate log, does not vote for quorum. */
-#define RAFT_VOTER 1   /* Replicate log, does vote for quorum. */
-#define RAFT_IDLE 1    /* Does not replicate log, does not vote for quorum. */
+#define RAFT_STANDBY 0 /* Replicate log, does not participate in quorum. */
+#define RAFT_VOTER 1   /* Replicate log, does participate in quorum. */
+#define RAFT_IDLE 1    /* Does not replicate log, or participate in quorum. */
 
 /**
  * Hold information about a single server in the cluster configuration.
@@ -1004,7 +1004,8 @@ struct raft_change
 };
 
 /**
- * Add a new non-voting server to the cluster configuration.
+ * Add a new server to the cluster configuration. Its initial role will be
+ * #RAFT_IDLE.
  */
 RAFT_API int raft_add(struct raft *r,
                       struct raft_change *req,
@@ -1013,11 +1014,20 @@ RAFT_API int raft_add(struct raft *r,
                       raft_change_cb cb);
 
 /**
- * Promote the given new non-voting server to be a voting one.
+ * Promote the given server to a more important role.
+ *
+ * If the server's current role is #RAFT_IDLE, the server can be promoted either
+ * to #RAFT_STANDBY or #RAFT_VOTER.
+ *
+ * If the server's current role is #RAFT_STANDBY, the server can be promoted to
+ * #RAFT_VOTER.
+ *
+ * In all other cases, #RAFT_INVALID is returned.
  */
 RAFT_API int raft_promote(struct raft *r,
                           struct raft_change *req,
                           unsigned id,
+			  int role,
                           raft_change_cb cb);
 
 /**

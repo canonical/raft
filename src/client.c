@@ -211,12 +211,16 @@ err:
 int raft_promote(struct raft *r,
                  struct raft_change *req,
                  unsigned id,
+		 int role,
                  raft_change_cb cb)
 {
     const struct raft_server *server;
     size_t server_index;
     raft_index last_index;
     int rv;
+
+    /* TODO: support promoting to RAFT_STANDBY. */
+    assert(role == RAFT_VOTER);
 
     rv = membershipCanChangeConfiguration(r);
     if (rv != 0) {

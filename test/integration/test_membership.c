@@ -62,11 +62,11 @@ static void tear_down(void *data)
 
 /* Invoke raft_promote against the I'th node and assert it returns the given
  * value. */
-#define PROMOTE(I, ID, RV)                                      \
-    {                                                           \
-        int rv_;                                                \
-        rv_ = raft_promote(CLUSTER_RAFT(I), &f->req, ID, NULL); \
-        munit_assert_int(rv_, ==, RV);                          \
+#define PROMOTE(I, ID, RV)                                                  \
+    {                                                                       \
+        int rv_;                                                            \
+        rv_ = raft_promote(CLUSTER_RAFT(I), &f->req, ID, RAFT_VOTER, NULL); \
+        munit_assert_int(rv_, ==, RV);                                      \
     }
 
 /* Invoke raft_remove against the I'th node and assert it returns the given
