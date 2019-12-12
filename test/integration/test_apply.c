@@ -12,10 +12,9 @@ struct fixture
     FIXTURE_CLUSTER;
 };
 
-static void *setup(const MunitParameter params[], void *user_data)
+static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    (void)user_data;
     SETUP_CLUSTER(2);
     CLUSTER_BOOTSTRAP;
     CLUSTER_START;
@@ -23,7 +22,7 @@ static void *setup(const MunitParameter params[], void *user_data)
     return f;
 }
 
-static void tear_down(void *data)
+static void tearDown(void *data)
 {
     struct fixture *f = data;
     TEAR_DOWN_CLUSTER;
@@ -105,7 +104,7 @@ static bool applyCbHasFired(struct raft_fixture *f, void *arg)
 SUITE(raft_apply)
 
 /* Append the very first command entry. */
-TEST(raft_apply, first, setup, tear_down, 0, NULL)
+TEST(raft_apply, first, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     APPLY(0);
@@ -120,7 +119,7 @@ TEST(raft_apply, first, setup, tear_down, 0, NULL)
  *****************************************************************************/
 
 /* If the raft instance is not in leader state, an error is returned. */
-TEST(raft_apply, notLeader, setup, tear_down, 0, NULL)
+TEST(raft_apply, notLeader, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     APPLY_ERROR(1, RAFT_NOTLEADER, "server is not the leader");
@@ -129,7 +128,7 @@ TEST(raft_apply, notLeader, setup, tear_down, 0, NULL)
 
 /* If the raft instance steps down from leader state, the apply callback fires
  * with an error. */
-TEST(raft_apply, leadershipLost, setup, tear_down, 0, NULL)
+TEST(raft_apply, leadershipLost, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     APPLY_SUBMIT(0);

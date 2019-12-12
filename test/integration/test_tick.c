@@ -12,13 +12,12 @@ struct fixture
     FIXTURE_CLUSTER;
 };
 
-static void *setup(const MunitParameter params[], void *user_data)
+static void *setup(const MunitParameter params[], MUNIT_UNUSED void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     const char *n_voting_param = munit_parameters_get(params, "n_voting");
     unsigned n = 3;
     unsigned n_voting = n;
-    (void)user_data;
     if (n_voting_param != NULL) {
         n_voting = atoi(n_voting_param);
     }

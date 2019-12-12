@@ -17,14 +17,12 @@ struct fixture
     struct raft_fixture fixture;
 };
 
-static void *setup(const MunitParameter params[], void *user_data)
+static void *setup(const MunitParameter params[], MUNIT_UNUSED void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     struct raft_configuration configuration;
     unsigned i;
     int rc;
-    (void)user_data;
-    (void)params;
     for (i = 0; i < N_SERVERS; i++) {
         test_fsm_setup(params, &f->fsms[i]);
     }

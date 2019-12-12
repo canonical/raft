@@ -12,11 +12,10 @@ struct fixture
     void *queue[2];
 };
 
-static void *setUp(const MunitParameter params[], void *user_data)
+static void *setUp(MUNIT_UNUSED const MunitParameter params[],
+                   MUNIT_UNUSED void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    (void)params;
-    (void)user_data;
     QUEUE_INIT(&f->queue);
     return f;
 }
