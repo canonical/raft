@@ -402,8 +402,8 @@ int uvSegmentLoadClosed(struct uv *uv,
     }
 
     if (*n != expected_n) {
-        Tracef(uv->tracer, "segment %s has %zu entries (expected %u)",
-               info->filename, *n, expected_n);
+        ErrMsgPrintf(uv->io->errmsg, "found %zu entries (expected %u)", *n,
+                     expected_n);
         rv = RAFT_CORRUPT;
         goto err_after_extend_entries;
     }
