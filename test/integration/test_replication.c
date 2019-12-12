@@ -121,7 +121,6 @@ TEST(send, followupHeartbeat, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft *raft;
-    (void)params;
     CLUSTER_BOOTSTRAP;
     CLUSTER_START;
 
@@ -163,7 +162,6 @@ TEST(send, skipHeartbeat, setup, tear_down, 0, NULL)
     struct fixture *f = data;
     struct raft *raft;
     struct raft_apply req;
-    (void)params;
     CLUSTER_BOOTSTRAP;
     CLUSTER_START;
 
@@ -201,7 +199,6 @@ TEST(send, probe, setup, tear_down, 0, NULL)
     struct fixture *f = data;
     struct raft_apply req1;
     struct raft_apply req2;
-    (void)params;
     CLUSTER_BOOTSTRAP;
     CLUSTER_START;
 
@@ -252,7 +249,6 @@ TEST(send, pipeline, setup, tear_down, 0, NULL)
     struct raft *raft;
     struct raft_apply req1;
     struct raft_apply req2;
-    (void)params;
     CLUSTER_BOOTSTRAP;
     CLUSTER_START;
 
@@ -292,7 +288,6 @@ TEST(send, pipeline, setup, tear_down, 0, NULL)
 TEST(send, disconnect, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
     CLUSTER_BOOTSTRAP;
     CLUSTER_START;
 
@@ -654,7 +649,6 @@ TEST(receive, candidateSameTerm, setup, tear_down, 0, cluster_3_params)
 TEST(receive, candidateHigherTerm, setup, tear_down, 0, cluster_3_params)
 {
     struct fixture *f = data;
-    (void)params;
     CLUSTER_BOOTSTRAP;
 
     /* Set a high election timeout on server 1, so it won't become candidate */
