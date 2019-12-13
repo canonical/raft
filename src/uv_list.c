@@ -3,6 +3,12 @@
 #include "assert.h"
 #include "uv.h"
 
+#if 0
+#define tracef(...) Tracef(uv->tracer, __VA_ARGS__)
+#else
+#define tracef(...)
+#endif
+
 static const char *uvListIgnored[] = {".", "..", "metadata1", "metadata2",
                                       NULL};
 
@@ -66,7 +72,7 @@ int UvList(struct uv *uv,
          * the next one. */
         if (rv != 0 || uvListShouldIgnore(filename)) {
             if (rv == 0) {
-                Tracef(uv->tracer, "ignore %s", filename);
+                tracef("ignore %s", filename);
             }
             continue;
         }
@@ -77,7 +83,7 @@ int UvList(struct uv *uv,
                                          &appended);
         if (appended || rv != 0) {
             if (rv == 0) {
-                Tracef(uv->tracer, "snapshot %s", filename);
+                tracef("snapshot %s", filename);
             }
             continue;
         }
@@ -87,12 +93,12 @@ int UvList(struct uv *uv,
                                         &appended);
         if (appended || rv != 0) {
             if (rv == 0) {
-                Tracef(uv->tracer, "segment %s", filename);
+                tracef("segment %s", filename);
             }
             continue;
         }
 
-        Tracef(uv->tracer, "ignore %s", filename);
+        tracef("ignore %s", filename);
     }
 
     rv2 = uv_fs_scandir_next(&req, &entry);
@@ -112,3 +118,5 @@ int UvList(struct uv *uv,
 
     return rv;
 }
+
+#undef tracef

@@ -17,6 +17,13 @@
 #include "snapshot.h"
 #include "tracing.h"
 
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
+#else
+#define tracef(...)
+#endif
+
 #ifndef max
 #define max(a, b) ((a) < (b) ? (b) : (a))
 #endif
@@ -46,7 +53,7 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
 
     if (r->state == RAFT_LEADER && i < r->configuration.n) {
         if (status != 0) {
-            tracef("failed to send append entries to server %ld: %s",
+            tracef("failed to send append entries to server %u: %s",
                    req->server_id, raft_strerror(status));
             /* Go back to probe mode. */
             progressToProbe(r, i);
@@ -104,7 +111,7 @@ static int sendAppendEntries(struct raft *r,
      */
     args->leader_commit = r->commit_index;
 
-    tracef("send %lu entries starting at %llu to server %lu (last index %llu)",
+    tracef("send %u entries starting at %llu to server %u (last index %llu)",
            args->n_entries, args->prev_log_index, server->id,
            logLastIndex(&r->log));
 
@@ -230,7 +237,7 @@ static void sendSnapshotGetCb(struct raft_io_snapshot_get *get,
     req->snapshot = snapshot;
     req->send.data = req;
 
-    tracef("sending snapshot with last index %ld to %ld", snapshot->index,
+    tracef("sending snapshot with last index %llu to %u", snapshot->index,
            server->id);
 
     rv = r->io->send(r->io, &req->send, &message, sendInstallSnapshotCb);
@@ -370,7 +377,7 @@ static int triggerAll(struct raft *r)
         if (server->id == r->id) {
             continue;
         }
-	/* Skip idle servers, unless they're being promoted. */
+        /* Skip idle servers, unless they're being promoted. */
         if (server->role == RAFT_IDLE &&
             server->id != r->leader_state.promotee_id) {
             continue;
@@ -378,7 +385,7 @@ static int triggerAll(struct raft *r)
         rv = replicationProgress(r, i);
         if (rv != 0 && rv != RAFT_NOCONNECTION) {
             /* This is not a critical failure, let's just log it. */
-            tracef("failed to send append entries to server %ld: %s (%d)",
+            tracef("failed to send append entries to server %u: %s (%d)",
                    server->id, raft_strerror(rv), rv);
         }
     }
@@ -973,7 +980,7 @@ static int deleteConflictingEntries(struct raft *r,
                 return RAFT_SHUTDOWN;
             }
 
-            tracef("log mismatch -> truncate (%ld)", entry_index);
+            tracef("log mismatch -> truncate (%llu)", entry_index);
 
             /* Possibly discard uncommitted configuration changes. */
             if (r->configuration_uncommitted_index >= entry_index) {
@@ -1157,7 +1164,8 @@ static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
 
     if (status != 0) {
         result.rejected = snapshot->index;
-        tracef("save snapshot %d: %s", snapshot->index, raft_strerror(status));
+        tracef("save snapshot %llu: %s", snapshot->index,
+               raft_strerror(status));
         goto discard;
     }
 
@@ -1170,7 +1178,7 @@ static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
     rv = snapshotRestore(r, snapshot);
     if (rv != 0) {
         result.rejected = snapshot->index;
-        tracef("restore snapshot %d: %s", snapshot->index,
+        tracef("restore snapshot %llu: %s", snapshot->index,
                raft_strerror(status));
         goto discard;
     }
@@ -1328,18 +1336,21 @@ static void applyChange(struct raft *r, const raft_index index)
     r->configuration_index = index;
 
     if (r->state == RAFT_LEADER) {
+        const struct raft_server *server;
         req = (struct raft_change *)getRequest(r, index, RAFT_CHANGE);
         assert(r->leader_state.change == req);
         r->leader_state.change = NULL;
 
-        /* If we are leader but not part of this new configuration, step down.
+        /* If we are leader but not part of this new configuration, step
+         * down. We also step down if we are not voters anymore.
          *
          * From Section 4.2.2:
          *
          *   In this approach, a leader that is removed from the configuration
-         * steps down once the Cnew entry is committed.
+         *   steps down once the Cnew entry is committed.
          */
-        if (configurationGet(&r->configuration, r->id) == NULL) {
+        server = configurationGet(&r->configuration, r->id);
+        if (server == NULL || server->role != RAFT_VOTER) {
             convertToFollower(r);
         }
 
@@ -1519,8 +1530,10 @@ void replicationQuorum(struct raft *r, const raft_index index)
 
     if (votes > configurationVoterCount(&r->configuration) / 2) {
         r->commit_index = index;
-        tracef("new commit index %ld", r->commit_index);
+        tracef("new commit index %llu", r->commit_index);
     }
 
     return;
 }
+
+#undef tracef
