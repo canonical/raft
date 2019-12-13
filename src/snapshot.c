@@ -9,6 +9,13 @@
 #include "log.h"
 #include "tracing.h"
 
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
+#else
+#define tracef(...)
+#endif
+
 void snapshotClose(struct raft_snapshot *s)
 {
     unsigned i;
@@ -33,7 +40,7 @@ int snapshotRestore(struct raft *r, struct raft_snapshot *snapshot)
 
     rv = r->fsm->restore(r->fsm, &snapshot->bufs[0]);
     if (rv != 0) {
-        tracef("restore snapshot %d: %s", snapshot->index,
+        tracef("restore snapshot %llu: %s", snapshot->index,
                errCodeToString(rv));
         return rv;
     }
@@ -93,3 +100,5 @@ int snapshotCopy(const struct raft_snapshot *src, struct raft_snapshot *dst)
 
     return 0;
 }
+
+#undef tracef

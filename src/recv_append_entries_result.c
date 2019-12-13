@@ -5,6 +5,13 @@
 #include "recv.h"
 #include "replication.h"
 
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
+#else
+#define tracef(...)
+#endif
+
 int recvAppendEntriesResult(struct raft *r,
                             const unsigned id,
                             const char *address,
@@ -78,3 +85,5 @@ int recvAppendEntriesResult(struct raft *r,
 
     return 0;
 }
+
+#undef tracef

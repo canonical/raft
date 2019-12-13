@@ -10,6 +10,13 @@
 #include "request.h"
 #include "tracing.h"
 
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
+#else
+#define tracef(...)
+#endif
+
 int raft_apply(struct raft *r,
                struct raft_apply *req,
                const struct raft_buffer bufs[],
@@ -291,7 +298,7 @@ int raft_promote(struct raft *r,
     rv = replicationProgress(r, server_index);
     if (rv != 0 && rv != RAFT_NOCONNECTION) {
         /* This error is not fatal. */
-        tracef("failed to send append entries to server %ld: %s (%d)",
+        tracef("failed to send append entries to server %u: %s (%d)",
                server->id, raft_strerror(rv), rv);
     }
 
@@ -356,3 +363,5 @@ err:
     assert(rv != 0);
     return rv;
 }
+
+#undef tracef

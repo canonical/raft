@@ -10,6 +10,13 @@
 #include "tick.h"
 #include "tracing.h"
 
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
+#else
+#define tracef(...)
+#endif
+
 /* Restore the most recent configuration. */
 static int restoreMostRecentConfiguration(struct raft *r,
                                           struct raft_entry *entry,
@@ -204,3 +211,5 @@ int raft_start(struct raft *r)
 
     return 0;
 }
+
+#undef tracef
