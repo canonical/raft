@@ -103,7 +103,7 @@ err:
     return rv;
 }
 
-/* If we're the only voting server in the configuration, Automatically
+/* If we're the only voting server in the configuration, automatically
  * self-elect ourselves and convert to leader without waiting for the election
  * timeout. */
 static int maybeSelfElect(struct raft *r)

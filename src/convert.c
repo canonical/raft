@@ -152,6 +152,12 @@ int convertToCandidate(struct raft *r)
     convertClear(r);
     convertSetState(r, RAFT_CANDIDATE);
 
+    /* Allocate the votes array. */
+    r->candidate_state.votes = raft_malloc(n_voters * sizeof(bool));
+    if (r->candidate_state.votes == NULL) {
+        return RAFT_NOMEM;
+    }
+
     /* Fast-forward to leader if we're the only voting server in the
      * configuration. */
     server = configurationGet(&r->configuration, r->id);
@@ -161,12 +167,6 @@ int convertToCandidate(struct raft *r)
     if (n_voters == 1) {
         tracef("self elect and convert to leader");
 	return convertToLeader(r);
-    }
-
-    /* Allocate the votes array. */
-    r->candidate_state.votes = raft_malloc(n_voters * sizeof(bool));
-    if (r->candidate_state.votes == NULL) {
-        return RAFT_NOMEM;
     }
 
     /* Start a new election round */
