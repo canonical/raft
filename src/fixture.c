@@ -927,6 +927,7 @@ static int serverInit(struct raft_fixture *f, unsigned i, struct raft_fsm *fsm)
     raft_set_heartbeat_timeout(&s->raft, HEARTBEAT_TIMEOUT);
     s->tracer.impl = (void *)&s->id;
     s->tracer.emit = emit;
+    s->raft.tracer = &s->tracer;
     return 0;
 }
 

@@ -84,6 +84,7 @@ test_integration_core_SOURCES = \
   test/integration/test_apply.c \
   test/integration/test_barrier.c \
   test/integration/test_bootstrap.c \
+  test/integration/test_demote.c \
   test/integration/test_election.c \
   test/integration/test_fixture.c \
   test/integration/test_heap.c \

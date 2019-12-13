@@ -224,7 +224,7 @@ int raft_promote(struct raft *r,
                  raft_change_cb cb)
 {
     const struct raft_server *server;
-    size_t server_index;
+    unsigned server_index;
     raft_index last_index;
     int rv;
 
@@ -306,7 +306,74 @@ int raft_promote(struct raft *r,
 
 err:
     assert(rv != 0);
+    return rv;
+}
 
+int raft_demote(struct raft *r,
+                struct raft_change *req,
+                unsigned id,
+                int role,
+                raft_change_cb cb)
+{
+    const struct raft_server *server;
+    unsigned server_index;
+    int old_role;
+    int rv;
+    (void)req;
+    (void)cb;
+
+    if (role != RAFT_IDLE && role != RAFT_STANDBY) {
+        rv = RAFT_BADROLE;
+        ErrMsgFromCode(r->errmsg, rv);
+        return rv;
+    }
+
+    rv = membershipCanChangeConfiguration(r);
+    if (rv != 0) {
+        return rv;
+    }
+
+    server = configurationGet(&r->configuration, id);
+    if (server == NULL) {
+        rv = RAFT_NOTFOUND;
+        ErrMsgPrintf(r->errmsg, "no server has ID %u", id);
+        goto err;
+    }
+
+    /* Check if we have already the desired role. */
+    if (server->role == role) {
+        const char *name;
+        rv = RAFT_BADROLE;
+        if (role == RAFT_IDLE) {
+            name = "idle";
+        } else {
+            name = "stand-by";
+        }
+        ErrMsgPrintf(r->errmsg, "server is already %s", name);
+        goto err;
+    }
+
+    server_index = configurationIndexOf(&r->configuration, id);
+    assert(server_index < r->configuration.n);
+
+    req->cb = cb;
+
+    old_role = r->configuration.servers[server_index].role;
+    r->configuration.servers[server_index].role = role;
+
+    rv = clientChangeConfiguration(r, req, &r->configuration);
+    if (rv != 0) {
+        r->configuration.servers[server_index].role = old_role;
+        return rv;
+    }
+
+    assert(r->leader_state.change == NULL);
+    r->leader_state.change = req;
+
+    return 0;
+
+err:
+    assert(rv != 0);
     return rv;
 }
 

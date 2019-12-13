@@ -377,7 +377,7 @@ static int triggerAll(struct raft *r)
         if (server->id == r->id) {
             continue;
         }
-	/* Skip idle servers, unless they're being promoted. */
+        /* Skip idle servers, unless they're being promoted. */
         if (server->role == RAFT_IDLE &&
             server->id != r->leader_state.promotee_id) {
             continue;
@@ -1164,7 +1164,8 @@ static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
 
     if (status != 0) {
         result.rejected = snapshot->index;
-        tracef("save snapshot %llu: %s", snapshot->index, raft_strerror(status));
+        tracef("save snapshot %llu: %s", snapshot->index,
+               raft_strerror(status));
         goto discard;
     }
 
@@ -1335,18 +1336,21 @@ static void applyChange(struct raft *r, const raft_index index)
     r->configuration_index = index;
 
     if (r->state == RAFT_LEADER) {
+        const struct raft_server *server;
         req = (struct raft_change *)getRequest(r, index, RAFT_CHANGE);
         assert(r->leader_state.change == req);
         r->leader_state.change = NULL;
 
-        /* If we are leader but not part of this new configuration, step down.
+        /* If we are leader but not part of this new configuration, step
+         * down. We also step down if we are not voters anymore.
          *
          * From Section 4.2.2:
          *
          *   In this approach, a leader that is removed from the configuration
-         * steps down once the Cnew entry is committed.
+         *   steps down once the Cnew entry is committed.
          */
-        if (configurationGet(&r->configuration, r->id) == NULL) {
+        server = configurationGet(&r->configuration, r->id);
+        if (server == NULL || server->role != RAFT_VOTER) {
             convertToFollower(r);
         }
 

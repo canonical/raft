@@ -103,8 +103,9 @@ err:
     return rv;
 }
 
-/* Automatically self-elect ourselves and convert to leader if we're the only
- * voting server in the configuration. */
+/* If we're the only voting server in the configuration, Automatically
+ * self-elect ourselves and convert to leader without waiting for the election
+ * timeout. */
 static int maybeSelfElect(struct raft *r)
 {
     const struct raft_server *server;
@@ -114,17 +115,13 @@ static int maybeSelfElect(struct raft *r)
         configurationVoterCount(&r->configuration) > 1) {
         return 0;
     }
-    tracef("self elect and convert to leader");
-    /* TODO: converting to candidate has the side effect of bumping the term, we
-     * should avoid that. */
+    /* Converting to candidate will notice that we're the only voter and
+     * automatically convert to leader. */
     rv = convertToCandidate(r);
     if (rv != 0) {
         return rv;
     }
-    rv = convertToLeader(r);
-    if (rv != 0) {
-        return rv;
-    }
+    assert(r->state == RAFT_LEADER);
     return 0;
 }
 
