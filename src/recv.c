@@ -13,6 +13,13 @@
 #include "string.h"
 #include "tracing.h"
 
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
+#else
+#define tracef(...)
+#endif
+
 /* Dispatch a single RPC message to the appropriate handler. */
 static int recvMessage(struct raft *r, struct raft_message *message)
 {
@@ -24,8 +31,8 @@ static int recvMessage(struct raft *r, struct raft_message *message)
         return 0;
     }
 
-    tracef("%s from server %ld", message_descs[message->type - 1],
-           message->server_id);
+    /* tracef("%s from server %ld", message_descs[message->type - 1],
+       message->server_id); */
 
     switch (message->type) {
         case RAFT_IO_APPEND_ENTRIES:
@@ -59,8 +66,8 @@ static int recvMessage(struct raft *r, struct raft_message *message)
     };
 
     if (rv != 0 && rv != RAFT_NOCONNECTION) {
-        tracef("recv: %s: %s", message_descs[message->type - 1],
-               raft_strerror(rv));
+        /* tracef("recv: %s: %s", message_descs[message->type - 1],
+                 raft_strerror(rv)); */
         return rv;
     }
     return 0;
@@ -138,7 +145,7 @@ int recvEnsureMatchingTerms(struct raft *r, raft_term term, int *match)
      *   immediately reverts to follower state.
      */
     if (term > r->current_term) {
-        char msg[1204];
+        char msg[128];
         sprintf(msg, "remote term %lld is higher than %lld -> bump local term",
                 term, r->current_term);
         if (r->state != RAFT_FOLLOWER) {
@@ -185,3 +192,5 @@ int recvUpdateLeader(struct raft *r, unsigned id, const char *address)
 
     return 0;
 }
+
+#undef tracef

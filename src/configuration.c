@@ -6,13 +6,13 @@
 /* Current encoding format version. */
 #define ENCODING_FORMAT 1
 
-void raft_configuration_init(struct raft_configuration *c)
+void configurationInit(struct raft_configuration *c)
 {
     c->servers = NULL;
     c->n = 0;
 }
 
-void raft_configuration_close(struct raft_configuration *c)
+void configurationClose(struct raft_configuration *c)
 {
     size_t i;
     assert(c != NULL);
@@ -98,11 +98,10 @@ int configurationCopy(const struct raft_configuration *src,
 {
     size_t i;
     int rv;
-    raft_configuration_init(dst);
+    configurationInit(dst);
     for (i = 0; i < src->n; i++) {
         struct raft_server *server = &src->servers[i];
-        rv = raft_configuration_add(dst, server->id, server->address,
-                                    server->role);
+        rv = configurationAdd(dst, server->id, server->address, server->role);
         if (rv != 0) {
             return rv;
         }
@@ -110,10 +109,10 @@ int configurationCopy(const struct raft_configuration *src,
     return 0;
 }
 
-int raft_configuration_add(struct raft_configuration *c,
-                           const unsigned id,
-                           const char *address,
-                           const int role)
+int configurationAdd(struct raft_configuration *c,
+                     unsigned id,
+                     const char *address,
+                     int role)
 {
     struct raft_server *servers;
     struct raft_server *server;
@@ -320,7 +319,7 @@ int configurationDecode(const struct raft_buffer *buf,
         /* Role code. */
         role = byteGet8(&cursor);
 
-        rv = raft_configuration_add(c, id, address, role);
+        rv = configurationAdd(c, id, address, role);
         if (rv != 0) {
             return rv;
         }

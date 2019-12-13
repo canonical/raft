@@ -63,7 +63,6 @@ test_unit_core_SOURCES = \
   test/unit/test_byte.c \
   test/unit/test_configuration.c \
   test/unit/test_err.c \
-  test/unit/test_heap.c \
   test/unit/test_log.c \
   test/unit/test_queue.c
 test_unit_core_LDADD = libtest.la
@@ -85,8 +84,10 @@ test_integration_core_SOURCES = \
   test/integration/test_apply.c \
   test/integration/test_barrier.c \
   test/integration/test_bootstrap.c \
+  test/integration/test_demote.c \
   test/integration/test_election.c \
   test/integration/test_fixture.c \
+  test/integration/test_heap.c \
   test/integration/test_membership.c \
   test/integration/test_promote.c \
   test/integration/test_recover.c \

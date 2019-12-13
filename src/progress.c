@@ -5,6 +5,13 @@
 #include "log.h"
 #include "tracing.h"
 
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
+#else
+#define tracef(...)
+#endif
+
 #ifndef max
 #define max(a, b) ((a) < (b) ? (b) : (a))
 #endif
@@ -242,10 +249,6 @@ bool progressMaybeUpdate(struct raft *r, unsigned i, raft_index last_index)
     if (p->next_index < last_index + 1) {
         p->next_index = last_index + 1;
     }
-    if (updated) {
-        tracef("new match/next idx for server %ld: %ld/%ld", server->id,
-               p->match_index, p->next_index);
-    }
     return updated;
 }
 
@@ -278,3 +281,5 @@ bool progressSnapshotDone(struct raft *r, const unsigned i)
     assert(p->state == PROGRESS__SNAPSHOT);
     return p->match_index >= p->snapshot_index;
 }
+
+#undef tracef
