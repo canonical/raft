@@ -306,7 +306,7 @@ TEST(UvWriterSubmit, vec, setUp, tearDown, 0, dir_all_params)
 }
 
 /* Write a vector of buffers twice. */
-TEST(UvWriterSubmit, vecTwice, setUp, tearDown, 0, dir_all_params)
+TEST(UvWriterSubmit, vec_twice, setUp, tearDown, 0, dir_all_params)
 {
     struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;

@@ -10,13 +10,6 @@
 #include "request.h"
 #include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
-#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
-
 int raft_apply(struct raft *r,
                struct raft_apply *req,
                const struct raft_buffer bufs[],
@@ -32,7 +25,6 @@ int raft_apply(struct raft *r,
 
     if (r->state != RAFT_LEADER) {
         rv = RAFT_NOTLEADER;
-        ErrMsgFromCode(r->errmsg, rv);
         goto err;
     }
 
@@ -224,7 +216,7 @@ int raft_promote(struct raft *r,
                  raft_change_cb cb)
 {
     const struct raft_server *server;
-    unsigned server_index;
+    size_t server_index;
     raft_index last_index;
     int rv;
 
@@ -298,7 +290,7 @@ int raft_promote(struct raft *r,
     rv = replicationProgress(r, server_index);
     if (rv != 0 && rv != RAFT_NOCONNECTION) {
         /* This error is not fatal. */
-        tracef("failed to send append entries to server %u: %s (%d)",
+        tracef("failed to send append entries to server %ld: %s (%d)",
                server->id, raft_strerror(rv), rv);
     }
 
@@ -306,74 +298,7 @@ int raft_promote(struct raft *r,
 
 err:
     assert(rv != 0);
-    return rv;
-}
 
-int raft_demote(struct raft *r,
-                struct raft_change *req,
-                unsigned id,
-                int role,
-                raft_change_cb cb)
-{
-    const struct raft_server *server;
-    unsigned server_index;
-    int old_role;
-    int rv;
-    (void)req;
-    (void)cb;
-
-    if (role != RAFT_IDLE && role != RAFT_STANDBY) {
-        rv = RAFT_BADROLE;
-        ErrMsgFromCode(r->errmsg, rv);
-        return rv;
-    }
-
-    rv = membershipCanChangeConfiguration(r);
-    if (rv != 0) {
-        return rv;
-    }
-
-    server = configurationGet(&r->configuration, id);
-    if (server == NULL) {
-        rv = RAFT_NOTFOUND;
-        ErrMsgPrintf(r->errmsg, "no server has ID %u", id);
-        goto err;
-    }
-
-    /* Check if we have already the desired role. */
-    if (server->role == role) {
-        const char *name;
-        rv = RAFT_BADROLE;
-        if (role == RAFT_IDLE) {
-            name = "idle";
-        } else {
-            name = "stand-by";
-        }
-        ErrMsgPrintf(r->errmsg, "server is already %s", name);
-        goto err;
-    }
-
-    server_index = configurationIndexOf(&r->configuration, id);
-    assert(server_index < r->configuration.n);
-
-    req->cb = cb;
-
-    old_role = r->configuration.servers[server_index].role;
-    r->configuration.servers[server_index].role = role;
-
-    rv = clientChangeConfiguration(r, req, &r->configuration);
-    if (rv != 0) {
-        r->configuration.servers[server_index].role = old_role;
-        return rv;
-    }
-
-    assert(r->leader_state.change == NULL);
-    r->leader_state.change = req;
-
-    return 0;
-
-err:
-    assert(rv != 0);
     return rv;
 }
 
@@ -430,5 +355,3 @@ err:
     assert(rv != 0);
     return rv;
 }
-
-#undef tracef

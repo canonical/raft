@@ -12,12 +12,6 @@
 #include "uv.h"
 #include "uv_encoding.h"
 
-#if 0
-#define tracef(...) Tracef(c->uv->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
-
 /* Check if the given filename matches the one of a closed segment (xxx-yyy), or
  * of an open segment (open-xxx), and fill the given info structure if so.
  *
@@ -366,7 +360,7 @@ int uvSegmentLoadClosed(struct uv *uv,
     /* If the segment is completely empty, just bail out. */
     rv = UvFsFileIsEmpty(uv->dir, info->filename, &empty, errmsg);
     if (rv != 0) {
-        tracef("stat %s: %s", info->filename, errmsg);
+        Tracef(uv->tracer, "stat %s: %s", info->filename, errmsg);
         rv = RAFT_IOERR;
         goto err;
     }
@@ -465,14 +459,14 @@ static int uvLoadOpenSegment(struct uv *uv,
 
     rv = UvFsFileIsEmpty(uv->dir, info->filename, &empty, errmsg);
     if (rv != 0) {
-        tracef("check if %s is empty: %s", info->filename, errmsg);
+        Tracef(uv->tracer, "check if %s is empty: %s", info->filename, errmsg);
         rv = RAFT_IOERR;
         goto err;
     }
 
     if (empty) {
         /* Empty segment, let's discard it. */
-        tracef("remove empty open segment %s", info->filename);
+        Tracef(uv->tracer, "remove empty open segment %s", info->filename);
         remove = true;
         goto done;
     }
@@ -488,14 +482,16 @@ static int uvLoadOpenSegment(struct uv *uv,
         if (format == 0) {
             rv = UvFsFileHasOnlyTrailingZeros(fd, &all_zeros, errmsg);
             if (rv != 0) {
-                tracef("check if %s is zeroed: %s", info->filename, errmsg);
+                Tracef(uv->tracer, "check if %s is zeroed: %s", info->filename,
+                       errmsg);
                 rv = RAFT_IOERR;
                 goto err_after_open;
             }
             if (all_zeros) {
                 /* This is equivalent to the empty case, let's remove the
                  * segment. */
-                tracef("remove zeroed open segment %s", info->filename);
+                Tracef(uv->tracer, "remove zeroed open segment %s",
+                       info->filename);
                 remove = true;
                 goto done;
             }
@@ -534,7 +530,7 @@ static int uvLoadOpenSegment(struct uv *uv,
             }
 
             if (!all_zeros) {
-                tracef("%s has non-zero trail", info->filename);
+                Tracef(uv->tracer, "%s has non-zero trail", info->filename);
             }
 
             Tracef(uv->tracer,
@@ -570,7 +566,7 @@ done:
     if (remove) {
         rv = UvFsRemoveFile(uv->dir, info->filename, errmsg);
         if (rv != 0) {
-            tracef("unlink %s: %s", info->filename, errmsg);
+            Tracef(uv->tracer, "unlink %s: %s", info->filename, errmsg);
             rv = RAFT_IOERR;
             goto err_after_open;
         }
@@ -582,12 +578,12 @@ done:
         assert(end_index >= first_index);
         sprintf(filename, UV__CLOSED_TEMPLATE, first_index, end_index);
 
-        tracef("finalize %s into %s", info->filename, filename);
+        Tracef(uv->tracer, "finalize %s into %s", info->filename, filename);
 
         rv = UvFsTruncateAndRenameFile(uv->dir, offset, info->filename,
                                        filename, errmsg);
         if (rv != 0) {
-            tracef("finalize %s: %s", info->filename, errmsg);
+            Tracef(uv->tracer, "finalize %s: %s", info->filename, errmsg);
             rv = RAFT_IOERR;
             goto err_after_open;
         }
@@ -801,7 +797,7 @@ int uvSegmentLoadAll(struct uv *uv,
     for (i = 0; i < n_infos; i++) {
         struct uvSegmentInfo *info = &infos[i];
 
-        tracef("load segment %s", info->filename);
+        Tracef(uv->tracer, "load segment %s", info->filename);
 
         if (info->is_open) {
             rv = uvLoadOpenSegment(uv, info, entries, n_entries, &next_index);
@@ -920,7 +916,7 @@ static int uvWriteClosedSegment(struct uv *uv,
     rv = UvFsMakeFile(uv->dir, filename, &data, 1, errmsg);
     uvSegmentBufferClose(&buf);
     if (rv != 0) {
-        tracef("write segment %s: %s", filename, errmsg);
+        Tracef(uv->tracer, "write segment %s: %s", filename, errmsg);
         return RAFT_IOERR;
     }
 
@@ -988,7 +984,7 @@ int uvSegmentTruncate(struct uv *uv,
 
     assert(!segment->is_open);
 
-    tracef("truncate %llu-%llu at %llu", segment->first_index,
+    Tracef(uv->tracer, "truncate %llu-%llu at %llu", segment->first_index,
            segment->end_index, index);
 
     rv = uvSegmentLoadClosed(uv, segment, &entries, &n);
@@ -1026,7 +1022,7 @@ int uvSegmentTruncate(struct uv *uv,
 
     rv = UvFsMakeFile(uv->dir, filename, &data, 1, errmsg);
     if (rv != 0) {
-        tracef("write %s: %s", filename, errmsg);
+        Tracef(uv->tracer, "write %s: %s", filename, errmsg);
         rv = RAFT_IOERR;
         goto out_after_buffer_init;
     }
@@ -1037,5 +1033,3 @@ out_after_buffer_init:
 out:
     return rv;
 }
-
-#undef tracef

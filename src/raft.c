@@ -151,24 +151,6 @@ const char *raft_strerror(int errnum)
     return errCodeToString(errnum);
 }
 
-void raft_configuration_init(struct raft_configuration *c)
-{
-    configurationInit(c);
-}
-
-void raft_configuration_close(struct raft_configuration *c)
-{
-    configurationClose(c);
-}
-
-int raft_configuration_add(struct raft_configuration *c,
-                           const unsigned id,
-                           const char *address,
-                           const int role)
-{
-    return configurationAdd(c, id, address, role);
-}
-
 int raft_configuration_encode(const struct raft_configuration *c,
                               struct raft_buffer *buf)
 {

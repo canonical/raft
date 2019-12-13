@@ -8,13 +8,6 @@
 #include "queue.h"
 #include "request.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
-#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
-
 /* Convenience for setting a new state value and asserting that the transition
  * is valid. */
 static void convertSetState(struct raft *r, int new_state)
@@ -145,23 +138,11 @@ void convertToFollower(struct raft *r)
 
 int convertToCandidate(struct raft *r)
 {
-    const struct raft_server *server;
     size_t n_voters = configurationVoterCount(&r->configuration);
     int rv;
 
     convertClear(r);
     convertSetState(r, RAFT_CANDIDATE);
-
-    /* Fast-forward to leader if we're the only voting server in the
-     * configuration. */
-    server = configurationGet(&r->configuration, r->id);
-    assert(server != NULL);
-    assert(server->role == RAFT_VOTER);
-
-    if (n_voters == 1) {
-        tracef("self elect and convert to leader");
-	return convertToLeader(r);
-    }
 
     /* Allocate the votes array. */
     r->candidate_state.votes = raft_malloc(n_voters * sizeof(bool));
@@ -215,5 +196,3 @@ void convertToUnavailable(struct raft *r)
     convertClear(r);
     convertSetState(r, RAFT_UNAVAILABLE);
 }
-
-#undef tracef

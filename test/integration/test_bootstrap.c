@@ -7,21 +7,22 @@
  *
  *****************************************************************************/
 
-struct fixture
+struct cluster
 {
     FIXTURE_CLUSTER;
 };
 
-static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
+static void *setupCluster(const MunitParameter params[],
+                          MUNIT_UNUSED void *user_data)
 {
-    struct fixture *f = munit_malloc(sizeof *f);
+    struct cluster *f = munit_malloc(sizeof *f);
     SETUP_CLUSTER(1);
     return f;
 }
 
-static void tearDown(void *data)
+static void tearDownCluster(void *data)
 {
-    struct fixture *f = data;
+    struct cluster *f = data;
     TEAR_DOWN_CLUSTER;
     free(f);
 }
@@ -36,9 +37,9 @@ SUITE(raft_bootstrap)
 
 /* Attempting to bootstrap an instance that's already started results in
  * RAFT_BUSY. */
-TEST(raft_bootstrap, busy, setUp, tearDown, 0, NULL)
+TEST(raft_bootstrap, busy, setupCluster, tearDownCluster, 0, NULL)
 {
-    struct fixture *f = data;
+    struct cluster *f = data;
     struct raft *raft;
     struct raft_configuration configuration;
     int rv;

@@ -8,9 +8,9 @@
  *
  *****************************************************************************/
 
-SUITE(raft_heap)
+SUITE(heap)
 
-TEST(raft_heap, malloc, NULL, NULL, 0, NULL)
+TEST(heap, malloc, NULL, NULL, 0, NULL)
 {
     void *p;
     p = raft_malloc(8);
@@ -19,7 +19,7 @@ TEST(raft_heap, malloc, NULL, NULL, 0, NULL)
     return MUNIT_OK;
 }
 
-TEST(raft_heap, calloc, NULL, NULL, 0, NULL)
+TEST(heap, calloc, NULL, NULL, 0, NULL)
 {
     void *p;
     p = raft_calloc(1, 8);
@@ -29,7 +29,7 @@ TEST(raft_heap, calloc, NULL, NULL, 0, NULL)
     return MUNIT_OK;
 }
 
-TEST(raft_heap, realloc, NULL, NULL, 0, NULL)
+TEST(heap, realloc, NULL, NULL, 0, NULL)
 {
     void *p;
     p = raft_realloc(NULL, 8);
@@ -42,7 +42,7 @@ TEST(raft_heap, realloc, NULL, NULL, 0, NULL)
     return MUNIT_OK;
 }
 
-TEST(raft_heap, aligned_alloc, NULL, NULL, 0, NULL)
+TEST(heap, aligned_alloc, NULL, NULL, 0, NULL)
 {
     void *p;
     p = raft_aligned_alloc(1024, 2048);

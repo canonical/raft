@@ -6,13 +6,6 @@
 #include "uv.h"
 #include "uv_encoding.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
-#define tracef(...) Tracef(c->uv->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
-
 /* The happy path for an raft_io_send request is:
  *
  * - Get the uvClient object whose address matches the one of target server.
@@ -185,6 +178,8 @@ static void uvSendWriteCb(struct uv_write_s *write, const int status)
     struct raft_io_send *req = send->req;
     int cb_status = 0;
 
+    tracef(c, "message write completed -> status %d", status);
+
     /* If the write failed and we're not currently closing, let's consider the
      * current stream handle as busted and start disconnecting (unless we're
      * already doing so). We'll trigger a new connection attempt once the handle
@@ -215,17 +210,17 @@ static int uvClientSend(struct uvClient *c, struct uvSend *send)
 
     /* If there's no connection available, let's queue the request. */
     if (c->stream == NULL) {
-        tracef("no connection available -> enqueue message");
+        tracef(c, "no connection available -> enqueue message");
         QUEUE_PUSH(&c->pending, &send->queue);
         return 0;
     }
 
-    tracef("connection available -> write message");
+    tracef(c, "connection available -> write message");
     send->write.data = send;
     rv = uv_write(&send->write, c->stream, send->bufs, send->n_bufs,
                   uvSendWriteCb);
     if (rv != 0) {
-        tracef("write message failed -> rv %d", rv);
+        tracef(c, "write message failed -> rv %d", rv);
         /* UNTESTED: what are the error conditions? perhaps ENOMEM */
         return RAFT_IOERR;
     }
@@ -259,7 +254,7 @@ static void uvClientSendPending(struct uvClient *c)
 static void uvClientTimerCb(uv_timer_t *timer)
 {
     struct uvClient *c = timer->data;
-    tracef("timer expired -> attempt to reconnect");
+    tracef(c, "timer expired -> attempt to reconnect");
     uvClientConnect(c); /* Retry to connect. */
 }
 
@@ -281,7 +276,8 @@ static void uvClientConnectCb(struct raft_uv_connect *req,
     unsigned n_pending;
     int rv;
 
-    tracef("connect attempt completed -> status %s", errCodeToString(status));
+    tracef(c, "connect attempt completed -> status %s",
+           errCodeToString(status));
 
     assert(c->connect.data != NULL);
     assert(c->stream == NULL);
@@ -319,7 +315,7 @@ static void uvClientConnectCb(struct raft_uv_connect *req,
     if (n_pending > UV__CLIENT_MAX_PENDING) {
         unsigned i;
         for (i = 0; i < n_pending - UV__CLIENT_MAX_PENDING; i++) {
-            tracef("queue full -> evict oldest message");
+            tracef(c, "queue full -> evict oldest message");
             queue *head;
             struct uvSend *old_send;
             struct raft_io_send *old_req;
@@ -509,5 +505,3 @@ void UvSendClose(struct uv *uv)
         uvClientAbort(client);
     }
 }
-
-#undef tracef

@@ -7,12 +7,6 @@
 #include "uv.h"
 #include "uv_encoding.h"
 
-#if 0
-#define tracef(...) Tracef(c->uv->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
-
 /* Track a truncate request. */
 struct uvTruncate
 {
@@ -77,14 +71,15 @@ static void uvTruncateWorkCb(uv_work_t *work)
         }
         rv = UvFsRemoveFile(uv->dir, segment->filename, errmsg);
         if (rv != 0) {
-            tracef("unlink segment %s: %s", segment->filename, errmsg);
+            Tracef(uv->tracer, "unlink segment %s: %s", segment->filename,
+                   errmsg);
             rv = RAFT_IOERR;
             goto err_after_list;
         }
     }
     rv = UvFsSyncDir(uv->dir, errmsg);
     if (rv != 0) {
-        tracef("sync data directory: %s", errmsg);
+        Tracef(uv->tracer, "sync data directory: %s", errmsg);
         rv = RAFT_IOERR;
         goto err_after_list;
     }
@@ -135,7 +130,8 @@ static void uvTruncateBarrierCb(struct UvBarrier *barrier)
     rv = uv_queue_work(uv->loop, &uv->truncate_work, uvTruncateWorkCb,
                        uvTruncateAfterWorkCb);
     if (rv != 0) {
-        tracef("truncate index %lld: %s", truncate->index, uv_strerror(rv));
+        Tracef(uv->tracer, "truncate index %lld: %s", truncate->index,
+               uv_strerror(rv));
         uv->truncate_work.data = NULL;
         uv->errored = true;
     }
@@ -179,5 +175,3 @@ err:
     assert(rv != 0);
     return rv;
 }
-
-#undef tracef

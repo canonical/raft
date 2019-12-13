@@ -6,12 +6,6 @@
 #include "uv.h"
 #include "uv_os.h"
 
-#if 0
-#define tracef(...) Tracef(c->uv->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
-
 /* The happy path for UvPrepare is:
  *
  * - If there is an unused open segment available, return its fd and counter
@@ -165,12 +159,12 @@ static int uvPrepareStart(struct uv *uv)
     segment->size = uv->block_size * uvSegmentBlocks(uv);
     sprintf(segment->filename, UV__OPEN_TEMPLATE, segment->counter);
 
-    tracef("create open segment %s", segment->filename);
+    Tracef(uv->tracer, "create open segment %s", segment->filename);
     rv = uv_queue_work(uv->loop, &segment->work, uvPrepareWorkCb,
                        uvPrepareAfterWorkCb);
     if (rv != 0) {
         /* UNTESTED: with the current libuv implementation this can't fail. */
-        tracef("can't create segment %s: %s", segment->filename,
+        Tracef(uv->tracer, "can't create segment %s: %s", segment->filename,
                uv_strerror(rv));
         rv = RAFT_IOERR;
         goto err_after_segment_alloc;
@@ -207,7 +201,7 @@ static void uvPrepareAfterWorkCb(uv_work_t *work, int status)
             UvOsClose(segment->fd);
             UvFsRemoveFile(uv->dir, segment->filename, errmsg);
         }
-        tracef("canceled creation of %s", segment->filename);
+        Tracef(uv->tracer, "canceled creation of %s", segment->filename);
         HeapFree(segment);
         uvMaybeFireCloseCb(uv);
         return;
@@ -231,7 +225,7 @@ static void uvPrepareAfterWorkCb(uv_work_t *work, int status)
 
     assert(segment->fd >= 0);
 
-    tracef("completed creation of %s", segment->filename);
+    Tracef(uv->tracer, "completed creation of %s", segment->filename);
     QUEUE_PUSH(&uv->prepare_pool, &segment->queue);
 
     /* Let's process any pending request. */
@@ -335,5 +329,3 @@ void UvPrepareClose(struct uv *uv)
         HeapFree(segment);
     }
 }
-
-#undef tracef

@@ -7,22 +7,23 @@
  *
  *****************************************************************************/
 
-struct fixture
+struct cluster
 {
     FIXTURE_CLUSTER;
 };
 
-static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
+static void *setupCluster(const MunitParameter params[],
+                          MUNIT_UNUSED void *user_data)
 {
-    struct fixture *f = munit_malloc(sizeof *f);
+    struct cluster *f = munit_malloc(sizeof *f);
     SETUP_CLUSTER(3);
     CLUSTER_BOOTSTRAP;
     return f;
 }
 
-static void tearDown(void *data)
+static void tearDownCluster(void *data)
 {
-    struct fixture *f = data;
+    struct cluster *f = data;
     TEAR_DOWN_CLUSTER;
     free(f);
 }
@@ -36,9 +37,9 @@ static void tearDown(void *data)
 SUITE(raft_recover)
 
 /* Attempting to recover a running instance results in RAFT_BUSY. */
-TEST(raft_recover, busy, setUp, tearDown, 0, NULL)
+TEST(raft_recover, busy, setupCluster, tearDownCluster, 0, NULL)
 {
-    struct fixture *f = data;
+    struct cluster *f = data;
     struct raft *raft;
     struct raft_configuration configuration;
     int rv;

@@ -11,12 +11,6 @@
 #include "uv_encoding.h"
 #include "uv_os.h"
 
-#if 0
-#define tracef(...) Tracef(c->uv->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
-
 /* Arbitrary maximum configuration size. Should be practically be enough */
 #define UV__META_MAX_CONFIGURATION_SIZE 1024 * 1024
 
@@ -75,7 +69,7 @@ int UvSnapshotInfoAppendIfMatch(struct uv *uv,
     uvSnapshotFilenameOf(&info, snapshot_filename);
     rv = UvFsFileExists(uv->dir, snapshot_filename, &exists, errmsg);
     if (rv != 0) {
-        tracef("stat %s: %s", snapshot_filename, errmsg);
+        Tracef(uv->tracer, "stat %s: %s", snapshot_filename, errmsg);
         rv = RAFT_IOERR;
         return rv;
     }
@@ -145,7 +139,7 @@ static int uvSnapshotLoadMeta(struct uv *uv,
 
     rv = UvFsOpenFileForReading(uv->dir, info->filename, &fd, errmsg);
     if (rv != 0) {
-        tracef("open %s: %s", info->filename, errmsg);
+        Tracef(uv->tracer, "open %s: %s", info->filename, errmsg);
         rv = RAFT_IOERR;
         goto err;
     }
@@ -153,14 +147,15 @@ static int uvSnapshotLoadMeta(struct uv *uv,
     buf.len = sizeof header;
     rv = UvFsReadInto(fd, &buf, errmsg);
     if (rv != 0) {
-        tracef("read %s: %s", info->filename, errmsg);
+        Tracef(uv->tracer, "read %s: %s", info->filename, errmsg);
         rv = RAFT_IOERR;
         goto err_after_open;
     }
 
     format = byteFlip64(header[0]);
     if (format != UV__DISK_FORMAT) {
-        tracef("load %s: unsupported format %ju", info->filename, format);
+        Tracef(uv->tracer, "load %s: unsupported format %ju", info->filename,
+               format);
         rv = RAFT_MALFORMED;
         goto err_after_open;
     }
@@ -170,13 +165,13 @@ static int uvSnapshotLoadMeta(struct uv *uv,
     snapshot->configuration_index = byteFlip64(header[2]);
     buf.len = byteFlip64(header[3]);
     if (buf.len > UV__META_MAX_CONFIGURATION_SIZE) {
-        tracef("load %s: configuration data too big (%zd)", info->filename,
-               buf.len);
+        Tracef(uv->tracer, "load %s: configuration data too big (%zd)",
+               info->filename, buf.len);
         rv = RAFT_CORRUPT;
         goto err_after_open;
     }
     if (buf.len == 0) {
-        tracef("load %s: no configuration data", info->filename);
+        Tracef(uv->tracer, "load %s: no configuration data", info->filename);
         rv = RAFT_CORRUPT;
         goto err_after_open;
     }
@@ -188,7 +183,7 @@ static int uvSnapshotLoadMeta(struct uv *uv,
 
     rv = UvFsReadInto(fd, &buf, errmsg);
     if (rv != 0) {
-        tracef("read %s: %s", info->filename, errmsg);
+        Tracef(uv->tracer, "read %s: %s", info->filename, errmsg);
         rv = RAFT_IOERR;
         goto err_after_buf_malloc;
     }
@@ -197,7 +192,7 @@ static int uvSnapshotLoadMeta(struct uv *uv,
     crc2 = byteCrc32(buf.base, buf.len, crc2);
 
     if (crc1 != crc2) {
-        tracef("read %s: checksum mismatch", info->filename);
+        Tracef(uv->tracer, "read %s: checksum mismatch", info->filename);
         rv = RAFT_CORRUPT;
         goto err_after_open;
     }
@@ -239,7 +234,7 @@ static int uvSnapshotLoadData(struct uv *uv,
 
     rv = UvFsReadFile(uv->dir, filename, &buf, errmsg);
     if (rv != 0) {
-        tracef("stat %s: %s", filename, errmsg);
+        Tracef(uv->tracer, "stat %s: %s", filename, errmsg);
         goto err;
     }
 
@@ -323,13 +318,13 @@ static int uvSnapshotKeepLastTwo(struct uv *uv,
         char filename[UV__FILENAME_LEN];
         rv = UvFsRemoveFile(uv->dir, snapshot->filename, errmsg);
         if (rv != 0) {
-            tracef("unlink %s: %s", snapshot->filename, errmsg);
+            Tracef(uv->tracer, "unlink %s: %s", snapshot->filename, errmsg);
             return RAFT_IOERR;
         }
         uvSnapshotFilenameOf(snapshot, filename);
         rv = UvFsRemoveFile(uv->dir, filename, errmsg);
         if (rv != 0) {
-            tracef("unlink %s: %s", filename, errmsg);
+            Tracef(uv->tracer, "unlink %s: %s", filename, errmsg);
             return RAFT_IOERR;
         }
     }
@@ -465,7 +460,7 @@ static void uvSnapshotPutStart(struct uvSnapshotPut *put)
     rv = uv_queue_work(uv->loop, &uv->snapshot_put_work, uvSnapshotPutWorkCb,
                        uvSnapshotPutAfterWorkCb);
     if (rv != 0) {
-        tracef("store snapshot %lld: %s", put->snapshot->index,
+        Tracef(uv->tracer, "store snapshot %lld: %s", put->snapshot->index,
                uv_strerror(rv));
         uv->errored = true;
     }
@@ -503,7 +498,8 @@ int UvSnapshotPut(struct raft_io *io,
     assert(!uv->closing);
     assert(uv->snapshot_put_work.data == NULL);
 
-    tracef("put snapshot at %lld, keeping %d", snapshot->index, trailing);
+    Tracef(uv->tracer, "put snapshot at %lld, keeping %d", snapshot->index,
+           trailing);
 
     put = HeapMalloc(sizeof *put);
     if (put == NULL) {
@@ -640,7 +636,7 @@ int UvSnapshotGet(struct raft_io *io,
                        uvSnapshotGetAfterWorkCb);
     if (rv != 0) {
         QUEUE_REMOVE(&get->queue);
-        tracef("get last snapshot: %s", uv_strerror(rv));
+        Tracef(uv->tracer, "get last snapshot: %s", uv_strerror(rv));
         rv = RAFT_IOERR;
         goto err_after_snapshot_alloc;
     }
@@ -655,5 +651,3 @@ err:
     assert(rv != 0);
     return rv;
 }
-
-#undef tracef

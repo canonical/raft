@@ -12,9 +12,10 @@ struct fixture
     FIXTURE_CLUSTER;
 };
 
-static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
+static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
+    (void)user_data;
     SETUP_CLUSTER(3);
     CLUSTER_BOOTSTRAP;
     CLUSTER_START;
@@ -22,7 +23,7 @@ static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
     return f;
 }
 
-static void tearDown(void *data)
+static void tear_down(void *data)
 {
     struct fixture *f = data;
     TEAR_DOWN_CLUSTER;
@@ -62,7 +63,7 @@ static void tearDown(void *data)
 SUITE(snapshot)
 
 /* Install a snapshot on a follower that has fallen behind. */
-TEST(snapshot, installOne, setUp, tearDown, 0, NULL)
+TEST(snapshot, installOne, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;

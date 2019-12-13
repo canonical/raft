@@ -13,7 +13,7 @@ struct fixture
     FIXTURE_CLUSTER;
 };
 
-static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
+static void *setup(const MunitParameter params[], MUNIT_UNUSED void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     unsigned i;
@@ -26,7 +26,7 @@ static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
     return f;
 }
 
-static void tearDown(void *data)
+static void tear_down(void *data)
 {
     struct fixture *f = data;
     TEAR_DOWN_CLUSTER;
@@ -105,10 +105,10 @@ static MunitParameterEnum cluster_3_params[] = {
  *
  *****************************************************************************/
 
-SUITE(election)
+SUITE(win)
 
 /* Test an election round with two voters. */
-TEST(election, twoVoters, setUp, tearDown, 0, NULL)
+TEST(win, two_voters, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -136,7 +136,7 @@ TEST(election, twoVoters, setUp, tearDown, 0, NULL)
 
 /* If we have already voted and the same candidate requests the vote again, the
  * vote is granted. */
-TEST(election, grantAgain, setUp, tearDown, 0, NULL)
+TEST(win, dupe_vote, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -168,7 +168,7 @@ TEST(election, grantAgain, setUp, tearDown, 0, NULL)
 }
 
 /* If the requester last log entry index is the same, the vote is granted. */
-TEST(election, grantIfLastIndexIsSame, setUp, tearDown, 0, NULL)
+TEST(win, last_index_is_same, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry1;
@@ -201,7 +201,7 @@ TEST(election, grantIfLastIndexIsSame, setUp, tearDown, 0, NULL)
 }
 
 /* If the requester last log entry index is higher, the vote is granted. */
-TEST(election, grantIfLastIndexIsHigher, setUp, tearDown, 0, NULL)
+TEST(win, last_index_is_higher, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry;
@@ -232,7 +232,7 @@ TEST(election, grantIfLastIndexIsHigher, setUp, tearDown, 0, NULL)
 
 /* If a candidate receives a vote request response granting the vote but the
  * quorum is not reached, it stays candidate. */
-TEST(election, waitQuorum, setUp, tearDown, 0, cluster_5_params)
+TEST(win, wait_quorum, setup, tear_down, 0, cluster_5_params)
 {
     struct fixture *f = data;
     (void)params;
@@ -263,8 +263,15 @@ TEST(election, waitQuorum, setUp, tearDown, 0, cluster_5_params)
     return MUNIT_OK;
 }
 
-/* The vote request gets rejected if our term is higher. */
-TEST(election, rejectIfHigherTerm, setUp, tearDown, 0, NULL)
+/******************************************************************************
+ *
+ * Scenarios where vote is not granted
+ *
+ *****************************************************************************/
+
+SUITE(reject)
+
+TEST(reject, higher_term, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     (void)params;
@@ -292,7 +299,7 @@ TEST(election, rejectIfHigherTerm, setUp, tearDown, 0, NULL)
 
 /* If the server already has a leader, the vote is not granted (even if the
  * request has a higher term). */
-TEST(election, rejectIfHasLeader, setUp, tearDown, 0, cluster_3_params)
+TEST(reject, has_leader, setup, tear_down, 0, cluster_3_params)
 {
     struct fixture *f = data;
     (void)params;
@@ -313,7 +320,7 @@ TEST(election, rejectIfHasLeader, setUp, tearDown, 0, cluster_3_params)
 }
 
 /* If a server has already voted, vote is not granted. */
-TEST(election, rejectIfAlreadyVoted, setUp, tearDown, 0, cluster_3_params)
+TEST(reject, already_voted, setup, tear_down, 0, cluster_3_params)
 {
     struct fixture *f = data;
     (void)params;
@@ -347,7 +354,7 @@ TEST(election, rejectIfAlreadyVoted, setUp, tearDown, 0, cluster_3_params)
 
 /* If the requester last log entry term is lower than ours, the vote is not
  * granted. */
-TEST(election, rejectIfLastTermIsLower, setUp, tearDown, 0, NULL)
+TEST(reject, last_term_is_lower, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry1;
@@ -392,7 +399,7 @@ TEST(election, rejectIfLastTermIsLower, setUp, tearDown, 0, NULL)
 
 /* If the requester last log entry index is the lower, the vote is not
  * granted. */
-TEST(election, rejectIfLastIndexIsLower, setUp, tearDown, 0, NULL)
+TEST(reject, last_index_is_lower, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry;
@@ -439,7 +446,7 @@ static MunitParameterEnum reject_not_voting_params[] = {
 };
 
 /* If we are not a voting server, the vote is not granted. */
-TEST(election, rejectIfNotVoter, setUp, tearDown, 0, reject_not_voting_params)
+TEST(reject, non_voting, setup, tear_down, 0, reject_not_voting_params)
 {
     struct fixture *f = data;
 
@@ -464,7 +471,7 @@ TEST(election, rejectIfNotVoter, setUp, tearDown, 0, reject_not_voting_params)
 /* If a candidate server receives a response indicating that the vote was not
  * granted, nothing happens (e.g. the server has already voted for someone
  * else). */
-TEST(election, receiveRejectResult, setUp, tearDown, 0, cluster_5_params)
+TEST(reject, not_granted, setup, tear_down, 0, cluster_5_params)
 {
     struct fixture *f = data;
     (void)params;
@@ -516,14 +523,22 @@ TEST(election, receiveRejectResult, setUp, tearDown, 0, cluster_5_params)
     return MUNIT_OK;
 }
 
-static char *ioErrorConvertDelay[] = {"0", "1", NULL};
-static MunitParameterEnum ioErrorConvert[] = {
-    {"delay", ioErrorConvertDelay},
+/******************************************************************************
+ *
+ * I/O errors
+ *
+ *****************************************************************************/
+
+SUITE(io_error)
+
+static char *io_error_candidate_delay[] = {"0", "1", NULL};
+static MunitParameterEnum io_error_candidate_params[] = {
+    {"delay", io_error_candidate_delay},
     {NULL, NULL},
 };
 
-/* An I/O error occurs when converting to candidate. */
-TEST(election, ioErrorConvert, setUp, tearDown, 0, ioErrorConvert)
+/* The I/O error occurs when converting to candidate. */
+TEST(io_error, candidate, setup, tear_down, 0, io_error_candidate_params)
 {
     struct fixture *f = data;
     const char *delay = munit_parameters_get(params, "delay");
@@ -539,9 +554,10 @@ TEST(election, ioErrorConvert, setUp, tearDown, 0, ioErrorConvert)
 }
 
 /* The I/O error occurs when sending a vote request, and gets ignored. */
-TEST(election, ioErrorSendVoteRequest, setUp, tearDown, 0, NULL)
+TEST(io_error, send_vote_request, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
+    (void)params;
     return MUNIT_SKIP;
     CLUSTER_START;
 
@@ -557,9 +573,10 @@ TEST(election, ioErrorSendVoteRequest, setUp, tearDown, 0, NULL)
 }
 
 /* The I/O error occurs when the second node tries to persist its vote. */
-TEST(election, ioErrorPersistVote, setUp, tearDown, 0, NULL)
+TEST(io_error, persist_vote, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
+    (void)params;
     return MUNIT_SKIP;
     CLUSTER_START;
 

@@ -6,13 +6,6 @@
 #include "log.h"
 #include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 1
-#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
-
 /* Common fields between follower and candidate state.
  *
  * The follower_state and candidate_state structs in raft.h must be kept
@@ -152,7 +145,7 @@ int electionStart(struct raft *r)
         rv = electionSend(r, server);
         if (rv != 0) {
             /* This is not a critical failure, let's just log it. */
-            tracef("failed to send vote request to server %u: %s", server->id,
+            tracef("failed to send vote request to server %ld: %s", server->id,
                    raft_strerror(rv));
         }
     }
@@ -268,5 +261,3 @@ bool electionTally(struct raft *r, size_t voter_index)
 
     return votes >= half + 1;
 }
-
-#undef tracef

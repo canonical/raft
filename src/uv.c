@@ -19,13 +19,6 @@
 #include "uv_encoding.h"
 #include "uv_os.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
-#define tracef(...) Tracef(c->uv->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
-
 /* Retry to connect to peer servers every second.
  *
  * TODO: implement an exponential backoff instead.  */
@@ -214,7 +207,7 @@ static int uvFilterSegments(struct uv *uv,
     j--;
 
     segment = &(*segments)[j];
-    tracef("most recent closed segment is %s", segment->filename);
+    Tracef(uv->tracer, "most recent closed segment is %s", segment->filename);
 
     /* If the end index of the last closed segment is lower than the last
      * snapshot index, there might be no entry that we can keep. We return an
@@ -224,7 +217,8 @@ static int uvFilterSegments(struct uv *uv,
      * open segment). */
     if (segment->end_index < last_index) {
         if (!(*segments)[*n - 1].is_open) {
-            tracef(
+            Tracef(
+                uv->tracer,
                 "discarding all closed segments, since most recent is behind "
                 "last snapshot");
             raft_free(*segments);
@@ -232,10 +226,10 @@ static int uvFilterSegments(struct uv *uv,
             *n = 0;
             return 0;
         }
-        tracef(
-            "most recent closed segment %s is behind last snapshot, "
-            "yet there are open segments",
-            segment->filename);
+        Tracef(uv->tracer,
+               "most recent closed segment %s is behind last snapshot, "
+               "yet there are open segments",
+               segment->filename);
     }
 
     /* Now scan the segments backwards, searching for the longest list of
@@ -247,7 +241,8 @@ static int uvFilterSegments(struct uv *uv,
             newer = &(*segments)[i];
             older = &(*segments)[i - 1];
             if (older->end_index != newer->first_index - 1) {
-                tracef("discarding non contiguous segment %s", older->filename);
+                Tracef(uv->tracer, "discarding non contiguous segment %s",
+                       older->filename);
                 break;
             }
         }
@@ -321,7 +316,7 @@ static int uvLoadSnapshotAndEntries(struct uv *uv,
             goto err;
         }
         uvSnapshotFilenameOf(&snapshots[n_snapshots - 1], snapshot_filename);
-        tracef("most recent snapshot at %lld", (*snapshot)->index);
+        Tracef(uv->tracer, "most recent snapshot at %lld", (*snapshot)->index);
         HeapFree(snapshots);
         snapshots = NULL;
 
@@ -413,9 +408,10 @@ static int uvLoad(struct raft_io *io,
     if (rv != 0) {
         return rv;
     }
-    tracef("start index %lld, %zu entries", *start_index, *n_entries);
+    Tracef(uv->tracer, "start index %lld, %zu entries", *start_index,
+           *n_entries);
     if (*snapshot == NULL) {
-        tracef("no snapshot");
+        Tracef(uv->tracer, "no snapshot");
     }
 
     last_index = *start_index + *n_entries - 1;
@@ -665,5 +661,3 @@ void raft_uv_set_tracer(struct raft_io *io, struct raft_tracer *tracer)
     uv = io->impl;
     uv->tracer = tracer;
 }
-
-#undef tracef

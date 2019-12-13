@@ -1,6 +1,6 @@
 #include "../../include/raft/fixture.h"
+
 #include "../lib/fsm.h"
-#include "../lib/heap.h"
 #include "../lib/runner.h"
 
 #define N_SERVERS 3
@@ -13,18 +13,18 @@
 
 struct fixture
 {
-    FIXTURE_HEAP;
     struct raft_fsm fsms[N_SERVERS];
     struct raft_fixture fixture;
 };
 
-static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
+static void *setup(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     struct raft_configuration configuration;
     unsigned i;
     int rc;
-    SETUP_HEAP;
+    (void)user_data;
+    (void)params;
     for (i = 0; i < N_SERVERS; i++) {
         test_fsm_setup(params, &f->fsms[i]);
     }
@@ -46,7 +46,7 @@ static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
     return f;
 }
 
-static void tearDown(void *data)
+static void tear_down(void *data)
 {
     struct fixture *f = data;
     unsigned i;
@@ -54,7 +54,6 @@ static void tearDown(void *data)
     for (i = 0; i < N_SERVERS; i++) {
         test_fsm_tear_down(&f->fsms[i]);
     }
-    TEAR_DOWN_HEAP;
     free(f);
 }
 
@@ -115,7 +114,7 @@ SUITE(raft_fixture_step)
 
 /* If there is no disk I/O in progress or network messages in flight, the tick
  * callbacks are called. */
-TEST(raft_fixture_step, tick, setUp, tearDown, 0, NULL)
+TEST(raft_fixture_step, tick, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_fixture_event *event;
@@ -147,7 +146,7 @@ TEST(raft_fixture_step, tick, setUp, tearDown, 0, NULL)
 }
 
 /* By default the election timeout of server 0 is the first to expire . */
-TEST(raft_fixture_step, electionTimeout, setUp, tearDown, 0, NULL)
+TEST(raft_fixture_step, election_timeout, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_fixture_event *event;
@@ -164,7 +163,7 @@ TEST(raft_fixture_step, electionTimeout, setUp, tearDown, 0, NULL)
 }
 
 /* Send requests are flushed immediately. */
-TEST(raft_fixture_step, flushSend, setUp, tearDown, 0, NULL)
+TEST(raft_fixture_step, flush_send, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_fixture_event *event;
@@ -182,7 +181,7 @@ TEST(raft_fixture_step, flushSend, setUp, tearDown, 0, NULL)
 }
 
 /* Messages are delivered according to the current network latency. */
-TEST(raft_fixture_step, deliver, setUp, tearDown, 0, NULL)
+TEST(raft_fixture_step, deliver, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_fixture_event *event;
@@ -207,7 +206,7 @@ TEST(raft_fixture_step, deliver, setUp, tearDown, 0, NULL)
 SUITE(raft_fixture_elect)
 
 /* Trigger the election of the first server. */
-TEST(raft_fixture_elect, first, setUp, tearDown, 0, NULL)
+TEST(raft_fixture_elect, first, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     ELECT(0);
@@ -218,7 +217,7 @@ TEST(raft_fixture_elect, first, setUp, tearDown, 0, NULL)
 }
 
 /* Trigger the election of the second server. */
-TEST(raft_fixture_elect, second, setUp, tearDown, 0, NULL)
+TEST(raft_fixture_elect, second, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     ELECT(1);
@@ -229,7 +228,7 @@ TEST(raft_fixture_elect, second, setUp, tearDown, 0, NULL)
 }
 
 /* Trigger an election change. */
-TEST(raft_fixture_elect, change, setUp, tearDown, 0, NULL)
+TEST(raft_fixture_elect, change, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     ELECT(0);
@@ -245,7 +244,7 @@ TEST(raft_fixture_elect, change, setUp, tearDown, 0, NULL)
 }
 
 /* Trigger an election that re-elects the same node. */
-TEST(raft_fixture_elect, again, setUp, tearDown, 0, NULL)
+TEST(raft_fixture_elect, again, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     ELECT(0);
@@ -269,7 +268,7 @@ TEST(raft_fixture_elect, again, setUp, tearDown, 0, NULL)
 SUITE(raft_fixture_step_until_applied)
 
 /* Wait for one entry to be applied. */
-TEST(raft_fixture_step_until_applied, one, setUp, tearDown, 0, NULL)
+TEST(raft_fixture_step_until_applied, one, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_apply *req = munit_malloc(sizeof *req);
@@ -284,7 +283,7 @@ TEST(raft_fixture_step_until_applied, one, setUp, tearDown, 0, NULL)
 }
 
 /* Wait for two entries to be applied. */
-TEST(raft_fixture_step_until_applied, two, setUp, tearDown, 0, NULL)
+TEST(raft_fixture_step_until_applied, two, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_apply *req1 = munit_malloc(sizeof *req1);

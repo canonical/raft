@@ -83,9 +83,6 @@
 /* Return the ID of the server the I'th server has voted for. */
 #define CLUSTER_VOTED_FOR(I) raft_fixture_voted_for(&f->cluster, I)
 
-/* Return a description of the last error occured on the I'th server. */
-#define CLUSTER_ERRMSG(I) raft_errmsg(CLUSTER_RAFT(I))
-
 /* Populate the given configuration with all servers in the fixture. All servers
  * will be voting. */
 #define CLUSTER_CONFIGURATION(CONF)                                     \

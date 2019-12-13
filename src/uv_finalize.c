@@ -4,12 +4,6 @@
 #include "uv.h"
 #include "uv_os.h"
 
-#if 0
-#define tracef(...) Tracef(c->uv->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
-
 /* Metadata about an open segment not used anymore and that should be closed or
  * remove (if not written at all). */
 struct uvDyingSegment
@@ -40,7 +34,7 @@ static void uvFinalizeWorkCb(uv_work_t *work)
     sprintf(filename2, UV__CLOSED_TEMPLATE, segment->first_index,
             segment->last_index);
 
-    tracef("finalize %s into %s", filename1, filename2);
+    Tracef(uv->tracer, "finalize %s into %s", filename1, filename2);
 
     /* If the segment hasn't actually been used (because the writer has been
      * closed or aborted before making any write), just remove it. */
@@ -69,7 +63,7 @@ sync:
     return;
 
 err:
-    tracef("truncate segment %s: %s", filename1, errmsg);
+    Tracef(uv->tracer, "truncate segment %s: %s", filename1, errmsg);
     assert(rv != 0);
     segment->status = rv;
 }
@@ -173,5 +167,3 @@ int UvFinalize(struct uv *uv,
 
     return 0;
 }
-
-#undef tracef

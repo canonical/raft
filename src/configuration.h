@@ -5,18 +5,6 @@
 
 #include "../include/raft.h"
 
-/* Initialize an empty configuration. */
-void configurationInit(struct raft_configuration *c);
-
-/* Release all memory used by the given configuation. */
-void configurationClose(struct raft_configuration *c);
-
-/* Add a server to the given configuration. */
-int configurationAdd(struct raft_configuration *c,
-                     unsigned id,
-                     const char *address,
-                     int role);
-
 /* Return the number of servers with the RAFT_VOTER role. */
 size_t configurationVoterCount(const struct raft_configuration *c);
 

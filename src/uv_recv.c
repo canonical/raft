@@ -8,12 +8,6 @@
 #include "uv.h"
 #include "uv_encoding.h"
 
-#if 0
-#define tracef(...) Tracef(c->uv->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
-
 /* The happy path for a receiving an RPC message is:
  *
  * - When a peer server successfully establishes a new connection with us, the
@@ -381,7 +375,7 @@ static void uvRecvAcceptCb(struct raft_uv_transport *transport,
     assert(!uv->closing);
     rv = uvAddServer(uv, id, address, stream);
     if (rv != 0) {
-        tracef("add server: %s", errCodeToString(rv));
+        Tracef(uv->tracer, "add server: %s", errCodeToString(rv));
         uv_close((struct uv_handle_s *)stream, (uv_close_cb)HeapFree);
     }
 }
@@ -406,5 +400,3 @@ void UvRecvClose(struct uv *uv)
         uvServerAbort(server);
     }
 }
-
-#undef tracef

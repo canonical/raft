@@ -10,13 +10,6 @@
 #include "tick.h"
 #include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
-#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
-
 /* Restore the most recent configuration. */
 static int restoreMostRecentConfiguration(struct raft *r,
                                           struct raft_entry *entry,
@@ -103,9 +96,8 @@ err:
     return rv;
 }
 
-/* If we're the only voting server in the configuration, Automatically
- * self-elect ourselves and convert to leader without waiting for the election
- * timeout. */
+/* Automatically self-elect ourselves and convert to leader if we're the only
+ * voting server in the configuration. */
 static int maybeSelfElect(struct raft *r)
 {
     const struct raft_server *server;
@@ -115,13 +107,17 @@ static int maybeSelfElect(struct raft *r)
         configurationVoterCount(&r->configuration) > 1) {
         return 0;
     }
-    /* Converting to candidate will notice that we're the only voter and
-     * automatically convert to leader. */
+    tracef("self elect and convert to leader");
+    /* TODO: converting to candidate has the side effect of bumping the term, we
+     * should avoid that. */
     rv = convertToCandidate(r);
     if (rv != 0) {
         return rv;
     }
-    assert(r->state == RAFT_LEADER);
+    rv = convertToLeader(r);
+    if (rv != 0) {
+        return rv;
+    }
     return 0;
 }
 
@@ -208,5 +204,3 @@ int raft_start(struct raft *r)
 
     return 0;
 }
-
-#undef tracef

@@ -7,13 +7,6 @@
 #include "replication.h"
 #include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
-#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
-
 static void installSnapshotSendCb(struct raft_io_send *req, int status)
 {
     (void)status;
@@ -101,5 +94,3 @@ reply:
 
     return 0;
 }
-
-#undef tracef

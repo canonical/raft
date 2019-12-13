@@ -8,13 +8,6 @@
 #include "replication.h"
 #include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 1
-#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
-
 /* Number of milliseconds after which a server promotion will be aborted if the
  * server hasn't caught up with the logs yet. */
 #define RAFT_MAX_CATCH_UP_DURATION (30 * 1000)
@@ -222,5 +215,3 @@ void tickCb(struct raft_io *io)
         convertToUnavailable(r);
     }
 }
-
-#undef tracef

@@ -1014,7 +1014,7 @@ RAFT_API int raft_add(struct raft *r,
                       raft_change_cb cb);
 
 /**
- * Promote the given server to a higher role.
+ * Promote the given server to a more important role.
  *
  * If the server's current role is #RAFT_IDLE, the server can be promoted either
  * to #RAFT_STANDBY or #RAFT_VOTER.
@@ -1025,23 +1025,6 @@ RAFT_API int raft_add(struct raft *r,
  * In all other cases, #RAFT_BADROLE is returned.
  */
 RAFT_API int raft_promote(struct raft *r,
-                          struct raft_change *req,
-                          unsigned id,
-                          int role,
-                          raft_change_cb cb);
-
-/**
- * Demote the given server to a lesser role.
- *
- * If the server's current role is #RAFT_VOTER, the server can be demoted either
- * to #RAFT_STANDBY or #RAFT_IDLE.
- *
- * If the server's current role is #RAFT_STANDBY, the server can be demoted to
- * #RAFT_IDLE.
- *
- * In all other cases, #RAFT_BADROLE is returned.
- */
-RAFT_API int raft_demote(struct raft *r,
                           struct raft_change *req,
                           unsigned id,
                           int role,

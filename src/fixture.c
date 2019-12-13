@@ -13,13 +13,6 @@
 #include "snapshot.h"
 #include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
-#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
-
 /* Defaults */
 #define HEARTBEAT_TIMEOUT 100
 #define ELECTION_TIMEOUT 1000
@@ -544,7 +537,7 @@ static int ioMethodSetVote(struct raft_io *raft_io, const unsigned server_id)
         return RAFT_IOERR;
     }
 
-    /* tracef("io: set vote: %d %d", server_id, io->index); */
+    tracef("io: set vote: %d %d", server_id, io->index);
     io->voted_for = server_id;
 
     return 0;
@@ -699,8 +692,8 @@ static int ioMethodSend(struct raft_io *raft_io,
         return RAFT_IOERR;
     }
 
-    /* tracef("io: send: %s to server %d", describeMessage(message),
-       message->server_id); */
+    tracef("io: send: %s to server %d", describeMessage(message),
+           message->server_id);
 
     r = raft_malloc(sizeof *r);
     assert(r != NULL);
@@ -721,8 +714,8 @@ static int ioMethodSend(struct raft_io *raft_io,
 
 static void ioReceive(struct io *io, struct raft_message *message)
 {
-    /* tracef("io: recv: %s from server %d", describeMessage(message),
-       message->server_id); */
+    tracef("io: recv: %s from server %d", describeMessage(message),
+           message->server_id);
     io->recv_cb(io->io, message);
     io->n_recv[message->type]++;
 }
@@ -927,7 +920,6 @@ static int serverInit(struct raft_fixture *f, unsigned i, struct raft_fsm *fsm)
     raft_set_heartbeat_timeout(&s->raft, HEARTBEAT_TIMEOUT);
     s->tracer.impl = (void *)&s->id;
     s->tracer.emit = emit;
-    s->raft.tracer = &s->tracer;
     return 0;
 }
 
@@ -1877,5 +1869,3 @@ unsigned raft_fixture_n_recv(struct raft_fixture *f, unsigned i, int type)
     struct io *io = f->servers[i].io.impl;
     return io->n_recv[type];
 }
-
-#undef tracef
