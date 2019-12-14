@@ -1,4 +1,3 @@
-dist: xenial
 language: c
 addons:
   apt:
@@ -9,9 +8,31 @@ addons:
     - btrfs-progs
     - xfsprogs
     - zfsutils-linux
-compiler:
-  - clang
-  - gcc
+jobs:
+  include:
+  - compiler: gcc
+    dist: bionic
+    arch: amd64
+  - if: type != pull_request
+    compiler: clang
+    dist: bionic
+    arch: amd64
+  - if: type != pull_request
+    compiler: gcc
+    dist: xenial
+    arch: amd64
+  - if: type != pull_request
+    compiler: gcc
+    dist: bionic
+    arch: s390x
+  - if: type != pull_request
+    compiler: gcc
+    dist: bionic
+    arch: arm64
+  - if: type != pull_request
+    compiler: clang
+    dist: bionic
+    arch: ppc64le
 before_script:
   - git clone --depth 1 https://github.com/edlund/amalgamate.git
   - export PATH=$PATH:$PWD/amalgamate
@@ -21,13 +42,7 @@ script:
   - amalgamate.py --config=amalgamation.json --source=$(pwd)
   - $CC raft.c -c -D_GNU_SOURCE -Wall -Wextra -Wpedantic -fpic
   - ./test/lib/fs.sh setup
-  - make check CFLAGS=-O0
-               RAFT_TMP_TMPFS=./tmp/tmpfs
-               RAFT_TMP_EXT4=./tmp/ext4
-               RAFT_TMP_BTRFS=./tmp/btrfs
-               RAFT_TMP_XFS=./tmp/xfs
-               RAFT_TMP_ZFS=./tmp/zfs
-    || (cat ./test-suite.log && false)
+  - make check CFLAGS=-O0 $(./test/lib/fs.sh detect) || (cat ./test-suite.log && false)
   - if [ $TRAVIS_COMPILER = gcc ]; then make code-coverage-capture; fi
   - ./test/lib/fs.sh teardown
 after_success:

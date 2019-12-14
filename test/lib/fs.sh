@@ -7,20 +7,6 @@ usage() {
     echo "usage: $0 setup|teardown [types]"
 }
 
-types="tmpfs ext4"
-
-if [ "$(which mkfs.btrfs)" != "" ]; then
-    types="$types btrfs"
-fi
-
-if [ "$(which mkfs.xfs)" != "" ]; then
-    types="$types xfs"
-fi
-
-if [ "$(which zfs)" != "" ]; then
-    types="$types zfs"
-fi
-
 if [ "${#}" -lt 1 ]; then
     usage
     exit 1
@@ -29,8 +15,38 @@ fi
 cmd="${1}"
 shift
 
-if [ "${#}" -gt 0 ]; then
-    types="${@}"
+types="tmpfs"
+
+# Check if loop devices are available, we might be running inside an
+# unprivileged container
+if sudo losetup -f > /dev/null 2>&1; then
+    types="$types ext4"
+
+    if [ "$(which mkfs.btrfs)" != "" ]; then
+        types="$types btrfs"
+    fi
+
+    if [ "$(which mkfs.xfs)" != "" ]; then
+        types="$types xfs"
+    fi
+
+    if [ "$(which zfs)" != "" ]; then
+        types="$types zfs"
+    fi
+
+    if [ "${#}" -gt 0 ]; then
+        types="${@}"
+    fi
+
+fi
+
+if [ "${cmd}" = "detect" ]; then
+    vars=""
+    for type in $types; do
+        vars="${vars}RAFT_TMP_$(echo ${type} | tr [a-z] [A-Z])=./tmp/${type} "
+    done
+    echo $vars
+    exit 0
 fi
 
 if [ "${cmd}" = "setup" ]; then

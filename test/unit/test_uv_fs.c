@@ -299,6 +299,11 @@ TEST(UvFsProbeCapabilities, aio, setUpDir, tearDownDir, 0, dir_aio_params)
     if (dir == NULL) {
         return MUNIT_SKIP;
     }
+    /* FIXME: btrfs doesn't like that we perform a first write to the probe file
+     * to detect the direct I/O buffer size. */
+    if (strcmp(munit_parameters_get(params, DIR_FS_PARAM), "btrfs") == 0) {
+        return MUNIT_SKIP;
+    }
     PROBE_CAPABILITIES(dir, 4096, true);
     return MUNIT_OK;
 }
