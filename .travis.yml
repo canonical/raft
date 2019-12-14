@@ -12,6 +12,10 @@ jobs:
   include:
   - compiler: gcc
     dist: bionic
+    arch: amd64
+  - compiler: gcc
+    dist: bionic
+    arch: s390x
   - if: type != pull_request
     compiler: clang
 before_script:
