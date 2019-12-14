@@ -19,6 +19,9 @@ jobs:
   - compiler: gcc
     dist: bionic
     arch: arm64
+  - compiler: clang
+    dist: bionic
+    arch: ppc64le
   - if: type != pull_request
     compiler: clang
 before_script:
