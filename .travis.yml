@@ -16,6 +16,9 @@ jobs:
   - compiler: gcc
     dist: bionic
     arch: s390x
+  - compiler: gcc
+    dist: bionic
+    arch: arm64
   - if: type != pull_request
     compiler: clang
 before_script:
