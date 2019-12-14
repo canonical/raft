@@ -948,10 +948,10 @@ TEST(load, openSegmentWithZeroFormatAndThenData, setUp, tearDown, 0, NULL)
 TEST(load, openSegmentWithBadFormat, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    uint64_t version = 2;
+    uint8_t version[8] = {2, 0, 0, 0, 0, 0, 0, 0};
     APPEND(1, 1);
     UNFINALIZE(1, 1, 1);
-    test_dir_overwrite_file(f->dir, "open-1", &version, sizeof version, 0);
+    test_dir_overwrite_file(f->dir, "open-1", version, sizeof version, 0);
     LOAD_ERROR(RAFT_CORRUPT,
                "load open segment open-1: unexpected format version 2");
     return MUNIT_OK;
