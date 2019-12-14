@@ -19,7 +19,7 @@ types="tmpfs"
 
 # Check if loop devices are available, we might be running inside an
 # unprivileged container
-if [ "$(sudo losetup -f)" != "" ]; then
+if sudo losetup -f > /dev/null 2>&1; then
     types="$types ext4"
 
     if [ "$(which mkfs.btrfs)" != "" ]; then
