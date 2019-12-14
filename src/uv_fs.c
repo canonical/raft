@@ -589,8 +589,13 @@ static int probeDirectIO(int fd, size_t *size, char *errmsg)
                 return 0;
             default:
                 /* UNTESTED: this is an unsupported file system. */
+#if defined(__s390x__)
+                ErrMsgPrintf(errmsg, "unsupported file system: %ux",
+                             fs_info.f_type);
+#else
                 ErrMsgPrintf(errmsg, "unsupported file system: %zx",
                              fs_info.f_type);
+#endif
                 return RAFT_IOERR;
         }
     }
