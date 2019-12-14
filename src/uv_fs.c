@@ -15,12 +15,6 @@ int UvFsCheckDir(const char *dir, char *errmsg)
     struct uv_fs_s req;
     int rv;
 
-    /* Ensure that the given path doesn't exceed our static buffer limit. */
-    if (!UV__DIR_HAS_VALID_LEN(dir)) {
-        ErrMsgPrintf(errmsg, "directory path too long");
-        return RAFT_NAMETOOLONG;
-    }
-
     /* Make sure we have a directory we can write into. */
     rv = uv_fs_stat(NULL, &req, dir, NULL);
     if (rv != 0) {
