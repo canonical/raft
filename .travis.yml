@@ -13,17 +13,26 @@ jobs:
   - compiler: gcc
     dist: bionic
     arch: amd64
-  - compiler: gcc
-    dist: bionic
-    arch: s390x
-  - compiler: gcc
-    dist: bionic
-    arch: arm64
-  - compiler: clang
-    dist: bionic
-    arch: ppc64le
   - if: type != pull_request
     compiler: clang
+    dist: bionic
+    arch: amd64
+  - if: type != pull_request
+    compiler: gcc
+    dist: xenial
+    arch: amd64
+  - if: type != pull_request
+    compiler: gcc
+    dist: bionic
+    arch: s390x
+  - if: type != pull_request
+    compiler: gcc
+    dist: bionic
+    arch: arm64
+  - if: type != pull_request
+    compiler: clang
+    dist: bionic
+    arch: ppc64le
 before_script:
   - git clone --depth 1 https://github.com/edlund/amalgamate.git
   - export PATH=$PATH:$PWD/amalgamate
