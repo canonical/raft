@@ -7,7 +7,7 @@
 
 /* Process an InstallSnapshot RPC from the given server. */
 int rpcRecvInstallSnapshot(struct raft *r,
-                           const unsigned id,
+                           raft_id id,
                            const char *address,
                            struct raft_install_snapshot *args);
 

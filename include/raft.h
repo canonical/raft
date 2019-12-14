@@ -125,7 +125,7 @@ RAFT_API void raft_configuration_close(struct raft_configuration *c);
  * returns.
  */
 RAFT_API int raft_configuration_add(struct raft_configuration *c,
-                                    unsigned id,
+                                    raft_id id,
                                     const char *address,
                                     int role);
 
@@ -231,7 +231,7 @@ struct raft_log
 struct raft_request_vote
 {
     raft_term term;            /* Candidate's term. */
-    unsigned candidate_id;     /* ID of the server requesting the vote. */
+    raft_id candidate_id;      /* ID of the server requesting the vote. */
     raft_index last_log_index; /* Index of candidate's last log entry. */
     raft_index last_log_term;  /* Term of log entry at last_log_index. */
 };
@@ -301,7 +301,7 @@ enum {
 struct raft_message
 {
     unsigned short type;        /* RPC type code. */
-    unsigned server_id;         /* ID of sending or destination server. */
+    raft_id server_id;          /* ID of sending or destination server. */
     const char *server_address; /* Address of sending or destination server. */
     union {                     /* Type-specific data */
         struct raft_request_vote request_vote;
@@ -449,7 +449,7 @@ struct raft_io
      * Initialize the backend with operational parameters such as server ID and
      * address.
      */
-    int (*init)(struct raft_io *io, unsigned id, const char *address);
+    int (*init)(struct raft_io *io, raft_id id, const char *address);
 
     /**
      * Release all resources used by the backend.
@@ -478,7 +478,7 @@ struct raft_io
      */
     int (*load)(struct raft_io *io,
                 raft_term *term,
-                unsigned *voted_for,
+                raft_id *voted_for,
                 struct raft_snapshot **snapshot,
                 raft_index *start_index,
                 struct raft_entry *entries[],
@@ -525,7 +525,7 @@ struct raft_io
      * that the change is durable before returning (e.g. using fdatasync() or
      * #O_DIRECT).
      */
-    int (*set_vote)(struct raft_io *io, unsigned server_id);
+    int (*set_vote)(struct raft_io *io, raft_id server_id);
 
     /**
      * Asynchronously send an RPC message.
@@ -670,7 +670,7 @@ struct raft
      * responding to RPCs (Figure 3.1).
      */
     raft_term current_term; /* Latest term server has seen. */
-    unsigned voted_for;     /* Candidate that received vote in current term. */
+    raft_id voted_for;      /* Candidate that received vote in current term. */
     struct raft_log log;    /* Log entries. */
 
     /*
@@ -757,7 +757,7 @@ struct raft
             unsigned randomized_election_timeout; /* Timer expiration. */
             struct                                /* Current leader info. */
             {
-                unsigned id;
+                raft_id id;
                 char *address;
             } current_leader;
         } follower_state;
@@ -770,7 +770,7 @@ struct raft
         {
             struct raft_progress *progress; /* Per-server replication state. */
             struct raft_change *change;     /* Pending membership change. */
-            unsigned promotee_id;           /* ID of server being promoted. */
+            raft_id promotee_id;            /* ID of server being promoted. */
             unsigned short round_number;    /* Current sync round. */
             raft_index round_index;         /* Target of the current round. */
             raft_time round_start;          /* Start of current round. */
@@ -920,7 +920,7 @@ RAFT_API int raft_state(struct raft *r);
 /**
  * Return the ID and address of the current known leader, if any.
  */
-RAFT_API void raft_leader(struct raft *r, unsigned *id, const char **address);
+RAFT_API void raft_leader(struct raft *r, raft_id *id, const char **address);
 
 /**
  * Return the index of the last entry that was appended to the local log.

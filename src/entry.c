@@ -4,10 +4,10 @@
 #include "assert.h"
 #include "entry.h"
 
-void entryBatchesDestroy(struct raft_entry *entries, unsigned n)
+void entryBatchesDestroy(struct raft_entry *entries, const size_t n)
 {
     void *batch = NULL;
-    unsigned i;
+    size_t i;
     if (entries == NULL) {
         assert(n == 0);
         return;
@@ -39,7 +39,7 @@ int entryCopy(const struct raft_entry *src, struct raft_entry *dst)
 
 int entryBatchCopy(const struct raft_entry *src,
                    struct raft_entry **dst,
-                   unsigned n)
+                   const size_t n)
 {
     size_t size = 0;
     void *batch;

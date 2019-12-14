@@ -9,7 +9,7 @@ int raft_state(struct raft *r)
     return r->state;
 }
 
-void raft_leader(struct raft *r, unsigned *id, const char **address)
+void raft_leader(struct raft *r, raft_id *id, const char **address)
 {
     switch (r->state) {
         case RAFT_UNAVAILABLE:

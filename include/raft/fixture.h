@@ -137,7 +137,7 @@ RAFT_API unsigned raft_fixture_leader_index(struct raft_fixture *f);
 /**
  * Return the ID of the server the @i'th server has voted for, or zero .
  */
-RAFT_API unsigned raft_fixture_voted_for(struct raft_fixture *f, unsigned i);
+RAFT_API raft_id raft_fixture_voted_for(struct raft_fixture *f, unsigned i);
 
 /**
  * Drive the cluster so the @i'th server gets elected as leader.

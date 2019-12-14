@@ -192,7 +192,7 @@ static int uvLoadEntriesBatch(struct uv *uv,
                               bool *last)
 {
     uint64_t preamble[2];      /* CRC32 checksums and number of raft entries */
-    unsigned n;                /* Number of entries in the batch */
+    unsigned long n;           /* Number of entries in the batch */
     unsigned max_n;            /* Maximum number of entries we expect */
     unsigned i;                /* Iterate through the entries */
     struct raft_buffer buf;    /* Read buffer */
@@ -217,7 +217,7 @@ static int uvLoadEntriesBatch(struct uv *uv,
         return RAFT_IOERR;
     }
 
-    n = byteFlip64(preamble[1]);
+    n = (size_t)byteFlip64(preamble[1]);
     if (n == 0) {
         ErrMsgPrintf(uv->io->errmsg, "entries count in preamble is zero");
         rv = RAFT_CORRUPT;
@@ -231,8 +231,8 @@ static int uvLoadEntriesBatch(struct uv *uv,
     max_n = UV__MAX_SEGMENT_SIZE / (sizeof(uint64_t) * 4);
 
     if (n > max_n) {
-        ErrMsgPrintf(uv->io->errmsg, "entries count %u in preamble is too high",
-                     n);
+        ErrMsgPrintf(uv->io->errmsg,
+                     "entries count %lu in preamble is too high", n);
         rv = RAFT_CORRUPT;
         goto err;
     }
@@ -361,7 +361,7 @@ int uvSegmentLoadClosed(struct uv *uv,
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int rv;
 
-    expected_n = info->end_index - info->first_index + 1;
+    expected_n = (unsigned)(info->end_index - info->first_index + 1);
 
     /* If the segment is completely empty, just bail out. */
     rv = UvFsFileIsEmpty(uv->dir, info->filename, &empty, errmsg);
@@ -584,7 +584,7 @@ done:
 
         tracef("finalize %s into %s", info->filename, filename);
 
-        rv = UvFsTruncateAndRenameFile(uv->dir, offset, info->filename,
+        rv = UvFsTruncateAndRenameFile(uv->dir, (size_t)offset, info->filename,
                                        filename, errmsg);
         if (rv != 0) {
             tracef("finalize %s: %s", info->filename, errmsg);
@@ -618,7 +618,7 @@ err:
 static int uvEnsureSegmentBufferIsLargeEnough(struct uvSegmentBuffer *b,
                                               size_t size)
 {
-    unsigned n = (size / b->block_size);
+    unsigned n = (unsigned)(size / b->block_size);
     void *base;
     size_t len;
 
@@ -746,13 +746,13 @@ void uvSegmentBufferFinalize(struct uvSegmentBuffer *b, uv_buf_t *out)
     unsigned n_blocks;
     unsigned tail;
 
-    n_blocks = b->n / b->block_size;
+    n_blocks = (unsigned)(b->n / b->block_size);
     if (b->n % b->block_size != 0) {
         n_blocks++;
     }
 
     /* Set the remainder of the last block to 0 */
-    tail = b->n % b->block_size;
+    tail = (unsigned)(b->n % b->block_size);
     if (tail != 0) {
         memset(b->arena.base + b->n, 0, b->block_size - tail);
     }
@@ -982,7 +982,7 @@ int uvSegmentTruncate(struct uv *uv,
     struct uvSegmentBuffer buf;
     struct raft_buffer data;
     size_t n;
-    size_t m;
+    unsigned m;
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int rv;
 
@@ -1000,7 +1000,7 @@ int uvSegmentTruncate(struct uv *uv,
 
     /* Discard all entries after the truncate index (included) */
     assert(index - segment->first_index < n);
-    m = index - segment->first_index;
+    m = (unsigned)(index - segment->first_index);
 
     uvSegmentBufferInit(&buf, uv->block_size);
 

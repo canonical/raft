@@ -51,7 +51,7 @@ static int uvTcpDecodePreamble(struct uvTcpHandshake *h)
     if (protocol != UV__TCP_HANDSHAKE_PROTOCOL) {
         return RAFT_MALFORMED;
     }
-    h->address.len = byteFlip64(h->preamble[2]);
+    h->address.len = (size_t)byteFlip64(h->preamble[2]);
     h->address.base = HeapMalloc(h->address.len);
     if (h->address.base == NULL) {
         return RAFT_NOMEM;
@@ -105,7 +105,7 @@ static void uvTcpIncomingReadCbAddress(uv_stream_t *stream,
 {
     struct uvTcpIncoming *incoming = stream->data;
     char *address;
-    unsigned id;
+    raft_id id;
     size_t n;
     int rv;
 
@@ -122,7 +122,7 @@ static void uvTcpIncomingReadCbAddress(uv_stream_t *stream,
     }
 
     /* We shouldn't have read more data than the pending amount. */
-    n = nread;
+    n = (size_t)nread;
     assert(n <= incoming->handshake.address.len - incoming->handshake.nread);
 
     /* Advance the read window */
@@ -178,7 +178,7 @@ static void uvTcpIncomingReadCbPreamble(uv_stream_t *stream,
     }
 
     /* We shouldn't have read more data than the pending amount. */
-    n = nread;
+    n = (size_t)nread;
     assert(n <=
            sizeof incoming->handshake.preamble - incoming->handshake.nread);
 

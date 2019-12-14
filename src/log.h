@@ -48,8 +48,8 @@ const struct raft_entry *logGet(struct raft_log *l, const raft_index index);
 
 /* Append a new entry to the log. */
 int logAppend(struct raft_log *l,
-              const raft_term term,
-              const int type,
+              raft_term term,
+              unsigned short type,
               const struct raft_buffer *buf,
               void *batch);
 
@@ -68,15 +68,15 @@ int logAppendConfiguration(struct raft_log *l,
  * memory referenced by the @buf attribute of the returned entries is guaranteed
  * to be valid until logRelease() is called. */
 int logAcquire(struct raft_log *l,
-               const raft_index index,
+               raft_index index,
                struct raft_entry *entries[],
                unsigned *n);
 
 /* Release a previously acquired array of entries. */
 void logRelease(struct raft_log *l,
-                const raft_index index,
+                raft_index index,
                 struct raft_entry entries[],
-                const size_t n);
+                unsigned n);
 
 /* Delete all entries from the given index (included) onwards. If the log is
  * empty this is a no-op. If @index is lower than or equal to the index of the

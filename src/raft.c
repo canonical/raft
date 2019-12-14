@@ -162,7 +162,7 @@ void raft_configuration_close(struct raft_configuration *c)
 }
 
 int raft_configuration_add(struct raft_configuration *c,
-                           const unsigned id,
+                           const raft_id id,
                            const char *address,
                            const int role)
 {

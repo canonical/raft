@@ -57,7 +57,7 @@ int progressRebuildArray(struct raft *r,
     struct raft_progress *progress;
     unsigned i;
     unsigned j;
-    unsigned id;
+    raft_id id;
 
     progress = raft_malloc(configuration->n * sizeof *progress);
     if (progress == NULL) {

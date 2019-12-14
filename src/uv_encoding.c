@@ -247,12 +247,12 @@ void uvEncodeBatchHeader(const struct raft_entry *entries,
         bytePut64(&cursor, entry->term);
 
         /* Message type (Either RAFT_COMMAND or RAFT_CHANGE) */
-        bytePut8(&cursor, entry->type);
+        bytePut8(&cursor, (uint8_t)entry->type);
 
         cursor = (uint8_t *)cursor + 3; /* Unused */
 
         /* Size of the log entry data, little endian. */
-        bytePut32(&cursor, entry->buf.len);
+        bytePut32(&cursor, (uint32_t)entry->buf.len);
     }
 }
 
@@ -287,7 +287,7 @@ int uvDecodeBatchHeader(const void *batch,
     size_t i;
     int rv;
 
-    *n = byteGet64(&cursor);
+    *n = (unsigned)byteGet64(&cursor);
 
     if (*n == 0) {
         *entries = NULL;
@@ -382,7 +382,7 @@ static int decodeInstallSnapshot(const uv_buf_t *buf,
     args->last_index = byteGet64(&cursor);
     args->last_term = byteGet64(&cursor);
     args->conf_index = byteGet64(&cursor);
-    conf.len = byteGet64(&cursor);
+    conf.len = (size_t)byteGet64(&cursor);
     conf.base = (void *)cursor;
     raft_configuration_init(&args->conf);
     rv = configurationDecode(&conf, &args->conf);
@@ -390,12 +390,12 @@ static int decodeInstallSnapshot(const uv_buf_t *buf,
         return rv;
     }
     cursor = (uint8_t*)cursor + conf.len;
-    args->data.len = byteGet64(&cursor);
+    args->data.len = (size_t)byteGet64(&cursor);
 
     return 0;
 }
 
-int uvDecodeMessage(unsigned type,
+int uvDecodeMessage(const unsigned long type,
                     const uv_buf_t *header,
                     struct raft_message *message,
                     size_t *payload_len)
@@ -403,7 +403,8 @@ int uvDecodeMessage(unsigned type,
     unsigned i;
     int rv = 0;
 
-    message->type = type;
+    /* TODO: check type overflow */
+    message->type = (unsigned short)type;
 
     *payload_len = 0;
 

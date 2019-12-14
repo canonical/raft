@@ -17,9 +17,9 @@
 
 /* Convenience for setting a new state value and asserting that the transition
  * is valid. */
-static void convertSetState(struct raft *r, int new_state)
+static void convertSetState(struct raft *r, unsigned short new_state)
 {
-    int old_state = r->state;
+    unsigned short old_state = r->state;
 
     /* Check that the transition is legal, see Figure 3.3. Note that with
      * respect to the paper we have an additional "unavailable" state, which is

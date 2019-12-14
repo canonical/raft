@@ -9,7 +9,7 @@
 
 /* Implementation of raft_uv_transport->init. */
 static int uvTcpInit(struct raft_uv_transport *transport,
-                     unsigned id,
+                     raft_id id,
                      const char *address)
 {
     struct UvTcp *t = transport->impl;

@@ -166,7 +166,7 @@ static void tearDown(void *data)
         struct raft_uv_transport _transport;                                 \
         struct raft_io _io;                                                  \
         raft_term _term;                                                     \
-        unsigned _voted_for;                                                 \
+        raft_id _voted_for;                                                  \
         struct raft_snapshot *_snapshot;                                     \
         raft_index _start_index;                                             \
         struct raft_entry *_entries;                                         \

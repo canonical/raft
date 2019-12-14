@@ -41,7 +41,7 @@ struct sendAppendEntries
     raft_index index;           /* Index of the first entry in the request. */
     struct raft_entry *entries; /* Entries referenced in the request. */
     unsigned n;                 /* Length of the entries array. */
-    unsigned server_id;         /* Destination server. */
+    raft_id server_id;          /* Destination server. */
 };
 
 /* Callback invoked after request to send an AppendEntries RPC has completed. */
@@ -160,7 +160,7 @@ struct sendInstallSnapshot
     struct raft_io_snapshot_get get; /* Snapshot get request. */
     struct raft_io_send send;        /* Underlying I/O send request. */
     struct raft_snapshot *snapshot;  /* Snapshot to send. */
-    unsigned server_id;              /* Destination server. */
+    raft_id server_id;               /* Destination server. */
 };
 
 static void sendInstallSnapshotCb(struct raft_io_send *send, int status)
@@ -366,7 +366,7 @@ send_snapshot:
  * It must be called only by leaders. */
 static int triggerAll(struct raft *r)
 {
-    size_t i;
+    unsigned i;
     int rv;
 
     assert(r->state == RAFT_LEADER);

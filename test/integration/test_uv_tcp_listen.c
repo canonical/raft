@@ -46,7 +46,7 @@ static void closeCb(struct raft_uv_transport *transport)
 }
 
 static void acceptCb(struct raft_uv_transport *t,
-                     unsigned id,
+                     raft_id id,
                      const char *address,
                      struct uv_stream_s *stream)
 {

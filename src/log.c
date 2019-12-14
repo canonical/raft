@@ -18,7 +18,7 @@ static size_t refsKey(const raft_index index, const size_t size)
 {
     assert(index > 0);
     assert(size > 0);
-    return (index - 1) % size;
+    return (size_t)((index - 1) % size);
 }
 
 /* Try to insert a new reference count item for the given log entry index into
@@ -466,7 +466,7 @@ static int ensureCapacity(struct raft_log *l)
 
 int logAppend(struct raft_log *l,
               const raft_term term,
-              const int type,
+              const unsigned short type,
               const struct raft_buffer *buf,
               void *batch)
 {
@@ -598,7 +598,7 @@ static size_t locateEntry(struct raft_log *l, const raft_index index)
     /* Get the circular buffer position of the desired entry. Log indexes start
      * at 1, so we subtract one to get array indexes. We also need to subtract
      * any index offset this log might start at. */
-    return positionAt(l, (index - 1) - l->offset);
+    return positionAt(l, (size_t)((index - 1) - l->offset));
 }
 
 raft_term logTermOf(struct raft_log *l, const raft_index index)
@@ -682,12 +682,12 @@ int logAcquire(struct raft_log *l,
     if (i < l->back) {
         /* The last entry does not wrap with respect to i, so the number of
          * entries is simply the length of the range [i...l->back). */
-        *n = l->back - i;
+        *n = (unsigned)(l->back - i);
     } else {
         /* The last entry wraps with respect to i, so the number of entries is
          * the sum of the lengths of the ranges [i...l->size) and [0...l->back),
          * which is l->size - i + l->back.*/
-        *n = l->size - i + l->back;
+        *n = (unsigned)(l->size - i + l->back);
     }
 
     assert(*n > 0);
@@ -729,7 +729,7 @@ static bool isBatchReferenced(struct raft_log *l, const void *batch)
 void logRelease(struct raft_log *l,
                 const raft_index index,
                 struct raft_entry entries[],
-                const size_t n)
+                const unsigned n)
 {
     size_t i;
     void *batch = NULL; /* Last batch whose memory was freed */
@@ -809,7 +809,7 @@ static void removeSuffix(struct raft_log *l,
     assert(index <= logLastIndex(l));
 
     /* Number of entries to delete */
-    n = (logLastIndex(l) - start) + 1;
+    n = (size_t)(logLastIndex(l) - start) + 1;
 
     for (i = 0; i < n; i++) {
         struct raft_entry *entry;
@@ -856,7 +856,7 @@ static void removePrefix(struct raft_log *l, const raft_index index)
     assert(index <= logLastIndex(l));
 
     /* Number of entries to delete */
-    n = (index - indexAt(l, 0)) + 1;
+    n = (size_t)(index - indexAt(l, 0)) + 1;
 
     for (i = 0; i < n; i++) {
         struct raft_entry *entry;

@@ -7,7 +7,7 @@
 
 /* Process an AppendEntries RPC result from the given server. */
 int recvAppendEntriesResult(struct raft *r,
-                            const unsigned id,
+                            raft_id id,
                             const char *address,
                             const struct raft_append_entries_result *result);
 

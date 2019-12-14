@@ -26,10 +26,10 @@ static int uvMetadataDecode(const void *buf,
                             char *errmsg)
 {
     const void *cursor = buf;
-    unsigned format;
+    uint64_t format;
     format = byteGet64(&cursor);
     if (format != UV__DISK_FORMAT) {
-        ErrMsgPrintf(errmsg, "bad format version %d", format);
+        ErrMsgPrintf(errmsg, "bad format version %ju", format);
         return RAFT_MALFORMED;
     }
     metadata->version = byteGet64(&cursor);
@@ -166,7 +166,7 @@ int uvMetadataLoad(const char *dir, struct uvMetadata *metadata, char *errmsg)
 }
 
 /* Return the metadata file index associated with the given version. */
-static int uvMetadataFileIndex(int version)
+static unsigned short uvMetadataFileIndex(unsigned long long version)
 {
     return version % 2 == 1 ? 1 : 2;
 }

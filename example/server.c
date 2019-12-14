@@ -21,7 +21,7 @@
 
 struct Fsm
 {
-    int count;
+    unsigned long long count;
 };
 
 static int FsmApply(struct raft_fsm *fsm,
@@ -150,7 +150,7 @@ static int ServerInit(struct Server *s,
 
     /* Seed the random generator */
     timespec_get(&now, TIME_UTC);
-    srandom(now.tv_nsec ^ now.tv_sec);
+    srandom((unsigned)(now.tv_nsec ^ now.tv_sec));
 
     s->loop = loop;
 
@@ -363,7 +363,7 @@ int main(int argc, char *argv[])
         return 1;
     }
     dir = argv[1];
-    id = atoi(argv[2]);
+    id = (unsigned)atoi(argv[2]);
 
     /* Ignore SIGPIPE, see https://github.com/joyent/libuv/issues/1254 */
     signal(SIGPIPE, SIG_IGN);

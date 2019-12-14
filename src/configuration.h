@@ -13,32 +13,32 @@ void configurationClose(struct raft_configuration *c);
 
 /* Add a server to the given configuration. */
 int configurationAdd(struct raft_configuration *c,
-                     unsigned id,
+                     raft_id id,
                      const char *address,
                      int role);
 
 /* Return the number of servers with the RAFT_VOTER role. */
-size_t configurationVoterCount(const struct raft_configuration *c);
+unsigned configurationVoterCount(const struct raft_configuration *c);
 
 /* Return the index of the server with the given ID (relative to the c->servers
  * array). If there's no server with the given ID, return the number of
  * servers. */
-size_t configurationIndexOf(const struct raft_configuration *c, unsigned id);
+unsigned configurationIndexOf(const struct raft_configuration *c, raft_id id);
 
 /* Return the index of the RAFT_VOTER server with the given ID (relative to the
  * sub array of c->servers that has only voting servers). If there's no server
  * with the given ID, or if it's not flagged as voting, return the number of
  * servers. */
-size_t configurationIndexOfVoter(const struct raft_configuration *c,
-                                 unsigned id);
+unsigned configurationIndexOfVoter(const struct raft_configuration *c,
+                                   raft_id id);
 
 /* Get the server with the given ID, or #NULL if no matching server is found. */
 const struct raft_server *configurationGet(const struct raft_configuration *c,
-                                           unsigned id);
+                                           raft_id id);
 
 /* Remove a server from a raft configuration. The given ID must match the one of
  * an existing server in the configuration. */
-int configurationRemove(struct raft_configuration *c, unsigned id);
+int configurationRemove(struct raft_configuration *c, raft_id id);
 
 /* Add all servers in c1 to c2 (which must be empty). */
 int configurationCopy(const struct raft_configuration *src,

@@ -129,7 +129,7 @@ RAFT_API void raft_uv_set_tracer(struct raft_io *io,
  * uv_close()'ing it and then releasing its memory.
  */
 typedef void (*raft_uv_accept_cb)(struct raft_uv_transport *t,
-                                  unsigned id,
+                                  raft_id id,
                                   const char *address,
                                   struct uv_stream_s *stream);
 
@@ -183,7 +183,7 @@ struct raft_uv_transport
     /**
      * Initialize the transport with the given server's identity.
      */
-    int (*init)(struct raft_uv_transport *t, unsigned id, const char *address);
+    int (*init)(struct raft_uv_transport *t, raft_id id, const char *address);
 
     /**
      * Start listening for incoming connections.
@@ -203,7 +203,7 @@ struct raft_uv_transport
      */
     int (*connect)(struct raft_uv_transport *t,
                    struct raft_uv_connect *req,
-                   unsigned id,
+                   raft_id id,
                    const char *address,
                    raft_uv_connect_cb cb);
 
