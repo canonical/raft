@@ -144,6 +144,10 @@ static MunitParameterEnum oomParams[] = {
 TEST(init, oom, setUp, tearDown, 0, oomParams)
 {
     struct fixture *f = data;
+#if defined(__i686__)
+    /* XXX: tmpfs seems to not support O_DIRECT */
+    return MUNIT_SKIP;
+#endif
     HEAP_FAULT_ENABLE;
     INIT_ERROR(f->dir, RAFT_NOMEM, "out of memory");
     return 0;
