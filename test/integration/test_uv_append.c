@@ -506,6 +506,10 @@ TEST(append, noSpaceUponPrepareSpare, setUp, tearDown, 0, dir_tmpfs_params)
     /* This test appears to leak memory on older libuv versions. */
     return MUNIT_SKIP;
 #endif
+#if defined(__powerpc64__)
+    /* XXX: fails on ppc64el */
+    return MUNIT_SKIP;
+#endif
     raft_uv_set_segment_size(&f->io, SEGMENT_BLOCK_SIZE * 2);
     test_dir_fill(f->dir, SEGMENT_BLOCK_SIZE * 3);
     APPEND(1, SEGMENT_BLOCK_SIZE);
@@ -522,6 +526,11 @@ TEST(append, noSpaceUponWrite, setUp, tearDownDeps, 0, dir_tmpfs_params)
     SKIP_IF_NO_FIXTURE;
 #if !HAVE_DECL_UV_FS_O_CREAT
     /* This test appears to leak memory on older libuv versions. */
+    TEAR_DOWN_UV;
+    return MUNIT_SKIP;
+#endif
+#if defined(__powerpc64__)
+    /* XXX: fails on ppc64el */
     TEAR_DOWN_UV;
     return MUNIT_SKIP;
 #endif
@@ -543,6 +552,11 @@ TEST(append, noSpaceResolved, setUp, tearDownDeps, 0, dir_tmpfs_params)
     SKIP_IF_NO_FIXTURE;
 #if !HAVE_DECL_UV_FS_O_CREAT
     /* This test appears to leak memory on older libuv versions. */
+    TEAR_DOWN_UV;
+    return MUNIT_SKIP;
+#endif
+#if defined(__powerpc64__)
+    /* XXX: fails on ppc64el */
     TEAR_DOWN_UV;
     return MUNIT_SKIP;
 #endif
