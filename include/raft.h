@@ -46,6 +46,11 @@
 RAFT_API const char *raft_strerror(int errnum);
 
 /**
+ * Hold the value of a raft server ID. Guaranteed to be at least 64-bit long.
+ */
+typedef unsigned long long raft_id;
+
+/**
  * Hold the value of a raft term. Guaranteed to be at least 64-bit long.
  */
 typedef unsigned long long raft_term;
@@ -82,7 +87,7 @@ struct raft_buffer
  */
 struct raft_server
 {
-    unsigned id;   /* Server ID, must be greater than zero. */
+    raft_id id;    /* Server ID, must be greater than zero. */
     char *address; /* Server address. User defined. */
     int role;      /* Server role. */
 };
@@ -1042,10 +1047,10 @@ RAFT_API int raft_promote(struct raft *r,
  * In all other cases, #RAFT_BADROLE is returned.
  */
 RAFT_API int raft_demote(struct raft *r,
-                          struct raft_change *req,
-                          unsigned id,
-                          int role,
-                          raft_change_cb cb);
+                         struct raft_change *req,
+                         unsigned id,
+                         int role,
+                         raft_change_cb cb);
 
 /**
  * Remove the given server from the cluster configuration.
