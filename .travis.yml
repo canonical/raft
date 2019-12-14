@@ -9,9 +9,10 @@ addons:
     - btrfs-progs
     - xfsprogs
     - zfsutils-linux
-compiler:
-  - clang
-  - gcc
+jobs:
+  include:
+  - compiler: clang
+  - compiler: gcc
 before_script:
   - git clone --depth 1 https://github.com/edlund/amalgamate.git
   - export PATH=$PATH:$PWD/amalgamate
