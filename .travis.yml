@@ -11,8 +11,9 @@ addons:
     - zfsutils-linux
 jobs:
   include:
-  - compiler: clang
   - compiler: gcc
+  - if: type != pull_request
+    compiler: clang
 before_script:
   - git clone --depth 1 https://github.com/edlund/amalgamate.git
   - export PATH=$PATH:$PWD/amalgamate
