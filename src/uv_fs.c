@@ -709,7 +709,6 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
         /* UNTESTED: this should basically fail only because of disk errors,
          * since we allocated the file with posix_fallocate and the block size
          * is supposed to be correct. */
-        assert(event.res != EAGAIN);
         *ok = false;
     }
 
