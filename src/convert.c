@@ -147,6 +147,8 @@ int convertToCandidate(struct raft *r)
     size_t n_voters = configurationVoterCount(&r->configuration);
     int rv;
 
+    (void)server; /* Only used for assertions. */
+
     convertClear(r);
     convertSetState(r, RAFT_CANDIDATE);
 
