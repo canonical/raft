@@ -163,7 +163,7 @@ enum {
  * A single entry in the raft log.
  *
  * An entry that originated from this raft instance while it was the leader
- * (typically via client calls to raft_apply()) should normaly have a @buf
+ * (typically via client calls to raft_apply()) should normally have a @buf
  * attribute referencing directly the memory that was originally allocated by
  * the client itself to contain the entry data, and the @batch attribute set to
  * #NULL.
