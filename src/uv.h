@@ -46,7 +46,7 @@ struct uvMetadata
 {
     unsigned long long version; /* Monotonically increasing version */
     raft_term term;             /* Current term */
-    unsigned voted_for;         /* Server ID of last vote, or 0 */
+    raft_id voted_for;          /* Server ID of last vote, or 0 */
 };
 
 /* Hold state of a libuv-based raft_io implementation. */
@@ -57,7 +57,7 @@ struct uv
     char dir[UV__DIR_LEN];               /* Data directory */
     struct raft_uv_transport *transport; /* Network transport */
     struct raft_tracer *tracer;          /* Debug tracing */
-    unsigned id;                         /* Server ID */
+    raft_id id;                          /* Server ID */
     int state;                           /* Current state */
     bool errored;                        /* If a disk I/O error was hit */
     bool direct_io;                      /* Whether direct I/O is supported */
@@ -268,7 +268,7 @@ int UvList(struct uv *uv,
            size_t *n_snapshots,
            struct uvSegmentInfo *segments[],
            size_t *n_segments,
-	   char *errmsg);
+           char *errmsg);
 
 /* Request to obtain a newly prepared open segment. */
 struct uvPrepare;

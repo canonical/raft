@@ -134,7 +134,7 @@ static int uvSnapshotLoadMeta(struct uv *uv,
                     1 /* Configuration length */];
     struct raft_buffer buf;
     uint64_t format;
-    uint32_t crc1;
+    uint64_t crc1;
     uint32_t crc2;
     uv_file fd;
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
@@ -168,7 +168,7 @@ static int uvSnapshotLoadMeta(struct uv *uv,
     crc1 = byteFlip64(header[1]);
 
     snapshot->configuration_index = byteFlip64(header[2]);
-    buf.len = byteFlip64(header[3]);
+    buf.len = (size_t)byteFlip64(header[3]);
     if (buf.len > UV__META_MAX_CONFIGURATION_SIZE) {
         tracef("load %s: configuration data too big (%zd)", info->filename,
                buf.len);

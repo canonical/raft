@@ -44,7 +44,7 @@ TESTS = $(check_PROGRAMS)
 
 check_LTLIBRARIES = libtest.la
 
-libtest_la_CFLAGS = $(AM_CFLAGS) -DMUNIT_TEST_NAME_LEN=60 -Wno-unused-result
+libtest_la_CFLAGS = $(AM_CFLAGS) -DMUNIT_TEST_NAME_LEN=60 -Wno-unused-result -Wno-conversion
 libtest_la_SOURCES = \
   test/lib/fault.c \
   test/lib/fsm.c \
@@ -65,6 +65,7 @@ test_unit_core_SOURCES = \
   test/unit/test_err.c \
   test/unit/test_log.c \
   test/unit/test_queue.c
+test_unit_core_CFLAGS = $(AM_CFLAGS) -Wno-conversion
 test_unit_core_LDADD = libtest.la
 
 if FIXTURE_ENABLED
@@ -85,6 +86,7 @@ test_integration_core_SOURCES = \
   test/integration/test_barrier.c \
   test/integration/test_bootstrap.c \
   test/integration/test_demote.c \
+  test/integration/test_digest.c \
   test/integration/test_election.c \
   test/integration/test_fixture.c \
   test/integration/test_heap.c \
@@ -96,6 +98,7 @@ test_integration_core_SOURCES = \
   test/integration/test_strerror.c \
   test/integration/test_tick.c \
   test/integration/test_start.c
+test_integration_core_CFLAGS = $(AM_CFLAGS) -Wno-conversion
 test_integration_core_LDFLAGS = -no-install
 test_integration_core_LDADD = libtest.la libraft.la
 
@@ -105,6 +108,7 @@ test_fuzzy_core_SOURCES = \
   test/fuzzy/test_liveness.c \
   test/fuzzy/test_membership.c \
   test/fuzzy/test_replication.c
+test_fuzzy_core_CFLAGS = $(AM_CFLAGS) -Wno-conversion
 test_fuzzy_core_LDFLAGS = -no-install
 test_fuzzy_core_LDADD = libtest.la libraft.la
 
@@ -157,6 +161,7 @@ test_unit_uv_SOURCES = \
   test/unit/test_uv_fs.c \
   test/unit/test_uv_writer.c
 test_unit_uv_LDFLAGS = $(UV_LIBS)
+test_unit_uv_CFLAGS = $(AM_CFLAGS) -Wno-conversion
 test_unit_uv_LDADD = libtest.la
 
 test_integration_uv_SOURCES = \
@@ -173,7 +178,7 @@ test_integration_uv_SOURCES = \
   test/integration/test_uv_tcp_listen.c \
   test/integration/test_uv_snapshot_put.c \
   test/integration/test_uv_truncate.c
-test_integration_uv_CFLAGS = $(AM_CFLAGS) -Wno-type-limits
+test_integration_uv_CFLAGS = $(AM_CFLAGS) -Wno-type-limits -Wno-conversion
 test_integration_uv_LDFLAGS = -no-install $(UV_LIBS)
 test_integration_uv_LDADD = libtest.la libraft.la
 

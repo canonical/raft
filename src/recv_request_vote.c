@@ -19,7 +19,7 @@ static void requestVoteSendCb(struct raft_io_send *req, int status)
 }
 
 int recvRequestVote(struct raft *r,
-                    const unsigned id,
+                    const raft_id id,
                     const char *address,
                     const struct raft_request_vote *args)
 {

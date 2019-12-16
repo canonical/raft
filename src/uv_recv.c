@@ -45,7 +45,7 @@
 struct uvServer
 {
     struct uv *uv;               /* libuv I/O implementation object */
-    unsigned id;                 /* ID of the remote server */
+    raft_id id;                  /* ID of the remote server */
     char *address;               /* Address of the other server */
     struct uv_stream_s *stream;  /* Connection handle */
     uv_buf_t buf;                /* Sliding buffer for reading incoming data */
@@ -60,7 +60,7 @@ struct uvServer
  * connection. */
 static int uvServerInit(struct uvServer *s,
                         struct uv *uv,
-                        const unsigned id,
+                        const raft_id id,
                         const char *address,
                         struct uv_stream_s *stream)
 {
@@ -239,7 +239,7 @@ static void uvServerReadCb(uv_stream_t *stream,
              * completed reading the preamble. */
             assert(s->header.base == NULL);
 
-            s->header.len = byteFlip64(s->preamble[1]);
+            s->header.len = (size_t)byteFlip64(s->preamble[1]);
 
             /* The length of the header must be greater than zero. */
             if (s->header.len == 0) {
@@ -249,7 +249,7 @@ static void uvServerReadCb(uv_stream_t *stream,
         } else if (s->payload.len == 0) {
             /* If the payload buffer is not set, it means we just completed
              * reading the message header. */
-            unsigned type;
+            uint64_t type;
 
             assert(s->header.base != NULL);
 
@@ -257,7 +257,7 @@ static void uvServerReadCb(uv_stream_t *stream,
             assert(type > 0);
 
             rv =
-                uvDecodeMessage(type, &s->header, &s->message, &s->payload.len);
+                uvDecodeMessage((unsigned long)type, &s->header, &s->message, &s->payload.len);
             if (rv != 0) {
                 Tracef(s->uv->tracer, "decode message: %s",
                        errCodeToString(rv));
@@ -315,7 +315,7 @@ static void uvServerReadCb(uv_stream_t *stream,
         return;
     }
     if (nread != UV_EOF) {
-        Tracef(s->uv->tracer, "receive data: %s", uv_strerror(nread));
+        Tracef(s->uv->tracer, "receive data: %s", uv_strerror((int)nread));
     }
 
 abort:
@@ -335,7 +335,7 @@ static int uvServerStart(struct uvServer *s)
 }
 
 static int uvAddServer(struct uv *uv,
-                       unsigned id,
+                       raft_id id,
                        const char *address,
                        struct uv_stream_s *stream)
 {
@@ -372,7 +372,7 @@ err:
 }
 
 static void uvRecvAcceptCb(struct raft_uv_transport *transport,
-                           unsigned id,
+                           raft_id id,
                            const char *address,
                            struct uv_stream_s *stream)
 {

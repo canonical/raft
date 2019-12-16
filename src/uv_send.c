@@ -48,7 +48,7 @@ struct uvClient
     struct uv_stream_s *stream;     /* Current connection handle */
     struct uv_stream_s *old_stream; /* Connection handle being closed */
     unsigned n_connect_attempt;     /* Consecutive connection attempts */
-    unsigned id;                    /* ID of the other server */
+    raft_id id;                     /* ID of the other server */
     char *address;                  /* Address of the other server */
     queue pending;                  /* Pending send message requests */
     queue queue;                    /* Clients queue */
@@ -84,7 +84,7 @@ static void uvSendDestroy(struct uvSend *s)
 /* Initialize a new client associated with the given server. */
 static int uvClientInit(struct uvClient *c,
                         struct uv *uv,
-                        unsigned id,
+                        raft_id id,
                         const char *address)
 {
     int rv;
@@ -407,7 +407,7 @@ static void uvClientAbort(struct uvClient *c)
 /* Find the client object associated with the given server, or create one if
  * there's none yet. */
 static int uvGetClient(struct uv *uv,
-                       const unsigned id,
+                       const raft_id id,
                        const char *address,
                        struct uvClient **client)
 {

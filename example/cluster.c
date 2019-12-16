@@ -83,7 +83,7 @@ int main(int argc, char *argv[])
 
     /* Seed the random generator */
     timespec_get(&now, TIME_UTC);
-    srandom(now.tv_nsec ^ now.tv_sec);
+    srandom((unsigned)(now.tv_nsec ^ now.tv_sec));
 
     while (1) {
         struct timespec interval;
@@ -99,7 +99,7 @@ int main(int argc, char *argv[])
         }
 
         /* Kill a random server. */
-        i = random() % N_SERVERS;
+        i = (unsigned)(random() % N_SERVERS);
 
         rv = kill(pids[i], SIGINT);
         if (rv != 0) {

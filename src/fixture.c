@@ -110,7 +110,7 @@ struct io
 
     /* Term and vote */
     raft_term term;
-    unsigned voted_for;
+    raft_id voted_for;
 
     /* Log */
     struct raft_snapshot *snapshot; /* Latest snapshot */
@@ -118,7 +118,7 @@ struct io
     size_t n;                       /* Size of the persisted entries array */
 
     /* Parameters passed via raft_io->init and raft_io->start */
-    unsigned id;
+    raft_id id;
     const char *address;
     unsigned tick_interval;
     raft_io_tick_cb tick_cb;
@@ -188,7 +188,7 @@ static bool ioFaultTick(struct io *io)
 }
 
 static int ioMethodInit(struct raft_io *raft_io,
-                        unsigned id,
+                        raft_id id,
                         const char *address)
 {
     struct io *io = raft_io->impl;
@@ -282,7 +282,7 @@ static void ioFlushSnapshotGet(struct io *s, struct snapshot_get *r)
 }
 
 /* Search for the peer with the given ID. */
-static struct peer *ioGetPeer(struct io *io, unsigned id)
+static struct peer *ioGetPeer(struct io *io, raft_id id)
 {
     unsigned i;
     for (i = 0; i < io->n_peers; i++) {
@@ -429,7 +429,7 @@ static void ioMethodClose(struct raft_io *raft_io, raft_io_close_cb cb)
 
 static int ioMethodLoad(struct raft_io *io,
                         raft_term *term,
-                        unsigned *voted_for,
+                        raft_id *voted_for,
                         struct raft_snapshot **snapshot,
                         raft_index *start_index,
                         struct raft_entry **entries,
@@ -536,7 +536,7 @@ static int ioMethodSetTerm(struct raft_io *raft_io, const raft_term term)
     return 0;
 }
 
-static int ioMethodSetVote(struct raft_io *raft_io, const unsigned server_id)
+static int ioMethodSetVote(struct raft_io *raft_io, const raft_id server_id)
 {
     struct io *io = raft_io->impl;
 
@@ -588,7 +588,7 @@ static int ioMethodTruncate(struct raft_io *raft_io, raft_index index)
         return RAFT_IOERR;
     }
 
-    n = index - 1; /* Number of entries left after truncation */
+    n = (size_t)(index - 1); /* Number of entries left after truncation */
 
     if (n > 0) {
         struct raft_entry *entries;
@@ -682,7 +682,7 @@ static int ioMethodRandom(struct raft_io *raft_io, int min, int max)
     (void)min;
     (void)max;
     io = raft_io->impl;
-    return io->randomized_election_timeout;
+    return (int)io->randomized_election_timeout;
 }
 
 /* Queue up a request which will be processed later, when io_stub_flush()
@@ -1074,7 +1074,7 @@ unsigned raft_fixture_leader_index(struct raft_fixture *f)
     return f->n;
 }
 
-unsigned raft_fixture_voted_for(struct raft_fixture *f, unsigned i)
+raft_id raft_fixture_voted_for(struct raft_fixture *f, unsigned i)
 {
     struct io *io = f->servers[i].io.impl;
     return io->voted_for;
@@ -1285,7 +1285,7 @@ static void updateCommitIndex(struct raft_fixture *f)
 static void getLowestTickTime(struct raft_fixture *f, raft_time *t, unsigned *i)
 {
     unsigned j;
-    *t = -1 /* Maximum value */;
+    *t = (raft_time)-1 /* Maximum value */;
     for (j = 0; j < f->n; j++) {
         struct io *io = f->servers[j].io.impl;
         if (io->next_tick < *t) {
@@ -1302,7 +1302,7 @@ static void getLowestRequestCompletionTime(struct raft_fixture *f,
                                            unsigned *i)
 {
     unsigned j;
-    *t = -1 /* Maximum value */;
+    *t = (raft_time)-1 /* Maximum value */;
     for (j = 0; j < f->n; j++) {
         struct io *io = f->servers[j].io.impl;
         queue *head;
@@ -1427,7 +1427,7 @@ bool raft_fixture_step_until(struct raft_fixture *f,
                              void *arg,
                              unsigned max_msecs)
 {
-    unsigned start = f->time;
+    raft_time start = f->time;
     while (!stop(f, arg) && (f->time - start) < max_msecs) {
         raft_fixture_step(f);
     }
@@ -1502,7 +1502,7 @@ static void minimizeRandomizedElectionTimeout(struct raft_fixture *f,
     /* If the minimum election timeout value would make the timer expire in the
      * past, cap it. */
     if (now - raft->election_timer_start > timeout) {
-        timeout = now - raft->election_timer_start;
+        timeout = (unsigned)(now - raft->election_timer_start);
     }
 
     raft->follower_state.randomized_election_timeout = timeout;

@@ -168,7 +168,7 @@ int recvEnsureMatchingTerms(struct raft *r, raft_term term, int *match)
     return 0;
 }
 
-int recvUpdateLeader(struct raft *r, unsigned id, const char *address)
+int recvUpdateLeader(struct raft *r, const raft_id id, const char *address)
 {
     assert(r->state == RAFT_FOLLOWER);
 

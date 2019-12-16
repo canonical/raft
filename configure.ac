@@ -100,6 +100,7 @@ AX_CHECK_COMPILE_FLAG([-Wshadow], [AM_CFLAGS="$AM_CFLAGS -Wshadow"], [], [-Werro
 AX_CHECK_COMPILE_FLAG([-Wendif-labels], [AM_CFLAGS="$AM_CFLAGS -Wendif-labels"], [], [-Werror])
 AX_CHECK_COMPILE_FLAG([-Wdate-time], [AM_CFLAGS="$AM_CFLAGS -Wdate-time"], [], [-Werror])
 AX_CHECK_COMPILE_FLAG([-Wnested-externs], [AM_CFLAGS="$AM_CFLAGS -Wnested-externs"], [], [-Werror])
+AX_CHECK_COMPILE_FLAG([-Wconversion], [AM_CFLAGS="$AM_CFLAGS -Wconversion"], [], [-Werror])
 AC_SUBST(AM_CFLAGS)
 
 AC_CONFIG_FILES([raft.pc Makefile])

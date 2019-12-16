@@ -119,7 +119,11 @@ SUITE(init)
 TEST(init, dirTooLong, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    INIT_ERROR(LONG_DIR, RAFT_NAMETOOLONG, "directory path too long");
+    struct raft_io io;
+    int rv;
+    rv = raft_uv_init(&io, &f->loop, LONG_DIR, &f->transport);
+    munit_assert_int(rv, ==, RAFT_NAMETOOLONG);
+    munit_assert_string_equal(io.errmsg, "directory path too long");
     return 0;
 }
 
@@ -140,6 +144,10 @@ static MunitParameterEnum oomParams[] = {
 TEST(init, oom, setUp, tearDown, 0, oomParams)
 {
     struct fixture *f = data;
+#if defined(__i686__)
+    /* XXX: tmpfs seems to not support O_DIRECT */
+    return MUNIT_SKIP;
+#endif
     HEAP_FAULT_ENABLE;
     INIT_ERROR(f->dir, RAFT_NOMEM, "out of memory");
     return 0;

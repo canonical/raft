@@ -32,7 +32,7 @@
 #define CONNECT_RETRY_DELAY 1000
 
 /* Implementation of raft_io->config. */
-static int uvInit(struct raft_io *io, unsigned id, const char *address)
+static int uvInit(struct raft_io *io, raft_id id, const char *address)
 {
     struct uv *uv;
     size_t direct_io;
@@ -393,7 +393,7 @@ err:
 /* Implementation of raft_io->load. */
 static int uvLoad(struct raft_io *io,
                   raft_term *term,
-                  unsigned *voted_for,
+                  raft_id *voted_for,
                   struct raft_snapshot **snapshot,
                   raft_index *start_index,
                   struct raft_entry **entries,
@@ -443,7 +443,7 @@ static int uvSetTerm(struct raft_io *io, const raft_term term)
 }
 
 /* Implementation of raft_io->set_term. */
-static int uvSetVote(struct raft_io *io, const unsigned server_id)
+static int uvSetVote(struct raft_io *io, const raft_id server_id)
 {
     struct uv *uv;
     int rv;
@@ -556,6 +556,12 @@ int raft_uv_init(struct raft_io *io,
     data = io->data;
     memset(io, 0, sizeof *io);
     io->data = data;
+
+    /* Ensure that the given path doesn't exceed our static buffer limit. */
+    if (!UV__DIR_HAS_VALID_LEN(dir)) {
+        ErrMsgPrintf(io->errmsg, "directory path too long");
+        return RAFT_NAMETOOLONG;
+    }
 
     /* Allocate the raft_io_uv object */
     uv = raft_malloc(sizeof *uv);

@@ -13,7 +13,7 @@
 #endif
 
 int recvAppendEntriesResult(struct raft *r,
-                            const unsigned id,
+                            const raft_id id,
                             const char *address,
                             const struct raft_append_entries_result *result)
 {

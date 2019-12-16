@@ -16,7 +16,7 @@
 #endif
 
 int recvRequestVoteResult(struct raft *r,
-                          unsigned id,
+                          raft_id id,
                           const char *address,
                           const struct raft_request_vote_result *result)
 {

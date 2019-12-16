@@ -154,9 +154,9 @@ static int tickLeader(struct raft *r)
      *   error.
      */
     if (r->leader_state.promotee_id != 0) {
-        unsigned id = r->leader_state.promotee_id;
-        size_t server_index;
-        unsigned round_duration = now - r->leader_state.round_start;
+        raft_id id = r->leader_state.promotee_id;
+        unsigned server_index;
+        raft_time round_duration = now - r->leader_state.round_start;
         bool is_too_slow;
         bool is_unresponsive;
 

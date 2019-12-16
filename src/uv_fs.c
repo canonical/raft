@@ -15,12 +15,6 @@ int UvFsCheckDir(const char *dir, char *errmsg)
     struct uv_fs_s req;
     int rv;
 
-    /* Ensure that the given path doesn't exceed our static buffer limit. */
-    if (!UV__DIR_HAS_VALID_LEN(dir)) {
-        ErrMsgPrintf(errmsg, "directory path too long");
-        return RAFT_NAMETOOLONG;
-    }
-
     /* Make sure we have a directory we can write into. */
     rv = uv_fs_stat(NULL, &req, dir, NULL);
     if (rv != 0) {
@@ -118,7 +112,7 @@ int UvFsFileSize(const char *dir,
         UvOsErrMsg(errmsg, "stat", rv);
         return RAFT_IOERR;
     }
-    *size = sb.st_size;
+    *size = (off_t)sb.st_size;
 
     return 0;
 }
@@ -189,7 +183,7 @@ int UvFsAllocateFile(const char *dir,
     }
 
     /* Allocate the desired size. */
-    rv = UvOsFallocate(*fd, 0, size);
+    rv = UvOsFallocate(*fd, 0, (off_t)size);
     if (rv != 0) {
         switch (rv) {
             case UV_ENOSPC:
@@ -368,7 +362,7 @@ int UvFsFileHasOnlyTrailingZeros(uv_file fd, bool *flag, char *errmsg)
         return RAFT_IOERR;
     }
 
-    buf.len = size;
+    buf.len = (size_t)size;
     buf.base = HeapMalloc(buf.len);
     if (buf.base == NULL) {
         ErrMsgOom(errmsg);
@@ -409,7 +403,7 @@ int UvFsReadInto(uv_file fd, struct raft_buffer *buf, char *errmsg)
 {
     int rv;
     /* TODO: use uv_fs_read() */
-    rv = read(fd, buf->base, buf->len);
+    rv = (int)read(fd, buf->base, buf->len);
     if (rv == -1) {
         UvOsErrMsg(errmsg, "read", -errno);
         return RAFT_IOERR;
@@ -447,7 +441,7 @@ int UvFsReadFile(const char *dir,
         goto err;
     }
 
-    buf->len = sb.st_size;
+    buf->len = (size_t)sb.st_size;
     buf->base = HeapMalloc(buf->len);
     if (buf->base == NULL) {
         ErrMsgOom(errmsg);
@@ -536,7 +530,7 @@ int UvFsTruncateAndRenameFile(const char *dir,
         UvOsErrMsg(errmsg, "open", rv);
         goto err;
     }
-    rv = UvOsTruncate(fd, size);
+    rv = UvOsTruncate(fd, (off_t)size);
     if (rv != 0) {
         UvOsErrMsg(errmsg, "truncate", rv);
         goto err_after_open;
@@ -609,7 +603,7 @@ static int probeDirectIO(int fd, size_t *size, char *errmsg)
             return RAFT_NOMEM;
         }
         memset(buf, 0, *size);
-        rv = write(fd, buf, *size);
+        rv = (int)write(fd, buf, *size);
         raft_free(buf);
         if (rv > 0) {
             /* Since we fallocate'ed the file, we should never fail because of
@@ -674,7 +668,7 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
     *((void **)(&iocb.aio_buf)) = buf;
     iocb.aio_nbytes = size;
     iocb.aio_offset = 0;
-    iocb.aio_fildes = fd;
+    iocb.aio_fildes = (uint32_t)fd;
     iocb.aio_reqprio = 0;
     iocb.aio_rw_flags |= RWF_NOWAIT | RWF_DSYNC;
 

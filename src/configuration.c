@@ -25,10 +25,10 @@ void configurationClose(struct raft_configuration *c)
     }
 }
 
-size_t configurationIndexOf(const struct raft_configuration *c,
-                            const unsigned id)
+unsigned configurationIndexOf(const struct raft_configuration *c,
+                              const raft_id id)
 {
-    size_t i;
+    unsigned i;
     assert(c != NULL);
     for (i = 0; i < c->n; i++) {
         if (c->servers[i].id == id) {
@@ -38,11 +38,11 @@ size_t configurationIndexOf(const struct raft_configuration *c,
     return c->n;
 }
 
-size_t configurationIndexOfVoter(const struct raft_configuration *c,
-                                 const unsigned id)
+unsigned configurationIndexOfVoter(const struct raft_configuration *c,
+                                   const raft_id id)
 {
-    size_t i;
-    size_t j = 0;
+    unsigned i;
+    unsigned j = 0;
     assert(c != NULL);
     assert(id > 0);
 
@@ -62,7 +62,7 @@ size_t configurationIndexOfVoter(const struct raft_configuration *c,
 }
 
 const struct raft_server *configurationGet(const struct raft_configuration *c,
-                                           const unsigned id)
+                                           const raft_id id)
 {
     size_t i;
     assert(c != NULL);
@@ -80,10 +80,10 @@ const struct raft_server *configurationGet(const struct raft_configuration *c,
     return &c->servers[i];
 }
 
-size_t configurationVoterCount(const struct raft_configuration *c)
+unsigned configurationVoterCount(const struct raft_configuration *c)
 {
-    size_t i;
-    size_t n = 0;
+    unsigned i;
+    unsigned n = 0;
     assert(c != NULL);
     for (i = 0; i < c->n; i++) {
         if (c->servers[i].role == RAFT_VOTER) {
@@ -110,7 +110,7 @@ int configurationCopy(const struct raft_configuration *src,
 }
 
 int configurationAdd(struct raft_configuration *c,
-                     unsigned id,
+                     raft_id id,
                      const char *address,
                      int role)
 {
@@ -157,10 +157,10 @@ int configurationAdd(struct raft_configuration *c,
     return 0;
 }
 
-int configurationRemove(struct raft_configuration *c, const unsigned id)
+int configurationRemove(struct raft_configuration *c, const raft_id id)
 {
-    size_t i;
-    size_t j;
+    unsigned i;
+    unsigned j;
     struct raft_server *servers;
     assert(c != NULL);
 
@@ -212,7 +212,7 @@ int configurationRemove(struct raft_configuration *c, const unsigned id)
 size_t configurationEncodedSize(const struct raft_configuration *c)
 {
     size_t n = 0;
-    size_t i;
+    unsigned i;
 
     /* We need one byte for the encoding format version */
     n++;
@@ -235,7 +235,7 @@ size_t configurationEncodedSize(const struct raft_configuration *c)
 void configurationEncodeToBuf(const struct raft_configuration *c, void *buf)
 {
     void *cursor = buf;
-    size_t i;
+    unsigned i;
 
     /* Encoding format version */
     bytePut8(&cursor, ENCODING_FORMAT);
@@ -248,7 +248,8 @@ void configurationEncodeToBuf(const struct raft_configuration *c, void *buf)
         assert(server->address != NULL);
         bytePut64Unaligned(&cursor, server->id); /* might not be aligned */
         bytePutString(&cursor, server->address);
-        bytePut8(&cursor, server->role);
+        assert(server->role < 255);
+        bytePut8(&cursor, (uint8_t)server->role);
     };
 }
 
@@ -297,11 +298,11 @@ int configurationDecode(const struct raft_buffer *buf,
     }
 
     /* Read the number of servers. */
-    n = byteGet64Unaligned(&cursor);
+    n = (size_t)byteGet64Unaligned(&cursor);
 
     /* Decode the individual servers. */
     for (i = 0; i < n; i++) {
-        unsigned id;
+        raft_id id;
         const char *address;
         int role;
         int rv;
@@ -311,7 +312,8 @@ int configurationDecode(const struct raft_buffer *buf,
 
         /* Server Address. */
         address = byteGetString(
-            &cursor, buf->len - ((uint8_t *)cursor - (uint8_t *)buf->base));
+            &cursor,
+            buf->len - (size_t)((uint8_t *)cursor - (uint8_t *)buf->base));
         if (address == NULL) {
             return RAFT_MALFORMED;
         }

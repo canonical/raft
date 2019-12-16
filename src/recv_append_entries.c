@@ -22,7 +22,7 @@ static void recvSendAppendEntriesResultCb(struct raft_io_send *req, int status)
 }
 
 int recvAppendEntries(struct raft *r,
-                      const unsigned id,
+                      raft_id id,
                       const char *address,
                       const struct raft_append_entries *args)
 {

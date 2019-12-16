@@ -125,7 +125,7 @@ static void tearDownDeps(void *data)
         struct raft_io _io;                                                  \
         struct raft_tracer _tracer;                                          \
         raft_term _term;                                                     \
-        unsigned _voted_for;                                                 \
+        raft_id _voted_for;                                                  \
         struct raft_snapshot *_snapshot;                                     \
         raft_index _start_index;                                             \
         struct raft_entry *_entries;                                         \
@@ -296,4 +296,3 @@ TEST(truncate, closingMultiple, setUp, tearDownDeps, 0, NULL)
     TEAR_DOWN_UV;
     return MUNIT_OK;
 }
-

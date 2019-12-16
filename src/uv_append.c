@@ -228,7 +228,8 @@ static void uvAliveSegmentWriteCb(struct UvWriterReq *write, const int status)
      *   case we advance the current block counter, reset the first buffer and
      *   set the scheduled marker to 0.
      */
-    n_blocks = s->buf.len / uv->block_size; /* Number of blocks written. */
+    n_blocks =
+        (unsigned)(s->buf.len / uv->block_size); /* Number of blocks written. */
     if (s->pending.n < uv->block_size) {
         /* Nothing to do */
         assert(n_blocks == 1);

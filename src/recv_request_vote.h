@@ -7,7 +7,7 @@
 
 /* Process a RequestVote RPC from the given server. */
 int recvRequestVote(struct raft *r,
-                    const unsigned id,
+                    raft_id id,
                     const char *address,
                     const struct raft_request_vote *args);
 

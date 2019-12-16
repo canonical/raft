@@ -36,7 +36,7 @@ struct uvTcpConnect
 };
 
 /* Encode an handshake message into the given buffer. */
-static int uvTcpEncodeHandshake(unsigned id, const char *address, uv_buf_t *buf)
+static int uvTcpEncodeHandshake(raft_id id, const char *address, uv_buf_t *buf)
 {
     void *cursor;
     size_t address_len = bytePad64(strlen(address) + 1);
@@ -200,7 +200,7 @@ err:
 
 int UvTcpConnect(struct raft_uv_transport *transport,
                  struct raft_uv_connect *req,
-                 unsigned id,
+                 raft_id id,
                  const char *address,
                  raft_uv_connect_cb cb)
 {

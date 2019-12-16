@@ -11,7 +11,7 @@ struct UvTcp
 {
     struct raft_uv_transport *transport; /* Interface object we implement */
     struct uv_loop_s *loop;              /* Event loop */
-    unsigned id;                         /* ID of this raft server */
+    raft_id id;                          /* ID of this raft server */
     const char *address;                 /* Address of this raft server */
     struct uv_tcp_s listener;            /* Listening TCP socket handle */
     raft_uv_accept_cb accept_cb;         /* Call after accepting a connection */
@@ -31,7 +31,7 @@ void UvTcpListenClose(struct UvTcp *t);
 /* Implementation of raft_uv_transport->connect. */
 int UvTcpConnect(struct raft_uv_transport *transport,
                  struct raft_uv_connect *req,
-                 unsigned id,
+                 raft_id id,
                  const char *address,
                  raft_uv_connect_cb cb);
 

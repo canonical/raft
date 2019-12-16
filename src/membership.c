@@ -49,11 +49,11 @@ err:
 
 bool membershipUpdateCatchUpRound(struct raft *r)
 {
-    size_t server_index;
+    unsigned server_index;
     raft_index match_index;
     raft_index last_index;
     raft_time now = r->io->time(r->io);
-    unsigned round_duration;
+    raft_time round_duration;
     bool is_up_to_date;
     bool is_fast_enough;
 

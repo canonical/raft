@@ -99,7 +99,7 @@ static void uvWriterWorkCb(uv_work_t *work)
         /* UNTESTED: since we're not using NOWAIT and the parameters are valid,
          * this shouldn't fail. */
         UvOsErrMsg(req->errmsg, "io_submit", rv);
-	rv = RAFT_IOERR;
+        rv = RAFT_IOERR;
         goto out_after_io_setup;
     }
 
@@ -117,7 +117,7 @@ out:
     if (rv != 0) {
         req->status = rv;
     } else {
-        uvWriterReqSetStatus(req, event.res);
+        uvWriterReqSetStatus(req, (int)event.res);
     }
 
     return;
@@ -151,7 +151,7 @@ static void uvWriterPollCb(uv_poll_t *poller, int status, int events)
     assert(events & UV_READABLE);
 
     /* Read the event file descriptor */
-    rv = read(w->event_fd, &completed, sizeof completed);
+    rv = (int)read(w->event_fd, &completed, sizeof completed);
     if (rv != sizeof completed) {
         /* UNTESTED: According to eventfd(2) this is the only possible failure
          * mode, meaning that epoll has indicated that the event FD is not yet
@@ -167,7 +167,7 @@ static void uvWriterPollCb(uv_poll_t *poller, int status, int events)
      *
      * If we got here at least one write should have completed and io_events
      * should return immediately without blocking. */
-    n_events = UvOsIoGetevents(w->ctx, 1, w->n_events, w->events, NULL);
+    n_events = UvOsIoGetevents(w->ctx, 1, (long int)w->n_events, w->events, NULL);
     assert(n_events >= 1);
 
     for (i = 0; i < (unsigned)n_events; i++) {
@@ -178,7 +178,7 @@ static void uvWriterPollCb(uv_poll_t *poller, int status, int events)
         /* If we got EAGAIN, it means it was not possible to perform the write
          * asynchronously, so let's fall back to the threadpool. */
         if (event->res == -EAGAIN) {
-            req->iocb.aio_flags &= ~IOCB_FLAG_RESFD;
+            req->iocb.aio_flags &= (unsigned)~IOCB_FLAG_RESFD;
             req->iocb.aio_resfd = 0;
             req->iocb.aio_rw_flags &= ~RWF_NOWAIT;
             assert(req->work.data == NULL);
@@ -196,7 +196,7 @@ static void uvWriterPollCb(uv_poll_t *poller, int status, int events)
         }
 #endif /* RWF_NOWAIT */
 
-        uvWriterReqSetStatus(req, event->res);
+        uvWriterReqSetStatus(req, (int)event->res);
 
 #if defined(RWF_NOWAIT)
     finish:
@@ -437,12 +437,12 @@ int UvWriterSubmit(struct UvWriter *w,
     memset(&req->iocb, 0, sizeof req->iocb);
     memset(req->errmsg, 0, sizeof req->errmsg);
 
-    req->iocb.aio_fildes = w->fd;
+    req->iocb.aio_fildes = (uint32_t)w->fd;
     req->iocb.aio_lio_opcode = IOCB_CMD_PWRITEV;
     req->iocb.aio_reqprio = 0;
     *((void **)(&req->iocb.aio_buf)) = (void *)bufs;
     req->iocb.aio_nbytes = n;
-    req->iocb.aio_offset = offset;
+    req->iocb.aio_offset = (int64_t)offset;
     *((void **)(&req->iocb.aio_data)) = (void *)req;
 
 #if defined(RWF_HIPRI)
@@ -461,7 +461,7 @@ int UvWriterSubmit(struct UvWriter *w,
      * without using the threadpool. */
     if (w->async) {
         req->iocb.aio_flags |= IOCB_FLAG_RESFD;
-        req->iocb.aio_resfd = w->event_fd;
+        req->iocb.aio_resfd = (uint32_t)w->event_fd;
         req->iocb.aio_rw_flags |= RWF_NOWAIT;
     }
 #else
@@ -497,7 +497,7 @@ int UvWriterSubmit(struct UvWriter *w,
 
         /* Submitting the write would block, or NOWAIT is not
          * supported. Let's run this request in the threadpool. */
-        req->iocb.aio_flags &= ~IOCB_FLAG_RESFD;
+        req->iocb.aio_flags &= (unsigned)~IOCB_FLAG_RESFD;
         req->iocb.aio_resfd = 0;
         req->iocb.aio_rw_flags &= ~RWF_NOWAIT;
     }

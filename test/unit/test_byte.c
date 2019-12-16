@@ -1,5 +1,7 @@
-#include "../../src/byte.h"
+#include <ctype.h>
+#include <stdio.h>
 
+#include "../../src/byte.h"
 #include "../lib/runner.h"
 
 /******************************************************************************
@@ -110,5 +112,53 @@ TEST(byteGet64Unaligned, success, NULL, NULL, 0, NULL)
     bytePut64Unaligned(&cursor1, 1);
     munit_assert_int(byteGet64Unaligned(&cursor2), ==, 1);
     free(buf);
+    return MUNIT_OK;
+}
+
+/******************************************************************************
+ *
+ * byteSha1
+ *
+ *****************************************************************************/
+
+/* Assert that the 20 bytes contained in VALUE match the given DIGEST
+ * hexadecimal representation. */
+#define ASSERT_SHA1(VALUE, DIGEST)                      \
+    do {                                                \
+        char _digest[41];                               \
+        unsigned _i;                                    \
+        for (_i = 0; _i < 20; _i++) {                   \
+            unsigned _j = _i * 2;                       \
+            sprintf(&_digest[_j], "%.2x", value[_i]);   \
+            _digest[_j] = toupper(_digest[_j]);         \
+            _digest[_j + 1] = toupper(_digest[_j + 1]); \
+        }                                               \
+        _digest[40] = '\0';                             \
+        munit_assert_string_equal(_digest, DIGEST);     \
+    } while (0)
+
+SUITE(byteSha1)
+
+TEST(byteSha1, abc, NULL, NULL, 0, NULL)
+{
+    struct byteSha1 sha1;
+    uint8_t text[] = "abc";
+    uint8_t value[20];
+    byteSha1Init(&sha1);
+    byteSha1Update(&sha1, text, sizeof text - 1);
+    byteSha1Digest(&sha1, value);
+    ASSERT_SHA1(value, "A9993E364706816ABA3E25717850C26C9CD0D89D");
+    return MUNIT_OK;
+}
+
+TEST(byteSha1, abcbd, NULL, NULL, 0, NULL)
+{
+    struct byteSha1 sha1;
+    uint8_t text[] = "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
+    uint8_t value[20];
+    byteSha1Init(&sha1);
+    byteSha1Update(&sha1, text, sizeof text - 1);
+    byteSha1Digest(&sha1, value);
+    ASSERT_SHA1(value, "84983E441C3BD26EBAAE4AA1F95129E5E54670F1");
     return MUNIT_OK;
 }
