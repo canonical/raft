@@ -126,7 +126,8 @@ void UvSnapshotSort(struct uvSnapshotInfo *infos, size_t n_infos)
  * the given snapshot object accordingly. */
 static int uvSnapshotLoadMeta(struct uv *uv,
                               struct uvSnapshotInfo *info,
-                              struct raft_snapshot *snapshot)
+                              struct raft_snapshot *snapshot,
+                              char *errmsg)
 {
     uint64_t header[1 + /* Format version */
                     1 + /* CRC checksum */
@@ -137,7 +138,6 @@ static int uvSnapshotLoadMeta(struct uv *uv,
     uint64_t crc1;
     uint32_t crc2;
     uv_file fd;
-    char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int rv;
 
     snapshot->term = info->term;
@@ -197,7 +197,7 @@ static int uvSnapshotLoadMeta(struct uv *uv,
     crc2 = byteCrc32(buf.base, buf.len, crc2);
 
     if (crc1 != crc2) {
-        tracef("read %s: checksum mismatch", info->filename);
+        ErrMsgPrintf(errmsg, "read %s: checksum mismatch", info->filename);
         rv = RAFT_CORRUPT;
         goto err_after_open;
     }
@@ -228,11 +228,11 @@ err:
  * snapshot object accordingly. */
 static int uvSnapshotLoadData(struct uv *uv,
                               struct uvSnapshotInfo *info,
-                              struct raft_snapshot *snapshot)
+                              struct raft_snapshot *snapshot,
+                              char *errmsg)
 {
     char filename[UV__FILENAME_LEN];
     struct raft_buffer buf;
-    char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int rv;
 
     uvSnapshotFilenameOf(info, filename);
@@ -263,14 +263,15 @@ err:
 
 int UvSnapshotLoad(struct uv *uv,
                    struct uvSnapshotInfo *meta,
-                   struct raft_snapshot *snapshot)
+                   struct raft_snapshot *snapshot,
+                   char *errmsg)
 {
     int rv;
-    rv = uvSnapshotLoadMeta(uv, meta, snapshot);
+    rv = uvSnapshotLoadMeta(uv, meta, snapshot, errmsg);
     if (rv != 0) {
         return rv;
     }
-    rv = uvSnapshotLoadData(uv, meta, snapshot);
+    rv = uvSnapshotLoadData(uv, meta, snapshot, errmsg);
     if (rv != 0) {
         return rv;
     }
@@ -581,7 +582,8 @@ static void uvSnapshotGetWorkCb(uv_work_t *work)
         goto out;
     }
     if (snapshots != NULL) {
-        rv = UvSnapshotLoad(uv, &snapshots[n_snapshots - 1], get->snapshot);
+        rv = UvSnapshotLoad(uv, &snapshots[n_snapshots - 1], get->snapshot,
+                            get->errmsg);
         if (rv != 0) {
             get->status = rv;
         }

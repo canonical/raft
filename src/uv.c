@@ -316,8 +316,11 @@ static int uvLoadSnapshotAndEntries(struct uv *uv,
             rv = RAFT_NOMEM;
             goto err;
         }
-        rv = UvSnapshotLoad(uv, &snapshots[n_snapshots - 1], *snapshot);
+        rv = UvSnapshotLoad(uv, &snapshots[n_snapshots - 1], *snapshot,
+                            uv->io->errmsg);
         if (rv != 0) {
+            HeapFree(*snapshot);
+            *snapshot = NULL;
             goto err;
         }
         uvSnapshotFilenameOf(&snapshots[n_snapshots - 1], snapshot_filename);

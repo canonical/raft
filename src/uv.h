@@ -246,7 +246,8 @@ void UvSnapshotSort(struct uvSnapshotInfo *infos, size_t n_infos);
 /* Load the snapshot associated with the given metadata. */
 int UvSnapshotLoad(struct uv *uv,
                    struct uvSnapshotInfo *meta,
-                   struct raft_snapshot *snapshot);
+                   struct raft_snapshot *snapshot,
+                   char *errmsg);
 
 /* Implementation raft_io->snapshot_put (defined in uv_snapshot.c). */
 int UvSnapshotPut(struct raft_io *io,
