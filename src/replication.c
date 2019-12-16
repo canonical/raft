@@ -300,7 +300,6 @@ int replicationProgress(struct raft *r, unsigned i)
 {
     struct raft_server *server = &r->configuration.servers[i];
     raft_index snapshot_index = logSnapshotIndex(&r->log);
-    raft_index last_index = logLastIndex(&r->log);
     raft_index next_index = progressNextIndex(r, i);
     raft_index prev_index;
     raft_term prev_term;
@@ -331,6 +330,7 @@ int replicationProgress(struct raft *r, unsigned i)
          * null. If the first entry is not available anymore, send the last
          * snapshot. */
         if (snapshot_index > 0) {
+            raft_index last_index = logLastIndex(&r->log);
             assert(last_index > 0); /* The log can't be empty */
             goto send_snapshot;
         }

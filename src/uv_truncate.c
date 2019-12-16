@@ -48,6 +48,7 @@ static void uvTruncateWorkCb(uv_work_t *work)
     assert(segments != NULL);
 
     /* Find the segment that contains the truncate point. */
+    segment = NULL; /* Suppress warnings. */
     for (i = 0; i < n_segments; i++) {
         segment = &segments[i];
         if (segment->is_open) {
