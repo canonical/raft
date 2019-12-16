@@ -139,6 +139,18 @@ RAFT_API int raft_configuration_encode(const struct raft_configuration *c,
                                        struct raft_buffer *buf);
 
 /**
+ * Hash function which outputs a 64-bit value based on a text and a number.
+ *
+ * This can be used to generate a unique ID for a new server being added, for
+ * example based on its address and on the current time in milliseconds since
+ * the Epoch.
+ *
+ * It's internally implemented as a SHA1 where only the last 8 bytes of the hash
+ * value are kept.
+ */
+RAFT_API unsigned long long raft_digest(const char *text, unsigned long long n);
+
+/**
  * Log entry types.
  */
 enum {

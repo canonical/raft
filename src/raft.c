@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "assert.h"
+#include "byte.h"
 #include "configuration.h"
 #include "convert.h"
 #include "election.h"
@@ -173,4 +174,21 @@ int raft_configuration_encode(const struct raft_configuration *c,
                               struct raft_buffer *buf)
 {
     return configurationEncode(c, buf);
+}
+
+unsigned long long raft_digest(const char *text, unsigned long long n)
+{
+    struct byteSha1 sha1;
+    uint8_t value[20];
+    uint64_t n64 = byteFlip64((uint64_t)n);
+    uint64_t digest;
+
+    byteSha1Init(&sha1);
+    byteSha1Update(&sha1, (const uint8_t *)text, (uint32_t)strlen(text));
+    byteSha1Update(&sha1, (const uint8_t *)&n64, (uint32_t)(sizeof n64));
+    byteSha1Digest(&sha1, value);
+
+    memcpy(&digest, value + (sizeof value - sizeof digest), sizeof digest);
+
+    return byteFlip64(digest);
 }
