@@ -19,19 +19,17 @@
  * is valid. */
 static void convertSetState(struct raft *r, unsigned short new_state)
 {
-    unsigned short old_state = r->state;
-
     /* Check that the transition is legal, see Figure 3.3. Note that with
      * respect to the paper we have an additional "unavailable" state, which is
      * the initial or final state. */
-    assert((old_state == RAFT_UNAVAILABLE && new_state == RAFT_FOLLOWER) ||
-           (old_state == RAFT_FOLLOWER && new_state == RAFT_CANDIDATE) ||
-           (old_state == RAFT_CANDIDATE && new_state == RAFT_FOLLOWER) ||
-           (old_state == RAFT_CANDIDATE && new_state == RAFT_LEADER) ||
-           (old_state == RAFT_LEADER && new_state == RAFT_FOLLOWER) ||
-           (old_state == RAFT_FOLLOWER && new_state == RAFT_UNAVAILABLE) ||
-           (old_state == RAFT_CANDIDATE && new_state == RAFT_UNAVAILABLE) ||
-           (old_state == RAFT_LEADER && new_state == RAFT_UNAVAILABLE));
+    assert((r->state == RAFT_UNAVAILABLE && new_state == RAFT_FOLLOWER) ||
+           (r->state == RAFT_FOLLOWER && new_state == RAFT_CANDIDATE) ||
+           (r->state == RAFT_CANDIDATE && new_state == RAFT_FOLLOWER) ||
+           (r->state == RAFT_CANDIDATE && new_state == RAFT_LEADER) ||
+           (r->state == RAFT_LEADER && new_state == RAFT_FOLLOWER) ||
+           (r->state == RAFT_FOLLOWER && new_state == RAFT_UNAVAILABLE) ||
+           (r->state == RAFT_CANDIDATE && new_state == RAFT_UNAVAILABLE) ||
+           (r->state == RAFT_LEADER && new_state == RAFT_UNAVAILABLE));
     r->state = new_state;
 }
 
@@ -166,7 +164,7 @@ int convertToCandidate(struct raft *r)
 
     if (n_voters == 1) {
         tracef("self elect and convert to leader");
-	return convertToLeader(r);
+        return convertToLeader(r);
     }
 
     /* Start a new election round */
