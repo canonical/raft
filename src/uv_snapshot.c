@@ -135,7 +135,7 @@ static int uvSnapshotLoadMeta(struct uv *uv,
                     1 /* Configuration length */];
     struct raft_buffer buf;
     uint64_t format;
-    uint64_t crc1;
+    uint32_t crc1;
     uint32_t crc2;
     uv_file fd;
     int rv;
@@ -165,7 +165,7 @@ static int uvSnapshotLoadMeta(struct uv *uv,
         goto err_after_open;
     }
 
-    crc1 = byteFlip64(header[1]);
+    crc1 = (uint32_t)byteFlip64(header[1]);
 
     snapshot->configuration_index = byteFlip64(header[2]);
     buf.len = (size_t)byteFlip64(header[3]);
