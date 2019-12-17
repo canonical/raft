@@ -1,9 +1,9 @@
 #include "../include/raft.h"
-
 #include "assert.h"
 #include "configuration.h"
 #include "convert.h"
 #include "election.h"
+#include "membership.h"
 #include "progress.h"
 #include "replication.h"
 #include "tracing.h"
@@ -101,7 +101,8 @@ static bool checkContactQuorum(struct raft *r)
     for (i = 0; i < r->configuration.n; i++) {
         struct raft_server *server = &r->configuration.servers[i];
         bool recent_recv = progressResetRecentRecv(r, i);
-        if ((server->role == RAFT_VOTER && recent_recv) || server->id == r->id) {
+        if ((server->role == RAFT_VOTER && recent_recv) ||
+            server->id == r->id) {
             contacts++;
         }
     }
@@ -220,6 +221,16 @@ void tickCb(struct raft_io *io)
     rv = tick(r);
     if (rv != 0) {
         convertToUnavailable(r);
+	return;
+    }
+
+    /* For all states: if there is a leadership transfer request in progress,
+     * check if it's expired. */
+    if (r->leadership_transfer.server_id != 0) {
+        raft_time now = r->io->time(r->io);
+        if (now - r->leadership_transfer.start >= r->election_timeout) {
+            membershipLeadershipTransferClose(r);
+        }
     }
 }
 
