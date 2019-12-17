@@ -298,6 +298,19 @@ struct raft_install_snapshot
 };
 
 /**
+ * Hold the arguments of a TimeoutNow RPC.
+ *
+ * The TimeoutNow RPC is invoked by leaders to transfer leadership to a
+ * follower.
+ */
+struct raft_timeout_now
+{
+    raft_term term;            /* Leader's term. */
+    raft_index last_log_index; /* Index of leader's last log entry. */
+    raft_index last_log_term;  /* Term of log entry at last_log_index. */
+};
+
+/**
  * Type codes for RPC messages.
  */
 enum {
@@ -305,7 +318,8 @@ enum {
     RAFT_IO_APPEND_ENTRIES_RESULT,
     RAFT_IO_REQUEST_VOTE,
     RAFT_IO_REQUEST_VOTE_RESULT,
-    RAFT_IO_INSTALL_SNAPSHOT
+    RAFT_IO_INSTALL_SNAPSHOT,
+    RAFT_IO_TIMEOUT_NOW
 };
 
 /**
