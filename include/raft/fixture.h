@@ -25,7 +25,7 @@ enum {
 struct raft_fixture_server
 {
     bool alive;                /* If false, the server is down. */
-    unsigned id;               /* Server ID. */
+    raft_id id;                /* Server ID. */
     char address[8];           /* Server address (stringified ID). */
     struct raft_tracer tracer; /* Tracer. */
     struct raft_io io;         /* In-memory raft_io implementation. */
@@ -65,7 +65,7 @@ struct raft_fixture
 {
     raft_time time;                  /* Global time, common to all servers. */
     unsigned n;                      /* Number of servers. */
-    unsigned leader_id;              /* ID of current leader, or 0 if none. */
+    raft_id leader_id;               /* ID of current leader, or 0 if none. */
     struct raft_log log;             /* Copy of current leader's log. */
     raft_index commit_index;         /* Current commit index on leader. */
     struct raft_fixture_event event; /* Last event occurred. */

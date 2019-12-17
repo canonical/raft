@@ -20,7 +20,7 @@
 int raft_init(struct raft *r,
               struct raft_io *io,
               struct raft_fsm *fsm,
-              const unsigned id,
+              const raft_id id,
               const char *address)
 {
     int rv;

@@ -696,7 +696,7 @@ struct raft
     struct raft_tracer *tracer; /* Tracer implementation. */
     struct raft_io *io;         /* Disk and network I/O implementation. */
     struct raft_fsm *fsm;       /* User-defined FSM to apply commands to. */
-    unsigned id;                /* Server ID of this raft instance. */
+    raft_id id;                 /* Server ID of this raft instance. */
     char *address;              /* Server address of this raft instance. */
 
     /*
@@ -860,7 +860,7 @@ struct raft
 RAFT_API int raft_init(struct raft *r,
                        struct raft_io *io,
                        struct raft_fsm *fsm,
-                       unsigned id,
+                       raft_id id,
                        const char *address);
 
 /**

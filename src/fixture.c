@@ -914,7 +914,7 @@ static int serverInit(struct raft_fixture *f, unsigned i, struct raft_fsm *fsm)
     struct raft_fixture_server *s = &f->servers[i];
     s->alive = true;
     s->id = i + 1;
-    sprintf(s->address, "%u", s->id);
+    sprintf(s->address, "%llu", s->id);
     rv = ioInit(&s->io, i, &f->time);
     if (rv != 0) {
         return rv;
@@ -1069,7 +1069,7 @@ bool raft_fixture_alive(struct raft_fixture *f, unsigned i)
 unsigned raft_fixture_leader_index(struct raft_fixture *f)
 {
     if (f->leader_id != 0) {
-        return f->leader_id - 1;
+        return (unsigned)(f->leader_id - 1);
     }
     return f->n;
 }
@@ -1092,7 +1092,7 @@ raft_id raft_fixture_voted_for(struct raft_fixture *f, unsigned i)
  */
 static bool updateLeaderAndCheckElectionSafety(struct raft_fixture *f)
 {
-    unsigned leader_id = 0;
+    raft_id leader_id = 0;
     unsigned leader_i = 0;
     raft_term leader_term = 0;
     unsigned i;
@@ -1118,7 +1118,7 @@ static bool updateLeaderAndCheckElectionSafety(struct raft_fixture *f)
 
             if (other->current_term == raft->current_term) {
                 fprintf(stderr,
-                        "server %u and %u are both leaders in term %llu",
+                        "server %llu and %llu are both leaders in term %llu",
                         raft->id, other->id, raft->current_term);
                 abort();
             }
@@ -1217,7 +1217,7 @@ static void checkLeaderAppendOnly(struct raft_fixture *f)
         return;
     }
 
-    raft = raft_fixture_get(f, f->leader_id - 1);
+    raft = raft_fixture_get(f, (unsigned)f->leader_id - 1);
     last = logLastIndex(&f->log);
 
     for (index = 1; index <= last; index++) {
@@ -1250,7 +1250,7 @@ static void checkLeaderAppendOnly(struct raft_fixture *f)
  * Append-Only check at the next iteration. */
 static void copyLeaderLog(struct raft_fixture *f)
 {
-    struct raft *raft = raft_fixture_get(f, f->leader_id - 1);
+    struct raft *raft = raft_fixture_get(f, (unsigned)f->leader_id - 1);
     struct raft_entry *entries;
     unsigned n;
     size_t i;
@@ -1274,7 +1274,7 @@ static void copyLeaderLog(struct raft_fixture *f)
 /* Update the commit index to match the one from the current leader. */
 static void updateCommitIndex(struct raft_fixture *f)
 {
-    struct raft *raft = raft_fixture_get(f, f->leader_id - 1);
+    struct raft *raft = raft_fixture_get(f, (unsigned)f->leader_id - 1);
     if (raft->commit_index > f->commit_index) {
         f->commit_index = raft->commit_index;
     }
@@ -1563,7 +1563,7 @@ void raft_fixture_depose(struct raft_fixture *f)
 
     /* Make sure there's a leader. */
     assert(f->leader_id != 0);
-    leader_i = f->leader_id - 1;
+    leader_i = (unsigned)f->leader_id - 1;
     assert(raft_state(&f->servers[leader_i].raft) == RAFT_LEADER);
 
     /* Set a very large election timeout on all followers, to prevent them from
