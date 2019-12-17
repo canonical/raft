@@ -336,6 +336,7 @@ struct raft_message
         struct raft_append_entries append_entries;
         struct raft_append_entries_result append_entries_result;
         struct raft_install_snapshot install_snapshot;
+        struct raft_timeout_now timeout_now;
     };
 };
 

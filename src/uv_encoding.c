@@ -64,6 +64,13 @@ static size_t sizeofInstallSnapshot(const struct raft_install_snapshot *p)
            sizeof(uint64_t);  /* Length of snapshot data */
 }
 
+static size_t sizeofTimeoutNow(void)
+{
+    return sizeof(uint64_t) + /* Term. */
+           sizeof(uint64_t) + /* Last log index. */
+           sizeof(uint64_t) /* Last log term. */;
+}
+
 size_t uvSizeofBatchHeader(size_t n)
 {
     return 8 + /* Number of entries in the batch, little endian */
@@ -133,6 +140,16 @@ static void encodeInstallSnapshot(const struct raft_install_snapshot *p,
     bytePut64(&cursor, p->data.len); /* Snapshot data size. */
 }
 
+static void encodeTimeoutNow(const struct raft_timeout_now *p, void *buf)
+{
+    void *cursor = buf;
+
+    bytePut64(&cursor, p->term);
+    bytePut64(&cursor, p->last_log_index);
+    bytePut64(&cursor, p->last_log_term);
+}
+
+
 int uvEncodeMessage(const struct raft_message *message,
                     uv_buf_t **bufs,
                     unsigned *n_bufs)
@@ -158,6 +175,9 @@ int uvEncodeMessage(const struct raft_message *message,
             break;
         case RAFT_IO_INSTALL_SNAPSHOT:
             header.len += sizeofInstallSnapshot(&message->install_snapshot);
+            break;
+        case RAFT_IO_TIMEOUT_NOW:
+            header.len += sizeofTimeoutNow();
             break;
         default:
             return RAFT_MALFORMED;
@@ -190,6 +210,9 @@ int uvEncodeMessage(const struct raft_message *message,
             break;
         case RAFT_IO_INSTALL_SNAPSHOT:
             encodeInstallSnapshot(&message->install_snapshot, cursor);
+            break;
+        case RAFT_IO_TIMEOUT_NOW:
+            encodeTimeoutNow(&message->timeout_now, cursor);
             break;
     };
 
@@ -408,6 +431,17 @@ static int decodeInstallSnapshot(const uv_buf_t *buf,
     return 0;
 }
 
+static void decodeTimeoutNow(const uv_buf_t *buf, struct raft_timeout_now *p)
+{
+    const void *cursor;
+
+    cursor = buf->base;
+
+    p->term = byteGet64(&cursor);
+    p->last_log_index = byteGet64(&cursor);
+    p->last_log_term = byteGet64(&cursor);
+}
+
 int uvDecodeMessage(const unsigned long type,
                     const uv_buf_t *header,
                     struct raft_message *message,
@@ -441,6 +475,9 @@ int uvDecodeMessage(const unsigned long type,
         case RAFT_IO_INSTALL_SNAPSHOT:
             rv = decodeInstallSnapshot(header, &message->install_snapshot);
             *payload_len += message->install_snapshot.data.len;
+            break;
+        case RAFT_IO_TIMEOUT_NOW:
+            decodeTimeoutNow(header, &message->timeout_now);
             break;
         default:
             rv = RAFT_IOERR;
