@@ -675,7 +675,7 @@ struct raft_progress
 struct raft; /* Forward declaration. */
 
 /**
- * Transfer leadership callback..
+ * Transfer leadership callback.
  */
 typedef void (*raft_transfer_leadership_cb)(struct raft *raft);
 
