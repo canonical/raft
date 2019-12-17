@@ -1,11 +1,11 @@
+#include "uv_encoding.h"
+
 #include <string.h>
 
 #include "../include/raft/uv.h"
-
 #include "assert.h"
 #include "byte.h"
 #include "configuration.h"
-#include "uv_encoding.h"
 
 /**
  * Size of the request preable.
@@ -14,12 +14,17 @@
     (sizeof(uint64_t) /* Message type. */ + \
      sizeof(uint64_t) /* Message size. */)
 
-size_t sizeofRequestVote(void)
+static size_t sizeofRequestVoteV1(void)
 {
     return sizeof(uint64_t) + /* Term. */
            sizeof(uint64_t) + /* Candidate ID. */
            sizeof(uint64_t) + /* Last log index. */
            sizeof(uint64_t) /* Last log term. */;
+}
+
+static size_t sizeofRequestVote(void)
+{
+    return sizeofRequestVoteV1() + sizeof(uint64_t) /* Leadership transfer. */;
 }
 
 static size_t sizeofRequestVoteResult(void)
@@ -73,6 +78,7 @@ static void encodeRequestVote(const struct raft_request_vote *p, void *buf)
     bytePut64(&cursor, p->candidate_id);
     bytePut64(&cursor, p->last_log_index);
     bytePut64(&cursor, p->last_log_term);
+    bytePut64(&cursor, p->disrupt_leader ? 1 : 0);
 }
 
 static void encodeRequestVoteResult(const struct raft_request_vote_result *p,
@@ -266,6 +272,13 @@ static void decodeRequestVote(const uv_buf_t *buf, struct raft_request_vote *p)
     p->candidate_id = byteGet64(&cursor);
     p->last_log_index = byteGet64(&cursor);
     p->last_log_term = byteGet64(&cursor);
+
+    /* Support for legacy request vote that doesn't have disrupt_leader. */
+    if (buf->len == sizeofRequestVoteV1()) {
+        p->disrupt_leader = false;
+    } else {
+        p->disrupt_leader = byteGet64(&cursor) == 1;
+    }
 }
 
 static void decodeRequestVoteResult(const uv_buf_t *buf,
@@ -313,7 +326,7 @@ int uvDecodeBatchHeader(const void *batch,
             goto err_after_alloc;
         }
 
-        cursor = (uint8_t*)cursor + 3; /* Unused */
+        cursor = (uint8_t *)cursor + 3; /* Unused */
 
         /* Size of the log entry data, little endian. */
         entry->buf.len = byteGet32(&cursor);
@@ -389,7 +402,7 @@ static int decodeInstallSnapshot(const uv_buf_t *buf,
     if (rv != 0) {
         return rv;
     }
-    cursor = (uint8_t*)cursor + conf.len;
+    cursor = (uint8_t *)cursor + conf.len;
     args->data.len = (size_t)byteGet64(&cursor);
 
     return 0;
@@ -459,10 +472,10 @@ void uvDecodeEntriesBatch(const struct raft_buffer *buf,
 
         entry->buf.base = cursor;
 
-	cursor = (uint8_t*)cursor + entry->buf.len;
+        cursor = (uint8_t *)cursor + entry->buf.len;
         if (entry->buf.len % 8 != 0) {
             /* Add padding */
-            cursor = (uint8_t*)cursor + 8 - (entry->buf.len % 8);
+            cursor = (uint8_t *)cursor + 8 - (entry->buf.len % 8);
         }
     }
 }
