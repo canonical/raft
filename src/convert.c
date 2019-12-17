@@ -4,6 +4,7 @@
 #include "configuration.h"
 #include "election.h"
 #include "log.h"
+#include "membership.h"
 #include "progress.h"
 #include "queue.h"
 #include "request.h"
@@ -212,6 +213,10 @@ int convertToLeader(struct raft *r)
 
 void convertToUnavailable(struct raft *r)
 {
+    /* Abort any pending leadership transfer request. */
+    if (r->leadership_transfer.server_id != 0) {
+        membershipLeadershipTransferClose(r);
+    }
     convertClear(r);
     convertSetState(r, RAFT_UNAVAILABLE);
 }
