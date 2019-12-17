@@ -672,13 +672,19 @@ struct raft_progress
     bool recent_recv;          /* A msg was received within election timeout. */
 };
 
+struct raft; /* Forward declaration. */
+
+/**
+ * Transfer leadership callback..
+ */
+typedef void (*raft_transfer_leadership_cb)(struct raft *raft);
+
 /**
  * Close callback.
  *
  * It's safe to release the memory of a raft instance only after this callback
  * has fired.
  */
-struct raft;
 typedef void (*raft_close_cb)(struct raft *raft);
 
 /**
@@ -815,6 +821,15 @@ struct raft
      * down after the election timeout has elapsed without contacting a majority
      * of voting servers. */
     raft_time election_timer_start;
+
+    /* Information about an in-progress leadership transfer. */
+    struct
+    {
+        raft_id server_id;              /* ID of target server. */
+        raft_time start;                /* Start of leadership transfer. */
+        raft_transfer_leadership_cb cb; /* User callback. */
+        struct raft_io_send send;       /* For sending TimeoutNow */
+    } leadership_transfer;
 
     /*
      * Information about the last snapshot that was taken (if any).
