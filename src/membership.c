@@ -11,7 +11,7 @@ int membershipCanChangeConfiguration(struct raft *r)
 {
     int rv;
 
-    if (r->state != RAFT_LEADER) {
+    if (r->state != RAFT_LEADER || r->leadership_transfer.server_id != 0) {
         rv = RAFT_NOTLEADER;
         goto err;
     }
