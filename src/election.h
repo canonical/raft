@@ -5,8 +5,8 @@
 
 #include "../include/raft.h"
 
-/* Reset the election_timer clock and set randomized_election_timeout to a random
- * value between election_timeout and 2 * election_timeout.
+/* Reset the election_timer clock and set randomized_election_timeout to a
+ * random value between election_timeout and 2 * election_timeout.
  *
  * From Section 3.4:
  *
@@ -54,8 +54,11 @@ bool electionTimerExpired(struct raft *r);
  *   To begin an election, a follower increments its current term and
  *   transitions to candidate state.  It then votes for itself and issues
  *   RequestVote RPCs in parallel to each of the other servers in the
- *   cluster. */
-int electionStart(struct raft *r);
+ *   cluster.
+ *
+ * If the disrupt_leader flag is true, the server will set the disrupt leader
+ * flag of the RequestVote messages it sends. */
+int electionStart(struct raft *r, bool disrupt_leader);
 
 /* Decide whether our vote should be granted to the requesting server and update
  * our state accordingly.
@@ -69,8 +72,8 @@ int electionStart(struct raft *r);
  *
  * The outcome of the decision is stored through the @granted pointer. */
 int electionVote(struct raft *r,
-                   const struct raft_request_vote *args,
-                   bool *granted);
+                 const struct raft_request_vote *args,
+                 bool *granted);
 
 /* Update the votes array by adding the vote from the server at the given
  * index. Return true if with this vote the server has reached the majority of

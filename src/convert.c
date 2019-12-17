@@ -141,7 +141,7 @@ void convertToFollower(struct raft *r)
     r->follower_state.current_leader.address = NULL;
 }
 
-int convertToCandidate(struct raft *r)
+int convertToCandidate(struct raft *r, bool disrupt_leader)
 {
     const struct raft_server *server;
     size_t n_voters = configurationVoterCount(&r->configuration);
@@ -170,7 +170,7 @@ int convertToCandidate(struct raft *r)
     }
 
     /* Start a new election round */
-    rv = electionStart(r);
+    rv = electionStart(r, disrupt_leader);
     if (rv != 0) {
         r->state = RAFT_FOLLOWER;
         raft_free(r->candidate_state.votes);

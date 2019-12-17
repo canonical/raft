@@ -10,6 +10,7 @@
 #include "recv_install_snapshot.h"
 #include "recv_request_vote.h"
 #include "recv_request_vote_result.h"
+#include "recv_timeout_now.h"
 #include "string.h"
 #include "tracing.h"
 
@@ -26,7 +27,7 @@ static int recvMessage(struct raft *r, struct raft_message *message)
     int rv = 0;
 
     if (message->type < RAFT_IO_APPEND_ENTRIES ||
-        message->type > RAFT_IO_INSTALL_SNAPSHOT) {
+        message->type > RAFT_IO_TIMEOUT_NOW) {
         tracef("received unknown message type type: %d", message->type);
         return 0;
     }
@@ -59,9 +60,13 @@ static int recvMessage(struct raft *r, struct raft_message *message)
                                        &message->request_vote_result);
             break;
         case RAFT_IO_INSTALL_SNAPSHOT:
-            rv = rpcRecvInstallSnapshot(r, message->server_id,
-                                        message->server_address,
-                                        &message->install_snapshot);
+            rv = recvInstallSnapshot(r, message->server_id,
+                                     message->server_address,
+                                     &message->install_snapshot);
+	    break;
+        case RAFT_IO_TIMEOUT_NOW:
+            rv = recvTimeoutNow(r, message->server_id, message->server_address,
+                                &message->timeout_now);
             break;
     };
 

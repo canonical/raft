@@ -20,8 +20,11 @@ void convertToFollower(struct raft *r);
  *
  * From Figure 3.1:
  *
- *   On conversion to candidate, start election */
-int convertToCandidate(struct raft *r);
+ *   On conversion to candidate, start election
+ *
+ * If the disrupt_leader flag is true, the server will set the disrupt leader
+ * flag of the RequestVote messages it sends.  */
+int convertToCandidate(struct raft *r, bool disrupt_leader);
 
 /* Convert from candidate to leader.
  *
