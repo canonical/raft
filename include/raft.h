@@ -1104,6 +1104,23 @@ RAFT_API int raft_remove(struct raft *r,
                          raft_change_cb cb);
 
 /**
+ * Transfer leadership to the server with the given ID.
+ *
+ * If the target server is not part of the configuration, or it's the leader
+ * itself, or it's not a #RAFT_VOTER, then #RAFT_BADID is returned.
+ *
+ * When this server detects that the target server has become the leader, or
+ * when @election_timeout milliseconds have elapsed, the given callback will be
+ * invoked.
+ *
+ * After the callback files, clients can check whether the operation was
+ * successful or not by calling @raft_leader() and checking if it returns the
+ * target server.
+ */
+RAFT_API int raft_transfer_leadership(struct raft *r,
+                                      raft_id id,
+                                      raft_transfer_leadership_cb cb);
+/**
  * User-definable dynamic memory allocation functions.
  *
  * The @data field will be passed as first argument to all functions.

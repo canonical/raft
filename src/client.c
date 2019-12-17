@@ -431,4 +431,47 @@ err:
     return rv;
 }
 
+int raft_transfer_leadership(struct raft *r,
+                             raft_id id,
+                             raft_transfer_leadership_cb cb)
+{
+    const struct raft_server *server;
+    unsigned i;
+    int rv;
+
+    if (r->state != RAFT_LEADER || r->leadership_transfer.server_id != 0) {
+        rv = RAFT_NOTLEADER;
+        ErrMsgFromCode(r->errmsg, rv);
+        goto err;
+    }
+
+    server = configurationGet(&r->configuration, id);
+    if (server == NULL || server->id == r->id || server->role != RAFT_VOTER) {
+        rv = RAFT_BADID;
+        ErrMsgFromCode(r->errmsg, rv);
+        goto err;
+    }
+
+    /* If this follower is up-to-date, we can send it the TimeoutNow message
+     * right away. */
+    i = configurationIndexOf(&r->configuration, server->id);
+    assert(i < r->configuration.n);
+
+    membershipLeadershipTransferInit(r, id, cb);
+
+    if (progressIsUpToDate(r, i)) {
+        rv = membershipLeadershipTransferStart(r);
+        if (rv != 0) {
+            membershipLeadershipTransferReset(r);
+            goto err;
+        }
+    }
+
+    return 0;
+
+err:
+    assert(rv != 0);
+    return rv;
+}
+
 #undef tracef
