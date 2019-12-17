@@ -125,12 +125,29 @@ static void serverRaftCloseCb(struct raft *raft)
     }
 }
 
+static void serverTransferLeadershipCb(struct raft *raft)
+{
+    struct Server *s = raft->data;
+    raft_id id;
+    const char *address;
+    raft_leader(&s->raft, &id, &address);
+    raft_close(&s->raft, serverRaftCloseCb);
+}
+
 /* Final callback in the shutdown sequence, invoked after the timer handle has
  * been closed. */
 static void serverTimerCloseCb(struct uv_handle_s *handle)
 {
     struct Server *s = handle->data;
     if (s->raft.data != NULL) {
+        if (s->raft.state == RAFT_LEADER) {
+            int rv;
+            rv = raft_transfer_leadership(&s->raft, 0,
+                                          serverTransferLeadershipCb);
+            if (rv == 0) {
+                return;
+            }
+        }
         raft_close(&s->raft, serverRaftCloseCb);
     }
 }
