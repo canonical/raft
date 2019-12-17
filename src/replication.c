@@ -770,9 +770,11 @@ int replicationUpdate(struct raft *r,
 
     if (i < r->configuration.n) {
         /* If we are transfering leadership to this follower, check if its log
-         * is now up-to-date and send a TimeoutNow RPC to it if so. */
+         * is now up-to-date and, if so, send it a TimeoutNow RPC (unless we
+         * already did). */
         if (r->leadership_transfer.server_id == server->id) {
-            if (progressIsUpToDate(r, i)) {
+            if (progressIsUpToDate(r, i) &&
+                r->leadership_transfer.send.data == NULL) {
                 rv = membershipLeadershipTransferStart(r);
                 if (rv != 0) {
                     membershipLeadershipTransferClose(r);

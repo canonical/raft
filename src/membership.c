@@ -166,6 +166,7 @@ void membershipLeadershipTransferInit(struct raft *r,
     r->leadership_transfer.server_id = id;
     r->leadership_transfer.start = r->io->time(r->io);
     r->leadership_transfer.cb = cb;
+    r->leadership_transfer.send.data = NULL;
 }
 
 int membershipLeadershipTransferStart(struct raft *r)
@@ -173,6 +174,7 @@ int membershipLeadershipTransferStart(struct raft *r)
     const struct raft_server *server;
     struct raft_message message;
     int rv;
+    assert(r->leadership_transfer.send.data == NULL);
     server =
         configurationGet(&r->configuration, r->leadership_transfer.server_id);
     assert(server != NULL);
@@ -182,6 +184,7 @@ int membershipLeadershipTransferStart(struct raft *r)
     message.timeout_now.term = r->current_term;
     message.timeout_now.last_log_index = logLastIndex(&r->log);
     message.timeout_now.last_log_term = logLastTerm(&r->log);
+    r->leadership_transfer.send.data = r;
     rv = r->io->send(r->io, &r->leadership_transfer.send, &message, NULL);
     if (rv != 0) {
         ErrMsgTransferf(r->io->errmsg, r->errmsg, "send timeout now to %llu",
@@ -196,6 +199,7 @@ void membershipLeadershipTransferReset(struct raft *r)
     r->leadership_transfer.server_id = 0;
     r->leadership_transfer.start = 0;
     r->leadership_transfer.cb = NULL;
+    r->leadership_transfer.send.data = NULL;
 }
 
 void membershipLeadershipTransferClose(struct raft *r)
