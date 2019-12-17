@@ -431,6 +431,30 @@ err:
     return rv;
 }
 
+/* Find a suitable voting follower. */
+static raft_id clientSelectTransferee(struct raft *r)
+{
+    const struct raft_server *transferee = NULL;
+    unsigned i;
+
+    for (i = 0; i < r->configuration.n; i++) {
+        const struct raft_server *server = &r->configuration.servers[i];
+        if (server->id == r->id || server->role != RAFT_VOTER) {
+            continue;
+        }
+        transferee = server;
+        if (progressIsUpToDate(r, i)) {
+            break;
+        }
+    }
+
+    if (transferee != NULL) {
+        return transferee->id;
+    }
+
+    return 0;
+}
+
 int raft_transfer_leadership(struct raft *r,
                              raft_id id,
                              raft_transfer_leadership_cb cb)
@@ -443,6 +467,15 @@ int raft_transfer_leadership(struct raft *r,
         rv = RAFT_NOTLEADER;
         ErrMsgFromCode(r->errmsg, rv);
         goto err;
+    }
+
+    if (id == 0) {
+        id = clientSelectTransferee(r);
+        if (id == 0) {
+            rv = RAFT_NOTFOUND;
+            ErrMsgPrintf(r->errmsg, "there's no other voting server");
+            goto err;
+        }
     }
 
     server = configurationGet(&r->configuration, id);

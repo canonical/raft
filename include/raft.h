@@ -1109,6 +1109,10 @@ RAFT_API int raft_remove(struct raft *r,
  * If the target server is not part of the configuration, or it's the leader
  * itself, or it's not a #RAFT_VOTER, then #RAFT_BADID is returned.
  *
+ * The special value #0 means to automatically select a voting follower to
+ * transfer leadership to. If there are no voting followers, return
+ * #RAFT_NOTFOUND.
+ *
  * When this server detects that the target server has become the leader, or
  * when @election_timeout milliseconds have elapsed, the given callback will be
  * invoked.

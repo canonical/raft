@@ -144,3 +144,26 @@ TEST(raft_transfer_leadership, twice, setUp, tearDown, 0, NULL)
     TRANSFER_LEADERSHIP_ERROR(0, 3, RAFT_NOTLEADER, "server is not the leader");
     return MUNIT_OK;
 }
+
+/* If the given ID is zero, the target is selected automatically. */
+TEST(raft_transfer_leadership, autoSelect, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    TRANSFER_LEADERSHIP(0, 0);
+    CLUSTER_STEP_UNTIL_HAS_LEADER(1000);
+    munit_assert_int(CLUSTER_LEADER, !=, 0);
+    return MUNIT_OK;
+}
+
+/* If the given ID is zero, the target is selected automatically. Followers that
+ * are up-to-date are preferred. */
+TEST(raft_transfer_leadership, autoSelectUpToDate, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    CLUSTER_KILL(1);
+    CLUSTER_MAKE_PROGRESS;
+    TRANSFER_LEADERSHIP(0, 0);
+    CLUSTER_STEP_UNTIL_HAS_LEADER(1000);
+    munit_assert_int(CLUSTER_LEADER, ==, 2);
+    return MUNIT_OK;
+}
