@@ -5,6 +5,7 @@
 #include "entry.h"
 #include "heap.h"
 #include "log.h"
+#include "membership.h"
 #include "recv_append_entries.h"
 #include "recv_append_entries_result.h"
 #include "recv_install_snapshot.h"
@@ -63,7 +64,7 @@ static int recvMessage(struct raft *r, struct raft_message *message)
             rv = recvInstallSnapshot(r, message->server_id,
                                      message->server_address,
                                      &message->install_snapshot);
-	    break;
+            break;
         case RAFT_IO_TIMEOUT_NOW:
             rv = recvTimeoutNow(r, message->server_id, message->server_address,
                                 &message->timeout_now);
@@ -75,6 +76,16 @@ static int recvMessage(struct raft *r, struct raft_message *message)
                  raft_strerror(rv)); */
         return rv;
     }
+
+    /* If there's a leadership transfer in progress, check if it has
+     * completed. */
+    if (r->leadership_transfer.server_id != 0) {
+        if (r->follower_state.current_leader.id ==
+            r->leadership_transfer.server_id) {
+            membershipLeadershipTransferClose(r);
+        }
+    }
+
     return 0;
 }
 
