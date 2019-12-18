@@ -28,6 +28,7 @@ libraft_la_SOURCES = \
   src/recv_request_vote.c \
   src/recv_request_vote_result.c \
   src/recv_install_snapshot.c \
+  src/recv_timeout_now.c \
   src/replication.c \
   src/snapshot.c \
   src/start.c \
@@ -97,6 +98,7 @@ test_integration_core_SOURCES = \
   test/integration/test_snapshot.c \
   test/integration/test_strerror.c \
   test/integration/test_tick.c \
+  test/integration/test_transfer_leadership.c \
   test/integration/test_start.c
 test_integration_core_CFLAGS = $(AM_CFLAGS) -Wno-conversion
 test_integration_core_LDFLAGS = -no-install

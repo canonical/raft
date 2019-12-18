@@ -40,6 +40,7 @@ It also includes a few optional enhancements:
 - Optimistic pipelining to reduce log replication latency
 - Writing to leader's disk in parallel
 - Automatic stepping down when the leader loses quorum
+- Leadership transfer extension
 
 Building
 --------

@@ -20,10 +20,10 @@ static void installSnapshotSendCb(struct raft_io_send *req, int status)
     raft_free(req);
 }
 
-int rpcRecvInstallSnapshot(struct raft *r,
-                           const raft_id id,
-                           const char *address,
-                           struct raft_install_snapshot *args)
+int recvInstallSnapshot(struct raft *r,
+                        const raft_id id,
+                        const char *address,
+                        struct raft_install_snapshot *args)
 {
     struct raft_io_send *req;
     struct raft_message message;

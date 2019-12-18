@@ -246,6 +246,7 @@ struct raft_request_vote
     raft_id candidate_id;      /* ID of the server requesting the vote. */
     raft_index last_log_index; /* Index of candidate's last log entry. */
     raft_index last_log_term;  /* Term of log entry at last_log_index. */
+    bool disrupt_leader;       /* True if current leader should be discarded. */
 };
 
 /**
@@ -297,6 +298,19 @@ struct raft_install_snapshot
 };
 
 /**
+ * Hold the arguments of a TimeoutNow RPC.
+ *
+ * The TimeoutNow RPC is invoked by leaders to transfer leadership to a
+ * follower.
+ */
+struct raft_timeout_now
+{
+    raft_term term;            /* Leader's term. */
+    raft_index last_log_index; /* Index of leader's last log entry. */
+    raft_index last_log_term;  /* Term of log entry at last_log_index. */
+};
+
+/**
  * Type codes for RPC messages.
  */
 enum {
@@ -304,7 +318,8 @@ enum {
     RAFT_IO_APPEND_ENTRIES_RESULT,
     RAFT_IO_REQUEST_VOTE,
     RAFT_IO_REQUEST_VOTE_RESULT,
-    RAFT_IO_INSTALL_SNAPSHOT
+    RAFT_IO_INSTALL_SNAPSHOT,
+    RAFT_IO_TIMEOUT_NOW
 };
 
 /**
@@ -321,6 +336,7 @@ struct raft_message
         struct raft_append_entries append_entries;
         struct raft_append_entries_result append_entries_result;
         struct raft_install_snapshot install_snapshot;
+        struct raft_timeout_now timeout_now;
     };
 };
 
@@ -656,13 +672,19 @@ struct raft_progress
     bool recent_recv;          /* A msg was received within election timeout. */
 };
 
+struct raft; /* Forward declaration. */
+
+/**
+ * Transfer leadership callback.
+ */
+typedef void (*raft_transfer_leadership_cb)(struct raft *raft);
+
 /**
  * Close callback.
  *
  * It's safe to release the memory of a raft instance only after this callback
  * has fired.
  */
-struct raft;
 typedef void (*raft_close_cb)(struct raft *raft);
 
 /**
@@ -674,7 +696,7 @@ struct raft
     struct raft_tracer *tracer; /* Tracer implementation. */
     struct raft_io *io;         /* Disk and network I/O implementation. */
     struct raft_fsm *fsm;       /* User-defined FSM to apply commands to. */
-    unsigned id;                /* Server ID of this raft instance. */
+    raft_id id;                 /* Server ID of this raft instance. */
     char *address;              /* Server address of this raft instance. */
 
     /*
@@ -800,6 +822,15 @@ struct raft
      * of voting servers. */
     raft_time election_timer_start;
 
+    /* Information about an in-progress leadership transfer. */
+    struct
+    {
+        raft_id server_id;              /* ID of target server. */
+        raft_time start;                /* Start of leadership transfer. */
+        raft_transfer_leadership_cb cb; /* User callback. */
+        struct raft_io_send send;       /* For sending TimeoutNow */
+    } leadership_transfer;
+
     /*
      * Information about the last snapshot that was taken (if any).
      */
@@ -829,7 +860,7 @@ struct raft
 RAFT_API int raft_init(struct raft *r,
                        struct raft_io *io,
                        struct raft_fsm *fsm,
-                       unsigned id,
+                       raft_id id,
                        const char *address);
 
 /**
@@ -1072,6 +1103,27 @@ RAFT_API int raft_remove(struct raft *r,
                          unsigned id,
                          raft_change_cb cb);
 
+/**
+ * Transfer leadership to the server with the given ID.
+ *
+ * If the target server is not part of the configuration, or it's the leader
+ * itself, or it's not a #RAFT_VOTER, then #RAFT_BADID is returned.
+ *
+ * The special value #0 means to automatically select a voting follower to
+ * transfer leadership to. If there are no voting followers, return
+ * #RAFT_NOTFOUND.
+ *
+ * When this server detects that the target server has become the leader, or
+ * when @election_timeout milliseconds have elapsed, the given callback will be
+ * invoked.
+ *
+ * After the callback files, clients can check whether the operation was
+ * successful or not by calling @raft_leader() and checking if it returns the
+ * target server.
+ */
+RAFT_API int raft_transfer_leadership(struct raft *r,
+                                      raft_id id,
+                                      raft_transfer_leadership_cb cb);
 /**
  * User-definable dynamic memory allocation functions.
  *

@@ -30,7 +30,7 @@ int raft_apply(struct raft *r,
     assert(bufs != NULL);
     assert(n > 0);
 
-    if (r->state != RAFT_LEADER) {
+    if (r->state != RAFT_LEADER || r->leadership_transfer.server_id != 0) {
         rv = RAFT_NOTLEADER;
         ErrMsgFromCode(r->errmsg, rv);
         goto err;
@@ -72,7 +72,7 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
     struct raft_buffer buf;
     int rv;
 
-    if (r->state != RAFT_LEADER) {
+    if (r->state != RAFT_LEADER || r->leadership_transfer.server_id != 0) {
         rv = RAFT_NOTLEADER;
         goto err;
     }
@@ -425,6 +425,82 @@ int raft_remove(struct raft *r,
 
 err_after_configuration_copy:
     raft_configuration_close(&configuration);
+
+err:
+    assert(rv != 0);
+    return rv;
+}
+
+/* Find a suitable voting follower. */
+static raft_id clientSelectTransferee(struct raft *r)
+{
+    const struct raft_server *transferee = NULL;
+    unsigned i;
+
+    for (i = 0; i < r->configuration.n; i++) {
+        const struct raft_server *server = &r->configuration.servers[i];
+        if (server->id == r->id || server->role != RAFT_VOTER) {
+            continue;
+        }
+        transferee = server;
+        if (progressIsUpToDate(r, i)) {
+            break;
+        }
+    }
+
+    if (transferee != NULL) {
+        return transferee->id;
+    }
+
+    return 0;
+}
+
+int raft_transfer_leadership(struct raft *r,
+                             raft_id id,
+                             raft_transfer_leadership_cb cb)
+{
+    const struct raft_server *server;
+    unsigned i;
+    int rv;
+
+    if (r->state != RAFT_LEADER || r->leadership_transfer.server_id != 0) {
+        rv = RAFT_NOTLEADER;
+        ErrMsgFromCode(r->errmsg, rv);
+        goto err;
+    }
+
+    if (id == 0) {
+        id = clientSelectTransferee(r);
+        if (id == 0) {
+            rv = RAFT_NOTFOUND;
+            ErrMsgPrintf(r->errmsg, "there's no other voting server");
+            goto err;
+        }
+    }
+
+    server = configurationGet(&r->configuration, id);
+    if (server == NULL || server->id == r->id || server->role != RAFT_VOTER) {
+        rv = RAFT_BADID;
+        ErrMsgFromCode(r->errmsg, rv);
+        goto err;
+    }
+
+    /* If this follower is up-to-date, we can send it the TimeoutNow message
+     * right away. */
+    i = configurationIndexOf(&r->configuration, server->id);
+    assert(i < r->configuration.n);
+
+    membershipLeadershipTransferInit(r, id, cb);
+
+    if (progressIsUpToDate(r, i)) {
+        rv = membershipLeadershipTransferStart(r);
+        if (rv != 0) {
+            membershipLeadershipTransferReset(r);
+            goto err;
+        }
+    }
+
+    return 0;
 
 err:
     assert(rv != 0);

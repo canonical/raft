@@ -10,6 +10,7 @@
 #include "err.h"
 #include "heap.h"
 #include "log.h"
+#include "membership.h"
 #include "tracing.h"
 
 #define DEFAULT_ELECTION_TIMEOUT 1000 /* One second */
@@ -20,7 +21,7 @@
 int raft_init(struct raft *r,
               struct raft_io *io,
               struct raft_fsm *fsm,
-              const unsigned id,
+              const raft_id id,
               const char *address)
 {
     int rv;
@@ -49,6 +50,7 @@ int raft_init(struct raft *r,
     r->last_applied = 0;
     r->last_stored = 0;
     r->state = RAFT_UNAVAILABLE;
+    membershipLeadershipTransferReset(r);
     r->snapshot.pending.term = 0;
     r->snapshot.threshold = DEFAULT_SNAPSHOT_THRESHOLD;
     r->snapshot.trailing = DEFAULT_SNAPSHOT_TRAILING;

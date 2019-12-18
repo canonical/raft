@@ -11,7 +11,7 @@ int membershipCanChangeConfiguration(struct raft *r)
 {
     int rv;
 
-    if (r->state != RAFT_LEADER) {
+    if (r->state != RAFT_LEADER || r->leadership_transfer.server_id != 0) {
         rv = RAFT_NOTLEADER;
         goto err;
     }
@@ -157,4 +157,56 @@ int membershipRollback(struct raft *r)
     r->configuration_uncommitted_index = 0;
 
     return 0;
+}
+
+void membershipLeadershipTransferInit(struct raft *r,
+                                      raft_id id,
+                                      raft_transfer_leadership_cb cb)
+{
+    r->leadership_transfer.server_id = id;
+    r->leadership_transfer.start = r->io->time(r->io);
+    r->leadership_transfer.cb = cb;
+    r->leadership_transfer.send.data = NULL;
+}
+
+int membershipLeadershipTransferStart(struct raft *r)
+{
+    const struct raft_server *server;
+    struct raft_message message;
+    int rv;
+    assert(r->leadership_transfer.send.data == NULL);
+    server =
+        configurationGet(&r->configuration, r->leadership_transfer.server_id);
+    assert(server != NULL);
+    message.type = RAFT_IO_TIMEOUT_NOW;
+    message.server_id = server->id;
+    message.server_address = server->address;
+    message.timeout_now.term = r->current_term;
+    message.timeout_now.last_log_index = logLastIndex(&r->log);
+    message.timeout_now.last_log_term = logLastTerm(&r->log);
+    r->leadership_transfer.send.data = r;
+    rv = r->io->send(r->io, &r->leadership_transfer.send, &message, NULL);
+    if (rv != 0) {
+        ErrMsgTransferf(r->io->errmsg, r->errmsg, "send timeout now to %llu",
+                        server->id);
+        return rv;
+    }
+    return 0;
+}
+
+void membershipLeadershipTransferReset(struct raft *r)
+{
+    r->leadership_transfer.server_id = 0;
+    r->leadership_transfer.start = 0;
+    r->leadership_transfer.cb = NULL;
+    r->leadership_transfer.send.data = NULL;
+}
+
+void membershipLeadershipTransferClose(struct raft *r)
+{
+    raft_transfer_leadership_cb cb = r->leadership_transfer.cb;
+    membershipLeadershipTransferReset(r);
+    if (cb != NULL) {
+        cb(r);
+    }
 }

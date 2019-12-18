@@ -51,6 +51,8 @@ static void recvCb(struct raft_io *io, struct raft_message *m1)
                              m2->request_vote.last_log_index);
             munit_assert_int(m1->request_vote.last_log_term, ==,
                              m2->request_vote.last_log_term);
+            munit_assert_int(m1->request_vote.disrupt_leader, ==,
+                             m2->request_vote.disrupt_leader);
             break;
         case RAFT_IO_REQUEST_VOTE_RESULT:
             munit_assert_int(m1->request_vote_result.term, ==,
@@ -102,6 +104,13 @@ static void recvCb(struct raft_io *io, struct raft_message *m1)
                              ==, 0);
             raft_configuration_close(&m1->install_snapshot.conf);
             raft_free(m1->install_snapshot.data.base);
+            break;
+        case RAFT_IO_TIMEOUT_NOW:
+            munit_assert_int(m1->timeout_now.term, ==, m2->timeout_now.term);
+            munit_assert_int(m1->timeout_now.last_log_index, ==,
+                             m2->timeout_now.last_log_index);
+            munit_assert_int(m1->timeout_now.last_log_term, ==,
+                             m2->timeout_now.last_log_term);
             break;
     };
     result->done = true;
@@ -271,6 +280,7 @@ TEST(recv, first, setUp, tearDown, 0, NULL)
     message.request_vote.candidate_id = 2;
     message.request_vote.last_log_index = 123;
     message.request_vote.last_log_term = 2;
+    message.request_vote.disrupt_leader = false;
     PEER_SEND(&message);
     RECV(&message);
     return MUNIT_OK;
@@ -285,6 +295,7 @@ TEST(recv, second, setUp, tearDown, 0, NULL)
     message.request_vote.candidate_id = 2;
     message.request_vote.last_log_index = 123;
     message.request_vote.last_log_term = 2;
+    message.request_vote.disrupt_leader = true;
     PEER_SEND(&message);
     RECV(&message);
     PEER_SEND(&message);
@@ -383,6 +394,20 @@ TEST(recv, installSnapshot, setUp, tearDown, 0, NULL)
 
     raft_configuration_close(&message.install_snapshot.conf);
 
+    return MUNIT_OK;
+}
+
+/* Receive a TimeoutNow message. */
+TEST(recv, timeoutNow, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    struct raft_message message;
+    message.type = RAFT_IO_TIMEOUT_NOW;
+    message.timeout_now.term = 3;
+    message.timeout_now.last_log_index = 123;
+    message.timeout_now.last_log_term = 2;
+    PEER_SEND(&message);
+    RECV(&message);
     return MUNIT_OK;
 }
 

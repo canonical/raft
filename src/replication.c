@@ -759,16 +759,35 @@ int replicationUpdate(struct raft *r,
         /* TODO: just log the error? */
     }
 
-    if (r->state == RAFT_LEADER) {
-        /* Get again the server index since it might have been removed from the
-         * configuration. */
-        i = configurationIndexOf(&r->configuration, server->id);
-        if (i < r->configuration.n &&
-            progressState(r, i) == PROGRESS__PIPELINE) {
+    /* Abort here we have been removed and we are not leaders anymore. */
+    if (r->state != RAFT_LEADER) {
+        goto out;
+    }
+
+    /* Get again the server index since it might have been removed from the
+     * configuration. */
+    i = configurationIndexOf(&r->configuration, server->id);
+
+    if (i < r->configuration.n) {
+        /* If we are transfering leadership to this follower, check if its log
+         * is now up-to-date and, if so, send it a TimeoutNow RPC (unless we
+         * already did). */
+        if (r->leadership_transfer.server_id == server->id) {
+            if (progressIsUpToDate(r, i) &&
+                r->leadership_transfer.send.data == NULL) {
+                rv = membershipLeadershipTransferStart(r);
+                if (rv != 0) {
+                    membershipLeadershipTransferClose(r);
+                }
+            }
+        }
+        /* If this follower is in pipeline mode, send it more entries. */
+        if (progressState(r, i) == PROGRESS__PIPELINE) {
             replicationProgress(r, i);
         }
     }
 
+out:
     return 0;
 }
 

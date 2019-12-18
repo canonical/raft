@@ -4,6 +4,7 @@
 #include "configuration.h"
 #include "election.h"
 #include "log.h"
+#include "membership.h"
 #include "progress.h"
 #include "queue.h"
 #include "request.h"
@@ -141,7 +142,7 @@ void convertToFollower(struct raft *r)
     r->follower_state.current_leader.address = NULL;
 }
 
-int convertToCandidate(struct raft *r)
+int convertToCandidate(struct raft *r, bool disrupt_leader)
 {
     const struct raft_server *server;
     size_t n_voters = configurationVoterCount(&r->configuration);
@@ -170,7 +171,7 @@ int convertToCandidate(struct raft *r)
     }
 
     /* Start a new election round */
-    rv = electionStart(r);
+    rv = electionStart(r, disrupt_leader);
     if (rv != 0) {
         r->state = RAFT_FOLLOWER;
         raft_free(r->candidate_state.votes);
@@ -212,6 +213,10 @@ int convertToLeader(struct raft *r)
 
 void convertToUnavailable(struct raft *r)
 {
+    /* Abort any pending leadership transfer request. */
+    if (r->leadership_transfer.server_id != 0) {
+        membershipLeadershipTransferClose(r);
+    }
     convertClear(r);
     convertSetState(r, RAFT_UNAVAILABLE);
 }

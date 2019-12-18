@@ -98,13 +98,19 @@ int progressRebuildArray(struct raft *r,
     return 0;
 }
 
+bool progressIsUpToDate(struct raft *r, unsigned i)
+{
+    struct raft_progress *p = &r->leader_state.progress[i];
+    raft_index last_index = logLastIndex(&r->log);
+    return p->next_index == last_index + 1;
+}
+
 bool progressShouldReplicate(struct raft *r, unsigned i)
 {
     struct raft_progress *p = &r->leader_state.progress[i];
     raft_time now = r->io->time(r->io);
     bool needs_heartbeat = now - p->last_send >= r->heartbeat_timeout;
     raft_index last_index = logLastIndex(&r->log);
-    bool is_up_to_date = p->next_index == last_index + 1;
     bool result = false;
 
     /* We must be in a valid state. */
@@ -130,7 +136,7 @@ bool progressShouldReplicate(struct raft *r, unsigned i)
         case PROGRESS__PIPELINE:
             /* In replication mode we send empty append entries messages only if
              * haven't sent anything in the last heartbeat interval. */
-            result = !is_up_to_date || needs_heartbeat;
+            result = !progressIsUpToDate(r, i) || needs_heartbeat;
             break;
     }
     return result;

@@ -117,7 +117,7 @@ static int maybeSelfElect(struct raft *r)
     }
     /* Converting to candidate will notice that we're the only voter and
      * automatically convert to leader. */
-    rv = convertToCandidate(r);
+    rv = convertToCandidate(r, false /* disrupt leader */);
     if (rv != 0) {
         return rv;
     }
