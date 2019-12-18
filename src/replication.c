@@ -1348,7 +1348,6 @@ static void applyChange(struct raft *r, const raft_index index)
     if (r->state == RAFT_LEADER) {
         const struct raft_server *server;
         req = r->leader_state.change;
-        assert(req != NULL);
         r->leader_state.change = NULL;
 
         /* If we are leader but not part of this new configuration, step
