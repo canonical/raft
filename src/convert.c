@@ -89,17 +89,13 @@ static void convertClearLeader(struct raft *r)
         head = QUEUE_HEAD(&r->leader_state.requests);
         QUEUE_REMOVE(head);
         req = QUEUE_DATA(head, struct request, queue);
+        assert(req->type == RAFT_COMMAND || req->type == RAFT_BARRIER);
         switch (req->type) {
             case RAFT_COMMAND:
                 convertFailApply((struct raft_apply *)req);
                 break;
             case RAFT_BARRIER:
                 convertFailBarrier((struct raft_barrier *)req);
-                break;
-            case RAFT_CHANGE:
-                convertFailChange((struct raft_change *)req);
-                assert(r->leader_state.change == (struct raft_change *)req);
-                r->leader_state.change = NULL;
                 break;
         };
     }

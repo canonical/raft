@@ -611,7 +611,6 @@ static int triggerActualPromotion(struct raft *r)
     raft_term term = r->current_term;
     size_t server_index;
     struct raft_server *server;
-    struct raft_change *req;
     int old_role;
     int rv;
 
@@ -638,13 +637,6 @@ static int triggerActualPromotion(struct raft *r)
     if (rv != 0) {
         goto err;
     }
-
-    req = r->leader_state.change;
-    assert(req != NULL);
-
-    req->type = RAFT_CHANGE;
-    req->index = index;
-    QUEUE_PUSH(&r->leader_state.requests, &req->queue);
 
     /* Start writing the new log entry to disk and send it to the followers. */
     rv = replicationTrigger(r, index);
@@ -1356,8 +1348,8 @@ static void applyChange(struct raft *r, const raft_index index)
 
     if (r->state == RAFT_LEADER) {
         const struct raft_server *server;
-        req = (struct raft_change *)getRequest(r, index, RAFT_CHANGE);
-        assert(r->leader_state.change == req);
+        req = r->leader_state.change;
+	assert(req != NULL);
         r->leader_state.change = NULL;
 
         /* If we are leader but not part of this new configuration, step

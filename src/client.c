@@ -125,6 +125,8 @@ static int clientChangeConfiguration(
     raft_term term = r->current_term;
     int rv;
 
+    (void)req;
+
     /* Index of the entry being appended. */
     index = logLastIndex(&r->log) + 1;
 
@@ -146,10 +148,6 @@ static int clientChangeConfiguration(
         raft_configuration_close(&r->configuration);
         r->configuration = *configuration;
     }
-
-    req->type = RAFT_CHANGE;
-    req->index = index;
-    QUEUE_PUSH(&r->leader_state.requests, &req->queue);
 
     /* Start writing the new log entry to disk and send it to the followers. */
     rv = replicationTrigger(r, index);
