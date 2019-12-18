@@ -1057,7 +1057,7 @@ struct raft_change
  */
 RAFT_API int raft_add(struct raft *r,
                       struct raft_change *req,
-                      unsigned id,
+                      raft_id id,
                       const char *address,
                       raft_change_cb cb);
 
@@ -1074,7 +1074,7 @@ RAFT_API int raft_add(struct raft *r,
  */
 RAFT_API int raft_promote(struct raft *r,
                           struct raft_change *req,
-                          unsigned id,
+                          raft_id id,
                           int role,
                           raft_change_cb cb);
 
@@ -1091,7 +1091,7 @@ RAFT_API int raft_promote(struct raft *r,
  */
 RAFT_API int raft_demote(struct raft *r,
                          struct raft_change *req,
-                         unsigned id,
+                         raft_id id,
                          int role,
                          raft_change_cb cb);
 
@@ -1100,7 +1100,7 @@ RAFT_API int raft_demote(struct raft *r,
  */
 RAFT_API int raft_remove(struct raft *r,
                          struct raft_change *req,
-                         unsigned id,
+                         raft_id id,
                          raft_change_cb cb);
 
 /**
