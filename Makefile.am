@@ -98,7 +98,7 @@ test_integration_core_SOURCES = \
   test/integration/test_snapshot.c \
   test/integration/test_strerror.c \
   test/integration/test_tick.c \
-  test/integration/test_transfer_leadership.c \
+  test/integration/test_transfer.c \
   test/integration/test_start.c
 test_integration_core_CFLAGS = $(AM_CFLAGS) -Wno-conversion
 test_integration_core_LDFLAGS = -no-install

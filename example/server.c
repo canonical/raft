@@ -111,6 +111,7 @@ struct Server
     unsigned id;                        /* Raft instance ID. */
     char address[64];                   /* Raft instance address. */
     struct raft raft;                   /* Raft instance. */
+    struct raft_transfer transfer;      /* Transfer leadership request. */
     ServerCloseCb close_cb;             /* Optional close callback. */
 };
 
@@ -125,9 +126,9 @@ static void serverRaftCloseCb(struct raft *raft)
     }
 }
 
-static void serverTransferLeadershipCb(struct raft *raft)
+static void serverTransferCb(struct raft_transfer *req)
 {
-    struct Server *s = raft->data;
+    struct Server *s = req->data;
     raft_id id;
     const char *address;
     raft_leader(&s->raft, &id, &address);
@@ -142,8 +143,7 @@ static void serverTimerCloseCb(struct uv_handle_s *handle)
     if (s->raft.data != NULL) {
         if (s->raft.state == RAFT_LEADER) {
             int rv;
-            rv = raft_transfer_leadership(&s->raft, 0,
-                                          serverTransferLeadershipCb);
+            rv = raft_transfer(&s->raft, &s->transfer, 0, serverTransferCb);
             if (rv == 0) {
                 return;
             }
@@ -234,6 +234,8 @@ static int ServerInit(struct Server *s,
 
     raft_set_snapshot_threshold(&s->raft, 64);
     raft_set_snapshot_trailing(&s->raft, 16);
+
+    s->transfer.data = s;
 
     return 0;
 

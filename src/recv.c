@@ -79,9 +79,8 @@ static int recvMessage(struct raft *r, struct raft_message *message)
 
     /* If there's a leadership transfer in progress, check if it has
      * completed. */
-    if (r->leadership_transfer.server_id != 0) {
-        if (r->follower_state.current_leader.id ==
-            r->leadership_transfer.server_id) {
+    if (r->transfer != NULL) {
+        if (r->follower_state.current_leader.id == r->transfer->id) {
             membershipLeadershipTransferClose(r);
         }
     }

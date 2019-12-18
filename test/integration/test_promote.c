@@ -176,7 +176,7 @@ TEST(raft_promote, upToDate, setUp, tearDown, 0, NULL)
     munit_assert_int(server->role, ==, RAFT_VOTER);
 
     /* The configuration change request eventually succeeds. */
-    CLUSTER_STEP_UNTIL_APPLIED(0, 2, 2000);
+    CLUSTER_STEP_UNTIL_APPLIED(0, 3, 2000);
 
     return MUNIT_OK;
 }

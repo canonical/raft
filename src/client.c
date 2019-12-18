@@ -30,7 +30,7 @@ int raft_apply(struct raft *r,
     assert(bufs != NULL);
     assert(n > 0);
 
-    if (r->state != RAFT_LEADER || r->leadership_transfer.server_id != 0) {
+    if (r->state != RAFT_LEADER || r->transfer != NULL) {
         rv = RAFT_NOTLEADER;
         ErrMsgFromCode(r->errmsg, rv);
         goto err;
@@ -72,7 +72,7 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
     struct raft_buffer buf;
     int rv;
 
-    if (r->state != RAFT_LEADER || r->leadership_transfer.server_id != 0) {
+    if (r->state != RAFT_LEADER || r->transfer != NULL) {
         rv = RAFT_NOTLEADER;
         goto err;
     }
@@ -125,6 +125,8 @@ static int clientChangeConfiguration(
     raft_term term = r->current_term;
     int rv;
 
+    (void)req;
+
     /* Index of the entry being appended. */
     index = logLastIndex(&r->log) + 1;
 
@@ -146,10 +148,6 @@ static int clientChangeConfiguration(
         raft_configuration_close(&r->configuration);
         r->configuration = *configuration;
     }
-
-    req->type = RAFT_CHANGE;
-    req->index = index;
-    QUEUE_PUSH(&r->leader_state.requests, &req->queue);
 
     /* Start writing the new log entry to disk and send it to the followers. */
     rv = replicationTrigger(r, index);
@@ -455,15 +453,16 @@ static raft_id clientSelectTransferee(struct raft *r)
     return 0;
 }
 
-int raft_transfer_leadership(struct raft *r,
-                             raft_id id,
-                             raft_transfer_leadership_cb cb)
+int raft_transfer(struct raft *r,
+                  struct raft_transfer *req,
+                  raft_id id,
+                  raft_transfer_cb cb)
 {
     const struct raft_server *server;
     unsigned i;
     int rv;
 
-    if (r->state != RAFT_LEADER || r->leadership_transfer.server_id != 0) {
+    if (r->state != RAFT_LEADER || r->transfer != NULL) {
         rv = RAFT_NOTLEADER;
         ErrMsgFromCode(r->errmsg, rv);
         goto err;
@@ -490,12 +489,12 @@ int raft_transfer_leadership(struct raft *r,
     i = configurationIndexOf(&r->configuration, server->id);
     assert(i < r->configuration.n);
 
-    membershipLeadershipTransferInit(r, id, cb);
+    membershipLeadershipTransferInit(r, req, id, cb);
 
     if (progressIsUpToDate(r, i)) {
         rv = membershipLeadershipTransferStart(r);
         if (rv != 0) {
-            membershipLeadershipTransferReset(r);
+            r->transfer = NULL;
             goto err;
         }
     }
