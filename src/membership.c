@@ -195,16 +195,11 @@ int membershipLeadershipTransferStart(struct raft *r)
     return 0;
 }
 
-void membershipLeadershipTransferReset(struct raft *r)
-{
-    r->transfer = NULL;
-}
-
 void membershipLeadershipTransferClose(struct raft *r)
 {
     struct raft_transfer *req = r->transfer;
     raft_transfer_cb cb = req->cb;
-    membershipLeadershipTransferReset(r);
+    r->transfer = NULL;
     if (cb != NULL) {
         cb(req);
     }

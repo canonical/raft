@@ -494,7 +494,7 @@ int raft_transfer(struct raft *r,
     if (progressIsUpToDate(r, i)) {
         rv = membershipLeadershipTransferStart(r);
         if (rv != 0) {
-            membershipLeadershipTransferReset(r);
+            r->transfer = NULL;
             goto err;
         }
     }
