@@ -172,7 +172,7 @@ int raft_add(struct raft *r,
              struct raft_change_configuration *req,
              raft_id id,
              const char *address,
-             raft_change_cb cb)
+             raft_change_configuration_cb cb)
 {
     struct raft_configuration configuration;
     int rv;
@@ -219,7 +219,7 @@ int raft_promote(struct raft *r,
                  struct raft_change_configuration *req,
                  raft_id id,
                  int role,
-                 raft_change_cb cb)
+                 raft_change_configuration_cb cb)
 {
     const struct raft_server *server;
     unsigned server_index;
@@ -311,7 +311,7 @@ int raft_demote(struct raft *r,
                 struct raft_change_configuration *req,
                 raft_id id,
                 int role,
-                raft_change_cb cb)
+                raft_change_configuration_cb cb)
 {
     const struct raft_server *server;
     unsigned server_index;
@@ -378,7 +378,7 @@ err:
 int raft_remove(struct raft *r,
                 struct raft_change_configuration *req,
                 raft_id id,
-                raft_change_cb cb)
+                raft_change_configuration_cb cb)
 {
     const struct raft_server *server;
     struct raft_configuration configuration;

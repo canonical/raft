@@ -1045,12 +1045,13 @@ RAFT_API int raft_barrier(struct raft *r,
  * Asynchronous request to change the raft configuration.
  */
 struct raft_change_configuration;
-typedef void (*raft_change_cb)(struct raft_change_configuration *req,
-                               int status);
+typedef void (*raft_change_configuration_cb)(
+    struct raft_change_configuration *req,
+    int status);
 struct raft_change_configuration
 {
     void *data;
-    raft_change_cb cb;
+    raft_change_configuration_cb cb;
 };
 
 /**
@@ -1061,7 +1062,7 @@ RAFT_API int raft_add(struct raft *r,
                       struct raft_change_configuration *req,
                       raft_id id,
                       const char *address,
-                      raft_change_cb cb);
+                      raft_change_configuration_cb cb);
 
 /**
  * Promote the given server to a higher role.
@@ -1078,7 +1079,7 @@ RAFT_API int raft_promote(struct raft *r,
                           struct raft_change_configuration *req,
                           raft_id id,
                           int role,
-                          raft_change_cb cb);
+                          raft_change_configuration_cb cb);
 
 /**
  * Demote the given server to a lesser role.
@@ -1095,7 +1096,7 @@ RAFT_API int raft_demote(struct raft *r,
                          struct raft_change_configuration *req,
                          raft_id id,
                          int role,
-                         raft_change_cb cb);
+                         raft_change_configuration_cb cb);
 
 /**
  * Remove the given server from the cluster configuration.
@@ -1103,7 +1104,7 @@ RAFT_API int raft_demote(struct raft *r,
 RAFT_API int raft_remove(struct raft *r,
                          struct raft_change_configuration *req,
                          raft_id id,
-                         raft_change_cb cb);
+                         raft_change_configuration_cb cb);
 
 /**
  * Transfer leadership to the server with the given ID.
