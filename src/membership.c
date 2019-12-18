@@ -166,8 +166,8 @@ void membershipLeadershipTransferInit(struct raft *r,
 {
     req->cb = cb;
     req->id = id;
+    req->start = r->io->time(r->io);
     r->leadership_transfer.req = req;
-    r->leadership_transfer.start = r->io->time(r->io);
     r->leadership_transfer.send.data = NULL;
 }
 
@@ -198,7 +198,6 @@ int membershipLeadershipTransferStart(struct raft *r)
 
 void membershipLeadershipTransferReset(struct raft *r)
 {
-    r->leadership_transfer.start = 0;
     r->leadership_transfer.req = NULL;
     r->leadership_transfer.send.data = NULL;
 }

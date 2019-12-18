@@ -228,7 +228,7 @@ void tickCb(struct raft_io *io)
      * check if it's expired. */
     if (r->leadership_transfer.req != NULL) {
         raft_time now = r->io->time(r->io);
-        if (now - r->leadership_transfer.start >= r->election_timeout) {
+        if (now - r->leadership_transfer.req->start >= r->election_timeout) {
             membershipLeadershipTransferClose(r);
         }
     }
