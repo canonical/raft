@@ -1047,7 +1047,7 @@ struct raft_change;
 typedef void (*raft_change_cb)(struct raft_change *req, int status);
 struct raft_change
 {
-    RAFT__REQUEST;
+    void *data;
     raft_change_cb cb;
 };
 
