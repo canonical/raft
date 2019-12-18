@@ -50,7 +50,7 @@ int raft_init(struct raft *r,
     r->last_applied = 0;
     r->last_stored = 0;
     r->state = RAFT_UNAVAILABLE;
-    r->leadership_transfer.req = NULL;
+    r->transfer = NULL;
     r->snapshot.pending.term = 0;
     r->snapshot.threshold = DEFAULT_SNAPSHOT_THRESHOLD;
     r->snapshot.trailing = DEFAULT_SNAPSHOT_TRAILING;

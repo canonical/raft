@@ -11,7 +11,7 @@ int membershipCanChangeConfiguration(struct raft *r)
 {
     int rv;
 
-    if (r->state != RAFT_LEADER || r->leadership_transfer.req != NULL) {
+    if (r->state != RAFT_LEADER || r->transfer != NULL) {
         rv = RAFT_NOTLEADER;
         goto err;
     }
@@ -168,7 +168,7 @@ void membershipLeadershipTransferInit(struct raft *r,
     req->id = id;
     req->start = r->io->time(r->io);
     req->send.data = NULL;
-    r->leadership_transfer.req = req;
+    r->transfer = req;
 }
 
 int membershipLeadershipTransferStart(struct raft *r)
@@ -176,9 +176,8 @@ int membershipLeadershipTransferStart(struct raft *r)
     const struct raft_server *server;
     struct raft_message message;
     int rv;
-    assert(r->leadership_transfer.req->send.data == NULL);
-    server =
-        configurationGet(&r->configuration, r->leadership_transfer.req->id);
+    assert(r->transfer->send.data == NULL);
+    server = configurationGet(&r->configuration, r->transfer->id);
     assert(server != NULL);
     message.type = RAFT_IO_TIMEOUT_NOW;
     message.server_id = server->id;
@@ -186,8 +185,8 @@ int membershipLeadershipTransferStart(struct raft *r)
     message.timeout_now.term = r->current_term;
     message.timeout_now.last_log_index = logLastIndex(&r->log);
     message.timeout_now.last_log_term = logLastTerm(&r->log);
-    r->leadership_transfer.req->send.data = r;
-    rv = r->io->send(r->io, &r->leadership_transfer.req->send, &message, NULL);
+    r->transfer->send.data = r;
+    rv = r->io->send(r->io, &r->transfer->send, &message, NULL);
     if (rv != 0) {
         ErrMsgTransferf(r->io->errmsg, r->errmsg, "send timeout now to %llu",
                         server->id);
@@ -198,12 +197,12 @@ int membershipLeadershipTransferStart(struct raft *r)
 
 void membershipLeadershipTransferReset(struct raft *r)
 {
-    r->leadership_transfer.req = NULL;
+    r->transfer = NULL;
 }
 
 void membershipLeadershipTransferClose(struct raft *r)
 {
-    struct raft_transfer *req = r->leadership_transfer.req;
+    struct raft_transfer *req = r->transfer;
     raft_transfer_cb cb = req->cb;
     membershipLeadershipTransferReset(r);
     if (cb != NULL) {

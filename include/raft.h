@@ -820,11 +820,8 @@ struct raft
      * of voting servers. */
     raft_time election_timer_start;
 
-    /* Information about an in-progress leadership transfer. */
-    struct
-    {
-        struct raft_transfer *req; /* User request. */
-    } leadership_transfer;
+    /* In-progress leadership transfer request, if any. */
+    struct raft_transfer *transfer;
 
     /*
      * Information about the last snapshot that was taken (if any).
