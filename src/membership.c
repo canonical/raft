@@ -11,7 +11,7 @@ int membershipCanChangeConfiguration(struct raft *r)
 {
     int rv;
 
-    if (r->state != RAFT_LEADER || r->leadership_transfer.server_id != 0) {
+    if (r->state != RAFT_LEADER || r->leadership_transfer.req != NULL) {
         rv = RAFT_NOTLEADER;
         goto err;
     }
@@ -165,9 +165,9 @@ void membershipLeadershipTransferInit(struct raft *r,
                                       raft_transfer_cb cb)
 {
     req->cb = cb;
-    r->leadership_transfer.server_id = id;
-    r->leadership_transfer.start = r->io->time(r->io);
+    req->id = id;
     r->leadership_transfer.req = req;
+    r->leadership_transfer.start = r->io->time(r->io);
     r->leadership_transfer.send.data = NULL;
 }
 
@@ -178,7 +178,7 @@ int membershipLeadershipTransferStart(struct raft *r)
     int rv;
     assert(r->leadership_transfer.send.data == NULL);
     server =
-        configurationGet(&r->configuration, r->leadership_transfer.server_id);
+        configurationGet(&r->configuration, r->leadership_transfer.req->id);
     assert(server != NULL);
     message.type = RAFT_IO_TIMEOUT_NOW;
     message.server_id = server->id;
@@ -198,7 +198,6 @@ int membershipLeadershipTransferStart(struct raft *r)
 
 void membershipLeadershipTransferReset(struct raft *r)
 {
-    r->leadership_transfer.server_id = 0;
     r->leadership_transfer.start = 0;
     r->leadership_transfer.req = NULL;
     r->leadership_transfer.send.data = NULL;

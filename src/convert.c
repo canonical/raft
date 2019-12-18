@@ -210,7 +210,7 @@ int convertToLeader(struct raft *r)
 void convertToUnavailable(struct raft *r)
 {
     /* Abort any pending leadership transfer request. */
-    if (r->leadership_transfer.server_id != 0) {
+    if (r->leadership_transfer.req != NULL) {
         membershipLeadershipTransferClose(r);
     }
     convertClear(r);

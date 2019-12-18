@@ -823,7 +823,6 @@ struct raft
     /* Information about an in-progress leadership transfer. */
     struct
     {
-        raft_id server_id;         /* ID of target server. */
         raft_time start;           /* Start of leadership transfer. */
         struct raft_transfer *req; /* User request. */
         struct raft_io_send send;  /* For sending TimeoutNow */
@@ -1106,8 +1105,9 @@ RAFT_API int raft_remove(struct raft *r,
 typedef void (*raft_transfer_cb)(struct raft_transfer *req);
 struct raft_transfer
 {
-    void *data;
-    raft_transfer_cb cb;
+    void *data;          /* User data */
+    raft_id id;          /* ID of target server. */
+    raft_transfer_cb cb; /* User callback */
 };
 
 /**

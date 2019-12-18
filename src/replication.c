@@ -764,7 +764,8 @@ int replicationUpdate(struct raft *r,
         /* If we are transfering leadership to this follower, check if its log
          * is now up-to-date and, if so, send it a TimeoutNow RPC (unless we
          * already did). */
-        if (r->leadership_transfer.server_id == server->id) {
+        if (r->leadership_transfer.req != NULL &&
+            r->leadership_transfer.req->id == server->id) {
             if (progressIsUpToDate(r, i) &&
                 r->leadership_transfer.send.data == NULL) {
                 rv = membershipLeadershipTransferStart(r);
@@ -1349,7 +1350,7 @@ static void applyChange(struct raft *r, const raft_index index)
     if (r->state == RAFT_LEADER) {
         const struct raft_server *server;
         req = r->leader_state.change;
-	assert(req != NULL);
+        assert(req != NULL);
         r->leader_state.change = NULL;
 
         /* If we are leader but not part of this new configuration, step

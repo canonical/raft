@@ -221,12 +221,12 @@ void tickCb(struct raft_io *io)
     rv = tick(r);
     if (rv != 0) {
         convertToUnavailable(r);
-	return;
+        return;
     }
 
     /* For all states: if there is a leadership transfer request in progress,
      * check if it's expired. */
-    if (r->leadership_transfer.server_id != 0) {
+    if (r->leadership_transfer.req != NULL) {
         raft_time now = r->io->time(r->io);
         if (now - r->leadership_transfer.start >= r->election_timeout) {
             membershipLeadershipTransferClose(r);

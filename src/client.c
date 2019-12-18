@@ -30,7 +30,7 @@ int raft_apply(struct raft *r,
     assert(bufs != NULL);
     assert(n > 0);
 
-    if (r->state != RAFT_LEADER || r->leadership_transfer.server_id != 0) {
+    if (r->state != RAFT_LEADER || r->leadership_transfer.req != NULL) {
         rv = RAFT_NOTLEADER;
         ErrMsgFromCode(r->errmsg, rv);
         goto err;
@@ -72,7 +72,7 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
     struct raft_buffer buf;
     int rv;
 
-    if (r->state != RAFT_LEADER || r->leadership_transfer.server_id != 0) {
+    if (r->state != RAFT_LEADER || r->leadership_transfer.req != NULL) {
         rv = RAFT_NOTLEADER;
         goto err;
     }
@@ -462,7 +462,7 @@ int raft_transfer(struct raft *r,
     unsigned i;
     int rv;
 
-    if (r->state != RAFT_LEADER || r->leadership_transfer.server_id != 0) {
+    if (r->state != RAFT_LEADER || r->leadership_transfer.req != NULL) {
         rv = RAFT_NOTLEADER;
         ErrMsgFromCode(r->errmsg, rv);
         goto err;
