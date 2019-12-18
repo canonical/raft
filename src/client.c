@@ -172,7 +172,7 @@ err:
 
 int raft_add(struct raft *r,
              struct raft_change *req,
-             unsigned id,
+             raft_id id,
              const char *address,
              raft_change_cb cb)
 {
@@ -219,7 +219,7 @@ err:
 
 int raft_promote(struct raft *r,
                  struct raft_change *req,
-                 unsigned id,
+                 raft_id id,
                  int role,
                  raft_change_cb cb)
 {
@@ -244,7 +244,7 @@ int raft_promote(struct raft *r,
     server = configurationGet(&r->configuration, id);
     if (server == NULL) {
         rv = RAFT_NOTFOUND;
-        ErrMsgPrintf(r->errmsg, "no server has ID %u", id);
+        ErrMsgPrintf(r->errmsg, "no server has ID %llu", id);
         goto err;
     }
 
@@ -311,7 +311,7 @@ err:
 
 int raft_demote(struct raft *r,
                 struct raft_change *req,
-                unsigned id,
+                raft_id id,
                 int role,
                 raft_change_cb cb)
 {
@@ -336,7 +336,7 @@ int raft_demote(struct raft *r,
     server = configurationGet(&r->configuration, id);
     if (server == NULL) {
         rv = RAFT_NOTFOUND;
-        ErrMsgPrintf(r->errmsg, "no server has ID %u", id);
+        ErrMsgPrintf(r->errmsg, "no server has ID %llu", id);
         goto err;
     }
 
@@ -379,7 +379,7 @@ err:
 
 int raft_remove(struct raft *r,
                 struct raft_change *req,
-                unsigned id,
+                raft_id id,
                 raft_change_cb cb)
 {
     const struct raft_server *server;
