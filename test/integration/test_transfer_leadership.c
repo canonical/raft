@@ -142,6 +142,7 @@ TEST(raft_transfer_leadership, twice, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
     TRANSFER_LEADERSHIP_SUBMIT(0, 2);
     TRANSFER_LEADERSHIP_ERROR(0, 3, RAFT_NOTLEADER, "server is not the leader");
+    TRANSFER_LEADERSHIP_WAIT;
     return MUNIT_OK;
 }
 
