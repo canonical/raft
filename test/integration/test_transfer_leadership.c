@@ -33,12 +33,12 @@ static bool transferLeadershipCbHasFired(struct raft_fixture *f, void *arg)
 }
 
 /* Submit a transfer leadership request against the I'th server. */
-#define TRANSFER_LEADERSHIP_SUBMIT(I, ID)                            \
-    struct raft *_raft = CLUSTER_RAFT(I);                            \
-    bool _done = false;                                              \
-    int _rv;                                                         \
-    _raft->data = &_done;                                            \
-    _rv = raft_transfer_leadership(_raft, ID, transferLeadershipCb); \
+#define TRANSFER_LEADERSHIP_SUBMIT(I, ID)                 \
+    struct raft *_raft = CLUSTER_RAFT(I);                 \
+    bool _done = false;                                   \
+    int _rv;                                              \
+    _raft->data = &_done;                                 \
+    _rv = raft_transfer(_raft, ID, transferLeadershipCb); \
     munit_assert_int(_rv, ==, 0);
 
 /* Wait until the transfer leadership request comletes. */
@@ -54,12 +54,12 @@ static bool transferLeadershipCbHasFired(struct raft_fixture *f, void *arg)
 
 /* Submit a transfer leadership request against the I'th server and assert that
  * the given error is returned. */
-#define TRANSFER_LEADERSHIP_ERROR(I, ID, RV, ERRMSG)                \
-    do {                                                            \
-        int __rv;                                                   \
-        __rv = raft_transfer_leadership(CLUSTER_RAFT(I), ID, NULL); \
-        munit_assert_int(__rv, ==, RV);                             \
-        munit_assert_string_equal(CLUSTER_ERRMSG(I), ERRMSG);       \
+#define TRANSFER_LEADERSHIP_ERROR(I, ID, RV, ERRMSG)          \
+    do {                                                      \
+        int __rv;                                             \
+        __rv = raft_transfer(CLUSTER_RAFT(I), ID, NULL);      \
+        munit_assert_int(__rv, ==, RV);                       \
+        munit_assert_string_equal(CLUSTER_ERRMSG(I), ERRMSG); \
     } while (0)
 
 /******************************************************************************
@@ -87,14 +87,14 @@ static void tearDown(void *data)
 
 /******************************************************************************
  *
- * raft_transfer_leadership
+ * raft_transfer
  *
  *****************************************************************************/
 
-SUITE(raft_transfer_leadership)
+SUITE(raft_transfer)
 
 /* The follower we ask to transfer leadership to is up-to-date. */
-TEST(raft_transfer_leadership, upToDate, setUp, tearDown, 0, NULL)
+TEST(raft_transfer, upToDate, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     TRANSFER_LEADERSHIP(0, 2);
@@ -104,7 +104,7 @@ TEST(raft_transfer_leadership, upToDate, setUp, tearDown, 0, NULL)
 }
 
 /* The follower we ask to transfer leadership to needs to catch up. */
-TEST(raft_transfer_leadership, catchUp, setUp, tearDown, 0, NULL)
+TEST(raft_transfer, catchUp, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_apply req;
@@ -117,7 +117,7 @@ TEST(raft_transfer_leadership, catchUp, setUp, tearDown, 0, NULL)
 
 /* The follower we ask to transfer leadership to is down and the leadership
  * transfer does not succeed. */
-TEST(raft_transfer_leadership, expire, setUp, tearDown, 0, NULL)
+TEST(raft_transfer, expire, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_apply req;
@@ -129,7 +129,7 @@ TEST(raft_transfer_leadership, expire, setUp, tearDown, 0, NULL)
 }
 
 /* The given ID doesn't match any server in the current configuration. */
-TEST(raft_transfer_leadership, unknownServer, setUp, tearDown, 0, NULL)
+TEST(raft_transfer, unknownServer, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     TRANSFER_LEADERSHIP_ERROR(0, 4, RAFT_BADID, "server ID is not valid");
@@ -137,7 +137,7 @@ TEST(raft_transfer_leadership, unknownServer, setUp, tearDown, 0, NULL)
 }
 
 /* Submitting a transfer request twice is an error. */
-TEST(raft_transfer_leadership, twice, setUp, tearDown, 0, NULL)
+TEST(raft_transfer, twice, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     TRANSFER_LEADERSHIP_SUBMIT(0, 2);
@@ -147,7 +147,7 @@ TEST(raft_transfer_leadership, twice, setUp, tearDown, 0, NULL)
 }
 
 /* If the given ID is zero, the target is selected automatically. */
-TEST(raft_transfer_leadership, autoSelect, setUp, tearDown, 0, NULL)
+TEST(raft_transfer, autoSelect, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     TRANSFER_LEADERSHIP(0, 0);
@@ -158,7 +158,7 @@ TEST(raft_transfer_leadership, autoSelect, setUp, tearDown, 0, NULL)
 
 /* If the given ID is zero, the target is selected automatically. Followers that
  * are up-to-date are preferred. */
-TEST(raft_transfer_leadership, autoSelectUpToDate, setUp, tearDown, 0, NULL)
+TEST(raft_transfer, autoSelectUpToDate, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     CLUSTER_KILL(1);

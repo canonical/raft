@@ -39,7 +39,7 @@ int membershipRollback(struct raft *r);
 /* Initialize the state of a leadership transfer request. */
 void membershipLeadershipTransferInit(struct raft *r,
                                       raft_id id,
-                                      raft_transfer_leadership_cb cb);
+                                      raft_transfer_cb cb);
 
 /* Start the leadership transfer by sending a TimeoutNow message to the target
  * server. */

@@ -453,9 +453,7 @@ static raft_id clientSelectTransferee(struct raft *r)
     return 0;
 }
 
-int raft_transfer_leadership(struct raft *r,
-                             raft_id id,
-                             raft_transfer_leadership_cb cb)
+int raft_transfer(struct raft *r, raft_id id, raft_transfer_cb cb)
 {
     const struct raft_server *server;
     unsigned i;

@@ -161,7 +161,7 @@ int membershipRollback(struct raft *r)
 
 void membershipLeadershipTransferInit(struct raft *r,
                                       raft_id id,
-                                      raft_transfer_leadership_cb cb)
+                                      raft_transfer_cb cb)
 {
     r->leadership_transfer.server_id = id;
     r->leadership_transfer.start = r->io->time(r->io);
@@ -204,7 +204,7 @@ void membershipLeadershipTransferReset(struct raft *r)
 
 void membershipLeadershipTransferClose(struct raft *r)
 {
-    raft_transfer_leadership_cb cb = r->leadership_transfer.cb;
+    raft_transfer_cb cb = r->leadership_transfer.cb;
     membershipLeadershipTransferReset(r);
     if (cb != NULL) {
         cb(r);

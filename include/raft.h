@@ -677,7 +677,7 @@ struct raft; /* Forward declaration. */
 /**
  * Transfer leadership callback.
  */
-typedef void (*raft_transfer_leadership_cb)(struct raft *raft);
+typedef void (*raft_transfer_cb)(struct raft *raft);
 
 /**
  * Close callback.
@@ -825,10 +825,10 @@ struct raft
     /* Information about an in-progress leadership transfer. */
     struct
     {
-        raft_id server_id;              /* ID of target server. */
-        raft_time start;                /* Start of leadership transfer. */
-        raft_transfer_leadership_cb cb; /* User callback. */
-        struct raft_io_send send;       /* For sending TimeoutNow */
+        raft_id server_id;        /* ID of target server. */
+        raft_time start;          /* Start of leadership transfer. */
+        raft_transfer_cb cb;      /* User callback. */
+        struct raft_io_send send; /* For sending TimeoutNow */
     } leadership_transfer;
 
     /*
@@ -1121,9 +1121,8 @@ RAFT_API int raft_remove(struct raft *r,
  * successful or not by calling @raft_leader() and checking if it returns the
  * target server.
  */
-RAFT_API int raft_transfer_leadership(struct raft *r,
-                                      raft_id id,
-                                      raft_transfer_leadership_cb cb);
+RAFT_API int raft_transfer(struct raft *r, raft_id id, raft_transfer_cb cb);
+
 /**
  * User-definable dynamic memory allocation functions.
  *
