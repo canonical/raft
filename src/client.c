@@ -453,7 +453,10 @@ static raft_id clientSelectTransferee(struct raft *r)
     return 0;
 }
 
-int raft_transfer(struct raft *r, raft_id id, raft_transfer_cb cb)
+int raft_transfer(struct raft *r,
+                  struct raft_transfer *req,
+                  raft_id id,
+                  raft_transfer_cb cb)
 {
     const struct raft_server *server;
     unsigned i;
@@ -486,7 +489,7 @@ int raft_transfer(struct raft *r, raft_id id, raft_transfer_cb cb)
     i = configurationIndexOf(&r->configuration, server->id);
     assert(i < r->configuration.n);
 
-    membershipLeadershipTransferInit(r, id, cb);
+    membershipLeadershipTransferInit(r, req, id, cb);
 
     if (progressIsUpToDate(r, i)) {
         rv = membershipLeadershipTransferStart(r);

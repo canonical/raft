@@ -160,12 +160,14 @@ int membershipRollback(struct raft *r)
 }
 
 void membershipLeadershipTransferInit(struct raft *r,
+                                      struct raft_transfer *req,
                                       raft_id id,
                                       raft_transfer_cb cb)
 {
+    req->cb = cb;
     r->leadership_transfer.server_id = id;
     r->leadership_transfer.start = r->io->time(r->io);
-    r->leadership_transfer.cb = cb;
+    r->leadership_transfer.req = req;
     r->leadership_transfer.send.data = NULL;
 }
 
@@ -198,15 +200,16 @@ void membershipLeadershipTransferReset(struct raft *r)
 {
     r->leadership_transfer.server_id = 0;
     r->leadership_transfer.start = 0;
-    r->leadership_transfer.cb = NULL;
+    r->leadership_transfer.req = NULL;
     r->leadership_transfer.send.data = NULL;
 }
 
 void membershipLeadershipTransferClose(struct raft *r)
 {
-    raft_transfer_cb cb = r->leadership_transfer.cb;
+    struct raft_transfer *req = r->leadership_transfer.req;
+    raft_transfer_cb cb = req->cb;
     membershipLeadershipTransferReset(r);
     if (cb != NULL) {
-        cb(r);
+        cb(req);
     }
 }

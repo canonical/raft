@@ -675,17 +675,15 @@ struct raft_progress
 struct raft; /* Forward declaration. */
 
 /**
- * Transfer leadership callback.
- */
-typedef void (*raft_transfer_cb)(struct raft *raft);
-
-/**
  * Close callback.
  *
  * It's safe to release the memory of a raft instance only after this callback
  * has fired.
  */
 typedef void (*raft_close_cb)(struct raft *raft);
+
+struct raft_change;   /* Forward declaration */
+struct raft_transfer; /* Forward declaration */
 
 /**
  * Hold and drive the state of a single raft server in a cluster.
@@ -825,10 +823,10 @@ struct raft
     /* Information about an in-progress leadership transfer. */
     struct
     {
-        raft_id server_id;        /* ID of target server. */
-        raft_time start;          /* Start of leadership transfer. */
-        raft_transfer_cb cb;      /* User callback. */
-        struct raft_io_send send; /* For sending TimeoutNow */
+        raft_id server_id;         /* ID of target server. */
+        raft_time start;           /* Start of leadership transfer. */
+        struct raft_transfer *req; /* User request. */
+        struct raft_io_send send;  /* For sending TimeoutNow */
     } leadership_transfer;
 
     /*
@@ -1043,7 +1041,6 @@ RAFT_API int raft_barrier(struct raft *r,
 /**
  * Asynchronous request to change the raft configuration.
  */
-struct raft_change;
 typedef void (*raft_change_cb)(struct raft_change *req, int status);
 struct raft_change
 {
@@ -1104,6 +1101,16 @@ RAFT_API int raft_remove(struct raft *r,
                          raft_change_cb cb);
 
 /**
+ * Asynchronous request to transfer leadership.
+ */
+typedef void (*raft_transfer_cb)(struct raft_transfer *req);
+struct raft_transfer
+{
+    void *data;
+    raft_transfer_cb cb;
+};
+
+/**
  * Transfer leadership to the server with the given ID.
  *
  * If the target server is not part of the configuration, or it's the leader
@@ -1121,7 +1128,10 @@ RAFT_API int raft_remove(struct raft *r,
  * successful or not by calling @raft_leader() and checking if it returns the
  * target server.
  */
-RAFT_API int raft_transfer(struct raft *r, raft_id id, raft_transfer_cb cb);
+RAFT_API int raft_transfer(struct raft *r,
+                           struct raft_transfer *req,
+                           raft_id id,
+                           raft_transfer_cb cb);
 
 /**
  * User-definable dynamic memory allocation functions.
