@@ -824,7 +824,6 @@ struct raft
     struct
     {
         struct raft_transfer *req; /* User request. */
-        struct raft_io_send send;  /* For sending TimeoutNow */
     } leadership_transfer;
 
     /*
@@ -1104,10 +1103,11 @@ RAFT_API int raft_remove(struct raft *r,
 typedef void (*raft_transfer_cb)(struct raft_transfer *req);
 struct raft_transfer
 {
-    void *data;          /* User data */
-    raft_id id;          /* ID of target server. */
-    raft_time start;     /* Start of leadership transfer. */
-    raft_transfer_cb cb; /* User callback */
+    void *data;               /* User data */
+    raft_id id;               /* ID of target server. */
+    raft_time start;          /* Start of leadership transfer. */
+    struct raft_io_send send; /* For sending TimeoutNow */
+    raft_transfer_cb cb;      /* User callback */
 };
 
 /**

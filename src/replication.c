@@ -767,7 +767,7 @@ int replicationUpdate(struct raft *r,
         if (r->leadership_transfer.req != NULL &&
             r->leadership_transfer.req->id == server->id) {
             if (progressIsUpToDate(r, i) &&
-                r->leadership_transfer.send.data == NULL) {
+                r->leadership_transfer.req->send.data == NULL) {
                 rv = membershipLeadershipTransferStart(r);
                 if (rv != 0) {
                     membershipLeadershipTransferClose(r);
