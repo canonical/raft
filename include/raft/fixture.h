@@ -26,7 +26,7 @@ struct raft_fixture_server
 {
     bool alive;                /* If false, the server is down. */
     raft_id id;                /* Server ID. */
-    char address[8];           /* Server address (stringified ID). */
+    char address[16];          /* Server address (stringified ID). */
     struct raft_tracer tracer; /* Tracer. */
     struct raft_io io;         /* In-memory raft_io implementation. */
     struct raft raft;          /* Raft instance. */
