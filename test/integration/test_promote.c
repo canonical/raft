@@ -33,7 +33,7 @@ struct result
         munit_assert_int(rv__, ==, 0);      \
     }
 
-static void changeCbAssertResult(struct raft_change *req, int status)
+static void changeCbAssertResult(struct raft_change_configuration *req, int status)
 {
     struct result *result = req->data;
     munit_assert_int(status, ==, result->status);
@@ -49,7 +49,7 @@ static bool changeCbHasFired(struct raft_fixture *f, void *arg)
 
 /* Submit an add request. */
 #define ADD_SUBMIT(I, ID)                                                     \
-    struct raft_change _req;                                                  \
+    struct raft_change_configuration _req;                                                  \
     char _address[16];                                                        \
     struct result _result = {0, false};                                       \
     int _rv;                                                                  \
@@ -67,7 +67,7 @@ static bool changeCbHasFired(struct raft_fixture *f, void *arg)
 
 /* Submit a promote request. */
 #define PROMOTE_SUBMIT(I, ID, ROLE)                                           \
-    struct raft_change _req;                                                  \
+    struct raft_change_configuration _req;                                                  \
     struct result _result = {0, false};                                       \
     int _rv;                                                                  \
     _req.data = &_result;                                                     \
@@ -90,7 +90,7 @@ static bool changeCbHasFired(struct raft_fixture *f, void *arg)
  * code. */
 #define PROMOTE_ERROR(I, ID, ROLE, RV, ERRMSG)                        \
     {                                                                 \
-        struct raft_change __req;                                     \
+        struct raft_change_configuration __req;                                     \
         int __rv;                                                     \
         __rv = raft_promote(CLUSTER_RAFT(I), &__req, ID, ROLE, NULL); \
         munit_assert_int(__rv, ==, RV);                               \

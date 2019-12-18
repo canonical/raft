@@ -118,7 +118,7 @@ err:
 
 static int clientChangeConfiguration(
     struct raft *r,
-    struct raft_change *req,
+    struct raft_change_configuration *req,
     const struct raft_configuration *configuration)
 {
     raft_index index;
@@ -169,7 +169,7 @@ err:
 }
 
 int raft_add(struct raft *r,
-             struct raft_change *req,
+             struct raft_change_configuration *req,
              raft_id id,
              const char *address,
              raft_change_cb cb)
@@ -216,7 +216,7 @@ err:
 }
 
 int raft_promote(struct raft *r,
-                 struct raft_change *req,
+                 struct raft_change_configuration *req,
                  raft_id id,
                  int role,
                  raft_change_cb cb)
@@ -308,7 +308,7 @@ err:
 }
 
 int raft_demote(struct raft *r,
-                struct raft_change *req,
+                struct raft_change_configuration *req,
                 raft_id id,
                 int role,
                 raft_change_cb cb)
@@ -376,7 +376,7 @@ err:
 }
 
 int raft_remove(struct raft *r,
-                struct raft_change *req,
+                struct raft_change_configuration *req,
                 raft_id id,
                 raft_change_cb cb)
 {

@@ -187,7 +187,7 @@ TEST(replication, sendSkipHeartbeat, setUp, tearDown, 0, NULL)
 /* The leader doesn't send replication messages to idle servers. */
 TEST(replication, skipIdle, setUp, tearDown, 0, NULL) {
     struct fixture *f = data;
-    struct raft_change req1;
+    struct raft_change_configuration req1;
     struct raft_apply req2;
     BOOTSTRAP_START_AND_ELECT;
     CLUSTER_ADD(&req1);

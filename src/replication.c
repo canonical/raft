@@ -1332,7 +1332,7 @@ static void applyBarrier(struct raft *r, const raft_index index)
 /* Apply a RAFT_CHANGE entry that has been committed. */
 static void applyChange(struct raft *r, const raft_index index)
 {
-    struct raft_change *req;
+    struct raft_change_configuration *req;
 
     assert(index > 0);
 

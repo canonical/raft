@@ -803,12 +803,13 @@ struct raft
         struct
         {
             struct raft_progress *progress; /* Per-server replication state. */
-            struct raft_change *change;     /* Pending membership change. */
-            raft_id promotee_id;            /* ID of server being promoted. */
-            unsigned short round_number;    /* Current sync round. */
-            raft_index round_index;         /* Target of the current round. */
-            raft_time round_start;          /* Start of current round. */
-            void *requests[2];              /* Outstanding client requests. */
+            struct raft_change_configuration
+                *change;                 /* Pending membership change. */
+            raft_id promotee_id;         /* ID of server being promoted. */
+            unsigned short round_number; /* Current sync round. */
+            raft_index round_index;      /* Target of the current round. */
+            raft_time round_start;       /* Start of current round. */
+            void *requests[2];           /* Outstanding client requests. */
         } leader_state;
     };
 
@@ -1043,9 +1044,10 @@ RAFT_API int raft_barrier(struct raft *r,
 /**
  * Asynchronous request to change the raft configuration.
  */
-struct raft_change;
-typedef void (*raft_change_cb)(struct raft_change *req, int status);
-struct raft_change
+struct raft_change_configuration;
+typedef void (*raft_change_cb)(struct raft_change_configuration *req,
+                               int status);
+struct raft_change_configuration
 {
     void *data;
     raft_change_cb cb;
@@ -1056,7 +1058,7 @@ struct raft_change
  * #RAFT_IDLE.
  */
 RAFT_API int raft_add(struct raft *r,
-                      struct raft_change *req,
+                      struct raft_change_configuration *req,
                       raft_id id,
                       const char *address,
                       raft_change_cb cb);
@@ -1073,7 +1075,7 @@ RAFT_API int raft_add(struct raft *r,
  * In all other cases, #RAFT_BADROLE is returned.
  */
 RAFT_API int raft_promote(struct raft *r,
-                          struct raft_change *req,
+                          struct raft_change_configuration *req,
                           raft_id id,
                           int role,
                           raft_change_cb cb);
@@ -1090,7 +1092,7 @@ RAFT_API int raft_promote(struct raft *r,
  * In all other cases, #RAFT_BADROLE is returned.
  */
 RAFT_API int raft_demote(struct raft *r,
-                         struct raft_change *req,
+                         struct raft_change_configuration *req,
                          raft_id id,
                          int role,
                          raft_change_cb cb);
@@ -1099,7 +1101,7 @@ RAFT_API int raft_demote(struct raft *r,
  * Remove the given server from the cluster configuration.
  */
 RAFT_API int raft_remove(struct raft *r,
-                         struct raft_change *req,
+                         struct raft_change_configuration *req,
                          raft_id id,
                          raft_change_cb cb);
 

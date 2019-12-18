@@ -10,7 +10,7 @@
 struct fixture
 {
     FIXTURE_CLUSTER;
-    struct raft_change req;
+    struct raft_change_configuration req;
 };
 
 static char *cluster_n[] = {"3", "4", "5", NULL};

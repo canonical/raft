@@ -67,7 +67,7 @@ static void convertFailBarrier(struct raft_barrier *req)
     }
 }
 
-static void convertFailChange(struct raft_change *req)
+static void convertFailChange(struct raft_change_configuration *req)
 {
     if (req != NULL && req->cb != NULL) {
         req->cb(req, RAFT_LEADERSHIPLOST);
