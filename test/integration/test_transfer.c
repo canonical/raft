@@ -3,7 +3,7 @@
 
 /******************************************************************************
  *
- * Fixture with a fake raft_io instance.
+ * Fixture with a test raft cluster.
  *
  *****************************************************************************/
 
@@ -167,5 +167,26 @@ TEST(raft_transfer, autoSelectUpToDate, setUp, tearDown, 0, NULL)
     TRANSFER(0, 0);
     CLUSTER_STEP_UNTIL_HAS_LEADER(1000);
     munit_assert_int(CLUSTER_LEADER, ==, 2);
+    return MUNIT_OK;
+}
+
+/* It's possible to transfer leadership also after the server has been
+ * demoted. */
+TEST(raft_transfer, afterDemotion, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    struct raft_change req;
+    struct raft *raft = CLUSTER_RAFT(0);
+    int rv;
+    CLUSTER_ADD(&req);
+    CLUSTER_STEP_UNTIL_APPLIED(0, 2, 1000);
+    CLUSTER_PROMOTE(&req, RAFT_VOTER);
+    CLUSTER_STEP_UNTIL_APPLIED(0, 3, 1000);
+    rv = raft_demote(raft, &req, raft->id, RAFT_IDLE, NULL);
+    munit_assert_int(rv, ==, 0);
+    CLUSTER_STEP_UNTIL_APPLIED(0, 4, 1000);
+    TRANSFER(0, 2);
+    CLUSTER_STEP_UNTIL_HAS_LEADER(1000);
+    munit_assert_int(CLUSTER_LEADER, ==, 1);
     return MUNIT_OK;
 }

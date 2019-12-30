@@ -138,15 +138,15 @@ TEST(raft_demote, standBy, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-/* Demote the leader to stand-by. */
+/* The leader can be demoted to stand-by and still act as leader, although it
+ * won't have any voting right. */
 TEST(raft_demote, leader, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     DEMOTE_SUBMIT(0, 1, RAFT_STANDBY);
-    CLUSTER_STEP_UNTIL_HAS_NO_LEADER(1000); /* Current leader steps down */
-    CLUSTER_STEP_UNTIL_HAS_LEADER(3000);    /* The other node elects itself */
-    munit_assert_int(CLUSTER_LEADER, ==, 1);
+    munit_assert_int(CLUSTER_LEADER, ==, 0);
     DEMOTE_WAIT;
+    munit_assert_int(CLUSTER_LEADER, ==, 0);
     return MUNIT_OK;
 }
 
