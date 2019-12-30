@@ -1351,7 +1351,7 @@ static void applyChange(struct raft *r, const raft_index index)
         r->leader_state.change = NULL;
 
         /* If we are leader but not part of this new configuration, step
-         * down. We also step down if we are not voters anymore.
+         * down.
          *
          * From Section 4.2.2:
          *
@@ -1359,7 +1359,7 @@ static void applyChange(struct raft *r, const raft_index index)
          *   steps down once the Cnew entry is committed.
          */
         server = configurationGet(&r->configuration, r->id);
-        if (server == NULL || server->role != RAFT_VOTER) {
+        if (server == NULL) {
             convertToFollower(r);
         }
 
