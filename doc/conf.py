@@ -2,7 +2,7 @@
 master_doc = 'index'
 
 # General information about the project.
-project = u'C-Raft API documentation'
+project = u'C-Raft documentation'
 copyright = u'2019-present, Canonical'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -21,8 +21,12 @@ pygments_style = 'sphinx'
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
+#html_theme = 'material'
 html_theme = 'material'
 html_theme_path = ['_themes']
+html_sidebars = {
+  '**': ['globaltoc.html'],
+}
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the

@@ -1,5 +1,5 @@
-C-Raft documentation
-====================
+C-Raft
+======
 
 C-Raft is a fully asynchronous C implementation of the Raft consensus protocol.
 
@@ -35,3 +35,10 @@ It also includes a few optional enhancements:
 * Automatic stepping down when the leader loses quorum
 * Leadership transfer extension
 * Non-voting servers
+
+.. toctree::
+   :maxdepth: 1
+
+   self
+   api
+
