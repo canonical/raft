@@ -8,8 +8,8 @@ Design
 
 The library has modular design: its core part implements only the core Raft
 algorithm logic, in a fully platform independent way. On top of that, a
-pluggable interface defines the I/O implementation for networking (send/receive
-RPC messages) and disk persistence (store log entries and snapshots).
+pluggable interface defines the I/O implementation for networking and disk
+persistence.
 
 A stock implementation of the I/O interface is provided when building the
 library with default options. It is based on `libuv`_ and should fit the vast
