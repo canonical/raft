@@ -15,13 +15,14 @@ version = u'0.9'
 release = version
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = 'sphinx'
+# pygments_style = 'sphinx'
 
 # -- Options for HTML output ----------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #html_theme = 'material'
+# html_theme = 'material'
 html_theme = 'material'
 html_theme_path = ['_themes']
 

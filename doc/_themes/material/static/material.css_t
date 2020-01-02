@@ -754,6 +754,35 @@ input {
     display: flex;
 }
 
+.md-typeset .highlight .s, .md-typeset .highlight .sb, .md-typeset .highlight .sc {
+    color: #0d904f;
+}
+
+.md-typeset .highlight .na, .md-typeset .highlight .nb {
+    color: #c2185b;
+}
+
+.md-typeset .highlight .cp {
+    color:  #666;
+}
+
+.md-typeset .highlight .k {
+    color: #3b78e7;
+}
+
+.md-typeset .highlight .il, .md-typeset .highlight .m, .md-typeset .highlight .mf, .md-typeset .highlight .mh, .md-typeset .highlight .mi, .md-typeset .highlight .mo {
+    color: #e74c3c;
+}
+
+.md-typeset .highlight .ne, .md-typeset .highlight .nf {
+    color: 
+    #c2185b;
+}
+
+.md-typeset .highlight .kr, .md-typeset .highlight .kt {
+    color:  #3e61a2;
+}
+
 code, kbd, pre {
     font-family: "","Courier New",Courier,monospace;
 }
