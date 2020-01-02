@@ -42,3 +42,17 @@ It also includes a few optional enhancements:
    self
    api
 
+Quick start
+-----------
+
+Make sure that `libuv`_ is installed on your system, then run:
+
+.. code-block:: bash
+
+   autoreconf -i
+   ./configure --enable-example
+   make
+
+Then create a :file:`main.c` file with this simple test program that just runs a
+single raft server and implements a basic state machine for incrementing a
+counter:

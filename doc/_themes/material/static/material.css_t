@@ -391,6 +391,10 @@ input {
     padding-top: .6rem;
 }
 
+.md-content__inner .toctree-wrapper {
+    display: none;
+}
+
 .md-typeset {
     font-size: .8rem;
     line-height: 1.6;
@@ -605,6 +609,68 @@ input {
 .md-typeset h6:hover .headerlink:hover,
 .md-typeset h6:target .headerlink {
     color: #536dfe
+}
+
+.md-typeset .literal .pre {
+    color:  #a61717;
+}
+
+.md-typeset .literal {
+    color: #37474f;
+    line-height: 1.4;
+}
+
+.md-typeset code {
+    word-break: break-word;
+}
+
+.md-typeset code {
+    color: #37474f;
+    font-size: 85%;
+    direction: ltr;
+}
+
+.md-typeset code {
+    margin: 0 .29412em;
+    padding: .07353em 0;
+}
+
+.md-typeset code {
+    position: relative;
+    margin: 1em 0;
+    padding: 0;
+    border-radius: .1rem;
+    background-color: hsla(0,0%,92.5%,.5);
+    color: #37474f;
+    line-height: 1.4;
+    -webkit-overflow-scrolling: touch;
+}
+
+.md-typeset code {
+    margin: 0 .29412em;
+    padding: .07353em 0;
+    border-radius: .1rem;
+    box-shadow: .29412em 0 0 hsla(0,0%,92.5%,.5),-.29412em 0 0 hsla(0,0%,92.5%,.5);
+    word-break: break-word;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+}
+
+.md-typeset code, .md-typeset pre {
+    background-color: hsla(0,0%,92.5%,.5);
+    color: #37474f;
+    font-size: 85%;
+    direction: ltr;
+}
+
+code, kbd, pre {
+    font-family: "","Courier New",Courier,monospace;
+}
+
+code, kbd, pre {
+    color: rgba(0,0,0,.87);
+    font-feature-settings: "kern";
+    font-family: Courier New,Courier,monospace;
 }
 
 .md-grid {
