@@ -36,12 +36,6 @@ It also includes a few optional enhancements:
 * Leadership transfer extension
 * Non-voting servers
 
-.. toctree::
-   :maxdepth: 1
-
-   self
-   api
-
 Quick start
 -----------
 
@@ -127,3 +121,9 @@ full `license`_ text.
 
 .. _license: https://github.com/canonical/raft/blob/master/LICENSE
 
+.. toctree::
+   :maxdepth: 1
+
+   self
+   getting-started
+   api
