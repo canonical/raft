@@ -1,13 +1,8 @@
-{#
-    basic/page.html
-    ~~~~~~~~~~~~~~~
-
-    Master template for simple pages.
-
-    :copyright: Copyright 2007-2019 by the Sphinx team, see AUTHORS.
-    :license: BSD, see LICENSE for details.
-#}
 {%- extends "layout.html" %}
 {% block body %}
-  {{ body }}
+<div class="md-content">
+  <article class="md-content__inner md-typeset">
+    {{ body }}
+  </article>
+</div>
 {% endblock %}

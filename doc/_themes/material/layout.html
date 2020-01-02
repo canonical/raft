@@ -1,6 +1,4 @@
 <!DOCTYPE html>
-{%- set render_sidebar = (not embedded) and (not theme_nosidebar|tobool) and
-                         (sidebars != []) %}
 
 {%- macro css() %}
     <link rel="stylesheet" href="{{ pathto('_static/' + style, 1) }}" type="text/css" />
@@ -73,37 +71,45 @@
     </header>
     {%- endmacro %}
 
-{%- macro sidebar() %}
-    <nav class="md-nav md-nav--primary" data-md-level="0">
-
-      <!-- Site title -->
-      <label class="md-nav__title md-nav__title--site" for="__drawer">
-        {{ project }}
-      </label>
-
-      {%- for sidebartemplate in sidebars %}
-      {%- include sidebartemplate %}
-      {%- endfor %}
-    </nav>
-
+<!-- Main navigation -->
+{%- macro navigation() %}
+    <div class="md-sidebar md-sidebar--primary"
+         data-md-component="navigation">
+      <div class="md-sidebar__scrollwrap">
+        <div class="md-sidebar__inner">
+          <nav class="md-nav md-nav--primary" data-md-level="0">
+            <!-- Site title -->
+            <label class="md-nav__title md-nav__title--site" for="__drawer">
+              {{ project }}
+            </label>
+            {{ toctree() }}
+          </nav>
+        </div>
+      </div>
+    </div>
 {%- endmacro %}
 
-{%- macro localtoc() %}
-    <nav class="md-nav md-nav--secondary">
-
-      <label class="md-nav__title md-nav__title--site" for="__drawer">
-        Table of contents
-      </label>
-
-      {%- include "localtoc.html" %}
-    </nav>
+<!-- Table of contents -->
+{%- macro toc() %}
+    <div class="md-sidebar md-sidebar--secondary"
+         data-md-component="toc">
+      <div class="md-sidebar__scrollwrap">
+        <div class="md-sidebar__inner">
+          <nav class="md-nav md-nav--secondary">
+            <label class="md-nav__title md-nav__title--site" for="__drawer">
+              Table of contents
+            </label>
+            {{ toc }}
+          </nav>
+        </div>
+      </div>
+    </div>
 {%- endmacro %}
 
 <html xmlns="http://www.w3.org/1999/xhtml"{% if language is not none %} lang="{{ language }}"{% endif %}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-
     <!-- Keep for compatibility, see http://bit.ly/2tMB6ag -->
     <meta http-equiv="x-ua-compatible" content="ie=edge" />
     {%- block htmltitle %}
@@ -118,30 +124,10 @@
     <div class="md-container">
       <main class="md-main" role="main">
         <div class="md-main__inner md-grid" data-md-component="container">
-          <!-- Main navigation -->
-          <div class="md-sidebar md-sidebar--primary"
-               data-md-component="navigation">
-            <div class="md-sidebar__scrollwrap">
-              <div class="md-sidebar__inner">
-                {%- block sidebar %}{{ sidebar() }}{% endblock %}
-              </div>
-            </div>
-          </div>
-          <!-- Table of contents -->
-          <div class="md-sidebar md-sidebar--secondary"
-               data-md-component="toc">
-            <div class="md-sidebar__scrollwrap">
-              <div class="md-sidebar__inner">
-                {%- block localtoc %}{{ localtoc() }}{% endblock %}
-              </div>
-            </div>
-          </div>
-          <!-- Article -->
-          <div class="md-content">
-            <article class="md-content__inner md-typeset">
-            {% block body %} {% endblock %}
-            </article>
-          </div>
+          {%- block navigation %}{{ navigation() }}{% endblock %}
+          {%- block toc %}{{ toc() }}{% endblock %}
+          {% block body %} {% endblock %}
+        </div>
       </main>
     </div>
   </body>
