@@ -39,6 +39,11 @@ a {
     text-decoration: none;
 }
 
+td, th {
+    font-weight: 400;
+    vertical-align: top;
+}
+
 input {
     border: 0;
     outline: 0;
@@ -656,11 +661,97 @@ input {
     box-decoration-break: clone;
 }
 
+.md-typeset .highlight code, .md-typeset .highlight pre {
+    display: block;
+    margin: 0;
+    padding: .525rem .6rem;
+    background-color: 
+    transparent;
+    overflow: auto;
+    vertical-align: top;
+}
+
+.md-typeset .highlighttable .highlight, .md-typeset .highlighttable .linenodiv {
+    margin: 0;
+    border-radius: 0;
+}
+
+.md-typeset .highlight {
+    position: relative;
+    margin: 1em 0;
+    padding: 0;
+    border-radius: .1rem;
+    background-color: hsla(0,0%,92.5%,.5);
+    color: #37474f;
+    line-height: 1.4;
+    -webkit-overflow-scrolling: touch;
+}
+
+.md-typeset .highlighttable .code {
+    -webkit-box-flex: 1;
+    flex: 1;
+    overflow: hidden;
+}
+
+.md-typeset .highlighttable tbody, .md-typeset .highlighttable td {
+    display: block;
+    padding: 0;
+}
+
+.md-typeset pre {
+    line-height: 1.4;
+}
+
+.md-typeset pre {
+    position: relative;
+    margin: 1em 0;
+    border-radius: .1rem;
+    line-height: 1.4;
+    -webkit-overflow-scrolling: touch;
+}
+
 .md-typeset code, .md-typeset pre {
     background-color: hsla(0,0%,92.5%,.5);
     color: #37474f;
     font-size: 85%;
     direction: ltr;
+}
+
+.md-typeset .highlighttable .linenos pre {
+    margin: 0;
+    padding: 0;
+    background-color: 
+    transparent;
+    color: inherit;
+    text-align: right;
+}
+
+.md-typeset .highlighttable .linenos {
+    background-color: rgba(0,0,0,.07);
+    color: rgba(0,0,0,.26);
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+.md-typeset .highlighttable tbody, .md-typeset .highlighttable td {
+    display: block;
+    padding: 0;
+}
+
+.md-typeset .highlighttable .linenodiv {
+    padding: .525rem .6rem;
+}
+
+.md-typeset .highlighttable .linenodiv {
+    margin: 0;
+    border-radius: 0;
+}
+
+.md-typeset .highlighttable tr {
+    display: -webkit-box;
+    display: flex;
 }
 
 code, kbd, pre {

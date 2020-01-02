@@ -48,6 +48,7 @@ Quick start
 Make sure that `libuv`_ is installed on your system, then run:
 
 .. code-block:: bash
+   :linenos:
 
    autoreconf -i
    ./configure --enable-example
