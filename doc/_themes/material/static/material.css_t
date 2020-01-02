@@ -396,7 +396,7 @@ input {
     padding-top: .6rem;
 }
 
-.md-content__inner .toctree-wrapper {
+#toc.section {
     display: none;
 }
 
@@ -422,6 +422,14 @@ input {
     rgba(0,0,0,.54);
     font-size: 1.5625rem;
     line-height: 1.3;
+}
+
+.md-typeset h3 {
+    margin: 1.6rem 0 .8rem;
+    font-size: 1rem;
+    font-weight: 400;
+    letter-spacing: -.01em;
+    line-height: 1.5;
 }
 
 .md-typeset blockquote, .md-typeset ol, .md-typeset p, .md-typeset ul {
