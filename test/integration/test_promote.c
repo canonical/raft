@@ -75,8 +75,11 @@ static bool changeCbHasFired(struct raft_fixture *f, void *arg)
         raft_promote(CLUSTER_RAFT(I), &_req, ID, ROLE, changeCbAssertResult); \
     munit_assert_int(_rv, ==, 0);
 
+/* Expect the promote callback to fire with the given status. */
+#define PROMOTE_EXPECT(STATUS) _result.status = STATUS;
+
 /* Wait until a promote request comletes. */
-#define PROMOTE_WAIT CLUSTER_STEP_UNTIL(changeCbHasFired, &_result, 2000)
+#define PROMOTE_WAIT CLUSTER_STEP_UNTIL(changeCbHasFired, &_result, 10000)
 
 /* Submit a request to promote the I'th server to the given role and wait for
  * the operation to succeed. */
@@ -399,6 +402,23 @@ TEST(raft_promote, leadershipLost, setUp, tearDown, 0, NULL)
     /* Server 3 is not being considered voting anymore. */
     server = configurationGet(&CLUSTER_RAFT(0)->configuration, 3);
     munit_assert_int(server->role, ==, RAFT_STANDBY);
+
+    return MUNIT_OK;
+}
+
+/* Trying to promote an unresponsive server eventually fails. */
+TEST(raft_promote, unresponsive, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    CLUSTER_MAKE_PROGRESS;
+    GROW;
+    ADD(0, 3);
+
+    PROMOTE_SUBMIT(0, 3, RAFT_VOTER);
+    CLUSTER_KILL(2);
+
+    PROMOTE_EXPECT(RAFT_NOCONNECTION);
+    PROMOTE_WAIT;
 
     return MUNIT_OK;
 }

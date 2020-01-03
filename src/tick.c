@@ -17,7 +17,7 @@
 
 /* Number of milliseconds after which a server promotion will be aborted if the
  * server hasn't caught up with the logs yet. */
-#define RAFT_MAX_CATCH_UP_DURATION (30 * 1000)
+#define RAFT_MAX_CATCH_UP_DURATION (5 * 1000)
 
 /* Apply time-dependent rules for followers (Figure 3.1). */
 static int tickFollower(struct raft *r)
@@ -175,11 +175,19 @@ static int tickLeader(struct raft *r)
         /* Abort the promotion if we are at the 10'th round and it's still
          * taking too long, or if the server is unresponsive. */
         if (is_too_slow || is_unresponsive) {
+            struct raft_change *change;
+
             r->leader_state.promotee_id = 0;
 
             r->leader_state.round_index = 0;
             r->leader_state.round_number = 0;
             r->leader_state.round_start = 0;
+
+            change = r->leader_state.change;
+            r->leader_state.change = NULL;
+            if (change != NULL && change->cb != NULL) {
+                change->cb(change, RAFT_NOCONNECTION);
+            }
         }
     }
 
