@@ -359,10 +359,6 @@ send_snapshot:
  *
  * This function loops through all followers and triggers replication on them.
  *
- * If the index is 0, no entry are written to disk, and a heartbeat
- * AppendEntries RPC with no entries (or missing entries for followers whose log
- * is behind) is sent.
- *
  * It must be called only by leaders. */
 static int triggerAll(struct raft *r)
 {
