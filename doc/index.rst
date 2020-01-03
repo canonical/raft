@@ -121,8 +121,8 @@ full `license`_ text.
 
 .. _license: https://github.com/canonical/raft/blob/master/LICENSE
 
-#toc
-------
+toc
+~~~
 
 .. toctree::
    :maxdepth: 1

@@ -365,6 +365,21 @@ input {
     color: #fb8c00;
 }
 
+/* Hide sub-sub sections */
+.md-nav--secondary ul ul ul {
+    display: none;
+}
+
+/* Don't indent sub items */
+.md-nav--secondary ul ul li {
+    padding: 0;
+}
+
+/* Hide top-level local toc item */
+.md-nav--secondary ul li a[href="#"] {
+    display: none;
+}
+
 .md-sidebar--secondary {
     display: block;
     margin-left: 100%;
