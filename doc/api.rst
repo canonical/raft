@@ -7,3 +7,5 @@ API reference
    :maxdepth: 1
 
    server
+   fsm
+   io
