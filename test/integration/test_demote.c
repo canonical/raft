@@ -165,7 +165,7 @@ TEST(raft_demote, changeRequestAlreadyInProgress, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
     GROW;
     ADD_SUBMIT(0, 3);
-    DEMOTE_ERROR(0, 2, RAFT_IDLE, RAFT_CANTCHANGE,
+    DEMOTE_ERROR(0, 2, RAFT_SPARE, RAFT_CANTCHANGE,
                  "a configuration change is already in progress");
     ADD_WAIT;
     return MUNIT_OK;
@@ -176,7 +176,7 @@ TEST(raft_demote, changeRequestAlreadyInProgress, setUp, tearDown, 0, NULL)
 TEST(raft_demote, unknownId, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    DEMOTE_ERROR(0, 3, RAFT_IDLE, RAFT_NOTFOUND, "no server has ID 3");
+    DEMOTE_ERROR(0, 3, RAFT_SPARE, RAFT_NOTFOUND, "no server has ID 3");
     return MUNIT_OK;
 }
 
@@ -184,8 +184,8 @@ TEST(raft_demote, unknownId, setUp, tearDown, 0, NULL)
 TEST(raft_demote, alreadyVoter, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    DEMOTE(0, 2, RAFT_IDLE);
-    DEMOTE_ERROR(0, 2, RAFT_IDLE, RAFT_BADROLE, "server is already idle");
+    DEMOTE(0, 2, RAFT_SPARE);
+    DEMOTE_ERROR(0, 2, RAFT_SPARE, RAFT_BADROLE, "server is already spare");
     return MUNIT_OK;
 }
 

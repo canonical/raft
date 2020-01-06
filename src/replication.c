@@ -373,8 +373,8 @@ static int triggerAll(struct raft *r)
         if (server->id == r->id) {
             continue;
         }
-        /* Skip idle servers, unless they're being promoted. */
-        if (server->role == RAFT_IDLE &&
+        /* Skip spare servers, unless they're being promoted. */
+        if (server->role == RAFT_SPARE &&
             server->id != r->leader_state.promotee_id) {
             continue;
         }

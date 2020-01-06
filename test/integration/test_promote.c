@@ -208,7 +208,7 @@ TEST(raft_promote, catchUp, setUp, tearDown, 0, NULL)
     /* Server 3 is not being considered as voting, since its log is behind. */
     raft = CLUSTER_RAFT(0);
     server = &raft->configuration.servers[2];
-    munit_assert_int(server->role, ==, RAFT_IDLE);
+    munit_assert_int(server->role, ==, RAFT_SPARE);
 
     /* Advance the match index of server 3, by acknowledging the AppendEntries
      * request that the leader has sent to it. */
@@ -344,7 +344,7 @@ TEST(raft_promote, unknownId, setUp, tearDown, 0, NULL)
 TEST(raft_promote, badRole, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    PROMOTE_ERROR(0, 3, RAFT_IDLE, RAFT_BADROLE, "server role is not valid");
+    PROMOTE_ERROR(0, 3, RAFT_SPARE, RAFT_BADROLE, "server role is not valid");
     return MUNIT_OK;
 }
 

@@ -77,7 +77,7 @@ struct raft_buffer
 
 #define RAFT_STANDBY 0 /* Replicate log, does not participate in quorum. */
 #define RAFT_VOTER 1   /* Replicate log, does participate in quorum. */
-#define RAFT_IDLE 2    /* Does not replicate log, or participate in quorum. */
+#define RAFT_SPARE 2    /* Does not replicate log, or participate in quorum. */
 
 /**
  * Hold information about a single server in the cluster configuration.
@@ -113,7 +113,7 @@ RAFT_API void raft_configuration_close(struct raft_configuration *c);
  *
  * The @id must be greater than zero and @address point to a valid string.
  *
- * The @role must be either #RAFT_VOTER, #RAFT_STANDBY, #RAFT_IDLE.
+ * The @role must be either #RAFT_VOTER, #RAFT_STANDBY, #RAFT_SPARE.
  *
  * If @id or @address are already in use by another server in the configuration,
  * an error is returned.
@@ -870,7 +870,7 @@ struct raft_change
 
 /**
  * Add a new server to the cluster configuration. Its initial role will be
- * #RAFT_IDLE.
+ * #RAFT_SPARE.
  */
 RAFT_API int raft_add(struct raft *r,
                       struct raft_change *req,
@@ -881,8 +881,8 @@ RAFT_API int raft_add(struct raft *r,
 /**
  * Promote the given server to a higher role.
  *
- * If the server's current role is #RAFT_IDLE, the server can be promoted either
- * to #RAFT_STANDBY or #RAFT_VOTER.
+ * If the server's current role is #RAFT_SPARE, the server can be promoted
+ * either to #RAFT_STANDBY or #RAFT_VOTER.
  *
  * If the server's current role is #RAFT_STANDBY, the server can be promoted to
  * #RAFT_VOTER.
@@ -899,10 +899,10 @@ RAFT_API int raft_promote(struct raft *r,
  * Demote the given server to a lesser role.
  *
  * If the server's current role is #RAFT_VOTER, the server can be demoted either
- * to #RAFT_STANDBY or #RAFT_IDLE.
+ * to #RAFT_STANDBY or #RAFT_SPARE.
  *
  * If the server's current role is #RAFT_STANDBY, the server can be demoted to
- * #RAFT_IDLE.
+ * #RAFT_SPARE.
  *
  * In all other cases, #RAFT_BADROLE is returned.
  */

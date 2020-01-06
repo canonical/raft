@@ -191,7 +191,7 @@ int raft_add(struct raft *r,
         goto err;
     }
 
-    rv = raft_configuration_add(&configuration, id, address, RAFT_IDLE);
+    rv = raft_configuration_add(&configuration, id, address, RAFT_SPARE);
     if (rv != 0) {
         goto err_after_configuration_copy;
     }
@@ -320,7 +320,7 @@ int raft_demote(struct raft *r,
     (void)req;
     (void)cb;
 
-    if (role != RAFT_IDLE && role != RAFT_STANDBY) {
+    if (role != RAFT_SPARE && role != RAFT_STANDBY) {
         rv = RAFT_BADROLE;
         ErrMsgFromCode(r->errmsg, rv);
         return rv;
@@ -342,8 +342,8 @@ int raft_demote(struct raft *r,
     if (server->role == role) {
         const char *name;
         rv = RAFT_BADROLE;
-        if (role == RAFT_IDLE) {
-            name = "idle";
+        if (role == RAFT_SPARE) {
+            name = "spare";
         } else {
             name = "stand-by";
         }

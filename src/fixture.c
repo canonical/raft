@@ -1146,7 +1146,7 @@ static bool updateLeaderAndCheckElectionSafety(struct raft_fixture *f)
 
             /* If the server is not in the configuration or is idle, then don't
              * count it. */
-            if (server == NULL || server->role == RAFT_IDLE) {
+            if (server == NULL || server->role == RAFT_SPARE) {
                 continue;
             }
 
