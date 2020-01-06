@@ -879,6 +879,18 @@ RAFT_API int raft_add(struct raft *r,
                       raft_change_cb cb);
 
 /**
+ * Assign a new role to the given server.
+ *
+ * If the server has already the given role, or if the given role is unknown,
+ * #RAFT_BADROLE is returned.
+ */
+RAFT_API int raft_assign(struct raft *r,
+			 struct raft_change *req,
+			 raft_id id,
+			 int role,
+			 raft_change_cb cb);
+
+/**
  * Promote the given server to a higher role.
  *
  * If the server's current role is #RAFT_SPARE, the server can be promoted
