@@ -58,12 +58,11 @@ static void tear_down(void *data)
         munit_assert_int(rv_, ==, RV);                                \
     }
 
-/* Submit a request to promote the server with the given ID to the given
- * ROLE. */
-#define PROMOTE(I, ID, ROLE)                                                \
-    {                                                                 \
-        int _rv;                                                      \
-        _rv = raft_promote(CLUSTER_RAFT(I), &f->req, ID, ROLE, NULL); \
+/* Submit a request to assign the given ROLE to the server with the given ID. */
+#define ASSIGN(I, ID, ROLE)                                          \
+    {                                                                \
+        int _rv;                                                     \
+        _rv = raft_assign(CLUSTER_RAFT(I), &f->req, ID, ROLE, NULL); \
         munit_assert_int(_rv, ==, 0);                                \
     }
 
@@ -184,7 +183,7 @@ TEST(raft_remove, committed, setup, tear_down, 0, NULL)
     GROW;
     ADD(0, 3, 0);
     CLUSTER_STEP_UNTIL_APPLIED(0, 2, 2000);
-    PROMOTE(0, 3, RAFT_STANDBY);
+    ASSIGN(0, 3, RAFT_STANDBY);
     CLUSTER_STEP_UNTIL_APPLIED(2, 1, 2000);
     CLUSTER_STEP_N(2);
     REMOVE(0, 3, 0);

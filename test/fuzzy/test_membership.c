@@ -56,7 +56,7 @@ TEST(membership, addNonVoting, setup, tear_down, 0, _params)
     CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_LEADER, 2, 2000);
 
     /* Then promote it. */
-    CLUSTER_PROMOTE(&f->req, RAFT_STANDBY);
+    CLUSTER_ASSIGN(&f->req, RAFT_STANDBY);
 
     CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_N, 3, 2000);
 
@@ -80,7 +80,7 @@ TEST(membership, addVoting, setup, tear_down, 0, _params)
     CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_LEADER, 2, 2000);
 
     /* Then promote it. */
-    CLUSTER_PROMOTE(&f->req, RAFT_VOTER);
+    CLUSTER_ASSIGN(&f->req, RAFT_VOTER);
 
     CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_N, 3, 2000);
 

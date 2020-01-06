@@ -281,15 +281,15 @@
         munit_assert_int(rc, ==, 0);                                   \
     }
 
-/* Promote the server that was added last. */
-#define CLUSTER_PROMOTE(REQ, ROLE)                                            \
-    do {                                                                         \
+/* Assign the given role to the server that was added last. */
+#define CLUSTER_ASSIGN(REQ, ROLE)                                              \
+    do {                                                                       \
         unsigned _id;                                                          \
         int _rv;                                                               \
         _id = CLUSTER_N; /* Last server that was added. */                     \
-        _rv = raft_promote(CLUSTER_RAFT(CLUSTER_LEADER), REQ, _id, ROLE, NULL); \
+        _rv = raft_assign(CLUSTER_RAFT(CLUSTER_LEADER), REQ, _id, ROLE, NULL); \
         munit_assert_int(_rv, ==, 0);                                          \
-    } while(0)
+    } while (0)
 
 /* Ensure that the cluster can make progress from the current state.
  *

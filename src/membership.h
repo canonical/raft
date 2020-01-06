@@ -16,7 +16,7 @@ int membershipCanChangeConfiguration(struct raft *r);
  * Return false if the server being promoted did not yet catch-up with logs, and
  * true if it did.
  *
- * This function must be called only by leaders after a @raft_promote request
+ * This function must be called only by leaders after a @raft_assign request
  * has been submitted. */
 bool membershipUpdateCatchUpRound(struct raft *r);
 
