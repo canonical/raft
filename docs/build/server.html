@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+
+<!-- Main navigation -->
+
+<!-- Table of contents -->
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Keep for compatibility, see http://bit.ly/2tMB6ag -->
+    <meta http-equiv="x-ua-compatible" content="ie=edge" />
+    <title>struct raft — Raft server</title>
+    <link rel="stylesheet" href="_static/material.css" type="text/css" />
+  </head>
+  <body dir="ltr" data-md-color-primary="orange" data-md-color-accent="orange">
+    <header class="md-header" data-md-component="header" data-md-state="shadow">
+      <nav class="md-header-nav md-grid">
+        <div class="md-flex">
+          <!-- Link to home -->
+          <div class="md-flex__cell md-flex__cell--shrink">
+            <a href="/"
+               title="C-Raft documentation"
+               class="md-header-nav__button md-logo">
+              <i class="md-icon">&#xE80C;</i>
+            </a>
+          </div>
+
+          <!-- Header title -->
+          <div class="md-flex__cell md-flex__cell--stretch">
+            <div class="md-flex__ellipsis md-header-nav__title"
+                 data-md-component="title">
+            <span class="md-header-nav__topic">
+              C-Raft documentation
+            </span>
+            </div>
+          </div>
+
+          <!-- Button to open search dialogue -->
+          <div class="md-flex__cell md-flex__cell--shrink">
+            <label class="md-icon md-icon--search md-header-nav__button"
+                   for="__search"></label>
+
+            <!-- Search interface -->
+            <div class="md-search" data-md-component="search" role="dialog">
+              <label class="md-search__overlay" for="__search"></label>
+              <div class="md-search__inner" role="search">
+                <form class="md-search__form" name="search">
+                  <input type="text" class="md-search__input" aria-label="search" name="query"
+                         placeholder="Search"
+                         autocapitalize="off" autocorrect="off" autocomplete="off"
+                         spellcheck="false" data-md-component="query"
+                         data-md-state="active" />
+                  <label class="md-icon md-search__icon" for="__search"></label>
+                  <button type="reset" class="md-icon md-search__icon"
+                          data-md-component="reset" tabindex="-1">
+                    &#xE5CD;<!-- close -->
+                  </button>
+                </form>
+                <div class="md-search__output">
+                  <div class="md-search__scrollwrap" data-md-scrollfix>
+                    <div class="md-search-result" data-md-component="result">
+                      <div class="md-search-result__meta">Type to start serching</div>
+                      <ol class="md-search-result__list"></ol>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </nav>
+    </header>
+    <div class="md-container">
+      <main class="md-main" role="main">
+        <div class="md-main__inner md-grid" data-md-component="container">
+    <div class="md-sidebar md-sidebar--primary"
+         data-md-component="navigation">
+      <div class="md-sidebar__scrollwrap">
+        <div class="md-sidebar__inner">
+          <nav class="md-nav md-nav--primary" data-md-level="0">
+            <!-- Site title -->
+            <label class="md-nav__title md-nav__title--site" for="__drawer">
+              C-Raft documentation
+            </label>
+            <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="index.html">C-Raft</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting-started.html">Getting started</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="api.html">API reference</a></li>
+</ul>
+
+          </nav>
+        </div>
+      </div>
+    </div>
+    <div class="md-sidebar md-sidebar--secondary"
+         data-md-component="toc">
+      <div class="md-sidebar__scrollwrap">
+        <div class="md-sidebar__inner">
+          <nav class="md-nav md-nav--secondary">
+            <label class="md-nav__title md-nav__title--site" for="__drawer">
+              Table of contents
+            </label>
+            <ul>
+<li><a class="reference internal" href="#"><code class="xref c c-type docutils literal notranslate"><span class="pre">struct</span> <span class="pre">raft</span></code> — Raft server</a><ul>
+<li><a class="reference internal" href="#data-types">Data types</a><ul>
+<li><a class="reference internal" href="#public-members">Public members</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#api">API</a></li>
+</ul>
+</li>
+</ul>
+
+          </nav>
+        </div>
+      </div>
+    </div>
+          
+<div class="md-content">
+  <article class="md-content__inner md-typeset">
+    <div class="section" id="struct-raft-raft-server">
+<span id="server"></span><h1><code class="xref c c-type docutils literal notranslate"><span class="pre">struct</span> <span class="pre">raft</span></code> — Raft server<a class="headerlink" href="#struct-raft-raft-server" title="Permalink to this headline">¶</a></h1>
+<p>The raft server struct is the central part of C-Raft. It holds and drive the
+state of a single raft server in a cluster.</p>
+<div class="section" id="data-types">
+<h2>Data types<a class="headerlink" href="#data-types" title="Permalink to this headline">¶</a></h2>
+<dl class="type">
+<dt id="c.raft">
+struct <code class="sig-name descname">raft</code><a class="headerlink" href="#c.raft" title="Permalink to this definition">¶</a></dt>
+<dd><p>A single raft server in a cluster.</p>
+</dd></dl>
+
+<dl class="type">
+<dt id="c.raft_id">
+<code class="sig-name descname">raft_id</code><a class="headerlink" href="#c.raft_id" title="Permalink to this definition">¶</a></dt>
+<dd><p>Hold the value of a raft server ID. Guaranteed to be at least 64-bit long.</p>
+</dd></dl>
+
+<dl class="type">
+<dt id="c.raft_close_cb">
+void <code class="sig-name descname">(*raft_close_cb)</code><span class="sig-paren">(</span>struct <a class="reference internal" href="#c.raft" title="raft">raft</a><em> *r</em><span class="sig-paren">)</span><a class="headerlink" href="#c.raft_close_cb" title="Permalink to this definition">¶</a></dt>
+<dd><p>Type definition for callback passed to <a class="reference internal" href="#c.raft_close" title="raft_close"><code class="xref c c-func docutils literal notranslate"><span class="pre">raft_close()</span></code></a>.</p>
+</dd></dl>
+
+<div class="section" id="public-members">
+<h3>Public members<a class="headerlink" href="#public-members" title="Permalink to this headline">¶</a></h3>
+<dl class="member">
+<dt id="c.data">
+void* <code class="sig-name descname">data</code><a class="headerlink" href="#c.data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Space for user-defined arbitrary data. C-Raft does not use and does not
+touch this field.</p>
+</dd></dl>
+
+<dl class="member">
+<dt id="c.id">
+<a class="reference internal" href="#c.raft_id" title="raft_id">raft_id</a> <code class="sig-name descname">id</code><a class="headerlink" href="#c.id" title="Permalink to this definition">¶</a></dt>
+<dd><p>Server ID. Readonly.</p>
+</dd></dl>
+
+</div>
+</div>
+<div class="section" id="api">
+<h2>API<a class="headerlink" href="#api" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="c.raft_init">
+int <code class="sig-name descname">raft_init</code><span class="sig-paren">(</span>struct <a class="reference internal" href="#c.raft" title="raft">raft</a><em> *r</em>, struct <a class="reference internal" href="io.html#c.raft_io" title="raft_io">raft_io</a><em> *io</em>, struct <a class="reference internal" href="fsm.html#c.raft_fsm" title="raft_fsm">raft_fsm</a><em> *fsm</em>, <a class="reference internal" href="#c.raft_id" title="raft_id">raft_id</a><em> id</em>, const char<em> *address</em><span class="sig-paren">)</span><a class="headerlink" href="#c.raft_init" title="Permalink to this definition">¶</a></dt>
+<dd><p>Initialize a raft server object.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="c.raft_close">
+int <code class="sig-name descname">raft_close</code><span class="sig-paren">(</span>struct <a class="reference internal" href="#c.raft" title="raft">raft</a>*<em> r</em>, <a class="reference internal" href="#c.raft_close_cb" title="raft_close_cb">raft_close_cb</a><em> cb</em><span class="sig-paren">)</span><a class="headerlink" href="#c.raft_close" title="Permalink to this definition">¶</a></dt>
+<dd><p>Close a raft server object, releasing all used resources.</p>
+<p>The memory of the object itself can be released only once the given close
+callback has been invoked.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="c.raft_start">
+int <code class="sig-name descname">raft_start</code><span class="sig-paren">(</span>struct <a class="reference internal" href="#c.raft" title="raft">raft</a>*<em> r</em><span class="sig-paren">)</span><a class="headerlink" href="#c.raft_start" title="Permalink to this definition">¶</a></dt>
+<dd><p>Start a raft server.</p>
+<p>The initial term, vote, snapshot and entries will be loaded from disk using
+the <code class="xref c c-func docutils literal notranslate"><span class="pre">raft_io-&gt;load()</span></code> method. The instance will start as follower, unless
+it’s the only voting server in the cluster, in which case it will
+automatically elect itself and become leader.</p>
+</dd></dl>
+
+</div>
+</div>
+
+  </article>
+</div>
+
+        </div>
+      </main>
+    </div>
+  </body>
+</html>
