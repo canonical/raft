@@ -596,7 +596,7 @@ int replicationTrigger(struct raft *r, raft_index index)
 }
 
 /* Helper to be invoked after a promotion of a non-voting server has been
- * requested via @raft_promote and that server has caught up with logs.
+ * requested via @raft_assign and that server has caught up with logs.
  *
  * This function changes the local configuration marking the server being
  * promoted as actually voting, appends the a RAFT_CHANGE entry with the new

@@ -891,40 +891,6 @@ RAFT_API int raft_assign(struct raft *r,
 			 raft_change_cb cb);
 
 /**
- * Promote the given server to a higher role.
- *
- * If the server's current role is #RAFT_SPARE, the server can be promoted
- * either to #RAFT_STANDBY or #RAFT_VOTER.
- *
- * If the server's current role is #RAFT_STANDBY, the server can be promoted to
- * #RAFT_VOTER.
- *
- * In all other cases, #RAFT_BADROLE is returned.
- */
-RAFT_API int raft_promote(struct raft *r,
-                          struct raft_change *req,
-                          raft_id id,
-                          int role,
-                          raft_change_cb cb);
-
-/**
- * Demote the given server to a lesser role.
- *
- * If the server's current role is #RAFT_VOTER, the server can be demoted either
- * to #RAFT_STANDBY or #RAFT_SPARE.
- *
- * If the server's current role is #RAFT_STANDBY, the server can be demoted to
- * #RAFT_SPARE.
- *
- * In all other cases, #RAFT_BADROLE is returned.
- */
-RAFT_API int raft_demote(struct raft *r,
-                         struct raft_change *req,
-                         raft_id id,
-                         int role,
-                         raft_change_cb cb);
-
-/**
  * Remove the given server from the cluster configuration.
  */
 RAFT_API int raft_remove(struct raft *r,

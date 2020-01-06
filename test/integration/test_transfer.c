@@ -180,9 +180,9 @@ TEST(raft_transfer, afterDemotion, setUp, tearDown, 0, NULL)
     int rv;
     CLUSTER_ADD(&req);
     CLUSTER_STEP_UNTIL_APPLIED(0, 2, 1000);
-    CLUSTER_PROMOTE(&req, RAFT_VOTER);
+    CLUSTER_ASSIGN(&req, RAFT_VOTER);
     CLUSTER_STEP_UNTIL_APPLIED(0, 3, 1000);
-    rv = raft_demote(raft, &req, raft->id, RAFT_SPARE, NULL);
+    rv = raft_assign(raft, &req, raft->id, RAFT_SPARE, NULL);
     munit_assert_int(rv, ==, 0);
     CLUSTER_STEP_UNTIL_APPLIED(0, 4, 1000);
     TRANSFER(0, 2);

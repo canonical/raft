@@ -215,27 +215,6 @@ err:
     return rv;
 }
 
-/* Return 0 if role1 equals role2, -1 if role1 is lesser than role2, 1
- * otherwise. */
-static int compareRoles(int role1, int role2)
-{
-    if (role1 == role2) {
-        return 0;
-    }
-
-    switch (role1) {
-        case RAFT_VOTER:
-            /* role2 must be lesser */
-            return 1;
-        case RAFT_SPARE:
-            /* role1 must be higher */
-            return -1;
-        default:
-            assert(role1 == RAFT_STANDBY);
-            return role2 == RAFT_VOTER ? -1 : 1;
-    }
-}
-
 int raft_assign(struct raft *r,
                 struct raft_change *req,
                 raft_id id,
@@ -243,7 +222,8 @@ int raft_assign(struct raft *r,
                 raft_change_cb cb)
 {
     const struct raft_server *server;
-    int rank;
+    unsigned server_index;
+    raft_index last_index;
     int rv;
 
     if (role != RAFT_STANDBY && role != RAFT_VOTER && role != RAFT_SPARE) {
@@ -264,10 +244,8 @@ int raft_assign(struct raft *r,
         goto err;
     }
 
-    rank = compareRoles(server->role, role);
-
     /* Check if we have already the desired role. */
-    if (rank == 0) {
+    if (server->role == role) {
         const char *name;
         rv = RAFT_BADROLE;
         switch (role) {
@@ -289,61 +267,6 @@ int raft_assign(struct raft *r,
         goto err;
     }
 
-    if (rank == -1) {
-        return raft_promote(r, req, id, role, cb);
-    } else {
-        return raft_demote(r, req, id, role, cb);
-    }
-
-err:
-    assert(rv != 0);
-    return rv;
-}
-
-int raft_promote(struct raft *r,
-                 struct raft_change *req,
-                 raft_id id,
-                 int role,
-                 raft_change_cb cb)
-{
-    const struct raft_server *server;
-    unsigned server_index;
-    raft_index last_index;
-    int rv;
-
-    if (role != RAFT_STANDBY && role != RAFT_VOTER) {
-        rv = RAFT_BADROLE;
-        ErrMsgFromCode(r->errmsg, rv);
-        return rv;
-    }
-
-    rv = membershipCanChangeConfiguration(r);
-    if (rv != 0) {
-        return rv;
-    }
-
-    tracef("promote server: id %d", id);
-
-    server = configurationGet(&r->configuration, id);
-    if (server == NULL) {
-        rv = RAFT_NOTFOUND;
-        ErrMsgPrintf(r->errmsg, "no server has ID %llu", id);
-        goto err;
-    }
-
-    /* Check if we have already the desired role. */
-    if (server->role == role) {
-        const char *name;
-        rv = RAFT_BADROLE;
-        if (role == RAFT_VOTER) {
-            name = "voter";
-        } else {
-            name = "stand-by";
-        }
-        ErrMsgPrintf(r->errmsg, "server is already %s", name);
-        goto err;
-    }
-
     server_index = configurationIndexOf(&r->configuration, id);
     assert(server_index < r->configuration.n);
 
@@ -354,9 +277,10 @@ int raft_promote(struct raft *r,
     assert(r->leader_state.change == NULL);
     r->leader_state.change = req;
 
-    /* If the log of this server is already up-to-date, or if we're promoting to
-     * stand-by, we can ask its promotion immediately. */
-    if (role == RAFT_STANDBY ||
+    /* If we are not promoting to the voter role or if the log of this server is
+     * already up-to-date, we can submit the configuration change
+     * immediately. */
+    if (role != RAFT_VOTER ||
         progressMatchIndex(r, server_index) == last_index) {
         int old_role = r->configuration.servers[server_index].role;
         r->configuration.servers[server_index].role = role;
@@ -384,74 +308,6 @@ int raft_promote(struct raft *r,
         tracef("failed to send append entries to server %u: %s (%d)",
                server->id, raft_strerror(rv), rv);
     }
-
-    return 0;
-
-err:
-    assert(rv != 0);
-    return rv;
-}
-
-int raft_demote(struct raft *r,
-                struct raft_change *req,
-                raft_id id,
-                int role,
-                raft_change_cb cb)
-{
-    const struct raft_server *server;
-    unsigned server_index;
-    int old_role;
-    int rv;
-    (void)req;
-    (void)cb;
-
-    if (role != RAFT_SPARE && role != RAFT_STANDBY) {
-        rv = RAFT_BADROLE;
-        ErrMsgFromCode(r->errmsg, rv);
-        return rv;
-    }
-
-    rv = membershipCanChangeConfiguration(r);
-    if (rv != 0) {
-        return rv;
-    }
-
-    server = configurationGet(&r->configuration, id);
-    if (server == NULL) {
-        rv = RAFT_NOTFOUND;
-        ErrMsgPrintf(r->errmsg, "no server has ID %llu", id);
-        goto err;
-    }
-
-    /* Check if we have already the desired role. */
-    if (server->role == role) {
-        const char *name;
-        rv = RAFT_BADROLE;
-        if (role == RAFT_SPARE) {
-            name = "spare";
-        } else {
-            name = "stand-by";
-        }
-        ErrMsgPrintf(r->errmsg, "server is already %s", name);
-        goto err;
-    }
-
-    server_index = configurationIndexOf(&r->configuration, id);
-    assert(server_index < r->configuration.n);
-
-    req->cb = cb;
-
-    old_role = r->configuration.servers[server_index].role;
-    r->configuration.servers[server_index].role = role;
-
-    rv = clientChangeConfiguration(r, req, &r->configuration);
-    if (rv != 0) {
-        r->configuration.servers[server_index].role = old_role;
-        return rv;
-    }
-
-    assert(r->leader_state.change == NULL);
-    r->leader_state.change = req;
 
     return 0;
 
