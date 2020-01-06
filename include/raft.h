@@ -45,9 +45,6 @@
  */
 RAFT_API const char *raft_strerror(int errnum);
 
-/**
- * Hold the value of a raft server ID. Guaranteed to be at least 64-bit long.
- */
 typedef unsigned long long raft_id;
 
 /**
@@ -440,70 +437,16 @@ typedef void (*raft_io_tick_cb)(struct raft_io *io);
  */
 typedef void (*raft_io_recv_cb)(struct raft_io *io, struct raft_message *msg);
 
-/**
- * Callback invoked by the I/O implementation when the memory of the @io object
- * can be safely released.
- */
 typedef void (*raft_io_close_cb)(struct raft_io *io);
 
-/**
- * I/O backend interface implementing periodic ticks, log store read/writes
- * and send/receive of network RPCs.
- */
 struct raft_io
 {
-    /**
-     * API version implemented by this instance. Currently 1.
-     */
     int version;
-
-    /**
-     * Custom user data.
-     */
     void *data;
-
-    /**
-     * Implementation-defined state object.
-     */
     void *impl;
-
-    /**
-     * Human-readable message providing diagnostic information about the last
-     * error occurred.
-     */
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
-
-    /**
-     * Initialize the backend with operational parameters such as server ID and
-     * address.
-     */
     int (*init)(struct raft_io *io, raft_id id, const char *address);
-
-    /**
-     * Release all resources used by the backend.
-     *
-     * The @tick and @recv callbacks must not be invoked anymore, and pending
-     * asynchronous requests be completed or canceled as soon as
-     * possible. Invoke the close callback once the #raft_io instance can be
-     * freed.
-     */
     void (*close)(struct raft_io *io, raft_io_close_cb cb);
-
-    /**
-     * Load persisted state from storage.
-     *
-     * The implementation must synchronously load the current state from its
-     * storage backend and return information about it through the given
-     * pointers.
-     *
-     * The implementation can safely assume that this method will be invoked
-     * exactly one time, before any call to append() or truncate(), and then
-     * won't be invoked again.
-     *
-     * The snapshot object and entries array must be allocated and populated
-     * using @raft_malloc. If this function completes successfully, ownership of
-     * such memory is transfered to the caller.
-     */
     int (*load)(struct raft_io *io,
                 raft_term *term,
                 raft_id *voted_for,
@@ -511,146 +454,46 @@ struct raft_io
                 raft_index *start_index,
                 struct raft_entry *entries[],
                 size_t *n_entries);
-
-    /**
-     * Start the backend.
-     *
-     * From now on the implementation must start accepting RPC requests and must
-     * invoke the @tick_cb callback every @msecs milliseconds. The @recv_cb
-     * callback must be invoked when receiving a message.
-     */
     int (*start)(struct raft_io *io,
                  unsigned msecs,
-                 raft_io_tick_cb tick_cb,
-                 raft_io_recv_cb recv_cb);
-
-    /**
-     * Bootstrap a server belonging to a new cluster.
-     *
-     * The I/O implementation must synchronously persist the given configuration
-     * as the first entry of the log. The current persisted term must be set to
-     * 1 and the vote to nil.
-     *
-     * If an attempt is made to bootstrap a server that has already some state,
-     * then #RAFT_CANTBOOTSTRAP must be returned.
-     */
+                 raft_io_tick_cb tick,
+                 raft_io_recv_cb recv);
     int (*bootstrap)(struct raft_io *io, const struct raft_configuration *conf);
-
-    /**
-     * Force appending a new configuration as last entry of the log.
-     */
     int (*recover)(struct raft_io *io, const struct raft_configuration *conf);
-
-    /**
-     * Synchronously persist current term (and nil vote). The implementation
-     * MUST ensure that the change is durable before returning (e.g. using
-     * fdatasync() or #O_DSYNC).
-     */
     int (*set_term)(struct raft_io *io, raft_term term);
-
-    /**
-     * Synchronously persist who we voted for. The implementation MUST ensure
-     * that the change is durable before returning (e.g. using fdatasync() or
-     * #O_DIRECT).
-     */
     int (*set_vote)(struct raft_io *io, raft_id server_id);
-
-    /**
-     * Asynchronously send an RPC message.
-     *
-     * The implementation is guaranteed that the memory referenced in the given
-     * message will not be released until the @cb callback is invoked.
-     */
     int (*send)(struct raft_io *io,
                 struct raft_io_send *req,
                 const struct raft_message *message,
                 raft_io_send_cb cb);
-
-    /**
-     * Asynchronously append the given entries to the log.
-     *
-     * The implementation is guaranteed that the memory holding the given
-     * entries will not be released until the @cb callback is invoked.
-     */
     int (*append)(struct raft_io *io,
                   struct raft_io_append *req,
                   const struct raft_entry entries[],
                   unsigned n,
                   raft_io_append_cb cb);
-
-    /**
-     * Asynchronously truncate all log entries from the given index onwards.
-     */
     int (*truncate)(struct raft_io *io, raft_index index);
-
-    /**
-     * Asynchronously persist a new snapshot. If the @trailing parameter is
-     * greater than zero, then all entries older that @snapshot->index -
-     * @trailing must be deleted. If the @trailing parameter is 0, then the
-     * snapshot completely replaces all existing entries, which should all be
-     * deleted. Subsequent calls to append() should append entries starting at
-     * index @snapshot->index + 1.
-     *
-     * If a request is submitted, the raft engine won't submit any other request
-     * until the original one has completed.
-     */
     int (*snapshot_put)(struct raft_io *io,
                         unsigned trailing,
                         struct raft_io_snapshot_put *req,
                         const struct raft_snapshot *snapshot,
                         raft_io_snapshot_put_cb cb);
-
-    /**
-     * Asynchronously load the last snapshot.
-     */
     int (*snapshot_get)(struct raft_io *io,
                         struct raft_io_snapshot_get *req,
                         raft_io_snapshot_get_cb cb);
-
-    /**
-     * Return the current time, expressed in milliseconds since the epoch.
-     */
     raft_time (*time)(struct raft_io *io);
-
-    /**
-     * Generate a random integer between min and max.
-     */
     int (*random)(struct raft_io *io, int min, int max);
 };
 
-/**
- * Interface for the user-implemented finate state machine replicated through
- * Raft.
- */
 struct raft_fsm
 {
-    /**
-     * API version implemented by this instance. Currently 1.
-     */
     int version;
-
-    /**
-     * Custom user data.
-     */
     void *data;
-
-    /**
-     * Apply a committed RAFT_COMMAND entry to the state machine.
-     */
     int (*apply)(struct raft_fsm *fsm,
                  const struct raft_buffer *buf,
                  void **result);
-
-    /**
-     * Take a snapshot of the state machine.
-     */
     int (*snapshot)(struct raft_fsm *fsm,
                     struct raft_buffer *bufs[],
                     unsigned *n_bufs);
-
-    /**
-     * Restore a snapshot of the state machine.
-     */
     int (*restore)(struct raft_fsm *fsm, struct raft_buffer *buf);
 };
 
@@ -846,21 +689,12 @@ struct raft
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
 };
 
-/**
- * Initialize a raft server object.
- */
 RAFT_API int raft_init(struct raft *r,
                        struct raft_io *io,
                        struct raft_fsm *fsm,
                        raft_id id,
                        const char *address);
 
-/**
- * Close a raft instance, releasing all used resources.
- *
- * The memory of instance itself can be released only once the given callback
- * has been invoked.
- */
 RAFT_API void raft_close(struct raft *r, raft_close_cb cb);
 
 /**
@@ -896,14 +730,6 @@ RAFT_API int raft_bootstrap(struct raft *r,
 RAFT_API int raft_recover(struct raft *r,
                           const struct raft_configuration *conf);
 
-/**
- * Start the given raft instance.
- *
- * The initial term, vote, snapshot and entries will be loaded from disk using
- * the raft_io->load method. The instance will start as #RAFT_FOLLOWER, unless
- * it's the only voting server in the cluster, in which case it will
- * automatically elect itself and become #RAFT_LEADER.
- */
 RAFT_API int raft_start(struct raft *r);
 
 /**

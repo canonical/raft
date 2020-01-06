@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+
+<!-- Main navigation -->
+
+<!-- Table of contents -->
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Keep for compatibility, see http://bit.ly/2tMB6ag -->
+    <meta http-equiv="x-ua-compatible" content="ie=edge" />
+    <title>struct raft_io — I/O backend interface</title>
+    <link rel="stylesheet" href="_static/material.css" type="text/css" />
+  </head>
+  <body dir="ltr" data-md-color-primary="orange" data-md-color-accent="orange">
+    <header class="md-header" data-md-component="header" data-md-state="shadow">
+      <nav class="md-header-nav md-grid">
+        <div class="md-flex">
+          <!-- Link to home -->
+          <div class="md-flex__cell md-flex__cell--shrink">
+            <a href="/"
+               title="C-Raft documentation"
+               class="md-header-nav__button md-logo">
+              <i class="md-icon">&#xE80C;</i>
+            </a>
+          </div>
+
+          <!-- Header title -->
+          <div class="md-flex__cell md-flex__cell--stretch">
+            <div class="md-flex__ellipsis md-header-nav__title"
+                 data-md-component="title">
+            <span class="md-header-nav__topic">
+              C-Raft documentation
+            </span>
+            </div>
+          </div>
+
+          <!-- Button to open search dialogue -->
+          <div class="md-flex__cell md-flex__cell--shrink">
+            <label class="md-icon md-icon--search md-header-nav__button"
+                   for="__search"></label>
+
+            <!-- Search interface -->
+            <div class="md-search" data-md-component="search" role="dialog">
+              <label class="md-search__overlay" for="__search"></label>
+              <div class="md-search__inner" role="search">
+                <form class="md-search__form" name="search">
+                  <input type="text" class="md-search__input" aria-label="search" name="query"
+                         placeholder="Search"
+                         autocapitalize="off" autocorrect="off" autocomplete="off"
+                         spellcheck="false" data-md-component="query"
+                         data-md-state="active" />
+                  <label class="md-icon md-search__icon" for="__search"></label>
+                  <button type="reset" class="md-icon md-search__icon"
+                          data-md-component="reset" tabindex="-1">
+                    &#xE5CD;<!-- close -->
+                  </button>
+                </form>
+                <div class="md-search__output">
+                  <div class="md-search__scrollwrap" data-md-scrollfix>
+                    <div class="md-search-result" data-md-component="result">
+                      <div class="md-search-result__meta">Type to start serching</div>
+                      <ol class="md-search-result__list"></ol>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </nav>
+    </header>
+    <div class="md-container">
+      <main class="md-main" role="main">
+        <div class="md-main__inner md-grid" data-md-component="container">
+    <div class="md-sidebar md-sidebar--primary"
+         data-md-component="navigation">
+      <div class="md-sidebar__scrollwrap">
+        <div class="md-sidebar__inner">
+          <nav class="md-nav md-nav--primary" data-md-level="0">
+            <!-- Site title -->
+            <label class="md-nav__title md-nav__title--site" for="__drawer">
+              C-Raft documentation
+            </label>
+            <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="index.html">C-Raft</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting-started.html">Getting started</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="api.html">API reference</a></li>
+</ul>
+
+          </nav>
+        </div>
+      </div>
+    </div>
+    <div class="md-sidebar md-sidebar--secondary"
+         data-md-component="toc">
+      <div class="md-sidebar__scrollwrap">
+        <div class="md-sidebar__inner">
+          <nav class="md-nav md-nav--secondary">
+            <label class="md-nav__title md-nav__title--site" for="__drawer">
+              Table of contents
+            </label>
+            <ul>
+<li><a class="reference internal" href="#"><code class="xref c c-type docutils literal notranslate"><span class="pre">struct</span> <span class="pre">raft_io</span></code> — I/O backend interface</a><ul>
+<li><a class="reference internal" href="#data-types">Data types</a><ul>
+<li><a class="reference internal" href="#public-members">Public members</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </nav>
+        </div>
+      </div>
+    </div>
+          
+<div class="md-content">
+  <article class="md-content__inner md-typeset">
+    <div class="section" id="struct-raft-io-i-o-backend-interface">
+<span id="io"></span><h1><code class="xref c c-type docutils literal notranslate"><span class="pre">struct</span> <span class="pre">raft_io</span></code> — I/O backend interface<a class="headerlink" href="#struct-raft-io-i-o-backend-interface" title="Permalink to this headline">¶</a></h1>
+<p>The I/O backend struct defines an interface for performing periodic ticks, log
+store read/write and send/receive of network RPCs.</p>
+<div class="section" id="data-types">
+<h2>Data types<a class="headerlink" href="#data-types" title="Permalink to this headline">¶</a></h2>
+<dl class="type">
+<dt id="c.raft_io">
+struct <code class="sig-name descname">raft_io</code><a class="headerlink" href="#c.raft_io" title="Permalink to this definition">¶</a></dt>
+<dd><p>Hold pointers to an actual implementation of the I/O backend interface.</p>
+</dd></dl>
+
+<dl class="type">
+<dt id="c.raft_io_close_cb">
+void <code class="sig-name descname">(*raft_io_close_cb)</code><span class="sig-paren">(</span>struct <a class="reference internal" href="#c.raft_io" title="raft_io">raft_io</a><em> *io</em><span class="sig-paren">)</span><a class="headerlink" href="#c.raft_io_close_cb" title="Permalink to this definition">¶</a></dt>
+<dd><p>Type definition for callback passed to <code class="xref c c-func docutils literal notranslate"><span class="pre">raft_io.close()</span></code>.</p>
+</dd></dl>
+
+<dl class="type">
+<dt id="c.raft_io_tick_cb">
+void <code class="sig-name descname">(*raft_io_tick_cb)</code><span class="sig-paren">(</span>struct <a class="reference internal" href="#c.raft_io" title="raft_io">raft_io</a><em> *io</em><span class="sig-paren">)</span><a class="headerlink" href="#c.raft_io_tick_cb" title="Permalink to this definition">¶</a></dt>
+<dd><p>Callback invoked by the I/O implementation at regular intervals.</p>
+</dd></dl>
+
+<dl class="type">
+<dt id="c.raft_io_recv_cb">
+void <code class="sig-name descname">(*raft_io_recv_cb)</code><span class="sig-paren">(</span>struct <a class="reference internal" href="#c.raft_io" title="raft_io">raft_io</a><em> *io</em>, struct raft_message<em> *msg</em><span class="sig-paren">)</span><a class="headerlink" href="#c.raft_io_recv_cb" title="Permalink to this definition">¶</a></dt>
+<dd><p>Callback invoked by the I/O implementation when an RPC message is received.</p>
+</dd></dl>
+
+<div class="section" id="public-members">
+<h3>Public members<a class="headerlink" href="#public-members" title="Permalink to this headline">¶</a></h3>
+<dl class="member">
+<dt id="c.data">
+void* <code class="sig-name descname">data</code><a class="headerlink" href="#c.data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Space for user-defined arbitrary data. C-Raft does not use and does not
+touch this field.</p>
+</dd></dl>
+
+<dl class="member">
+<dt id="c.version">
+int <code class="sig-name descname">version</code><a class="headerlink" href="#c.version" title="Permalink to this definition">¶</a></dt>
+<dd><p>API version implemented by this instance. Currently 1.</p>
+</dd></dl>
+
+<dl class="member">
+<dt id="c.impl">
+void* <code class="sig-name descname">impl</code><a class="headerlink" href="#c.impl" title="Permalink to this definition">¶</a></dt>
+<dd><p>Implementation-defined state.</p>
+</dd></dl>
+
+<dl class="member">
+<dt>
+<code class="sig-name descname">char errmsg[RAFT_ERRMSG_BUF_SIZE]</code></dt>
+<dd><p>Human-readable message providing diagnostic information about the last error
+occurred.</p>
+</dd></dl>
+
+<dl class="member">
+<dt id="c.init">
+int <code class="sig-name descname">(*init)</code><span class="sig-paren">(</span>struct <a class="reference internal" href="#c.raft_io" title="raft_io">raft_io</a><em> *io</em>, <a class="reference internal" href="server.html#c.raft_id" title="raft_id">raft_id</a><em> id</em>, const char<em> *address</em><span class="sig-paren">)</span><a class="headerlink" href="#c.init" title="Permalink to this definition">¶</a></dt>
+<dd><p>Initialize the backend with operational parameters such as server ID and
+address.</p>
+</dd></dl>
+
+<dl class="member">
+<dt id="c.close">
+void <code class="sig-name descname">(*close)</code><span class="sig-paren">(</span>struct <a class="reference internal" href="#c.raft_io" title="raft_io">raft_io</a><em> *io</em>, <a class="reference internal" href="#c.raft_io_close_cb" title="raft_io_close_cb">raft_io_close_cb</a><em> cb</em><span class="sig-paren">)</span><a class="headerlink" href="#c.close" title="Permalink to this definition">¶</a></dt>
+<dd><p>Release all resources used by the backend.</p>
+<p>The <code class="code docutils literal notranslate"><span class="pre">tick</span></code> and <code class="code docutils literal notranslate"><span class="pre">recv</span></code> callbacks must not be invoked anymore, and
+pending asynchronous requests be completed or canceled as soon as
+possible. Invoke the close callback once the <a class="reference internal" href="#c.raft_io" title="raft_io"><code class="xref c c-type docutils literal notranslate"><span class="pre">raft_io</span></code></a> instance can
+be freed.</p>
+</dd></dl>
+
+<dl class="member">
+<dt id="c.load">
+int <code class="sig-name descname">(*load)</code><span class="sig-paren">(</span>struct <a class="reference internal" href="#c.raft_io" title="raft_io">raft_io</a><em> *io</em>, raft_term<em> *term</em>, <a class="reference internal" href="server.html#c.raft_id" title="raft_id">raft_id</a><em> *voted_for</em>, struct raft_snapshot<em> **snapshot</em>, raft_index<em> *start_index</em>, struct raft_entry<em> *entries[]</em>, size_t<em> *n_entries</em><span class="sig-paren">)</span><a class="headerlink" href="#c.load" title="Permalink to this definition">¶</a></dt>
+<dd><p>Load persisted state from storage.</p>
+<p>The implementation must synchronously load the current state from its
+storage backend and return information about it through the given
+pointers.</p>
+<p>The implementation can safely assume that this method will be invoked exactly
+one time, before any call to <code class="xref c c-func docutils literal notranslate"><span class="pre">raft_io.append()</span></code> or
+c:func:<cite>raft_io.truncate()</cite>, and then won’t be invoked again.</p>
+<p>The snapshot object and entries array must be allocated and populated using
+<code class="xref c c-func docutils literal notranslate"><span class="pre">raft_malloc()</span></code>. If this function completes successfully, ownership of
+such memory is transfered to the caller.</p>
+</dd></dl>
+
+<dl class="member">
+<dt id="c.start">
+int <code class="sig-name descname">(*start)</code><span class="sig-paren">(</span>struct <a class="reference internal" href="#c.raft_io" title="raft_io">raft_io</a><em> *io</em>, unsigned<em> msecs</em>, <a class="reference internal" href="#c.raft_io_tick_cb" title="raft_io_tick_cb">raft_io_tick_cb</a><em> tick</em>, <a class="reference internal" href="#c.raft_io_recv_cb" title="raft_io_recv_cb">raft_io_recv_cb</a><em> recv</em><span class="sig-paren">)</span><a class="headerlink" href="#c.start" title="Permalink to this definition">¶</a></dt>
+<dd><p>Start the backend.</p>
+<p>From now on the implementation must start accepting RPC requests and must
+invoke the <code class="code docutils literal notranslate"><span class="pre">tick</span></code> callback every <code class="code docutils literal notranslate"><span class="pre">msecs</span></code> milliseconds. The
+<code class="code docutils literal notranslate"><span class="pre">recv</span></code> callback must be invoked when receiving a message.</p>
+</dd></dl>
+
+<dl class="member">
+<dt id="c.bootstrap">
+int <code class="sig-name descname">(*bootstrap)</code><span class="sig-paren">(</span>struct <a class="reference internal" href="#c.raft_io" title="raft_io">raft_io</a><em> *io</em>, const struct raft_configuration<em> *conf</em><span class="sig-paren">)</span><a class="headerlink" href="#c.bootstrap" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bootstrap a server belonging to a new cluster.</p>
+<p>The implementation must synchronously persist the given configuration as the
+first entry of the log. The current persisted term must be set to 1 and the
+vote to nil.</p>
+<p>If an attempt is made to bootstrap a server that has already some state,
+then RAFT_CANTBOOTSTRAP must be returned.</p>
+</dd></dl>
+
+<dl class="member">
+<dt id="c.recover">
+int <code class="sig-name descname">(*recover)</code><span class="sig-paren">(</span>struct <a class="reference internal" href="#c.raft_io" title="raft_io">raft_io</a><em> *io</em>, const struct raft_configuration<em> *conf</em><span class="sig-paren">)</span><a class="headerlink" href="#c.recover" title="Permalink to this definition">¶</a></dt>
+<dd><p>Force appending a new configuration as last entry of the log.</p>
+</dd></dl>
+
+<dl class="member">
+<dt id="c.set_term">
+int <code class="sig-name descname">(*set_term)</code><span class="sig-paren">(</span>struct <a class="reference internal" href="#c.raft_io" title="raft_io">raft_io</a><em> *io</em>, raft_term<em> term</em><span class="sig-paren">)</span><a class="headerlink" href="#c.set_term" title="Permalink to this definition">¶</a></dt>
+<dd><p>Synchronously persist current term (and nil vote).</p>
+<p>The implementation MUST ensure that the change is durable before returning
+(e.g. using <code class="code docutils literal notranslate"><span class="pre">fdatasync()</span></code> or O_DSYNC).</p>
+</dd></dl>
+
+<dl class="member">
+<dt id="c.set_vote">
+int <code class="sig-name descname">(*set_vote)</code><span class="sig-paren">(</span>struct <a class="reference internal" href="#c.raft_io" title="raft_io">raft_io</a><em> *io</em>, <a class="reference internal" href="server.html#c.raft_id" title="raft_id">raft_id</a><em> server_id</em><span class="sig-paren">)</span><a class="headerlink" href="#c.set_vote" title="Permalink to this definition">¶</a></dt>
+<dd><p>Synchronously persist who we voted for.</p>
+<p>The implementation MUST ensure that the change is durable before returning
+(e.g. using <code class="code docutils literal notranslate"><span class="pre">fdatasync()</span></code> or O_DSYNC).</p>
+</dd></dl>
+
+<dl class="member">
+<dt id="c.send">
+int <code class="sig-name descname">(*send)</code><span class="sig-paren">(</span>struct <a class="reference internal" href="#c.raft_io" title="raft_io">raft_io</a><em> *io</em>, struct raft_io_send<em> *req</em>, const struct raft_message<em> *message</em>, raft_io_send_cb<em> cb</em><span class="sig-paren">)</span><a class="headerlink" href="#c.send" title="Permalink to this definition">¶</a></dt>
+<dd><p>Asynchronously send an RPC message.</p>
+<p>The implementation is guaranteed that the memory referenced in the given
+message will not be released until the <code class="code docutils literal notranslate"><span class="pre">cb</span></code> callback is invoked.</p>
+</dd></dl>
+
+<dl class="member">
+<dt id="c.append">
+int <code class="sig-name descname">(*append)</code><span class="sig-paren">(</span>struct <a class="reference internal" href="#c.raft_io" title="raft_io">raft_io</a><em> *io</em>, struct raft_io_append<em> *req</em>, const struct raft_entry<em> entries[]</em>, unsigned<em> n</em>, raft_io_append_cb<em> cb</em><span class="sig-paren">)</span><a class="headerlink" href="#c.append" title="Permalink to this definition">¶</a></dt>
+<dd><p>Asynchronously append the given entries to the log.</p>
+<p>The implementation is guaranteed that the memory holding the given entries
+will not be released until the <code class="code docutils literal notranslate"><span class="pre">cb</span></code> callback is invoked.</p>
+</dd></dl>
+
+<dl class="member">
+<dt id="c.truncate">
+int <code class="sig-name descname">(*truncate)</code><span class="sig-paren">(</span>struct <a class="reference internal" href="#c.raft_io" title="raft_io">raft_io</a><em> *io</em>, raft_index<em> index</em><span class="sig-paren">)</span><a class="headerlink" href="#c.truncate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Asynchronously truncate all log entries from the given index onwards.</p>
+</dd></dl>
+
+<dl class="member">
+<dt id="c.snapshot_put">
+int <code class="sig-name descname">(*snapshot_put)</code><span class="sig-paren">(</span>struct <a class="reference internal" href="#c.raft_io" title="raft_io">raft_io</a><em> *io</em>, unsigned<em> trailing</em>, struct raft_io_snapshot_put<em> *req</em>, const struct raft_snapshot<em> *snapshot</em>, raft_io_snapshot_put_cb<em> cb</em><span class="sig-paren">)</span><a class="headerlink" href="#c.snapshot_put" title="Permalink to this definition">¶</a></dt>
+<dd><p>Asynchronously persist a new snapshot. If the <code class="code docutils literal notranslate"><span class="pre">trailing</span></code> parameter is
+greater than zero, then all entries older that <code class="code docutils literal notranslate"><span class="pre">snapshot-&gt;index</span> <span class="pre">-</span>
+<span class="pre">trailing</span></code> must be deleted. If the <code class="code docutils literal notranslate"><span class="pre">trailing</span></code> parameter is <code class="code docutils literal notranslate"><span class="pre">0</span></code>,
+then the snapshot completely replaces all existing entries, which should all
+be deleted. Subsequent calls to append() should append entries starting at
+index <code class="code docutils literal notranslate"><span class="pre">snapshot-&gt;index</span> <span class="pre">+</span> <span class="pre">1</span></code>.</p>
+<p>If a request is submitted, the raft engine won’t submit any other request
+until the original one has completed.</p>
+</dd></dl>
+
+<dl class="member">
+<dt id="c.snapshot_get">
+int <code class="sig-name descname">(*snapshot_get)</code><span class="sig-paren">(</span>struct <a class="reference internal" href="#c.raft_io" title="raft_io">raft_io</a><em> *io</em>, struct raft_io_snapshot_get<em> *req</em>, raft_io_snapshot_get_cb<em> cb</em><span class="sig-paren">)</span><a class="headerlink" href="#c.snapshot_get" title="Permalink to this definition">¶</a></dt>
+<dd><p>Asynchronously load the last snapshot.</p>
+</dd></dl>
+
+<dl class="member">
+<dt id="c.time">
+raft_time <code class="sig-name descname">(*time)</code><span class="sig-paren">(</span>struct <a class="reference internal" href="#c.raft_io" title="raft_io">raft_io</a><em> *io</em><span class="sig-paren">)</span><a class="headerlink" href="#c.time" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the current time, expressed in milliseconds.</p>
+</dd></dl>
+
+<dl class="member">
+<dt id="c.random">
+int <code class="sig-name descname">(*random)</code><span class="sig-paren">(</span>struct <a class="reference internal" href="#c.raft_io" title="raft_io">raft_io</a><em> *io</em>, int<em> min</em>, int<em> max</em><span class="sig-paren">)</span><a class="headerlink" href="#c.random" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate a random integer between <code class="code docutils literal notranslate"><span class="pre">min</span></code> and <code class="code docutils literal notranslate"><span class="pre">max</span></code>.</p>
+</dd></dl>
+
+</div>
+</div>
+</div>
+
+  </article>
+</div>
+
+        </div>
+      </main>
+    </div>
+  </body>
+</html>
