@@ -30,7 +30,7 @@
         }                                                             \
         munit_assert_int(_n, >, 0);                                   \
         for (_i = 0; _i < _n; _i++) {                                 \
-            test_fsm_setup(NULL, &f->fsms[_i]);                       \
+            test_fsm_init(&f->fsms[_i]);                              \
         }                                                             \
         _rv = raft_fixture_init(&f->cluster, _n, f->fsms);            \
         munit_assert_int(_rv, ==, 0);                                 \
@@ -261,7 +261,7 @@
 #define CLUSTER_GROW                                               \
     {                                                              \
         int rv_;                                                   \
-        test_fsm_setup(NULL, &f->fsms[CLUSTER_N]);                 \
+        test_fsm_init(&f->fsms[CLUSTER_N]);                        \
         rv_ = raft_fixture_grow(&f->cluster, &f->fsms[CLUSTER_N]); \
         munit_assert_int(rv_, ==, 0);                              \
     }

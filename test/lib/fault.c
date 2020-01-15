@@ -1,4 +1,5 @@
 #include "fault.h"
+
 #include "munit.h"
 
 void test_fault_init(struct test_fault *f)

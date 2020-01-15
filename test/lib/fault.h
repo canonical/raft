@@ -1,7 +1,5 @@
 /**
- *
  * Helper for test components supporting fault injection.
- *
  */
 
 #ifndef TEST_FAULT_H

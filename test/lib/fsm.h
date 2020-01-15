@@ -11,7 +11,7 @@
 
 #include "munit.h"
 
-void test_fsm_setup(const MunitParameter params[], struct raft_fsm *fsm);
+void test_fsm_init(struct raft_fsm *fsm);
 
 void test_fsm_tear_down(struct raft_fsm *fsm);
 

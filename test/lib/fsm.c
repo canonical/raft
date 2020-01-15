@@ -103,11 +103,9 @@ static int test_fsm__snapshot(struct raft_fsm *fsm,
     return encode_snapshot(t->x, t->y, bufs, n_bufs);
 }
 
-void test_fsm_setup(const MunitParameter params[], struct raft_fsm *fsm)
+void test_fsm_init(struct raft_fsm *fsm)
 {
     struct test_fsm *t = munit_malloc(sizeof *fsm);
-
-    (void)params;
 
     t->x = 0;
     t->y = 0;
