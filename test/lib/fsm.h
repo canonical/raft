@@ -13,7 +13,7 @@
 
 void test_fsm_init(struct raft_fsm *fsm);
 
-void test_fsm_tear_down(struct raft_fsm *fsm);
+void test_fsm_close(struct raft_fsm *fsm);
 
 /**
  * Encode a command to set x to the given value.

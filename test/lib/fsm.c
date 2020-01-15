@@ -117,7 +117,7 @@ void test_fsm_init(struct raft_fsm *fsm)
     fsm->restore = test_fsm__restore;
 }
 
-void test_fsm_tear_down(struct raft_fsm *fsm)
+void test_fsm_close(struct raft_fsm *fsm)
 {
     struct test_fsm *t = fsm->data;
     free(t);

@@ -41,7 +41,7 @@
         unsigned i;                          \
         raft_fixture_close(&f->cluster);     \
         for (i = 0; i < CLUSTER_N; i++) {    \
-            test_fsm_tear_down(&f->fsms[i]); \
+            test_fsm_close(&f->fsms[i]); \
         }                                    \
     } while (0);                             \
     TEAR_DOWN_HEAP;

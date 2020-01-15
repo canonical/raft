@@ -52,7 +52,7 @@ static void tearDown(void *data)
     unsigned i;
     raft_fixture_close(&f->fixture);
     for (i = 0; i < N_SERVERS; i++) {
-        test_fsm_tear_down(&f->fsms[i]);
+        test_fsm_close(&f->fsms[i]);
     }
     TEAR_DOWN_HEAP;
     free(f);
