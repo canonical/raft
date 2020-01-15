@@ -1,1 +1,2 @@
 *.m4
+!raft-check-flags.m4
