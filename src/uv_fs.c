@@ -177,6 +177,9 @@ int UvFsAllocateFile(const char *dir,
 
     UvOsJoin(dir, filename, path);
 
+    /* TODO: use RWF_DSYNC instead, if available. */
+    flags |= O_DSYNC;
+
     rv = uvFsOpenFile(dir, filename, flags, S_IRUSR | S_IWUSR, fd, errmsg);
     if (rv != 0) {
         goto err;
