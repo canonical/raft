@@ -678,8 +678,10 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
         /* UNTESTED: in practice this should fail only with ENOMEM */
         raft_free(buf);
         UvOsIoDestroy(ctx);
-        /* On ZFS 0.8 this is not properly supported yet. */
-        if (errno == EOPNOTSUPP) {
+        /* On ZFS 0.8 this is not properly supported yet. Also, when running on
+         * older kernels a binary compiled on a kernel with RWF_NOWAIT support,
+         * we might get EINVAL. */
+        if (errno == EOPNOTSUPP || errno == EINVAL) {
             *ok = false;
             return 0;
         }
