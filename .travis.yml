@@ -13,13 +13,12 @@ jobs:
   - compiler: gcc
     dist: bionic
     arch: amd64
+  - compiler: gcc
+    dist: xenial
+    arch: amd64
   - if: type != pull_request
     compiler: clang
     dist: bionic
-    arch: amd64
-  - if: type != pull_request
-    compiler: gcc
-    dist: xenial
     arch: amd64
   - if: type != pull_request
     compiler: gcc
