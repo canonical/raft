@@ -447,13 +447,15 @@ int UvWriterSubmit(struct UvWriter *w,
 
 #if defined(RWF_HIPRI)
     /* High priority request, if possible */
-    req->iocb.aio_rw_flags |= RWF_HIPRI;
+    /* TODO: do proper kernel feature detection for this one. */
+    /* req->iocb.aio_rw_flags |= RWF_HIPRI; */
 #endif
 
 #if defined(RWF_DSYNC)
     /* Use per-request synchronous I/O if available. Otherwise, we have opened
      * the file with O_DSYNC. */
-    req->iocb.aio_rw_flags |= RWF_DSYNC;
+    /* TODO: do proper kernel feature detection for this one. */
+    /* req->iocb.aio_rw_flags |= RWF_DSYNC; */
 #endif
 
 #if defined(RWF_NOWAIT)
