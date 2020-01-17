@@ -854,7 +854,7 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
     /* If none of the entries that we persisted is present anymore in our
      * in-memory log, there's nothing to report or to do. We just discard
      * them. */
-    if (i == 0) {
+    if (i == 0 || r->state != RAFT_FOLLOWER) {
         goto out;
     }
 
