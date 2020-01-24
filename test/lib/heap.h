@@ -1,8 +1,8 @@
 /* Add support for fault injection and leak detection to stdlib's malloc()
  * family. */
 
-#ifndef TEST_HEAP_H_
-#define TEST_HEAP_H_
+#ifndef TEST_HEAP_H
+#define TEST_HEAP_H
 
 #include "../../include/raft.h"
 
@@ -31,5 +31,5 @@ void test_heap_tear_down(struct raft_heap *h);
 void test_heap_fault_config(struct raft_heap *h, int delay, int repeat);
 void test_heap_fault_enable(struct raft_heap *h);
 
-#endif /* TEST_HEAP_H_ */
+#endif /* TEST_HEAP_H */
 

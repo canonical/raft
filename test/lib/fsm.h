@@ -9,8 +9,6 @@
 
 #include "../../include/raft.h"
 
-#include "munit.h"
-
 void test_fsm_init(struct raft_fsm *fsm);
 
 void test_fsm_close(struct raft_fsm *fsm);
