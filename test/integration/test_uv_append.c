@@ -500,10 +500,6 @@ TEST(append, noSpaceUponPrepareCurrent, setUp, tearDown, 0, dir_tmpfs_params)
 {
     struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;
-#if !HAVE_DECL_UV_FS_O_CREAT
-    /* This test appears to leak memory on older libuv versions. */
-    return MUNIT_SKIP;
-#endif
     raft_uv_set_segment_size(&f->io, SEGMENT_BLOCK_SIZE * 32768);
     APPEND_FAILURE(
         1, 64, RAFT_NOSPACE,
@@ -516,10 +512,6 @@ TEST(append, noSpaceUponPrepareSpare, setUp, tearDown, 0, dir_tmpfs_params)
 {
     struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;
-#if !HAVE_DECL_UV_FS_O_CREAT
-    /* This test appears to leak memory on older libuv versions. */
-    return MUNIT_SKIP;
-#endif
 #if defined(__powerpc64__)
     /* XXX: fails on ppc64el */
     return MUNIT_SKIP;
@@ -538,11 +530,6 @@ TEST(append, noSpaceUponWrite, setUp, tearDownDeps, 0, dir_tmpfs_params)
 {
     struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;
-#if !HAVE_DECL_UV_FS_O_CREAT
-    /* This test appears to leak memory on older libuv versions. */
-    TEAR_DOWN_UV;
-    return MUNIT_SKIP;
-#endif
 #if defined(__powerpc64__)
     /* XXX: fails on ppc64el */
     TEAR_DOWN_UV;
@@ -564,11 +551,6 @@ TEST(append, noSpaceResolved, setUp, tearDownDeps, 0, dir_tmpfs_params)
 {
     struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;
-#if !HAVE_DECL_UV_FS_O_CREAT
-    /* This test appears to leak memory on older libuv versions. */
-    TEAR_DOWN_UV;
-    return MUNIT_SKIP;
-#endif
 #if defined(__powerpc64__)
     /* XXX: fails on ppc64el */
     TEAR_DOWN_UV;
