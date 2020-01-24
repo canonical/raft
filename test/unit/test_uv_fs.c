@@ -1,5 +1,6 @@
 #include "../../src/uv_fs.h"
 #include "../../src/uv_os.h"
+#include "../lib/aio.h"
 #include "../lib/dir.h"
 #include "../lib/runner.h"
 
@@ -347,13 +348,13 @@ TEST(UvFsProbeCapabilities, noResources, DirBtrfsSetUp, DirTearDown, 0, NULL)
     if (dir == NULL) {
         return MUNIT_SKIP;
     }
-    rv = test_aio_fill(&ctx, 0);
+    rv = AioFill(&ctx, 0);
     if (rv != 0) {
         return MUNIT_SKIP;
     }
     PROBE_CAPABILITIES_ERROR(dir, RAFT_IOERR,
                              "io_setup: resource temporarily unavailable");
-    test_aio_destroy(ctx);
+    AioDestroy(ctx);
     return MUNIT_OK;
 }
 

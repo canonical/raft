@@ -1,5 +1,6 @@
 #include "../lib/runner.h"
 #include "../lib/uv.h"
+#include "../lib/aio.h"
 
 /* Maximum number of blocks a segment can have */
 #define MAX_SEGMENT_BLOCKS 4
@@ -581,9 +582,9 @@ TEST(append, writeError, setUp, tearDown, 0, NULL)
     return MUNIT_SKIP;
 
     APPEND_SUBMIT(0, 1, 64);
-    test_aio_fill(&ctx, 0);
+    AioFill(&ctx, 0);
     APPEND_WAIT(0);
-    test_aio_destroy(ctx);
+    AioDestroy(ctx);
     return MUNIT_OK;
 }
 
@@ -667,7 +668,7 @@ TEST(append, ioSetupError, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
     aio_context_t ctx = 0;
     int rv;
-    rv = test_aio_fill(&ctx, 0);
+    rv = AioFill(&ctx, 0);
     if (rv != 0) {
         return MUNIT_SKIP;
     }

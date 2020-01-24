@@ -1,6 +1,7 @@
 #include "../../src/uv_fs.h"
 #include "../../src/uv_writer.h"
 #include "../lib/dir.h"
+#include "../lib/aio.h"
 #include "../lib/loop.h"
 #include "../lib/runner.h"
 
@@ -247,12 +248,12 @@ TEST(UvWriterInit, noResources, setUpDeps, tearDownDeps, 0, NULL)
     struct fixture *f = data;
     aio_context_t ctx = 0;
     int rv;
-    rv = test_aio_fill(&ctx, 0);
+    rv = AioFill(&ctx, 0);
     if (rv != 0) {
         return MUNIT_SKIP;
     }
     INIT_ERROR(RAFT_TOOMANY, "AIO events user limit exceeded");
-    test_aio_destroy(ctx);
+    AioDestroy(ctx);
     return MUNIT_OK;
 }
 
@@ -351,12 +352,12 @@ TEST(UvWriterSubmit, noResources, setUpDeps, tearDown, 0, DirNoAioParams)
     int rv;
     SKIP_IF_NO_FIXTURE;
     INIT(2);
-    rv = test_aio_fill(&ctx, 0);
+    rv = AioFill(&ctx, 0);
     if (rv != 0) {
         return MUNIT_SKIP;
     }
     WRITE_FAILURE(1, 0, 0, RAFT_TOOMANY, "AIO events user limit exceeded");
-    test_aio_destroy(ctx);
+    AioDestroy(ctx);
     return MUNIT_OK;
 }
 

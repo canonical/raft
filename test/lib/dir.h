@@ -7,8 +7,6 @@
 #ifndef TEST_DIR_H
 #define TEST_DIR_H
 
-#include <linux/aio_abi.h>
-
 #include "munit.h"
 
 /* Munit parameter defining the file system type backing the temporary directory
@@ -138,17 +136,5 @@ bool DirHasFile(const char *dir, const char *filename);
 /* Fill the underlying file system of the given dir, leaving only n bytes free.
  */
 void DirFill(const char *dir, const size_t n);
-
-/* Fill the AIO subsystem resources by allocating a lot of events to the given
- * context, and leaving only @n events available for subsequent calls to
- * @io_setup.
- *
- * Return -1 if it looks like there is another process already using the AIO
- * subsytem, which would most probably make the calling test flaky because there
- * won't be exactly @n events available anymore. */
-int test_aio_fill(aio_context_t *ctx, unsigned n);
-
-/* Destroy the given AIO context. */
-void test_aio_destroy(aio_context_t ctx);
 
 #endif /* TEST_DIR_H */
