@@ -185,7 +185,8 @@ TEST(replication, sendSkipHeartbeat, setUp, tearDown, 0, NULL)
 }
 
 /* The leader doesn't send replication messages to idle servers. */
-TEST(replication, skipIdle, setUp, tearDown, 0, NULL) {
+TEST(replication, skipIdle, setUp, tearDown, 0, NULL)
+{
     struct fixture *f = data;
     struct raft_change req1;
     struct raft_apply req2;
@@ -465,7 +466,7 @@ TEST(replication, recvMissingEntries, setUp, tearDown, 0, NULL)
     /* Server 0 has an entry that server 1 doesn't have */
     entry.type = RAFT_COMMAND;
     entry.term = 1;
-    test_fsm_encode_set_x(1, &entry.buf);
+    FsmEncodeSetX(1, &entry.buf);
     CLUSTER_ADD_ENTRY(0, &entry);
 
     /* Server 0 wins the election because it has a longer log. */
@@ -492,12 +493,12 @@ TEST(replication, recvPrevLogTermMismatch, setUp, tearDown, 0, NULL)
     /* The servers have an entry with a conflicting term. */
     entry1.type = RAFT_COMMAND;
     entry1.term = 2;
-    test_fsm_encode_set_x(1, &entry1.buf);
+    FsmEncodeSetX(1, &entry1.buf);
     CLUSTER_ADD_ENTRY(0, &entry1);
 
     entry2.type = RAFT_COMMAND;
     entry2.term = 1;
-    test_fsm_encode_set_x(2, &entry2.buf);
+    FsmEncodeSetX(2, &entry2.buf);
     CLUSTER_ADD_ENTRY(1, &entry2);
 
     CLUSTER_START;
@@ -522,12 +523,12 @@ TEST(replication, recvPrevIndexConflict, setUp, tearDown, 0, NULL)
     /* The servers have an entry with a conflicting term. */
     entry1.type = RAFT_COMMAND;
     entry1.term = 2;
-    test_fsm_encode_set_x(1, &entry1.buf);
+    FsmEncodeSetX(1, &entry1.buf);
     CLUSTER_ADD_ENTRY(0, &entry1);
 
     entry2.type = RAFT_COMMAND;
     entry2.term = 1;
-    test_fsm_encode_set_x(2, &entry2.buf);
+    FsmEncodeSetX(2, &entry2.buf);
     CLUSTER_ADD_ENTRY(1, &entry2);
 
     CLUSTER_START;
@@ -585,7 +586,7 @@ TEST(replication, recvMatch_last_snapshot, setUp, tearDown, 0, NULL)
     /* The first server has entry 2 */
     entry.type = RAFT_COMMAND;
     entry.term = 2;
-    test_fsm_encode_set_x(5, &entry.buf);
+    FsmEncodeSetX(5, &entry.buf);
     CLUSTER_ADD_ENTRY(0, &entry);
 
     /* The second server has a snapshot up to entry 2 */
@@ -800,7 +801,7 @@ TEST(replication, resultRetry, setUp, tearDown, 0, NULL)
      * not have. */
     entry.type = RAFT_COMMAND;
     entry.term = 1;
-    test_fsm_encode_set_x(5, &entry.buf);
+    FsmEncodeSetX(5, &entry.buf);
     CLUSTER_ADD_ENTRY(0, &entry);
 
     CLUSTER_START;

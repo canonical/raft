@@ -26,7 +26,7 @@ static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
     int rc;
     SET_UP_HEAP;
     for (i = 0; i < N_SERVERS; i++) {
-        test_fsm_init(&f->fsms[i]);
+        FsmInit(&f->fsms[i]);
     }
 
     rc = raft_fixture_init(&f->fixture, N_SERVERS, f->fsms);
@@ -52,7 +52,7 @@ static void tearDown(void *data)
     unsigned i;
     raft_fixture_close(&f->fixture);
     for (i = 0; i < N_SERVERS; i++) {
-        test_fsm_close(&f->fsms[i]);
+        FsmClose(&f->fsms[i]);
     }
     TEAR_DOWN_HEAP;
     free(f);
@@ -80,7 +80,7 @@ static void tearDown(void *data)
     {                                                \
         struct raft_buffer buf;                      \
         int rc;                                      \
-        test_fsm_encode_add_x(1, &buf);              \
+        FsmEncodeAddX(1, &buf);                      \
         rc = raft_apply(GET(I), REQ, &buf, 1, NULL); \
         munit_assert_int(rc, ==, 0);                 \
     }
@@ -103,7 +103,7 @@ static void tearDown(void *data)
 /* Assert that the x field of the FSM with the given index matches the given
  * value. */
 #define ASSERT_FSM_X(I, VALUE) \
-    munit_assert_int(test_fsm_get_x(&f->fsms[I]), ==, VALUE)
+    munit_assert_int(FsmGetX(&f->fsms[I]), ==, VALUE)
 
 /******************************************************************************
  *

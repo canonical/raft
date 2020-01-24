@@ -177,11 +177,11 @@ TEST(election, grantIfLastIndexIsSame, setUp, tearDown, 0, NULL)
 
     entry1.type = RAFT_COMMAND;
     entry1.term = 1;
-    test_fsm_encode_set_x(1, &entry1.buf);
+    FsmEncodeSetX(1, &entry1.buf);
 
     entry2.type = RAFT_COMMAND;
     entry2.term = 1;
-    test_fsm_encode_set_x(1, &entry2.buf);
+    FsmEncodeSetX(1, &entry2.buf);
 
     CLUSTER_ADD_ENTRY(0, &entry1);
     CLUSTER_ADD_ENTRY(1, &entry2);
@@ -209,7 +209,7 @@ TEST(election, grantIfLastIndexIsHigher, setUp, tearDown, 0, NULL)
 
     entry.type = RAFT_COMMAND;
     entry.term = 1;
-    test_fsm_encode_set_x(1, &entry.buf);
+    FsmEncodeSetX(1, &entry.buf);
 
     CLUSTER_ADD_ENTRY(0, &entry);
     CLUSTER_SET_TERM(1, 2);
@@ -356,11 +356,11 @@ TEST(election, rejectIfLastTermIsLower, setUp, tearDown, 0, NULL)
 
     entry1.type = RAFT_COMMAND;
     entry1.term = 1;
-    test_fsm_encode_set_x(123, &entry1.buf);
+    FsmEncodeSetX(123, &entry1.buf);
 
     entry2.type = RAFT_COMMAND;
     entry2.term = 2;
-    test_fsm_encode_set_x(456, &entry2.buf);
+    FsmEncodeSetX(456, &entry2.buf);
 
     CLUSTER_ADD_ENTRY(0, &entry1);
     CLUSTER_ADD_ENTRY(1, &entry2);
@@ -400,7 +400,7 @@ TEST(election, rejectIfLastIndexIsLower, setUp, tearDown, 0, NULL)
 
     entry.type = RAFT_COMMAND;
     entry.term = 2;
-    test_fsm_encode_set_x(123, &entry.buf);
+    FsmEncodeSetX(123, &entry.buf);
 
     CLUSTER_ADD_ENTRY(1, &entry);
 

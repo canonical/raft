@@ -4,7 +4,7 @@
 #include "munit.h"
 
 /* In-memory implementation of the raft_fsm interface. */
-struct test_fsm
+struct fsm
 {
     int x;
     int y;
@@ -17,7 +17,7 @@ static int fsmApply(struct raft_fsm *fsm,
                     const struct raft_buffer *buf,
                     void **result)
 {
-    struct test_fsm *t = fsm->data;
+    struct fsm *f = fsm->data;
     unsigned command;
     int value;
 
@@ -30,16 +30,16 @@ static int fsmApply(struct raft_fsm *fsm,
 
     switch (command) {
         case SET_X:
-            t->x = value;
+            f->x = value;
             break;
         case SET_Y:
-            t->y = value;
+            f->y = value;
             break;
         case ADD_X:
-            t->x += value;
+            f->x += value;
             break;
         case ADD_Y:
-            t->y += value;
+            f->y += value;
             break;
         default:
             return -1;
@@ -52,13 +52,13 @@ static int fsmApply(struct raft_fsm *fsm,
 
 static int fsmRestore(struct raft_fsm *fsm, struct raft_buffer *buf)
 {
-    struct test_fsm *t = fsm->data;
+    struct fsm *f = fsm->data;
     const void *cursor = buf->base;
 
     munit_assert_int(buf->len, ==, sizeof(uint64_t) * 2);
 
-    t->x = byteGet64(&cursor);
-    t->y = byteGet64(&cursor);
+    f->x = byteGet64(&cursor);
+    f->y = byteGet64(&cursor);
 
     raft_free(buf->base);
 
@@ -99,31 +99,31 @@ static int fsmSnapshot(struct raft_fsm *fsm,
                        struct raft_buffer *bufs[],
                        unsigned *n_bufs)
 {
-    struct test_fsm *t = fsm->data;
-    return fsmEncodeSnapshot(t->x, t->y, bufs, n_bufs);
+    struct fsm *f = fsm->data;
+    return fsmEncodeSnapshot(f->x, f->y, bufs, n_bufs);
 }
 
-void test_fsm_init(struct raft_fsm *fsm)
+void FsmInit(struct raft_fsm *fsm)
 {
-    struct test_fsm *t = munit_malloc(sizeof *fsm);
+    struct fsm *f = munit_malloc(sizeof *fsm);
 
-    t->x = 0;
-    t->y = 0;
+    f->x = 0;
+    f->y = 0;
 
     fsm->version = 1;
-    fsm->data = t;
+    fsm->data = f;
     fsm->apply = fsmApply;
     fsm->snapshot = fsmSnapshot;
     fsm->restore = fsmRestore;
 }
 
-void test_fsm_close(struct raft_fsm *fsm)
+void FsmClose(struct raft_fsm *fsm)
 {
-    struct test_fsm *t = fsm->data;
-    free(t);
+    struct fsm *f = fsm->data;
+    free(f);
 }
 
-void test_fsm_encode_set_x(const int value, struct raft_buffer *buf)
+void FsmEncodeSetX(const int value, struct raft_buffer *buf)
 {
     void *cursor;
 
@@ -137,7 +137,7 @@ void test_fsm_encode_set_x(const int value, struct raft_buffer *buf)
     bytePut64(&cursor, value);
 }
 
-void test_fsm_encode_add_x(const int value, struct raft_buffer *buf)
+void FsmEncodeAddX(const int value, struct raft_buffer *buf)
 {
     void *cursor;
 
@@ -151,7 +151,7 @@ void test_fsm_encode_add_x(const int value, struct raft_buffer *buf)
     bytePut64(&cursor, value);
 }
 
-void test_fsm_encode_set_y(const int value, struct raft_buffer *buf)
+void FsmEncodeSetY(const int value, struct raft_buffer *buf)
 {
     void *cursor;
 
@@ -165,7 +165,7 @@ void test_fsm_encode_set_y(const int value, struct raft_buffer *buf)
     bytePut64(&cursor, value);
 }
 
-void test_fsm_encode_add_y(const int value, struct raft_buffer *buf)
+void FsmEncodeAddY(const int value, struct raft_buffer *buf)
 {
     void *cursor;
 
@@ -179,36 +179,24 @@ void test_fsm_encode_add_y(const int value, struct raft_buffer *buf)
     bytePut64(&cursor, value);
 }
 
-void test_fsm_encode_snapshot(int x,
-                              int y,
-                              struct raft_buffer *bufs[],
-                              unsigned *n_bufs)
+void FsmEncodeSnapshot(int x,
+                       int y,
+                       struct raft_buffer *bufs[],
+                       unsigned *n_bufs)
 {
     int rc;
     rc = fsmEncodeSnapshot(x, y, bufs, n_bufs);
     munit_assert_int(rc, ==, 0);
 }
 
-int test_fsm_get_x(struct raft_fsm *fsm)
+int FsmGetX(struct raft_fsm *fsm)
 {
-    struct test_fsm *t = fsm->data;
-    return t->x;
+    struct fsm *f = fsm->data;
+    return f->x;
 }
 
-int test_fsm_get_y(struct raft_fsm *fsm)
+int FsmGetY(struct raft_fsm *fsm)
 {
-    struct test_fsm *t = fsm->data;
-    return t->y;
-}
-
-void test_fsm_set_x(struct raft_fsm *fsm, int value)
-{
-    struct test_fsm *t = fsm->data;
-    t->x = value;
-}
-
-void test_fsm_set_y(struct raft_fsm *fsm, int value)
-{
-    struct test_fsm *t = fsm->data;
-    t->y = value;
+    struct fsm *f = fsm->data;
+    return f->y;
 }

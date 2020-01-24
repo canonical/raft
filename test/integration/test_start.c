@@ -91,11 +91,11 @@ TEST(raft_start, oneSnapshotAndSomeFollowUpEntries, setUp, tearDown, 0, NULL)
 
     entries[0].type = RAFT_COMMAND;
     entries[0].term = 2;
-    test_fsm_encode_set_x(6, &entries[0].buf);
+    FsmEncodeSetX(6, &entries[0].buf);
 
     entries[1].type = RAFT_COMMAND;
     entries[1].term = 2;
-    test_fsm_encode_add_y(2, &entries[1].buf);
+    FsmEncodeAddY(2, &entries[1].buf);
 
     CLUSTER_SET_SNAPSHOT(0 /*                                               */,
                          6 /* last index                                    */,
@@ -111,7 +111,7 @@ TEST(raft_start, oneSnapshotAndSomeFollowUpEntries, setUp, tearDown, 0, NULL)
     CLUSTER_MAKE_PROGRESS;
 
     fsm = CLUSTER_FSM(0);
-    munit_assert_int(test_fsm_get_x(fsm), ==, 7);
+    munit_assert_int(FsmGetX(fsm), ==, 7);
 
     return MUNIT_OK;
 }
@@ -155,7 +155,7 @@ TEST(raft_start, twoEntries, setUp, tearDown, 0, NULL)
 
     entry.type = RAFT_COMMAND;
     entry.term = 3;
-    test_fsm_encode_set_x(123, &entry.buf);
+    FsmEncodeSetX(123, &entry.buf);
 
     CLUSTER_ADD_ENTRY(0, &entry);
     CLUSTER_SET_TERM(0, 3);
@@ -171,7 +171,7 @@ TEST(raft_start, twoEntries, setUp, tearDown, 0, NULL)
 
     for (i = 0; i < CLUSTER_N; i++) {
         fsm = CLUSTER_FSM(i);
-        munit_assert_int(test_fsm_get_x(fsm), ==, 124);
+        munit_assert_int(FsmGetX(fsm), ==, 124);
     }
 
     return MUNIT_OK;

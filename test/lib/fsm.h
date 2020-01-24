@@ -1,56 +1,36 @@
-/**
- * Test implementation of the raft_fsm interface, with fault injection.
+/* Test implementation of the raft_fsm interface, with fault injection.
  *
- * The test FSM supports only two commands: setting x and setting y.
- */
+ * The test FSM supports only two commands: setting x and setting y. */
 
 #ifndef TEST_FSM_H
 #define TEST_FSM_H
 
 #include "../../include/raft.h"
 
-void test_fsm_init(struct raft_fsm *fsm);
+void FsmInit(struct raft_fsm *fsm);
 
-void test_fsm_close(struct raft_fsm *fsm);
+void FsmClose(struct raft_fsm *fsm);
 
-/**
- * Encode a command to set x to the given value.
- */
-void test_fsm_encode_set_x(int value, struct raft_buffer *buf);
+/* Encode a command to set x to the given value. */
+void FsmEncodeSetX(int value, struct raft_buffer *buf);
 
-/**
- * Encode a command to add the given value to x.
- */
-void test_fsm_encode_add_x(int value, struct raft_buffer *buf);
+/* Encode a command to add the given value to x. */
+void FsmEncodeAddX(int value, struct raft_buffer *buf);
 
-/**
- * Encode a command to set y to the given value.
- */
-void test_fsm_encode_set_y(int value, struct raft_buffer *buf);
+/* Encode a command to set y to the given value. */
+void FsmEncodeSetY(int value, struct raft_buffer *buf);
 
-/**
- * Encode a command to add the given value to y.
- */
-void test_fsm_encode_add_y(int value, struct raft_buffer *buf);
+/* Encode a command to add the given value to y. */
+void FsmEncodeAddY(int value, struct raft_buffer *buf);
 
-/**
- * Encode a snapshot of an FSM with the given values for x and y.
- */
-void test_fsm_encode_snapshot(int x,
-                              int y,
-                              struct raft_buffer *bufs[],
-                              unsigned *n_bufs);
+/* Encode a snapshot of an FSM with the given values for x and y. */
+void FsmEncodeSnapshot(int x,
+                       int y,
+                       struct raft_buffer *bufs[],
+                       unsigned *n_bufs);
 
-/**
- * Return the current value of x or y.
- */
-int test_fsm_get_x(struct raft_fsm *fsm);
-int test_fsm_get_y(struct raft_fsm *fsm);
-
-/**
- * Set the current value of x or y.
- */
-void test_fsm_set_x(struct raft_fsm *fsm, int value);
-void test_fsm_set_y(struct raft_fsm *fsm, int value);
+/* Return the current value of x or y. */
+int FsmGetX(struct raft_fsm *fsm);
+int FsmGetY(struct raft_fsm *fsm);
 
 #endif /* TEST_FSM_H */

@@ -30,7 +30,7 @@
         }                                                             \
         munit_assert_int(_n, >, 0);                                   \
         for (_i = 0; _i < _n; _i++) {                                 \
-            test_fsm_init(&f->fsms[_i]);                              \
+            FsmInit(&f->fsms[_i]);                              \
         }                                                             \
         _rv = raft_fixture_init(&f->cluster, _n, f->fsms);            \
         munit_assert_int(_rv, ==, 0);                                 \
@@ -41,7 +41,7 @@
         unsigned i;                       \
         raft_fixture_close(&f->cluster);  \
         for (i = 0; i < CLUSTER_N; i++) { \
-            test_fsm_close(&f->fsms[i]);  \
+            FsmClose(&f->fsms[i]);  \
         }                                 \
     } while (0);                          \
     TEAR_DOWN_HEAP;
@@ -231,7 +231,7 @@
         struct raft_buffer buf_;                    \
         struct raft *raft_;                         \
         int rv_;                                    \
-        test_fsm_encode_add_x(VALUE, &buf_);        \
+        FsmEncodeAddX(VALUE, &buf_);        \
         raft_ = raft_fixture_get(&f->cluster, I);   \
         rv_ = raft_apply(raft_, REQ, &buf_, 1, CB); \
         munit_assert_int(rv_, ==, 0);               \
@@ -261,7 +261,7 @@
 #define CLUSTER_GROW                                               \
     {                                                              \
         int rv_;                                                   \
-        test_fsm_init(&f->fsms[CLUSTER_N]);                        \
+        FsmInit(&f->fsms[CLUSTER_N]);                        \
         rv_ = raft_fixture_grow(&f->cluster, &f->fsms[CLUSTER_N]); \
         munit_assert_int(rv_, ==, 0);                              \
     }
