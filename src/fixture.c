@@ -238,7 +238,7 @@ static void ioFlushAppend(struct io *s, struct append *append)
     if (append->req->cb != NULL) {
         append->req->cb(append->req, 0);
     }
-    free(append);
+    raft_free(append);
 }
 
 /* Flush a snapshot put request, copying the snapshot data. */
