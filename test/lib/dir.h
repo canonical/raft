@@ -1,21 +1,25 @@
-/* Test directory utilties.
+/**
+ * Test directory utilties.
  *
  * This module sports helpers to create temporary directories backed by various
  * file systems, read/write files in them, check for the presence of files
- * etc. */
+ * etc.
+ */
 
-#ifndef TEST_DIR_H_
-#define TEST_DIR_H_
+#ifndef TEST_DIR_H
+#define TEST_DIR_H
 
 #include <linux/aio_abi.h>
 
 #include "munit.h"
 
-/* Munit parameter defining the file system type backing the temporary directory
+/**
+ * Munit parameter defining the file system type backing the temporary directory
  * created by test_dir_setup().
  *
  * The various file systems must have been previously setup with the fs.sh
- * script. */
+ * script.
+ */
 #define DIR_FS_PARAM "dir-fs"
 
 #define FIXTURE_DIR char *dir
@@ -197,4 +201,4 @@ int test_aio_fill(aio_context_t *ctx, unsigned n);
 /* Destroy the given AIO context. */
 void test_aio_destroy(aio_context_t ctx);
 
-#endif /* TEST_DIR_H_ */
+#endif /* TEST_DIR_H */

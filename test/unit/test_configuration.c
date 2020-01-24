@@ -18,7 +18,7 @@ struct fixture
 static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    SETUP_HEAP;
+    SET_UP_HEAP;
     configurationInit(&f->configuration);
     return f;
 }

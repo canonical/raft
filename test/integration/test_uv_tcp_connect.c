@@ -125,7 +125,7 @@ static void *setUpDeps(const MunitParameter params[],
 {
     struct fixture *f = munit_malloc(sizeof *f);
     int rv;
-    SETUP_HEAP;
+    SET_UP_HEAP;
     SETUP_LOOP;
     SETUP_TCP;
     rv = raft_uv_tcp_init(&f->transport, &f->loop);

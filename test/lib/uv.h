@@ -27,7 +27,7 @@
     FIXTURE_UV_TRANSPORT
 #define SETUP_UV_DEPS  \
     SETUP_DIR_OR_SKIP; \
-    SETUP_HEAP;        \
+    SET_UP_HEAP;       \
     SETUP_LOOP;        \
     SETUP_TRACER;      \
     SETUP_UV_TRANSPORT

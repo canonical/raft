@@ -24,7 +24,7 @@ static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
     struct raft_configuration configuration;
     unsigned i;
     int rc;
-    SETUP_HEAP;
+    SET_UP_HEAP;
     for (i = 0; i < N_SERVERS; i++) {
         test_fsm_init(&f->fsms[i]);
     }

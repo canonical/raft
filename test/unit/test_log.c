@@ -105,7 +105,7 @@ struct fixture
 static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    SETUP_HEAP;
+    SET_UP_HEAP;
     logInit(&f->log);
     return f;
 }

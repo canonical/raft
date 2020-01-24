@@ -103,7 +103,7 @@ static int getIntParam(const MunitParameter params[], const char *name)
     return value != NULL ? atoi(value) : 0;
 }
 
-void test_heap_setup(const MunitParameter params[], struct raft_heap *h)
+void test_heap_set_up(const MunitParameter params[], struct raft_heap *h)
 {
     struct heap *heap = munit_malloc(sizeof *heap);
     int delay = getIntParam(params, TEST_HEAP_FAULT_DELAY);

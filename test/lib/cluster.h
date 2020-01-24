@@ -20,7 +20,7 @@
 /* N is the default number of servers, but can be tweaked with the cluster-n
  * parameter. */
 #define SETUP_CLUSTER(DEFAULT_N)                                      \
-    SETUP_HEAP;                                                       \
+    SET_UP_HEAP;                                                      \
     do {                                                              \
         unsigned _n = DEFAULT_N;                                      \
         unsigned _i;                                                  \
@@ -36,14 +36,14 @@
         munit_assert_int(_rv, ==, 0);                                 \
     } while (0)
 
-#define TEAR_DOWN_CLUSTER                    \
-    do {                                     \
-        unsigned i;                          \
-        raft_fixture_close(&f->cluster);     \
-        for (i = 0; i < CLUSTER_N; i++) {    \
-            test_fsm_close(&f->fsms[i]); \
-        }                                    \
-    } while (0);                             \
+#define TEAR_DOWN_CLUSTER                 \
+    do {                                  \
+        unsigned i;                       \
+        raft_fixture_close(&f->cluster);  \
+        for (i = 0; i < CLUSTER_N; i++) { \
+            test_fsm_close(&f->fsms[i]);  \
+        }                                 \
+    } while (0);                          \
     TEAR_DOWN_HEAP;
 
 /* Munit parameter for setting the number of servers */
