@@ -103,7 +103,7 @@ static int getIntParam(const MunitParameter params[], const char *name)
     return value != NULL ? atoi(value) : 0;
 }
 
-void test_heap_set_up(const MunitParameter params[], struct raft_heap *h)
+void HeapSetUp(const MunitParameter params[], struct raft_heap *h)
 {
     struct heap *heap = munit_malloc(sizeof *heap);
     int delay = getIntParam(params, TEST_HEAP_FAULT_DELAY);
@@ -127,7 +127,7 @@ void test_heap_set_up(const MunitParameter params[], struct raft_heap *h)
     FaultPause(&heap->fault);
 }
 
-void test_heap_tear_down(struct raft_heap *h)
+void HeapTearDown(struct raft_heap *h)
 {
     struct heap *heap = h->data;
     if (heap->n != 0) {
@@ -137,13 +137,13 @@ void test_heap_tear_down(struct raft_heap *h)
     raft_heap_set_default();
 }
 
-void test_heap_fault_config(struct raft_heap *h, int delay, int repeat)
+void HeapFaultConfig(struct raft_heap *h, int delay, int repeat)
 {
     struct heap *heap = h->data;
     FaultConfig(&heap->fault, delay, repeat);
 }
 
-void test_heap_fault_enable(struct raft_heap *h)
+void HeapFaultEnable(struct raft_heap *h)
 {
     struct heap *heap = h->data;
     FaultResume(&heap->fault);

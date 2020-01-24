@@ -605,7 +605,7 @@ TEST(logAppend, oom, setUp, tearDown, 0, logAppendOom)
     int rv;
     buf.base = NULL;
     buf.len = 0;
-    test_heap_fault_enable(&f->heap);
+    HeapFaultEnable(&f->heap);
     rv = logAppend(&f->log, 1, RAFT_COMMAND, &buf, NULL);
     munit_assert_int(rv, ==, RAFT_NOMEM);
     return MUNIT_OK;
@@ -616,8 +616,8 @@ TEST(logAppend, oomRefs, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     APPEND_MANY(1, LOG__REFS_INITIAL_SIZE);
-    test_heap_fault_config(&f->heap, 1, 1);
-    test_heap_fault_enable(&f->heap);
+    HeapFaultConfig(&f->heap, 1, 1);
+    HeapFaultEnable(&f->heap);
     APPEND_ERROR(1, RAFT_NOMEM);
     return MUNIT_OK;
 }
@@ -650,7 +650,7 @@ TEST(logAppendConfiguration, oom, setUp, tearDown, 0, logAppendConfigurationOom)
     rv = configurationAdd(&configuration, 1, "1", RAFT_VOTER);
     munit_assert_int(rv, ==, 0);
 
-    test_heap_fault_enable(&f->heap);
+    HeapFaultEnable(&f->heap);
 
     rv = logAppendConfiguration(&f->log, 1, &configuration);
     munit_assert_int(rv, ==, RAFT_NOMEM);
@@ -806,8 +806,8 @@ TEST(logAcquire, oom, setUp, tearDown, 0, NULL)
 
     APPEND(1 /* term */);
 
-    test_heap_fault_config(&f->heap, 0, 1);
-    test_heap_fault_enable(&f->heap);
+    HeapFaultConfig(&f->heap, 0, 1);
+    HeapFaultEnable(&f->heap);
 
     rv = logAcquire(&f->log, 1, &entries, &n);
     munit_assert_int(rv, ==, RAFT_NOMEM);
@@ -1027,7 +1027,7 @@ TEST(logTruncate, acquiredOom, setUp, tearDown, 0, logTruncateAcquiredOom)
     buf.base = NULL;
     buf.len = 0;
 
-    test_heap_fault_enable(&f->heap);
+    HeapFaultEnable(&f->heap);
 
     rv = logAppend(&f->log, 2, RAFT_COMMAND, &buf, NULL);
     munit_assert_int(rv, ==, RAFT_NOMEM);

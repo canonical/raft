@@ -378,7 +378,7 @@ TEST(replication, sendOom, setUp, tearDown, 0, send_oom_params)
     struct raft_apply req;
     BOOTSTRAP_START_AND_ELECT;
 
-    test_heap_fault_enable(&f->heap);
+    HEAP_FAULT_ENABLE;
 
     CLUSTER_APPLY_ADD_X(0, &req, 1, NULL);
     CLUSTER_STEP;

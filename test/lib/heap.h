@@ -20,14 +20,14 @@
 
 /* Macro helpers. */
 #define FIXTURE_HEAP struct raft_heap heap
-#define SET_UP_HEAP test_heap_set_up(params, &f->heap)
-#define TEAR_DOWN_HEAP test_heap_tear_down(&f->heap)
-#define HEAP_FAULT_ENABLE test_heap_fault_enable(&f->heap)
+#define SET_UP_HEAP HeapSetUp(params, &f->heap)
+#define TEAR_DOWN_HEAP HeapTearDown(&f->heap)
+#define HEAP_FAULT_ENABLE HeapFaultEnable(&f->heap)
 
-void test_heap_set_up(const MunitParameter params[], struct raft_heap *h);
-void test_heap_tear_down(struct raft_heap *h);
+void HeapSetUp(const MunitParameter params[], struct raft_heap *h);
+void HeapTearDown(struct raft_heap *h);
 
-void test_heap_fault_config(struct raft_heap *h, int delay, int repeat);
-void test_heap_fault_enable(struct raft_heap *h);
+void HeapFaultConfig(struct raft_heap *h, int delay, int repeat);
+void HeapFaultEnable(struct raft_heap *h);
 
 #endif /* TEST_HEAP_H */
