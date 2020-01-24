@@ -9,20 +9,20 @@ struct heap
 {
     int n;                   /* Number of outstanding allocations. */
     size_t alignment;        /* Value of last aligned alloc */
-    struct test_fault fault; /* Fault trigger. */
+    struct Fault fault; /* Fault trigger. */
 };
 
 static void heapInit(struct heap *h)
 {
     h->n = 0;
     h->alignment = 0;
-    test_fault_init(&h->fault);
+    FaultInit(&h->fault);
 }
 
 static void *heapMalloc(void *data, size_t size)
 {
     struct heap *h = data;
-    if (test_fault_tick(&h->fault)) {
+    if (FaultTick(&h->fault)) {
         return NULL;
     }
     h->n++;
@@ -39,7 +39,7 @@ static void heapFree(void *data, void *ptr)
 static void *heapCalloc(void *data, size_t nmemb, size_t size)
 {
     struct heap *h = data;
-    if (test_fault_tick(&h->fault)) {
+    if (FaultTick(&h->fault)) {
         return NULL;
     }
     h->n++;
@@ -50,7 +50,7 @@ static void *heapRealloc(void *data, void *ptr, size_t size)
 {
     struct heap *h = data;
 
-    if (test_fault_tick(&h->fault)) {
+    if (FaultTick(&h->fault)) {
         return NULL;
     }
 
@@ -76,7 +76,7 @@ static void *heapAlignedAlloc(void *data, size_t alignment, size_t size)
     struct heap *h = data;
     void *p;
 
-    if (test_fault_tick(&h->fault)) {
+    if (FaultTick(&h->fault)) {
         return NULL;
     }
 
@@ -113,7 +113,7 @@ void test_heap_set_up(const MunitParameter params[], struct raft_heap *h)
 
     heapInit(heap);
 
-    test_fault_config(&heap->fault, delay, repeat);
+    FaultConfig(&heap->fault, delay, repeat);
 
     h->data = heap;
     h->malloc = heapMalloc;
@@ -124,7 +124,7 @@ void test_heap_set_up(const MunitParameter params[], struct raft_heap *h)
     h->aligned_free = heapAlignedFree;
 
     raft_heap_set(h);
-    test_fault_pause(&heap->fault);
+    FaultPause(&heap->fault);
 }
 
 void test_heap_tear_down(struct raft_heap *h)
@@ -140,11 +140,11 @@ void test_heap_tear_down(struct raft_heap *h)
 void test_heap_fault_config(struct raft_heap *h, int delay, int repeat)
 {
     struct heap *heap = h->data;
-    test_fault_config(&heap->fault, delay, repeat);
+    FaultConfig(&heap->fault, delay, repeat);
 }
 
 void test_heap_fault_enable(struct raft_heap *h)
 {
     struct heap *heap = h->data;
-    test_fault_resume(&heap->fault);
+    FaultResume(&heap->fault);
 }
