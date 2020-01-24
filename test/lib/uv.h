@@ -25,11 +25,11 @@
     FIXTURE_LOOP;       \
     FIXTURE_TRACER;     \
     FIXTURE_UV_TRANSPORT
-#define SETUP_UV_DEPS  \
-    SETUP_DIR_OR_SKIP; \
-    SET_UP_HEAP;       \
-    SETUP_LOOP;        \
-    SETUP_TRACER;      \
+#define SETUP_UV_DEPS \
+    SET_UP_DIR;       \
+    SET_UP_HEAP;      \
+    SETUP_LOOP;       \
+    SETUP_TRACER;     \
     SETUP_UV_TRANSPORT
 #define TEAR_DOWN_UV_DEPS   \
     TEAR_DOWN_UV_TRANSPORT; \

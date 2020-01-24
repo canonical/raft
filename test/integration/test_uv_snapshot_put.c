@@ -233,10 +233,8 @@ TEST(snapshot_put, entriesLessThanTrailing, setUp, tearDown, 0, NULL)
                  100  /* index */
     );
 
-    munit_assert_true(
-        test_dir_has_file(f->dir, "0000000000000001-0000000000000150"));
-    munit_assert_true(
-        test_dir_has_file(f->dir, "0000000000000151-0000000000000300"));
+    munit_assert_true(DirHasFile(f->dir, "0000000000000001-0000000000000150"));
+    munit_assert_true(DirHasFile(f->dir, "0000000000000151-0000000000000300"));
 
     return MUNIT_OK;
 }
@@ -258,10 +256,8 @@ TEST(snapshot_put, entriesMoreThanTrailing, setUp, tearDown, 0, NULL)
                  280  /* index */
     );
 
-    munit_assert_false(
-        test_dir_has_file(f->dir, "0000000000000001-0000000000000150"));
-    munit_assert_true(
-        test_dir_has_file(f->dir, "0000000000000151-0000000000000300"));
+    munit_assert_false(DirHasFile(f->dir, "0000000000000001-0000000000000150"));
+    munit_assert_true(DirHasFile(f->dir, "0000000000000151-0000000000000300"));
 
     return MUNIT_OK;
 }

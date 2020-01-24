@@ -76,22 +76,22 @@ static void closeCb(struct raft_io *io)
         bytePut64(&cursor, VERSION);                             \
         bytePut64(&cursor, TERM);                                \
         bytePut64(&cursor, VOTED_FOR);                           \
-        test_dir_write_file(f->dir, filename, buf, sizeof buf);  \
+        DirWriteFile(f->dir, filename, buf, sizeof buf);         \
     }
 
 /* Assert that the content of either the metadata1 or metadata2 file match the
  * given values. */
-#define ASSERT_METADATA_FILE(N, VERSION, TERM, VOTED_FOR)        \
-    {                                                            \
-        uint8_t buf2[8 * 4];                                     \
-        const void *cursor = buf2;                               \
-        char filename[strlen("metadataN") + 1];                  \
-        sprintf(filename, "metadata%d", N);                      \
-        test_dir_read_file(f->dir, filename, buf2, sizeof buf2); \
-        munit_assert_int(byteGet64(&cursor), ==, 1);             \
-        munit_assert_int(byteGet64(&cursor), ==, VERSION);       \
-        munit_assert_int(byteGet64(&cursor), ==, TERM);          \
-        munit_assert_int(byteGet64(&cursor), ==, VOTED_FOR);     \
+#define ASSERT_METADATA_FILE(N, VERSION, TERM, VOTED_FOR)    \
+    {                                                        \
+        uint8_t buf2[8 * 4];                                 \
+        const void *cursor = buf2;                           \
+        char filename[strlen("metadataN") + 1];              \
+        sprintf(filename, "metadata%d", N);                  \
+        DirReadFile(f->dir, filename, buf2, sizeof buf2);    \
+        munit_assert_int(byteGet64(&cursor), ==, 1);         \
+        munit_assert_int(byteGet64(&cursor), ==, VERSION);   \
+        munit_assert_int(byteGet64(&cursor), ==, TERM);      \
+        munit_assert_int(byteGet64(&cursor), ==, VOTED_FOR); \
     }
 
 /******************************************************************************
@@ -138,7 +138,7 @@ TEST(set_term, first, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
     SET_TERM(1);
     ASSERT_METADATA_FILE(1, 1, 1, 0);
-    munit_assert_false(test_dir_has_file(f->dir, "metadata2"));
+    munit_assert_false(DirHasFile(f->dir, "metadata2"));
     return MUNIT_OK;
 }
 

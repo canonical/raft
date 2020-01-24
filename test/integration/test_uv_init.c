@@ -71,7 +71,7 @@ static void closeCb(struct raft_io *io)
         bytePut64(&cursor, VERSION);                             \
         bytePut64(&cursor, TERM);                                \
         bytePut64(&cursor, VOTED_FOR);                           \
-        test_dir_write_file(f->dir, filename, buf, sizeof buf);  \
+        DirWriteFile(f->dir, filename, buf, sizeof buf);         \
     }
 
 #define LONG_DIR                                                               \
@@ -172,17 +172,17 @@ TEST(init, dirNotAccessible, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
     sprintf(errmsg, "directory '%s' is not writable", f->dir);
-    test_dir_unexecutable(f->dir);
+    DirMakeUnexecutable(f->dir);
     INIT_ERROR(f->dir, RAFT_INVALID, errmsg);
     return MUNIT_OK;
 }
 
 /* No space is left for probing I/O capabilities. */
-TEST(init, noSpace, setUp, tearDown, 0, dir_tmpfs_params)
+TEST(init, noSpace, setUp, tearDown, 0, DirTmpfsParams)
 {
     struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;
-    test_dir_fill(f->dir, 4);
+    DirFill(f->dir, 4);
     INIT_ERROR(f->dir, RAFT_NOSPACE,
                "create I/O capabilities probe file: not enough space to "
                "allocate 4096 bytes");
@@ -196,7 +196,7 @@ TEST(init, metadataOneTooShort, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[16];
-    test_dir_write_file(f->dir, "metadata1", buf, sizeof buf);
+    DirWriteFile(f->dir, "metadata1", buf, sizeof buf);
     INIT(f->dir);
     CLOSE;
     return MUNIT_OK;

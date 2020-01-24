@@ -32,7 +32,7 @@
 SUITE(UvFsCheckDir)
 
 /* If the directory exists, the function suceeds. */
-TEST(UvFsCheckDir, exists, setUpDir, tearDownDir, 0, NULL)
+TEST(UvFsCheckDir, exists, DirSetUp, DirTearDown, 0, NULL)
 {
     const char *dir = data;
     CHECK_DIR(dir);
@@ -40,7 +40,7 @@ TEST(UvFsCheckDir, exists, setUpDir, tearDownDir, 0, NULL)
 }
 
 /* If the directory doesn't exist, it an error is returned. */
-TEST(UvFsCheckDir, doesNotExist, setUpDir, tearDownDir, 0, NULL)
+TEST(UvFsCheckDir, doesNotExist, DirSetUp, DirTearDown, 0, NULL)
 {
     const char *parent = data;
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
@@ -54,7 +54,7 @@ TEST(UvFsCheckDir, doesNotExist, setUpDir, tearDownDir, 0, NULL)
 /* If the process can't access the directory, an error is returned. */
 TEST(UvFsCheckDir, permissionDenied, NULL, NULL, 0, NULL)
 {
-    bool has_access = test_dir_has_file("/proc/1", "root");
+    bool has_access = DirHasFile("/proc/1", "root");
     /* Skip the test is the process actually has access to /proc/1/root. */
     if (has_access) {
         return MUNIT_SKIP;
@@ -81,12 +81,12 @@ TEST(UvFsCheckDir, notDir, NULL, NULL, 0, NULL)
 }
 
 /* If the given directory is not writable, an error is returned. */
-TEST(UvFsCheckDir, notWritable, setUpDir, tearDownDir, 0, NULL)
+TEST(UvFsCheckDir, notWritable, DirSetUp, DirTearDown, 0, NULL)
 {
     const char *dir = data;
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
     sprintf(errmsg, "directory '%s' is not writable", dir);
-    test_dir_unwritable(dir);
+    DirMakeUnwritable(dir);
     CHECK_DIR_ERROR(dir, RAFT_INVALID, errmsg);
     return MUNIT_OK;
 }
@@ -134,7 +134,7 @@ TEST(UvFsSyncDir, noExists, NULL, NULL, 0, NULL)
 SUITE(UvFsOpenFileForReading)
 
 /* If the directory doesn't exist, an error is returned. */
-TEST(UvFsOpenFileForReading, noExists, setUpDir, tearDownDir, 0, NULL)
+TEST(UvFsOpenFileForReading, noExists, DirSetUp, DirTearDown, 0, NULL)
 {
     const char *dir = data;
     OPEN_FILE_FOR_READING_ERROR(dir, "foo", RAFT_IOERR,
@@ -175,13 +175,13 @@ TEST(UvFsOpenFileForReading, noExists, setUpDir, tearDownDir, 0, NULL)
 SUITE(UvFsAllocateFile)
 
 /* If the given path is valid, the file gets created. */
-TEST(UvFsAllocateFile, success, setUpDir, tearDownDir, 0, NULL)
+TEST(UvFsAllocateFile, success, DirSetUp, DirTearDown, 0, NULL)
 {
     const char *dir = data;
     ALLOCATE_FILE(dir,   /* dir */
                   "foo", /* filename */
                   4096 /* size */);
-    munit_assert_true(test_dir_has_file(dir, "foo"));
+    munit_assert_true(DirHasFile(dir, "foo"));
     return MUNIT_OK;
 }
 
@@ -197,11 +197,11 @@ TEST(UvFsAllocateFile, dirNoExists, NULL, NULL, 0, NULL)
 }
 
 /* If the given path already exists, an error is returned. */
-TEST(UvFsAllocateFile, fileAlreadyExists, setUpDir, tearDownDir, 0, NULL)
+TEST(UvFsAllocateFile, fileAlreadyExists, DirSetUp, DirTearDown, 0, NULL)
 {
     const char *dir = data;
     char buf[8];
-    test_dir_write_file(dir, "foo", buf, sizeof buf);
+    DirWriteFile(dir, "foo", buf, sizeof buf);
     ALLOCATE_FILE_ERROR(dir,        /* dir */
                         "foo",      /* filename */
                         64,         /* size */
@@ -211,7 +211,7 @@ TEST(UvFsAllocateFile, fileAlreadyExists, setUpDir, tearDownDir, 0, NULL)
 }
 
 /* The file system has run out of space. */
-TEST(UvFsAllocateFile, noSpace, setUpDir, tearDownDir, 0, dir_tmpfs_params)
+TEST(UvFsAllocateFile, noSpace, DirSetUp, DirTearDown, 0, DirTmpfsParams)
 {
     const char *dir = data;
     if (dir == NULL) {
@@ -222,7 +222,7 @@ TEST(UvFsAllocateFile, noSpace, setUpDir, tearDownDir, 0, dir_tmpfs_params)
                         4096 * 32768, /* size */
                         RAFT_NOSPACE, /* status */
                         "not enough space to allocate 134217728 bytes");
-    munit_assert_false(test_dir_has_file(dir, "foo"));
+    munit_assert_false(DirHasFile(dir, "foo"));
     return MUNIT_OK;
 }
 
@@ -264,7 +264,7 @@ TEST(UvFsAllocateFile, noSpace, setUpDir, tearDownDir, 0, dir_tmpfs_params)
 
 SUITE(UvFsProbeCapabilities)
 
-TEST(UvFsProbeCapabilities, tmpfs, setUpTmpfsDir, tearDownDir, 0, NULL)
+TEST(UvFsProbeCapabilities, tmpfs, DirTmpfsSetUp, DirTearDown, 0, NULL)
 {
     const char *dir = data;
     if (dir == NULL) {
@@ -276,7 +276,7 @@ TEST(UvFsProbeCapabilities, tmpfs, setUpTmpfsDir, tearDownDir, 0, NULL)
 
 /* ZFS 0.8 reports that it supports direct I/O, but does not support fully
  * support asynchronous kernel AIO. */
-TEST(UvFsProbeCapabilities, zfsDirectIO, setUpZfsDir, tearDownDir, 0, NULL)
+TEST(UvFsProbeCapabilities, zfsDirectIO, DirZfsSetUp, DirTearDown, 0, NULL)
 {
     const char *dir = data;
     size_t direct_io = 0;
@@ -293,7 +293,7 @@ TEST(UvFsProbeCapabilities, zfsDirectIO, setUpZfsDir, tearDownDir, 0, NULL)
 #if defined(RWF_NOWAIT)
 
 /* File systems that fully support DIO. */
-TEST(UvFsProbeCapabilities, aio, setUpDir, tearDownDir, 0, dir_aio_params)
+TEST(UvFsProbeCapabilities, aio, DirSetUp, DirTearDown, 0, DirAioParams)
 {
     const char *dir = data;
     if (dir == NULL) {
@@ -312,10 +312,10 @@ TEST(UvFsProbeCapabilities, aio, setUpDir, tearDownDir, 0, dir_aio_params)
 
 /* If the given path is not executable, the block size of the underlying file
  * system can't be determined and an error is returned. */
-TEST(UvFsProbeCapabilities, noAccess, setUpDir, tearDownDir, 0, NULL)
+TEST(UvFsProbeCapabilities, noAccess, DirSetUp, DirTearDown, 0, NULL)
 {
     const char *dir = data;
-    test_dir_unexecutable(dir);
+    DirMakeUnexecutable(dir);
     PROBE_CAPABILITIES_ERROR(
         dir, RAFT_IOERR,
         "create I/O capabilities probe file: open: permission denied");
@@ -323,13 +323,13 @@ TEST(UvFsProbeCapabilities, noAccess, setUpDir, tearDownDir, 0, NULL)
 }
 
 /* No space is left on the target device. */
-TEST(UvFsProbeCapabilities, noSpace, setUpTmpfsDir, tearDownDir, 0, NULL)
+TEST(UvFsProbeCapabilities, noSpace, DirTmpfsSetUp, DirTearDown, 0, NULL)
 {
     const char *dir = data;
     if (dir == NULL) {
         return MUNIT_SKIP;
     }
-    test_dir_fill(dir, 0);
+    DirFill(dir, 0);
     PROBE_CAPABILITIES_ERROR(dir, RAFT_NOSPACE,
                              "create I/O capabilities probe file: not enough "
                              "space to allocate 4096 bytes");
@@ -339,7 +339,7 @@ TEST(UvFsProbeCapabilities, noSpace, setUpTmpfsDir, tearDownDir, 0, NULL)
 #if defined(RWF_NOWAIT)
 
 /* The uvIoSetup() call fails with EAGAIN. */
-TEST(UvFsProbeCapabilities, noResources, setUpBtrfsDir, tearDownDir, 0, NULL)
+TEST(UvFsProbeCapabilities, noResources, DirBtrfsSetUp, DirTearDown, 0, NULL)
 {
     const char *dir = data;
     aio_context_t ctx = 0;
