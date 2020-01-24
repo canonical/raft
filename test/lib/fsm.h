@@ -41,9 +41,15 @@ void test_fsm_encode_snapshot(int x,
                               struct raft_buffer *bufs[],
                               unsigned *n_bufs);
 
+/**
+ * Return the current value of x or y.
+ */
 int test_fsm_get_x(struct raft_fsm *fsm);
 int test_fsm_get_y(struct raft_fsm *fsm);
 
+/**
+ * Set the current value of x or y.
+ */
 void test_fsm_set_x(struct raft_fsm *fsm, int value);
 void test_fsm_set_y(struct raft_fsm *fsm, int value);
 
