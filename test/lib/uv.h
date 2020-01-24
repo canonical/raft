@@ -29,7 +29,7 @@
     SET_UP_DIR;       \
     SET_UP_HEAP;      \
     SETUP_LOOP;       \
-    SETUP_TRACER;     \
+    SET_UP_TRACER;    \
     SETUP_UV_TRANSPORT
 #define TEAR_DOWN_UV_DEPS   \
     TEAR_DOWN_UV_TRANSPORT; \
