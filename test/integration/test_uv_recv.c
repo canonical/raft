@@ -229,7 +229,6 @@ static void *setUpDeps(const MunitParameter params[], void *user_data)
     struct fixture *f = munit_malloc(sizeof *f);
     SETUP_UV_DEPS;
     SETUP_TCP;
-    TCP_SERVER_LISTEN;
     PEER_SETUP;
     f->io.data = f;
     f->closed = false;

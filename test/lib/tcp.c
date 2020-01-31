@@ -5,6 +5,88 @@
 #include <stdio.h>
 #include <unistd.h>
 
+void TcpServerInit(struct TcpServer *s)
+{
+    struct sockaddr_in addr;
+    socklen_t size = sizeof addr;
+    int rv;
+
+    /* Initialize the socket address structure. */
+    memset(&addr, 0, size);
+
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    addr.sin_port = 0; /* Get a random free port */
+
+    /* Create the server socket. */
+    s->socket = socket(AF_INET, SOCK_STREAM, 0);
+    if (s->socket == -1) {
+        munit_errorf("tcp server: socket(): %s", strerror(errno));
+    }
+
+    /* Bind the socket. */
+    rv = bind(s->socket, (struct sockaddr *)&addr, size);
+    if (rv == -1) {
+        munit_errorf("tcp server: bind(): %s", strerror(errno));
+    }
+
+    /* Start listening. */
+    rv = listen(s->socket, 1);
+    if (rv == -1) {
+        munit_errorf("tcp server: listen(): %s", strerror(errno));
+    }
+
+    /* Get the actual addressed assigned by the kernel and save it back in the
+     * relevant field. */
+    rv = getsockname(s->socket, (struct sockaddr *)&addr, &size);
+    if (rv != 0) {
+        munit_errorf("tcp: getsockname(): %s", strerror(errno));
+    }
+
+    sprintf(s->address, "127.0.0.1:%d", htons(addr.sin_port));
+}
+
+void TcpServerClose(struct TcpServer *s)
+{
+    int rv;
+
+    if (s->socket == -1) {
+        return;
+    }
+
+    rv = close(s->socket);
+    if (rv == -1) {
+        munit_errorf("tcp server: close(): %s", strerror(errno));
+    }
+}
+
+int TcpServerAccept(struct TcpServer *s)
+{
+    int socket;
+    struct sockaddr_in address;
+    socklen_t size;
+
+    size = sizeof(address);
+
+    socket = accept(s->socket, (struct sockaddr *)&address, &size);
+    if (socket < 0) {
+        munit_errorf("tcp server: accept(): %s", strerror(errno));
+    }
+
+    return socket;
+}
+
+void TcpServerStop(struct TcpServer *s)
+{
+    int rv;
+
+    rv = close(s->socket);
+    if (rv == -1) {
+        munit_errorf("tcp server: close(): %s", strerror(errno));
+    }
+    s->socket = -1;
+}
+
 void test_tcp_setup(const MunitParameter params[], struct test_tcp *t)
 {
     (void)params;
