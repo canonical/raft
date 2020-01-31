@@ -1,4 +1,5 @@
 *.m4
+!attributes.m4
 !ax_ac_append_to_file.m4
 !ax_ac_print_to_file.m4
 !ax_add_am_macro_static.m4
@@ -8,4 +9,3 @@
 !ax_compare_version.m4
 !ax_file_escapes.m4
 !pkg.m4
-!raft-check-flags.m4
