@@ -71,36 +71,39 @@ AC_CHECK_DECLS([UV_FS_O_CREAT], [], [], [[#include <uv.h>]])
 # on 32-bit architecture be 8 bytes instead of the normal 4.
 AC_SYS_LARGEFILE
 
-CC_CHECK_CFLAGS_APPEND([-std=c11])
-CC_CHECK_CFLAGS_APPEND([-g])
-CC_CHECK_CFLAGS_APPEND([--mcet -fcf-protection])
-CC_CHECK_CFLAGS_APPEND([--param=ssp-buffer-size=4])
-CC_CHECK_CFLAGS_APPEND([-pipe])
-CC_CHECK_CFLAGS_APPEND([-fno-strict-aliasing])
-CC_CHECK_CFLAGS_APPEND([-fdiagnostics-color])
-CC_CHECK_CFLAGS_APPEND([-fexceptions])
-CC_CHECK_CFLAGS_APPEND([-fstack-clash-protection])
-CC_CHECK_CFLAGS_APPEND([-fstack-protector-strong])
-CC_CHECK_CFLAGS_APPEND([-fasynchronous-unwind-tables])
-CC_CHECK_CFLAGS_APPEND([-fdiagnostics-show-option])
-CC_CHECK_CFLAGS_APPEND([-Wall])
-CC_CHECK_CFLAGS_APPEND([-Wextra])
-CC_CHECK_CFLAGS_APPEND([-Wpedantic])
-CC_CHECK_CFLAGS_APPEND([-Wimplicit-fallthrough=5])
-CC_CHECK_CFLAGS_APPEND([-Wcast-align])
-CC_CHECK_CFLAGS_APPEND([-Wstrict-prototypes])
-CC_CHECK_CFLAGS_APPEND([-Wlogical-op])
-CC_CHECK_CFLAGS_APPEND([-Wmissing-include-dirs])
-CC_CHECK_CFLAGS_APPEND([-Wold-style-definition])
-CC_CHECK_CFLAGS_APPEND([-Winit-self])
-CC_CHECK_CFLAGS_APPEND([-Wfloat-equal])
-CC_CHECK_CFLAGS_APPEND([-Wsuggest-attribute=noreturn])
-CC_CHECK_CFLAGS_APPEND([-Wformat=2])
-CC_CHECK_CFLAGS_APPEND([-Wshadow])
-CC_CHECK_CFLAGS_APPEND([-Wendif-labels])
-CC_CHECK_CFLAGS_APPEND([-Wdate-time])
-CC_CHECK_CFLAGS_APPEND([-Wnested-externs])
-CC_CHECK_CFLAGS_APPEND([-Wconversion])
+CC_CHECK_FLAGS_APPEND([AM_CFLAGS],[CFLAGS],[ \
+  -std=c11 \
+  -g \
+  --mcet \
+  -fcf-protection \
+  --param=ssp-buffer-size=4 \
+  -pipe \
+  -fno-strict-aliasing \
+  -fdiagnostics-color \
+  -fexceptions \
+  -fstack-clash-protection \
+  -fstack-protector-strong \
+  -fasynchronous-unwind-tables \
+  -fdiagnostics-show-option \
+  -Wall \
+  -Wextra \
+  -Wpedantic \
+  -Wimplicit-fallthrough=5 \
+  -Wcast-align \
+  -Wstrict-prototypes \
+  -Wlogical-op \
+  -Wmissing-include-dirs \
+  -Wold-style-definition \
+  -Winit-self \
+  -Wfloat-equal \
+  -Wsuggest-attribute=noreturn \
+  -Wformat=2 \
+  -Wshadow \
+  -Wendif-labels \
+  -Wdate-time \
+  -Wnested-externs \
+  -Wconversion \
+])
 AC_SUBST(AM_CFLAGS)
 
 AC_CONFIG_FILES([raft.pc Makefile])
