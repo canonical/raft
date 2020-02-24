@@ -206,7 +206,7 @@ static void uvWriterPollCb(uv_poll_t *poller, int status, int events)
         uvWriterReqFinish(req);
     }
 }
-#endif
+#endif /* linux */
 
 int UvWriterInit(struct UvWriter *w,
                  struct uv_loop_s *loop,
@@ -316,15 +316,14 @@ err:
     return rv;
 }
 
+#if defined(__linux__)
 static void uvWriterCleanUpAndFireCloseCb(struct UvWriter *w)
 {
     assert(w->closing);
 
-#if defined(__linux__)
     UvOsClose(w->fd);
     MyHeapFree(w->events);
     UvOsIoDestroy(w->ctx);
-#endif
 
     if (w->close_cb != NULL) {
         w->close_cb(w);
@@ -372,11 +371,13 @@ static void uvWriterCheckCb(struct uv_check_s *check)
     }
     uv_close((struct uv_handle_s *)&w->check, uvWriterCheckCloseCb);
 }
+#endif /* linux */
+
 
 void UvWriterClose(struct UvWriter *w, UvWriterCloseCb cb)
 {
 #if !defined(__linux__)
-    uv_fs_close(w->loop, NULL, w->fd, cb);
+    uv_fs_close(w->loop, NULL, w->fd, NULL); //TODO: NULL as callback?
 #else
     int rv;
     assert(!w->closing);
@@ -403,6 +404,7 @@ void UvWriterClose(struct UvWriter *w, UvWriterCloseCb cb)
 #endif
 }
 
+#if defined(__linux__)
 /* Return the total lengths of the given buffers. */
 static size_t lenOfBufs(const uv_buf_t bufs[], unsigned n)
 {
@@ -413,6 +415,7 @@ static size_t lenOfBufs(const uv_buf_t bufs[], unsigned n)
     }
     return len;
 }
+#endif
 
 int UvWriterSubmit(struct UvWriter *w,
                    struct UvWriterReq *req,
@@ -423,7 +426,7 @@ int UvWriterSubmit(struct UvWriter *w,
 {
     int rv = 0;
 #if !defined(__linux__)
-    return uv_fs_write(w->loop, req, w->fd, bufs, n, offset, cb);
+    return uv_fs_write(w->loop, NULL, w->fd, bufs, n, offset, NULL); //TODO: NULL as req and cb?
 #else
 #if defined(RWF_NOWAIT)
     struct iocb *iocbs = &req->iocb;
