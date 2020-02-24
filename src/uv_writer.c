@@ -223,7 +223,7 @@ int UvWriterInit(struct UvWriter *w,
     w->loop = loop;
     w->fd = fd;
 #if !defined(__linux__)
-
+    //TODO: initialize writer here
 #else
     w->async = async;
     w->ctx = 0;
