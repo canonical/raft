@@ -6,6 +6,12 @@ include_HEADERS = include/raft.h
 raftincludedir = $(includedir)/raft
 raftinclude_HEADERS =
 
+if WINDOWS
+
+  AM_CFLAGS += -D__USE_MINGW_ANSI_STDIO
+
+endif #WINDOWS
+
 lib_LTLIBRARIES = libraft.la
 libraft_la_CFLAGS = $(AM_CFLAGS) -fvisibility=hidden
 libraft_la_LDFLAGS = -version-info 0:7:0
@@ -33,9 +39,14 @@ libraft_la_SOURCES = \
   src/snapshot.c \
   src/start.c \
   src/state.c \
-  src/syscall.c \
   src/tick.c \
   src/tracing.c
+
+if LINUX
+
+  libraft_la_SOURCES += syscall.c
+
+endif #LINUX
 
 bin_PROGRAMS =
 
@@ -153,7 +164,6 @@ libtest_la_SOURCES += \
 test_unit_uv_SOURCES = \
   src/err.c \
   src/heap.c \
-  src/syscall.c \
   src/tracing.c \
   src/uv_fs.c \
   src/uv_os.c \
@@ -164,6 +174,12 @@ test_unit_uv_SOURCES = \
 test_unit_uv_LDFLAGS = $(UV_LIBS)
 test_unit_uv_CFLAGS = $(AM_CFLAGS) -Wno-conversion
 test_unit_uv_LDADD = libtest.la
+
+if LINUX
+
+  test_unit_uv_SOURCES += syscall.c
+  
+endif #LINUX
 
 test_integration_uv_SOURCES = \
   test/integration/main_uv.c \

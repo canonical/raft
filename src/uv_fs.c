@@ -746,11 +746,13 @@ int UvFsProbeCapabilities(const char *dir,
     }
     UvFsRemoveFile(dir, UV__FS_PROBE_FILE, ignored);
 
+#if defined(__linux__)
     /* Check if we can use direct I/O. */
     rv = probeDirectIO(fd, direct, errmsg);
     if (rv != 0) {
         goto err_after_file_open;
     }
+#endif
 
 #if !defined(RWF_NOWAIT)
     /* We can't have fully async I/O, since io_submit might potentially block.

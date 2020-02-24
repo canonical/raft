@@ -10,6 +10,29 @@ AC_USE_SYSTEM_EXTENSIONS # Defines _GNU_SOURCE and similar
 
 LT_INIT
 
+AC_CANONICAL_HOST
+
+build_linux=no
+build_windows=no
+build_mac=no
+
+#Detect target OS
+case "${host_os}" in
+    linx*)
+        build_linux=yes
+        ;;
+    mingw*)
+        build_windows=yes
+        ;;
+    darwin*)
+        build_mac=yes
+        ;;
+esac
+
+AM_CONDITIONAL([LINUX], [test "$build_linux" = "yes"])
+AM_CONDITIONAL([WINDOWS], [test "$build_windows" = "yes"])
+AM_CONDITIONAL([OSX], [test "$build_mac" = "yes"])
+
 # The libuv raft_io implementation is built by default if libuv is found, unless
 # explicitely disabled.
 AC_ARG_ENABLE(uv, AS_HELP_STRING([--disable-uv], [do not build the libuv-based raft_io implementation]))

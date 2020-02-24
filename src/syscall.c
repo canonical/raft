@@ -1,5 +1,3 @@
-#ifdef __linux__ //TODO: this should be done from the build system
-
 #include "syscall.h"
 
 #include <sys/syscall.h>
@@ -53,4 +51,3 @@ int io_uring_enter(int fd,
                         sig, _NSIG / 8);
 }
 #endif
-#endif /* linux */
