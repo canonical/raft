@@ -6,9 +6,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
-#if defined(__linux__)
-#include <sys/vfs.h>
-#endif
 #include <unistd.h>
 #include <uv.h>
 
@@ -17,6 +14,7 @@
 
 #ifdef __linux__
 #include <sys/eventfd.h>
+#include <sys/vfs.h>
 #include "syscall.h"
 #endif
 

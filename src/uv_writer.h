@@ -26,8 +26,8 @@ struct UvWriter
     aio_context_t ctx;             /* KAIO handle */
     struct io_event *events;       /* Array of KAIO response objects */
     unsigned n_events;             /* Length of the events array */
+    int event_fd;          /* Poll'ed to check if write is finished */
 #endif
-    uv_os_sock_t event_fd;          /* Poll'ed to check if write is finished */
     struct uv_poll_s event_poller; /* Poll event_fd for completed poll requests */
     struct uv_check_s check;       /* Check for completed threadpool requests */
     UvWriterCloseCb close_cb;      /* Close callback */

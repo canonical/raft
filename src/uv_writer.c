@@ -7,6 +7,8 @@
 #include "assert.h"
 #include "heap.h"
 
+
+#if defined(__linux__)
 /* Copy the error message from the request object to the writer object. */
 static void uvWriterReqTransferErrMsg(struct UvWriterReq *req)
 {
@@ -38,7 +40,6 @@ static void uvWriterReqFinish(struct UvWriterReq *req)
     req->cb(req, req->status);
 }
 
-#if defined(__linux__)
 /* Wrapper around the low-level OS syscall, providing a better error message. */
 static int uvWriterIoSetup(unsigned n, aio_context_t *ctx, char *errmsg)
 {
