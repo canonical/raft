@@ -38,6 +38,7 @@ static void uvWriterReqFinish(struct UvWriterReq *req)
     req->cb(req, req->status);
 }
 
+#if defined(__linux__)
 /* Wrapper around the low-level OS syscall, providing a better error message. */
 static int uvWriterIoSetup(unsigned n, aio_context_t *ctx, char *errmsg)
 {
@@ -204,6 +205,7 @@ static void uvWriterPollCb(uv_poll_t *poller, int status, int events)
         uvWriterReqFinish(req);
     }
 }
+#endif
 
 int UvWriterInit(struct UvWriter *w,
                  struct uv_loop_s *loop,
@@ -219,6 +221,9 @@ int UvWriterInit(struct UvWriter *w,
     w->data = data;
     w->loop = loop;
     w->fd = fd;
+#if !defined(__linux__)
+
+#else
     w->async = async;
     w->ctx = 0;
     w->events = NULL;
@@ -248,7 +253,7 @@ int UvWriterInit(struct UvWriter *w,
     }
 
     /* Initialize the array of re-usable event objects. */
-    w->events = HeapCalloc(w->n_events, sizeof *w->events);
+    w->events = MyHeapCalloc(w->n_events, sizeof *w->events);
     if (w->events == NULL) {
         /* UNTESTED: todo */
         ErrMsgOom(errmsg);
@@ -301,11 +306,12 @@ int UvWriterInit(struct UvWriter *w,
 err_after_event_fd:
     UvOsClose(w->event_fd);
 err_after_events_alloc:
-    HeapFree(w->events);
+    MyHeapFree(w->events);
 err_after_io_setup:
     UvOsIoDestroy(w->ctx);
 err:
     assert(rv != 0);
+#endif
     return rv;
 }
 
@@ -313,9 +319,11 @@ static void uvWriterCleanUpAndFireCloseCb(struct UvWriter *w)
 {
     assert(w->closing);
 
+#if defined(__linux__)
     UvOsClose(w->fd);
-    HeapFree(w->events);
+    MyHeapFree(w->events);
     UvOsIoDestroy(w->ctx);
+#endif
 
     if (w->close_cb != NULL) {
         w->close_cb(w);
@@ -366,6 +374,9 @@ static void uvWriterCheckCb(struct uv_check_s *check)
 
 void UvWriterClose(struct UvWriter *w, UvWriterCloseCb cb)
 {
+#if !defined(__linux__)
+    uv_fs_close(w->loop, NULL, w->fd, cb);
+#else
     int rv;
     assert(!w->closing);
     w->closing = true;
@@ -388,6 +399,7 @@ void UvWriterClose(struct UvWriter *w, UvWriterCloseCb cb)
     } else {
         uv_close((struct uv_handle_s *)&w->check, uvWriterCheckCloseCb);
     }
+#endif
 }
 
 /* Return the total lengths of the given buffers. */
@@ -409,6 +421,9 @@ int UvWriterSubmit(struct UvWriter *w,
                    UvWriterReqCb cb)
 {
     int rv = 0;
+#if !defined(__linux__)
+    return uv_fs_write(w->loop, req, w->fd, bufs, n, offset, cb);
+#else
 #if defined(RWF_NOWAIT)
     struct iocb *iocbs = &req->iocb;
 #endif /* RWF_NOWAIT */
@@ -526,5 +541,7 @@ done:
 
 err:
     assert(rv != 0);
+#endif
+
     return rv;
 }

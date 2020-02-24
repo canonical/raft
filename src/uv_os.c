@@ -5,16 +5,20 @@
 #include <libgen.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/eventfd.h>
 #include <sys/types.h>
-#include <sys/uio.h>
+#if defined(__linux__)
 #include <sys/vfs.h>
+#endif
 #include <unistd.h>
 #include <uv.h>
 
 #include "assert.h"
 #include "err.h"
+
+#ifdef __linux__
+#include <sys/eventfd.h>
 #include "syscall.h"
+#endif
 
 /* Default permissions when creating a directory. */
 #define DEFAULT_DIR_PERM 0700
@@ -37,6 +41,13 @@ int UvOsClose(uv_file fd)
     return uv_fs_close(NULL, &req, fd, NULL);
 }
 
+#ifdef _WIN32
+int UvOsFallocate(uv_file fd, off_t offset, off_t len)
+{
+    //TODO: implement functionality
+    return 0;
+}
+#else
 int UvOsFallocate(uv_file fd, off_t offset, off_t len)
 {
     int rv;
@@ -51,6 +62,7 @@ int UvOsFallocate(uv_file fd, off_t offset, off_t len)
     }
     return 0;
 }
+#endif
 
 int UvOsTruncate(uv_file fd, off_t offset)
 {
@@ -111,6 +123,7 @@ void UvOsJoin(const char *dir, const char *filename, char *path)
     strcat(path, filename);
 }
 
+#ifdef __linux__
 int UvOsIoSetup(unsigned nr, aio_context_t *ctxp)
 {
     int rv;
@@ -185,3 +198,4 @@ int UvOsSetDirectIo(uv_file fd)
     }
     return 0;
 }
+#endif
