@@ -175,6 +175,7 @@ static int ServerInit(struct Server *s,
     timespec_get(&now, TIME_UTC);
     srandom((unsigned)(now.tv_nsec ^ now.tv_sec));
 #else
+    /*mingw doesn't implement timespec_get*/
     srandom(5);
 #endif
 

@@ -415,7 +415,7 @@ static size_t lenOfBufs(const uv_buf_t bufs[], unsigned n)
     }
     return len;
 }
-#endif
+#endif /* linux */
 
 int UvWriterSubmit(struct UvWriter *w,
                    struct UvWriterReq *req,
@@ -545,7 +545,7 @@ done:
 
 err:
     assert(rv != 0);
-#endif
+#endif /* linux */
 
     return rv;
 }

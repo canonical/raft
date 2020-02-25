@@ -107,7 +107,7 @@ int UvOsRename(const char *path1, const char *path2);
 void UvOsJoin(const char *dir, const char *filename, char *path);
 
 /* TODO: figure a portable abstraction. */
-#ifdef __linux__
+#if defined(__linux__)
 int UvOsIoSetup(unsigned nr, aio_context_t *ctxp);
 int UvOsIoDestroy(aio_context_t ctx);
 int UvOsIoSubmit(aio_context_t ctx, long nr, struct iocb **iocbpp);
