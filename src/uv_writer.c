@@ -313,6 +313,7 @@ err_after_io_setup:
 err:
     assert(rv != 0);
 #endif
+
     return rv;
 }
 
@@ -371,13 +372,24 @@ static void uvWriterCheckCb(struct uv_check_s *check)
     }
     uv_close((struct uv_handle_s *)&w->check, uvWriterCheckCloseCb);
 }
+
+/* Return the total lengths of the given buffers. */
+static size_t lenOfBufs(const uv_buf_t bufs[], unsigned n)
+{
+    size_t len = 0;
+    unsigned i;
+    for (i = 0; i < n; i++) {
+        len += bufs[i].len;
+    }
+    return len;
+}
 #endif /* linux */
 
 
 void UvWriterClose(struct UvWriter *w, UvWriterCloseCb cb)
 {
 #if !defined(__linux__)
-    uv_fs_close(w->loop, NULL, w->fd, NULL); //TODO: NULL as callback?
+    uv_fs_close(w->loop, NULL, w->fd, NULL); //TODO: NULL as request and callback?
 #else
     int rv;
     assert(!w->closing);
@@ -404,19 +416,6 @@ void UvWriterClose(struct UvWriter *w, UvWriterCloseCb cb)
 #endif
 }
 
-#if defined(__linux__)
-/* Return the total lengths of the given buffers. */
-static size_t lenOfBufs(const uv_buf_t bufs[], unsigned n)
-{
-    size_t len = 0;
-    unsigned i;
-    for (i = 0; i < n; i++) {
-        len += bufs[i].len;
-    }
-    return len;
-}
-#endif /* linux */
-
 int UvWriterSubmit(struct UvWriter *w,
                    struct UvWriterReq *req,
                    const uv_buf_t bufs[],
@@ -426,7 +425,7 @@ int UvWriterSubmit(struct UvWriter *w,
 {
     int rv = 0;
 #if !defined(__linux__)
-    return uv_fs_write(w->loop, NULL, w->fd, bufs, n, offset, NULL); //TODO: NULL as req and cb?
+    return uv_fs_write(w->loop, NULL, w->fd, bufs, n, offset, NULL); //TODO: NULL as request and callback?
 #else
 #if defined(RWF_NOWAIT)
     struct iocb *iocbs = &req->iocb;

@@ -171,12 +171,12 @@ static int ServerInit(struct Server *s,
     memset(s, 0, sizeof *s);
 
     /* Seed the random generator */
-#if defined(__unix__)
-    timespec_get(&now, TIME_UTC);
-    srandom((unsigned)(now.tv_nsec ^ now.tv_sec));
-#else
+#if defined(_WIN32)
     /*mingw doesn't implement timespec_get*/
     srandom(5);
+#else
+    timespec_get(&now, TIME_UTC);
+    srandom((unsigned)(now.tv_nsec ^ now.tv_sec));
 #endif
 
     s->loop = loop;
