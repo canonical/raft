@@ -30,8 +30,10 @@ AS_IF([test "x$enable_uv" != "xno"],
       [
           AM_COND_IF([WINDOWS], 
           [
-              UV_LIBS= "-L$prefix/lib -lpthread -lws2_32 -lpsapi -liphlpapi -lshell32 -luserenv -luser32 -luv -lmswsock -ladvapi32",
-              UV_CFLAGS= "-I$prefix/include"
+              UV_LIBS="-L$prefix/lib -luv -lpthread -lws2_32 -lpsapi -liphlpapi -lshell32 -luserenv -luser32 -lmswsock -ladvapi32"
+              UV_CFLAGS="-I$prefix/include"
+              AC_SUBST(UV_LIBS)
+              AC_SUBST(UV_CFLAGS)
           ],
           [PKG_CHECK_MODULES(UV, [libuv >= 1.8.0], [have_uv=yes], [have_uv=no])])
         ],
