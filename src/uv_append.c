@@ -305,6 +305,7 @@ static int uvAppendMaybeStart(struct uv *uv)
     int rv;
 
     assert(!uv->closing);
+    assert(!QUEUE_IS_EMPTY(&uv->append_pending_reqs));
 
     /* If we are already writing, let's wait. */
     if (!QUEUE_IS_EMPTY(&uv->append_writing_reqs)) {
@@ -641,6 +642,7 @@ int UvAppend(struct raft_io *io,
     }
 
     assert(append->segment != NULL);
+    assert(!QUEUE_IS_EMPTY(&uv->append_pending_reqs));
 
     /* Try to write immediately. */
     rv = uvAppendMaybeStart(uv);
