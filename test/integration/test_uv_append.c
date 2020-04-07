@@ -288,6 +288,20 @@ TEST(append, secondBig, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
+/* Schedule multiple appends each one exceeding the segment size. */
+TEST(append, severalBig, setUp, tearDownDeps, 0, NULL)
+{
+    struct fixture *f = data;
+    APPEND_SUBMIT(0, 2, MAX_SEGMENT_BLOCKS * SEGMENT_BLOCK_SIZE);
+    APPEND_SUBMIT(1, 2, MAX_SEGMENT_BLOCKS * SEGMENT_BLOCK_SIZE);
+    APPEND_SUBMIT(2, 2, MAX_SEGMENT_BLOCKS * SEGMENT_BLOCK_SIZE);
+    APPEND_WAIT(0);
+    APPEND_WAIT(1);
+    APPEND_WAIT(2);
+    ASSERT_ENTRIES(6, 6 * MAX_SEGMENT_BLOCKS * SEGMENT_BLOCK_SIZE);
+    return MUNIT_OK;
+}
+
 /* Write the very first entry and then another one, both fitting in the same
  * block. */
 TEST(append, fitBlock, setUp, tearDownDeps, 0, NULL)

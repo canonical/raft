@@ -305,6 +305,7 @@ static int uvAppendMaybeStart(struct uv *uv)
     int rv;
 
     assert(!uv->closing);
+    assert(!QUEUE_IS_EMPTY(&uv->append_pending_reqs));
 
     /* If we are already writing, let's wait. */
     if (!QUEUE_IS_EMPTY(&uv->append_writing_reqs)) {
@@ -579,7 +580,7 @@ static int uvAppendEnqueueRequest(struct uv *uv, struct uvAppend *append)
     /* If we have no segments yet, it means this is the very first append, and
      * we need to add a new segment. Otherwise we check if the last segment has
      * enough room for this batch of entries. */
-    segment = uvGetCurrentAliveSegment(uv);
+    segment = uvGetLastAliveSegment(uv);
     if (segment == NULL || segment->finalize) {
         fits = false;
     } else {
@@ -641,6 +642,7 @@ int UvAppend(struct raft_io *io,
     }
 
     assert(append->segment != NULL);
+    assert(!QUEUE_IS_EMPTY(&uv->append_pending_reqs));
 
     /* Try to write immediately. */
     rv = uvAppendMaybeStart(uv);
