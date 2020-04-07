@@ -580,7 +580,7 @@ static int uvAppendEnqueueRequest(struct uv *uv, struct uvAppend *append)
     /* If we have no segments yet, it means this is the very first append, and
      * we need to add a new segment. Otherwise we check if the last segment has
      * enough room for this batch of entries. */
-    segment = uvGetCurrentAliveSegment(uv);
+    segment = uvGetLastAliveSegment(uv);
     if (segment == NULL || segment->finalize) {
         fits = false;
     } else {
