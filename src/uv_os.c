@@ -166,7 +166,7 @@ int UvOsEventfd(unsigned int initval, int flags)
     int rv;
     /* At the moment only UV_FS_O_NONBLOCK is supported */
     assert(flags == UV_FS_O_NONBLOCK);
-    flags = EFD_NONBLOCK;
+    flags = EFD_NONBLOCK|EFD_CLOEXEC;
     rv = eventfd(initval, flags);
     if (rv == -1) {
         return -errno;
