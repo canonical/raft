@@ -636,6 +636,40 @@ TEST(load, manySnapshots, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
+/* There are two snapshots, but the last one has an empty data file. The first
+ * one is loaded and the empty one is discarded.  */
+TEST(load, emptySnapshot, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    struct snapshot snapshot = {
+        1, /* term */
+        4, /* index */
+        1  /* data */
+    };
+    char filename[64];
+    uint64_t now;
+
+    SNAPSHOT_PUT(1, 4, 1);
+
+    /* Take a snapshot but then truncate the data file, as if the server ran out
+     * of space before it could write it. */
+    uv_update_time(&f->loop);
+    now = uv_now(&f->loop);
+    sprintf(filename, "snapshot-2-6-%ju", now);
+    SNAPSHOT_PUT(2, 6, 2);
+    test_dir_truncate_file(f->dir, filename, 0);
+
+    LOAD(0,         /* term */
+         0,         /* voted for */
+         &snapshot, /* snapshot */
+         5,        /* start index */
+         0,         /* data for first loaded entry */
+         0          /* n entries */
+    );
+
+    return MUNIT_OK;
+}
+
 /* The data directory has a closed segment with entries that are no longer
  * needed, since they are included in a snapshot. We still keep those segments
  * and just let the next snapshot logic delete them. */

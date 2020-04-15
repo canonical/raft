@@ -59,6 +59,7 @@ int UvSnapshotInfoAppendIfMatch(struct uv *uv,
     bool matched;
     char snapshot_filename[UV__FILENAME_LEN];
     bool exists;
+    bool is_empty;
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int rv;
 
@@ -69,9 +70,9 @@ int UvSnapshotInfoAppendIfMatch(struct uv *uv,
         return 0;
     }
 
-    /* Check if there's actually a snapshot file for this snapshot metadata. If
-     * there's none, it means that we aborted before finishing the snapshot, so
-     * let's remove the metadata file. */
+    /* Check if there's actually a valid snapshot file for this snapshot
+     * metadata. If there's none or it's empty, it means that we aborted before
+     * finishing the snapshot, so let's remove the metadata file. */
     uvSnapshotFilenameOf(&info, snapshot_filename);
     rv = UvFsFileExists(uv->dir, snapshot_filename, &exists, errmsg);
     if (rv != 0) {
@@ -81,6 +82,19 @@ int UvSnapshotInfoAppendIfMatch(struct uv *uv,
     }
     if (!exists) {
         UvFsRemoveFile(uv->dir, filename, errmsg); /* Ignore errors */
+        *appended = false;
+        return 0;
+    }
+    rv = UvFsFileIsEmpty(uv->dir, snapshot_filename, &is_empty, errmsg);
+    if (rv != 0) {
+        tracef("is_empty %s: %s", snapshot_filename, errmsg);
+        rv = RAFT_IOERR;
+        return rv;
+    }
+    if (is_empty) {
+        /* Ignore errors */
+        UvFsRemoveFile(uv->dir, filename, errmsg);
+        UvFsRemoveFile(uv->dir, snapshot_filename, errmsg);
         *appended = false;
         return 0;
     }

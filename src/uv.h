@@ -232,7 +232,7 @@ void uvSnapshotFilenameOf(struct uvSnapshotInfo *info, char *filename);
 
 /* Append a new item to the given snapshot info list if the given filename
  * matches the pattern of a snapshot metadata file (snapshot-xxx-yyy-zzz.meta)
- * and there is actually a matching snapshot file on disk. */
+ * and there is actually a matching non-empty snapshot file on disk. */
 int UvSnapshotInfoAppendIfMatch(struct uv *uv,
                                 const char *filename,
                                 struct uvSnapshotInfo *infos[],
