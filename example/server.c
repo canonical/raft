@@ -69,7 +69,7 @@ static int FsmRestore(struct raft_fsm *fsm, struct raft_buffer *buf)
 
 static int FsmInit(struct raft_fsm *fsm)
 {
-    struct Fsm *f = raft_malloc(sizeof *fsm);
+    struct Fsm *f = raft_malloc(sizeof *f);
     if (f == NULL) {
         return RAFT_NOMEM;
     }
