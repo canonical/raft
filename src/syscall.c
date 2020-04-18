@@ -1,8 +1,11 @@
 #include "syscall.h"
 
+#if HAVE_LINUX_AIO_ABI_H || HAVE_LINUX_IO_URING_H
 #include <sys/syscall.h>
 #include <unistd.h>
+#endif
 
+#if HAVE_LINUX_AIO_ABI_H
 int io_setup(unsigned nr_events, aio_context_t *ctx_idp)
 {
     return (int)syscall(__NR_io_setup, nr_events, ctx_idp);
@@ -26,6 +29,7 @@ int io_getevents(aio_context_t ctx_id,
 {
     return (int)syscall(__NR_io_getevents, ctx_id, min_nr, nr, events, timeout);
 }
+#endif
 
 #if HAVE_LINUX_IO_URING_H
 int io_uring_register(int fd,
