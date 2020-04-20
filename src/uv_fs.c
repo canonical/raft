@@ -607,7 +607,7 @@ static int probeDirectIO(int fd, size_t *size, char *errmsg)
         }
         memset(buf, 0, *size);
         rv = (int)write(fd, buf, *size);
-        raft_free(buf);
+        raft_aligned_free(*size, buf);
         if (rv > 0) {
             /* Since we fallocate'ed the file, we should never fail because of
              * lack of disk space, and all bytes should have been written. */
@@ -679,7 +679,7 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
     rv = UvOsIoSubmit(ctx, 1, &iocbs);
     if (rv != 0) {
         /* UNTESTED: in practice this should fail only with ENOMEM */
-        raft_free(buf);
+        raft_aligned_free(size, buf);
         UvOsIoDestroy(ctx);
         /* On ZFS 0.8 this is not properly supported yet. Also, when running on
          * older kernels a binary compiled on a kernel with RWF_NOWAIT support,
@@ -697,7 +697,7 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
     assert(n_events == 1);
 
     /* Release the write buffer. */
-    raft_free(buf);
+    raft_aligned_free(size, buf);
 
     /* Release the KAIO context handle. */
     rv = UvOsIoDestroy(ctx);
