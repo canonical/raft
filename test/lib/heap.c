@@ -8,12 +8,14 @@
 struct heap
 {
     int n;                   /* Number of outstanding allocations. */
+    size_t alignment;        /* Value of last aligned alloc */
     struct test_fault fault; /* Fault trigger. */
 };
 
 static void heapInit(struct heap *h)
 {
     h->n = 0;
+    h->alignment = 0;
     test_fault_init(&h->fault);
 }
 
@@ -83,7 +85,16 @@ static void *heapAlignedAlloc(void *data, size_t alignment, size_t size)
     p = aligned_alloc(alignment, size);
     munit_assert_ptr_not_null(p);
 
+    h->alignment = alignment;
+
     return p;
+}
+
+static void heapAlignedFree(void *data, size_t alignment, void *ptr)
+{
+    struct heap *h = data;
+    munit_assert_int(alignment, ==, h->alignment);
+    heapFree(data, ptr);
 }
 
 static int getIntParam(const MunitParameter params[], const char *name)
@@ -110,6 +121,7 @@ void test_heap_setup(const MunitParameter params[], struct raft_heap *h)
     h->calloc = heapCalloc;
     h->realloc = heapRealloc;
     h->aligned_alloc = heapAlignedAlloc;
+    h->aligned_free = heapAlignedFree;
 
     raft_heap_set(h);
     test_fault_pause(&heap->fault);
@@ -119,7 +131,7 @@ void test_heap_tear_down(struct raft_heap *h)
 {
     struct heap *heap = h->data;
     if (heap->n != 0) {
-      //munit_errorf("memory leak: %d outstanding allocations", heap->n);
+        // munit_errorf("memory leak: %d outstanding allocations", heap->n);
     }
     free(heap);
     raft_heap_set_default();
