@@ -1009,7 +1009,7 @@ int uvSegmentTruncate(struct uv *uv,
         goto out_after_buffer_init;
     }
 
-    uvSegmentBufferAppend(&buf, entries, m);
+    rv = uvSegmentBufferAppend(&buf, entries, m);
     if (rv != 0) {
         goto out_after_buffer_init;
     }
