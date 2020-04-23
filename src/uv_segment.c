@@ -497,6 +497,7 @@ static int uvLoadOpenSegment(struct uv *uv,
                  * segment. */
                 tracef("remove zeroed open segment %s", info->filename);
                 remove = true;
+                close(fd);
                 goto done;
             }
         }
@@ -589,7 +590,7 @@ done:
         if (rv != 0) {
             tracef("finalize %s: %s", info->filename, errmsg);
             rv = RAFT_IOERR;
-            goto err_after_open;
+            goto err;
         }
 
         info->is_open = false;
