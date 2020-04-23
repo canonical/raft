@@ -1488,6 +1488,9 @@ int replicationApply(struct raft *r)
                 applyChange(r, index);
                 rv = 0;
                 break;
+            default:
+                rv = 0; /* For coverity. This case can't be taken. */
+                break;
         }
 
         if (rv != 0) {
