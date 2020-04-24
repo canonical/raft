@@ -41,12 +41,12 @@
 void errMsgWrap(char *e, const char *format);
 
 /* Transfer an error message from an object to another, wrapping it. */
-#define ErrMsgTransfer(ERRMSG1, ERRMSG2, FORMAT)     \
-    strncpy(ERRMSG2, ERRMSG1, RAFT_ERRMSG_BUF_SIZE); \
+#define ErrMsgTransfer(ERRMSG1, ERRMSG2, FORMAT)    \
+    memcpy(ERRMSG2, ERRMSG1, RAFT_ERRMSG_BUF_SIZE); \
     ErrMsgWrapf(ERRMSG2, FORMAT)
 
 #define ErrMsgTransferf(ERRMSG1, ERRMSG2, FORMAT, ...) \
-    strncpy(ERRMSG2, ERRMSG1, RAFT_ERRMSG_BUF_SIZE);   \
+    memcpy(ERRMSG2, ERRMSG1, RAFT_ERRMSG_BUF_SIZE);    \
     ErrMsgWrapf(ERRMSG2, FORMAT, __VA_ARGS__)
 
 /* Use the static error message for the error with the given code. */

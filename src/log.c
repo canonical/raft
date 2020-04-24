@@ -267,11 +267,14 @@ static void refsIncr(struct raft_log *l,
 
     /* Lookup the slot associated with the given term/index, which must have
      * been previously inserted. */
-    for (slot = &l->refs[key]; slot != NULL; slot = slot->next) {
+    slot = &l->refs[key];
+    while (1) {
+        assert(slot != NULL);
         assert(slot->index == index);
         if (slot->term == term) {
             break;
         }
+        slot = slot->next;
     }
     assert(slot != NULL);
 
@@ -297,14 +300,16 @@ static bool refsDecr(struct raft_log *l,
 
     /* Lookup the slot associated with the given term/index, keeping track of
      * its previous slot in the bucket list. */
-    for (slot = &l->refs[key]; slot != NULL; slot = slot->next) {
+    slot = &l->refs[key];
+    while (1) {
+        assert(slot != NULL);
         assert(slot->index == index);
         if (slot->term == term) {
             break;
         }
         prev_slot = slot;
+        slot = slot->next;
     }
-    assert(slot != NULL);
 
     slot->count--;
 
