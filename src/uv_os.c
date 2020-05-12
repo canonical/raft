@@ -37,6 +37,36 @@ int UvOsClose(uv_file fd)
     return uv_fs_close(NULL, &req, fd, NULL);
 }
 
+/* Emulate fallocate(). Mostly taken from glibc's implementation. */
+static int uvOsFallocateEmulation(int fd, off_t offset, off_t len)
+{
+    unsigned increment;
+    struct statfs f;
+    int rv;
+
+    rv = fstatfs(fd, &f);
+    if (rv != 0) {
+        return errno;
+    }
+
+    if (f.f_bsize == 0) {
+        increment = 512;
+    } else if (f.f_bsize < 4096) {
+        increment = f.f_bsize;
+    } else {
+        increment = 4096;
+    }
+
+    for (offset += (len - 1) % increment; len > 0; offset += increment) {
+        len -= increment;
+        rv = pwrite(fd, "", 1, offset);
+        if (rv != 1)
+            return errno;
+    }
+
+    return 0;
+}
+
 int UvOsFallocate(uv_file fd, off_t offset, off_t len)
 {
     int rv;
@@ -47,7 +77,16 @@ int UvOsFallocate(uv_file fd, off_t offset, off_t len)
          *   posix_fallocate() returns zero on success, or an error number on
          *   failure.  Note that errno is not set.
          */
-        return -rv;
+        if (rv != EOPNOTSUPP) {
+            return -rv;
+        }
+        /* This might be a libc implementation (e.g. musl) that doesn't
+         * implement a transparent fallback if fallocate() is not supported
+         * by the underlying file system. */
+        rv = uvOsFallocateEmulation(fd, offset, len);
+        if (rv != 0) {
+            return -EOPNOTSUPP;
+        }
     }
     return 0;
 }
@@ -64,7 +103,8 @@ int UvOsFsync(uv_file fd)
     return uv_fs_fsync(NULL, &req, fd, NULL);
 }
 
-int UvOsFdatasync(uv_file fd) {
+int UvOsFdatasync(uv_file fd)
+{
     struct uv_fs_s req;
     return uv_fs_fdatasync(NULL, &req, fd, NULL);
 }
@@ -166,7 +206,7 @@ int UvOsEventfd(unsigned int initval, int flags)
     int rv;
     /* At the moment only UV_FS_O_NONBLOCK is supported */
     assert(flags == UV_FS_O_NONBLOCK);
-    flags = EFD_NONBLOCK|EFD_CLOEXEC;
+    flags = EFD_NONBLOCK | EFD_CLOEXEC;
     rv = eventfd(initval, flags);
     if (rv == -1) {
         return -errno;
