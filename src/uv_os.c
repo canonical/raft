@@ -40,7 +40,7 @@ int UvOsClose(uv_file fd)
 /* Emulate fallocate(). Mostly taken from glibc's implementation. */
 static int uvOsFallocateEmulation(int fd, off_t offset, off_t len)
 {
-    unsigned increment;
+    ssize_t increment;
     struct statfs f;
     int rv;
 
@@ -59,7 +59,7 @@ static int uvOsFallocateEmulation(int fd, off_t offset, off_t len)
 
     for (offset += (len - 1) % increment; len > 0; offset += increment) {
         len -= increment;
-        rv = pwrite(fd, "", 1, offset);
+        rv = (int)pwrite(fd, "", 1, offset);
         if (rv != 1)
             return errno;
     }
