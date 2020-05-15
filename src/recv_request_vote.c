@@ -26,6 +26,7 @@ int recvRequestVote(struct raft *r,
     struct raft_io_send *req;
     struct raft_message message;
     struct raft_request_vote_result *result = &message.request_vote_result;
+    bool has_leader;
     int match;
     int rv;
 
@@ -47,15 +48,17 @@ int recvRequestVote(struct raft *r,
      * From Section 4.2.3:
      *
      *   This change conflicts with the leadership transfer mechanism as
-     *   described in Chapter 3, in whicha server legitimately starts an
+     *   described in Chapter 3, in which a server legitimately starts an
      *   election without waiting an election timeout. In that case, RequestVote
      *   messages should be processed by other servers even when they believe a
-     *   current cluster leader exists.Those RequestVote requests can include a
+     *   current cluster leader exists. Those RequestVote requests can include a
      *   special flag to indicate this behavior ("I have permission to disrupt
      *   the leader - it told me to!").
      */
-    if (r->state == RAFT_FOLLOWER && r->follower_state.current_leader.id != 0 &&
-        !args->disrupt_leader) {
+    has_leader =
+        r->state == RAFT_LEADER ||
+        (r->state == RAFT_FOLLOWER && r->follower_state.current_leader.id != 0);
+    if (has_leader && !args->disrupt_leader) {
         tracef("local server has a leader -> reject ");
         goto reply;
     }
