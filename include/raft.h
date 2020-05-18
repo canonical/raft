@@ -687,6 +687,10 @@ struct raft
      * error occurred.
      */
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
+
+    /* Whether to use pre-vote to avoid disconnected servers disrupting the
+     * current leader, as described in 4.2.3 and 9.6. */
+    bool pre_vote;
 };
 
 RAFT_API int raft_init(struct raft *r,
@@ -760,6 +764,11 @@ RAFT_API void raft_set_heartbeat_timeout(struct raft *r, unsigned msecs);
  * is 1024.
  */
 RAFT_API void raft_set_snapshot_threshold(struct raft *r, unsigned n);
+
+/**
+ * Enable or disable pre-vote support. Pre-vote is turned off by default.
+ */
+RAFT_API void raft_set_pre_vote(struct raft *r, bool enabled);
 
 /**
  * Number of outstanding log entries to keep in the log after a snapshot has
