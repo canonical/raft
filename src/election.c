@@ -66,12 +66,20 @@ static int electionSend(struct raft *r,
 {
     struct raft_message message;
     struct raft_io_send *send;
+    raft_term term;
     int rv;
     assert(server->id != r->id);
     assert(server->id != 0);
 
+    /* If we are in the pre-vote phase, we indicate our future term in the
+     * request. */
+    term = r->current_term;
+    if (r->candidate_state.in_pre_vote) {
+        term++;
+    }
+
     message.type = RAFT_IO_REQUEST_VOTE;
-    message.request_vote.term = r->current_term;
+    message.request_vote.term = term;
     message.request_vote.candidate_id = r->id;
     message.request_vote.last_log_index = logLastIndex(&r->log);
     message.request_vote.last_log_term = logLastTerm(&r->log);
