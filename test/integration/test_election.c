@@ -575,3 +575,44 @@ TEST(election, ioErrorPersistVote, setUp, tearDown, 0, NULL)
 
     return MUNIT_OK;
 }
+
+/* Test an election round with two voters and pre-vote. */
+TEST(election, preVote, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    raft_set_pre_vote(CLUSTER_RAFT(0), true);
+    raft_set_pre_vote(CLUSTER_RAFT(1), true);
+    CLUSTER_START;
+
+    /* The first server eventually times out and converts to candidate, but it
+     * does not increment its term yet.*/
+    STEP_UNTIL_CANDIDATE(0);
+    ASSERT_TIME(1000);
+    ASSERT_TERM(0, 1);
+
+    CLUSTER_STEP; /* Server 1 tick */
+    ASSERT_FOLLOWER(1);
+
+    CLUSTER_STEP; /* Server 0 completes sending a pre-vote RequestVote RPC */
+    CLUSTER_STEP; /* Server 1 receives the pre-vote RequestVote RPC */
+    ASSERT_TERM(1, 1); /* Server 1 does increment its term */
+    ASSERT_VOTED_FOR(1, 0); /* Server 1 does not persist its vote */
+    ASSERT_TIME(1015);
+
+    CLUSTER_STEP; /* Server 1 completes sending pre-vote RequestVote result */
+    CLUSTER_STEP; /* Server 0 receives the pre-vote RequestVote result */
+    ASSERT_CANDIDATE(0);
+    ASSERT_TERM(0, 2); /* Server 0 has now incremented its term. */
+    ASSERT_TIME(1030);
+
+    CLUSTER_STEP; /* Server 1 completes sending an actual RequestVote RPC */
+    CLUSTER_STEP; /* Server 1 receives the actual RequestVote RPC */
+    ASSERT_TERM(1, 2); /* Server 1 does increment its term. */
+    ASSERT_VOTED_FOR(1, 1); /* Server 1 does persists its vote */
+
+    CLUSTER_STEP; /* Server 1 completes sending actual RequestVote result */
+    CLUSTER_STEP; /* Server 0 receives the actual RequestVote result */
+    ASSERT_LEADER(0);
+
+    return MUNIT_OK;
+}
