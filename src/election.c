@@ -249,16 +249,18 @@ int electionVote(struct raft *r,
     return 0;
 
 grant_vote:
-    rv = r->io->set_vote(r->io, args->candidate_id);
-    if (rv != 0) {
-        return rv;
+    if (!args->pre_vote) {
+        rv = r->io->set_vote(r->io, args->candidate_id);
+        if (rv != 0) {
+            return rv;
+        }
+        r->voted_for = args->candidate_id;
+
+        /* Reset the election timer. */
+        r->election_timer_start = r->io->time(r->io);
     }
 
     *granted = true;
-    r->voted_for = args->candidate_id;
-
-    /* Reset the election timer. */
-    r->election_timer_start = r->io->time(r->io);
 
     return 0;
 }
