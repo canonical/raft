@@ -63,7 +63,7 @@ int recvRequestVote(struct raft *r,
         goto reply;
     }
 
-    /* If this is a pre-vote request, don't actually increment out term or
+    /* If this is a pre-vote request, don't actually increment our term or
      * persist the vote. */
     if (args->pre_vote) {
         recvCheckMatchingTerms(r, args->term, &match);
