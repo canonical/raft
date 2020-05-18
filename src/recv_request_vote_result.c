@@ -76,13 +76,22 @@ int recvRequestVoteResult(struct raft *r,
      */
     if (result->vote_granted) {
         if (electionTally(r, votes_index)) {
-            tracef("votes quorum reached -> convert to leader");
-            rv = convertToLeader(r);
-            if (rv != 0) {
-                return rv;
+            if (r->candidate_state.in_pre_vote) {
+                tracef("votes quorum reached -> pre-vote successful");
+                r->candidate_state.in_pre_vote = false;
+                rv = electionStart(r, false);
+                if (rv != 0) {
+                    return rv;
+                }
+            } else {
+                tracef("votes quorum reached -> convert to leader");
+                rv = convertToLeader(r);
+                if (rv != 0) {
+                    return rv;
+                }
+                /* Send initial heartbeat. */
+                replicationHeartbeat(r);
             }
-            /* Send initial heartbeat. */
-            replicationHeartbeat(r);
         } else {
             tracef("votes quorum not reached");
         }
