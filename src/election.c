@@ -167,7 +167,7 @@ int electionStart(struct raft *r, bool disrupt_leader)
         rv = electionSend(r, server, disrupt_leader);
         if (rv != 0) {
             /* This is not a critical failure, let's just log it. */
-            tracef("failed to send vote request to server %u: %s", server->id,
+            tracef("failed to send vote request to server %llu: %s", server->id,
                    raft_strerror(rv));
         }
     }
