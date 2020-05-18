@@ -641,6 +641,7 @@ struct raft
         {
             unsigned randomized_election_timeout; /* Timer expiration. */
             bool *votes;                          /* Vote results. */
+            bool in_pre_vote;                     /* True in pre-vote phase. */
         } candidate_state;
         struct
         {
