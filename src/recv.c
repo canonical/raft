@@ -133,6 +133,16 @@ static int bumpCurrentTerm(struct raft *r, raft_term term)
     return 0;
 }
 
+void recvCheckMatchingTerms(struct raft *r, raft_term term, int *match) {
+    if (term < r->current_term) {
+        *match = -1;
+    } else if (term > r->current_term) {
+        *match = 1;
+    } else {
+        *match = 0;
+    }
+}
+
 int recvEnsureMatchingTerms(struct raft *r, raft_term term, int *match)
 {
     int rv;
@@ -140,8 +150,9 @@ int recvEnsureMatchingTerms(struct raft *r, raft_term term, int *match)
     assert(r != NULL);
     assert(match != NULL);
 
-    if (term < r->current_term) {
-        *match = -1;
+    recvCheckMatchingTerms(r, term, match);
+
+    if (*match == -1) {
         return 0;
     }
 
@@ -159,7 +170,7 @@ int recvEnsureMatchingTerms(struct raft *r, raft_term term, int *match)
      *   If a candidate or leader discovers that its term is out of date, it
      *   immediately reverts to follower state.
      */
-    if (term > r->current_term) {
+    if (*match == 1) {
         char msg[128];
         sprintf(msg, "remote term %lld is higher than %lld -> bump local term",
                 term, r->current_term);
@@ -175,9 +186,6 @@ int recvEnsureMatchingTerms(struct raft *r, raft_term term, int *match)
             /* Also convert to follower. */
             convertToFollower(r);
         }
-        *match = 1;
-    } else {
-        *match = 0;
     }
 
     return 0;
