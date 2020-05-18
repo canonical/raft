@@ -41,6 +41,7 @@ It also includes a few optional enhancements:
 - Writing to leader's disk in parallel
 - Automatic stepping down when the leader loses quorum
 - Leadership transfer extension
+- Pre-vote protocol
 
 Building
 --------
