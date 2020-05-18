@@ -234,6 +234,7 @@ static int ServerInit(struct Server *s,
 
     raft_set_snapshot_threshold(&s->raft, 64);
     raft_set_snapshot_trailing(&s->raft, 16);
+    raft_set_pre_vote(&s->raft, true);
 
     s->transfer.data = s;
 
