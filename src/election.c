@@ -118,22 +118,25 @@ int electionStart(struct raft *r, bool disrupt_leader)
     assert(n_voters <= r->configuration.n);
     assert(voting_index < n_voters);
 
-    /* Increment current term */
-    term = r->current_term + 1;
-    rv = r->io->set_term(r->io, term);
-    if (rv != 0) {
-        goto err;
-    }
+    /* During pre-vote we don't actually increment term or persist vote. */
+    if (!r->candidate_state.in_pre_vote) {
+        /* Increment current term */
+        term = r->current_term + 1;
+        rv = r->io->set_term(r->io, term);
+        if (rv != 0) {
+            goto err;
+        }
 
-    /* Vote for self */
-    rv = r->io->set_vote(r->io, r->id);
-    if (rv != 0) {
-        goto err;
-    }
+        /* Vote for self */
+        rv = r->io->set_vote(r->io, r->id);
+        if (rv != 0) {
+            goto err;
+        }
 
-    /* Update our cache too. */
-    r->current_term = term;
-    r->voted_for = r->id;
+        /* Update our cache too. */
+        r->current_term = term;
+        r->voted_for = r->id;
+    }
 
     /* Reset election timer. */
     electionResetTimer(r);
