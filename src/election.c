@@ -61,8 +61,7 @@ static void sendRequestVoteCb(struct raft_io_send *send, int status)
 
 /* Send a RequestVote RPC to the given server. */
 static int electionSend(struct raft *r,
-                        const struct raft_server *server,
-                        bool disrupt_leader)
+                        const struct raft_server *server)
 {
     struct raft_message message;
     struct raft_io_send *send;
@@ -83,7 +82,7 @@ static int electionSend(struct raft *r,
     message.request_vote.candidate_id = r->id;
     message.request_vote.last_log_index = logLastIndex(&r->log);
     message.request_vote.last_log_term = logLastTerm(&r->log);
-    message.request_vote.disrupt_leader = disrupt_leader;
+    message.request_vote.disrupt_leader = r->candidate_state.disrupt_leader;
     message.request_vote.pre_vote = r->candidate_state.in_pre_vote;
     message.server_id = server->id;
     message.server_address = server->address;
@@ -104,7 +103,7 @@ static int electionSend(struct raft *r,
     return 0;
 }
 
-int electionStart(struct raft *r, bool disrupt_leader)
+int electionStart(struct raft *r)
 {
     raft_term term;
     size_t n_voters;
@@ -164,7 +163,7 @@ int electionStart(struct raft *r, bool disrupt_leader)
         if (server->id == r->id || server->role != RAFT_VOTER) {
             continue;
         }
-        rv = electionSend(r, server, disrupt_leader);
+        rv = electionSend(r, server);
         if (rv != 0) {
             /* This is not a critical failure, let's just log it. */
             tracef("failed to send vote request to server %llu: %s", server->id,
