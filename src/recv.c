@@ -111,14 +111,20 @@ void recvCb(struct raft_io *io, struct raft_message *message)
     }
 }
 
-/* Bump the current term to the given value and reset our vote, persiting the
- * change to disk. */
-static int bumpCurrentTerm(struct raft *r, raft_term term)
+int recvBumpCurrentTerm(struct raft *r, raft_term term)
 {
     int rv;
+    char msg[128];
 
     assert(r != NULL);
-    assert(term >= r->current_term);
+    assert(term > r->current_term);
+
+    sprintf(msg, "remote term %lld is higher than %lld -> bump local term",
+            term, r->current_term);
+    if (r->state != RAFT_FOLLOWER) {
+        strcat(msg, " and step down");
+    }
+    tracef("%s", msg);
 
     /* Save the new term to persistent store, resetting the vote. */
     rv = r->io->set_term(r->io, term);
@@ -130,10 +136,16 @@ static int bumpCurrentTerm(struct raft *r, raft_term term)
     r->current_term = term;
     r->voted_for = 0;
 
+    if (r->state != RAFT_FOLLOWER) {
+        /* Also convert to follower. */
+        convertToFollower(r);
+    }
+
     return 0;
 }
 
-void recvCheckMatchingTerms(struct raft *r, raft_term term, int *match) {
+void recvCheckMatchingTerms(struct raft *r, raft_term term, int *match)
+{
     if (term < r->current_term) {
         *match = -1;
     } else if (term > r->current_term) {
@@ -171,20 +183,9 @@ int recvEnsureMatchingTerms(struct raft *r, raft_term term, int *match)
      *   immediately reverts to follower state.
      */
     if (*match == 1) {
-        char msg[128];
-        sprintf(msg, "remote term %lld is higher than %lld -> bump local term",
-                term, r->current_term);
-        if (r->state != RAFT_FOLLOWER) {
-            strcat(msg, " and step down");
-        }
-        tracef("%s", msg);
-        rv = bumpCurrentTerm(r, term);
+        rv = recvBumpCurrentTerm(r, term);
         if (rv != 0) {
             return rv;
-        }
-        if (r->state != RAFT_FOLLOWER) {
-            /* Also convert to follower. */
-            convertToFollower(r);
         }
     }
 
