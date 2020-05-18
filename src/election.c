@@ -76,6 +76,7 @@ static int electionSend(struct raft *r,
     message.request_vote.last_log_index = logLastIndex(&r->log);
     message.request_vote.last_log_term = logLastTerm(&r->log);
     message.request_vote.disrupt_leader = disrupt_leader;
+    message.request_vote.pre_vote = false;
     message.server_id = server->id;
     message.server_address = server->address;
 

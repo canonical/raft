@@ -244,6 +244,7 @@ struct raft_request_vote
     raft_index last_log_index; /* Index of candidate's last log entry. */
     raft_index last_log_term;  /* Term of log entry at last_log_index. */
     bool disrupt_leader;       /* True if current leader should be discarded. */
+    bool pre_vote;             /* True if this is a pre-vote request. */
 };
 
 /**
