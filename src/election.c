@@ -61,21 +61,29 @@ static void sendRequestVoteCb(struct raft_io_send *send, int status)
 
 /* Send a RequestVote RPC to the given server. */
 static int electionSend(struct raft *r,
-                        const struct raft_server *server,
-                        bool disrupt_leader)
+                        const struct raft_server *server)
 {
     struct raft_message message;
     struct raft_io_send *send;
+    raft_term term;
     int rv;
     assert(server->id != r->id);
     assert(server->id != 0);
 
+    /* If we are in the pre-vote phase, we indicate our future term in the
+     * request. */
+    term = r->current_term;
+    if (r->candidate_state.in_pre_vote) {
+        term++;
+    }
+
     message.type = RAFT_IO_REQUEST_VOTE;
-    message.request_vote.term = r->current_term;
+    message.request_vote.term = term;
     message.request_vote.candidate_id = r->id;
     message.request_vote.last_log_index = logLastIndex(&r->log);
     message.request_vote.last_log_term = logLastTerm(&r->log);
-    message.request_vote.disrupt_leader = disrupt_leader;
+    message.request_vote.disrupt_leader = r->candidate_state.disrupt_leader;
+    message.request_vote.pre_vote = r->candidate_state.in_pre_vote;
     message.server_id = server->id;
     message.server_address = server->address;
 
@@ -95,7 +103,7 @@ static int electionSend(struct raft *r,
     return 0;
 }
 
-int electionStart(struct raft *r, bool disrupt_leader)
+int electionStart(struct raft *r)
 {
     raft_term term;
     size_t n_voters;
@@ -117,22 +125,25 @@ int electionStart(struct raft *r, bool disrupt_leader)
     assert(n_voters <= r->configuration.n);
     assert(voting_index < n_voters);
 
-    /* Increment current term */
-    term = r->current_term + 1;
-    rv = r->io->set_term(r->io, term);
-    if (rv != 0) {
-        goto err;
-    }
+    /* During pre-vote we don't actually increment term or persist vote. */
+    if (!r->candidate_state.in_pre_vote) {
+        /* Increment current term */
+        term = r->current_term + 1;
+        rv = r->io->set_term(r->io, term);
+        if (rv != 0) {
+            goto err;
+        }
 
-    /* Vote for self */
-    rv = r->io->set_vote(r->io, r->id);
-    if (rv != 0) {
-        goto err;
-    }
+        /* Vote for self */
+        rv = r->io->set_vote(r->io, r->id);
+        if (rv != 0) {
+            goto err;
+        }
 
-    /* Update our cache too. */
-    r->current_term = term;
-    r->voted_for = r->id;
+        /* Update our cache too. */
+        r->current_term = term;
+        r->voted_for = r->id;
+    }
 
     /* Reset election timer. */
     electionResetTimer(r);
@@ -152,10 +163,10 @@ int electionStart(struct raft *r, bool disrupt_leader)
         if (server->id == r->id || server->role != RAFT_VOTER) {
             continue;
         }
-        rv = electionSend(r, server, disrupt_leader);
+        rv = electionSend(r, server);
         if (rv != 0) {
             /* This is not a critical failure, let's just log it. */
-            tracef("failed to send vote request to server %u: %s", server->id,
+            tracef("failed to send vote request to server %llu: %s", server->id,
                    raft_strerror(rv));
         }
     }
@@ -237,16 +248,18 @@ int electionVote(struct raft *r,
     return 0;
 
 grant_vote:
-    rv = r->io->set_vote(r->io, args->candidate_id);
-    if (rv != 0) {
-        return rv;
+    if (!args->pre_vote) {
+        rv = r->io->set_vote(r->io, args->candidate_id);
+        if (rv != 0) {
+            return rv;
+        }
+        r->voted_for = args->candidate_id;
+
+        /* Reset the election timer. */
+        r->election_timer_start = r->io->time(r->io);
     }
 
     *granted = true;
-    r->voted_for = args->candidate_id;
-
-    /* Reset the election timer. */
-    r->election_timer_start = r->io->time(r->io);
 
     return 0;
 }

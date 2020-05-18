@@ -80,12 +80,20 @@ size_t uvSizeofBatchHeader(size_t n)
 static void encodeRequestVote(const struct raft_request_vote *p, void *buf)
 {
     void *cursor = buf;
+    uint64_t flags = 0;
+
+    if (p->disrupt_leader) {
+        flags |= 1 << 0;
+    }
+    if (p->pre_vote) {
+        flags |= 1 << 1;
+    }
 
     bytePut64(&cursor, p->term);
     bytePut64(&cursor, p->candidate_id);
     bytePut64(&cursor, p->last_log_index);
     bytePut64(&cursor, p->last_log_term);
-    bytePut64(&cursor, p->disrupt_leader ? 1 : 0);
+    bytePut64(&cursor, flags);
 }
 
 static void encodeRequestVoteResult(const struct raft_request_vote_result *p,
@@ -148,7 +156,6 @@ static void encodeTimeoutNow(const struct raft_timeout_now *p, void *buf)
     bytePut64(&cursor, p->last_log_index);
     bytePut64(&cursor, p->last_log_term);
 }
-
 
 int uvEncodeMessage(const struct raft_message *message,
                     uv_buf_t **bufs,
@@ -299,8 +306,11 @@ static void decodeRequestVote(const uv_buf_t *buf, struct raft_request_vote *p)
     /* Support for legacy request vote that doesn't have disrupt_leader. */
     if (buf->len == sizeofRequestVoteV1()) {
         p->disrupt_leader = false;
+        p->pre_vote = false;
     } else {
-        p->disrupt_leader = byteGet64(&cursor) == 1;
+        uint64_t flags = byteGet64(&cursor);
+        p->disrupt_leader = (bool)(flags & 1 << 0);
+        p->pre_vote = (bool)(flags & 1 << 1);
     }
 }
 

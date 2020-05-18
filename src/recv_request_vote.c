@@ -63,9 +63,15 @@ int recvRequestVote(struct raft *r,
         goto reply;
     }
 
-    rv = recvEnsureMatchingTerms(r, args->term, &match);
-    if (rv != 0) {
-        return rv;
+    /* If this is a pre-vote request, don't actually increment our term or
+     * persist the vote. */
+    if (args->pre_vote) {
+        recvCheckMatchingTerms(r, args->term, &match);
+    } else {
+        rv = recvEnsureMatchingTerms(r, args->term, &match);
+        if (rv != 0) {
+            return rv;
+        }
     }
 
     /* From Figure 3.1:
@@ -79,9 +85,12 @@ int recvRequestVote(struct raft *r,
         goto reply;
     }
 
-    /* At this point our term must be the same as the request term (otherwise we
-     * would have rejected the request or bumped our term). */
-    assert(r->current_term == args->term);
+    /* Unless this is a pre-vote request, at this point our term must be the
+     * same as the request term (otherwise we would have rejected the request or
+     * bumped our term). */
+    if (!args->pre_vote) {
+        assert(r->current_term == args->term);
+    }
 
     rv = electionVote(r, args, &result->vote_granted);
     if (rv != 0) {

@@ -9,6 +9,17 @@
  * receiving an RPC message. */
 void recvCb(struct raft_io *io, struct raft_message *message);
 
+/* Compare a request's term with the server's current term.
+ *
+ * The match output parameter will be set to 0 if the local term matches the
+ * request's term, to -1 if the request's term is lower, and to 1 if the
+ * request's term is higher. */
+void recvCheckMatchingTerms(struct raft *r, raft_term term, int *match);
+
+/* Bump the current term and possibly step down from candidate or leader
+ * state. */
+int recvBumpCurrentTerm(struct raft *r, raft_term term);
+
 /* Common logic for RPC handlers, comparing the request's term with the server's
  * current term and possibly deciding to reject the request or step down from
  * candidate or leader.

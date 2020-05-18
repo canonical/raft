@@ -57,6 +57,7 @@ int raft_init(struct raft *r,
     r->snapshot.put.data = NULL;
     r->close_cb = NULL;
     memset(r->errmsg, 0, sizeof r->errmsg);
+    r->pre_vote = false;
     rv = r->io->init(r->io, r->id, r->address);
     if (rv != 0) {
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
@@ -110,6 +111,11 @@ void raft_set_snapshot_threshold(struct raft *r, unsigned n)
 void raft_set_snapshot_trailing(struct raft *r, unsigned n)
 {
     r->snapshot.trailing = n;
+}
+
+void raft_set_pre_vote(struct raft *r, bool enabled)
+{
+    r->pre_vote = enabled;
 }
 
 const char *raft_errmsg(struct raft *r)

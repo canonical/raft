@@ -55,10 +55,8 @@ bool electionTimerExpired(struct raft *r);
  *   transitions to candidate state.  It then votes for itself and issues
  *   RequestVote RPCs in parallel to each of the other servers in the
  *   cluster.
- *
- * If the disrupt_leader flag is true, the server will set the disrupt leader
- * flag of the RequestVote messages it sends. */
-int electionStart(struct raft *r, bool disrupt_leader);
+ */
+int electionStart(struct raft *r);
 
 /* Decide whether our vote should be granted to the requesting server and update
  * our state accordingly.
