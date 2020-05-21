@@ -60,8 +60,7 @@ static void sendRequestVoteCb(struct raft_io_send *send, int status)
 }
 
 /* Send a RequestVote RPC to the given server. */
-static int electionSend(struct raft *r,
-                        const struct raft_server *server)
+static int electionSend(struct raft *r, const struct raft_server *server)
 {
     struct raft_message message;
     struct raft_io_send *send;
@@ -185,6 +184,7 @@ int electionVote(struct raft *r,
     const struct raft_server *local_server;
     raft_index local_last_index;
     raft_term local_last_term;
+    bool is_transferee; /* Requester is the target of a leadership transfer */
     int rv;
 
     assert(r != NULL);
@@ -200,7 +200,10 @@ int electionVote(struct raft *r,
         return 0;
     }
 
-    if (r->voted_for != 0 && r->voted_for != args->candidate_id) {
+    is_transferee =
+        r->transfer != NULL && r->transfer->id == args->candidate_id;
+    if (r->voted_for != 0 && r->voted_for != args->candidate_id &&
+        !is_transferee) {
         tracef("local server already voted -> not granting vote");
         return 0;
     }
