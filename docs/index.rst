@@ -130,3 +130,4 @@ toc
    self
    getting-started
    api
+   disk-format
