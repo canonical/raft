@@ -616,3 +616,104 @@ TEST(election, preVote, setUp, tearDown, 0, NULL)
 
     return MUNIT_OK;
 }
+
+/* A candidate receives votes then crashes. */
+TEST(election, preVoteWithcandidateCrash, setUp, tearDown, 0, cluster_3_params)
+{
+    struct fixture *f = data;
+    raft_set_pre_vote(CLUSTER_RAFT(0), true);
+    raft_set_pre_vote(CLUSTER_RAFT(1), true);
+    raft_set_pre_vote(CLUSTER_RAFT(2), true);
+    CLUSTER_START;
+
+    /* The first server eventually times out and converts to candidate, but it
+     * does not increment its term yet.*/
+    STEP_UNTIL_CANDIDATE(0);
+    ASSERT_TIME(1000);
+    ASSERT_TERM(0, 1);
+
+     /* Server 1 and 2 ticks */
+    CLUSTER_STEP_N(2);
+    ASSERT_FOLLOWER(1);
+    ASSERT_FOLLOWER(2);
+
+     /* Server 0 completes sending a pre-vote RequestVote RPCs */
+    CLUSTER_STEP_N(2);
+
+    CLUSTER_STEP; /* Server 1 receives the pre-vote RequestVote RPC */
+    ASSERT_TERM(1, 1); /* Server 1 does not increment its term */
+    ASSERT_VOTED_FOR(1, 0); /* Server 1 does not persist its vote */
+    ASSERT_TIME(1015);
+
+    CLUSTER_STEP; /* Server 2 receives the pre-vote RequestVote RPC */
+    ASSERT_TERM(2, 1); /* Server 2 does not increment its term */
+    ASSERT_VOTED_FOR(2, 0); /* Server 1 does not persist its vote */
+    ASSERT_TIME(1015);
+
+     /* Server 1 and 2 complete sending pre-vote RequestVote results */
+    CLUSTER_STEP_N(2);
+
+    /* Server 0 receives the pre-vote RequestVote results */
+    CLUSTER_STEP_N(2);
+    ASSERT_CANDIDATE(0);
+    ASSERT_TERM(0, 2); /* Server 0 has now incremented its term. */
+    ASSERT_TIME(1030);
+
+     /* Server 1 completes sending actual RequestVote RPCs */
+    CLUSTER_STEP_N(2);
+
+    CLUSTER_STEP; /* Server 1 receives the actual RequestVote RPC */
+    ASSERT_TERM(1, 2); /* Server 1 does increment its term. */
+    ASSERT_VOTED_FOR(1, 1); /* Server 1 does persists its vote */
+
+    CLUSTER_STEP; /* Server 2 receives the actual RequestVote RPC */
+    ASSERT_TERM(2, 2); /* Server 2 does increment its term. */
+    ASSERT_VOTED_FOR(2, 1); /* Server 2 does persists its vote */
+
+    /* Server 0 crashes. */
+    CLUSTER_KILL(0);
+
+    /* Server 1 times out and starts an election. It doesn't increment its term
+     * yet but it reset its vote since it's beginning the pre-vote phase. */
+    STEP_UNTIL_CANDIDATE(1);
+    ASSERT_TIME(2200);
+    ASSERT_TERM(1, 2);
+    ASSERT_VOTED_FOR(1, 0);
+
+    /* Since server 2 has already voted for server 0, it doesn't grant its vote
+     * and eventually times out and becomes candidate, resetting its vote as
+     * well. */
+    STEP_UNTIL_CANDIDATE(2);
+    ASSERT_TIME(2300);
+    ASSERT_TERM(2, 2);
+    ASSERT_VOTED_FOR(2, 0);
+
+    /* Server 2 completes sending the pre-vote RequestVote RPCs */
+    CLUSTER_STEP_N(2);
+
+    CLUSTER_STEP; /* Server 1 receives the pre-vote RequestVote RPC */
+    ASSERT_TERM(1, 2); /* Server 1 does not increment its term */
+    ASSERT_VOTED_FOR(1, 0); /* Server 1 does not persist its vote */
+
+     /* Server 1 completes sending pre-vote RequestVote results */
+    CLUSTER_STEP_N(2);
+
+    /* Server 2 receives the pre-vote RequestVote results */
+    CLUSTER_STEP;
+    ASSERT_CANDIDATE(2);
+    ASSERT_TERM(2, 3); /* Server 2 has now incremented its term. */
+    ASSERT_TIME(2330);
+
+    /* Server 2 completes sending actual RequestVote RPCs */
+    CLUSTER_STEP_N(2);
+
+    CLUSTER_STEP_N(2); /* Server 1 receives the actual RequestVote RPC */
+    ASSERT_TERM(1, 3); /* Server 1 does increment its term. */
+    ASSERT_VOTED_FOR(1, 3); /* Server 1 does persists its vote */
+
+    CLUSTER_STEP; /* Server 1 completes sending actual RequestVote result */
+    CLUSTER_STEP; /* Server 2 receives the actual RequestVote result */
+    ASSERT_LEADER(2);
+
+    return MUNIT_OK;
+}

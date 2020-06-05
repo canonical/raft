@@ -124,8 +124,18 @@ int electionStart(struct raft *r)
     assert(n_voters <= r->configuration.n);
     assert(voting_index < n_voters);
 
-    /* During pre-vote we don't actually increment term or persist vote. */
-    if (!r->candidate_state.in_pre_vote) {
+    /* During pre-vote we don't actually increment term or persist vote, however
+     * we reset any vote that we previously granted since we have timed out and
+     * that vote is no longer valid. */
+    if (r->candidate_state.in_pre_vote) {
+        /* Reset vote */
+        rv = r->io->set_vote(r->io, 0);
+        if (rv != 0) {
+            goto err;
+        }
+        /* Update our cache too. */
+        r->voted_for = 0;
+    } else {
         /* Increment current term */
         term = r->current_term + 1;
         rv = r->io->set_term(r->io, term);
