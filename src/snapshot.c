@@ -19,7 +19,7 @@
 void snapshotClose(struct raft_snapshot *s)
 {
     unsigned i;
-    raft_configuration_close(&s->configuration);
+    configurationClose(&s->configuration);
     for (i = 0; i < s->n_bufs; i++) {
         raft_free(s->bufs[i].base);
     }
@@ -45,7 +45,7 @@ int snapshotRestore(struct raft *r, struct raft_snapshot *snapshot)
         return rv;
     }
 
-    raft_configuration_close(&r->configuration);
+    configurationClose(&r->configuration);
     r->configuration = snapshot->configuration;
     r->configuration_index = snapshot->configuration_index;
 

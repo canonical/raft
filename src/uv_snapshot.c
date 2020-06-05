@@ -216,7 +216,7 @@ static int uvSnapshotLoadMeta(struct uv *uv,
         goto err_after_open;
     }
 
-    raft_configuration_init(&snapshot->configuration);
+    configurationInit(&snapshot->configuration);
     rv = configurationDecode(&buf, &snapshot->configuration);
     if (rv != 0) {
         goto err_after_buf_malloc;

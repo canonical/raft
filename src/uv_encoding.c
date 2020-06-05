@@ -430,7 +430,7 @@ static int decodeInstallSnapshot(const uv_buf_t *buf,
     args->conf_index = byteGet64(&cursor);
     conf.len = (size_t)byteGet64(&cursor);
     conf.base = (void *)cursor;
-    raft_configuration_init(&args->conf);
+    configurationInit(&args->conf);
     rv = configurationDecode(&conf, &args->conf);
     if (rv != 0) {
         return rv;

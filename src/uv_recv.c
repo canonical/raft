@@ -7,6 +7,7 @@
 #include "heap.h"
 #include "uv.h"
 #include "uv_encoding.h"
+#include "configuration.h"
 
 #if 0
 #define tracef(...) Tracef(c->uv->tracer, __VA_ARGS__)
@@ -98,7 +99,7 @@ static void uvServerDestroy(struct uvServer *s)
                 HeapFree(s->message.append_entries.entries);
                 break;
             case RAFT_IO_INSTALL_SNAPSHOT:
-                raft_configuration_close(&s->message.install_snapshot.conf);
+                configurationClose(&s->message.install_snapshot.conf);
                 break;
         }
     }
