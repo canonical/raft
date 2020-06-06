@@ -13,16 +13,22 @@ struct fixture
 };
 
 static char *cluster_n[] = {"3", "5", "7", NULL};
+static char *cluster_pre_vote[] = {"0", "1", NULL};
 
 static MunitParameterEnum _params[] = {
     {CLUSTER_N_PARAM, cluster_n},
+    {CLUSTER_PRE_VOTE_PARAM, cluster_pre_vote},
     {NULL, NULL},
 };
 
 static void *setup(const MunitParameter params[], MUNIT_UNUSED void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
+    unsigned i;
     SETUP_CLUSTER(0);
+    for (i = 0; i < CLUSTER_N; i++) {
+      raft_set_pre_vote(CLUSTER_RAFT(i), true);
+    }
     CLUSTER_BOOTSTRAP;
     CLUSTER_RANDOMIZE;
     CLUSTER_START;
