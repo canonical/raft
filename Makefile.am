@@ -146,6 +146,7 @@ check_PROGRAMS += \
   test/integration/uv
 
 libtest_la_SOURCES += \
+  test/lib/aio.c \
   test/lib/dir.c \
   test/lib/tcp.c \
   test/lib/loop.c

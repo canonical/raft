@@ -8,7 +8,6 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
-#include <sys/syscall.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -17,50 +16,36 @@
 
 #define TEST_DIR_TEMPLATE "./tmp/%s/raft-test-XXXXXX"
 
-char *test_dir_all[] = {"tmpfs", "ext4", "btrfs", "xfs", "zfs", NULL};
+static char *dirAll[] = {"tmpfs", "ext4", "btrfs", "xfs", "zfs", NULL};
 
-char *test_dir_tmpfs[] = {"tmpfs", NULL};
+static char *dirTmpfs[] = {"tmpfs", NULL};
 
-char *test_dir_btrfs[] = {"btrfs", NULL};
+static char *dirAio[] = {"btrfs", "ext4", "xfs", NULL};
 
-char *test_dir_zfs[] = {"zfs", NULL};
+static char *dirNoAio[] = {"tmpfs", "zfs", NULL};
 
-char *test_dir_aio[] = {"btrfs", "ext4", "xfs", NULL};
-
-char *test_dir_no_aio[] = {"tmpfs", "zfs", NULL};
-
-MunitParameterEnum dir_tmpfs_params[] = {
-    {DIR_FS_PARAM, test_dir_tmpfs},
+MunitParameterEnum DirTmpfsParams[] = {
+    {DIR_FS_PARAM, dirTmpfs},
     {NULL, NULL},
 };
 
-MunitParameterEnum dir_btrfs_params[] = {
-    {DIR_FS_PARAM, test_dir_btrfs},
+MunitParameterEnum DirAllParams[] = {
+    {DIR_FS_PARAM, dirAll},
     {NULL, NULL},
 };
 
-MunitParameterEnum dir_zfs_params[] = {
-    {DIR_FS_PARAM, test_dir_zfs},
+MunitParameterEnum DirAioParams[] = {
+    {DIR_FS_PARAM, dirAio},
     {NULL, NULL},
 };
 
-MunitParameterEnum dir_all_params[] = {
-    {DIR_FS_PARAM, test_dir_all},
-    {NULL, NULL},
-};
-
-MunitParameterEnum dir_aio_params[] = {
-    {DIR_FS_PARAM, test_dir_aio},
-    {NULL, NULL},
-};
-
-MunitParameterEnum dir_no_aio_params[] = {
-    {DIR_FS_PARAM, test_dir_no_aio},
+MunitParameterEnum DirNoAioParams[] = {
+    {DIR_FS_PARAM, dirNoAio},
     {NULL, NULL},
 };
 
 /* Create a temporary directory in the given parent directory. */
-static char *mkTempDir(const char *parent)
+static char *dirMakeTemp(const char *parent)
 {
     char *dir;
     if (parent == NULL) {
@@ -74,86 +59,100 @@ static char *mkTempDir(const char *parent)
     return dir;
 }
 
-void *setUpDir(MUNIT_UNUSED const MunitParameter params[],
+void *DirSetUp(MUNIT_UNUSED const MunitParameter params[],
                MUNIT_UNUSED void *user_data)
 {
     const char *fs = munit_parameters_get(params, DIR_FS_PARAM);
     if (fs == NULL) {
-        return mkTempDir("/tmp");
+        return dirMakeTemp("/tmp");
     } else if (strcmp(fs, "tmpfs") == 0) {
-        return setUpTmpfsDir(params, user_data);
+        return DirTmpfsSetUp(params, user_data);
     } else if (strcmp(fs, "ext4") == 0) {
-        return setUpExt4Dir(params, user_data);
+        return DirExt4SetUp(params, user_data);
     } else if (strcmp(fs, "btrfs") == 0) {
-        return setUpBtrfsDir(params, user_data);
+        return DirBtrfsSetUp(params, user_data);
     } else if (strcmp(fs, "zfs") == 0) {
-        return setUpZfsDir(params, user_data);
+        return DirZfsSetUp(params, user_data);
     } else if (strcmp(fs, "xfs") == 0) {
-        return setUpXfsDir(params, user_data);
+        return DirXfsSetUp(params, user_data);
     }
     munit_errorf("Unsupported file system %s", fs);
     return NULL;
 }
 
-void *setUpTmpfsDir(MUNIT_UNUSED const MunitParameter params[],
+void *DirTmpfsSetUp(MUNIT_UNUSED const MunitParameter params[],
                     MUNIT_UNUSED void *user_data)
 {
-    return mkTempDir(getenv("RAFT_TMP_TMPFS"));
+    return dirMakeTemp(getenv("RAFT_TMP_TMPFS"));
 }
 
-void *setUpExt4Dir(MUNIT_UNUSED const MunitParameter params[],
+void *DirExt4SetUp(MUNIT_UNUSED const MunitParameter params[],
                    MUNIT_UNUSED void *user_data)
 {
-    return mkTempDir(getenv("RAFT_TMP_EXT4"));
+    return dirMakeTemp(getenv("RAFT_TMP_EXT4"));
 }
 
-void *setUpBtrfsDir(MUNIT_UNUSED const MunitParameter params[],
+void *DirBtrfsSetUp(MUNIT_UNUSED const MunitParameter params[],
                     MUNIT_UNUSED void *user_data)
 {
-    return mkTempDir(getenv("RAFT_TMP_BTRFS"));
+    return dirMakeTemp(getenv("RAFT_TMP_BTRFS"));
 }
 
-void *setUpZfsDir(MUNIT_UNUSED const MunitParameter params[],
+void *DirZfsSetUp(MUNIT_UNUSED const MunitParameter params[],
                   MUNIT_UNUSED void *user_data)
 {
-    return mkTempDir(getenv("RAFT_TMP_ZFS"));
+    return dirMakeTemp(getenv("RAFT_TMP_ZFS"));
 }
 
-void *setUpXfsDir(MUNIT_UNUSED const MunitParameter params[],
+void *DirXfsSetUp(MUNIT_UNUSED const MunitParameter params[],
                   MUNIT_UNUSED void *user_data)
 {
-    return mkTempDir(getenv("RAFT_TMP_XFS"));
+    return dirMakeTemp(getenv("RAFT_TMP_XFS"));
 }
 
 /* Wrapper around remove(), compatible with ntfw. */
-static int removeFn(const char *path,
-                    MUNIT_UNUSED const struct stat *sbuf,
-                    MUNIT_UNUSED int type,
-                    MUNIT_UNUSED struct FTW *ftwb)
+static int dirRemoveFn(const char *path,
+                       MUNIT_UNUSED const struct stat *sbuf,
+                       MUNIT_UNUSED int type,
+                       MUNIT_UNUSED struct FTW *ftwb)
 {
     return remove(path);
 }
 
-void tearDownDir(void *data)
-{
-    char *dir = data;
-    if (dir == NULL) {
-        return;
-    }
-    if (test_dir_exists(dir)) {
-        test_dir_remove(dir);
-    }
-    free(dir);
-}
-
-void test_dir_remove(char *dir)
+static void dirRemove(char *dir)
 {
     int rv;
     rv = chmod(dir, 0755);
     munit_assert_int(rv, ==, 0);
 
-    rv = nftw(dir, removeFn, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS);
+    rv = nftw(dir, dirRemoveFn, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS);
     munit_assert_int(rv, ==, 0);
+}
+
+static bool dirExists(const char *dir)
+{
+    struct stat sb;
+    int rv;
+
+    rv = stat(dir, &sb);
+    if (rv == -1) {
+        munit_assert_int(errno, ==, ENOENT);
+        return false;
+    }
+
+    return true;
+}
+
+void DirTearDown(void *data)
+{
+    char *dir = data;
+    if (dir == NULL) {
+        return;
+    }
+    if (dirExists(dir)) {
+        dirRemove(dir);
+    }
+    free(dir);
 }
 
 /* Join the given @dir and @filename into @path. */
@@ -164,10 +163,10 @@ static void joinPath(const char *dir, const char *filename, char *path)
     strcat(path, filename);
 }
 
-void test_dir_write_file(const char *dir,
-                         const char *filename,
-                         const void *buf,
-                         const size_t n)
+void DirWriteFile(const char *dir,
+                  const char *filename,
+                  const void *buf,
+                  const size_t n)
 {
     char path[256];
     int fd;
@@ -184,43 +183,22 @@ void test_dir_write_file(const char *dir,
     close(fd);
 }
 
-void test_dir_write_file_with_zeros(const char *dir,
-                                    const char *filename,
-                                    const size_t n)
+void DirWriteFileWithZeros(const char *dir,
+                           const char *filename,
+                           const size_t n)
 {
     void *buf = munit_malloc(n);
 
-    test_dir_write_file(dir, filename, buf, n);
+    DirWriteFile(dir, filename, buf, n);
 
     free(buf);
 }
 
-void test_dir_append_file(const char *dir,
-                          const char *filename,
-                          const void *buf,
-                          const size_t n)
-{
-    char path[256];
-    int fd;
-    int rv;
-
-    joinPath(dir, filename, path);
-
-    fd = open(path, O_APPEND | O_RDWR, S_IRUSR | S_IWUSR);
-
-    munit_assert_int(fd, !=, -1);
-
-    rv = write(fd, buf, n);
-    munit_assert_int(rv, ==, n);
-
-    close(fd);
-}
-
-void test_dir_overwrite_file(const char *dir,
-                             const char *filename,
-                             const void *buf,
-                             const size_t n,
-                             const off_t whence)
+void DirOverwriteFile(const char *dir,
+                      const char *filename,
+                      const void *buf,
+                      const size_t n,
+                      const off_t whence)
 {
     char path[256];
     int fd;
@@ -255,24 +233,7 @@ void test_dir_overwrite_file(const char *dir,
     close(fd);
 }
 
-void test_dir_overwrite_file_with_zeros(const char *dir,
-                                        const char *filename,
-                                        const size_t n,
-                                        const off_t whence)
-{
-    void *buf;
-
-    buf = munit_malloc(n);
-    memset(buf, 0, n);
-
-    test_dir_overwrite_file(dir, filename, buf, n, whence);
-
-    free(buf);
-}
-
-void test_dir_truncate_file(const char *dir,
-                            const char *filename,
-                            const size_t n)
+void DirTruncateFile(const char *dir, const char *filename, const size_t n)
 {
     char path[256];
     int fd;
@@ -290,7 +251,7 @@ void test_dir_truncate_file(const char *dir,
     munit_assert_int(rv, ==, 0);
 }
 
-void test_dir_grow_file(const char *dir, const char *filename, const size_t n)
+void DirGrowFile(const char *dir, const char *filename, const size_t n)
 {
     char path[256];
     int fd;
@@ -320,9 +281,9 @@ void test_dir_grow_file(const char *dir, const char *filename, const size_t n)
     munit_assert_int(rv, ==, 0);
 }
 
-void test_dir_rename_file(const char *dir,
-                          const char *filename1,
-                          const char *filename2)
+void DirRenameFile(const char *dir,
+                   const char *filename1,
+                   const char *filename2)
 {
     char path1[256];
     char path2[256];
@@ -335,7 +296,7 @@ void test_dir_rename_file(const char *dir,
     munit_assert_int(rv, ==, 0);
 }
 
-void test_dir_remove_file(const char *dir, const char *filename)
+void DirRemoveFile(const char *dir, const char *filename)
 {
     char path[256];
     int rv;
@@ -345,10 +306,10 @@ void test_dir_remove_file(const char *dir, const char *filename)
     munit_assert_int(rv, ==, 0);
 }
 
-void test_dir_read_file(const char *dir,
-                        const char *filename,
-                        void *buf,
-                        const size_t n)
+void DirReadFile(const char *dir,
+                 const char *filename,
+                 void *buf,
+                 const size_t n)
 {
     char path[256];
     int fd;
@@ -368,21 +329,7 @@ void test_dir_read_file(const char *dir,
     close(fd);
 }
 
-bool test_dir_exists(const char *dir)
-{
-    struct stat sb;
-    int rv;
-
-    rv = stat(dir, &sb);
-    if (rv == -1) {
-        munit_assert_int(errno, ==, ENOENT);
-        return false;
-    }
-
-    return true;
-}
-
-void test_dir_unexecutable(const char *dir)
+void DirMakeUnexecutable(const char *dir)
 {
     int rv;
 
@@ -390,7 +337,7 @@ void test_dir_unexecutable(const char *dir)
     munit_assert_int(rv, ==, 0);
 }
 
-void test_dir_unwritable(const char *dir)
+void DirMakeUnwritable(const char *dir)
 {
     int rv;
 
@@ -398,7 +345,7 @@ void test_dir_unwritable(const char *dir)
     munit_assert_int(rv, ==, 0);
 }
 
-void test_dir_unreadable_file(const char *dir, const char *filename)
+void DirMakeFileUnreadable(const char *dir, const char *filename)
 {
     char path[256];
     int rv;
@@ -409,7 +356,7 @@ void test_dir_unreadable_file(const char *dir, const char *filename)
     munit_assert_int(rv, ==, 0);
 }
 
-bool test_dir_has_file(const char *dir, const char *filename)
+bool DirHasFile(const char *dir, const char *filename)
 {
     char path[256];
     int fd;
@@ -427,7 +374,7 @@ bool test_dir_has_file(const char *dir, const char *filename)
     return true;
 }
 
-void test_dir_fill(const char *dir, const size_t n)
+void DirFill(const char *dir, const size_t n)
 {
     char path[256];
     const char *filename = ".fill";
@@ -473,55 +420,4 @@ void test_dir_fill(const char *dir, const size_t n)
     }
 
     close(fd);
-}
-
-int test_aio_fill(aio_context_t *ctx, unsigned n)
-{
-    char buf[256];
-    int fd;
-    int rv;
-    int limit;
-    int used;
-
-    /* Figure out how many events are available. */
-    fd = open("/proc/sys/fs/aio-max-nr", O_RDONLY);
-    munit_assert_int(fd, !=, -1);
-
-    rv = read(fd, buf, sizeof buf);
-    munit_assert_int(rv, !=, -1);
-
-    close(fd);
-
-    limit = atoi(buf);
-
-    /* Figure out how many events are in use. */
-    fd = open("/proc/sys/fs/aio-nr", O_RDONLY);
-    munit_assert_int(fd, !=, -1);
-
-    rv = read(fd, buf, sizeof buf);
-    munit_assert_int(rv, !=, -1);
-
-    close(fd);
-
-    used = atoi(buf);
-
-    /* Best effort check that nothing process is using AIO. Our own unit tests
-     * case use up to 2 event slots at the time this function is called, so we
-     * don't consider those. */
-    if (used > 2) {
-        return -1;
-    }
-
-    rv = syscall(__NR_io_setup, limit - used - n, ctx);
-    munit_assert_int(rv, ==, 0);
-
-    return 0;
-}
-
-void test_aio_destroy(aio_context_t ctx)
-{
-    int rv;
-
-    rv = syscall(__NR_io_destroy, ctx);
-    munit_assert_int(rv, ==, 0);
 }

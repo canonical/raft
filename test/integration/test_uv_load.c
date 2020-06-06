@@ -64,11 +64,11 @@ struct snapshot
     "000000000000000" #END
 
 /* Check if open segment file exists. */
-#define HAS_OPEN_SEGMENT_FILE(COUNT) test_dir_has_file(f->dir, "open-" #COUNT)
+#define HAS_OPEN_SEGMENT_FILE(COUNT) DirHasFile(f->dir, "open-" #COUNT)
 
 /* Check if closed segment file exists. */
 #define HAS_CLOSED_SEGMENT_FILE(START, END) \
-    test_dir_has_file(f->dir, CLOSED_SEGMENT_FILENAME(START, END))
+    DirHasFile(f->dir, CLOSED_SEGMENT_FILENAME(START, END))
 
 /* Initialize a standalone raft_io instance and use it to append N batches of
  * entries, each containing one entry. DATA should be an integer that will be
@@ -234,16 +234,16 @@ struct snapshot
 
 /* Forcibly turn a closed segment into an open one, by renaming the underlying
  * file and growing its size. */
-#define UNFINALIZE(FIRST_INDEX, LAST_INDEX, COUNTER)               \
-    do {                                                           \
-        const char *_filename1 =                                   \
-            CLOSED_SEGMENT_FILENAME(FIRST_INDEX, LAST_INDEX);      \
-        char _filename2[64];                                       \
-        sprintf(_filename2, "open-%u", (unsigned)COUNTER);         \
-        munit_assert_true(test_dir_has_file(f->dir, _filename1));  \
-        munit_assert_false(test_dir_has_file(f->dir, _filename2)); \
-        test_dir_rename_file(f->dir, _filename1, _filename2);      \
-        test_dir_grow_file(f->dir, _filename2, SEGMENT_SIZE);      \
+#define UNFINALIZE(FIRST_INDEX, LAST_INDEX, COUNTER)          \
+    do {                                                      \
+        const char *_filename1 =                              \
+            CLOSED_SEGMENT_FILENAME(FIRST_INDEX, LAST_INDEX); \
+        char _filename2[64];                                  \
+        sprintf(_filename2, "open-%u", (unsigned)COUNTER);    \
+        munit_assert_true(DirHasFile(f->dir, _filename1));    \
+        munit_assert_false(DirHasFile(f->dir, _filename2));   \
+        DirRenameFile(f->dir, _filename1, _filename2);        \
+        DirGrowFile(f->dir, _filename2, SEGMENT_SIZE);        \
     } while (0)
 
 /* Initialize the raft_io instance, then call raft_io->load() and assert that it
@@ -379,7 +379,7 @@ TEST(load, ignoreUnknownFiles, setUp, tearDown, 0, unknownFilesParams)
 {
     struct fixture *f = data;
     const char *filename = munit_parameters_get(params, "filename");
-    test_dir_write_file_with_zeros(f->dir, filename, 128);
+    DirWriteFileWithZeros(f->dir, filename, 128);
     LOAD(0,    /* term                                              */
          0,    /* voted for                                         */
          NULL, /* snapshot                                          */
@@ -394,7 +394,7 @@ TEST(load, ignoreUnknownFiles, setUp, tearDown, 0, unknownFilesParams)
 TEST(load, emptyOpenSegment, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    test_dir_write_file(f->dir, "open-1", NULL, 0);
+    DirWriteFile(f->dir, "open-1", NULL, 0);
     LOAD(0,    /* term                                              */
          0,    /* voted for                                         */
          NULL, /* snapshot                                          */
@@ -411,7 +411,7 @@ TEST(load, emptyOpenSegment, setUp, tearDown, 0, NULL)
 TEST(load, openSegmentWithTrailingZeros, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    test_dir_write_file_with_zeros(f->dir, "open-1", 256);
+    DirWriteFileWithZeros(f->dir, "open-1", 256);
     LOAD(0,    /* term                                              */
          0,    /* voted for                                         */
          NULL, /* snapshot                                          */
@@ -450,7 +450,7 @@ TEST(load, openSegmentWithNonZeroData, setUp, tearDown, 0, NULL)
     uint64_t corrupt = 123456789;
     APPEND(2, 1);
     UNFINALIZE(1, 2, 1);
-    test_dir_overwrite_file(f->dir, "open-1", &corrupt, sizeof corrupt, 60);
+    DirOverwriteFile(f->dir, "open-1", &corrupt, sizeof corrupt, 60);
     LOAD(0,    /* term                                              */
          0,    /* voted for                                         */
          NULL, /* snapshot                                          */
@@ -474,7 +474,7 @@ TEST(load, openSegmentWithIncompleteBatch, setUp, tearDown, 0, NULL)
     APPEND(2, 1);
     UNFINALIZE(1, 2, 1);
     memset(zero, 0, sizeof zero);
-    test_dir_overwrite_file(f->dir, "open-1", &zero, sizeof zero, 62);
+    DirOverwriteFile(f->dir, "open-1", &zero, sizeof zero, 62);
     LOAD(0,    /* term                                              */
          0,    /* voted for                                         */
          NULL, /* snapshot                                          */
@@ -499,7 +499,7 @@ TEST(load, openSegmentWithIncompleteFirstBatch, setUp, tearDown, 0, NULL)
     APPEND(1, 1);
     UNFINALIZE(1, 1, 1);
 
-    test_dir_overwrite_file(f->dir, "open-1", buf, sizeof buf, 0);
+    DirOverwriteFile(f->dir, "open-1", buf, sizeof buf, 0);
 
     LOAD(0,    /* term                                              */
          0,    /* voted for                                         */
@@ -545,7 +545,7 @@ TEST(load, secondOpenSegmentIsAllZeros, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
     APPEND(1, 1);
     UNFINALIZE(1, 1, 1);
-    test_dir_write_file_with_zeros(f->dir, "open-2", SEGMENT_SIZE);
+    DirWriteFileWithZeros(f->dir, "open-2", SEGMENT_SIZE);
 
     LOAD(0,    /* term                                              */
          0,    /* voted for                                         */
@@ -620,7 +620,7 @@ TEST(load, manySnapshots, setUp, tearDown, 0, NULL)
     now = uv_now(&f->loop);
     sprintf(filename, "snapshot-1-8-%ju", now);
     SNAPSHOT_PUT(1, 8, 1);
-    test_dir_remove_file(f->dir, filename);
+    DirRemoveFile(f->dir, filename);
 
     SNAPSHOT_PUT(1, 8, 2);
     SNAPSHOT_PUT(2, 6, 3);
@@ -657,12 +657,12 @@ TEST(load, emptySnapshot, setUp, tearDown, 0, NULL)
     now = uv_now(&f->loop);
     sprintf(filename, "snapshot-2-6-%ju", now);
     SNAPSHOT_PUT(2, 6, 2);
-    test_dir_truncate_file(f->dir, filename, 0);
+    DirTruncateFile(f->dir, filename, 0);
 
     LOAD(0,         /* term */
          0,         /* voted for */
          &snapshot, /* snapshot */
-         5,        /* start index */
+         5,         /* start index */
          0,         /* data for first loaded entry */
          0          /* n entries */
     );
@@ -725,8 +725,8 @@ TEST(load, closedSegmentWithInconsistentFilename, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     APPEND(3, 1);
-    test_dir_rename_file(f->dir, "0000000000000001-0000000000000003",
-                         "0000000000000001-0000000000000004");
+    DirRenameFile(f->dir, "0000000000000001-0000000000000003",
+                  "0000000000000001-0000000000000004");
     LOAD_ERROR(RAFT_CORRUPT,
                "load closed segment 0000000000000001-0000000000000004: found 3 "
                "entries (expected 4)");
@@ -788,7 +788,7 @@ TEST(load, nonContiguousClosedSegments, setUp, tearDown, 0, NULL)
     APPEND(2, 2);
     APPEND(3, 4);
     SNAPSHOT_PUT(1, 4, 1);
-    test_dir_remove_file(f->dir, CLOSED_SEGMENT_FILENAME(2, 3));
+    DirRemoveFile(f->dir, CLOSED_SEGMENT_FILENAME(2, 3));
     LOAD(0,         /* term */
          0,         /* voted for */
          &snapshot, /* snapshot */
@@ -815,7 +815,7 @@ TEST(load, closedSegmentWithEntriesPastSnapshot, setUp, tearDown, 0, NULL)
             "snapshot snapshot-1-4-%ju",
             now);
     SNAPSHOT_PUT(1, 4, 1);
-    test_dir_remove_file(f->dir, CLOSED_SEGMENT_FILENAME(1, 5));
+    DirRemoveFile(f->dir, CLOSED_SEGMENT_FILENAME(1, 5));
     LOAD_ERROR(RAFT_CORRUPT, errmsg);
     return MUNIT_OK;
 }
@@ -824,7 +824,7 @@ TEST(load, closedSegmentWithEntriesPastSnapshot, setUp, tearDown, 0, NULL)
 TEST(load, openSegmentWithIncompleteFormat, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    test_dir_write_file_with_zeros(f->dir, "open-1", WORD_SIZE / 2);
+    DirWriteFileWithZeros(f->dir, "open-1", WORD_SIZE / 2);
     LOAD_ERROR(RAFT_IOERR,
                "load open segment open-1: read format: short read: 4 bytes "
                "instead of 8");
@@ -839,7 +839,7 @@ TEST(load, openSegmentWithIncompletePreamble, setUp, tearDown, 0, NULL)
     size_t offset = WORD_SIZE /* Format version */ + WORD_SIZE /* Checksums */;
     APPEND(1, 1);
     UNFINALIZE(1, 1, 1);
-    test_dir_truncate_file(f->dir, "open-1", offset);
+    DirTruncateFile(f->dir, "open-1", offset);
     LOAD_ERROR(RAFT_IOERR,
                "load open segment open-1: entries batch 1 starting at byte 8: "
                "read preamble: short read: 8 bytes instead of 16");
@@ -857,7 +857,7 @@ TEST(load, openSegmentWithIncompleteBatchHeader, setUp, tearDown, 0, NULL)
 
     APPEND(1, 1);
     UNFINALIZE(1, 1, 1);
-    test_dir_truncate_file(f->dir, "open-1", offset);
+    DirTruncateFile(f->dir, "open-1", offset);
     LOAD_ERROR(RAFT_IOERR,
                "load open segment open-1: entries batch 1 starting at byte 8: "
                "read header: short read: 8 bytes instead of 16");
@@ -877,7 +877,7 @@ TEST(load, openSegmentWithIncompleteBatchData, setUp, tearDown, 0, NULL)
 
     APPEND(1, 1);
     UNFINALIZE(1, 1, 1);
-    test_dir_truncate_file(f->dir, "open-1", offset);
+    DirTruncateFile(f->dir, "open-1", offset);
     LOAD_ERROR(RAFT_IOERR,
                "load open segment open-1: entries batch 1 starting at byte 8: "
                "read data: short read: 4 bytes instead of 8");
@@ -891,8 +891,8 @@ TEST(load, closedSegmentWithCorruptedBatchHeader, setUp, tearDown, 0, NULL)
     size_t offset = WORD_SIZE /* Format version */;
     uint64_t corrupted = 12345678;
     APPEND(1, 1);
-    test_dir_overwrite_file(f->dir, CLOSED_SEGMENT_FILENAME(1, 1), &corrupted,
-                            sizeof corrupted, offset);
+    DirOverwriteFile(f->dir, CLOSED_SEGMENT_FILENAME(1, 1), &corrupted,
+                     sizeof corrupted, offset);
     LOAD_ERROR(RAFT_CORRUPT,
                "load closed segment 0000000000000001-0000000000000001: entries "
                "batch 1 starting at byte 8: header checksum mismatch");
@@ -907,8 +907,8 @@ TEST(load, closedSegmentWithCorruptedBatchData, setUp, tearDown, 0, NULL)
         WORD_SIZE /* Format version */ + WORD_SIZE / 2 /* Header checksum */;
     uint32_t corrupted = 123456789;
     APPEND(1, 1);
-    test_dir_overwrite_file(f->dir, CLOSED_SEGMENT_FILENAME(1, 1), &corrupted,
-                            sizeof corrupted, offset);
+    DirOverwriteFile(f->dir, CLOSED_SEGMENT_FILENAME(1, 1), &corrupted,
+                     sizeof corrupted, offset);
     LOAD_ERROR(RAFT_CORRUPT,
                "load closed segment 0000000000000001-0000000000000001: entries "
                "batch 1 starting at byte 8: data checksum mismatch");
@@ -922,7 +922,7 @@ TEST(load, closedSegmentWithBadIndex, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
     APPEND(1, 1);
     APPEND(1, 2);
-    test_dir_remove_file(f->dir, CLOSED_SEGMENT_FILENAME(1, 1));
+    DirRemoveFile(f->dir, CLOSED_SEGMENT_FILENAME(1, 1));
     LOAD_ERROR(RAFT_CORRUPT,
                "unexpected closed segment 0000000000000002-0000000000000002: "
                "first index should have been 1");
@@ -933,7 +933,7 @@ TEST(load, closedSegmentWithBadIndex, setUp, tearDown, 0, NULL)
 TEST(load, emptyClosedSegment, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    test_dir_write_file(f->dir, CLOSED_SEGMENT_FILENAME(1, 1), NULL, 0);
+    DirWriteFile(f->dir, CLOSED_SEGMENT_FILENAME(1, 1), NULL, 0);
     LOAD_ERROR(
         RAFT_CORRUPT,
         "load closed segment 0000000000000001-0000000000000001: file is empty");
@@ -945,7 +945,7 @@ TEST(load, closedSegmentWithBadFormat, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t buf[8] = {2, 0, 0, 0, 0, 0, 0, 0};
-    test_dir_write_file(f->dir, CLOSED_SEGMENT_FILENAME(1, 1), buf, sizeof buf);
+    DirWriteFile(f->dir, CLOSED_SEGMENT_FILENAME(1, 1), buf, sizeof buf);
     LOAD_ERROR(RAFT_CORRUPT,
                "load closed segment 0000000000000001-0000000000000001: "
                "unexpected format version 2");
@@ -958,7 +958,7 @@ TEST(load, openSegmentWithNoAccessPermission, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
     APPEND(1, 1);
     UNFINALIZE(1, 1, 1);
-    test_dir_unreadable_file(f->dir, "open-1");
+    DirMakeFileUnreadable(f->dir, "open-1");
     LOAD_ERROR(RAFT_IOERR,
                "load open segment open-1: open file: open: permission denied");
     return MUNIT_OK;
@@ -972,7 +972,7 @@ TEST(load, openSegmentWithZeroFormatAndThenData, setUp, tearDown, 0, NULL)
     uint64_t version = 0 /* Format version */;
     APPEND(1, 1);
     UNFINALIZE(1, 1, 1);
-    test_dir_overwrite_file(f->dir, "open-1", &version, sizeof version, 0);
+    DirOverwriteFile(f->dir, "open-1", &version, sizeof version, 0);
     LOAD_ERROR(RAFT_CORRUPT,
                "load open segment open-1: unexpected format version 0");
     return MUNIT_OK;
@@ -985,7 +985,7 @@ TEST(load, openSegmentWithBadFormat, setUp, tearDown, 0, NULL)
     uint8_t version[8] = {2, 0, 0, 0, 0, 0, 0, 0};
     APPEND(1, 1);
     UNFINALIZE(1, 1, 1);
-    test_dir_overwrite_file(f->dir, "open-1", version, sizeof version, 0);
+    DirOverwriteFile(f->dir, "open-1", version, sizeof version, 0);
     LOAD_ERROR(RAFT_CORRUPT,
                "load open segment open-1: unexpected format version 2");
     return MUNIT_OK;

@@ -1,5 +1,6 @@
 #include "../lib/runner.h"
 #include "../lib/uv.h"
+#include "../lib/aio.h"
 
 /* Maximum number of blocks a segment can have */
 #define MAX_SEGMENT_BLOCKS 4
@@ -242,12 +243,12 @@ TEST(append, prepareSegments, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     APPEND(1, 64);
-    while (!test_dir_has_file(f->dir, "open-3")) {
+    while (!DirHasFile(f->dir, "open-3")) {
         LOOP_RUN(1);
     }
-    munit_assert_true(test_dir_has_file(f->dir, "open-1"));
-    munit_assert_true(test_dir_has_file(f->dir, "open-2"));
-    munit_assert_true(test_dir_has_file(f->dir, "open-3"));
+    munit_assert_true(DirHasFile(f->dir, "open-1"));
+    munit_assert_true(DirHasFile(f->dir, "open-2"));
+    munit_assert_true(DirHasFile(f->dir, "open-3"));
     return MUNIT_OK;
 }
 
@@ -258,13 +259,13 @@ TEST(append, finalizeSegment, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
     APPEND(MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE);
     APPEND(1, 64);
-    while (!test_dir_has_file(f->dir, "open-4")) {
+    while (!DirHasFile(f->dir, "open-4")) {
         LOOP_RUN(1);
     }
     munit_assert_true(
-        test_dir_has_file(f->dir, "0000000000000001-0000000000000004"));
-    munit_assert_false(test_dir_has_file(f->dir, "open-1"));
-    munit_assert_true(test_dir_has_file(f->dir, "open-4"));
+        DirHasFile(f->dir, "0000000000000001-0000000000000004"));
+    munit_assert_false(DirHasFile(f->dir, "open-1"));
+    munit_assert_true(DirHasFile(f->dir, "open-4"));
     return MUNIT_OK;
 }
 
@@ -478,10 +479,10 @@ TEST(append, counter, setUp, tearDown, 0, NULL)
         APPEND(1, size);
     }
     munit_assert_true(
-        test_dir_has_file(f->dir, "0000000000000001-0000000000000003"));
+        DirHasFile(f->dir, "0000000000000001-0000000000000003"));
     munit_assert_true(
-        test_dir_has_file(f->dir, "0000000000000004-0000000000000006"));
-    munit_assert_true(test_dir_has_file(f->dir, "open-4"));
+        DirHasFile(f->dir, "0000000000000004-0000000000000006"));
+    munit_assert_true(DirHasFile(f->dir, "open-4"));
     return MUNIT_OK;
 }
 
@@ -496,14 +497,10 @@ TEST(append, cancel, setUp, tearDownDeps, 0, NULL)
 }
 
 /* The creation of the current open segment fails because there's no space. */
-TEST(append, noSpaceUponPrepareCurrent, setUp, tearDown, 0, dir_tmpfs_params)
+TEST(append, noSpaceUponPrepareCurrent, setUp, tearDown, 0, DirTmpfsParams)
 {
     struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;
-#if !HAVE_DECL_UV_FS_O_CREAT
-    /* This test appears to leak memory on older libuv versions. */
-    return MUNIT_SKIP;
-#endif
     raft_uv_set_segment_size(&f->io, SEGMENT_BLOCK_SIZE * 32768);
     APPEND_FAILURE(
         1, 64, RAFT_NOSPACE,
@@ -512,20 +509,16 @@ TEST(append, noSpaceUponPrepareCurrent, setUp, tearDown, 0, dir_tmpfs_params)
 }
 
 /* The creation of a spare open segment fails because there's no space. */
-TEST(append, noSpaceUponPrepareSpare, setUp, tearDown, 0, dir_tmpfs_params)
+TEST(append, noSpaceUponPrepareSpare, setUp, tearDown, 0, DirTmpfsParams)
 {
     struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;
-#if !HAVE_DECL_UV_FS_O_CREAT
-    /* This test appears to leak memory on older libuv versions. */
-    return MUNIT_SKIP;
-#endif
 #if defined(__powerpc64__)
     /* XXX: fails on ppc64el */
     return MUNIT_SKIP;
 #endif
     raft_uv_set_segment_size(&f->io, SEGMENT_BLOCK_SIZE * 2);
-    test_dir_fill(f->dir, SEGMENT_BLOCK_SIZE * 3);
+    DirFill(f->dir, SEGMENT_BLOCK_SIZE * 3);
     APPEND(1, SEGMENT_BLOCK_SIZE);
     APPEND_SUBMIT(0, 1, SEGMENT_BLOCK_SIZE);
     APPEND_EXPECT(0, RAFT_NOSPACE);
@@ -534,54 +527,44 @@ TEST(append, noSpaceUponPrepareSpare, setUp, tearDown, 0, dir_tmpfs_params)
 }
 
 /* The write request fails because there's not enough space. */
-TEST(append, noSpaceUponWrite, setUp, tearDownDeps, 0, dir_tmpfs_params)
+TEST(append, noSpaceUponWrite, setUp, tearDownDeps, 0, DirTmpfsParams)
 {
     struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;
-#if !HAVE_DECL_UV_FS_O_CREAT
-    /* This test appears to leak memory on older libuv versions. */
-    TEAR_DOWN_UV;
-    return MUNIT_SKIP;
-#endif
 #if defined(__powerpc64__)
     /* XXX: fails on ppc64el */
     TEAR_DOWN_UV;
     return MUNIT_SKIP;
 #endif
     raft_uv_set_segment_size(&f->io, SEGMENT_BLOCK_SIZE);
-    test_dir_fill(f->dir, SEGMENT_BLOCK_SIZE * 2);
+    DirFill(f->dir, SEGMENT_BLOCK_SIZE * 2);
     APPEND(1, 64);
     APPEND_FAILURE(1, (SEGMENT_BLOCK_SIZE + 128), RAFT_NOSPACE,
                    "short write: 4096 bytes instead of 8192");
-    test_dir_remove_file(f->dir, ".fill");
+    DirRemoveFile(f->dir, ".fill");
     ASSERT_ENTRIES(1, 64);
     return MUNIT_OK;
 }
 
 /* A few requests fail because not enough disk space is available. Eventually
  * the space is released and the request succeeds. */
-TEST(append, noSpaceResolved, setUp, tearDownDeps, 0, dir_tmpfs_params)
+TEST(append, noSpaceResolved, setUp, tearDownDeps, 0, DirTmpfsParams)
 {
     struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;
-#if !HAVE_DECL_UV_FS_O_CREAT
-    /* This test appears to leak memory on older libuv versions. */
-    TEAR_DOWN_UV;
-    return MUNIT_SKIP;
-#endif
 #if defined(__powerpc64__)
     /* XXX: fails on ppc64el */
     TEAR_DOWN_UV;
     return MUNIT_SKIP;
 #endif
-    test_dir_fill(f->dir, SEGMENT_BLOCK_SIZE);
+    DirFill(f->dir, SEGMENT_BLOCK_SIZE);
     APPEND_FAILURE(
         1, 64, RAFT_NOSPACE,
         "create segment open-1: not enough space to allocate 16384 bytes");
     APPEND_FAILURE(
         1, 64, RAFT_NOSPACE,
         "create segment open-2: not enough space to allocate 16384 bytes");
-    test_dir_remove_file(f->dir, ".fill");
+    DirRemoveFile(f->dir, ".fill");
     f->count = 0; /* Reset the data counter */
     APPEND(1, 64);
     ASSERT_ENTRIES(1, 64);
@@ -599,9 +582,9 @@ TEST(append, writeError, setUp, tearDown, 0, NULL)
     return MUNIT_SKIP;
 
     APPEND_SUBMIT(0, 1, 64);
-    test_aio_fill(&ctx, 0);
+    AioFill(&ctx, 0);
     APPEND_WAIT(0);
-    test_aio_destroy(ctx);
+    AioDestroy(ctx);
     return MUNIT_OK;
 }
 
@@ -642,11 +625,11 @@ TEST(append, removeSegmentUponClose, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
     APPEND(1, 64);
-    while (!test_dir_has_file(f->dir, "open-2")) {
+    while (!DirHasFile(f->dir, "open-2")) {
         LOOP_RUN(1);
     }
     TEAR_DOWN_UV;
-    munit_assert_false(test_dir_has_file(f->dir, "open-2"));
+    munit_assert_false(DirHasFile(f->dir, "open-2"));
     return MUNIT_OK;
 }
 
@@ -674,7 +657,7 @@ TEST(append, currentSegment, setUp, tearDownDeps, 0, NULL)
     TEAR_DOWN_UV;
 
     munit_assert_true(
-        test_dir_has_file(f->dir, "0000000000000001-0000000000000001"));
+        DirHasFile(f->dir, "0000000000000001-0000000000000001"));
 
     return MUNIT_OK;
 }
@@ -685,7 +668,7 @@ TEST(append, ioSetupError, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
     aio_context_t ctx = 0;
     int rv;
-    rv = test_aio_fill(&ctx, 0);
+    rv = AioFill(&ctx, 0);
     if (rv != 0) {
         return MUNIT_SKIP;
     }

@@ -18,7 +18,7 @@ struct fixture
 static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    SETUP_HEAP;
+    SET_UP_HEAP;
     configurationInit(&f->configuration);
     return f;
 }
@@ -254,8 +254,8 @@ TEST(configurationCopy, oom, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
     struct raft_configuration configuration;
     ADD(1, "192.168.1.1:666", RAFT_STANDBY);
-    test_heap_fault_config(&f->heap, 0, 1);
-    test_heap_fault_enable(&f->heap);
+    HeapFaultConfig(&f->heap, 0, 1);
+    HeapFaultEnable(&f->heap);
     COPY_ERROR(RAFT_NOMEM, &configuration);
     return MUNIT_OK;
 }
@@ -329,7 +329,7 @@ static MunitParameterEnum add_oom_params[] = {
 TEST(configurationAdd, oom, setUp, tearDown, 0, add_oom_params)
 {
     struct fixture *f = data;
-    test_heap_fault_enable(&f->heap);
+    HeapFaultEnable(&f->heap);
     ADD_ERROR(RAFT_NOMEM, 1, "127.0.0.1:666", RAFT_VOTER);
     return MUNIT_OK;
 }
@@ -392,8 +392,8 @@ TEST(configurationRemove, oom, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
     ADD(1, "127.0.0.1:666", RAFT_VOTER);
     ADD(2, "192.168.1.1:666", RAFT_STANDBY);
-    test_heap_fault_config(&f->heap, 0, 1);
-    test_heap_fault_enable(&f->heap);
+    HeapFaultConfig(&f->heap, 0, 1);
+    HeapFaultEnable(&f->heap);
     REMOVE_ERROR(RAFT_NOMEM, 1);
     return MUNIT_OK;
 }
@@ -484,8 +484,8 @@ TEST(configurationEncode, oom, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_buffer buf;
-    test_heap_fault_config(&f->heap, 2, 1);
-    test_heap_fault_enable(&f->heap);
+    HeapFaultConfig(&f->heap, 2, 1);
+    HeapFaultEnable(&f->heap);
     ADD(1, "127.0.0.1:666", RAFT_VOTER);
     ENCODE_ERROR(RAFT_NOMEM, &buf);
     return MUNIT_OK;
@@ -556,8 +556,8 @@ TEST(configurationDecode, oom, setUp, tearDown, 0, NULL)
                        'x', '.', 'y', 0,             /* Server address */
                        1};                           /* Voting flag */
     struct raft_buffer buf;
-    test_heap_fault_config(&f->heap, 0, 1);
-    test_heap_fault_enable(&f->heap);
+    HeapFaultConfig(&f->heap, 0, 1);
+    HeapFaultEnable(&f->heap);
     buf.base = bytes;
     buf.len = sizeof bytes;
     DECODE_ERROR(RAFT_NOMEM, &buf);

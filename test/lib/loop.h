@@ -13,14 +13,22 @@
 
 #define FIXTURE_LOOP struct uv_loop_s loop
 
-#define SETUP_LOOP                                                          \
-    {                                                                       \
-        int rv__;                                                           \
-        rv__ = uv_replace_allocator(raft_malloc, raft_realloc, raft_calloc, \
-                                    raft_free);                             \
-        munit_assert_int(rv__, ==, 0);                                      \
-        rv__ = uv_loop_init(&f->loop);                                      \
-        munit_assert_int(rv__, ==, 0);                                      \
+/* Older libuv versions might try to free() memory that was not allocated. */
+#if HAVE_DECL_UV_FS_O_CREAT
+#define LOOP_REPLACE_ALLOCATOR                                         \
+    _rv = uv_replace_allocator(raft_malloc, raft_realloc, raft_calloc, \
+                               raft_free);                             \
+    munit_assert_int(_rv, ==, 0)
+#else
+#define LOOP_REPLACE_ALLOCATOR
+#endif
+
+#define SETUP_LOOP                    \
+    {                                 \
+        int _rv;                      \
+        LOOP_REPLACE_ALLOCATOR;       \
+        _rv = uv_loop_init(&f->loop); \
+        munit_assert_int(_rv, ==, 0); \
     }
 
 #define TEAR_DOWN_LOOP                                                     \

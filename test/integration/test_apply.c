@@ -62,7 +62,7 @@ static bool applyCbHasFired(struct raft_fixture *f, void *arg)
     struct raft_apply _req;                                                  \
     struct result _result = {0, false};                                      \
     int _rv;                                                                 \
-    test_fsm_encode_set_x(123, &_buf);                                       \
+    FsmEncodeSetX(123, &_buf);                                               \
     _req.data = &_result;                                                    \
     _rv = raft_apply(CLUSTER_RAFT(I), &_req, &_buf, 1, applyCbAssertResult); \
     munit_assert_int(_rv, ==, 0);
@@ -88,7 +88,7 @@ static bool applyCbHasFired(struct raft_fixture *f, void *arg)
         struct raft_buffer _buf;                                  \
         struct raft_apply _req;                                   \
         int _rv;                                                  \
-        test_fsm_encode_set_x(123, &_buf);                        \
+        FsmEncodeSetX(123, &_buf);                                \
         _rv = raft_apply(CLUSTER_RAFT(I), &_req, &_buf, 1, NULL); \
         munit_assert_int(_rv, ==, RV);                            \
         munit_assert_string_equal(CLUSTER_ERRMSG(I), ERRMSG);     \
@@ -108,7 +108,7 @@ TEST(raft_apply, first, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     APPLY(0);
-    munit_assert_int(test_fsm_get_x(CLUSTER_FSM(0)), ==, 123);
+    munit_assert_int(FsmGetX(CLUSTER_FSM(0)), ==, 123);
     return MUNIT_OK;
 }
 

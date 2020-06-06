@@ -1,6 +1,7 @@
 #include "../../src/uv_fs.h"
 #include "../../src/uv_writer.h"
 #include "../lib/dir.h"
+#include "../lib/aio.h"
 #include "../lib/loop.h"
 #include "../lib/runner.h"
 
@@ -162,7 +163,7 @@ static void submitCbAssertResult(struct UvWriterReq *req, int status)
         unsigned _i;                                          \
         unsigned _j;                                          \
                                                               \
-        test_dir_read_file(f->dir, "foo", _buf, _size);       \
+        DirReadFile(f->dir, "foo", _buf, _size);              \
                                                               \
         for (_i = 0; _i < N; _i++) {                          \
             char *cursor = (char *)_buf + _i * f->block_size; \
@@ -188,7 +189,7 @@ static void *setUpDeps(const MunitParameter params[], void *user_data)
     char path[UV__PATH_SZ];
     char errmsg[256];
     int rv;
-    SETUP_DIR_OR_SKIP;
+    SET_UP_DIR;
     SETUP_LOOP;
     rv = UvFsProbeCapabilities(f->dir, &f->direct_io, &f->async_io, errmsg);
     munit_assert_int(rv, ==, 0);
@@ -247,12 +248,12 @@ TEST(UvWriterInit, noResources, setUpDeps, tearDownDeps, 0, NULL)
     struct fixture *f = data;
     aio_context_t ctx = 0;
     int rv;
-    rv = test_aio_fill(&ctx, 0);
+    rv = AioFill(&ctx, 0);
     if (rv != 0) {
         return MUNIT_SKIP;
     }
     INIT_ERROR(RAFT_TOOMANY, "AIO events user limit exceeded");
-    test_aio_destroy(ctx);
+    AioDestroy(ctx);
     return MUNIT_OK;
 }
 
@@ -264,7 +265,7 @@ TEST(UvWriterInit, noResources, setUpDeps, tearDownDeps, 0, NULL)
 
 SUITE(UvWriterSubmit)
 
-TEST(UvWriterSubmit, one, setUp, tearDown, 0, dir_all_params)
+TEST(UvWriterSubmit, one, setUp, tearDown, 0, DirAllParams)
 {
     struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;
@@ -274,7 +275,7 @@ TEST(UvWriterSubmit, one, setUp, tearDown, 0, dir_all_params)
 }
 
 /* Write two buffers, one after the other. */
-TEST(UvWriterSubmit, two, setUp, tearDown, 0, dir_all_params)
+TEST(UvWriterSubmit, two, setUp, tearDown, 0, DirAllParams)
 {
     struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;
@@ -285,7 +286,7 @@ TEST(UvWriterSubmit, two, setUp, tearDown, 0, dir_all_params)
 }
 
 /* Write the same block twice. */
-TEST(UvWriterSubmit, twice, setUp, tearDown, 0, dir_all_params)
+TEST(UvWriterSubmit, twice, setUp, tearDown, 0, DirAllParams)
 {
     struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;
@@ -296,7 +297,7 @@ TEST(UvWriterSubmit, twice, setUp, tearDown, 0, dir_all_params)
 }
 
 /* Write a vector of buffers. */
-TEST(UvWriterSubmit, vec, setUp, tearDown, 0, dir_all_params)
+TEST(UvWriterSubmit, vec, setUp, tearDown, 0, DirAllParams)
 {
     struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;
@@ -306,7 +307,7 @@ TEST(UvWriterSubmit, vec, setUp, tearDown, 0, dir_all_params)
 }
 
 /* Write a vector of buffers twice. */
-TEST(UvWriterSubmit, vecTwice, setUp, tearDown, 0, dir_all_params)
+TEST(UvWriterSubmit, vecTwice, setUp, tearDown, 0, DirAllParams)
 {
     struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;
@@ -317,7 +318,7 @@ TEST(UvWriterSubmit, vecTwice, setUp, tearDown, 0, dir_all_params)
 }
 
 /* Write past the allocated space. */
-TEST(UvWriterSubmit, beyondEOF, setUp, tearDown, 0, dir_all_params)
+TEST(UvWriterSubmit, beyondEOF, setUp, tearDown, 0, DirAllParams)
 {
     struct fixture *f = data;
     int i;
@@ -331,32 +332,32 @@ TEST(UvWriterSubmit, beyondEOF, setUp, tearDown, 0, dir_all_params)
 }
 
 /* Write two different blocks concurrently. */
-TEST(UvWriterSubmit, concurrent, NULL, NULL, 0, dir_all_params)
+TEST(UvWriterSubmit, concurrent, NULL, NULL, 0, DirAllParams)
 {
     return MUNIT_SKIP; /* TODO: tests hang */
 }
 
 /* Write the same block concurrently. */
-TEST(UvWriterSubmit, concurrentSame, NULL, NULL, 0, dir_all_params)
+TEST(UvWriterSubmit, concurrentSame, NULL, NULL, 0, DirAllParams)
 {
     return MUNIT_SKIP; /* TODO: tests hang */
 }
 
 /* There are not enough resources to create an AIO context to perform the
  * write. */
-TEST(UvWriterSubmit, noResources, setUpDeps, tearDown, 0, dir_no_aio_params)
+TEST(UvWriterSubmit, noResources, setUpDeps, tearDown, 0, DirNoAioParams)
 {
     struct fixture *f = data;
     aio_context_t ctx = 0;
     int rv;
     SKIP_IF_NO_FIXTURE;
     INIT(2);
-    rv = test_aio_fill(&ctx, 0);
+    rv = AioFill(&ctx, 0);
     if (rv != 0) {
         return MUNIT_SKIP;
     }
     WRITE_FAILURE(1, 0, 0, RAFT_TOOMANY, "AIO events user limit exceeded");
-    test_aio_destroy(ctx);
+    AioDestroy(ctx);
     return MUNIT_OK;
 }
 
@@ -369,7 +370,7 @@ TEST(UvWriterSubmit, noResources, setUpDeps, tearDown, 0, dir_no_aio_params)
 SUITE(UvWriterClose)
 
 /* Close with an inflight write running in the threadpool. */
-TEST(UvWriterClose, threadpool, setUp, tearDownDeps, 0, dir_no_aio_params)
+TEST(UvWriterClose, threadpool, setUp, tearDownDeps, 0, DirNoAioParams)
 {
     struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;
@@ -380,7 +381,7 @@ TEST(UvWriterClose, threadpool, setUp, tearDownDeps, 0, dir_no_aio_params)
 #if defined(RWF_NOWAIT)
 
 /* Close with an inflight AIO write . */
-TEST(UvWriterClose, aio, setUp, tearDownDeps, 0, dir_aio_params)
+TEST(UvWriterClose, aio, setUp, tearDownDeps, 0, DirAioParams)
 {
     struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;

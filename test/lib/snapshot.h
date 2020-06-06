@@ -21,6 +21,6 @@
     SNAPSHOT->term = LAST_TERM;                                               \
     SNAPSHOT->configuration = CONF;                                           \
     SNAPSHOT->configuration_index = CONF_INDEX;                               \
-    test_fsm_encode_snapshot(X, Y, &SNAPSHOT->bufs, &SNAPSHOT->n_bufs)
+    FsmEncodeSnapshot(X, Y, &SNAPSHOT->bufs, &SNAPSHOT->n_bufs)
 
 #endif /* TEST_CONFIGURATION_H */

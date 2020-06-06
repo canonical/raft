@@ -15,7 +15,7 @@
 struct fixture
 {
     FIXTURE_UV_DEPS;
-    FIXTURE_TCP;
+    FIXTURE_TCP_SERVER;
     FIXTURE_UV;
     struct raft_message messages[N_MESSAGES];
 };
@@ -90,8 +90,7 @@ static void *setUpDeps(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     SETUP_UV_DEPS;
-    SETUP_TCP;
-    TCP_SERVER_LISTEN;
+    SETUP_TCP_SERVER;
     f->io.data = f;
     return f;
 }
@@ -99,7 +98,7 @@ static void *setUpDeps(const MunitParameter params[], void *user_data)
 static void tearDownDeps(void *data)
 {
     struct fixture *f = data;
-    TEAR_DOWN_TCP;
+    TEAR_DOWN_TCP_SERVER;
     TEAR_DOWN_UV_DEPS;
     free(f);
 }
@@ -114,7 +113,7 @@ static void *setUp(const MunitParameter params[], void *user_data)
         struct raft_message *message = &f->messages[i];
         message->type = RAFT_IO_REQUEST_VOTE;
         message->server_id = 1;
-        message->server_address = f->tcp.server.address;
+        message->server_address = f->server.address;
     }
     return f;
 }
@@ -291,7 +290,7 @@ TEST(send, reconnectAfterWriteError, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
     int socket;
     SEND(0);
-    socket = test_tcp_accept(&f->tcp);
+    socket = TcpServerAccept(&f->server);
     close(socket);
     SEND_FAILURE(0, RAFT_IOERR, "");
     SEND(0);
@@ -307,7 +306,7 @@ TEST(send, reconnectAfterMultipleWriteErrors, setUp, tearDown, 0, NULL)
     int socket;
     signal(SIGPIPE, SIG_IGN);
     SEND(0);
-    socket = test_tcp_accept(&f->tcp);
+    socket = TcpServerAccept(&f->server);
     close(socket);
     SEND_SUBMIT(1 /* message */, 0 /* rv */, RAFT_IOERR /* status */);
     SEND_SUBMIT(2 /* message */, 0 /* rv */, RAFT_IOERR /* status */);

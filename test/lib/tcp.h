@@ -10,20 +10,45 @@
 #include "munit.h"
 
 /* Macro helpers. */
+#define FIXTURE_TCP_SERVER struct TcpServer server
+#define SETUP_TCP_SERVER TcpServerInit(&f->server)
+#define TEAR_DOWN_TCP_SERVER TcpServerClose(&f->server)
+
+#define TCP_SERVER_STOP TcpServerStop(&f->server)
+#define TCP_SERVER_ADDRESS f->server.address
+
 #define FIXTURE_TCP struct test_tcp tcp
 #define SETUP_TCP test_tcp_setup(params, &f->tcp)
 #define TEAR_DOWN_TCP test_tcp_tear_down(&f->tcp)
 
-#define TCP_SERVER_LISTEN test_tcp_listen(&f->tcp)
-#define TCP_SERVER_STOP test_tcp_stop(&f->tcp)
-#define TCP_SERVER_ADDRESS test_tcp_address(&f->tcp)
 #define TCP_CLIENT_CONNECT(PORT) test_tcp_connect(&f->tcp, PORT)
 #define TCP_CLIENT_SEND(BUF, N) test_tcp_send(&f->tcp, BUF, N)
 #define TCP_CLIENT_CLOSE test_tcp_close(&f->tcp)
 
-/**
- * Object that can be used to setup and control a TCP server and/or client.
- */
+struct TcpServer
+{
+    int socket;        /* Socket listening to incoming connections */
+    char address[128]; /* IPv4 address of the server, with port */
+};
+
+void TcpServerInit(struct TcpServer *s);
+void TcpServerClose(struct TcpServer *s);
+
+/* Accept inbound client connection and return the relevant socket. */
+int TcpServerAccept(struct TcpServer *s);
+
+/* Close the server socket. */
+void TcpServerStop(struct TcpServer *s);
+
+struct TcpClient
+{
+    int socket; /* Socket connected to a server. */
+};
+
+void TcpClientInit(struct TcpClient *s);
+void TcpClientClose(struct TcpClient *s);
+
+/* Object that can be used to setup and control a TCP server and/or client. */
 struct test_tcp
 {
     struct

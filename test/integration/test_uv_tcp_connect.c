@@ -15,7 +15,7 @@ struct fixture
 {
     FIXTURE_HEAP;
     FIXTURE_LOOP;
-    FIXTURE_TCP;
+    FIXTURE_TCP_SERVER;
     struct raft_uv_transport transport;
     bool closed;
 };
@@ -125,9 +125,9 @@ static void *setUpDeps(const MunitParameter params[],
 {
     struct fixture *f = munit_malloc(sizeof *f);
     int rv;
-    SETUP_HEAP;
+    SET_UP_HEAP;
     SETUP_LOOP;
-    SETUP_TCP;
+    SETUP_TCP_SERVER;
     rv = raft_uv_tcp_init(&f->transport, &f->loop);
     munit_assert_int(rv, ==, 0);
     return f;
@@ -138,7 +138,7 @@ static void tearDownDeps(void *data)
     struct fixture *f = data;
     LOOP_STOP;
     raft_uv_tcp_close(&f->transport);
-    TEAR_DOWN_TCP;
+    TEAR_DOWN_TCP_SERVER;
     TEAR_DOWN_LOOP;
     TEAR_DOWN_HEAP;
     free(f);
@@ -172,7 +172,6 @@ SUITE(tcp_connect)
 TEST(tcp_connect, first, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    TCP_SERVER_LISTEN;
     CONNECT(2, TCP_SERVER_ADDRESS);
     return MUNIT_OK;
 }
@@ -181,7 +180,7 @@ TEST(tcp_connect, first, setUp, tearDown, 0, NULL)
 TEST(tcp_connect, refused, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    (void)params;
+    TCP_SERVER_STOP;
     CONNECT_FAILURE(2, BOGUS_ADDRESS, RAFT_NOCONNECTION,
                     "uv_tcp_connect(): connection refused");
     return MUNIT_OK;
@@ -210,7 +209,6 @@ TEST(tcp_connect, oom, setUp, tearDown, 0, oomParams)
 TEST(tcp_connect, closeImmediately, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
-    TCP_SERVER_LISTEN;
     CONNECT_CLOSE(2, TCP_SERVER_ADDRESS, 0);
     return MUNIT_OK;
 }
@@ -219,7 +217,6 @@ TEST(tcp_connect, closeImmediately, setUp, tearDownDeps, 0, NULL)
 TEST(tcp_connect, closeDuringHandshake, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
-    TCP_SERVER_LISTEN;
     CONNECT_CLOSE(2, TCP_SERVER_ADDRESS, 1);
     return MUNIT_OK;
 }

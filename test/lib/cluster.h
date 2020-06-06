@@ -19,31 +19,39 @@
 
 /* N is the default number of servers, but can be tweaked with the cluster-n
  * parameter. */
-#define SETUP_CLUSTER(DEFAULT_N)                                      \
-    SETUP_HEAP;                                                       \
-    do {                                                              \
-        unsigned _n = DEFAULT_N;                                      \
-        unsigned _i;                                                  \
-        int _rv;                                                      \
-        if (munit_parameters_get(params, CLUSTER_N_PARAM) != NULL) {  \
-            _n = atoi(munit_parameters_get(params, CLUSTER_N_PARAM)); \
-        }                                                             \
-        munit_assert_int(_n, >, 0);                                   \
-        for (_i = 0; _i < _n; _i++) {                                 \
-            test_fsm_setup(NULL, &f->fsms[_i]);                       \
-        }                                                             \
-        _rv = raft_fixture_init(&f->cluster, _n, f->fsms);            \
-        munit_assert_int(_rv, ==, 0);                                 \
+#define SETUP_CLUSTER(DEFAULT_N)                                             \
+    SET_UP_HEAP;                                                             \
+    do {                                                                     \
+        unsigned _n = DEFAULT_N;                                             \
+        bool _pre_vote = false;                                              \
+        unsigned _i;                                                         \
+        int _rv;                                                             \
+        if (munit_parameters_get(params, CLUSTER_N_PARAM) != NULL) {         \
+            _n = atoi(munit_parameters_get(params, CLUSTER_N_PARAM));        \
+        }                                                                    \
+        if (munit_parameters_get(params, CLUSTER_PRE_VOTE_PARAM) != NULL) {  \
+            _pre_vote =                                                      \
+                atoi(munit_parameters_get(params, CLUSTER_PRE_VOTE_PARAM));  \
+        }                                                                    \
+        munit_assert_int(_n, >, 0);                                          \
+        for (_i = 0; _i < _n; _i++) {                                        \
+            FsmInit(&f->fsms[_i]);                                           \
+        }                                                                    \
+        _rv = raft_fixture_init(&f->cluster, _n, f->fsms);                   \
+        munit_assert_int(_rv, ==, 0);                                        \
+        for (_i = 0; _i < _n; _i++) {                                        \
+            raft_set_pre_vote(raft_fixture_get(&f->cluster, _i), _pre_vote); \
+        }                                                                    \
     } while (0)
 
-#define TEAR_DOWN_CLUSTER                    \
-    do {                                     \
-        unsigned i;                          \
-        raft_fixture_close(&f->cluster);     \
-        for (i = 0; i < CLUSTER_N; i++) {    \
-            test_fsm_tear_down(&f->fsms[i]); \
-        }                                    \
-    } while (0);                             \
+#define TEAR_DOWN_CLUSTER                 \
+    do {                                  \
+        unsigned i;                       \
+        raft_fixture_close(&f->cluster);  \
+        for (i = 0; i < CLUSTER_N; i++) { \
+            FsmClose(&f->fsms[i]);        \
+        }                                 \
+    } while (0);                          \
     TEAR_DOWN_HEAP;
 
 /* Munit parameter for setting the number of servers */
@@ -51,6 +59,9 @@
 
 /* Munit parameter for setting the number of voting servers */
 #define CLUSTER_N_VOTING_PARAM "cluster-n-voting"
+
+/* Munit parameter for enabling pre-vote */
+#define CLUSTER_PRE_VOTE_PARAM "cluster-pre-vote"
 
 /* Get the number of servers in the cluster. */
 #define CLUSTER_N raft_fixture_n(&f->cluster)
@@ -231,7 +242,7 @@
         struct raft_buffer buf_;                    \
         struct raft *raft_;                         \
         int rv_;                                    \
-        test_fsm_encode_add_x(VALUE, &buf_);        \
+        FsmEncodeAddX(VALUE, &buf_);                \
         raft_ = raft_fixture_get(&f->cluster, I);   \
         rv_ = raft_apply(raft_, REQ, &buf_, 1, CB); \
         munit_assert_int(rv_, ==, 0);               \
@@ -261,7 +272,7 @@
 #define CLUSTER_GROW                                               \
     {                                                              \
         int rv_;                                                   \
-        test_fsm_setup(NULL, &f->fsms[CLUSTER_N]);                 \
+        FsmInit(&f->fsms[CLUSTER_N]);                              \
         rv_ = raft_fixture_grow(&f->cluster, &f->fsms[CLUSTER_N]); \
         munit_assert_int(rv_, ==, 0);                              \
     }

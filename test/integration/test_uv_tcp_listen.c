@@ -85,7 +85,7 @@ static void *setUpDeps(const MunitParameter params[],
                        MUNIT_UNUSED void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
-    SETUP_HEAP;
+    SET_UP_HEAP;
     SETUP_LOOP;
     SETUP_TCP;
     return f;
