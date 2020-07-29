@@ -18,6 +18,11 @@
 #define DEFAULT_SNAPSHOT_THRESHOLD 1024
 #define DEFAULT_SNAPSHOT_TRAILING 2048
 
+/* Number of milliseconds after which a server promotion will be aborted if the
+ * server hasn't caught up with the logs yet. */
+#define DEFAULT_MAX_CATCH_UP_ROUNDS 10
+#define DEFAULT_MAX_CATCH_UP_ROUND_DURATION (5 * 1000)
+
 int raft_init(struct raft *r,
               struct raft_io *io,
               struct raft_fsm *fsm,
@@ -58,6 +63,8 @@ int raft_init(struct raft *r,
     r->close_cb = NULL;
     memset(r->errmsg, 0, sizeof r->errmsg);
     r->pre_vote = false;
+    r->max_catch_up_rounds = DEFAULT_MAX_CATCH_UP_ROUNDS;
+    r->max_catch_up_round_duration = DEFAULT_MAX_CATCH_UP_ROUND_DURATION;
     rv = r->io->init(r->io, r->id, r->address);
     if (rv != 0) {
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
@@ -111,6 +118,16 @@ void raft_set_snapshot_threshold(struct raft *r, unsigned n)
 void raft_set_snapshot_trailing(struct raft *r, unsigned n)
 {
     r->snapshot.trailing = n;
+}
+
+void raft_set_max_catch_up_rounds(struct raft *r, unsigned n)
+{
+    r->max_catch_up_rounds = n;
+}
+
+void raft_set_max_catch_up_round_duration(struct raft *r, unsigned msecs)
+{
+    r->max_catch_up_round_duration = msecs;
 }
 
 void raft_set_pre_vote(struct raft *r, bool enabled)
