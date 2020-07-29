@@ -15,10 +15,6 @@
 #define tracef(...)
 #endif
 
-/* Number of milliseconds after which a server promotion will be aborted if the
- * server hasn't caught up with the logs yet. */
-#define RAFT_MAX_CATCH_UP_DURATION (5 * 1000)
-
 /* Apply time-dependent rules for followers (Figure 3.1). */
 static int tickFollower(struct raft *r)
 {
@@ -168,9 +164,9 @@ static int tickLeader(struct raft *r)
         assert(server_index < r->configuration.n);
         assert(r->configuration.servers[server_index].role != RAFT_VOTER);
 
-        is_too_slow = (r->leader_state.round_number == 10 &&
+        is_too_slow = (r->leader_state.round_number == r->max_catch_up_rounds &&
                        round_duration > r->election_timeout);
-        is_unresponsive = round_duration > RAFT_MAX_CATCH_UP_DURATION;
+        is_unresponsive = round_duration > r->max_catch_up_round_duration;
 
         /* Abort the promotion if we are at the 10'th round and it's still
          * taking too long, or if the server is unresponsive. */

@@ -77,7 +77,7 @@ struct raft_buffer
 
 #define RAFT_STANDBY 0 /* Replicate log, does not participate in quorum. */
 #define RAFT_VOTER 1   /* Replicate log, does participate in quorum. */
-#define RAFT_SPARE 2    /* Does not replicate log, or participate in quorum. */
+#define RAFT_SPARE 2   /* Does not replicate log, or participate in quorum. */
 
 /**
  * Hold information about a single server in the cluster configuration.
@@ -694,6 +694,11 @@ struct raft
     /* Whether to use pre-vote to avoid disconnected servers disrupting the
      * current leader, as described in 4.2.3 and 9.6. */
     bool pre_vote;
+
+    /* Limit how long to wait for a stand-by to catch-up with the log when its
+     * being promoted to voter. */
+    unsigned max_catch_up_rounds;
+    unsigned max_catch_up_round_duration;
 };
 
 RAFT_API int raft_init(struct raft *r,
@@ -779,6 +784,20 @@ RAFT_API void raft_set_pre_vote(struct raft *r, bool enabled);
  * few entries. The default is 128.
  */
 RAFT_API void raft_set_snapshot_trailing(struct raft *r, unsigned n);
+
+/**
+ * Set the maximum number of a catch-up rounds to try when replicating entries
+ * to a stand-by server that is being promoted to voter, before giving up and
+ * failing the configuration change. The default is 10.
+ */
+RAFT_API void raft_set_max_catch_up_rounds(struct raft *r, unsigned n);
+
+/**
+ * Set the maximum duration of a catch-up round when replicating entries to a
+ * stand-by server that is being promoted to voter. The default is 5 seconds.
+ */
+RAFT_API void raft_set_max_catch_up_round_duration(struct raft *r,
+                                                   unsigned msecs);
 
 /**
  * Return a human-readable description of the last error occured.
@@ -897,10 +916,10 @@ RAFT_API int raft_add(struct raft *r,
  * #RAFT_BADROLE is returned.
  */
 RAFT_API int raft_assign(struct raft *r,
-			 struct raft_change *req,
-			 raft_id id,
-			 int role,
-			 raft_change_cb cb);
+                         struct raft_change *req,
+                         raft_id id,
+                         int role,
+                         raft_change_cb cb);
 
 /**
  * Remove the given server from the cluster configuration.
