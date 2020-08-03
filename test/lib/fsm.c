@@ -18,6 +18,7 @@ static int fsmApply(struct raft_fsm *fsm,
                     void **result)
 {
     struct fsm *f = fsm->data;
+    const void *cursor = buf->base;
     unsigned command;
     int value;
 
@@ -25,8 +26,8 @@ static int fsmApply(struct raft_fsm *fsm,
         return -1;
     }
 
-    command = *(uint64_t *)buf->base;
-    value = *((int64_t *)buf->base + 1);
+    command = (unsigned)byteGet64(&cursor);
+    value = (int)byteGet64(&cursor);
 
     switch (command) {
         case SET_X:
