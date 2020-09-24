@@ -396,26 +396,30 @@ static void uvSnapshotPutWorkCb(uv_work_t *work)
 {
     struct uvSnapshotPut *put = work->data;
     struct uv *uv = put->uv;
-    char filename[UV__FILENAME_LEN];
+    char metadata[UV__FILENAME_LEN];
+    char snapshot[UV__FILENAME_LEN];
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int rv;
 
-    sprintf(filename, UV__SNAPSHOT_META_TEMPLATE, put->snapshot->term,
+    sprintf(metadata, UV__SNAPSHOT_META_TEMPLATE, put->snapshot->term,
             put->snapshot->index, put->meta.timestamp);
 
-    rv = UvFsMakeFile(uv->dir, filename, put->meta.bufs, 2, put->errmsg);
+    rv = UvFsMakeFile(uv->dir, metadata, put->meta.bufs, 2, put->errmsg);
     if (rv != 0) {
-        ErrMsgWrapf(put->errmsg, "write %s", filename);
+        ErrMsgWrapf(put->errmsg, "write %s", metadata);
         put->status = RAFT_IOERR;
         return;
     }
 
-    sprintf(filename, UV__SNAPSHOT_TEMPLATE, put->snapshot->term,
+    sprintf(snapshot, UV__SNAPSHOT_TEMPLATE, put->snapshot->term,
             put->snapshot->index, put->meta.timestamp);
 
-    rv = UvFsMakeFile(uv->dir, filename, put->snapshot->bufs,
+    rv = UvFsMakeFile(uv->dir, snapshot, put->snapshot->bufs,
                       put->snapshot->n_bufs, put->errmsg);
     if (rv != 0) {
-        ErrMsgWrapf(put->errmsg, "write %s", filename);
+        ErrMsgWrapf(put->errmsg, "write %s", snapshot);
+        UvFsRemoveFile(uv->dir, metadata, errmsg);
+        UvFsRemoveFile(uv->dir, snapshot, errmsg);
         put->status = RAFT_IOERR;
         return;
     }
