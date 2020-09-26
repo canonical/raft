@@ -337,8 +337,12 @@ static int uvLoadSnapshotAndEntries(struct uv *uv,
         if (rv != 0) {
             goto err;
         }
-        if (segments != NULL && !segments[0].is_open) {
-            *start_index = segments[0].first_index;
+        if (segments != NULL) {
+            if (segments[0].is_open) {
+                *start_index = 1;
+            } else {
+                *start_index = segments[0].first_index;
+            }
         } else {
             *start_index = (*snapshot)->index + 1;
         }
