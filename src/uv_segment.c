@@ -9,6 +9,7 @@
 #include "byte.h"
 #include "configuration.h"
 #include "entry.h"
+#include "heap.h"
 #include "uv.h"
 #include "uv_encoding.h"
 
@@ -155,29 +156,43 @@ int uvSegmentKeepTrailing(struct uv *uv,
     return 0;
 }
 
-/* Open a segment file and read its format version. */
-static int uvOpenSegmentFile(struct uv *uv,
+/* Read a segment file and read its format version. */
+static int uvReadSegmentFile(struct uv *uv,
                              const char *filename,
-                             uv_file *fd,
+                             struct raft_buffer *buf,
                              uint64_t *format)
 {
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
-    struct raft_buffer buf;
     int rv;
-    rv = UvFsOpenFileForReading(uv->dir, filename, fd, errmsg);
+    rv = UvFsReadFile(uv->dir, filename, buf, errmsg);
     if (rv != 0) {
-        ErrMsgTransfer(errmsg, uv->io->errmsg, "open file");
+        ErrMsgTransfer(errmsg, uv->io->errmsg, "read file");
         return RAFT_IOERR;
     }
-    buf.base = format;
-    buf.len = sizeof *format;
-    rv = UvFsReadInto(*fd, &buf, errmsg);
-    if (rv != 0) {
-        ErrMsgTransfer(errmsg, uv->io->errmsg, "read format");
-        UvOsClose(*fd);
+    if (buf->len < 8) {
+        ErrMsgPrintf(uv->io->errmsg, "file has only %lu bytes", buf->len);
+        HeapFree(buf->base);
         return RAFT_IOERR;
     }
-    *format = byteFlip64(*format);
+    *format = byteFlip64(*(uint64_t *)buf->base);
+    return 0;
+}
+
+/* Read a portion of the segment content into the given buffer and update the
+ * offset. */
+static int uvReadContent(const struct raft_buffer *content,
+                         size_t *offset,
+                         struct raft_buffer *buf,
+                         char *errmsg)
+{
+    if (*offset + buf->len > content->len) {
+        size_t remaining = content->len - *offset;
+        ErrMsgPrintf(errmsg, "short read: %zu bytes instead of %zu", remaining,
+                     buf->len);
+        return RAFT_IOERR;
+    }
+    memcpy(buf->base, &((uint8_t *)content->base)[*offset], buf->len);
+    *offset += buf->len;
     return 0;
 }
 
@@ -185,10 +200,10 @@ static int uvOpenSegmentFile(struct uv *uv,
  *
  * Set @last to #true if the loaded batch is the last one. */
 static int uvLoadEntriesBatch(struct uv *uv,
-                              const int fd,
+                              const struct raft_buffer *content,
                               struct raft_entry **entries,
                               unsigned *n_entries,
-                              off_t *offset, /* Offset of last batch */
+                              size_t *offset, /* Offset of last batch */
                               bool *last)
 {
     uint64_t preamble[2];      /* CRC32 checksums and number of raft entries */
@@ -201,17 +216,18 @@ static int uvLoadEntriesBatch(struct uv *uv,
     uint32_t crc1;             /* Target checksum */
     uint32_t crc2;             /* Actual checksum */
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
+    size_t start;
     int rv;
 
     /* Save the current offset, to provide more information when logging. */
-    *offset = lseek(fd, 0, SEEK_CUR);
+    start = *offset;
 
     /* Read the preamble, consisting of the checksums for the batch header and
      * data buffers and the first 8 bytes of the header buffer, which contains
      * the number of entries in the batch. */
     buf.base = preamble;
     buf.len = sizeof preamble;
-    rv = UvFsReadInto(fd, &buf, errmsg);
+    rv = uvReadContent(content, offset, &buf, errmsg);
     if (rv != 0) {
         ErrMsgTransfer(errmsg, uv->io->errmsg, "read preamble");
         return RAFT_IOERR;
@@ -249,7 +265,7 @@ static int uvLoadEntriesBatch(struct uv *uv,
 
     buf.base = (uint8_t *)header.base + sizeof(uint64_t);
     buf.len = header.len - sizeof(uint64_t);
-    rv = UvFsReadInto(fd, &buf, errmsg);
+    rv = uvReadContent(content, offset, &buf, errmsg);
     if (rv != 0) {
         ErrMsgTransfer(errmsg, uv->io->errmsg, "read header");
         rv = RAFT_IOERR;
@@ -283,7 +299,7 @@ static int uvLoadEntriesBatch(struct uv *uv,
         rv = RAFT_NOMEM;
         goto err_after_header_decode;
     }
-    rv = UvFsReadInto(fd, &data, errmsg);
+    rv = uvReadContent(content, offset, &data, errmsg);
     if (rv != 0) {
         ErrMsgTransfer(errmsg, uv->io->errmsg, "read data");
         rv = RAFT_IOERR;
@@ -303,7 +319,7 @@ static int uvLoadEntriesBatch(struct uv *uv,
 
     raft_free(header.base);
 
-    *last = UvFsIsAtEof(fd);
+    *last = *offset == content->len;
 
     return 0;
 
@@ -317,6 +333,7 @@ err:
     *entries = NULL;
     *n_entries = 0;
     assert(rv != 0);
+    *offset = start;
     return rv;
 }
 
@@ -351,10 +368,11 @@ int uvSegmentLoadClosed(struct uv *uv,
                         size_t *n)
 {
     bool empty;                     /* Whether the file is empty */
-    uv_file fd;                     /* Segment file descriptor */
     uint64_t format;                /* Format version */
     bool last;                      /* Whether the last batch was reached */
     struct raft_entry *tmp_entries; /* Entries in current batch */
+    struct raft_buffer buf;         /* Segment file content */
+    size_t offset;                  /* Content read cursor */
     unsigned tmp_n;                 /* Number of entries in current batch */
     unsigned expected_n; /* Number of entries that we expect to find */
     int i;
@@ -377,14 +395,14 @@ int uvSegmentLoadClosed(struct uv *uv,
     }
 
     /* Open the segment file. */
-    rv = uvOpenSegmentFile(uv, info->filename, &fd, &format);
+    rv = uvReadSegmentFile(uv, info->filename, &buf, &format);
     if (rv != 0) {
         goto err;
     }
     if (format != UV__DISK_FORMAT) {
         ErrMsgPrintf(uv->io->errmsg, "unexpected format version %ju", format);
         rv = RAFT_CORRUPT;
-        goto err_after_open;
+        goto err_after_read;
     }
 
     /* Load all batches in the segment. */
@@ -392,13 +410,13 @@ int uvSegmentLoadClosed(struct uv *uv,
     *n = 0;
 
     last = false;
+    offset = sizeof format;
     for (i = 1; !last; i++) {
-        off_t offset;
-        rv = uvLoadEntriesBatch(uv, fd, &tmp_entries, &tmp_n, &offset, &last);
+        rv = uvLoadEntriesBatch(uv, &buf, &tmp_entries, &tmp_n, &offset, &last);
         if (rv != 0) {
             ErrMsgWrapf(uv->io->errmsg, "entries batch %u starting at byte %ju",
                         i, offset);
-            goto err_after_open;
+            goto err_after_read;
         }
         rv = extendEntries(tmp_entries, tmp_n, entries, n);
         if (rv != 0) {
@@ -417,7 +435,7 @@ int uvSegmentLoadClosed(struct uv *uv,
     assert(i > 1);  /* At least one batch was loaded. */
     assert(*n > 0); /* At least one entry was loaded. */
 
-    close(fd);
+    HeapFree(buf.base);
 
     return 0;
 
@@ -430,13 +448,29 @@ err_after_extend_entries:
         entryBatchesDestroy(*entries, *n);
     }
 
-err_after_open:
-    close(fd);
+err_after_read:
+    HeapFree(buf.base);
 
 err:
     assert(rv != 0);
 
     return rv;
+}
+
+/* Check if the content of the segment file contains all zeros from the current
+ * offset onward. */
+static bool uvContentHasOnlyTrailingZeros(const struct raft_buffer *buf,
+                                          size_t offset)
+{
+    size_t i;
+
+    for (i = offset; i < buf->len; i++) {
+        if (((char *)buf->base)[i] != 0) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 /* Load all entries contained in an open segment. */
@@ -451,11 +485,11 @@ static int uvLoadOpenSegment(struct uv *uv,
     bool empty;                     /* Whether the segment file is empty */
     bool remove = false;            /* Whether to remove this segment */
     bool last = false;              /* Whether the last batch was reached */
-    uv_file fd;                     /* Segment file descriptor */
     uint64_t format;                /* Format version */
     size_t n_batches = 0;           /* Number of loaded batches */
     struct raft_entry *tmp_entries; /* Entries in current batch */
-    off_t offset;                   /* Offset of last batch processed */
+    struct raft_buffer buf;         /* Segment file content */
+    size_t offset;                  /* Content read cursor */
     unsigned tmp_n_entries;         /* Number of entries in current batch */
     int i;
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
@@ -477,63 +511,48 @@ static int uvLoadOpenSegment(struct uv *uv,
         goto done;
     }
 
-    rv = uvOpenSegmentFile(uv, info->filename, &fd, &format);
+    rv = uvReadSegmentFile(uv, info->filename, &buf, &format);
     if (rv != 0) {
         goto err;
     }
 
     /* Check that the format is the expected one, or perhaps 0, indicating that
      * the segment was allocated but never written. */
+    offset = sizeof format;
     if (format != UV__DISK_FORMAT) {
         if (format == 0) {
-            rv = UvFsFileHasOnlyTrailingZeros(fd, &all_zeros, errmsg);
-            if (rv != 0) {
-                tracef("check if %s is zeroed: %s", info->filename, errmsg);
-                rv = RAFT_IOERR;
-                goto err_after_open;
-            }
+            all_zeros = uvContentHasOnlyTrailingZeros(&buf, offset);
             if (all_zeros) {
                 /* This is equivalent to the empty case, let's remove the
                  * segment. */
                 tracef("remove zeroed open segment %s", info->filename);
                 remove = true;
-                close(fd);
+                HeapFree(buf.base);
                 goto done;
             }
         }
         ErrMsgPrintf(uv->io->errmsg, "unexpected format version %ju", format);
         rv = RAFT_CORRUPT;
-        goto err_after_open;
+        goto err_after_read;
     }
 
     /* Load all batches in the segment. */
     for (i = 1; !last; i++) {
-        rv = uvLoadEntriesBatch(uv, fd, &tmp_entries, &tmp_n_entries, &offset,
+        rv = uvLoadEntriesBatch(uv, &buf, &tmp_entries, &tmp_n_entries, &offset,
                                 &last);
         if (rv != 0) {
-            int rv2;
-
             /* If this isn't a decoding error, just bail out. */
             if (rv != RAFT_CORRUPT) {
                 ErrMsgWrapf(uv->io->errmsg,
                             "entries batch %u starting at byte %ju", i, offset);
-                goto err_after_open;
+                goto err_after_read;
             }
 
             /* If this is a decoding error, and not an OS error, check if the
              * rest of the file is filled with zeros. In that case we assume
              * that the server shutdown uncleanly and we just truncate this
              * incomplete data. */
-            lseek(fd, offset, SEEK_SET);
-
-            rv2 = UvFsFileHasOnlyTrailingZeros(fd, &all_zeros, uv->io->errmsg);
-            if (rv2 != 0) {
-                ErrMsgWrapf(uv->io->errmsg, "check if %s is zeroed",
-                            info->filename);
-                rv = RAFT_IOERR;
-                goto err_after_open;
-            }
-
+            all_zeros = uvContentHasOnlyTrailingZeros(&buf, offset);
             if (!all_zeros) {
                 tracef("%s has non-zero trail", info->filename);
             }
@@ -558,8 +577,7 @@ static int uvLoadOpenSegment(struct uv *uv,
         *next_index += tmp_n_entries;
     }
 
-    rv = close(fd);
-    assert(rv == 0);
+    HeapFree(buf.base);
 
     if (n_batches == 0) {
         remove = true;
@@ -573,7 +591,7 @@ done:
         if (rv != 0) {
             tracef("unlink %s: %s", info->filename, errmsg);
             rv = RAFT_IOERR;
-            goto err_after_open;
+            goto err_after_read;
         }
     } else {
         char filename[UV__FILENAME_LEN];
@@ -605,8 +623,8 @@ err_after_batch_load:
     raft_free(tmp_entries[0].batch);
     raft_free(tmp_entries);
 
-err_after_open:
-    close(fd);
+err_after_read:
+    HeapFree(buf.base);
 
 err:
     assert(rv != 0);

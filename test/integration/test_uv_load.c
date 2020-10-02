@@ -825,9 +825,7 @@ TEST(load, openSegmentWithIncompleteFormat, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     DirWriteFileWithZeros(f->dir, "open-1", WORD_SIZE / 2);
-    LOAD_ERROR(RAFT_IOERR,
-               "load open segment open-1: read format: short read: 4 bytes "
-               "instead of 8");
+    LOAD_ERROR(RAFT_IOERR, "load open segment open-1: file has only 4 bytes");
     return MUNIT_OK;
 }
 
@@ -960,7 +958,7 @@ TEST(load, openSegmentWithNoAccessPermission, setUp, tearDown, 0, NULL)
     UNFINALIZE(1, 1, 1);
     DirMakeFileUnreadable(f->dir, "open-1");
     LOAD_ERROR(RAFT_IOERR,
-               "load open segment open-1: open file: open: permission denied");
+               "load open segment open-1: read file: open: permission denied");
     return MUNIT_OK;
 }
 
