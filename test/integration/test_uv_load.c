@@ -312,9 +312,7 @@ struct snapshot
                 struct raft_entry *_entry = &_entries[_i];                    \
                 if (_entry->batch != _batch) {                                \
                     _batch = _entry->batch;                                   \
-                    fprintf(stderr, "CP1 BATCH\n");                           \
                     raft_free(_batch);                                        \
-                    fprintf(stderr, "CP2 BATCH\n");                           \
                 }                                                             \
             }                                                                 \
             raft_free(_entries);                                              \
