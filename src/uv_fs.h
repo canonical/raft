@@ -61,10 +61,6 @@ int UvFsMakeOrOverwriteFile(const char *dir,
                             const struct raft_buffer *buf,
                             char *errmsg);
 
-/* Check if the content of the file associated with the given file descriptor
- * contains all zeros from the current offset onward. */
-int UvFsFileHasOnlyTrailingZeros(uv_file fd, bool *flag, char *errmsg);
-
 /* Check if the given file descriptor has reached the end of the file. */
 bool UvFsIsAtEof(uv_file fd);
 

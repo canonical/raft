@@ -339,59 +339,6 @@ err:
     return RAFT_IOERR;
 }
 
-int UvFsFileHasOnlyTrailingZeros(uv_file fd, bool *flag, char *errmsg)
-{
-    struct raft_buffer buf;
-    off_t size;
-    off_t offset;
-    size_t i;
-    int rv;
-
-    /* Save the current offset. */
-    offset = lseek(fd, 0, SEEK_CUR);
-
-    /* Figure the size of the rest of the file. */
-    size = lseek(fd, 0, SEEK_END);
-    if (size == -1) {
-        UvOsErrMsg(errmsg, "lseek", -errno);
-        return RAFT_IOERR;
-    }
-    size -= offset;
-
-    /* Reposition the file descriptor offset to the original offset. */
-    offset = lseek(fd, offset, SEEK_SET);
-    if (offset == -1) {
-        UvOsErrMsg(errmsg, "lseek", -errno);
-        return RAFT_IOERR;
-    }
-
-    buf.len = (size_t)size;
-    buf.base = HeapMalloc(buf.len);
-    if (buf.base == NULL) {
-        ErrMsgOom(errmsg);
-        return RAFT_NOMEM;
-    }
-
-    rv = UvFsReadInto(fd, &buf, errmsg);
-    if (rv != 0) {
-        return rv;
-    }
-
-    for (i = 0; i < (size_t)size; i++) {
-        if (((char *)buf.base)[i] != 0) {
-            *flag = false;
-            goto done;
-        }
-    }
-
-    *flag = true;
-
-done:
-    HeapFree(buf.base);
-
-    return 0;
-}
-
 bool UvFsIsAtEof(uv_file fd)
 {
     off_t offset;
