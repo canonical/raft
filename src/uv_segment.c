@@ -156,7 +156,7 @@ int uvSegmentKeepTrailing(struct uv *uv,
     return 0;
 }
 
-/* Read a segment file and read its format version. */
+/* Read a segment file and return its format version. */
 static int uvReadSegmentFile(struct uv *uv,
                              const char *filename,
                              struct raft_buffer *buf,
@@ -178,21 +178,25 @@ static int uvReadSegmentFile(struct uv *uv,
     return 0;
 }
 
-/* Read a portion of the segment content into the given buffer and update the
- * offset. */
-static int uvReadContent(const struct raft_buffer *content,
-                         size_t *offset,
-                         struct raft_buffer *buf,
-                         char *errmsg)
+/* Consume the content buffer, returning a pointer to the current position and
+ * advancing the offset of n bytes. Return an error if not enough bytes are
+ * available. */
+static int uvConsumeContent(const struct raft_buffer *content,
+                            size_t *offset,
+                            size_t n,
+                            void **data,
+                            char *errmsg)
 {
-    if (*offset + buf->len > content->len) {
+    if (*offset + n > content->len) {
         size_t remaining = content->len - *offset;
         ErrMsgPrintf(errmsg, "short read: %zu bytes instead of %zu", remaining,
-                     buf->len);
+                     n);
         return RAFT_IOERR;
     }
-    memcpy(buf->base, &((uint8_t *)content->base)[*offset], buf->len);
-    *offset += buf->len;
+    if (data != NULL) {
+        *data = &((uint8_t *)content->base)[*offset];
+    }
+    *offset += n;
     return 0;
 }
 
@@ -206,11 +210,11 @@ static int uvLoadEntriesBatch(struct uv *uv,
                               size_t *offset, /* Offset of last batch */
                               bool *last)
 {
-    uint64_t preamble[2];      /* CRC32 checksums and number of raft entries */
+    void *checksums;           /* CRC32 checksums */
+    void *batch;               /* Entries batch */
     unsigned long n;           /* Number of entries in the batch */
     unsigned max_n;            /* Maximum number of entries we expect */
     unsigned i;                /* Iterate through the entries */
-    struct raft_buffer buf;    /* Read buffer */
     struct raft_buffer header; /* Batch header */
     struct raft_buffer data;   /* Batch data */
     uint32_t crc1;             /* Target checksum */
@@ -222,18 +226,23 @@ static int uvLoadEntriesBatch(struct uv *uv,
     /* Save the current offset, to provide more information when logging. */
     start = *offset;
 
-    /* Read the preamble, consisting of the checksums for the batch header and
-     * data buffers and the first 8 bytes of the header buffer, which contains
-     * the number of entries in the batch. */
-    buf.base = preamble;
-    buf.len = sizeof preamble;
-    rv = uvReadContent(content, offset, &buf, errmsg);
+    /* Read the checksums. */
+    rv = uvConsumeContent(content, offset, sizeof(uint32_t) * 2, &checksums,
+                          errmsg);
     if (rv != 0) {
         ErrMsgTransfer(errmsg, uv->io->errmsg, "read preamble");
         return RAFT_IOERR;
     }
 
-    n = (size_t)byteFlip64(preamble[1]);
+    /* Read the first 8 bytes of the batch, which contains the number of entries
+     * in the batch. */
+    rv = uvConsumeContent(content, offset, sizeof(uint64_t), &batch, errmsg);
+    if (rv != 0) {
+        ErrMsgTransfer(errmsg, uv->io->errmsg, "read preamble");
+        return RAFT_IOERR;
+    }
+
+    n = (size_t)byteFlip64(*(uint64_t *)batch);
     if (n == 0) {
         ErrMsgPrintf(uv->io->errmsg, "entries count in preamble is zero");
         rv = RAFT_CORRUPT;
@@ -253,38 +262,33 @@ static int uvLoadEntriesBatch(struct uv *uv,
         goto err;
     }
 
-    /* Read the batch header, excluding the first 8 bytes containing the number
-     * of entries, which we have already read. */
+    /* Consume the batch header, excluding the first 8 bytes containing the
+     * number of entries, which we have already read. */
     header.len = uvSizeofBatchHeader(n);
-    header.base = raft_malloc(header.len);
-    if (header.base == NULL) {
-        rv = RAFT_NOMEM;
-        goto err;
-    }
-    *(uint64_t *)header.base = preamble[1];
+    header.base = batch;
 
-    buf.base = (uint8_t *)header.base + sizeof(uint64_t);
-    buf.len = header.len - sizeof(uint64_t);
-    rv = uvReadContent(content, offset, &buf, errmsg);
+    rv = uvConsumeContent(content, offset,
+                          uvSizeofBatchHeader(n) - sizeof(uint64_t), NULL,
+                          errmsg);
     if (rv != 0) {
         ErrMsgTransfer(errmsg, uv->io->errmsg, "read header");
         rv = RAFT_IOERR;
-        goto err_after_header_alloc;
+        goto err;
     }
 
     /* Check batch header integrity. */
-    crc1 = byteFlip32(*(uint32_t *)preamble);
+    crc1 = byteFlip32(((uint32_t *)checksums)[0]);
     crc2 = byteCrc32(header.base, header.len, 0);
     if (crc1 != crc2) {
         ErrMsgPrintf(uv->io->errmsg, "header checksum mismatch");
         rv = RAFT_CORRUPT;
-        goto err_after_header_alloc;
+        goto err;
     }
 
     /* Decode the batch header, allocating the entries array. */
     rv = uvDecodeBatchHeader(header.base, entries, n_entries);
     if (rv != 0) {
-        goto err_after_header_alloc;
+        goto err;
     }
 
     /* Calculate the total size of the batch data */
@@ -292,43 +296,34 @@ static int uvLoadEntriesBatch(struct uv *uv,
     for (i = 0; i < n; i++) {
         data.len += (*entries)[i].buf.len;
     }
+    data.base = (uint8_t *)content->base + *offset;
 
-    /* Read the batch data */
-    data.base = raft_malloc(data.len);
-    if (data.base == NULL) {
-        rv = RAFT_NOMEM;
-        goto err_after_header_decode;
-    }
-    rv = uvReadContent(content, offset, &data, errmsg);
+    /* Consume the batch data */
+    rv = uvConsumeContent(content, offset, data.len, NULL, errmsg);
     if (rv != 0) {
         ErrMsgTransfer(errmsg, uv->io->errmsg, "read data");
         rv = RAFT_IOERR;
-        goto err_after_data_alloc;
+        goto err_after_header_decode;
     }
 
     /* Check batch data integrity. */
-    crc1 = byteFlip32(*((uint32_t *)preamble + 1));
+    crc1 = byteFlip32(((uint32_t *)checksums)[1]);
     crc2 = byteCrc32(data.base, data.len, 0);
     if (crc1 != crc2) {
         ErrMsgPrintf(uv->io->errmsg, "data checksum mismatch");
         rv = RAFT_CORRUPT;
-        goto err_after_data_alloc;
+        goto err_after_header_decode;
     }
 
-    uvDecodeEntriesBatch(&data, *entries, *n_entries);
-
-    raft_free(header.base);
+    uvDecodeEntriesBatch(content->base, *offset - data.len, *entries,
+                         *n_entries);
 
     *last = *offset == content->len;
 
     return 0;
 
-err_after_data_alloc:
-    raft_free(data.base);
 err_after_header_decode:
-    raft_free(*entries);
-err_after_header_alloc:
-    raft_free(header.base);
+    HeapFree(*entries);
 err:
     *entries = NULL;
     *n_entries = 0;
@@ -435,8 +430,6 @@ int uvSegmentLoadClosed(struct uv *uv,
     assert(i > 1);  /* At least one batch was loaded. */
     assert(*n > 0); /* At least one entry was loaded. */
 
-    HeapFree(buf.base);
-
     return 0;
 
 err_after_batch_load:
@@ -445,7 +438,7 @@ err_after_batch_load:
 
 err_after_extend_entries:
     if (*entries != NULL) {
-        entryBatchesDestroy(*entries, *n);
+        HeapFree(*entries);
     }
 
 err_after_read:
@@ -577,9 +570,8 @@ static int uvLoadOpenSegment(struct uv *uv,
         *next_index += tmp_n_entries;
     }
 
-    HeapFree(buf.base);
-
     if (n_batches == 0) {
+        HeapFree(buf.base);
         remove = true;
     }
 

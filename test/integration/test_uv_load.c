@@ -312,7 +312,9 @@ struct snapshot
                 struct raft_entry *_entry = &_entries[_i];                    \
                 if (_entry->batch != _batch) {                                \
                     _batch = _entry->batch;                                   \
+                    fprintf(stderr, "CP1 BATCH\n");                           \
                     raft_free(_batch);                                        \
+                    fprintf(stderr, "CP2 BATCH\n");                           \
                 }                                                             \
             }                                                                 \
             raft_free(_entries);                                              \
@@ -839,8 +841,8 @@ TEST(load, openSegmentWithIncompletePreamble, setUp, tearDown, 0, NULL)
     UNFINALIZE(1, 1, 1);
     DirTruncateFile(f->dir, "open-1", offset);
     LOAD_ERROR(RAFT_IOERR,
-               "load open segment open-1: entries batch 1 starting at byte 8: "
-               "read preamble: short read: 8 bytes instead of 16");
+               "load open segment open-1: entries batch 1 starting at byte 16: "
+               "read preamble: short read: 0 bytes instead of 8");
     return MUNIT_OK;
 }
 
