@@ -497,20 +497,21 @@ int uvDecodeMessage(const unsigned long type,
     return rv;
 }
 
-void uvDecodeEntriesBatch(const struct raft_buffer *buf,
+void uvDecodeEntriesBatch(uint8_t *batch,
+                          size_t offset,
                           struct raft_entry *entries,
                           unsigned n)
 {
-    void *cursor;
+    uint8_t *cursor;
     size_t i;
 
-    assert(buf != NULL);
+    assert(batch != NULL);
 
-    cursor = buf->base;
+    cursor = batch + offset;
 
     for (i = 0; i < n; i++) {
         struct raft_entry *entry = &entries[i];
-        entry->batch = buf->base;
+        entry->batch = batch;
 
         if (entry->buf.len == 0) {
             entry->buf.base = NULL;
@@ -519,10 +520,10 @@ void uvDecodeEntriesBatch(const struct raft_buffer *buf,
 
         entry->buf.base = cursor;
 
-        cursor = (uint8_t *)cursor + entry->buf.len;
+        cursor = cursor + entry->buf.len;
         if (entry->buf.len % 8 != 0) {
             /* Add padding */
-            cursor = (uint8_t *)cursor + 8 - (entry->buf.len % 8);
+            cursor = cursor + 8 - (entry->buf.len % 8);
         }
     }
 }

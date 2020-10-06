@@ -3,11 +3,11 @@
 #include "../include/raft/uv.h"
 #include "assert.h"
 #include "byte.h"
+#include "configuration.h"
 #include "err.h"
 #include "heap.h"
 #include "uv.h"
 #include "uv_encoding.h"
-#include "configuration.h"
 
 #if 0
 #define tracef(...) Tracef(c->uv->tracer, __VA_ARGS__)
@@ -257,8 +257,8 @@ static void uvServerReadCb(uv_stream_t *stream,
             type = byteFlip64(s->preamble[0]);
             assert(type > 0);
 
-            rv =
-                uvDecodeMessage((unsigned long)type, &s->header, &s->message, &s->payload.len);
+            rv = uvDecodeMessage((unsigned long)type, &s->header, &s->message,
+                                 &s->payload.len);
             if (rv != 0) {
                 Tracef(s->uv->tracer, "decode message: %s",
                        errCodeToString(rv));
@@ -283,7 +283,7 @@ static void uvServerReadCb(uv_stream_t *stream,
                 case RAFT_IO_APPEND_ENTRIES:
                     payload.base = s->payload.base;
                     payload.len = s->payload.len;
-                    uvDecodeEntriesBatch(&payload,
+                    uvDecodeEntriesBatch(payload.base, 0,
                                          s->message.append_entries.entries,
                                          s->message.append_entries.n_entries);
                     break;

@@ -23,7 +23,8 @@ int uvDecodeBatchHeader(const void *batch,
                         struct raft_entry **entries,
                         unsigned *n);
 
-void uvDecodeEntriesBatch(const struct raft_buffer *buf,
+void uvDecodeEntriesBatch(uint8_t *batch,
+                          size_t offset,
                           struct raft_entry *entries,
                           unsigned n);
 

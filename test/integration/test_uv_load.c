@@ -312,7 +312,9 @@ struct snapshot
                 struct raft_entry *_entry = &_entries[_i];                    \
                 if (_entry->batch != _batch) {                                \
                     _batch = _entry->batch;                                   \
+                    fprintf(stderr, "CP1 BATCH\n");                           \
                     raft_free(_batch);                                        \
+                    fprintf(stderr, "CP2 BATCH\n");                           \
                 }                                                             \
             }                                                                 \
             raft_free(_entries);                                              \
@@ -825,9 +827,7 @@ TEST(load, openSegmentWithIncompleteFormat, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     DirWriteFileWithZeros(f->dir, "open-1", WORD_SIZE / 2);
-    LOAD_ERROR(RAFT_IOERR,
-               "load open segment open-1: read format: short read: 4 bytes "
-               "instead of 8");
+    LOAD_ERROR(RAFT_IOERR, "load open segment open-1: file has only 4 bytes");
     return MUNIT_OK;
 }
 
@@ -841,8 +841,8 @@ TEST(load, openSegmentWithIncompletePreamble, setUp, tearDown, 0, NULL)
     UNFINALIZE(1, 1, 1);
     DirTruncateFile(f->dir, "open-1", offset);
     LOAD_ERROR(RAFT_IOERR,
-               "load open segment open-1: entries batch 1 starting at byte 8: "
-               "read preamble: short read: 8 bytes instead of 16");
+               "load open segment open-1: entries batch 1 starting at byte 16: "
+               "read preamble: short read: 0 bytes instead of 8");
     return MUNIT_OK;
 }
 
@@ -960,7 +960,7 @@ TEST(load, openSegmentWithNoAccessPermission, setUp, tearDown, 0, NULL)
     UNFINALIZE(1, 1, 1);
     DirMakeFileUnreadable(f->dir, "open-1");
     LOAD_ERROR(RAFT_IOERR,
-               "load open segment open-1: open file: open: permission denied");
+               "load open segment open-1: read file: open: permission denied");
     return MUNIT_OK;
 }
 
