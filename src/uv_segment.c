@@ -170,7 +170,7 @@ static int uvReadSegmentFile(struct uv *uv,
         return RAFT_IOERR;
     }
     if (buf->len < 8) {
-        ErrMsgPrintf(uv->io->errmsg, "file has only %lu bytes", buf->len);
+        ErrMsgPrintf(uv->io->errmsg, "file has only %zu bytes", buf->len);
         HeapFree(buf->base);
         return RAFT_IOERR;
     }
@@ -409,7 +409,7 @@ int uvSegmentLoadClosed(struct uv *uv,
     for (i = 1; !last; i++) {
         rv = uvLoadEntriesBatch(uv, &buf, &tmp_entries, &tmp_n, &offset, &last);
         if (rv != 0) {
-            ErrMsgWrapf(uv->io->errmsg, "entries batch %u starting at byte %ju",
+            ErrMsgWrapf(uv->io->errmsg, "entries batch %u starting at byte %zu",
                         i, offset);
             goto err_after_read;
         }
@@ -537,7 +537,7 @@ static int uvLoadOpenSegment(struct uv *uv,
             /* If this isn't a decoding error, just bail out. */
             if (rv != RAFT_CORRUPT) {
                 ErrMsgWrapf(uv->io->errmsg,
-                            "entries batch %u starting at byte %ju", i, offset);
+                            "entries batch %u starting at byte %zu", i, offset);
                 goto err_after_read;
             }
 
@@ -551,7 +551,7 @@ static int uvLoadOpenSegment(struct uv *uv,
             }
 
             Tracef(uv->tracer,
-                   "truncate open segment %s at %jd (batch %d), since it has "
+                   "truncate open segment %s at %zu (batch %d), since it has "
                    "corrupted "
                    "entries",
                    info->filename, offset, i);
