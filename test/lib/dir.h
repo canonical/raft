@@ -7,6 +7,8 @@
 #ifndef TEST_DIR_H
 #define TEST_DIR_H
 
+#include <sys/types.h>
+
 #include "munit.h"
 
 /* Munit parameter defining the file system type backing the temporary directory
