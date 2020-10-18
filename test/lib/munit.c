@@ -308,7 +308,7 @@ munit_malloc_ex(const char* filename, int line, size_t size) {
  * sync. */
 
 /* Clocks (v1)
- * Portable Snippets - https://gitub.com/nemequ/portable-snippets
+ * Portable Snippets - https://github.com/nemequ/portable-snippets
  * Created by Evan Nemerson <evan@nemerson.com>
  *
  *   To the extent possible under law, the authors have waived all
