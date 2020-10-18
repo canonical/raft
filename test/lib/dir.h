@@ -1,4 +1,4 @@
-/* Test directory utilties.
+/* Test directory utilities.
  *
  * This module sports helpers to create temporary directories backed by various
  * file systems, read/write files in them, check for the presence of files
