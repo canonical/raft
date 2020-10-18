@@ -96,7 +96,7 @@ TEST(tick, candidate, setUp, tearDown, 0, NULL)
     /* The term has been incremented. */
     munit_assert_int(raft->current_term, ==, 2);
 
-    /* We have voted for ouselves. */
+    /* We have voted for ourselves. */
     munit_assert_int(raft->voted_for, ==, 1);
 
     /* We are candidate */
@@ -189,7 +189,7 @@ TEST(tick, new_election, setUp, tearDown, 0, NULL)
     /* The term has been incremented and saved to stable store. */
     munit_assert_int(raft->current_term, ==, 3);
 
-    /* We have voted for ouselves. */
+    /* We have voted for ourselves. */
     munit_assert_int(raft->voted_for, ==, 1);
 
     /* We are still candidate */
