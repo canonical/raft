@@ -371,7 +371,7 @@ void UvWriterClose(struct UvWriter *w, UvWriterCloseCb cb)
     w->closing = true;
     w->close_cb = cb;
 
-    /* We can close the event file descriptor right away, but we shoudln't close
+    /* We can close the event file descriptor right away, but we shouldn't close
      * the main file descriptor or destroy the AIO context since there might be
      * threadpool requests in flight. */
     UvOsClose(w->event_fd);
