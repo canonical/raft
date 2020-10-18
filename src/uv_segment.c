@@ -64,7 +64,7 @@ int uvSegmentInfoAppendIfMatch(const char *filename,
     /* Check if it's a closed or open filename */
     matched = uvSegmentInfoMatch(filename, &info);
 
-    /* If fhis is neither a closed or an open segment, return. */
+    /* If this is neither a closed or an open segment, return. */
     if (!matched) {
         *appended = false;
         return 0;
