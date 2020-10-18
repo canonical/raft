@@ -560,16 +560,16 @@ struct raft
      *
      * The possible scenarios are:
      *
-     * 1. #configuration_index and #configuration_uncommited_index are both
+     * 1. #configuration_index and #configuration_uncommitted_index are both
      *    zero. This should only happen when a brand new server starts joining a
      *    cluster and is waiting to receive log entries from the current
      *    leader. In this case #configuration must be empty and have no servers.
      *
-     * 2. #configuration_index is non-zero while #configuration_uncommited_index
+     * 2. #configuration_index is non-zero while #configuration_uncommitted_index
      *    is zero. In this case the content of #configuration must match the one
      *    of the log entry at #configuration_index.
      *
-     * 3. #configuration_index and #configuration_uncommited_index are both
+     * 3. #configuration_index and #configuration_uncommitted_index are both
      *    non-zero, with the latter being greater than the former. In this case
      *    the content of #configuration must match the one of the log entry at
      *    #configuration_uncommitted_index.
