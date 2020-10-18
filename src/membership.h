@@ -32,7 +32,7 @@ int membershipUncommittedChange(struct raft *r,
 
 /* Rollback any promotion configuration change that was applied locally, but
  * failed to be committed. It must be called by followers after they receive an
- * AppendEntries RPC request that instructs them to evict the uncomitted entry
+ * AppendEntries RPC request that instructs them to evict the uncommitted entry
  * from their log. */
 int membershipRollback(struct raft *r);
 

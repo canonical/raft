@@ -57,8 +57,8 @@ static int restoreMostRecentConfiguration(struct raft *r,
  *
  * as explained in section 4.1.
  *
- * TODO: we should probably set configuration_uncomitted_index as well, since we
- * can't be sure a configuration change has been comitted and we need to be
+ * TODO: we should probably set configuration_uncommitted_index as well, since we
+ * can't be sure a configuration change has been committed and we need to be
  * ready to roll back to the last committed configuration.
  */
 static int restoreEntries(struct raft *r,
