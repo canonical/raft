@@ -52,7 +52,7 @@ static int restoreMostRecentConfiguration(struct raft *r,
  *   that server's log: the C_new entry is replicated to the C_new servers, and
  *   a majority of the new configuration is used to determine the C_new entry's
  *   commitment. This means that servers do notwait for configuration entries to
- *   be committed, and each server always uses the latest configurationfound in
+ *   be committed, and each server always uses the latest configuration found in
  *   its log.
  *
  * as explained in section 4.1.
