@@ -47,7 +47,7 @@ void membershipLeadershipTransferInit(struct raft *r,
 int membershipLeadershipTransferStart(struct raft *r);
 
 /* Finish a leadership transfer (whether successful or not), resetting the
- * leadership tranfer state and firing the user callback. */
+ * leadership transfer state and firing the user callback. */
 void membershipLeadershipTransferClose(struct raft *r);
 
 #endif /* MEMBERSHIP_H_ */
