@@ -42,7 +42,7 @@ static bool transferCbHasFired(struct raft_fixture *f, void *arg)
     _rv = raft_transfer(_raft, &_req, ID, transferCb); \
     munit_assert_int(_rv, ==, 0);
 
-/* Wait until the transfer leadership request comletes. */
+/* Wait until the transfer leadership request completes. */
 #define TRANSFER_WAIT CLUSTER_STEP_UNTIL(transferCbHasFired, &_done, 2000)
 
 /* Submit a transfer leadership request and wait for it to complete. */

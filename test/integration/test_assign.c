@@ -77,7 +77,7 @@ static bool changeCbHasFired(struct raft_fixture *f, void *arg)
 /* Expect the request callback to fire with the given status. */
 #define ASSIGN_EXPECT(STATUS) _result.status = STATUS;
 
-/* Wait until a promote request comletes. */
+/* Wait until a promote request completes. */
 #define ASSIGN_WAIT CLUSTER_STEP_UNTIL(changeCbHasFired, &_result, 10000)
 
 /* Submit a request to assign the I'th server to the given role and wait for the

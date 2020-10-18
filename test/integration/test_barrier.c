@@ -67,7 +67,7 @@ static bool barrierCbHasFired(struct raft_fixture *f, void *arg)
 /* Expect the barrier callback to fire with the given status. */
 #define BARRIER_EXPECT(STATUS) _result.status = STATUS
 
-/* Wait until the barrier request comletes. */
+/* Wait until the barrier request completes. */
 #define BARRIER_WAIT CLUSTER_STEP_UNTIL(barrierCbHasFired, &_result, 2000)
 
 /* Submit to the I'th server a barrier request and wait for the operation to
