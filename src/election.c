@@ -120,7 +120,7 @@ int electionStart(struct raft *r)
     assert(voting_index < r->configuration.n);
 
     /* Sanity check that configurationVoterCount and configurationIndexOfVoter
-     * have returned somethig that makes sense. */
+     * have returned something that makes sense. */
     assert(n_voters <= r->configuration.n);
     assert(voting_index < n_voters);
 
