@@ -114,7 +114,7 @@ static int uvSnapshotCompare(const void *p1, const void *p2)
     struct uvSnapshotInfo *s1 = (struct uvSnapshotInfo *)p1;
     struct uvSnapshotInfo *s2 = (struct uvSnapshotInfo *)p2;
 
-    /* If terms are different, the snaphot with the highest term is the most
+    /* If terms are different, the snapshot with the highest term is the most
      * recent. */
     if (s1->term != s2->term) {
         return s1->term < s2->term ? -1 : 1;
