@@ -1129,7 +1129,7 @@ munit_maybe_concat(size_t* len, char* prefix, char* suffix) {
   return res;
 }
 
-/* Possbily free a string returned by munit_maybe_concat. */
+/* Possibly free a string returned by munit_maybe_concat. */
 static void
 munit_maybe_free_concat(char* s, const char* prefix, const char* suffix) {
   if (prefix != s && suffix != s)
