@@ -608,7 +608,7 @@ TEST(replication, recvMatch_last_snapshot, setUp, tearDown, 0, NULL)
 
     return MUNIT_OK;
 }
-/* If a candidate server receives a request contaning the same term as its
+/* If a candidate server receives a request containing the same term as its
  * own, it it steps down to follower and accept the request . */
 TEST(replication, recvCandidateSameTerm, setUp, tearDown, 0, NULL)
 {
@@ -647,7 +647,7 @@ TEST(replication, recvCandidateSameTerm, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-/* If a candidate server receives a request contaning an higher term as its
+/* If a candidate server receives a request containing an higher term as its
  * own, it it steps down to follower and accept the request . */
 TEST(replication, recvCandidateHigherTerm, setUp, tearDown, 0, NULL)
 {
