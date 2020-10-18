@@ -367,7 +367,7 @@ out:
     raft_free(send);
 }
 
-/* Release the memory used by the given message tramsmit object. */
+/* Release the memory used by the given message transmit object. */
 static void ioDestroyTransmit(struct transmit *transmit)
 {
     struct raft_message *message;
