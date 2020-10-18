@@ -45,7 +45,7 @@ typedef void *queue[2];
 /* Return the element at the back of the queue. */
 #define QUEUE_TAIL(q) (QUEUE_PREV(q))
 
-/* Iternate over the element of a queue. * Mutating the queue while iterating
+/* Iterate over the element of a queue. * Mutating the queue while iterating
  * results in undefined behavior. */
 #define QUEUE_FOREACH(q, e) \
     for ((q) = QUEUE_NEXT(e); (q) != (e); (q) = QUEUE_NEXT(q))
