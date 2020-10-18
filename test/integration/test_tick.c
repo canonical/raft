@@ -93,7 +93,7 @@ TEST(tick, candidate, setUp, tearDown, 0, NULL)
     CLUSTER_STEP_UNTIL_ELAPSED(
         raft->follower_state.randomized_election_timeout);
 
-    /* The term has been incremeted. */
+    /* The term has been incremented. */
     munit_assert_int(raft->current_term, ==, 2);
 
     /* We have voted for ouselves. */
@@ -186,7 +186,7 @@ TEST(tick, new_election, setUp, tearDown, 0, NULL)
     CLUSTER_STEP_UNTIL_ELAPSED(
         raft->candidate_state.randomized_election_timeout);
 
-    /* The term has been incremeted and saved to stable store. */
+    /* The term has been incremented and saved to stable store. */
     munit_assert_int(raft->current_term, ==, 3);
 
     /* We have voted for ouselves. */
