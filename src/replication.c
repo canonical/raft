@@ -1226,7 +1226,7 @@ int replicationInstallSnapshot(struct raft *r,
     *async = false;
 
     /* If we are taking a snapshot ourselves or installing a snapshot, ignore
-     * the request, the leader will weventually retry. TODO: we should do
+     * the request, the leader will eventually retry. TODO: we should do
      * something smarter. */
     if (r->snapshot.pending.term != 0 || r->snapshot.put.data != NULL) {
         *async = true;
