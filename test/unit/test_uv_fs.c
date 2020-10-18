@@ -32,7 +32,7 @@
 
 SUITE(UvFsCheckDir)
 
-/* If the directory exists, the function suceeds. */
+/* If the directory exists, the function succeeds. */
 TEST(UvFsCheckDir, exists, DirSetUp, DirTearDown, 0, NULL)
 {
     const char *dir = data;
