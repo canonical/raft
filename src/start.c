@@ -43,7 +43,7 @@ static int restoreMostRecentConfiguration(struct raft *r,
  * actually committed or not. We don't allow more than one pending uncommitted
  * configuration change at a time, plus
  *
- *   when adding or removing just asingle server, it is safe to switch directly
+ *   when adding or removing just a single server, it is safe to switch directly
  *   to the new configuration.
  *
  * and
