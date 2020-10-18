@@ -1211,7 +1211,7 @@ TEST(logSnapshot, wrap, setUp, tearDown, 0, NULL)
 
 SUITE(logRestore)
 
-/* Mimick the initial restore of a snapshot after loading state from disk, when
+/* Mimic the initial restore of a snapshot after loading state from disk, when
  * there are no outstanding entries. */
 TEST(logRestore, initial, setUp, tearDown, 0, NULL)
 {
