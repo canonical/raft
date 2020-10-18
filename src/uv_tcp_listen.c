@@ -21,7 +21,7 @@
  * - The accept process gets canceled in the transport->close() implementation,
  *   by calling tcp_accept_stop(): the incoming TCP connection handle gets
  *   closed, preventing any further handshake data notification, and all
- *   allocated memory gets released in the handle close callack.
+ *   allocated memory gets released in the handle close callback.
  */
 
 /* Hold state for a connection being accepted. */

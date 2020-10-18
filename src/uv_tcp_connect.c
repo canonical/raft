@@ -57,7 +57,7 @@ static int uvTcpEncodeHandshake(raft_id id, const char *address, uv_buf_t *buf)
 }
 
 /* Finish the connect request, releasing its memory and firing the connect
- * callbact. */
+ * callback. */
 static void uvTcpConnectFinish(struct uvTcpConnect *connect)
 {
     struct uv_stream_s *stream = (struct uv_stream_s *)connect->tcp;
