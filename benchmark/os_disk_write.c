@@ -136,7 +136,7 @@ static int createTempFile(const char *dir, int size, char **path, int *fd)
     rv = posix_fallocate(*fd, 0, size);
     if (rv != 0) {
         errno = rv;
-        printf("posiz_fallocate: %s\n", strerror(errno));
+        printf("posix_fallocate: %s\n", strerror(errno));
         return -1;
     }
 
