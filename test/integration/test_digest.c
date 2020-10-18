@@ -3,7 +3,7 @@
 
 SUITE(raft_digest)
 
-/* Generation of the ID of the boostrap dqlite node. */
+/* Generation of the ID of the bootstrap dqlite node. */
 TEST(raft_digest, bootstrapServerId, NULL, NULL, 0, NULL)
 {
     const char *address = "127.0.0.1:65536";
