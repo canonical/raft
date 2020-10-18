@@ -60,7 +60,7 @@ static void submitCbAssertResult(struct UvWriterReq *req, int status)
         f->closed = false;                                                 \
     } while (0)
 
-/* Trye to initialize the fixture's writer and check that the given error is
+/* Try to initialize the fixture's writer and check that the given error is
  * returned. */
 #define INIT_ERROR(RV, ERRMSG)                                             \
     do {                                                                   \
