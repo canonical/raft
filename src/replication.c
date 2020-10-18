@@ -757,7 +757,7 @@ int replicationUpdate(struct raft *r,
     i = configurationIndexOf(&r->configuration, server->id);
 
     if (i < r->configuration.n) {
-        /* If we are transfering leadership to this follower, check if its log
+        /* If we are transferring leadership to this follower, check if its log
          * is now up-to-date and, if so, send it a TimeoutNow RPC (unless we
          * already did). */
         if (r->transfer != NULL && r->transfer->id == server->id) {
