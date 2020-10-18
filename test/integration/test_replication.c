@@ -776,7 +776,7 @@ TEST(replication, resultHigherTerm, setUp, tearDown, 0, NULL)
     CLUSTER_SATURATE_BOTHWAYS(0, 1);
     CLUSTER_SATURATE_BOTHWAYS(0, 2);
 
-    /* Eventually a new leader gets electected */
+    /* Eventually a new leader gets elected */
     CLUSTER_STEP_UNTIL_HAS_NO_LEADER(2000);
     CLUSTER_STEP_UNTIL_HAS_LEADER(4000);
     munit_assert_int(CLUSTER_LEADER, ==, 1);
