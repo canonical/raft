@@ -800,7 +800,7 @@ RAFT_API void raft_set_max_catch_up_round_duration(struct raft *r,
                                                    unsigned msecs);
 
 /**
- * Return a human-readable description of the last error occured.
+ * Return a human-readable description of the last error occurred.
  */
 RAFT_API const char *raft_errmsg(struct raft *r);
 
