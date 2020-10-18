@@ -11,7 +11,7 @@ AC_USE_SYSTEM_EXTENSIONS # Defines _GNU_SOURCE and similar
 LT_INIT
 
 # The libuv raft_io implementation is built by default if libuv is found, unless
-# explicitely disabled.
+# explicitly disabled.
 AC_ARG_ENABLE(uv, AS_HELP_STRING([--disable-uv], [do not build the libuv-based raft_io implementation]))
 AS_IF([test "x$enable_uv" != "xno"],
       [PKG_CHECK_MODULES(UV, [libuv >= 1.8.0], [have_uv=yes], [have_uv=no])],
@@ -20,7 +20,7 @@ AS_IF([test "x$enable_uv" = "xyes" -a "x$have_uv" = "xno"], [AC_MSG_ERROR([libuv
 AM_CONDITIONAL(UV_ENABLED, test "x$have_uv" = "xyes")
 
 # The fake I/O implementation and associated fixture is built by default, unless
-# explicitely disabled.
+# explicitly disabled.
 AC_ARG_ENABLE(fixture, AS_HELP_STRING([--disable-fixture], [do not build the raft_fixture test helper]))
 AM_CONDITIONAL(FIXTURE_ENABLED, test "x$enable_fixture" != "xno")
 

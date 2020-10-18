@@ -159,7 +159,7 @@ static MUNIT_THREAD_LOCAL jmp_buf munit_tear_down_jmp_buf;
 #endif
 
 /* At certain warning levels, mingw will trigger warnings about
- * suggesting the format attribute, which we've explicity *not* set
+ * suggesting the format attribute, which we've explicitly *not* set
  * because it will then choke on our attempts to use the MS-specific
  * I64 modifier for size_t (which we have to use since MSVC doesn't
  * support the C99 z modifier). */
