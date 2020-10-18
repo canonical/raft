@@ -59,7 +59,7 @@ struct uvClient
 struct uvSend
 {
     struct uvClient *client;  /* Client connected to the target server */
-    struct raft_io_send *req; /* Uer request */
+    struct raft_io_send *req; /* User request */
     uv_buf_t *bufs;           /* Encoded raft RPC message to send */
     unsigned n_bufs;          /* Number of buffers */
     uv_write_t write;         /* Stream write request */
