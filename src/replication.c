@@ -1248,7 +1248,7 @@ int replicationInstallSnapshot(struct raft *r,
 
     *async = true;
 
-    /* Premptively update our in-memory state. */
+    /* Preemptively update our in-memory state. */
     logRestore(&r->log, args->last_index, args->last_term);
 
     r->last_stored = 0;
