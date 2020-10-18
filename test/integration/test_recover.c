@@ -3,7 +3,7 @@
 
 /******************************************************************************
  *
- * Fixture holding a bootstrapped raft caluster.
+ * Fixture holding a bootstrapped raft cluster.
  *
  *****************************************************************************/
 
