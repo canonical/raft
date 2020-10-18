@@ -76,7 +76,7 @@ TEST(ErrMsgWrapf, partialTruncate, NULL, NULL, 0, NULL)
     return MUNIT_OK;
 }
 
-/* The wrapped error message gets entirelly truncated. */
+/* The wrapped error message gets entirely truncated. */
 TEST(ErrMsgWrapf, fullTruncate, NULL, NULL, 0, NULL)
 {
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
