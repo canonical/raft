@@ -194,7 +194,7 @@ static void uvFireRecvCb(struct uvServer *s)
     s->uv->recv_cb(s->uv->io, &s->message);
 
     /* Reset our state as we'll start reading a new message. We don't need to
-     * release the payload buffer, since ownership was transfered to the
+     * release the payload buffer, since ownership was transferred to the
      * user. */
     memset(s->preamble, 0, sizeof s->preamble);
     raft_free(s->header.base);
