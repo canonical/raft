@@ -427,7 +427,7 @@ void logStart(struct raft_log *l,
     l->offset = start_index - 1;
 }
 
-/* Ensure that the entries array has enough free slots for adding a new enty. */
+/* Ensure that the entries array has enough free slots for adding a new entry. */
 static int ensureCapacity(struct raft_log *l)
 {
     struct raft_entry *entries; /* New entries array */
