@@ -16,7 +16,7 @@ void errMsgWrap(char *e, const char *format)
     size_t trail_n;
     size_t i;
 
-    /* Calculate the lenght of the prefix. */
+    /* Calculate the length of the prefix. */
     prefix_n = strlen(format);
 
     /* If there isn't enough space for the ": " separator and at least one
