@@ -529,7 +529,7 @@ static int probeDirectIO(int fd, size_t *size, char *errmsg)
         switch (fs_info.f_type) {
             case 0x01021994: /* TMPFS_MAGIC */
             case 0x2fc12fc1: /* ZFS magic */
-            case 0x24051905: /* UBIFS Suprt magic */
+            case 0x24051905: /* UBIFS Support magic */
                 *size = 0;
                 return 0;
             default:
