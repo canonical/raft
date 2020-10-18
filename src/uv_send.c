@@ -398,7 +398,7 @@ static void uvClientAbort(struct uvClient *c)
         uvClientDisconnect(c);
     }
 
-    /* Closing the timer implicitely stop it, so the timeout callback won't be
+    /* Closing the timer implicitly stop it, so the timeout callback won't be
      * fired. */
     uv_close((struct uv_handle_s *)&c->timer, uvClientTimerCloseCb);
     c->closing = true;
