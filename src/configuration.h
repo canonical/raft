@@ -8,7 +8,7 @@
 /* Initialize an empty configuration. */
 void configurationInit(struct raft_configuration *c);
 
-/* Release all memory used by the given configuation. */
+/* Release all memory used by the given configuration. */
 void configurationClose(struct raft_configuration *c);
 
 /* Add a server to the given configuration. */

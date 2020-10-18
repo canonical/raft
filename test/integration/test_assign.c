@@ -219,7 +219,7 @@ TEST(raft_assign, promoteCatchUp, setUp, tearDown, 0, NULL)
     /* Eventually the leader notices that the third server has caught. */
     CLUSTER_STEP_UNTIL(thirdServerHasCaughtUp, NULL, 2000);
 
-    /* The leader has submitted a onfiguration change request, but it's
+    /* The leader has submitted a configuration change request, but it's
      * uncommitted. */
     ASSERT_CONFIGURATION_INDEXES(0, 3, 4);
 
