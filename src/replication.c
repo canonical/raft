@@ -1460,7 +1460,7 @@ abort:
 int replicationApply(struct raft *r)
 {
     raft_index index;
-    int rv;
+    int rv = 0;
 
     assert(r->state == RAFT_LEADER || r->state == RAFT_FOLLOWER);
     assert(r->last_applied <= r->commit_index);
