@@ -201,7 +201,7 @@ int UvOsIoGetevents(aio_context_t ctx,
     return rv;
 }
 
-int UvOsEventfd(unsigned int initval, int flags)
+int UvOsEventfd(int initval, int flags)
 {
     int rv;
     /* At the moment only UV_FS_O_NONBLOCK is supported */

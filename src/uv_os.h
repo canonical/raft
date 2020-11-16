@@ -113,7 +113,7 @@ int UvOsIoGetevents(aio_context_t ctx,
                     long max_nr,
                     struct io_event *events,
                     struct timespec *timeout);
-int UvOsEventfd(unsigned int initval, int flags);
+int UvOsEventfd(int initval, int flags);
 int UvOsSetDirectIo(uv_file fd);
 
 /* Format an error message caused by a failed system call or stdlib function. */
