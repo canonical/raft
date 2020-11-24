@@ -153,7 +153,7 @@ int uvSegmentLoadClosed(struct uv *uv,
 int uvSegmentLoadAll(struct uv *uv,
                      const raft_index start_index,
                      struct uvSegmentInfo *segments,
-                     size_t n_segments,
+                     size_t nSegments,
                      struct raft_entry **entries,
                      size_t *nEntries);
 
@@ -268,7 +268,7 @@ int UvList(struct uv *uv,
            struct uvSnapshotInfo *snapshots[],
            size_t *n_snapshots,
            struct uvSegmentInfo *segments[],
-           size_t *n_segments,
+           size_t *nSegments,
            char *errmsg);
 
 /* Request to obtain a newly prepared open segment. */
