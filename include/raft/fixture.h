@@ -168,28 +168,28 @@ RAFT_API void raft_fixture_depose(struct raft_fixture *f);
  *
  * In particular, the following happens:
  *
- * 1. If there are pending #raft_io_send requests, that have been submitted
- *    using #raft_io->send() and not yet sent, the oldest one is picked and the
+ * 1. If there are pending #raftIo_send requests, that have been submitted
+ *    using #raftIo->send() and not yet sent, the oldest one is picked and the
  *    relevant callback fired. This simulates completion of a socket write,
  *    which means that the send request has been completed. The receiver does
  *    not immediately receives the message, as the message is propagating
- *    through the network. However any memory associated with the #raft_io_send
+ *    through the network. However any memory associated with the #raftIo_send
  *    request can be released (e.g. log entries). The in-memory I/O
  *    implementation assigns a latency to each RPC message, which will get
  *    delivered to the receiver only after that amount of time elapses. If the
  *    sender and the receiver are currently disconnected, the RPC message is
  *    simply dropped. If a callback was fired, jump directly to 3. and skip 2.
  *
- * 2. All pending #raft_io_append disk writes across all servers, that have been
- *    submitted using #raft_io->append() but not yet completed, are scanned and
+ * 2. All pending #raftIo_append disk writes across all servers, that have been
+ *    submitted using #raftIo->append() but not yet completed, are scanned and
  *    the one with the lowest completion time is picked. All in-flight network
  *    messages waiting to be delivered are scanned and the one with the lowest
  *    delivery time is picked. All servers are scanned, and the one with the
  *    lowest tick expiration time is picked. The three times are compared and
- *    the lowest one is picked. If a #raft_io_append disk write has completed,
+ *    the lowest one is picked. If a #raftIo_append disk write has completed,
  *    the relevant callback will be invoked, if there's a network message to be
  *    delivered, the receiver's @raft_io_recv_cb callback gets fired, if a tick
- *    timer has expired the relevant #raft_io->tick() callback will be
+ *    timer has expired the relevant #raftIo->tick() callback will be
  *    invoked. Only one event will be fired. If there is more than one event to
  *    fire, one of them is picked according to the following rules: events for
  *    servers with lower index are fired first, tick events take precedence over
@@ -359,7 +359,7 @@ RAFT_API int raft_fixture_grow(struct raft_fixture *f, struct raft_fsm *fsm);
 
 /**
  * Set the value that will be returned to the @i'th raft instance when it asks
- * the underlying #raft_io implementation for a randomized election timeout
+ * the underlying #raftIo implementation for a randomized election timeout
  * value. The default value is 1000 + @i * 100, meaning that the election timer
  * of server 0 will expire first.
  */
