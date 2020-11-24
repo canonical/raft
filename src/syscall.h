@@ -15,13 +15,13 @@
 
 #if HAVE_LINUX_AIO_ABI_H
 /* AIO */
-int io_setup(unsigned nr_events, aio_context_t *ctx_idp);
+int io_setup(unsigned nr_events, aio_context_t *ctxIdp);
 
-int io_destroy(aio_context_t ctx_id);
+int io_destroy(aio_context_t ctxId);
 
-int io_submit(aio_context_t ctx_id, long nr, struct iocb **iocbpp);
+int io_submit(aio_context_t ctxId, long nr, struct iocb **iocbpp);
 
-int io_getevents(aio_context_t ctx_id,
+int io_getevents(aio_context_t ctxId,
                  long min_nr,
                  long nr,
                  struct io_event *events,
