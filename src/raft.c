@@ -68,11 +68,11 @@ int raft_init(struct raft *r,
     rv = r->io->init(r->io, r->id, r->address);
     if (rv != 0) {
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
-        goto err_after_address_alloc;
+        goto errAfterAddressAlloc;
     }
     return 0;
 
-err_after_address_alloc:
+errAfterAddressAlloc:
     HeapFree(r->address);
 err:
     assert(rv != 0);
