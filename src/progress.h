@@ -45,7 +45,7 @@ raft_index progressNextIndex(struct raft *r, unsigned i);
  * as replicated. */
 raft_index progressMatchIndex(struct raft *r, unsigned i);
 
-/* Update the last_send timestamp after an AppendEntries request has been
+/* Update the lastSend timestamp after an AppendEntries request has been
  * sent. */
 void progressUpdateLastSend(struct raft *r, unsigned i);
 
