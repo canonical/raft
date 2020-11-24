@@ -249,14 +249,14 @@ int UvSnapshotLoad(struct uv *uv,
                    struct raft_snapshot *snapshot,
                    char *errmsg);
 
-/* Implementation raft_io->snapshot_put (defined in uv_snapshot.c). */
+/* Implementation raft_io->snapshot_put (defined in uvSnapshot.c). */
 int UvSnapshotPut(struct raft_io *io,
                   unsigned trailing,
                   struct raft_io_snapshot_put *req,
                   const struct raft_snapshot *snapshot,
                   raft_io_snapshot_put_cb cb);
 
-/* Implementation of raft_io->snapshot_get (defined in uv_snapshot.c). */
+/* Implementation of raft_io->snapshot_get (defined in uvSnapshot.c). */
 int UvSnapshotGet(struct raft_io *io,
                   struct raft_io_snapshot_get *req,
                   raft_io_snapshot_get_cb cb);
