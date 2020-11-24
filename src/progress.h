@@ -87,16 +87,16 @@ void progressOptimisticNextIndex(struct raft *r,
 /* Return false if the given @index comes from an outdated message. Otherwise
  * update the progress and returns true. To be called when receiving a
  * successful AppendEntries RPC response. */
-bool progressMaybeUpdate(struct raft *r, unsigned i, raft_index last_index);
+bool progressMaybeUpdate(struct raft *r, unsigned i, raft_index lastIndex);
 
 /* Return false if the given rejected index comes from an out of order
  * message. Otherwise decrease the progress next index to min(rejected,
- * last_index) and returns true. To be called when receiving an unsuccessful
+ * lastIndex) and returns true. To be called when receiving an unsuccessful
  * AppendEntries RPC response. */
 bool progressMaybeDecrement(struct raft *r,
                             unsigned i,
                             raft_index rejected,
-                            raft_index last_index);
+                            raft_index lastIndex);
 
 /* Return true if match_index is equal or higher than the snapshot_index. */
 bool progressSnapshotDone(struct raft *r, unsigned i);

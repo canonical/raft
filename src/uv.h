@@ -138,7 +138,7 @@ void uvSegmentSort(struct uvSegmentInfo *infos, size_t n_infos);
 int uvSegmentKeepTrailing(struct uv *uv,
                           struct uvSegmentInfo *segments,
                           size_t n,
-                          raft_index last_index,
+                          raft_index lastIndex,
                           size_t trailing,
                           char *errmsg);
 
@@ -353,7 +353,7 @@ int UvFinalize(struct uv *uv,
                unsigned long long counter,
                size_t used,
                raft_index first_index,
-               raft_index last_index);
+               raft_index lastIndex);
 
 /* Implementation of raft_io->send. */
 int UvSend(struct raft_io *io,
