@@ -126,7 +126,7 @@ RAFT_API struct raft *raft_fixture_get(struct raft_fixture *f, unsigned i);
 /**
  * Return @true if the @i'th server hasn't been killed.
  */
-RAFT_API bool raft_fixture_alive(struct raft_fixture *f, unsigned i);
+RAFT_API bool raftFixtureAlive(struct raft_fixture *f, unsigned i);
 
 /**
  * Return the index of the current leader, or the current number of servers if
