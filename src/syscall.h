@@ -33,7 +33,7 @@ int io_getevents(aio_context_t ctxId,
 int ioUringRegister(int fd,
                     unsigned int opcode,
                     const void *arg,
-                    unsigned int nr_args);
+                    unsigned int nrArgs);
 
 int ioUringSetup(unsigned int entries, struct io_uring_params *p);
 
