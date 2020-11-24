@@ -17,7 +17,7 @@ int uvEncodeMessage(const struct raft_message *message,
 int uvDecodeMessage(unsigned long type,
                     const uv_buf_t *header,
                     struct raft_message *message,
-                    size_t *payload_len);
+                    size_t *payloadLen);
 
 int uvDecodeBatchHeader(const void *batch,
                         struct raft_entry **entries,
