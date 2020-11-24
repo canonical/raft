@@ -125,12 +125,12 @@ struct uvSegmentInfo
  * segment (open-xxx). */
 int uvSegmentInfoAppendIfMatch(const char *filename,
                                struct uvSegmentInfo *infos[],
-                               size_t *n_infos,
+                               size_t *nInfos,
                                bool *appended);
 
 /* Sort the given list of segments by comparing their filenames. Closed segments
  * come before open segments. */
-void uvSegmentSort(struct uvSegmentInfo *infos, size_t n_infos);
+void uvSegmentSort(struct uvSegmentInfo *infos, size_t nInfos);
 
 /* Keep only the closed segments whose entries are within the given trailing
  * amount past the given snapshot last index. If the given trailing amount is 0,
@@ -236,12 +236,12 @@ void uvSnapshotFilenameOf(struct uvSnapshotInfo *info, char *filename);
 int UvSnapshotInfoAppendIfMatch(struct uv *uv,
                                 const char *filename,
                                 struct uvSnapshotInfo *infos[],
-                                size_t *n_infos,
+                                size_t *nInfos,
                                 bool *appended);
 
 /* Sort the given list of snapshots by comparing their filenames. Older
  * snapshots will come first. */
-void UvSnapshotSort(struct uvSnapshotInfo *infos, size_t n_infos);
+void UvSnapshotSort(struct uvSnapshotInfo *infos, size_t nInfos);
 
 /* Load the snapshot associated with the given metadata. */
 int UvSnapshotLoad(struct uv *uv,
