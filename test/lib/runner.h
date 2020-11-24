@@ -39,7 +39,7 @@ extern int _main_suites_n;
  * the prefix attribute of the slot will be set to /S. */
 #define SUITE(S)      \
     SUITE__DECLARE(S) \
-    SUITE__ADD_CHILD(main, #S, S)
+    SUITE_ADD_CHILD(main, #S, S)
 
 /* Declare and register a new test. */
 #define TEST(S, C, SETUP, TEAR_DOWN, OPTIONS, PARAMS)                \
@@ -76,7 +76,7 @@ extern int _main_suites_n;
 /* Set the tests and suites attributes of the next available slot of the
  * MunitSuite[] array of S1 to the MunitTest[] and MunitSuite[] arrays of S2,
  * using the given PREXIX. */
-#define SUITE__ADD_CHILD(S1, PREFIX, S2)                               \
+#define SUITE_ADD_CHILD(S1, PREFIX, S2)                                \
     __attribute__((constructor)) static void _##S1##_##S2##_init(void) \
     {                                                                  \
         int n = _##S1##_suites_n;                                      \
