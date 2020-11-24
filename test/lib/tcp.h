@@ -103,6 +103,6 @@ int test_tcpAccept(struct test_tcp *t);
 /**
  * Close the server socket.
  */
-void test_tcp_stop(struct test_tcp *t);
+void testTcpStop(struct test_tcp *t);
 
 #endif /* TEST_TCP_H */
