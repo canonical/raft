@@ -266,7 +266,7 @@ int UvSnapshotGet(struct raft_io *io,
  * open ones). */
 int UvList(struct uv *uv,
            struct uvSnapshotInfo *snapshots[],
-           size_t *n_snapshots,
+           size_t *nSnapshots,
            struct uvSegmentInfo *segments[],
            size_t *nSegments,
            char *errmsg);
