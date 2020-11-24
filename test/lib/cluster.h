@@ -279,17 +279,17 @@
 
 /* Add a new pristine server to the cluster, connected to all others. Then
  * submit a request to add it to the configuration as an idle server. */
-#define CLUSTER_ADD(REQ)                                               \
-    {                                                                  \
-        int rc;                                                        \
-        struct raft *new_raft;                                         \
-        CLUSTER_GROW;                                                  \
-        rc = raft_start(CLUSTER_RAFT(CLUSTER_N - 1));                  \
-        munit_assert_int(rc, ==, 0);                                   \
-        new_raft = CLUSTER_RAFT(CLUSTER_N - 1);                        \
-        rc = raft_add(CLUSTER_RAFT(CLUSTER_LEADER), REQ, new_raft->id, \
-                      new_raft->address, NULL);                        \
-        munit_assert_int(rc, ==, 0);                                   \
+#define CLUSTER_ADD(REQ)                                              \
+    {                                                                 \
+        int rc;                                                       \
+        struct raft *newRaft;                                         \
+        CLUSTER_GROW;                                                 \
+        rc = raft_start(CLUSTER_RAFT(CLUSTER_N - 1));                 \
+        munit_assert_int(rc, ==, 0);                                  \
+        newRaft = CLUSTER_RAFT(CLUSTER_N - 1);                        \
+        rc = raft_add(CLUSTER_RAFT(CLUSTER_LEADER), REQ, newRaft->id, \
+                      newRaft->address, NULL);                        \
+        munit_assert_int(rc, ==, 0);                                  \
     }
 
 /* Assign the given role to the server that was added last. */
