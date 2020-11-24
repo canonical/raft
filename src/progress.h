@@ -5,7 +5,7 @@
 
 #include "../include/raft.h"
 
-/* Possible values for the state field of struct raft_progress. */
+/* Possible values for the state field of struct raftProgress. */
 enum {
     PROGRESS__PROBE = 0, /* At most one AppendEntries per heartbeat interval */
     PROGRESS__PIPELINE,  /* Optimistically stream AppendEntries */
