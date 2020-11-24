@@ -35,7 +35,7 @@ int ioUringRegister(int fd,
                     const void *arg,
                     unsigned int nr_args);
 
-int io_uring_setup(unsigned int entries, struct io_uring_params *p);
+int ioUringSetup(unsigned int entries, struct io_uring_params *p);
 
 int ioUringEnter(int fd,
                  unsigned int to_submit,
