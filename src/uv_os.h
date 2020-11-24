@@ -110,7 +110,7 @@ int UvOsIoDestroy(aio_context_t ctx);
 int UvOsIoSubmit(aio_context_t ctx, long nr, struct iocb **iocbpp);
 int UvOsIoGetevents(aio_context_t ctx,
                     long min_nr,
-                    long max_nr,
+                    long maxNr,
                     struct io_event *events,
                     struct timespec *timeout);
 int UvOsEventfd(unsigned int initval, int flags);
