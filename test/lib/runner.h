@@ -14,11 +14,11 @@ extern MunitSuite _main_suites[];
 extern int _main_suites_n;
 
 /* Maximum number of test cases for each suite */
-#define SUITE__CAP 128
+#define SUITE_CAP 128
 
 /* Define the top-level suites array and the main() function of the test. */
 #define RUNNER(NAME)                                               \
-    MunitSuite _main_suites[SUITE__CAP];                           \
+    MunitSuite _main_suites[SUITE_CAP];                            \
     int _main_suites_n = 0;                                        \
                                                                    \
     int main(int argc, char *argv[MUNIT_ARRAY_PARAM(argc + 1)])    \
@@ -31,8 +31,8 @@ extern int _main_suites_n;
  *
  * A test suite is a pair of static variables:
  *
- * static MunitTest _##S##_suites[SUITE__CAP]
- * static MunitTest _##S##_tests[SUITE__CAP]
+ * static MunitTest _##S##_suites[SUITE_CAP]
+ * static MunitTest _##S##_tests[SUITE_CAP]
  *
  * The tests and suites attributes of the next available MunitSuite slot in the
  * _module_suites array will be set to the suite's tests and suites arrays, and
@@ -57,8 +57,8 @@ extern int _main_suites_n;
 /* Declare the MunitSuite[] and the MunitTest[] arrays that compose the test
  * suite identified by S. */
 #define SUITE__DECLARE(S)                                      \
-    static MunitSuite _##S##_suites[SUITE__CAP];               \
-    static MunitTest _##S##_tests[SUITE__CAP];                 \
+    static MunitSuite _##S##_suites[SUITE_CAP];                \
+    static MunitTest _##S##_tests[SUITE_CAP];                  \
     static MunitTestSetup _##S##_setup = NULL;                 \
     static MunitTestTearDown _##S##_tear_down = NULL;          \
     static int _##S##_suites_n = 0;                            \
