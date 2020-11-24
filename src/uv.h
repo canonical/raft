@@ -54,7 +54,7 @@ struct uv
 {
     struct raft_io *io;                  /* I/O object we're implementing */
     struct uv_loop_s *loop;              /* UV event loop */
-    char dir[UV__DIR_LEN];               /* Data directory */
+    char dir[UV_DIR_LEN];                /* Data directory */
     struct raft_uv_transport *transport; /* Network transport */
     struct raft_tracer *tracer;          /* Debug tracing */
     raft_id id;                          /* Server ID */

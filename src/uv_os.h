@@ -59,10 +59,10 @@
 #define LEN_AT_MOST_(STR, LEN) (strnlen(STR, LEN + 1) <= LEN)
 
 /* Maximum length of a directory path string. */
-#define UV__DIR_LEN (UV__PATH_SZ - UV__SEP_LEN - UV__FILENAME_LEN - 1)
+#define UV_DIR_LEN (UV__PATH_SZ - UV__SEP_LEN - UV__FILENAME_LEN - 1)
 
-/* True if the given DIR string has at most UV__DIR_LEN chars. */
-#define UV__DIR_HAS_VALID_LEN(DIR) LEN_AT_MOST_(DIR, UV__DIR_LEN)
+/* True if the given DIR string has at most UV_DIR_LEN chars. */
+#define UV__DIR_HAS_VALID_LEN(DIR) LEN_AT_MOST_(DIR, UV_DIR_LEN)
 
 /* True if the given FILENAME string has at most UV__FILENAME_LEN chars. */
 #define UV__FILENAME_HAS_VALID_LEN(FILENAME) \
