@@ -155,7 +155,7 @@ int uvSegmentLoadAll(struct uv *uv,
                      struct uvSegmentInfo *segments,
                      size_t n_segments,
                      struct raft_entry **entries,
-                     size_t *n_entries);
+                     size_t *nEntries);
 
 /* Return the number of blocks in a segments. */
 #define uvSegmentBlocks(UV) (UV->segment_size / UV->block_size)
@@ -187,7 +187,7 @@ int uvSegmentBufferFormat(struct uvSegmentBuffer *b);
  * will be appended. */
 int uvSegmentBufferAppend(struct uvSegmentBuffer *b,
                           const struct raft_entry entries[],
-                          unsigned n_entries);
+                          unsigned nEntries);
 
 /* After all entries to write have been encoded, finalize the buffer by zeroing
  * the unused memory of the last block. The out parameter will point to the
