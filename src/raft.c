@@ -120,7 +120,7 @@ void raft_set_snapshot_trailing(struct raft *r, unsigned n)
     r->snapshot.trailing = n;
 }
 
-void raft_set_max_catch_up_rounds(struct raft *r, unsigned n)
+void raftSetMaxCatchUpRounds(struct raft *r, unsigned n)
 {
     r->max_catch_up_rounds = n;
 }
