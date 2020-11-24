@@ -16,9 +16,9 @@ void logClose(struct raft_log *l);
 
 /* Called at startup when populating the log with entries loaded from disk. It
  * sets the starting state of the log. The start index must be lower or equal
- * than snapshot_index + 1. */
+ * than snapshotIndex + 1. */
 void logStart(struct raft_log *l,
-              raft_index snapshot_index,
+              raft_index snapshotIndex,
               raft_term snapshot_term,
               raft_index start_index);
 
