@@ -78,7 +78,7 @@ void test_tcpListen(struct test_tcp *t);
 /**
  * Return the address of the server socket created with @test_tcpListen.
  */
-const char *test_tcp_address(struct test_tcp *t);
+const char *testTcpAddress(struct test_tcp *t);
 
 /**
  * Connect the client socket to the given port on localhost.
