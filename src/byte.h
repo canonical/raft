@@ -145,18 +145,18 @@ BYTE_INLINE uint64_t byteGet64Unaligned(const void **cursor)
     return byteFlip64(value);
 }
 
-BYTE_INLINE const char *byteGetString(const void **cursor, size_t max_len)
+BYTE_INLINE const char *byteGetString(const void **cursor, size_t maxLen)
 {
     const char **p = (const char **)cursor;
     const char *value = *p;
     size_t len = 0;
-    while (len < max_len) {
+    while (len < maxLen) {
         if (*(*p + len) == 0) {
             break;
         }
         len++;
     }
-    if (len == max_len) {
+    if (len == maxLen) {
         return NULL;
     }
     *p += len + 1;
