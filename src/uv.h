@@ -280,7 +280,7 @@ struct uvPrepare
     uv_file fd;                 /* Resulting segment file descriptor */
     unsigned long long counter; /* Resulting segment counter */
     uvPrepareCb cb;             /* Completion callback */
-    queue queue;                /* Links in uv_io->prepare_reqs */
+    queue queue;                /* Links in uvIo->prepare_reqs */
 };
 
 /* Get a prepared open segment ready for writing. If a prepared open segment is
