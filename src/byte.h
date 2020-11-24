@@ -23,7 +23,7 @@
 #define BYTE_LITTLE_ENDIAN
 #elif defined(__BYTE_ORDER) && (__BYTE_ORDER == __BIG_ENDIAN) && \
     defined(__GNUC__) && __GNUC__ >= 4 && __GNUC_MINOR__ >= 8
-#define RAFT__BIG_ENDIAN
+#define RAFT_BIG_ENDIAN
 #endif
 
 /* Flip a 32-bit number to network byte order (little endian) */
@@ -31,7 +31,7 @@ BYTE_INLINE uint32_t byteFlip32(uint32_t v)
 {
 #if defined(BYTE_LITTLE_ENDIAN)
     return v;
-#elif defined(RAFT__BIG_ENDIAN)
+#elif defined(RAFT_BIG_ENDIAN)
     return __builtin_bswap32(v);
 #else /* Unknown endianess */
     union {
@@ -53,7 +53,7 @@ BYTE_INLINE uint64_t byteFlip64(uint64_t v)
 {
 #if defined(BYTE_LITTLE_ENDIAN)
     return v;
-#elif defined(RAFT__BIG_ENDIAN)
+#elif defined(RAFT_BIG_ENDIAN)
     return __builtin_bswap64(v);
 #else
     union {
