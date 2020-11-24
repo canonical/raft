@@ -223,16 +223,16 @@ RAFT_API struct raft_fixture_event *raft_fixture_step_n(struct raft_fixture *f,
                                                         unsigned n);
 
 /**
- * Step the cluster until the given @stop function returns #true, or @max_msecs
+ * Step the cluster until the given @stop function returns #true, or @maxMsecs
  * have elapsed.
  *
- * Return #true if the @stop function has returned #true within @max_msecs.
+ * Return #true if the @stop function has returned #true within @maxMsecs.
  */
 RAFT_API bool raft_fixture_step_until(struct raft_fixture *f,
                                       bool (*stop)(struct raft_fixture *f,
                                                    void *arg),
                                       void *arg,
-                                      unsigned max_msecs);
+                                      unsigned maxMsecs);
 
 /**
  * Step the cluster until @msecs have elapsed.
@@ -241,63 +241,63 @@ RAFT_API void raft_fixture_step_until_elapsed(struct raft_fixture *f,
                                               unsigned msecs);
 
 /**
- * Step the cluster until a leader is elected, or @max_msecs have elapsed.
+ * Step the cluster until a leader is elected, or @maxMsecs have elapsed.
  */
 RAFT_API bool raft_fixture_step_until_has_leader(struct raft_fixture *f,
-                                                 unsigned max_msecs);
+                                                 unsigned maxMsecs);
 
 /**
- * Step the cluster until the current leader gets deposed, or @max_msecs have
+ * Step the cluster until the current leader gets deposed, or @maxMsecs have
  * elapsed.
  */
 RAFT_API bool raft_fixture_step_until_has_no_leader(struct raft_fixture *f,
-                                                    unsigned max_msecs);
+                                                    unsigned maxMsecs);
 
 /**
  * Step the cluster until the @i'th server has applied the entry at the given
- * index, or @max_msecs have elapsed. If @i equals the number of servers, then
+ * index, or @maxMsecs have elapsed. If @i equals the number of servers, then
  * step until all servers have applied the given entry.
  */
 RAFT_API bool raft_fixture_step_until_applied(struct raft_fixture *f,
                                               unsigned i,
                                               raft_index index,
-                                              unsigned max_msecs);
+                                              unsigned maxMsecs);
 
 /**
  * Step the cluster until the state of the @i'th server matches the given one,
- * or @max_msecs have elapsed.
+ * or @maxMsecs have elapsed.
  */
 RAFT_API bool raft_fixture_step_until_state_is(struct raft_fixture *f,
                                                unsigned i,
                                                int state,
-                                               unsigned max_msecs);
+                                               unsigned maxMsecs);
 
 /**
  * Step the cluster until the term of the @i'th server matches the given one,
- * or @max_msecs have elapsed.
+ * or @maxMsecs have elapsed.
  */
 RAFT_API bool raft_fixture_step_until_term_is(struct raft_fixture *f,
                                               unsigned i,
                                               raft_term term,
-                                              unsigned max_msecs);
+                                              unsigned maxMsecs);
 
 /**
  * Step the cluster until the @i'th server has voted for the @j'th one, or
- * @max_msecs have elapsed.
+ * @maxMsecs have elapsed.
  */
 RAFT_API bool raft_fixture_step_until_voted_for(struct raft_fixture *f,
                                                 unsigned i,
                                                 unsigned j,
-                                                unsigned max_msecs);
+                                                unsigned maxMsecs);
 
 /**
  * Step the cluster until all pending network messages from the @i'th server to
- * the @j'th server have been delivered, or @max_msecs have elapsed.
+ * the @j'th server have been delivered, or @maxMsecs have elapsed.
  */
 RAFT_API bool raft_fixture_step_until_delivered(struct raft_fixture *f,
                                                 unsigned i,
                                                 unsigned j,
-                                                unsigned max_msecs);
+                                                unsigned maxMsecs);
 
 /**
  * Set a function to be called after every time a fixture event occurs as
