@@ -125,7 +125,7 @@ void raft_set_max_catch_up_rounds(struct raft *r, unsigned n)
     r->max_catch_up_rounds = n;
 }
 
-void raft_set_max_catch_up_round_duration(struct raft *r, unsigned msecs)
+void raftSetMaxCatchUpRoundDuration(struct raft *r, unsigned msecs)
 {
     r->max_catch_up_round_duration = msecs;
 }
