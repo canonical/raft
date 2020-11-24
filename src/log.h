@@ -20,7 +20,7 @@ void logClose(struct raft_log *l);
 void logStart(struct raft_log *l,
               raft_index snapshotIndex,
               raft_term snapshotTerm,
-              raft_index start_index);
+              raft_index startIndex);
 
 /* Get the number of entries the log currently contains. */
 size_t logNumEntries(struct raft_log *l);

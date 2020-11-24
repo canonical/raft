@@ -148,10 +148,10 @@ int uvSegmentLoadClosed(struct uv *uv,
                         struct raft_entry *entries[],
                         size_t *n);
 
-/* Load raft entries from the given segments. The @start_index is the expected
+/* Load raft entries from the given segments. The @startIndex is the expected
  * index of the first entry of the first segment. */
 int uvSegmentLoadAll(struct uv *uv,
-                     const raft_index start_index,
+                     const raft_index startIndex,
                      struct uvSegmentInfo *segments,
                      size_t nSegments,
                      struct raft_entry **entries,
