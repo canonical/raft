@@ -101,6 +101,6 @@ void logSnapshot(struct raft_log *l, raft_index lastIndex, unsigned trailing);
  * The log can be in any state. All outstanding entries will be discarded, the
  * last index and last term of the most recent snapshot will be set to the given
  * values, and the offset adjusted accordingly. */
-void logRestore(struct raft_log *l, raft_index lastIndex, raft_term last_term);
+void logRestore(struct raft_log *l, raft_index lastIndex, raft_term lastTerm);
 
 #endif /* RAFT_LOG_H_ */
