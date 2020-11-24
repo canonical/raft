@@ -39,7 +39,7 @@ int ioUringSetup(unsigned int entries, struct io_uring_params *p);
 
 int ioUringEnter(int fd,
                  unsigned int to_submit,
-                 unsigned int min_complete,
+                 unsigned int minComplete,
                  unsigned int flags,
                  sigset_t *sig);
 #endif
