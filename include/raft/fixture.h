@@ -90,10 +90,10 @@ RAFT_API void raft_fixture_close(struct raft_fixture *f);
 
 /**
  * Convenience to generate a configuration object containing all servers in the
- * cluster. The first @n_voting servers will be voting ones.
+ * cluster. The first @nVoting servers will be voting ones.
  */
 RAFT_API int raft_fixture_configuration(struct raft_fixture *f,
-                                        unsigned n_voting,
+                                        unsigned nVoting,
                                         struct raft_configuration *conf);
 
 /**
