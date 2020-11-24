@@ -30,10 +30,10 @@ int io_getevents(aio_context_t ctxId,
 
 #if HAVE_LINUX_IO_URING_H
 /* uring */
-int io_uring_register(int fd,
-                      unsigned int opcode,
-                      const void *arg,
-                      unsigned int nr_args);
+int ioUringRegister(int fd,
+                    unsigned int opcode,
+                    const void *arg,
+                    unsigned int nr_args);
 
 int io_uring_setup(unsigned int entries, struct io_uring_params *p);
 
