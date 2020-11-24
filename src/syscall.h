@@ -22,7 +22,7 @@ int io_destroy(aio_context_t ctxId);
 int io_submit(aio_context_t ctxId, long nr, struct iocb **iocbpp);
 
 int io_getevents(aio_context_t ctxId,
-                 long min_nr,
+                 long minNr,
                  long nr,
                  struct io_event *events,
                  struct timespec *timeout);
