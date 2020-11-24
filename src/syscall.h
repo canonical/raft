@@ -37,11 +37,11 @@ int io_uring_register(int fd,
 
 int io_uring_setup(unsigned int entries, struct io_uring_params *p);
 
-int io_uring_enter(int fd,
-                   unsigned int to_submit,
-                   unsigned int min_complete,
-                   unsigned int flags,
-                   sigset_t *sig);
+int ioUringEnter(int fd,
+                 unsigned int to_submit,
+                 unsigned int min_complete,
+                 unsigned int flags,
+                 sigset_t *sig);
 #endif
 
 #endif /* SYSCALL_ */
