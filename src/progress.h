@@ -98,7 +98,7 @@ bool progressMaybeDecrement(struct raft *r,
                             raft_index rejected,
                             raft_index lastIndex);
 
-/* Return true if match_index is equal or higher than the snapshot_index. */
+/* Return true if matchIndex is equal or higher than the snapshot_index. */
 bool progressSnapshotDone(struct raft *r, unsigned i);
 
 #endif /* PROGRESS_H_ */
