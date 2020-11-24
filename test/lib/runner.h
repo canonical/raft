@@ -37,8 +37,8 @@ extern int _main_suites_n;
  * The tests and suites attributes of the next available MunitSuite slot in the
  * _module_suites array will be set to the suite's tests and suites arrays, and
  * the prefix attribute of the slot will be set to /S. */
-#define SUITE(S)      \
-    SUITE__DECLARE(S) \
+#define SUITE(S)     \
+    SUITE_DECLARE(S) \
     SUITE_ADD_CHILD(main, #S, S)
 
 /* Declare and register a new test. */
@@ -56,7 +56,7 @@ extern int _main_suites_n;
 
 /* Declare the MunitSuite[] and the MunitTest[] arrays that compose the test
  * suite identified by S. */
-#define SUITE__DECLARE(S)                                      \
+#define SUITE_DECLARE(S)                                       \
     static MunitSuite _##S##_suites[SUITE_CAP];                \
     static MunitTest _##S##_tests[SUITE_CAP];                  \
     static MunitTestSetup _##S##_setup = NULL;                 \
