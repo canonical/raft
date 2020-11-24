@@ -381,7 +381,7 @@
 
 /* Make an I/O error occur on the I'th server after @DELAY operations. */
 #define CLUSTER_IO_FAULT(I, DELAY, REPEAT) \
-    raft_fixture_io_fault(&f->cluster, I, DELAY, REPEAT)
+    raftFixtureIoFault(&f->cluster, I, DELAY, REPEAT)
 
 /* Return the number of messages sent by the given server. */
 #define CLUSTER_N_SEND(I, TYPE) raft_fixture_n_send(&f->cluster, I, TYPE)
