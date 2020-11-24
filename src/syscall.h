@@ -15,7 +15,7 @@
 
 #if HAVE_LINUX_AIO_ABI_H
 /* AIO */
-int io_setup(unsigned nr_events, aio_context_t *ctxIdp);
+int io_setup(unsigned nrEvents, aio_context_t *ctxIdp);
 
 int io_destroy(aio_context_t ctxId);
 
