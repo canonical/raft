@@ -49,13 +49,13 @@ raft_index progressMatchIndex(struct raft *r, unsigned i);
  * sent. */
 void progressUpdateLastSend(struct raft *r, unsigned i);
 
-/* Reset to false the recent_recv flag of the server at the given index,
+/* Reset to false the recentRecv flag of the server at the given index,
  * returning the previous value.
  *
  * To be called once every election_timeout milliseconds. */
 bool progressResetRecentRecv(struct raft *r, unsigned i);
 
-/* Set to true the recent_recv flag of the server at the given index.
+/* Set to true the recentRecv flag of the server at the given index.
  *
  * To be called whenever we receive an AppendEntries RPC result */
 void progressMarkRecentRecv(struct raft *r, unsigned i);
