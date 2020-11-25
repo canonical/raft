@@ -98,7 +98,7 @@ void test_tcp_send(struct test_tcp *t, const void *buf, int len);
 /**
  * Accept inbound client connection and return the relevant socket.
  */
-int test_tcpAccept(struct test_tcp *t);
+int testTcpAccept(struct test_tcp *t);
 
 /**
  * Close the server socket.
