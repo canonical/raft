@@ -180,13 +180,13 @@ RAFT_API void raft_fixture_depose(struct raft_fixture *f);
  *    sender and the receiver are currently disconnected, the RPC message is
  *    simply dropped. If a callback was fired, jump directly to 3. and skip 2.
  *
- * 2. All pending #raftIo_append disk writes across all servers, that have been
+ * 2. All pending #raftIoAppend disk writes across all servers, that have been
  *    submitted using #raftIo->append() but not yet completed, are scanned and
  *    the one with the lowest completion time is picked. All in-flight network
  *    messages waiting to be delivered are scanned and the one with the lowest
  *    delivery time is picked. All servers are scanned, and the one with the
  *    lowest tick expiration time is picked. The three times are compared and
- *    the lowest one is picked. If a #raftIo_append disk write has completed,
+ *    the lowest one is picked. If a #raftIoAppend disk write has completed,
  *    the relevant callback will be invoked, if there's a network message to be
  *    delivered, the receiver's @raft_io_recv_cb callback gets fired, if a tick
  *    timer has expired the relevant #raftIo->tick() callback will be
