@@ -73,10 +73,10 @@ void test_tcp_tear_down(struct test_tcp *t);
 /**
  * Start listening to a random free port on localhost.
  */
-void test_tcpListen(struct test_tcp *t);
+void testTcpListen(struct test_tcp *t);
 
 /**
- * Return the address of the server socket created with @test_tcpListen.
+ * Return the address of the server socket created with @testTcpListen.
  */
 const char *testTcpAddress(struct test_tcp *t);
 
