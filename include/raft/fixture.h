@@ -168,12 +168,12 @@ RAFT_API void raft_fixture_depose(struct raft_fixture *f);
  *
  * In particular, the following happens:
  *
- * 1. If there are pending #raftIo_send requests, that have been submitted
+ * 1. If there are pending #raftIoSend requests, that have been submitted
  *    using #raftIo->send() and not yet sent, the oldest one is picked and the
  *    relevant callback fired. This simulates completion of a socket write,
  *    which means that the send request has been completed. The receiver does
  *    not immediately receives the message, as the message is propagating
- *    through the network. However any memory associated with the #raftIo_send
+ *    through the network. However any memory associated with the #raftIoSend
  *    request can be released (e.g. log entries). The in-memory I/O
  *    implementation assigns a latency to each RPC message, which will get
  *    delivered to the receiver only after that amount of time elapses. If the
