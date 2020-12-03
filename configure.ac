@@ -98,13 +98,32 @@ CC_CHECK_FLAGS_APPEND([AM_CFLAGS],[CFLAGS],[ \
   -Wfloat-equal \
   -Wsuggest-attribute=noreturn \
   -Wformat=2 \
-  -Wshadow \
   -Wendif-labels \
   -Wdate-time \
   -Wnested-externs \
   -Wconversion \
+  -Werror=implicit-function-declaration \
+  -Wunused-but-set-variable \
+  -Werror=return-type \
+  -Werror=incompatible-pointer-types \
+  -Wshadow \
+  -Werror=overflow \
+  -Werror=shift-count-overflow \
+  -Werror=shift-overflow=2 \
+  -Warray-bounds \
+  -Wrestrict \
+  -Wreturn-local-addr \
+  -Wstringop-overflow \
 ])
 AC_SUBST(AM_CFLAGS)
+
+CC_CHECK_FLAGS_APPEND([AM_LDFLAGS],[LDFLAGS],[ \
+  -z relro \
+  -z now \
+  -fstack-protector-strong \
+  --param=ssp-buffer-size=4 \
+])
+AC_SUBST(AM_LDLAGS)
 
 AC_CONFIG_FILES([raft.pc Makefile])
 AC_OUTPUT

@@ -1264,6 +1264,7 @@ static void copyLeaderLog(struct raft_fixture *f)
         struct raft_buffer buf;
         buf.len = entry->buf.len;
         buf.base = raft_malloc(buf.len);
+        assert(buf.base != NULL);
         memcpy(buf.base, entry->buf.base, buf.len);
         rv = logAppend(&f->log, entry->term, entry->type, &buf, NULL);
         assert(rv == 0);
