@@ -65,6 +65,7 @@ int entryBatchCopy(const struct raft_entry *src,
     /* Copy the entries. */
     *dst = raft_malloc(n * sizeof **dst);
     if (*dst == NULL) {
+        raft_free(batch);
         return RAFT_NOMEM;
     }
 
