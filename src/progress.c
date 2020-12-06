@@ -130,7 +130,7 @@ bool progressShouldReplicate(struct raft *r, unsigned i)
             result = false;
             break;
         case PROGRESS__PROBE:
-            /* We send at most one message per heatbeat interval. */
+            /* We send at most one message per heartbeat interval. */
             result = needs_heartbeat;
             break;
         case PROGRESS__PIPELINE:

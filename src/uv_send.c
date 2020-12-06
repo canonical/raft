@@ -59,7 +59,7 @@ struct uvClient
 struct uvSend
 {
     struct uvClient *client;  /* Client connected to the target server */
-    struct raft_io_send *req; /* Uer request */
+    struct raft_io_send *req; /* User request */
     uv_buf_t *bufs;           /* Encoded raft RPC message to send */
     unsigned n_bufs;          /* Number of buffers */
     uv_write_t write;         /* Stream write request */
@@ -398,7 +398,7 @@ static void uvClientAbort(struct uvClient *c)
         uvClientDisconnect(c);
     }
 
-    /* Closing the timer implicitely stop it, so the timeout callback won't be
+    /* Closing the timer implicitly stop it, so the timeout callback won't be
      * fired. */
     uv_close((struct uv_handle_s *)&c->timer, uvClientTimerCloseCb);
     c->closing = true;

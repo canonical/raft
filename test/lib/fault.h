@@ -5,7 +5,7 @@
 
 #include <stdbool.h>
 
-/* Information about a fault that should occurr in a component. */
+/* Information about a fault that should occur in a component. */
 struct Fault
 {
     int countdown; /* Trigger the fault when this counter gets to zero. */

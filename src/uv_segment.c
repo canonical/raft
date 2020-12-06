@@ -64,7 +64,7 @@ int uvSegmentInfoAppendIfMatch(const char *filename,
     /* Check if it's a closed or open filename */
     matched = uvSegmentInfoMatch(filename, &info);
 
-    /* If fhis is neither a closed or an open segment, return. */
+    /* If this is neither a closed or an open segment, return. */
     if (!matched) {
         *appended = false;
         return 0;
@@ -737,7 +737,7 @@ int uvSegmentBufferAppend(struct uvSegmentBuffer *b,
     crc2 = 0;
     for (i = 0; i < n_entries; i++) {
         const struct raft_entry *entry = &entries[i];
-        /* TODO: enforce the requirment of 8-byte aligment also in the
+        /* TODO: enforce the requirement of 8-byte alignment also in the
          * higher-level APIs. */
         assert(entry->buf.len % sizeof(uint64_t) == 0);
         memcpy(cursor, entry->buf.base, entry->buf.len);

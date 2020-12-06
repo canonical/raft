@@ -137,7 +137,7 @@ static int sendAppendEntries(struct raft *r,
     }
 
     if (progressState(r, i) == PROGRESS__PIPELINE) {
-        /* Optimitiscally update progress. */
+        /* Optimistically update progress. */
         progressOptimisticNextIndex(r, i, req->index + req->n);
     }
 
@@ -757,7 +757,7 @@ int replicationUpdate(struct raft *r,
     i = configurationIndexOf(&r->configuration, server->id);
 
     if (i < r->configuration.n) {
-        /* If we are transfering leadership to this follower, check if its log
+        /* If we are transferring leadership to this follower, check if its log
          * is now up-to-date and, if so, send it a TimeoutNow RPC (unless we
          * already did). */
         if (r->transfer != NULL && r->transfer->id == server->id) {
@@ -1226,7 +1226,7 @@ int replicationInstallSnapshot(struct raft *r,
     *async = false;
 
     /* If we are taking a snapshot ourselves or installing a snapshot, ignore
-     * the request, the leader will weventually retry. TODO: we should do
+     * the request, the leader will eventually retry. TODO: we should do
      * something smarter. */
     if (r->snapshot.pending.term != 0 || r->snapshot.put.data != NULL) {
         *async = true;
@@ -1248,7 +1248,7 @@ int replicationInstallSnapshot(struct raft *r,
 
     *async = true;
 
-    /* Premptively update our in-memory state. */
+    /* Preemptively update our in-memory state. */
     logRestore(&r->log, args->last_index, args->last_term);
 
     r->last_stored = 0;

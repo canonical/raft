@@ -43,7 +43,7 @@ static int restoreMostRecentConfiguration(struct raft *r,
  * actually committed or not. We don't allow more than one pending uncommitted
  * configuration change at a time, plus
  *
- *   when adding or removing just asingle server, it is safe to switch directly
+ *   when adding or removing just a single server, it is safe to switch directly
  *   to the new configuration.
  *
  * and
@@ -52,13 +52,13 @@ static int restoreMostRecentConfiguration(struct raft *r,
  *   that server's log: the C_new entry is replicated to the C_new servers, and
  *   a majority of the new configuration is used to determine the C_new entry's
  *   commitment. This means that servers do notwait for configuration entries to
- *   be committed, and each server always uses the latest configurationfound in
+ *   be committed, and each server always uses the latest configuration found in
  *   its log.
  *
  * as explained in section 4.1.
  *
- * TODO: we should probably set configuration_uncomitted_index as well, since we
- * can't be sure a configuration change has been comitted and we need to be
+ * TODO: we should probably set configuration_uncommitted_index as well, since we
+ * can't be sure a configuration change has been committed and we need to be
  * ready to roll back to the last committed configuration.
  */
 static int restoreEntries(struct raft *r,

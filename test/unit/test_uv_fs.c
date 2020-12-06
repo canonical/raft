@@ -32,7 +32,7 @@
 
 SUITE(UvFsCheckDir)
 
-/* If the directory exists, the function suceeds. */
+/* If the directory exists, the function succeeds. */
 TEST(UvFsCheckDir, exists, DirSetUp, DirTearDown, 0, NULL)
 {
     const char *dir = data;
@@ -149,7 +149,7 @@ TEST(UvFsOpenFileForReading, noExists, DirSetUp, DirTearDown, 0, NULL)
  *
  *****************************************************************************/
 
-/* Allocate a file with the given parameters and assert that no error occured.
+/* Allocate a file with the given parameters and assert that no error occurred.
  */
 #define ALLOCATE_FILE(DIR, FILENAME, SIZE)                           \
     {                                                                \

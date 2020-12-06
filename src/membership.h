@@ -32,7 +32,7 @@ int membershipUncommittedChange(struct raft *r,
 
 /* Rollback any promotion configuration change that was applied locally, but
  * failed to be committed. It must be called by followers after they receive an
- * AppendEntries RPC request that instructs them to evict the uncomitted entry
+ * AppendEntries RPC request that instructs them to evict the uncommitted entry
  * from their log. */
 int membershipRollback(struct raft *r);
 
@@ -47,7 +47,7 @@ void membershipLeadershipTransferInit(struct raft *r,
 int membershipLeadershipTransferStart(struct raft *r);
 
 /* Finish a leadership transfer (whether successful or not), resetting the
- * leadership tranfer state and firing the user callback. */
+ * leadership transfer state and firing the user callback. */
 void membershipLeadershipTransferClose(struct raft *r);
 
 #endif /* MEMBERSHIP_H_ */

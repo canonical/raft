@@ -29,7 +29,7 @@ struct uvTcpConnect
     struct raft_uv_connect *req; /* User request */
     uv_buf_t handshake;          /* Handshake data */
     struct uv_tcp_s *tcp;        /* TCP connection socket handle */
-    struct uv_connect_s connect; /* TCP connectionr request */
+    struct uv_connect_s connect; /* TCP connection request */
     struct uv_write_s write;     /* TCP handshake request */
     int status;                  /* Returned to the request callback */
     queue queue;                 /* Pending connect queue */
@@ -57,7 +57,7 @@ static int uvTcpEncodeHandshake(raft_id id, const char *address, uv_buf_t *buf)
 }
 
 /* Finish the connect request, releasing its memory and firing the connect
- * callbact. */
+ * callback. */
 static void uvTcpConnectFinish(struct uvTcpConnect *connect)
 {
     struct uv_stream_s *stream = (struct uv_stream_s *)connect->tcp;

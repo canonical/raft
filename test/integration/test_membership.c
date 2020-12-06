@@ -227,7 +227,7 @@ TEST(raft_remove, inProgress, setup, tear_down, 0, NULL)
     return MUNIT_OK;
 }
 
-/* Trying to remove a server with an unknwon ID results in an error. */
+/* Trying to remove a server with an unknown ID results in an error. */
 TEST(raft_remove, badId, setup, tear_down, 0, NULL)
 {
     struct fixture *f = data;

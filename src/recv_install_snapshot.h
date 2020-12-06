@@ -1,4 +1,4 @@
-/* InstallSnapshpt RPC handlers. */
+/* InstallSnapshot RPC handlers. */
 
 #ifndef RECV_INSTALL_SNAPSHOT_H_
 #define RECV_INSTALL_SNAPSHOT_H_

@@ -125,7 +125,7 @@ RAFT_API void raft_uv_set_tracer(struct raft_io *io,
  *
  * No references to @address must be kept after this function returns.
  *
- * Ownership of @stream is transfered to user code, which is responsible of
+ * Ownership of @stream is transferred to user code, which is responsible of
  * uv_close()'ing it and then releasing its memory.
  */
 typedef void (*raft_uv_accept_cb)(struct raft_uv_transport *t,

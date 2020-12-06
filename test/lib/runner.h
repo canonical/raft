@@ -75,7 +75,7 @@ extern int _main_suites_n;
 
 /* Set the tests and suites attributes of the next available slot of the
  * MunitSuite[] array of S1 to the MunitTest[] and MunitSuite[] arrays of S2,
- * using the given PREXIX. */
+ * using the given PREFIX. */
 #define SUITE__ADD_CHILD(S1, PREFIX, S2)                               \
     __attribute__((constructor)) static void _##S1##_##S2##_init(void) \
     {                                                                  \

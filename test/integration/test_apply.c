@@ -70,7 +70,7 @@ static bool applyCbHasFired(struct raft_fixture *f, void *arg)
 /* Expect the apply callback to fire with the given status. */
 #define APPLY_EXPECT(STATUS) _result.status = STATUS
 
-/* Wait until an apply request comletes. */
+/* Wait until an apply request completes. */
 #define APPLY_WAIT CLUSTER_STEP_UNTIL(applyCbHasFired, &_result, 2000)
 
 /* Submit to the I'th server a request to apply a new RAFT_COMMAND entry and

@@ -264,7 +264,7 @@ struct snapshot
         munit_assert_string_equal(f->io.errmsg, ERRMSG);          \
     } while (0)
 
-/* Initialize the raft_io instance, then tnvoke raft_io->load() and assert that
+/* Initialize the raft_io instance, then invoke raft_io->load() and assert that
  * it returns the given state. If non-NULL, SNAPSHOT points to a struct snapshot
  * object whose attributes must match the loaded snapshot. ENTRIES_DATA is
  * supposed to be the integer stored in the data of first loaded entry. */

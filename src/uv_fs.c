@@ -529,7 +529,7 @@ static int probeDirectIO(int fd, size_t *size, char *errmsg)
         switch (fs_info.f_type) {
             case 0x01021994: /* TMPFS_MAGIC */
             case 0x2fc12fc1: /* ZFS magic */
-            case 0x24051905: /* UBIFS Suprt magic */
+            case 0x24051905: /* UBIFS Support magic */
                 *size = 0;
                 return 0;
             default:
@@ -545,7 +545,7 @@ static int probeDirectIO(int fd, size_t *size, char *errmsg)
         }
     }
 
-    /* Try to peform direct I/O, using various buffer size. */
+    /* Try to perform direct I/O, using various buffer size. */
     *size = 4096;
     while (*size >= 512) {
         buf = raft_aligned_alloc(*size, *size);

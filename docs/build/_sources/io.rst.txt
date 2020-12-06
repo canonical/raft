@@ -75,7 +75,7 @@ Public members
 
    The snapshot object and entries array must be allocated and populated using
    :c:func:`raft_malloc`. If this function completes successfully, ownership of
-   such memory is transfered to the caller.
+   such memory is transferred to the caller.
 
 .. c:member:: int (*start)(struct raft_io *io, unsigned msecs, raft_io_tick_cb tick, raft_io_recv_cb recv)
 

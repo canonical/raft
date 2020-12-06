@@ -152,7 +152,7 @@ TEST(send, second, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-/* Sunmit a few send requests in parallel. */
+/* Submit a few send requests in parallel. */
 TEST(send, parallel, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
@@ -268,7 +268,7 @@ TEST(send, badMessage, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-/* Old send requests that have accumolated and could not yet be sent are
+/* Old send requests that have accumulated and could not yet be sent are
  * progressively evicted. */
 TEST(send, evictOldPending, setUp, tearDownDeps, 0, NULL)
 {

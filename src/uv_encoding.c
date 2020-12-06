@@ -8,7 +8,7 @@
 #include "configuration.h"
 
 /**
- * Size of the request preable.
+ * Size of the request preamble.
  */
 #define RAFT_IO_UV__PREAMBLE_SIZE           \
     (sizeof(uint64_t) /* Message type. */ + \

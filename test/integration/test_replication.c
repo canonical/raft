@@ -608,7 +608,7 @@ TEST(replication, recvMatch_last_snapshot, setUp, tearDown, 0, NULL)
 
     return MUNIT_OK;
 }
-/* If a candidate server receives a request contaning the same term as its
+/* If a candidate server receives a request containing the same term as its
  * own, it it steps down to follower and accept the request . */
 TEST(replication, recvCandidateSameTerm, setUp, tearDown, 0, NULL)
 {
@@ -647,7 +647,7 @@ TEST(replication, recvCandidateSameTerm, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-/* If a candidate server receives a request contaning an higher term as its
+/* If a candidate server receives a request containing an higher term as its
  * own, it it steps down to follower and accept the request . */
 TEST(replication, recvCandidateHigherTerm, setUp, tearDown, 0, NULL)
 {
@@ -776,7 +776,7 @@ TEST(replication, resultHigherTerm, setUp, tearDown, 0, NULL)
     CLUSTER_SATURATE_BOTHWAYS(0, 1);
     CLUSTER_SATURATE_BOTHWAYS(0, 2);
 
-    /* Eventually a new leader gets electected */
+    /* Eventually a new leader gets elected */
     CLUSTER_STEP_UNTIL_HAS_NO_LEADER(2000);
     CLUSTER_STEP_UNTIL_HAS_LEADER(4000);
     munit_assert_int(CLUSTER_LEADER, ==, 1);

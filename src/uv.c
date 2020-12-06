@@ -46,7 +46,7 @@ static int uvInit(struct raft_io *io, raft_id id, const char *address)
         return rv;
     }
 
-    /* Proble file system capabilities */
+    /* Probe file system capabilities */
     rv = UvFsProbeCapabilities(uv->dir, &direct_io, &uv->async_io, io->errmsg);
     if (rv != 0) {
         return rv;

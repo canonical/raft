@@ -57,7 +57,7 @@ TEST(recover, newConfiguration, setUp, tearDown, 0, NULL)
     struct raft_configuration configuration2;
     int rv;
 
-    /* Boostrap using an initial configuration */
+    /* Bootstrap using an initial configuration */
     raft_configuration_init(&configuration1);
     rv = raft_configuration_add(&configuration1, 1, "1", RAFT_VOTER);
     munit_assert_int(rv, ==, 0);
@@ -66,7 +66,7 @@ TEST(recover, newConfiguration, setUp, tearDown, 0, NULL)
     rv = f->io.bootstrap(&f->io, &configuration1);
     munit_assert_int(rv, ==, 0);
 
-    /* Boostrap using a different configuration */
+    /* Bootstrap using a different configuration */
     raft_configuration_init(&configuration2);
     rv = raft_configuration_add(&configuration2, 1, "1", RAFT_VOTER);
     munit_assert_int(rv, ==, 0);
