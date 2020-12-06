@@ -133,7 +133,7 @@ uv_run(&loop, UV_RUN_DEFAULT);
 Asynchronously submit requests to apply new commands to your application FSM:
 
 ```C
-static void applyCb(struct raft_apply *req, int status, void *result) {
+static void apply_callback(struct raft_apply *req, int status, void *result) {
   /* ... */
 }
 
