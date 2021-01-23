@@ -24,8 +24,13 @@ endif()
 
 #we did not find libuv via - we try to find the header and library -> mainly for non unixoides
 if(NOT TARGET libuv)
-    FIND_PATH(LIBUV_INCLUDE_DIR NAMES uv.h)
-    FIND_LIBRARY(LIBUV_LIBRARY NAMES uv libuv)
+    #You might manually set the variable LIBUV_INCLUDE_DIR to give a hint where to search for the include
+    FIND_PATH(LIBUV_INCLUDE_DIR NAMES uv.h HINTS ${LIBUV_INCLUDE_DIR} ${LIBUV_DIR})
+    #You might manually set the variable LIBUV_LIBRARY_DIR to give a hint where to search for the library
+    FIND_LIBRARY(LIBUV_LIBRARY NAMES uv libuv HINTS ${LIBUV_LIBRARY_DIR} ${LIBUV_DIR})
+    include(FindPackageHandleStandardArgs)
+    find_package_handle_standard_args(LIBUV  DEFAULT_MSG
+                                      LIBUV_LIBRARY LIBUV_INCLUDE_DIR)
     if(LIBUV_FOUND)
         add_library(libuv INTERFACE)
         target_include_directories(libuv INTERFACE ${LIBUV_INCLUDE_DIR})
