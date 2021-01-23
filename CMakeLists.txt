@@ -3,6 +3,13 @@ cmake_minimum_required(VERSION 3.10)
 set(VERSION 0.9.24)
 project(raft VERSION ${VERSION})
 
+option(raft_static "build raft as static library" On)
+option(raft_shared "build raft as shared library" On)
+
+if(NOT raft_static AND NOT raft_shared)
+    message(ERROR "raft should neither be build as static nor shard library - what do you want")
+endif()
+
 #first try to find the libuv via pkg-config
 if(NOT TARGET libuv)
     find_package(PkgConfig)
@@ -119,12 +126,26 @@ if(TARGET libuv)
         )
 endif()
 
-add_library(${PROJECT_NAME} SHARED ${RAFT_SOURCES} ${RAFT_HEADERS})
-set_property(TARGET ${PROJECT_NAME} PROPERTY VERSION${VERSION})
-set_property(TARGET ${PROJECT_NAME} PROPERTY SOVERSION 0.7)
-
 if(NOT TARGET libuv)
     message(WARNING "libuv not found we continue without")
-else()
-    target_link_libraries(${PROJECT_NAME} libuv)
+endif()
+
+if(raft_shared)
+    add_library(${PROJECT_NAME} SHARED ${RAFT_SOURCES} ${RAFT_HEADERS})
+    set_property(TARGET ${PROJECT_NAME} PROPERTY VERSION${VERSION})
+    set_property(TARGET ${PROJECT_NAME} PROPERTY SOVERSION 0.7)
+
+    if(TARGET libuv)
+        target_link_libraries(${PROJECT_NAME} libuv)
+    endif()
+endif()
+
+if(raft_static)
+    add_library(${PROJECT_NAME} STATIC ${RAFT_SOURCES} ${RAFT_HEADERS})
+    set_property(TARGET ${PROJECT_NAME} PROPERTY VERSION${VERSION})
+    set_property(TARGET ${PROJECT_NAME} PROPERTY SOVERSION 0.7)
+
+    if(TARGET libuv)
+        target_link_libraries(${PROJECT_NAME} libuv)
+    endif()
 endif()
