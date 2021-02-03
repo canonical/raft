@@ -2,6 +2,7 @@
 
 #include "assert.h"
 #include "convert.h"
+#include "entry.h"
 #include "heap.h"
 #include "log.h"
 #include "recv.h"
@@ -112,6 +113,8 @@ int recvAppendEntries(struct raft *r,
      * something smarter, e.g. buffering the entries in the I/O backend, which
      * should be in charge of serializing everything. */
     if (r->snapshot.put.data != NULL && args->n_entries > 0) {
+        tracef("ignoring AppendEntries RPC during snapshot install");
+        entryBatchesDestroy(args->entries, args->n_entries);
         return 0;
     }
 
