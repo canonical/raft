@@ -3,6 +3,7 @@
 #include "assert.h"
 #include "configuration.h"
 #include "convert.h"
+#include "entry.h"
 #ifdef __GLIBC__
 #include "error.h"
 #endif
@@ -1095,6 +1096,7 @@ int replicationAppend(struct raft *r,
 
     request->raft = r;
     request->args = *args;
+    /* Index of first new entry */
     request->index = args->prev_log_index + 1 + i;
 
     /* Update our in-memory log to reflect that we received these entries. We'll
@@ -1102,11 +1104,19 @@ int replicationAppend(struct raft *r,
      * that we issue below actually completes.  */
     for (j = 0; j < n; j++) {
         struct raft_entry *entry = &args->entries[i + j];
-
-        rv = logAppend(&r->log, entry->term, entry->type, &entry->buf,
-                       entry->batch);
+         /* TODO This copy should not strictly be necessary, as the batch logic will
+          * take care of freeing the batch buffer in which the entries are received.
+          * However, this would lead to memory spikes in certain edge cases.
+          * https://github.com/canonical/dqlite/issues/276
+          */
+        struct raft_entry copy = {0};
+        rv = entryCopy(entry, &copy);
         if (rv != 0) {
-            /* TODO: we should revert any changes we made to the log */
+            goto err_after_request_alloc;
+        }
+
+        rv = logAppend(&r->log, copy.term, copy.type, &copy.buf, NULL);
+        if (rv != 0) {
             goto err_after_request_alloc;
         }
     }
@@ -1128,15 +1138,22 @@ int replicationAppend(struct raft *r,
         goto err_after_acquire_entries;
     }
 
-    raft_free(args->entries);
-
+    entryBatchesDestroy(args->entries, args->n_entries);
     return 0;
 
 err_after_acquire_entries:
+    /* Release the entries related to the IO request */
     logRelease(&r->log, request->index, request->args.entries,
                request->args.n_entries);
 
 err_after_request_alloc:
+    /* Release all entries added to the in-memory log, making
+     * sure the in-memory log and disk don't diverge, leading
+     * to future log entries not being persisted to disk.
+     */
+    if (j != 0) {
+        logTruncate(&r->log, request->index);
+    }
     raft_free(request);
 
 err:
