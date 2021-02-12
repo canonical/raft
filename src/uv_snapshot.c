@@ -493,6 +493,11 @@ static void uvSnapshotPutStart(struct uvSnapshotPut *put)
 static void uvSnapshotPutBarrierCb(struct UvBarrier *barrier)
 {
     struct uvSnapshotPut *put = barrier->data;
+    if (put == NULL) {
+        tracef("uvSnapshotPutBarrierCb already fired, wait for UvUnblock\n");
+        return;
+    }
+
     struct uv *uv = put->uv;
     assert(put->trailing == 0);
     put->barrier.data = NULL;
