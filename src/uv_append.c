@@ -699,6 +699,24 @@ static void uvFinalizeCurrentAliveSegmentOnceIdle(struct uv *uv)
     }
 }
 
+bool UvBarrierReady(struct uv *uv)
+{
+    if (uv->barrier == NULL) {
+        return true;
+    }
+
+    queue *head;
+    QUEUE_FOREACH(head, &uv->append_segments)
+    {
+        struct uvAliveSegment *segment;
+        segment = QUEUE_DATA(head, struct uvAliveSegment, queue);
+        if (segment->barrier == uv->barrier) {
+                return false;
+        }
+    }
+    return true;
+}
+
 int UvBarrier(struct uv *uv,
               raft_index next_index,
               struct UvBarrier *barrier,

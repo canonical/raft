@@ -92,7 +92,7 @@ static void uvFinalizeAfterWorkCb(uv_work_t *work, int status)
     /* If we have no more dismissed segments to close, check if there's a
      * barrier to unblock or if we are done closing. */
     if (QUEUE_IS_EMPTY(&uv->finalize_reqs)) {
-        if (uv->barrier != NULL) {
+        if (uv->barrier != NULL && UvBarrierReady(uv)) {
             uv->barrier->cb(uv->barrier);
         }
         uvMaybeFireCloseCb(uv);

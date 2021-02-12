@@ -338,6 +338,9 @@ int UvBarrier(struct uv *uv,
               struct UvBarrier *barrier,
               UvBarrierCb cb);
 
+/* Returns @true if there are no more segments referencing uv->barrier */
+bool UvBarrierReady(struct uv *uv);
+
 /* Resume writing append requests after UvBarrier has been called. */
 void UvUnblock(struct uv *uv);
 
