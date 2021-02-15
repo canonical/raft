@@ -1,6 +1,7 @@
 #include "../lib/runner.h"
 #include "../lib/uv.h"
 #include "../lib/aio.h"
+#include "../../src/uv.h"
 
 /* Maximum number of blocks a segment can have */
 #define MAX_SEGMENT_BLOCKS 4
@@ -34,6 +35,7 @@ struct result
 {
     int status;
     bool done;
+    void *data;
 };
 
 static void appendCbAssertResult(struct raft_io_append *req, int status)
@@ -65,18 +67,22 @@ static void appendCbAssertResult(struct raft_io_append *req, int status)
         }                                                   \
     }
 
-/* Submit an append request identified by I, with N_ENTRIES entries, each one of
- * size ENTRY_SIZE. The default expectation is for the operation to succeed. A
- * custom STATUS can be set with APPEND_EXPECT. */
-#define APPEND_SUBMIT(I, N_ENTRIES, ENTRY_SIZE)                     \
+#define APPEND_SUBMIT_CB_DATA(I, N_ENTRIES, ENTRY_SIZE, CB, DATA)   \
     struct raft_io_append _req##I;                                  \
-    struct result _result##I = {0, false};                          \
+    struct result _result##I = {0, false, DATA};                    \
     int _rv##I;                                                     \
     ENTRIES(I, N_ENTRIES, ENTRY_SIZE);                              \
     _req##I.data = &_result##I;                                     \
     _rv##I = f->io.append(&f->io, &_req##I, _entries##I, N_ENTRIES, \
-                          appendCbAssertResult);                    \
+                          CB);                                      \
     munit_assert_int(_rv##I, ==, 0)
+
+/* Submit an append request identified by I, with N_ENTRIES entries, each one of
+ * size ENTRY_SIZE. The default expectation is for the operation to succeed. A
+ * custom STATUS can be set with APPEND_EXPECT. */
+#define APPEND_SUBMIT(I, N_ENTRIES, ENTRY_SIZE)                       \
+        APPEND_SUBMIT_CB_DATA(I, N_ENTRIES, ENTRY_SIZE,               \
+                              appendCbAssertResult, NULL)             \
 
 /* Try to submit an append request and assert that the given error code and
  * message are returned. */
@@ -674,5 +680,90 @@ TEST(append, ioSetupError, setUp, tearDown, 0, NULL)
     }
     APPEND_FAILURE(1, 64, RAFT_TOOMANY,
                    "setup writer for open-1: AIO events user limit exceeded");
+    return MUNIT_OK;
+}
+
+/*===========================================================================
+  Test interaction between UvAppend and UvBarrier
+  ===========================================================================*/
+
+struct barrierData
+{
+   int current;     /* Count the number of finished AppendEntries RPCs */
+   int expected;    /* Expected number of finished AppendEntries RPCs  */
+   bool done;       /* @true if the Barrier CB has fired               */
+   bool expectDone; /* Expect the Barrier CB to have fired or not      */
+   struct uv *uv;
+};
+
+static void barrierCbCompareCounter(struct UvBarrier *barrier)
+{
+    struct barrierData *bd = barrier->data;
+    munit_assert_false(bd->done);
+    bd->done = true;
+    struct uv *uv = bd->uv;
+    UvUnblock(uv);
+    munit_assert_int(bd->current, ==, bd->expected);
+}
+
+static void appendCbIncreaseCounterAssertResult(struct raft_io_append *req,
+                                   int status)
+{
+    struct result *result = req->data;
+    munit_assert_int(status, ==, result->status);
+    result->done = true;
+    struct barrierData *bd = result->data;
+    munit_assert_true(bd->done == bd->expectDone);
+    bd->current += 1;
+}
+
+/* Fill up 3 segments worth of AppendEntries RPC's.
+ * Request a Barrier and expect that the AppendEntries RPC's are finished before
+ * the Barrier callback is fired.
+ */
+TEST(append, barrierOpenSegments, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    struct barrierData bd = {0};
+    bd.current = 0;
+    bd.expected = 3;
+    bd.done = false;
+    bd.expectDone = false;
+    bd.uv = f->io.impl;
+
+    APPEND_SUBMIT_CB_DATA(0, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd);
+    APPEND_SUBMIT_CB_DATA(1, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd);
+    APPEND_SUBMIT_CB_DATA(2, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd);
+
+    struct UvBarrier barrier = {0};
+    barrier.data = (void*) &bd;
+    UvBarrier(f->io.impl, 1, &barrier, barrierCbCompareCounter);
+
+    APPEND_WAIT(2);
+    return MUNIT_OK;
+}
+
+/* Request a Barrier and expect that the no AppendEntries RPC's are finished before
+ * the Barrier callback is fired.
+ */
+TEST(append, barrierNoOpenSegments, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    struct barrierData bd = {0};
+    bd.current = 0;
+    bd.expected = 0;
+    bd.done = false;
+    bd.expectDone = true;
+    bd.uv = f->io.impl;
+
+    struct UvBarrier barrier = {0};
+    barrier.data = (void*) &bd;
+    UvBarrier(f->io.impl, 1, &barrier, barrierCbCompareCounter);
+
+    APPEND_SUBMIT_CB_DATA(0, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd);
+    APPEND_SUBMIT_CB_DATA(1, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd);
+    APPEND_SUBMIT_CB_DATA(2, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd);
+
+    APPEND_WAIT(2);
     return MUNIT_OK;
 }

@@ -167,6 +167,7 @@ test_unit_uv_CFLAGS = $(AM_CFLAGS) -Wno-conversion
 test_unit_uv_LDADD = libtest.la
 
 test_integration_uv_SOURCES = \
+  ${libraft_la_SOURCES} \
   test/integration/main_uv.c \
   test/integration/test_uv_init.c \
   test/integration/test_uv_append.c \
