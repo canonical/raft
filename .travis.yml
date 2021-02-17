@@ -33,7 +33,7 @@ jobs:
     arch: amd64
 
   - compiler: gcc
-    dist: xenial
+    dist: focal
     arch: amd64
 
   - if: type != pull_request
