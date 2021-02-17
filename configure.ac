@@ -14,7 +14,7 @@ LT_INIT
 # explicitly disabled.
 AC_ARG_ENABLE(uv, AS_HELP_STRING([--disable-uv], [do not build the libuv-based raft_io implementation]))
 AS_IF([test "x$enable_uv" != "xno"],
-      [PKG_CHECK_MODULES(UV, [libuv >= 1.8.0], [have_uv=yes], [have_uv=no])],
+      [PKG_CHECK_MODULES(UV, [libuv >= 1.18.0], [have_uv=yes], [have_uv=no])],
       [have_uv=no])
 AS_IF([test "x$enable_uv" = "xyes" -a "x$have_uv" = "xno"], [AC_MSG_ERROR([libuv required but not found])], [])
 AM_CONDITIONAL(UV_ENABLED, test "x$have_uv" = "xyes")
