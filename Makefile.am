@@ -166,6 +166,9 @@ test_unit_uv_LDFLAGS = $(UV_LIBS)
 test_unit_uv_CFLAGS = $(AM_CFLAGS) -Wno-conversion
 test_unit_uv_LDADD = libtest.la
 
+# The integration/uv test is not linked to libraft, but built
+# directly against the libraft sources in order to test some
+# non-visible, non-API functions.
 test_integration_uv_SOURCES = \
   ${libraft_la_SOURCES} \
   test/integration/main_uv.c \
@@ -183,7 +186,7 @@ test_integration_uv_SOURCES = \
   test/integration/test_uv_truncate.c
 test_integration_uv_CFLAGS = $(AM_CFLAGS) -Wno-type-limits -Wno-conversion
 test_integration_uv_LDFLAGS = -no-install $(UV_LIBS)
-test_integration_uv_LDADD = libtest.la libraft.la
+test_integration_uv_LDADD = libtest.la
 
 AM_CFLAGS += $(UV_CFLAGS)
 
