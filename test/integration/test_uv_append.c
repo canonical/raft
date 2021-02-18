@@ -646,6 +646,10 @@ TEST(append, barrierOpenSegments, setUp, tearDown, 0, NULL)
     barrier.data = (void*) &bd;
     UvBarrier(f->io.impl, 1, &barrier, barrierCbCompareCounter);
 
+    /* Make sure every callback fired */
+    LOOP_RUN_UNTIL(&bd.done);
+    APPEND_WAIT(0);
+    APPEND_WAIT(1);
     APPEND_WAIT(2);
     return MUNIT_OK;
 }
@@ -671,6 +675,10 @@ TEST(append, barrierNoOpenSegments, setUp, tearDown, 0, NULL)
     APPEND_SUBMIT_CB_DATA(1, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd);
     APPEND_SUBMIT_CB_DATA(2, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd);
 
+    /* Make sure every callback fired */
+    LOOP_RUN_UNTIL(&bd.done);
+    APPEND_WAIT(0);
+    APPEND_WAIT(1);
     APPEND_WAIT(2);
     return MUNIT_OK;
 }
