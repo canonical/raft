@@ -1,5 +1,6 @@
 #include <unistd.h>
 
+#include "append_helpers.h"
 #include "../lib/runner.h"
 #include "../lib/tcp.h"
 #include "../lib/uv.h"
@@ -15,6 +16,7 @@ struct fixture
     FIXTURE_UV_DEPS;
     FIXTURE_UV;
     bool closed;
+    int count;
 };
 
 /******************************************************************************
@@ -23,12 +25,6 @@ struct fixture
  *
  *****************************************************************************/
 
-struct result
-{
-    int status;
-    bool done;
-};
-
 struct snapshot
 {
     raft_term term;
@@ -36,13 +32,6 @@ struct snapshot
     uint64_t data;
     bool done;
 };
-
-static void appendCb(struct raft_io_append *req, int status)
-{
-    bool *done = req->data;
-    munit_assert_int(status, ==, 0);
-    *done = true;
-}
 
 static void snapshotPutCbAssertResult(struct raft_io_snapshot_put *req,
                                       int status)
@@ -68,30 +57,6 @@ static void snapshotGetCbAssertResult(struct raft_io_snapshot_get *req,
     raft_free(snapshot);
 }
 
-/* Submit an append request to append N entries and wait for the operation to
- * successfully complete. */
-#define APPEND(N)                                                 \
-    do {                                                          \
-        struct raft_entry _entries[N];                            \
-        uint64_t _entries_data[N];                                \
-        int _i;                                                   \
-        struct raft_io_append _req;                               \
-        bool _done = false;                                       \
-        int _rv;                                                  \
-        for (_i = 0; _i < N; _i++) {                              \
-            struct raft_entry *_entry = &_entries[_i];            \
-            _entry->term = 1;                                     \
-            _entry->type = RAFT_COMMAND;                          \
-            _entry->buf.base = &_entries_data[_i];                \
-            _entry->buf.len = sizeof _entries_data[_i];           \
-            _entry->batch = NULL;                                 \
-        }                                                         \
-        _req.data = &_done;                                       \
-        _rv = f->io.append(&f->io, &_req, _entries, N, appendCb); \
-        munit_assert_int(_rv, ==, 0);                             \
-        LOOP_RUN_UNTIL(&_done);                                   \
-    } while (0)
-
 /* Submit a request to truncate the log at N */
 #define TRUNCATE(N)                      \
     {                                    \
@@ -105,7 +70,7 @@ static void snapshotGetCbAssertResult(struct raft_io_snapshot_get *req,
     struct raft_buffer _snapshot_buf;                              \
     uint64_t _snapshot_data;                                       \
     struct raft_io_snapshot_put _req;                              \
-    struct result _result = {STATUS, false};                       \
+    struct result _result = {STATUS, false, NULL};                 \
     int _rv;                                                       \
     _snapshot.term = 1;                                            \
     _snapshot.index = INDEX;                                       \
@@ -226,7 +191,7 @@ TEST(snapshot_put, entriesLessThanTrailing, setUp, tearDown, 0, NULL)
         &f->io, 4096); /* Lower the number of block to force finalizing */
 
     for (i = 0; i < 40; i++) {
-        APPEND(10);
+        APPEND(10, 8);
     }
 
     SNAPSHOT_PUT(128, /* trailing */
@@ -249,7 +214,7 @@ TEST(snapshot_put, entriesMoreThanTrailing, setUp, tearDown, 0, NULL)
         &f->io, 4096); /* Lower the number of block to force finalizing */
 
     for (i = 0; i < 40; i++) {
-        APPEND(10);
+        APPEND(10, 8);
     }
 
     SNAPSHOT_PUT(128, /* trailing */
@@ -266,7 +231,7 @@ TEST(snapshot_put, entriesMoreThanTrailing, setUp, tearDown, 0, NULL)
 TEST(snapshot_put, install, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    APPEND(4);
+    APPEND(4, 8);
     SNAPSHOT_PUT(0, /* trailing */
                  1  /* index */
     );
@@ -280,5 +245,48 @@ TEST(snapshot_put, installWithoutPreviousEntries, setUp, tearDown, 0, NULL)
     SNAPSHOT_PUT(0, /* trailing */
                  1  /* index */
     );
+    return MUNIT_OK;
+}
+
+/* Request to install a couple of snapshots in a row, no previous entry is present. */
+TEST(snapshot_put, installMultipleWithoutPreviousEntries, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    SNAPSHOT_PUT(0, /* trailing */
+                 1  /* index */
+    );
+    SNAPSHOT_PUT(0, /* trailing */
+                 3  /* index */
+    );
+    SNAPSHOT_PUT(0,    /* trailing */
+                 1337  /* index */
+    );
+    return MUNIT_OK;
+}
+
+/* Request to install a couple of snapshots in a row, AppendEntries Requests
+ * happen before, meanwhile and after */
+TEST(snapshot_put, installMultipleAppendEntriesInBetween, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+
+    APPEND_SUBMIT(0, 256, 8);
+    APPEND_SUBMIT(1, 256, 8);
+    SNAPSHOT_PUT(0, /* trailing */
+                 1  /* index */
+    );
+    APPEND_WAIT(0);
+    APPEND_WAIT(1);
+    APPEND_SUBMIT(2, 256, 8);
+    APPEND_SUBMIT(3, 256, 8);
+    SNAPSHOT_PUT(0, /* trailing */
+                 100  /* index */
+    );
+    APPEND_WAIT(2);
+    APPEND_WAIT(3);
+    APPEND_SUBMIT(4, 256, 8);
+    APPEND_SUBMIT(5, 256, 8);
+    APPEND_WAIT(4);
+    APPEND_WAIT(5);
     return MUNIT_OK;
 }
