@@ -123,11 +123,8 @@ bool progressShouldReplicate(struct raft *r, unsigned i)
 
     switch (p->state) {
         case PROGRESS__SNAPSHOT:
-            /* If we have already sent a snapshot, don't send any further entry
-             * and let's wait for the target server to reply.
-             *
-             * TODO: rollback to probe if we don't hear anything for a while. */
-            result = false;
+            /* Raft will retry sending a Snapshot if the timeout has elapsed. */
+            result = now - p->last_send >= r->install_snapshot_timeout;
             break;
         case PROGRESS__PROBE:
             /* We send at most one message per heartbeat interval. */

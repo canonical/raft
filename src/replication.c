@@ -276,6 +276,7 @@ static int sendSnapshot(struct raft *r, const unsigned i)
         goto err_after_req_alloc;
     }
 
+    progressUpdateLastSend(r, i);
     return 0;
 
 err_after_req_alloc:

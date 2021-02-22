@@ -613,6 +613,12 @@ struct raft
     unsigned heartbeat_timeout;
 
     /*
+     * When the leader sends an InstallSnapshot RPC to a follower it will consider
+     * the RPC as failed after this timeout and retry.
+     */
+    unsigned install_snapshot_timeout;
+
+    /*
      * The fields below hold the part of the server's volatile state which is
      * always applicable regardless of the whether the server is follower,
      * candidate or leader (Figure 3.1). This state is rebuilt automatically
@@ -766,6 +772,11 @@ RAFT_API void raft_set_election_timeout(struct raft *r, unsigned msecs);
  * Set the heartbeat timeout.
  */
 RAFT_API void raft_set_heartbeat_timeout(struct raft *r, unsigned msecs);
+
+/**
+ * Set the snapshot install timeout.
+ */
+RAFT_API void raft_set_install_snapshot_timeout(struct raft *r, unsigned msecs);
 
 /**
  * Number of outstanding log entries before starting a new snapshot. The default

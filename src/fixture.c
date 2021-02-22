@@ -22,6 +22,7 @@
 
 /* Defaults */
 #define HEARTBEAT_TIMEOUT 100
+#define INSTALL_SNAPSHOT_TIMEOUT (2 * HEARTBEAT_TIMEOUT)
 #define ELECTION_TIMEOUT 1000
 #define NETWORK_LATENCY 15
 #define DISK_LATENCY 10
@@ -925,6 +926,7 @@ static int serverInit(struct raft_fixture *f, unsigned i, struct raft_fsm *fsm)
     }
     raft_set_election_timeout(&s->raft, ELECTION_TIMEOUT);
     raft_set_heartbeat_timeout(&s->raft, HEARTBEAT_TIMEOUT);
+    raft_set_install_snapshot_timeout(&s->raft, INSTALL_SNAPSHOT_TIMEOUT);
     s->tracer.impl = (void *)&s->id;
     s->tracer.emit = emit;
     s->raft.tracer = &s->tracer;
