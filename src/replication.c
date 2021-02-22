@@ -58,18 +58,6 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
                    req->server_id, raft_strerror(status));
             /* Go back to probe mode. */
             progressToProbe(r, i);
-        } else {
-            /* Update the last_send timestamp: for a heartbeat_timeout
-             * milliseconds we'll be good and we won't need to contact followers
-             * again, since this was not an idle period.
-             *
-             * From Figure 3.1:
-             *
-             *   [Rules for Servers] Leaders: Upon election: send initial empty
-             *   AppendEntries RPCs (heartbeat) to each server; repeat during
-             * idle periods to prevent election timeouts
-             */
-            progressUpdateLastSend(r, i);
         }
     }
 
@@ -142,6 +130,7 @@ static int sendAppendEntries(struct raft *r,
         progressOptimisticNextIndex(r, i, req->index + req->n);
     }
 
+    progressUpdateLastSend(r, i);
     return 0;
 
 err_after_req_alloc:
