@@ -1236,7 +1236,7 @@ int replicationInstallSnapshot(struct raft *r,
      * something smarter. */
     if (r->snapshot.pending.term != 0 || r->snapshot.put.data != NULL) {
         *async = true;
-        return 0;
+        return RAFT_BUSY;
     }
 
     /* If our last snapshot is more up-to-date, this is a no-op */
