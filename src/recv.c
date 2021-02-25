@@ -64,6 +64,12 @@ static int recvMessage(struct raft *r, struct raft_message *message)
             rv = recvInstallSnapshot(r, message->server_id,
                                      message->server_address,
                                      &message->install_snapshot);
+            /* Already installing a snapshot, wait for it and ignore this one */
+            if (rv == RAFT_BUSY) {
+                raft_free(message->install_snapshot.data.base);
+                raft_configuration_close(&message->install_snapshot.conf);
+                rv = 0;
+            }
             break;
         case RAFT_IO_TIMEOUT_NOW:
             rv = recvTimeoutNow(r, message->server_id, message->server_address,

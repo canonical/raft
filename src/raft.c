@@ -15,6 +15,7 @@
 
 #define DEFAULT_ELECTION_TIMEOUT 1000 /* One second */
 #define DEFAULT_HEARTBEAT_TIMEOUT 100 /* One tenth of a second */
+#define DEFAULT_INSTALL_SNAPSHOT_TIMEOUT (2 * DEFAULT_HEARTBEAT_TIMEOUT)
 #define DEFAULT_SNAPSHOT_THRESHOLD 1024
 #define DEFAULT_SNAPSHOT_TRAILING 2048
 
@@ -51,6 +52,7 @@ int raft_init(struct raft *r,
     r->configuration_uncommitted_index = 0;
     r->election_timeout = DEFAULT_ELECTION_TIMEOUT;
     r->heartbeat_timeout = DEFAULT_HEARTBEAT_TIMEOUT;
+    r->install_snapshot_timeout = DEFAULT_INSTALL_SNAPSHOT_TIMEOUT;
     r->commit_index = 0;
     r->last_applied = 0;
     r->last_stored = 0;
@@ -108,6 +110,11 @@ void raft_set_election_timeout(struct raft *r, const unsigned msecs)
 void raft_set_heartbeat_timeout(struct raft *r, const unsigned msecs)
 {
     r->heartbeat_timeout = msecs;
+}
+
+void raft_set_install_snapshot_timeout(struct raft *r, const unsigned msecs)
+{
+    r->install_snapshot_timeout = msecs;
 }
 
 void raft_set_snapshot_threshold(struct raft *r, unsigned n)
