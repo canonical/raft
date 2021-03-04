@@ -374,13 +374,13 @@ static void uvClientTimerCloseCb(struct uv_handle_s *handle)
     uvClientMaybeDestroy(c);
 }
 
-/* Start shutting down a client since the raft_io instance has been closed. */
+/* Start shutting down a client. This happens when the `raft_io` instance
+ * has been closed or when the address of the client has changed. */
 static void uvClientAbort(struct uvClient *c)
 {
     struct uv *uv = c->uv;
     int rv;
 
-    assert(uv->closing);
     assert(c->stream != NULL || c->old_stream != NULL ||
            uv_is_active((struct uv_handle_s *)&c->timer) ||
            c->connect.data != NULL);
@@ -421,8 +421,13 @@ static int uvGetClient(struct uv *uv,
         if ((*client)->id != id) {
             continue;
         }
-        /* TODO: handle a change in the address */
-        /* assert(strcmp((*client)->address, address) == 0); */
+
+        /* Client address has changed, abort connection and create a new one. */
+        if (strcmp((*client)->address, address) != 0) {
+            uvClientAbort(*client);
+            break;
+        }
+
         return 0;
     }
 
