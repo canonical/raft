@@ -259,6 +259,35 @@ TEST(send, badAddress, setUp, tearDownDeps, 0, NULL)
     return MUNIT_OK;
 }
 
+/* Make sure UvSend doesn't use a stale connection for a certain server id
+ * by first sending a message to a valid address and then sending a message to
+ * an invalid address, making sure the valid connection is not reused.
+ * Afterwards assert that a send to the correct address still succeeds. */
+TEST(send, changeToUnconnectedAddress, setUp, tearDownDeps, 0, NULL)
+{
+    struct fixture *f = data;
+
+    /* Send a message to a server and a connected address */
+    SEND(0);
+
+    /* Send a message to the same server, but update the address to an
+     * unconnected address and assert it fails. */
+    munit_assert_ullong(MESSAGE(0)->server_id, ==, MESSAGE(1)->server_id);
+    MESSAGE(1)->server_address = "127.0.0.2:1";
+    SEND_SUBMIT(1 /* message */, 0 /* rv */, RAFT_CANCELED /* status */);
+
+    /* Send another message to the same server and connected address */
+    munit_assert_ullong(MESSAGE(0)->server_id, ==, MESSAGE(2)->server_id);
+    SEND(2);
+
+    /* Send another message to the same server and connected address */
+    munit_assert_ullong(MESSAGE(0)->server_id, ==, MESSAGE(3)->server_id);
+    SEND(3);
+
+    TEAR_DOWN_UV;
+    return MUNIT_OK;
+}
+
 /* The message has an invalid type. */
 TEST(send, badMessage, setUp, tearDown, 0, NULL)
 {
