@@ -288,6 +288,22 @@ TEST(send, changeToUnconnectedAddress, setUp, tearDownDeps, 0, NULL)
     return MUNIT_OK;
 }
 
+/* The send eventually times out and the client connection is aborted. */
+TEST(send, timeOut, setUp, tearDownDeps, 0, NULL)
+{
+    struct fixture *f = data;
+
+    /* Send a message to an unconnected address and assert it times out. */
+    MESSAGE(0)->server_address = "127.0.0.2:1";
+    SEND_SUBMIT(0 /* message */, 0 /* rv */, RAFT_CANCELED /* status */);
+
+    /* Wait for the send to timeout  */
+    SEND_WAIT(0);
+
+    TEAR_DOWN_UV;
+    return MUNIT_OK;
+}
+
 /* The message has an invalid type. */
 TEST(send, badMessage, setUp, tearDown, 0, NULL)
 {
