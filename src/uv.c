@@ -30,6 +30,7 @@
  *
  * TODO: implement an exponential backoff instead.  */
 #define CONNECT_RETRY_DELAY 1000
+#define CONNECT_ATTEMPTS 100
 
 /* Implementation of raft_io->config. */
 static int uvInit(struct raft_io *io, raft_id id, const char *address)
@@ -594,6 +595,7 @@ int raft_uv_init(struct raft_io *io,
     QUEUE_INIT(&uv->clients);
     QUEUE_INIT(&uv->servers);
     uv->connect_retry_delay = CONNECT_RETRY_DELAY;
+    uv->connect_attempts = CONNECT_ATTEMPTS;
     uv->prepare_inflight = NULL;
     QUEUE_INIT(&uv->prepare_reqs);
     QUEUE_INIT(&uv->prepare_pool);
@@ -670,6 +672,13 @@ void raft_uv_set_connect_retry_delay(struct raft_io *io, unsigned msecs)
     struct uv *uv;
     uv = io->impl;
     uv->connect_retry_delay = msecs;
+}
+
+void raft_uv_set_connect_attempts(struct raft_io *io, unsigned attempts)
+{
+    struct uv *uv;
+    uv = io->impl;
+    uv->connect_attempts = attempts;
 }
 
 void raft_uv_set_tracer(struct raft_io *io, struct raft_tracer *tracer)

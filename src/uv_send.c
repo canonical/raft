@@ -340,31 +340,6 @@ static void uvClientConnectCb(struct raft_uv_connect *req,
     assert(rv == 0);
 }
 
-/* Perform a single connection attempt, scheduling a retry if it fails. */
-static void uvClientConnect(struct uvClient *c)
-{
-    int rv;
-
-    assert(!c->closing);
-    assert(c->stream == NULL);
-    assert(c->old_stream == NULL);
-    assert(!uv_is_active((struct uv_handle_s *)&c->timer));
-    assert(c->connect.data == NULL);
-
-    c->n_connect_attempt++;
-
-    c->connect.data = c;
-    rv = c->uv->transport->connect(c->uv->transport, &c->connect, c->id,
-                                   c->address, uvClientConnectCb);
-    if (rv != 0) {
-        /* Restart the timer, so we can retry. */
-        c->connect.data = NULL;
-        rv = uv_timer_start(&c->timer, uvClientTimerCb,
-                            c->uv->connect_retry_delay, 0);
-        assert(rv == 0);
-    }
-}
-
 /* Final callback in the close chain of an io_uv__client object */
 static void uvClientTimerCloseCb(struct uv_handle_s *handle)
 {
@@ -383,7 +358,7 @@ static void uvClientAbort(struct uvClient *c)
 
     assert(c->stream != NULL || c->old_stream != NULL ||
            uv_is_active((struct uv_handle_s *)&c->timer) ||
-           c->connect.data != NULL);
+           c->connect.data != NULL || c->n_connect_attempt > uv->connect_attempts);
 
     QUEUE_REMOVE(&c->queue);
     QUEUE_PUSH(&uv->aborting, &c->queue);
@@ -402,6 +377,39 @@ static void uvClientAbort(struct uvClient *c)
      * fired. */
     uv_close((struct uv_handle_s *)&c->timer, uvClientTimerCloseCb);
     c->closing = true;
+}
+
+/* Perform a single connection attempt, scheduling a retry if it fails. */
+static void uvClientConnect(struct uvClient *c)
+{
+    int rv;
+
+    assert(!c->closing);
+    assert(c->stream == NULL);
+    assert(c->old_stream == NULL);
+    assert(!uv_is_active((struct uv_handle_s *)&c->timer));
+    assert(c->connect.data == NULL);
+
+    c->n_connect_attempt++;
+
+    /* Stop retrying after a certain amount of attempts and clean up
+     * the connection. A new connection attempt will be made
+     * when raft sends a new RPC to this client. */
+    if (c->n_connect_attempt > c->uv->connect_attempts) {
+        uvClientAbort(c);
+        return;
+    }
+
+    c->connect.data = c;
+    rv = c->uv->transport->connect(c->uv->transport, &c->connect, c->id,
+                                   c->address, uvClientConnectCb);
+    if (rv != 0) {
+        /* Restart the timer, so we can retry. */
+        c->connect.data = NULL;
+        rv = uv_timer_start(&c->timer, uvClientTimerCb,
+                            c->uv->connect_retry_delay, 0);
+        assert(rv == 0);
+    }
 }
 
 /* Find the client object associated with the given server, or create one if

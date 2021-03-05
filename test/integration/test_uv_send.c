@@ -109,6 +109,7 @@ static void *setUp(const MunitParameter params[], void *user_data)
     unsigned i;
     SETUP_UV;
     raft_uv_set_connect_retry_delay(&f->io, 1);
+    raft_uv_set_connect_attempts(&f->io, 5);
     for (i = 0; i < N_MESSAGES; i++) {
         struct raft_message *message = &f->messages[i];
         message->type = RAFT_IO_REQUEST_VOTE;
@@ -288,7 +289,8 @@ TEST(send, changeToUnconnectedAddress, setUp, tearDownDeps, 0, NULL)
     return MUNIT_OK;
 }
 
-/* The send eventually times out and the client connection is aborted. */
+/* The send eventually times out after a number of attempts and the
+ * client connection is aborted. */
 TEST(send, timeOut, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;

@@ -67,6 +67,7 @@ struct uv
     queue clients;                       /* Outbound connections */
     queue servers;                       /* Inbound connections */
     unsigned connect_retry_delay;        /* Client connection retry delay */
+    unsigned connect_attempts;           /* Client connection attempts */
     void *prepare_inflight;              /* Segment being prepared */
     queue prepare_reqs;                  /* Pending prepare requests. */
     queue prepare_pool;                  /* Prepared open segments */

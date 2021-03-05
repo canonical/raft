@@ -114,6 +114,12 @@ RAFT_API void raft_uv_set_segment_size(struct raft_io *io, size_t size);
 RAFT_API void raft_uv_set_connect_retry_delay(struct raft_io *io, unsigned msecs);
 
 /**
+ * Set how many attempts should be made to connect with another server.
+ * The default is 100 attempts.
+ */
+RAFT_API void raft_uv_set_connect_attempts(struct raft_io *io, unsigned attempts);
+
+/**
  * Emit low-level debug messages using the given tracer.
  */
 RAFT_API void raft_uv_set_tracer(struct raft_io *io,
