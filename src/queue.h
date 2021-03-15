@@ -53,4 +53,15 @@ typedef void *queue[2];
 /* Return the structure holding the given element. */
 #define QUEUE_DATA(e, type, field) ((type *)((void*)((char *)(e)-offsetof(type, field))))
 
+/* Returns the size of the queue */
+#define QUEUE_SIZE(q, sz)     \
+    do {                      \
+        queue *e;             \
+        unsigned sz_ = 0;     \
+        QUEUE_FOREACH(e, q) { \
+            sz_++;            \
+        }                     \
+        *sz = sz_;            \
+    } while(0)
+
 #endif /* QUEUE_H_*/

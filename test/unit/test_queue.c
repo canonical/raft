@@ -1,3 +1,5 @@
+#include <limits.h> /* For UINT_MAX */
+
 #include "../../src/queue.h"
 #include "../lib/runner.h"
 
@@ -264,5 +266,73 @@ TEST(QUEUE_FOREACH, two, setUp, tearDown, 0, NULL)
     }
     munit_assert_int(values[0], ==, 1);
     munit_assert_int(values[1], ==, 2);
+    return MUNIT_OK;
+}
+
+/******************************************************************************
+ *
+ * QUEUE_SIZE
+ *
+ *****************************************************************************/
+SUITE(QUEUE_SIZE)
+
+/* Size of an empty queue. */
+TEST(QUEUE_SIZE, zero, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    unsigned sz = UINT_MAX;
+    QUEUE_SIZE(&f->queue, &sz);
+    munit_assert_uint(sz, ==, 0);
+    return MUNIT_OK;
+}
+
+/* Size of a queue with a pushed item. */
+TEST(QUEUE_SIZE, one, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    unsigned sz = UINT_MAX;
+    struct item items[1];
+    PUSH(items);
+    QUEUE_SIZE(&f->queue, &sz);
+    munit_assert_uint(sz, ==, 1);
+    return MUNIT_OK;
+}
+
+/* Size of a queue with two pushed items. */
+TEST(QUEUE_SIZE, two, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    unsigned sz = UINT_MAX;
+    struct item items[2];
+    PUSH(items);
+    QUEUE_SIZE(&f->queue, &sz);
+    munit_assert_uint(sz, ==, 2);
+    return MUNIT_OK;
+}
+
+/* Size of a queue with two pushed items and 1 removed item. */
+TEST(QUEUE_SIZE, twoMinusOne, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    unsigned sz = UINT_MAX;
+    struct item items[2];
+    PUSH(items);
+    REMOVE(items, 1);
+    QUEUE_SIZE(&f->queue, &sz);
+    munit_assert_uint(sz, ==, 1);
+    return MUNIT_OK;
+}
+
+/* Size of a queue with two pushed items and 2 removed items. */
+TEST(QUEUE_SIZE, twoMinusTwo, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    unsigned sz = UINT_MAX;
+    struct item items[2];
+    PUSH(items);
+    REMOVE(items, 0);
+    REMOVE(items, 1);
+    QUEUE_SIZE(&f->queue, &sz);
+    munit_assert_uint(sz, ==, 0);
     return MUNIT_OK;
 }
