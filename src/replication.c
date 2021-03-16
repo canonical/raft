@@ -1232,9 +1232,8 @@ int replicationInstallSnapshot(struct raft *r,
     *rejected = args->last_index;
     *async = false;
 
-    /* If we are taking a snapshot ourselves or installing a snapshot, ignore
-     * the request, the leader will eventually retry. TODO: we should do
-     * something smarter. */
+    /* If we are taking a snapshot ourselves or installing a snapshot report
+     * that we're busy. */
     if (r->snapshot.pending.term != 0 || r->snapshot.put.data != NULL) {
         *async = true;
         return RAFT_BUSY;

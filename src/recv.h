@@ -9,6 +9,12 @@
  * receiving an RPC message. */
 void recvCb(struct raft_io *io, struct raft_message *message);
 
+/* Dispatch a single RPC message to the appropriate handler. */
+int handleMessage(struct raft *r, struct raft_message *message);
+
+/* Free resources contained in this message */
+void destroyMessage(struct raft_message *message);
+
 /* Compare a request's term with the server's current term.
  *
  * The match output parameter will be set to 0 if the local term matches the

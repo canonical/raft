@@ -6,6 +6,8 @@
 #include <stddef.h>
 #include <stdio.h>
 
+#include "../src/queue.h"
+
 #define RAFT_API __attribute__((visibility("default")))
 
 /**
@@ -328,6 +330,7 @@ struct raft_message
     unsigned short type;        /* RPC type code. */
     raft_id server_id;          /* ID of sending or destination server. */
     const char *server_address; /* Address of sending or destination server. */
+    queue queue;                /* Queue of unhandled messages */
     union {                     /* Type-specific data */
         struct raft_request_vote request_vote;
         struct raft_request_vote_result request_vote_result;
@@ -705,6 +708,11 @@ struct raft
      * being promoted to voter. */
     unsigned max_catch_up_rounds;
     unsigned max_catch_up_round_duration;
+
+    /* Queue for storing messages when the Raft backend is busy */
+    queue messages;
+    /* Maximum amount of unhandled messages in the queue before raft drops */
+    unsigned messages_max_size;
 };
 
 RAFT_API int raft_init(struct raft *r,

@@ -6,6 +6,7 @@
 #include "membership.h"
 #include "progress.h"
 #include "replication.h"
+#include "recv.h"
 #include "tracing.h"
 
 /* Set to 1 to enable tracing. */
@@ -200,6 +201,29 @@ static int tick(struct raft *r)
     /* If we are not available, let's do nothing. */
     if (r->state == RAFT_UNAVAILABLE) {
         return 0;
+    }
+
+    /* For any state, check if we need to handle queued messages */
+    queue *head;
+    while (!QUEUE_IS_EMPTY(&r->messages)) {
+        tracef("handle queued message");
+        struct raft_message *message;
+        head = QUEUE_HEAD(&r->messages);
+        message = QUEUE_DATA(head, struct raft_message, queue);
+        rv = handleMessage(r, message);
+        if (rv == RAFT_BUSY) {
+            /* Do nothing, retry next tick */
+            break;
+        } else if (rv != 0) {
+            /* Something failed, abort */
+            QUEUE_REMOVE(head);
+            raft_free(message);
+            return rv;
+        } else {
+            /* Success */
+            QUEUE_REMOVE(head);
+            raft_free(message);
+        }
     }
 
     switch (r->state) {

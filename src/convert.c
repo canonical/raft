@@ -7,6 +7,7 @@
 #include "membership.h"
 #include "progress.h"
 #include "queue.h"
+#include "recv.h"
 #include "request.h"
 
 /* Set to 1 to enable tracing. */
@@ -113,6 +114,16 @@ static void convertClear(struct raft *r)
 {
     assert(r->state == RAFT_UNAVAILABLE || r->state == RAFT_FOLLOWER ||
            r->state == RAFT_CANDIDATE || r->state == RAFT_LEADER);
+
+    while(!QUEUE_IS_EMPTY(&r->messages)) {
+        queue *head;
+        head = QUEUE_HEAD(&r->messages);
+        struct raft_message *message = QUEUE_DATA(head, struct raft_message, queue);
+        QUEUE_REMOVE(head);
+        destroyMessage(message);
+        raft_free(message);
+    }
+
     switch (r->state) {
         case RAFT_FOLLOWER:
             convertClearFollower(r);

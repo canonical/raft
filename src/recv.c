@@ -23,7 +23,7 @@
 #endif
 
 /* Dispatch a single RPC message to the appropriate handler. */
-static int recvMessage(struct raft *r, struct raft_message *message)
+int handleMessage(struct raft *r, struct raft_message *message)
 {
     int rv = 0;
 
@@ -41,9 +41,8 @@ static int recvMessage(struct raft *r, struct raft_message *message)
             rv = recvAppendEntries(r, message->server_id,
                                    message->server_address,
                                    &message->append_entries);
-            if (rv != 0) {
-                entryBatchesDestroy(message->append_entries.entries,
-                                    message->append_entries.n_entries);
+            if (rv != 0 && rv != RAFT_BUSY) {
+                destroyMessage(message);
             }
             break;
         case RAFT_IO_APPEND_ENTRIES_RESULT:
@@ -64,11 +63,8 @@ static int recvMessage(struct raft *r, struct raft_message *message)
             rv = recvInstallSnapshot(r, message->server_id,
                                      message->server_address,
                                      &message->install_snapshot);
-            /* Already installing a snapshot, wait for it and ignore this one */
-            if (rv == RAFT_BUSY) {
-                raft_free(message->install_snapshot.data.base);
-                raft_configuration_close(&message->install_snapshot.conf);
-                rv = 0;
+            if (rv != 0 && rv != RAFT_BUSY) {
+                destroyMessage(message);
             }
             break;
         case RAFT_IO_TIMEOUT_NOW:
@@ -94,27 +90,66 @@ static int recvMessage(struct raft *r, struct raft_message *message)
     return 0;
 }
 
+void destroyMessage(struct raft_message *message)
+{
+    switch (message->type) {
+    case RAFT_IO_APPEND_ENTRIES:
+        entryBatchesDestroy(message->append_entries.entries,
+                            message->append_entries.n_entries);
+        break;
+    case RAFT_IO_INSTALL_SNAPSHOT:
+        raft_configuration_close(&message->install_snapshot.conf);
+        raft_free(message->install_snapshot.data.base);
+        break;
+    default:
+        break;
+    }
+}
+
+static void messagePushToQueue(struct raft *r, struct raft_message *message)
+{
+    tracef("queue message");
+    struct raft_message *copy = raft_malloc(sizeof(*copy));
+    *copy = *message;
+    QUEUE_INIT(&copy->queue);
+    QUEUE_PUSH(&r->messages, &copy->queue);
+}
+
+static void recvMessage(struct raft *r, struct raft_message *message)
+{
+    int rv;
+    if (r->state == RAFT_UNAVAILABLE) {
+        destroyMessage(message);
+        return;
+    }
+
+    rv = handleMessage(r, message);
+    if (rv == RAFT_BUSY) {
+        messagePushToQueue(r, message);
+    } else if (rv != 0) {
+        convertToUnavailable(r);
+    }
+}
+
 void recvCb(struct raft_io *io, struct raft_message *message)
 {
     struct raft *r = io->data;
-    int rv;
-    if (r->state == RAFT_UNAVAILABLE) {
-        switch (message->type) {
-            case RAFT_IO_APPEND_ENTRIES:
-                entryBatchesDestroy(message->append_entries.entries,
-                                    message->append_entries.n_entries);
-                break;
-            case RAFT_IO_INSTALL_SNAPSHOT:
-                raft_configuration_close(&message->install_snapshot.conf);
-                raft_free(message->install_snapshot.data.base);
-                break;
-        }
+
+    /* If there are too many buffered messages, start dropping */
+    unsigned q_sz = 0;
+    QUEUE_SIZE(&r->messages, &q_sz);
+    if (q_sz == r->messages_max_size) {
+        destroyMessage(message);
         return;
     }
-    rv = recvMessage(r, message);
-    if (rv != 0) {
-        convertToUnavailable(r);
+
+    /* If there are already buffered messages, buffer this one too */
+    if (!QUEUE_IS_EMPTY(&r->messages)) {
+        messagePushToQueue(r, message);
+        return;
     }
+
+    recvMessage(r, message);
 }
 
 int recvBumpCurrentTerm(struct raft *r, raft_term term)

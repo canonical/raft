@@ -109,13 +109,10 @@ int recvAppendEntries(struct raft *r,
     /* Reset the election timer. */
     r->election_timer_start = r->io->time(r->io);
 
-    /* If we are installing a snapshot, ignore these entries. TODO: we should do
-     * something smarter, e.g. buffering the entries in the I/O backend, which
-     * should be in charge of serializing everything. */
+    /* If we are installing a snapshot, report that we're busy */
     if (r->snapshot.put.data != NULL && args->n_entries > 0) {
-        tracef("ignoring AppendEntries RPC during snapshot install");
-        entryBatchesDestroy(args->entries, args->n_entries);
-        return 0;
+        tracef("AppendEntries RPC during snapshot install");
+        return RAFT_BUSY;
     }
 
     rv = replicationAppend(r, args, &result->rejected, &async);

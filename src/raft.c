@@ -24,6 +24,8 @@
 #define DEFAULT_MAX_CATCH_UP_ROUNDS 10
 #define DEFAULT_MAX_CATCH_UP_ROUND_DURATION (5 * 1000)
 
+#define DEFAULT_MESSAGES_MAX_SIZE 5
+
 int raft_init(struct raft *r,
               struct raft_io *io,
               struct raft_fsm *fsm,
@@ -67,6 +69,8 @@ int raft_init(struct raft *r,
     r->pre_vote = false;
     r->max_catch_up_rounds = DEFAULT_MAX_CATCH_UP_ROUNDS;
     r->max_catch_up_round_duration = DEFAULT_MAX_CATCH_UP_ROUND_DURATION;
+    QUEUE_INIT(&r->messages);
+    r->messages_max_size = DEFAULT_MESSAGES_MAX_SIZE;
     rv = r->io->init(r->io, r->id, r->address);
     if (rv != 0) {
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
@@ -95,9 +99,11 @@ static void ioCloseCb(struct raft_io *io)
 void raft_close(struct raft *r, void (*cb)(struct raft *r))
 {
     assert(r->close_cb == NULL);
+
     if (r->state != RAFT_UNAVAILABLE) {
         convertToUnavailable(r);
     }
+
     r->close_cb = cb;
     r->io->close(r->io, ioCloseCb);
 }

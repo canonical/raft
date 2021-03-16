@@ -814,3 +814,117 @@ TEST(replication, resultRetry, setUp, tearDown, 0, NULL)
 
     return MUNIT_OK;
 }
+
+#define QUEUE_2_MESSAGES_ON_SERVER_1                                           \
+    /* Set a small snapshot threshold on the follower */                       \
+    struct raft *r = CLUSTER_RAFT(1);                                          \
+    raft_set_snapshot_trailing(r, 1);                                          \
+    raft_set_snapshot_threshold(r, 3);                                         \
+    CLUSTER_MAKE_PROGRESS;                                                     \
+    CLUSTER_MAKE_PROGRESS;                                                     \
+    static struct raft_apply reqs[4] = {0};                                    \
+    /* This is needed for the cleanup code */                                  \
+    reqs[0].type = RAFT_COMMAND;                                               \
+    reqs[1].type = RAFT_COMMAND;                                               \
+    reqs[2].type = RAFT_COMMAND;                                               \
+    reqs[3].type = RAFT_COMMAND;                                               \
+    CLUSTER_APPLY_ADD_X(CLUSTER_LEADER, &reqs[0], 1, NULL);                    \
+    CLUSTER_APPLY_ADD_X(CLUSTER_LEADER, &reqs[1], 1, NULL);                    \
+    CLUSTER_STEP_N(5);                                                         \
+    CLUSTER_APPLY_ADD_X(CLUSTER_LEADER, &reqs[2], 1, NULL);                    \
+    CLUSTER_STEP_N(5);                                                         \
+    CLUSTER_APPLY_ADD_X(CLUSTER_LEADER, &reqs[3], 1, NULL);                    \
+    /* Allow time for the last request to arrive */                            \
+    CLUSTER_STEP_N(10);                                                        \
+    /* Check that the messages are in fact queued */                           \
+    unsigned sz = 0;                                                           \
+    QUEUE_SIZE(&r->messages, &sz);                                             \
+    munit_assert_uint(sz, ==, 2);                                              \
+
+
+/* AppendEntries arriving while a snapshot is taken are not resent */
+TEST(replication, appendEntriesDuringSnapshot, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    CLUSTER_BOOTSTRAP;
+    CLUSTER_START;
+    CLUSTER_ELECT(0);
+
+    QUEUE_2_MESSAGES_ON_SERVER_1;
+
+    /* Don't allow traffic to the follower */
+    CLUSTER_SATURATE(0, 1);
+
+    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_LEADER, reqs[3].index, 3000);
+    return MUNIT_OK;
+}
+
+/* IO errors occur while handling the queue  */
+TEST(replication, ioErrorsDuringMessageQueueHandling, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    CLUSTER_BOOTSTRAP;
+    CLUSTER_START;
+    CLUSTER_ELECT(0);
+
+    QUEUE_2_MESSAGES_ON_SERVER_1;
+
+    /* Don't allow traffic to the follower */
+    CLUSTER_SATURATE(0, 1);
+
+    /* Introduce IO faults while handling the message queue */
+    CLUSTER_IO_FAULT(1, 0, 10);
+    CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_UNAVAILABLE, 3000);
+    return MUNIT_OK;
+}
+
+/* Close raft with messages in the queue  */
+TEST(replication, nonEmptyMessageQueueUponShutdown, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    CLUSTER_BOOTSTRAP;
+    CLUSTER_START;
+    CLUSTER_ELECT(0);
+
+    QUEUE_2_MESSAGES_ON_SERVER_1;
+
+    /* Shut down the raft instance  */
+    return MUNIT_OK;
+}
+
+/* AppendEntries arriving while the queue is full are dropped */
+TEST(replication, queueFullThenNotFull, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    CLUSTER_BOOTSTRAP;
+
+    /* The first server has a snapshot present */
+    CLUSTER_SET_SNAPSHOT(0 /* server index                                  */,
+                         6 /* last index                                    */,
+                         2 /* last term                                     */,
+                         1 /* conf index                                    */,
+                         5 /* x                                             */,
+                         7 /* y                                             */);
+    CLUSTER_START;
+    CLUSTER_ELECT(0);
+
+    /* Drop all AppendEntries and InstallSnapshot messages on server 1 by
+     * filling the queue artificially */
+    struct raft *r = CLUSTER_RAFT(1);
+    r->messages_max_size = 0;
+
+    /* Because all AppendEntries are dropped, server 1 eventually converts to candidate */
+    CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_CANDIDATE, 3000);
+    /* Server 1 has not stored any entries */
+    munit_assert_int(r->last_stored, ==, 1);
+
+    /* Allow some room in the queue */
+    r->messages_max_size = 10;
+
+    /* Make sure the snapshot is delivered now */
+    CLUSTER_STEP_UNTIL_APPLIED(1, 6, 5000);
+    /* And that the cluster makes progress */
+    CLUSTER_MAKE_PROGRESS;
+
+    return MUNIT_OK;
+}
