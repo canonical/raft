@@ -290,6 +290,7 @@ err:
 int replicationProgress(struct raft *r, unsigned i)
 {
     struct raft_server *server = &r->configuration.servers[i];
+    bool progress_state_is_snapshot = progressState(r, i) == PROGRESS__SNAPSHOT;
     raft_index snapshot_index = logSnapshotIndex(&r->log);
     raft_index next_index = progressNextIndex(r, i);
     raft_index prev_index;
@@ -319,8 +320,8 @@ int replicationProgress(struct raft *r, unsigned i)
     if (next_index == 1) {
         /* We're including the very first entry, so prevIndex and prevTerm are
          * null. If the first entry is not available anymore, send the last
-         * snapshot. */
-        if (snapshot_index > 0) {
+         * snapshot if we're not already sending one. */
+        if (snapshot_index > 0 && !progress_state_is_snapshot) {
             raft_index last_index = logLastIndex(&r->log);
             assert(last_index > 0); /* The log can't be empty */
             goto send_snapshot;
@@ -332,11 +333,16 @@ int replicationProgress(struct raft *r, unsigned i)
          * next_index - 1. */
         prev_index = next_index - 1;
         prev_term = logTermOf(&r->log, prev_index);
-        /* If the entry is not anymore in our log, send the last snapshot. */
-        if (prev_term == 0) {
+        /* If the entry is not anymore in our log, send the last snapshot if we're
+         * not doing so already. */
+        if (prev_term == 0 && !progress_state_is_snapshot) {
             assert(prev_index < snapshot_index);
             tracef("missing entry at index %lld -> send snapshot", prev_index);
             goto send_snapshot;
+        } else if (prev_term == 0 && progress_state_is_snapshot) {
+            /* The entry is not in the log, but the peer is installing a
+             * snapshot, send an empty AppendEntries RPC */
+            prev_index = 0;
         }
     }
 

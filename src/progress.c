@@ -124,8 +124,14 @@ bool progressShouldReplicate(struct raft *r, unsigned i)
 
     switch (p->state) {
         case PROGRESS__SNAPSHOT:
-            /* Raft will retry sending a Snapshot if the timeout has elapsed. */
-            result = now - p->snapshot_last_send >= r->install_snapshot_timeout;
+            /* Snapshot timed out, move to PROBE */
+            if (now - p->snapshot_last_send >= r->install_snapshot_timeout) {
+                result = true;
+                progressAbortSnapshot(r, i);
+            } else {
+                /* Enforce Leadership during follower Snapshot installation */
+                result = needs_heartbeat;
+            }
             break;
         case PROGRESS__PROBE:
             /* We send at most one message per heartbeat interval. */
