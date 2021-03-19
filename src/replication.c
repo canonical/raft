@@ -1379,9 +1379,9 @@ static bool shouldTakeSnapshot(struct raft *r)
         return false;
     }
 
-    /* If a snapshot is already in progress, we don't want to start another
-     *  one. */
-    if (r->snapshot.pending.term != 0) {
+    /* If a snapshot is already in progress or we're installing a snapshot, we
+     * don't want to start another one. */
+    if (r->snapshot.pending.term != 0 || r->snapshot.put.data != NULL) {
         return false;
     };
 
