@@ -1479,6 +1479,11 @@ int replicationApply(struct raft *r)
 
     for (index = r->last_applied + 1; index <= r->commit_index; index++) {
         const struct raft_entry *entry = logGet(&r->log, index);
+        if (entry == NULL) {
+            /* This can happen while installing a snapshot */
+            tracef("replicationApply - ENTRY NULL");
+            return 0;
+        }
 
         assert(entry->type == RAFT_COMMAND || entry->type == RAFT_BARRIER ||
                entry->type == RAFT_CHANGE);
