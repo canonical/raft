@@ -47,6 +47,11 @@ int UvFsMakeFile(const char *dir,
                  unsigned n_bufs,
                  char *errmsg);
 
+/* UvFsMakeFile makes use of a temporary file when creating a file,
+ * this function takes care of cleaning up leftover temp files after
+ * e.g a crash. */
+int UvFsRemoveTmpFiles(const char *dir, char* errmsg);
+
 /* Create or overwrite a file.
  *
  * If the file does not exists yet, it gets created, the given content written
