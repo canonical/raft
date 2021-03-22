@@ -359,3 +359,39 @@ TEST(UvFsProbeCapabilities, noResources, DirBtrfsSetUp, DirTearDown, 0, NULL)
 }
 
 #endif /* RWF_NOWAIT */
+
+
+/******************************************************************************
+ *
+ * UvFsMakeFile
+ *
+ *****************************************************************************/
+
+SUITE(UvFsMakeFile)
+
+/* If the file does not exist, the function succeeds. */
+TEST(UvFsMakeFile, notExists, DirSetUp, DirTearDown, 0, NULL)
+{
+    const char *dir = data;
+    int rv;
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
+    struct raft_buffer bufs[2] = {0};
+    rv = UvFsMakeFile(dir, "foo", bufs, 2, errmsg);
+    munit_assert_int(rv, ==, 0);
+    return MUNIT_OK;
+}
+
+/* If the file exists, the function does not succeed. */
+TEST(UvFsMakeFile, exists, DirSetUp, DirTearDown, 0, NULL)
+{
+    const char *dir = data;
+    int rv;
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
+    struct raft_buffer bufs[2] = {0};
+    rv = UvFsMakeFile(dir, "foo", bufs, 2, errmsg);
+    munit_assert_int(rv, ==, 0);
+    rv = UvFsMakeFile(dir, "foo", bufs, 2, errmsg);
+    munit_assert_int(rv, !=, 0);
+    return MUNIT_OK;
+}
+
