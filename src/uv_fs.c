@@ -10,6 +10,9 @@
 #include "heap.h"
 #include "uv_os.h"
 
+#define TMP_FILE_PREFIX "tmp-"
+#define TMP_FILE_FMT TMP_FILE_PREFIX "%s"
+
 int UvFsCheckDir(const char *dir, char *errmsg)
 {
     struct uv_fs_s req;
@@ -264,9 +267,93 @@ int UvFsMakeFile(const char *dir,
                  unsigned n_bufs,
                  char *errmsg)
 {
+    int rv;
+    char tmp_filename[UV__FILENAME_LEN+1] = {0};
+    char path[UV__PATH_SZ] = {0};
+    char tmp_path[UV__PATH_SZ] = {0};
+
+    /* Create a temp file with the given content
+     * TODO as of libuv 1.34.0, use `uv_fs_mkstemp` */
+    size_t sz = sizeof(tmp_filename);
+    rv = snprintf(tmp_filename, sz, TMP_FILE_FMT, filename);
+    if (rv < 0 || rv >= (int) sz) {
+        return rv;
+    }
     int flags = UV_FS_O_WRONLY | UV_FS_O_CREAT | UV_FS_O_EXCL;
-    return uvFsWriteFile(dir, filename, flags, bufs, n_bufs, errmsg);
+    rv = uvFsWriteFile(dir, tmp_filename, flags, bufs, n_bufs, errmsg);
+    if (rv != 0) {
+        goto err_after_tmp_create;
+    }
+
+    /* Check if the file exists */
+    bool exists = false;
+    rv = UvFsFileExists(dir, filename, &exists, errmsg);
+    if (rv != 0) {
+        goto err_after_tmp_create;
+    }
+    if (exists) {
+        rv = -1;
+        goto err_after_tmp_create;
+    }
+
+    /* Rename the temp file. Remark that there is a race between the existence
+     * check and the rename, there is no `renameat2` equivalent in libuv.
+     * However, in the current implementation this should pose no problems.*/
+    UvOsJoin(dir, tmp_filename, tmp_path);
+    UvOsJoin(dir, filename, path);
+    rv = UvOsRename(tmp_path, path);
+    if (rv != 0) {
+        UvOsErrMsg(errmsg, "rename", rv);
+        goto err_after_tmp_create;
+    }
+
+    rv = UvFsSyncDir(dir, errmsg);
+    if (rv != 0) {
+        char ignored[RAFT_ERRMSG_BUF_SIZE];
+        UvFsRemoveFile(dir, filename, ignored);
+        return rv;
+    }
+
+    return 0;
+
+err_after_tmp_create:
+    UvFsRemoveFile(dir, tmp_filename, errmsg);
+    return rv;
 }
+
+int UvFsRemoveTmpFiles(const char *dir, char* errmsg)
+{
+    struct uv_fs_s req;
+    struct uv_dirent_s entry;
+    int n;
+    int i;
+    int rv;
+    int rv2;
+
+    n = uv_fs_scandir(NULL, &req, dir, 0, NULL);
+    if (n < 0) {
+        ErrMsgPrintf(errmsg, "scan data directory: %s", uv_strerror(n));
+        return RAFT_IOERR;
+    }
+
+    rv = 0;
+    for (i = 0; i < n; i++) {
+        const char *filename;
+        rv = uv_fs_scandir_next(&req, &entry);
+        assert(rv == 0); /* Can't fail in libuv */
+
+        filename = entry.name;
+        if (strncmp(filename, TMP_FILE_PREFIX, strlen(TMP_FILE_PREFIX)) == 0) {
+            rv = UvFsRemoveFile(dir, filename, errmsg);
+        }
+    }
+
+    rv2 = uv_fs_scandir_next(&req, &entry);
+    assert(rv2 == UV_EOF);
+
+    return rv;
+}
+
 
 int UvFsMakeOrOverwriteFile(const char *dir,
                             const char *filename,
