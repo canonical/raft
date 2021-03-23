@@ -27,6 +27,7 @@ static void initProgress(struct raft_progress *p, raft_index last_index)
     p->match_index = 0;
     p->snapshot_index = 0;
     p->last_send = 0;
+    p->snapshot_last_send = 0;
     p->recent_recv = false;
     p->state = PROGRESS__PROBE;
 }
@@ -123,8 +124,14 @@ bool progressShouldReplicate(struct raft *r, unsigned i)
 
     switch (p->state) {
         case PROGRESS__SNAPSHOT:
-            /* Raft will retry sending a Snapshot if the timeout has elapsed. */
-            result = now - p->last_send >= r->install_snapshot_timeout;
+            /* Snapshot timed out, move to PROBE */
+            if (now - p->snapshot_last_send >= r->install_snapshot_timeout) {
+                result = true;
+                progressAbortSnapshot(r, i);
+            } else {
+                /* Enforce Leadership during follower Snapshot installation */
+                result = needs_heartbeat;
+            }
             break;
         case PROGRESS__PROBE:
             /* We send at most one message per heartbeat interval. */
@@ -152,6 +159,11 @@ raft_index progressMatchIndex(struct raft *r, unsigned i)
 void progressUpdateLastSend(struct raft *r, unsigned i)
 {
     r->leader_state.progress[i].last_send = r->io->time(r->io);
+}
+
+void progressUpdateSnapshotLastSend(struct raft *r, unsigned i)
+{
+    r->leader_state.progress[i].snapshot_last_send = r->io->time(r->io);
 }
 
 bool progressResetRecentRecv(struct raft *r, const unsigned i)

@@ -53,6 +53,15 @@ static void tearDown(void *data)
         }                                                       \
     }
 
+/* Set the snapshot timeout on all servers of the cluster */
+#define SET_SNAPSHOT_TIMEOUT(VALUE)                                   \
+    {                                                                 \
+        unsigned i;                                                   \
+        for (i = 0; i < CLUSTER_N; i++) {                             \
+            raft_set_install_snapshot_timeout(CLUSTER_RAFT(i), VALUE);\
+        }                                                             \
+    }
+
 /******************************************************************************
  *
  * Successfully install a snapshot
@@ -93,6 +102,7 @@ TEST(snapshot, installOneTimeOut, setUp, tearDown, 0, NULL)
     /* Set very low threshold and trailing entries number */
     SET_SNAPSHOT_THRESHOLD(3);
     SET_SNAPSHOT_TRAILING(1);
+    SET_SNAPSHOT_TIMEOUT(200);
     CLUSTER_SATURATE_BOTHWAYS(0, 2);
 
     /* Apply a few of entries, to force a snapshot to be taken. */
@@ -104,7 +114,7 @@ TEST(snapshot, installOneTimeOut, setUp, tearDown, 0, NULL)
     CLUSTER_DESATURATE(0, 2);
 
     /* InstallSnaphot RPC times out */
-    CLUSTER_STEP_UNTIL_ELAPSED(200);
+    CLUSTER_STEP_UNTIL_ELAPSED(400);
 
     /* Reconnect the follower */
     CLUSTER_DESATURATE(2, 0);
@@ -125,6 +135,7 @@ TEST(snapshot, installOneTimeOutAppendAfter, setUp, tearDown, 0, NULL)
     /* Set very low threshold and trailing entries number */
     SET_SNAPSHOT_THRESHOLD(3);
     SET_SNAPSHOT_TRAILING(1);
+    SET_SNAPSHOT_TIMEOUT(200);
     CLUSTER_SATURATE_BOTHWAYS(0, 2);
 
     /* Apply a few of entries, to force a snapshot to be taken. */
@@ -136,15 +147,14 @@ TEST(snapshot, installOneTimeOutAppendAfter, setUp, tearDown, 0, NULL)
     CLUSTER_DESATURATE(0, 2);
 
     /* InstallSnaphot RPC times out */
-    CLUSTER_STEP_UNTIL_ELAPSED(200);
+    CLUSTER_STEP_UNTIL_ELAPSED(400);
 
     /* Reconnect the follower */
     CLUSTER_DESATURATE(2, 0);
 
     /* Append a few entries and check if they are replicated */
     CLUSTER_MAKE_PROGRESS;
-    CLUSTER_MAKE_PROGRESS;
-    CLUSTER_STEP_UNTIL_APPLIED(2, 6, 5000);
+    CLUSTER_STEP_UNTIL_APPLIED(2, 5, 5000);
 
     /* Assert that the leader has retried the InstallSnapshot RPC */
     munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_INSTALL_SNAPSHOT), ==, 2);
@@ -161,6 +171,7 @@ TEST(snapshot, installMultipleTimeOut, setUp, tearDown, 0, NULL)
     /* Set very low threshold and trailing entries number */
     SET_SNAPSHOT_THRESHOLD(3);
     SET_SNAPSHOT_TRAILING(1);
+    SET_SNAPSHOT_TIMEOUT(200);
     CLUSTER_SATURATE_BOTHWAYS(0, 2);
 
     /* Apply a few of entries, to force a snapshot to be taken. */
@@ -172,7 +183,7 @@ TEST(snapshot, installMultipleTimeOut, setUp, tearDown, 0, NULL)
     CLUSTER_DESATURATE(0, 2);
 
     /* InstallSnaphot RPC times out */
-    CLUSTER_STEP_UNTIL_ELAPSED(200);
+    CLUSTER_STEP_UNTIL_ELAPSED(400);
 
     /* Apply another few of entries, to force a new snapshot to be taken. */
     CLUSTER_MAKE_PROGRESS;
@@ -180,7 +191,7 @@ TEST(snapshot, installMultipleTimeOut, setUp, tearDown, 0, NULL)
     CLUSTER_MAKE_PROGRESS;
 
     /* InstallSnaphot RPC times out */
-    CLUSTER_STEP_UNTIL_ELAPSED(200);
+    CLUSTER_STEP_UNTIL_ELAPSED(400);
 
     /* Reconnect the follower */
     CLUSTER_DESATURATE(2, 0);
@@ -202,6 +213,7 @@ TEST(snapshot, installMultipleTimeOutAppendAfter, setUp, tearDown, 0, NULL)
     /* Set very low threshold and trailing entries number */
     SET_SNAPSHOT_THRESHOLD(3);
     SET_SNAPSHOT_TRAILING(1);
+    SET_SNAPSHOT_TIMEOUT(200);
     CLUSTER_SATURATE_BOTHWAYS(0, 2);
 
     /* Apply a few of entries, to force a snapshot to be taken. */
@@ -213,7 +225,7 @@ TEST(snapshot, installMultipleTimeOutAppendAfter, setUp, tearDown, 0, NULL)
     CLUSTER_DESATURATE(0, 2);
 
     /* InstallSnaphot RPC times out */
-    CLUSTER_STEP_UNTIL_ELAPSED(200);
+    CLUSTER_STEP_UNTIL_ELAPSED(400);
 
     /* Apply another few of entries, to force a new snapshot to be taken. */
     CLUSTER_MAKE_PROGRESS;
@@ -221,7 +233,7 @@ TEST(snapshot, installMultipleTimeOutAppendAfter, setUp, tearDown, 0, NULL)
     CLUSTER_MAKE_PROGRESS;
 
     /* InstallSnaphot RPC times out */
-    CLUSTER_STEP_UNTIL_ELAPSED(200);
+    CLUSTER_STEP_UNTIL_ELAPSED(400);
 
     /* Reconnect the follower */
     CLUSTER_DESATURATE(2, 0);
@@ -233,6 +245,65 @@ TEST(snapshot, installMultipleTimeOutAppendAfter, setUp, tearDown, 0, NULL)
 
     /* Assert that the leader has sent multiple InstallSnapshot RPCs */
     munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_INSTALL_SNAPSHOT), >=, 2);
+
+    return MUNIT_OK;
+}
+
+static bool server_installing_snapshot(struct raft_fixture *f, void* data) {
+    (void) f;
+    const struct raft *r = data;
+    return r->snapshot.put.data != NULL;
+}
+
+static bool server_snapshot_done(struct raft_fixture *f, void *data) {
+    (void) f;
+    const struct raft *r = data;
+    return r->snapshot.put.data == NULL;
+}
+
+/* Follower receives HeartBeats during the installation of a snapshot */
+TEST(snapshot, installSnapshotHeartBeats, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+
+    /* Set very low threshold and trailing entries number */
+    SET_SNAPSHOT_THRESHOLD(3);
+    SET_SNAPSHOT_TRAILING(1);
+    CLUSTER_SATURATE_BOTHWAYS(0, 1);
+
+    /* Apply a few of entries, to force a snapshot to be taken. */
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+
+    /* Set a large disk latency on the follower, this will allow some
+     * heartbeats to be sent during the snapshot installation */
+    CLUSTER_SET_DISK_LATENCY(1, 2000);
+
+    munit_assert_uint(CLUSTER_N_RECV(1, RAFT_IO_INSTALL_SNAPSHOT), ==, 0);
+
+    /* Step the cluster until server 1 installs a snapshot */
+    const struct raft *r = CLUSTER_RAFT(1);
+    CLUSTER_DESATURATE_BOTHWAYS(0, 1);
+    CLUSTER_STEP_UNTIL(server_installing_snapshot, (void*) r, 2000);
+    munit_assert_uint(CLUSTER_N_RECV(1, RAFT_IO_INSTALL_SNAPSHOT), ==, 1);
+
+    /* Count the number of AppendEntries RPCs received during the snapshot
+     * install*/
+    unsigned before = CLUSTER_N_RECV(1, RAFT_IO_APPEND_ENTRIES);
+    CLUSTER_STEP_UNTIL(server_snapshot_done, (void*) r, 5000);
+    unsigned after = CLUSTER_N_RECV(1, RAFT_IO_APPEND_ENTRIES);
+    munit_assert_uint(before, < , after);
+
+    /* Check that the InstallSnapshot RPC was not resent */
+    munit_assert_uint(CLUSTER_N_RECV(1, RAFT_IO_INSTALL_SNAPSHOT), ==, 1);
+
+    /* Check that the snapshot was applied and we can still make progress */
+    CLUSTER_STEP_UNTIL_APPLIED(1, 4, 5000);
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_STEP_UNTIL_APPLIED(1, 6, 5000);
 
     return MUNIT_OK;
 }

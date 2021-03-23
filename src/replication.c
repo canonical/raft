@@ -276,7 +276,7 @@ static int sendSnapshot(struct raft *r, const unsigned i)
         goto err_after_req_alloc;
     }
 
-    progressUpdateLastSend(r, i);
+    progressUpdateSnapshotLastSend(r, i);
     return 0;
 
 err_after_req_alloc:
@@ -290,6 +290,7 @@ err:
 int replicationProgress(struct raft *r, unsigned i)
 {
     struct raft_server *server = &r->configuration.servers[i];
+    bool progress_state_is_snapshot = progressState(r, i) == PROGRESS__SNAPSHOT;
     raft_index snapshot_index = logSnapshotIndex(&r->log);
     raft_index next_index = progressNextIndex(r, i);
     raft_index prev_index;
@@ -319,8 +320,8 @@ int replicationProgress(struct raft *r, unsigned i)
     if (next_index == 1) {
         /* We're including the very first entry, so prevIndex and prevTerm are
          * null. If the first entry is not available anymore, send the last
-         * snapshot. */
-        if (snapshot_index > 0) {
+         * snapshot if we're not already sending one. */
+        if (snapshot_index > 0 && !progress_state_is_snapshot) {
             raft_index last_index = logLastIndex(&r->log);
             assert(last_index > 0); /* The log can't be empty */
             goto send_snapshot;
@@ -332,11 +333,16 @@ int replicationProgress(struct raft *r, unsigned i)
          * next_index - 1. */
         prev_index = next_index - 1;
         prev_term = logTermOf(&r->log, prev_index);
-        /* If the entry is not anymore in our log, send the last snapshot. */
-        if (prev_term == 0) {
+        /* If the entry is not anymore in our log, send the last snapshot if we're
+         * not doing so already. */
+        if (prev_term == 0 && !progress_state_is_snapshot) {
             assert(prev_index < snapshot_index);
             tracef("missing entry at index %lld -> send snapshot", prev_index);
             goto send_snapshot;
+        } else if (prev_term == 0 && progress_state_is_snapshot) {
+            /* The entry is not in the log, but the peer is installing a
+             * snapshot, send an empty AppendEntries RPC */
+            prev_index = 0;
         }
     }
 
@@ -1379,9 +1385,9 @@ static bool shouldTakeSnapshot(struct raft *r)
         return false;
     }
 
-    /* If a snapshot is already in progress, we don't want to start another
-     *  one. */
-    if (r->snapshot.pending.term != 0) {
+    /* If a snapshot is already in progress or we're installing a snapshot, we
+     * don't want to start another one. */
+    if (r->snapshot.pending.term != 0 || r->snapshot.put.data != NULL) {
         return false;
     };
 
@@ -1479,6 +1485,11 @@ int replicationApply(struct raft *r)
 
     for (index = r->last_applied + 1; index <= r->commit_index; index++) {
         const struct raft_entry *entry = logGet(&r->log, index);
+        if (entry == NULL) {
+            /* This can happen while installing a snapshot */
+            tracef("replicationApply - ENTRY NULL");
+            return 0;
+        }
 
         assert(entry->type == RAFT_COMMAND || entry->type == RAFT_BARRIER ||
                entry->type == RAFT_CHANGE);

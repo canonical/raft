@@ -49,6 +49,10 @@ raft_index progressMatchIndex(struct raft *r, unsigned i);
  * sent. */
 void progressUpdateLastSend(struct raft *r, unsigned i);
 
+/* Update the snapshot_last_send timestamp after an InstallSnaphot request has
+ * been sent. */
+void progressUpdateSnapshotLastSend(struct raft *r, unsigned i);
+
 /* Reset to false the recent_recv flag of the server at the given index,
  * returning the previous value.
  *
