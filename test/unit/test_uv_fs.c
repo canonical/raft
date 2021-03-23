@@ -375,7 +375,7 @@ TEST(UvFsMakeFile, notExists, DirSetUp, DirTearDown, 0, NULL)
     const char *dir = data;
     int rv;
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
-    struct raft_buffer bufs[2] = {0};
+    struct raft_buffer bufs[2] = {{0},{0}};
     rv = UvFsMakeFile(dir, "foo", bufs, 2, errmsg);
     munit_assert_int(rv, ==, 0);
     return MUNIT_OK;
@@ -387,7 +387,7 @@ TEST(UvFsMakeFile, exists, DirSetUp, DirTearDown, 0, NULL)
     const char *dir = data;
     int rv;
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
-    struct raft_buffer bufs[2] = {0};
+    struct raft_buffer bufs[2] = {{0},{0}};
     rv = UvFsMakeFile(dir, "foo", bufs, 2, errmsg);
     munit_assert_int(rv, ==, 0);
     rv = UvFsMakeFile(dir, "foo", bufs, 2, errmsg);
@@ -408,7 +408,7 @@ TEST(UvFsRemoveTmpFiles, twoTmpFiles, DirSetUp, DirTearDown, 0, NULL)
     const char *dir = data;
     int rv;
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
-    struct raft_buffer bufs[2] = {0};
+    struct raft_buffer bufs[2] = {{0},{0}};
     rv = UvFsMakeFile(dir, "tmp-foo1", bufs, 2, errmsg);
     munit_assert_int(rv, ==, 0);
     rv = UvFsMakeFile(dir, "tmp-foo2", bufs, 2, errmsg);
