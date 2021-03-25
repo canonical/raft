@@ -227,6 +227,7 @@ if SANITIZE_ENABLED
 endif
 
 if CODE_COVERAGE_ENABLED
+AM_CFLAGS += -DCODE_COVERAGE_ENABLED
 
 include $(top_srcdir)/aminclude_static.am
 
