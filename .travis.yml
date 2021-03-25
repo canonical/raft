@@ -32,27 +32,7 @@ jobs:
     dist: bionic
     arch: amd64
 
-  - compiler: gcc
-    dist: focal
-    arch: amd64
-
-  - if: type != pull_request
-    compiler: clang
-    dist: bionic
-    arch: amd64
-
-  - if: type != pull_request
-    compiler: gcc
-    dist: bionic
-    arch: s390x
-
-  - if: type != pull_request
-    compiler: gcc
-    dist: bionic
-    arch: arm64
-
-  - if: type != pull_request
-    compiler: clang
+  - compiler: clang
     dist: bionic
     arch: ppc64le
 
