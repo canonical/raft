@@ -1388,7 +1388,7 @@ munit_test_runner_run_test_with_params(MunitTestRunner* runner, const MunitTest*
           if (stderr_buf != NULL) {
             munit_log_errno(MUNIT_LOG_ERROR, stderr, "unable to write to pipe");
           }
-          exit(EXIT_FAILURE);
+          _exit(EXIT_FAILURE);
         }
         bytes_written += write_res;
       } while ((size_t) bytes_written < sizeof(report));
@@ -1397,7 +1397,7 @@ munit_test_runner_run_test_with_params(MunitTestRunner* runner, const MunitTest*
         fclose(stderr_buf);
       close(pipefd[1]);
 
-      exit(EXIT_SUCCESS);
+      _exit(EXIT_SUCCESS);
     } else if (fork_pid == -1) {
       close(pipefd[0]);
       close(pipefd[1]);
