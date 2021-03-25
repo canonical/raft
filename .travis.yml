@@ -24,7 +24,7 @@ addons:
 
     build_command_prepend: "autoreconf -i && ./configure"
     build_command: "make"
-    branch_pattern: master
+    branch_pattern: coverity_scan
 
 jobs:
   include:
