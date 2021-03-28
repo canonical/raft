@@ -2,7 +2,9 @@
 
 #include <stdlib.h>
 #include <string.h>
+#ifdef __linux__
 #include <sys/vfs.h>
+#endif
 #include <unistd.h>
 
 #include "assert.h"
@@ -52,6 +54,10 @@ int UvFsCheckDir(const char *dir, char *errmsg)
 
 int UvFsSyncDir(const char *dir, char *errmsg)
 {
+#ifdef _WIN32
+    // Windows doesn't really support sync on folders.
+    return 0;
+#endif
     uv_file fd;
     int rv;
     rv = UvOsOpen(dir, UV_FS_O_RDONLY | UV_FS_O_DIRECTORY, 0, &fd);
@@ -178,7 +184,9 @@ int UvFsAllocateFile(const char *dir,
     UvOsJoin(dir, filename, path);
 
     /* TODO: use RWF_DSYNC instead, if available. */
-    flags |= O_DSYNC;
+#if defined(UV_FS_O_DSYNC)
+    flags |= UV_FS_O_DSYNC;
+#endif
 
     rv = uvFsOpenFile(dir, filename, flags, S_IRUSR | S_IWUSR, fd, errmsg);
     if (rv != 0) {
@@ -199,6 +207,11 @@ int UvFsAllocateFile(const char *dir,
                 rv = RAFT_IOERR;
                 break;
         }
+        goto err_after_open;
+    }
+    rv = UvOsFsync(*fd);
+    if (rv != 0) {
+        UvOsErrMsg(errmsg, "fsync", rv);
         goto err_after_open;
     }
 
@@ -223,6 +236,9 @@ static int uvFsWriteFile(const char *dir,
     int rv;
     size_t size;
     unsigned i;
+#ifdef _WIN32
+    uv_buf_t convBufArr[n_bufs];
+#endif
     size = 0;
     for (i = 0; i < n_bufs; i++) {
         size += bufs[i].len;
@@ -231,7 +247,18 @@ static int uvFsWriteFile(const char *dir,
     if (rv != 0) {
         goto err;
     }
+#ifdef _WIN32
+    // casting raft_buffer to uv_buf_t changes the value of the len field.
+    // uv_buf_t for Windows is ULONG, while for linux it's size_t. Copying
+    // the values and explicitly casting len to ULONG seems to work.
+    for (i = 0; i < n_bufs; i++) {
+        convBufArr[i].len = (unsigned long)bufs[i].len;
+        convBufArr[i].base = bufs[i].base;
+    }
+    rv = UvOsWrite(fd, convBufArr, n_bufs, 0);
+#else
     rv = UvOsWrite(fd, (const uv_buf_t *)bufs, n_bufs, 0);
+#endif
     if (rv != (int)(size)) {
         if (rv < 0) {
             UvOsErrMsg(errmsg, "write", rv);
@@ -344,7 +371,14 @@ open:
         goto err;
     }
 
+#ifdef WINDOWS
+    uv_buf_t convBufArr[1];
+    convBufArr[0].len = (unsigned long)buf->len;
+    convBufArr[0].base = buf->base;
+    rv = UvOsWrite(fd, convBufArr, 1, 0);
+#else
     rv = UvOsWrite(fd, (const uv_buf_t *)buf, 1, 0);
+#endif
     if (rv != (int)(buf->len)) {
         if (rv < 0) {
             UvOsErrMsg(errmsg, "write", rv);
@@ -556,6 +590,7 @@ err:
     return RAFT_IOERR;
 }
 
+#ifdef __linux__
 /* Check if direct I/O is possible on the given fd. */
 static int probeDirectIO(int fd, size_t *size, char *errmsg)
 {
@@ -634,6 +669,7 @@ static int probeDirectIO(int fd, size_t *size, char *errmsg)
     *size = 0;
     return 0;
 }
+#endif
 
 #if defined(RWF_NOWAIT)
 /* Check if fully non-blocking async I/O is possible on the given fd. */
@@ -726,6 +762,10 @@ int UvFsProbeCapabilities(const char *dir,
                           bool *async,
                           char *errmsg)
 {
+#ifndef __linux__
+    *direct = 0;
+#endif
+
     int fd; /* File descriptor of the probe file */
     int rv;
     char ignored[RAFT_ERRMSG_BUF_SIZE];
@@ -740,11 +780,13 @@ int UvFsProbeCapabilities(const char *dir,
     }
     UvFsRemoveFile(dir, UV__FS_PROBE_FILE, ignored);
 
+#ifdef __linux__
     /* Check if we can use direct I/O. */
     rv = probeDirectIO(fd, direct, errmsg);
     if (rv != 0) {
         goto err_after_file_open;
     }
+#endif
 
 #if !defined(RWF_NOWAIT)
     /* We can't have fully async I/O, since io_submit might potentially block.
@@ -769,8 +811,10 @@ out:
     close(fd);
     return 0;
 
+#ifdef __linux__
 err_after_file_open:
     close(fd);
+#endif
 err:
     return rv;
 }

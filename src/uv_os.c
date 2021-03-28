@@ -5,16 +5,21 @@
 #include <libgen.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/eventfd.h>
 #include <sys/types.h>
-#include <sys/uio.h>
-#include <sys/vfs.h>
 #include <unistd.h>
 #include <uv.h>
 
 #include "assert.h"
 #include "err.h"
+
+#ifdef __linux__
+#include <sys/eventfd.h>
+#include <sys/vfs.h>
 #include "syscall.h"
+#elif defined(__FreeBSD__) || defined(__APPLE__)
+#include <sys/param.h>
+#include <sys/mount.h>
+#endif
 
 /* Default permissions when creating a directory. */
 #define DEFAULT_DIR_PERM 0700
@@ -36,6 +41,24 @@ int UvOsClose(uv_file fd)
     struct uv_fs_s req;
     return uv_fs_close(NULL, &req, fd, NULL);
 }
+
+#ifdef _WIN32
+int UvOsFallocate(uv_file fd, off_t offset, off_t len)
+{
+    // This is not really correct. A better implementation would probably
+    // be to open the file, seek to offset and write zeros.
+    int rv;
+    rv = ftruncate(fd, offset+len);
+    if (rv != 0) {
+      return rv;
+    }
+    rv = UvOsFsync(fd);
+    if (rv != 0) {
+        return rv;
+    }
+    return 0;
+}
+#else
 
 /* Emulate fallocate(). Mostly taken from glibc's implementation. */
 static int uvOsFallocateEmulation(int fd, off_t offset, off_t len)
@@ -70,6 +93,7 @@ static int uvOsFallocateEmulation(int fd, off_t offset, off_t len)
 int UvOsFallocate(uv_file fd, off_t offset, off_t len)
 {
     int rv;
+#ifdef __linux__
     rv = posix_fallocate(fd, offset, len);
     if (rv != 0) {
         /* From the manual page:
@@ -80,6 +104,7 @@ int UvOsFallocate(uv_file fd, off_t offset, off_t len)
         if (rv != EOPNOTSUPP) {
             return -rv;
         }
+#endif
         /* This might be a libc implementation (e.g. musl) that doesn't
          * implement a transparent fallback if fallocate() is not supported
          * by the underlying file system. */
@@ -87,9 +112,12 @@ int UvOsFallocate(uv_file fd, off_t offset, off_t len)
         if (rv != 0) {
             return -EOPNOTSUPP;
         }
+#ifdef __linux__
     }
+#endif
     return 0;
 }
+#endif
 
 int UvOsTruncate(uv_file fd, off_t offset)
 {
@@ -147,10 +175,15 @@ void UvOsJoin(const char *dir, const char *filename, char *path)
     assert(UV__DIR_HAS_VALID_LEN(dir));
     assert(UV__FILENAME_HAS_VALID_LEN(filename));
     strcpy(path, dir);
+#ifdef _WIN32
+    strcat(path, "\\");
+#else
     strcat(path, "/");
+#endif
     strcat(path, filename);
 }
 
+#ifdef __linux__
 int UvOsIoSetup(unsigned nr, aio_context_t *ctxp)
 {
     int rv;
@@ -225,3 +258,4 @@ int UvOsSetDirectIo(uv_file fd)
     }
     return 0;
 }
+#endif
