@@ -339,11 +339,13 @@ int replicationProgress(struct raft *r, unsigned i)
             assert(prev_index < snapshot_index);
             tracef("missing entry at index %lld -> send snapshot", prev_index);
             goto send_snapshot;
-        } else if (prev_term == 0 && progress_state_is_snapshot) {
-            /* The entry is not in the log, but the peer is installing a
-             * snapshot, send an empty AppendEntries RPC */
-            prev_index = 0;
         }
+    }
+
+    /* Send empty AppendEntries RPC when installing a snaphot */
+    if (progress_state_is_snapshot) {
+        prev_index = logLastIndex(&r->log);
+        prev_term = logLastTerm(&r->log);
     }
 
     return sendAppendEntries(r, i, prev_index, prev_term);
