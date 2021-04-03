@@ -1074,7 +1074,7 @@ int replicationAppend(struct raft *r,
      */
     if (n == 0) {
         if (args->leader_commit > r->commit_index) {
-            r->commit_index = min(args->leader_commit, logLastIndex(&r->log));
+            r->commit_index = min(args->leader_commit, r->last_stored);
             rv = replicationApply(r);
             if (rv != 0) {
                 return rv;
