@@ -33,6 +33,11 @@
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
+static inline bool snapshotInstallBusy(struct raft *r)
+{
+    return r->last_stored == 0 && r->snapshot.put.data != NULL;
+}
+
 /* Context of a RAFT_IO_APPEND_ENTRIES request that was submitted with
  * raft_io_>send(). */
 struct sendAppendEntries
@@ -339,11 +344,13 @@ int replicationProgress(struct raft *r, unsigned i)
             assert(prev_index < snapshot_index);
             tracef("missing entry at index %lld -> send snapshot", prev_index);
             goto send_snapshot;
-        } else if (prev_term == 0 && progress_state_is_snapshot) {
-            /* The entry is not in the log, but the peer is installing a
-             * snapshot, send an empty AppendEntries RPC */
-            prev_index = 0;
         }
+    }
+
+    /* Send empty AppendEntries RPC when installing a snaphot */
+    if (progress_state_is_snapshot) {
+        prev_index = logLastIndex(&r->log);
+        prev_term = logLastTerm(&r->log);
     }
 
     return sendAppendEntries(r, i, prev_index, prev_term);
@@ -846,6 +853,12 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
         goto out;
     }
 
+    /* We received an InstallSnapshot RCP while these entries were being
+     * persisted to disk */
+    if (snapshotInstallBusy(r)) {
+        goto out;
+    }
+
     i = updateLastStored(r, request->index, args->entries, args->n_entries);
 
     /* If none of the entries that we persisted is present anymore in our
@@ -1062,7 +1075,9 @@ int replicationAppend(struct raft *r,
     n = args->n_entries - i; /* Number of new entries */
 
     /* If this is an empty AppendEntries, there's nothing to write. However we
-     * still want to check if we can commit some entry.
+     * still want to check if we can commit some entry. However, don't commit
+     * anything while a snapshot install is busy, r->last_stored will be 0 in
+     * that case.
      *
      * From Figure 3.1:
      *
@@ -1071,8 +1086,8 @@ int replicationAppend(struct raft *r,
      *   entry).
      */
     if (n == 0) {
-        if (args->leader_commit > r->commit_index) {
-            r->commit_index = min(args->leader_commit, logLastIndex(&r->log));
+        if ((args->leader_commit > r->commit_index) && !snapshotInstallBusy(r)) {
+            r->commit_index = min(args->leader_commit, r->last_stored);
             rv = replicationApply(r);
             if (rv != 0) {
                 return rv;

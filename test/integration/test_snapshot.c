@@ -307,3 +307,35 @@ TEST(snapshot, installSnapshotHeartBeats, setUp, tearDown, 0, NULL)
 
     return MUNIT_OK;
 }
+
+/* InstallSnapshot RPC arrives while persisting Entries */
+TEST(snapshot, installSnapshotDuringEntriesWrite, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+
+    /* Set a large disk latency on the follower, this will allow a
+     * InstallSnapshot RPC to arrive while the entries are being persisted. */
+    CLUSTER_SET_DISK_LATENCY(1, 2000);
+    SET_SNAPSHOT_THRESHOLD(3);
+    SET_SNAPSHOT_TRAILING(1);
+
+    /* Replicate some entries, these will take a while to persist */
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+
+    /* Make sure leader can't succesfully send any more entries */
+    CLUSTER_DISCONNECT(0,1);
+    CLUSTER_MAKE_PROGRESS; /* Snapshot taken here */
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS; /* Snapshot taken here */
+    CLUSTER_MAKE_PROGRESS;
+
+    /* Snapshot with index 6 is sent while follower is still writing the entries
+     * to disk that arrived before the disconnect. */
+    CLUSTER_RECONNECT(0,1);
+
+    /* Make sure follower is up to date */
+    CLUSTER_STEP_UNTIL_APPLIED(1, 7, 5000);
+    return MUNIT_OK;
+}
