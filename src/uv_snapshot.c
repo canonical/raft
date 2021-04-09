@@ -72,7 +72,8 @@ int UvSnapshotInfoAppendIfMatch(struct uv *uv,
 
     /* Check if there's actually a valid snapshot file for this snapshot
      * metadata. If there's none or it's empty, it means that we aborted before
-     * finishing the snapshot, so let's remove the metadata file. */
+     * finishing the snapshot, or that another thread is still busy writing the
+     * snapshot. */
     uvSnapshotFilenameOf(&info, snapshot_filename);
     rv = UvFsFileExists(uv->dir, snapshot_filename, &exists, errmsg);
     if (rv != 0) {
@@ -81,10 +82,14 @@ int UvSnapshotInfoAppendIfMatch(struct uv *uv,
         return rv;
     }
     if (!exists) {
-        UvFsRemoveFile(uv->dir, filename, errmsg); /* Ignore errors */
         *appended = false;
         return 0;
     }
+
+    /* TODO This check is strictly not needed, snapshot files are created by
+     * renaming fully written and synced tmp-files. Leaving it here, just to be
+     * extra-safe. Can probably be removed once more data integrity checks are
+     * performed at startup. */
     rv = UvFsFileIsEmpty(uv->dir, snapshot_filename, &is_empty, errmsg);
     if (rv != 0) {
         tracef("is_empty %s: %s", snapshot_filename, errmsg);
@@ -92,9 +97,6 @@ int UvSnapshotInfoAppendIfMatch(struct uv *uv,
         return rv;
     }
     if (is_empty) {
-        /* Ignore errors */
-        UvFsRemoveFile(uv->dir, filename, errmsg);
-        UvFsRemoveFile(uv->dir, snapshot_filename, errmsg);
         *appended = false;
         return 0;
     }
