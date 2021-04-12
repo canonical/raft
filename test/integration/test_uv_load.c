@@ -1,4 +1,5 @@
 #include "../../src/byte.h"
+#include "../../src/uv.h"
 #include "../lib/runner.h"
 #include "../lib/uv.h"
 
@@ -374,7 +375,7 @@ static MunitParameterEnum unknownFilesParams[] = {
     {NULL, NULL},
 };
 
-/* File that are not part of the raft state are ignored. */
+/* Files that are not part of the raft state are ignored. */
 TEST(load, ignoreUnknownFiles, setUp, tearDown, 0, unknownFilesParams)
 {
     struct fixture *f = data;
@@ -387,6 +388,47 @@ TEST(load, ignoreUnknownFiles, setUp, tearDown, 0, unknownFilesParams)
          0,    /* data for first loaded entry    */
          0     /* n entries                                         */
     );
+    return MUNIT_OK;
+}
+
+static char *unusableFiles[] = {
+    "tmp-0000000001221212-0000000001221217",
+    "tmp-snapshot-15-8260687-512469866",
+    "snapshot-525-43326736-880259052",
+    "snapshot-999-13371337-880259052.meta",
+    "snapshot-20-8260687-512469866",
+    "snapshot-88-8260687-512469866.meta",
+    "snapshot-88-8260999-512469866.meta",
+    "tmp-snapshot-88-8260999-512469866.meta",
+    "tmp-snapshot-33-8260687-512469866",
+    "snapshot-33-8260687-512469866.meta",
+    "tmp-metadata1",
+    "tmp-metadata2",
+    "tmp-open1",
+    "tmp-open13",
+    NULL
+};
+
+static MunitParameterEnum unusableFilesParams[] = {
+    {"filename", unusableFiles},
+    {NULL, NULL},
+};
+
+/* Files that can no longer be used are removed. */
+TEST(load, removeUnusableFiles, setUp, tearDown, 0, unusableFilesParams)
+{
+    struct fixture *f = data;
+    const char *filename = munit_parameters_get(params, "filename");
+    DirWriteFileWithZeros(f->dir, filename, 128);
+    munit_assert_true(DirHasFile(f->dir, filename));
+    LOAD(0,    /* term                                              */
+         0,    /* voted for                                         */
+         NULL, /* snapshot                                          */
+         1,    /* start index                                       */
+         0,    /* data for first loaded entry    */
+         0     /* n entries                                         */
+    );
+    munit_assert_false(DirHasFile(f->dir, filename));
     return MUNIT_OK;
 }
 
@@ -633,6 +675,11 @@ TEST(load, manySnapshots, setUp, tearDown, 0, NULL)
          0          /* n entries */
     );
 
+    /* The orphaned .meta file is removed */
+    char meta_filename[128];
+    sprintf(meta_filename, "%s%s", filename, UV__SNAPSHOT_META_SUFFIX);
+    munit_assert_false(DirHasFile(f->dir,meta_filename));
+
     return MUNIT_OK;
 }
 
@@ -667,6 +714,59 @@ TEST(load, emptySnapshot, setUp, tearDown, 0, NULL)
          0          /* n entries */
     );
 
+    return MUNIT_OK;
+}
+
+/* There is an orphaned snapshot and an orphaned snapshot .meta file,
+ * make sure they are removed */
+TEST(load, orphanedSnapshotFiles, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    uv_update_time(&f->loop);
+    uint64_t now = uv_now(&f->loop);
+
+    struct snapshot expected_snapshot = {
+        2, /* term */
+        16, /* index */
+        4  /* data */
+    };
+
+    char filename1_removed[64];
+    char metafilename1_removed[64];
+    char filename2_removed[64];
+    char metafilename2_removed[64];
+
+    /* Take a snapshot but then remove the data file, as if the server crashed
+     * before it could complete writing it. */
+    sprintf(filename1_removed, "snapshot-2-18-%ju", now);
+    sprintf(metafilename1_removed, "snapshot-2-18-%ju%s", now, UV__SNAPSHOT_META_SUFFIX);
+    SNAPSHOT_PUT(2, 18, 1);
+    munit_assert_true(DirHasFile(f->dir, filename1_removed));
+    munit_assert_true(DirHasFile(f->dir, metafilename1_removed));
+    DirRemoveFile(f->dir, filename1_removed);
+
+    /* Take a snapshot but then remove the .meta file */
+    now = uv_now(&f->loop);
+    sprintf(filename2_removed, "snapshot-2-19-%ju", now);
+    sprintf(metafilename2_removed, "snapshot-2-19-%ju%s", now, UV__SNAPSHOT_META_SUFFIX);
+    SNAPSHOT_PUT(2, 19, 2);
+    munit_assert_true(DirHasFile(f->dir, filename2_removed));
+    munit_assert_true(DirHasFile(f->dir, metafilename2_removed));
+    DirRemoveFile(f->dir, metafilename2_removed);
+
+    /* Take a valid snapshot and make sure it's loaded */
+    SNAPSHOT_PUT(2, 16, 4);
+    LOAD(0,                     /* term */
+         0,                     /* voted for */
+         &expected_snapshot,    /* snapshot */
+         17,                    /* start index */
+         0,                     /* data for first loaded entry */
+         0                      /* n entries */
+    );
+
+    /* The orphaned files are removed */
+    munit_assert_false(DirHasFile(f->dir, metafilename1_removed));
+    munit_assert_false(DirHasFile(f->dir, filename2_removed));
     return MUNIT_OK;
 }
 

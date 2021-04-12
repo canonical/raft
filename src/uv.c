@@ -31,6 +31,53 @@
  * TODO: implement an exponential backoff instead.  */
 #define CONNECT_RETRY_DELAY 1000
 
+/* Cleans up files that are no longer used by the system */
+static int uvMaintenance(const char *dir, char* errmsg)
+{
+    struct uv_fs_s req;
+    struct uv_dirent_s entry;
+    int n;
+    int i;
+    int rv;
+    int rv2;
+
+    n = uv_fs_scandir(NULL, &req, dir, 0, NULL);
+    if (n < 0) {
+        ErrMsgPrintf(errmsg, "scan data directory: %s", uv_strerror(n));
+        return RAFT_IOERR;
+    }
+
+    rv = 0;
+    for (i = 0; i < n; i++) {
+        const char *filename;
+        rv = uv_fs_scandir_next(&req, &entry);
+        assert(rv == 0); /* Can't fail in libuv */
+
+        filename = entry.name;
+        /* Remove leftover tmp-files */
+        if (strncmp(filename, TMP_FILE_PREFIX, strlen(TMP_FILE_PREFIX)) == 0) {
+            UvFsRemoveFile(dir, filename, errmsg); /* Ignore errors */
+            continue;
+        }
+
+        /* Remove orphaned snapshot files */
+        bool orphan = false;
+        if ((UvSnapshotIsOrphan(dir, filename, &orphan) == 0) && orphan) {
+            UvFsRemoveFile(dir, filename, errmsg); /* Ignore errors */
+            continue;
+        }
+
+        /* Remove orphaned snapshot metadata files */
+        if ((UvSnapshotMetaIsOrphan(dir, filename, &orphan) == 0) && orphan) {
+            UvFsRemoveFile(dir, filename, errmsg); /* Ignore errors */
+        }
+    }
+
+    rv2 = uv_fs_scandir_next(&req, &entry);
+    assert(rv2 == UV_EOF);
+    return rv;
+}
+
 /* Implementation of raft_io->config. */
 static int uvInit(struct raft_io *io, raft_id id, const char *address)
 {
@@ -54,7 +101,7 @@ static int uvInit(struct raft_io *io, raft_id id, const char *address)
     uv->direct_io = direct_io != 0;
     uv->block_size = direct_io != 0 ? direct_io : 4096;
 
-    rv = UvFsRemoveTmpFiles(uv->dir, io->errmsg);
+    rv = uvMaintenance(uv->dir, io->errmsg);
     if (rv != 0) {
         return rv;
     }

@@ -8,6 +8,9 @@
 #include "../include/raft.h"
 #include "err.h"
 
+#define TMP_FILE_PREFIX "tmp-"
+#define TMP_FILE_FMT TMP_FILE_PREFIX "%s"
+
 /* Check that the given directory can be used. */
 int UvFsCheckDir(const char *dir, char *errmsg);
 
@@ -46,11 +49,6 @@ int UvFsMakeFile(const char *dir,
                  struct raft_buffer *bufs,
                  unsigned n_bufs,
                  char *errmsg);
-
-/* UvFsMakeFile makes use of a temporary file when creating a file,
- * this function takes care of cleaning up leftover temp files after
- * e.g a crash. */
-int UvFsRemoveTmpFiles(const char *dir, char* errmsg);
 
 /* Create or overwrite a file.
  *

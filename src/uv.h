@@ -27,9 +27,11 @@
  * creation timestamp (milliseconds since epoch). */
 #define UV__SNAPSHOT_TEMPLATE "snapshot-%llu-%llu-%llu"
 
+#define UV__SNAPSHOT_META_SUFFIX ".meta"
+
 /* Template string for snapshot metadata filenames: snapshot term,  snapshot
  * index, creation timestamp (milliseconds since epoch). */
-#define UV__SNAPSHOT_META_TEMPLATE UV__SNAPSHOT_TEMPLATE ".meta"
+#define UV__SNAPSHOT_META_TEMPLATE UV__SNAPSHOT_TEMPLATE UV__SNAPSHOT_META_SUFFIX
 
 /* State codes. */
 enum {
@@ -229,6 +231,14 @@ struct uvSnapshotInfo
 
 /* Render the filename of the data file of a snapshot */
 void uvSnapshotFilenameOf(struct uvSnapshotInfo *info, char *filename);
+
+/* Upon success `orphan` will be true if filename is a snapshot file without a
+ * sibling .meta file */
+int UvSnapshotIsOrphan(const char *dir, const char *filename, bool *orphan);
+
+/* Upon success `orphan` will be true if filename is a snapshot .meta file
+ * without a sibling snapshot file */
+int UvSnapshotMetaIsOrphan(const char *dir, const char *filename, bool *orphan);
 
 /* Append a new item to the given snapshot info list if the given filename
  * matches the pattern of a snapshot metadata file (snapshot-xxx-yyy-zzz.meta)

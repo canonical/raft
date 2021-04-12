@@ -10,9 +10,6 @@
 #include "heap.h"
 #include "uv_os.h"
 
-#define TMP_FILE_PREFIX "tmp-"
-#define TMP_FILE_FMT TMP_FILE_PREFIX "%s"
-
 int UvFsCheckDir(const char *dir, char *errmsg)
 {
     struct uv_fs_s req;
@@ -320,40 +317,6 @@ err_after_tmp_create:
     UvFsRemoveFile(dir, tmp_filename, errmsg);
     return rv;
 }
-
-int UvFsRemoveTmpFiles(const char *dir, char* errmsg)
-{
-    struct uv_fs_s req;
-    struct uv_dirent_s entry;
-    int n;
-    int i;
-    int rv;
-    int rv2;
-
-    n = uv_fs_scandir(NULL, &req, dir, 0, NULL);
-    if (n < 0) {
-        ErrMsgPrintf(errmsg, "scan data directory: %s", uv_strerror(n));
-        return RAFT_IOERR;
-    }
-
-    rv = 0;
-    for (i = 0; i < n; i++) {
-        const char *filename;
-        rv = uv_fs_scandir_next(&req, &entry);
-        assert(rv == 0); /* Can't fail in libuv */
-
-        filename = entry.name;
-        if (strncmp(filename, TMP_FILE_PREFIX, strlen(TMP_FILE_PREFIX)) == 0) {
-            rv = UvFsRemoveFile(dir, filename, errmsg);
-        }
-    }
-
-    rv2 = uv_fs_scandir_next(&req, &entry);
-    assert(rv2 == UV_EOF);
-
-    return rv;
-}
-
 
 int UvFsMakeOrOverwriteFile(const char *dir,
                             const char *filename,
