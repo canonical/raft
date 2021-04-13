@@ -20,6 +20,34 @@
 /* Arbitrary maximum configuration size. Should be practically be enough */
 #define UV__META_MAX_CONFIGURATION_SIZE 1024 * 1024
 
+/* Returns true if the filename is a valid snapshot file or snapshot meta
+ * filename depending on the `meta` switch. If the parse is successful, the
+ * arguments will contain the parsed values. */
+static bool uvSnapshotParseFilename(const char *filename,
+                                    bool meta,
+                                    raft_term *term,
+                                    raft_index *index,
+                                    raft_time *timestamp)
+{
+    /* Check if it's a well-formed snapshot filename */
+    int consumed = 0;
+    int matched;
+    size_t filename_len = strlen(filename);
+    assert(filename_len < UV__FILENAME_LEN);
+    if (meta) {
+        matched = sscanf(filename, UV__SNAPSHOT_META_TEMPLATE "%n",
+                         term, index, timestamp, &consumed);
+    } else {
+        matched = sscanf(filename, UV__SNAPSHOT_TEMPLATE "%n",
+                         term, index, timestamp, &consumed);
+    }
+    if (matched != 3 || consumed != (int)filename_len) {
+        return false;
+    }
+
+    return true;
+}
+
 /* Check if the given filename matches the pattern of a snapshot metadata
  * filename (snapshot-xxx-yyy-zzz.meta), and fill the given info structure if
  * so.
@@ -28,13 +56,7 @@
 static bool uvSnapshotInfoMatch(const char *filename,
                                 struct uvSnapshotInfo *info)
 {
-    int consumed = 0;
-    int matched;
-    size_t filename_len = strlen(filename);
-    assert(filename_len < UV__FILENAME_LEN);
-    matched = sscanf(filename, UV__SNAPSHOT_META_TEMPLATE "%n", &info->term,
-                     &info->index, &info->timestamp, &consumed);
-    if (matched != 3 || consumed != (int)filename_len) {
+    if (!uvSnapshotParseFilename(filename, true, &info->term, &info->index, &info->timestamp)) {
         return false;
     }
     strcpy(info->filename, filename);
@@ -108,6 +130,54 @@ int UvSnapshotInfoAppendIfMatch(struct uv *uv,
     *appended = true;
 
     return 0;
+}
+
+static int uvSnapshotIsOrphanInternal(const char *dir, const char *filename, bool meta, bool *orphan)
+{
+    int rv;
+    *orphan = false;
+
+    raft_term term;
+    raft_index index;
+    raft_time timestamp;
+    if (!uvSnapshotParseFilename(filename, meta, &term, &index, &timestamp)) {
+        return 0;
+    }
+
+    /* filename is a well-formed snapshot filename, check if the sibling file exists. */
+    char sibling_filename[UV__FILENAME_LEN];
+    if (meta) {
+        rv = snprintf(sibling_filename, UV__FILENAME_LEN, UV__SNAPSHOT_TEMPLATE,
+                      term, index, timestamp);
+    } else {
+        rv = snprintf(sibling_filename, UV__FILENAME_LEN, UV__SNAPSHOT_META_TEMPLATE,
+                      term, index, timestamp);
+    }
+
+    if (rv >= UV__FILENAME_LEN) {
+        /* Output truncated */
+        return -1;
+    }
+
+    bool sibling_exists = false;
+    char ignored[RAFT_ERRMSG_BUF_SIZE];
+    rv = UvFsFileExists(dir, sibling_filename, &sibling_exists, ignored);
+    if (rv != 0) {
+        return rv;
+    }
+
+    *orphan = !sibling_exists;
+    return 0;
+}
+
+int UvSnapshotIsOrphan(const char *dir, const char *filename, bool *orphan)
+{
+    return uvSnapshotIsOrphanInternal(dir, filename, false, orphan);
+}
+
+int UvSnapshotMetaIsOrphan(const char *dir, const char *filename, bool *orphan)
+{
+    return uvSnapshotIsOrphanInternal(dir, filename, true, orphan);
 }
 
 /* Compare two snapshots to decide which one is more recent. */

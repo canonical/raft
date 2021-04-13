@@ -394,35 +394,3 @@ TEST(UvFsMakeFile, exists, DirSetUp, DirTearDown, 0, NULL)
     munit_assert_int(rv, !=, 0);
     return MUNIT_OK;
 }
-
-/******************************************************************************
- *
- * UvFsRemoveTmpFiles
- *
- *****************************************************************************/
-
-SUITE(UvFsRemoveTmpFiles)
-
-TEST(UvFsRemoveTmpFiles, twoTmpFiles, DirSetUp, DirTearDown, 0, NULL)
-{
-    const char *dir = data;
-    int rv;
-    char errmsg[RAFT_ERRMSG_BUF_SIZE];
-    struct raft_buffer bufs[2] = {{0},{0}};
-    rv = UvFsMakeFile(dir, "tmp-foo1", bufs, 2, errmsg);
-    munit_assert_int(rv, ==, 0);
-    rv = UvFsMakeFile(dir, "tmp-foo2", bufs, 2, errmsg);
-    munit_assert_int(rv, ==, 0);
-    rv = UvFsMakeFile(dir, "mp-foo2", bufs, 2, errmsg);
-    munit_assert_int(rv, ==, 0);
-    rv = UvFsMakeFile(dir, "tmpp-foo3", bufs, 2, errmsg);
-    munit_assert_int(rv, ==, 0);
-
-    rv = UvFsRemoveTmpFiles(dir, errmsg);
-    munit_assert_int(rv, ==, 0);
-    munit_assert_false(DirHasFile(dir, "tmp-foo1"));
-    munit_assert_false(DirHasFile(dir, "tmp-foo2"));
-    munit_assert_true(DirHasFile(dir, "mp-foo2"));
-    munit_assert_true(DirHasFile(dir, "tmpp-foo3"));
-    return MUNIT_OK;
-}
