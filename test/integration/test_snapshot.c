@@ -252,7 +252,13 @@ TEST(snapshot, installMultipleTimeOutAppendAfter, setUp, tearDown, 0, NULL)
 static bool server_installing_snapshot(struct raft_fixture *f, void* data) {
     (void) f;
     const struct raft *r = data;
-    return r->snapshot.put.data != NULL;
+    return r->snapshot.put.data != NULL && r->last_stored == 0;
+}
+
+static bool server_taking_snapshot(struct raft_fixture *f, void* data) {
+    (void) f;
+    const struct raft *r = data;
+    return r->snapshot.put.data != NULL && r->last_stored != 0;
 }
 
 static bool server_snapshot_done(struct raft_fixture *f, void *data) {
@@ -337,5 +343,43 @@ TEST(snapshot, installSnapshotDuringEntriesWrite, setUp, tearDown, 0, NULL)
 
     /* Make sure follower is up to date */
     CLUSTER_STEP_UNTIL_APPLIED(1, 7, 5000);
+    return MUNIT_OK;
+}
+
+/* Follower receives AppendEntries RPCs while taking a snapshot */
+TEST(snapshot, takeSnapshotAppendEntries, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+
+    /* Set very low threshold and trailing entries number */
+    SET_SNAPSHOT_THRESHOLD(3);
+    SET_SNAPSHOT_TRAILING(1);
+
+    /* Set a large disk latency on the follower, this will allow AppendEntries
+     * to be sent while a snapshot is taken */
+    CLUSTER_SET_DISK_LATENCY(1, 2000);
+
+    /* Apply a few of entries, to force a snapshot to be taken. */
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+
+    /* Step the cluster until server 1 takes a snapshot */
+    const struct raft *r = CLUSTER_RAFT(1);
+    CLUSTER_STEP_UNTIL(server_taking_snapshot, (void*) r, 2000);
+
+    /* Send AppendEntries RPCs while server 1 is taking a snapshot */
+    static struct raft_apply reqs[5];
+    for (int i = 0; i < 5; i++) {
+        CLUSTER_APPLY_ADD_X(CLUSTER_LEADER, &reqs[i], 1, NULL);
+    }
+    CLUSTER_STEP_UNTIL(server_snapshot_done, (void*) r, 5000);
+
+    /* Make sure the AppendEntries are applied and we can make progress */
+    CLUSTER_STEP_UNTIL_APPLIED(1, 9, 5000);
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_STEP_UNTIL_APPLIED(1, 11, 5000);
     return MUNIT_OK;
 }
