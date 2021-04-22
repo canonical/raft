@@ -33,11 +33,6 @@
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
-static inline bool snapshotInstallBusy(struct raft *r)
-{
-    return r->last_stored == 0 && r->snapshot.put.data != NULL;
-}
-
 /* Context of a RAFT_IO_APPEND_ENTRIES request that was submitted with
  * raft_io_>send(). */
 struct sendAppendEntries
@@ -855,7 +850,7 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
 
     /* We received an InstallSnapshot RCP while these entries were being
      * persisted to disk */
-    if (snapshotInstallBusy(r)) {
+    if (replicationInstallSnapshotBusy(r)) {
         goto out;
     }
 
@@ -1086,7 +1081,8 @@ int replicationAppend(struct raft *r,
      *   entry).
      */
     if (n == 0) {
-        if ((args->leader_commit > r->commit_index) && !snapshotInstallBusy(r)) {
+        if ((args->leader_commit > r->commit_index)
+             && !replicationInstallSnapshotBusy(r)) {
             r->commit_index = min(args->leader_commit, r->last_stored);
             rv = replicationApply(r);
             if (rv != 0) {
@@ -1575,6 +1571,11 @@ void replicationQuorum(struct raft *r, const raft_index index)
     }
 
     return;
+}
+
+inline bool replicationInstallSnapshotBusy(struct raft *r)
+{
+    return r->last_stored == 0 && r->snapshot.put.data != NULL;
 }
 
 #undef tracef
