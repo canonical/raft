@@ -594,7 +594,12 @@ static raft_time uvTime(struct raft_io *io)
 /* Implementation of raft_io->random. */
 static int uvRandom(struct raft_io *io, int min, int max)
 {
-    (void)io;
+    static bool initialized = false;
+    if (!initialized) {
+        struct uv *uv = io->impl;
+        srand((unsigned)uv_now(uv->loop) + (unsigned)uv->id);
+        initialized = true;
+    }
     return min + (abs(rand()) % (max - min));
 }
 
