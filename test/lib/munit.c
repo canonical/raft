@@ -143,10 +143,6 @@
 #  define MUNIT_NO_BUFFER
 #endif
 
-#if defined(CODE_COVERAGE_ENABLED)
-extern void __gcov_flush(void);
-#endif
-
 /*** Logging ***/
 
 static MunitLogLevel munit_log_level_visible = MUNIT_LOG_INFO;
@@ -1392,9 +1388,6 @@ munit_test_runner_run_test_with_params(MunitTestRunner* runner, const MunitTest*
           if (stderr_buf != NULL) {
             munit_log_errno(MUNIT_LOG_ERROR, stderr, "unable to write to pipe");
           }
-#if defined(CODE_COVERAGE_ENABLED)
-          __gcov_flush();
-#endif
           _exit(EXIT_FAILURE);
         }
         bytes_written += write_res;
@@ -1404,9 +1397,6 @@ munit_test_runner_run_test_with_params(MunitTestRunner* runner, const MunitTest*
         fclose(stderr_buf);
       close(pipefd[1]);
 
-#if defined(CODE_COVERAGE_ENABLED)
-      __gcov_flush();
-#endif
       _exit(EXIT_SUCCESS);
     } else if (fork_pid == -1) {
       close(pipefd[0]);
