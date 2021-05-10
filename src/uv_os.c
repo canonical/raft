@@ -83,8 +83,11 @@ static int uvOsFallocateEmulation(int fd, off_t offset, off_t len)
     for (offset += (len - 1) % increment; len > 0; offset += increment) {
         len -= increment;
         rv = (int)pwrite(fd, "", 1, offset);
-        if (rv != 1)
+        if (rv != 1) {
+            if (errno == ENOSPC)
+                return UV_ENOSPC;
             return errno;
+        }
     }
 
     return 0;
@@ -95,6 +98,22 @@ int UvOsFallocate(uv_file fd, off_t offset, off_t len)
     int rv;
 #ifdef __linux__
     rv = posix_fallocate(fd, offset, len);
+#else // MacOS
+    fstore_t store = {F_ALLOCATECONTIG, F_PEOFPOSMODE, offset, len, -1};
+    rv = fcntl(fd, F_PREALLOCATE, &store);
+    if (-1 == rv) {
+        // Perhaps we are too fragmented, allocate non-continuous
+        store.fst_flags = F_ALLOCATEALL;
+        rv = fcntl(fd, F_PREALLOCATE, &store);
+        if (-1 == rv) {
+            rv = EOPNOTSUPP;
+            if (errno == ENOSPC)
+                return UV_ENOSPC;
+        }
+    } else {
+        rv = ftruncate(fd, len);
+    }
+#endif
     if (rv != 0) {
         /* From the manual page:
          *
@@ -104,18 +123,12 @@ int UvOsFallocate(uv_file fd, off_t offset, off_t len)
         if (rv != EOPNOTSUPP) {
             return -rv;
         }
-#endif
         /* This might be a libc implementation (e.g. musl) that doesn't
          * implement a transparent fallback if fallocate() is not supported
          * by the underlying file system. */
         rv = uvOsFallocateEmulation(fd, offset, len);
-        if (rv != 0) {
-            return -EOPNOTSUPP;
-        }
-#ifdef __linux__
     }
-#endif
-    return 0;
+    return rv;
 }
 #endif
 
