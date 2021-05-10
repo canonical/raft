@@ -24,6 +24,7 @@
     do {                                                                     \
         unsigned _n = DEFAULT_N;                                             \
         bool _pre_vote = false;                                              \
+        unsigned _hb = 0;                                                    \
         unsigned _i;                                                         \
         int _rv;                                                             \
         if (munit_parameters_get(params, CLUSTER_N_PARAM) != NULL) {         \
@@ -33,6 +34,10 @@
             _pre_vote =                                                      \
                 atoi(munit_parameters_get(params, CLUSTER_PRE_VOTE_PARAM));  \
         }                                                                    \
+        if (munit_parameters_get(params, CLUSTER_HEARTBEAT_PARAM) != NULL) { \
+            _hb =                                                            \
+                atoi(munit_parameters_get(params, CLUSTER_HEARTBEAT_PARAM)); \
+        }                                                                    \
         munit_assert_int(_n, >, 0);                                          \
         for (_i = 0; _i < _n; _i++) {                                        \
             FsmInit(&f->fsms[_i]);                                           \
@@ -41,6 +46,10 @@
         munit_assert_int(_rv, ==, 0);                                        \
         for (_i = 0; _i < _n; _i++) {                                        \
             raft_set_pre_vote(raft_fixture_get(&f->cluster, _i), _pre_vote); \
+            if (_hb) {                                                       \
+                raft_set_heartbeat_timeout(raft_fixture_get(&f->cluster, _i),\
+                                           _hb);                             \
+            }                                                                \
         }                                                                    \
     } while (0)
 
@@ -62,6 +71,9 @@
 
 /* Munit parameter for enabling pre-vote */
 #define CLUSTER_PRE_VOTE_PARAM "cluster-pre-vote"
+
+/* Munit parameter for setting HeartBeat timeout */
+#define CLUSTER_HEARTBEAT_PARAM "cluster-heartbeat"
 
 /* Get the number of servers in the cluster. */
 #define CLUSTER_N raft_fixture_n(&f->cluster)

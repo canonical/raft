@@ -190,3 +190,22 @@ TEST(raft_transfer, afterDemotion, setUp, tearDown, 0, NULL)
     munit_assert_int(CLUSTER_LEADER, ==, 1);
     return MUNIT_OK;
 }
+
+static char *cluster_pre_vote[] = {"0", "1", NULL};
+static char *cluster_heartbeat[] = {"1", "100", NULL};
+
+static MunitParameterEnum _params[] = {
+    {CLUSTER_PRE_VOTE_PARAM, cluster_pre_vote},
+    {CLUSTER_HEARTBEAT_PARAM, cluster_heartbeat},
+    {NULL, NULL},
+};
+
+/* It's possible to transfer leadership also when pre-vote is active */
+TEST(raft_transfer, preVote, setUp, tearDown, 0, _params)
+{
+    struct fixture *f = data;
+    TRANSFER(0, 2);
+    CLUSTER_STEP_UNTIL_HAS_LEADER(1000);
+    munit_assert_int(CLUSTER_LEADER, ==, 1);
+    return MUNIT_OK;
+}
