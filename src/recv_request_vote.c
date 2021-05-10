@@ -65,7 +65,7 @@ int recvRequestVote(struct raft *r,
 
     /* If this is a pre-vote request, don't actually increment our term or
      * persist the vote. */
-    if (args->pre_vote) {
+    if (args->pre_vote && !args->disrupt_leader) {
         recvCheckMatchingTerms(r, args->term, &match);
     } else {
         rv = recvEnsureMatchingTerms(r, args->term, &match);

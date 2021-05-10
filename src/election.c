@@ -127,7 +127,7 @@ int electionStart(struct raft *r)
     /* During pre-vote we don't actually increment term or persist vote, however
      * we reset any vote that we previously granted since we have timed out and
      * that vote is no longer valid. */
-    if (r->candidate_state.in_pre_vote) {
+    if (r->candidate_state.in_pre_vote && !r->candidate_state.disrupt_leader) {
         /* Reset vote */
         rv = r->io->set_vote(r->io, 0);
         if (rv != 0) {
