@@ -80,6 +80,7 @@ TEST(Compress, compressDecompressRandomOne, NULL, NULL, 0,
 
     /* Assert that after compression and decompression the data is unchanged */
     munit_assert_int(Compress(&buf, 1, &compressed, errmsg), ==, 0);
+    munit_assert_true(IsCompressed(compressed.base, compressed.len));
     munit_assert_int(Decompress(compressed, &decompressed, errmsg), ==, 0);
     munit_assert_ulong(decompressed.len, ==, len);
     munit_assert_int(memcmp(decompressed.base, buf.base, buf.len), ==, 0);
@@ -120,6 +121,7 @@ TEST(Compress, compressDecompressNonRandomOne, NULL, NULL, 0,
     /* Assert that after compression and decompression the data is unchanged and
      * that the compressed data is actually smaller */
     munit_assert_int(Compress(&buf, 1, &compressed, errmsg), ==, 0);
+    munit_assert_true(IsCompressed(compressed.base, compressed.len));
     munit_assert_ulong(compressed.len, <, buf.len);
     munit_assert_int(Decompress(compressed, &decompressed, errmsg), ==, 0);
     munit_assert_ulong(decompressed.len, ==, len);
@@ -158,6 +160,7 @@ TEST(Compress, compressDecompressRandomTwo, NULL, NULL, 0,
 
     /* Assert that after compression and decompression the data is unchanged */
     munit_assert_int(Compress(bufs, 2, &compressed, errmsg), ==, 0);
+    munit_assert_true(IsCompressed(compressed.base, compressed.len));
     munit_assert_int(Decompress(compressed, &decompressed, errmsg), ==, 0);
     munit_assert_ulong(decompressed.len, ==, buf1.len + buf2.len);
     munit_assert_int(memcmp(decompressed.base, buf1.base, buf1.len), ==, 0);
@@ -182,6 +185,7 @@ TEST(Compress, compressDecompressCorruption, NULL, NULL, 0, NULL)
     struct raft_buffer buf = getBufWithRandom(len);
 
     munit_assert_int(Compress(&buf, 1, &compressed, errmsg), ==, 0);
+    munit_assert_true(IsCompressed(compressed.base, compressed.len));
 
     /* Corrupt the a data byte after the header */
     munit_assert_ulong(LZ4F_HEADER_SIZE_MAX_RAFT, <, compressed.len);
@@ -215,3 +219,29 @@ TEST(Compress, lz4Disabled, NULL, NULL, 0, NULL)
 }
 
 #endif /* LZ4_AVAILABLE */
+
+static const char LZ4_MAGIC[4] = {0x04, 0x22, 0x4d, 0x18};
+TEST(Compress, isCompressedTooSmall, NULL, NULL, 0, NULL)
+{
+    munit_assert_false(IsCompressed(&LZ4_MAGIC[1], sizeof(LZ4_MAGIC)-1));
+    return MUNIT_OK;
+}
+
+TEST(Compress, isCompressedNull, NULL, NULL, 0, NULL)
+{
+    munit_assert_false(IsCompressed(NULL, sizeof(LZ4_MAGIC)));
+    return MUNIT_OK;
+}
+
+TEST(Compress, isCompressed, NULL, NULL, 0, NULL)
+{
+    munit_assert_true(IsCompressed(LZ4_MAGIC, sizeof(LZ4_MAGIC)));
+    return MUNIT_OK;
+}
+
+TEST(Compress, notCompressed, NULL, NULL, 0, NULL)
+{
+    char not_compressed[4] = {0x18, 0x4d, 0x22, 0x04};
+    munit_assert_false(IsCompressed(not_compressed, sizeof(not_compressed)));
+    return MUNIT_OK;
+}

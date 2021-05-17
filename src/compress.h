@@ -25,4 +25,7 @@ int Compress(struct raft_buffer bufs[], unsigned n_bufs,
 int Decompress(struct raft_buffer buf, struct raft_buffer *decompressed,
                char *errmsg);
 
+/* Returns `true` if `data` is compressed, `false` otherwise. */
+bool IsCompressed(const void *data, size_t sz);
+
 #endif /* COMPRESS_H_ */
