@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include "assert.h"
+#include "compress.h"
 #include "err.h"
 #include "heap.h"
 #include "uv_os.h"

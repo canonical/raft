@@ -61,6 +61,7 @@ struct uv
     struct raft_tracer *tracer;          /* Debug tracing */
     raft_id id;                          /* Server ID */
     int state;                           /* Current state */
+    bool snapshot_compression;           /* If compression is enabled */
     bool errored;                        /* If a disk I/O error was hit */
     bool direct_io;                      /* Whether direct I/O is supported */
     bool async_io;                       /* Whether async I/O is supported */

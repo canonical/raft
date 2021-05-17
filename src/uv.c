@@ -646,6 +646,11 @@ int raft_uv_init(struct raft_io *io,
     uv->errored = false;
     uv->direct_io = false;
     uv->async_io = false;
+#ifdef LZ4_ENABLED
+    uv->snapshot_compression = true;
+#else
+    uv->snapshot_compression = false;
+#endif
     uv->segment_size = UV__MAX_SEGMENT_SIZE;
     uv->block_size = 0;
     QUEUE_INIT(&uv->clients);
