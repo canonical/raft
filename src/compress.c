@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "assert.h"
+#include "byte.h"
 #include "err.h"
 
 #define min(a,b) ((a) < (b) ? (a) : (b))
@@ -228,3 +229,16 @@ err:
 #endif /* LZ4_AVAILABLE */
 }
 
+bool IsCompressed(const void *data, size_t sz)
+{
+    if (data == NULL || sz < 4) {
+        return false;
+    }
+    const void *cursor = data;
+#ifdef LZ4F_MAGICNUMBER
+#define RAFT_LZ4F_MAGICNUMBER LZ4F_MAGICNUMBER
+#else
+#define RAFT_LZ4F_MAGICNUMBER 0x184D2204U
+#endif
+    return byteGet32(&cursor) == RAFT_LZ4F_MAGICNUMBER;
+}
