@@ -238,6 +238,18 @@ TEST(snapshot_put, install, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
+/* Request to install a snapshot without compression. */
+TEST(snapshot_put, installNoCompression, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    raft_uv_set_snapshot_compression(&f->io, false);
+    APPEND(4, 8);
+    SNAPSHOT_PUT(0, /* trailing */
+                 1  /* index */
+    );
+    return MUNIT_OK;
+}
+
 /* Request to install a snapshot, no previous entry is present. */
 TEST(snapshot_put, installWithoutPreviousEntries, setUp, tearDown, 0, NULL)
 {
