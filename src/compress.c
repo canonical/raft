@@ -3,6 +3,7 @@
 #ifdef LZ4_AVAILABLE
 #include <lz4frame.h>
 #endif
+#include <limits.h>
 #include <string.h>
 
 #include "assert.h"
@@ -197,7 +198,11 @@ int Decompress(struct raft_buffer buf, struct raft_buffer *decompressed,
     ret = 1;
     while (ret != 0) {
         src_size = buf.len - src_offset;
-        dst_size = decompressed->len - dst_offset;
+        /* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+         * The next line works around a bug in an older lz4 lib where the
+         * `size_t` dst_size parameter would overflow an `int`.
+         * !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! */
+        dst_size = min(decompressed->len - dst_offset, (size_t)INT_MAX);
         /* `dst_size` will contain the number of bytes written to decompressed->base,
          * while `src_size` will contain the number of bytes consumed from
          * buf.base */
