@@ -11,6 +11,8 @@
 #include "err.h"
 
 #define min(a,b) ((a) < (b) ? (a) : (b))
+#define max(a,b) ((a) > (b) ? (a) : (b))
+#define MIN_COMPRESSED_SIZE 1048576
 
 int Compress(struct raft_buffer bufs[], unsigned n_bufs,
              struct raft_buffer *compressed, char *errmsg)
@@ -28,22 +30,22 @@ int Compress(struct raft_buffer bufs[], unsigned n_bufs,
 
     int rv = RAFT_IOERR;
     size_t src_size = 0;
-    size_t max_dst_size = 0;
+    size_t dst_size = 0;
     size_t ret = 0;
-    size_t offset = 0;
+    size_t src_offset = 0;
+    size_t dst_offset = 0;
+    compressed->base = NULL;
+    compressed->len = 0;
 
     /* Set LZ4 preferences */
     LZ4F_preferences_t lz4_pref;
     memset(&lz4_pref, 0, sizeof(lz4_pref));
     lz4_pref.frameInfo.contentChecksumFlag = 1;
 
-    /* Determine total uncompressed size and size of compressed buffer */
+    /* Determine total uncompressed size */
     for (unsigned i = 0; i < n_bufs; ++i) {
         src_size += bufs[i].len;
-        max_dst_size += LZ4F_compressBound(bufs[i].len, &lz4_pref);
     }
-    /* Allow room for the lz4 header */
-    max_dst_size += LZ4F_HEADER_SIZE_MAX_RAFT;
 
     /* contentSize has no impact on LZ4F_compressBound and is needed to allocate a
      * correctly sized buffer when decompressing */
@@ -58,7 +60,10 @@ int Compress(struct raft_buffer bufs[], unsigned n_bufs,
         goto err;
     }
 
-    compressed->base = raft_malloc(max_dst_size);
+    /* Guestimate of eventual compressed size */
+    dst_size = LZ4F_compressBound(max(MIN_COMPRESSED_SIZE, src_size / 10), &lz4_pref);
+    dst_size += LZ4F_HEADER_SIZE_MAX_RAFT;
+    compressed->base = raft_malloc(dst_size);
     if (compressed->base == NULL) {
         rv = RAFT_NOMEM;
         goto err_after_ctx_alloc;
@@ -66,38 +71,63 @@ int Compress(struct raft_buffer bufs[], unsigned n_bufs,
 
     /* Returns the size of the lz4 header, data should be written after the
      * header */
-    offset = LZ4F_compressBegin(ctx, compressed->base, max_dst_size, &lz4_pref);
-    if (LZ4F_isError(offset)) {
-        ErrMsgPrintf(errmsg, "LZ4F_compressBegin %s", LZ4F_getErrorName(offset));
+    dst_offset = LZ4F_compressBegin(ctx, compressed->base, dst_size, &lz4_pref);
+    if (LZ4F_isError(dst_offset)) {
+        ErrMsgPrintf(errmsg, "LZ4F_compressBegin %s", LZ4F_getErrorName(dst_offset));
         rv = RAFT_IOERR;
         goto err_after_buff_alloc;
     }
 
     /* Compress all buffers */
     for (unsigned i = 0; i < n_bufs; ++i) {
-        ret = LZ4F_compressUpdate(ctx, (char*)compressed->base + offset,
-                                  max_dst_size - offset, bufs[i].base,
-                                  bufs[i].len, NULL);
-        if (LZ4F_isError(ret)) {
-            ErrMsgPrintf(errmsg, "LZ4F_compressUpdate %s",
-                         LZ4F_getErrorName(ret));
-            rv = RAFT_IOERR;
-            goto err_after_buff_alloc;
+        src_offset = 0;
+        while (src_offset < bufs[i].len) {
+            src_size = min(bufs[i].len - src_offset, (size_t)1048576);
+            if (dst_size - dst_offset < LZ4F_compressBound(src_size, &lz4_pref)) {
+                /* Not enough room in the dest buffer, realloc */
+                size_t inc = max(LZ4F_compressBound(src_size, &lz4_pref), lz4_pref.frameInfo.contentSize / 10);
+                compressed->base = raft_realloc(compressed->base, dst_size + inc);
+                if (!compressed->base) {
+                    rv = RAFT_NOMEM;
+                    goto err_after_ctx_alloc;
+                }
+                dst_size += inc;
+            }
+            ret = LZ4F_compressUpdate(ctx, (char*)compressed->base + dst_offset,
+                                      dst_size - dst_offset, (char*)bufs[i].base + src_offset,
+                                      src_size, NULL);
+            if (LZ4F_isError(ret)) {
+                ErrMsgPrintf(errmsg, "LZ4F_compressUpdate %s",
+                             LZ4F_getErrorName(ret));
+                rv = RAFT_IOERR;
+                goto err_after_buff_alloc;
+            }
+            dst_offset += ret;
+            src_offset += src_size;
         }
-        offset += ret;
+    }
+
+    if ((dst_size - dst_offset) < LZ4F_compressBound(0, &lz4_pref)) {
+        size_t inc = LZ4F_compressBound(0, &lz4_pref);
+        compressed->base = raft_realloc(compressed->base, dst_size + inc);
+        if (!compressed->base) {
+            rv = RAFT_NOMEM;
+            goto err_after_ctx_alloc;
+        }
+        dst_size += inc;
     }
 
     /* Finalize compression */
-    ret = LZ4F_compressEnd(ctx, (char*)compressed->base + offset,
-                           max_dst_size - offset, NULL);
+    ret = LZ4F_compressEnd(ctx, (char*)compressed->base + dst_offset,
+                           dst_size - dst_offset, NULL);
     if (LZ4F_isError(ret)) {
         ErrMsgPrintf(errmsg, "LZ4F_compressEnd %s", LZ4F_getErrorName(ret));
         rv = RAFT_IOERR;
         goto err_after_buff_alloc;
     }
 
-    offset += ret;
-    compressed->len = offset;
+    dst_offset += ret;
+    compressed->len = dst_offset;
 
     LZ4F_freeCompressionContext(ctx);
     return 0;
