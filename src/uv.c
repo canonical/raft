@@ -646,6 +646,11 @@ int raft_uv_init(struct raft_io *io,
     uv->errored = false;
     uv->direct_io = false;
     uv->async_io = false;
+#ifdef LZ4_ENABLED
+    uv->snapshot_compression = true;
+#else
+    uv->snapshot_compression = false;
+#endif
     uv->segment_size = UV__MAX_SEGMENT_SIZE;
     uv->block_size = 0;
     QUEUE_INIT(&uv->clients);
@@ -720,6 +725,19 @@ void raft_uv_set_block_size(struct raft_io *io, size_t size)
     struct uv *uv;
     uv = io->impl;
     uv->block_size = size;
+}
+
+int raft_uv_set_snapshot_compression(struct raft_io *io, bool compressed)
+{
+    struct uv *uv;
+    uv = io->impl;
+#ifndef LZ4_AVAILABLE
+    if (compressed) {
+        return RAFT_INVALID;
+    }
+#endif
+    uv->snapshot_compression = compressed;
+    return 0;
 }
 
 void raft_uv_set_connect_retry_delay(struct raft_io *io, unsigned msecs)

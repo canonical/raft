@@ -107,6 +107,15 @@ RAFT_API void raft_uv_set_block_size(struct raft_io *io, size_t size);
 RAFT_API void raft_uv_set_segment_size(struct raft_io *io, size_t size);
 
 /**
+ * Turn snapshot compression on or off.
+ * Returns non-0 on failure, this can e.g. happen when compression is requested
+ * while no suitable compression library is found.
+ *
+ * By default snapshots are compressed if the appropriate libraries are found.
+ */
+RAFT_API int raft_uv_set_snapshot_compression(struct raft_io *io, bool compressed);
+
+/**
  * Set how many milliseconds to wait between subsequent retries when
  * establishing a connection with another server. The default is 1000
  * milliseconds.

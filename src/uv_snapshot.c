@@ -5,6 +5,7 @@
 #include "array.h"
 #include "assert.h"
 #include "byte.h"
+#include "compress.h"
 #include "configuration.h"
 #include "heap.h"
 #include "uv.h"
@@ -329,6 +330,16 @@ static int uvSnapshotLoadData(struct uv *uv,
         goto err;
     }
 
+    if (IsCompressed(buf.base, buf.len)) {
+        struct raft_buffer decompressed = {0};
+        rv = Decompress(buf, &decompressed, errmsg);
+        if (rv != 0) {
+            goto err_after_read_file;
+        }
+        HeapFree(buf.base);
+        buf = decompressed;
+    }
+
     snapshot->bufs = HeapMalloc(sizeof *snapshot->bufs);
     snapshot->n_bufs = 1;
     if (snapshot->bufs == NULL) {
@@ -337,7 +348,6 @@ static int uvSnapshotLoadData(struct uv *uv,
     }
 
     snapshot->bufs[0] = buf;
-
     return 0;
 
 err_after_read_file:
@@ -464,6 +474,26 @@ out:
     return rv;
 }
 
+static int makeFileCompressed(const char *dir,
+                           const char *filename,
+                           struct raft_buffer *bufs,
+                           unsigned n_bufs,
+                           char *errmsg)
+{
+    int rv;
+
+    struct raft_buffer compressed = {0};
+    rv = Compress(bufs, n_bufs, &compressed, errmsg);
+    if (rv != 0) {
+        ErrMsgWrapf(errmsg, "compress %s", filename);
+        return RAFT_IOERR;
+    }
+
+    rv = UvFsMakeFile(dir, filename, &compressed, 1, errmsg);
+    raft_free(compressed.base);
+    return rv;
+}
+
 static void uvSnapshotPutWorkCb(uv_work_t *work)
 {
     struct uvSnapshotPut *put = work->data;
@@ -486,8 +516,14 @@ static void uvSnapshotPutWorkCb(uv_work_t *work)
     sprintf(snapshot, UV__SNAPSHOT_TEMPLATE, put->snapshot->term,
             put->snapshot->index, put->meta.timestamp);
 
-    rv = UvFsMakeFile(uv->dir, snapshot, put->snapshot->bufs,
-                      put->snapshot->n_bufs, put->errmsg);
+    if (uv->snapshot_compression) {
+        rv = makeFileCompressed(uv->dir, snapshot, put->snapshot->bufs,
+                                put->snapshot->n_bufs, put->errmsg);
+    } else {
+        rv = UvFsMakeFile(uv->dir, snapshot, put->snapshot->bufs,
+                          put->snapshot->n_bufs, put->errmsg);
+    }
+
     if (rv != 0) {
         ErrMsgWrapf(put->errmsg, "write %s", snapshot);
         UvFsRemoveFile(uv->dir, metadata, errmsg);

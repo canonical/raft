@@ -19,6 +19,50 @@ AS_IF([test "x$enable_uv" != "xno"],
 AS_IF([test "x$enable_uv" = "xyes" -a "x$have_uv" = "xno"], [AC_MSG_ERROR([libuv required but not found])], [])
 AM_CONDITIONAL(UV_ENABLED, test "x$have_uv" = "xyes")
 
+# The libuv raft_io implementation is built by default to compress snapshots if liblz4 is found, unless
+# explicitly disabled.
+AC_ARG_ENABLE(lz4, AS_HELP_STRING([--disable-lz4], [do not use lz4 compression]))
+
+# Thanks to the OpenVPN configure.ac file for this part.
+AS_IF([test "x$enable_lz4" != "xno"],
+      # If this fails, we will do another test next.
+      # We also add set LZ4_LIBS otherwise
+      # linker will not know about the lz4 library
+      [PKG_CHECK_MODULES(LZ4, [liblz4 >= 1.7.1], [have_lz4="yes"], [LZ4_LIBS="-llz4"])])
+if test "${have_lz4}" != "yes" -a "${enable_lz4}" != "no"; then
+    AC_CHECK_HEADERS([lz4.h],
+                     [have_lz4h="yes"],
+                     [])
+    if test "${have_lz4h}" = "yes" ; then
+        AC_MSG_CHECKING([additionally if system LZ4 version >= 1.7.1])
+        AC_COMPILE_IFELSE(
+        [AC_LANG_PROGRAM([[
+#include <lz4.h>
+                         ]],
+                         [[
+/* Version encoding: MMNNPP (Major miNor Patch) - see lz4.h for details */
+#if LZ4_VERSION_NUMBER < 10701L
+#error LZ4 is too old
+#endif
+                         ]]
+                        )],
+         [
+             AC_MSG_RESULT([ok])
+             have_lz4="yes"
+         ],
+         [
+             AC_MSG_RESULT([system LZ4 library is too old])
+             have_lz4="no"
+         ]
+        )
+    fi
+fi
+
+AS_IF([test "x$enable_lz4" != "xno" -a "x$have_lz4" = "xno"],
+      [AC_MSG_ERROR([liblz4 required but not found])], [])
+AM_CONDITIONAL(LZ4_AVAILABLE, test "x$have_lz4" = "xyes")
+AM_CONDITIONAL(LZ4_ENABLED, test "x$enable_lz4" != "xno")
+
 # The fake I/O implementation and associated fixture is built by default, unless
 # explicitly disabled.
 AC_ARG_ENABLE(fixture, AS_HELP_STRING([--disable-fixture], [do not build the raft_fixture test helper]))
