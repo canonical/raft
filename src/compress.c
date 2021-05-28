@@ -218,8 +218,9 @@ int Decompress(struct raft_buffer buf, struct raft_buffer *decompressed,
     }
 
     if (LZ4F_freeDecompressionContext(ctx) != 0) {
-        rv = RAFT_IOERR;
-        goto err_after_buff_alloc;
+        raft_free(decompressed->base);
+        decompressed->base = NULL;
+        return RAFT_IOERR;
     }
 
     return 0;
