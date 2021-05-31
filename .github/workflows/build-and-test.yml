@@ -1,0 +1,54 @@
+name: CI Tests
+
+on:
+  - push
+  - pull_request
+
+jobs:
+  build-and-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-18.04
+          - ubuntu-20.04
+        compiler:
+          - gcc
+          - clang
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup dependencies
+      run: |
+          sudo apt-get update -qq
+          sudo apt-get install -qq lcov linux-libc-dev liblz4-dev libuv1-dev btrfs-progs xfsprogs zfsutils-linux
+
+    - name: Build
+      env:
+        CC: ${{ matrix.compiler }}
+      run: |
+          git clone --depth 1 https://github.com/edlund/amalgamate.git
+          export PATH=$PATH:$PWD/amalgamate
+          autoreconf -i
+          ./configure --enable-example --enable-debug --enable-code-coverage --enable-sanitize
+          amalgamate.py --config=amalgamation.json --source=$(pwd)
+          $CC raft.c -c -D_GNU_SOURCE -DHAVE_LINUX_AIO_ABI_H -Wall -Wextra -Wpedantic -fpic
+
+    - name: Test
+      env:
+        CC: ${{ matrix.compiler }}
+      run: |
+          ./test/lib/fs.sh setup
+          make check CFLAGS=-O0 $(./test/lib/fs.sh detect) || (cat ./test-suite.log && false)
+          ./test/lib/fs.sh teardown
+
+    - name: Coverage
+      env:
+        CC: ${{ matrix.compiler }}
+      run: if [ "${CC}" = "gcc" ]; then make code-coverage-capture; fi
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v1
+      with:
+        verbose: true

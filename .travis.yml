@@ -1,8 +1,4 @@
 language: c
-env:
-  global:
-   - secure: "T0kfZEvvymfcV4LWvDxafXMYIXlvhgYBWpY8GMKFxx8NBPBZID7wLFEnhiAF/p7gSaW4491mn3aDGA6/l9mJ/2MgXJssBiGh/5Wz+9dUTKH8T176PZI0+hNSkLPI+c/L00sslhhL7ZOF41mQf4VVHUhkIlFtfI9s/5e6iClw3EefSryX4lqmmE7E/aSMuE5fAQYNV48iwwQvZvcWEZ4yg8Cie5nMv6MdFQUZhmnxXZeixQ2JJGx2/nT/AhlvxTNlPXMsS9khWYVCts4DUpdO3qv52Zj1hOB6f7QoqY7qv3RsHFTN+6YsNlgbKCmFV4JDkCZqklQSfiyFB4IqqudH2AGFNhaJw00wb6kk7Kz3l827V36ib7Jgt3jWg+iF6elTrPm/1Friu7VdW2aCxLWtQYVgkW6sl3uWi8W1Uv8nM58vgFzmtJuojts0mfy0Q2sT/2gR/OITIIcfjZZ8X25Dtm9uNh/7wCVAyU19thiTNVQWrykzEZoiJXWkp1TUZQhpT/PpU5ibwumuk2ZgqAzUSYXzxWXk1/qqOkks8bz4LuKqX9uHbePCUHhvJA3DgfR1kajGREjycteoRNvZQyt8l0hP0deCdEVNZe0GY0Ut0dN6EnjuGMszqioF4ozz9Pje4OR/4u8+H1rVFY4VVliVLIawZ+Eusu4rZgl9oSQ8CzY="
-
 addons:
   apt:
     packages:
@@ -14,46 +10,19 @@ addons:
     - xfsprogs
     - zfsutils-linux
 
-  coverity_scan:
-    build_script_url: https://dl.stgraber.org/coverity_travis.sh
-    project:
-      name: canonical/raft
-      description: "Fully asynchronous C implementation of the Raft consensus protocol"
-
-    # Where email notification of build analysis results will be sent
-    notification_email: free.ekanayaka@canonical.com
-
-    build_command_prepend: "autoreconf -i && ./configure"
-    build_command: "make"
-    branch_pattern: master
-
 jobs:
   include:
-  - compiler: gcc
-    dist: bionic
-    arch: amd64
-
-  - compiler: gcc
-    dist: focal
-    arch: amd64
-
-  - if: type != pull_request
-    compiler: clang
-    dist: bionic
-    arch: amd64
-
   - if: type != pull_request
     compiler: gcc
     dist: bionic
     arch: s390x
 
-  - if: type != pull_request
+  - if: type == pull_request
     compiler: gcc
     dist: bionic
     arch: arm64
 
-  # Coverity issue is interfering with ppc64le master build
-  - if: type == pull_request
+  - if: type != pull_request
     compiler: clang
     dist: bionic
     arch: ppc64le
@@ -66,16 +35,12 @@ script:
   - autoreconf -i
   - |
     if [ $TRAVIS_CPU_ARCH = "s390x" ] || [ $TRAVIS_CPU_ARCH = "arm64" ]; then
-      ./configure --enable-example --enable-debug --enable-code-coverage
+      ./configure --enable-example --enable-debug
     else
-      ./configure --enable-example --enable-debug --enable-code-coverage --enable-sanitize
+      ./configure --enable-example --enable-debug --enable-sanitize
     fi
   - amalgamate.py --config=amalgamation.json --source=$(pwd)
   - $CC raft.c -c -D_GNU_SOURCE -DHAVE_LINUX_AIO_ABI_H -Wall -Wextra -Wpedantic -fpic
   - ./test/lib/fs.sh setup
   - make check CFLAGS=-O0 $(./test/lib/fs.sh detect) || (cat ./test-suite.log && false)
-  - if [ $TRAVIS_COMPILER = gcc ]; then make code-coverage-capture; fi
   - ./test/lib/fs.sh teardown
-
-after_success:
-  - bash <(curl -s https://codecov.io/bash) -G "./src*"
