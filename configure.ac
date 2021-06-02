@@ -24,12 +24,10 @@ AM_CONDITIONAL(UV_ENABLED, test "x$have_uv" = "xyes")
 AC_ARG_ENABLE(lz4, AS_HELP_STRING([--disable-lz4], [do not use lz4 compression]))
 
 # Thanks to the OpenVPN configure.ac file for this part.
-AS_IF([test "x$enable_lz4" != "xno"],
-      # If this fails, we will do another test next.
-      # We also add set LZ4_LIBS otherwise
-      # linker will not know about the lz4 library
-      [PKG_CHECK_MODULES(LZ4, [liblz4 >= 1.7.1], [have_lz4="yes"], [LZ4_LIBS="-llz4"])])
-if test "${have_lz4}" != "yes" -a "${enable_lz4}" != "no"; then
+# If this fails, we will do another test next.
+# We also add set LZ4_LIBS otherwise linker will not know about the lz4 library
+PKG_CHECK_MODULES(LZ4, [liblz4 >= 1.7.1], [have_lz4="yes"], [LZ4_LIBS="-llz4"])
+if test "${have_lz4}" != "yes" ; then
     AC_CHECK_HEADERS([lz4.h],
                      [have_lz4h="yes"],
                      [])
@@ -58,10 +56,14 @@ if test "${have_lz4}" != "yes" -a "${enable_lz4}" != "no"; then
     fi
 fi
 
-AS_IF([test "x$enable_lz4" != "xno" -a "x$have_lz4" = "xno"],
+AS_IF([test "x$enable_lz4" != "xno" -a "x$have_lz4" != "xyes"],
       [AC_MSG_ERROR([liblz4 required but not found])], [])
+# LZ4 Can be available without being enabled, this allows a user to activate
+# it at a later stage through an API call.
 AM_CONDITIONAL(LZ4_AVAILABLE, test "x$have_lz4" = "xyes")
-AM_CONDITIONAL(LZ4_ENABLED, test "x$enable_lz4" != "xno")
+# `LZ4_ENABLED` will cause the libuv snapshot implementation to use lz4
+# compression by default.
+AM_CONDITIONAL(LZ4_ENABLED, test "x$enable_lz4" != "xno" -a "x$have_lz4" = "xyes")
 
 # The fake I/O implementation and associated fixture is built by default, unless
 # explicitly disabled.
