@@ -65,7 +65,7 @@ int Compress(struct raft_buffer bufs[], unsigned n_bufs,
     /* Guestimate of eventual compressed size, mainly not to allocate a huge
      * buffer as `LZ4F_compressBound` calculates the worst case scenario. */
     dst_size = LZ4F_compressBound(
-            max(MEGABYTE, lz4_pref.frameInfo.contentSize / 10), &lz4_pref);
+            max(MEGABYTE, (size_t)lz4_pref.frameInfo.contentSize / 10), &lz4_pref);
     dst_size += LZ4F_HEADER_SIZE_MAX_RAFT;
     compressed->base = raft_malloc(dst_size);
     if (compressed->base == NULL) {
@@ -92,7 +92,7 @@ int Compress(struct raft_buffer bufs[], unsigned n_bufs,
             src_size = min(bufs[i].len - src_offset, (size_t)MEGABYTE);
             dst_size_needed = LZ4F_compressBound(src_size, &lz4_pref);
             if (dst_size - dst_offset < dst_size_needed) {
-                dst_size += max(dst_size_needed, lz4_pref.frameInfo.contentSize / 10);
+                dst_size += max(dst_size_needed, (size_t)lz4_pref.frameInfo.contentSize / 10);
                 compressed->base = raft_realloc(compressed->base, dst_size);
                 if (compressed->base == NULL) {
                     rv = RAFT_NOMEM;
@@ -188,8 +188,8 @@ int Decompress(struct raft_buffer buf, struct raft_buffer *decompressed,
     }
     src_offset = src_size;
 
-    decompressed->base = raft_malloc(frameInfo.contentSize);
-    decompressed->len = frameInfo.contentSize;
+    decompressed->base = raft_malloc((size_t)frameInfo.contentSize);
+    decompressed->len = (size_t)frameInfo.contentSize;
     if (decompressed->base == NULL) {
         rv = RAFT_NOMEM;
         goto err_after_ctx_alloc;
