@@ -146,7 +146,17 @@ raft_apply(&raft, &req, &buf, 1, apply_callback);
 
 To add more servers to the cluster use the ```raft_add()``` and
 ```raft_promote``` APIs.
-  
+
+Usage Notes
+-----------
+
+The default [libuv](http://libuv.org) based ```raft_io``` implementation compresses the raft
+snapshots using the ```liblz4``` library. Next to saving disk space, the lz4
+compressed snapshots offer additional data integrity checks in the form of a
+[Content Checksum](https://github.com/lz4/lz4/blob/dev/doc/lz4_Frame_format.md), this allows raft
+to detect corruptions that occurred during storage. It is therefore recommended to not disable
+lz4 compression by means of the ```--disable-lz4``` configure flag.
+
 Notable users
 -------------
 
