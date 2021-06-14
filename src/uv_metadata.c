@@ -36,7 +36,7 @@ static int uvMetadataDecode(const void *buf,
     metadata->term = byteGet64(&cursor);
     metadata->voted_for = byteGet64(&cursor);
 
-    /* Sanity checks that values make sense */
+    /* Coherence checks that values make sense */
     if (metadata->version == 0) {
         ErrMsgPrintf(errmsg, "version is set to zero");
         return RAFT_CORRUPT;

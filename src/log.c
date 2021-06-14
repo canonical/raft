@@ -619,7 +619,7 @@ raft_term logTermOf(struct raft_log *l, const raft_index index)
 
     if (index == l->snapshot.last_index) {
         assert(l->snapshot.last_term != 0);
-        /* Sanity check that if we still have the entry at last_index, its term
+        /* Coherence check that if we still have the entry at last_index, its term
          * matches the one in the snapshot. */
         i = locateEntry(l, index);
         if (i != l->size) {

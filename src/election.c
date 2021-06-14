@@ -119,7 +119,7 @@ int electionStart(struct raft *r)
      * configuration (meaning that we are a voting server). */
     assert(voting_index < r->configuration.n);
 
-    /* Sanity check that configurationVoterCount and configurationIndexOfVoter
+    /* Coherence check that configurationVoterCount and configurationIndexOfVoter
      * have returned something that makes sense. */
     assert(n_voters <= r->configuration.n);
     assert(voting_index < n_voters);

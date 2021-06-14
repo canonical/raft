@@ -334,13 +334,13 @@ TEST(UvWriterSubmit, beyondEOF, setUp, tearDown, 0, DirAllParams)
 /* Write two different blocks concurrently. */
 TEST(UvWriterSubmit, concurrent, NULL, NULL, 0, DirAllParams)
 {
-    return MUNIT_SKIP; /* TODO: tests hang */
+    return MUNIT_SKIP; /* TODO: tests stop responding */
 }
 
 /* Write the same block concurrently. */
 TEST(UvWriterSubmit, concurrentSame, NULL, NULL, 0, DirAllParams)
 {
-    return MUNIT_SKIP; /* TODO: tests hang */
+    return MUNIT_SKIP; /* TODO: tests stop responding */
 }
 
 /* There are not enough resources to create an AIO context to perform the
