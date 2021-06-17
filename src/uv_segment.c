@@ -521,6 +521,7 @@ static int uvLoadOpenSegment(struct uv *uv,
                 tracef("remove zeroed open segment %s", info->filename);
                 remove = true;
                 HeapFree(buf.base);
+                buf.base = NULL;
                 goto done;
             }
         }
@@ -572,6 +573,7 @@ static int uvLoadOpenSegment(struct uv *uv,
 
     if (n_batches == 0) {
         HeapFree(buf.base);
+        buf.base = NULL;
         remove = true;
     }
 
@@ -616,7 +618,9 @@ err_after_batch_load:
     raft_free(tmp_entries);
 
 err_after_read:
-    HeapFree(buf.base);
+    if (buf.base != NULL) {
+        HeapFree(buf.base);
+    }
 
 err:
     assert(rv != 0);
