@@ -481,7 +481,7 @@ static int uvLoadOpenSegment(struct uv *uv,
     uint64_t format;                /* Format version */
     size_t n_batches = 0;           /* Number of loaded batches */
     struct raft_entry *tmp_entries; /* Entries in current batch */
-    struct raft_buffer buf;         /* Segment file content */
+    struct raft_buffer buf = {0};   /* Segment file content */
     size_t offset;                  /* Content read cursor */
     unsigned tmp_n_entries;         /* Number of entries in current batch */
     int i;
