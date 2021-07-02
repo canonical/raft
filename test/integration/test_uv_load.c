@@ -850,6 +850,29 @@ TEST(load, openSegmentWithEntriesBehindSnapshot, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
+/* The data directory contains a snapshot and an open segment containing a valid
+ * entry, and no closed segments. */
+TEST(load, openSegmentNoClosedSegmentsSnapshotPresent, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    struct snapshot snapshot = {
+        1, /* term */
+        3, /* index */
+        1  /* data */
+    };
+    SNAPSHOT_PUT(1, 3, 1);
+    APPEND(1, 4);
+    UNFINALIZE(4, 4, 1);
+    LOAD(0,         /* term */
+         0,         /* voted for */
+         &snapshot, /* snapshot */
+         4,         /* start index */
+         4,         /* data for first loaded entry */
+         1          /* n entries */
+    );
+    return MUNIT_OK;
+}
+
 /* The data directory has several closed segments, all with entries compatible
  * with the snapshot. */
 TEST(load, closedSegmentsOverlappingWithSnapshot, setUp, tearDown, 0, NULL)
