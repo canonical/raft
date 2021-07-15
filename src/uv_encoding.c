@@ -368,7 +368,8 @@ int uvDecodeBatchHeader(const void *batch,
     return 0;
 
 err_after_alloc:
-    raft_free(entries);
+    raft_free(*entries);
+    *entries = NULL;
 
 err:
     assert(rv != 0);
