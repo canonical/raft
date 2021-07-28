@@ -90,6 +90,9 @@ TEST(snapshot, installOne, setUp, tearDown, 0, NULL)
     CLUSTER_DESATURATE_BOTHWAYS(0, 2);
     CLUSTER_STEP_UNTIL_APPLIED(2, 4, 5000);
 
+    /* Check that the leader has sent a snapshot */
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_INSTALL_SNAPSHOT), ==, 1);
+    munit_assert_int(CLUSTER_N_RECV(2, RAFT_IO_INSTALL_SNAPSHOT), ==, 1);
     return MUNIT_OK;
 }
 
@@ -103,26 +106,144 @@ TEST(snapshot, installOneTimeOut, setUp, tearDown, 0, NULL)
     SET_SNAPSHOT_THRESHOLD(3);
     SET_SNAPSHOT_TRAILING(1);
     SET_SNAPSHOT_TIMEOUT(200);
+
+    /* Apply a few of entries, to force a snapshot to be taken. Drop all network
+     * traffic between servers 0 and 2 in order for AppendEntries RPCs to not be
+     * replicated */
     CLUSTER_SATURATE_BOTHWAYS(0, 2);
-
-    /* Apply a few of entries, to force a snapshot to be taken. */
     CLUSTER_MAKE_PROGRESS;
     CLUSTER_MAKE_PROGRESS;
     CLUSTER_MAKE_PROGRESS;
 
-    /* Reconnect the leader, but follower cannot reply */
-    CLUSTER_DESATURATE(0, 2);
+    /* Reconnect both servers and set a high disk latency on server 2 so that
+     * the InstallSnapshot RPC will time out */
+    CLUSTER_SET_DISK_LATENCY(2, 300);
+    CLUSTER_DESATURATE_BOTHWAYS(0, 2);
 
-    /* InstallSnaphot RPC times out */
-    CLUSTER_STEP_UNTIL_ELAPSED(400);
+    /* Wait a while and check that the leader has sent a snapshot */
+    CLUSTER_STEP_UNTIL_ELAPSED(300);
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_INSTALL_SNAPSHOT), ==, 1);
+    munit_assert_int(CLUSTER_N_RECV(2, RAFT_IO_INSTALL_SNAPSHOT), ==, 1);
 
-    /* Reconnect the follower */
-    CLUSTER_DESATURATE(2, 0);
+    /* Wait for the snapshot to be installed */
     CLUSTER_STEP_UNTIL_APPLIED(2, 4, 5000);
 
     /* Assert that the leader has retried the InstallSnapshot RPC */
     munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_INSTALL_SNAPSHOT), ==, 2);
+    munit_assert_int(CLUSTER_N_RECV(2, RAFT_IO_INSTALL_SNAPSHOT), ==, 2);
 
+    return MUNIT_OK;
+}
+
+/* Install snapshot to an offline node */
+TEST(snapshot, installOneDisconnectedFromBeginningReconnects, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+
+    /* Set very low threshold and trailing entries number */
+    SET_SNAPSHOT_THRESHOLD(3);
+    SET_SNAPSHOT_TRAILING(1);
+    SET_SNAPSHOT_TIMEOUT(200);
+
+    /* Apply a few of entries, to force a snapshot to be taken. Disconnect
+     * servers 0 and 2 so that the network calls return failure status */
+    CLUSTER_DISCONNECT(0, 2);
+    CLUSTER_DISCONNECT(2, 0);
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+
+    /* Wait a while so leader detects offline node */
+    CLUSTER_STEP_UNTIL_ELAPSED(2000);
+
+    /* Assert that the leader doesn't try sending a snapshot to an offline node */
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_INSTALL_SNAPSHOT), ==, 0);
+    munit_assert_int(CLUSTER_N_RECV(2, RAFT_IO_INSTALL_SNAPSHOT), ==, 0);
+
+    CLUSTER_RECONNECT(0, 2);
+    CLUSTER_RECONNECT(2, 0);
+    /* Wait for the snapshot to be installed */
+    CLUSTER_STEP_UNTIL_APPLIED(2, 4, 5000);
+
+    /* Assert that the leader has sent an InstallSnapshot RPC */
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_INSTALL_SNAPSHOT), ==, 1);
+    munit_assert_int(CLUSTER_N_RECV(2, RAFT_IO_INSTALL_SNAPSHOT), ==, 1);
+
+    return MUNIT_OK;
+}
+
+/* Install snapshot to an offline node that went down during operation */
+TEST(snapshot, installOneDisconnectedDuringOperationReconnects, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+
+    /* Set very low threshold and trailing entries number */
+    SET_SNAPSHOT_THRESHOLD(3);
+    SET_SNAPSHOT_TRAILING(1);
+    SET_SNAPSHOT_TIMEOUT(200);
+
+    /* Apply a few of entries */
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+
+    /* Wait for follower to catch up*/
+    CLUSTER_STEP_UNTIL_APPLIED(2, 4, 5000);
+    /* Assert that the leader hasn't sent an InstallSnapshot RPC  */
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_INSTALL_SNAPSHOT), ==, 0);
+
+    CLUSTER_DISCONNECT(0, 2);
+    CLUSTER_DISCONNECT(2, 0);
+
+    /* Wait a while so leader detects offline node */
+    CLUSTER_STEP_UNTIL_ELAPSED(2000);
+
+    /* Apply a few more entries */
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+
+    /* Assert that the leader doesn't try sending snapshot to an offline node */
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_INSTALL_SNAPSHOT), ==, 0);
+    munit_assert_int(CLUSTER_N_RECV(2, RAFT_IO_INSTALL_SNAPSHOT), ==, 0);
+
+    CLUSTER_RECONNECT(0, 2);
+    CLUSTER_RECONNECT(2, 0);
+    CLUSTER_STEP_UNTIL_APPLIED(2, 7, 5000);
+
+    /* Assert that the leader has tried sending an InstallSnapshot RPC */
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_INSTALL_SNAPSHOT), ==, 1);
+    munit_assert_int(CLUSTER_N_RECV(2, RAFT_IO_INSTALL_SNAPSHOT), ==, 1);
+
+    return MUNIT_OK;
+}
+
+/* No snapshots sent to killed nodes */
+TEST(snapshot, noSnapshotInstallToKilled, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+
+    /* Set very low threshold and trailing entries number */
+    SET_SNAPSHOT_THRESHOLD(3);
+    SET_SNAPSHOT_TRAILING(1);
+    SET_SNAPSHOT_TIMEOUT(200);
+
+    /* Kill a server */
+    CLUSTER_KILL(2);
+
+    /* Apply a few of entries */
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+
+    /* Wait a while */
+    CLUSTER_STEP_UNTIL_ELAPSED(4000);
+
+    /* Assert that the leader hasn't sent an InstallSnapshot RPC  */
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_INSTALL_SNAPSHOT), ==, 0);
     return MUNIT_OK;
 }
 
@@ -136,21 +257,22 @@ TEST(snapshot, installOneTimeOutAppendAfter, setUp, tearDown, 0, NULL)
     SET_SNAPSHOT_THRESHOLD(3);
     SET_SNAPSHOT_TRAILING(1);
     SET_SNAPSHOT_TIMEOUT(200);
+
+    /* Apply a few of entries, to force a snapshot to be taken. Drop all network
+     * traffic between servers 0 and 2 in order for AppendEntries RPCs to not be
+     * replicated */
     CLUSTER_SATURATE_BOTHWAYS(0, 2);
-
-    /* Apply a few of entries, to force a snapshot to be taken. */
     CLUSTER_MAKE_PROGRESS;
     CLUSTER_MAKE_PROGRESS;
     CLUSTER_MAKE_PROGRESS;
 
-    /* Reconnect the leader, but follower cannot reply */
-    CLUSTER_DESATURATE(0, 2);
+    /* Reconnect both servers and set a high disk latency on server 2 so that
+     * the InstallSnapshot RPC will time out */
+    CLUSTER_SET_DISK_LATENCY(2, 300);
+    CLUSTER_DESATURATE_BOTHWAYS(0, 2);
 
-    /* InstallSnaphot RPC times out */
-    CLUSTER_STEP_UNTIL_ELAPSED(400);
-
-    /* Reconnect the follower */
-    CLUSTER_DESATURATE(2, 0);
+    /* Wait for the snapshot to be installed */
+    CLUSTER_STEP_UNTIL_APPLIED(2, 4, 5000);
 
     /* Append a few entries and check if they are replicated */
     CLUSTER_MAKE_PROGRESS;
@@ -172,29 +294,33 @@ TEST(snapshot, installMultipleTimeOut, setUp, tearDown, 0, NULL)
     SET_SNAPSHOT_THRESHOLD(3);
     SET_SNAPSHOT_TRAILING(1);
     SET_SNAPSHOT_TIMEOUT(200);
+
+    /* Apply a few of entries, to force a snapshot to be taken. Drop all network
+     * traffic between servers 0 and 2 in order for AppendEntries RPCs to not be
+     * replicated */
     CLUSTER_SATURATE_BOTHWAYS(0, 2);
-
-    /* Apply a few of entries, to force a snapshot to be taken. */
     CLUSTER_MAKE_PROGRESS;
     CLUSTER_MAKE_PROGRESS;
     CLUSTER_MAKE_PROGRESS;
 
-    /* Reconnect the leader, but follower cannot reply */
-    CLUSTER_DESATURATE(0, 2);
+    /* Reconnect both servers and set a high disk latency on server 2 so that
+     * the InstallSnapshot RPC will time out */
+    CLUSTER_SET_DISK_LATENCY(2, 300);
+    CLUSTER_DESATURATE_BOTHWAYS(0, 2);
 
-    /* InstallSnaphot RPC times out */
+    /* Step until the snapshot times out */
     CLUSTER_STEP_UNTIL_ELAPSED(400);
 
-    /* Apply another few of entries, to force a new snapshot to be taken. */
+    /* Apply another few of entries, to force a new snapshot to be taken. Drop
+     * all traffic between servers 0 and 2 in order for AppendEntries RPCs to not be
+     * replicated */
+    CLUSTER_SATURATE_BOTHWAYS(0, 2);
     CLUSTER_MAKE_PROGRESS;
     CLUSTER_MAKE_PROGRESS;
     CLUSTER_MAKE_PROGRESS;
-
-    /* InstallSnaphot RPC times out */
-    CLUSTER_STEP_UNTIL_ELAPSED(400);
 
     /* Reconnect the follower */
-    CLUSTER_DESATURATE(2, 0);
+    CLUSTER_DESATURATE_BOTHWAYS(0, 2);
     CLUSTER_STEP_UNTIL_APPLIED(2, 7, 5000);
 
     /* Assert that the leader has sent multiple InstallSnapshot RPCs */
@@ -214,30 +340,33 @@ TEST(snapshot, installMultipleTimeOutAppendAfter, setUp, tearDown, 0, NULL)
     SET_SNAPSHOT_THRESHOLD(3);
     SET_SNAPSHOT_TRAILING(1);
     SET_SNAPSHOT_TIMEOUT(200);
+
+    /* Apply a few of entries, to force a snapshot to be taken. Drop all network
+     * traffic between servers 0 and 2 in order for AppendEntries RPCs to not be
+     * replicated */
     CLUSTER_SATURATE_BOTHWAYS(0, 2);
-
-    /* Apply a few of entries, to force a snapshot to be taken. */
     CLUSTER_MAKE_PROGRESS;
     CLUSTER_MAKE_PROGRESS;
     CLUSTER_MAKE_PROGRESS;
 
-    /* Reconnect the leader, but follower cannot reply */
-    CLUSTER_DESATURATE(0, 2);
+    /* Reconnect both servers and set a high disk latency on server 2 so that
+     * the InstallSnapshot RPC will time out */
+    CLUSTER_SET_DISK_LATENCY(2, 300);
+    CLUSTER_DESATURATE_BOTHWAYS(0, 2);
 
-    /* InstallSnaphot RPC times out */
+    /* Step until the snapshot times out */
     CLUSTER_STEP_UNTIL_ELAPSED(400);
 
-    /* Apply another few of entries, to force a new snapshot to be taken. */
+    /* Apply another few of entries, to force a new snapshot to be taken. Drop
+     * all traffic between servers 0 and 2 in order for AppendEntries RPCs to not be
+     * replicated */
+    CLUSTER_SATURATE_BOTHWAYS(0, 2);
     CLUSTER_MAKE_PROGRESS;
     CLUSTER_MAKE_PROGRESS;
     CLUSTER_MAKE_PROGRESS;
-
-    /* InstallSnaphot RPC times out */
-    CLUSTER_STEP_UNTIL_ELAPSED(400);
 
     /* Reconnect the follower */
-    CLUSTER_DESATURATE(2, 0);
-
+    CLUSTER_DESATURATE_BOTHWAYS(0, 2);
     /* Append a few entries and make sure the follower catches up */
     CLUSTER_MAKE_PROGRESS;
     CLUSTER_MAKE_PROGRESS;
