@@ -42,5 +42,5 @@ script:
   - amalgamate.py --config=amalgamation.json --source=$(pwd)
   - $CC raft.c -c -D_GNU_SOURCE -DHAVE_LINUX_AIO_ABI_H -Wall -Wextra -Wpedantic -fpic
   - ./test/lib/fs.sh setup
-  - make check CFLAGS=-O0 $(./test/lib/fs.sh detect) || (cat ./test-suite.log && false)
+  - make check $(./test/lib/fs.sh detect) || (cat ./test-suite.log && false)
   - ./test/lib/fs.sh teardown
