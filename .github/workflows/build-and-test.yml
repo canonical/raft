@@ -40,7 +40,7 @@ jobs:
         CC: ${{ matrix.compiler }}
       run: |
           ./test/lib/fs.sh setup
-          make check CFLAGS=-O0 $(./test/lib/fs.sh detect) || (cat ./test-suite.log && false)
+          make check $(./test/lib/fs.sh detect) || (cat ./test-suite.log && false)
           ./test/lib/fs.sh teardown
 
     - name: Coverage

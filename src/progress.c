@@ -178,6 +178,11 @@ void progressMarkRecentRecv(struct raft *r, const unsigned i)
     r->leader_state.progress[i].recent_recv = true;
 }
 
+bool progressGetRecentRecv(const struct raft *r, const unsigned i)
+{
+    return r->leader_state.progress[i].recent_recv;
+}
+
 void progressToSnapshot(struct raft *r, unsigned i)
 {
     struct raft_progress *p = &r->leader_state.progress[i];

@@ -351,7 +351,15 @@ int replicationProgress(struct raft *r, unsigned i)
     return sendAppendEntries(r, i, prev_index, prev_term);
 
 send_snapshot:
-    return sendSnapshot(r, i);
+    if (progressGetRecentRecv(r, i)) {
+        /* Only send a snapshot when we have heard from the server */
+        return sendSnapshot(r, i);
+    } else {
+        /* Send empty AppendEntries RPC when we haven't heard from the server */
+        prev_index = logLastIndex(&r->log);
+        prev_term = logLastTerm(&r->log);
+        return sendAppendEntries(r, i, prev_index, prev_term);
+    }
 }
 
 /* Possibly trigger I/O requests for newly appended log entries or heartbeats.

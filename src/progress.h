@@ -64,6 +64,9 @@ bool progressResetRecentRecv(struct raft *r, unsigned i);
  * To be called whenever we receive an AppendEntries RPC result */
 void progressMarkRecentRecv(struct raft *r, unsigned i);
 
+/* Return the value of the recent_recv flag. */
+bool progressGetRecentRecv(const struct raft *r, unsigned i);
+
 /* Convert to the i'th server to snapshot mode. */
 void progressToSnapshot(struct raft *r, unsigned i);
 
