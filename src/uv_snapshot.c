@@ -12,11 +12,7 @@
 #include "uv_encoding.h"
 #include "uv_os.h"
 
-#if 0
-#define tracef(...) Tracef(c->uv->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
+#define tracef(...) Tracef(uv->tracer, __VA_ARGS__)
 
 /* Arbitrary maximum configuration size. Should be practically be enough */
 #define UV__META_MAX_CONFIGURATION_SIZE 1024 * 1024
@@ -602,7 +598,6 @@ static void uvSnapshotPutBarrierCb(struct UvBarrier *barrier)
 {
     struct uvSnapshotPut *put = barrier->data;
     if (put == NULL) {
-        tracef("uvSnapshotPutBarrierCb already fired, wait for UvUnblock\n");
         return;
     }
 

@@ -8,13 +8,9 @@
 #include "progress.h"
 #include "queue.h"
 #include "request.h"
+#include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
 
 /* Convenience for setting a new state value and asserting that the transition
  * is valid. */

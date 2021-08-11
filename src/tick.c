@@ -8,12 +8,7 @@
 #include "replication.h"
 #include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
 
 /* Apply time-dependent rules for followers (Figure 3.1). */
 static int tickFollower(struct raft *r)

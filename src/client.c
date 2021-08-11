@@ -10,12 +10,7 @@
 #include "request.h"
 #include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
 
 int raft_apply(struct raft *r,
                struct raft_apply *req,
@@ -182,7 +177,7 @@ int raft_add(struct raft *r,
         return rv;
     }
 
-    tracef("add server: id %d, address %s", id, address);
+    tracef("add server: id %llu, address %s", id, address);
 
     /* Make a copy of the current configuration, and add the new server to
      * it. */
@@ -305,7 +300,7 @@ int raft_assign(struct raft *r,
     rv = replicationProgress(r, server_index);
     if (rv != 0 && rv != RAFT_NOCONNECTION) {
         /* This error is not fatal. */
-        tracef("failed to send append entries to server %u: %s (%d)",
+        tracef("failed to send append entries to server %llu: %s (%d)",
                server->id, raft_strerror(rv), rv);
     }
 
@@ -336,7 +331,7 @@ int raft_remove(struct raft *r,
         goto err;
     }
 
-    tracef("remove server: id %d", id);
+    tracef("remove server: id %llu", id);
 
     /* Make a copy of the current configuration, and remove the given server
      * from it. */

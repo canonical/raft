@@ -15,12 +15,7 @@
 #include "string.h"
 #include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
 
 /* Dispatch a single RPC message to the appropriate handler. */
 static int recvMessage(struct raft *r, struct raft_message *message)

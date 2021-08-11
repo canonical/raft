@@ -13,11 +13,7 @@
 #include "uv.h"
 #include "uv_encoding.h"
 
-#if 0
-#define tracef(...) Tracef(c->uv->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
+#define tracef(...) Tracef(uv->tracer, __VA_ARGS__)
 
 /* Check if the given filename matches the one of a closed segment (xxx-yyy), or
  * of an open segment (open-xxx), and fill the given info structure if so.

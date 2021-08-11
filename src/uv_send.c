@@ -6,12 +6,7 @@
 #include "uv.h"
 #include "uv_encoding.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
 #define tracef(...) Tracef(c->uv->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
 
 /* The happy path for an raft_io_send request is:
  *
@@ -239,7 +234,7 @@ static void uvClientSendPending(struct uvClient *c)
 {
     int rv;
     assert(c->stream != NULL);
-    tracef(c, "send pending messages");
+    tracef("send pending messages");
     while (!QUEUE_IS_EMPTY(&c->pending)) {
         queue *head;
         struct uvSend *send;
