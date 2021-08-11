@@ -65,7 +65,7 @@ static int restoreEntries(struct raft *r,
                           size_t n)
 {
     struct raft_entry *conf = NULL;
-    raft_index conf_index;
+    raft_index conf_index = 0;
     size_t i;
     int rv;
     logStart(&r->log, snapshot_index, snapshot_term, start_index);
