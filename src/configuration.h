@@ -61,4 +61,6 @@ int configurationEncode(const struct raft_configuration *c,
 int configurationDecode(const struct raft_buffer *buf,
                         struct raft_configuration *c);
 
+/* Output the configuration to the raft tracer */
+void configurationTrace(const struct raft *r, struct raft_configuration *c, const char *msg);
 #endif /* CONFIGURATION_H_ */
