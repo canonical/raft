@@ -10,12 +10,7 @@
 #include "tick.h"
 #include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
 
 /* Restore the most recent configuration. */
 static int restoreMostRecentConfiguration(struct raft *r,
@@ -30,6 +25,7 @@ static int restoreMostRecentConfiguration(struct raft *r,
         raft_configuration_close(&configuration);
         return rv;
     }
+    configurationTrace(r, &configuration, "restore most recent configuration");
     raft_configuration_close(&r->configuration);
     r->configuration = configuration;
     r->configuration_index = index;
@@ -69,7 +65,7 @@ static int restoreEntries(struct raft *r,
                           size_t n)
 {
     struct raft_entry *conf = NULL;
-    raft_index conf_index;
+    raft_index conf_index = 0;
     size_t i;
     int rv;
     logStart(&r->log, snapshot_index, snapshot_term, start_index);
@@ -152,6 +148,8 @@ int raft_start(struct raft *r)
         return rv;
     }
     assert(start_index >= 1);
+    tracef("current_term:%llu voted_for:%llu start_index:%llu n_entries:%lu",
+           r->current_term, r->voted_for, start_index, n_entries);
 
     /* If we have a snapshot, let's restore it. */
     if (snapshot != NULL) {
@@ -193,6 +191,7 @@ int raft_start(struct raft *r)
      * received. */
     rv = r->io->start(r->io, r->heartbeat_timeout, tickCb, recvCb);
     if (rv != 0) {
+        tracef("io start failed %d", rv);
         return rv;
     }
 

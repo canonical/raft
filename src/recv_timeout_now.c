@@ -7,12 +7,7 @@
 #include "recv.h"
 #include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
 
 int recvTimeoutNow(struct raft *r,
                    const raft_id id,
@@ -31,9 +26,11 @@ int recvTimeoutNow(struct raft *r,
 
     (void)address;
 
+    tracef("self:%llu from:%llu@%s last_log_index:%llu last_log_term:%llu term:%llu", r->id, id, address, args->last_log_index, args->last_log_term, args->term);
     /* Ignore the request if we are not voters. */
     local_server = configurationGet(&r->configuration, r->id);
     if (local_server == NULL || local_server->role != RAFT_VOTER) {
+        tracef("non-voter");
         return 0;
     }
 
@@ -41,6 +38,7 @@ int recvTimeoutNow(struct raft *r,
      * leader. */
     if (r->state != RAFT_FOLLOWER ||
         r->follower_state.current_leader.id != id) {
+        tracef("Ignore - r->state:%d current_leader.id:%llu", r->state, r->follower_state.current_leader.id);
         return 0;
     }
 

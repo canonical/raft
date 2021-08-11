@@ -9,12 +9,7 @@
 #include "replication.h"
 #include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
 
 static void recvSendAppendEntriesResultCb(struct raft_io_send *req, int status)
 {
@@ -38,6 +33,8 @@ int recvAppendEntries(struct raft *r,
     assert(id > 0);
     assert(args != NULL);
     assert(address != NULL);
+    tracef("self:%llu from:%llu@%s leader_commit:%llu n_entries:%d prev_log_index:%llu prev_log_term:%llu, term:%llu",
+            r->id, id, address, args->leader_commit, args->n_entries, args->prev_log_index, args->prev_log_term, args->term);
 
     result->rejected = args->prev_log_index;
     result->last_log_index = logLastIndex(&r->log);

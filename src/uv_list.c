@@ -3,11 +3,7 @@
 #include "assert.h"
 #include "uv.h"
 
-#if 0
 #define tracef(...) Tracef(uv->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
 
 static const char *uvListIgnored[] = {".", "..", "metadata1", "metadata2",
                                       NULL};

@@ -19,12 +19,7 @@
 #include "uv_encoding.h"
 #include "uv_os.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
-#define tracef(...) Tracef(c->uv->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
+#define tracef(...) Tracef(uv->tracer, __VA_ARGS__)
 
 /* Retry to connect to peer servers every second.
  *

@@ -12,11 +12,7 @@
 #include "uv_encoding.h"
 #include "uv_os.h"
 
-#if 0
-#define tracef(...) Tracef(c->uv->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
+#define tracef(...) Tracef(uv->tracer, __VA_ARGS__)
 
 /* Arbitrary maximum configuration size. Should be practically be enough */
 #define UV__META_MAX_CONFIGURATION_SIZE 1024 * 1024
@@ -334,6 +330,7 @@ static int uvSnapshotLoadData(struct uv *uv,
         struct raft_buffer decompressed = {0};
         rv = Decompress(buf, &decompressed, errmsg);
         if (rv != 0) {
+            tracef("decompress failed rv:%d", rv);
             goto err_after_read_file;
         }
         HeapFree(buf.base);
@@ -508,6 +505,7 @@ static void uvSnapshotPutWorkCb(uv_work_t *work)
 
     rv = UvFsMakeFile(uv->dir, metadata, put->meta.bufs, 2, put->errmsg);
     if (rv != 0) {
+        tracef("snapshot.meta creation failed %d", rv);
         ErrMsgWrapf(put->errmsg, "write %s", metadata);
         put->status = RAFT_IOERR;
         return;
@@ -525,6 +523,7 @@ static void uvSnapshotPutWorkCb(uv_work_t *work)
     }
 
     if (rv != 0) {
+        tracef("snapshot creation failed %d", rv);
         ErrMsgWrapf(put->errmsg, "write %s", snapshot);
         UvFsRemoveFile(uv->dir, metadata, errmsg);
         UvFsRemoveFile(uv->dir, snapshot, errmsg);
@@ -602,7 +601,6 @@ static void uvSnapshotPutBarrierCb(struct UvBarrier *barrier)
 {
     struct uvSnapshotPut *put = barrier->data;
     if (put == NULL) {
-        tracef("uvSnapshotPutBarrierCb already fired, wait for UvUnblock\n");
         return;
     }
 

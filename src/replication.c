@@ -18,12 +18,7 @@
 #include "snapshot.h"
 #include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
 
 #ifndef max
 #define max(a, b) ((a) < (b) ? (b) : (a))
@@ -54,7 +49,7 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
 
     if (r->state == RAFT_LEADER && i < r->configuration.n) {
         if (status != 0) {
-            tracef("failed to send append entries to server %u: %s",
+            tracef("failed to send append entries to server %llu: %s",
                    req->server_id, raft_strerror(status));
             /* Go back to probe mode. */
             progressToProbe(r, i);
@@ -100,7 +95,7 @@ static int sendAppendEntries(struct raft *r,
      */
     args->leader_commit = r->commit_index;
 
-    tracef("send %u entries starting at %llu to server %u (last index %llu)",
+    tracef("send %u entries starting at %llu to server %llu (last index %llu)",
            args->n_entries, args->prev_log_index, server->id,
            logLastIndex(&r->log));
 
@@ -227,7 +222,7 @@ static void sendSnapshotGetCb(struct raft_io_snapshot_get *get,
     req->snapshot = snapshot;
     req->send.data = req;
 
-    tracef("sending snapshot with last index %llu to %u", snapshot->index,
+    tracef("sending snapshot with last index %llu to %llu", snapshot->index,
            server->id);
 
     rv = r->io->send(r->io, &req->send, &message, sendInstallSnapshotCb);
@@ -388,7 +383,7 @@ static int triggerAll(struct raft *r)
         rv = replicationProgress(r, i);
         if (rv != 0 && rv != RAFT_NOCONNECTION) {
             /* This is not a critical failure, let's just log it. */
-            tracef("failed to send append entries to server %u: %s (%d)",
+            tracef("failed to send append entries to server %llu: %s (%d)",
                    server->id, raft_strerror(rv), rv);
         }
     }
@@ -693,7 +688,7 @@ int replicationUpdate(struct raft *r,
                                        result->last_log_index);
         if (retry) {
             /* Retry, ignoring errors. */
-            tracef("log mismatch -> send old entries to %u", server->id);
+            tracef("log mismatch -> send old entries to %llu", server->id);
             replicationProgress(r, i);
         }
         return 0;
@@ -995,7 +990,6 @@ static int deleteConflictingEntries(struct raft *r,
             if (entry_index <= r->commit_index) {
                 /* Should never happen; something is seriously wrong! */
                 tracef("new index conflicts with committed entry -> shutdown");
-
                 return RAFT_SHUTDOWN;
             }
 
@@ -1262,11 +1256,13 @@ int replicationInstallSnapshot(struct raft *r,
      * something smarter. */
     if (r->snapshot.pending.term != 0 || r->snapshot.put.data != NULL) {
         *async = true;
+        tracef("already taking or installing snapshot");
         return RAFT_BUSY;
     }
 
     /* If our last snapshot is more up-to-date, this is a no-op */
     if (r->log.snapshot.last_index >= args->last_index) {
+        tracef("have more recent snapshot");
         *rejected = 0;
         return 0;
     }
@@ -1274,6 +1270,7 @@ int replicationInstallSnapshot(struct raft *r,
     /* If we already have all entries in the snapshot, this is a no-op */
     local_term = logTermOf(&r->log, args->last_index);
     if (local_term != 0 && local_term >= args->last_term) {
+        tracef("have all entries");
         *rejected = 0;
         return 0;
     }
@@ -1312,6 +1309,7 @@ int replicationInstallSnapshot(struct raft *r,
                              0 /* zero trailing means replace everything */,
                              &r->snapshot.put, snapshot, installSnapshotCb);
     if (rv != 0) {
+        tracef("snapshot_put failed %d", rv);
         goto err_after_bufs_alloc;
     }
 
@@ -1388,6 +1386,7 @@ static void applyChange(struct raft *r, const raft_index index)
          */
         server = configurationGet(&r->configuration, r->id);
         if (server == NULL) {
+            tracef("leader removed from config");
             convertToFollower(r);
         }
 

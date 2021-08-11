@@ -2,9 +2,11 @@
 
 #include "assert.h"
 #include "byte.h"
+#include "tracing.h"
 
 /* Current encoding format version. */
 #define ENCODING_FORMAT 1
+
 
 void configurationInit(struct raft_configuration *c)
 {
@@ -329,3 +331,22 @@ int configurationDecode(const struct raft_buffer *buf,
 
     return 0;
 }
+
+#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
+void configurationTrace(const struct raft *r, struct raft_configuration *c, const char *msg)
+{
+    if (!r->tracer->enabled || r == NULL || c == NULL) {
+        return;
+    }
+
+    tracef("%s", msg);
+    tracef("=== CONFIG START ===");
+    unsigned i;
+    struct raft_server *s;
+    for (i = 0; i < c->n; i++) {
+        s = &c->servers[i];
+        tracef("id:%llu address:%s role:%d", s->id, s->address, s->role);
+    }
+    tracef("=== CONFIG END ===");
+}
+#undef tracef

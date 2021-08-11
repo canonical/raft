@@ -4,11 +4,7 @@
 #include "uv.h"
 #include "uv_os.h"
 
-#if 0
-#define tracef(...) Tracef(c->uv->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
+#define tracef(...) Tracef(uv->tracer, __VA_ARGS__)
 
 /* Metadata about an open segment not used anymore and that should be closed or
  * remove (if not written at all). */

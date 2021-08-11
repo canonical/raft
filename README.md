@@ -157,6 +157,8 @@ compressed snapshots offer additional data integrity checks in the form of a
 to detect corruptions that occurred during storage. It is therefore recommended to not disable
 lz4 compression by means of the ```--disable-lz4``` configure flag.
 
+Detailed tracing will be enabled when the environment variable `LIBRAFT_TRACE` is set upon startup.
+
 Notable users
 -------------
 

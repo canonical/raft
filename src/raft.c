@@ -35,7 +35,10 @@ int raft_init(struct raft *r,
     r->io = io;
     r->io->data = r;
     r->fsm = fsm;
-    r->tracer = &NoopTracer;
+
+    r->tracer = &StderrTracer;
+    raft_tracer_maybe_enable(r->tracer, true);
+
     r->id = id;
     /* Make a copy of the address */
     r->address = HeapMalloc(strlen(address) + 1);

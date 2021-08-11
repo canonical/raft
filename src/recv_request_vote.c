@@ -5,12 +5,7 @@
 #include "recv.h"
 #include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
 
 static void requestVoteSendCb(struct raft_io_send *req, int status)
 {
@@ -34,6 +29,10 @@ int recvRequestVote(struct raft *r,
     assert(id > 0);
     assert(args != NULL);
 
+    tracef("self:%llu from:%llu@%s candidate_id:%llu disrupt_leader:%d last_log_index:%llu"
+           "last_log_term:%llu pre_vote:%d term:%llu",
+           r->id, id, address, args->candidate_id, args->disrupt_leader, args->last_log_index,
+           args->last_log_term, args->pre_vote, args->term);
     result->vote_granted = false;
 
     /* Reject the request if we have a leader.
@@ -89,6 +88,7 @@ int recvRequestVote(struct raft *r,
      * same as the request term (otherwise we would have rejected the request or
      * bumped our term). */
     if (!args->pre_vote) {
+        tracef("no pre_vote: current_term:%llu term:%llu", r->current_term, args->term);
         assert(r->current_term == args->term);
     }
 

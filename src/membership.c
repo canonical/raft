@@ -6,22 +6,28 @@
 #include "err.h"
 #include "log.h"
 #include "progress.h"
+#include "tracing.h"
+
+#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
 
 int membershipCanChangeConfiguration(struct raft *r)
 {
     int rv;
 
     if (r->state != RAFT_LEADER || r->transfer != NULL) {
+        tracef("NOT LEADER");
         rv = RAFT_NOTLEADER;
         goto err;
     }
 
     if (r->configuration_uncommitted_index != 0) {
+        tracef("r->configuration_uncommitted_index %llu", r->configuration_uncommitted_index);
         rv = RAFT_CANTCHANGE;
         goto err;
     }
 
     if (r->leader_state.promotee_id != 0) {
+        tracef("r->leader_state.promotee_id %llu", r->leader_state.promotee_id);
         rv = RAFT_CANTCHANGE;
         goto err;
     }
@@ -69,6 +75,8 @@ bool membershipUpdateCatchUpRound(struct raft *r)
     /* If the server did not reach the target index for this round, it did not
      * catch up. */
     if (match_index < r->leader_state.round_index) {
+        tracef("member (index: %u) not yet caught up match_index:%llu round_index:%llu",
+                server_index, match_index, r->leader_state.round_index);
         return false;
     }
 
@@ -77,6 +85,9 @@ bool membershipUpdateCatchUpRound(struct raft *r)
 
     is_up_to_date = match_index == last_index;
     is_fast_enough = round_duration < r->election_timeout;
+
+    tracef("member is_up_to_date:%d is_fast_enough:%d",
+            is_up_to_date, is_fast_enough);
 
     /* If the server's log is fully up-to-date or the round that just terminated
      * was fast enough, then the server as caught up. */
@@ -114,8 +125,10 @@ int membershipUncommittedChange(struct raft *r,
 
     rv = configurationDecode(&entry->buf, &configuration);
     if (rv != 0) {
+        tracef("failed to decode configuration at index:%llu", index);
         goto err;
     }
+    configurationTrace(r, &configuration, "uncommitted config change");
 
     raft_configuration_close(&r->configuration);
 
@@ -137,6 +150,7 @@ int membershipRollback(struct raft *r)
     assert(r != NULL);
     assert(r->state == RAFT_FOLLOWER);
     assert(r->configuration_uncommitted_index > 0);
+    tracef("roll back membership");
 
     /* Fetch the last committed configuration entry. */
     assert(r->configuration_index != 0);
@@ -153,6 +167,8 @@ int membershipRollback(struct raft *r)
     if (rv != 0) {
         return rv;
     }
+
+    configurationTrace(r, &r->configuration, "roll back config");
 
     r->configuration_uncommitted_index = 0;
 
