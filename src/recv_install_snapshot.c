@@ -28,6 +28,8 @@ int recvInstallSnapshot(struct raft *r,
     bool async;
 
     assert(address != NULL);
+    tracef("self:%llu from:%llu@%s conf_index:%llu last_index:%llu last_term:%llu term:%llu",
+            r->id, id, address, args->conf_index, args->last_index, args->last_term, args->term);
 
     result->rejected = args->last_index;
     result->last_log_index = logLastIndex(&r->log);
@@ -59,6 +61,7 @@ int recvInstallSnapshot(struct raft *r,
 
     rv = replicationInstallSnapshot(r, args, &result->rejected, &async);
     if (rv != 0) {
+        tracef("replicationInstallSnapshot failed %d", rv);
         return rv;
     }
 

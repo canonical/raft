@@ -330,6 +330,7 @@ static int uvSnapshotLoadData(struct uv *uv,
         struct raft_buffer decompressed = {0};
         rv = Decompress(buf, &decompressed, errmsg);
         if (rv != 0) {
+            tracef("decompress failed rv:%d", rv);
             goto err_after_read_file;
         }
         HeapFree(buf.base);
@@ -504,6 +505,7 @@ static void uvSnapshotPutWorkCb(uv_work_t *work)
 
     rv = UvFsMakeFile(uv->dir, metadata, put->meta.bufs, 2, put->errmsg);
     if (rv != 0) {
+        tracef("snapshot.meta creation failed %d", rv);
         ErrMsgWrapf(put->errmsg, "write %s", metadata);
         put->status = RAFT_IOERR;
         return;
@@ -521,6 +523,7 @@ static void uvSnapshotPutWorkCb(uv_work_t *work)
     }
 
     if (rv != 0) {
+        tracef("snapshot creation failed %d", rv);
         ErrMsgWrapf(put->errmsg, "write %s", snapshot);
         UvFsRemoveFile(uv->dir, metadata, errmsg);
         UvFsRemoveFile(uv->dir, snapshot, errmsg);

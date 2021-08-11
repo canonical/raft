@@ -121,6 +121,7 @@ bool progressShouldReplicate(struct raft *r, unsigned i)
         case PROGRESS__SNAPSHOT:
             /* Snapshot timed out, move to PROBE */
             if (now - p->snapshot_last_send >= r->install_snapshot_timeout) {
+                tracef("snapshot timed out for index:%u", i);
                 result = true;
                 progressAbortSnapshot(r, i);
             } else {

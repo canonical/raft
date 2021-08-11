@@ -73,8 +73,7 @@ static int recvMessage(struct raft *r, struct raft_message *message)
     };
 
     if (rv != 0 && rv != RAFT_NOCONNECTION) {
-        /* tracef("recv: %s: %s", message_descs[message->type - 1],
-                 raft_strerror(rv)); */
+        tracef("recv: %d: %s", message->type, raft_strerror(rv));
         return rv;
     }
 
@@ -166,6 +165,7 @@ int recvEnsureMatchingTerms(struct raft *r, raft_term term, int *match)
     recvCheckMatchingTerms(r, term, match);
 
     if (*match == -1) {
+        tracef("old term - current_term:%llu other_term:%llu", r->current_term, term);
         return 0;
     }
 
@@ -186,6 +186,7 @@ int recvEnsureMatchingTerms(struct raft *r, raft_term term, int *match)
     if (*match == 1) {
         rv = recvBumpCurrentTerm(r, term);
         if (rv != 0) {
+            tracef("recvBumpCurrentTerm failed %d", rv);
             return rv;
         }
     }

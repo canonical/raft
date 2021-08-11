@@ -990,7 +990,6 @@ static int deleteConflictingEntries(struct raft *r,
             if (entry_index <= r->commit_index) {
                 /* Should never happen; something is seriously wrong! */
                 tracef("new index conflicts with committed entry -> shutdown");
-
                 return RAFT_SHUTDOWN;
             }
 
@@ -1257,11 +1256,13 @@ int replicationInstallSnapshot(struct raft *r,
      * something smarter. */
     if (r->snapshot.pending.term != 0 || r->snapshot.put.data != NULL) {
         *async = true;
+        tracef("already taking or installing snapshot");
         return RAFT_BUSY;
     }
 
     /* If our last snapshot is more up-to-date, this is a no-op */
     if (r->log.snapshot.last_index >= args->last_index) {
+        tracef("have more recent snapshot");
         *rejected = 0;
         return 0;
     }
@@ -1269,6 +1270,7 @@ int replicationInstallSnapshot(struct raft *r,
     /* If we already have all entries in the snapshot, this is a no-op */
     local_term = logTermOf(&r->log, args->last_index);
     if (local_term != 0 && local_term >= args->last_term) {
+        tracef("have all entries");
         *rejected = 0;
         return 0;
     }
@@ -1307,6 +1309,7 @@ int replicationInstallSnapshot(struct raft *r,
                              0 /* zero trailing means replace everything */,
                              &r->snapshot.put, snapshot, installSnapshotCb);
     if (rv != 0) {
+        tracef("snapshot_put failed %d", rv);
         goto err_after_bufs_alloc;
     }
 
@@ -1383,6 +1386,7 @@ static void applyChange(struct raft *r, const raft_index index)
          */
         server = configurationGet(&r->configuration, r->id);
         if (server == NULL) {
+            tracef("leader removed from config");
             convertToFollower(r);
         }
 

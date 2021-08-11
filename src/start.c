@@ -25,6 +25,7 @@ static int restoreMostRecentConfiguration(struct raft *r,
         raft_configuration_close(&configuration);
         return rv;
     }
+    configurationTrace(r, &configuration, "restore most recent configuration");
     raft_configuration_close(&r->configuration);
     r->configuration = configuration;
     r->configuration_index = index;
@@ -147,6 +148,8 @@ int raft_start(struct raft *r)
         return rv;
     }
     assert(start_index >= 1);
+    tracef("current_term:%llu voted_for:%llu start_index:%llu n_entries:%lu",
+           r->current_term, r->voted_for, start_index, n_entries);
 
     /* If we have a snapshot, let's restore it. */
     if (snapshot != NULL) {
@@ -188,6 +191,7 @@ int raft_start(struct raft *r)
      * received. */
     rv = r->io->start(r->io, r->heartbeat_timeout, tickCb, recvCb);
     if (rv != 0) {
+        tracef("io start failed %d", rv);
         return rv;
     }
 

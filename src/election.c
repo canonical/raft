@@ -126,6 +126,7 @@ int electionStart(struct raft *r)
         /* Reset vote */
         rv = r->io->set_vote(r->io, 0);
         if (rv != 0) {
+            tracef("set_vote failed %d", rv);
             goto err;
         }
         /* Update our cache too. */
@@ -135,12 +136,14 @@ int electionStart(struct raft *r)
         term = r->current_term + 1;
         rv = r->io->set_term(r->io, term);
         if (rv != 0) {
+            tracef("set_term failed %d", rv);
             goto err;
         }
 
         /* Vote for self */
         rv = r->io->set_vote(r->io, r->id);
         if (rv != 0) {
+            tracef("set_vote self failed %d", rv);
             goto err;
         }
 
@@ -259,6 +262,7 @@ grant_vote:
     if (!args->pre_vote) {
         rv = r->io->set_vote(r->io, args->candidate_id);
         if (rv != 0) {
+            tracef("set_vote failed %d", rv);
             return rv;
         }
         r->voted_for = args->candidate_id;
@@ -267,6 +271,7 @@ grant_vote:
         r->election_timer_start = r->io->time(r->io);
     }
 
+    tracef("vote granted to %llu", args->candidate_id);
     *granted = true;
 
     return 0;

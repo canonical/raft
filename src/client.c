@@ -28,6 +28,7 @@ int raft_apply(struct raft *r,
     if (r->state != RAFT_LEADER || r->transfer != NULL) {
         rv = RAFT_NOTLEADER;
         ErrMsgFromCode(r->errmsg, rv);
+        tracef("raft_apply not leader");
         goto err;
     }
 
@@ -221,6 +222,7 @@ int raft_assign(struct raft *r,
     raft_index last_index;
     int rv;
 
+    tracef("raft_assign to id:%llu the role:%d", id, role);
     if (role != RAFT_STANDBY && role != RAFT_VOTER && role != RAFT_SPARE) {
         rv = RAFT_BADROLE;
         ErrMsgFromCode(r->errmsg, rv);
@@ -282,6 +284,7 @@ int raft_assign(struct raft *r,
 
         rv = clientChangeConfiguration(r, req, &r->configuration);
         if (rv != 0) {
+            tracef("clientChangeConfiguration failed %d", rv);
             r->configuration.servers[server_index].role = old_role;
             return rv;
         }
@@ -398,7 +401,9 @@ int raft_transfer(struct raft *r,
     unsigned i;
     int rv;
 
+    tracef("transfer to %llu", id);
     if (r->state != RAFT_LEADER || r->transfer != NULL) {
+        tracef("transfer error - state:%d", r->state);
         rv = RAFT_NOTLEADER;
         ErrMsgFromCode(r->errmsg, rv);
         goto err;
