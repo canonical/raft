@@ -417,6 +417,11 @@ struct raft_tracer
     void *impl;
 
     /**
+     * Whether this tracer should emit messages.
+     */
+    bool enabled;
+
+    /**
      * Emit the given trace message, possibly decorating it with the provided
      * metadata.
      */
