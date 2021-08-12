@@ -335,7 +335,7 @@ int configurationDecode(const struct raft_buffer *buf,
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
 void configurationTrace(const struct raft *r, struct raft_configuration *c, const char *msg)
 {
-    if (!r->tracer->enabled || r == NULL || c == NULL) {
+    if (r == NULL || c == NULL || !r->tracer->enabled ) {
         return;
     }
 
