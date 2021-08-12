@@ -15,6 +15,9 @@ jobs:
         compiler:
           - gcc
           - clang
+        tracing:
+          - LIBRAFT_TRACE=1
+          - NOLIBRAFT_TRACE=1
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -39,6 +42,7 @@ jobs:
       env:
         CC: ${{ matrix.compiler }}
       run: |
+          export ${{ matrix.tracing }}
           ./test/lib/fs.sh setup
           make check $(./test/lib/fs.sh detect) || (cat ./test-suite.log && false)
           ./test/lib/fs.sh teardown
