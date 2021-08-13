@@ -148,7 +148,7 @@ int raft_start(struct raft *r)
         return rv;
     }
     assert(start_index >= 1);
-    tracef("current_term:%llu voted_for:%llu start_index:%llu n_entries:%lu",
+    tracef("current_term:%llu voted_for:%llu start_index:%llu n_entries:%zu",
            r->current_term, r->voted_for, start_index, n_entries);
 
     /* If we have a snapshot, let's restore it. */
@@ -178,7 +178,7 @@ int raft_start(struct raft *r)
 
     /* Append the entries to the log, possibly restoring the last
      * configuration. */
-    tracef("restore %lu entries starting at %llu", n_entries, start_index);
+    tracef("restore %zu entries starting at %llu", n_entries, start_index);
     rv = restoreEntries(r, snapshot_index, snapshot_term, start_index, entries,
                         n_entries);
     if (rv != 0) {
