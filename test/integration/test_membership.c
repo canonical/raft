@@ -200,9 +200,7 @@ TEST(raft_remove, self, setup, tear_down, 0, NULL)
     struct fixture *f = data;
     REMOVE(0, 1, 0);
     CLUSTER_STEP_UNTIL_APPLIED(0, 2, 2000);
-    /* TODO: the second server does not get notified */
-    return MUNIT_SKIP;
-    // CLUSTER_STEP_UNTIL_APPLIED(1, 2, 2000);
+    CLUSTER_STEP_UNTIL_APPLIED(1, 2, 10000);
     return MUNIT_OK;
 }
 
