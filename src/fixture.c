@@ -925,6 +925,7 @@ static int serverInit(struct raft_fixture *f, unsigned i, struct raft_fsm *fsm)
     s->tracer.impl = (void *)&s->id;
     s->tracer.emit = emit;
     s->raft.tracer = &s->tracer;
+    raft_tracer_maybe_enable(&s->tracer, true);
     return 0;
 }
 

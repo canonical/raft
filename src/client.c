@@ -21,6 +21,8 @@ int raft_apply(struct raft *r,
     raft_index index;
     int rv;
 
+    tracef("raft_apply n %d", n);
+
     assert(r != NULL);
     assert(bufs != NULL);
     assert(n > 0);
