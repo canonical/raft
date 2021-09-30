@@ -7,6 +7,7 @@
 #include "membership.h"
 #include "progress.h"
 #include "queue.h"
+#include "replication.h"
 #include "request.h"
 #include "tracing.h"
 
@@ -206,7 +207,16 @@ int convertToLeader(struct raft *r)
     r->leader_state.round_index = 0;
     r->leader_state.round_start = 0;
 
-    return 0;
+    /* By definition, all entries until the last_stored entry will be committed if
+     * we are the only voter around. */
+    size_t n_voters = configurationVoterCount(&r->configuration);
+    if (n_voters == 1 && (r->last_stored > r->commit_index)) {
+        tracef("Apply log entries after self election %llu %llu", r->last_stored, r->commit_index);
+        r->commit_index = r->last_stored;
+        rv = replicationApply(r);
+    }
+
+    return rv;
 }
 
 void convertToUnavailable(struct raft *r)
