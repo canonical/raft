@@ -11,6 +11,8 @@ int raft_state(struct raft *r)
 
 void raft_leader(struct raft *r, raft_id *id, const char **address)
 {
+    const struct raft_server *server;
+
     switch (r->state) {
         case RAFT_UNAVAILABLE:
         case RAFT_CANDIDATE:
@@ -23,6 +25,13 @@ void raft_leader(struct raft *r, raft_id *id, const char **address)
             return;
         case RAFT_LEADER:
             if (r->transfer != NULL) {
+                *id = 0;
+                *address = NULL;
+                return;
+            }
+            server = configurationGet(&r->configuration, r->id);
+            /* Leader no longer part of configuration */
+            if (server == NULL) {
                 *id = 0;
                 *address = NULL;
                 return;

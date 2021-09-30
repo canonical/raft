@@ -13,10 +13,18 @@
 int membershipCanChangeConfiguration(struct raft *r)
 {
     int rv;
+    const struct raft_server *server;
 
     if (r->state != RAFT_LEADER || r->transfer != NULL) {
         tracef("NOT LEADER");
         rv = RAFT_NOTLEADER;
+        goto err;
+    }
+
+    server = configurationGet(&r->configuration, r->id);
+    if (server == NULL) {
+        tracef("leader no longer part of configuration");
+        rv = RAFT_CANTCHANGE;
         goto err;
     }
 

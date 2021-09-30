@@ -75,6 +75,39 @@ static void tear_down(void *data)
         munit_assert_int(rv_, ==, RV);                         \
     }
 
+/* Submit to the I'th server a request to apply a new RAFT_COMMAND entry and
+ * assert that the given error is returned. */
+#define APPLY_ERROR(I, RV, ERRMSG)                                \
+    do {                                                          \
+        struct raft_buffer _buf;                                  \
+        struct raft_apply _req;                                   \
+        int _rv;                                                  \
+        FsmEncodeSetX(123, &_buf);                                \
+        _rv = raft_apply(CLUSTER_RAFT(I), &_req, &_buf, 1, NULL); \
+        munit_assert_int(_rv, ==, RV);                            \
+        munit_assert_string_equal(CLUSTER_ERRMSG(I), ERRMSG);     \
+        raft_free(_buf.base);                                     \
+    } while (0)
+
+struct result
+{
+    int status;
+    bool done;
+};
+
+/* Submit to the I'th server a request to apply a new RAFT_BARRIER entry and
+ * assert that the given error is returned. */
+#define BARRIER_ERROR(I, RV, ERRMSG)                                       \
+    do {                                                                   \
+        struct raft_barrier _req;                                          \
+        struct result _result = {0, false};                                \
+        int _rv;                                                           \
+        _req.data = &_result;                                              \
+        _rv = raft_barrier(CLUSTER_RAFT(I), &_req, NULL);                  \
+        munit_assert_int(_rv, ==, RV);                                     \
+        munit_assert_string_equal(CLUSTER_ERRMSG(I), ERRMSG);              \
+    } while (0)
+
 /******************************************************************************
  *
  * Assertions
@@ -201,6 +234,60 @@ TEST(raft_remove, self, setup, tear_down, 0, NULL)
     REMOVE(0, 1, 0);
     CLUSTER_STEP_UNTIL_APPLIED(0, 2, 2000);
     CLUSTER_STEP_UNTIL_APPLIED(1, 2, 10000);
+    return MUNIT_OK;
+}
+
+/* After a leader gets a request to remove itself, the 2nd server is elected */
+TEST(raft_remove, selfOtherLeader, setup, tear_down, 0, NULL)
+{
+    struct fixture *f = data;
+    raft_id leader_id = 0xDEADBEEF;
+    const char *leader_address = NULL;
+
+    munit_assert_true(CLUSTER_LEADER == 0);
+    raft_leader(CLUSTER_RAFT(0), &leader_id, &leader_address);
+    munit_assert_ulong(leader_id, ==, 1);
+    munit_assert_ptr_not_null(leader_address);
+
+    REMOVE(0, 1, 0);
+    raft_leader(CLUSTER_RAFT(0), &leader_id, &leader_address);
+    munit_assert_ulong(leader_id, ==, 0);
+    munit_assert_ptr_null(leader_address);
+
+    CLUSTER_STEP_UNTIL_HAS_NO_LEADER(2000);
+    CLUSTER_STEP_UNTIL_HAS_LEADER(5000);
+    munit_assert_true(CLUSTER_LEADER == 1);
+    raft_leader(CLUSTER_RAFT(1), &leader_id, &leader_address);
+    munit_assert_ulong(leader_id, ==, 2);
+    munit_assert_ptr_not_null(leader_address);
+
+    return MUNIT_OK;
+}
+
+/* After removing itself, a leader can't add members */
+TEST(raft_remove, selfAddFail, setup, tear_down, 0, NULL)
+{
+    struct fixture *f = data;
+    REMOVE(0, 1, 0);
+    ADD(0, 2, RAFT_CANTCHANGE);
+    return MUNIT_OK;
+}
+
+/* After removing itself, a leader can't apply commands */
+TEST(raft_remove, selfApplyFail, setup, tear_down, 0, NULL)
+{
+    struct fixture *f = data;
+    REMOVE(0, 1, 0);
+    APPLY_ERROR(0, RAFT_NOTLEADER, "server is not the leader");
+    return MUNIT_OK;
+}
+
+/* After removing itself, a leader can't apply barriers */
+TEST(raft_remove, selfBarrierFail, setup, tear_down, 0, NULL)
+{
+    struct fixture *f = data;
+    REMOVE(0, 1, 0);
+    BARRIER_ERROR(0, RAFT_NOTLEADER, "server is not the leader");
     return MUNIT_OK;
 }
 

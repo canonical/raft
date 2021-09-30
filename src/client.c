@@ -12,6 +12,15 @@
 
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
 
+static int canAcceptCommand(struct raft *r) {
+    const struct raft_server *server = configurationGet(&r->configuration, r->id);
+    bool in_config = (server != NULL);
+    if (r->state != RAFT_LEADER || r->transfer != NULL || !in_config) {
+        return RAFT_NOTLEADER;
+    }
+    return 0;
+}
+
 int raft_apply(struct raft *r,
                struct raft_apply *req,
                const struct raft_buffer bufs[],
@@ -21,14 +30,16 @@ int raft_apply(struct raft *r,
     raft_index index;
     int rv;
 
+    tracef("raft_apply");
+
     assert(r != NULL);
     assert(bufs != NULL);
     assert(n > 0);
 
-    if (r->state != RAFT_LEADER || r->transfer != NULL) {
-        rv = RAFT_NOTLEADER;
+    rv = canAcceptCommand(r);
+    if (rv != 0) {
         ErrMsgFromCode(r->errmsg, rv);
-        tracef("raft_apply not leader");
+        tracef("raft_apply not leader or removed rv:%d", rv);
         goto err;
     }
 
@@ -68,8 +79,12 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
     struct raft_buffer buf;
     int rv;
 
-    if (r->state != RAFT_LEADER || r->transfer != NULL) {
-        rv = RAFT_NOTLEADER;
+    tracef("raft_barrier");
+
+    rv = canAcceptCommand(r);
+    if (rv != 0) {
+        ErrMsgFromCode(r->errmsg, rv);
+        tracef("raft_barrier not leader or removed rv:%d", rv);
         goto err;
     }
 
@@ -173,12 +188,12 @@ int raft_add(struct raft *r,
     struct raft_configuration configuration;
     int rv;
 
+    tracef("raft_add server: id %llu, address %s", id, address);
+
     rv = membershipCanChangeConfiguration(r);
     if (rv != 0) {
         return rv;
     }
-
-    tracef("add server: id %llu, address %s", id, address);
 
     /* Make a copy of the current configuration, and add the new server to
      * it. */
