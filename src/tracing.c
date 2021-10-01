@@ -1,4 +1,6 @@
+#include <inttypes.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include "tracing.h"
 
@@ -21,7 +23,11 @@ static inline void stderrTracerEmit(struct raft_tracer *t,
                                     const char *message)
 {
     (void)t;
-    fprintf(stderr, "LIBRAFT %s:%d %s\n", file, line, message);
+    struct timespec ts = {0};
+    /* ignore errors */
+    clock_gettime(CLOCK_REALTIME, &ts);
+    int64_t ns = ts.tv_sec * 1000000000 + ts.tv_nsec;
+    fprintf(stderr, "LIBRAFT   %" PRId64 " %s:%d %s\n", ns, file, line, message);
 }
 struct raft_tracer StderrTracer = {.impl = NULL, .enabled = false, .emit = stderrTracerEmit};
 
