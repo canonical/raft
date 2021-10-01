@@ -635,7 +635,7 @@ int raft_uv_init(struct raft_io *io,
     strcpy(uv->dir, dir);
     uv->transport = transport;
     uv->transport->data = NULL;
-    uv->tracer = &NoopTracer;
+    uv->tracer = &StderrTracer;
     uv->id = 0; /* Set by raft_io->config() */
     uv->state = UV__PRISTINE;
     uv->errored = false;

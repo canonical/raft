@@ -328,7 +328,9 @@ static int uvSnapshotLoadData(struct uv *uv,
 
     if (IsCompressed(buf.base, buf.len)) {
         struct raft_buffer decompressed = {0};
+        tracef("snapshot decompress start");
         rv = Decompress(buf, &decompressed, errmsg);
+        tracef("snapshot decompress end %d", rv);
         if (rv != 0) {
             tracef("decompress failed rv:%d", rv);
             goto err_after_read_file;
@@ -514,6 +516,7 @@ static void uvSnapshotPutWorkCb(uv_work_t *work)
     sprintf(snapshot, UV__SNAPSHOT_TEMPLATE, put->snapshot->term,
             put->snapshot->index, put->meta.timestamp);
 
+    tracef("snapshot write start");
     if (uv->snapshot_compression) {
         rv = makeFileCompressed(uv->dir, snapshot, put->snapshot->bufs,
                                 put->snapshot->n_bufs, put->errmsg);
@@ -521,6 +524,7 @@ static void uvSnapshotPutWorkCb(uv_work_t *work)
         rv = UvFsMakeFile(uv->dir, snapshot, put->snapshot->bufs,
                           put->snapshot->n_bufs, put->errmsg);
     }
+    tracef("snapshot write end %d", rv);
 
     if (rv != 0) {
         tracef("snapshot creation failed %d", rv);
