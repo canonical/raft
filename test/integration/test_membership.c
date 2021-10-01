@@ -75,6 +75,23 @@ static void tear_down(void *data)
         munit_assert_int(rv_, ==, RV);                         \
     }
 
+struct result
+{
+    int status;
+    bool done;
+};
+
+/* Submit an apply request. */
+#define APPLY_SUBMIT(I)                                                      \
+    struct raft_buffer _buf;                                                 \
+    struct raft_apply _req;                                                  \
+    struct result _result = {0, false};                                      \
+    int _rv;                                                                 \
+    FsmEncodeSetX(123, &_buf);                                               \
+    _req.data = &_result;                                                    \
+    _rv = raft_apply(CLUSTER_RAFT(I), &_req, &_buf, 1, NULL);                \
+    munit_assert_int(_rv, ==, 0);
+
 /******************************************************************************
  *
  * Assertions
@@ -200,9 +217,65 @@ TEST(raft_remove, self, setup, tear_down, 0, NULL)
     struct fixture *f = data;
     REMOVE(0, 1, 0);
     CLUSTER_STEP_UNTIL_APPLIED(0, 2, 2000);
-    /* TODO: the second server does not get notified */
-    return MUNIT_SKIP;
-    // CLUSTER_STEP_UNTIL_APPLIED(1, 2, 2000);
+    CLUSTER_STEP_UNTIL_APPLIED(1, 2, 10000);
+    return MUNIT_OK;
+}
+
+/* A leader gets a request to remove itself from a 3-node cluster */
+TEST(raft_remove, selfThreeNodeClusterReplicate, setup, tear_down, 0, NULL)
+{
+    struct fixture *f = data;
+    /* Add a third node */
+    GROW;
+    ADD(0, 3, 0);
+    CLUSTER_STEP_UNTIL_APPLIED(0, 2, 2000);
+    ASSIGN(0, 3, RAFT_VOTER);
+    CLUSTER_STEP_UNTIL_APPLIED(0, 3, 2000);
+
+    /* Verify node with id 1 is the leader */
+    raft_id leader_id = 0xDEADBEEF;
+    const char *leader_address = NULL;
+    raft_leader(CLUSTER_RAFT(0), &leader_id, &leader_address);
+    munit_assert_ulong(leader_id, ==, 1);
+    munit_assert_ptr_not_null(leader_address);
+
+    /* The leader is requested to remove itself from the configuration */
+    REMOVE(0, 1, 0);
+
+    /* The - removed - leader should still replicate entries.
+     *
+     * Raft dissertation 4.2.2
+     * `First, there will be a period of time (while it is committing Cnew) when
+     * a leader can manage a cluster that does not include itself; it replicates
+     * log entries but does not count itself in majorities.`
+     *
+     * */
+    APPLY_SUBMIT(0)
+
+    /* The removed leader eventually steps down */
+    CLUSTER_STEP_UNTIL_HAS_NO_LEADER(5000);
+    raft_leader(CLUSTER_RAFT(0), &leader_id, &leader_address);
+    munit_assert_ulong(leader_id, ==, 0);
+    munit_assert_ptr_null(leader_address);
+
+    /* Every node should have all entries */
+    CLUSTER_STEP_UNTIL_APPLIED(0, 4, 10000);
+    CLUSTER_STEP_UNTIL_APPLIED(1, 4, 10000);
+    CLUSTER_STEP_UNTIL_APPLIED(2, 4, 10000);
+
+    /* The removed leader eventually steps down */
+    CLUSTER_STEP_UNTIL_HAS_LEADER(5000);
+
+    /* The removed leader doesn't know who the leader is */
+    raft_leader(CLUSTER_RAFT(0), &leader_id, &leader_address);
+    munit_assert_ulong(leader_id, ==, 0);
+    munit_assert_ptr_null(leader_address);
+
+    /* The new configuration has a leader */
+    raft_leader(CLUSTER_RAFT(1), &leader_id, &leader_address);
+    munit_assert_ulong(leader_id, !=, 0);
+    munit_assert_ulong(leader_id, !=, 1);
+    munit_assert_ptr_not_null(leader_address);
     return MUNIT_OK;
 }
 

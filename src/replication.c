@@ -496,9 +496,6 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
         goto out;
     }
 
-    /* If Check if we have reached a quorum. */
-    server_index = configurationIndexOf(&r->configuration, r->id);
-
     /* Only update the next index if we are part of the current
      * configuration. The only case where this is not true is when we were
      * asked to remove ourselves from the cluster.
@@ -509,11 +506,9 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
      *   leader can manage a cluster that does not include itself; it
      *   replicates log entries but does not count itself in majorities.
      */
+    server_index = configurationIndexOf(&r->configuration, r->id);
     if (server_index < r->configuration.n) {
         r->leader_state.progress[server_index].match_index = r->last_stored;
-    } else {
-        const struct raft_entry *entry = logGet(&r->log, r->last_stored);
-        assert(entry->type == RAFT_CHANGE);
     }
 
     /* Check if we can commit some new entries. */
