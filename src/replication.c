@@ -1380,8 +1380,8 @@ static void applyChange(struct raft *r, const raft_index index)
          *   steps down once the Cnew entry is committed.
          */
         server = configurationGet(&r->configuration, r->id);
-        if (server == NULL) {
-            tracef("leader removed from config");
+        if (server == NULL || server->role != RAFT_VOTER) {
+            tracef("leader removed from config or no longer voter server: %p", (void*)server);
             convertToFollower(r);
         }
 

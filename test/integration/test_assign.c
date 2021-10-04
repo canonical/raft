@@ -432,14 +432,26 @@ TEST(raft_assign, demoteToStandBy, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-/* The leader can be demoted to stand-by and still act as leader, although it
- * won't have any voting right. */
+/* The leader can be demoted to stand-by and will no longer act as leader */
 TEST(raft_assign, demoteLeader, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     ASSIGN_SUBMIT(0, 1, RAFT_STANDBY);
     munit_assert_int(CLUSTER_LEADER, ==, 0);
     ASSIGN_WAIT;
+    CLUSTER_STEP_UNTIL_HAS_LEADER(5000);
+    munit_assert_int(CLUSTER_LEADER, =!, 0);
+    return MUNIT_OK;
+}
+
+/* The leader can be demoted to spare and will no longer act as leader */
+TEST(raft_assign, demoteLeaderToSpare, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    ASSIGN_SUBMIT(0, 1, RAFT_SPARE);
     munit_assert_int(CLUSTER_LEADER, ==, 0);
+    ASSIGN_WAIT;
+    CLUSTER_STEP_UNTIL_HAS_LEADER(5000);
+    munit_assert_int(CLUSTER_LEADER, =!, 0);
     return MUNIT_OK;
 }
