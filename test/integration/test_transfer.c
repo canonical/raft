@@ -185,9 +185,7 @@ TEST(raft_transfer, afterDemotion, setUp, tearDown, 0, NULL)
     rv = raft_assign(raft, &req, raft->id, RAFT_SPARE, NULL);
     munit_assert_int(rv, ==, 0);
     CLUSTER_STEP_UNTIL_APPLIED(0, 4, 1000);
-    TRANSFER(0, 2);
-    CLUSTER_STEP_UNTIL_HAS_LEADER(1000);
-    munit_assert_int(CLUSTER_LEADER, ==, 1);
+    TRANSFER_ERROR(0, 2, RAFT_NOTLEADER, "server is not the leader");
     return MUNIT_OK;
 }
 
