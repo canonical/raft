@@ -10,13 +10,16 @@
 int uvIpParse(const char *address, struct sockaddr_in *addr)
 {
     char buf[256];
+    size_t n;
     char *host;
     char *port;
     char *colon = ":";
     int rv;
 
     /* TODO: turn this poor man parsing into proper one */
-    strcpy(buf, address);
+    n = sizeof(buf)-1;
+    strncpy(buf, address, n);
+    buf[n] = '\0';
     host = strtok(buf, colon);
     port = strtok(NULL, ":");
     if (port == NULL) {

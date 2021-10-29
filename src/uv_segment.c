@@ -23,6 +23,7 @@ static bool uvSegmentInfoMatch(const char *filename, struct uvSegmentInfo *info)
 {
     int consumed;
     int matched;
+    size_t n;
     size_t filename_len = strnlen(filename, UV__FILENAME_LEN + 1);
 
     assert(filename_len < UV__FILENAME_LEN);
@@ -44,7 +45,9 @@ static bool uvSegmentInfoMatch(const char *filename, struct uvSegmentInfo *info)
     return false;
 
 match:
-    strcpy(info->filename, filename);
+    n = sizeof(info->filename) - 1;
+    strncpy(info->filename, filename, n);
+    info->filename[n] = '\0';
     return true;
 }
 
@@ -584,7 +587,7 @@ done:
             goto err_after_read;
         }
     } else {
-        char filename[UV__FILENAME_LEN];
+        char filename[UV__SEGMENT_FILENAME_BUF_SIZE];
         raft_index end_index = *next_index - 1;
 
         /* At least one entry was loaded */
@@ -604,7 +607,11 @@ done:
         info->is_open = false;
         info->first_index = first_index;
         info->end_index = end_index;
-        strcpy(info->filename, filename);
+        size_t nb = sizeof(info->filename);
+        /* info->filename & filename are arrays of same size, always zero
+         * terminate just to be safe though. */
+        strncpy(info->filename, filename, nb);
+        info->filename[nb-1] = '\0';
     }
 
     return 0;

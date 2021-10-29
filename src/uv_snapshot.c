@@ -56,7 +56,10 @@ static bool uvSnapshotInfoMatch(const char *filename,
     if (!uvSnapshotParseFilename(filename, true, &info->term, &info->index, &info->timestamp)) {
         return false;
     }
-    strcpy(info->filename, filename);
+    /* Allow room for '\0' terminator */
+    size_t n = sizeof(info->filename) - 1;
+    strncpy(info->filename, filename, n);
+    info->filename[n] = '\0';
     return true;
 }
 
