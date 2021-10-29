@@ -195,6 +195,11 @@ int membershipLeadershipTransferStart(struct raft *r)
     assert(r->transfer->send.data == NULL);
     server = configurationGet(&r->configuration, r->transfer->id);
     assert(server != NULL);
+    if (server == NULL) {
+        tracef("transferee server not found in configuration");
+        return -1;
+    }
+
     message.type = RAFT_IO_TIMEOUT_NOW;
     message.server_id = server->id;
     message.server_address = server->address;
