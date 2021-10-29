@@ -64,9 +64,6 @@ int UvFsMakeOrOverwriteFile(const char *dir,
                             const struct raft_buffer *buf,
                             char *errmsg);
 
-/* Check if the given file descriptor has reached the end of the file. */
-bool UvFsIsAtEof(uv_file fd);
-
 /* Open a file for reading. */
 int UvFsOpenFileForReading(const char *dir,
                            const char *filename,

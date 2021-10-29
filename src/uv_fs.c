@@ -390,16 +390,6 @@ err:
     return RAFT_IOERR;
 }
 
-bool UvFsIsAtEof(uv_file fd)
-{
-    off_t offset;
-    off_t size;
-    offset = lseek(fd, 0, SEEK_CUR); /* Get the current offset */
-    size = lseek(fd, 0, SEEK_END);   /* Get file size */
-    lseek(fd, offset, SEEK_SET);     /* Restore current offset */
-    return offset == size;           /* Compare current offset and size */
-}
-
 int UvFsReadInto(uv_file fd, struct raft_buffer *buf, char *errmsg)
 {
     int rv;
