@@ -201,7 +201,7 @@ TEST(UvFsAllocateFile, dirNoExists, NULL, NULL, 0, NULL)
 TEST(UvFsAllocateFile, fileAlreadyExists, DirSetUp, DirTearDown, 0, NULL)
 {
     const char *dir = data;
-    char buf[8];
+    char buf[8] = {0};
     DirWriteFile(dir, "foo", buf, sizeof buf);
     ALLOCATE_FILE_ERROR(dir,        /* dir */
                         "foo",      /* filename */
