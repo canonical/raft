@@ -23,7 +23,7 @@
 #define DISK_LATENCY 10
 
 /* To keep in sync with raft.h */
-#define N_MESSAGE_TYPES 5
+#define N_MESSAGE_TYPES 6
 
 /* Maximum number of peer stub instances connected to a certain stub
  * instance. This should be enough for testing purposes. */
