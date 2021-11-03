@@ -22,7 +22,20 @@ void errMsgWrap(char *e, const char *format)
     /* If there isn't enough space for the ": " separator and at least one
      * character of the wrapped error message, then just print the prefix. */
     if (prefix_n >= n - (WRAP_SEP_LEN + 1)) {
+/* We explicitly allow truncation here + silence clang about unknown
+ * warning-group "-Wformat-truncation" */
+#ifdef __GNUC__
+#ifndef __clang__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+#endif
+#endif
         ErrMsgPrintf(e, "%s", format);
+#ifdef __GNUC__
+#ifndef __clang__
+#pragma GCC diagnostic pop
+#endif
+#endif
         return;
     }
 

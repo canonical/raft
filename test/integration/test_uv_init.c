@@ -195,7 +195,7 @@ TEST(init, noSpace, setUp, tearDown, 0, DirTmpfsParams)
 TEST(init, metadataOneTooShort, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    uint8_t buf[16];
+    uint8_t buf[16] = {0};
     DirWriteFile(f->dir, "metadata1", buf, sizeof buf);
     INIT(f->dir);
     CLOSE;

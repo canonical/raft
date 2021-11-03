@@ -239,7 +239,7 @@ benchmark_os_disk_write_LDFLAGS = -luring
 endif # BENCHMARK_ENABLED
 
 if DEBUG_ENABLED
-  AM_CFLAGS += -Werror
+  AM_CFLAGS += -Werror -Wall
 else
   AM_CFLAGS += -DNDEBUG
 endif
