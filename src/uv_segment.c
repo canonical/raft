@@ -592,7 +592,12 @@ done:
 
         /* At least one entry was loaded */
         assert(end_index >= first_index);
-        sprintf(filename, UV__CLOSED_TEMPLATE, first_index, end_index);
+        int nb = snprintf(filename, sizeof(filename), UV__CLOSED_TEMPLATE, first_index, end_index);
+        if ((nb < 0) || ((size_t)nb >= sizeof(filename))) {
+            tracef("snprintf failed: %d", nb);
+            rv = RAFT_IOERR;
+            goto err;
+        }
 
         tracef("finalize %s into %s", info->filename, filename);
 
@@ -607,11 +612,12 @@ done:
         info->is_open = false;
         info->first_index = first_index;
         info->end_index = end_index;
-        size_t nb = sizeof(info->filename);
-        /* info->filename & filename are arrays of same size, always zero
-         * terminate just to be safe though. */
-        strncpy(info->filename, filename, nb);
-        info->filename[nb-1] = '\0';
+        memset(info->filename, '\0', sizeof(info->filename));
+        _Static_assert(sizeof(info->filename) >= sizeof(filename), "Destination buffer too small");
+        /* info->filename is zeroed out, info->filename is at least as large as
+         * filename and we checked that nb < sizeof(filename) -> we won't
+         * overflow and the result will be zero terminated. */
+        memcpy(info->filename, filename, (size_t)nb);
     }
 
     return 0;
