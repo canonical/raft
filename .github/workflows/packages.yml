@@ -30,7 +30,7 @@ jobs:
       run: |
           cp -R dqlite-ppa/debian raft/
           cd raft/
-          VERSION="$(git describe | sed -e "s/^v//" -e "s/-/+git/")"
+          VERSION="$(git describe --tags | sed -e "s/^v//" -e "s/-/+git/")"
           dch --create \
             --distribution ${TARGET} \
             --package raft \
