@@ -632,7 +632,8 @@ int raft_uv_init(struct raft_io *io,
 
     uv->io = io;
     uv->loop = loop;
-    strcpy(uv->dir, dir);
+    strncpy(uv->dir, dir, sizeof(uv->dir)-1);
+    uv->dir[sizeof(uv->dir)-1] = '\0';
     uv->transport = transport;
     uv->transport->data = NULL;
     uv->tracer = &StderrTracer;
