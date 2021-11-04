@@ -119,7 +119,7 @@ SUITE(init)
 TEST(init, dirTooLong, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    struct raft_io io;
+    struct raft_io io = {0};
     int rv;
     rv = raft_uv_init(&io, &f->loop, LONG_DIR, &f->transport);
     munit_assert_int(rv, ==, RAFT_NAMETOOLONG);
