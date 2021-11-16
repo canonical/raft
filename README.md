@@ -43,10 +43,27 @@ It also includes a few optional enhancements:
 - Leadership transfer extension
 - Pre-vote protocol
 
+Install
+-------
+
+If you are on a Debian-based system, you can get the latest development release from
+dqlite's [dev PPA](https://launchpad.net/~dqlite/+archive/ubuntu/dev):
+
+```
+sudo add-apt-repository ppa:dqlite/dev
+sudo apt-get update
+sudo apt-get install libraft-dev
+```
+
 Building
 --------
 
+To build ``libraft`` from source you'll need:
+* A reasonably recent version of [libuv](https://libuv.org/) (v1.18.0 or beyond).
+* Optionally, but recommended, a reasonably recent version of [liblz4](https://lz4.github.io/lz4/) (v1.7.1 or beyond).
+
 ```bash
+sudo apt-get install libuv1-dev liblz4-dev
 autoreconf -i
 ./configure --enable-example
 make
