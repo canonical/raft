@@ -119,19 +119,11 @@ int electionStart(struct raft *r)
     assert(n_voters <= r->configuration.n);
     assert(voting_index < n_voters);
 
-    /* During pre-vote we don't actually increment term or persist vote, however
-     * we reset any vote that we previously granted since we have timed out and
-     * that vote is no longer valid. */
-    if (r->candidate_state.in_pre_vote && !r->candidate_state.disrupt_leader) {
-        /* Reset vote */
-        rv = r->io->set_vote(r->io, 0);
-        if (rv != 0) {
-            tracef("set_vote failed %d", rv);
-            goto err;
-        }
-        /* Update our cache too. */
-        r->voted_for = 0;
-    } else {
+    /* During pre-vote we don't increment our term, or reset our vote. Resetting
+     * our vote could lead to double-voting if we were to receive a RequestVote
+     * RPC during our Candidate state while we already voted for a server during
+     * the term. */
+    if (!r->candidate_state.in_pre_vote) {
         /* Increment current term */
         term = r->current_term + 1;
         rv = r->io->set_term(r->io, term);
@@ -210,12 +202,26 @@ int electionVote(struct raft *r,
 
     is_transferee =
         r->transfer != NULL && r->transfer->id == args->candidate_id;
-    if (r->voted_for != 0 && r->voted_for != args->candidate_id &&
+    if (!args->pre_vote && r->voted_for != 0 && r->voted_for != args->candidate_id &&
         !is_transferee) {
         tracef("local server already voted -> not granting vote");
         return 0;
     }
 
+    /* Raft Dissertation 9.6:
+     * > In the Pre-Vote algorithm, a candidate
+     * > only increments its term if it first learns from a majority of the
+     * > cluster that they would be willing
+     * > to grant the candidate their votes (if the candidate's log is
+     * > sufficiently up-to-date, and the voters
+     * > have not received heartbeats from a valid leader for at least a baseline
+     * > election timeout)
+     * Arriving here means that in a pre-vote phase, we will cast our vote
+     * if the candidate's log is sufficiently up-to-date, no matter what the
+     * candidate's term is. We have already checked if we currently have a leader
+     * upon reception of the RequestVote RPC, meaning the 2 conditions will be
+     * satisfied if the candidate's log is up-to-date.
+     * */
     local_last_index = logLastIndex(&r->log);
 
     /* Our log is definitely not more up-to-date if it's empty! */
