@@ -156,7 +156,7 @@ int convertToCandidate(struct raft *r, bool disrupt_leader)
         return RAFT_NOMEM;
     }
     r->candidate_state.disrupt_leader = disrupt_leader;
-    r->candidate_state.in_pre_vote = r->pre_vote;
+    r->candidate_state.in_pre_vote = disrupt_leader ? false : r->pre_vote;
 
     /* Fast-forward to leader if we're the only voting server in the
      * configuration. */
