@@ -27,10 +27,16 @@ static size_t sizeofRequestVote(void)
     return sizeofRequestVoteV1() + sizeof(uint64_t) /* Leadership transfer. */;
 }
 
-static size_t sizeofRequestVoteResult(void)
+static size_t sizeofRequestVoteResultV1(void)
 {
     return sizeof(uint64_t) + /* Term. */
            sizeof(uint64_t) /* Vote granted. */;
+}
+
+static size_t sizeofRequestVoteResult(void)
+{
+    return sizeofRequestVoteResultV1() +
+           sizeof(uint64_t) /* Flags. */;
 }
 
 static size_t sizeofAppendEntries(const struct raft_append_entries *p)
@@ -100,9 +106,15 @@ static void encodeRequestVoteResult(const struct raft_request_vote_result *p,
                                     void *buf)
 {
     void *cursor = buf;
+    uint64_t flags = 0;
+
+    if (p->pre_vote == raft_tribool_true) {
+        flags |= (1 << 0);
+    }
 
     bytePut64(&cursor, p->term);
     bytePut64(&cursor, p->vote_granted);
+    bytePut64(&cursor, flags);
 }
 
 static void encodeAppendEntries(const struct raft_append_entries *p, void *buf)
@@ -323,6 +335,14 @@ static void decodeRequestVoteResult(const uv_buf_t *buf,
 
     p->term = byteGet64(&cursor);
     p->vote_granted = byteGet64(&cursor);
+
+    /* Support legacy RequestVoteResultV1 */
+    p->pre_vote = raft_tribool_unknown;
+
+    if (buf->len > sizeofRequestVoteResultV1()) {
+        uint64_t flags = byteGet64(&cursor);
+        p->pre_vote = TO_RAFT_TRIBOOL(flags & (1 << 0));
+    }
 }
 
 int uvDecodeBatchHeader(const void *batch,

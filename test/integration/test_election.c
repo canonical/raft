@@ -706,3 +706,65 @@ TEST(election, preVoteWithcandidateCrash, setUp, tearDown, 0, cluster_3_params)
     ASSERT_LEADER(1);
     return MUNIT_OK;
 }
+
+/* Ensure delayed pre-vote responses are not counted towards the real election
+ * quorum. */
+TEST(election, preVoteNoStaleVotes, setUp, tearDown, 0, cluster_3_params)
+{
+    struct fixture *f = data;
+    raft_set_pre_vote(CLUSTER_RAFT(0), true);
+    raft_set_pre_vote(CLUSTER_RAFT(1), true);
+    raft_set_pre_vote(CLUSTER_RAFT(2), true);
+
+    /* Server 2 is 1 term ahead of the other servers, this will allow it to send stale
+     * pre-vote responses that pass the term checks. */
+    CLUSTER_SET_TERM(2, 2);
+    CLUSTER_START;
+
+    /* The first server eventually times out and converts to candidate, but it
+     * does not increment its term yet.*/
+    STEP_UNTIL_CANDIDATE(0);
+    ASSERT_TIME(1000);
+    ASSERT_TERM(0, 1);
+
+     /* Server 1 and 2 ticks */
+    CLUSTER_STEP_N(2);
+    ASSERT_FOLLOWER(1);
+    ASSERT_FOLLOWER(2);
+
+     /* Server 0 completes sending a pre-vote RequestVote RPCs */
+    CLUSTER_STEP_N(2);
+
+    CLUSTER_STEP; /* Server 1 receives the pre-vote RequestVote RPC */
+    ASSERT_TERM(1, 1); /* Server 1 does not increment its term */
+    ASSERT_VOTED_FOR(1, 0); /* Server 1 does not persist its vote */
+    ASSERT_TIME(1015);
+
+    CLUSTER_STEP; /* Server 2 receives the pre-vote RequestVote RPC */
+    ASSERT_TERM(2, 2); /* Server 2 does not increment its term */
+    ASSERT_VOTED_FOR(2, 0); /* Server 1 does not persist its vote */
+    ASSERT_TIME(1015);
+
+    /* Slow down responses of Server 2 */
+    CLUSTER_SET_NETWORK_LATENCY(2, 100);
+
+    /* Server 1 completes sending pre-vote RequestVote results */
+    CLUSTER_STEP_N(2);
+
+    /* Server 0 receives the pre-vote RequestVote results */
+    CLUSTER_STEP_N(2);
+    ASSERT_CANDIDATE(0);
+    ASSERT_TERM(0, 2); /* Server 0 has now incremented its term. */
+    ASSERT_TIME(1030);
+
+    /* Don't send messages from 0, this ensures no real RequestVote RPCs are sent */
+    CLUSTER_SATURATE(0, 1);
+    CLUSTER_SATURATE(0, 2);
+
+    /* Wait until all messages from 2 to 0 are delivered */
+    CLUSTER_STEP_UNTIL_DELIVERED(2, 0, 100);
+
+    /* Make sure we haven't counted the pre-vote result as a real vote */
+    ASSERT_CANDIDATE(0);
+    return MUNIT_OK;
+}

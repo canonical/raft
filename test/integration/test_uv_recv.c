@@ -310,6 +310,7 @@ TEST(recv, requestVoteResult, setUp, tearDown, 0, NULL)
     message.type = RAFT_IO_REQUEST_VOTE_RESULT;
     message.request_vote_result.term = 3;
     message.request_vote_result.vote_granted = true;
+    message.request_vote_result.pre_vote = raft_tribool_false;
     PEER_SEND(&message);
     RECV(&message);
     return MUNIT_OK;
