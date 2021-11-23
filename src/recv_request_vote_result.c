@@ -51,6 +51,12 @@ int recvRequestVoteResult(struct raft *r,
         }
     }
 
+    /* Converted to follower as a result of seeing a higher term. */
+    if (r->state != RAFT_CANDIDATE) {
+        tracef("no longer candidate -> ignore");
+        return 0;
+    }
+
     if (match < 0) {
         /* If the term in the result is older than ours, this is an old message
          * we should ignore, because the node who voted for us would have
@@ -83,9 +89,7 @@ int recvRequestVoteResult(struct raft *r,
             if (result->term > r->current_term + 1) {
                 assert(!result->vote_granted);
                 rv = recvBumpCurrentTerm(r, result->term);
-                if (rv != 0) {
-                    return rv;
-                }
+                return rv;
             }
         }
     } else {
