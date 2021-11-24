@@ -285,7 +285,7 @@ static int uvSnapshotLoadMeta(struct uv *uv,
     if (crc1 != crc2) {
         ErrMsgPrintf(errmsg, "read %s: checksum mismatch", info->filename);
         rv = RAFT_CORRUPT;
-        goto err_after_open;
+        goto err_after_buf_malloc;
     }
 
     configurationInit(&snapshot->configuration);
