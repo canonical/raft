@@ -23,6 +23,8 @@ statement from your version. This exception does not (and cannot) modify any
 license terms which apply to the Application, with which you must still
 comply.
 
+SPDX-License-Identifier: LGPL-3.0-only WITH LGPL-3.0-linking-exception
+
 
                    GNU LESSER GENERAL PUBLIC LICENSE
                        Version 3, 29 June 2007
