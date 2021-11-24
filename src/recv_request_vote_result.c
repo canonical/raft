@@ -24,7 +24,8 @@ int recvRequestVoteResult(struct raft *r,
     assert(r != NULL);
     assert(id > 0);
 
-    tracef("self:%llu from:%llu@%s term:%llu vote_granted:%d", r->id, id, address, result->term, result->vote_granted);
+    tracef("self:%llu from:%llu@%s term:%llu vote_granted:%d pre_vote:%d",
+    	    r->id, id, address, result->term, result->vote_granted, result->pre_vote);
     votes_index = configurationIndexOfVoter(&r->configuration, id);
     if (votes_index == r->configuration.n) {
         tracef("non-voting or unknown server -> reject");
@@ -50,11 +51,32 @@ int recvRequestVoteResult(struct raft *r,
         }
     }
 
+    /* Converted to follower as a result of seeing a higher term. */
+    if (r->state != RAFT_CANDIDATE) {
+        tracef("no longer candidate -> ignore");
+        return 0;
+    }
+
     if (match < 0) {
         /* If the term in the result is older than ours, this is an old message
          * we should ignore, because the node who voted for us would have
          * obtained our term.  This happens if the network is pretty choppy. */
         tracef("local term is higher -> ignore");
+        return 0;
+    }
+
+    /* Avoid counting pre-vote votes as regular votes. */
+    if (!r->candidate_state.in_pre_vote && result->pre_vote == raft_tribool_true) {
+        tracef("receive stale pre-vote response -> ignore");
+        return 0;
+    }
+
+    /* This can happen when a candidate wins a pre-vote, bumps its term,
+     * sends real RequestVote RPCs, crashes, comes online, starts a pre-vote
+     * and then receives the response to the RequestVote RPC it sent
+     * out before crashing. */
+    if (r->candidate_state.in_pre_vote && result->pre_vote == raft_tribool_false) {
+        tracef("receive vote response during pre-vote -> ignore");
         return 0;
     }
 
@@ -67,9 +89,7 @@ int recvRequestVoteResult(struct raft *r,
             if (result->term > r->current_term + 1) {
                 assert(!result->vote_granted);
                 rv = recvBumpCurrentTerm(r, result->term);
-                if (rv != 0) {
-                    return rv;
-                }
+                return rv;
             }
         }
     } else {

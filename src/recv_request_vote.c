@@ -29,11 +29,12 @@ int recvRequestVote(struct raft *r,
     assert(id > 0);
     assert(args != NULL);
 
-    tracef("self:%llu from:%llu@%s candidate_id:%llu disrupt_leader:%d last_log_index:%llu"
+    tracef("self:%llu from:%llu@%s candidate_id:%llu disrupt_leader:%d last_log_index:%llu "
            "last_log_term:%llu pre_vote:%d term:%llu",
            r->id, id, address, args->candidate_id, args->disrupt_leader, args->last_log_index,
            args->last_log_term, args->pre_vote, args->term);
     result->vote_granted = false;
+    result->pre_vote = TO_RAFT_TRIBOOL(args->pre_vote);
 
     /* Reject the request if we have a leader.
      *

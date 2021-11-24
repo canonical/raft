@@ -72,6 +72,16 @@ struct raft_buffer
 };
 
 /**
+ * A type for storing unknown bools.
+ */
+typedef enum {
+    raft_tribool_unknown,
+    raft_tribool_true,
+    raft_tribool_false,
+} raft_tribool;
+#define TO_RAFT_TRIBOOL(b)  ((b) ? raft_tribool_true : raft_tribool_false)
+
+/**
  * Server role codes.
  */
 
@@ -252,8 +262,9 @@ struct raft_request_vote
  */
 struct raft_request_vote_result
 {
-    raft_term term;    /* Receiver's current term (candidate updates itself). */
-    bool vote_granted; /* True means candidate received vote. */
+    raft_term term;        /* Receiver's current term (candidate updates itself). */
+    bool vote_granted;     /* True means candidate received vote. */
+    raft_tribool pre_vote; /* The response to a pre-vote RequestVote or not. */
 };
 
 /**
