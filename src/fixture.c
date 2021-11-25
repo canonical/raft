@@ -216,6 +216,14 @@ static void ioFlushAppend(struct io *s, struct append *append)
     struct raft_entry *entries;
     unsigned i;
 
+    if (ioFaultTick(s)) {
+        if (append->req->cb != NULL) {
+            append->req->cb(append->req, 1);
+        }
+        raft_free(append);
+        return;
+    }
+
     /* Allocate an array for the old entries plus the new ones. */
     entries = raft_realloc(s->entries, (s->n + append->n) * sizeof *s->entries);
     assert(entries != NULL);

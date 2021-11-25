@@ -569,6 +569,49 @@ TEST(replication, recvSkip, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
+/* A write on the follower fails, expect the follower to eventually catch up. */
+TEST(replication, recvSingleDiskWriteFailure, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    struct raft_apply req;
+    BOOTSTRAP_START_AND_ELECT;
+
+    /* Submit an entry */
+    CLUSTER_APPLY_ADD_X(0, &req, 1, NULL);
+
+    /* The leader replicates the entry to the follower */
+    CLUSTER_STEP;
+
+    /* Introduce a single disk failure */
+    CLUSTER_IO_FAULT(1, 1, 1);
+
+    CLUSTER_STEP_UNTIL_APPLIED(0, req.index, 2000);
+    return MUNIT_OK;
+}
+
+/* A write on the follower fails, expect the follower to eventually catch up. */
+TEST(replication, recvSingleDiskWriteFailureMultipleAppendEntries, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    struct raft_apply reqs[4] = {0};
+    BOOTSTRAP_START_AND_ELECT;
+
+    /* Submit an entry */
+    CLUSTER_APPLY_ADD_X(0, &reqs[0], 1, NULL);
+    CLUSTER_STEP_UNTIL_APPLIED(0, reqs[0].index, 2000);
+
+    /* Introduce a single disk failure */
+    CLUSTER_IO_FAULT(1, 3, 1);
+
+    /* Submit some more entries */
+    CLUSTER_APPLY_ADD_X(0, &reqs[1], 1, NULL);
+    CLUSTER_APPLY_ADD_X(0, &reqs[2], 1, NULL);
+    CLUSTER_APPLY_ADD_X(0, &reqs[3], 1, NULL);
+
+    CLUSTER_STEP_UNTIL_APPLIED(0, reqs[3].index, 2000);
+    return MUNIT_OK;
+}
+
 /* If the index and term of the last snapshot on the server match prevLogIndex
  * and prevLogTerm the request is accepted. */
 TEST(replication, recvMatch_last_snapshot, setUp, tearDown, 0, NULL)

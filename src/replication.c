@@ -905,6 +905,13 @@ respond:
 out:
     logRelease(&r->log, request->index, request->args.entries,
                request->args.n_entries);
+    if (status != 0) {
+        /* Reflect the failed disk write in the in-memory log because it's used
+         * to decide which entries to persist when receiving AppendEntries RPCs.
+         * Not truncating the log would lead to falsely assuming the in-memory
+         * log entry was persisted successfully. */
+        logTruncate(&r->log, request->index);
+    }
 
     raft_free(request);
 }
