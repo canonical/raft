@@ -411,4 +411,8 @@ void cluster_randomize_init(struct raft_fixture *f);
 void cluster_randomize(struct raft_fixture *f,
                        struct raft_fixture_event *event);
 
+/* Verify the size of the on-disk log */
+#define CLUSTER_ASSERT_LOG_SIZE(I, N) \
+    munit_assert_ulong(raft_fixture_io_log_size(&f->cluster, I), ==, N);
+
 #endif /* TEST_CLUSTER_H */

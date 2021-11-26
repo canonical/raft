@@ -1885,4 +1885,9 @@ unsigned raft_fixture_n_recv(struct raft_fixture *f, unsigned i, int type)
     return io->n_recv[type];
 }
 
+size_t raft_fixture_io_log_size(struct raft_fixture *f, unsigned i)
+{
+    struct io *io = f->servers[i].io.impl;
+    return io->n;
+}
 #undef tracef

@@ -431,4 +431,9 @@ RAFT_API unsigned raft_fixture_n_recv(struct raft_fixture *f,
                                       unsigned i,
                                       int type);
 
+/**
+ * Return the length of the on-disk log.
+ */
+RAFT_API size_t raft_fixture_io_log_size(struct raft_fixture *f, unsigned i);
+
 #endif /* RAFT_FIXTURE_H */

@@ -586,6 +586,9 @@ TEST(replication, recvSingleDiskWriteFailure, setUp, tearDown, 0, NULL)
     CLUSTER_IO_FAULT(1, 1, 1);
 
     CLUSTER_STEP_UNTIL_APPLIED(0, req.index, 2000);
+
+    CLUSTER_ASSERT_LOG_SIZE(0, 2);
+    CLUSTER_ASSERT_LOG_SIZE(1, 2);
     return MUNIT_OK;
 }
 
@@ -595,6 +598,9 @@ TEST(replication, recvSingleDiskWriteFailureMultipleAppendEntries, setUp, tearDo
     struct fixture *f = data;
     struct raft_apply reqs[4] = {0};
     BOOTSTRAP_START_AND_ELECT;
+
+    CLUSTER_ASSERT_LOG_SIZE(0, 1);
+    CLUSTER_ASSERT_LOG_SIZE(1, 1);
 
     /* Submit an entry */
     CLUSTER_APPLY_ADD_X(0, &reqs[0], 1, NULL);
@@ -609,6 +615,9 @@ TEST(replication, recvSingleDiskWriteFailureMultipleAppendEntries, setUp, tearDo
     CLUSTER_APPLY_ADD_X(0, &reqs[3], 1, NULL);
 
     CLUSTER_STEP_UNTIL_APPLIED(0, reqs[3].index, 2000);
+
+    CLUSTER_ASSERT_LOG_SIZE(0, 5);
+    CLUSTER_ASSERT_LOG_SIZE(1, 5);
     return MUNIT_OK;
 }
 

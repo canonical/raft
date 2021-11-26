@@ -853,11 +853,24 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
     }
 
     i = updateLastStored(r, request->index, args->entries, args->n_entries);
+    /* If none of the entries that we persisted are present anymore in our
+     * in-memory log, it must mean the log was truncated possibly by a
+     * previous failed write. Truncate the on-disk log to r->last_stored + 1. */
+    if (i == 0) {
+        raft_index trunc_idx = r->last_stored + 1;
+        tracef("truncate at %llu\n", trunc_idx);
+        rv = r->io->truncate(r->io, trunc_idx);
+        if (rv != 0) {
+            tracef("io->truncate failed at index %llu rv:%d\n", trunc_idx, rv);
+            ErrMsgWrapf(r->io->errmsg, "io->truncate failed at index %llu rv:%d", trunc_idx, rv);
+            convertToUnavailable(r);
+            return;
+        }
+        result.rejected = args->prev_log_index + 1;
+        goto respond;
+    }
 
-    /* If none of the entries that we persisted is present anymore in our
-     * in-memory log, there's nothing to report or to do. We just discard
-     * them. */
-    if (i == 0 || r->state != RAFT_FOLLOWER) {
+    if (r->state != RAFT_FOLLOWER) {
         goto out;
     }
 
