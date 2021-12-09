@@ -684,6 +684,11 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
     /* Fetch the response: will block until done. */
     n_events = UvOsIoGetevents(ctx, 1, 1, &event, NULL);
     assert(n_events == 1);
+    if (n_events != 1) {
+        /* UNTESTED */
+        UvOsErrMsg(errmsg, "UvOsIoGetevents", n_events);
+        return RAFT_IOERR;
+    }
 
     /* Release the write buffer. */
     raft_aligned_free(size, buf);
