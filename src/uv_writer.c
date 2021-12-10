@@ -107,7 +107,10 @@ static void uvWriterWorkCb(uv_work_t *work)
     /* Wait for the request to complete */
     n_events = UvOsIoGetevents(ctx, 1, 1, &event, NULL);
     assert(n_events == 1);
-    assert(rv == 0);
+    if (n_events != 1) {
+        /* UNTESTED */
+        rv = n_events >= 0 ? -1 : n_events;
+    }
 
 out_after_io_setup:
     if (w->n_events > 1) {
@@ -144,10 +147,12 @@ static void uvWriterPollCb(uv_poll_t *poller, int status, int events)
     int rv;
 
     assert(w->event_fd >= 0);
-
-    /* TODO: it's not clear when polling could fail. In this case we should
-     * probably mark all pending requests as failed. */
     assert(status == 0);
+    if (status != 0) {
+        /* UNTESTED libuv docs: If an error happens while polling, status will be < 0 and
+         * corresponds with one of the UV_E* error codes. */
+        goto fail_requests;
+    }
 
     assert(events & UV_READABLE);
 
@@ -170,6 +175,11 @@ static void uvWriterPollCb(uv_poll_t *poller, int status, int events)
      * should return immediately without blocking. */
     n_events = UvOsIoGetevents(w->ctx, 1, (long int)w->n_events, w->events, NULL);
     assert(n_events >= 1);
+    if (n_events < 1) {
+        /* UNTESTED */
+        status = n_events == 0 ? -1 : n_events;
+        goto fail_requests;
+    }
 
     for (i = 0; i < (unsigned)n_events; i++) {
         struct io_event *event = &w->events[i];
@@ -202,6 +212,18 @@ static void uvWriterPollCb(uv_poll_t *poller, int status, int events)
 #if defined(RWF_NOWAIT)
     finish:
 #endif /* RWF_NOWAIT */
+        uvWriterReqFinish(req);
+    }
+
+    return;
+
+fail_requests:
+    while (!QUEUE_IS_EMPTY(&w->poll_queue)) {
+        queue *head;
+        struct UvWriterReq *req;
+        head = QUEUE_HEAD(&w->poll_queue);
+        req = QUEUE_DATA(head, struct UvWriterReq, queue);
+        uvWriterReqSetStatus(req, status);
         uvWriterReqFinish(req);
     }
 }
