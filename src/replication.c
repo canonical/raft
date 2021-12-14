@@ -548,7 +548,13 @@ static int appendLeader(struct raft *r, raft_index index)
 
     /* We expect this function to be called only when there are actually
      * some entries to write. */
-    assert(n > 0);
+    if (n == 0) {
+        assert(false);
+        tracef("No log entries found at index %llu", index);
+        ErrMsgPrintf(r->errmsg, "No log entries found at index %llu", index);
+        rv = RAFT_SHUTDOWN;
+        goto err_after_entries_acquired;
+    }
 
     /* Allocate a new request. */
     request = raft_malloc(sizeof *request);
@@ -1133,6 +1139,12 @@ int replicationAppend(struct raft *r,
     }
 
     assert(request->args.n_entries == n);
+    if (request->args.n_entries == 0) {
+        tracef("No log entries found at index %llu", request->index);
+        ErrMsgPrintf(r->errmsg, "No log entries found at index %llu", request->index);
+        rv = RAFT_SHUTDOWN;
+        goto err_after_acquire_entries;
+    }
 
     request->req.data = request;
     rv = r->io->append(r->io, &request->req, request->args.entries,
