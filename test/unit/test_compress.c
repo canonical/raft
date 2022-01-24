@@ -108,8 +108,8 @@ TEST(Compress, compressDecompressRandomOne, NULL, NULL, 0,
 }
 
 static char* len_nonrandom_one_params[] = {
-#ifdef __arm__
-/*    4KB     64KB     4MB        1GB           INT_MAX (larger alocations fail on arm 32-bit */
+#if !defined(__LP64__) && (defined(__arm__) || defined(__i386__) || defined(__mips__))
+/*    4KB     64KB     4MB        1GB           INT_MAX (larger allocations fail on 32-bit archs */
       "4096", "65536", "4194304", "1073741824", "2147483647",
 #else
 /*    4KB     64KB     4MB        1GB           2GB + 200MB */
