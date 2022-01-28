@@ -52,12 +52,12 @@ static struct raft_heap defaultHeap = {
 
 static struct raft_heap *currentHeap = &defaultHeap;
 
-void *HeapMalloc(size_t size)
+void *RaftHeapMalloc(size_t size)
 {
     return currentHeap->malloc(currentHeap->data, size);
 }
 
-void HeapFree(void *ptr)
+void RaftHeapFree(void *ptr)
 {
     if (ptr == NULL) {
         return;
@@ -65,34 +65,34 @@ void HeapFree(void *ptr)
     currentHeap->free(currentHeap->data, ptr);
 }
 
-void *HeapCalloc(size_t nmemb, size_t size)
+void *RaftHeapCalloc(size_t nmemb, size_t size)
 {
     return currentHeap->calloc(currentHeap->data, nmemb, size);
 }
 
-void *HeapRealloc(void *ptr, size_t size)
+void *RaftHeapRealloc(void *ptr, size_t size)
 {
     return currentHeap->realloc(currentHeap->data, ptr, size);
 }
 
 void *raft_malloc(size_t size)
 {
-    return HeapMalloc(size);
+    return RaftHeapMalloc(size);
 }
 
 void raft_free(void *ptr)
 {
-    HeapFree(ptr);
+    RaftHeapFree(ptr);
 }
 
 void *raft_calloc(size_t nmemb, size_t size)
 {
-    return HeapCalloc(nmemb, size);
+    return RaftHeapCalloc(nmemb, size);
 }
 
 void *raft_realloc(void *ptr, size_t size)
 {
-    return HeapRealloc(ptr, size);
+    return RaftHeapRealloc(ptr, size);
 }
 
 void *raft_aligned_alloc(size_t alignment, size_t size)
