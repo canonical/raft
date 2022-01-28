@@ -271,7 +271,7 @@ int UvWriterInit(struct UvWriter *w,
     }
 
     /* Initialize the array of re-usable event objects. */
-    w->events = HeapCalloc(w->n_events, sizeof *w->events);
+    w->events = RaftHeapCalloc(w->n_events, sizeof *w->events);
     if (w->events == NULL) {
         /* UNTESTED: todo */
         ErrMsgOom(errmsg);
@@ -324,7 +324,7 @@ int UvWriterInit(struct UvWriter *w,
 err_after_event_fd:
     UvOsClose(w->event_fd);
 err_after_events_alloc:
-    HeapFree(w->events);
+    RaftHeapFree(w->events);
 err_after_io_setup:
     UvOsIoDestroy(w->ctx);
 err:
@@ -337,7 +337,7 @@ static void uvWriterCleanUpAndFireCloseCb(struct UvWriter *w)
     assert(w->closing);
 
     UvOsClose(w->fd);
-    HeapFree(w->events);
+    RaftHeapFree(w->events);
     UvOsIoDestroy(w->ctx);
 
     if (w->close_cb != NULL) {

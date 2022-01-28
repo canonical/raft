@@ -208,9 +208,9 @@ int recvUpdateLeader(struct raft *r, const raft_id id, const char *address)
     }
 
     if (r->follower_state.current_leader.address != NULL) {
-        HeapFree(r->follower_state.current_leader.address);
+        RaftHeapFree(r->follower_state.current_leader.address);
     }
-    r->follower_state.current_leader.address = HeapMalloc(strlen(address) + 1);
+    r->follower_state.current_leader.address = RaftHeapMalloc(strlen(address) + 1);
     if (r->follower_state.current_leader.address == NULL) {
         return RAFT_NOMEM;
     }

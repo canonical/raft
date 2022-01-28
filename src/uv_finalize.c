@@ -83,7 +83,7 @@ static void uvFinalizeAfterWorkCb(uv_work_t *work, int status)
     if (segment->status != 0) {
         uv->errored = true;
     }
-    HeapFree(segment);
+    RaftHeapFree(segment);
 
     /* If we have no more dismissed segments to close, check if there's a
      * barrier to unblock or if we are done closing. */
@@ -102,7 +102,7 @@ static void uvFinalizeAfterWorkCb(uv_work_t *work, int status)
 
     rv = uvFinalizeStart(segment);
     if (rv != 0) {
-        HeapFree(segment);
+        RaftHeapFree(segment);
         uv->errored = true;
     }
 }
@@ -143,7 +143,7 @@ int UvFinalize(struct uv *uv,
         assert(last_index >= first_index);
     }
 
-    segment = HeapMalloc(sizeof *segment);
+    segment = RaftHeapMalloc(sizeof *segment);
     if (segment == NULL) {
         return RAFT_NOMEM;
     }
@@ -163,7 +163,7 @@ int UvFinalize(struct uv *uv,
 
     rv = uvFinalizeStart(segment);
     if (rv != 0) {
-        HeapFree(segment);
+        RaftHeapFree(segment);
         return rv;
     }
 

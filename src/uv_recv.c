@@ -63,7 +63,7 @@ static int uvServerInit(struct uvServer *s,
 {
     s->uv = uv;
     s->id = id;
-    s->address = HeapMalloc(strlen(address) + 1);
+    s->address = RaftHeapMalloc(strlen(address) + 1);
     if (s->address == NULL) {
         return RAFT_NOMEM;
     }
@@ -89,10 +89,10 @@ static void uvServerDestroy(struct uvServer *s)
 
     if (s->header.base != NULL) {
         /* This means we were interrupted while reading the header. */
-        HeapFree(s->header.base);
+        RaftHeapFree(s->header.base);
         switch (s->message.type) {
             case RAFT_IO_APPEND_ENTRIES:
-                HeapFree(s->message.append_entries.entries);
+                RaftHeapFree(s->message.append_entries.entries);
                 break;
             case RAFT_IO_INSTALL_SNAPSHOT:
                 configurationClose(&s->message.install_snapshot.conf);
@@ -101,10 +101,10 @@ static void uvServerDestroy(struct uvServer *s)
     }
     if (s->payload.base != NULL) {
         /* This means we were interrupted while reading the payload. */
-        HeapFree(s->payload.base);
+        RaftHeapFree(s->payload.base);
     }
-    HeapFree(s->address);
-    HeapFree(s->stream);
+    RaftHeapFree(s->address);
+    RaftHeapFree(s->stream);
 }
 
 /* Invoked to initialize the read buffer for the next asynchronous read on the
@@ -137,7 +137,7 @@ static void uvServerAllocCb(uv_handle_t *handle,
         if (s->payload.len == 0) {
             assert(s->header.len > 0);
             assert(s->header.base == NULL);
-            s->header.base = HeapMalloc(s->header.len);
+            s->header.base = RaftHeapMalloc(s->header.len);
             if (s->header.base == NULL) {
                 /* Setting all buffer fields to 0 will make read_cb fail with
                  * ENOBUFS. */
@@ -150,7 +150,7 @@ static void uvServerAllocCb(uv_handle_t *handle,
 
         /* If we get here we should be expecting the payload. */
         assert(s->payload.len > 0);
-        s->payload.base = HeapMalloc(s->payload.len);
+        s->payload.base = RaftHeapMalloc(s->payload.len);
         if (s->payload.base == NULL) {
             /* Setting all buffer fields to 0 will make read_cb fail with
              * ENOBUFS. */
@@ -172,7 +172,7 @@ static void uvServerStreamCloseCb(uv_handle_t *handle)
     struct uvServer *s = handle->data;
     struct uv *uv = s->uv;
     uvServerDestroy(s);
-    HeapFree(s);
+    RaftHeapFree(s);
     uvMaybeFireCloseCb(uv);
 }
 
@@ -340,7 +340,7 @@ static int uvAddServer(struct uv *uv,
     int rv;
 
     /* Initialize the new connection */
-    server = HeapMalloc(sizeof *server);
+    server = RaftHeapMalloc(sizeof *server);
     if (server == NULL) {
         rv = RAFT_NOMEM;
         goto err;
@@ -379,7 +379,7 @@ static void uvRecvAcceptCb(struct raft_uv_transport *transport,
     rv = uvAddServer(uv, id, address, stream);
     if (rv != 0) {
         tracef("add server: %s", errCodeToString(rv));
-        uv_close((struct uv_handle_s *)stream, (uv_close_cb)HeapFree);
+        uv_close((struct uv_handle_s *)stream, (uv_close_cb)RaftHeapFree);
     }
 }
 
