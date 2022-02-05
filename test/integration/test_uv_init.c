@@ -3,6 +3,9 @@
 #include "../lib/runner.h"
 #include "../lib/uv.h"
 
+#include <linux/magic.h>
+#include <sys/vfs.h>
+
 /******************************************************************************
  *
  * Fixture with a non-initialized raft_io instance and uv dependencies.
@@ -144,10 +147,14 @@ static MunitParameterEnum oomParams[] = {
 TEST(init, oom, setUp, tearDown, 0, oomParams)
 {
     struct fixture *f = data;
-#if defined(__i686__)
     /* XXX: tmpfs seems to not support O_DIRECT */
-    return MUNIT_SKIP;
-#endif
+    struct statfs info;
+    int rv;
+    rv = statfs(f->dir, &info);
+    munit_assert_int(rv, ==, 0);
+    if (info.f_type == TMPFS_MAGIC) {
+        return MUNIT_SKIP;
+    }
 #if defined(__powerpc64__)
     /* XXX: fails on ppc64el */
     return MUNIT_SKIP;
