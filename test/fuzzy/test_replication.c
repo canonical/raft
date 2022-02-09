@@ -60,7 +60,7 @@ TEST(replication, appendEntries, setup, tear_down, 0, _params)
     struct raft_apply *req = munit_malloc(sizeof *req);
     (void)params;
     APPLY_ADD_ONE(req);
-    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_N, 2, 2000);
+    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_N, 3, 2000);
     free(req);
     return MUNIT_OK;
 }
@@ -76,14 +76,15 @@ TEST(replication, availability, setup, tear_down, 0, _params)
     (void)params;
 
     APPLY_ADD_ONE(req1);
-    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_N, 2, 2000);
+    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_N, 3, 2000);
 
     CLUSTER_KILL_LEADER;
     CLUSTER_STEP_UNTIL_HAS_NO_LEADER(10000);
     CLUSTER_STEP_UNTIL_HAS_LEADER(10000);
 
     APPLY_ADD_ONE(req2);
-    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_LEADER, 3, 2000);
+    /* Index 3 -> 5 = APPLY entry + BARRIER entry after becoming leader */
+    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_LEADER, 5, 2000);
 
     free(req1);
     free(req2);

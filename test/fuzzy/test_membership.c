@@ -53,12 +53,12 @@ TEST(membership, addNonVoting, setup, tear_down, 0, _params)
     struct raft *raft;
 
     CLUSTER_ADD(&f->req);
-    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_LEADER, 2, 2000);
+    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_LEADER, 3, 2000);
 
     /* Then promote it. */
     CLUSTER_ASSIGN(&f->req, RAFT_STANDBY);
 
-    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_N, 3, 2000);
+    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_N, 4, 2000);
 
     raft = CLUSTER_RAFT(CLUSTER_LEADER);
 
@@ -77,12 +77,12 @@ TEST(membership, addVoting, setup, tear_down, 0, _params)
     (void)params;
 
     CLUSTER_ADD(&f->req);
-    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_LEADER, 2, 2000);
+    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_LEADER, 3, 2000);
 
     /* Then promote it. */
     CLUSTER_ASSIGN(&f->req, RAFT_VOTER);
 
-    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_N, 3, 2000);
+    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_N, 4, 2000);
 
     raft = CLUSTER_RAFT(CLUSTER_LEADER);
 
@@ -105,7 +105,7 @@ TEST(membership, removeVoting, setup, tear_down, 0, _params)
     rv = raft_remove(raft, &f->req, CLUSTER_LEADER % CLUSTER_N + 1, NULL);
     munit_assert_int(rv, ==, 0);
 
-    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_LEADER, 2, 2000);
+    CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_LEADER, 3, 2000);
 
     munit_assert_int(raft->configuration.n, ==, CLUSTER_N - 1);
 

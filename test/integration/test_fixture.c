@@ -280,7 +280,7 @@ TEST(raft_fixture_step_until_applied, one, setUp, tearDown, 0, NULL)
     struct raft_apply *req = munit_malloc(sizeof *req);
     ELECT(0);
     APPLY(0, req);
-    STEP_UNTIL_APPLIED(2);
+    STEP_UNTIL_APPLIED(3);
     ASSERT_FSM_X(0, 1);
     ASSERT_FSM_X(1, 1);
     ASSERT_FSM_X(2, 1);
@@ -297,7 +297,7 @@ TEST(raft_fixture_step_until_applied, two, setUp, tearDown, 0, NULL)
     ELECT(0);
     APPLY(0, req1);
     APPLY(0, req2);
-    STEP_UNTIL_APPLIED(3);
+    STEP_UNTIL_APPLIED(4);
     ASSERT_FSM_X(0, 2);
     ASSERT_FSM_X(1, 2);
     ASSERT_FSM_X(2, 2);

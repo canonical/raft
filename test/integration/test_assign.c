@@ -211,7 +211,7 @@ TEST(raft_assign, promoteCatchUp, setUp, tearDown, 0, NULL)
 
     /* Advance the match index of server 3, by acknowledging the AppendEntries
      * request that the leader has sent to it. */
-    CLUSTER_STEP_UNTIL_APPLIED(2, 2, 2000);
+    CLUSTER_STEP_UNTIL_APPLIED(2, 3, 2000);
 
     /* Disconnect the second server, so it doesn't participate in the quorum */
     CLUSTER_SATURATE_BOTHWAYS(0, 1);
@@ -221,16 +221,16 @@ TEST(raft_assign, promoteCatchUp, setUp, tearDown, 0, NULL)
 
     /* The leader has submitted a configuration change request, but it's
      * uncommitted. */
-    ASSERT_CONFIGURATION_INDEXES(0, 3, 4);
+    ASSERT_CONFIGURATION_INDEXES(0, 4, 5);
 
     /* The third server notifies that it has appended the new
      * configuration. Since it's considered voting already, it counts for the
      * majority and the entry gets committed. */
-    CLUSTER_STEP_UNTIL_APPLIED(0, 4, 2000);
-    CLUSTER_STEP_UNTIL_APPLIED(2, 4, 2000);
+    CLUSTER_STEP_UNTIL_APPLIED(0, 5, 2000);
+    CLUSTER_STEP_UNTIL_APPLIED(2, 5, 2000);
 
     /* The promotion is completed. */
-    ASSERT_CONFIGURATION_INDEXES(0, 4, 0);
+    ASSERT_CONFIGURATION_INDEXES(0, 5, 0);
 
     return MUNIT_OK;
 }
@@ -276,7 +276,7 @@ TEST(raft_assign, promoteNewRound, setUp, tearDown, 0, NULL)
 
     /* The promotion is eventually completed. */
     CLUSTER_STEP_UNTIL_APPLIED(0, req->index + 1, 5000);
-    ASSERT_CONFIGURATION_INDEXES(0, 5, 0);
+    ASSERT_CONFIGURATION_INDEXES(0, 6, 0);
 
     free(req);
 
@@ -300,11 +300,11 @@ TEST(raft_assign, changeIsImmediate, setUp, tearDown, 0, NULL)
     GROW;
     CLUSTER_MAKE_PROGRESS;
     ADD(0, 3);
-    CLUSTER_STEP_UNTIL_APPLIED(1, 3, 2000);
+    CLUSTER_STEP_UNTIL_APPLIED(1, 4, 2000);
 
     ASSIGN_SUBMIT(0, 3, RAFT_VOTER);
     CLUSTER_STEP_UNTIL(secondServerHasNewConfiguration, NULL, 3000);
-    ASSERT_CONFIGURATION_INDEXES(1, 3, 4);
+    ASSERT_CONFIGURATION_INDEXES(1, 4, 5);
 
     ASSIGN_WAIT;
 

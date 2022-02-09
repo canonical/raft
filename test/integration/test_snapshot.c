@@ -263,7 +263,7 @@ TEST(snapshot, installOneDisconnectedDuringOperationReconnects, setUp, tearDown,
     CLUSTER_MAKE_PROGRESS;
 
     /* Wait for follower to catch up*/
-    CLUSTER_STEP_UNTIL_APPLIED(2, 4, 5000);
+    CLUSTER_STEP_UNTIL_APPLIED(2, 5, 5000);
     /* Assert that the leader hasn't sent an InstallSnapshot RPC  */
     munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_INSTALL_SNAPSHOT), ==, 0);
 
@@ -284,7 +284,7 @@ TEST(snapshot, installOneDisconnectedDuringOperationReconnects, setUp, tearDown,
 
     CLUSTER_RECONNECT(0, 2);
     CLUSTER_RECONNECT(2, 0);
-    CLUSTER_STEP_UNTIL_APPLIED(2, 7, 5000);
+    CLUSTER_STEP_UNTIL_APPLIED(2, 8, 5000);
 
     /* Assert that the leader has tried sending an InstallSnapshot RPC */
     munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_INSTALL_SNAPSHOT), ==, 1);
