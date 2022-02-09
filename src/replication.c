@@ -1354,6 +1354,9 @@ static int applyCommand(struct raft *r,
     if (rv != 0) {
         return rv;
     }
+
+    r->last_applied = index;
+
     req = (struct raft_apply *)getRequest(r, index, RAFT_COMMAND);
     if (req != NULL && req->cb != NULL) {
         req->cb(req, 0, result);
@@ -1364,6 +1367,8 @@ static int applyCommand(struct raft *r,
 /* Fire the callback of a barrier request whose entry has been committed. */
 static void applyBarrier(struct raft *r, const raft_index index)
 {
+    r->last_applied = index;
+
     struct raft_barrier *req;
     req = (struct raft_barrier *)getRequest(r, index, RAFT_BARRIER);
     if (req != NULL && req->cb != NULL) {
@@ -1387,6 +1392,7 @@ static void applyChange(struct raft *r, const raft_index index)
     }
 
     r->configuration_index = index;
+    r->last_applied = index;
 
     if (r->state == RAFT_LEADER) {
         const struct raft_server *server;
@@ -1619,8 +1625,6 @@ int replicationApply(struct raft *r)
         if (rv != 0) {
             break;
         }
-
-        r->last_applied = index;
     }
 
     if (shouldTakeSnapshot(r)) {
