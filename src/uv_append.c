@@ -326,9 +326,9 @@ start:
         return 0;
     }
 
-    /* If there's a barrier in progress, and it's not waiting for this segment
+    /* If there's a blocking barrier in progress, and it's not waiting for this segment
      * to be finalized, let's wait. */
-    if (uv->barrier != NULL && segment->barrier != uv->barrier) {
+    if (uv->barrier != NULL && segment->barrier != uv->barrier && uv->barrier->blocking) {
         return 0;
     }
 
@@ -773,7 +773,6 @@ int UvBarrier(struct uv *uv,
 
 void UvUnblock(struct uv *uv)
 {
-    assert(uv->barrier != NULL);
     uv->barrier = NULL;
     if (uv->closing) {
         uvMaybeFireCloseCb(uv);

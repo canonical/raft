@@ -323,6 +323,7 @@ typedef void (*UvBarrierCb)(struct UvBarrier *req);
 struct UvBarrier
 {
     void *data;     /* User data */
+    bool blocking;  /* Whether this barrier should block future writes */
     UvBarrierCb cb; /* Completion callback */
 };
 
@@ -335,7 +336,7 @@ struct UvBarrier
  *   that will be appended will have the new index.
  *
  * - Execution of new writes for subsequent append requests will be blocked
- *   until UvUnblock is called.
+ *   until UvUnblock is called when the barrier is blocking.
  *
  * - Wait for all currently pending and inflight append requests against all
  *   open segments to complete, and for those open segments to be finalized,
