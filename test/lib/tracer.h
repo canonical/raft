@@ -6,7 +6,7 @@
 #include "../../include/raft.h"
 
 #define FIXTURE_TRACER struct raft_tracer tracer
-#define SET_UP_TRACER f->tracer.emit = TracerEmit
+#define SET_UP_TRACER f->tracer.emit = TracerEmit; f->tracer.enabled = true
 #define TEAR_DOWN_TRACER
 
 void TracerEmit(struct raft_tracer *t,
