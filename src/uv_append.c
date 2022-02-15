@@ -270,11 +270,11 @@ out:
         if (rv != 0) {
             uv->errored = true;
         }
-    } else if (s->finalize) {
-        /* If there are no more append_pending_reqs, this segment
-         * must be finalized here in case we don't receive AppendEntries
-         * RPCs anymore (could happen during a Snapshot install, causing
-         * the BarrierCb to never fire) */
+    } else if (s->finalize && (s->pending_last_index == s->last_index)) {
+        /* If there are no more append_pending_reqs or write requests in flight,
+         * this segment must be finalized here in case we don't receive
+         * AppendEntries RPCs anymore (could happen during a Snapshot install,
+         * causing the BarrierCb to never fire) */
         uvAliveSegmentFinalize(s);
     }
 }
