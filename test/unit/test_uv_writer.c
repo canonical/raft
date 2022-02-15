@@ -194,7 +194,8 @@ static void *setUpDeps(const MunitParameter params[], void *user_data)
     rv = UvFsProbeCapabilities(f->dir, &f->direct_io, &f->async_io, errmsg);
     munit_assert_int(rv, ==, 0);
     f->block_size = f->direct_io != 0 ? f->direct_io : 4096;
-    UvOsJoin(f->dir, "foo", path);
+    rv = UvOsJoin(f->dir, "foo", path);
+    munit_assert_int(rv, ==, 0);
     rv = UvOsOpen(path, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR, &f->fd);
     munit_assert_int(rv, ==, 0);
     rv = UvOsFallocate(f->fd, 0, f->block_size * N_BLOCKS);

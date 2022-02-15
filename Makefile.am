@@ -175,6 +175,7 @@ test_unit_uv_SOURCES = \
   src/uv_writer.c \
   test/unit/main_uv.c \
   test/unit/test_uv_fs.c \
+  test/unit/test_uv_os.c \
   test/unit/test_uv_writer.c
 test_unit_uv_LDFLAGS = $(UV_LIBS)
 test_unit_uv_CFLAGS = $(AM_CFLAGS) -Wno-conversion

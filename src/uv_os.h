@@ -102,7 +102,7 @@ int UvOsUnlink(const char *path);
 int UvOsRename(const char *path1, const char *path2);
 
 /* Join dir and filename into a full OS path. */
-void UvOsJoin(const char *dir, const char *filename, char *path);
+int UvOsJoin(const char *dir, const char *filename, char *path);
 
 /* TODO: figure a portable abstraction. */
 int UvOsIoSetup(unsigned nr, aio_context_t *ctxp);

@@ -78,7 +78,10 @@ int UvFsFileExists(const char *dir,
     char path[UV__PATH_SZ];
     int rv;
 
-    UvOsJoin(dir, filename, path);
+    rv = UvOsJoin(dir, filename, path);
+    if (rv != 0) {
+        return RAFT_INVALID;
+    }
 
     rv = UvOsStat(path, &sb);
     if (rv != 0) {
@@ -106,7 +109,10 @@ int UvFsFileSize(const char *dir,
     char path[UV__PATH_SZ];
     int rv;
 
-    UvOsJoin(dir, filename, path);
+    rv = UvOsJoin(dir, filename, path);
+    if (rv != 0) {
+        return RAFT_INVALID;
+    }
 
     rv = UvOsStat(path, &sb);
     if (rv != 0) {
@@ -144,7 +150,10 @@ static int uvFsOpenFile(const char *dir,
 {
     char path[UV__PATH_SZ];
     int rv;
-    UvOsJoin(dir, filename, path);
+    rv = UvOsJoin(dir, filename, path);
+    if (rv != 0) {
+        return RAFT_INVALID;
+    }
     rv = UvOsOpen(path, flags, mode, fd);
     if (rv != 0) {
         UvOsErrMsg(errmsg, "open", rv);
@@ -160,8 +169,12 @@ int UvFsOpenFileForReading(const char *dir,
 {
     char path[UV__PATH_SZ];
     int flags = O_RDONLY;
+    int rv;
 
-    UvOsJoin(dir, filename, path);
+    rv = UvOsJoin(dir, filename, path);
+    if (rv != 0) {
+        return RAFT_INVALID;
+    }
 
     return uvFsOpenFile(dir, filename, flags, 0, fd, errmsg);
 }
@@ -176,7 +189,10 @@ int UvFsAllocateFile(const char *dir,
     int flags = O_WRONLY | O_CREAT | O_EXCL; /* Common open flags */
     int rv = 0;
 
-    UvOsJoin(dir, filename, path);
+    rv = UvOsJoin(dir, filename, path);
+    if (rv != 0) {
+        return RAFT_INVALID;
+    }
 
     /* TODO: use RWF_DSYNC instead, if available. */
     flags |= O_DSYNC;
@@ -297,8 +313,14 @@ int UvFsMakeFile(const char *dir,
     /* Rename the temp file. Remark that there is a race between the existence
      * check and the rename, there is no `renameat2` equivalent in libuv.
      * However, in the current implementation this should pose no problems.*/
-    UvOsJoin(dir, tmp_filename, tmp_path);
-    UvOsJoin(dir, filename, path);
+    rv = UvOsJoin(dir, tmp_filename, tmp_path);
+    if (rv != 0) {
+        return RAFT_INVALID;
+    }
+    rv = UvOsJoin(dir, filename, path);
+    if (rv != 0) {
+        return RAFT_INVALID;
+    }
     rv = UvOsRename(tmp_path, path);
     if (rv != 0) {
         UvOsErrMsg(errmsg, "rename", rv);
@@ -331,7 +353,10 @@ int UvFsMakeOrOverwriteFile(const char *dir,
     uv_file fd;
     int rv;
 
-    UvOsJoin(dir, filename, path);
+    rv = UvOsJoin(dir, filename, path);
+    if (rv != 0) {
+        return RAFT_INVALID;
+    }
 
 open:
     rv = UvOsOpen(path, flags, mode, &fd);
@@ -418,7 +443,10 @@ int UvFsReadFile(const char *dir,
     uv_file fd;
     int rv;
 
-    UvOsJoin(dir, filename, path);
+    rv = UvOsJoin(dir, filename, path);
+    if (rv != 0) {
+        return RAFT_INVALID;
+    }
 
     rv = UvOsStat(path, &sb);
     if (rv != 0) {
@@ -466,7 +494,10 @@ int UvFsReadFileInto(const char *dir,
     uv_file fd;
     int rv;
 
-    UvOsJoin(dir, filename, path);
+    rv = UvOsJoin(dir, filename, path);
+    if (rv != 0) {
+        return RAFT_INVALID;
+    }
 
     rv = uvFsOpenFile(dir, filename, O_RDONLY, 0, &fd, errmsg);
     if (rv != 0) {
@@ -492,7 +523,10 @@ int UvFsRemoveFile(const char *dir, const char *filename, char *errmsg)
 {
     char path[UV__PATH_SZ];
     int rv;
-    UvOsJoin(dir, filename, path);
+    rv = UvOsJoin(dir, filename, path);
+    if (rv != 0) {
+        return RAFT_INVALID;
+    }
     rv = UvOsUnlink(path);
     if (rv != 0) {
         UvOsErrMsg(errmsg, "unlink", rv);
@@ -512,8 +546,14 @@ int UvFsTruncateAndRenameFile(const char *dir,
     uv_file fd;
     int rv;
 
-    UvOsJoin(dir, filename1, path1);
-    UvOsJoin(dir, filename2, path2);
+    rv = UvOsJoin(dir, filename1, path1);
+    if (rv != 0) {
+        return RAFT_INVALID;
+    }
+    rv = UvOsJoin(dir, filename2, path2);
+    if (rv != 0) {
+        return RAFT_INVALID;
+    }
 
     /* Truncate and rename. */
     rv = UvOsOpen(path1, UV_FS_O_RDWR, 0, &fd);
