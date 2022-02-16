@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <libgen.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/eventfd.h>
@@ -142,13 +143,15 @@ int UvOsRename(const char *path1, const char *path2)
     return uv_fs_rename(NULL, &req, path1, path2, NULL);
 }
 
-void UvOsJoin(const char *dir, const char *filename, char *path)
+int UvOsJoin(const char *dir, const char *filename, char *path)
 {
-    assert(UV__DIR_HAS_VALID_LEN(dir));
-    assert(UV__FILENAME_HAS_VALID_LEN(filename));
+    if (!UV__DIR_HAS_VALID_LEN(dir) || !UV__FILENAME_HAS_VALID_LEN(filename)) {
+        return -1;
+    }
     strcpy(path, dir);
     strcat(path, "/");
     strcat(path, filename);
+    return 0;
 }
 
 int UvOsIoSetup(unsigned nr, aio_context_t *ctxp)
