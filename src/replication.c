@@ -531,7 +531,7 @@ out:
 /* Submit a disk write for all entries from the given index onward. */
 static int appendLeader(struct raft *r, raft_index index)
 {
-    struct raft_entry *entries;
+    struct raft_entry *entries = NULL;
     unsigned n;
     struct appendLeader *request;
     int rv;
