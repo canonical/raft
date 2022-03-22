@@ -150,6 +150,7 @@ libraft_la_SOURCES += \
   src/uv_tcp_listen.c \
   src/uv_tcp_connect.c \
   src/uv_truncate.c \
+  src/uv_work.c \
   src/uv_writer.c
 libraft_la_LDFLAGS += $(UV_LIBS)
 
@@ -198,7 +199,8 @@ test_integration_uv_SOURCES = \
   test/integration/test_uv_tcp_connect.c \
   test/integration/test_uv_tcp_listen.c \
   test/integration/test_uv_snapshot_put.c \
-  test/integration/test_uv_truncate.c
+  test/integration/test_uv_truncate.c \
+  test/integration/test_uv_work.c
 test_integration_uv_CFLAGS = $(AM_CFLAGS) -Wno-type-limits -Wno-conversion
 test_integration_uv_LDFLAGS = -no-install $(UV_LIBS)
 test_integration_uv_LDADD = libtest.la

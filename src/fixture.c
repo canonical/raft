@@ -21,6 +21,7 @@
 #define ELECTION_TIMEOUT 1000
 #define NETWORK_LATENCY 15
 #define DISK_LATENCY 10
+#define WORK_DURATION 200
 
 /* To keep in sync with raft.h */
 #define N_MESSAGE_TYPES 6
@@ -36,7 +37,7 @@
     queue queue                /* Link the I/O pending requests queue. */
 
 /* Request type codes. */
-enum { APPEND = 1, SEND, TRANSMIT, SNAPSHOT_PUT, SNAPSHOT_GET };
+enum { APPEND = 1, SEND, TRANSMIT, SNAPSHOT_PUT, SNAPSHOT_GET, ASYNC_WORK };
 
 /* Abstract base type for an asynchronous request submitted to the stub I/o
  * implementation. */
@@ -70,6 +71,13 @@ struct snapshot_put
     unsigned trailing;
     struct raft_io_snapshot_put *req;
     const struct raft_snapshot *snapshot;
+};
+
+/* Pending request to perform general work. */
+struct async_work
+{
+    REQUEST;
+    struct raft_io_async_work *req;
 };
 
 /* Pending request to load a snapshot. */
@@ -131,6 +139,7 @@ struct io
     unsigned randomized_election_timeout; /* Value returned by io->random() */
     unsigned network_latency;             /* Milliseconds to deliver RPCs */
     unsigned disk_latency;                /* Milliseconds to perform disk I/O */
+    unsigned work_duration;               /* Milliseconds to long running work */
 
     struct
     {
@@ -277,6 +286,16 @@ static void ioFlushSnapshotGet(struct io *s, struct snapshot_get *r)
     raft_free(r);
 }
 
+/* Flush an async work request */
+static void ioFlushAsyncWork(struct io *s, struct async_work *r)
+{
+    (void) s;
+    int rv;
+    rv = r->req->work(r->req);
+    r->req->cb(r->req, rv);
+    raft_free(r);
+}
+
 /* Search for the peer with the given ID. */
 static struct peer *ioGetPeer(struct io *io, raft_id id)
 {
@@ -409,6 +428,9 @@ static void ioFlushAll(struct io *io)
                 break;
             case SNAPSHOT_GET:
                 ioFlushSnapshotGet(io, (struct snapshot_get *)r);
+                break;
+            case ASYNC_WORK:
+                ioFlushAsyncWork(io, (struct async_work *)r);
                 break;
             default:
                 assert(0);
@@ -646,6 +668,28 @@ static int ioMethodSnapshotPut(struct raft_io *raft_io,
     return 0;
 }
 
+static int ioMethodAsyncWork(struct raft_io *raft_io,
+                             struct raft_io_async_work *req,
+                             raft_io_async_work_cb cb)
+{
+    struct io *io = raft_io->impl;
+    struct raft *raft = raft_io->data;
+    struct async_work *r;
+
+    r = raft_malloc(sizeof *r);
+    assert(r != NULL);
+
+    r->type = ASYNC_WORK;
+    r->req = req;
+    r->req->cb = cb;
+    r->req->data = raft;
+    r->completion_time = *io->time + io->work_duration;
+
+    QUEUE_PUSH(&io->requests, &r->queue);
+    return 0;
+}
+
+
 static int ioMethodSnapshotGet(struct raft_io *raft_io,
                                struct raft_io_snapshot_get *req,
                                raft_io_snapshot_get_cb cb)
@@ -848,6 +892,7 @@ static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
     io->randomized_election_timeout = ELECTION_TIMEOUT + index * 100;
     io->network_latency = NETWORK_LATENCY;
     io->disk_latency = DISK_LATENCY;
+    io->work_duration = WORK_DURATION;
     io->fault.countdown = -1;
     io->fault.n = -1;
     memset(io->drop, 0, sizeof io->drop);
@@ -868,6 +913,7 @@ static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
     raft_io->truncate = ioMethodTruncate;
     raft_io->send = ioMethodSend;
     raft_io->snapshot_put = ioMethodSnapshotPut;
+    raft_io->async_work = ioMethodAsyncWork;
     raft_io->snapshot_get = ioMethodSnapshotGet;
     raft_io->time = ioMethodTime;
     raft_io->random = ioMethodRandom;
@@ -1366,6 +1412,10 @@ static void completeRequest(struct raft_fixture *f, unsigned i, raft_time t)
         case SNAPSHOT_GET:
             ioFlushSnapshotGet(io, (struct snapshot_get *)r);
             f->event.type = RAFT_FIXTURE_DISK;
+            break;
+        case ASYNC_WORK:
+            ioFlushAsyncWork(io, (struct async_work *)r);
+            f->event.type = RAFT_FIXTURE_WORK;
             break;
         default:
             assert(0);
