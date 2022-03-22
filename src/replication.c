@@ -137,6 +137,18 @@ err:
     return rv;
 }
 
+static void takeSnapshotClose(struct raft *r, struct raft_snapshot *s)
+{
+    if (r->fsm->version == 1 ||
+        (r->fsm->version > 1 && r->fsm->snapshot_async == NULL)) {
+        snapshotClose(s);
+        return;
+    }
+
+    configurationClose(&s->configuration);
+    r->fsm->snapshot_finalize(r->fsm, &s->bufs, &s->n_bufs);
+}
+
 /* Context of a RAFT_IO_INSTALL_SNAPSHOT request that was submitted with
  * raft_io_>send(). */
 struct sendInstallSnapshot
@@ -1439,16 +1451,59 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
     }
 
     logSnapshot(&r->log, snapshot->index, r->snapshot.trailing);
-
 out:
-    snapshotClose(&r->snapshot.pending);
+    takeSnapshotClose(r, snapshot);
     r->snapshot.pending.term = 0;
+}
+
+static int putSnapshot(struct raft *r, struct raft_snapshot *snapshot,
+                       raft_io_snapshot_put_cb cb)
+{
+    int rv;
+    assert(r->snapshot.put.data == NULL);
+    r->snapshot.put.data = r;
+    rv = r->io->snapshot_put(r->io, r->snapshot.trailing, &r->snapshot.put,
+                             snapshot, cb);
+    if (rv != 0) {
+        takeSnapshotClose(r, snapshot);
+        r->snapshot.pending.term = 0;
+        r->snapshot.put.data = NULL;
+    }
+
+    return rv;
+}
+
+static void takeSnapshotDoneCb(struct raft_io_async_work *take,
+                               int status) {
+    struct raft *r = take->data;
+    struct raft_snapshot *snapshot = &r->snapshot.pending;
+    int rv;
+
+    raft_free(take);
+
+    if (status != 0) {
+        tracef("take snapshot failed %s", raft_strerror(status));
+        takeSnapshotClose(r, snapshot);
+        return;
+    }
+
+    rv = putSnapshot(r, snapshot, takeSnapshotCb);
+    if (rv != 0) {
+        tracef("put snapshot failed %d", rv);
+    }
+}
+
+static int takeSnapshotAsync(struct raft_io_async_work *take)
+{
+    struct raft *r = take->data;
+    tracef("take snapshot async at %lld", r->snapshot.pending.index);
+    struct raft_snapshot *snapshot = &r->snapshot.pending;
+    return r->fsm->snapshot_async(r->fsm, &snapshot->bufs, &snapshot->n_bufs);
 }
 
 static int takeSnapshot(struct raft *r)
 {
     struct raft_snapshot *snapshot;
-    unsigned i;
     int rv;
 
     tracef("take snapshot at %lld", r->last_applied);
@@ -1456,12 +1511,13 @@ static int takeSnapshot(struct raft *r)
     snapshot = &r->snapshot.pending;
     snapshot->index = r->last_applied;
     snapshot->term = logTermOf(&r->log, r->last_applied);
+    snapshot->bufs = NULL;
+    snapshot->n_bufs = 0;
 
     rv = configurationCopy(&r->configuration, &snapshot->configuration);
     if (rv != 0) {
         goto abort;
     }
-
     snapshot->configuration_index = r->configuration_index;
 
     rv = r->fsm->snapshot(r->fsm, &snapshot->bufs, &snapshot->n_bufs);
@@ -1470,26 +1526,35 @@ static int takeSnapshot(struct raft *r)
         if (rv == RAFT_BUSY) {
             rv = 0;
         }
-        goto abort_after_config_copy;
+        raft_configuration_close(&snapshot->configuration);
+        goto abort;
     }
 
-    assert(r->snapshot.put.data == NULL);
-    r->snapshot.put.data = r;
-    rv = r->io->snapshot_put(r->io, r->snapshot.trailing, &r->snapshot.put,
-                             snapshot, takeSnapshotCb);
-    if (rv != 0) {
-        goto abort_after_fsm_snapshot;
+    bool sync_snapshot = r->fsm->version < 2 || r->fsm->snapshot_async == NULL;
+    if (sync_snapshot) {
+        /* putSnapshot will clean up config and buffers case of error */
+        return putSnapshot(r, snapshot, takeSnapshotCb);
+    } else {
+        struct raft_io_async_work *take = raft_malloc(sizeof(*take));
+        if (take == NULL) {
+            rv = RAFT_NOMEM;
+            goto abort_after_snapshot;
+        }
+        take->cb = NULL;
+        take->data = r;
+        take->work = takeSnapshotAsync;
+        rv = r->io->async_work(r->io, take, takeSnapshotDoneCb);
+        if (rv != 0) {
+            raft_free(take);
+            goto abort_after_snapshot;
+        }
     }
 
     return 0;
 
-abort_after_fsm_snapshot:
-    for (i = 0; i < snapshot->n_bufs; i++) {
-        raft_free(snapshot->bufs[i].base);
-    }
-    raft_free(snapshot->bufs);
-abort_after_config_copy:
-    raft_configuration_close(&snapshot->configuration);
+abort_after_snapshot:
+    /* Closes config and finalizes snapshot */
+    takeSnapshotClose(r, snapshot);
 abort:
     r->snapshot.pending.term = 0;
     return rv;

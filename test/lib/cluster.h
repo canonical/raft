@@ -19,38 +19,52 @@
 
 /* N is the default number of servers, but can be tweaked with the cluster-n
  * parameter. */
-#define SETUP_CLUSTER(DEFAULT_N)                                             \
-    SET_UP_HEAP;                                                             \
-    do {                                                                     \
-        unsigned _n = DEFAULT_N;                                             \
-        bool _pre_vote = false;                                              \
-        unsigned _hb = 0;                                                    \
-        unsigned _i;                                                         \
-        int _rv;                                                             \
-        if (munit_parameters_get(params, CLUSTER_N_PARAM) != NULL) {         \
-            _n = atoi(munit_parameters_get(params, CLUSTER_N_PARAM));        \
-        }                                                                    \
-        if (munit_parameters_get(params, CLUSTER_PRE_VOTE_PARAM) != NULL) {  \
-            _pre_vote =                                                      \
-                atoi(munit_parameters_get(params, CLUSTER_PRE_VOTE_PARAM));  \
-        }                                                                    \
-        if (munit_parameters_get(params, CLUSTER_HEARTBEAT_PARAM) != NULL) { \
-            _hb =                                                            \
-                atoi(munit_parameters_get(params, CLUSTER_HEARTBEAT_PARAM)); \
-        }                                                                    \
-        munit_assert_int(_n, >, 0);                                          \
-        for (_i = 0; _i < _n; _i++) {                                        \
-            FsmInit(&f->fsms[_i]);                                           \
-        }                                                                    \
-        _rv = raft_fixture_init(&f->cluster, _n, f->fsms);                   \
-        munit_assert_int(_rv, ==, 0);                                        \
-        for (_i = 0; _i < _n; _i++) {                                        \
-            raft_set_pre_vote(raft_fixture_get(&f->cluster, _i), _pre_vote); \
-            if (_hb) {                                                       \
-                raft_set_heartbeat_timeout(raft_fixture_get(&f->cluster, _i),\
-                                           _hb);                             \
-            }                                                                \
-        }                                                                    \
+#define SETUP_CLUSTER(DEFAULT_N)                                               \
+    SET_UP_HEAP;                                                               \
+    do {                                                                       \
+        unsigned _n = DEFAULT_N;                                               \
+        bool _pre_vote = false;                                                \
+        bool _ss_async = false;                                                \
+        int _fsm_version = 2;                                                  \
+        unsigned _hb = 0;                                                      \
+        unsigned _i;                                                           \
+        int _rv;                                                               \
+        if (munit_parameters_get(params, CLUSTER_N_PARAM) != NULL) {           \
+            _n = atoi(munit_parameters_get(params, CLUSTER_N_PARAM));          \
+        }                                                                      \
+        if (munit_parameters_get(params, CLUSTER_PRE_VOTE_PARAM) != NULL) {    \
+            _pre_vote =                                                        \
+                atoi(munit_parameters_get(params, CLUSTER_PRE_VOTE_PARAM));    \
+        }                                                                      \
+        if (munit_parameters_get(params, CLUSTER_HEARTBEAT_PARAM) != NULL) {   \
+            _hb =                                                              \
+                atoi(munit_parameters_get(params, CLUSTER_HEARTBEAT_PARAM));   \
+        }                                                                      \
+        if (munit_parameters_get(params, CLUSTER_SS_ASYNC_PARAM) != NULL) {    \
+            _ss_async =                                                        \
+                atoi(munit_parameters_get(params, CLUSTER_SS_ASYNC_PARAM));    \
+        }                                                                      \
+        if (munit_parameters_get(params, CLUSTER_FSM_VERSION_PARAM) != NULL) { \
+            _fsm_version =                                                     \
+                atoi(munit_parameters_get(params, CLUSTER_FSM_VERSION_PARAM)); \
+        }                                                                      \
+        munit_assert_int(_n, >, 0);                                            \
+        for (_i = 0; _i < _n; _i++) {                                          \
+            if (_ss_async && _fsm_version > 1) {                               \
+                FsmInitAsync(&f->fsms[_i], _fsm_version);                      \
+            } else {                                                           \
+                FsmInit(&f->fsms[_i], _fsm_version);                           \
+            }                                                                  \
+        }                                                                      \
+        _rv = raft_fixture_init(&f->cluster, _n, f->fsms);                     \
+        munit_assert_int(_rv, ==, 0);                                          \
+        for (_i = 0; _i < _n; _i++) {                                          \
+            raft_set_pre_vote(raft_fixture_get(&f->cluster, _i), _pre_vote);   \
+            if (_hb) {                                                         \
+                raft_set_heartbeat_timeout(raft_fixture_get(&f->cluster, _i),  \
+                                           _hb);                               \
+            }                                                                  \
+        }                                                                      \
     } while (0)
 
 #define TEAR_DOWN_CLUSTER                 \
@@ -74,6 +88,12 @@
 
 /* Munit parameter for setting HeartBeat timeout */
 #define CLUSTER_HEARTBEAT_PARAM "cluster-heartbeat"
+
+/* Munit parameter for setting snapshot behaviour */
+#define CLUSTER_SS_ASYNC_PARAM "cluster-snapshot-async"
+
+/* Munit parameter for setting snapshot behaviour */
+#define CLUSTER_FSM_VERSION_PARAM "fsm-version"
 
 /* Get the number of servers in the cluster. */
 #define CLUSTER_N raft_fixture_n(&f->cluster)
@@ -284,7 +304,7 @@
 #define CLUSTER_GROW                                               \
     {                                                              \
         int rv_;                                                   \
-        FsmInit(&f->fsms[CLUSTER_N]);                              \
+        FsmInit(&f->fsms[CLUSTER_N], 2);                           \
         rv_ = raft_fixture_grow(&f->cluster, &f->fsms[CLUSTER_N]); \
         munit_assert_int(rv_, ==, 0);                              \
     }

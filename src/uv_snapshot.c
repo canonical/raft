@@ -634,7 +634,10 @@ int UvSnapshotPut(struct raft_io *io,
     raft_index next_index;
 
     uv = io->impl;
-    assert(!uv->closing);
+    if (uv->closing) {
+        return RAFT_CANCELED;
+    }
+
     assert(uv->snapshot_put_work.data == NULL);
 
     tracef("put snapshot at %lld, keeping %d", snapshot->index, trailing);
