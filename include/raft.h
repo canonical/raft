@@ -423,7 +423,7 @@ struct raft_io_snapshot_get
 struct raft_io_async_work;
 typedef int (*raft_io_async_work_fn)(struct raft_io_async_work *req);
 typedef void (*raft_io_async_work_cb)(struct raft_io_async_work *req,
-				      int status);
+                                      int status);
 struct raft_io_async_work
 {
     void *data;                 /* User data */
@@ -529,10 +529,22 @@ struct raft_io
  * `snapshot_finalize` can be used to e.g. release a lock that was taken during
  * a call to `snapshot`. Until `snapshot_finalize` is called, raft can access
  * the data contained in the `raft_buffer`s.
+ *
+ * version 3:
+ * Adds support for async snapshots through the `snapshot_async` function.
+ * When this method is provided, raft will call `snapshot` in the main loop,
+ * and when successful, will call `snapshot_async` by means of the `io->async_work` method.
+ * The callback to `io->async_work` will in turn call `snapshot_finalize`
+ * in the main loop when the work has completed independent of the return value
+ * of `snapshot_async`.
+ * An implementation that does not use asynchronous snapshots MUST set
+ * `snapshot_async` to NULL.
+ * All memory allocated by the snapshot routines MUST be freed by the snapshot
+ * routines themselves.
  */
 struct raft_fsm
 {
-    int version;
+    int version; /* 1, 2 or 3 */
     void *data;
     int (*apply)(struct raft_fsm *fsm,
                  const struct raft_buffer *buf,
@@ -545,6 +557,10 @@ struct raft_fsm
     int (*snapshot_finalize)(struct raft_fsm *fsm,
                              struct raft_buffer *bufs[],
                              unsigned *n_bufs);
+    /* Fields below added since version 3. */
+    int (*snapshot_async)(struct raft_fsm *fsm,
+                          struct raft_buffer *bufs[],
+                          unsigned *n_bufs);
 };
 
 /**
