@@ -185,6 +185,9 @@ void uvMaybeFireCloseCb(struct uv *uv)
     if (!QUEUE_IS_EMPTY(&uv->snapshot_get_reqs)) {
         return;
     }
+    if (!QUEUE_IS_EMPTY(&uv->async_work_reqs)) {
+        return;
+    }
     if (!QUEUE_IS_EMPTY(&uv->aborting)) {
         return;
     }
@@ -671,6 +674,7 @@ int raft_uv_init(struct raft_io *io,
     uv->finalize_work.data = NULL;
     uv->truncate_work.data = NULL;
     QUEUE_INIT(&uv->snapshot_get_reqs);
+    QUEUE_INIT(&uv->async_work_reqs);
     uv->snapshot_put_work.data = NULL;
     uv->timer.data = NULL;
     uv->tick_cb = NULL; /* Set by raft_io->start() */
@@ -696,6 +700,7 @@ int raft_uv_init(struct raft_io *io,
     io->send = UvSend;
     io->snapshot_put = UvSnapshotPut;
     io->snapshot_get = UvSnapshotGet;
+    io->async_work = UvAsyncWork;
     io->time = uvTime;
     io->random = uvRandom;
 
