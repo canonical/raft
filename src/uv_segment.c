@@ -901,9 +901,9 @@ static int uvWriteClosedSegment(struct uv *uv,
                                 const struct raft_buffer *conf)
 {
     char filename[UV__FILENAME_LEN];
-    struct uvSegmentBuffer buf;
+    struct uvSegmentBuffer buf = {0};
     struct raft_buffer data;
-    struct raft_entry entry;
+    struct raft_entry entry = {0};
     size_t cap;
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int rv;

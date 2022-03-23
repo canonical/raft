@@ -7,7 +7,10 @@
 
 #include "../../include/raft.h"
 
-void FsmInit(struct raft_fsm *fsm);
+void FsmInit(struct raft_fsm *fsm, int version);
+
+/* Same as FsmInit but with asynchronous snapshots */
+void FsmInitAsync(struct raft_fsm *fsm, int version);
 
 void FsmClose(struct raft_fsm *fsm);
 

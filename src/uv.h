@@ -83,6 +83,7 @@ struct uv
     struct uv_work_s finalize_work;      /* Resize and rename segments */
     struct uv_work_s truncate_work;      /* Execute truncate log requests */
     queue snapshot_get_reqs;             /* Inflight get snapshot requests */
+    queue async_work_reqs;               /* Inflight async work requests */
     struct uv_work_s snapshot_put_work;  /* Execute snapshot put requests */
     struct uvMetadata metadata;          /* Cache of metadata on disk */
     struct uv_timer_s timer;             /* Timer for periodic ticks */
@@ -271,6 +272,12 @@ int UvSnapshotPut(struct raft_io *io,
 int UvSnapshotGet(struct raft_io *io,
                   struct raft_io_snapshot_get *req,
                   raft_io_snapshot_get_cb cb);
+
+
+/* Implementation of raft_io->async_work (defined in uv_work.c). */
+int UvAsyncWork(struct raft_io *io,
+                struct raft_io_async_work *req,
+                raft_io_async_work_cb cb);
 
 /* Return a list of all snapshots and segments found in the data directory. Both
  * snapshots and segments are ordered by filename (closed segments come before

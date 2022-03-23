@@ -62,6 +62,72 @@ static void tearDown(void *data)
         }                                                             \
     }
 
+static int ioMethodSnapshotPutFail(struct raft_io *raft_io,
+                                   unsigned trailing,
+                                   struct raft_io_snapshot_put *req,
+                                   const struct raft_snapshot *snapshot,
+                                   raft_io_snapshot_put_cb cb)
+{
+    (void) raft_io;
+    (void) trailing;
+    (void) req;
+    (void) snapshot;
+    (void) cb;
+    return -1;
+}
+
+#define SET_FAULTY_SNAPSHOT_PUT()                                        \
+    {                                                                    \
+        unsigned i;                                                      \
+        for (i = 0; i < CLUSTER_N; i++) {                                \
+            CLUSTER_RAFT(i)->io->snapshot_put = ioMethodSnapshotPutFail; \
+        }                                                                \
+    }
+
+static int ioMethodAsyncWorkFail(struct raft_io *raft_io,
+                                 struct raft_io_async_work *req,
+                                 raft_io_async_work_cb cb)
+{
+    (void) raft_io;
+    (void) req;
+    (void) cb;
+    return -1;
+}
+
+#define SET_FAULTY_ASYNC_WORK()                                      \
+    {                                                                \
+        unsigned i;                                                  \
+        for (i = 0; i < CLUSTER_N; i++) {                            \
+            CLUSTER_RAFT(i)->io->async_work = ioMethodAsyncWorkFail; \
+        }                                                            \
+    }
+
+static int fsmSnapshotFail(struct raft_fsm *fsm,
+                           struct raft_buffer *bufs[],
+                           unsigned *n_bufs)
+{
+    (void) fsm;
+    (void) bufs;
+    (void) n_bufs;
+    return -1;
+}
+
+#define SET_FAULTY_SNAPSHOT_ASYNC()                                      \
+    {                                                                    \
+        unsigned i;                                                      \
+        for (i = 0; i < CLUSTER_N; i++) {                                \
+            CLUSTER_RAFT(i)->fsm->snapshot_async = fsmSnapshotFail;      \
+        }                                                                \
+    }
+
+#define SET_FAULTY_SNAPSHOT()                                            \
+    {                                                                    \
+        unsigned i;                                                      \
+        for (i = 0; i < CLUSTER_N; i++) {                                \
+            CLUSTER_RAFT(i)->fsm->snapshot = fsmSnapshotFail;            \
+        }                                                                \
+    }
+
 /******************************************************************************
  *
  * Successfully install a snapshot
@@ -475,8 +541,24 @@ TEST(snapshot, installSnapshotDuringEntriesWrite, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
+static char *fsm_snapshot_async[] = {"0", "1", NULL};
+static char *fsm_version[] = {"1", "2", NULL};
+static MunitParameterEnum fsm_snapshot_async_params[] = {
+    {CLUSTER_SS_ASYNC_PARAM, fsm_snapshot_async},
+    {CLUSTER_FSM_VERSION_PARAM, fsm_version},
+    {NULL, NULL},
+};
+
+static char *fsm_snapshot_only_async[] = {"1", NULL};
+static char *fsm_version_only_async[] = {"2", NULL};
+static MunitParameterEnum fsm_snapshot_only_async_params[] = {
+    {CLUSTER_SS_ASYNC_PARAM, fsm_snapshot_only_async},
+    {CLUSTER_FSM_VERSION_PARAM, fsm_version_only_async},
+    {NULL, NULL},
+};
+
 /* Follower receives AppendEntries RPCs while taking a snapshot */
-TEST(snapshot, takeSnapshotAppendEntries, setUp, tearDown, 0, NULL)
+TEST(snapshot, takeSnapshotAppendEntries, setUp, tearDown, 0, fsm_snapshot_async_params)
 {
     struct fixture *f = data;
     (void)params;
@@ -496,7 +578,7 @@ TEST(snapshot, takeSnapshotAppendEntries, setUp, tearDown, 0, NULL)
 
     /* Step the cluster until server 1 takes a snapshot */
     const struct raft *r = CLUSTER_RAFT(1);
-    CLUSTER_STEP_UNTIL(server_taking_snapshot, (void*) r, 2000);
+    CLUSTER_STEP_UNTIL(server_taking_snapshot, (void*) r, 3000);
 
     /* Send AppendEntries RPCs while server 1 is taking a snapshot */
     static struct raft_apply reqs[5];
@@ -510,5 +592,85 @@ TEST(snapshot, takeSnapshotAppendEntries, setUp, tearDown, 0, NULL)
     CLUSTER_MAKE_PROGRESS;
     CLUSTER_MAKE_PROGRESS;
     CLUSTER_STEP_UNTIL_APPLIED(1, 11, 5000);
+    return MUNIT_OK;
+}
+
+TEST(snapshot, takeSnapshotSnapshotPutFail, setUp, tearDown, 0, fsm_snapshot_async_params)
+{
+    struct fixture *f = data;
+    (void)params;
+
+    SET_FAULTY_SNAPSHOT_PUT();
+
+    /* Set very low threshold and trailing entries number */
+    SET_SNAPSHOT_THRESHOLD(3);
+    SET_SNAPSHOT_TRAILING(1);
+
+    /* Apply a few of entries, to force a snapshot to be taken. */
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+
+    /* No crash or leaks have occurred */
+    return MUNIT_OK;
+}
+
+TEST(snapshot, takeSnapshotAsyncWorkFail, setUp, tearDown, 0, fsm_snapshot_async_params)
+{
+    struct fixture *f = data;
+    (void)params;
+
+    SET_FAULTY_ASYNC_WORK();
+
+    /* Set very low threshold and trailing entries number */
+    SET_SNAPSHOT_THRESHOLD(3);
+    SET_SNAPSHOT_TRAILING(1);
+
+    /* Apply a few of entries, to force a snapshot to be taken. */
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+
+    /* No crash or leaks have occurred */
+    return MUNIT_OK;
+}
+
+TEST(snapshot, takeSnapshotAsyncFail, setUp, tearDown, 0, fsm_snapshot_only_async_params)
+{
+    struct fixture *f = data;
+    (void)params;
+
+    SET_FAULTY_SNAPSHOT_ASYNC();
+
+    /* Set very low threshold and trailing entries number */
+    SET_SNAPSHOT_THRESHOLD(3);
+    SET_SNAPSHOT_TRAILING(1);
+
+    /* Apply a few of entries, to force a snapshot to be taken. */
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+
+    /* No crash or leaks have occurred */
+    return MUNIT_OK;
+}
+
+TEST(snapshot, takeSnapshotFail, setUp, tearDown, 0, fsm_snapshot_async_params)
+{
+    struct fixture *f = data;
+    (void)params;
+
+    SET_FAULTY_SNAPSHOT();
+
+    /* Set very low threshold and trailing entries number */
+    SET_SNAPSHOT_THRESHOLD(3);
+    SET_SNAPSHOT_TRAILING(1);
+
+    /* Apply a few of entries, to force a snapshot to be taken. */
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+
+    /* No crash or leaks have occurred */
     return MUNIT_OK;
 }

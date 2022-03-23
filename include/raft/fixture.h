@@ -16,7 +16,8 @@
 enum {
     RAFT_FIXTURE_TICK = 1, /* The tick callback has been invoked */
     RAFT_FIXTURE_NETWORK,  /* A network request has been sent or received */
-    RAFT_FIXTURE_DISK      /* An I/O request has been submitted */
+    RAFT_FIXTURE_DISK,     /* An I/O request has been submitted */
+    RAFT_FIXTURE_WORK      /* A large, CPU and/or memory intensive task */
 };
 
 /**
