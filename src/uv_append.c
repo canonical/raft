@@ -635,7 +635,7 @@ int UvAppend(struct raft_io *io,
     uv = io->impl;
     assert(!uv->closing);
 
-    append = RaftHeapCalloc(1, sizeof *append);
+    append = RaftHeapMalloc(sizeof *append);
     if (append == NULL) {
         rv = RAFT_NOMEM;
         goto err;

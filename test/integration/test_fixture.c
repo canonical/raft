@@ -26,7 +26,7 @@ static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
     int rc;
     SET_UP_HEAP;
     for (i = 0; i < N_SERVERS; i++) {
-        FsmInit(&f->fsms[i], 2);
+        FsmInit(&f->fsms[i]);
     }
 
     rc = raft_fixture_init(&f->fixture, N_SERVERS, f->fsms);
