@@ -501,6 +501,31 @@ struct raft_io
     int (*random)(struct raft_io *io, int min, int max);
 };
 
+/*
+ * version 1:
+ * struct raft_fsm
+ * {
+ *     int version;
+ *     void *data;
+ *     int (*apply)(struct raft_fsm *fsm,
+ *                  const struct raft_buffer *buf,
+ *                  void **result);
+ *     int (*snapshot)(struct raft_fsm *fsm,
+ *                     struct raft_buffer *bufs[],
+ *                     unsigned *n_bufs);
+ *     int (*restore)(struct raft_fsm *fsm, struct raft_buffer *buf);
+ * };
+ *
+ * version 2:
+ * introduces `snapshot_finalize`, when this method is not NULL, it will
+ * always run after a successful call to `snapshot`, whether the snapshot has
+ * been successfully written to disk or not. If it is set, raft will
+ * assume no ownership of any of the `raft_buffer`s and the responsibility to
+ * clean up lies with the user of raft.
+ * `snapshot_finalize` can be used to e.g. release a lock that was taken during
+ * a call to `snapshot`. Until `snapshot_finalize` is called, raft can access
+ * the data contained in the `raft_buffer`s.
+ */
 struct raft_fsm
 {
     int version;
@@ -512,6 +537,9 @@ struct raft_fsm
                     struct raft_buffer *bufs[],
                     unsigned *n_bufs);
     int (*restore)(struct raft_fsm *fsm, struct raft_buffer *buf);
+    int (*snapshot_finalize)(struct raft_fsm *fsm,
+                             struct raft_buffer *bufs[],
+                             unsigned *n_bufs);
 };
 
 /**
