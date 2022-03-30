@@ -74,10 +74,11 @@ static int FsmInit(struct raft_fsm *fsm)
         return RAFT_NOMEM;
     }
     f->count = 0;
-    fsm->version = 1;
+    fsm->version = 2;
     fsm->data = f;
     fsm->apply = FsmApply;
     fsm->snapshot = FsmSnapshot;
+    fsm->snapshot_finalize = NULL;
     fsm->restore = FsmRestore;
     return 0;
 }

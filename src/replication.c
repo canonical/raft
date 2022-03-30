@@ -531,7 +531,7 @@ out:
 /* Submit a disk write for all entries from the given index onward. */
 static int appendLeader(struct raft *r, raft_index index)
 {
-    struct raft_entry *entries;
+    struct raft_entry *entries = NULL;
     unsigned n;
     struct appendLeader *request;
     int rv;
@@ -1424,6 +1424,22 @@ static bool shouldTakeSnapshot(struct raft *r)
     return true;
 }
 
+/*
+ * When taking a snapshot, ownership of the snapshot data is with raft if
+ * `snapshot_finalize` is NULL.
+ */
+static void takeSnapshotClose(struct raft *r, struct raft_snapshot *s)
+{
+    if (r->fsm->version == 1 ||
+        (r->fsm->version > 1 && r->fsm->snapshot_finalize == NULL)) {
+        snapshotClose(s);
+        return;
+    }
+
+    configurationClose(&s->configuration);
+    r->fsm->snapshot_finalize(r->fsm, &s->bufs, &s->n_bufs);
+}
+
 static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
 {
     struct raft *r = req->data;
@@ -1441,14 +1457,13 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
     logSnapshot(&r->log, snapshot->index, r->snapshot.trailing);
 
 out:
-    snapshotClose(&r->snapshot.pending);
+    takeSnapshotClose(r, &r->snapshot.pending);
     r->snapshot.pending.term = 0;
 }
 
 static int takeSnapshot(struct raft *r)
 {
     struct raft_snapshot *snapshot;
-    unsigned i;
     int rv;
 
     tracef("take snapshot at %lld", r->last_applied);
@@ -1470,7 +1485,8 @@ static int takeSnapshot(struct raft *r)
         if (rv == RAFT_BUSY) {
             rv = 0;
         }
-        goto abort_after_config_copy;
+        raft_configuration_close(&snapshot->configuration);
+        goto abort;
     }
 
     assert(r->snapshot.put.data == NULL);
@@ -1484,12 +1500,7 @@ static int takeSnapshot(struct raft *r)
     return 0;
 
 abort_after_fsm_snapshot:
-    for (i = 0; i < snapshot->n_bufs; i++) {
-        raft_free(snapshot->bufs[i].base);
-    }
-    raft_free(snapshot->bufs);
-abort_after_config_copy:
-    raft_configuration_close(&snapshot->configuration);
+    takeSnapshotClose(r, snapshot);
 abort:
     r->snapshot.pending.term = 0;
     return rv;

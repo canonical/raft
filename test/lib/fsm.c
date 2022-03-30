@@ -8,6 +8,8 @@ struct fsm
 {
     int x;
     int y;
+    int lock;
+    void *data;
 };
 
 /* Command codes */
@@ -104,18 +106,58 @@ static int fsmSnapshot(struct raft_fsm *fsm,
     return fsmEncodeSnapshot(f->x, f->y, bufs, n_bufs);
 }
 
-void FsmInit(struct raft_fsm *fsm)
+static int fsmSnapshotInitialize(struct raft_fsm *fsm,
+	                         struct raft_buffer *bufs[],
+	                         unsigned *n_bufs)
+{
+    struct fsm *f = fsm->data;
+    munit_assert_int(f->lock, ==, 0);
+    f->lock = 1;
+    f->data = raft_malloc(8); /* Detect proper cleanup in finalize */
+    munit_assert_ptr_not_null(f->data);
+    return fsmEncodeSnapshot(f->x, f->y, bufs, n_bufs);
+}
+
+static int fsmSnapshotFinalize(struct raft_fsm *fsm,
+	                         struct raft_buffer *bufs[],
+	                         unsigned *n_bufs)
+{
+    (void) bufs;
+    (void) n_bufs;
+    struct fsm *f = fsm->data;
+    if (*bufs != NULL) {
+        for (unsigned i = 0; i < *n_bufs; ++i) {
+            raft_free((*bufs)[i].base);
+        }
+        raft_free(*bufs);
+    }
+    *bufs = NULL;
+    *n_bufs = 0;
+    munit_assert_int(f->lock, ==, 1);
+    f->lock = 0;
+    raft_free(f->data);
+    return 0;
+}
+
+void FsmInit(struct raft_fsm *fsm, int version)
 {
     struct fsm *f = munit_malloc(sizeof *fsm);
+    memset(fsm, 'x', sizeof(*fsm)); /* Fill  with garbage */
 
     f->x = 0;
     f->y = 0;
+    f->lock = 0;
+    f->data = NULL;
 
-    fsm->version = 1;
+    fsm->version = version;
     fsm->data = f;
     fsm->apply = fsmApply;
     fsm->snapshot = fsmSnapshot;
     fsm->restore = fsmRestore;
+    if (version > 1) {
+        fsm->snapshot = fsmSnapshotInitialize;
+        fsm->snapshot_finalize = fsmSnapshotFinalize;
+    }
 }
 
 void FsmClose(struct raft_fsm *fsm)
