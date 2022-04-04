@@ -44,6 +44,16 @@ int Compress(struct raft_buffer bufs[], unsigned n_bufs,
         src_size += bufs[i].len;
     }
 
+    /* Work around a bug in liblz4 on bionic, in practice raft should only
+     * Compress non-0 length buffers, so this should be fine.
+     * https://github.com/lz4/lz4/issues/157
+     * */
+    if (src_size == 0) {
+        ErrMsgPrintf(errmsg, "total size must be larger then 0");
+        rv = RAFT_INVALID;
+        goto err;
+    }
+
     /* Set LZ4 preferences */
     LZ4F_preferences_t lz4_pref;
     memset(&lz4_pref, 0, sizeof(lz4_pref));

@@ -151,6 +151,21 @@ TEST(byteSha1, abc, NULL, NULL, 0, NULL)
     return MUNIT_OK;
 }
 
+TEST(byteSha1, abcWithZeroLen, NULL, NULL, 0, NULL)
+{
+    struct byteSha1 sha1;
+    uint8_t text[] = "abc";
+    uint8_t garbage[] = "garbage";
+    uint8_t value[20];
+    byteSha1Init(&sha1);
+    byteSha1Update(&sha1, text, sizeof text - 1);
+    /* Update with 0 length buffer doesn't change digest */
+    byteSha1Update(&sha1, garbage, 0);
+    byteSha1Digest(&sha1, value);
+    ASSERT_SHA1(value, "A9993E364706816ABA3E25717850C26C9CD0D89D");
+    return MUNIT_OK;
+}
+
 TEST(byteSha1, abcbd, NULL, NULL, 0, NULL)
 {
     struct byteSha1 sha1;

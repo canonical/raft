@@ -15,7 +15,9 @@ struct raft_buffer getBufWithRandom(size_t len)
     struct raft_buffer buf = {0};
     buf.len = len;
     buf.base = munit_malloc(buf.len);
-    munit_assert_ptr_not_null(buf.base);
+    if (len != 0) {
+        munit_assert_ptr_not_null(buf.base);
+    }
 
     size_t offset = 0;
     /* Write as many random ints in buf as possible */
@@ -45,7 +47,9 @@ struct raft_buffer getBufWithNonRandom(size_t len)
     struct raft_buffer buf = {0};
     buf.len = len;
     buf.base = munit_malloc(buf.len);
-    munit_assert_ptr_not_null(buf.base);
+    if (len != 0) {
+        munit_assert_ptr_not_null(buf.base);
+    }
 
     memset(buf.base, 0xAC, buf.len);
     return buf;
@@ -63,6 +67,19 @@ static void sha1(struct raft_buffer bufs[], unsigned n_bufs, uint8_t value[20])
     byteSha1Digest(&sha, value);
 }
 
+TEST(Compress, compressDecompressZeroLength, NULL, NULL, 0, NULL)
+{
+    char errmsg[RAFT_ERRMSG_BUF_SIZE] = {0};
+    struct raft_buffer bufs1[2] = {{NULL, 0},{(void*)0xDEADBEEF, 0}}; /* 0 length */
+    struct raft_buffer bufs2[2] = {{(void*)0xDEADBEEF, 0},{NULL, 0}}; /* 0 length */
+    struct raft_buffer compressed = {0};
+    munit_assert_int(Compress(&bufs1[0], 1, &compressed, errmsg), ==, RAFT_INVALID);
+    munit_assert_int(Compress(&bufs1[1], 1, &compressed, errmsg), ==, RAFT_INVALID);
+    munit_assert_int(Compress(bufs1, 2, &compressed, errmsg), ==, RAFT_INVALID);
+    munit_assert_int(Compress(bufs2, 2, &compressed, errmsg), ==, RAFT_INVALID);
+    return MUNIT_OK;
+}
+
 static char* len_one_params[] = {
 /*    16B   1KB     64KB     4MB        128MB */
       "16", "1024", "65536", "4194304", "134217728",
@@ -70,7 +87,7 @@ static char* len_one_params[] = {
       "65516", "65517", "65518", "65521", "65535",
       "65537", "65551", "65555", "65556",
 /*    Ugly lengths */
-      "1", "9", "123450", "1337", "6655111",
+      "0", "1", "9", "123450", "1337", "6655111",
       NULL
 };
 
@@ -90,6 +107,9 @@ TEST(Compress, compressDecompressRandomOne, NULL, NULL, 0,
 
     /* Fill a buffer with random data */
     size_t len = strtoul(munit_parameters_get(params, "len_one"), NULL, 0);
+    if (len == 0) {
+        return MUNIT_SKIP;
+    }
     struct raft_buffer buf = getBufWithRandom(len);
 
     /* Assert that after compression and decompression the data is unchanged */
@@ -119,7 +139,7 @@ static char* len_nonrandom_one_params[] = {
       "65516", "65517", "65518", "65521", "65535",
       "65537", "65551", "65555", "65556",
 /*    Ugly lengths */
-      "993450", "31337", "83883825",
+      "0", "993450", "31337", "83883825",
       NULL
 };
 
@@ -139,6 +159,9 @@ TEST(Compress, compressDecompressNonRandomOne, NULL, NULL, 0,
 
     /* Fill a buffer with non-random data */
     size_t len = strtoul(munit_parameters_get(params, "len_one"), NULL, 0);
+    if (len == 0) {
+        return MUNIT_SKIP;
+    }
     struct raft_buffer buf = getBufWithNonRandom(len);
 
     /* Assert that after compression and decompression the data is unchanged and
@@ -147,7 +170,9 @@ TEST(Compress, compressDecompressNonRandomOne, NULL, NULL, 0,
     munit_assert_int(Compress(&buf, 1, &compressed, errmsg), ==, 0);
     free(buf.base);
     munit_assert_true(IsCompressed(compressed.base, compressed.len));
-    munit_assert_ulong(compressed.len, <, buf.len);
+    if (len > 0) {
+        munit_assert_ulong(compressed.len, <, buf.len);
+    }
     munit_assert_int(Decompress(compressed, &decompressed, errmsg), ==, 0);
     munit_assert_ulong(decompressed.len, ==, len);
     sha1(&decompressed, 1, sha1_decompressed);
@@ -159,7 +184,7 @@ TEST(Compress, compressDecompressNonRandomOne, NULL, NULL, 0,
 }
 
 static char* len_two_params[] = {
-      "4194304", "13373", "66",
+      "4194304", "13373", "66", "0",
       NULL
 };
 
@@ -176,14 +201,26 @@ TEST(Compress, compressDecompressRandomTwo, NULL, NULL, 0,
     struct raft_buffer compressed = {0};
     struct raft_buffer decompressed = {0};
     uint8_t sha1_virgin[20] = {0};
+    uint8_t sha1_single[20] = {0};
     uint8_t sha1_decompressed[20] = {1};
 
     /* Fill two buffers with random data */
     size_t len1 = strtoul(munit_parameters_get(params, "len_one"), NULL, 0);
-    struct raft_buffer buf1 = getBufWithRandom(len1);
     size_t len2 = strtoul(munit_parameters_get(params, "len_two"), NULL, 0);
+    if (len1 + len2 == 0) {
+        return MUNIT_SKIP;
+    }
+    struct raft_buffer buf1 = getBufWithRandom(len1);
     struct raft_buffer buf2 = getBufWithRandom(len2);
     struct raft_buffer bufs[2] = { buf1, buf2 };
+
+    /* If one of the buffers is empty ensure data is identical to single buffer
+     * case. */
+    if (len1 == 0) {
+        sha1(&buf2, 1, sha1_single);
+    } else if (len2 == 0) {
+        sha1(&buf1, 1, sha1_single);
+    }
 
     /* Assert that after compression and decompression the data is unchanged */
     sha1(bufs, 2, sha1_virgin);
@@ -195,6 +232,11 @@ TEST(Compress, compressDecompressRandomTwo, NULL, NULL, 0,
     munit_assert_ulong(decompressed.len, ==, buf1.len + buf2.len);
     sha1(&decompressed, 1, sha1_decompressed);
     munit_assert_int(memcmp(sha1_virgin, sha1_decompressed, 20), ==, 0);
+
+    if (len1 == 0 || len2 == 0) {
+        munit_assert_int(memcmp(sha1_single, sha1_virgin, 20), ==, 0);
+        munit_assert_int(memcmp(sha1_single, sha1_decompressed, 20), ==, 0);
+    }
 
     raft_free(compressed.base);
     raft_free(decompressed.base);
