@@ -243,4 +243,19 @@ RAFT_API int raft_uv_tcp_init(struct raft_uv_transport *t,
  */
 RAFT_API void raft_uv_tcp_close(struct raft_uv_transport *t);
 
+/**
+ * Set the IP address and port that the listening socket will bind to.
+ *
+ * By default the socket will bind to the address provided in
+ * raft_init(), which may be inconvenient if running your application in a
+ * container, for example.
+ *
+ * The @address argument must be an IPv4 dotted quad IP address and port, e.g.
+ * "0.0.0.0:8080". If you do not provide a port, the default of 8080 will be
+ * used. The port given here *must* match the port given to raft_init().
+ *
+ * Must be called before raft_init().
+ */
+RAFT_API int raft_uv_tcp_set_bind_address(struct raft_uv_transport *t, const char *address);
+
 #endif /* RAFT_UV_H */

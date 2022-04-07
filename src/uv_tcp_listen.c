@@ -284,7 +284,11 @@ int UvTcpListen(struct raft_uv_transport *transport, raft_uv_accept_cb cb)
     t = transport->impl;
     t->accept_cb = cb;
 
-    rv = uvIpParse(t->address, &addr);
+    if (t->bind_address == NULL) {
+        rv = uvIpParse(t->address, &addr);
+    } else {
+        rv = uvIpParse(t->bind_address, &addr);
+    }
     if (rv != 0) {
         return rv;
     }
