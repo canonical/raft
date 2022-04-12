@@ -68,6 +68,19 @@ static void acceptCb(struct raft_uv_transport *t,
         f->closed = false;                                           \
     } while (0)
 
+#define INIT2                                                        \
+    do {                                                             \
+        int _rv;                                                     \
+        _rv = raft_uv_tcp_init(&f->transport, &f->loop);             \
+        munit_assert_int(_rv, ==, 0);                                \
+        _rv = raft_uv_tcp_set_bind_address(&f->transport, "127.0.0.1:9000");  \
+        munit_assert_int(_rv, ==, 0);                                \
+        _rv = f->transport.init(&f->transport, 1, "127.0.0.1:9000"); \
+        munit_assert_int(_rv, ==, 0);                                \
+        f->transport.data = f;                                       \
+        f->closed = false;                                           \
+    } while (0)
+
 #define CLOSE                                       \
     do {                                            \
         f->transport.close(&f->transport, closeCb); \
@@ -107,6 +120,28 @@ static void *setUp(const MunitParameter params[], void *user_data)
     int rv;
     /* test_tcp_listen(&f->tcp); */
     INIT;
+    f->accepted = false;
+    f->handshake.offset = 0;
+
+    cursor = f->handshake.buf;
+    bytePut64(&cursor, 1);
+    bytePut64(&cursor, PEER_ID);
+    bytePut64(&cursor, 16);
+    strcpy(cursor, PEER_ADDRESS);
+
+    rv = f->transport.listen(&f->transport, acceptCb);
+    munit_assert_int(rv, ==, 0);
+
+    return f;
+}
+
+static void *setUp2(const MunitParameter params[], void *user_data)
+{
+    struct fixture *f = setUpDeps(params, user_data);
+    void *cursor;
+    int rv;
+    /* test_tcp_listen(&f->tcp); */
+    INIT2;
     f->accepted = false;
     f->handshake.offset = 0;
 
@@ -177,6 +212,17 @@ SUITE(tcp_listen)
 
 /* If the handshake is successful, the accept callback is invoked. */
 TEST(tcp_listen, first, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    PEER_CONNECT;
+    PEER_HANDSHAKE;
+    ACCEPT;
+    return MUNIT_OK;
+}
+
+/* If the handshake is successful, the accept callback is invoked.
+ * With raft_uv_tcp_set_bind_address() */
+TEST(tcp_listen, set_bind, setUp2, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     PEER_CONNECT;
