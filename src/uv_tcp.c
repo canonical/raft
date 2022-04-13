@@ -1,3 +1,4 @@
+#include "uv_ip.h"
 #include "uv_tcp.h"
 
 #include <string.h>
@@ -6,6 +7,7 @@
 #include "../include/raft/uv.h"
 #include "assert.h"
 #include "err.h"
+#include "heap.h"
 
 /* Implementation of raft_uv_transport->init. */
 static int uvTcpInit(struct raft_uv_transport *transport,
@@ -75,6 +77,7 @@ int raft_uv_tcp_init(struct raft_uv_transport *transport,
     t->loop = loop;
     t->id = 0;
     t->address = NULL;
+    t->bind_address = NULL;
     t->listener.data = NULL;
     t->accept_cb = NULL;
     QUEUE_INIT(&t->accepting);
@@ -95,5 +98,26 @@ int raft_uv_tcp_init(struct raft_uv_transport *transport,
 void raft_uv_tcp_close(struct raft_uv_transport *transport)
 {
     struct UvTcp *t = transport->impl;
+    raft_free(t->bind_address);
     raft_free(t);
+}
+
+int raft_uv_tcp_set_bind_address(struct raft_uv_transport *transport,
+                                 const char *address)
+{
+    struct UvTcp *t = transport->impl;
+    struct sockaddr_in addr;
+    int rv;
+
+    rv = uvIpParse(address, &addr);
+    if (rv != 0) {
+        return RAFT_INVALID;
+    }
+
+    t->bind_address = raft_malloc(strlen(address) + 1);
+    if (t->bind_address == NULL) {
+        return RAFT_NOMEM;
+    }
+    strcpy(t->bind_address, address);
+    return 0;
 }

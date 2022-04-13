@@ -20,6 +20,7 @@ struct UvTcp
     queue aborting;                      /* Connections being aborted */
     bool closing;                        /* True after close() is called */
     raft_uv_transport_close_cb close_cb; /* Call when it's safe to free us */
+    char *bind_address;                  /* Optional address:port to bind to */
 };
 
 /* Implementation of raft_uv_transport->listen. */
