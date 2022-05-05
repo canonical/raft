@@ -779,6 +779,7 @@ int UvFsProbeCapabilities(const char *dir,
     /* Check if we can use direct I/O. */
     rv = probeDirectIO(fd, direct, errmsg);
     if (rv != 0) {
+        ErrMsgWrapf(errmsg, "probe Direct I/O");
         goto err_after_file_open;
     }
 
@@ -795,6 +796,7 @@ int UvFsProbeCapabilities(const char *dir,
     }
     rv = probeAsyncIO(fd, *direct, async, errmsg);
     if (rv != 0) {
+        ErrMsgWrapf(errmsg, "probe Async I/O");
         goto err_after_file_open;
     }
 #endif /* RWF_NOWAIT */

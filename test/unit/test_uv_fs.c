@@ -353,7 +353,7 @@ TEST(UvFsProbeCapabilities, noResources, DirBtrfsSetUp, DirTearDown, 0, NULL)
         return MUNIT_SKIP;
     }
     PROBE_CAPABILITIES_ERROR(dir, RAFT_IOERR,
-                             "io_setup: resource temporarily unavailable");
+                             "probe Async I/O: io_setup: resource temporarily unavailable");
     AioDestroy(ctx);
     return MUNIT_OK;
 }
