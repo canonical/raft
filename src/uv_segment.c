@@ -1,4 +1,6 @@
 #include <errno.h>
+#include <inttypes.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -801,6 +803,68 @@ void uvSegmentBufferReset(struct uvSegmentBuffer *b, unsigned retain)
     b->n = b->n % b->block_size;
 }
 
+/* When a corrupted segment is detected, the segment is renamed.
+ * Upon a restart, raft will not detect the segment anymore and will try
+ * to start without it.
+ * */
+#define CORRUPT_FILE_FMT "corrupt-%"PRId64"-%s"
+static void uvMoveCorruptSegment(struct uv *uv, struct uvSegmentInfo *info)
+{
+    char errmsg[RAFT_ERRMSG_BUF_SIZE] = {0};
+    char new_filename[UV__FILENAME_LEN+1] = {0};
+    size_t sz = sizeof(new_filename);
+    int rv;
+
+    struct timespec ts = {0};
+    /* Ignore errors */
+    clock_gettime(CLOCK_REALTIME, &ts);
+    int64_t ns = ts.tv_sec * 1000000000 + ts.tv_nsec;
+    rv = snprintf(new_filename, sz, CORRUPT_FILE_FMT, ns, info->filename);
+    if (rv < 0 || rv >= (int)sz) {
+        tracef("snprintf %d", rv);
+        return;
+    }
+
+    UvFsRenameFile(uv->dir, info->filename, new_filename, errmsg);
+    if (rv != 0) {
+        tracef("%s", errmsg);
+        return;
+    }
+}
+
+/*
+ * On startup, raft will try to recover when a corrupt segment is detected.
+ *
+ * When a corrupt open segment is encountered, it, and all subsequent open segments,
+ * are renamed. Not renaming newer, possible non-corrupt, open segments could lead
+ * to loading inconsistent data.
+ *
+ * When a corrupt closed segment is encountered, it will be renamed when
+ * it is the last closed segment, in that case all open-segments are renamed too.
+ */
+static void uvRecoverFromCorruptSegment(struct uv *uv,
+                                        size_t i_corrupt,
+                                        struct uvSegmentInfo *infos,
+                                        size_t n_infos)
+{
+    struct uvSegmentInfo *info = &infos[i_corrupt];
+    if (info->is_open) {
+        for (size_t i = i_corrupt; i < n_infos; ++i) {
+            info = &infos[i];
+            uvMoveCorruptSegment(uv, info);
+        }
+    } else {
+        size_t i_next = i_corrupt + 1;
+        /* last segment or last closed segment. */
+        if (i_next == n_infos || infos[i_next].is_open) {
+            for (size_t i = i_corrupt; i < n_infos; ++i) {
+                info = &infos[i];
+                uvMoveCorruptSegment(uv, info);
+            }
+        }
+    }
+}
+
 int uvSegmentLoadAll(struct uv *uv,
                      const raft_index start_index,
                      struct uvSegmentInfo *infos,
@@ -831,6 +895,9 @@ int uvSegmentLoadAll(struct uv *uv,
             rv = uvSegmentLoadOpen(uv, info, entries, n_entries, &next_index);
             ErrMsgWrapf(uv->io->errmsg, "load open segment %s", info->filename);
             if (rv != 0) {
+                if (rv == RAFT_CORRUPT) {
+                    uvRecoverFromCorruptSegment(uv, i, infos, n_infos);
+                }
                 goto err;
             }
         } else {
@@ -852,6 +919,9 @@ int uvSegmentLoadAll(struct uv *uv,
             if (rv != 0) {
                 ErrMsgWrapf(uv->io->errmsg, "load closed segment %s",
                             info->filename);
+                if (rv == RAFT_CORRUPT) {
+                    uvRecoverFromCorruptSegment(uv, i, infos, n_infos);
+                }
                 goto err;
             }
 
