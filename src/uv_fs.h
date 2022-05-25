@@ -97,6 +97,12 @@ int UvFsTruncateAndRenameFile(const char *dir,
                               const char *filename2,
                               char *errmsg);
 
+/* Synchronously rename a file. */
+int UvFsRenameFile(const char *dir,
+		   const char *filename1,
+		   const char *filename2,
+		   char *errmsg);
+
 /* Return information about the I/O capabilities of the underlying file
  * system.
  *

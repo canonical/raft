@@ -535,6 +535,33 @@ int UvFsRemoveFile(const char *dir, const char *filename, char *errmsg)
     return 0;
 }
 
+int UvFsRenameFile(const char *dir,
+		   const char *filename1,
+		   const char *filename2,
+		   char *errmsg)
+{
+    char path1[UV__PATH_SZ];
+    char path2[UV__PATH_SZ];
+    int rv;
+
+    rv = UvOsJoin(dir, filename1, path1);
+    if (rv != 0) {
+        return RAFT_INVALID;
+    }
+    rv = UvOsJoin(dir, filename2, path2);
+    if (rv != 0) {
+        return RAFT_INVALID;
+    }
+
+    rv = UvOsRename(path1, path2);
+    if (rv != 0) {
+        UvOsErrMsg(errmsg, "rename", rv);
+        return rv;
+    }
+
+    return 0;
+}
+
 int UvFsTruncateAndRenameFile(const char *dir,
                               size_t size,
                               const char *filename1,

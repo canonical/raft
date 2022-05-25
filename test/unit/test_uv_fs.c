@@ -394,3 +394,41 @@ TEST(UvFsMakeFile, exists, DirSetUp, DirTearDown, 0, NULL)
     munit_assert_int(rv, !=, 0);
     return MUNIT_OK;
 }
+
+/******************************************************************************
+ *
+ * UvFsRenameFile
+ *
+ *****************************************************************************/
+
+SUITE(UvFsRenameFile)
+
+TEST(UvFsRenameFile, rename, DirSetUp, DirTearDown, 0, NULL)
+{
+    const char *dir = data;
+    int rv;
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
+    struct raft_buffer bufs[2] = {{0},{0}};
+    rv = UvFsMakeFile(dir, "foo", bufs, 2, errmsg);
+    munit_assert_int(rv, ==, 0);
+    rv = UvFsRenameFile(dir, "foo", "bar", errmsg);
+    munit_assert_int(rv, ==, 0);
+    munit_assert_false(DirHasFile(dir, "foo"));
+    munit_assert_true(DirHasFile(dir, "bar"));
+    return MUNIT_OK;
+}
+
+/* rename to same name */
+TEST(UvFsRenameFile, same, DirSetUp, DirTearDown, 0, NULL)
+{
+    const char *dir = data;
+    int rv;
+    char errmsg[RAFT_ERRMSG_BUF_SIZE];
+    struct raft_buffer bufs[2] = {{0},{0}};
+    rv = UvFsMakeFile(dir, "foo", bufs, 2, errmsg);
+    munit_assert_int(rv, ==, 0);
+    rv = UvFsRenameFile(dir, "foo", "foo", errmsg);
+    munit_assert_int(rv, ==, 0);
+    munit_assert_true(DirHasFile(dir, "foo"));
+    return MUNIT_OK;
+}
