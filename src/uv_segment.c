@@ -466,7 +466,7 @@ static bool uvContentHasOnlyTrailingZeros(const struct raft_buffer *buf,
 }
 
 /* Load all entries contained in an open segment. */
-static int uvLoadOpenSegment(struct uv *uv,
+static int uvSegmentLoadOpen(struct uv *uv,
                              struct uvSegmentInfo *info,
                              struct raft_entry *entries[],
                              size_t *n,
@@ -828,7 +828,7 @@ int uvSegmentLoadAll(struct uv *uv,
         tracef("load segment %s", info->filename);
 
         if (info->is_open) {
-            rv = uvLoadOpenSegment(uv, info, entries, n_entries, &next_index);
+            rv = uvSegmentLoadOpen(uv, info, entries, n_entries, &next_index);
             ErrMsgWrapf(uv->io->errmsg, "load open segment %s", info->filename);
             if (rv != 0) {
                 goto err;
