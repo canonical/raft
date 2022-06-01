@@ -247,17 +247,20 @@ struct snapshot
         DirGrowFile(f->dir, _filename2, SEGMENT_SIZE);        \
     } while (0)
 
+#define LOAD_VARS                           \
+        int _rv;                            \
+        raft_term _term;                    \
+        raft_id _voted_for;                 \
+        struct raft_snapshot *_snapshot;    \
+        raft_index _start_index;            \
+        struct raft_entry *_entries;        \
+        size_t _n;
+
 /* Initialize the raft_io instance, then call raft_io->load() and assert that it
  * returns the given error code and message. */
 #define LOAD_ERROR(RV, ERRMSG)                                    \
     do {                                                          \
-        int _rv;                                                  \
-        raft_term _term;                                          \
-        raft_id _voted_for;                                       \
-        struct raft_snapshot *_snapshot;                          \
-        raft_index _start_index;                                  \
-        struct raft_entry *_entries;                              \
-        size_t _n;                                                \
+        LOAD_VARS;                                                \
         SETUP_UV;                                                 \
         _rv = f->io.load(&f->io, &_term, &_voted_for, &_snapshot, \
                          &_start_index, &_entries, &_n);          \
@@ -265,23 +268,7 @@ struct snapshot
         munit_assert_string_equal(f->io.errmsg, ERRMSG);          \
     } while (0)
 
-/* Initialize the raft_io instance, then invoke raft_io->load() and assert that
- * it returns the given state. If non-NULL, SNAPSHOT points to a struct snapshot
- * object whose attributes must match the loaded snapshot. ENTRIES_DATA is
- * supposed to be the integer stored in the data of first loaded entry. */
-#define LOAD(TERM, VOTED_FOR, SNAPSHOT, START_INDEX, ENTRIES_DATA, N_ENTRIES) \
-    do {                                                                      \
-        int _rv;                                                              \
-        raft_term _term;                                                      \
-        raft_id _voted_for;                                                   \
-        struct raft_snapshot *_snapshot;                                      \
-        raft_index _start_index;                                              \
-        struct raft_entry *_entries;                                          \
-        size_t _n;                                                            \
-        void *_batch = NULL;                                                  \
-        uint64_t _data = ENTRIES_DATA;                                        \
-        unsigned _i;                                                          \
-        SETUP_UV;                                                             \
+#define _LOAD(TERM, VOTED_FOR, SNAPSHOT, START_INDEX, N_ENTRIES)              \
         _rv = f->io.load(&f->io, &_term, &_voted_for, &_snapshot,             \
                          &_start_index, &_entries, &_n);                      \
         munit_assert_int(_rv, ==, 0);                                         \
@@ -318,6 +305,29 @@ struct snapshot
             }                                                                 \
             raft_free(_entries);                                              \
         }                                                                     \
+
+/* Initialize the raft_io instance, then invoke raft_io->load() and assert that
+ * it returns the given state. If non-NULL, SNAPSHOT points to a struct snapshot
+ * object whose attributes must match the loaded snapshot. ENTRIES_DATA is
+ * supposed to be the integer stored in the data of first loaded entry. */
+#define LOAD(TERM, VOTED_FOR, SNAPSHOT, START_INDEX, ENTRIES_DATA, N_ENTRIES) \
+    do {                                                                      \
+        LOAD_VARS;                                                            \
+        void *_batch = NULL;                                                  \
+        uint64_t _data = ENTRIES_DATA;                                        \
+        unsigned _i;                                                          \
+        SETUP_UV;                                                             \
+        _LOAD(TERM, VOTED_FOR, SNAPSHOT, START_INDEX, N_ENTRIES)              \
+    } while (0)
+
+/* Same as LOAD without SETUP_UV */
+#define LOAD_NO_SETUP(TERM, VOTED_FOR, SNAPSHOT, START_INDEX, ENTRIES_DATA, N_ENTRIES) \
+    do {                                                                               \
+    	LOAD_VARS;                                                                     \
+        void *_batch = NULL;                                                           \
+        uint64_t _data = ENTRIES_DATA;                                                 \
+        unsigned _i;                                                                   \
+        _LOAD(TERM, VOTED_FOR, SNAPSHOT, START_INDEX, N_ENTRIES)                       \
     } while (0)
 
 /******************************************************************************
