@@ -6,13 +6,30 @@
 #include "../include/raft.h"
 #include "../include/raft/uv.h"
 
-#define N_SERVERS 3    /* Number of servers in the example cluster */
+#define N_SERVERS 4    /* Number of servers in the example cluster */
 #define APPLY_RATE 125 /* Apply a new entry every 125 milliseconds */
 
 #define Log(SERVER_ID, FORMAT) printf("%d: " FORMAT "\n", SERVER_ID)
 #define Logf(SERVER_ID, FORMAT, ...) \
     printf("%d: " FORMAT "\n", SERVER_ID, __VA_ARGS__)
 
+static void trace_message(struct raft_tracer *t, const char *file, int line, const char *message)
+{
+    static const char* include_source_files[] = {
+        "configuration.c", "convert.c", "election.c", "membership.c", "recv_request_vote.c",
+        "recv_request_vote_result.c", "recv_timeout_now.c", "start.c", NULL
+    };
+
+    (void)t;
+
+    file += 4;
+    for (const char** included_file_name = include_source_files; *included_file_name; ++included_file_name){
+        if (!strcmp(*included_file_name,file)){
+            printf("Trace: %s (%s:%d)\n", message, file, line);
+            return;
+        }
+    }
+}
 /********************************************************************
  *
  * Sample application FSM that just increases a counter.
@@ -213,6 +230,9 @@ static int ServerInit(struct Server *s,
         goto err_after_fsm_init;
     }
     s->raft.data = s;
+
+	s->raft.tracer->emit = &trace_message;
+	s->raft.tracer->enabled = true;
 
     /* Bootstrap the initial configuration if needed. */
     raft_configuration_init(&configuration);
