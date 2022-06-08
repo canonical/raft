@@ -129,6 +129,12 @@ RAFT_API void raft_uv_set_tracer(struct raft_io *io,
                                  struct raft_tracer *tracer);
 
 /**
+ * Enable or disable auto-recovery on startup. Default enabled.
+ */
+RAFT_API void raft_uv_set_auto_recovery(struct raft_io *io,
+                                        bool flag);
+
+/**
  * Callback invoked by the transport implementation when a new incoming
  * connection has been established.
  *

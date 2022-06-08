@@ -669,6 +669,7 @@ int raft_uv_init(struct raft_io *io,
     QUEUE_INIT(&uv->aborting);
     uv->closing = false;
     uv->close_cb = NULL;
+    uv->auto_recovery = true;
 
     /* Set the raft_io implementation. */
     io->version = 1; /* future-proof'ing */
@@ -745,6 +746,13 @@ void raft_uv_set_tracer(struct raft_io *io, struct raft_tracer *tracer)
     struct uv *uv;
     uv = io->impl;
     uv->tracer = tracer;
+}
+
+void raft_uv_set_auto_recovery(struct raft_io *io, bool flag)
+{
+    struct uv *uv;
+    uv = io->impl;
+    uv->auto_recovery = flag;
 }
 
 #undef tracef

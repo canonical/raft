@@ -895,7 +895,7 @@ int uvSegmentLoadAll(struct uv *uv,
             rv = uvSegmentLoadOpen(uv, info, entries, n_entries, &next_index);
             ErrMsgWrapf(uv->io->errmsg, "load open segment %s", info->filename);
             if (rv != 0) {
-                if (rv == RAFT_CORRUPT) {
+                if (rv == RAFT_CORRUPT && uv->auto_recovery) {
                     uvRecoverFromCorruptSegment(uv, i, infos, n_infos);
                 }
                 goto err;
@@ -919,7 +919,7 @@ int uvSegmentLoadAll(struct uv *uv,
             if (rv != 0) {
                 ErrMsgWrapf(uv->io->errmsg, "load closed segment %s",
                             info->filename);
-                if (rv == RAFT_CORRUPT) {
+                if (rv == RAFT_CORRUPT && uv->auto_recovery) {
                     uvRecoverFromCorruptSegment(uv, i, infos, n_infos);
                 }
                 goto err;
