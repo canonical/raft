@@ -454,7 +454,6 @@ static int uvLoad(struct raft_io *io,
                   size_t *n_entries)
 {
     struct uv *uv;
-    raft_index last_index;
     int rv;
     uv = io->impl;
 
@@ -472,10 +471,8 @@ static int uvLoad(struct raft_io *io,
         tracef("no snapshot");
     }
 
-    last_index = *start_index + *n_entries - 1;
-
     /* Set the index of the next entry that will be appended. */
-    uv->append_next_index = last_index + 1;
+    uv->append_next_index = *start_index + *n_entries;
 
     return 0;
 }
