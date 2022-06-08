@@ -330,12 +330,14 @@ static int uvFilterSegments(struct uv *uv,
 }
 
 /* Load the last snapshot (if any) and all entries contained in all segment
- * files of the data directory. */
+ * files of the data directory. This function can be called recursively, `depth`
+ * is there to ensure we don't get stuck in a recursive loop. */
 static int uvLoadSnapshotAndEntries(struct uv *uv,
                                     struct raft_snapshot **snapshot,
                                     raft_index *start_index,
                                     struct raft_entry *entries[],
-                                    size_t *n)
+                                    size_t *n,
+                                    int depth)
 {
     struct uvSnapshotInfo *snapshots;
     struct uvSegmentInfo *segments;
@@ -441,6 +443,13 @@ err:
         *entries = NULL;
         *n = 0;
     }
+    /* Try to recover exactly once when corruption is detected, the first pass
+     * might have cleaned up corrupt data. Most of the arguments are already
+     * reset after the `err` label, except for `start_index`. */
+    if (rv == RAFT_CORRUPT && uv->auto_recovery && depth == 0) {
+	*start_index = 1;
+    	return uvLoadSnapshotAndEntries(uv, snapshot, start_index, entries, n, depth + 1);
+    }
     return rv;
 }
 
@@ -462,7 +471,7 @@ static int uvLoad(struct raft_io *io,
     *snapshot = NULL;
 
     rv =
-        uvLoadSnapshotAndEntries(uv, snapshot, start_index, entries, n_entries);
+        uvLoadSnapshotAndEntries(uv, snapshot, start_index, entries, n_entries, 0);
     if (rv != 0) {
         return rv;
     }
@@ -551,7 +560,7 @@ static int uvRecover(struct raft_io *io, const struct raft_configuration *conf)
 
     /* Load the current state. This also closes any leftover open segment. */
     rv = uvLoadSnapshotAndEntries(uv, &snapshot, &start_index, &entries,
-                                  &n_entries);
+                                  &n_entries, 0);
     if (rv != 0) {
         return rv;
     }
