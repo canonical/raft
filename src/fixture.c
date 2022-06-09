@@ -1324,7 +1324,9 @@ static void fireTick(struct raft_fixture *f, unsigned i)
     f->event.server_index = i;
     f->event.type = RAFT_FIXTURE_TICK;
     io->next_tick += io->tick_interval;
-    io->tick_cb(io->io);
+    if (f->servers[i].alive) {
+        io->tick_cb(io->io);
+    }
 }
 
 /* Complete the first request with completion time @t on the @i'th server. */
@@ -1761,6 +1763,22 @@ static void disconnectFromAll(struct raft_fixture *f, unsigned i)
     }
 }
 
+static void reconnectToAll(struct raft_fixture *f, unsigned i)
+{
+    unsigned j;
+    for (j = 0; j < f->n; j++) {
+        if (j == i) {
+            continue;
+        }
+        /* Don't reconnect to disconnected peers */
+        if (!f->servers[j].alive) {
+            continue;
+        }
+        raft_fixture_desaturate(f, i, j);
+        raft_fixture_desaturate(f, j, i);
+    }
+}
+
 bool raft_fixture_saturated(struct raft_fixture *f, unsigned i, unsigned j)
 {
     struct raft_io *io1 = &f->servers[i].io;
@@ -1779,6 +1797,12 @@ void raft_fixture_kill(struct raft_fixture *f, unsigned i)
 {
     disconnectFromAll(f, i);
     f->servers[i].alive = false;
+}
+
+void raft_fixture_revive(struct raft_fixture *f, unsigned i)
+{
+    reconnectToAll(f, i);
+    f->servers[i].alive = true;
 }
 
 int raft_fixture_grow(struct raft_fixture *f, struct raft_fsm *fsm)

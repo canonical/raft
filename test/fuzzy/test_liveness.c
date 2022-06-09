@@ -28,7 +28,7 @@ struct fixture
     struct disconnection *disconnections;
 };
 
-static char *cluster_n[] = {"3", NULL};
+static char *cluster_n[] = {"3", "4", NULL};
 static char *cluster_pre_vote[] = {"0", "1", NULL};
 
 static MunitParameterEnum _params[] = {

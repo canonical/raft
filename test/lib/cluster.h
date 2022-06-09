@@ -271,6 +271,9 @@
 /* Kill the I'th server. */
 #define CLUSTER_KILL(I) raft_fixture_kill(&f->cluster, I);
 
+/* Revive the I'th server */
+#define CLUSTER_REVIVE(I) raft_fixture_revive(&f->cluster, I);
+
 /* Kill the leader. */
 #define CLUSTER_KILL_LEADER CLUSTER_KILL(CLUSTER_LEADER)
 
