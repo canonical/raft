@@ -21,6 +21,7 @@ int recvRequestVote(struct raft *r,
     struct raft_io_send *req;
     struct raft_message message;
     struct raft_request_vote_result *result = &message.request_vote_result;
+    raft_term check_term;
     bool has_leader;
     int match;
     int rv;
@@ -63,15 +64,15 @@ int recvRequestVote(struct raft *r,
         goto reply;
     }
 
-    /* If this is a pre-vote request, don't actually increment our term or
-     * persist the vote. */
+    check_term = args->term;
+    /* If this is a pre-vote the candidate has artificially increased it's term */
     if (args->pre_vote) {
-        recvCheckMatchingTerms(r, args->term, &match);
-    } else {
-        rv = recvEnsureMatchingTerms(r, args->term, &match);
-        if (rv != 0) {
-            return rv;
-        }
+        assert(args->term >= 1);
+        check_term = args->term - 1;
+    }
+    rv = recvEnsureMatchingTerms(r, check_term, &match);
+    if (rv != 0) {
+	return rv;
     }
 
     /* From Figure 3.1:
