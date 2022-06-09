@@ -1324,7 +1324,9 @@ static void fireTick(struct raft_fixture *f, unsigned i)
     f->event.server_index = i;
     f->event.type = RAFT_FIXTURE_TICK;
     io->next_tick += io->tick_interval;
-    io->tick_cb(io->io);
+    if (f->servers[i].alive) {
+        io->tick_cb(io->io);
+    }
 }
 
 /* Complete the first request with completion time @t on the @i'th server. */
