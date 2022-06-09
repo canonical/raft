@@ -353,6 +353,11 @@ RAFT_API void raft_fixture_desaturate(struct raft_fixture *f,
 RAFT_API void raft_fixture_kill(struct raft_fixture *f, unsigned i);
 
 /**
+ * Revive a killed server with the given index.
+ */
+RAFT_API void raft_fixture_revive(struct raft_fixture *f, unsigned i);
+
+/**
  * Add a new empty server to the cluster and connect it to all others.
  */
 RAFT_API int raft_fixture_grow(struct raft_fixture *f, struct raft_fsm *fsm);
