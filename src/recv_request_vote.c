@@ -21,7 +21,6 @@ int recvRequestVote(struct raft *r,
     struct raft_io_send *req;
     struct raft_message message;
     struct raft_request_vote_result *result = &message.request_vote_result;
-    raft_term check_term;
     bool has_leader;
     int match;
     int rv;
@@ -64,15 +63,15 @@ int recvRequestVote(struct raft *r,
         goto reply;
     }
 
-    check_term = args->term;
-    /* If this is a pre-vote the candidate has artificially increased it's term */
+    /* If this is a pre-vote request, don't actually increment our term or
+     * persist the vote. */
     if (args->pre_vote) {
-        assert(args->term >= 1);
-        check_term = args->term - 1;
-    }
-    rv = recvEnsureMatchingTerms(r, check_term, &match);
-    if (rv != 0) {
-	return rv;
+        recvCheckMatchingTerms(r, args->term, &match);
+    } else {
+        rv = recvEnsureMatchingTerms(r, args->term, &match);
+        if (rv != 0) {
+            return rv;
+        }
     }
 
     /* From Figure 3.1:
@@ -101,6 +100,17 @@ int recvRequestVote(struct raft *r,
 
 reply:
     result->term = r->current_term;
+    /* Nodes don't update their term when seeing a Pre-Vote RequestVote RPC.
+     * To prevent the candidate from ignoring the response of this node if it has
+     * a smaller term than the candidate, we include the term of the request.
+     * The smaller term can occur if this node was partitioned from the cluster
+     * and has reestablished connectivity. This prevents a cluster deadlock
+     * when a majority of the nodes is online, but they fail to establish quorum
+     * because the vote of a former partitioned node with a smaller term is
+     * needed for majority.*/
+    if (args->pre_vote) {
+        result->term = args->term;
+    }
 
     message.type = RAFT_IO_REQUEST_VOTE_RESULT;
     message.server_id = id;
