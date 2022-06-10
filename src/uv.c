@@ -330,12 +330,14 @@ static int uvFilterSegments(struct uv *uv,
 }
 
 /* Load the last snapshot (if any) and all entries contained in all segment
- * files of the data directory. */
+ * files of the data directory. This function can be called recursively, `depth`
+ * is there to ensure we don't get stuck in a recursive loop. */
 static int uvLoadSnapshotAndEntries(struct uv *uv,
                                     struct raft_snapshot **snapshot,
                                     raft_index *start_index,
                                     struct raft_entry *entries[],
-                                    size_t *n)
+                                    size_t *n,
+                                    int depth)
 {
     struct uvSnapshotInfo *snapshots;
     struct uvSegmentInfo *segments;
@@ -441,6 +443,13 @@ err:
         *entries = NULL;
         *n = 0;
     }
+    /* Try to recover exactly once when corruption is detected, the first pass
+     * might have cleaned up corrupt data. Most of the arguments are already
+     * reset after the `err` label, except for `start_index`. */
+    if (rv == RAFT_CORRUPT && uv->auto_recovery && depth == 0) {
+	*start_index = 1;
+    	return uvLoadSnapshotAndEntries(uv, snapshot, start_index, entries, n, depth + 1);
+    }
     return rv;
 }
 
@@ -454,7 +463,6 @@ static int uvLoad(struct raft_io *io,
                   size_t *n_entries)
 {
     struct uv *uv;
-    raft_index last_index;
     int rv;
     uv = io->impl;
 
@@ -463,7 +471,7 @@ static int uvLoad(struct raft_io *io,
     *snapshot = NULL;
 
     rv =
-        uvLoadSnapshotAndEntries(uv, snapshot, start_index, entries, n_entries);
+        uvLoadSnapshotAndEntries(uv, snapshot, start_index, entries, n_entries, 0);
     if (rv != 0) {
         return rv;
     }
@@ -472,10 +480,8 @@ static int uvLoad(struct raft_io *io,
         tracef("no snapshot");
     }
 
-    last_index = *start_index + *n_entries - 1;
-
     /* Set the index of the next entry that will be appended. */
-    uv->append_next_index = last_index + 1;
+    uv->append_next_index = *start_index + *n_entries;
 
     return 0;
 }
@@ -554,7 +560,7 @@ static int uvRecover(struct raft_io *io, const struct raft_configuration *conf)
 
     /* Load the current state. This also closes any leftover open segment. */
     rv = uvLoadSnapshotAndEntries(uv, &snapshot, &start_index, &entries,
-                                  &n_entries);
+                                  &n_entries, 0);
     if (rv != 0) {
         return rv;
     }
@@ -672,6 +678,7 @@ int raft_uv_init(struct raft_io *io,
     QUEUE_INIT(&uv->aborting);
     uv->closing = false;
     uv->close_cb = NULL;
+    uv->auto_recovery = true;
 
     /* Set the raft_io implementation. */
     io->version = 1; /* future-proof'ing */
@@ -748,6 +755,13 @@ void raft_uv_set_tracer(struct raft_io *io, struct raft_tracer *tracer)
     struct uv *uv;
     uv = io->impl;
     uv->tracer = tracer;
+}
+
+void raft_uv_set_auto_recovery(struct raft_io *io, bool flag)
+{
+    struct uv *uv;
+    uv = io->impl;
+    uv->auto_recovery = flag;
 }
 
 #undef tracef

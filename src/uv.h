@@ -91,6 +91,7 @@ struct uv
     queue aborting;                      /* Cleanups upon errors or shutdown */
     bool closing;                        /* True if we are closing */
     raft_io_close_cb close_cb;           /* Invoked when finishing closing */
+    bool auto_recovery;                  /* Try to recover from corrupt segments */
 };
 
 /* Implementation of raft_io->truncate. */
