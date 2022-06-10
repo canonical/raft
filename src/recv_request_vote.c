@@ -100,6 +100,17 @@ int recvRequestVote(struct raft *r,
 
 reply:
     result->term = r->current_term;
+    /* Nodes don't update their term when seeing a Pre-Vote RequestVote RPC.
+     * To prevent the candidate from ignoring the response of this node if it has
+     * a smaller term than the candidate, we include the term of the request.
+     * The smaller term can occur if this node was partitioned from the cluster
+     * and has reestablished connectivity. This prevents a cluster deadlock
+     * when a majority of the nodes is online, but they fail to establish quorum
+     * because the vote of a former partitioned node with a smaller term is
+     * needed for majority.*/
+    if (args->pre_vote) {
+        result->term = args->term;
+    }
 
     message.type = RAFT_IO_REQUEST_VOTE_RESULT;
     message.server_id = id;
