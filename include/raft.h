@@ -502,20 +502,6 @@ struct raft_io
 };
 
 /*
- * version 1:
- * struct raft_fsm
- * {
- *     int version;
- *     void *data;
- *     int (*apply)(struct raft_fsm *fsm,
- *                  const struct raft_buffer *buf,
- *                  void **result);
- *     int (*snapshot)(struct raft_fsm *fsm,
- *                     struct raft_buffer *bufs[],
- *                     unsigned *n_bufs);
- *     int (*restore)(struct raft_fsm *fsm, struct raft_buffer *buf);
- * };
- *
  * version 2:
  * introduces `snapshot_finalize`, when this method is not NULL, it will
  * always run after a successful call to `snapshot`, whether the snapshot has
@@ -537,6 +523,7 @@ struct raft_fsm
                     struct raft_buffer *bufs[],
                     unsigned *n_bufs);
     int (*restore)(struct raft_fsm *fsm, struct raft_buffer *buf);
+    /* Fields below added since version 2. */
     int (*snapshot_finalize)(struct raft_fsm *fsm,
                              struct raft_buffer *bufs[],
                              unsigned *n_bufs);
