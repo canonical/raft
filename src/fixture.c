@@ -978,6 +978,15 @@ int raft_fixture_init(struct raft_fixture *f, unsigned n, struct raft_fsm *fsms)
     return 0;
 }
 
+int raft_fixture_initialize(struct raft_fixture *f)
+{
+    f->time = 0;
+    logInit(&f->log);
+    f->commit_index = 0;
+    f->hook = NULL;
+    return 0;
+}
+
 void raft_fixture_close(struct raft_fixture *f)
 {
     unsigned i;

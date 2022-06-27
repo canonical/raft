@@ -74,14 +74,23 @@ struct raft_fixture
 };
 
 /**
+ * !!! DEPRECATED users should use `raft_fixture_initialize`. !!!
+ *
  * Initialize a raft cluster fixture with @n servers. Each server will use an
  * in-memory @raft_io implementation and one of the given @fsms. All servers
  * will be initially connected to one another, but they won't be bootstrapped or
  * started.
  */
+__attribute__((deprecated("use raft_fixture_initialize")))
 RAFT_API int raft_fixture_init(struct raft_fixture *f,
                                unsigned n,
                                struct raft_fsm *fsms);
+
+/**
+ * Initialize a raft cluster fixture. Servers can be added by using
+ * `raft_fixture_grow`.
+ */
+RAFT_API int raft_fixture_initialize(struct raft_fixture *f);
 
 /**
  * Release all memory used by the fixture.
