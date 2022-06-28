@@ -3,7 +3,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/random.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -595,13 +597,28 @@ static raft_time uvTime(struct raft_io *io)
 /* Implementation of raft_io->random. */
 static int uvRandom(struct raft_io *io, int min, int max)
 {
-    static bool initialized = false;
-    if (!initialized) {
-        struct uv *uv = io->impl;
-        srand((unsigned)uv_now(uv->loop) + (unsigned)uv->id);
-        initialized = true;
-    }
+    (void) io;
     return min + (abs(rand()) % (max - min));
+}
+
+static void uvSeedRand(struct uv *uv)
+{
+    ssize_t sz = -1;
+    unsigned seed = 0; /* fed to srand() */
+
+    sz = getrandom(&seed, sizeof seed, GRND_NONBLOCK);
+    if (sz == -1 || sz < ((ssize_t)sizeof seed)) {
+        /* Fall back to an inferior random seed when `getrandom` would have blocked or
+         * when not enough randomness was returned. */
+        seed ^= (unsigned)uv->id;
+        seed ^= (unsigned)uv_now(uv->loop);
+        struct timeval time = {0};
+        /* Ignore errors. */
+        gettimeofday(&time, NULL);
+        seed ^= (unsigned)((time.tv_sec * 1000) + (time.tv_usec / 1000));
+    }
+
+    srand(seed);
 }
 
 int raft_uv_init(struct raft_io *io,
@@ -679,6 +696,8 @@ int raft_uv_init(struct raft_io *io,
     uv->closing = false;
     uv->close_cb = NULL;
     uv->auto_recovery = true;
+
+    uvSeedRand(uv);
 
     /* Set the raft_io implementation. */
     io->version = 1; /* future-proof'ing */
