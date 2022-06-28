@@ -77,7 +77,7 @@ TEST(election, changeReviveOutdated, setup, tear_down, 0, _params)
     CLUSTER_KILL(i);
 
     /* Server i's term will be lower than the term of the election. */
-    CLUSTER_STEP_UNTIL_HAS_LEADER(10000);
+    CLUSTER_STEP_UNTIL_HAS_LEADER(20000);
 
     /* Add some entries to the log */
     CLUSTER_MAKE_PROGRESS;
@@ -85,7 +85,7 @@ TEST(election, changeReviveOutdated, setup, tear_down, 0, _params)
     CLUSTER_KILL_LEADER;
     CLUSTER_STEP_UNTIL_HAS_NO_LEADER(10000);
 
-    /* Reviver server i with an outdated log and term, the cluster
+    /* Revive server i with an outdated log and term, the cluster
      * should be able to elect a new leader */
     CLUSTER_REVIVE(i);
     CLUSTER_STEP_UNTIL_HAS_LEADER(20000);
