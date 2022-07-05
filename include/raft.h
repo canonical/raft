@@ -519,6 +519,12 @@ struct raft_io
                       raft_io_async_work_cb cb);
 };
 
+/**
+ * Creates a struct raft_io. Memory must be freed by the user after calling
+ * raft_close.
+ */
+RAFT_API int raft_io_create(struct raft_io **io);
+
 /*
  * version 2:
  * introduces `snapshot_finalize`, when this method is not NULL, it will
@@ -562,6 +568,12 @@ struct raft_fsm
                           struct raft_buffer *bufs[],
                           unsigned *n_bufs);
 };
+
+/**
+ * Creates a struct raft_fsm. Memory must be freed by the user after calling
+ * raft_close.
+ */
+RAFT_API int raft_fsm_create(struct raft_fsm **fsm);
 
 /**
  * State codes.
@@ -772,6 +784,13 @@ struct raft
     unsigned max_catch_up_rounds;
     unsigned max_catch_up_round_duration;
 };
+
+/**
+ * Creates a struct raft. Memory must be freed by the user after calling
+ * raft_close.
+ */
+RAFT_API int raft_create(struct raft **r);
+
 
 RAFT_API int raft_init(struct raft *r,
                        struct raft_io *io,

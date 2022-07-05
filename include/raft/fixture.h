@@ -29,8 +29,8 @@ struct raft_fixture_server
     raft_id id;                /* Server ID. */
     char address[16];          /* Server address (stringified ID). */
     struct raft_tracer tracer; /* Tracer. */
-    struct raft_io io;         /* In-memory raft_io implementation. */
-    struct raft raft;          /* Raft instance. */
+    struct raft_io *io;        /* In-memory raft_io implementation. */
+    struct raft *raft;         /* Raft instance. */
 };
 
 /**

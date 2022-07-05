@@ -24,6 +24,33 @@
 #define DEFAULT_MAX_CATCH_UP_ROUNDS 10
 #define DEFAULT_MAX_CATCH_UP_ROUND_DURATION (5 * 1000)
 
+int raft_create(struct raft **r)
+{
+    *r = raft_calloc(1, sizeof(**r));
+    if (*r == NULL) {
+        return RAFT_NOMEM;
+    }
+    return 0;
+}
+
+int raft_fsm_create(struct raft_fsm **fsm)
+{
+    *fsm = raft_calloc(1, sizeof(**fsm));
+    if (*fsm == NULL) {
+        return RAFT_NOMEM;
+    }
+    return 0;
+}
+
+int raft_io_create(struct raft_io **io)
+{
+    *io = raft_calloc(1, sizeof(**io));
+    if (*io == NULL) {
+        return RAFT_NOMEM;
+    }
+    return 0;
+}
+
 static int ioFsmCompat(struct raft *r,
                        struct raft_io *io,
                        struct raft_fsm *fsm);
