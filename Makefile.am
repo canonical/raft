@@ -105,14 +105,15 @@ test_integration_core_SOURCES = \
   test/integration/test_election.c \
   test/integration/test_fixture.c \
   test/integration/test_heap.c \
+  test/integration/test_init.c \
   test/integration/test_membership.c \
   test/integration/test_recover.c \
   test/integration/test_replication.c \
   test/integration/test_snapshot.c \
+  test/integration/test_start.c \
   test/integration/test_strerror.c \
   test/integration/test_tick.c \
-  test/integration/test_transfer.c \
-  test/integration/test_start.c
+  test/integration/test_transfer.c
 test_integration_core_CFLAGS = $(AM_CFLAGS) -Wno-conversion
 test_integration_core_LDFLAGS = -no-install
 test_integration_core_LDADD = libtest.la libraft.la
@@ -150,6 +151,7 @@ libraft_la_SOURCES += \
   src/uv_tcp_listen.c \
   src/uv_tcp_connect.c \
   src/uv_truncate.c \
+  src/uv_work.c \
   src/uv_writer.c
 libraft_la_LDFLAGS += $(UV_LIBS)
 
@@ -198,7 +200,8 @@ test_integration_uv_SOURCES = \
   test/integration/test_uv_tcp_connect.c \
   test/integration/test_uv_tcp_listen.c \
   test/integration/test_uv_snapshot_put.c \
-  test/integration/test_uv_truncate.c
+  test/integration/test_uv_truncate.c \
+  test/integration/test_uv_work.c
 test_integration_uv_CFLAGS = $(AM_CFLAGS) -Wno-type-limits -Wno-conversion
 test_integration_uv_LDFLAGS = -no-install $(UV_LIBS)
 test_integration_uv_LDADD = libtest.la
