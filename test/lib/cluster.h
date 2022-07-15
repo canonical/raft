@@ -49,7 +49,7 @@
                 atoi(munit_parameters_get(params, CLUSTER_FSM_VERSION_PARAM)); \
         }                                                                      \
         munit_assert_int(_n, >, 0);                                            \
-        _rv = raft_fixture_initialize(&f->cluster);                            \
+        _rv = raft_fixture_init(&f->cluster);                                  \
         munit_assert_int(_rv, ==, 0);                                          \
         for (_i = 0; _i < _n; _i++) {                                          \
             if (!_ss_async || _fsm_version < 3) {                              \

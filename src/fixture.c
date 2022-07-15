@@ -30,6 +30,16 @@
  * instance. This should be enough for testing purposes. */
 #define MAX_PEERS 8
 
+struct raft_fixture_server
+{
+    bool alive;                /* If false, the server is down. */
+    raft_id id;                /* Server ID. */
+    char address[16];          /* Server address (stringified ID). */
+    struct raft_tracer tracer; /* Tracer. */
+    struct raft_io io;         /* In-memory raft_io implementation. */
+    struct raft raft;          /* Raft instance. */
+};
+
 /* Fields common across all request types. */
 #define REQUEST                                                            \
     int type;                  /* Request code type. */                    \
@@ -962,7 +972,12 @@ static void emit(struct raft_tracer *t,
 static int serverInit(struct raft_fixture *f, unsigned i, struct raft_fsm *fsm)
 {
     int rv;
-    struct raft_fixture_server *s = &f->servers[i];
+    struct raft_fixture_server *s;
+    s = raft_malloc(sizeof(*s));
+    if (s == NULL) {
+        return RAFT_NOMEM;
+    }
+    f->servers[i] = s;
     s->alive = true;
     s->id = i + 1;
     sprintf(s->address, "%llu", s->id);
@@ -988,6 +1003,7 @@ static void serverClose(struct raft_fixture_server *s)
 {
     raft_close(&s->raft, NULL);
     ioClose(&s->io);
+    raft_free(s);
 }
 
 /* Connect the server with the given index to all others */
@@ -995,8 +1011,8 @@ static void serverConnectToAll(struct raft_fixture *f, unsigned i)
 {
     unsigned j;
     for (j = 0; j < f->n; j++) {
-        struct raft_io *io1 = &f->servers[i].io;
-        struct raft_io *io2 = &f->servers[j].io;
+        struct raft_io *io1 = &f->servers[i]->io;
+        struct raft_io *io2 = &f->servers[j]->io;
         if (i == j) {
             continue;
         }
@@ -1004,36 +1020,7 @@ static void serverConnectToAll(struct raft_fixture *f, unsigned i)
     }
 }
 
-int raft_fixture_init(struct raft_fixture *f, unsigned n, struct raft_fsm *fsms)
-{
-    unsigned i;
-    int rc;
-    assert(n >= 1);
-
-    f->time = 0;
-    f->n = n;
-
-    /* Initialize all servers */
-    for (i = 0; i < n; i++) {
-        rc = serverInit(f, i, &fsms[i]);
-        if (rc != 0) {
-            return rc;
-        }
-    }
-
-    /* Connect all servers to each another */
-    for (i = 0; i < f->n; i++) {
-        serverConnectToAll(f, i);
-    }
-
-    logInit(&f->log);
-    f->commit_index = 0;
-    f->hook = NULL;
-
-    return 0;
-}
-
-int raft_fixture_initialize(struct raft_fixture *f)
+int raft_fixture_init(struct raft_fixture *f)
 {
     f->time = 0;
     logInit(&f->log);
@@ -1046,11 +1033,11 @@ void raft_fixture_close(struct raft_fixture *f)
 {
     unsigned i;
     for (i = 0; i < f->n; i++) {
-        struct io *io = f->servers[i].io.impl;
+        struct io *io = f->servers[i]->io.impl;
         ioFlushAll(io);
     }
     for (i = 0; i < f->n; i++) {
-        serverClose(&f->servers[i]);
+        serverClose(f->servers[i]);
     }
     logClose(&f->log);
 }
@@ -1068,7 +1055,7 @@ int raft_fixture_configuration(struct raft_fixture *f,
         struct raft_fixture_server *s;
         int role = i < n_voting ? RAFT_VOTER : RAFT_STANDBY;
         int rv;
-        s = &f->servers[i];
+        s = f->servers[i];
         rv = raft_configuration_add(configuration, s->id, s->address, role);
         if (rv != 0) {
             return rv;
@@ -1097,7 +1084,7 @@ int raft_fixture_start(struct raft_fixture *f)
     unsigned i;
     int rv;
     for (i = 0; i < f->n; i++) {
-        struct raft_fixture_server *s = &f->servers[i];
+        struct raft_fixture_server *s = f->servers[i];
         rv = raft_start(&s->raft);
         if (rv != 0) {
             return rv;
@@ -1119,13 +1106,13 @@ raft_time raft_fixture_time(struct raft_fixture *f)
 struct raft *raft_fixture_get(struct raft_fixture *f, unsigned i)
 {
     assert(i < f->n);
-    return &f->servers[i].raft;
+    return &f->servers[i]->raft;
 }
 
 bool raft_fixture_alive(struct raft_fixture *f, unsigned i)
 {
     assert(i < f->n);
-    return f->servers[i].alive;
+    return f->servers[i]->alive;
 }
 
 unsigned raft_fixture_leader_index(struct raft_fixture *f)
@@ -1138,7 +1125,7 @@ unsigned raft_fixture_leader_index(struct raft_fixture *f)
 
 raft_id raft_fixture_voted_for(struct raft_fixture *f, unsigned i)
 {
-    struct io *io = f->servers[i].io.impl;
+    struct io *io = f->servers[i]->io.impl;
     return io->voted_for;
 }
 
@@ -1350,7 +1337,7 @@ static void getLowestTickTime(struct raft_fixture *f, raft_time *t, unsigned *i)
     unsigned j;
     *t = (raft_time)-1 /* Maximum value */;
     for (j = 0; j < f->n; j++) {
-        struct io *io = f->servers[j].io.impl;
+        struct io *io = f->servers[j]->io.impl;
         if (io->next_tick < *t) {
             *t = io->next_tick;
             *i = j;
@@ -1367,7 +1354,7 @@ static void getLowestRequestCompletionTime(struct raft_fixture *f,
     unsigned j;
     *t = (raft_time)-1 /* Maximum value */;
     for (j = 0; j < f->n; j++) {
-        struct io *io = f->servers[j].io.impl;
+        struct io *io = f->servers[j]->io.impl;
         queue *head;
         QUEUE_FOREACH(head, &io->requests)
         {
@@ -1383,12 +1370,12 @@ static void getLowestRequestCompletionTime(struct raft_fixture *f,
 /* Fire the tick callback of the i'th server. */
 static void fireTick(struct raft_fixture *f, unsigned i)
 {
-    struct io *io = f->servers[i].io.impl;
+    struct io *io = f->servers[i]->io.impl;
     f->time = io->next_tick;
     f->event.server_index = i;
     f->event.type = RAFT_FIXTURE_TICK;
     io->next_tick += io->tick_interval;
-    if (f->servers[i].alive) {
+    if (f->servers[i]->alive) {
         io->tick_cb(io->io);
     }
 }
@@ -1396,7 +1383,7 @@ static void fireTick(struct raft_fixture *f, unsigned i)
 /* Complete the first request with completion time @t on the @i'th server. */
 static void completeRequest(struct raft_fixture *f, unsigned i, raft_time t)
 {
-    struct io *io = f->servers[i].io.impl;
+    struct io *io = f->servers[i]->io.impl;
     queue *head;
     struct ioRequest *r = NULL;
     bool found = false;
@@ -1550,7 +1537,7 @@ static void dropAllExcept(struct raft_fixture *f,
 {
     unsigned j;
     for (j = 0; j < f->n; j++) {
-        struct raft_fixture_server *s = &f->servers[j];
+        struct raft_fixture_server *s = f->servers[j];
         if (j == i) {
             continue;
         }
@@ -1563,7 +1550,7 @@ static void dropAllExcept(struct raft_fixture *f,
 static void minimizeRandomizedElectionTimeout(struct raft_fixture *f,
                                               unsigned i)
 {
-    struct raft *raft = &f->servers[i].raft;
+    struct raft *raft = &f->servers[i]->raft;
     raft_time now = raft->io->time(raft->io);
     unsigned timeout = raft->election_timeout;
     assert(raft->state == RAFT_FOLLOWER);
@@ -1584,7 +1571,7 @@ static void maximizeAllRandomizedElectionTimeoutsExcept(struct raft_fixture *f,
 {
     unsigned j;
     for (j = 0; j < f->n; j++) {
-        struct raft *raft = &f->servers[j].raft;
+        struct raft *raft = &f->servers[j]->raft;
         unsigned timeout = raft->election_timeout * 2;
         if (j == i) {
             continue;
@@ -1613,7 +1600,7 @@ void raft_fixture_elect(struct raft_fixture *f, unsigned i)
 
     /* Make sure all servers are currently followers. */
     for (j = 0; j < f->n; j++) {
-        assert(raft_state(&f->servers[j].raft) == RAFT_FOLLOWER);
+        assert(raft_state(&f->servers[j]->raft) == RAFT_FOLLOWER);
     }
 
     /* Pretend that the last randomized election timeout was set at the maximum
@@ -1633,7 +1620,7 @@ void raft_fixture_depose(struct raft_fixture *f)
     /* Make sure there's a leader. */
     assert(f->leader_id != 0);
     leader_i = (unsigned)f->leader_id - 1;
-    assert(raft_state(&f->servers[leader_i].raft) == RAFT_LEADER);
+    assert(raft_state(&f->servers[leader_i]->raft) == RAFT_LEADER);
 
     /* Set a very large election timeout on all followers, to prevent them from
      * starting an election. */
@@ -1800,22 +1787,22 @@ bool raft_fixture_step_until_delivered(struct raft_fixture *f,
 
 void raft_fixture_disconnect(struct raft_fixture *f, unsigned i, unsigned j)
 {
-    struct raft_io *io1 = &f->servers[i].io;
-    struct raft_io *io2 = &f->servers[j].io;
+    struct raft_io *io1 = &f->servers[i]->io;
+    struct raft_io *io2 = &f->servers[j]->io;
     ioDisconnect(io1, io2);
 }
 
 void raft_fixture_reconnect(struct raft_fixture *f, unsigned i, unsigned j)
 {
-    struct raft_io *io1 = &f->servers[i].io;
-    struct raft_io *io2 = &f->servers[j].io;
+    struct raft_io *io1 = &f->servers[i]->io;
+    struct raft_io *io2 = &f->servers[j]->io;
     ioReconnect(io1, io2);
 }
 
 void raft_fixture_saturate(struct raft_fixture *f, unsigned i, unsigned j)
 {
-    struct raft_io *io1 = &f->servers[i].io;
-    struct raft_io *io2 = &f->servers[j].io;
+    struct raft_io *io1 = &f->servers[i]->io;
+    struct raft_io *io2 = &f->servers[j]->io;
     ioSaturate(io1, io2);
 }
 
@@ -1839,7 +1826,7 @@ static void reconnectToAll(struct raft_fixture *f, unsigned i)
             continue;
         }
         /* Don't reconnect to disconnected peers */
-        if (!f->servers[j].alive) {
+        if (!f->servers[j]->alive) {
             continue;
         }
         raft_fixture_desaturate(f, i, j);
@@ -1849,28 +1836,28 @@ static void reconnectToAll(struct raft_fixture *f, unsigned i)
 
 bool raft_fixture_saturated(struct raft_fixture *f, unsigned i, unsigned j)
 {
-    struct raft_io *io1 = &f->servers[i].io;
-    struct raft_io *io2 = &f->servers[j].io;
+    struct raft_io *io1 = &f->servers[i]->io;
+    struct raft_io *io2 = &f->servers[j]->io;
     return ioSaturated(io1, io2);
 }
 
 void raft_fixture_desaturate(struct raft_fixture *f, unsigned i, unsigned j)
 {
-    struct raft_io *io1 = &f->servers[i].io;
-    struct raft_io *io2 = &f->servers[j].io;
+    struct raft_io *io1 = &f->servers[i]->io;
+    struct raft_io *io2 = &f->servers[j]->io;
     ioDesaturate(io1, io2);
 }
 
 void raft_fixture_kill(struct raft_fixture *f, unsigned i)
 {
     disconnectFromAll(f, i);
-    f->servers[i].alive = false;
+    f->servers[i]->alive = false;
 }
 
 void raft_fixture_revive(struct raft_fixture *f, unsigned i)
 {
     reconnectToAll(f, i);
-    f->servers[i].alive = true;
+    f->servers[i]->alive = true;
 }
 
 int raft_fixture_grow(struct raft_fixture *f, struct raft_fsm *fsm)
@@ -1888,8 +1875,8 @@ int raft_fixture_grow(struct raft_fixture *f, struct raft_fsm *fsm)
 
     serverConnectToAll(f, i);
     for (j = 0; j < f->n; j++) {
-        struct raft_io *io1 = &f->servers[i].io;
-        struct raft_io *io2 = &f->servers[j].io;
+        struct raft_io *io1 = &f->servers[i]->io;
+        struct raft_io *io2 = &f->servers[j]->io;
         ioConnect(io2, io1);
     }
 
@@ -1900,7 +1887,7 @@ void raft_fixture_set_randomized_election_timeout(struct raft_fixture *f,
                                                   unsigned i,
                                                   unsigned msecs)
 {
-    struct io *io = f->servers[i].io.impl;
+    struct io *io = f->servers[i]->io.impl;
     io->randomized_election_timeout = msecs;
 }
 
@@ -1908,7 +1895,7 @@ void raft_fixture_set_network_latency(struct raft_fixture *f,
                                       unsigned i,
                                       unsigned msecs)
 {
-    struct io *io = f->servers[i].io.impl;
+    struct io *io = f->servers[i]->io.impl;
     io->network_latency = msecs;
 }
 
@@ -1916,13 +1903,13 @@ void raft_fixture_set_disk_latency(struct raft_fixture *f,
                                    unsigned i,
                                    unsigned msecs)
 {
-    struct io *io = f->servers[i].io.impl;
+    struct io *io = f->servers[i]->io.impl;
     io->disk_latency = msecs;
 }
 
 void raft_fixture_set_term(struct raft_fixture *f, unsigned i, raft_term term)
 {
-    struct io *io = f->servers[i].io.impl;
+    struct io *io = f->servers[i]->io.impl;
     io->term = term;
 }
 
@@ -1930,7 +1917,7 @@ void raft_fixture_set_snapshot(struct raft_fixture *f,
                                unsigned i,
                                struct raft_snapshot *snapshot)
 {
-    struct io *io = f->servers[i].io.impl;
+    struct io *io = f->servers[i]->io.impl;
     io->snapshot = snapshot;
 }
 
@@ -1938,7 +1925,7 @@ void raft_fixture_add_entry(struct raft_fixture *f,
                             unsigned i,
                             struct raft_entry *entry)
 {
-    struct io *io = f->servers[i].io.impl;
+    struct io *io = f->servers[i]->io.impl;
     struct raft_entry *entries;
     entries = raft_realloc(io->entries, (io->n + 1) * sizeof *entries);
     assert(entries != NULL);
@@ -1952,20 +1939,20 @@ void raft_fixture_io_fault(struct raft_fixture *f,
                            int delay,
                            int repeat)
 {
-    struct io *io = f->servers[i].io.impl;
+    struct io *io = f->servers[i]->io.impl;
     io->fault.countdown = delay;
     io->fault.n = repeat;
 }
 
 unsigned raft_fixture_n_send(struct raft_fixture *f, unsigned i, int type)
 {
-    struct io *io = f->servers[i].io.impl;
+    struct io *io = f->servers[i]->io.impl;
     return io->n_send[type];
 }
 
 unsigned raft_fixture_n_recv(struct raft_fixture *f, unsigned i, int type)
 {
-    struct io *io = f->servers[i].io.impl;
+    struct io *io = f->servers[i]->io.impl;
     return io->n_recv[type];
 }
 

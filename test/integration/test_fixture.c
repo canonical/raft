@@ -29,7 +29,7 @@ static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
         FsmInit(&f->fsms[i], 2);
     }
 
-    rc = raft_fixture_initialize(&f->fixture);
+    rc = raft_fixture_init(&f->fixture);
     munit_assert_int(rc, ==, 0);
 
     for (i = 0; i < N_SERVERS; i++) {
