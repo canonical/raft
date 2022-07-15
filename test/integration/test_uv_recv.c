@@ -138,6 +138,7 @@ static void peerCloseCb(struct raft_io *io)
         int _rv;                                                   \
         _rv = uv_loop_init(_loop);                                 \
         munit_assert_int(_rv, ==, 0);                              \
+        _transport->version = 1;                                   \
         _rv = raft_uv_tcp_init(_transport, _loop);                 \
         munit_assert_int(_rv, ==, 0);                              \
         _rv = raft_uv_init(_io, _loop, f->dir, _transport);        \

@@ -642,6 +642,11 @@ int raft_uv_init(struct raft_io *io,
     memset(io, 0, sizeof *io);
     io->data = data;
 
+    if (transport->version == 0) {
+        ErrMsgPrintf(io->errmsg, "transport->version must be set");
+        return RAFT_INVALID;
+    }
+
     /* Ensure that the given path doesn't exceed our static buffer limit. */
     if (!UV__DIR_HAS_VALID_LEN(dir)) {
         ErrMsgPrintf(io->errmsg, "directory path too long");

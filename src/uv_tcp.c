@@ -61,8 +61,15 @@ int raft_uv_tcp_init(struct raft_uv_transport *transport,
 {
     struct UvTcp *t;
     void *data = transport->data;
+    int version = transport->version;
+    if (version != 1) {
+        ErrMsgPrintf(transport->errmsg, "Invalid version: %d", version);
+        return RAFT_INVALID;
+    }
+
     memset(transport, 0, sizeof *transport);
     transport->data = data;
+    transport->version = version;
     t = raft_malloc(sizeof *t);
     if (t == NULL) {
         ErrMsgOom(transport->errmsg);

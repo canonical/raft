@@ -96,6 +96,7 @@ struct snapshot
                                                                              \
         /* Initialize the instance, loading existing data, but discarding    \
          * it. This makes sure that the start index is correctly set. */     \
+        _transport.version = 1;                                              \
         _rv = raft_uv_tcp_init(&_transport, &f->loop);                       \
         munit_assert_int(_rv, ==, 0);                                        \
         _rv = raft_uv_init(&_io, &f->loop, f->dir, &_transport);             \
@@ -177,6 +178,7 @@ struct snapshot
                                                                               \
         /* Initialize the instance, loading existing data, but discarding     \
          * it. This makes sure that the start index is correctly set. */      \
+        _transport.version = 1;                                               \
         _rv = raft_uv_tcp_init(&_transport, &f->loop);                        \
         munit_assert_int(_rv, ==, 0);                                         \
         _rv = raft_uv_init(&_io, &f->loop, f->dir, &_transport);              \

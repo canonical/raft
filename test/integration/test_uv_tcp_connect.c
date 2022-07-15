@@ -130,6 +130,7 @@ static void *setUpDeps(const MunitParameter params[],
     SET_UP_HEAP;
     SETUP_LOOP;
     SETUP_TCP_SERVER;
+    f->transport.version = 1;
     rv = raft_uv_tcp_init(&f->transport, &f->loop);
     munit_assert_int(rv, ==, 0);
     return f;

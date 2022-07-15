@@ -181,6 +181,8 @@ static int ServerInit(struct Server *s,
     s->timer.data = s;
 
     /* Initialize the TCP-based RPC transport. */
+    s->transport.version = 1;
+    s->transport.data = NULL;
     rv = raft_uv_tcp_init(&s->transport, s->loop);
     if (rv != 0) {
         goto err;
