@@ -8,6 +8,8 @@
 
 #include "../raft.h"
 
+#include <stdint.h>
+
 #define RAFT_FIXTURE_MAX_SERVERS 8
 
 /**
@@ -70,6 +72,7 @@ struct raft_fixture
     struct raft_fixture_event *event; /* Last event occurred. */
     raft_fixture_event_cb hook;       /* Event callback. */
     struct raft_fixture_server *servers[RAFT_FIXTURE_MAX_SERVERS];
+    uint64_t reserved[16];            /* For future expansion of struct. */
 };
 
 /**
