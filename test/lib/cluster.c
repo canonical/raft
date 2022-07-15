@@ -39,5 +39,7 @@ void cluster_randomize_init(struct raft_fixture *f)
 
 void cluster_randomize(struct raft_fixture *f, struct raft_fixture_event *event)
 {
-    randomize(f, event->server_index, event->type);
+    unsigned index = raft_fixture_event_server_index(event);
+    int type = raft_fixture_event_type(event);
+    randomize(f, index, type);
 }

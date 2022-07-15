@@ -28,11 +28,17 @@ struct raft_fixture_server;
 /**
  * Information about a test cluster event triggered by the fixture.
  */
-struct raft_fixture_event
-{
-    unsigned server_index; /* Index of the server the event occurred on. */
-    int type;              /* Type of the event. */
-};
+struct raft_fixture_event;
+
+/**
+ * Returns the type of the event.
+ */
+int raft_fixture_event_type(struct raft_fixture_event *event);
+
+/**
+ * Returns the server index of the event.
+ */
+unsigned raft_fixture_event_server_index(struct raft_fixture_event *event);
 
 /**
  * Event callback. See raft_fixture_hook().
@@ -56,13 +62,13 @@ typedef void (*raft_fixture_event_cb)(struct raft_fixture *f,
  */
 struct raft_fixture
 {
-    raft_time time;                  /* Global time, common to all servers. */
-    unsigned n;                      /* Number of servers. */
-    raft_id leader_id;               /* ID of current leader, or 0 if none. */
-    struct raft_log log;             /* Copy of current leader's log. */
-    raft_index commit_index;         /* Current commit index on leader. */
-    struct raft_fixture_event event; /* Last event occurred. */
-    raft_fixture_event_cb hook;      /* Event callback. */
+    raft_time time;                   /* Global time, common to all servers. */
+    unsigned n;                       /* Number of servers. */
+    raft_id leader_id;                /* ID of current leader, or 0 if none. */
+    struct raft_log log;              /* Copy of current leader's log. */
+    raft_index commit_index;          /* Current commit index on leader. */
+    struct raft_fixture_event *event; /* Last event occurred. */
+    raft_fixture_event_cb hook;       /* Event callback. */
     struct raft_fixture_server *servers[RAFT_FIXTURE_MAX_SERVERS];
 };
 

@@ -40,6 +40,24 @@ struct raft_fixture_server
     struct raft raft;          /* Raft instance. */
 };
 
+struct raft_fixture_event
+{
+    unsigned server_index; /* Index of the server the event occurred on. */
+    int type;              /* Type of the event. */
+};
+
+RAFT_API int raft_fixture_event_type(struct raft_fixture_event *event)
+{
+    assert(event != NULL);
+    return event->type;
+}
+
+RAFT_API unsigned raft_fixture_event_server_index(struct raft_fixture_event *event)
+{
+    assert(event != NULL);
+    return event->server_index;
+}
+
 /* Fields common across all request types. */
 #define REQUEST                                                            \
     int type;                  /* Request code type. */                    \
@@ -1026,6 +1044,10 @@ int raft_fixture_init(struct raft_fixture *f)
     logInit(&f->log);
     f->commit_index = 0;
     f->hook = NULL;
+    f->event = raft_malloc(sizeof(*f->event));
+    if (f->event == NULL) {
+        return RAFT_NOMEM;
+    }
     return 0;
 }
 
@@ -1039,6 +1061,7 @@ void raft_fixture_close(struct raft_fixture *f)
     for (i = 0; i < f->n; i++) {
         serverClose(f->servers[i]);
     }
+    raft_free(f->event);
     logClose(&f->log);
 }
 
@@ -1372,8 +1395,8 @@ static void fireTick(struct raft_fixture *f, unsigned i)
 {
     struct io *io = f->servers[i]->io.impl;
     f->time = io->next_tick;
-    f->event.server_index = i;
-    f->event.type = RAFT_FIXTURE_TICK;
+    f->event->server_index = i;
+    f->event->type = RAFT_FIXTURE_TICK;
     io->next_tick += io->tick_interval;
     if (f->servers[i]->alive) {
         io->tick_cb(io->io);
@@ -1388,7 +1411,7 @@ static void completeRequest(struct raft_fixture *f, unsigned i, raft_time t)
     struct ioRequest *r = NULL;
     bool found = false;
     f->time = t;
-    f->event.server_index = i;
+    f->event->server_index = i;
     QUEUE_FOREACH(head, &io->requests)
     {
         r = QUEUE_DATA(head, struct ioRequest, queue);
@@ -1402,27 +1425,27 @@ static void completeRequest(struct raft_fixture *f, unsigned i, raft_time t)
     switch (r->type) {
         case APPEND:
             ioFlushAppend(io, (struct append *)r);
-            f->event.type = RAFT_FIXTURE_DISK;
+            f->event->type = RAFT_FIXTURE_DISK;
             break;
         case SEND:
             ioFlushSend(io, (struct send *)r);
-            f->event.type = RAFT_FIXTURE_NETWORK;
+            f->event->type = RAFT_FIXTURE_NETWORK;
             break;
         case TRANSMIT:
             ioDeliverTransmit(io, (struct transmit *)r);
-            f->event.type = RAFT_FIXTURE_NETWORK;
+            f->event->type = RAFT_FIXTURE_NETWORK;
             break;
         case SNAPSHOT_PUT:
             ioFlushSnapshotPut(io, (struct snapshot_put *)r);
-            f->event.type = RAFT_FIXTURE_DISK;
+            f->event->type = RAFT_FIXTURE_DISK;
             break;
         case SNAPSHOT_GET:
             ioFlushSnapshotGet(io, (struct snapshot_get *)r);
-            f->event.type = RAFT_FIXTURE_DISK;
+            f->event->type = RAFT_FIXTURE_DISK;
             break;
         case ASYNC_WORK:
             ioFlushAsyncWork(io, (struct async_work *)r);
-            f->event.type = RAFT_FIXTURE_WORK;
+            f->event->type = RAFT_FIXTURE_WORK;
             break;
         default:
             assert(0);
@@ -1461,10 +1484,10 @@ struct raft_fixture_event *raft_fixture_step(struct raft_fixture *f)
     }
 
     if (f->hook != NULL) {
-        f->hook(f, &f->event);
+        f->hook(f, f->event);
     }
 
-    return &f->event;
+    return f->event;
 }
 
 struct raft_fixture_event *raft_fixture_step_n(struct raft_fixture *f,
