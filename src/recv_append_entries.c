@@ -37,7 +37,7 @@ int recvAppendEntries(struct raft *r,
             r->id, id, address, args->leader_commit, args->n_entries, args->prev_log_index, args->prev_log_term, args->term);
 
     result->rejected = args->prev_log_index;
-    result->last_log_index = logLastIndex(&r->log);
+    result->last_log_index = logLastIndex(r->log);
 
     rv = recvEnsureMatchingTerms(r, args->term, &match);
     if (rv != 0) {

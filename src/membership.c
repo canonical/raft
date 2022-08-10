@@ -38,7 +38,7 @@ int membershipCanChangeConfiguration(struct raft *r)
 
     /* The index of the last committed configuration can't be greater than the
      * last log index. */
-    assert(logLastIndex(&r->log) >= r->configuration_index);
+    assert(logLastIndex(r->log) >= r->configuration_index);
 
     /* No catch-up round should be in progress. */
     assert(r->leader_state.round_number == 0);
@@ -80,7 +80,7 @@ bool membershipUpdateCatchUpRound(struct raft *r)
         return false;
     }
 
-    last_index = logLastIndex(&r->log);
+    last_index = logLastIndex(r->log);
     round_duration = now - r->leader_state.round_start;
 
     is_up_to_date = match_index == last_index;
@@ -155,7 +155,7 @@ int membershipRollback(struct raft *r)
     /* Fetch the last committed configuration entry. */
     assert(r->configuration_index != 0);
 
-    entry = logGet(&r->log, r->configuration_index);
+    entry = logGet(r->log, r->configuration_index);
 
     assert(entry != NULL);
 
@@ -204,8 +204,8 @@ int membershipLeadershipTransferStart(struct raft *r)
     message.server_id = server->id;
     message.server_address = server->address;
     message.timeout_now.term = r->current_term;
-    message.timeout_now.last_log_index = logLastIndex(&r->log);
-    message.timeout_now.last_log_term = logLastTerm(&r->log);
+    message.timeout_now.last_log_index = logLastIndex(r->log);
+    message.timeout_now.last_log_term = logLastTerm(r->log);
     r->transfer->send.data = r;
     rv = r->io->send(r->io, &r->transfer->send, &message, NULL);
     if (rv != 0) {

@@ -67,7 +67,7 @@ struct raft_fixture
     raft_time time;                   /* Global time, common to all servers. */
     unsigned n;                       /* Number of servers. */
     raft_id leader_id;                /* ID of current leader, or 0 if none. */
-    struct raft_log log;              /* Copy of current leader's log. */
+    struct raft_log *log;             /* Copy of current leader's log. */
     raft_index commit_index;          /* Current commit index on leader. */
     struct raft_fixture_event *event; /* Last event occurred. */
     raft_fixture_event_cb hook;       /* Event callback. */

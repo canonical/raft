@@ -202,50 +202,6 @@ struct raft_entry
 };
 
 /**
- * Counter for outstanding references to a log entry.
- *
- * When an entry is first appended to the log, its refcount is set to one (the
- * log itself is the only one referencing the entry). Whenever an entry is
- * included in an I/O request (to write it to disk or to send it to other
- * servers) its refcount is increased by one. Whenever an entry gets deleted
- * from the log its refcount is decreased by one. Likewise, whenever an I/O
- * request is completed the refcount of the relevant entries is decreased by
- * one. When the refcount drops to zero the memory that its @buf attribute
- * points to gets released, or, if the @batch attribute is non-NULL, a check is
- * made to see if all other entries of the same batch also have a zero refcount,
- * and the memory that @batch points to gets released if that's the case.
- */
-struct raft_entry_ref
-{
-    raft_term term;              /* Term of the entry being ref-counted. */
-    raft_index index;            /* Index of the entry being ref-counted. */
-    unsigned short count;        /* Number of references. */
-    struct raft_entry_ref *next; /* Next item in the bucket (for collisions). */
-};
-
-/**
- * In-memory cache of the persistent raft log stored on disk.
- *
- * The raft log cache is implemented as a circular buffer of log entries, which
- * makes some frequent operations very efficient (e.g. deleting the first N
- * entries when snapshotting).
- */
-struct raft_log
-{
-    struct raft_entry *entries;  /* Circular buffer of log entries. */
-    size_t size;                 /* Number of available slots in the buffer. */
-    size_t front, back;          /* Indexes of used slots [front, back). */
-    raft_index offset;           /* Index of first entry is offset+1. */
-    struct raft_entry_ref *refs; /* Log entries reference counts hash table. */
-    size_t refs_size;            /* Size of the reference counts hash table. */
-    struct                       /* Information about last snapshot, or zero. */
-    {
-        raft_index last_index; /* Snapshot replaces all entries up to here. */
-        raft_term last_term;   /* Term of last index. */
-    } snapshot;
-};
-
-/**
  * Hold the arguments of a RequestVote RPC.
  *
  * The RequestVote RPC is invoked by candidates to gather votes.
@@ -608,6 +564,8 @@ typedef void (*raft_close_cb)(struct raft *raft);
 struct raft_change;   /* Forward declaration */
 struct raft_transfer; /* Forward declaration */
 
+struct raft_log;
+
 /**
  * Hold and drive the state of a single raft server in a cluster.
  */
@@ -626,7 +584,7 @@ struct raft
      */
     raft_term current_term; /* Latest term server has seen. */
     raft_id voted_for;      /* Candidate that received vote in current term. */
-    struct raft_log log;    /* Log entries. */
+    struct raft_log *log;   /* Log entries. */
 
     /*
      * Current membership configuration (Chapter 4).

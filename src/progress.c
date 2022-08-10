@@ -31,7 +31,7 @@ int progressBuildArray(struct raft *r)
 {
     struct raft_progress *progress;
     unsigned i;
-    raft_index last_index = logLastIndex(&r->log);
+    raft_index last_index = logLastIndex(r->log);
     progress = raft_malloc(r->configuration.n * sizeof *progress);
     if (progress == NULL) {
         return RAFT_NOMEM;
@@ -49,7 +49,7 @@ int progressBuildArray(struct raft *r)
 int progressRebuildArray(struct raft *r,
                          const struct raft_configuration *configuration)
 {
-    raft_index last_index = logLastIndex(&r->log);
+    raft_index last_index = logLastIndex(r->log);
     struct raft_progress *progress;
     unsigned i;
     unsigned j;
@@ -97,7 +97,7 @@ int progressRebuildArray(struct raft *r,
 bool progressIsUpToDate(struct raft *r, unsigned i)
 {
     struct raft_progress *p = &r->leader_state.progress[i];
-    raft_index last_index = logLastIndex(&r->log);
+    raft_index last_index = logLastIndex(r->log);
     return p->next_index == last_index + 1;
 }
 
@@ -106,7 +106,7 @@ bool progressShouldReplicate(struct raft *r, unsigned i)
     struct raft_progress *p = &r->leader_state.progress[i];
     raft_time now = r->io->time(r->io);
     bool needs_heartbeat = now - p->last_send >= r->heartbeat_timeout;
-    raft_index last_index = logLastIndex(&r->log);
+    raft_index last_index = logLastIndex(r->log);
     bool result = false;
 
     /* We must be in a valid state. */
@@ -183,7 +183,7 @@ void progressToSnapshot(struct raft *r, unsigned i)
 {
     struct raft_progress *p = &r->leader_state.progress[i];
     p->state = PROGRESS__SNAPSHOT;
-    p->snapshot_index = logSnapshotIndex(&r->log);
+    p->snapshot_index = logSnapshotIndex(r->log);
 }
 
 void progressAbortSnapshot(struct raft *r, const unsigned i)

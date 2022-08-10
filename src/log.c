@@ -335,17 +335,26 @@ static bool refsDecr(struct raft_log *l,
     return true;
 }
 
-void logInit(struct raft_log *l)
+struct raft_log* logInit(void)
 {
-    assert(l != NULL);
-    l->entries = NULL;
-    l->size = 0;
-    l->front = l->back = 0;
-    l->offset = 0;
-    l->refs = NULL;
-    l->refs_size = 0;
-    l->snapshot.last_index = 0;
-    l->snapshot.last_term = 0;
+    struct raft_log *log;
+
+    log = raft_malloc(sizeof(*log));
+    if (log == NULL) {
+        return NULL;
+    }
+
+
+    log->entries = NULL;
+    log->size = 0;
+    log->front = log->back = 0;
+    log->offset = 0;
+    log->refs = NULL;
+    log->refs_size = 0;
+    log->snapshot.last_index = 0;
+    log->snapshot.last_term = 0;
+
+    return log;
 }
 
 /* Return the index of the i'th entry in the log. */
@@ -411,6 +420,8 @@ void logClose(struct raft_log *l)
     if (l->refs != NULL) {
         raft_free(l->refs);
     }
+
+    raft_free(l);
 }
 
 void logStart(struct raft_log *l,

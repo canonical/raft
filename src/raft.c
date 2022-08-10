@@ -59,7 +59,12 @@ int raft_init(struct raft *r,
     strcpy(r->address, address);
     r->current_term = 0;
     r->voted_for = 0;
-    logInit(&r->log);
+    r->log = logInit();
+    if (r->log == NULL) {
+        rv = RAFT_NOMEM;
+        goto err_after_address_alloc;
+    }
+
     raft_configuration_init(&r->configuration);
     r->configuration_index = 0;
     r->configuration_uncommitted_index = 0;
@@ -98,7 +103,7 @@ static void ioCloseCb(struct raft_io *io)
 {
     struct raft *r = io->data;
     raft_free(r->address);
-    logClose(&r->log);
+    logClose(r->log);
     raft_configuration_close(&r->configuration);
     if (r->close_cb != NULL) {
         r->close_cb(r);

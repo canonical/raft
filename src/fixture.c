@@ -1041,7 +1041,10 @@ static void serverConnectToAll(struct raft_fixture *f, unsigned i)
 int raft_fixture_init(struct raft_fixture *f)
 {
     f->time = 0;
-    logInit(&f->log);
+    f->log = logInit();
+    if (f->log == NULL) {
+        return RAFT_NOMEM;
+    }
     f->commit_index = 0;
     f->hook = NULL;
     f->event = raft_malloc(sizeof(*f->event));
@@ -1062,7 +1065,7 @@ void raft_fixture_close(struct raft_fixture *f)
         serverClose(f->servers[i]);
     }
     raft_free(f->event);
-    logClose(&f->log);
+    logClose(f->log);
 }
 
 int raft_fixture_configuration(struct raft_fixture *f,
@@ -1277,7 +1280,7 @@ static void checkLeaderAppendOnly(struct raft_fixture *f)
 {
     struct raft *raft;
     raft_index index;
-    raft_index last = logLastIndex(&f->log);
+    raft_index last = logLastIndex(f->log);
 
     /* If the cached log is empty it means there was no leader before. */
     if (last == 0) {
@@ -1290,21 +1293,21 @@ static void checkLeaderAppendOnly(struct raft_fixture *f)
     }
 
     raft = raft_fixture_get(f, (unsigned)f->leader_id - 1);
-    last = logLastIndex(&f->log);
+    last = logLastIndex(f->log);
 
     for (index = 1; index <= last; index++) {
         const struct raft_entry *entry1;
         const struct raft_entry *entry2;
         size_t i;
 
-        entry1 = logGet(&f->log, index);
-        entry2 = logGet(&raft->log, index);
+        entry1 = logGet(f->log, index);
+        entry2 = logGet(raft->log, index);
 
         assert(entry1 != NULL);
 
         /* Check if the entry was snapshotted. */
         if (entry2 == NULL) {
-            assert(raft->log.snapshot.last_index >= index);
+            assert(raft->log->snapshot.last_index >= index);
             continue;
         }
 
@@ -1327,9 +1330,14 @@ static void copyLeaderLog(struct raft_fixture *f)
     unsigned n;
     size_t i;
     int rv;
-    logClose(&f->log);
-    logInit(&f->log);
-    rv = logAcquire(&raft->log, 1, &entries, &n);
+    logClose(f->log);
+    f->log = logInit();
+    if (f->log == NULL) {
+        assert(false);
+        return;
+    }
+
+    rv = logAcquire(raft->log, 1, &entries, &n);
     assert(rv == 0);
     for (i = 0; i < n; i++) {
         struct raft_entry *entry = &entries[i];
@@ -1338,10 +1346,10 @@ static void copyLeaderLog(struct raft_fixture *f)
         buf.base = raft_malloc(buf.len);
         assert(buf.base != NULL);
         memcpy(buf.base, entry->buf.base, buf.len);
-        rv = logAppend(&f->log, entry->term, entry->type, &buf, NULL);
+        rv = logAppend(f->log, entry->term, entry->type, &buf, NULL);
         assert(rv == 0);
     }
-    logRelease(&raft->log, 1, entries, n);
+    logRelease(raft->log, 1, entries, n);
 }
 
 /* Update the commit index to match the one from the current leader. */
