@@ -4,6 +4,7 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 
 #define RAFT_API __attribute__((visibility("default")))
@@ -556,6 +557,8 @@ struct raft_log;
 
 /**
  * Hold and drive the state of a single raft server in a cluster.
+ * When replacing reserved fields in the middle of this struct, you MUST use a
+ * type with the same size and alignment requirements as the original type.
  */
 struct raft
 {
@@ -667,6 +670,7 @@ struct raft
                 raft_id id;
                 char *address;
             } current_leader;
+            uint64_t reserved[8];                 /* Future use */
         } follower_state;
         struct
         {
@@ -674,6 +678,7 @@ struct raft
             bool *votes;                          /* Vote results. */
             bool disrupt_leader;                  /* For leadership transfer */
             bool in_pre_vote;                     /* True in pre-vote phase. */
+            uint64_t reserved[8];                 /* Future use */
         } candidate_state;
         struct
         {
@@ -684,6 +689,7 @@ struct raft
             raft_index round_index;         /* Target of the current round. */
             raft_time round_start;          /* Start of current round. */
             void *requests[2];              /* Outstanding client requests. */
+            uint64_t reserved[8];           /* Future use */
         } leader_state;
     };
 
@@ -709,6 +715,7 @@ struct raft
         unsigned trailing;               /* N. of trailing entries to retain */
         struct raft_snapshot pending;    /* In progress snapshot */
         struct raft_io_snapshot_put put; /* Store snapshot request */
+        uint64_t reserved[8];            /* Future use */
     } snapshot;
 
     /*
@@ -730,6 +737,9 @@ struct raft
      * being promoted to voter. */
     unsigned max_catch_up_rounds;
     unsigned max_catch_up_round_duration;
+
+    /* Future extensions */
+    uint64_t reserved[32];
 };
 
 RAFT_API int raft_init(struct raft *r,
