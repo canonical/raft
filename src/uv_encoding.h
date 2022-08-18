@@ -56,9 +56,5 @@ void uvEncodeBatchHeader(const struct raft_entry *entries,
                          unsigned n,
                          void *buf);
 
-/* Encode the content of a snapshot metadata file. */
-int uvEncodeSnapshotMeta(const struct raft_configuration *conf,
-                         raft_index conf_index,
-                         struct raft_buffer *buf);
 
 #endif /* UV_ENCODING_H_ */
