@@ -20,7 +20,7 @@ struct fixture
 
 static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
 {
-    struct fixture *f = munit_malloc(sizeof *f);
+    struct fixture *f = munit_calloc(1, sizeof *f);
     struct raft_configuration configuration;
     unsigned i;
     int rc;

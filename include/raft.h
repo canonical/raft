@@ -473,6 +473,11 @@ typedef void (*raft_io_recv_cb)(struct raft_io *io, struct raft_message *msg);
 
 typedef void (*raft_io_close_cb)(struct raft_io *io);
 
+/**
+ * version field MUST be filled out by user.
+ * When moving to a new version, the user MUST implement the newly added
+ * methods.
+ */
 struct raft_io
 {
     int version; /* 1 or 2 */
@@ -522,7 +527,11 @@ struct raft_io
                       raft_io_async_work_cb cb);
 };
 
-/*
+/**
+ * version field MUST be filled out by user.
+ * When moving to a new version, the user MUST initialize the new methods,
+ * either with an implementation or with NULL.
+ *
  * version 2:
  * introduces `snapshot_finalize`, when this method is not NULL, it will
  * always run after a successful call to `snapshot`, whether the snapshot has
@@ -545,6 +554,7 @@ struct raft_io
  * All memory allocated by the snapshot routines MUST be freed by the snapshot
  * routines themselves.
  */
+
 struct raft_fsm
 {
     int version; /* 1, 2 or 3 */

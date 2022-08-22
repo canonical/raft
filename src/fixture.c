@@ -909,6 +909,7 @@ static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
     io->n_append = 0;
 
     raft_io->impl = io;
+    raft_io->version = 2;
     raft_io->init = ioMethodInit;
     raft_io->close = ioMethodClose;
     raft_io->start = ioMethodStart;

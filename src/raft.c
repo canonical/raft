@@ -24,9 +24,9 @@
 #define DEFAULT_MAX_CATCH_UP_ROUNDS 10
 #define DEFAULT_MAX_CATCH_UP_ROUND_DURATION (5 * 1000)
 
-static int ioFsmCompat(struct raft *r,
-                       struct raft_io *io,
-                       struct raft_fsm *fsm);
+static int ioFsmVersionCheck(struct raft *r,
+                             struct raft_io *io,
+                             struct raft_fsm *fsm);
 
 int raft_init(struct raft *r,
               struct raft_io *io,
@@ -37,7 +37,7 @@ int raft_init(struct raft *r,
     int rv;
     assert(r != NULL);
 
-    rv = ioFsmCompat(r, io, fsm);
+    rv = ioFsmVersionCheck(r, io, fsm);
     if (rv != 0) {
 	goto err;
     }
@@ -238,10 +238,20 @@ unsigned long long raft_digest(const char *text, unsigned long long n)
     return byteFlip64(digest);
 }
 
-static int ioFsmCompat(struct raft *r,
-                       struct raft_io *io,
-                       struct raft_fsm *fsm)
+static int ioFsmVersionCheck(struct raft *r,
+                             struct raft_io *io,
+                             struct raft_fsm *fsm)
 {
+    if (io->version == 0) {
+        ErrMsgPrintf(r->errmsg, "io->version must be set");
+        return -1;
+    }
+
+    if (fsm->version == 0) {
+        ErrMsgPrintf(r->errmsg, "fsm->version must be set");
+        return -1;
+    }
+
     if ((fsm->version > 2 && fsm->snapshot_async != NULL)
         && ((io->version < 2) || (io->async_work == NULL))) {
         ErrMsgPrintf(r->errmsg,
