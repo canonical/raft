@@ -704,7 +704,7 @@ int raft_uv_init(struct raft_io *io,
     uvSeedRand(uv);
 
     /* Set the raft_io implementation. */
-    io->version = 1; /* future-proof'ing */
+    io->version = 2; /* future-proof'ing */
     io->impl = uv;
     io->init = uvInit;
     io->close = uvClose;
