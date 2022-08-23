@@ -412,7 +412,8 @@ int uvSegmentLoadClosed(struct uv *uv,
         if (rv != 0) {
             ErrMsgWrapf(uv->io->errmsg, "entries batch %u starting at byte %zu",
                         i, offset);
-            goto err_after_read;
+            /* Clean up the last allocation from extendEntries. */
+            goto err_after_extend_entries;
         }
         rv = extendEntries(tmp_entries, tmp_n, entries, n);
         if (rv != 0) {
