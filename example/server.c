@@ -363,6 +363,7 @@ static void mainServerCloseCb(struct Server *server)
 /* Handler triggered by SIGINT. It will initiate the shutdown sequence. */
 static void mainSigintCb(struct uv_signal_s *handle, int signum)
 {
+    (void)signum;
     struct Server *server = handle->data;
     assert(signum == SIGINT);
     uv_signal_stop(handle);
