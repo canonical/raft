@@ -11,29 +11,31 @@
 /**
  * Error codes.
  */
-#define RAFT_NOMEM 1            /* Out of memory */
-#define RAFT_BADID 2            /* Server ID is not valid */
-#define RAFT_DUPLICATEID 3      /* Server ID already in use */
-#define RAFT_DUPLICATEADDRESS 4 /* Server address already in use */
-#define RAFT_BADROLE 5          /* Server role is not valid */
-#define RAFT_MALFORMED 6
-#define RAFT_NOTLEADER 7
-#define RAFT_LEADERSHIPLOST 8
-#define RAFT_SHUTDOWN 9
-#define RAFT_CANTBOOTSTRAP 10
-#define RAFT_CANTCHANGE 11
-#define RAFT_CORRUPT 12
-#define RAFT_CANCELED 13
-#define RAFT_NAMETOOLONG 14
-#define RAFT_TOOBIG 15
-#define RAFT_NOCONNECTION 16
-#define RAFT_BUSY 17
-#define RAFT_IOERR 18        /* File system or storage error */
-#define RAFT_NOTFOUND 19     /* Resource not found */
-#define RAFT_INVALID 20      /* Invalid parameter */
-#define RAFT_UNAUTHORIZED 21 /* No access to a resource */
-#define RAFT_NOSPACE 22      /* Not enough space on disk */
-#define RAFT_TOOMANY 23      /* Some system or raft limit was hit */
+enum {
+    RAFT_NOMEM = 1,        /* Out of memory */
+    RAFT_BADID,            /* Server ID is not valid */
+    RAFT_DUPLICATEID,      /* Server ID already in use */
+    RAFT_DUPLICATEADDRESS, /* Server address already in use */
+    RAFT_BADROLE,          /* Server role is not valid */
+    RAFT_MALFORMED,
+    RAFT_NOTLEADER,
+    RAFT_LEADERSHIPLOST,
+    RAFT_SHUTDOWN,
+    RAFT_CANTBOOTSTRAP,
+    RAFT_CANTCHANGE,
+    RAFT_CORRUPT,
+    RAFT_CANCELED,
+    RAFT_NAMETOOLONG,
+    RAFT_TOOBIG,
+    RAFT_NOCONNECTION,
+    RAFT_BUSY,
+    RAFT_IOERR,        /* File system or storage error */
+    RAFT_NOTFOUND,     /* Resource not found */
+    RAFT_INVALID,      /* Invalid parameter */
+    RAFT_UNAUTHORIZED, /* No access to a resource */
+    RAFT_NOSPACE,      /* Not enough space on disk */
+    RAFT_TOOMANY       /* Some system or raft limit was hit */
+};
 
 /**
  * Size of human-readable error message buffers.
@@ -84,10 +86,11 @@ typedef enum {
 /**
  * Server role codes.
  */
-
-#define RAFT_STANDBY 0 /* Replicate log, does not participate in quorum. */
-#define RAFT_VOTER 1   /* Replicate log, does participate in quorum. */
-#define RAFT_SPARE 2   /* Does not replicate log, or participate in quorum. */
+enum {
+    RAFT_STANDBY, /* Replicate log, does not participate in quorum. */
+    RAFT_VOTER,   /* Replicate log, does participate in quorum. */
+    RAFT_SPARE    /* Does not replicate log, or participate in quorum. */
+};
 
 /**
  * Hold information about a single server in the cluster configuration.
