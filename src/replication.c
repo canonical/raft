@@ -1620,16 +1620,31 @@ int replicationApply(struct raft *r)
     return rv;
 }
 
-void replicationQuorum(struct raft *r, const raft_index index)
+static bool matchIndicesAtLeast(struct raft *r, const raft_index index)
 {
     size_t votes = 0;
     size_t i;
+    for (i = 0; i < r->configuration.n; i++) {
+        struct raft_server *server = &r->configuration.servers[i];
+        tracef("server->id %llu server->role %d index %llu", server->id, server->role, index);
+        if (server->role != RAFT_VOTER) {
+            continue;
+        }
+        tracef("match_index %llu", r->leader_state.progress[i].match_index);
+        if (r->leader_state.progress[i].match_index >= index) {
+            votes++;
+        }
+    }
+
+    tracef("votes %ld", votes);
+    return votes > (configurationVoterCount(&r->configuration) / 2);
+}
+
+void replicationQuorum(struct raft *r, const raft_index index)
+{
+    raft_index n;
 
     assert(r->state == RAFT_LEADER);
-
-    if (index <= r->commit_index) {
-        return;
-    }
 
     /* TODO: fuzzy-test --seed 0x8db5fccc replication/entries/partitioned
      * fails the assertion below. */
@@ -1639,19 +1654,21 @@ void replicationQuorum(struct raft *r, const raft_index index)
     // assert(logTermOf(&r->log, index) > 0);
     assert(logTermOf(&r->log, index) <= r->current_term);
 
-    for (i = 0; i < r->configuration.n; i++) {
-        struct raft_server *server = &r->configuration.servers[i];
-        if (server->role != RAFT_VOTER) {
-            continue;
+    /* Raft Paper fig. 2 - Rules for Servers
+     * If there exists an N such that N > commitIndex, a majority
+     * of matchIndex[i] >= N, and log[N].term == currentTerm:
+     * set commitIndex = N (5.3, 5.4).
+     * */
+    for (n = index; n > r->commit_index; n -= 1) {
+        if (logTermOf(&r->log, n) < r->current_term) {
+            break;
         }
-        if (r->leader_state.progress[i].match_index >= index) {
-            votes++;
-        }
-    }
 
-    if (votes > configurationVoterCount(&r->configuration) / 2) {
-        r->commit_index = index;
-        tracef("new commit index %llu", r->commit_index);
+        if (matchIndicesAtLeast(r, n)) {
+            r->commit_index = n;
+            tracef("new commit index %llu", n);
+            break;
+        }
     }
 
     return;
