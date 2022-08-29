@@ -74,15 +74,6 @@ struct raft_buffer
     size_t len; /* Length of the buffer. */
 };
 
-/**
- * A type for storing unknown bools.
- */
-typedef enum {
-    raft_tribool_unknown,
-    raft_tribool_true,
-    raft_tribool_false,
-} raft_tribool;
-#define TO_RAFT_TRIBOOL(b)  ((b) ? raft_tribool_true : raft_tribool_false)
 
 /**
  * Server role codes.
@@ -209,6 +200,7 @@ struct raft_entry
  */
 struct raft_request_vote
 {
+    int version;
     raft_term term;            /* Candidate's term. */
     raft_id candidate_id;      /* ID of the server requesting the vote. */
     raft_index last_log_index; /* Index of candidate's last log entry. */
@@ -216,16 +208,19 @@ struct raft_request_vote
     bool disrupt_leader;       /* True if current leader should be discarded. */
     bool pre_vote;             /* True if this is a pre-vote request. */
 };
+#define RAFT_REQUEST_VOTE_VERSION 2
 
 /**
  * Hold the result of a RequestVote RPC.
  */
 struct raft_request_vote_result
 {
+    int version;
     raft_term term;        /* Receiver's current term (candidate updates itself). */
     bool vote_granted;     /* True means candidate received vote. */
-    raft_tribool pre_vote; /* The response to a pre-vote RequestVote or not. */
+    bool pre_vote;         /* The response to a pre-vote RequestVote or not. */
 };
+#define RAFT_REQUEST_VOTE_RESULT_VERSION 2
 
 /**
  * Hold the arguments of an AppendEntries RPC.
@@ -235,6 +230,7 @@ struct raft_request_vote_result
  */
 struct raft_append_entries
 {
+    int version;
     raft_term term;             /* Leader's term. */
     raft_index prev_log_index;  /* Index of log entry preceeding new ones. */
     raft_term prev_log_term;    /* Term of entry at prev_log_index. */
@@ -242,22 +238,26 @@ struct raft_append_entries
     struct raft_entry *entries; /* Log entries to append. */
     unsigned n_entries;         /* Size of the log entries array. */
 };
+#define RAFT_APPEND_ENTRIES_VERSION 0
 
 /**
  * Hold the result of an AppendEntries RPC (figure 3.1).
  */
 struct raft_append_entries_result
 {
+    int version;
     raft_term term;            /* Receiver's current_term. */
     raft_index rejected;       /* If non-zero, the index that was rejected. */
     raft_index last_log_index; /* Receiver's last log entry index, as hint. */
 };
+#define RAFT_APPEND_ENTRIES_RESULT_VERSION 0
 
 /**
  * Hold the arguments of an InstallSnapshot RPC (figure 5.3).
  */
 struct raft_install_snapshot
 {
+    int version;
     raft_term term;                 /* Leader's term. */
     raft_index last_index;          /* Index of last entry in the snapshot. */
     raft_term last_term;            /* Term of last_index. */
@@ -265,6 +265,7 @@ struct raft_install_snapshot
     raft_index conf_index;          /* Commit index of conf. */
     struct raft_buffer data;        /* Raw snapshot data. */
 };
+#define RAFT_INSTALL_SNAPSHOT_VERSION 0
 
 /**
  * Hold the arguments of a TimeoutNow RPC.
@@ -274,10 +275,12 @@ struct raft_install_snapshot
  */
 struct raft_timeout_now
 {
+    int version;
     raft_term term;            /* Leader's term. */
     raft_index last_log_index; /* Index of leader's last log entry. */
     raft_index last_log_term;  /* Term of log entry at last_log_index. */
 };
+#define RAFT_TIMEOUT_NOW_VERSION 0
 
 /**
  * Type codes for RPC messages.
@@ -293,6 +296,30 @@ enum {
 
 /**
  * A single RPC message that can be sent or received over the network.
+ *
+ * The RPC message types all have a `version` field.
+ * In the libuv io implementation, `version` is filled out during decoding
+ * and is based on the size of the message on the wire, see e.g.
+ * `sizeofRequestVoteV1`. The version number in the RAFT_MESSAGE_XXX_VERSION
+ * macro needs to be bumped every time the message is updated.
+ *
+ * Notes when adding a new message type to raft:
+ * raft_io implementations compiled against old versions of raft don't know the
+ * new message type and possibly have not allocated enough space for it. When
+ * such an application receives a new message over the wire, the raft_io
+ * implementation will err out or drop the message, because it doesn't know how
+ * to decode it based on its type.
+ * raft_io implementations compiled against versions of raft that know the new
+ * message type but at runtime are linked against an older raft lib, will pass
+ * the message to raft, where raft will drop it.
+ * When raft receives a message and accesses a field of a new message type,
+ * the raft_io implementation must have known about the new message type,
+ * so it was compiled against a modern enough version of raft, and memory
+ * accesses should be safe.
+ *
+ * Sending a new message type with a raft_io implementation that doesn't know
+ * the type is safe, the implementation should drop the message based on its
+ * type and will not try to access fields it doesn't know the existence of.
  */
 struct raft_message
 {

@@ -109,7 +109,7 @@ static void encodeRequestVoteResult(const struct raft_request_vote_result *p,
     void *cursor = buf;
     uint64_t flags = 0;
 
-    if (p->pre_vote == raft_tribool_true) {
+    if (p->pre_vote) {
         flags |= (1 << 0);
     }
 
@@ -311,6 +311,7 @@ static void decodeRequestVote(const uv_buf_t *buf, struct raft_request_vote *p)
 
     cursor = buf->base;
 
+    p->version = 1;
     p->term = byteGet64(&cursor);
     p->candidate_id = byteGet64(&cursor);
     p->last_log_index = byteGet64(&cursor);
@@ -321,6 +322,7 @@ static void decodeRequestVote(const uv_buf_t *buf, struct raft_request_vote *p)
         p->disrupt_leader = false;
         p->pre_vote = false;
     } else {
+        p->version = 2;
         uint64_t flags = byteGet64(&cursor);
         p->disrupt_leader = (bool)(flags & 1 << 0);
         p->pre_vote = (bool)(flags & 1 << 1);
@@ -334,15 +336,14 @@ static void decodeRequestVoteResult(const uv_buf_t *buf,
 
     cursor = buf->base;
 
+    p->version = 1;
     p->term = byteGet64(&cursor);
     p->vote_granted = byteGet64(&cursor);
 
-    /* Support legacy RequestVoteResultV1 */
-    p->pre_vote = raft_tribool_unknown;
-
     if (buf->len > sizeofRequestVoteResultV1()) {
+        p->version = 2;
         uint64_t flags = byteGet64(&cursor);
-        p->pre_vote = TO_RAFT_TRIBOOL(flags & (1 << 0));
+        p->pre_vote = (flags & (1 << 0));
     }
 }
 
@@ -409,6 +410,7 @@ static int decodeAppendEntries(const uv_buf_t *buf,
 
     cursor = buf->base;
 
+    args->version = 0;
     args->term = byteGet64(&cursor);
     args->prev_log_index = byteGet64(&cursor);
     args->prev_log_term = byteGet64(&cursor);
@@ -429,6 +431,7 @@ static void decodeAppendEntriesResult(const uv_buf_t *buf,
 
     cursor = buf->base;
 
+    p->version = 0;
     p->term = byteGet64(&cursor);
     p->rejected = byteGet64(&cursor);
     p->last_log_index = byteGet64(&cursor);
@@ -446,6 +449,7 @@ static int decodeInstallSnapshot(const uv_buf_t *buf,
 
     cursor = buf->base;
 
+    args->version = 0;
     args->term = byteGet64(&cursor);
     args->last_index = byteGet64(&cursor);
     args->last_term = byteGet64(&cursor);
@@ -469,6 +473,7 @@ static void decodeTimeoutNow(const uv_buf_t *buf, struct raft_timeout_now *p)
 
     cursor = buf->base;
 
+    p->version = 0;
     p->term = byteGet64(&cursor);
     p->last_log_index = byteGet64(&cursor);
     p->last_log_term = byteGet64(&cursor);

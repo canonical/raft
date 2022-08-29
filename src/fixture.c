@@ -384,7 +384,7 @@ static void ioFlushSend(struct io *io, struct send *send)
         goto out;
     }
 
-    transmit = raft_malloc(sizeof *transmit);
+    transmit = raft_calloc(1, sizeof *transmit);
     assert(transmit != NULL);
 
     transmit->type = TRANSMIT;

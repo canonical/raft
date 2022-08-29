@@ -24,8 +24,9 @@ int recvRequestVoteResult(struct raft *r,
     assert(r != NULL);
     assert(id > 0);
 
-    tracef("self:%llu from:%llu@%s term:%llu vote_granted:%d pre_vote:%d",
-    	    r->id, id, address, result->term, result->vote_granted, result->pre_vote);
+    tracef("self:%llu from:%llu@%s term:%llu vote_granted:%d pre_vote:%d version:%d",
+    	    r->id, id, address, result->term, result->vote_granted, result->pre_vote,
+    	    result->version);
     votes_index = configurationIndexOfVoter(&r->configuration, id);
     if (votes_index == r->configuration.n) {
         tracef("non-voting or unknown server -> reject");
@@ -66,7 +67,7 @@ int recvRequestVoteResult(struct raft *r,
     }
 
     /* Avoid counting pre-vote votes as regular votes. */
-    if (!r->candidate_state.in_pre_vote && result->pre_vote == raft_tribool_true) {
+    if (result->version > 1 && result->pre_vote && !r->candidate_state.in_pre_vote) {
         tracef("receive stale pre-vote response -> ignore");
         return 0;
     }
@@ -75,7 +76,7 @@ int recvRequestVoteResult(struct raft *r,
      * sends real RequestVote RPCs, crashes, comes online, starts a pre-vote
      * and then receives the response to the RequestVote RPC it sent
      * out before crashing. */
-    if (r->candidate_state.in_pre_vote && result->pre_vote == raft_tribool_false) {
+    if (result->version > 1 && !result->pre_vote && r->candidate_state.in_pre_vote) {
         tracef("receive vote response during pre-vote -> ignore");
         return 0;
     }

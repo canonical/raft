@@ -38,6 +38,7 @@ int recvAppendEntries(struct raft *r,
 
     result->rejected = args->prev_log_index;
     result->last_log_index = logLastIndex(r->log);
+    result->version = RAFT_APPEND_ENTRIES_RESULT_VERSION;
 
     rv = recvEnsureMatchingTerms(r, args->term, &match);
     if (rv != 0) {

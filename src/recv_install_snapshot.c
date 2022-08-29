@@ -33,6 +33,7 @@ int recvInstallSnapshot(struct raft *r,
 
     result->rejected = args->last_index;
     result->last_log_index = logLastIndex(r->log);
+    result->version = RAFT_APPEND_ENTRIES_RESULT_VERSION;
 
     rv = recvEnsureMatchingTerms(r, args->term, &match);
     if (rv != 0) {
