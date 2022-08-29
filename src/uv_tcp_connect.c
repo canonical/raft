@@ -25,14 +25,16 @@
 /* Hold state for a single connection request. */
 struct uvTcpConnect
 {
-    struct UvTcp *t;             /* Transport implementation */
-    struct raft_uv_connect *req; /* User request */
-    uv_buf_t handshake;          /* Handshake data */
-    struct uv_tcp_s *tcp;        /* TCP connection socket handle */
-    struct uv_connect_s connect; /* TCP connection request */
-    struct uv_write_s write;     /* TCP handshake request */
-    int status;                  /* Returned to the request callback */
-    queue queue;                 /* Pending connect queue */
+    struct UvTcp *t;                     /* Transport implementation */
+    struct raft_uv_connect *req;         /* User request */
+    uv_buf_t handshake;                  /* Handshake data */
+    struct uv_tcp_s *tcp;                /* TCP connection socket handle */
+    struct uv_getaddrinfo_s getaddrinfo; /* DNS resolve request */
+    struct uv_connect_s connect;         /* TCP connection request */
+    struct uv_write_s write;             /* TCP handshake request */
+    uv_check_t delayedtcpclose;          /* A check handle required to delay closing tcp */
+    int status;                          /* Returned to the request callback */
+    queue queue;                         /* Pending connect queue */
 };
 
 /* Encode an handshake message into the given buffer. */
@@ -64,7 +66,9 @@ static void uvTcpConnectFinish(struct uvTcpConnect *connect)
     struct raft_uv_connect *req = connect->req;
     int status = connect->status;
     QUEUE_REMOVE(&connect->queue);
+    uv_close((struct uv_handle_s *)&connect->delayedtcpclose, NULL);
     RaftHeapFree(connect->handshake.base);
+    uv_freeaddrinfo(connect->getaddrinfo.addrinfo);
     raft_free(connect);
     req->cb(req, stream, status);
 }
@@ -83,12 +87,29 @@ static void uvTcpConnectUvCloseCb(struct uv_handle_s *handle)
     UvTcpMaybeFireCloseCb(t);
 }
 
+static void uvTcpConnectCheckMayClose(uv_check_t *handle)
+{
+    struct uvTcpConnect *connect = handle->data;
+    if (connect->status || uv_is_active((uv_handle_t *)connect->tcp)) {
+        uv_check_stop(&connect->delayedtcpclose);
+        uv_close((struct uv_handle_s *)connect->tcp, uvTcpConnectUvCloseCb);
+    }
+}
+
 /* Abort a connection request. */
 static void uvTcpConnectAbort(struct uvTcpConnect *connect)
 {
     QUEUE_REMOVE(&connect->queue);
     QUEUE_PUSH(&connect->t->aborting, &connect->queue);
-    uv_close((struct uv_handle_s *)connect->tcp, uvTcpConnectUvCloseCb);
+    if (uv_cancel((struct uv_req_s *)&connect->getaddrinfo) == 0 ||
+        !uv_is_active((uv_handle_t *)connect->tcp)) {
+        /* If canceling the addrinfo call was not successfull, but the tcp
+           handle is not active the getaddrinfo is in progress and we need to
+           delay closing the tcp handle until it's finished */
+        uv_check_start(&connect->delayedtcpclose, uvTcpConnectCheckMayClose);
+    } else {
+        uv_close((struct uv_handle_s *)connect->tcp, uvTcpConnectUvCloseCb);
+    }
 }
 
 /* The handshake TCP write completes. Fire the connect callback. */
@@ -146,23 +167,62 @@ err:
     uvTcpConnectAbort(connect);
 }
 
+static void uvGetAddrInfoCb(uv_getaddrinfo_t *req,
+                            int status,
+                            struct addrinfo *res)
+{
+    struct uvTcpConnect *connect = req->data;
+    struct UvTcp *t = connect->t;
+    int rv;
+
+    if (t->closing || status == UV_ECANCELED) {
+        connect->status = RAFT_CANCELED;
+        return;
+    }
+
+    if (status < 0) {
+        ErrMsgPrintf(t->transport->errmsg, "uv_getaddrinfo(): %s",
+                     uv_err_name(status));
+        connect->status = RAFT_NOCONNECTION;
+        goto err;
+    }
+    rv = uv_tcp_connect(&connect->connect, connect->tcp,
+                        (const struct sockaddr *)res->ai_addr,
+                        uvTcpConnectUvConnectCb);
+    if (rv != 0) {
+        /* UNTESTED: since parsing succeed, this should fail only because of
+         * lack of system resources */
+        ErrMsgPrintf(t->transport->errmsg, "uv_tcp_connect(): %s",
+                     uv_strerror(rv));
+        connect->status = RAFT_NOCONNECTION;
+        goto err;
+    }
+
+    return;
+
+err:
+    uvTcpConnectAbort(connect);
+}
 /* Create a new TCP handle and submit a connection request to the event loop. */
 static int uvTcpConnectStart(struct uvTcpConnect *r, const char *address)
 {
+    static struct addrinfo hints = {
+        .ai_flags = AI_V4MAPPED | AI_ADDRCONFIG | AI_NUMERICHOST,
+        .ai_family = AF_INET,
+        .ai_socktype = SOCK_STREAM,
+        .ai_protocol = 0};
     struct UvTcp *t = r->t;
-    struct sockaddr_in addr;
+    char hostname[NI_MAXHOST];
+    char service[NI_MAXSERV];
     int rv;
 
-    rv = uvIpParse(address, &addr);
-    if (rv != 0) {
-        goto err;
-    }
+    r->handshake.base = NULL;
 
     /* Initialize the handshake buffer. */
     rv = uvTcpEncodeHandshake(t->id, t->address, &r->handshake);
     if (rv != 0) {
         assert(rv == RAFT_NOMEM);
-        ErrMsgOom(r->t->transport->errmsg);
+        ErrMsgOom(t->transport->errmsg);
         goto err;
     }
 
@@ -170,19 +230,30 @@ static int uvTcpConnectStart(struct uvTcpConnect *r, const char *address)
     if (r->tcp == NULL) {
         ErrMsgOom(t->transport->errmsg);
         rv = RAFT_NOMEM;
-        goto err_after_encode_handshake;
+        goto err;
     }
+
+    rv = uv_check_init(t->loop, &r->delayedtcpclose);
+    assert(rv == 0);
 
     rv = uv_tcp_init(r->t->loop, r->tcp);
     assert(rv == 0);
     r->tcp->data = r;
 
-    rv = uv_tcp_connect(&r->connect, r->tcp, (struct sockaddr *)&addr,
-                        uvTcpConnectUvConnectCb);
-    if (rv != 0) {
-        /* UNTESTED: since parsing succeed, this should fail only because of
-         * lack of system resources */
-        ErrMsgPrintf(t->transport->errmsg, "uv_tcp_connect(): %s",
+    rv = uvIpAddrSplit(address, hostname, sizeof(hostname), service,
+                       sizeof(service));
+    if (rv) {
+        ErrMsgPrintf(t->transport->errmsg,
+                     "uv_tcp_connect(): Cannot split %s into host and service",
+                     address);
+        rv = RAFT_NOCONNECTION;
+        goto err_after_tcp_init;
+    }
+    rv = uv_getaddrinfo(r->t->loop, &r->getaddrinfo, &uvGetAddrInfoCb, hostname,
+                        service, &hints);
+    if (rv) {
+        ErrMsgPrintf(t->transport->errmsg,
+                     "uv_tcp_connect(): Cannot initiate getaddrinfo %s",
                      uv_strerror(rv));
         rv = RAFT_NOCONNECTION;
         goto err_after_tcp_init;
@@ -192,9 +263,11 @@ static int uvTcpConnectStart(struct uvTcpConnect *r, const char *address)
 
 err_after_tcp_init:
     uv_close((uv_handle_t *)r->tcp, (uv_close_cb)RaftHeapFree);
-err_after_encode_handshake:
-    RaftHeapFree(r->handshake.base);
+    uv_close((uv_handle_t *)&r->delayedtcpclose, NULL);
+
 err:
+    RaftHeapFree(r->handshake.base);
+
     return rv;
 }
 
@@ -221,8 +294,9 @@ int UvTcpConnect(struct raft_uv_transport *transport,
     r->req = req;
     r->status = 0;
     r->write.data = r;
+    r->getaddrinfo.data = r;
     r->connect.data = r;
-
+    r->delayedtcpclose.data = r;
     req->cb = cb;
 
     /* Keep track of the pending request */
