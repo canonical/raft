@@ -24,6 +24,11 @@
 #define DEFAULT_MAX_CATCH_UP_ROUNDS 10
 #define DEFAULT_MAX_CATCH_UP_ROUND_DURATION (5 * 1000)
 
+int raft_version_number (void)
+{
+    return RAFT_VERSION_NUMBER;
+}
+
 static int ioFsmVersionCheck(struct raft *r,
                              struct raft_io *io,
                              struct raft_fsm *fsm);

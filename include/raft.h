@@ -10,6 +10,16 @@
 #define RAFT_API __attribute__((visibility("default")))
 
 /**
+ * Version.
+ */
+#define RAFT_VERSION_MAJOR    1
+#define RAFT_VERSION_MINOR    16
+#define RAFT_VERSION_RELEASE  0
+#define RAFT_VERSION_NUMBER (RAFT_VERSION_MAJOR *100*100 + RAFT_VERSION_MINOR *100 + RAFT_VERSION_RELEASE)
+
+int raft_version_number (void);
+
+/**
  * Error codes.
  */
 enum {
