@@ -165,6 +165,7 @@ static void tearDown(void *data)
  *****************************************************************************/
 
 #define BOGUS_ADDRESS "127.0.0.1:6666"
+#define INVALID_ADDRESS "500.0.0.1:6666"
 
 SUITE(tcp_connect)
 
@@ -214,7 +215,7 @@ TEST(tcp_connect, closeImmediately, setUp, tearDownDeps, 0, NULL)
 }
 
 /* The transport gets closed during the handshake. */
-TEST(tcp_connect, closeDuringHandshake, setUp, tearDownDeps, 0, NULL)
+TEST(tcp_connect, closeDuringDnsLookup, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
 
@@ -233,6 +234,14 @@ TEST(tcp_connect, closeDuringHandshake, setUp, tearDownDeps, 0, NULL)
     return MUNIT_OK;
 }
 
+/* The transport gets closed during the handshake. */
+TEST(tcp_connect, closeDuringHandshake, setUp, tearDownDeps, 0, NULL)
+{
+    struct fixture *f = data;
+    CONNECT_CLOSE(2, TCP_SERVER_ADDRESS, 2);
+    return MUNIT_OK;
+}
+
 static void checkCb(struct uv_check_s *check)
 {
     struct fixture *f = check->data;
@@ -242,7 +251,7 @@ static void checkCb(struct uv_check_s *check)
 
 /* The transport gets closed right after a connection failure, while the
  * connection attempt is being aborted. */
-TEST(tcp_connect, closeDuringAbort, setUp, tearDownDeps, 0, NULL)
+TEST(tcp_connect, closeDuringDnsLookupAbort, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
     struct uv_check_s check;
@@ -253,7 +262,30 @@ TEST(tcp_connect, closeDuringAbort, setUp, tearDownDeps, 0, NULL)
     munit_assert_int(rv, ==, 0);
     check.data = f;
     uv_check_start(&check, checkCb);
+    CONNECT_REQ(2, INVALID_ADDRESS, 0, RAFT_NOCONNECTION);
+    LOOP_RUN(1);
+    LOOP_RUN_UNTIL(&_result.done);
+    CLOSE_WAIT;
+    return MUNIT_OK;
+}
+
+/* The transport gets closed right after a connection failure, while the
+ * connection attempt is being aborted. */
+TEST(tcp_connect, closeDuringConnectAbort, setUp, tearDownDeps, 0, NULL)
+{
+    struct fixture *f = data;
+    struct uv_check_s check;
+    int rv;
+    /* Use a check handle in order to close the transport in the same loop
+     * iteration where the connection failure occurs. */
+    rv = uv_check_init(&f->loop, &check);
+    munit_assert_int(rv, ==, 0);
+    check.data = f;
     CONNECT_REQ(2, BOGUS_ADDRESS, 0, RAFT_NOCONNECTION);
+    /* Successfull DNS lookup will initiate async connect */
+    LOOP_RUN(1);
+    // Now start the check handle to fire in the next iteration */
+    uv_check_start(&check, checkCb);
     LOOP_RUN(1);
     LOOP_RUN_UNTIL(&_result.done);
     CLOSE_WAIT;
