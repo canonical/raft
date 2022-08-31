@@ -10,10 +10,19 @@
 /* The happy path of a connection request is:
  *
  * - Create a TCP handle and submit a TCP connect request.
+ * - Initiate a asynchronous dns resolve request
+ * - Once the name lookup was successfull connect to the first given IP
  * - Once connected over TCP, submit a write request for the handshake.
  * - Once the write completes, fire the connection request callback.
  *
+ * Alternative happy path of a connection request, if hostname resolves to
+ * multiple IPs and first/second/... IP is reachable:
+ * - close the tcp handle and initiate a new connect with next IP in cb
+ *
  * Possible failure modes are:
+ *
+ * - The name resolve for the hostname is not sucessfull, close the TCP handle
+ *   and fire the request callback.
  *
  * - The transport get closed, close the TCP handle and and fire the request
  *   callback with RAFT_CANCELED.
@@ -30,11 +39,13 @@ struct uvTcpConnect
     uv_buf_t handshake;                  /* Handshake data */
     struct uv_tcp_s *tcp;                /* TCP connection socket handle */
     struct uv_getaddrinfo_s getaddrinfo; /* DNS resolve request */
+    const struct addrinfo* ai_current;   /* The current sockaddr to connect to */
     struct uv_connect_s connect;         /* TCP connection request */
     struct uv_write_s write;             /* TCP handshake request */
     int status;                          /* Returned to the request callback */
-    bool resolving; /* Indicate name resolving in progress */
-    queue queue;    /* Pending connect queue */
+    bool resolving;                      /* Indicate name resolving in progress */
+    bool retry;                          /* Indicate tcp connect failure handling */
+    queue queue;                         /* Pending connect queue */
 };
 
 /* Encode an handshake message into the given buffer. */
@@ -93,9 +104,13 @@ static void uvTcpConnectAbort(struct uvTcpConnect *connect)
     QUEUE_PUSH(&connect->t->aborting, &connect->queue);
     uv_cancel((struct uv_req_s *)&connect->getaddrinfo);
     /* Call uv_close on the tcp handle, if there is no getaddrinfo request
-in flight. Data structures may only be freed after the uvGetAddrInfoCb was
-triggered. Tcp handle will be closed in the uvGetAddrInfoCb in this case. */
-    if (!connect->resolving) {
+     * in flight and the handle is not currently closed due to next IP
+     * connect attempt.
+     * Data structures may only be freed after the uvGetAddrInfoCb was
+     * triggered. Tcp handle will be closed in the uvGetAddrInfoCb in this case.
+     * uvTcpConnectUvCloseCb will be invoked from uvTcpTryNextConnectCb
+     * in case a next IP connect should be started. */
+    if (!connect->resolving && !connect->retry) {
         uv_close((struct uv_handle_s *)connect->tcp, uvTcpConnectUvCloseCb);
     }
 }
@@ -121,6 +136,30 @@ static void uvTcpConnectUvWriteCb(struct uv_write_s *write, int status)
     uvTcpConnectFinish(connect);
 }
 
+/* Helper function to connect to the remote node */
+static void uvTcpAsyncConnect(struct uvTcpConnect *connect);
+
+/* The TCP connect failed, we closed the handle and want to try with next IP */
+static void uvTcpTryNextConnectCb(struct uv_handle_s *handle)
+{
+    struct uvTcpConnect *connect = handle->data;
+    struct UvTcp *t = connect->t;
+    int rv;
+
+    connect->retry = false;
+
+    if (t->closing) {
+        connect->status = RAFT_CANCELED;
+        /* We are already in close cb for the tcp handle, simply invoke final cb */
+        uvTcpConnectUvCloseCb(handle);
+        return;
+    }
+    rv = uv_tcp_init(t->loop, connect->tcp);
+    assert(rv == 0);
+    uvTcpAsyncConnect(connect);
+}
+
+
 /* The TCP connection is established. Write the handshake data. */
 static void uvTcpConnectUvConnectCb(struct uv_connect_s *req, int status)
 {
@@ -135,6 +174,14 @@ static void uvTcpConnectUvConnectCb(struct uv_connect_s *req, int status)
 
     if (status != 0) {
         assert(status != UV_ECANCELED); /* t->closing would have been true */
+        connect->ai_current = connect->ai_current->ai_next;
+        if (connect->ai_current){
+            /* For the next connect attempt we need to close the tcp handle. */
+            /* To avoid interference with aborting we set a flag to indicate the connect attempt */
+            connect->retry = true;
+            uv_close((struct uv_handle_s *)connect->tcp, uvTcpTryNextConnectCb);
+            return;
+        }
         connect->status = RAFT_NOCONNECTION;
         ErrMsgPrintf(t->transport->errmsg, "uv_tcp_connect(): %s",
                      uv_strerror(status));
@@ -155,6 +202,22 @@ err:
     uvTcpConnectAbort(connect);
 }
 
+/* Helper function to connect to the remote node */
+static void uvTcpAsyncConnect(struct uvTcpConnect *connect)
+{
+    int rv = uv_tcp_connect(&connect->connect, connect->tcp,
+                            connect->ai_current->ai_addr,
+														uvTcpConnectUvConnectCb);
+    if (rv != 0) {
+        /* UNTESTED: since parsing succeed, this should fail only because of
+         * lack of system resources */
+        ErrMsgPrintf(connect->t->transport->errmsg, "uv_tcp_connect(): %s",
+                     uv_strerror(rv));
+        connect->status = RAFT_NOCONNECTION;
+        uvTcpConnectAbort(connect);
+    }
+}
+
 /* The hostname resolve is finished */
 static void uvGetAddrInfoCb(uv_getaddrinfo_t *req,
                             int status,
@@ -162,7 +225,6 @@ static void uvGetAddrInfoCb(uv_getaddrinfo_t *req,
 {
     struct uvTcpConnect *connect = req->data;
     struct UvTcp *t = connect->t;
-    int rv;
 
     connect->resolving =
         false; /* Indicate we are in the name resolving phase */
@@ -170,7 +232,7 @@ static void uvGetAddrInfoCb(uv_getaddrinfo_t *req,
     if (t->closing) {
         connect->status = RAFT_CANCELED;
 
-        /* We need to close the tcp handle to to connection attempt */
+        /* We need to close the tcp handle to abort connection attempt */
         uv_close((struct uv_handle_s *)connect->tcp, uvTcpConnectUvCloseCb);
         return;
     }
@@ -179,30 +241,17 @@ static void uvGetAddrInfoCb(uv_getaddrinfo_t *req,
         ErrMsgPrintf(t->transport->errmsg, "uv_getaddrinfo(): %s",
                      uv_err_name(status));
         connect->status = RAFT_NOCONNECTION;
-        goto err;
+        uvTcpConnectAbort(connect);
+        return;
     }
-    rv = uv_tcp_connect(&connect->connect, connect->tcp,
-                        (const struct sockaddr *)res->ai_addr,
-                        uvTcpConnectUvConnectCb);
-    if (rv != 0) {
-        /* UNTESTED: since parsing succeed, this should fail only because of
-         * lack of system resources */
-        ErrMsgPrintf(t->transport->errmsg, "uv_tcp_connect(): %s",
-                     uv_strerror(rv));
-        connect->status = RAFT_NOCONNECTION;
-        goto err;
-    }
-
-    return;
-
-err:
-    uvTcpConnectAbort(connect);
+    connect->ai_current = res;
+    uvTcpAsyncConnect(connect);
 }
 /* Create a new TCP handle and submit a connection request to the event loop. */
 static int uvTcpConnectStart(struct uvTcpConnect *r, const char *address)
 {
     static struct addrinfo hints = {
-        .ai_flags = AI_V4MAPPED | AI_ADDRCONFIG | AI_NUMERICHOST,
+        .ai_flags = AI_V4MAPPED | AI_ADDRCONFIG,
         .ai_family = AF_INET,
         .ai_socktype = SOCK_STREAM,
         .ai_protocol = 0};
@@ -288,6 +337,7 @@ int UvTcpConnect(struct raft_uv_transport *transport,
     r->write.data = r;
     r->getaddrinfo.data = r;
     r->resolving = false;
+    r->retry = false;
     r->connect.data = r;
     req->cb = cb;
 

@@ -15,6 +15,7 @@
 #define TEAR_DOWN_TCP_SERVER TcpServerClose(&f->server)
 
 #define TCP_SERVER_STOP TcpServerStop(&f->server)
+#define TCP_SERVER_PORT f->server.port
 #define TCP_SERVER_ADDRESS f->server.address
 
 #define FIXTURE_TCP struct test_tcp tcp
@@ -28,6 +29,7 @@
 struct TcpServer
 {
     int socket;        /* Socket listening to incoming connections */
+    int port;
     char address[128]; /* IPv4 address of the server, with port */
 };
 
