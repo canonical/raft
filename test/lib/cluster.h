@@ -436,4 +436,36 @@ void cluster_randomize_init(struct raft_fixture *f);
 void cluster_randomize(struct raft_fixture *f,
                        struct raft_fixture_event *event);
 
+/* Submit a barrier request. */
+#define CLUSTER_BARRIER_SUBMIT(I)                                                      \
+    struct raft_barrier _barrier_req;                                                  \
+    struct barrierCbResult _barrier_result = {0, false};                               \
+    int _barrier_rv;                                                                   \
+    _barrier_req.data = &_barrier_result;                                              \
+    _barrier_rv = raft_barrier(CLUSTER_RAFT(I), &_barrier_req, barrierCbAssertResult); \
+    munit_assert_int(_barrier_rv, ==, 0);
+
+/* Expect the barrier callback to fire with the given status. */
+#define CLUSTER_BARRIER_EXPECT(STATUS) _barrier_result.status = STATUS
+
+/* Wait until the barrier request completes. */
+#define CLUSTER_BARRIER_WAIT CLUSTER_STEP_UNTIL(barrierCbHasFired, &_barrier_result, 2000)
+
+/* Submit to the I'th server a barrier request and wait for the operation to
+ * succeed. */
+#define CLUSTER_BARRIER(I)         \
+    do {                           \
+        CLUSTER_BARRIER_SUBMIT(I); \
+        CLUSTER_BARRIER_WAIT;      \
+    } while (0)
+
+struct barrierCbResult
+{
+    int status;
+    bool done;
+};
+
+void barrierCbAssertResult(struct raft_barrier *req, int status);
+bool barrierCbHasFired(struct raft_fixture *f, void *arg);
+
 #endif /* TEST_CLUSTER_H */

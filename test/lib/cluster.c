@@ -41,3 +41,17 @@ void cluster_randomize(struct raft_fixture *f, struct raft_fixture_event *event)
 {
     randomize(f, event->server_index, event->type);
 }
+
+void barrierCbAssertResult(struct raft_barrier *req, int status)
+{
+    struct barrierCbResult *result = req->data;
+    munit_assert_int(status, ==, result->status);
+    result->done = true;
+}
+
+bool barrierCbHasFired(struct raft_fixture *f, void *arg)
+{
+    struct barrierCbResult *result = arg;
+    (void)f;
+    return result->done;
+}

@@ -82,14 +82,14 @@ struct result
 };
 
 /* Submit an apply request. */
-#define APPLY_SUBMIT(I)                                                      \
-    struct raft_buffer _buf;                                                 \
-    struct raft_apply _req;                                                  \
-    struct result _result = {0, false};                                      \
-    int _rv;                                                                 \
-    FsmEncodeSetX(123, &_buf);                                               \
-    _req.data = &_result;                                                    \
-    _rv = raft_apply(CLUSTER_RAFT(I), &_req, &_buf, 1, NULL);                \
+#define APPLY_SUBMIT(I)                                       \
+    struct raft_buffer _buf;                                  \
+    struct raft_apply _req;                                   \
+    struct result _result = {0, false};                       \
+    int _rv;                                                  \
+    FsmEncodeSetX(123, &_buf);                                \
+    _req.data = &_result;                                     \
+    _rv = raft_apply(CLUSTER_RAFT(I), &_req, &_buf, 1, NULL); \
     munit_assert_int(_rv, ==, 0);
 
 /******************************************************************************
@@ -250,18 +250,13 @@ TEST(raft_remove, selfThreeNodeClusterReplicate, setup, tear_down, 0, NULL)
      * log entries but does not count itself in majorities.`
      *
      * */
-    APPLY_SUBMIT(0)
+    APPLY_SUBMIT(0);
 
     /* The removed leader eventually steps down */
     CLUSTER_STEP_UNTIL_HAS_NO_LEADER(5000);
     raft_leader(CLUSTER_RAFT(0), &leader_id, &leader_address);
     munit_assert_ulong(leader_id, ==, 0);
     munit_assert_ptr_null(leader_address);
-
-    /* Every node should have all entries */
-    CLUSTER_STEP_UNTIL_APPLIED(0, 4, 10000);
-    CLUSTER_STEP_UNTIL_APPLIED(1, 4, 10000);
-    CLUSTER_STEP_UNTIL_APPLIED(2, 4, 10000);
 
     /* The removed leader eventually steps down */
     CLUSTER_STEP_UNTIL_HAS_LEADER(5000);
@@ -276,6 +271,16 @@ TEST(raft_remove, selfThreeNodeClusterReplicate, setup, tear_down, 0, NULL)
     munit_assert_ulong(leader_id, !=, 0);
     munit_assert_ulong(leader_id, !=, 1);
     munit_assert_ptr_not_null(leader_address);
+
+    /* The new leader applies a barrier to commit entries from previous terms */
+    CLUSTER_BARRIER(CLUSTER_LEADER);
+
+    /* Every node should have at least 4 entries, and the non-removed nodes
+     * should have 5 (because of the barrier) */
+    CLUSTER_STEP_UNTIL_APPLIED(0, 4, 10000);
+    CLUSTER_STEP_UNTIL_APPLIED(1, 5, 10000);
+    CLUSTER_STEP_UNTIL_APPLIED(2, 5, 10000);
+
     return MUNIT_OK;
 }
 
