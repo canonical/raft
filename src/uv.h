@@ -318,7 +318,8 @@ int UvPrepare(struct uv *uv,
  * and then remove it immediately. */
 void UvPrepareClose(struct uv *uv);
 
-/* Implementation of raft_io->append.*/
+/* Implementation of raft_io->append. All the raft_buffers of the raft_entry structs
+ * in the entries array are required to have a len that is a multiple of 8. */
 int UvAppend(struct raft_io *io,
              struct raft_io_append *req,
              const struct raft_entry entries[],

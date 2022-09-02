@@ -143,6 +143,17 @@ static void tearDown(void *data)
 
 SUITE(append)
 
+/* Append an entries array containing unaligned buffers. */
+TEST(append, unaligned, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    APPEND_SUBMIT_CB_DATA(0, 1, 9, NULL, NULL, RAFT_INVALID);
+    munit_assert_string_equal(f->io.errmsg, "entry buffers must be 8-byte aligned");
+    APPEND_SUBMIT_CB_DATA(1, 3, 63, NULL, NULL, RAFT_INVALID);
+    munit_assert_string_equal(f->io.errmsg, "entry buffers must be 8-byte aligned");
+    return MUNIT_OK;
+}
+
 /* Append the very first batch of entries. */
 TEST(append, first, setUp, tearDownDeps, 0, NULL)
 {
@@ -657,9 +668,9 @@ TEST(append, barrierOpenSegments, setUp, tearDown, 0, blocking_bool_params)
 		     "0000000000000009-0000000000000012", NULL};
     bd.files = files;
 
-    APPEND_SUBMIT_CB_DATA(0, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd);
-    APPEND_SUBMIT_CB_DATA(1, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd);
-    APPEND_SUBMIT_CB_DATA(2, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd);
+    APPEND_SUBMIT_CB_DATA(0, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd, 0);
+    APPEND_SUBMIT_CB_DATA(1, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd, 0);
+    APPEND_SUBMIT_CB_DATA(2, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd, 0);
 
     struct UvBarrier barrier = {0};
     barrier.data = (void*) &bd;
@@ -693,9 +704,9 @@ TEST(append, blockingBarrierNoOpenSegments, setUp, tearDown, 0, NULL)
     barrier.blocking = true;
     UvBarrier(f->io.impl, 1, &barrier, barrierCbCompareCounter);
 
-    APPEND_SUBMIT_CB_DATA(0, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd);
-    APPEND_SUBMIT_CB_DATA(1, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd);
-    APPEND_SUBMIT_CB_DATA(2, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd);
+    APPEND_SUBMIT_CB_DATA(0, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd, 0);
+    APPEND_SUBMIT_CB_DATA(1, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd, 0);
+    APPEND_SUBMIT_CB_DATA(2, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd, 0);
 
     /* Make sure every callback fired */
     LOOP_RUN_UNTIL(&bd.done);
@@ -731,9 +742,9 @@ TEST(append, blockingBarrierSingleOpenSegment, setUp, tearDown, 0, NULL)
     barrier.blocking = true;
     UvBarrier(f->io.impl, 1, &barrier, barrierCbCompareCounter);
 
-    APPEND_SUBMIT_CB_DATA(0, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd);
-    APPEND_SUBMIT_CB_DATA(1, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd);
-    APPEND_SUBMIT_CB_DATA(2, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd);
+    APPEND_SUBMIT_CB_DATA(0, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd, 0);
+    APPEND_SUBMIT_CB_DATA(1, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd, 0);
+    APPEND_SUBMIT_CB_DATA(2, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd, 0);
 
     /* Make sure every callback fired */
     LOOP_RUN_UNTIL(&bd.done);
@@ -794,7 +805,7 @@ TEST(append, nonBlockingBarrierLongBlockingTask, setUp, tearDown, 0, NULL)
     barrier.data = (void*) &bd;
     barrier.blocking = false;
     UvBarrier(f->io.impl, bd.uv->append_next_index, &barrier, barrierCbLongWork);
-    APPEND_SUBMIT_CB_DATA(0, 1, 64, appendCbIncreaseCounterAssertResult, &bd);
+    APPEND_SUBMIT_CB_DATA(0, 1, 64, appendCbIncreaseCounterAssertResult, &bd, 0);
 
     /* Make sure every callback fired */
     LOOP_RUN_UNTIL(&bd.done);
@@ -819,7 +830,7 @@ TEST(append, blockingBarrierLongBlockingTask, setUp, tearDown, 0, NULL)
     barrier.data = (void*) &bd;
     barrier.blocking = true;
     UvBarrier(f->io.impl, bd.uv->append_next_index, &barrier, barrierCbLongWork);
-    APPEND_SUBMIT_CB_DATA(0, 1, 64, appendCbIncreaseCounterAssertResult, &bd);
+    APPEND_SUBMIT_CB_DATA(0, 1, 64, appendCbIncreaseCounterAssertResult, &bd, 0);
 
     /* Make sure every callback fired */
     LOOP_RUN_UNTIL(&bd.done);
