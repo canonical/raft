@@ -622,6 +622,24 @@ err:
     return rv;
 }
 
+/* Check that all entry buffers are 8-byte aligned */
+static int uvCheckEntryBuffersAligned(struct uv *uv,
+                                      const struct raft_entry entries[],
+                                      unsigned n)
+{
+    unsigned i;
+
+    for (i = 0; i < n; i++) {
+        if (entries[i].buf.len % 8) {
+            ErrMsgPrintf(uv->io->errmsg, "entry buffers must be 8-byte aligned");
+            Tracef(uv->tracer, "%s", uv->io->errmsg);
+            return RAFT_INVALID;
+        }
+    }
+
+    return 0;
+}
+
 int UvAppend(struct raft_io *io,
              struct raft_io_append *req,
              const struct raft_entry entries[],
@@ -644,6 +662,11 @@ int UvAppend(struct raft_io *io,
     append->entries = entries;
     append->n = n;
     req->cb = cb;
+
+    rv = uvCheckEntryBuffersAligned(uv, entries, n);
+    if (rv != 0) {
+        goto err_after_req_alloc;
+    }
 
     rv = uvAppendEnqueueRequest(uv, append);
     if (rv != 0) {

@@ -143,6 +143,17 @@ static void tearDown(void *data)
 
 SUITE(append)
 
+/* Append an entries array containing unaligned buffers. */
+TEST(append, unaligned, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    APPEND_SUBMIT_CB_DATA(0, 1, 9, NULL, NULL, RAFT_INVALID);
+    munit_assert_string_equal(f->io.errmsg, "entry buffers must be 8-byte aligned");
+    APPEND_SUBMIT_CB_DATA(1, 3, 63, NULL, NULL, RAFT_INVALID);
+    munit_assert_string_equal(f->io.errmsg, "entry buffers must be 8-byte aligned");
+    return MUNIT_OK;
+}
+
 /* Append the very first batch of entries. */
 TEST(append, first, setUp, tearDownDeps, 0, NULL)
 {
