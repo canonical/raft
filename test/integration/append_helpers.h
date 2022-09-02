@@ -38,7 +38,8 @@ static void appendCbAssertResult(struct raft_io_append *req, int status)
             entry->batch = NULL;                            \
             munit_assert_ptr_not_null(entry->buf.base);     \
             memset(entry->buf.base, 0, entry->buf.len);     \
-            *(uint64_t *)entry->buf.base = f->count;        \
+            uint64_t _temporary = f->count;                 \
+            memcpy(entry->buf.base, &_temporary, 8);        \
             f->count++;                                     \
         }                                                   \
     }
