@@ -12,7 +12,7 @@ addons:
 
 jobs:
   include:
-  - if: type != pull_request
+  - if: type == pull_request
     compiler: gcc
     dist: bionic
     arch: s390x
@@ -22,7 +22,7 @@ jobs:
     dist: bionic
     arch: arm64
 
-  - if: type != pull_request
+  - if: type == pull_request
     compiler: clang
     dist: bionic
     arch: ppc64le
