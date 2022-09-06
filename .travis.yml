@@ -14,17 +14,17 @@ jobs:
   include:
   - if: type == pull_request
     compiler: gcc
-    dist: bionic
+    dist: focal
     arch: s390x
 
   - if: type == pull_request
     compiler: gcc
-    dist: bionic
+    dist: focal
     arch: arm64
 
   - if: type == pull_request
     compiler: clang
-    dist: bionic
+    dist: focal
     arch: ppc64le
 
 before_script:
