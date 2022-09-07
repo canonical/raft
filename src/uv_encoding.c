@@ -1,5 +1,6 @@
 #include "uv_encoding.h"
 
+#include <limits.h>
 #include <string.h>
 
 #include "../include/raft/uv.h"
@@ -473,7 +474,7 @@ static void decodeTimeoutNow(const uv_buf_t *buf, struct raft_timeout_now *p)
     p->last_log_term = byteGet64(&cursor);
 }
 
-int uvDecodeMessage(const unsigned long type,
+int uvDecodeMessage(uint16_t type,
                     const uv_buf_t *header,
                     struct raft_message *message,
                     size_t *payload_len)
@@ -481,7 +482,7 @@ int uvDecodeMessage(const unsigned long type,
     unsigned i;
     int rv = 0;
 
-    /* TODO: check type overflow */
+    memset(message, 0, sizeof(*message));
     message->type = (unsigned short)type;
 
     *payload_len = 0;
