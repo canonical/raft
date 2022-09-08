@@ -48,6 +48,7 @@ check_LTLIBRARIES = libtest.la
 
 libtest_la_CFLAGS = $(AM_CFLAGS) -DMUNIT_TEST_NAME_LEN=60 -Wno-unused-result -Wno-conversion
 libtest_la_SOURCES = \
+  test/lib/addrinfo.c \
   test/lib/fault.c \
   test/lib/fsm.c \
   test/lib/heap.c \
