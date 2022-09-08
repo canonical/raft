@@ -20,11 +20,11 @@ static int uvTcpInit(struct raft_uv_transport *transport,
     assert(address != NULL);
     t->id = id;
     t->address = address;
-    rv = uv_tcp_init(t->loop, &t->listener);
+    rv = uv_tcp_init(t->loop, &t->default_listener);
     if (rv != 0) {
         return rv;
     }
-    t->listener.data = t;
+    t->default_listener.data = t;
     return 0;
 }
 
@@ -49,7 +49,7 @@ void UvTcpMaybeFireCloseCb(struct UvTcp *t)
     assert(QUEUE_IS_EMPTY(&t->accepting));
     assert(QUEUE_IS_EMPTY(&t->connecting));
 
-    if (t->listener.data != NULL) {
+    if (t->listeners || t->default_listener.data != NULL) {
         return;
     }
     if (!QUEUE_IS_EMPTY(&t->aborting)) {
@@ -78,7 +78,9 @@ int raft_uv_tcp_init(struct raft_uv_transport *transport,
     t->id = 0;
     t->address = NULL;
     t->bind_address = NULL;
-    t->listener.data = NULL;
+    t->default_listener.data = NULL;
+    t->listeners = NULL;
+    t->num_listeners = 0;
     t->accept_cb = NULL;
     QUEUE_INIT(&t->accepting);
     QUEUE_INIT(&t->connecting);
@@ -106,10 +108,12 @@ int raft_uv_tcp_set_bind_address(struct raft_uv_transport *transport,
                                  const char *address)
 {
     struct UvTcp *t = transport->impl;
-    struct sockaddr_in addr;
+    char hostname[NI_MAXHOST];
+    char service[NI_MAXSERV];
     int rv;
 
-    rv = uvIpParse(address, &addr);
+    rv = uvIpAddrSplit(address, hostname, sizeof(hostname), service,
+                       sizeof(service));
     if (rv != 0) {
         return RAFT_INVALID;
     }

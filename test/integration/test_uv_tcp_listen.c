@@ -1,6 +1,7 @@
 #include "../../include/raft.h"
 #include "../../include/raft/uv.h"
 #include "../../src/byte.h"
+#include "../lib/addrinfo.h"
 #include "../lib/heap.h"
 #include "../lib/loop.h"
 #include "../lib/runner.h"
@@ -67,7 +68,12 @@ static void acceptCb(struct raft_uv_transport *t,
             _rv = raft_uv_tcp_set_bind_address(&f->transport, bind_addr); \
             munit_assert_int(_rv, ==, 0);                                 \
         }                                                                 \
-        _rv = f->transport.init(&f->transport, 1, "127.0.0.1:9000");      \
+        const char *address = munit_parameters_get(params, "a");          \
+        if (!address) {                                                   \
+            address = "127.0.0.1:9000";                                   \
+        }                                                                 \
+        _rv = f->transport.init(&f->transport, 1, address);               \
+        munit_assert_int(_rv, ==, 0);                                     \
         f->transport.data = f;                                            \
         f->closed = false;                                                \
     } while (0)
@@ -89,6 +95,7 @@ static void *setUpDeps(const MunitParameter params[],
                        MUNIT_UNUSED void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
+    SET_UP_ADDRINFO;
     SET_UP_HEAP;
     SETUP_LOOP;
     SETUP_TCP;
@@ -101,6 +108,7 @@ static void tearDownDeps(void *data)
     TEAR_DOWN_TCP;
     TEAR_DOWN_LOOP;
     TEAR_DOWN_HEAP;
+    TEAR_DOWN_ADDRINFO;
     free(f);
 }
 
@@ -182,16 +190,21 @@ static void tearDown(void *data)
 
 SUITE(tcp_listen)
 
-/* Parameters for sending a partial handshake */
-static char *validBindAddresses[] = {"", "127.0.0.1:9000", NULL};
+/* Parameters for listen address */
 
-static MunitParameterEnum tcpListenParams[] = {
+static char *validAddresses[] = {"127.0.0.1:9000", "localhost:9000", NULL};
+
+static char *validBindAddresses[] = {
+    "", "127.0.0.1:9000", "localhost:9000", ":9000", "0.0.0.0:9000", NULL};
+
+static MunitParameterEnum validListenParams[] = {
+    {"a", validAddresses},
     {"b", validBindAddresses},
     {NULL, NULL},
 };
 
 /* If the handshake is successful, the accept callback is invoked. */
-TEST(tcp_listen, first, setUp, tearDown, 0, tcpListenParams)
+TEST(tcp_listen, success, setUp, tearDown, 0, validListenParams)
 {
     struct fixture *f = data;
     LISTEN(0);
@@ -200,6 +213,94 @@ TEST(tcp_listen, first, setUp, tearDown, 0, tcpListenParams)
     ACCEPT;
     return MUNIT_OK;
 }
+
+/* Parameters for invalid listen addresses */
+static char *invalidAddresses[] = {"500.1.2.3:9000", "not-existing:9000",
+                                   "192.0.2.0:9000", NULL};
+
+static char *invalidBindAddresses[] = {
+    "", "500.1.2.3:9000", "not-existing:9000", "192.0.2.0:9000", NULL};
+
+static MunitParameterEnum invalidTcpListenParams[] = {
+    {"a", invalidAddresses},
+    {"b", invalidBindAddresses},
+    {NULL, NULL},
+};
+
+/* Check error on invalid hostname specified */
+TEST(tcp_listen, invalidAddress, setUp, tearDown, 0, invalidTcpListenParams)
+{
+    struct fixture *f = data;
+    LISTEN(RAFT_IOERR);
+    return MUNIT_OK;
+}
+
+/* Check success with addrinfo resolve to mutiple IP and first one is used to connect */
+TEST(tcp_listen, firstOfTwo, setUp, tearDown, 0, NULL)
+{
+    const struct AddrinfoResult results[] = { {"127.0.0.1", 9000}, { "127.0.0.2", 9000} };
+    struct fixture *f = data;
+    AddrinfoInjectSetResponse( 0, 2, results);
+    LISTEN(0);
+    PEER_CONNECT;
+    PEER_HANDSHAKE;
+    ACCEPT;
+    return MUNIT_OK;
+}
+
+/* Check success with addrinfo resolve to mutiple IP and second one is used to connect */
+TEST(tcp_listen, secondOfTwo, setUp, tearDown, 0, NULL)
+{
+    const struct AddrinfoResult results[] = { {"127.0.0.2", 9000}, { "127.0.0.1", 9000} };
+    struct fixture *f = data;
+    AddrinfoInjectSetResponse( 0, 2, results);
+
+    LISTEN(0);
+    PEER_CONNECT;
+    PEER_HANDSHAKE;
+    ACCEPT;
+    return MUNIT_OK;
+}
+
+/* Simulate port already in use error by addrinfo response contain the same IP twice */
+TEST(tcp_listen, alreadyBound, setUp, tearDown, 0, NULL)
+{
+    const struct AddrinfoResult results[] = { {"127.0.0.1", 9000}, { "127.0.0.1", 9000} };
+    struct fixture *f = data;
+    AddrinfoInjectSetResponse( 0, 2, results);
+    LISTEN(RAFT_IOERR);
+    return MUNIT_OK;
+}
+
+/* Error in bind first IP address */
+TEST(tcp_listen, cannotBindFirst, setUp, tearDown, 0, NULL)
+{
+    const struct AddrinfoResult results[] = { {"192.0.2.0", 9000}, { "127.0.0.1", 9000} };
+    struct fixture *f = data;
+    AddrinfoInjectSetResponse( 0, 2, results);
+    LISTEN(RAFT_IOERR);
+    return MUNIT_OK;
+}
+
+/* Error in bind of second IP address */
+TEST(tcp_listen, cannotBindSecond, setUp, tearDown, 0, NULL)
+{
+    const struct AddrinfoResult results[] = { {"127.0.0.1", 9000}, { "192.0.2.0", 9000} };
+    struct fixture *f = data;
+    AddrinfoInjectSetResponse( 0, 2, results);
+    LISTEN(RAFT_IOERR);
+    return MUNIT_OK;
+}
+
+/* Check error on general dns server failure */
+TEST(tcp_listen, resolveFailure, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    AddrinfoInjectSetResponse( EAI_FAIL, 0, NULL);
+    LISTEN(RAFT_IOERR);
+    return MUNIT_OK;
+}
+
 
 /* The client sends us a bad protocol version */
 TEST(tcp_listen, badProtocol, setUp, tearDown, 0, NULL)

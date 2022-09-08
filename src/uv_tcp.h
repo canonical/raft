@@ -13,7 +13,9 @@ struct UvTcp
     struct uv_loop_s *loop;              /* Event loop */
     raft_id id;                          /* ID of this raft server */
     const char *address;                 /* Address of this raft server */
-    struct uv_tcp_s listener;            /* Listening TCP socket handle */
+    struct uv_tcp_s default_listener;    /* The default listener to use on single IP */
+    size_t num_listeners;                /* The number of listener sockets (multi IPs) */
+    struct uv_tcp_s* listeners;          /* The array of tcp listen sockets (multi IPs) */
     raft_uv_accept_cb accept_cb;         /* Call after accepting a connection */
     queue accepting;                     /* Connections being accepted */
     queue connecting;                    /* Pending connection requests */

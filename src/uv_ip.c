@@ -32,7 +32,7 @@ int uvIpAddrSplit(const char *address,
 {
     char colon = ':';
     const char *service_ptr = NULL;
-
+    
     if (host) {
         service_ptr = strCpyUntil(host, address, host_size, colon);
         if (!service_ptr) {
@@ -53,29 +53,33 @@ int uvIpAddrSplit(const char *address,
     return 0;
 }
 
-int uvIpParse(const char *address, struct sockaddr_in *addr)
+/* Synchronoues resolve hostname to IP address */
+int uvIpResolveBindAddresses(const char *address, struct addrinfo **ai_result)
 {
-    char buf[256];
-    size_t n;
-    char *host;
-    char *port;
-    char *colon = ":";
+    static struct addrinfo hints = {
+        .ai_flags = AI_V4MAPPED | AI_ADDRCONFIG | AI_PASSIVE | AI_NUMERICSERV,
+        .ai_family = AF_INET,
+        .ai_socktype = SOCK_STREAM,
+        .ai_protocol = 0};
+    char hostname[NI_MAXHOST];
+    char service[NI_MAXSERV];
     int rv;
-
-    /* TODO: turn this poor man parsing into proper one */
-    n = sizeof(buf) - 1;
-    strncpy(buf, address, n);
-    buf[n] = '\0';
-    host = strtok(buf, colon);
-    port = strtok(NULL, ":");
-    if (port == NULL) {
-        port = "8080";
-    }
-
-    rv = uv_ip4_addr(host, atoi(port), addr);
+    
+    rv = uvIpAddrSplit( address, hostname, sizeof(hostname), service, sizeof(service));
     if (rv != 0) {
-        return RAFT_NOCONNECTION;
+        return rv;
     }
-
+    
+    if (hostname[0]) {
+        rv = getaddrinfo( hostname, service, &hints, ai_result);
+    } else {
+        rv = getaddrinfo( NULL, service, &hints, ai_result);
+    }
+    
+    if (rv != 0) {
+        return RAFT_IOERR;
+    }
+    
     return 0;
 }
+
