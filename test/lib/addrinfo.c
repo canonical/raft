@@ -52,6 +52,10 @@ void AddrinfoInjectSetResponse(int rv, int num_results, const struct AddrinfoRes
     response->rv = rv;
     response->result = NULL;
     for (int i = num_results-1; i >= 0; --i) {
+        struct sockaddr_in *addr_in = malloc(sizeof(struct sockaddr_in));
+        munit_assert_ptr((void*)addr_in,!=,NULL);
+        munit_assert_int(uv_ip4_addr(results[i].ip, results[i].port, addr_in),==,0);
+
         struct addrinfo* ai = malloc(sizeof(struct addrinfo));
         munit_assert_ptr((void*)ai,!=,NULL);
         ai->ai_flags = 0;
@@ -59,9 +63,7 @@ void AddrinfoInjectSetResponse(int rv, int num_results, const struct AddrinfoRes
         ai->ai_socktype = SOCK_STREAM;
         ai->ai_protocol = IPPROTO_TCP;
         ai->ai_addrlen = sizeof(struct sockaddr_in);
-        ai->ai_addr =    malloc(ai->ai_addrlen);
-        munit_assert_ptr((void*)ai->ai_addr,!=,NULL);
-        munit_assert_int(uv_ip4_addr(results[i].ip, results[i].port, (struct sockaddr_in *)ai->ai_addr),==,0);
+        ai->ai_addr = (struct sockaddr*)addr_in;
         ai->ai_canonname = NULL;
         ai->ai_next = response->result;
         response->result = ai;
@@ -159,6 +161,7 @@ void freeaddrinfo(struct addrinfo *res)
         res =    response->result;
         while (res) {
             struct addrinfo *next = res->ai_next;
+            free(res->ai_addr);
             free(res);
             res = next;
         }
