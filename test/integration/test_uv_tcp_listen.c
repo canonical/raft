@@ -108,7 +108,6 @@ static void *setUp(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = setUpDeps(params, user_data);
     void *cursor;
-    int rv;
     /* test_tcp_listen(&f->tcp); */
     INIT;
     f->accepted = false;
@@ -119,9 +118,6 @@ static void *setUp(const MunitParameter params[], void *user_data)
     bytePut64(&cursor, PEER_ID);
     bytePut64(&cursor, 16);
     strcpy(cursor, PEER_ADDRESS);
-
-    rv = f->transport.listen(&f->transport, acceptCb);
-    munit_assert_int(rv, ==, 0);
 
     return f;
 }
@@ -138,6 +134,13 @@ static void tearDown(void *data)
  * Helper macros
  *
  *****************************************************************************/
+
+#define LISTEN(EXPECTED_RV)                   \
+  do { \
+      int rv; \
+      rv = f->transport.listen(&f->transport, acceptCb); \
+      munit_assert_int(rv, ==, EXPECTED_RV); \
+  } while (false)
 
 /* Connect to the listening socket of the transport, creating a new connection
  * that is waiting to be accepted. */
@@ -191,6 +194,7 @@ static MunitParameterEnum tcpListenParams[] = {
 TEST(tcp_listen, first, setUp, tearDown, 0, tcpListenParams)
 {
     struct fixture *f = data;
+    LISTEN(0);
     PEER_CONNECT;
     PEER_HANDSHAKE;
     ACCEPT;
@@ -201,6 +205,7 @@ TEST(tcp_listen, first, setUp, tearDown, 0, tcpListenParams)
 TEST(tcp_listen, badProtocol, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
+    LISTEN(0);
     memset(f->handshake.buf, 999, sizeof(uint64_t));
     PEER_CONNECT;
     PEER_HANDSHAKE;
@@ -221,6 +226,7 @@ static MunitParameterEnum peerAbortParams[] = {
 TEST(tcp_listen, peerAbort, setUp, tearDown, 0, peerAbortParams)
 {
     struct fixture *f = data;
+    LISTEN(0);
     const char *n = munit_parameters_get(params, "n");
     PEER_CONNECT;
     PEER_HANDSHAKE_PARTIAL(atoi(n));
@@ -245,6 +251,7 @@ static MunitParameterEnum oomParams[] = {
 TEST(tcp_listen, oom, setUp, tearDown, 0, oomParams)
 {
     struct fixture *f = data;
+    LISTEN(0);
     PEER_CONNECT;
     PEER_HANDSHAKE;
     HEAP_FAULT_ENABLE;
@@ -262,6 +269,7 @@ TEST(tcp_listen, oom, setUp, tearDown, 0, oomParams)
 TEST(tcp_listen, pending, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
+    LISTEN(0);
     PEER_CONNECT;
     return MUNIT_OK;
 }
@@ -271,6 +279,7 @@ TEST(tcp_listen, pending, setUp, tearDown, 0, NULL)
 TEST(tcp_listen, closeBeforeHandshake, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
+    LISTEN(0);
     PEER_CONNECT;
     LOOP_RUN_UNTIL_CONNECTED;
     return MUNIT_OK;
@@ -286,6 +295,7 @@ static MunitParameterEnum closeDuringHandshake[] = {
 TEST(tcp_listen, handshake, setUp, tearDown, 0, closeDuringHandshake)
 {
     struct fixture *f = data;
+    LISTEN(0);
     const char *n_param = munit_parameters_get(params, "n");
     PEER_CONNECT;
     PEER_HANDSHAKE_PARTIAL(atoi(n_param));
