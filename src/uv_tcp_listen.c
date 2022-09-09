@@ -344,6 +344,23 @@ err:
     return rv;
 }
 
+/* Ignore duplicate entries from glibc getaddrinfo due to 
+ * https://bugzilla.redhat.com/show_bug.cgi?id=496300
+ * in case of resolving localhost */
+static bool UvIsAddressDuplication(struct addrinfo *addr_info)
+{
+    struct addrinfo *next = addr_info->ai_next;
+    
+    /* Check, if we have a list of length 2 */
+    if (!next || next->ai_next) {
+        return false;
+    }
+    if (addr_info->ai_addrlen != next->ai_addrlen || bcmp(addr_info->ai_addr, next->ai_addr, addr_info->ai_addrlen)) {
+        return false;
+    }
+    return true;
+}
+
 int UvTcpListen(struct raft_uv_transport *transport, raft_uv_accept_cb cb)
 {
     struct UvTcp *t;
@@ -361,7 +378,7 @@ int UvTcpListen(struct raft_uv_transport *transport, raft_uv_accept_cb cb)
     if (rv != 0 || !addr_infos) {
         return rv;
     }
-    if (addr_infos->ai_next) {
+    if (addr_infos->ai_next && !UvIsAddressDuplication(addr_infos)) {
         rv = UvTcpListenOnMultipleIP(transport, addr_infos);
     } else {
         rv = UvTcpBindListen(&t->default_listener, addr_infos->ai_addr);
