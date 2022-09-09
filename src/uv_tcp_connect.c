@@ -207,7 +207,7 @@ static void uvTcpAsyncConnect(struct uvTcpConnect *connect)
 {
     int rv = uv_tcp_connect(&connect->connect, connect->tcp,
                             connect->ai_current->ai_addr,
-														uvTcpConnectUvConnectCb);
+                            uvTcpConnectUvConnectCb);
     if (rv != 0) {
         /* UNTESTED: since parsing succeed, this should fail only because of
          * lack of system resources */
