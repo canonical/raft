@@ -15,16 +15,10 @@ static int uvTcpInit(struct raft_uv_transport *transport,
                      const char *address)
 {
     struct UvTcp *t = transport->impl;
-    int rv;
     assert(id > 0);
     assert(address != NULL);
     t->id = id;
     t->address = address;
-    rv = uv_tcp_init(t->loop, &t->default_listener);
-    if (rv != 0) {
-        return rv;
-    }
-    t->default_listener.data = t;
     return 0;
 }
 
@@ -46,13 +40,12 @@ void UvTcpMaybeFireCloseCb(struct UvTcp *t)
         return;
     }
 
-    assert(QUEUE_IS_EMPTY(&t->accepting));
-    assert(QUEUE_IS_EMPTY(&t->connecting));
-
-    if (t->listeners || t->default_listener.data != NULL) {
+    if (t->listeners) {
         return;
     }
-    if (!QUEUE_IS_EMPTY(&t->aborting)) {
+    assert(QUEUE_IS_EMPTY(&t->accepting));
+
+    if (!QUEUE_IS_EMPTY(&t->connecting) || !QUEUE_IS_EMPTY(&t->aborting)) {
         return;
     }
 
@@ -78,7 +71,6 @@ int raft_uv_tcp_init(struct raft_uv_transport *transport,
     t->id = 0;
     t->address = NULL;
     t->bind_address = NULL;
-    t->default_listener.data = NULL;
     t->listeners = NULL;
     t->num_listeners = 0;
     t->accept_cb = NULL;
