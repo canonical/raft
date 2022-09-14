@@ -1079,6 +1079,19 @@ RAFT_API void raft_heap_set(struct raft_heap *heap);
  */
 RAFT_API void raft_heap_set_default(void);
 
+/**
+ * Return a reference to the current dynamic memory allocator.
+ *
+ * This is intended for use by applications that want to temporarily replace
+ * and then restore the original allocator, or that want to defer to the
+ * original allocator in some circumstances.
+ *
+ * The behavior of attempting to mutate the default allocator through the
+ * pointer returned by this function, including attempting to deallocate
+ * the backing memory, is undefined.
+ */
+RAFT_API const struct raft_heap *raft_heap_get(void);
+
 #undef RAFT__REQUEST
 
 #endif /* RAFT_H */
