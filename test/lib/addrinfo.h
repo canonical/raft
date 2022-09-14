@@ -23,14 +23,15 @@
 
 typedef struct AddrinfoResult
 {
-	const char* ip;
-	const int port;
+    const char *ip;
+    const int port;
 } AddrinfoResult_t;
 
-void AddrinfoInjectSetResponse(int rv, int num_results, const struct AddrinfoResult *results);
+void AddrinfoInjectSetResponse(int rv,
+                               int num_results,
+                               const struct AddrinfoResult *results);
 
 void AddrinfoInjectSetUp(const MunitParameter params[]);
 void AddrinfoInjectTearDown(void);
 
-
-#endif // #ifndef TEST_ADDRINFO_H
+#endif  // #ifndef TEST_ADDRINFO_H

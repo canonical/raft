@@ -32,7 +32,7 @@ int uvIpAddrSplit(const char *address,
 {
     char colon = ':';
     const char *service_ptr = NULL;
-    
+
     if (host) {
         service_ptr = strCpyUntil(host, address, host_size, colon);
         if (!service_ptr) {
@@ -64,22 +64,22 @@ int uvIpResolveBindAddresses(const char *address, struct addrinfo **ai_result)
     char hostname[NI_MAXHOST];
     char service[NI_MAXSERV];
     int rv;
-    
-    rv = uvIpAddrSplit( address, hostname, sizeof(hostname), service, sizeof(service));
+
+    rv = uvIpAddrSplit(address, hostname, sizeof(hostname), service,
+                       sizeof(service));
     if (rv != 0) {
         return rv;
     }
-    
+
     if (hostname[0]) {
-        rv = getaddrinfo( hostname, service, &hints, ai_result);
+        rv = getaddrinfo(hostname, service, &hints, ai_result);
     } else {
-        rv = getaddrinfo( NULL, service, &hints, ai_result);
+        rv = getaddrinfo(NULL, service, &hints, ai_result);
     }
-    
+
     if (rv != 0) {
         return RAFT_IOERR;
     }
-    
+
     return 0;
 }
-

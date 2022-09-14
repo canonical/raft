@@ -192,10 +192,11 @@ TEST(tcp_connect, connectByName, setUp, tearDown, 0, NULL)
 
 /* Successfully connect to the peer by first IP  */
 TEST(tcp_connect, firstIP, setUp, tearDown, 0, NULL)
-{    
+{
     struct fixture *f = data;
-    const struct AddrinfoResult results[] = { { "127.0.0.1", TCP_SERVER_PORT}, { "192.0.2.0", 6666} };
-    AddrinfoInjectSetResponse( 0, 2, results);
+    const struct AddrinfoResult results[] = {{"127.0.0.1", TCP_SERVER_PORT},
+                                             {"192.0.2.0", 6666}};
+    AddrinfoInjectSetResponse(0, 2, results);
     CONNECT(2, "any-host");
     return MUNIT_OK;
 }
@@ -204,9 +205,10 @@ TEST(tcp_connect, firstIP, setUp, tearDown, 0, NULL)
 TEST(tcp_connect, secondIP, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    const struct AddrinfoResult results[] = { { "127.0.0.1", .6666}, { "127.0.0.1", TCP_SERVER_PORT} };
-     
-    AddrinfoInjectSetResponse( 0, 2, results);
+    const struct AddrinfoResult results[] = {{"127.0.0.1", .6666},
+                                             {"127.0.0.1", TCP_SERVER_PORT}};
+
+    AddrinfoInjectSetResponse(0, 2, results);
     CONNECT(2, "any-host");
     return MUNIT_OK;
 }
@@ -267,7 +269,7 @@ TEST(tcp_connect, closeDuringHandshake, setUp, tearDownDeps, 0, NULL)
      * iteration, not leaving us a chance to close without going through a lot
      * of hoops.
      * https://github.com/libuv/libuv/pull/3598 */
-    unsigned incompatible_uv = (1 << 16) | (44 <<  8) | 2;
+    unsigned incompatible_uv = (1 << 16) | (44 << 8) | 2;
     if (uv_version() >= incompatible_uv) {
         CLOSE;
         return MUNIT_SKIP;
@@ -327,16 +329,17 @@ TEST(tcp_connect, closeDuringConnectAbort, setUp, tearDownDeps, 0, NULL)
     return MUNIT_OK;
 }
 
-/* The transport gets closed right after the first connection attempt failed, while 
- *  doing a second connection attempt. */
+/* The transport gets closed right after the first connection attempt failed,
+ * while doing a second connection attempt. */
 TEST(tcp_connect, closeDuringSecondConnect, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
     struct uv_check_s check;
     int rv;
-    const struct AddrinfoResult results[] = { { "127.0.0.1", .6666}, { "127.0.0.1", TCP_SERVER_PORT} };
-     
-    AddrinfoInjectSetResponse( 0, 2, results);
+    const struct AddrinfoResult results[] = {{"127.0.0.1", .6666},
+                                             {"127.0.0.1", TCP_SERVER_PORT}};
+
+    AddrinfoInjectSetResponse(0, 2, results);
 
     /* Use a check handle in order to close the transport in the same loop
      * iteration where the second connection attempt occurs. */
@@ -352,4 +355,3 @@ TEST(tcp_connect, closeDuringSecondConnect, setUp, tearDownDeps, 0, NULL)
     CLOSE_WAIT;
     return MUNIT_OK;
 }
-

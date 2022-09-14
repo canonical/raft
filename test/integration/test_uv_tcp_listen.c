@@ -143,12 +143,12 @@ static void tearDown(void *data)
  *
  *****************************************************************************/
 
-#define LISTEN(EXPECTED_RV)                   \
-  do { \
-      int rv; \
-      rv = f->transport.listen(&f->transport, acceptCb); \
-      munit_assert_int(rv, ==, EXPECTED_RV); \
-  } while (false)
+#define LISTEN(EXPECTED_RV)                                \
+    do {                                                   \
+        int rv;                                            \
+        rv = f->transport.listen(&f->transport, acceptCb); \
+        munit_assert_int(rv, ==, EXPECTED_RV);             \
+    } while (false)
 
 /* Connect to the listening socket of the transport, creating a new connection
  * that is waiting to be accepted. */
@@ -235,12 +235,14 @@ TEST(tcp_listen, invalidAddress, setUp, tearDown, 0, invalidTcpListenParams)
     return MUNIT_OK;
 }
 
-/* Check success with addrinfo resolve to mutiple IP and first one is used to connect */
+/* Check success with addrinfo resolve to mutiple IP and first one is used to
+ * connect */
 TEST(tcp_listen, firstOfTwo, setUp, tearDown, 0, NULL)
 {
-    const struct AddrinfoResult results[] = { {"127.0.0.1", 9000}, { "127.0.0.2", 9000} };
+    const struct AddrinfoResult results[] = {{"127.0.0.1", 9000},
+                                             {"127.0.0.2", 9000}};
     struct fixture *f = data;
-    AddrinfoInjectSetResponse( 0, 2, results);
+    AddrinfoInjectSetResponse(0, 2, results);
     LISTEN(0);
     PEER_CONNECT;
     PEER_HANDSHAKE;
@@ -248,12 +250,14 @@ TEST(tcp_listen, firstOfTwo, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-/* Check success with addrinfo resolve to mutiple IP and second one is used to connect */
+/* Check success with addrinfo resolve to mutiple IP and second one is used to
+ * connect */
 TEST(tcp_listen, secondOfTwo, setUp, tearDown, 0, NULL)
 {
-    const struct AddrinfoResult results[] = { {"127.0.0.2", 9000}, { "127.0.0.1", 9000} };
+    const struct AddrinfoResult results[] = {{"127.0.0.2", 9000},
+                                             {"127.0.0.1", 9000}};
     struct fixture *f = data;
-    AddrinfoInjectSetResponse( 0, 2, results);
+    AddrinfoInjectSetResponse(0, 2, results);
 
     LISTEN(0);
     PEER_CONNECT;
@@ -262,14 +266,17 @@ TEST(tcp_listen, secondOfTwo, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-/* Simulate port already in use error by addrinfo response contain the same IP twice */
+/* Simulate port already in use error by addrinfo response contain the same IP
+ * twice */
 TEST(tcp_listen, alreadyBound, setUp, tearDown, 0, NULL)
 {
-	/* We need to use the same endpoint three times as a simple duplicate will be skipped due 
-   * to a glib strange behavior https://bugzilla.redhat.com/show_bug.cgi?id=496300  */
-	const struct AddrinfoResult results[] = { {"127.0.0.1", 9000}, { "127.0.0.1", 9000}, { "127.0.0.1", 9000} };
+    /* We need to use the same endpoint three times as a simple duplicate will
+     * be skipped due to a glib strange behavior
+     * https://bugzilla.redhat.com/show_bug.cgi?id=496300  */
+    const struct AddrinfoResult results[] = {
+        {"127.0.0.1", 9000}, {"127.0.0.1", 9000}, {"127.0.0.1", 9000}};
     struct fixture *f = data;
-    AddrinfoInjectSetResponse( 0, 3, results);
+    AddrinfoInjectSetResponse(0, 3, results);
     LISTEN(RAFT_IOERR);
     return MUNIT_OK;
 }
@@ -277,9 +284,10 @@ TEST(tcp_listen, alreadyBound, setUp, tearDown, 0, NULL)
 /* Error in bind first IP address */
 TEST(tcp_listen, cannotBindFirst, setUp, tearDown, 0, NULL)
 {
-    const struct AddrinfoResult results[] = { {"192.0.2.0", 9000}, { "127.0.0.1", 9000} };
+    const struct AddrinfoResult results[] = {{"192.0.2.0", 9000},
+                                             {"127.0.0.1", 9000}};
     struct fixture *f = data;
-    AddrinfoInjectSetResponse( 0, 2, results);
+    AddrinfoInjectSetResponse(0, 2, results);
     LISTEN(RAFT_IOERR);
     return MUNIT_OK;
 }
@@ -287,9 +295,10 @@ TEST(tcp_listen, cannotBindFirst, setUp, tearDown, 0, NULL)
 /* Error in bind of second IP address */
 TEST(tcp_listen, cannotBindSecond, setUp, tearDown, 0, NULL)
 {
-    const struct AddrinfoResult results[] = { {"127.0.0.1", 9000}, { "192.0.2.0", 9000} };
+    const struct AddrinfoResult results[] = {{"127.0.0.1", 9000},
+                                             {"192.0.2.0", 9000}};
     struct fixture *f = data;
-    AddrinfoInjectSetResponse( 0, 2, results);
+    AddrinfoInjectSetResponse(0, 2, results);
     LISTEN(RAFT_IOERR);
     return MUNIT_OK;
 }
@@ -298,11 +307,10 @@ TEST(tcp_listen, cannotBindSecond, setUp, tearDown, 0, NULL)
 TEST(tcp_listen, resolveFailure, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    AddrinfoInjectSetResponse( EAI_FAIL, 0, NULL);
+    AddrinfoInjectSetResponse(EAI_FAIL, 0, NULL);
     LISTEN(RAFT_IOERR);
     return MUNIT_OK;
 }
-
 
 /* The client sends us a bad protocol version */
 TEST(tcp_listen, badProtocol, setUp, tearDown, 0, NULL)

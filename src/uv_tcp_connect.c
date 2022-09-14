@@ -10,7 +10,7 @@
 /* The happy path of a connection request is:
  *
  * - Create a TCP handle and submit a TCP connect request.
- * - Initiate a asynchronous dns resolve request
+ * - Initiate an asynchronous dns resolve request
  * - Once the name lookup was successfull connect to the first given IP
  * - Once connected over TCP, submit a write request for the handshake.
  * - Once the write completes, fire the connection request callback.
@@ -159,7 +159,6 @@ static void uvTcpTryNextConnectCb(struct uv_handle_s *handle)
     uvTcpAsyncConnect(connect);
 }
 
-
 /* The TCP connection is established. Write the handshake data. */
 static void uvTcpConnectUvConnectCb(struct uv_connect_s *req, int status)
 {
@@ -175,9 +174,10 @@ static void uvTcpConnectUvConnectCb(struct uv_connect_s *req, int status)
     if (status != 0) {
         assert(status != UV_ECANCELED); /* t->closing would have been true */
         connect->ai_current = connect->ai_current->ai_next;
-        if (connect->ai_current){
+        if (connect->ai_current) {
             /* For the next connect attempt we need to close the tcp handle. */
-            /* To avoid interference with aborting we set a flag to indicate the connect attempt */
+            /* To avoid interference with aborting we set a flag to indicate the
+             * connect attempt */
             connect->retry = true;
             uv_close((struct uv_handle_s *)connect->tcp, uvTcpTryNextConnectCb);
             return;
@@ -205,9 +205,9 @@ err:
 /* Helper function to connect to the remote node */
 static void uvTcpAsyncConnect(struct uvTcpConnect *connect)
 {
-    int rv = uv_tcp_connect(&connect->connect, connect->tcp,
-                            connect->ai_current->ai_addr,
-                            uvTcpConnectUvConnectCb);
+    int rv;
+    rv = uv_tcp_connect(&connect->connect, connect->tcp,
+                        connect->ai_current->ai_addr, uvTcpConnectUvConnectCb);
     if (rv != 0) {
         /* UNTESTED: since parsing succeed, this should fail only because of
          * lack of system resources */
@@ -250,11 +250,10 @@ static void uvGetAddrInfoCb(uv_getaddrinfo_t *req,
 /* Create a new TCP handle and submit a connection request to the event loop. */
 static int uvTcpConnectStart(struct uvTcpConnect *r, const char *address)
 {
-    static struct addrinfo hints = {
-        .ai_flags = AI_V4MAPPED | AI_ADDRCONFIG,
-        .ai_family = AF_INET,
-        .ai_socktype = SOCK_STREAM,
-        .ai_protocol = 0};
+    static struct addrinfo hints = {.ai_flags = AI_V4MAPPED | AI_ADDRCONFIG,
+                                    .ai_family = AF_INET,
+                                    .ai_socktype = SOCK_STREAM,
+                                    .ai_protocol = 0};
     struct UvTcp *t = r->t;
     char hostname[NI_MAXHOST];
     char service[NI_MAXSERV];
