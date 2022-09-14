@@ -114,3 +114,8 @@ void raft_heap_set_default(void)
 {
     currentHeap = &defaultHeap;
 }
+
+const struct raft_heap *raft_heap_get(void)
+{
+    return currentHeap;
+}
