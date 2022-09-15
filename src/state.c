@@ -42,3 +42,18 @@ raft_index raft_last_applied(struct raft *r)
 {
     return r->last_applied;
 }
+
+raft_index raft_configuration_uncommitted_index(struct raft *r)
+{
+    return r->configuration_uncommitted_index;
+}
+
+raft_term raft_last_log_term(struct raft *r)
+{
+    return logLastTerm(&r->log);
+}
+
+raft_term raft_current_term(struct raft *r)
+{
+    return r->current_term;
+}

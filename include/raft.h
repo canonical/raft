@@ -904,6 +904,22 @@ RAFT_API raft_index raft_last_index(struct raft *r);
  */
 RAFT_API raft_index raft_last_applied(struct raft *r);
 
+/**
+ * Return the index of the uncommitted configuration change entry in the
+ * local log, or 0 if the local log has no such uncommitted entries.
+ */
+RAFT_API raft_index raft_configuration_uncommitted_index(struct raft *r);
+
+/**
+ * Return the term of the last entry that was appended to the local log.
+ */
+RAFT_API raft_term raft_last_log_term(struct raft *r);
+
+/**
+ * Return the local current term.
+ */
+RAFT_API raft_term raft_current_term(struct raft *r);
+
 /* Common fields across client request types. */
 #define RAFT__REQUEST \
     void *data;       \
