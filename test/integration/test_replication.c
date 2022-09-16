@@ -817,3 +817,32 @@ TEST(replication, resultRetry, setUp, tearDown, 0, NULL)
 
     return MUNIT_OK;
 }
+
+/* A leader doesn't commit any log entries from previous terms before committing
+ * an entry from its own term. */
+TEST(replication, commitPreviousTerm, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    struct raft_entry entry;
+    bool result;
+
+    CLUSTER_GROW;
+    CLUSTER_BOOTSTRAP;
+
+    entry.type = RAFT_COMMAND;
+    entry.term = 1;
+    FsmEncodeSetX(5, &entry.buf);
+    CLUSTER_ADD_ENTRY(0, &entry);
+
+    CLUSTER_START;
+    CLUSTER_ELECT(0);
+    result = raft_fixture_step_until_replicated(&f->cluster, 3, 2, 1, 2000);
+    /* Give the leader enough time to notice that the entry is replicated. */
+    CLUSTER_STEP_N(10);
+    munit_assert_true(result);
+    /* Even though the entry is replicated everywhere, the leader doesn't
+     * commit it because it was appended in a previous term. */
+    munit_assert_uint64(raft_last_applied(CLUSTER_RAFT(0)), ==, 1);
+
+    return MUNIT_OK;
+}

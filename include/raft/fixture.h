@@ -309,6 +309,12 @@ RAFT_API bool raft_fixture_step_until_delivered(struct raft_fixture *f,
                                                 unsigned j,
                                                 unsigned max_msecs);
 
+RAFT_API bool raft_fixture_step_until_replicated(struct raft_fixture *f,
+                                                 unsigned i,
+                                                 raft_index index,
+                                                 raft_term term,
+                                                 unsigned max_msecs);
+
 /**
  * Set a function to be called after every time a fixture event occurs as
  * consequence of a step.

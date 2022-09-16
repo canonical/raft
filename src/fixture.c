@@ -1532,6 +1532,42 @@ bool raft_fixture_step_until_has_no_leader(struct raft_fixture *f,
     return raft_fixture_step_until(f, hasNoLeader, NULL, max_msecs);
 }
 
+struct entryIsReplicatedArg
+{
+    unsigned i;
+    raft_index index;
+    raft_term term;
+};
+
+static bool entryIsReplicated(struct raft_fixture *f, void *arg)
+{
+    struct entryIsReplicatedArg *x = arg;
+    struct raft_log *log;
+    unsigned i;
+    bool result = true;
+    assert(x->i <= f->n);
+    if (x->i == f->n) {
+        for (i = 0; i < f->n; i++) {
+            log = &f->servers[i].raft.log;
+            result = result && logLastIndex(log) >= x->index && logTermOf(log, x->index) == x->term;
+        }
+    } else {
+        log = &f->servers[x->i].raft.log;
+        result = logLastIndex(log) >= x->index && logTermOf(log, x->index) == x->term;
+    }
+    return result;
+}
+
+bool raft_fixture_step_until_replicated(struct raft_fixture *f,
+                                        unsigned i,
+                                        raft_index index,
+                                        raft_term term,
+                                        unsigned max_msecs)
+{
+    struct entryIsReplicatedArg arg = {i, index, term};
+    return raft_fixture_step_until(f, entryIsReplicated, &arg, max_msecs);
+}
+
 /* Enable/disable dropping outgoing messages of a certain type from all servers
  * except one. */
 static void dropAllExcept(struct raft_fixture *f,
