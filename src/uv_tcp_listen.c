@@ -286,7 +286,7 @@ err:
 }
 
 /* Do bind/listen call on the tcp handle */
-static int UvTcpBindListen(struct uv_tcp_s *listener, struct sockaddr *addr)
+static int uvTcpBindListen(struct uv_tcp_s *listener, struct sockaddr *addr)
 {
     if (uv_tcp_bind(listener, addr, 0) ||
         uv_listen((uv_stream_t *)listener, 1, uvTcpListenCb)) {
@@ -296,7 +296,7 @@ static int UvTcpBindListen(struct uv_tcp_s *listener, struct sockaddr *addr)
 }
 
 /* Create a tcp handle and do bind/listen for each IP */
-static int UvTcpListenOnMultipleIP(struct raft_uv_transport *transport,
+static int uvTcpListenOnMultipleIP(struct raft_uv_transport *transport,
                                    struct addrinfo *addr_infos)
 {
     struct UvTcp *t;
@@ -323,7 +323,7 @@ static int UvTcpListenOnMultipleIP(struct raft_uv_transport *transport,
         struct uv_tcp_s *listener = &t->listeners[num_listeners];
         listener->data = t;
         if (uv_tcp_init(t->loop, listener) ||
-            UvTcpBindListen(listener, current->ai_addr)) {
+            uvTcpBindListen(listener, current->ai_addr)) {
             rv = RAFT_IOERR;
             goto err;
         }
@@ -346,7 +346,7 @@ err:
 /* Ignore duplicate entries from glibc getaddrinfo due to
  * https://bugzilla.redhat.com/show_bug.cgi?id=496300
  * in case of resolving localhost */
-static bool UvIsAddressDuplication(struct addrinfo *addr_info)
+static bool uvIsAddressDuplication(struct addrinfo *addr_info)
 {
     struct addrinfo *next = addr_info->ai_next;
 
@@ -378,10 +378,10 @@ int UvTcpListen(struct raft_uv_transport *transport, raft_uv_accept_cb cb)
     if (rv != 0 || !addr_infos) {
         return rv;
     }
-    if (addr_infos->ai_next && UvIsAddressDuplication(addr_infos)) {
-        rv = UvTcpListenOnMultipleIP(transport, addr_infos->ai_next);
+    if (addr_infos->ai_next && uvIsAddressDuplication(addr_infos)) {
+        rv = uvTcpListenOnMultipleIP(transport, addr_infos->ai_next);
     } else {
-        rv = UvTcpListenOnMultipleIP(transport, addr_infos);
+        rv = uvTcpListenOnMultipleIP(transport, addr_infos);
     }
     freeaddrinfo(addr_infos);
     return rv;

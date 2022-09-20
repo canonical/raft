@@ -58,24 +58,24 @@ static void acceptCb(struct raft_uv_transport *t,
     uv_close((struct uv_handle_s *)stream, (uv_close_cb)raft_free);
 }
 
-#define INIT                                                              \
-    do {                                                                  \
-        int _rv;                                                          \
-        _rv = raft_uv_tcp_init(&f->transport, &f->loop);                  \
-        munit_assert_int(_rv, ==, 0);                                     \
-        const char *bind_addr = munit_parameters_get(params, "b");        \
-        if (bind_addr && strlen(bind_addr)) {                             \
-            _rv = raft_uv_tcp_set_bind_address(&f->transport, bind_addr); \
-            munit_assert_int(_rv, ==, 0);                                 \
-        }                                                                 \
-        const char *address = munit_parameters_get(params, "a");          \
-        if (!address) {                                                   \
-            address = "127.0.0.1:9000";                                   \
-        }                                                                 \
-        _rv = f->transport.init(&f->transport, 1, address);               \
-        munit_assert_int(_rv, ==, 0);                                     \
-        f->transport.data = f;                                            \
-        f->closed = false;                                                \
+#define INIT                                                                  \
+    do {                                                                      \
+        int _rv;                                                              \
+        _rv = raft_uv_tcp_init(&f->transport, &f->loop);                      \
+        munit_assert_int(_rv, ==, 0);                                         \
+        const char *bind_addr = munit_parameters_get(params, "bind-address"); \
+        if (bind_addr && strlen(bind_addr)) {                                 \
+            _rv = raft_uv_tcp_set_bind_address(&f->transport, bind_addr);     \
+            munit_assert_int(_rv, ==, 0);                                     \
+        }                                                                     \
+        const char *address = munit_parameters_get(params, "address");        \
+        if (!address) {                                                       \
+            address = "127.0.0.1:9000";                                       \
+        }                                                                     \
+        _rv = f->transport.init(&f->transport, 1, address);                   \
+        munit_assert_int(_rv, ==, 0);                                         \
+        f->transport.data = f;                                                \
+        f->closed = false;                                                    \
     } while (0)
 
 #define CLOSE                                       \
@@ -198,8 +198,8 @@ static char *validBindAddresses[] = {
     "", "127.0.0.1:9000", "localhost:9000", ":9000", "0.0.0.0:9000", NULL};
 
 static MunitParameterEnum validListenParams[] = {
-    {"a", validAddresses},
-    {"b", validBindAddresses},
+    {"address", validAddresses},
+    {"bind-address", validBindAddresses},
     {NULL, NULL},
 };
 
@@ -222,8 +222,8 @@ static char *invalidBindAddresses[] = {
     "", "500.1.2.3:9000", "not-existing:9000", "192.0.2.0:9000", NULL};
 
 static MunitParameterEnum invalidTcpListenParams[] = {
-    {"a", invalidAddresses},
-    {"b", invalidBindAddresses},
+    {"address", invalidAddresses},
+    {"bind-address", invalidBindAddresses},
     {NULL, NULL},
 };
 
