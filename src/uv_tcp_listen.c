@@ -418,7 +418,5 @@ void UvTcpListenClose(struct UvTcp *t)
             uv_close((struct uv_handle_s *)&t->listeners[i],
                      uvTcpListenCloseCbListener);
         }
-    } else {
-        UvTcpMaybeFireCloseCb(t);
     }
 }

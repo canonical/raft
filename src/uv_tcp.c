@@ -32,6 +32,7 @@ static void uvTcpClose(struct raft_uv_transport *transport,
     t->close_cb = cb;
     UvTcpListenClose(t);
     UvTcpConnectClose(t);
+    UvTcpMaybeFireCloseCb(t);
 }
 
 void UvTcpMaybeFireCloseCb(struct UvTcp *t)
@@ -40,12 +41,13 @@ void UvTcpMaybeFireCloseCb(struct UvTcp *t)
         return;
     }
 
-    if (t->listeners) {
+    assert(QUEUE_IS_EMPTY(&t->accepting));
+    assert(QUEUE_IS_EMPTY(&t->connecting));
+    if (!QUEUE_IS_EMPTY(&t->aborting)) {
         return;
     }
-    assert(QUEUE_IS_EMPTY(&t->accepting));
 
-    if (!QUEUE_IS_EMPTY(&t->connecting) || !QUEUE_IS_EMPTY(&t->aborting)) {
+    if (t->listeners) {
         return;
     }
 
