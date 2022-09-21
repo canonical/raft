@@ -47,7 +47,7 @@ void UvTcpMaybeFireCloseCb(struct UvTcp *t)
         return;
     }
 
-    if (t->listeners) {
+    if (t->listeners != NULL) {
         return;
     }
 
