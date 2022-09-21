@@ -314,7 +314,7 @@ static int uvTcpListenOnMultipleIP(struct raft_uv_transport *transport,
     current = addr_infos;
     t->listeners = raft_malloc(n_listeners * sizeof(*t->listeners));
     if (!t->listeners) {
-        return RAFT_NOMEM;
+        rv = RAFT_NOMEM;
         goto err;
     }
 
