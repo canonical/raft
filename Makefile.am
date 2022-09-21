@@ -48,6 +48,7 @@ check_LTLIBRARIES = libtest.la
 
 libtest_la_CFLAGS = $(AM_CFLAGS) -DMUNIT_TEST_NAME_LEN=60 -Wno-unused-result -Wno-conversion
 libtest_la_SOURCES = \
+  test/lib/addrinfo.c \
   test/lib/fault.c \
   test/lib/fsm.c \
   test/lib/heap.c \
@@ -179,9 +180,8 @@ test_unit_uv_SOURCES = \
   test/unit/test_uv_fs.c \
   test/unit/test_uv_os.c \
   test/unit/test_uv_writer.c
-test_unit_uv_LDFLAGS = $(UV_LIBS)
 test_unit_uv_CFLAGS = $(AM_CFLAGS) -Wno-conversion
-test_unit_uv_LDADD = libtest.la
+test_unit_uv_LDADD = libtest.la $(UV_LIBS)
 
 # The integration/uv test is not linked to libraft, but built
 # directly against the libraft sources in order to test some
@@ -203,8 +203,8 @@ test_integration_uv_SOURCES = \
   test/integration/test_uv_truncate.c \
   test/integration/test_uv_work.c
 test_integration_uv_CFLAGS = $(AM_CFLAGS) -Wno-type-limits -Wno-conversion
-test_integration_uv_LDFLAGS = -no-install $(UV_LIBS)
-test_integration_uv_LDADD = libtest.la
+test_integration_uv_LDFLAGS = -no-install
+test_integration_uv_LDADD = libtest.la $(UV_LIBS)
 
 AM_CFLAGS += $(UV_CFLAGS)
 
@@ -225,8 +225,8 @@ bin_PROGRAMS += \
  example/cluster
 
 example_server_SOURCES = example/server.c
-example_server_LDFLAGS = -no-install $(UV_LIBS)
-example_server_LDADD = libraft.la
+example_server_LDFLAGS = -no-install
+example_server_LDADD = libraft.la $(UV_LIBS)
 
 example_cluster_SOURCES = example/cluster.c
 

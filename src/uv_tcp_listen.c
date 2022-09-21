@@ -36,6 +36,7 @@ struct uvTcpHandshake
 struct uvTcpIncoming
 {
     struct UvTcp *t;                 /* Transport implementation */
+    struct uv_tcp_s *listener;      /* The tcp handle, which accepted this socket */
     struct uv_tcp_s *tcp;            /* TCP connection socket handle */
     struct uvTcpHandshake handshake; /* Handshake data */
     queue queue;                     /* Pending accept queue */
@@ -209,6 +210,7 @@ static void uvTcpIncomingReadCbPreamble(uv_stream_t *stream,
 static int uvTcpIncomingStart(struct uvTcpIncoming *incoming)
 {
     int rv;
+
     memset(&incoming->handshake, 0, sizeof incoming->handshake);
 
     incoming->tcp = RaftHeapMalloc(sizeof *incoming->tcp);
@@ -220,7 +222,7 @@ static int uvTcpIncomingStart(struct uvTcpIncoming *incoming)
     rv = uv_tcp_init(incoming->t->loop, incoming->tcp);
     assert(rv == 0);
 
-    rv = uv_accept((struct uv_stream_s *)&incoming->t->listener,
+    rv = uv_accept((struct uv_stream_s *)incoming->listener,
                    (struct uv_stream_s *)incoming->tcp);
     if (rv != 0) {
         rv = RAFT_IOERR;
@@ -238,6 +240,11 @@ err_after_tcp_init:
     return rv;
 }
 
+#define IS_IN_ARRAY(elem, array, array_size)         \
+    (const char *)(elem) >= (const char *)(array) && \
+        (const char *)(elem) <                       \
+            (const char *)(array) + array_size * sizeof(*array)
+
 /* Called when there's a new incoming connection: create a new tcp_accept object
  * and start receiving handshake data. */
 static void uvTcpListenCb(struct uv_stream_s *stream, int status)
@@ -245,7 +252,8 @@ static void uvTcpListenCb(struct uv_stream_s *stream, int status)
     struct UvTcp *t = stream->data;
     struct uvTcpIncoming *incoming;
     int rv;
-    assert(stream == (struct uv_stream_s *)&t->listener);
+
+    assert(IS_IN_ARRAY(stream, t->listeners, t->n_listeners));
 
     if (status != 0) {
         rv = RAFT_IOERR;
@@ -258,6 +266,8 @@ static void uvTcpListenCb(struct uv_stream_s *stream, int status)
         goto err;
     }
     incoming->t = t;
+    incoming->listener = (struct uv_tcp_s *)stream;
+    incoming->tcp = NULL;
 
     QUEUE_PUSH(&t->accepting, &incoming->queue);
 
@@ -275,35 +285,106 @@ err:
     assert(rv != 0);
 }
 
+/* Do bind/listen call on the tcp handle */
+static int uvTcpBindListen(struct uv_tcp_s *listener, struct sockaddr *addr)
+{
+    if (uv_tcp_bind(listener, addr, 0) ||
+        uv_listen((uv_stream_t *)listener, 1, uvTcpListenCb)) {
+        return RAFT_IOERR;
+    }
+    return 0;
+}
+
+/* Create a tcp handle and do bind/listen for each IP */
+static int uvTcpListenOnMultipleIP(struct raft_uv_transport *transport,
+                                   struct addrinfo *addr_infos)
+{
+    struct UvTcp *t;
+    struct addrinfo *current;
+    unsigned n_listeners;
+    int rv;
+
+    t = transport->impl;
+
+    n_listeners = 0;
+    for (current = addr_infos; current; current = current->ai_next) {
+        ++n_listeners;
+    }
+
+    current = addr_infos;
+    t->listeners = raft_malloc(n_listeners * sizeof(*t->listeners));
+    if (!t->listeners) {
+        return RAFT_NOMEM;
+        goto err;
+    }
+
+    t->n_listeners = n_listeners;
+    for (n_listeners = 0; n_listeners < t->n_listeners; ++n_listeners) {
+        struct uv_tcp_s *listener = &t->listeners[n_listeners];
+        listener->data = t;
+        if (uv_tcp_init(t->loop, listener) ||
+            uvTcpBindListen(listener, current->ai_addr)) {
+            rv = RAFT_IOERR;
+            goto err;
+        }
+        current = addr_infos->ai_next;
+    }
+    return 0;
+
+err:
+    if (t->listeners) {
+        for (unsigned i = 0; i <= n_listeners; ++i) {
+            uv_close((struct uv_handle_s *)&t->listeners[i], NULL);
+        }
+        raft_free(t->listeners);
+        t->listeners = NULL;
+        t->n_listeners = 0;
+    }
+    return rv;
+}
+
+/* Ignore duplicate entries from glibc getaddrinfo due to
+ * https://bugzilla.redhat.com/show_bug.cgi?id=496300
+ * in case of resolving localhost */
+static bool uvIsAddressDuplication(struct addrinfo *addr_info)
+{
+    struct addrinfo *next = addr_info->ai_next;
+
+    /* Check, if we have a list of length 2 */
+    if (!next || next->ai_next) {
+        return false;
+    }
+    if (addr_info->ai_addrlen != next->ai_addrlen ||
+        bcmp(addr_info->ai_addr, next->ai_addr, addr_info->ai_addrlen)) {
+        return false;
+    }
+    return true;
+}
+
 int UvTcpListen(struct raft_uv_transport *transport, raft_uv_accept_cb cb)
 {
     struct UvTcp *t;
-    struct sockaddr_in addr;
+    struct addrinfo *addr_infos;
     int rv;
 
     t = transport->impl;
     t->accept_cb = cb;
 
     if (t->bind_address == NULL) {
-        rv = uvIpParse(t->address, &addr);
+        rv = uvIpResolveBindAddresses(t->address, &addr_infos);
     } else {
-        rv = uvIpParse(t->bind_address, &addr);
+        rv = uvIpResolveBindAddresses(t->bind_address, &addr_infos);
     }
-    if (rv != 0) {
+    if (rv != 0 || !addr_infos) {
         return rv;
     }
-    rv = uv_tcp_bind(&t->listener, (const struct sockaddr *)&addr, 0);
-    if (rv != 0) {
-        /* UNTESTED: what are the error conditions? */
-        return RAFT_IOERR;
+    if (addr_infos->ai_next && uvIsAddressDuplication(addr_infos)) {
+        rv = uvTcpListenOnMultipleIP(transport, addr_infos->ai_next);
+    } else {
+        rv = uvTcpListenOnMultipleIP(transport, addr_infos);
     }
-    rv = uv_listen((uv_stream_t *)&t->listener, 1, uvTcpListenCb);
-    if (rv != 0) {
-        /* UNTESTED: what are the error conditions? */
-        return RAFT_IOERR;
-    }
-
-    return 0;
+    freeaddrinfo(addr_infos);
+    return rv;
 }
 
 /* Close callback for uvTcp->listener. */
@@ -311,15 +392,19 @@ static void uvTcpListenCloseCbListener(struct uv_handle_s *handle)
 {
     struct UvTcp *t = handle->data;
     assert(t->closing);
-    t->listener.data = NULL;
-    UvTcpMaybeFireCloseCb(t);
+    assert(t->n_listeners);
+    assert(t->listeners);
+    if (--t->n_listeners == 0) {
+        raft_free(t->listeners);
+        t->listeners = NULL;
+        UvTcpMaybeFireCloseCb(t);
+    }
 }
 
 void UvTcpListenClose(struct UvTcp *t)
 {
     queue *head;
     assert(t->closing);
-    assert(t->listener.data != NULL);
 
     while (!QUEUE_IS_EMPTY(&t->accepting)) {
         struct uvTcpIncoming *incoming;
@@ -328,5 +413,10 @@ void UvTcpListenClose(struct UvTcp *t)
         uvTcpIncomingAbort(incoming);
     }
 
-    uv_close((struct uv_handle_s *)&t->listener, uvTcpListenCloseCbListener);
+    if (t->n_listeners) {
+        for (unsigned i = 0; i < t->n_listeners; ++i) {
+            uv_close((struct uv_handle_s *)&t->listeners[i],
+                     uvTcpListenCloseCbListener);
+        }
+    }
 }

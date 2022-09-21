@@ -1,5 +1,6 @@
 #include "../../include/raft.h"
 #include "../../include/raft/uv.h"
+#include "../lib/addrinfo.h"
 #include "../lib/heap.h"
 #include "../lib/loop.h"
 #include "../lib/runner.h"
@@ -61,8 +62,8 @@ static void connectCbAssertResult(struct raft_uv_connect *req,
 
 #define CLOSE_SUBMIT                            \
     munit_assert_false(f->closed);              \
-    f->transport.close(&f->transport, closeCb); \
-    munit_assert_false(f->closed)
+    f->transport.close(&f->transport, closeCb); 
+
 #define CLOSE_WAIT LOOP_RUN_UNTIL(&f->closed)
 #define CLOSE     \
     CLOSE_SUBMIT; \
@@ -125,6 +126,7 @@ static void *setUpDeps(const MunitParameter params[],
 {
     struct fixture *f = munit_malloc(sizeof *f);
     int rv;
+    SET_UP_ADDRINFO;
     SET_UP_HEAP;
     SETUP_LOOP;
     SETUP_TCP_SERVER;
@@ -141,6 +143,7 @@ static void tearDownDeps(void *data)
     TEAR_DOWN_TCP_SERVER;
     TEAR_DOWN_LOOP;
     TEAR_DOWN_HEAP;
+    TEAR_DOWN_ADDRINFO;
     free(f);
 }
 
@@ -169,11 +172,44 @@ static void tearDown(void *data)
 
 SUITE(tcp_connect)
 
-/* Successfully connect to the peer. */
+/* Successfully connect to the peer by IP */
 TEST(tcp_connect, first, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     CONNECT(2, TCP_SERVER_ADDRESS);
+    return MUNIT_OK;
+}
+
+/* Successfully connect to the peer by hostname */
+TEST(tcp_connect, connectByName, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    char host_adress[256];
+    sprintf(host_adress, "localhost:%d", TCP_SERVER_PORT);
+    CONNECT(2, host_adress);
+    return MUNIT_OK;
+}
+
+/* Successfully connect to the peer by first IP  */
+TEST(tcp_connect, firstIP, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    const struct AddrinfoResult results[] = {{"127.0.0.1", TCP_SERVER_PORT},
+                                             {"192.0.2.0", 6666}};
+    AddrinfoInjectSetResponse(0, 2, results);
+    CONNECT(2, "any-host");
+    return MUNIT_OK;
+}
+
+/* Successfully connect to the peer by second IP  */
+TEST(tcp_connect, secondIP, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    const struct AddrinfoResult results[] = {{"127.0.0.1", .6666},
+                                             {"127.0.0.1", TCP_SERVER_PORT}};
+
+    AddrinfoInjectSetResponse(0, 2, results);
+    CONNECT(2, "any-host");
     return MUNIT_OK;
 }
 
@@ -214,21 +250,10 @@ TEST(tcp_connect, closeImmediately, setUp, tearDownDeps, 0, NULL)
     return MUNIT_OK;
 }
 
-/* The transport gets closed during the handshake. */
+/* The transport gets closed during the dns lookup */
 TEST(tcp_connect, closeDuringDnsLookup, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
-
-    /* This test fails for libuv version >= 1.44.2 due to changes in uv_run
-     * whereby queueing and processing the write_cb happen in the same loop
-     * iteration, not leaving us a chance to close without going through a lot
-     * of hoops.
-     * https://github.com/libuv/libuv/pull/3598 */
-    unsigned incompatible_uv = (1 << 16) | (44 <<  8) | 2;
-    if (uv_version() >= incompatible_uv) {
-        CLOSE;
-        return MUNIT_SKIP;
-    }
 
     CONNECT_CLOSE(2, TCP_SERVER_ADDRESS, 1);
     return MUNIT_OK;
@@ -238,6 +263,18 @@ TEST(tcp_connect, closeDuringDnsLookup, setUp, tearDownDeps, 0, NULL)
 TEST(tcp_connect, closeDuringHandshake, setUp, tearDownDeps, 0, NULL)
 {
     struct fixture *f = data;
+
+    /* This test fails for libuv version >= 1.44.2 due to changes in uv_run
+     * whereby queueing and processing the write_cb happen in the same loop
+     * iteration, not leaving us a chance to close without going through a lot
+     * of hoops.
+     * https://github.com/libuv/libuv/pull/3598 */
+    unsigned incompatible_uv = (1 << 16) | (44 << 8) | 2;
+    if (uv_version() >= incompatible_uv) {
+        CLOSE;
+        return MUNIT_SKIP;
+    }
+
     CONNECT_CLOSE(2, TCP_SERVER_ADDRESS, 2);
     return MUNIT_OK;
 }
@@ -249,7 +286,7 @@ static void checkCb(struct uv_check_s *check)
     uv_close((struct uv_handle_s *)check, NULL);
 }
 
-/* The transport gets closed right after a connection failure, while the
+/* The transport gets closed right after a dns lookup failure, while the
  * connection attempt is being aborted. */
 TEST(tcp_connect, closeDuringDnsLookupAbort, setUp, tearDownDeps, 0, NULL)
 {
@@ -257,7 +294,7 @@ TEST(tcp_connect, closeDuringDnsLookupAbort, setUp, tearDownDeps, 0, NULL)
     struct uv_check_s check;
     int rv;
     /* Use a check handle in order to close the transport in the same loop
-     * iteration where the connection failure occurs. */
+     * iteration where the dns failure lookup occurs */
     rv = uv_check_init(&f->loop, &check);
     munit_assert_int(rv, ==, 0);
     check.data = f;
@@ -276,6 +313,7 @@ TEST(tcp_connect, closeDuringConnectAbort, setUp, tearDownDeps, 0, NULL)
     struct fixture *f = data;
     struct uv_check_s check;
     int rv;
+
     /* Use a check handle in order to close the transport in the same loop
      * iteration where the connection failure occurs. */
     rv = uv_check_init(&f->loop, &check);
@@ -284,7 +322,33 @@ TEST(tcp_connect, closeDuringConnectAbort, setUp, tearDownDeps, 0, NULL)
     CONNECT_REQ(2, BOGUS_ADDRESS, 0, RAFT_NOCONNECTION);
     /* Successfull DNS lookup will initiate async connect */
     LOOP_RUN(1);
-    // Now start the check handle to fire in the next iteration */
+    uv_check_start(&check, checkCb);
+    LOOP_RUN(1);
+    LOOP_RUN_UNTIL(&_result.done);
+    CLOSE_WAIT;
+    return MUNIT_OK;
+}
+
+/* The transport gets closed right after the first connection attempt failed,
+ * while doing a second connection attempt. */
+TEST(tcp_connect, closeDuringSecondConnect, setUp, tearDownDeps, 0, NULL)
+{
+    struct fixture *f = data;
+    struct uv_check_s check;
+    int rv;
+    const struct AddrinfoResult results[] = {{"127.0.0.1", .6666},
+                                             {"127.0.0.1", TCP_SERVER_PORT}};
+
+    AddrinfoInjectSetResponse(0, 2, results);
+
+    /* Use a check handle in order to close the transport in the same loop
+     * iteration where the second connection attempt occurs. */
+    rv = uv_check_init(&f->loop, &check);
+    munit_assert_int(rv, ==, 0);
+    check.data = f;
+    CONNECT_REQ(2, "any-host", 0, RAFT_CANCELED);
+    /* Successfull DNS lookup will initiate async connect */
+    LOOP_RUN(1);
     uv_check_start(&check, checkCb);
     LOOP_RUN(1);
     LOOP_RUN_UNTIL(&_result.done);

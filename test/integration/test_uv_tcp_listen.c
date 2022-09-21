@@ -1,6 +1,7 @@
 #include "../../include/raft.h"
 #include "../../include/raft/uv.h"
 #include "../../src/byte.h"
+#include "../lib/addrinfo.h"
 #include "../lib/heap.h"
 #include "../lib/loop.h"
 #include "../lib/runner.h"
@@ -57,28 +58,24 @@ static void acceptCb(struct raft_uv_transport *t,
     uv_close((struct uv_handle_s *)stream, (uv_close_cb)raft_free);
 }
 
-#define INIT                                                         \
-    do {                                                             \
-        int _rv;                                                     \
-        _rv = raft_uv_tcp_init(&f->transport, &f->loop);             \
-        munit_assert_int(_rv, ==, 0);                                \
-        _rv = f->transport.init(&f->transport, 1, "127.0.0.1:9000"); \
-        munit_assert_int(_rv, ==, 0);                                \
-        f->transport.data = f;                                       \
-        f->closed = false;                                           \
-    } while (0)
-
-#define INIT2                                                        \
-    do {                                                             \
-        int _rv;                                                     \
-        _rv = raft_uv_tcp_init(&f->transport, &f->loop);             \
-        munit_assert_int(_rv, ==, 0);                                \
-        _rv = raft_uv_tcp_set_bind_address(&f->transport, "127.0.0.1:9000");  \
-        munit_assert_int(_rv, ==, 0);                                \
-        _rv = f->transport.init(&f->transport, 1, "127.0.0.1:9000"); \
-        munit_assert_int(_rv, ==, 0);                                \
-        f->transport.data = f;                                       \
-        f->closed = false;                                           \
+#define INIT                                                                  \
+    do {                                                                      \
+        int _rv;                                                              \
+        _rv = raft_uv_tcp_init(&f->transport, &f->loop);                      \
+        munit_assert_int(_rv, ==, 0);                                         \
+        const char *bind_addr = munit_parameters_get(params, "bind-address"); \
+        if (bind_addr && strlen(bind_addr)) {                                 \
+            _rv = raft_uv_tcp_set_bind_address(&f->transport, bind_addr);     \
+            munit_assert_int(_rv, ==, 0);                                     \
+        }                                                                     \
+        const char *address = munit_parameters_get(params, "address");        \
+        if (!address) {                                                       \
+            address = "127.0.0.1:9000";                                       \
+        }                                                                     \
+        _rv = f->transport.init(&f->transport, 1, address);                   \
+        munit_assert_int(_rv, ==, 0);                                         \
+        f->transport.data = f;                                                \
+        f->closed = false;                                                    \
     } while (0)
 
 #define CLOSE                                       \
@@ -98,6 +95,7 @@ static void *setUpDeps(const MunitParameter params[],
                        MUNIT_UNUSED void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
+    SET_UP_ADDRINFO;
     SET_UP_HEAP;
     SETUP_LOOP;
     SETUP_TCP;
@@ -110,6 +108,7 @@ static void tearDownDeps(void *data)
     TEAR_DOWN_TCP;
     TEAR_DOWN_LOOP;
     TEAR_DOWN_HEAP;
+    TEAR_DOWN_ADDRINFO;
     free(f);
 }
 
@@ -117,7 +116,6 @@ static void *setUp(const MunitParameter params[], void *user_data)
 {
     struct fixture *f = setUpDeps(params, user_data);
     void *cursor;
-    int rv;
     /* test_tcp_listen(&f->tcp); */
     INIT;
     f->accepted = false;
@@ -128,31 +126,6 @@ static void *setUp(const MunitParameter params[], void *user_data)
     bytePut64(&cursor, PEER_ID);
     bytePut64(&cursor, 16);
     strcpy(cursor, PEER_ADDRESS);
-
-    rv = f->transport.listen(&f->transport, acceptCb);
-    munit_assert_int(rv, ==, 0);
-
-    return f;
-}
-
-static void *setUp2(const MunitParameter params[], void *user_data)
-{
-    struct fixture *f = setUpDeps(params, user_data);
-    void *cursor;
-    int rv;
-    /* test_tcp_listen(&f->tcp); */
-    INIT2;
-    f->accepted = false;
-    f->handshake.offset = 0;
-
-    cursor = f->handshake.buf;
-    bytePut64(&cursor, 1);
-    bytePut64(&cursor, PEER_ID);
-    bytePut64(&cursor, 16);
-    strcpy(cursor, PEER_ADDRESS);
-
-    rv = f->transport.listen(&f->transport, acceptCb);
-    munit_assert_int(rv, ==, 0);
 
     return f;
 }
@@ -169,6 +142,13 @@ static void tearDown(void *data)
  * Helper macros
  *
  *****************************************************************************/
+
+#define LISTEN(EXPECTED_RV)                                \
+    do {                                                   \
+        int rv;                                            \
+        rv = f->transport.listen(&f->transport, acceptCb); \
+        munit_assert_int(rv, ==, EXPECTED_RV);             \
+    } while (false)
 
 /* Connect to the listening socket of the transport, creating a new connection
  * that is waiting to be accepted. */
@@ -210,24 +190,125 @@ static void tearDown(void *data)
 
 SUITE(tcp_listen)
 
+/* Parameters for listen address */
+
+static char *validAddresses[] = {"127.0.0.1:9000", "localhost:9000", NULL};
+
+static char *validBindAddresses[] = {
+    "", "127.0.0.1:9000", "localhost:9000", ":9000", "0.0.0.0:9000", NULL};
+
+static MunitParameterEnum validListenParams[] = {
+    {"address", validAddresses},
+    {"bind-address", validBindAddresses},
+    {NULL, NULL},
+};
+
 /* If the handshake is successful, the accept callback is invoked. */
-TEST(tcp_listen, first, setUp, tearDown, 0, NULL)
+TEST(tcp_listen, success, setUp, tearDown, 0, validListenParams)
 {
     struct fixture *f = data;
+    LISTEN(0);
     PEER_CONNECT;
     PEER_HANDSHAKE;
     ACCEPT;
     return MUNIT_OK;
 }
 
-/* If the handshake is successful, the accept callback is invoked.
- * With raft_uv_tcp_set_bind_address() */
-TEST(tcp_listen, set_bind, setUp2, tearDown, 0, NULL)
+/* Parameters for invalid listen addresses */
+static char *invalidAddresses[] = {"500.1.2.3:9000", "not-existing:9000",
+                                   "192.0.2.0:9000", NULL};
+
+static char *invalidBindAddresses[] = {
+    "", "500.1.2.3:9000", "not-existing:9000", "192.0.2.0:9000", NULL};
+
+static MunitParameterEnum invalidTcpListenParams[] = {
+    {"address", invalidAddresses},
+    {"bind-address", invalidBindAddresses},
+    {NULL, NULL},
+};
+
+/* Check error on invalid hostname specified */
+TEST(tcp_listen, invalidAddress, setUp, tearDown, 0, invalidTcpListenParams)
 {
     struct fixture *f = data;
+    LISTEN(RAFT_IOERR);
+    return MUNIT_OK;
+}
+
+/* Check success with addrinfo resolve to mutiple IP and first one is used to
+ * connect */
+TEST(tcp_listen, firstOfTwo, setUp, tearDown, 0, NULL)
+{
+    const struct AddrinfoResult results[] = {{"127.0.0.1", 9000},
+                                             {"127.0.0.2", 9000}};
+    struct fixture *f = data;
+    AddrinfoInjectSetResponse(0, 2, results);
+    LISTEN(0);
     PEER_CONNECT;
     PEER_HANDSHAKE;
     ACCEPT;
+    return MUNIT_OK;
+}
+
+/* Check success with addrinfo resolve to mutiple IP and second one is used to
+ * connect */
+TEST(tcp_listen, secondOfTwo, setUp, tearDown, 0, NULL)
+{
+    const struct AddrinfoResult results[] = {{"127.0.0.2", 9000},
+                                             {"127.0.0.1", 9000}};
+    struct fixture *f = data;
+    AddrinfoInjectSetResponse(0, 2, results);
+
+    LISTEN(0);
+    PEER_CONNECT;
+    PEER_HANDSHAKE;
+    ACCEPT;
+    return MUNIT_OK;
+}
+
+/* Simulate port already in use error by addrinfo response contain the same IP
+ * twice */
+TEST(tcp_listen, alreadyBound, setUp, tearDown, 0, NULL)
+{
+    /* We need to use the same endpoint three times as a simple duplicate will
+     * be skipped due to a glib strange behavior
+     * https://bugzilla.redhat.com/show_bug.cgi?id=496300  */
+    const struct AddrinfoResult results[] = {
+        {"127.0.0.1", 9000}, {"127.0.0.1", 9000}, {"127.0.0.1", 9000}};
+    struct fixture *f = data;
+    AddrinfoInjectSetResponse(0, 3, results);
+    LISTEN(RAFT_IOERR);
+    return MUNIT_OK;
+}
+
+/* Error in bind first IP address */
+TEST(tcp_listen, cannotBindFirst, setUp, tearDown, 0, NULL)
+{
+    const struct AddrinfoResult results[] = {{"192.0.2.0", 9000},
+                                             {"127.0.0.1", 9000}};
+    struct fixture *f = data;
+    AddrinfoInjectSetResponse(0, 2, results);
+    LISTEN(RAFT_IOERR);
+    return MUNIT_OK;
+}
+
+/* Error in bind of second IP address */
+TEST(tcp_listen, cannotBindSecond, setUp, tearDown, 0, NULL)
+{
+    const struct AddrinfoResult results[] = {{"127.0.0.1", 9000},
+                                             {"192.0.2.0", 9000}};
+    struct fixture *f = data;
+    AddrinfoInjectSetResponse(0, 2, results);
+    LISTEN(RAFT_IOERR);
+    return MUNIT_OK;
+}
+
+/* Check error on general dns server failure */
+TEST(tcp_listen, resolveFailure, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    AddrinfoInjectSetResponse(EAI_FAIL, 0, NULL);
+    LISTEN(RAFT_IOERR);
     return MUNIT_OK;
 }
 
@@ -235,6 +316,7 @@ TEST(tcp_listen, set_bind, setUp2, tearDown, 0, NULL)
 TEST(tcp_listen, badProtocol, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
+    LISTEN(0);
     memset(f->handshake.buf, 999, sizeof(uint64_t));
     PEER_CONNECT;
     PEER_HANDSHAKE;
@@ -255,6 +337,7 @@ static MunitParameterEnum peerAbortParams[] = {
 TEST(tcp_listen, peerAbort, setUp, tearDown, 0, peerAbortParams)
 {
     struct fixture *f = data;
+    LISTEN(0);
     const char *n = munit_parameters_get(params, "n");
     PEER_CONNECT;
     PEER_HANDSHAKE_PARTIAL(atoi(n));
@@ -279,6 +362,7 @@ static MunitParameterEnum oomParams[] = {
 TEST(tcp_listen, oom, setUp, tearDown, 0, oomParams)
 {
     struct fixture *f = data;
+    LISTEN(0);
     PEER_CONNECT;
     PEER_HANDSHAKE;
     HEAP_FAULT_ENABLE;
@@ -296,6 +380,7 @@ TEST(tcp_listen, oom, setUp, tearDown, 0, oomParams)
 TEST(tcp_listen, pending, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
+    LISTEN(0);
     PEER_CONNECT;
     return MUNIT_OK;
 }
@@ -305,6 +390,7 @@ TEST(tcp_listen, pending, setUp, tearDown, 0, NULL)
 TEST(tcp_listen, closeBeforeHandshake, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
+    LISTEN(0);
     PEER_CONNECT;
     LOOP_RUN_UNTIL_CONNECTED;
     return MUNIT_OK;
@@ -320,6 +406,7 @@ static MunitParameterEnum closeDuringHandshake[] = {
 TEST(tcp_listen, handshake, setUp, tearDown, 0, closeDuringHandshake)
 {
     struct fixture *f = data;
+    LISTEN(0);
     const char *n_param = munit_parameters_get(params, "n");
     PEER_CONNECT;
     PEER_HANDSHAKE_PARTIAL(atoi(n_param));

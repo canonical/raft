@@ -43,7 +43,8 @@ void TcpServerInit(struct TcpServer *s)
         munit_errorf("tcp: getsockname(): %s", strerror(errno));
     }
 
-    sprintf(s->address, "127.0.0.1:%d", htons(addr.sin_port));
+    s->port = htons(addr.sin_port);
+    sprintf(s->address, "127.0.0.1:%d", s->port);
 }
 
 void TcpServerClose(struct TcpServer *s)
