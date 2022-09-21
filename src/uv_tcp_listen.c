@@ -253,7 +253,7 @@ static void uvTcpListenCb(struct uv_stream_s *stream, int status)
     struct uvTcpIncoming *incoming;
     int rv;
 
-    assert(IS_IN_ARRAY(stream, t->listeners, t->num_listeners));
+    assert(IS_IN_ARRAY(stream, t->listeners, t->n_listeners));
 
     if (status != 0) {
         rv = RAFT_IOERR;
@@ -301,26 +301,26 @@ static int uvTcpListenOnMultipleIP(struct raft_uv_transport *transport,
 {
     struct UvTcp *t;
     struct addrinfo *current;
-    size_t num_listeners;
+    unsigned n_listeners;
     int rv;
 
     t = transport->impl;
 
-    num_listeners = 0;
+    n_listeners = 0;
     for (current = addr_infos; current; current = current->ai_next) {
-        ++num_listeners;
+        ++n_listeners;
     }
 
     current = addr_infos;
-    t->listeners = raft_malloc(num_listeners * sizeof(*t->listeners));
+    t->listeners = raft_malloc(n_listeners * sizeof(*t->listeners));
     if (!t->listeners) {
         return RAFT_NOMEM;
         goto err;
     }
 
-    t->num_listeners = num_listeners;
-    for (num_listeners = 0; num_listeners < t->num_listeners; ++num_listeners) {
-        struct uv_tcp_s *listener = &t->listeners[num_listeners];
+    t->n_listeners = n_listeners;
+    for (n_listeners = 0; n_listeners < t->n_listeners; ++n_listeners) {
+        struct uv_tcp_s *listener = &t->listeners[n_listeners];
         listener->data = t;
         if (uv_tcp_init(t->loop, listener) ||
             uvTcpBindListen(listener, current->ai_addr)) {
@@ -333,12 +333,12 @@ static int uvTcpListenOnMultipleIP(struct raft_uv_transport *transport,
 
 err:
     if (t->listeners) {
-        for (size_t i = 0; i <= num_listeners; ++i) {
+        for (unsigned i = 0; i <= n_listeners; ++i) {
             uv_close((struct uv_handle_s *)&t->listeners[i], NULL);
         }
         raft_free(t->listeners);
         t->listeners = NULL;
-        t->num_listeners = 0;
+        t->n_listeners = 0;
     }
     return rv;
 }
@@ -392,9 +392,9 @@ static void uvTcpListenCloseCbListener(struct uv_handle_s *handle)
 {
     struct UvTcp *t = handle->data;
     assert(t->closing);
-    assert(t->num_listeners);
+    assert(t->n_listeners);
     assert(t->listeners);
-    if (--t->num_listeners == 0) {
+    if (--t->n_listeners == 0) {
         raft_free(t->listeners);
         t->listeners = NULL;
         UvTcpMaybeFireCloseCb(t);
@@ -413,8 +413,8 @@ void UvTcpListenClose(struct UvTcp *t)
         uvTcpIncomingAbort(incoming);
     }
 
-    if (t->num_listeners) {
-        for (size_t i = 0; i < t->num_listeners; ++i) {
+    if (t->n_listeners) {
+        for (unsigned i = 0; i < t->n_listeners; ++i) {
             uv_close((struct uv_handle_s *)&t->listeners[i],
                      uvTcpListenCloseCbListener);
         }

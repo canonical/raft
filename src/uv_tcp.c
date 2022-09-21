@@ -74,7 +74,7 @@ int raft_uv_tcp_init(struct raft_uv_transport *transport,
     t->address = NULL;
     t->bind_address = NULL;
     t->listeners = NULL;
-    t->num_listeners = 0;
+    t->n_listeners = 0;
     t->accept_cb = NULL;
     QUEUE_INIT(&t->accepting);
     QUEUE_INIT(&t->connecting);
