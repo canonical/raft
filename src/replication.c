@@ -9,6 +9,7 @@
 #endif
 #include "err.h"
 #include "heap.h"
+#include "lifecycle.h"
 #include "log.h"
 #include "membership.h"
 #include "progress.h"
@@ -454,7 +455,7 @@ static struct request *getRequest(struct raft *r,
         req = QUEUE_DATA(head, struct request, queue);
         if (req->index == index) {
             assert(req->type == type);
-            QUEUE_REMOVE(head);
+            lifecycleRequestEnd(r, req);
             return req;
         }
     }

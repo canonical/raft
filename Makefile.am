@@ -19,6 +19,7 @@ libraft_la_SOURCES = \
   src/entry.c \
   src/err.c \
   src/heap.c \
+  src/lifecycle.c \
   src/log.c \
   src/membership.c \
   src/progress.c \
