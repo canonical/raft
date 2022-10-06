@@ -1,6 +1,9 @@
 ACLOCAL_AMFLAGS = -I m4
 AM_CFLAGS += $(CODE_COVERAGE_CFLAGS)
 
+# Not clobbering the base pointer helps bpftrace construct backtraces
+AM_CFLAGS += -fno-omit-frame-pointer
+
 include_HEADERS = include/raft.h
 
 raftincludedir = $(includedir)/raft
@@ -19,6 +22,7 @@ libraft_la_SOURCES = \
   src/entry.c \
   src/err.c \
   src/heap.c \
+  src/lifecycle.c \
   src/log.c \
   src/membership.c \
   src/progress.c \
