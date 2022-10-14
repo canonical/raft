@@ -12,6 +12,7 @@ jobs:
         os:
           - ubuntu-18.04
           - ubuntu-20.04
+          - ubuntu-22.04
         compiler:
           - gcc
           - clang
@@ -21,7 +22,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Setup dependencies
       run: |
           sudo apt-get update -qq
@@ -64,13 +65,14 @@ jobs:
         os:
           - ubuntu-18.04
           - ubuntu-20.04
+          - ubuntu-22.04
         compiler:
           - gcc
           - clang
     runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Setup dependencies
       run: |
           sudo apt-get update -qq
@@ -106,9 +108,9 @@ jobs:
         verbose: true
 
   build-nolz4-fail:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Setup dependencies
       run: |
           sudo apt-get update -qq
