@@ -21,7 +21,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Setup dependencies
       run: |
           sudo apt-get update -qq
@@ -70,7 +70,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Setup dependencies
       run: |
           sudo apt-get update -qq
@@ -108,7 +108,7 @@ jobs:
   build-nolz4-fail:
     runs-on: ubuntu-18.04
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Setup dependencies
       run: |
           sudo apt-get update -qq
