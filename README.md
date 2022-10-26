@@ -1,5 +1,7 @@
 [![CI Tests](https://github.com/canonical/raft/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/canonical/raft/actions/workflows/build-and-test.yml) [![codecov](https://codecov.io/gh/canonical/raft/branch/master/graph/badge.svg)](https://codecov.io/gh/canonical/raft) [![Documentation Status](https://readthedocs.org/projects/raft/badge/?version=latest)](https://raft.readthedocs.io/en/latest/?badge=latest)
 
+[English](./README.md)|[简体中文](./README_CH.md)
+
 Fully asynchronous C implementation of the Raft consensus protocol.
 
 The library has modular design: its core part implements only the core Raft
