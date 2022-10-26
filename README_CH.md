@@ -2,6 +2,8 @@
 
 [![CI Tests](https://github.com/canonical/raft/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/canonical/raft/actions/workflows/build-and-test.yml) [![codecov](https://codecov.io/gh/canonical/raft/branch/master/graph/badge.svg)](https://codecov.io/gh/canonical/raft) [![Documentation Status](https://readthedocs.org/projects/raft/badge/?version=latest)](https://raft.readthedocs.io/en/latest/?badge=latest)
 
+**注意**：中文文档有可能未及时更新，请以最新的英文[readme](./README.md)为准。
+
 raft协议的完全异步C语言实现。
 
 raft库采用模块化设计，核心部分实现了完全独立于平台的raft算法逻辑。重要的是为网络传输（发送/接收rpc消息）和存储持久化（日志和快照）提供了可插拔的I/O接口实现。
