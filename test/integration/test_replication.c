@@ -814,3 +814,19 @@ TEST(replication, resultRetry, setUp, tearDown, 0, NULL)
 
     return MUNIT_OK;
 }
+
+/* When the leader fails to write some new entries to disk, it steps down. */
+TEST(replication, diskWriteFailure, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    struct raft_apply *req = munit_malloc(sizeof(*req));
+    BOOTSTRAP_START_AND_ELECT;
+
+    CLUSTER_IO_FAULT(0, 1, 1);
+    CLUSTER_APPLY_ADD_X(0, req, 1, NULL);
+    /* The leader steps down when its disk write fails. */
+    CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_FOLLOWER, 2000);
+    free(req);
+
+    return MUNIT_OK;
+}
