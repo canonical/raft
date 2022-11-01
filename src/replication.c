@@ -468,6 +468,7 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
     struct appendLeader *request = req->data;
     struct raft *r = request->raft;
     size_t server_index;
+    raft_index index;
     int rv;
 
     tracef("leader: written %u entries starting at %lld: status %d", request->n,
@@ -475,7 +476,11 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
 
     /* In case of a failed disk write, if we were the leader creating these
      * entries in the first place, truncate our log too (since we have appended
-     * these entries to it) and fire the request callback. */
+     * these entries to it) and fire the request callback.
+     *
+     * Afterward, convert immediately to follower state, giving the cluster a
+     * chance to elect another leader that doesn't have a full disk (or whatever
+     * caused our write error). */
     if (status != 0) {
         struct raft_apply *apply;
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
@@ -523,10 +528,12 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
 out:
     /* Tell the log that we're done referencing these entries. */
     logRelease(&r->log, request->index, request->entries, request->n);
-    if (status != 0) {
-        logTruncate(&r->log, request->index);
-    }
+    index = request->index;
     raft_free(request);
+    if (status != 0) {
+        logTruncate(&r->log, index);
+        convertToFollower(r);
+    }
 }
 
 /* Submit a disk write for all entries from the given index onward. */

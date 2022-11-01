@@ -224,6 +224,13 @@ static void ioFlushAppend(struct io *s, struct append *append)
 {
     struct raft_entry *entries;
     unsigned i;
+    int status = 0;
+
+    /* Simulates a disk write failure. */
+    if (ioFaultTick(s)) {
+        status = RAFT_IOERR;
+        goto done;
+    }
 
     /* Allocate an array for the old entries plus the new ones. */
     entries = raft_realloc(s->entries, (s->n + append->n) * sizeof *s->entries);
@@ -240,8 +247,9 @@ static void ioFlushAppend(struct io *s, struct append *append)
     s->entries = entries;
     s->n += append->n;
 
+done:
     if (append->req->cb != NULL) {
-        append->req->cb(append->req, 0);
+        append->req->cb(append->req, status);
     }
     raft_free(append);
 }
