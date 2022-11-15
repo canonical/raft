@@ -1429,6 +1429,14 @@ static bool shouldTakeSnapshot(struct raft *r)
         return false;
     }
 
+    /* If there's an uncommitted configuration, do nothing. This assures we only
+     * include committed configurations in the snapshot. This also assures that
+     * the log entry containing the uncommitted configuration is still available
+     * when the configuration change has to be rolled back. */
+    if (r->configuration_uncommitted_index != 0) {
+        return false;
+    }
+
     return true;
 }
 
