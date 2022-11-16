@@ -83,19 +83,14 @@ BYTE__INLINE void bytePut8(void **cursor, uint8_t value)
 
 BYTE__INLINE void bytePut32(void **cursor, uint32_t value)
 {
-    uint32_t **p = (uint32_t **)cursor;
-    **p = byteFlip32(value);
-    *p += 1;
+    unsigned i;
+    uint32_t flipped = byteFlip32(value);
+    for (i = 0; i < sizeof(uint32_t); i++) {
+        bytePut8(cursor, ((uint8_t *)(&flipped))[i]);
+    }
 }
 
 BYTE__INLINE void bytePut64(void **cursor, uint64_t value)
-{
-    uint64_t **p = (uint64_t **)cursor;
-    **p = byteFlip64(value);
-    *p += 1;
-}
-
-BYTE__INLINE void bytePut64Unaligned(void **cursor, uint64_t value)
 {
     unsigned i;
     uint64_t flipped = byteFlip64(value);
@@ -121,21 +116,15 @@ BYTE__INLINE uint8_t byteGet8(const void **cursor)
 
 BYTE__INLINE uint32_t byteGet32(const void **cursor)
 {
-    const uint32_t **p = (const uint32_t **)cursor;
-    uint32_t value = byteFlip32(**p);
-    *p += 1;
-    return value;
+    uint32_t value = 0;
+    unsigned i;
+    for (i = 0; i < sizeof(uint32_t); i++) {
+        ((uint8_t *)(&value))[i] = byteGet8(cursor);
+    }
+    return byteFlip32(value);
 }
 
 BYTE__INLINE uint64_t byteGet64(const void **cursor)
-{
-    const uint64_t **p = (const uint64_t **)cursor;
-    uint64_t value = byteFlip64(**p);
-    *p += 1;
-    return value;
-}
-
-BYTE__INLINE uint64_t byteGet64Unaligned(const void **cursor)
 {
     uint64_t value = 0;
     unsigned i;

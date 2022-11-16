@@ -243,12 +243,12 @@ void configurationEncodeToBuf(const struct raft_configuration *c, void *buf)
     bytePut8(&cursor, ENCODING_FORMAT);
 
     /* Number of servers. */
-    bytePut64Unaligned(&cursor, c->n); /* cursor might not be 8-byte aligned */
+    bytePut64(&cursor, c->n);
 
     for (i = 0; i < c->n; i++) {
         struct raft_server *server = &c->servers[i];
         assert(server->address != NULL);
-        bytePut64Unaligned(&cursor, server->id); /* might not be aligned */
+        bytePut64(&cursor, server->id);
         bytePutString(&cursor, server->address);
         assert(server->role < 255);
         bytePut8(&cursor, (uint8_t)server->role);
@@ -300,7 +300,7 @@ int configurationDecode(const struct raft_buffer *buf,
     }
 
     /* Read the number of servers. */
-    n = (size_t)byteGet64Unaligned(&cursor);
+    n = (size_t)byteGet64(&cursor);
 
     /* Decode the individual servers. */
     for (i = 0; i < n; i++) {
@@ -310,7 +310,7 @@ int configurationDecode(const struct raft_buffer *buf,
         int rv;
 
         /* Server ID. */
-        id = byteGet64Unaligned(&cursor);
+        id = byteGet64(&cursor);
 
         /* Server Address. */
         address = byteGetString(

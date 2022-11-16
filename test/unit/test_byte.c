@@ -98,19 +98,19 @@ TEST(byteGetString, malformed, NULL, NULL, 0, NULL)
 
 /******************************************************************************
  *
- * byteGet64Unaligned
+ * byteGet64
  *
  *****************************************************************************/
 
-SUITE(byteGet64Unaligned)
+SUITE(byteGet64)
 
-TEST(byteGet64Unaligned, success, NULL, NULL, 0, NULL)
+TEST(byteGet64, success, NULL, NULL, 0, NULL)
 {
     uint8_t *buf = munit_malloc(sizeof(uint64_t) * 2);
     void *cursor1 = buf + 1;
     const void *cursor2 = buf + 1;
-    bytePut64Unaligned(&cursor1, 1);
-    munit_assert_int(byteGet64Unaligned(&cursor2), ==, 1);
+    bytePut64(&cursor1, 1);
+    munit_assert_int(byteGet64(&cursor2), ==, 1);
     free(buf);
     return MUNIT_OK;
 }
