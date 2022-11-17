@@ -14,10 +14,10 @@
 static void uvMetadataEncode(const struct uvMetadata *metadata, void *buf)
 {
     void *cursor = buf;
-    bytePut64Unaligned(&cursor, UV__DISK_FORMAT);
-    bytePut64Unaligned(&cursor, metadata->version);
-    bytePut64Unaligned(&cursor, metadata->term);
-    bytePut64Unaligned(&cursor, metadata->voted_for);
+    bytePut64(&cursor, UV__DISK_FORMAT);
+    bytePut64(&cursor, metadata->version);
+    bytePut64(&cursor, metadata->term);
+    bytePut64(&cursor, metadata->voted_for);
 }
 
 /* Decode the content of a metadata file. */
@@ -27,14 +27,14 @@ static int uvMetadataDecode(const void *buf,
 {
     const void *cursor = buf;
     uint64_t format;
-    format = byteGet64Unaligned(&cursor);
+    format = byteGet64(&cursor);
     if (format != UV__DISK_FORMAT) {
         ErrMsgPrintf(errmsg, "bad format version %ju", format);
         return RAFT_MALFORMED;
     }
-    metadata->version = byteGet64Unaligned(&cursor);
-    metadata->term = byteGet64Unaligned(&cursor);
-    metadata->voted_for = byteGet64Unaligned(&cursor);
+    metadata->version = byteGet64(&cursor);
+    metadata->term = byteGet64(&cursor);
+    metadata->voted_for = byteGet64(&cursor);
 
     /* Coherence checks that values make sense */
     if (metadata->version == 0) {

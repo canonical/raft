@@ -426,9 +426,9 @@ TEST(configurationEncode, one_server, setUp, tearDown, 0, NULL)
     cursor = buf.base;
 
     munit_assert_int(byteGet8(&cursor), ==, 1);
-    munit_assert_int(byteGet64Unaligned(&cursor), ==, 1);
+    munit_assert_int(byteGet64(&cursor), ==, 1);
 
-    munit_assert_int(byteGet64Unaligned(&cursor), ==, 1);
+    munit_assert_int(byteGet64(&cursor), ==, 1);
     munit_assert_string_equal(byteGetString(&cursor, strlen(address) + 1),
                               address);
     munit_assert_int(byteGet8(&cursor), ==, RAFT_VOTER);
@@ -462,14 +462,14 @@ TEST(configurationEncode, two_servers, setUp, tearDown, 0, NULL)
     cursor = buf.base;
 
     munit_assert_int(byteGet8(&cursor), ==, 1);
-    munit_assert_int(byteGet64Unaligned(&cursor), ==, 2);
+    munit_assert_int(byteGet64(&cursor), ==, 2);
 
-    munit_assert_int(byteGet64Unaligned(&cursor), ==, 1);
+    munit_assert_int(byteGet64(&cursor), ==, 1);
     munit_assert_string_equal(byteGetString(&cursor, strlen(address1) + 1),
                               address1);
     munit_assert_int(byteGet8(&cursor), ==, RAFT_STANDBY);
 
-    munit_assert_int(byteGet64Unaligned(&cursor), ==, 2);
+    munit_assert_int(byteGet64(&cursor), ==, 2);
     munit_assert_string_equal(byteGetString(&cursor, strlen(address2) + 1),
                               address2);
     munit_assert_int(byteGet8(&cursor), ==, RAFT_VOTER);
