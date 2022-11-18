@@ -1,5 +1,5 @@
 AC_PREREQ(2.60)
-AC_INIT([raft], [0.15.0])
+AC_INIT([raft], [0.16.0])
 AC_LANG([C])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_AUX_DIR([ac])
