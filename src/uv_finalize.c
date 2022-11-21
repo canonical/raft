@@ -135,13 +135,12 @@ int UvFinalize(struct uv *uv,
                raft_index first_index,
                raft_index last_index)
 {
+    tracef("uv finalize start:%llu end:%llu", first_index, last_index);
     struct uvDyingSegment *segment;
     int rv;
 
-    if (used > 0) {
-        assert(first_index > 0);
-        assert(last_index >= first_index);
-    }
+    assert(first_index > 0);
+    assert(last_index >= first_index);
 
     segment = RaftHeapMalloc(sizeof *segment);
     if (segment == NULL) {
