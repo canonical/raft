@@ -222,6 +222,11 @@ endif # LZ4_ENABLED
 
 endif # UV_ENABLED
 
+if BACKTRACE_ENABLED
+libraft_la_CFLAGS += -DRAFT_ASSERT_WITH_BACKTRACE
+libraft_la_LDFLAGS += -lbacktrace
+endif # BACKTRACE_ENABLED
+
 if EXAMPLE_ENABLED
 
 bin_PROGRAMS += \

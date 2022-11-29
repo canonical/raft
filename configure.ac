@@ -65,6 +65,9 @@ AM_CONDITIONAL(LZ4_AVAILABLE, test "x$have_lz4" = "xyes")
 # compression by default.
 AM_CONDITIONAL(LZ4_ENABLED, test "x$enable_lz4" != "xno" -a "x$have_lz4" = "xyes")
 
+AC_ARG_ENABLE(backtrace, AS_HELP_STRING([--enable-backtrace[=ARG]], [print backtrace on assertion failure [default=no]]))
+AM_CONDITIONAL(BACKTRACE_ENABLED, test "x$enable_backtrace" = "xyes")
+
 # The fake I/O implementation and associated fixture is built by default, unless
 # explicitly disabled.
 AC_ARG_ENABLE(fixture, AS_HELP_STRING([--disable-fixture], [do not build the raft_fixture test helper]))
