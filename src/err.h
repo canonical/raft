@@ -24,7 +24,12 @@
     X(RAFT_TOOBIG, "data is too big")                                   \
     X(RAFT_NOCONNECTION, "no connection to remote server available")    \
     X(RAFT_BUSY, "operation can't be performed at this time")           \
-    X(RAFT_IOERR, "I/O error")
+    X(RAFT_IOERR, "I/O error")                                          \
+    X(RAFT_NOTFOUND, "Resource not found")                              \
+    X(RAFT_INVALID, "Invalid parameter")                                \
+    X(RAFT_UNAUTHORIZED, "No access to resource")                       \
+    X(RAFT_NOSPACE, "Not enough disk space")                            \
+    X(RAFT_TOOMANY, "System or raft limit met or exceeded")
 
 /* Format an error message. */
 #define ErrMsgPrintf(ERRMSG, ...) \
