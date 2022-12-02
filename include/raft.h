@@ -96,6 +96,7 @@ enum {
 
 /**
  * Hold information about a single server in the cluster configuration.
+ * WARNING: This struct is encoded/decoded, be careful when adapting it.
  */
 struct raft_server
 {
@@ -106,6 +107,7 @@ struct raft_server
 
 /**
  * Hold information about all servers currently part of the cluster.
+ * WARNING: This struct is encoded/decoded, be careful when adapting it.
  */
 struct raft_configuration
 {
@@ -348,6 +350,10 @@ struct raft_message
 
 /**
  * Hold the details of a snapshot.
+ * The user-provided raft_buffer structs should provide the user with enough
+ * flexibility to adapt/evolve snapshot formats.
+ * If this struct would NEED to be adapted in the future, raft can always move to
+ * a new struct with a new name and a new raft_io version.
  */
 struct raft_snapshot
 {
