@@ -3,6 +3,7 @@
     "sources": [
 	"src/byte.c",
 	"src/client.c",
+	"src/compress.c",
 	"src/configuration.c",
 	"src/convert.c",
 	"src/election.c",
@@ -10,6 +11,7 @@
 	"src/err.c",
 	"src/fixture.c",
 	"src/heap.c",
+	"src/lifecycle.c",
 	"src/log.c",
 	"src/membership.c",
 	"src/progress.c",
@@ -45,6 +47,7 @@
 	"src/uv_tcp_connect.c",
 	"src/uv_tcp_listen.c",
 	"src/uv_truncate.c",
+	"src/uv_work.c",
 	"src/uv_writer.c"
     ],
     "include_paths": [
