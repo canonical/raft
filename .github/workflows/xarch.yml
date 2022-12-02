@@ -1,0 +1,27 @@
+name: CI tests (32-bit)
+
+on:
+  - push
+  - pull_request
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+    runs-on: ubuntu-22.04
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Setup dependencies
+      run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update -qq
+          sudo apt-get install -qq liblz4-dev:i386 libuv1-dev:i386 gcc-multilib
+
+    - name: Build
+      run: |
+          git clone --depth 1 https://github.com/edlund/amalgamate.git
+          amalgamate/amalgamate.py --config=amalgamation.json --source=$(pwd)
+          gcc -std=gnu11 raft.c -m32 -shared -fPIC -o libraft.so -DHAVE_LINUX_AIO_ABI_H -DLZ4_AVAILABLE -DLZ4_ENABLED -Wall -Wextra -Wpedantic -Werror -luv -llz4
+          file libraft.so
+          ldd libraft.so
