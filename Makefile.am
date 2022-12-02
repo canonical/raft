@@ -11,7 +11,7 @@ raftinclude_HEADERS =
 
 lib_LTLIBRARIES = libraft.la
 libraft_la_CFLAGS = $(AM_CFLAGS) -fvisibility=hidden
-libraft_la_LDFLAGS = -version-info 2:0:0
+libraft_la_LDFLAGS = -version-info 3:0:0
 libraft_la_SOURCES = \
   src/byte.c \
   src/client.c \
