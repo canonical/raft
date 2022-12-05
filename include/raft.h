@@ -644,8 +644,12 @@ struct raft
      *    non-zero, with the latter being greater than the former. In this case
      *    the content of #configuration must match the one of the log entry at
      *    #configuration_uncommitted_index.
+     *
+     * TODO previous_configuration will always contain a copy of the previous
+     * configuration, if any, and is used in configuration rollback scenarios.
      */
     struct raft_configuration configuration;
+    struct raft_configuration configuration_previous; //currently not used.
     raft_index configuration_index;
     raft_index configuration_uncommitted_index;
 
