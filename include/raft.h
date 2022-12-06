@@ -917,12 +917,21 @@ RAFT_API raft_index raft_last_index(struct raft *r);
  */
 RAFT_API raft_index raft_last_applied(struct raft *r);
 
-/* Common fields across client request types. */
-#define RAFT__REQUEST \
-    void *data;       \
-    int type;         \
-    raft_index index; \
-    void *queue[2]
+/**
+ * Common fields across client request types.
+ * `req_id`, `client_id` and `unique_id` are currently unused.
+ * `reserved` fields should be replaced by new members with the same size
+ * and alignment requirements as `uint64_t`.
+ */
+#define RAFT__REQUEST      \
+    void *data;            \
+    int type;              \
+    raft_index index;      \
+    void *queue[2];        \
+    uint8_t req_id[16];    \
+    uint8_t client_id[16]; \
+    uint8_t unique_id[16]; \
+    uint64_t reserved[4]   \
 
 /**
  * Asynchronous request to append a new command entry to the log and apply it to
