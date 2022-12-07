@@ -100,8 +100,11 @@ err:
 
 static void uvTruncateAfterWorkCb(uv_work_t *work, int status)
 {
+    assert(work != NULL);
     struct uvTruncate *truncate = work->data;
+    assert(truncate != NULL);
     struct uv *uv = truncate->uv;
+    assert(uv != NULL);
     assert(status == 0);
     if (truncate->status != 0) {
         uv->errored = true;
