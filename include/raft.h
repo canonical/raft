@@ -634,7 +634,8 @@ struct raft
      * 1. #configuration_index and #configuration_uncommitted_index are both
      *    zero. This should only happen when a brand new server starts joining a
      *    cluster and is waiting to receive log entries from the current
-     *    leader. In this case #configuration must be empty and have no servers.
+     *    leader. In this case #configuration and #configuration_previous
+     *    must be empty and have no servers.
      *
      * 2. #configuration_index is non-zero while #configuration_uncommitted_index
      *    is zero. In this case the content of #configuration must match the one
@@ -645,11 +646,12 @@ struct raft
      *    the content of #configuration must match the one of the log entry at
      *    #configuration_uncommitted_index.
      *
-     * TODO previous_configuration will always contain a copy of the previous
-     * configuration, if any, and is used in configuration rollback scenarios.
+     * 4. In case the previous - committed - configuration can no longer be found
+     *    in the log e.g. after truncating the log when taking or installing a
+     *    snapshot, `configuration_previous` will contain a copy of it.
      */
     struct raft_configuration configuration;
-    struct raft_configuration configuration_previous; //currently not used.
+    struct raft_configuration configuration_previous;
     raft_index configuration_index;
     raft_index configuration_uncommitted_index;
 
