@@ -63,4 +63,11 @@ int configurationDecode(const struct raft_buffer *buf,
 
 /* Output the configuration to the raft tracer */
 void configurationTrace(const struct raft *r, struct raft_configuration *c, const char *msg);
+
+/* Replaces the previous configuration with a copy of the configuration */
+int configurationBackup(struct raft *r, struct raft_configuration *src);
+
+/* Replaces the current configuration with a copy of the previous configuration. */
+int configurationRestorePrevious(struct raft *r);
+
 #endif /* CONFIGURATION_H_ */
