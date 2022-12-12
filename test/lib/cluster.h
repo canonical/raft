@@ -49,16 +49,16 @@
                 atoi(munit_parameters_get(params, CLUSTER_FSM_VERSION_PARAM)); \
         }                                                                      \
         munit_assert_int(_n, >, 0);                                            \
-        _rv = raft_fixture_initialize(&f->cluster);                            \
+        _rv = raft_fixture_init(&f->cluster);                                  \
         munit_assert_int(_rv, ==, 0);                                          \
         for (_i = 0; _i < _n; _i++) {                                          \
-            _rv = raft_fixture_grow(&f->cluster, &f->fsms[_i]);                \
-            munit_assert_int(_rv, ==, 0);                                      \
             if (!_ss_async || _fsm_version < 3) {                              \
                 FsmInit(&f->fsms[_i], _fsm_version);                           \
             } else {                                                           \
                 FsmInitAsync(&f->fsms[_i], _fsm_version);                      \
             }                                                                  \
+            _rv = raft_fixture_grow(&f->cluster, &f->fsms[_i]);                \
+            munit_assert_int(_rv, ==, 0);                                      \
         }                                                                      \
         for (_i = 0; _i < _n; _i++) {                                          \
             raft_set_pre_vote(raft_fixture_get(&f->cluster, _i), _pre_vote);   \

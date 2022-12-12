@@ -34,7 +34,8 @@ int recvRequestVote(struct raft *r,
            r->id, id, address, args->candidate_id, args->disrupt_leader, args->last_log_index,
            args->last_log_term, args->pre_vote, args->term);
     result->vote_granted = false;
-    result->pre_vote = TO_RAFT_TRIBOOL(args->pre_vote);
+    result->pre_vote = args->pre_vote;
+    result->version = RAFT_REQUEST_VOTE_RESULT_VERSION;
 
     /* Reject the request if we have a leader.
      *

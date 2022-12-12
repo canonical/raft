@@ -138,6 +138,7 @@ static void peerCloseCb(struct raft_io *io)
         int _rv;                                                   \
         _rv = uv_loop_init(_loop);                                 \
         munit_assert_int(_rv, ==, 0);                              \
+        _transport->version = 1;                                   \
         _rv = raft_uv_tcp_init(_transport, _loop);                 \
         munit_assert_int(_rv, ==, 0);                              \
         _rv = raft_uv_init(_io, _loop, f->dir, _transport);        \
@@ -310,7 +311,7 @@ TEST(recv, requestVoteResult, setUp, tearDown, 0, NULL)
     message.type = RAFT_IO_REQUEST_VOTE_RESULT;
     message.request_vote_result.term = 3;
     message.request_vote_result.vote_granted = true;
-    message.request_vote_result.pre_vote = raft_tribool_false;
+    message.request_vote_result.pre_vote = false;
     PEER_SEND(&message);
     RECV(&message);
     return MUNIT_OK;

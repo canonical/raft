@@ -24,9 +24,14 @@
 #define DEFAULT_MAX_CATCH_UP_ROUNDS 10
 #define DEFAULT_MAX_CATCH_UP_ROUND_DURATION (5 * 1000)
 
-static int ioFsmCompat(struct raft *r,
-                       struct raft_io *io,
-                       struct raft_fsm *fsm);
+int raft_version_number (void)
+{
+    return RAFT_VERSION_NUMBER;
+}
+
+static int ioFsmVersionCheck(struct raft *r,
+                             struct raft_io *io,
+                             struct raft_fsm *fsm);
 
 int raft_init(struct raft *r,
               struct raft_io *io,
@@ -37,7 +42,7 @@ int raft_init(struct raft *r,
     int rv;
     assert(r != NULL);
 
-    rv = ioFsmCompat(r, io, fsm);
+    rv = ioFsmVersionCheck(r, io, fsm);
     if (rv != 0) {
 	goto err;
     }
@@ -59,7 +64,12 @@ int raft_init(struct raft *r,
     strcpy(r->address, address);
     r->current_term = 0;
     r->voted_for = 0;
-    logInit(&r->log);
+    r->log = logInit();
+    if (r->log == NULL) {
+        rv = RAFT_NOMEM;
+        goto err_after_address_alloc;
+    }
+
     raft_configuration_init(&r->configuration);
     r->configuration_index = 0;
     r->configuration_uncommitted_index = 0;
@@ -98,7 +108,7 @@ static void ioCloseCb(struct raft_io *io)
 {
     struct raft *r = io->data;
     raft_free(r->address);
-    logClose(&r->log);
+    logClose(r->log);
     raft_configuration_close(&r->configuration);
     if (r->close_cb != NULL) {
         r->close_cb(r);
@@ -238,10 +248,20 @@ unsigned long long raft_digest(const char *text, unsigned long long n)
     return byteFlip64(digest);
 }
 
-static int ioFsmCompat(struct raft *r,
-                       struct raft_io *io,
-                       struct raft_fsm *fsm)
+static int ioFsmVersionCheck(struct raft *r,
+                             struct raft_io *io,
+                             struct raft_fsm *fsm)
 {
+    if (io->version == 0) {
+        ErrMsgPrintf(r->errmsg, "io->version must be set");
+        return -1;
+    }
+
+    if (fsm->version == 0) {
+        ErrMsgPrintf(r->errmsg, "fsm->version must be set");
+        return -1;
+    }
+
     if ((fsm->version > 2 && fsm->snapshot_async != NULL)
         && ((io->version < 2) || (io->async_work == NULL))) {
         ErrMsgPrintf(r->errmsg,

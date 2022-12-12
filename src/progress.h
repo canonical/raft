@@ -12,6 +12,20 @@ enum {
     PROGRESS__SNAPSHOT   /* Sending a snapshot */
 };
 
+/**
+ * Used by leaders to keep track of replication progress for each server.
+ */
+struct raft_progress
+{
+    unsigned short state;         /* Probe, pipeline or snapshot. */
+    raft_index next_index;        /* Next entry to send. */
+    raft_index match_index;       /* Highest index reported as replicated. */
+    raft_index snapshot_index;    /* Last index of most recent snapshot sent. */
+    raft_time last_send;          /* Timestamp of last AppendEntries RPC. */
+    raft_time snapshot_last_send; /* Timestamp of last InstallSnaphot RPC. */
+    bool recent_recv;             /* A msg was received within election timeout. */
+};
+
 /* Create and initialize the array of progress objects used by the leader to *
  * track followers. The match index will be set to zero, and the next index to
  * the current last index plus 1. */

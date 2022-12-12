@@ -1,5 +1,6 @@
 #include "uv_encoding.h"
 
+#include <limits.h>
 #include <string.h>
 
 #include "../include/raft/uv.h"
@@ -108,7 +109,7 @@ static void encodeRequestVoteResult(const struct raft_request_vote_result *p,
     void *cursor = buf;
     uint64_t flags = 0;
 
-    if (p->pre_vote == raft_tribool_true) {
+    if (p->pre_vote) {
         flags |= (1 << 0);
     }
 
@@ -310,6 +311,7 @@ static void decodeRequestVote(const uv_buf_t *buf, struct raft_request_vote *p)
 
     cursor = buf->base;
 
+    p->version = 1;
     p->term = byteGet64(&cursor);
     p->candidate_id = byteGet64(&cursor);
     p->last_log_index = byteGet64(&cursor);
@@ -320,6 +322,7 @@ static void decodeRequestVote(const uv_buf_t *buf, struct raft_request_vote *p)
         p->disrupt_leader = false;
         p->pre_vote = false;
     } else {
+        p->version = 2;
         uint64_t flags = byteGet64(&cursor);
         p->disrupt_leader = (bool)(flags & 1 << 0);
         p->pre_vote = (bool)(flags & 1 << 1);
@@ -333,15 +336,14 @@ static void decodeRequestVoteResult(const uv_buf_t *buf,
 
     cursor = buf->base;
 
+    p->version = 1;
     p->term = byteGet64(&cursor);
     p->vote_granted = byteGet64(&cursor);
 
-    /* Support legacy RequestVoteResultV1 */
-    p->pre_vote = raft_tribool_unknown;
-
     if (buf->len > sizeofRequestVoteResultV1()) {
+        p->version = 2;
         uint64_t flags = byteGet64(&cursor);
-        p->pre_vote = TO_RAFT_TRIBOOL(flags & (1 << 0));
+        p->pre_vote = (flags & (1 << 0));
     }
 }
 
@@ -408,6 +410,7 @@ static int decodeAppendEntries(const uv_buf_t *buf,
 
     cursor = buf->base;
 
+    args->version = 0;
     args->term = byteGet64(&cursor);
     args->prev_log_index = byteGet64(&cursor);
     args->prev_log_term = byteGet64(&cursor);
@@ -428,6 +431,7 @@ static void decodeAppendEntriesResult(const uv_buf_t *buf,
 
     cursor = buf->base;
 
+    p->version = 0;
     p->term = byteGet64(&cursor);
     p->rejected = byteGet64(&cursor);
     p->last_log_index = byteGet64(&cursor);
@@ -445,6 +449,7 @@ static int decodeInstallSnapshot(const uv_buf_t *buf,
 
     cursor = buf->base;
 
+    args->version = 0;
     args->term = byteGet64(&cursor);
     args->last_index = byteGet64(&cursor);
     args->last_term = byteGet64(&cursor);
@@ -468,12 +473,13 @@ static void decodeTimeoutNow(const uv_buf_t *buf, struct raft_timeout_now *p)
 
     cursor = buf->base;
 
+    p->version = 0;
     p->term = byteGet64(&cursor);
     p->last_log_index = byteGet64(&cursor);
     p->last_log_term = byteGet64(&cursor);
 }
 
-int uvDecodeMessage(const unsigned long type,
+int uvDecodeMessage(uint16_t type,
                     const uv_buf_t *header,
                     struct raft_message *message,
                     size_t *payload_len)
@@ -481,7 +487,7 @@ int uvDecodeMessage(const unsigned long type,
     unsigned i;
     int rv = 0;
 
-    /* TODO: check type overflow */
+    memset(message, 0, sizeof(*message));
     message->type = (unsigned short)type;
 
     *payload_len = 0;
@@ -547,43 +553,4 @@ void uvDecodeEntriesBatch(uint8_t *batch,
             cursor = cursor + 8 - (entry->buf.len % 8);
         }
     }
-}
-
-int uvEncodeSnapshotMeta(const struct raft_configuration *conf,
-                         raft_index conf_index,
-                         struct raft_buffer *buf)
-{
-    size_t conf_len;
-    void *cursor;
-    uint64_t *header;
-    void *conf_buf;
-    unsigned crc;
-
-    conf_len = configurationEncodedSize(conf);
-
-    buf->len = sizeof(*header) * 4; /* Format, CRC, configuration index/len */
-    buf->len += conf_len;
-    buf->base = raft_malloc(buf->len);
-    if (buf->base == NULL) {
-        return RAFT_NOMEM;
-    }
-
-    header = buf->base;
-    conf_buf = header + 4;
-
-    configurationEncodeToBuf(conf, conf_buf);
-
-    cursor = header;
-    bytePut64(&cursor, UV__DISK_FORMAT);
-    bytePut64(&cursor, 0);
-    bytePut64(&cursor, conf_index);
-    bytePut64(&cursor, conf_len);
-
-    crc = byteCrc32(&header[2], sizeof(uint64_t) * 2, 0); /* Conf index/len */
-    crc = byteCrc32(conf_buf, conf_len, crc);
-
-    cursor = &header[1];
-    bytePut64(&cursor, crc);
-
-    return 0;
 }

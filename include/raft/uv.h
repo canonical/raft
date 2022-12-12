@@ -177,8 +177,17 @@ typedef void (*raft_uv_transport_close_cb)(struct raft_uv_transport *t);
  * Interface to establish outgoing connections to other Raft servers and to
  * accept incoming connections from them.
  */
+
 struct raft_uv_transport
 {
+    /**
+     * Keep track of struct version, MUST be filled out by user.
+     * When moving to a new version, the user MUST implement the newly added
+     * methods.
+     * Latest version is 1.
+     */
+    int version;
+
     /**
      * User defined data.
      */

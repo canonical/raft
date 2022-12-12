@@ -53,8 +53,8 @@ int recvTimeoutNow(struct raft *r,
     }
 
     /* Ignore the request if we our log is not up-to-date. */
-    local_last_index = logLastIndex(&r->log);
-    local_last_term = logLastTerm(&r->log);
+    local_last_index = logLastIndex(r->log);
+    local_last_term = logLastTerm(r->log);
     if (local_last_index != args->last_log_index ||
         local_last_term != args->last_log_term) {
         return 0;

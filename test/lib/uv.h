@@ -11,11 +11,12 @@
 #include "tracer.h"
 
 #define FIXTURE_UV_TRANSPORT struct raft_uv_transport transport
-#define SETUP_UV_TRANSPORT                               \
-    do {                                                 \
-        int rv_;                                         \
-        rv_ = raft_uv_tcp_init(&f->transport, &f->loop); \
-        munit_assert_int(rv_, ==, 0);                    \
+#define SETUP_UV_TRANSPORT                                \
+    do {                                                  \
+        int rv_;                                          \
+        f->transport.version = 1;                         \
+        rv_ = raft_uv_tcp_init(&f->transport, &f->loop);  \
+        munit_assert_int(rv_, ==, 0);                     \
     } while (0)
 #define TEAR_DOWN_UV_TRANSPORT raft_uv_tcp_close(&f->transport)
 

@@ -20,7 +20,7 @@ struct fixture
 
 static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
 {
-    struct fixture *f = munit_malloc(sizeof *f);
+    struct fixture *f = munit_calloc(1, sizeof *f);
     struct raft_configuration configuration;
     unsigned i;
     int rc;
@@ -29,7 +29,7 @@ static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
         FsmInit(&f->fsms[i], 2);
     }
 
-    rc = raft_fixture_initialize(&f->fixture);
+    rc = raft_fixture_init(&f->fixture);
     munit_assert_int(rc, ==, 0);
 
     for (i = 0; i < N_SERVERS; i++) {
@@ -129,23 +129,23 @@ TEST(raft_fixture_step, tick, setUp, tearDown, 0, NULL)
     ASSERT_TIME(0);
 
     event = STEP;
-    munit_assert_int(event->server_index, ==, 0);
-    munit_assert_int(event->type, ==, RAFT_FIXTURE_TICK);
+    munit_assert_int(raft_fixture_event_server_index(event), ==, 0);
+    munit_assert_int(raft_fixture_event_type(event), ==, RAFT_FIXTURE_TICK);
     ASSERT_TIME(100);
 
     event = STEP;
-    munit_assert_int(event->server_index, ==, 1);
-    munit_assert_int(event->type, ==, RAFT_FIXTURE_TICK);
+    munit_assert_int(raft_fixture_event_server_index(event), ==, 1);
+    munit_assert_int(raft_fixture_event_type(event), ==, RAFT_FIXTURE_TICK);
     ASSERT_TIME(100);
 
     event = STEP;
-    munit_assert_int(event->server_index, ==, 2);
-    munit_assert_int(event->type, ==, RAFT_FIXTURE_TICK);
+    munit_assert_int(raft_fixture_event_server_index(event), ==, 2);
+    munit_assert_int(raft_fixture_event_type(event), ==, RAFT_FIXTURE_TICK);
     ASSERT_TIME(100);
 
     event = STEP;
-    munit_assert_int(event->server_index, ==, 0);
-    munit_assert_int(event->type, ==, RAFT_FIXTURE_TICK);
+    munit_assert_int(raft_fixture_event_server_index(event), ==, 0);
+    munit_assert_int(raft_fixture_event_type(event), ==, RAFT_FIXTURE_TICK);
     ASSERT_TIME(200);
 
     return MUNIT_OK;
@@ -158,8 +158,8 @@ TEST(raft_fixture_step, electionTimeout, setUp, tearDown, 0, NULL)
     struct raft_fixture_event *event;
     (void)params;
     event = STEP_N(28);
-    munit_assert_int(event->server_index, ==, 0);
-    munit_assert_int(event->type, ==, RAFT_FIXTURE_TICK);
+    munit_assert_int(raft_fixture_event_server_index(event), ==, 0);
+    munit_assert_int(raft_fixture_event_type(event), ==, RAFT_FIXTURE_TICK);
     ASSERT_TIME(1000);
     ASSERT_STATE(0, RAFT_CANDIDATE);
     ASSERT_STATE(1, RAFT_FOLLOWER);
@@ -176,12 +176,12 @@ TEST(raft_fixture_step, flushSend, setUp, tearDown, 0, NULL)
     (void)params;
     STEP_UNTIL_STATE_IS(0, RAFT_CANDIDATE);
     event = STEP;
-    munit_assert_int(event->server_index, ==, 0);
-    munit_assert_int(event->type, ==, RAFT_FIXTURE_NETWORK);
+    munit_assert_int(raft_fixture_event_server_index(event), ==, 0);
+    munit_assert_int(raft_fixture_event_type(event), ==, RAFT_FIXTURE_NETWORK);
     ASSERT_TIME(1000);
     event = STEP;
-    munit_assert_int(event->server_index, ==, 0);
-    munit_assert_int(event->type, ==, RAFT_FIXTURE_NETWORK);
+    munit_assert_int(raft_fixture_event_server_index(event), ==, 0);
+    munit_assert_int(raft_fixture_event_type(event), ==, RAFT_FIXTURE_NETWORK);
     ASSERT_TIME(1000);
     return MUNIT_OK;
 }
@@ -197,8 +197,8 @@ TEST(raft_fixture_step, deliver, setUp, tearDown, 0, NULL)
     STEP_N(2);                              /* Ticks for server 1 and 2 */
     ASSERT_TIME(1000);
     event = STEP;
-    munit_assert_int(event->server_index, ==, 0);
-    munit_assert_int(event->type, ==, RAFT_FIXTURE_NETWORK);
+    munit_assert_int(raft_fixture_event_server_index(event), ==, 0);
+    munit_assert_int(raft_fixture_event_type(event), ==, RAFT_FIXTURE_NETWORK);
     ASSERT_TIME(1015);
     return MUNIT_OK;
 }

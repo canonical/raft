@@ -251,9 +251,17 @@ static void uvServerReadCb(uv_stream_t *stream,
             assert(s->header.base != NULL);
 
             type = byteFlip64(s->preamble[0]);
-            assert(type > 0);
 
-            rv = uvDecodeMessage((unsigned long)type, &s->header, &s->message,
+	    /* Only use first 2 bytes of the type. Normally we would check if
+	     * type doesn't overflow UINT16_MAX, but we don't do this to allow
+	     * future legacy nodes to still handle messages that include extra
+	     * information in the 6 unused bytes of the type field of the
+	     * preamble.
+	     * TODO: This is preparation to add the version of the message
+	     * in the raft preamble. Once this change has been active for
+	     * sufficiently long time, we can start encoding the version in some
+	     * of the remaining bytes of s->preamble[0]. */
+            rv = uvDecodeMessage((uint16_t)type, &s->header, &s->message,
                                  &s->payload.len);
             if (rv != 0) {
                 Tracef(s->uv->tracer, "decode message: %s",

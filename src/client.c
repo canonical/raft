@@ -36,14 +36,14 @@ int raft_apply(struct raft *r,
     }
 
     /* Index of the first entry being appended. */
-    index = logLastIndex(&r->log) + 1;
+    index = logLastIndex(r->log) + 1;
     tracef("%u commands starting at %lld", n, index);
     req->type = RAFT_COMMAND;
     req->index = index;
     req->cb = cb;
 
     /* Append the new entries to the log. */
-    rv = logAppendCommands(&r->log, r->current_term, bufs, n);
+    rv = logAppendCommands(r->log, r->current_term, bufs, n);
     if (rv != 0) {
         goto err;
     }
@@ -58,7 +58,7 @@ int raft_apply(struct raft *r,
     return 0;
 
 err_after_log_append:
-    logDiscard(&r->log, index);
+    logDiscard(r->log, index);
     QUEUE_REMOVE(&req->queue);
 err:
     assert(rv != 0);
@@ -86,13 +86,13 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
     }
 
     /* Index of the barrier entry being appended. */
-    index = logLastIndex(&r->log) + 1;
+    index = logLastIndex(r->log) + 1;
     tracef("barrier starting at %lld", index);
     req->type = RAFT_BARRIER;
     req->index = index;
     req->cb = cb;
 
-    rv = logAppend(&r->log, r->current_term, RAFT_BARRIER, &buf, NULL);
+    rv = logAppend(r->log, r->current_term, RAFT_BARRIER, &buf, NULL);
     if (rv != 0) {
         goto err_after_buf_alloc;
     }
@@ -107,7 +107,7 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
     return 0;
 
 err_after_log_append:
-    logDiscard(&r->log, index);
+    logDiscard(r->log, index);
     QUEUE_REMOVE(&req->queue);
 err_after_buf_alloc:
     raft_free(buf.base);
@@ -127,10 +127,10 @@ static int clientChangeConfiguration(
     (void)req;
 
     /* Index of the entry being appended. */
-    index = logLastIndex(&r->log) + 1;
+    index = logLastIndex(r->log) + 1;
 
     /* Encode the new configuration and append it to the log. */
-    rv = logAppendConfiguration(&r->log, term, configuration);
+    rv = logAppendConfiguration(r->log, term, configuration);
     if (rv != 0) {
         goto err;
     }
@@ -160,7 +160,7 @@ static int clientChangeConfiguration(
     return 0;
 
 err_after_log_append:
-    logTruncate(&r->log, index);
+    logTruncate(r->log, index);
 
 err:
     assert(rv != 0);
@@ -270,7 +270,7 @@ int raft_assign(struct raft *r,
     server_index = configurationIndexOf(&r->configuration, id);
     assert(server_index < r->configuration.n);
 
-    last_index = logLastIndex(&r->log);
+    last_index = logLastIndex(r->log);
 
     req->cb = cb;
 

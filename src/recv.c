@@ -22,15 +22,6 @@ static int recvMessage(struct raft *r, struct raft_message *message)
 {
     int rv = 0;
 
-    if (message->type < RAFT_IO_APPEND_ENTRIES ||
-        message->type > RAFT_IO_TIMEOUT_NOW) {
-        tracef("received unknown message type type: %d", message->type);
-        return 0;
-    }
-
-    /* tracef("%s from server %ld", message_descs[message->type - 1],
-       message->server_id); */
-
     switch (message->type) {
         case RAFT_IO_APPEND_ENTRIES:
             rv = recvAppendEntries(r, message->server_id,
@@ -70,6 +61,10 @@ static int recvMessage(struct raft *r, struct raft_message *message)
             rv = recvTimeoutNow(r, message->server_id, message->server_address,
                                 &message->timeout_now);
             break;
+        default:
+            tracef("received unknown message type (%d)", message->type);
+            /* Drop message */
+            return 0;
     };
 
     if (rv != 0 && rv != RAFT_NOCONNECTION) {

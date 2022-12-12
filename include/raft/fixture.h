@@ -8,6 +8,8 @@
 
 #include "../raft.h"
 
+#include <stdint.h>
+
 #define RAFT_FIXTURE_MAX_SERVERS 8
 
 /**
@@ -23,24 +25,22 @@ enum {
 /**
  * State of a single server in a cluster fixture.
  */
-struct raft_fixture_server
-{
-    bool alive;                /* If false, the server is down. */
-    raft_id id;                /* Server ID. */
-    char address[16];          /* Server address (stringified ID). */
-    struct raft_tracer tracer; /* Tracer. */
-    struct raft_io io;         /* In-memory raft_io implementation. */
-    struct raft raft;          /* Raft instance. */
-};
+struct raft_fixture_server;
 
 /**
  * Information about a test cluster event triggered by the fixture.
  */
-struct raft_fixture_event
-{
-    unsigned server_index; /* Index of the server the event occurred on. */
-    int type;              /* Type of the event. */
-};
+struct raft_fixture_event;
+
+/**
+ * Returns the type of the event.
+ */
+int raft_fixture_event_type(struct raft_fixture_event *event);
+
+/**
+ * Returns the server index of the event.
+ */
+unsigned raft_fixture_event_server_index(struct raft_fixture_event *event);
 
 /**
  * Event callback. See raft_fixture_hook().
@@ -64,34 +64,22 @@ typedef void (*raft_fixture_event_cb)(struct raft_fixture *f,
  */
 struct raft_fixture
 {
-    raft_time time;                  /* Global time, common to all servers. */
-    unsigned n;                      /* Number of servers. */
-    raft_id leader_id;               /* ID of current leader, or 0 if none. */
-    struct raft_log log;             /* Copy of current leader's log. */
-    raft_index commit_index;         /* Current commit index on leader. */
-    struct raft_fixture_event event; /* Last event occurred. */
-    raft_fixture_event_cb hook;      /* Event callback. */
-    struct raft_fixture_server servers[RAFT_FIXTURE_MAX_SERVERS];
+    raft_time time;                   /* Global time, common to all servers. */
+    unsigned n;                       /* Number of servers. */
+    raft_id leader_id;                /* ID of current leader, or 0 if none. */
+    struct raft_log *log;             /* Copy of current leader's log. */
+    raft_index commit_index;          /* Current commit index on leader. */
+    struct raft_fixture_event *event; /* Last event occurred. */
+    raft_fixture_event_cb hook;       /* Event callback. */
+    struct raft_fixture_server *servers[RAFT_FIXTURE_MAX_SERVERS];
+    uint64_t reserved[16];            /* For future expansion of struct. */
 };
-
-/**
- * !!! DEPRECATED users should use `raft_fixture_initialize`. !!!
- *
- * Initialize a raft cluster fixture with @n servers. Each server will use an
- * in-memory @raft_io implementation and one of the given @fsms. All servers
- * will be initially connected to one another, but they won't be bootstrapped or
- * started.
- */
-__attribute__((deprecated("use raft_fixture_initialize")))
-RAFT_API int raft_fixture_init(struct raft_fixture *f,
-                               unsigned n,
-                               struct raft_fsm *fsms);
 
 /**
  * Initialize a raft cluster fixture. Servers can be added by using
  * `raft_fixture_grow`.
  */
-RAFT_API int raft_fixture_initialize(struct raft_fixture *f);
+RAFT_API int raft_fixture_init(struct raft_fixture *f);
 
 /**
  * Release all memory used by the fixture.

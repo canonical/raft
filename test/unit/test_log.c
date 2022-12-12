@@ -12,7 +12,7 @@
 struct fixture
 {
     FIXTURE_HEAP;
-    struct raft_log log;
+    struct raft_log *log;
 };
 
 /******************************************************************************
@@ -22,11 +22,11 @@ struct fixture
  *****************************************************************************/
 
 /* Accessors */
-#define NUM_ENTRIES logNumEntries(&f->log)
-#define LAST_INDEX logLastIndex(&f->log)
-#define TERM_OF(INDEX) logTermOf(&f->log, INDEX)
-#define LAST_TERM logLastTerm(&f->log)
-#define GET(INDEX) logGet(&f->log, INDEX)
+#define NUM_ENTRIES logNumEntries(f->log)
+#define LAST_INDEX logLastIndex(f->log)
+#define TERM_OF(INDEX) logTermOf(f->log, INDEX)
+#define LAST_TERM logLastTerm(f->log)
+#define GET(INDEX) logGet(f->log, INDEX)
 
 /* Append one command entry with the given term and a hard-coded payload. */
 #define APPEND(TERM)                                               \
@@ -36,7 +36,7 @@ struct fixture
         buf_.base = raft_malloc(8);                                \
         buf_.len = 8;                                              \
         strcpy(buf_.base, "hello");                                \
-        rv_ = logAppend(&f->log, TERM, RAFT_COMMAND, &buf_, NULL); \
+        rv_ = logAppend(f->log, TERM, RAFT_COMMAND, &buf_, NULL); \
         munit_assert_int(rv_, ==, 0);                              \
     }
 
@@ -56,7 +56,7 @@ struct fixture
         int rv_;                                                   \
         buf_.base = raft_malloc(8);                                \
         buf_.len = 8;                                              \
-        rv_ = logAppend(&f->log, TERM, RAFT_COMMAND, &buf_, NULL); \
+        rv_ = logAppend(f->log, TERM, RAFT_COMMAND, &buf_, NULL); \
         munit_assert_int(rv_, ==, RV);                             \
         raft_free(buf_.base);                                      \
     }
@@ -77,7 +77,7 @@ struct fixture
             buf.base = (uint8_t *)batch + offset;                  \
             buf.len = 8;                                           \
             *(uint64_t *)buf.base = i * 1000;                      \
-            rv = logAppend(&f->log, 1, RAFT_COMMAND, &buf, batch); \
+            rv = logAppend(f->log, 1, RAFT_COMMAND, &buf, batch); \
             munit_assert_int(rv, ==, 0);                           \
             offset += 8;                                           \
         }                                                          \
@@ -86,15 +86,15 @@ struct fixture
 #define ACQUIRE(INDEX)                                  \
     {                                                   \
         int rv2;                                        \
-        rv2 = logAcquire(&f->log, INDEX, &entries, &n); \
+        rv2 = logAcquire(f->log, INDEX, &entries, &n); \
         munit_assert_int(rv2, ==, 0);                   \
     }
 
-#define RELEASE(INDEX) logRelease(&f->log, INDEX, entries, n);
+#define RELEASE(INDEX) logRelease(f->log, INDEX, entries, n);
 
-#define TRUNCATE(N) logTruncate(&f->log, N)
-#define SNAPSHOT(INDEX, TRAILING) logSnapshot(&f->log, INDEX, TRAILING)
-#define RESTORE(INDEX, TERM) logRestore(&f->log, INDEX, TERM)
+#define TRUNCATE(N) logTruncate(f->log, N)
+#define SNAPSHOT(INDEX, TRAILING) logSnapshot(f->log, INDEX, TRAILING)
+#define RESTORE(INDEX, TERM) logRestore(f->log, INDEX, TERM)
 
 /******************************************************************************
  *
@@ -106,14 +106,17 @@ static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
 {
     struct fixture *f = munit_malloc(sizeof *f);
     SET_UP_HEAP;
-    logInit(&f->log);
+    f->log = logInit();
+    if (f->log == NULL) {
+        munit_assert_true(false);
+    }
     return f;
 }
 
 static void tearDown(void *data)
 {
     struct fixture *f = data;
-    logClose(&f->log);
+    logClose(f->log);
     TEAR_DOWN_HEAP;
     free(f);
 }
@@ -127,22 +130,22 @@ static void tearDown(void *data)
 /* Assert the state of the fixture's log in terms of size, front/back indexes,
  * offset and number of entries. */
 #define ASSERT(SIZE, FRONT, BACK, OFFSET, N)     \
-    munit_assert_int(f->log.size, ==, SIZE);     \
-    munit_assert_int(f->log.front, ==, FRONT);   \
-    munit_assert_int(f->log.back, ==, BACK);     \
-    munit_assert_int(f->log.offset, ==, OFFSET); \
-    munit_assert_int(logNumEntries(&f->log), ==, N)
+    munit_assert_int(f->log->size, ==, SIZE);     \
+    munit_assert_int(f->log->front, ==, FRONT);   \
+    munit_assert_int(f->log->back, ==, BACK);     \
+    munit_assert_int(f->log->offset, ==, OFFSET); \
+    munit_assert_int(logNumEntries(f->log), ==, N)
 
 /* Assert the last index and term of the most recent snapshot. */
 #define ASSERT_SNAPSHOT(INDEX, TERM)                         \
-    munit_assert_int(f->log.snapshot.last_index, ==, INDEX); \
-    munit_assert_int(f->log.snapshot.last_term, ==, TERM)
+    munit_assert_int(f->log->snapshot.last_index, ==, INDEX); \
+    munit_assert_int(f->log->snapshot.last_term, ==, TERM)
 
 /* Assert that the term of entry at INDEX equals TERM. */
 #define ASSERT_TERM_OF(INDEX, TERM)              \
     {                                            \
         const struct raft_entry *entry;          \
-        entry = logGet(&f->log, INDEX);          \
+        entry = logGet(f->log, INDEX);          \
         munit_assert_ptr_not_null(entry);        \
         munit_assert_int(entry->term, ==, TERM); \
     }
@@ -152,14 +155,14 @@ static void tearDown(void *data)
 #define ASSERT_REFCOUNT(INDEX, COUNT)                                 \
     {                                                                 \
         size_t i;                                                     \
-        munit_assert_ptr_not_null(f->log.refs);                       \
-        for (i = 0; i < f->log.refs_size; i++) {                      \
-            if (f->log.refs[i].index == INDEX) {                      \
-                munit_assert_int(f->log.refs[i].count, ==, COUNT);    \
+        munit_assert_ptr_not_null(f->log->refs);                       \
+        for (i = 0; i < f->log->refs_size; i++) {                      \
+            if (f->log->refs[i].index == INDEX) {                      \
+                munit_assert_int(f->log->refs[i].count, ==, COUNT);    \
                 break;                                                \
             }                                                         \
         }                                                             \
-        if (i == f->log.refs_size) {                                  \
+        if (i == f->log->refs_size) {                                  \
             munit_errorf("no refcount found for entry with index %d", \
                          (int)INDEX);                                 \
         }                                                             \
@@ -524,7 +527,7 @@ TEST(logAppend, many, setUp, tearDown, 0, NULL)
     for (i = 0; i < 3000; i++) {
         APPEND(1 /* term */);
     }
-    munit_assert_int(f->log.refs_size, ==, 4096);
+    munit_assert_int(f->log->refs_size, ==, 4096);
     return MUNIT_OK;
 }
 
@@ -606,7 +609,7 @@ TEST(logAppend, oom, setUp, tearDown, 0, logAppendOom)
     buf.base = NULL;
     buf.len = 0;
     HeapFaultEnable(&f->heap);
-    rv = logAppend(&f->log, 1, RAFT_COMMAND, &buf, NULL);
+    rv = logAppend(f->log, 1, RAFT_COMMAND, &buf, NULL);
     munit_assert_int(rv, ==, RAFT_NOMEM);
     return MUNIT_OK;
 }
@@ -652,7 +655,7 @@ TEST(logAppendConfiguration, oom, setUp, tearDown, 0, logAppendConfigurationOom)
 
     HeapFaultEnable(&f->heap);
 
-    rv = logAppendConfiguration(&f->log, 1, &configuration);
+    rv = logAppendConfiguration(f->log, 1, &configuration);
     munit_assert_int(rv, ==, RAFT_NOMEM);
 
     configurationClose(&configuration);
@@ -809,7 +812,7 @@ TEST(logAcquire, oom, setUp, tearDown, 0, NULL)
     HeapFaultConfig(&f->heap, 0, 1);
     HeapFaultEnable(&f->heap);
 
-    rv = logAcquire(&f->log, 1, &entries, &n);
+    rv = logAcquire(f->log, 1, &entries, &n);
     munit_assert_int(rv, ==, RAFT_NOMEM);
 
     return MUNIT_OK;
@@ -942,7 +945,7 @@ TEST(logTruncate, batch, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
     APPEND_BATCH(3 /* n entries */);
     TRUNCATE(1 /* index */);
-    munit_assert_int(f->log.size, ==, 0);
+    munit_assert_int(f->log->size, ==, 0);
     return MUNIT_OK;
 }
 
@@ -1029,7 +1032,7 @@ TEST(logTruncate, acquiredOom, setUp, tearDown, 0, logTruncateAcquiredOom)
 
     HeapFaultEnable(&f->heap);
 
-    rv = logAppend(&f->log, 2, RAFT_COMMAND, &buf, NULL);
+    rv = logAppend(f->log, 2, RAFT_COMMAND, &buf, NULL);
     munit_assert_int(rv, ==, RAFT_NOMEM);
 
     RELEASE(2);

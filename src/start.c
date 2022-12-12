@@ -68,11 +68,11 @@ static int restoreEntries(struct raft *r,
     raft_index conf_index = 0;
     size_t i;
     int rv;
-    logStart(&r->log, snapshot_index, snapshot_term, start_index);
+    logStart(r->log, snapshot_index, snapshot_term, start_index);
     r->last_stored = start_index - 1;
     for (i = 0; i < n; i++) {
         struct raft_entry *entry = &entries[i];
-        rv = logAppend(&r->log, entry->term, entry->type, &entry->buf,
+        rv = logAppend(r->log, entry->term, entry->type, &entry->buf,
                        entry->batch);
         if (rv != 0) {
             goto err;
@@ -93,8 +93,8 @@ static int restoreEntries(struct raft *r,
     return 0;
 
 err:
-    if (logNumEntries(&r->log) > 0) {
-        logDiscard(&r->log, r->log.offset + 1);
+    if (logNumEntries(r->log) > 0) {
+        logDiscard(r->log, r->log->offset + 1);
     }
     return rv;
 }
@@ -136,8 +136,8 @@ int raft_start(struct raft *r)
     assert(r->heartbeat_timeout != 0);
     assert(r->heartbeat_timeout < r->election_timeout);
     assert(r->install_snapshot_timeout != 0);
-    assert(logNumEntries(&r->log) == 0);
-    assert(logSnapshotIndex(&r->log) == 0);
+    assert(logNumEntries(r->log) == 0);
+    assert(logSnapshotIndex(r->log) == 0);
     assert(r->last_stored == 0);
 
     tracef("starting");
