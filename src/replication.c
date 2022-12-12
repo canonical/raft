@@ -845,6 +845,7 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
     assert(args->n_entries > 0);
 
     result.term = r->current_term;
+    result.version = RAFT_APPEND_ENTRIES_RESULT_VERSION;
     if (status != 0) {
         if (r->state != RAFT_FOLLOWER) {
             tracef("local server is not follower -> ignore I/O failure");
@@ -1202,6 +1203,7 @@ static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
     r->snapshot.put.data = NULL;
 
     result.term = r->current_term;
+    result.version = RAFT_APPEND_ENTRIES_RESULT_VERSION;
 
     /* If we are shutting down, let's discard the result. TODO: what about other
      * states? */
