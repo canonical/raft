@@ -75,6 +75,7 @@ static void uvFinalizeAfterWorkCb(uv_work_t *work, int status)
 {
     struct uvDyingSegment *segment = work->data;
     struct uv *uv = segment->uv;
+    tracef("uv finalize after work cb status:%d", status);
     queue *head;
     int rv;
 
@@ -88,6 +89,7 @@ static void uvFinalizeAfterWorkCb(uv_work_t *work, int status)
     /* If we have no more dismissed segments to close, check if there's a
      * barrier to unblock or if we are done closing. */
     if (QUEUE_IS_EMPTY(&uv->finalize_reqs)) {
+        tracef("unblock barrier or close");
         if (uv->barrier != NULL && UvBarrierReady(uv)) {
             uv->barrier->cb(uv->barrier);
         }
