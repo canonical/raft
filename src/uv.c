@@ -156,6 +156,7 @@ static int uvStart(struct raft_io *io,
 
 void uvMaybeFireCloseCb(struct uv *uv)
 {
+    tracef("uv maybe fire close cb");
     if (!uv->closing) {
         return;
     }

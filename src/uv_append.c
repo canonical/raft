@@ -6,6 +6,8 @@
 #include "uv_encoding.h"
 #include "uv_writer.h"
 
+#define tracef(...) Tracef(uv->tracer, __VA_ARGS__)
+
 /* The happy path for an append request is:
  *
  * - If there is a current segment and it is has enough spare capacity to hold
@@ -799,6 +801,8 @@ int UvBarrier(struct uv *uv,
 
 void UvUnblock(struct uv *uv)
 {
+    tracef("uv unblock");
+    tracef("clear uv barrier");
     uv->barrier = NULL;
     if (uv->closing) {
         uvMaybeFireCloseCb(uv);
@@ -817,6 +821,7 @@ void UvUnblock(struct uv *uv)
  * we're closing and abort there. */
 static void uvBarrierClose(struct uv *uv)
 {
+    tracef("uv barrier close");
     struct UvBarrier *barrier = NULL;
     queue *head;
     assert(uv->closing);
@@ -828,6 +833,7 @@ static void uvBarrierClose(struct uv *uv)
             barrier = segment->barrier;
             barrier->cb(barrier);
             if (segment->barrier == uv->barrier) {
+                tracef("clear uv barrier");
                 uv->barrier = NULL;
             }
         }
@@ -840,6 +846,7 @@ static void uvBarrierClose(struct uv *uv)
      * too. */
     if (uv->barrier != NULL) {
         uv->barrier->cb(uv->barrier);
+        tracef("clear uv barrier");
         uv->barrier = NULL;
     }
 }

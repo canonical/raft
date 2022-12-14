@@ -23,6 +23,7 @@ static void uvTruncateWorkCb(uv_work_t *work)
 {
     struct uvTruncate *truncate = work->data;
     struct uv *uv = truncate->uv;
+    tracef("uv truncate work cb");
     struct uvSnapshotInfo *snapshots;
     struct uvSegmentInfo *segments;
     struct uvSegmentInfo *segment;
@@ -89,6 +90,7 @@ static void uvTruncateWorkCb(uv_work_t *work)
     RaftHeapFree(segments);
     truncate->status = 0;
 
+    tracef("uv truncate work cb ok");
     return;
 
 err_after_list:
@@ -105,10 +107,12 @@ static void uvTruncateAfterWorkCb(uv_work_t *work, int status)
     assert(truncate != NULL);
     struct uv *uv = truncate->uv;
     assert(uv != NULL);
+    tracef("uv truncate after work cb status:%d", status);
     assert(status == 0);
     if (truncate->status != 0) {
         uv->errored = true;
     }
+    tracef("clear truncate work");
     uv->truncate_work.data = NULL;
     RaftHeapFree(truncate);
     UvUnblock(uv);
@@ -118,10 +122,12 @@ static void uvTruncateBarrierCb(struct UvBarrier *barrier)
 {
     struct uvTruncate *truncate = barrier->data;
     struct uv *uv = truncate->uv;
+    tracef("uv truncate barrier cb");
     int rv;
 
     /* If we're closing, don't perform truncation at all and abort here. */
     if (uv->closing) {
+        tracef("closing => don't truncate");
         RaftHeapFree(truncate);
         return;
     }
@@ -131,11 +137,13 @@ static void uvTruncateBarrierCb(struct UvBarrier *barrier)
     assert(uv->finalize_work.data == NULL);
     assert(uv->truncate_work.data == NULL);
 
+    tracef("set truncate work");
     uv->truncate_work.data = truncate;
     rv = uv_queue_work(uv->loop, &uv->truncate_work, uvTruncateWorkCb,
                        uvTruncateAfterWorkCb);
     if (rv != 0) {
         tracef("truncate index %lld: %s", truncate->index, uv_strerror(rv));
+	tracef("clear truncate work");
         uv->truncate_work.data = NULL;
         uv->errored = true;
     }
@@ -148,6 +156,7 @@ int UvTruncate(struct raft_io *io, raft_index index)
     int rv;
 
     uv = io->impl;
+    tracef("uv truncate %llu", index);
     assert(!uv->closing);
 
     /* We should truncate only entries that we were requested to append in the
