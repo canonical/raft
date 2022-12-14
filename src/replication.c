@@ -803,6 +803,7 @@ static void sendAppendEntriesResult(
     struct raft_io_send *req;
     int rv;
 
+    assert(r->state == RAFT_FOLLOWER);
     message.type = RAFT_IO_APPEND_ENTRIES_RESULT;
     message.server_id = r->follower_state.current_leader.id;
     message.server_address = r->follower_state.current_leader.address;
