@@ -751,7 +751,7 @@ int replicationUpdate(struct raft *r,
     }
 
     /* Check if we can commit some new entries. */
-    replicationQuorum(r, r->last_stored);
+    replicationQuorum(r, last_index);
 
     rv = replicationApply(r);
     if (rv != 0) {

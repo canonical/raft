@@ -251,6 +251,12 @@ TEST(replication, sendProbe, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
+static bool indices_updated(struct raft_fixture *f, void* data) {
+    (void) f;
+    const struct raft *r = data;
+    return r->last_stored == 3 && r->leader_state.progress[1].match_index == 2;
+}
+
 /* A follower transitions to pipeline mode after the leader receives a
  * successful AppendEntries response from it. */
 TEST(replication, sendPipeline, setUp, tearDown, 0, NULL)
@@ -287,6 +293,11 @@ TEST(replication, sendPipeline, setUp, tearDown, 0, NULL)
     CLUSTER_STEP;
     munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_APPEND_ENTRIES), ==, 3);
     munit_assert_int(raft->leader_state.progress[1].next_index, ==, 4);
+
+    /* Wait until the leader has stored entry 3 and the follower has matched
+     * entry 2. Expect the commit index to have been updated to 2. */
+    CLUSTER_STEP_UNTIL(indices_updated, CLUSTER_RAFT(0), 2000);
+    munit_assert_ulong(raft->commit_index, ==, 2);
 
     /* Eventually server 0 receives AppendEntries results for both entries. */
     CLUSTER_STEP_UNTIL_APPLIED(0, 3, 1000);
