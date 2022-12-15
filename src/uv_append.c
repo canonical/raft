@@ -332,7 +332,10 @@ start:
     }
 
     /* If there's a blocking barrier in progress, and it's not waiting for this segment
-     * to be finalized, let's wait. */
+     * to be finalized, let's wait.
+     *
+     * FIXME shouldn't we wait even if segment->barrier == uv->barrier, if there are
+     * other open segments associated with the same barrier? */
     if (uv->barrier != NULL && segment->barrier != uv->barrier && uv->barrier->blocking) {
         return 0;
     }
@@ -831,12 +834,28 @@ static void uvBarrierClose(struct uv *uv)
         segment = QUEUE_DATA(head, struct uvAliveSegment, queue);
         if (segment->barrier != NULL && segment->barrier != barrier) {
             barrier = segment->barrier;
-            barrier->cb(barrier);
+            if (barrier->cb != NULL) {
+                barrier->cb(barrier);
+            }
             if (segment->barrier == uv->barrier) {
-                tracef("clear uv barrier");
                 uv->barrier = NULL;
             }
         }
+        /* The segment->barrier field is used:
+         *
+         * - by UvBarrierReady, to check whether it's time to invoke the barrier
+         *   callback after successfully finalizing a segment
+         * - by uvAppendMaybeStart, to see whether we should go ahead with writing
+         *   to a segment even though a barrier is active because the barrier is
+         *   waiting on that same segment to be finalized (but see the FIXME in
+         *   that function)
+         * - to save a barrier for later, if UvBarrier was called when uv->barrier
+         *   was already set
+         *
+         * If we're cancelling the barrier, we don't need to save it for later;
+         * the callback will not be invoked a second time in any case; and
+         * uvAppendMaybeStart won't be called while closing. So it's fine to
+         * clear segment->barrier here. */
         segment->barrier = NULL;
     }
 
@@ -844,9 +863,8 @@ static void uvBarrierClose(struct uv *uv)
      * that the open segment it was associated with has started to be finalized
      * and is not anymore in the append_segments queue. Let's cancel that
      * too. */
-    if (uv->barrier != NULL) {
+    if (uv->barrier != NULL && uv->barrier->cb != NULL) {
         uv->barrier->cb(uv->barrier);
-        tracef("clear uv barrier");
         uv->barrier = NULL;
     }
 }

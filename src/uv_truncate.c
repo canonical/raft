@@ -125,6 +125,9 @@ static void uvTruncateBarrierCb(struct UvBarrier *barrier)
     tracef("uv truncate barrier cb");
     int rv;
 
+    /* Ensure that we don't invoke this callback more than once. */
+    barrier->cb = NULL;
+
     /* If we're closing, don't perform truncation at all and abort here. */
     if (uv->closing) {
         tracef("closing => don't truncate");
