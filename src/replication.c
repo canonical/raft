@@ -1638,6 +1638,7 @@ void replicationQuorum(struct raft *r, const raft_index index)
 {
     size_t votes = 0;
     size_t i;
+    raft_term term;
 
     assert(r->state == RAFT_LEADER);
 
@@ -1645,13 +1646,20 @@ void replicationQuorum(struct raft *r, const raft_index index)
         return;
     }
 
+    term = logTermOf(r->log, index);
+
     /* TODO: fuzzy-test --seed 0x8db5fccc replication/entries/partitioned
      * fails the assertion below. */
-    if (logTermOf(r->log, index) == 0) {
+    if (term == 0) {
         return;
     }
     // assert(logTermOf(r->log, index) > 0);
-    assert(logTermOf(r->log, index) <= r->current_term);
+    assert(!(term > r->current_term));
+
+    /* Don't commit entries from previous terms by counting replicas. */
+    if (term < r->current_term) {
+        return;
+    }
 
     for (i = 0; i < r->configuration.n; i++) {
         struct raft_server *server = &r->configuration.servers[i];
