@@ -1246,7 +1246,10 @@ discard:
     raft_configuration_close(&snapshot->configuration);
 
 respond:
-    if (r->state != RAFT_UNAVAILABLE) {
+    /* TODO Investigate when and if a RAFT_FOLLOWER moves to RAFT_CANDIDATE
+     * during the installation of a snapshot.
+     * See https://github.com/canonical/raft/issues/343 */
+    if (r->state == RAFT_FOLLOWER) {
         result.last_log_index = r->last_stored;
         sendAppendEntriesResult(r, &result);
     }
