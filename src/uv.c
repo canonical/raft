@@ -218,7 +218,7 @@ static void uvTransportCloseCb(struct raft_uv_transport *transport)
     uvMaybeFireCloseCb(uv);
 }
 
-/* Implementation of raft_io->stop. */
+/* Implementation of raft_io->close. */
 static void uvClose(struct raft_io *io, raft_io_close_cb cb)
 {
     struct uv *uv;

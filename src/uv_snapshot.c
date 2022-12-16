@@ -602,6 +602,8 @@ static void uvSnapshotPutStart(struct uvSnapshotPut *put)
 
 static void uvSnapshotPutBarrierCb(struct UvBarrier *barrier)
 {
+    /* Ensure that we don't invoke this callback more than once. */
+    barrier->cb = NULL;
     struct uvSnapshotPut *put = barrier->data;
     if (put == NULL) {
         return;
