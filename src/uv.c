@@ -199,7 +199,6 @@ void uvMaybeFireCloseCb(struct uv *uv)
 
     if (uv->close_cb != NULL) {
         uv->close_cb(uv->io);
-        uv->close_cb = NULL;
     }
 }
 
