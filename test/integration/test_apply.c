@@ -39,6 +39,8 @@ struct result
 {
     int status;
     bool done;
+    raft_index prev_applied;
+    struct raft* raft;
 };
 
 static void applyCbAssertResult(struct raft_apply *req, int status, void *_)
@@ -46,6 +48,10 @@ static void applyCbAssertResult(struct raft_apply *req, int status, void *_)
     struct result *result = req->data;
     (void)_;
     munit_assert_int(status, ==, result->status);
+    if (status == 0) {
+        munit_assert_ulong(result->prev_applied, <,
+                           raft_last_applied(result->raft));
+    }
     result->done = true;
 }
 
@@ -57,12 +63,13 @@ static bool applyCbHasFired(struct raft_fixture *f, void *arg)
 }
 
 /* Submit an apply request. */
-#define APPLY_SUBMIT(I)                                                      \
+#define APPLY_SUBMIT(I, N)                                                   \
     struct raft_buffer _buf;                                                 \
     struct raft_apply _req;                                                  \
-    struct result _result = {0, false};                                      \
+    struct raft *r = CLUSTER_RAFT(I);                                        \
+    struct result _result = {0, false, raft_last_applied(r), r};             \
     int _rv;                                                                 \
-    FsmEncodeSetX(123, &_buf);                                               \
+    FsmEncodeSetX(N, &_buf);                                                 \
     _req.data = &_result;                                                    \
     _rv = raft_apply(CLUSTER_RAFT(I), &_req, &_buf, 1, applyCbAssertResult); \
     munit_assert_int(_rv, ==, 0);
@@ -75,10 +82,10 @@ static bool applyCbHasFired(struct raft_fixture *f, void *arg)
 
 /* Submit to the I'th server a request to apply a new RAFT_COMMAND entry and
  * wait for the operation to succeed. */
-#define APPLY(I)         \
-    do {                 \
-        APPLY_SUBMIT(I); \
-        APPLY_WAIT;      \
+#define APPLY(I, N)         \
+    do {                    \
+        APPLY_SUBMIT(I, N); \
+        APPLY_WAIT;         \
     } while (0)
 
 /* Submit to the I'th server a request to apply a new RAFT_COMMAND entry and
@@ -107,8 +114,22 @@ SUITE(raft_apply)
 TEST(raft_apply, first, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    APPLY(0);
-    munit_assert_int(FsmGetX(CLUSTER_FSM(0)), ==, 123);
+    int val = 123;
+    APPLY(0, val);
+    munit_assert_int(FsmGetX(CLUSTER_FSM(0)), ==, val);
+    return MUNIT_OK;
+}
+
+/* Append two command entries. */
+TEST(raft_apply, two, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    int val = 123;
+    APPLY(0, val);
+    munit_assert_int(FsmGetX(CLUSTER_FSM(0)), ==, val);
+    val = 124;
+    APPLY(0, val);
+    munit_assert_int(FsmGetX(CLUSTER_FSM(0)), ==, val);
     return MUNIT_OK;
 }
 
@@ -131,7 +152,7 @@ TEST(raft_apply, notLeader, setUp, tearDown, 0, NULL)
 TEST(raft_apply, leadershipLost, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    APPLY_SUBMIT(0);
+    APPLY_SUBMIT(0, 123);
     APPLY_EXPECT(RAFT_LEADERSHIPLOST);
     CLUSTER_DEPOSE;
     APPLY_WAIT;

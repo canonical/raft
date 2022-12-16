@@ -751,7 +751,7 @@ int replicationUpdate(struct raft *r,
     }
 
     /* Check if we can commit some new entries. */
-    replicationQuorum(r, r->last_stored);
+    replicationQuorum(r, last_index);
 
     rv = replicationApply(r);
     if (rv != 0) {
@@ -1358,6 +1358,9 @@ static int applyCommand(struct raft *r,
     if (rv != 0) {
         return rv;
     }
+
+    r->last_applied = index;
+
     req = (struct raft_apply *)getRequest(r, index, RAFT_COMMAND);
     if (req != NULL && req->cb != NULL) {
         req->cb(req, 0, result);
@@ -1368,6 +1371,8 @@ static int applyCommand(struct raft *r,
 /* Fire the callback of a barrier request whose entry has been committed. */
 static void applyBarrier(struct raft *r, const raft_index index)
 {
+    r->last_applied = index;
+
     struct raft_barrier *req;
     req = (struct raft_barrier *)getRequest(r, index, RAFT_BARRIER);
     if (req != NULL && req->cb != NULL) {
@@ -1391,6 +1396,7 @@ static void applyChange(struct raft *r, const raft_index index)
     }
 
     r->configuration_index = index;
+    r->last_applied = index;
 
     if (r->state == RAFT_LEADER) {
         const struct raft_server *server;
@@ -1623,8 +1629,6 @@ int replicationApply(struct raft *r)
         if (rv != 0) {
             break;
         }
-
-        r->last_applied = index;
     }
 
     if (shouldTakeSnapshot(r)) {
@@ -1638,6 +1642,7 @@ void replicationQuorum(struct raft *r, const raft_index index)
 {
     size_t votes = 0;
     size_t i;
+    raft_term term;
 
     assert(r->state == RAFT_LEADER);
 
@@ -1645,13 +1650,20 @@ void replicationQuorum(struct raft *r, const raft_index index)
         return;
     }
 
+    term = logTermOf(r->log, index);
+
     /* TODO: fuzzy-test --seed 0x8db5fccc replication/entries/partitioned
      * fails the assertion below. */
-    if (logTermOf(r->log, index) == 0) {
+    if (term == 0) {
         return;
     }
     // assert(logTermOf(r->log, index) > 0);
-    assert(logTermOf(r->log, index) <= r->current_term);
+    assert(!(term > r->current_term));
+
+    /* Don't commit entries from previous terms by counting replicas. */
+    if (term < r->current_term) {
+        return;
+    }
 
     for (i = 0; i < r->configuration.n; i++) {
         struct raft_server *server = &r->configuration.servers[i];

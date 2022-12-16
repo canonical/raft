@@ -14,7 +14,7 @@
  */
 #define RAFT_VERSION_MAJOR    1
 #define RAFT_VERSION_MINOR    17
-#define RAFT_VERSION_RELEASE  0
+#define RAFT_VERSION_RELEASE  1
 #define RAFT_VERSION_NUMBER (RAFT_VERSION_MAJOR *100*100 + RAFT_VERSION_MINOR *100 + RAFT_VERSION_RELEASE)
 
 int raft_version_number (void);
@@ -964,6 +964,9 @@ struct raft_apply
  * The ownership of the memory of the @bufs array itself is not transferred to
  * the raft library, and, if allocated dynamically, must be deallocated by the
  * caller.
+ *
+ * If the command was successfully applied, r->last_applied will be equal to
+ * the log entry index of the applied command when the cb is invoked.
  */
 RAFT_API int raft_apply(struct raft *r,
                         struct raft_apply *req,

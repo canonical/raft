@@ -125,16 +125,19 @@ TEST(replication, sendFollowupHeartbeat, setUp, tearDown, 0, NULL)
     raft = CLUSTER_RAFT(1);
 
     /* Server 1 receives the first heartbeat. */
-    CLUSTER_STEP_N(2);
+    CLUSTER_STEP_N(4);
     munit_assert_int(raft->election_timer_start, ==, 1045);
+    munit_assert_int(CLUSTER_N_RECV(1, RAFT_IO_APPEND_ENTRIES), ==, 1);
 
     /* Server 1 receives the second heartbeat. */
     CLUSTER_STEP_N(8);
     munit_assert_int(raft->election_timer_start, ==, 1215);
+    munit_assert_int(CLUSTER_N_RECV(1, RAFT_IO_APPEND_ENTRIES), ==, 2);
 
     /* Server 1 receives the third heartbeat. */
     CLUSTER_STEP_N(7);
     munit_assert_int(raft->election_timer_start, ==, 1315);
+    munit_assert_int(CLUSTER_N_RECV(1, RAFT_IO_APPEND_ENTRIES), ==, 3);
 
     /* Server 1 receives the fourth heartbeat. */
     CLUSTER_STEP_N(7);
@@ -193,11 +196,11 @@ TEST(replication, skipIdle, setUp, tearDown, 0, NULL)
     struct raft_apply req2;
     BOOTSTRAP_START_AND_ELECT;
     CLUSTER_ADD(&req1);
-    CLUSTER_STEP_UNTIL_APPLIED(0, 2, 1000);
+    CLUSTER_STEP_UNTIL_APPLIED(0, 3, 1000);
     CLUSTER_APPLY_ADD_X(CLUSTER_LEADER, &req2, 1, NULL);
     CLUSTER_STEP_UNTIL_ELAPSED(1000);
-    munit_assert_int(CLUSTER_LAST_APPLIED(0), ==, 3);
-    munit_assert_int(CLUSTER_LAST_APPLIED(1), ==, 3);
+    munit_assert_int(CLUSTER_LAST_APPLIED(0), ==, 4);
+    munit_assert_int(CLUSTER_LAST_APPLIED(1), ==, 4);
     munit_assert_int(CLUSTER_LAST_APPLIED(2), ==, 0);
     return MUNIT_OK;
 }
@@ -246,9 +249,15 @@ TEST(replication, sendProbe, setUp, tearDown, 0, NULL)
     munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_APPEND_ENTRIES), ==, 2);
 
     /* Eventually server 0 receives AppendEntries results for both entries. */
-    CLUSTER_STEP_UNTIL_APPLIED(0, 3, 1000);
+    CLUSTER_STEP_UNTIL_APPLIED(0, 4, 1000);
 
     return MUNIT_OK;
+}
+
+static bool indices_updated(struct raft_fixture *f, void* data) {
+    (void) f;
+    const struct raft *r = data;
+    return r->last_stored == 4 && r->leader_state.progress[1].match_index == 3;
 }
 
 /* A follower transitions to pipeline mode after the leader receives a
@@ -266,9 +275,9 @@ TEST(replication, sendPipeline, setUp, tearDown, 0, NULL)
 
     /* Server 0 becomes leader and sends the initial heartbeat, receiving a
      * successful response. */
-    CLUSTER_STEP_UNTIL_ELAPSED(1060);
+    CLUSTER_STEP_UNTIL_ELAPSED(1070);
     ASSERT_LEADER(0);
-    ASSERT_TIME(1060);
+    ASSERT_TIME(1070);
     munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_APPEND_ENTRIES), ==, 1);
 
     /* Server 0 receives a new entry after 15 milliseconds. Since the follower
@@ -278,7 +287,7 @@ TEST(replication, sendPipeline, setUp, tearDown, 0, NULL)
     CLUSTER_APPLY_ADD_X(0, &req1, 1, NULL);
     CLUSTER_STEP;
     munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_APPEND_ENTRIES), ==, 2);
-    munit_assert_int(raft->leader_state.progress[1].next_index, ==, 3);
+    munit_assert_int(raft->leader_state.progress[1].next_index, ==, 4);
 
     /* After another 15 milliseconds server 0 receives a second apply request,
      * which is also sent out immediately */
@@ -286,10 +295,15 @@ TEST(replication, sendPipeline, setUp, tearDown, 0, NULL)
     CLUSTER_APPLY_ADD_X(0, &req2, 1, NULL);
     CLUSTER_STEP;
     munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_APPEND_ENTRIES), ==, 3);
-    munit_assert_int(raft->leader_state.progress[1].next_index, ==, 4);
+    munit_assert_int(raft->leader_state.progress[1].next_index, ==, 5);
+
+    /* Wait until the leader has stored entry 4 and the follower has matched
+     * entry 3. Expect the commit index to have been updated to 3. */
+    CLUSTER_STEP_UNTIL(indices_updated, CLUSTER_RAFT(0), 2000);
+    munit_assert_ulong(raft->commit_index, ==, 3);
 
     /* Eventually server 0 receives AppendEntries results for both entries. */
-    CLUSTER_STEP_UNTIL_APPLIED(0, 3, 1000);
+    CLUSTER_STEP_UNTIL_APPLIED(0, 4, 1000);
 
     return MUNIT_OK;
 }
@@ -476,7 +490,7 @@ TEST(replication, recvMissingEntries, setUp, tearDown, 0, NULL)
     munit_assert_int(CLUSTER_LEADER, ==, 0);
 
     /* The first server replicates missing entries to the second. */
-    CLUSTER_STEP_UNTIL_APPLIED(1, 2, 3000);
+    CLUSTER_STEP_UNTIL_APPLIED(1, 3, 3000);
 
     return MUNIT_OK;
 }
@@ -811,7 +825,7 @@ TEST(replication, resultRetry, setUp, tearDown, 0, NULL)
     /* The first server receives an AppendEntries result from the second server
      * indicating that its log does not have the entry at index 2, so it will
      * resend it. */
-    CLUSTER_STEP_UNTIL_APPLIED(1, 2, 2000);
+    CLUSTER_STEP_UNTIL_APPLIED(1, 3, 2000);
 
     return MUNIT_OK;
 }

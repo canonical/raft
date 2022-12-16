@@ -170,7 +170,7 @@ TEST(raft_transfer, autoSelectUpToDate, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-/* It's possible to transfer leadership also after the server has been
+/* It's not possible to transfer leadership after the server has been
  * demoted. */
 TEST(raft_transfer, afterDemotion, setUp, tearDown, 0, NULL)
 {
@@ -179,12 +179,12 @@ TEST(raft_transfer, afterDemotion, setUp, tearDown, 0, NULL)
     struct raft *raft = CLUSTER_RAFT(0);
     int rv;
     CLUSTER_ADD(&req);
-    CLUSTER_STEP_UNTIL_APPLIED(0, 2, 1000);
-    CLUSTER_ASSIGN(&req, RAFT_VOTER);
     CLUSTER_STEP_UNTIL_APPLIED(0, 3, 1000);
+    CLUSTER_ASSIGN(&req, RAFT_VOTER);
+    CLUSTER_STEP_UNTIL_APPLIED(0, 4, 1000);
     rv = raft_assign(raft, &req, raft->id, RAFT_SPARE, NULL);
     munit_assert_int(rv, ==, 0);
-    CLUSTER_STEP_UNTIL_APPLIED(0, 4, 1000);
+    CLUSTER_STEP_UNTIL_APPLIED(0, 5, 1000);
     TRANSFER_ERROR(0, 2, RAFT_NOTLEADER, "server is not the leader");
     return MUNIT_OK;
 }
