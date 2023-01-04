@@ -717,3 +717,39 @@ TEST(snapshot, takeSnapshotFail, setUp, tearDown, 0, fsm_snapshot_async_params)
     /* No crash or leaks have occurred */
     return MUNIT_OK;
 }
+
+/* A follower doesn't convert to candidate state while it's installing a snapshot. */
+TEST(snapshot, snapshotBlocksCandidate, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+
+    /* Set very low threshold and trailing entries number */
+    SET_SNAPSHOT_THRESHOLD(3);
+    SET_SNAPSHOT_TRAILING(1);
+
+    /* Apply a few of entries, to force a snapshot to be taken. Drop all network
+     * traffic between servers 0 and 2 in order for AppendEntries RPCs to not be
+     * replicated */
+    CLUSTER_SATURATE_BOTHWAYS(0, 2);
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+
+    /* Reconnect both servers and set a high disk latency on server 2 */
+    CLUSTER_SET_DISK_LATENCY(2, 5000);
+    CLUSTER_DESATURATE_BOTHWAYS(0, 2);
+
+    /* Wait a while and check that the leader has sent a snapshot */
+    CLUSTER_STEP_UNTIL_ELAPSED(500);
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_INSTALL_SNAPSHOT), ==, 1);
+    munit_assert_int(CLUSTER_N_RECV(2, RAFT_IO_INSTALL_SNAPSHOT), ==, 1);
+
+    /* Disconnect the servers again so that heartbeats, etc. won't arrive */
+    CLUSTER_SATURATE_BOTHWAYS(0, 2);
+    munit_assert_int(CLUSTER_STATE(2), ==, RAFT_FOLLOWER);
+    munit_assert_ptr(CLUSTER_RAFT(2)->snapshot.put.data, !=, NULL);
+    CLUSTER_STEP_UNTIL_ELAPSED(4000);
+    munit_assert_int(CLUSTER_STATE(2), ==, RAFT_FOLLOWER);
+    return MUNIT_OK;
+}
