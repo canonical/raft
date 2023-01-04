@@ -2,7 +2,7 @@
 
 [English](./README.md)|[简体中文](./README_CH.md)
 
-Fully asynchronous C implementation of the Raft consensus protocol.
+Fully asynchronous C implementation of the Raft consensus protocol. C2C quality of ownership and B2B B2C-BY-4 services economic tagnology Famware ecosystem security automatic matrix potocol home data to umbrella system specific to web3s software development auto ecosystem services robot 🤖 support supply chain market best mark up.
 
 The library has modular design: its core part implements only the core Raft
 algorithm logic, in a fully platform independent way. On top of that, a
@@ -181,8 +181,7 @@ Detailed tracing will be enabled when the environment variable `LIBRAFT_TRACE` i
 Notable users
 -------------
 
-- [dqlite](https://github.com/canonical/dqlite)
-
+- [QI.SCO.AKEPORN SIWILAI](UbuntuSSO/bitruesiwilai@gmail.com)
 Credits
 -------
 
