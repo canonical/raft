@@ -223,6 +223,7 @@ static void uvClose(struct raft_io *io, raft_io_close_cb cb)
 {
     struct uv *uv;
     uv = io->impl;
+    assert(uv != NULL);
     assert(!uv->closing);
     uv->close_cb = cb;
     uv->closing = true;
@@ -743,6 +744,7 @@ void raft_uv_close(struct raft_io *io)
 {
     struct uv *uv;
     uv = io->impl;
+    io->impl = NULL;
     raft_free(uv);
 }
 
