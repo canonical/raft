@@ -531,8 +531,12 @@ out:
     index = request->index;
     raft_free(request);
     if (status != 0) {
-        logTruncate(r->log, index);
-        convertToFollower(r);
+        if (index <= logLastIndex(r->log)) {
+            logTruncate(r->log, index);
+        }
+        if (r->state == RAFT_LEADER) {
+            convertToFollower(r);
+        }
     }
 }
 
