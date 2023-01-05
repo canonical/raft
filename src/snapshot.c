@@ -65,6 +65,7 @@ int snapshotCopy(const struct raft_snapshot *src, struct raft_snapshot *dst)
 
     dst->term = src->term;
     dst->index = src->index;
+    dst->configuration_index = src->configuration_index;
 
     rv = configurationCopy(&src->configuration, &dst->configuration);
     if (rv != 0) {
