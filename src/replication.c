@@ -849,21 +849,22 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
     assert(args->entries != NULL);
     assert(args->n_entries > 0);
 
-    result.term = r->current_term;
-    result.version = RAFT_APPEND_ENTRIES_RESULT_VERSION;
-    if (status != 0) {
-        if (r->state != RAFT_FOLLOWER) {
-            tracef("local server is not follower -> ignore I/O failure");
-            goto out;
-        }
-        result.rejected = args->prev_log_index + 1;
-        goto respond;
-    }
-
     /* If we're shutting down or have errored, ignore the result. */
     if (r->state == RAFT_UNAVAILABLE) {
         tracef("local server is unavailable -> ignore I/O result");
         goto out;
+    }
+    /* If a new term has started since the request came in, ignore the result. */
+    if (args->term != r->current_term) {
+        tracef("new term while processing request -> ignore I/O result");
+        goto out;
+    }
+
+    result.version = RAFT_APPEND_ENTRIES_RESULT_VERSION;
+    result.term = args->term;
+    if (status != 0) {
+        result.rejected = args->prev_log_index + 1;
+        goto respond;
     }
 
     /* We received an InstallSnapshot RCP while these entries were being
@@ -1195,6 +1196,7 @@ struct recvInstallSnapshot
 {
     struct raft *raft;
     struct raft_snapshot snapshot;
+    raft_term term; /* Used to check for state transitions. */
 };
 
 static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
@@ -1213,11 +1215,13 @@ static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
     result.term = r->current_term;
     result.version = RAFT_APPEND_ENTRIES_RESULT_VERSION;
 
-    /* If we are shutting down, let's discard the result. TODO: what about other
-     * states? */
+    /* If we are shutting down, let's discard the result. */
     if (r->state == RAFT_UNAVAILABLE) {
+        tracef("shutting down -> discard result of snapshot installation");
         goto discard;
     }
+    /* We don't transition to candidate state while a snapshot is being installed. */
+    assert(request->term == r->current_term);
 
     if (status != 0) {
         result.rejected = snapshot->index;
@@ -1313,6 +1317,7 @@ int replicationInstallSnapshot(struct raft *r,
         goto err;
     }
     request->raft = r;
+    request->term = r->current_term;
 
     snapshot = &request->snapshot;
     snapshot->term = args->last_term;
