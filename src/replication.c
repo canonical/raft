@@ -1205,6 +1205,9 @@ static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
     struct raft_append_entries_result result;
     int rv;
 
+    /* We avoid converting to candidate state while installing a snapshot. */
+    assert(r->state == RAFT_FOLLOWER || r->state == RAFT_UNAVAILABLE);
+
     r->snapshot.put.data = NULL;
 
     result.term = r->current_term;
@@ -1250,9 +1253,6 @@ discard:
     raft_configuration_close(&snapshot->configuration);
 
 respond:
-    /* TODO Investigate when and if a RAFT_FOLLOWER moves to RAFT_CANDIDATE
-     * during the installation of a snapshot.
-     * See https://github.com/canonical/raft/issues/343 */
     if (r->state == RAFT_FOLLOWER) {
         result.last_log_index = r->last_stored;
         sendAppendEntriesResult(r, &result);
