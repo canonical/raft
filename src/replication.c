@@ -1195,6 +1195,7 @@ struct recvInstallSnapshot
 {
     struct raft *raft;
     struct raft_snapshot snapshot;
+    raft_term term; /* Used to check for state transitions. */
 };
 
 static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
@@ -1203,6 +1204,7 @@ static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
     struct raft *r = request->raft;
     struct raft_snapshot *snapshot = &request->snapshot;
     struct raft_append_entries_result result;
+    bool should_respond = true;
     int rv;
 
     /* We avoid converting to candidate state while installing a snapshot. */
@@ -1212,17 +1214,26 @@ static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
 
     result.term = r->current_term;
     result.version = RAFT_APPEND_ENTRIES_RESULT_VERSION;
+    result.rejected = 0;
 
-    /* If we are shutting down, let's discard the result. TODO: what about other
-     * states? */
+    /* If we are shutting down, let's discard the result. */
     if (r->state == RAFT_UNAVAILABLE) {
+        tracef("shutting down -> discard result of snapshot installation");
+        should_respond = false;
         goto discard;
+    }
+    /* If the request is from a previous term, it means that someone else became
+     * a candidate while we were installing the snapshot. In that case, we want to
+     * install the snapshot anyway, but our "current leader" may no longer be the
+     * same as the server that sent the install request, so we shouldn't send a
+     * response to that server. */
+    if (request->term != r->current_term) {
+        tracef("new term since receiving snapshot -> install but don't respond");
+        should_respond = false;
     }
 
     if (status != 0) {
-        result.rejected = snapshot->index;
-        tracef("save snapshot %llu: %s", snapshot->index,
-               raft_strerror(status));
+        tracef("save snapshot %llu: %s", snapshot->index, raft_strerror(status));
         goto discard;
     }
 
@@ -1234,9 +1245,7 @@ static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
      */
     rv = snapshotRestore(r, snapshot);
     if (rv != 0) {
-        result.rejected = snapshot->index;
-        tracef("restore snapshot %llu: %s", snapshot->index,
-               raft_strerror(status));
+        tracef("restore snapshot %llu: %s", snapshot->index, raft_strerror(status));
         goto discard;
     }
 
@@ -1250,17 +1259,19 @@ static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
     }
 
     tracef("restored snapshot with last index %llu", snapshot->index);
-    result.rejected = 0;
+
     goto respond;
 
 discard:
     /* In case of error we must also free the snapshot data buffer and free the
      * configuration. */
+    result.rejected = snapshot->index;
     raft_free(snapshot->bufs[0].base);
+    raft_free(snapshot->bufs);
     raft_configuration_close(&snapshot->configuration);
 
 respond:
-    if (r->state == RAFT_FOLLOWER) {
+    if (should_respond) {
         result.last_log_index = r->last_stored;
         sendAppendEntriesResult(r, &result);
     }
@@ -1320,6 +1331,7 @@ int replicationInstallSnapshot(struct raft *r,
         goto err;
     }
     request->raft = r;
+    request->term = r->current_term;
 
     snapshot = &request->snapshot;
     snapshot->term = args->last_term;
