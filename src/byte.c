@@ -170,7 +170,7 @@ A million repetitions of "a"
     z += (w ^ x ^ y) + blk(i) + 0xCA62C1D6 + rol(v, 5); \
     w = rol(w, 30);
 
-static void byteSha1Transform(uint32_t state[5], const uint8_t buffer[64])
+static void byteSha1Transform(uint32_t state[5], const void *buffer)
 {
     uint32_t a, b, c, d, e;
     typedef union {
