@@ -103,7 +103,7 @@ TEST(QUEUE_IS_EMPTY, yes, setUp, tearDown, 0, NULL)
 TEST(QUEUE_IS_EMPTY, no, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    struct item items[1];
+    static struct item items[1];
     PUSH(items);
     ASSERT_NOT_EMPTY;
     return MUNIT_OK;
@@ -120,7 +120,7 @@ SUITE(QUEUE_PUSH)
 TEST(QUEUE_PUSH, one, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    struct item items[1];
+    static struct item items[1];
     PUSH(items);
     ASSERT_HEAD(1);
     return MUNIT_OK;
@@ -129,7 +129,7 @@ TEST(QUEUE_PUSH, one, setUp, tearDown, 0, NULL)
 TEST(QUEUE_PUSH, two, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    struct item items[2];
+    static struct item items[2];
     int i;
     PUSH(items);
     for (i = 0; i < 2; i++) {
@@ -151,7 +151,7 @@ SUITE(QUEUE_REMOVE)
 TEST(QUEUE_REMOVE, first, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    struct item items[3];
+    static struct item items[3];
     PUSH(items);
     REMOVE(items, 0);
     ASSERT_HEAD(2);
@@ -161,7 +161,7 @@ TEST(QUEUE_REMOVE, first, setUp, tearDown, 0, NULL)
 TEST(QUEUE_REMOVE, second, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    struct item items[3];
+    static struct item items[3];
     PUSH(items);
     REMOVE(items, 1);
     ASSERT_HEAD(1);
@@ -171,7 +171,7 @@ TEST(QUEUE_REMOVE, second, setUp, tearDown, 0, NULL)
 TEST(QUEUE_REMOVE, success, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    struct item items[3];
+    static struct item items[3];
     PUSH(items);
     REMOVE(items, 2);
     ASSERT_HEAD(1);
@@ -189,7 +189,7 @@ SUITE(QUEUE_TAIL)
 TEST(QUEUE_TAIL, one, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    struct item items[1];
+    static struct item items[1];
     PUSH(items);
     ASSERT_TAIL(1);
     return MUNIT_OK;
@@ -198,7 +198,7 @@ TEST(QUEUE_TAIL, one, setUp, tearDown, 0, NULL)
 TEST(QUEUE_TAIL, two, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    struct item items[2];
+    static struct item items[2];
     PUSH(items);
     ASSERT_TAIL(2);
     return MUNIT_OK;
@@ -207,7 +207,7 @@ TEST(QUEUE_TAIL, two, setUp, tearDown, 0, NULL)
 TEST(QUEUE_TAIL, three, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    struct item items[3];
+    static struct item items[3];
     PUSH(items);
     ASSERT_TAIL(3);
     return MUNIT_OK;
@@ -236,7 +236,7 @@ TEST(QUEUE_FOREACH, zero, setUp, tearDown, 0, NULL)
 TEST(QUEUE_FOREACH, one, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    struct item items[1];
+    static struct item items[1];
     queue *head;
     int count = 0;
     PUSH(items);
@@ -250,7 +250,7 @@ TEST(QUEUE_FOREACH, one, setUp, tearDown, 0, NULL)
 TEST(QUEUE_FOREACH, two, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    struct item items[2];
+    static struct item items[2];
     queue *head;
     int values[2] = {0, 0};
     int i = 0;
