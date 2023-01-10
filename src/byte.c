@@ -315,7 +315,14 @@ void byteSha1Update(struct byteSha1 *s, const uint8_t *data, uint32_t len)
         memcpy(&s->buffer[j], data, (i = 64 - j));
         byteSha1Transform(s->state, s->buffer);
         for (; i + 63 < len; i += 64) {
+#if defined(__powerpc64__) && defined(__GNUC__) && __GNUC__ >= 12
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-overread"
+#endif
             byteSha1Transform(s->state, &data[i]);
+#if defined(__powerpc64__) && defined(__GNUC__) && __GNUC__ >= 12
+#pragma GCC diagnostic pop
+#endif
         }
         j = 0;
     } else
