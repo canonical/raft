@@ -217,6 +217,7 @@ static void peerCloseCb(struct raft_io *io)
         struct result _result = {MESSAGE, false}; \
         f->io.data = &_result;                    \
         LOOP_RUN_UNTIL(&_result.done);            \
+        f->io.data = NULL;                        \
     } while (0)
 
 /******************************************************************************
