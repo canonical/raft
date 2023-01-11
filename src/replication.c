@@ -1403,6 +1403,7 @@ static void applyChange(struct raft *r, const raft_index index)
      * via an AppendEntries RPC (for followers), then reset the uncommitted
      * index, since that uncommitted configuration is now committed. */
     if (r->configuration_uncommitted_index == index) {
+        tracef("configuration at index:%llu is committed.", index);
         r->configuration_uncommitted_index = 0;
     }
 
