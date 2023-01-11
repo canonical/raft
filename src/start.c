@@ -12,51 +12,59 @@
 
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
 
-/* Restore the most recent configuration. */
-static int restoreMostRecentConfiguration(struct raft *r,
-                                          struct raft_entry *entry,
-                                          raft_index index)
+/* Restore the most recent configurations. */
+static int restoreConfigurations(struct raft *r, raft_index prev_index,
+                                 raft_index last_index, struct raft_entry *last)
 {
-    struct raft_configuration configuration;
+    struct raft_configuration last_conf;
     int rv;
-    raft_configuration_init(&configuration);
-    rv = configurationDecode(&entry->buf, &configuration);
-    if (rv != 0) {
-        raft_configuration_close(&configuration);
-        return rv;
+
+    /* No configuration entry loaded, nothing to do */
+    if (last == NULL) {
+        assert(prev_index == 0);
+        return 0;
+    } else {
+        /* There is a latest configuration, we can't know if it's
+         * committed or not. Backup the configuration restored from the snapshot
+         * or noop in case there was no snapshot. */
+        configurationBackup(r, &r->configuration);
+        raft_configuration_init(&last_conf);
+        rv = configurationDecode(&last->buf, &last_conf);
+        if (rv != 0) {
+            raft_configuration_close(&last_conf);
+            return rv;
+        }
+        configurationClose(&r->configuration);
+        r->configuration = last_conf;
+        r->configuration_uncommitted_index = last_index;
+
+        /* If the last configuration is the first entry in the log, we know it's
+         * the bootstrap configuration and it's committed by default. */
+        if (last_index == 1) {
+            assert(prev_index == 0);
+            r->configuration_index = 1;
+            r->configuration_uncommitted_index = 0;
+        }
+
+        /* If there is a previous configuration it must have been committed as
+         * we don't allow multiple uncommitted configurations. */
+        if (prev_index != 0) {
+            r->configuration_index = prev_index;
+        }
     }
-    configurationTrace(r, &configuration, "restore most recent configuration");
-    raft_configuration_close(&r->configuration);
-    r->configuration = configuration;
-    r->configuration_index = index;
+
+    configurationTrace(r, &r->configuration, "restore most recent configuration");
     return 0;
 }
 
 /* Restore the entries that were loaded from persistent storage. The most recent
  * configuration entry will be restored as well, if any.
  *
- * Note that we don't care whether the most recent configuration entry was
- * actually committed or not. We don't allow more than one pending uncommitted
- * configuration change at a time, plus
- *
- *   when adding or removing just a single server, it is safe to switch directly
- *   to the new configuration.
- *
- * and
- *
- *   The new configuration takes effect on each server as soon as it is added to
- *   that server's log: the C_new entry is replicated to the C_new servers, and
- *   a majority of the new configuration is used to determine the C_new entry's
- *   commitment. This means that servers do notwait for configuration entries to
- *   be committed, and each server always uses the latest configuration found in
- *   its log.
- *
- * as explained in section 4.1.
- *
- * TODO: we should probably set configuration_uncommitted_index as well, since we
- * can't be sure a configuration change has been committed and we need to be
- * ready to roll back to the last committed configuration.
- */
+ * Note that we cannot know if the last configuration in the log was committed
+ * or not, therefore we also need to track the second-to-last configuration
+ * entry. This second-to-last entry is committed by default as raft doesn't
+ * allow multipled uncommitted configuration entries and is used in case of
+ * configuration rollback scenarios. */
 static int restoreEntries(struct raft *r,
                           raft_index snapshot_index,
                           raft_term snapshot_term,
@@ -64,8 +72,9 @@ static int restoreEntries(struct raft *r,
                           struct raft_entry *entries,
                           size_t n)
 {
-    struct raft_entry *conf = NULL;
-    raft_index conf_index = 0;
+    struct raft_entry *last_conf = NULL;
+    raft_index last_conf_index = 0;
+    raft_index prev_conf_index = 0;
     size_t i;
     int rv;
     logStart(r->log, snapshot_index, snapshot_term, start_index);
@@ -78,17 +87,20 @@ static int restoreEntries(struct raft *r,
             goto err;
         }
         r->last_stored++;
-        if (entry->type == RAFT_CHANGE) {
-            conf = entry;
-            conf_index = r->last_stored;
+        /* Only take configurations into account that are newer than the
+         * configuration restored from the snapshot. */
+        if (entry->type == RAFT_CHANGE && r->last_stored > r->configuration_index) {
+            prev_conf_index = last_conf_index;
+            last_conf = entry;
+            last_conf_index = r->last_stored;
         }
     }
-    if (conf != NULL) {
-        rv = restoreMostRecentConfiguration(r, conf, conf_index);
-        if (rv != 0) {
-            goto err;
-        }
+
+    rv = restoreConfigurations(r, prev_conf_index, last_conf_index, last_conf);
+    if (rv != 0) {
+        goto err;
     }
+
     raft_free(entries);
     return 0;
 
@@ -164,6 +176,14 @@ int raft_start(struct raft *r)
         snapshot_index = snapshot->index;
         snapshot_term = snapshot->term;
         raft_free(snapshot);
+
+        /* Enable configuration rollback if the next configuration after installing
+         * this snapshot needs to be rolled back. */
+        rv = configurationBackup(r, &r->configuration);
+        if (rv != 0) {
+            tracef("failed to backup current configuration.");
+            return rv;
+        }
     } else if (n_entries > 0) {
         /* If we don't have a snapshot and the on-disk log is not empty, then
          * the first entry must be a configuration entry. */

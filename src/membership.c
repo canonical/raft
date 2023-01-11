@@ -155,23 +155,26 @@ int membershipRollback(struct raft *r)
     /* Fetch the last committed configuration entry. */
     assert(r->configuration_index != 0);
 
-    entry = logGet(r->log, r->configuration_index);
-
-    assert(entry != NULL);
-
     /* Replace the current configuration with the last committed one. */
-    raft_configuration_close(&r->configuration);
-    raft_configuration_init(&r->configuration);
+    entry = logGet(r->log, r->configuration_index);
+    if (entry != NULL) {
+        raft_configuration_close(&r->configuration);
+        raft_configuration_init(&r->configuration);
 
-    rv = configurationDecode(&entry->buf, &r->configuration);
-    if (rv != 0) {
-        return rv;
+        rv = configurationDecode(&entry->buf, &r->configuration);
+        if (rv != 0) {
+            return rv;
+        }
+    } else {
+        /* Configuration was truncated from log. */
+        rv = configurationRestorePrevious(r);
+        if (rv != 0) {
+            return rv;
+        }
     }
 
     configurationTrace(r, &r->configuration, "roll back config");
-
     r->configuration_uncommitted_index = 0;
-
     return 0;
 }
 

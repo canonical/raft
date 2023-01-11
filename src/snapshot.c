@@ -43,6 +43,7 @@ int snapshotRestore(struct raft *r, struct raft_snapshot *snapshot)
     configurationClose(&r->configuration);
     r->configuration = snapshot->configuration;
     r->configuration_index = snapshot->configuration_index;
+    r->configuration_uncommitted_index = 0;
     configurationTrace(r, &r->configuration, "configuration restore from snapshot");
 
     r->commit_index = snapshot->index;
@@ -65,6 +66,7 @@ int snapshotCopy(const struct raft_snapshot *src, struct raft_snapshot *dst)
 
     dst->term = src->term;
     dst->index = src->index;
+    dst->configuration_index = src->configuration_index;
 
     rv = configurationCopy(&src->configuration, &dst->configuration);
     if (rv != 0) {

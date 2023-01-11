@@ -1,3 +1,4 @@
+#include "../../src/configuration.h"
 #include "../../src/progress.h"
 #include "../lib/cluster.h"
 #include "../lib/runner.h"
@@ -522,6 +523,176 @@ TEST(replication, recvPrevLogTermMismatch, setUp, tearDown, 0, NULL)
     /* The follower eventually replicates the entry */
     CLUSTER_STEP_UNTIL_APPLIED(1, 2, 3000);
 
+    return MUNIT_OK;
+}
+
+static void assert_config(struct raft* raft, struct raft_configuration *expected)
+{
+    struct raft_configuration *actual;
+    actual = &raft->configuration;
+
+    munit_assert_uint(actual->n, ==, expected->n);
+    for (unsigned i = 0; i < actual->n; i++) {
+        munit_assert_ulong(actual->servers[i].id, ==, expected->servers[i].id);
+        munit_assert_int(actual->servers[i].role,
+                         ==,
+                         expected->servers[i].role);
+        munit_assert_string_equal(actual->servers[i].address,
+                                  expected->servers[i].address);
+    }
+}
+
+/* If the term of the last log entry on the server is different from the one
+ * prevLogTerm, and value of prevLogIndex is greater than server's commit
+ * index (i.e. this is a normal inconsistency), we reject the request. This time
+ * it's a configuration entry. */
+TEST(replication, recvPrevLogTermMismatchConfiguration, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    struct raft_entry entry1;
+    struct raft_entry entry2;
+    struct raft_configuration base; /* For assertion purposes. */
+    struct raft_configuration conf;
+    CLUSTER_BOOTSTRAP;
+    CLUSTER_CONFIGURATION(&base);
+
+    /* The servers have an entry with a conflicting term. */
+    entry1.type = RAFT_COMMAND;
+    entry1.term = 2;
+    FsmEncodeSetX(1, &entry1.buf);
+    CLUSTER_ADD_ENTRY(0, &entry1);
+
+    entry2.type = RAFT_CHANGE;
+    entry2.term = 1;
+
+    /* Add a different config to the log that will be rolled back. */
+    CLUSTER_CONFIGURATION(&conf);
+    raft_configuration_add(&conf, 3, "3", 2);
+    raft_configuration_encode(&conf, &entry2.buf);
+    raft_configuration_close(&conf);
+    CLUSTER_ADD_ENTRY(1, &entry2);
+
+    CLUSTER_START;
+    CLUSTER_ELECT(0);
+
+    /* The follower eventually replicates the entry */
+    CLUSTER_STEP_UNTIL_APPLIED(1, 2, 3000);
+
+    /* Ensure config is rolled back. */
+    assert_config(CLUSTER_RAFT(0), &base);
+    assert_config(CLUSTER_RAFT(1), &base);
+    raft_configuration_close(&base);
+    return MUNIT_OK;
+}
+
+/* If the term of the last log entry on the server is different from the one
+ * prevLogTerm, and value of prevLogIndex is greater than server's commit
+ * index (i.e. this is a normal inconsistency), we reject the request. This time
+ * it's a configuration entry, there's also an older configuration entry
+ * present.  */
+TEST(replication, recvPrevLogTermMismatchConfigurationWithPrevious, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    struct raft_entry entry1;
+    struct raft_entry entry2;
+    struct raft_entry entry3;
+    struct raft_entry entry4;
+    struct raft_configuration base; /* For assertion purposes. */
+    struct raft_configuration conf;
+    CLUSTER_BOOTSTRAP;
+    CLUSTER_CONFIGURATION(&base);
+
+    /* The servers have a matching configuration entry. */
+    entry1.type = RAFT_CHANGE;
+    entry1.term = 1;
+    CLUSTER_CONFIGURATION(&conf);
+    raft_configuration_encode(&conf, &entry1.buf);
+    CLUSTER_ADD_ENTRY(0, &entry1);
+
+    entry2.type = RAFT_CHANGE;
+    entry2.term = 1;
+    raft_configuration_encode(&conf, &entry2.buf);
+    CLUSTER_ADD_ENTRY(1, &entry2);
+
+    /* The servers have an entry with a conflicting term. */
+    entry3.type = RAFT_COMMAND;
+    entry3.term = 2;
+    FsmEncodeSetX(1, &entry3.buf);
+    CLUSTER_ADD_ENTRY(0, &entry3);
+
+    entry4.type = RAFT_CHANGE;
+    entry4.term = 1;
+    /* Add a different config to the log that will be rolled back. */
+    raft_configuration_add(&conf, 3, "3", 2);
+    raft_configuration_encode(&conf, &entry4.buf);
+    raft_configuration_close(&conf);
+    CLUSTER_ADD_ENTRY(1, &entry4);
+
+    CLUSTER_START;
+    CLUSTER_ELECT(0);
+
+    /* The follower eventually replicates the entry */
+    CLUSTER_STEP_UNTIL_APPLIED(1, 3, 3000);
+
+    /* Ensure config is rolled back. */
+    assert_config(CLUSTER_RAFT(0), &base);
+    assert_config(CLUSTER_RAFT(1), &base);
+    raft_configuration_close(&base);
+    return MUNIT_OK;
+}
+
+/* If the term of the last log entry on the server is different from the one
+ * prevLogTerm, and value of prevLogIndex is greater than server's commit
+ * index (i.e. this is a normal inconsistency), we reject the request. This time
+ * it's a configuration entry and there is a snapshot, there's no previous
+ * configuration entry in the log. */
+TEST(replication, recvPrevLogTermMismatchConfigurationSnapshotNoPrev, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    struct raft_entry entry1;
+    struct raft_entry entry2;
+    struct raft_configuration conf;
+    struct raft_configuration base; /* For assertion purposes. */
+    int rv;
+
+    CLUSTER_CONFIGURATION(&conf);
+    CLUSTER_CONFIGURATION(&base);
+    rv = raft_bootstrap(CLUSTER_RAFT(0), &conf);
+    munit_assert_int(rv, ==, 0);
+
+    /* The second server has a snapshot up to entry 1 */
+    CLUSTER_SET_SNAPSHOT(1 /*                                               */,
+                         1 /* last index                                    */,
+                         1 /* last term                                     */,
+                         1 /* conf index                                    */,
+                         5 /* x                                             */,
+                         0 /* y                                             */);
+    CLUSTER_SET_TERM(1,1);
+
+    /* The servers have an entry with a conflicting term. */
+    entry1.type = RAFT_COMMAND;
+    entry1.term = 3;
+    FsmEncodeSetX(1, &entry1.buf);
+    CLUSTER_ADD_ENTRY(0, &entry1);
+
+    /* Add a different config to the log that will be rolled back. */
+    entry2.type = RAFT_CHANGE;
+    entry2.term = 2;
+    raft_configuration_add(&conf, 3, "3", 2);
+    raft_configuration_encode(&conf, &entry2.buf);
+    raft_configuration_close(&conf);
+    CLUSTER_ADD_ENTRY(1, &entry2);
+
+    CLUSTER_START;
+    CLUSTER_ELECT(0);
+
+    /* The follower eventually replicates the entry */
+    CLUSTER_STEP_UNTIL_APPLIED(1, 3, 3000);
+
+    /* Ensure config is rolled back. */
+    assert_config(CLUSTER_RAFT(0), &base);
+    assert_config(CLUSTER_RAFT(1), &base);
+    raft_configuration_close(&base);
     return MUNIT_OK;
 }
 

@@ -349,4 +349,44 @@ void configurationTrace(const struct raft *r, struct raft_configuration *c, cons
     }
     tracef("=== CONFIG END ===");
 }
+
+int configurationBackup(struct raft *r, struct raft_configuration *src)
+{
+    int rv;
+    struct raft_configuration dst;
+
+    /* Copy the configuration to an intermediate configuration because the copy
+     * can fail and we don't want to be left without the previous configuration. */
+    configurationInit(&dst);
+    rv = configurationCopy(src, &dst);
+    if (rv != 0) {
+        return rv;
+    }
+    configurationClose(&r->configuration_previous);
+    r->configuration_previous = dst;
+    return 0;
+}
+
+int configurationRestorePrevious(struct raft *r)
+{
+    int rv;
+    struct raft_configuration prev;
+
+    /* There should always be a previous config. */
+    assert(r->configuration_previous.n != 0);
+    if (r->configuration_previous.n == 0) {
+        return RAFT_INVALID;
+    }
+
+    /* Copy the configuration to an intermediate configuration because the copy
+     * can fail and we don't want to be left without a configuration. */
+    configurationInit(&prev);
+    rv = configurationCopy(&r->configuration_previous, &prev);
+    if (rv != 0) {
+        return rv;
+    }
+    configurationClose(&r->configuration);
+    r->configuration = prev;
+    return 0;
+}
 #undef tracef
