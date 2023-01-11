@@ -24,6 +24,8 @@
 #define DEFAULT_MAX_CATCH_UP_ROUNDS 10
 #define DEFAULT_MAX_CATCH_UP_ROUND_DURATION (5 * 1000)
 
+#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
+
 int raft_version_number (void)
 {
     return RAFT_VERSION_NUMBER;
@@ -108,6 +110,7 @@ err:
 static void ioCloseCb(struct raft_io *io)
 {
     struct raft *r = io->data;
+    tracef("io close cb");
     raft_free(r->address);
     logClose(r->log);
     raft_configuration_close(&r->configuration);
