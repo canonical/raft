@@ -114,7 +114,10 @@ jobs:
     - name: Setup dependencies
       run: |
           sudo apt-get update -qq
+          # make sure liblz4 is not there
+          sudo apt-get remove liblz4-dev || true
           sudo apt-get install -qq lcov linux-libc-dev libuv1-dev btrfs-progs xfsprogs zfsutils-linux
+          sudo ldconfig
 
     # Expect the configure step to fail
     - name: Build
