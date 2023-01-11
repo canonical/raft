@@ -3,6 +3,7 @@
 #include "assert.h"
 #include "election.h"
 #include "recv.h"
+#include "replication.h"
 #include "tracing.h"
 
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -73,6 +74,16 @@ int recvRequestVote(struct raft *r,
         if (rv != 0) {
             return rv;
         }
+    }
+
+    /* Reject the request if we are installing a snapshot.
+     *
+     * This condition should only be reachable if the disrupt_leader flag is set,
+     * since otherwise we wouldn't have passed the have_leader check above (follower
+     * state is not cleared while a snapshot is being installed). */
+    if (replicationInstallSnapshotBusy(r)) {
+        tracef("installing snapshot -> reject (disrupt_leader:%d)", (int)args->disrupt_leader);
+        goto reply;
     }
 
     /* From Figure 3.1:

@@ -7,6 +7,7 @@
 
 #include "assert.h"
 #include "configuration.h"
+#include "convert.h"
 #include "entry.h"
 #include "log.h"
 #include "queue.h"
@@ -1985,6 +1986,12 @@ unsigned raft_fixture_n_recv(struct raft_fixture *f, unsigned i, int type)
 {
     struct io *io = f->servers[i]->io.impl;
     return io->n_recv[type];
+}
+
+void raft_fixture_make_unavailable(struct raft_fixture *f, unsigned i)
+{
+    struct raft *r = &f->servers[i]->raft;
+    convertToUnavailable(r);
 }
 
 #undef tracef

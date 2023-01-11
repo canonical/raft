@@ -434,4 +434,10 @@ RAFT_API unsigned raft_fixture_n_recv(struct raft_fixture *f,
                                       unsigned i,
                                       int type);
 
+/**
+ * Force the @i'th server into the UNAVAILABLE state.
+ */
+RAFT_API void raft_fixture_make_unavailable(struct raft_fixture *f,
+                                            unsigned i);
+
 #endif /* RAFT_FIXTURE_H */
