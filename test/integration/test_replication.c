@@ -794,6 +794,7 @@ TEST(replication, recvMatch_last_snapshot, setUp, tearDown, 0, NULL)
 
     return MUNIT_OK;
 }
+
 /* If a candidate server receives a request containing the same term as its
  * own, it it steps down to follower and accept the request . */
 TEST(replication, recvCandidateSameTerm, setUp, tearDown, 0, NULL)
@@ -1012,6 +1013,39 @@ TEST(replication, diskWriteFailure, setUp, tearDown, 0, NULL)
     CLUSTER_APPLY_ADD_X(0, req, 1, NULL);
     /* The leader steps down when its disk write fails. */
     CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_FOLLOWER, 2000);
+    free(req);
+
+    return MUNIT_OK;
+}
+
+/* A follower updates its term number while persisting entries. */
+TEST(replication, newTermWhileAppending, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    struct raft_apply *req = munit_malloc(sizeof(*req));
+    raft_term term;
+    CLUSTER_GROW;
+
+    /* Make sure that persisting entries will take a long time */
+    CLUSTER_SET_DISK_LATENCY(2, 3000);
+
+    BOOTSTRAP_START_AND_ELECT;
+    CLUSTER_APPLY_ADD_X(0, req, 1, NULL);
+
+    /* Wait for the leader to replicate the entry */
+    CLUSTER_STEP_UNTIL_ELAPSED(500);
+
+    /* Force a new term */
+    term = CLUSTER_RAFT(2)->current_term;
+    CLUSTER_DEPOSE;
+    CLUSTER_ELECT(1);
+
+    CLUSTER_STEP_UNTIL_ELAPSED(500);
+    munit_assert_ullong(CLUSTER_RAFT(2)->current_term, ==, term + 1);
+
+    /* Wait for the long disk write to complete */
+    CLUSTER_STEP_UNTIL_ELAPSED(3000);
+
     free(req);
 
     return MUNIT_OK;

@@ -866,7 +866,7 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
         goto out;
     }
 
-    /* We received an InstallSnapshot RCP while these entries were being
+    /* We received an InstallSnapshot RPC while these entries were being
      * persisted to disk */
     if (replicationInstallSnapshotBusy(r)) {
         goto out;
@@ -911,8 +911,11 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
         }
     }
 
-    if (r->state != RAFT_FOLLOWER) {
-        tracef("local server is not follower -> don't send result");
+    /* If our state or term number has changed since receiving these entries,
+     * our current_leader may have changed as well, so don't send a response
+     * to that server. */
+    if (r->state != RAFT_FOLLOWER || r->current_term != args->term) {
+        tracef("new role or term since receiving entries -> don't respond");
         goto out;
     }
 
