@@ -187,7 +187,7 @@ Credits
 -------
 
 Of course the biggest thanks goes to Diego Ongaro :) (the original author of the
-Raft dissertation)
+Raft dissertation).
 
 A lot of ideas and inspiration was taken from other Raft implementations such
 as:
