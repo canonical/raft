@@ -417,16 +417,26 @@ err:
 
 int UvFsReadInto(uv_file fd, struct raft_buffer *buf, char *errmsg)
 {
-    int rv;
+    ssize_t rv;
+    size_t offset = 0;
+
     /* TODO: use uv_fs_read() */
-    rv = (int)read(fd, buf->base, buf->len);
-    if (rv == -1) {
-        UvOsErrMsg(errmsg, "read", -errno);
-        return RAFT_IOERR;
+    while (offset < buf->len) {
+        rv = read(fd, (char*)buf->base + offset, buf->len - offset);
+        if (rv == -1) {
+            UvOsErrMsg(errmsg, "read", -errno);
+            return RAFT_IOERR;
+        }
+        /* EOF. Don't think this is reachable, but just make very sure
+         * we don't loop forever. */
+        if (rv == 0) {
+            break;
+        }
+        assert(rv > 0);
+        offset += (size_t)rv;
     }
-    assert(rv >= 0);
-    if ((size_t)rv < buf->len) {
-        ErrMsgPrintf(errmsg, "short read: %d bytes instead of %zu", rv,
+    if (offset < buf->len) {
+        ErrMsgPrintf(errmsg, "short read: %zu bytes instead of %zu", offset,
                      buf->len);
         return RAFT_IOERR;
     }
