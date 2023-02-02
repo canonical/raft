@@ -2,6 +2,7 @@
 
 #include "../../src/byte.h"
 #include "../../src/uv.h"
+#include "../../src/uv_encoding.h"
 #include "../lib/runner.h"
 #include "../lib/uv.h"
 
@@ -538,7 +539,7 @@ TEST(load, openSegmentWithNonZeroData, setUp, tearDown, 0, NULL)
     uint64_t corrupt = 123456789;
     APPEND(2, 1);
     UNFINALIZE(1, 2, 1);
-    DirOverwriteFile(f->dir, "open-1", &corrupt, sizeof corrupt, 60);
+    DirOverwriteFile(f->dir, "open-1", &corrupt, sizeof corrupt, 76);
     LOAD(0,    /* term                                              */
          0,    /* voted for                                         */
          NULL, /* snapshot                                          */
@@ -562,7 +563,7 @@ TEST(load, openSegmentWithIncompleteBatch, setUp, tearDown, 0, NULL)
     APPEND(2, 1);
     UNFINALIZE(1, 2, 1);
     memset(zero, 0, sizeof zero);
-    DirOverwriteFile(f->dir, "open-1", &zero, sizeof zero, 62);
+    DirOverwriteFile(f->dir, "open-1", &zero, sizeof zero, 78);
     LOAD(0,    /* term                                              */
          0,    /* voted for                                         */
          NULL, /* snapshot                                          */
@@ -574,13 +575,17 @@ TEST(load, openSegmentWithIncompleteBatch, setUp, tearDown, 0, NULL)
 }
 
 /* The data directory has an open segment whose first batch is only
- * partially written. In that case the segment gets removed. */
+ * partially written, only the segment header has been written.
+ * In that case the segment gets removed. */
 TEST(load, openSegmentWithIncompleteFirstBatch, setUp, tearDown, 0, NULL)
 {
+    uint32_t crc;
     struct fixture *f = data;
-    uint8_t buf[4 * WORD_SIZE] = {
-        1, 0, 0, 0, 0, 0, 0, 0, /* Format version */
-        0, 0, 0, 0, 0, 0, 0, 0, /* CRC32 checksums */
+    uint8_t buf[6 * WORD_SIZE] = {
+        2, 0, 0, 0, 0, 0, 0, 0, /* Format version */
+        1, 0, 0, 0, 0, 0, 0, 0, /* First Index */
+        0, 0, 0, 0, 0, 0, 0, 0, /* Segment Header Checksum */
+        0, 0, 0, 0, 0, 0, 0, 0, /* Batch CRC32 checksums */
         0, 0, 0, 0, 0, 0, 0, 0, /* Number of entries */
         0, 0, 0, 0, 0, 0, 0, 0  /* Batch data */
     };
@@ -589,6 +594,13 @@ TEST(load, openSegmentWithIncompleteFirstBatch, setUp, tearDown, 0, NULL)
 
     DirOverwriteFile(f->dir, "open-1", buf, sizeof buf, 0);
 
+    // Ensure the crc checks out.
+    uint64_t format = UV__SEGMENT_DISK_FORMAT_2;
+    uint64_t first_index = 1;
+    crc = byteCrc32(&format, sizeof(format), 0);
+    crc = byteCrc32(&first_index, sizeof(first_index), crc);
+    DirOverwriteFile(f->dir, "open-1", &crc, sizeof crc, 16);
+
     LOAD(0,    /* term                                              */
          0,    /* voted for                                         */
          NULL, /* snapshot                                          */
@@ -596,6 +608,40 @@ TEST(load, openSegmentWithIncompleteFirstBatch, setUp, tearDown, 0, NULL)
          0,    /* data for first loaded entry    */
          0     /* n entries                                         */
     );
+
+    return MUNIT_OK;
+}
+
+/* The data directory has an open segment whose first batch is only
+ * partially written, only the segment header has been written.
+ * In that case the segment gets removed. */
+TEST(load, openSegmentWithBadCrc, setUp, tearDown, 0, NULL)
+{
+    uint32_t crc;
+    struct fixture *f = data;
+    uint8_t buf[6 * WORD_SIZE] = {
+        2, 0, 0, 0, 0, 0, 0, 0, /* Format version */
+        1, 0, 0, 0, 0, 0, 0, 0, /* First Index */
+        0, 0, 0, 0, 0, 0, 0, 0, /* Segment Header Checksum */
+        0, 0, 0, 0, 0, 0, 0, 0, /* Batch CRC32 checksums */
+        0, 0, 0, 0, 0, 0, 0, 0, /* Number of entries */
+        0, 0, 0, 0, 0, 0, 0, 0  /* Batch data */
+    };
+    APPEND(1, 1);
+    UNFINALIZE(1, 1, 1);
+
+    DirOverwriteFile(f->dir, "open-1", buf, sizeof buf, 0);
+
+    // Ensure the segment header crc doesn't check out.
+    uint64_t format = UV__SEGMENT_DISK_FORMAT_2;
+    uint64_t first_index = 1;
+    crc = byteCrc32(&format, sizeof(format), 0);
+    crc = byteCrc32(&first_index, sizeof(first_index), crc);
+    crc += 1; // Invalidate the crc.
+    DirOverwriteFile(f->dir, "open-1", &crc, sizeof crc, 16);
+
+    LOAD_ERROR_NO_RECOVER(RAFT_CORRUPT,
+               "load open segment open-1: segment header crc mismatch");
 
     return MUNIT_OK;
 }
@@ -653,8 +699,26 @@ TEST(load, secondOpenSegmentIsAllZeros, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-/* The data directory has two open segments, the first one has a corrupt header.
- */
+/* The data directory has a closed segment containing all zeros */
+TEST(load, closedSegmentAllZeros, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    APPEND(1, 1);
+    DirWriteFileWithZeros(f->dir, CLOSED_SEGMENT_FILENAME(1,1), SEGMENT_SIZE);
+
+    LOAD(0,    /* term                                              */
+         0,    /* voted for                                         */
+         NULL, /* snapshot                                          */
+         1,    /* start index                                       */
+         1,    /* data for first loaded entry    */
+         1     /* n entries                                         */
+    );
+
+    munit_assert_false(HAS_CLOSED_SEGMENT_FILE(1, 1));
+    return MUNIT_OK;
+}
+
+/* The data directory has two open segments, the first one has a corrupt header. */
 TEST(load, twoOpenSegmentsFirstCorrupt, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
@@ -682,8 +746,31 @@ TEST(load, twoOpenSegmentsFirstCorrupt, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-/* The data directory has two open segments, the first one has a corrupt header.
- */
+/* The data directory has two open segments, with the second one having an
+ * unexpected first index. */
+TEST(load, secondOpenSegmentUnexpectedFirstIndex, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    APPEND(1, 1);
+    APPEND(1, 2);
+    UNFINALIZE(1, 1, 1);
+    UNFINALIZE(2, 2, 2);
+    uint32_t crc;
+
+    /* Write the new first index and ensure the crc checks out. */
+    uint64_t format = UV__SEGMENT_DISK_FORMAT_2;
+    uint64_t first_index = 3;
+    crc = byteCrc32(&format, sizeof(format), 0);
+    crc = byteCrc32(&first_index, sizeof(first_index), crc);
+    DirOverwriteFile(f->dir, "open-2", &first_index, sizeof first_index, 8);
+    DirOverwriteFile(f->dir, "open-2", &crc, sizeof crc, 16);
+
+    LOAD_ERROR_NO_RECOVER(RAFT_INVALID,
+               "load open segment open-2: unexpected first_index:3 expected:2");
+    return MUNIT_OK;
+}
+
+/* The data directory has two open segments, the first one has a corrupt header. */
 TEST(load, twoOpenSegmentsFirstCorruptNoRecovery, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
@@ -702,6 +789,30 @@ TEST(load, twoOpenSegmentsFirstCorruptNoRecovery, setUp, tearDown, 0, NULL)
     munit_assert_true(HAS_OPEN_SEGMENT_FILE(2));
     return MUNIT_OK;
 }
+
+/* The data directory has a closed and an open segment, with the open segment
+ * having an unexpected first index. */
+TEST(load, oneCloseOneOpenSegmentUnexpectedFirstIndex, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    uint32_t crc;
+    APPEND(1, 1);
+    APPEND(1, 2);
+    UNFINALIZE(2, 2, 1);
+
+    /* Write the new first index and ensure the crc checks out. */
+    uint64_t format = UV__SEGMENT_DISK_FORMAT_2;
+    uint64_t first_index = 3;
+    crc = byteCrc32(&format, sizeof(format), 0);
+    crc = byteCrc32(&first_index, sizeof(first_index), crc);
+    DirOverwriteFile(f->dir, "open-1", &first_index, sizeof first_index, 8);
+    DirOverwriteFile(f->dir, "open-1", &crc, sizeof crc, 16);
+
+    LOAD_ERROR_NO_RECOVER(RAFT_INVALID,
+               "load open segment open-1: unexpected first_index:3 expected:2");
+    return MUNIT_OK;
+}
+
 
 /* The data directory has a valid open segment. */
 TEST(load, openSegment, setUp, tearDown, 0, NULL)
@@ -1388,15 +1499,15 @@ TEST(load,
     APPEND(2, 8);
 
     /* Corrupt the last closed segment */
-    size_t offset =
-        WORD_SIZE /* Format version */ + WORD_SIZE / 2 /* Header checksum */;
+    size_t offset = uvSizeofSegmentHeader(UV__SEGMENT_DISK_FORMAT_2)
+                    + WORD_SIZE / 2 /* Batch Header checksum */;
     uint32_t corrupted = 123456789;
     DirOverwriteFile(f->dir, CLOSED_SEGMENT_FILENAME(8, 9), &corrupted,
                      sizeof corrupted, offset);
     LOAD_ERROR_NO_RECOVER(
         RAFT_CORRUPT,
         "load closed segment 0000000000000008-0000000000000009: entries "
-        "batch 1 starting at byte 8: data checksum mismatch");
+        "batch 1 starting at byte 24: data checksum mismatch");
     return MUNIT_OK;
 }
 
@@ -1421,8 +1532,8 @@ TEST(load,
     APPEND(2, 8);
 
     /* Corrupt the last closed segment */
-    size_t offset =
-        WORD_SIZE /* Format version */ + WORD_SIZE / 2 /* Header checksum */;
+    size_t offset = uvSizeofSegmentHeader(UV__SEGMENT_DISK_FORMAT_2)
+                    + WORD_SIZE / 2 /* Header checksum */;
     uint32_t corrupted = 123456789;
     DirOverwriteFile(f->dir, CLOSED_SEGMENT_FILENAME(8, 9), &corrupted,
                      sizeof corrupted, offset);
@@ -1459,8 +1570,8 @@ TEST(load,
     UNFINALIZE(9, 9, 1);
 
     /* Corrupt the last closed segment */
-    size_t offset =
-        WORD_SIZE /* Format version */ + WORD_SIZE / 2 /* Header checksum */;
+    size_t offset = uvSizeofSegmentHeader(UV__SEGMENT_DISK_FORMAT_2)
+                    + WORD_SIZE / 2 /* Header checksum */;
     uint32_t corrupted = 123456789;
     DirOverwriteFile(f->dir, CLOSED_SEGMENT_FILENAME(8, 8), &corrupted,
                      sizeof corrupted, offset);
@@ -1495,8 +1606,8 @@ TEST(load,
     UNFINALIZE(9, 9, 1);
 
     /* Corrupt the last closed segment */
-    size_t offset =
-        WORD_SIZE /* Format version */ + WORD_SIZE / 2 /* Header checksum */;
+    size_t offset = uvSizeofSegmentHeader(UV__SEGMENT_DISK_FORMAT_2)
+                    + WORD_SIZE / 2 /* Batch Header checksum */;
     uint32_t corrupted = 123456789;
     DirOverwriteFile(f->dir, CLOSED_SEGMENT_FILENAME(8, 8), &corrupted,
                      sizeof corrupted, offset);
@@ -1504,7 +1615,7 @@ TEST(load,
     LOAD_ERROR_NO_RECOVER(
         RAFT_CORRUPT,
         "load closed segment 0000000000000008-0000000000000008: entries "
-        "batch 1 starting at byte 8: data checksum mismatch");
+        "batch 1 starting at byte 24: data checksum mismatch");
     return MUNIT_OK;
 }
 
@@ -1523,21 +1634,21 @@ TEST(load,
     APPEND(2, 6);
     APPEND(2, 8);
 
-    /* Corrupt the second last closed segment */
-    size_t offset =
-        WORD_SIZE /* Format version */ + WORD_SIZE / 2 /* Header checksum */;
+    /* Corrupt the last closed segment */
+    size_t offset = uvSizeofSegmentHeader(UV__SEGMENT_DISK_FORMAT_2)
+                    + WORD_SIZE / 2 /* Header checksum */;
     uint32_t corrupted = 123456789;
     DirOverwriteFile(f->dir, CLOSED_SEGMENT_FILENAME(6, 7), &corrupted,
                      sizeof corrupted, offset);
     LOAD_ERROR(RAFT_CORRUPT,
                "load closed segment 0000000000000006-0000000000000007: entries "
-               "batch 1 starting at byte 8: data checksum mismatch");
+               "batch 1 starting at byte 24: data checksum mismatch");
 
     /* Second load still fails. */
     LOAD_ERROR_NO_SETUP(
         RAFT_CORRUPT,
         "load closed segment 0000000000000006-0000000000000007: entries "
-        "batch 1 starting at byte 8: data checksum mismatch");
+        "batch 1 starting at byte 24: data checksum mismatch");
 
     return MUNIT_OK;
 }
@@ -1597,17 +1708,32 @@ TEST(load, openSegmentWithIncompleteFormat, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
+/* The data directory has an open segment which has incomplete first index data. */
+TEST(load, openSegmentWithIncompleteFirstIndex, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    size_t offset = WORD_SIZE +    /* Format version */
+                    WORD_SIZE - 1; /* Short First Index */
+
+    APPEND(1, 1);
+    UNFINALIZE(1, 1, 1);
+    DirTruncateFile(f->dir, "open-1", offset);
+    LOAD_ERROR(RAFT_IOERR, "load open segment open-1: file has only 15 bytes");
+    return MUNIT_OK;
+}
+
 /* The data directory has an open segment which has an incomplete batch
  * preamble. */
 TEST(load, openSegmentWithIncompletePreamble, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    size_t offset = WORD_SIZE /* Format version */ + WORD_SIZE /* Checksums */;
     APPEND(1, 1);
     UNFINALIZE(1, 1, 1);
+    size_t offset = uvSizeofSegmentHeader(UV__SEGMENT_DISK_FORMAT_2)
+                    + WORD_SIZE /* Batch Checksums */;
     DirTruncateFile(f->dir, "open-1", offset);
     LOAD_ERROR(RAFT_IOERR,
-               "load open segment open-1: entries batch 1 starting at byte 16: "
+               "load open segment open-1: entries batch 1 starting at byte 32: "
                "read preamble: short read: 0 bytes instead of 8");
     return MUNIT_OK;
 }
@@ -1616,8 +1742,8 @@ TEST(load, openSegmentWithIncompletePreamble, setUp, tearDown, 0, NULL)
 TEST(load, openSegmentWithIncompleteBatchHeader, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    size_t offset = WORD_SIZE + /* Format version */
-                    WORD_SIZE + /* Checksums */
+    size_t offset = uvSizeofSegmentHeader(UV__SEGMENT_DISK_FORMAT_2) +
+                    WORD_SIZE + /* Batch Checksums */
                     WORD_SIZE + /* Number of entries */
                     WORD_SIZE /* Partial batch header */;
 
@@ -1625,7 +1751,7 @@ TEST(load, openSegmentWithIncompleteBatchHeader, setUp, tearDown, 0, NULL)
     UNFINALIZE(1, 1, 1);
     DirTruncateFile(f->dir, "open-1", offset);
     LOAD_ERROR(RAFT_IOERR,
-               "load open segment open-1: entries batch 1 starting at byte 8: "
+               "load open segment open-1: entries batch 1 starting at byte 24: "
                "read header: short read: 8 bytes instead of 16");
     return MUNIT_OK;
 }
@@ -1634,7 +1760,7 @@ TEST(load, openSegmentWithIncompleteBatchHeader, setUp, tearDown, 0, NULL)
 TEST(load, openSegmentWithIncompleteBatchData, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    size_t offset = WORD_SIZE + /* Format version */
+    size_t offset = uvSizeofSegmentHeader(UV__SEGMENT_DISK_FORMAT_2) +
                     WORD_SIZE + /* Checksums */
                     WORD_SIZE + /* Number of entries */
                     WORD_SIZE + /* Entry term */
@@ -1645,7 +1771,7 @@ TEST(load, openSegmentWithIncompleteBatchData, setUp, tearDown, 0, NULL)
     UNFINALIZE(1, 1, 1);
     DirTruncateFile(f->dir, "open-1", offset);
     LOAD_ERROR(RAFT_IOERR,
-               "load open segment open-1: entries batch 1 starting at byte 8: "
+               "load open segment open-1: entries batch 1 starting at byte 24: "
                "read data: short read: 4 bytes instead of 8");
     return MUNIT_OK;
 }
@@ -1654,7 +1780,7 @@ TEST(load, openSegmentWithIncompleteBatchData, setUp, tearDown, 0, NULL)
 TEST(load, closedSegmentWithCorruptedBatchHeader, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    size_t offset = WORD_SIZE /* Format version */;
+    size_t offset = uvSizeofSegmentHeader(UV__SEGMENT_DISK_FORMAT_2);
     uint64_t corrupted = 12345678;
     APPEND(1, 1);
     DirOverwriteFile(f->dir, CLOSED_SEGMENT_FILENAME(1, 1), &corrupted,
@@ -1662,7 +1788,7 @@ TEST(load, closedSegmentWithCorruptedBatchHeader, setUp, tearDown, 0, NULL)
     LOAD_ERROR_NO_RECOVER(
         RAFT_CORRUPT,
         "load closed segment 0000000000000001-0000000000000001: entries "
-        "batch 1 starting at byte 8: header checksum mismatch");
+        "batch 1 starting at byte 24: header checksum mismatch");
     return MUNIT_OK;
 }
 
@@ -1670,8 +1796,8 @@ TEST(load, closedSegmentWithCorruptedBatchHeader, setUp, tearDown, 0, NULL)
 TEST(load, closedSegmentWithCorruptedBatchData, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    size_t offset =
-        WORD_SIZE /* Format version */ + WORD_SIZE / 2 /* Header checksum */;
+    size_t offset = uvSizeofSegmentHeader(UV__SEGMENT_DISK_FORMAT_2)
+                    + WORD_SIZE / 2 /* Header checksum */;
     uint32_t corrupted = 123456789;
     APPEND(1, 1);
     DirOverwriteFile(f->dir, CLOSED_SEGMENT_FILENAME(1, 1), &corrupted,
@@ -1679,7 +1805,7 @@ TEST(load, closedSegmentWithCorruptedBatchData, setUp, tearDown, 0, NULL)
     LOAD_ERROR_NO_RECOVER(
         RAFT_CORRUPT,
         "load closed segment 0000000000000001-0000000000000001: entries "
-        "batch 1 starting at byte 8: data checksum mismatch");
+        "batch 1 starting at byte 24: data checksum mismatch");
     return MUNIT_OK;
 }
 
@@ -1713,12 +1839,12 @@ TEST(load, emptyClosedSegment, setUp, tearDown, 0, NULL)
 TEST(load, closedSegmentWithBadFormat, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    uint8_t buf[8] = {2, 0, 0, 0, 0, 0, 0, 0};
+    uint8_t buf[8] = {255, 0, 0, 0, 0, 0, 0, 0};
     DirWriteFile(f->dir, CLOSED_SEGMENT_FILENAME(1, 1), buf, sizeof buf);
     LOAD_ERROR_NO_RECOVER(
         RAFT_CORRUPT,
         "load closed segment 0000000000000001-0000000000000001: "
-        "unexpected format version 2");
+        "unexpected format version 255");
     return MUNIT_OK;
 }
 
@@ -1760,11 +1886,209 @@ TEST(load, openSegmentWithZeroFormatAndThenData, setUp, tearDown, 0, NULL)
 TEST(load, openSegmentWithBadFormat, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    uint8_t version[8] = {2, 0, 0, 0, 0, 0, 0, 0};
+    uint8_t version[8] = {255, 0, 0, 0, 0, 0, 0, 0};
     APPEND(1, 1);
     UNFINALIZE(1, 1, 1);
     DirOverwriteFile(f->dir, "open-1", version, sizeof version, 0);
     LOAD_ERROR_NO_RECOVER(
-        RAFT_CORRUPT, "load open segment open-1: unexpected format version 2");
+        RAFT_CORRUPT, "load open segment open-1: unexpected format version 255");
+    return MUNIT_OK;
+}
+
+/*****************************************************************************
+ *                                                                           *
+ *                              LEGACY SEGMENTS                              *
+ *                                                                           *
+ *****************************************************************************/
+
+SUITE(loadLegacy)
+
+/* The data directory has an open segment whose first batch is only
+ * partially written. In that case the segment gets removed. */
+TEST(loadLegacy, openSegmentWithIncompleteFirstBatch, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    uint8_t buf[4 * WORD_SIZE] = {
+        1, 0, 0, 0, 0, 0, 0, 0, /* Format version */
+        0, 0, 0, 0, 0, 0, 0, 0, /* CRC32 checksums */
+        0, 0, 0, 0, 0, 0, 0, 0, /* Number of entries */
+        0, 0, 0, 0, 0, 0, 0, 0  /* Batch data */
+    };
+    APPEND(1, 1);
+    UNFINALIZE(1, 1, 1);
+
+    DirOverwriteFile(f->dir, "open-1", buf, sizeof buf, 0);
+
+    LOAD(0,    /* term                                              */
+         0,    /* voted for                                         */
+         NULL, /* snapshot                                          */
+         1,    /* start index                                       */
+         0,    /* data for first loaded entry    */
+         0     /* n entries                                         */
+    );
+
+    return MUNIT_OK;
+}
+
+static int segmentBufferFormatLegacy(struct uvSegmentBuffer *b)
+{
+    int rv;
+    void *cursor;
+    rv = uvSegmentBufferFormat(b, 0);
+    munit_assert(rv == 0);
+    munit_assert(b->n == uvSizeofSegmentHeader(2));
+    /* Rewind the arena and write legacy format. */
+    cursor = b->arena.base;
+    bytePut64(&cursor, 1); // Write legacy format
+    b->n = sizeof(uint64_t);
+    return 0;
+}
+
+static void createLegacySegmentWithEntries(struct fixture *f,
+                                           const char *filename,
+                                           const struct raft_entry entries[],
+                                           unsigned n_entries)
+{
+    struct uvSegmentBuffer b = {0};
+    struct raft_buffer write = {0};
+    char err[RAFT_ERRMSG_BUF_SIZE];
+
+    uvSegmentBufferInit(&b, SEGMENT_BLOCK_SIZE);
+    munit_assert(segmentBufferFormatLegacy(&b) == 0);
+    if (entries != NULL) {
+        munit_assert(uvSegmentBufferAppend(&b, entries, n_entries) == 0);
+    }
+
+    write.base = b.arena.base;
+    write.len = b.n;
+    /* Write file to disk. */
+    munit_assert(UvFsMakeFile(f->dir, filename, &write, 1, err) == 0);
+    munit_assert_true(DirHasFile(f->dir, filename));
+
+    uvSegmentBufferClose(&b);
+}
+
+TEST(loadLegacy, openSingleEntry, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    uint64_t entry_data = 1;
+
+    struct raft_entry entry = {0};
+    entry.term = 1;
+    entry.type = RAFT_COMMAND;
+    entry.buf.base = &entry_data;
+    entry.buf.len = sizeof(entry_data);
+    entry.batch = NULL;
+
+    createLegacySegmentWithEntries(f, "open-1", &entry, 1);
+    LOAD(0,    /* term (NOT UPDATED IN THIS TEST)  */
+         0,    /* voted for                        */
+         NULL, /* snapshot                         */
+         1,    /* start index                      */
+         1,    /* data for first loaded entry      */
+         1     /* n entries                        */
+    );
+
+    /* The open segment has been closed. */
+    munit_assert_true(HAS_CLOSED_SEGMENT_FILE(1, 1));
+    return MUNIT_OK;
+}
+
+TEST(loadLegacy, multipleOpenSingleEntry, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    uint64_t entry_data = 1;
+
+    struct raft_entry entry = {0};
+    entry.term = 1;
+    entry.type = RAFT_COMMAND;
+    entry.buf.base = &entry_data;
+    entry.buf.len = sizeof(entry_data);
+    entry.batch = NULL;
+
+    createLegacySegmentWithEntries(f, "open-1", &entry, 1);
+    entry_data = 2;
+    createLegacySegmentWithEntries(f, "open-2", &entry, 1);
+    entry_data = 3;
+    createLegacySegmentWithEntries(f, "open-3", &entry, 1);
+    LOAD(0,    /* term (NOT UPDATED IN THIS TEST)  */
+         0,    /* voted for                        */
+         NULL, /* snapshot                         */
+         1,    /* start index                      */
+         1,    /* data for first loaded entry      */
+         3     /* n entries                        */
+    );
+
+    /* The open segment has been closed. */
+    munit_assert_true(HAS_CLOSED_SEGMENT_FILE(1, 1));
+    munit_assert_true(HAS_CLOSED_SEGMENT_FILE(2, 2));
+    munit_assert_true(HAS_CLOSED_SEGMENT_FILE(3, 3));
+    return MUNIT_OK;
+}
+
+TEST(loadLegacy, openMultipleEntries, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    uint64_t entry_data_1 = 1;
+    uint64_t entry_data_2 = 2;
+
+    struct raft_entry entries[2] = {{0}, {0}};
+    entries[0].term = 1;
+    entries[0].type = RAFT_COMMAND;
+    entries[0].buf.base = &entry_data_1;
+    entries[0].buf.len = sizeof(entry_data_1);
+    entries[0].batch = NULL;
+
+    entries[1].term = 1;
+    entries[1].type = RAFT_COMMAND;
+    entries[1].buf.base = &entry_data_2;
+    entries[1].buf.len = sizeof(entry_data_2);
+    entries[1].batch = NULL;
+
+    createLegacySegmentWithEntries(f, "open-1", entries, 2);
+    LOAD(0,    /* term (NOT UPDATED IN THIS TEST)  */
+         0,    /* voted for                        */
+         NULL, /* snapshot                         */
+         1,    /* start index                      */
+         1,    /* data for first loaded entry      */
+         2     /* n entries                        */
+    );
+
+    /* The open segment has been closed. */
+    munit_assert_true(HAS_CLOSED_SEGMENT_FILE(1, 2));
+
+    return MUNIT_OK;
+}
+
+TEST(loadLegacy, closedMultipleEntries, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    uint64_t entry_data_1 = 1;
+    uint64_t entry_data_2 = 2;
+
+    struct raft_entry entries[2] = {{0}, {0}};
+    entries[0].term = 1;
+    entries[0].type = RAFT_COMMAND;
+    entries[0].buf.base = &entry_data_1;
+    entries[0].buf.len = sizeof(entry_data_1);
+    entries[0].batch = NULL;
+
+    entries[1].term = 1;
+    entries[1].type = RAFT_COMMAND;
+    entries[1].buf.base = &entry_data_2;
+    entries[1].buf.len = sizeof(entry_data_2);
+    entries[1].batch = NULL;
+
+    createLegacySegmentWithEntries(f, CLOSED_SEGMENT_FILENAME(1,2), entries, 2);
+    LOAD(0,    /* term (NOT UPDATED IN THIS TEST)  */
+         0,    /* voted for                        */
+         NULL, /* snapshot                         */
+         1,    /* start index                      */
+         1,    /* data for first loaded entry      */
+         2     /* n entries                        */
+    );
+
+    /* The open segment has been closed. */
+    munit_assert_true(HAS_CLOSED_SEGMENT_FILE(1, 2));
     return MUNIT_OK;
 }

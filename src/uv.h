@@ -154,10 +154,25 @@ int uvSegmentLoadClosed(struct uv *uv,
                         struct raft_entry *entries[],
                         size_t *n);
 
-/* Load raft entries from the given segments. The @start_index is the expected
- * index of the first entry of the first segment. */
+/* Determine the start index of the next entry to load from the segments. */
+raft_index uvSegmentStartIndex(struct uv *uv,
+                               struct uvSegmentInfo *infos,
+                               raft_index snapshot_index);
+
+/* Filter the given segment list to find the most recent contiguous chunk of
+ * closed segments that overlaps with the given snapshot last index. */
+int uvSegmentFilter(struct uv *uv,
+                    raft_index snapshot_index,
+                    const char *snapshot_filename,
+                    struct uvSegmentInfo **segments,
+                    size_t *n);
+
+/* Load raft entries from the given segments starting from @start_index.
+ * @snapshot_index is used to perform a sanity check after the segments have
+ * been loaded. */
 int uvSegmentLoadAll(struct uv *uv,
                      const raft_index start_index,
+                     const raft_index snapshot_index,
                      struct uvSegmentInfo *segments,
                      size_t n_segments,
                      struct raft_entry **entries,
@@ -183,9 +198,9 @@ void uvSegmentBufferInit(struct uvSegmentBuffer *b, size_t block_size);
 /* Release all memory used by the buffer. */
 void uvSegmentBufferClose(struct uvSegmentBuffer *b);
 
-/* Encode the format version at the very beginning of the buffer. This function
- * must be called when the buffer is empty. */
-int uvSegmentBufferFormat(struct uvSegmentBuffer *b);
+/* Encode the format version and first_index at the very beginning of the
+ * buffer. This function must be called when the buffer is empty. */
+int uvSegmentBufferFormat(struct uvSegmentBuffer *b, raft_index first_index);
 
 /* Extend the segment's buffer by encoding the given entries.
  *

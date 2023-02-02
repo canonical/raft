@@ -7,6 +7,7 @@
 #include "assert.h"
 #include "byte.h"
 #include "configuration.h"
+#include "err.h"
 
 /**
  * Size of the request preamble.
@@ -564,4 +565,65 @@ void uvDecodeEntriesBatch(uint8_t *batch,
             cursor = cursor + 8 - (entry->buf.len % 8);
         }
     }
+}
+
+size_t uvSizeofSegmentHeader(uint64_t format)
+{
+    switch (format) {
+    case UV__SEGMENT_DISK_FORMAT_LEGACY:
+        return sizeof(uint64_t);   // Format version
+    case UV__SEGMENT_DISK_FORMAT_2:
+        return sizeof(uint64_t)    // Format version
+               + sizeof(uint64_t)  // First Index
+               + sizeof(uint64_t); // 4 byte CRC + 4 byte unused
+    default:
+        return 0;
+    }
+}
+
+void uvEncodeSegmentHeaderFormat2(uint64_t first_index, void *buf)
+{
+    void *cursor = buf;
+    uint32_t crc;
+
+    bytePut64(&cursor, UV__SEGMENT_DISK_FORMAT_2);
+    bytePut64(&cursor, first_index);
+    crc = byteCrc32(buf, 2 * sizeof(uint64_t), 0);
+    bytePut32(&cursor, crc);
+}
+
+int uvDecodeSegmentHeaderValidate(void *buf, size_t n, uint64_t *format,
+                                  char errmsg[RAFT_ERRMSG_BUF_SIZE])
+{
+    uint32_t crc_read;
+    uint32_t crc_calculated;
+    const void *cursor;
+    size_t crc_offset;
+
+    assert(n >= 8);
+    *format = byteFlip64(*(uint64_t *)buf);
+    if (*format == 0) {
+        return 0; // Potentially all-zeros file.
+    }
+    if (*format == UV__SEGMENT_DISK_FORMAT_LEGACY) {
+        return 0; // Can't do any validation.
+    }
+    if (*format != UV__SEGMENT_DISK_FORMAT_2) {
+        ErrMsgPrintf(errmsg, "unexpected format version %ju", *format);
+        return RAFT_CORRUPT; // Unknown format.
+    }
+    // Format 2 as of here.
+    if (n < uvSizeofSegmentHeader(UV__SEGMENT_DISK_FORMAT_2)) {
+        ErrMsgPrintf(errmsg, "file has only %zu bytes", n);
+        return RAFT_IOERR;
+    }
+    crc_offset = 2 * sizeof(uint64_t); // 8 bytes format, 8 bytes first_index
+    crc_calculated = byteCrc32(buf, crc_offset, 0);
+    cursor = (char*)buf + crc_offset;
+    crc_read = byteGet32(&cursor);
+    if (crc_calculated != crc_read) {
+        ErrMsgPrintf(errmsg, "segment header crc mismatch");
+        return RAFT_CORRUPT;
+    }
+    return 0;
 }

@@ -165,7 +165,7 @@ static int uvAliveSegmentEncodeEntriesToWriteBuf(struct uvAliveSegment *segment,
     /* If this is the very first write to the segment, we need to include the
      * format version */
     if (segment->pending.n == 0 && segment->next_block == 0) {
-        rv = uvSegmentBufferFormat(&segment->pending);
+        rv = uvSegmentBufferFormat(&segment->pending, segment->first_index);
         if (rv != 0) {
             return rv;
         }

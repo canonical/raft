@@ -10,6 +10,9 @@
 /* Current disk format version. */
 #define UV__DISK_FORMAT 1
 
+#define UV__SEGMENT_DISK_FORMAT_LEGACY UV__DISK_FORMAT
+#define UV__SEGMENT_DISK_FORMAT_2 2
+
 int uvEncodeMessage(const struct raft_message *message,
                     uv_buf_t **bufs,
                     unsigned *n_bufs);
@@ -56,4 +59,14 @@ void uvEncodeBatchHeader(const struct raft_entry *entries,
                          unsigned n,
                          void *buf);
 
+/* Validates the contents of the segment header in @buf of len @n.
+ * Returns 0 when the segment header is valid. When the segment is valid,
+ * @format contains the format version that can potentially be 0 and valid when
+ * the file contains all 0's. It's the caller's responsibility to do further
+ * validation. */
+int uvDecodeSegmentHeaderValidate(void *buf, size_t n, uint64_t *format, char errmsg[RAFT_ERRMSG_BUF_SIZE]);
+
+size_t uvSizeofSegmentHeader(uint64_t format);
+
+void uvEncodeSegmentHeaderFormat2(uint64_t first_index, void *buf);
 #endif /* UV_ENCODING_H_ */
