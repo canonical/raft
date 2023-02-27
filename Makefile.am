@@ -254,6 +254,18 @@ benchmark_os_disk_write_LDFLAGS = -luring
 
 endif # BENCHMARK_ENABLED
 
+if RECOVERY_ENABLED
+
+bin_PROGRAMS += \
+ recovery/downgrade_segment_format
+
+recovery_downgrade_segment_format_SOURCES = \
+  recovery/downgrade_segment_format.c \
+  ${libraft_la_SOURCES}
+recovery_downgrade_segment_format_LDFLAGS = $(UV_LIBS)
+
+endif # RECOVERY_ENABLED
+
 if DEBUG_ENABLED
   AM_CFLAGS += -Werror -Wall
 else

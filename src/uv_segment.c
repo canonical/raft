@@ -1341,4 +1341,76 @@ out:
     return rv;
 }
 
+int UvSegmentConvertDirToFormat(struct uv *uv, int target_format,
+                                char errmsg[RAFT_ERRMSG_BUF_SIZE])
+{
+    int rv;
+    struct uvSnapshotInfo *snapshots;
+    struct uvSegmentInfo *segments;
+    size_t n_snapshots;
+    size_t n_segments;
+    uint64_t format;
+    struct raft_buffer buf = {0};
+    uint8_t format_buf[8] = {1,0,0,0,0,0,0,0};
+    struct raft_buffer fmt_buf = {format_buf, 8};
+
+    if (uv == NULL) {
+        ErrMsgPrintf(errmsg, "uv is NULL");
+        return -1;
+    }
+    if (target_format != UV__SEGMENT_DISK_FORMAT_LEGACY) {
+        ErrMsgPrintf(errmsg, "unknown target format %d", target_format);
+        return -1;
+    }
+    rv = UvList(uv, &snapshots, &n_snapshots, &segments, &n_segments, errmsg);
+    if (rv != 0) {
+        ErrMsgPrintf(errmsg, "failed to list segments %d", rv);
+        return -1;
+    }
+    // Not interested in snapshots.
+    if (snapshots != NULL) {
+        RaftHeapFree(snapshots);
+    }
+    // Nothing to do.
+    if (segments == NULL) {
+        ErrMsgPrintf(errmsg, "No segments detected");
+        return 0;
+    }
+    // Convert segment to desired format and replace original.
+    for (size_t i = 0; i < n_segments; i++) {
+        struct uvSegmentInfo *info = &segments[i];
+        printf("segment %s: start conversion ...\n", info->filename);
+        rv = uvReadSegmentFile(uv, info->filename, &buf, &format);
+        if (rv != 0) {
+            ErrMsgPrintf(errmsg, "failed to read %s", info->filename);
+            goto out;
+        }
+        if (format == UV__SEGMENT_DISK_FORMAT_LEGACY) {
+            printf("segment %s: nothing to do\n", info->filename);
+            RaftHeapFree(buf.base);
+            continue;
+        }
+        rv = UvFsRemoveFile(uv->dir, info->filename, errmsg);
+        if (rv != 0) {
+            RaftHeapFree(buf.base);
+            ErrMsgPrintf(errmsg, "failed to remove %s", info->filename);
+            goto out;
+        }
+        // Write the legacy header and data
+        size_t offset = uvSizeofSegmentHeader(UV__SEGMENT_DISK_FORMAT_2);
+        struct raft_buffer bufs[2] = {fmt_buf, {(char*)buf.base + offset, buf.len - offset}};
+        rv = UvFsMakeFile(uv->dir, info->filename, bufs, 2, errmsg);
+        RaftHeapFree(buf.base);
+        if (rv != 0) {
+            ErrMsgPrintf(errmsg, "failed to create %s", info->filename);
+            goto out;
+        }
+        printf("segment %s: conversion done\n", info->filename);
+    }
+
+out:
+    RaftHeapFree(segments);
+    return rv;
+}
+
 #undef tracef

@@ -54,6 +54,10 @@ AM_CONDITIONAL(EXAMPLE_ENABLED, test "x$enable_example" = "xyes")
 AC_ARG_ENABLE(benchmark, AS_HELP_STRING([--enable-benchmark[=ARG]], [build the benchmark programs [default=no]]))
 AM_CONDITIONAL(BENCHMARK_ENABLED, test "x$enable_benchmark" = "xyes")
 
+# The recovery programs are optional.
+AC_ARG_ENABLE(recovery, AS_HELP_STRING([--enable-recovery[=ARG]], [build the recovery programs [default=no]]))
+AM_CONDITIONAL(RECOVERY_ENABLED, test "x$enable_recovery" = "xyes")
+
 # Whether to enable debugging code.
 AC_ARG_ENABLE(debug, AS_HELP_STRING([--enable-debug[=ARG]], [enable debugging [default=no]]))
 AM_CONDITIONAL(DEBUG_ENABLED, test "x$enable_debug" = "xyes")

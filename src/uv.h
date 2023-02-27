@@ -178,6 +178,12 @@ int uvSegmentLoadAll(struct uv *uv,
                      struct raft_entry **entries,
                      size_t *n_entries);
 
+/* Converts all segments in the uv dir to the specified format. Valid values for
+ * @format are 1 or the macros UV__DISK_FORMAT (1) and UV__SEGMENT_DISK_FORMAT_LEGACY (1).
+ * Returns 0 on success. */
+int UvSegmentConvertDirToFormat(struct uv *uv, int format,
+                                char errmsg[RAFT_ERRMSG_BUF_SIZE]);
+
 /* Return the number of blocks in a segments. */
 #define uvSegmentBlocks(UV) (UV->segment_size / UV->block_size)
 

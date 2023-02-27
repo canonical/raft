@@ -38,3 +38,4 @@ benchmark/os-disk-write
 tmp
 conftest*
 doc/build
+recovery/downgrade_segment_format
