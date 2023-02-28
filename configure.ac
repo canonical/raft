@@ -175,7 +175,7 @@ CC_CHECK_FLAGS_APPEND([AM_LDFLAGS],[LDFLAGS],[ \
 AC_SUBST(AM_LDLAGS)
 
 REQUIRES=''
-AS_IF(test "x$enable_lz4" != "xno" -a "x$have_lz4" = "xyes", REQUIRES=lz4)
+AS_IF(test "x$enable_lz4" != "xno" -a "x$have_lz4" = "xyes", REQUIRES=liblz4)
 AS_IF(test "$have_uv" = yes, REQUIRES="$REQUIRES libuv")
 AC_SUBST(REQUIRES)
 
