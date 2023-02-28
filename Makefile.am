@@ -78,9 +78,9 @@ test_unit_core_CFLAGS = $(AM_CFLAGS) -Wno-conversion
 test_unit_core_LDADD = libtest.la
 
 if LZ4_AVAILABLE
-test_unit_core_CFLAGS += -DLZ4_AVAILABLE
+test_unit_core_CFLAGS += -DLZ4_AVAILABLE $(LZ4_CFLAGS)
 test_unit_core_LDFLAGS = $(LZ4_LIBS)
-libraft_la_CFLAGS += -DLZ4_AVAILABLE
+libraft_la_CFLAGS += -DLZ4_AVAILABLE $(LZ4_CFLAGS)
 libraft_la_LDFLAGS += $(LZ4_LIBS)
 endif # LZ4_AVAILABLE
 if LZ4_ENABLED

@@ -6,5 +6,6 @@ includedir=@includedir@
 Name: raft
 Description: C implementation of the Raft Consensus protocol
 Version:  @PACKAGE_VERSION@
+Requires.private: @REQUIRES@
 Libs: -L${libdir} -lraft
 Cflags: -I${includedir}
