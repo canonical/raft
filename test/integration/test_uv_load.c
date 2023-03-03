@@ -51,6 +51,18 @@ struct snapshot
     uint64_t data;
 };
 
+static char *bools[] = {
+    "0",
+    "1",
+    NULL,
+};
+
+#define SEGMENTS_CONVERT "segments-convert"
+static MunitParameterEnum convertDirParams[] = {
+    {SEGMENTS_CONVERT, bools},
+    {NULL, NULL},
+};
+
 #define WORD_SIZE 8
 
 /* Maximum number of blocks a segment can have */
@@ -334,7 +346,9 @@ struct snapshot
 /* Initialize the raft_io instance, then invoke raft_io->load() and assert that
  * it returns the given state. If non-NULL, SNAPSHOT points to a struct snapshot
  * object whose attributes must match the loaded snapshot. ENTRIES_DATA is
- * supposed to be the integer stored in the data of first loaded entry. */
+ * supposed to be the integer stored in the data of first loaded entry. Converts
+ * the segments in the directory to legacy format if SEGMENTS_CONVERT parameter
+ * is non-0. */
 #define LOAD(TERM, VOTED_FOR, SNAPSHOT, START_INDEX, ENTRIES_DATA, N_ENTRIES) \
     do {                                                                      \
         LOAD_VARS;                                                            \
@@ -342,6 +356,15 @@ struct snapshot
         uint64_t _data = ENTRIES_DATA;                                        \
         unsigned _i;                                                          \
         SETUP_UV;                                                             \
+        const char *_convert = munit_parameters_get(params, SEGMENTS_CONVERT);\
+        if (_convert != NULL && strtoul(_convert, NULL, 0)) {                 \
+            int _rv2;                                                         \
+            struct uv *_uv = f->io.impl;                                      \
+            char _errmsg[RAFT_ERRMSG_BUF_SIZE];                               \
+            _rv2 = UvSegmentConvertDirToFormat(_uv,                           \
+                    UV__SEGMENT_DISK_FORMAT_LEGACY, _errmsg);                 \
+            munit_assert_int(_rv2, ==, 0);                                    \
+        }                                                                     \
         _LOAD(TERM, VOTED_FOR, SNAPSHOT, START_INDEX, N_ENTRIES)              \
     } while (0)
 
@@ -480,7 +503,7 @@ TEST(load, removeUnusableFiles, setUp, tearDown, 0, unusableFilesParams)
 }
 
 /* The data directory has an empty open segment. */
-TEST(load, emptyOpenSegment, setUp, tearDown, 0, NULL)
+TEST(load, emptyOpenSegment, setUp, tearDown, 0, convertDirParams)
 {
     struct fixture *f = data;
     DirWriteFile(f->dir, "open-1", NULL, 0);
@@ -497,7 +520,7 @@ TEST(load, emptyOpenSegment, setUp, tearDown, 0, NULL)
 }
 
 /* The data directory has a freshly allocated open segment filled with zeros. */
-TEST(load, openSegmentWithTrailingZeros, setUp, tearDown, 0, NULL)
+TEST(load, openSegmentWithTrailingZeros, setUp, tearDown, 0, convertDirParams)
 {
     struct fixture *f = data;
     DirWriteFileWithZeros(f->dir, "open-1", 256);
@@ -514,7 +537,7 @@ TEST(load, openSegmentWithTrailingZeros, setUp, tearDown, 0, NULL)
 }
 
 /* The data directory has a valid closed and open segments. */
-TEST(load, bothOpenAndClosedSegments, setUp, tearDown, 0, NULL)
+TEST(load, bothOpenAndClosedSegments, setUp, tearDown, 0, convertDirParams)
 {
     struct fixture *f = data;
     APPEND(2, 1);
@@ -533,7 +556,7 @@ TEST(load, bothOpenAndClosedSegments, setUp, tearDown, 0, NULL)
 
 /* The data directory has an allocated open segment which contains non-zero
  * corrupted data in its second batch. */
-TEST(load, openSegmentWithNonZeroData, setUp, tearDown, 0, NULL)
+TEST(load, openSegmentWithNonZeroData, setUp, tearDown, 0, convertDirParams)
 {
     struct fixture *f = data;
     uint64_t corrupt = 123456789;
@@ -556,7 +579,7 @@ TEST(load, openSegmentWithNonZeroData, setUp, tearDown, 0, NULL)
 
 /* The data directory has an open segment with a partially written batch that
  * needs to be truncated. */
-TEST(load, openSegmentWithIncompleteBatch, setUp, tearDown, 0, NULL)
+TEST(load, openSegmentWithIncompleteBatch, setUp, tearDown, 0, convertDirParams)
 {
     struct fixture *f = data;
     uint8_t zero[256];

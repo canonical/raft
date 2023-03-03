@@ -1350,6 +1350,7 @@ int UvSegmentConvertDirToFormat(struct uv *uv, int target_format,
     size_t n_snapshots;
     size_t n_segments;
     uint64_t format;
+    bool empty;
     struct raft_buffer buf = {0};
     uint8_t format_buf[8] = {1,0,0,0,0,0,0,0};
     struct raft_buffer fmt_buf = {format_buf, 8};
@@ -1380,6 +1381,15 @@ int UvSegmentConvertDirToFormat(struct uv *uv, int target_format,
     for (size_t i = 0; i < n_segments; i++) {
         struct uvSegmentInfo *info = &segments[i];
         printf("segment %s: start conversion ...\n", info->filename);
+        rv = UvFsFileIsEmpty(uv->dir, info->filename, &empty, errmsg);
+        if (rv != 0) {
+            ErrMsgPrintf(errmsg, "failed to read %s", info->filename);
+            goto out;
+        }
+        if (empty) {
+            printf("segment %s: empty\n", info->filename);
+            continue;
+        }
         rv = uvReadSegmentFile(uv, info->filename, &buf, &format);
         if (rv != 0) {
             ErrMsgPrintf(errmsg, "failed to read %s", info->filename);
