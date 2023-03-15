@@ -900,9 +900,15 @@ RAFT_API void raft_set_max_catch_up_round_duration(struct raft *r,
 RAFT_API const char *raft_errmsg(struct raft *r);
 
 /**
- * Return the code of the current raft state.
+ * Return the code of the current raft state (follower/candidate/leader).
  */
 RAFT_API int raft_state(struct raft *r);
+
+/**
+ * Return the code of the current raft role (spare/standby/voter),
+ * or -1 if this server is not in the current configuration.
+ */
+RAFT_API int raft_role(struct raft *r);
 
 /**
  * Return the ID and address of the current known leader, if any.
