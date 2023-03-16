@@ -1,4 +1,4 @@
-[![CI Tests](https://github.com/canonical/raft/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/canonical/raft/actions/workflows/build-and-test.yml) [![codecov](https://codecov.io/gh/canonical/raft/branch/master/graph/badge.svg)](https://codecov.io/gh/canonical/raft) [![Documentation Status](https://readthedocs.org/projects/raft/badge/?version=latest)](https://raft.readthedocs.io/en/latest/?badge=latest)
+[![CI Tests](https://github.com/canonical/raft/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/canonical/raft/actions/workflows/build-and-test.yml) [![codecov](https://codecov.io/gh/canonical/raft/branch/master/graph/badge.svg)](https://codecov.io/gh/canonical/raft) [![Documentation Status](https://readthedocs.org/projects/raft/badge/?version=latest)](https://raft.readthedocs.io/en/latest/?badge=latest) ![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/canonical/raft)
 
 [English](./README.md)|[简体中文](./README_CH.md)
 
