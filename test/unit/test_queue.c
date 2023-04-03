@@ -3,13 +3,20 @@
 
 /******************************************************************************
  *
- * Fixture with a single queue.
+ * Fixture with a single queue and a few test items that can be added to it.
  *
  *****************************************************************************/
 
+struct item
+{
+    int value;
+    queue queue;
+};
+
 struct fixture
 {
-    void *queue[2];
+    queue queue;
+    struct item items[3];
 };
 
 static void *setUp(MUNIT_UNUSED const MunitParameter params[],
@@ -32,27 +39,20 @@ static void tearDown(void *data)
  *
  *****************************************************************************/
 
-struct item
-{
-    int value;
-    void *queue[2];
-};
-
-/* Initialize and push the given items to the fixture's queue. Each item will
- * have a value equal to its index plus one. */
-#define PUSH(ITEMS)                              \
-    {                                            \
-        int n_ = sizeof ITEMS / sizeof ITEMS[0]; \
-        int i_;                                  \
-        for (i_ = 0; i_ < n_; i_++) {            \
-            struct item *item = &items[i_];      \
-            item->value = i_ + 1;                \
-            QUEUE_PUSH(&f->queue, &item->queue); \
-        }                                        \
+/* Initialize and push the given number of fixture items to the fixture's
+ * queue. Each item will have a value equal to its index plus one. */
+#define PUSH(N)                                   \
+    {                                             \
+        int i_;                                   \
+        for (i_ = 0; i_ < N; i_++) {              \
+            struct item *item_ = &f->items[i_];   \
+            item_->value = i_ + 1;                \
+            QUEUE_PUSH(&f->queue, &item_->queue); \
+        }                                         \
     }
 
-/* Remove the i'th item among the given ones. */
-#define REMOVE(ITEMS, I) QUEUE_REMOVE(&ITEMS[I].queue)
+/* Remove the i'th fixture item from the fixture queue. */
+#define REMOVE(I) QUEUE_REMOVE(&f->items[I].queue)
 
 /******************************************************************************
  *
@@ -103,8 +103,7 @@ TEST(QUEUE_IS_EMPTY, yes, setUp, tearDown, 0, NULL)
 TEST(QUEUE_IS_EMPTY, no, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    static struct item items[1];
-    PUSH(items);
+    PUSH(1);
     ASSERT_NOT_EMPTY;
     return MUNIT_OK;
 }
@@ -120,8 +119,7 @@ SUITE(QUEUE_PUSH)
 TEST(QUEUE_PUSH, one, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    static struct item items[1];
-    PUSH(items);
+    PUSH(1);
     ASSERT_HEAD(1);
     return MUNIT_OK;
 }
@@ -129,12 +127,11 @@ TEST(QUEUE_PUSH, one, setUp, tearDown, 0, NULL)
 TEST(QUEUE_PUSH, two, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    static struct item items[2];
     int i;
-    PUSH(items);
+    PUSH(2);
     for (i = 0; i < 2; i++) {
         ASSERT_HEAD(i + 1);
-        REMOVE(items, i);
+        REMOVE(i);
     }
     ASSERT_EMPTY;
     return MUNIT_OK;
@@ -151,9 +148,8 @@ SUITE(QUEUE_REMOVE)
 TEST(QUEUE_REMOVE, first, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    static struct item items[3];
-    PUSH(items);
-    REMOVE(items, 0);
+    PUSH(3);
+    REMOVE(0);
     ASSERT_HEAD(2);
     return MUNIT_OK;
 }
@@ -161,9 +157,8 @@ TEST(QUEUE_REMOVE, first, setUp, tearDown, 0, NULL)
 TEST(QUEUE_REMOVE, second, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    static struct item items[3];
-    PUSH(items);
-    REMOVE(items, 1);
+    PUSH(3);
+    REMOVE(1);
     ASSERT_HEAD(1);
     return MUNIT_OK;
 }
@@ -171,9 +166,8 @@ TEST(QUEUE_REMOVE, second, setUp, tearDown, 0, NULL)
 TEST(QUEUE_REMOVE, success, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    static struct item items[3];
-    PUSH(items);
-    REMOVE(items, 2);
+    PUSH(3);
+    REMOVE(2);
     ASSERT_HEAD(1);
     return MUNIT_OK;
 }
@@ -189,8 +183,7 @@ SUITE(QUEUE_TAIL)
 TEST(QUEUE_TAIL, one, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    static struct item items[1];
-    PUSH(items);
+    PUSH(1);
     ASSERT_TAIL(1);
     return MUNIT_OK;
 }
@@ -198,8 +191,7 @@ TEST(QUEUE_TAIL, one, setUp, tearDown, 0, NULL)
 TEST(QUEUE_TAIL, two, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    static struct item items[2];
-    PUSH(items);
+    PUSH(2);
     ASSERT_TAIL(2);
     return MUNIT_OK;
 }
@@ -207,8 +199,7 @@ TEST(QUEUE_TAIL, two, setUp, tearDown, 0, NULL)
 TEST(QUEUE_TAIL, three, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    static struct item items[3];
-    PUSH(items);
+    PUSH(3);
     ASSERT_TAIL(3);
     return MUNIT_OK;
 }
@@ -236,10 +227,9 @@ TEST(QUEUE_FOREACH, zero, setUp, tearDown, 0, NULL)
 TEST(QUEUE_FOREACH, one, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    static struct item items[1];
     queue *head;
     int count = 0;
-    PUSH(items);
+    PUSH(1);
     QUEUE_FOREACH(head, &f->queue) { count++; }
     munit_assert_int(count, ==, 1);
     return MUNIT_OK;
@@ -250,11 +240,10 @@ TEST(QUEUE_FOREACH, one, setUp, tearDown, 0, NULL)
 TEST(QUEUE_FOREACH, two, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    static struct item items[2];
     queue *head;
     int values[2] = {0, 0};
     int i = 0;
-    PUSH(items);
+    PUSH(2);
     QUEUE_FOREACH(head, &f->queue)
     {
         struct item *item;
