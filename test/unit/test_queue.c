@@ -9,7 +9,7 @@
 
 struct fixture
 {
-    void *queue[2];
+    queue queue;
 };
 
 static void *setUp(MUNIT_UNUSED const MunitParameter params[],
@@ -35,7 +35,7 @@ static void tearDown(void *data)
 struct item
 {
     int value;
-    void *queue[2];
+    queue queue;
 };
 
 /* Initialize and push the given items to the fixture's queue. Each item will
