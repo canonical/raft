@@ -3,13 +3,20 @@
 
 /******************************************************************************
  *
- * Fixture with a single queue.
+ * Fixture with a single queue and a few test items that can be added to it.
  *
  *****************************************************************************/
+
+struct item
+{
+    int value;
+    queue queue;
+};
 
 struct fixture
 {
     queue queue;
+    struct item items[3];
 };
 
 static void *setUp(MUNIT_UNUSED const MunitParameter params[],
@@ -31,12 +38,6 @@ static void tearDown(void *data)
  * Helper macros
  *
  *****************************************************************************/
-
-struct item
-{
-    int value;
-    queue queue;
-};
 
 /* Initialize and push the given items to the fixture's queue. Each item will
  * have a value equal to its index plus one. */
