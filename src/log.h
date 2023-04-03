@@ -82,8 +82,8 @@ raft_term logLastTerm(struct raft_log *l);
  * entry in the most recent snapshot). */
 raft_term logTermOf(struct raft_log *l, raft_index index);
 
-/* Get the last index of the most recent snapshot. Return #0 if there are no *
- * snapshots. */
+/* Get the index of the last entry in the most recent snapshot. Return #0 if
+ * there are no snapshots. */
 raft_index logSnapshotIndex(struct raft_log *l);
 
 /* Get the entry with the given index. * The returned pointer remains valid only
