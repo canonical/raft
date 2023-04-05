@@ -65,7 +65,7 @@ To build ``libraft`` from source you'll need:
 * Optionally, but recommended, a reasonably recent version of [liblz4](https://lz4.github.io/lz4/) (v1.7.1 or beyond).
 
 ```bash
-sudo apt-get install libuv1-dev liblz4-dev
+sudo apt-get install libuv1-dev liblz4-dev libtool pkg-config build-essential
 autoreconf -i
 ./configure --enable-example
 make

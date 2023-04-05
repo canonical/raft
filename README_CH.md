@@ -55,7 +55,7 @@ sudo apt-get install libraft-dev
 - 可选的[liblz4](https://lz4.github.io/lz4/)（推荐使用）（v1.7.1或之后的版本）
 
 ```bash
-sudo apt-get install libuv1-dev liblz4-dev
+sudo apt-get install libuv1-dev liblz4-dev libtool pkg-config build-essential
 
 autoreconf -i
 
