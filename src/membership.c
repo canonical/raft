@@ -4,6 +4,7 @@
 #include "assert.h"
 #include "configuration.h"
 #include "err.h"
+#include "heap.h"
 #include "log.h"
 #include "progress.h"
 #include "tracing.h"
@@ -194,10 +195,16 @@ void membershipLeadershipTransferInit(struct raft *r,
     r->transfer = req;
 }
 
+static void membershipLeadershipSendCb(struct raft_io_send *send, int status) {
+    (void)status;
+    RaftHeapFree(send);
+}
+
 int membershipLeadershipTransferStart(struct raft *r)
 {
     const struct raft_server *server;
     struct raft_message message;
+    struct raft_io_send *send;
     int rv;
     assert(r->transfer->send.data == NULL);
     server = configurationGet(&r->configuration, r->transfer->id);
@@ -207,15 +214,37 @@ int membershipLeadershipTransferStart(struct raft *r)
         return -1;
     }
 
+    /* Don't use the raft_io_send object embedded in struct raft_transfer, since
+     * the two objects must have different lifetimes. For example raft_io_send
+     * might live longer than raft_transfer, see #396.
+     *
+     * Ideally we should remove the embedded struct raft_io_send send field from
+     * struct raft_transfer, and replace it with a raft_io_send *send pointer,
+     * that we set to the raft_io_send object allocated in this function. This
+     * would break ABI compatibility though. */
+    send = RaftHeapMalloc(sizeof *send);
+    if (send == NULL) {
+        return RAFT_NOMEM;
+    }
+
     message.type = RAFT_IO_TIMEOUT_NOW;
     message.server_id = server->id;
     message.server_address = server->address;
     message.timeout_now.term = r->current_term;
     message.timeout_now.last_log_index = logLastIndex(r->log);
     message.timeout_now.last_log_term = logLastTerm(r->log);
+
+    /* Set the data attribute of the raft_io_send object embedded in
+     * raft_transfer. This is needed because we historically used it as a flag
+     * to indicate that a transfer request was sent. See the replicationUpdate
+     * function. */
     r->transfer->send.data = r;
-    rv = r->io->send(r->io, &r->transfer->send, &message, NULL);
+
+    send->data = r;
+
+    rv = r->io->send(r->io, send, &message, membershipLeadershipSendCb);
     if (rv != 0) {
+        RaftHeapFree(send);
         ErrMsgTransferf(r->io->errmsg, r->errmsg, "send timeout now to %llu",
                         server->id);
         return rv;
