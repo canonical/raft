@@ -352,8 +352,8 @@ struct raft_message
  * Hold the details of a snapshot.
  * The user-provided raft_buffer structs should provide the user with enough
  * flexibility to adapt/evolve snapshot formats.
- * If this struct would NEED to be adapted in the future, raft can always move to
- * a new struct with a new name and a new raft_io version.
+ * If this struct would NEED to be adapted in the future, raft can always move
+ * to a new struct with a new name and a new raft_io version.
  */
 struct raft_snapshot
 {
@@ -545,10 +545,10 @@ struct raft_io
  * version 3:
  * Adds support for async snapshots through the `snapshot_async` function.
  * When this method is provided, raft will call `snapshot` in the main loop,
- * and when successful, will call `snapshot_async` by means of the `io->async_work` method.
- * The callback to `io->async_work` will in turn call `snapshot_finalize`
- * in the main loop when the work has completed independent of the return value
- * of `snapshot_async`.
+ * and when successful, will call `snapshot_async` using the `io->async_work`
+ * method, so blocking I/O calls are allowed in the implementation. After the
+ * `snapshot_async` completes, `snapshot_finalize` will be called in the main
+ * loop, independent of the return value of `snapshot_async`.
  * An implementation that does not use asynchronous snapshots MUST set
  * `snapshot_async` to NULL.
  * All memory allocated by the snapshot routines MUST be freed by the snapshot
@@ -637,7 +637,7 @@ struct raft
      *    leader. In this case #configuration and #configuration_previous
      *    must be empty and have no servers.
      *
-     * 2. #configuration_index is non-zero while #configuration_uncommitted_index
+     * 2. #configuration_index is non-zero and #configuration_uncommitted_index
      *    is zero. In this case the content of #configuration must match the one
      *    of the log entry at #configuration_index.
      *
@@ -646,9 +646,10 @@ struct raft
      *    the content of #configuration must match the one of the log entry at
      *    #configuration_uncommitted_index.
      *
-     * 4. In case the previous - committed - configuration can no longer be found
-     *    in the log e.g. after truncating the log when taking or installing a
-     *    snapshot, `configuration_previous` will contain a copy of it.
+     * 4. In case the previous - committed - configuration can no longer be
+     *    found in the log e.g. after truncating the log when taking or
+     *    installing a snapshot, `configuration_previous` will contain a copy
+     *    of it.
      */
     struct raft_configuration configuration;
     struct raft_configuration configuration_previous;
@@ -690,8 +691,8 @@ struct raft
     unsigned heartbeat_timeout;
 
     /*
-     * When the leader sends an InstallSnapshot RPC to a follower it will consider
-     * the RPC as failed after this timeout and retry.
+     * When the leader sends an InstallSnapshot RPC to a follower it will
+     * consider the RPC as failed after this timeout and retry.
      */
     unsigned install_snapshot_timeout;
 
