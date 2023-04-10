@@ -12,12 +12,14 @@
 /**
  * Version.
  */
-#define RAFT_VERSION_MAJOR    1
-#define RAFT_VERSION_MINOR    17
-#define RAFT_VERSION_RELEASE  1
-#define RAFT_VERSION_NUMBER (RAFT_VERSION_MAJOR *100*100 + RAFT_VERSION_MINOR *100 + RAFT_VERSION_RELEASE)
+#define RAFT_VERSION_MAJOR 1
+#define RAFT_VERSION_MINOR 17
+#define RAFT_VERSION_RELEASE 1
+#define RAFT_VERSION_NUMBER                                      \
+    (RAFT_VERSION_MAJOR * 100 * 100 + RAFT_VERSION_MINOR * 100 + \
+     RAFT_VERSION_RELEASE)
 
-int raft_version_number (void);
+int raft_version_number(void);
 
 /**
  * Error codes.
@@ -83,7 +85,6 @@ struct raft_buffer
     void *base; /* Pointer to the buffer data. */
     size_t len; /* Length of the buffer. */
 };
-
 
 /**
  * Server role codes.
@@ -228,9 +229,9 @@ struct raft_request_vote
 struct raft_request_vote_result
 {
     int version;
-    raft_term term;        /* Receiver's current term (candidate updates itself). */
-    bool vote_granted;     /* True means candidate received vote. */
-    bool pre_vote;         /* The response to a pre-vote RequestVote or not. */
+    raft_term term;    /* Receiver's current term (candidate updates itself). */
+    bool vote_granted; /* True means candidate received vote. */
+    bool pre_vote;     /* The response to a pre-vote RequestVote or not. */
 };
 #define RAFT_REQUEST_VOTE_RESULT_VERSION 2
 
@@ -720,7 +721,7 @@ struct raft
                 raft_id id;
                 char *address;
             } current_leader;
-            uint64_t reserved[8];                 /* Future use */
+            uint64_t reserved[8]; /* Future use */
         } follower_state;
         struct
         {
@@ -940,7 +941,7 @@ RAFT_API raft_index raft_last_applied(struct raft *r);
     uint8_t req_id[16];    \
     uint8_t client_id[16]; \
     uint8_t unique_id[16]; \
-    uint64_t reserved[4]   \
+    uint64_t reserved[4]
 
 /**
  * Asynchronous request to append a new command entry to the log and apply it to
