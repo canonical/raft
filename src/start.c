@@ -13,8 +13,10 @@
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
 
 /* Restore the most recent configurations. */
-static int restoreConfigurations(struct raft *r, raft_index prev_index,
-                                 raft_index last_index, struct raft_entry *last)
+static int restoreConfigurations(struct raft *r,
+                                 raft_index prev_index,
+                                 raft_index last_index,
+                                 struct raft_entry *last)
 {
     struct raft_configuration last_conf;
     int rv;
@@ -53,7 +55,8 @@ static int restoreConfigurations(struct raft *r, raft_index prev_index,
         }
     }
 
-    configurationTrace(r, &r->configuration, "restore most recent configuration");
+    configurationTrace(r, &r->configuration,
+                       "restore most recent configuration");
     return 0;
 }
 
@@ -89,7 +92,8 @@ static int restoreEntries(struct raft *r,
         r->last_stored++;
         /* Only take configurations into account that are newer than the
          * configuration restored from the snapshot. */
-        if (entry->type == RAFT_CHANGE && r->last_stored > r->configuration_index) {
+        if (entry->type == RAFT_CHANGE &&
+            r->last_stored > r->configuration_index) {
             prev_conf_index = last_conf_index;
             last_conf = entry;
             last_conf_index = r->last_stored;
@@ -177,8 +181,8 @@ int raft_start(struct raft *r)
         snapshot_term = snapshot->term;
         raft_free(snapshot);
 
-        /* Enable configuration rollback if the next configuration after installing
-         * this snapshot needs to be rolled back. */
+        /* Enable configuration rollback if the next configuration after
+         * installing this snapshot needs to be rolled back. */
         rv = configurationBackup(r, &r->configuration);
         if (rv != 0) {
             tracef("failed to backup current configuration.");

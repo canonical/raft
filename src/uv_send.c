@@ -264,7 +264,10 @@ static unsigned uvClientPendingCount(struct uvClient *c)
 {
     queue *head;
     unsigned n = 0;
-    QUEUE_FOREACH(head, &c->pending) { n++; }
+    QUEUE_FOREACH(head, &c->pending)
+    {
+        n++;
+    }
     return n;
 }
 

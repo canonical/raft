@@ -1,10 +1,10 @@
 #include <unistd.h>
 
+#include "../../src/uv.h"
 #include "../lib/dir.h"
 #include "../lib/loop.h"
 #include "../lib/runner.h"
 #include "../lib/uv.h"
-#include "../../src/uv.h"
 
 /******************************************************************************
  *
@@ -83,10 +83,10 @@ static int asyncWorkFn(struct raft_io_async_work *req)
 
 SUITE(UvAsyncWork)
 
-static char* rvs[] = { "-1", "0", "1", "37", NULL };
+static char *rvs[] = {"-1", "0", "1", "37", NULL};
 static MunitParameterEnum rvs_params[] = {
-    { "rv", rvs },
-    { NULL, NULL },
+    {"rv", rvs},
+    {NULL, NULL},
 };
 
 TEST(UvAsyncWork, work, setUp, tearDown, 0, rvs_params)

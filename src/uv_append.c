@@ -272,14 +272,14 @@ out:
         if (rv != 0) {
             uv->errored = true;
         }
-    } else if (s->finalize
-               && (s->pending_last_index == s->last_index)
-               && !s->writer.closing) {
+    } else if (s->finalize && (s->pending_last_index == s->last_index) &&
+               !s->writer.closing) {
         /* If there are no more append_pending_reqs or write requests in flight,
          * this segment must be finalized here in case we don't receive
          * AppendEntries RPCs anymore (could happen during a Snapshot install,
-         * causing the BarrierCb to never fire), but check that the callbacks that
-         * fired after completion of this write didn't already close the segment. */
+         * causing the BarrierCb to never fire), but check that the callbacks
+         * that fired after completion of this write didn't already close the
+         * segment. */
         uvAliveSegmentFinalize(s);
     }
 }
@@ -331,12 +331,13 @@ start:
         return 0;
     }
 
-    /* If there's a blocking barrier in progress, and it's not waiting for this segment
-     * to be finalized, let's wait.
+    /* If there's a blocking barrier in progress, and it's not waiting for this
+     * segment to be finalized, let's wait.
      *
-     * FIXME shouldn't we wait even if segment->barrier == uv->barrier, if there are
-     * other open segments associated with the same barrier? */
-    if (uv->barrier != NULL && segment->barrier != uv->barrier && uv->barrier->blocking) {
+     * FIXME shouldn't we wait even if segment->barrier == uv->barrier, if there
+     * are other open segments associated with the same barrier? */
+    if (uv->barrier != NULL && segment->barrier != uv->barrier &&
+        uv->barrier->blocking) {
         return 0;
     }
 
@@ -636,7 +637,8 @@ static int uvCheckEntryBuffersAligned(struct uv *uv,
 
     for (i = 0; i < n; i++) {
         if (entries[i].buf.len % 8) {
-            ErrMsgPrintf(uv->io->errmsg, "entry buffers must be 8-byte aligned");
+            ErrMsgPrintf(uv->io->errmsg,
+                         "entry buffers must be 8-byte aligned");
             Tracef(uv->tracer, "%s", uv->io->errmsg);
             return RAFT_INVALID;
         }
@@ -748,7 +750,7 @@ bool UvBarrierReady(struct uv *uv)
         struct uvAliveSegment *segment;
         segment = QUEUE_DATA(head, struct uvAliveSegment, queue);
         if (segment->barrier == uv->barrier) {
-                return false;
+            return false;
         }
     }
     return true;
@@ -845,12 +847,12 @@ static void uvBarrierClose(struct uv *uv)
          *
          * - by UvBarrierReady, to check whether it's time to invoke the barrier
          *   callback after successfully finalizing a segment
-         * - by uvAppendMaybeStart, to see whether we should go ahead with writing
-         *   to a segment even though a barrier is active because the barrier is
-         *   waiting on that same segment to be finalized (but see the FIXME in
-         *   that function)
-         * - to save a barrier for later, if UvBarrier was called when uv->barrier
-         *   was already set
+         * - by uvAppendMaybeStart, to see whether we should go ahead with
+         * writing to a segment even though a barrier is active because the
+         * barrier is waiting on that same segment to be finalized (but see the
+         * FIXME in that function)
+         * - to save a barrier for later, if UvBarrier was called when
+         * uv->barrier was already set
          *
          * If we're cancelling the barrier, we don't need to save it for later;
          * the callback will not be invoked a second time in any case; and

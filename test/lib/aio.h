@@ -9,8 +9,8 @@
  * @io_setup.
  *
  * Return -1 if it looks like there is another process already using the AIO
- * subsystem, which would most probably make the calling test flaky because there
- * won't be exactly @n events available anymore. */
+ * subsystem, which would most probably make the calling test flaky because
+ * there won't be exactly @n events available anymore. */
 int AioFill(aio_context_t *ctx, unsigned n);
 
 /* Destroy the given AIO context. */

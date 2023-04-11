@@ -7,8 +7,8 @@
 
 struct heap
 {
-    int n;                   /* Number of outstanding allocations. */
-    size_t alignment;        /* Value of last aligned alloc */
+    int n;              /* Number of outstanding allocations. */
+    size_t alignment;   /* Value of last aligned alloc */
     struct Fault fault; /* Fault trigger. */
 };
 

@@ -1,7 +1,7 @@
 #include "../../src/uv_fs.h"
 #include "../../src/uv_writer.h"
-#include "../lib/dir.h"
 #include "../lib/aio.h"
+#include "../lib/dir.h"
 #include "../lib/loop.h"
 #include "../lib/runner.h"
 

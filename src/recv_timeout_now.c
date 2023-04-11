@@ -26,7 +26,11 @@ int recvTimeoutNow(struct raft *r,
 
     (void)address;
 
-    tracef("self:%llu from:%llu@%s last_log_index:%llu last_log_term:%llu term:%llu", r->id, id, address, args->last_log_index, args->last_log_term, args->term);
+    tracef(
+        "self:%llu from:%llu@%s last_log_index:%llu last_log_term:%llu "
+        "term:%llu",
+        r->id, id, address, args->last_log_index, args->last_log_term,
+        args->term);
     /* Ignore the request if we are not voters. */
     local_server = configurationGet(&r->configuration, r->id);
     if (local_server == NULL || local_server->role != RAFT_VOTER) {
@@ -38,7 +42,8 @@ int recvTimeoutNow(struct raft *r,
      * leader. */
     if (r->state != RAFT_FOLLOWER ||
         r->follower_state.current_leader.id != id) {
-        tracef("Ignore - r->state:%d current_leader.id:%llu", r->state, r->follower_state.current_leader.id);
+        tracef("Ignore - r->state:%d current_leader.id:%llu", r->state,
+               r->follower_state.current_leader.id);
         return 0;
     }
 

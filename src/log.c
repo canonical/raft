@@ -335,7 +335,7 @@ static bool refsDecr(struct raft_log *l,
     return true;
 }
 
-struct raft_log* logInit(void)
+struct raft_log *logInit(void)
 {
     struct raft_log *log;
 
@@ -343,7 +343,6 @@ struct raft_log* logInit(void)
     if (log == NULL) {
         return NULL;
     }
-
 
     log->entries = NULL;
     log->size = 0;
@@ -438,7 +437,8 @@ void logStart(struct raft_log *l,
     l->offset = start_index - 1;
 }
 
-/* Ensure that the entries array has enough free slots for adding a new entry. */
+/* Ensure that the entries array has enough free slots for adding a new entry.
+ */
 static int ensureCapacity(struct raft_log *l)
 {
     struct raft_entry *entries; /* New entries array */
@@ -630,8 +630,8 @@ raft_term logTermOf(struct raft_log *l, const raft_index index)
 
     if (index == l->snapshot.last_index) {
         assert(l->snapshot.last_term != 0);
-        /* Coherence check that if we still have the entry at last_index, its term
-         * matches the one in the snapshot. */
+        /* Coherence check that if we still have the entry at last_index, its
+         * term matches the one in the snapshot. */
         i = locateEntry(l, index);
         if (i != l->size) {
             assert(l->entries[i].term == l->snapshot.last_term);

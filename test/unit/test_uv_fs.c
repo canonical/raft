@@ -352,14 +352,14 @@ TEST(UvFsProbeCapabilities, noResources, DirBtrfsSetUp, DirTearDown, 0, NULL)
     if (rv != 0) {
         return MUNIT_SKIP;
     }
-    PROBE_CAPABILITIES_ERROR(dir, RAFT_IOERR,
-                             "probe Async I/O: io_setup: resource temporarily unavailable");
+    PROBE_CAPABILITIES_ERROR(
+        dir, RAFT_IOERR,
+        "probe Async I/O: io_setup: resource temporarily unavailable");
     AioDestroy(ctx);
     return MUNIT_OK;
 }
 
 #endif /* RWF_NOWAIT */
-
 
 /******************************************************************************
  *
@@ -375,7 +375,7 @@ TEST(UvFsMakeFile, notExists, DirSetUp, DirTearDown, 0, NULL)
     const char *dir = data;
     int rv;
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
-    struct raft_buffer bufs[2] = {{0},{0}};
+    struct raft_buffer bufs[2] = {{0}, {0}};
     rv = UvFsMakeFile(dir, "foo", bufs, 2, errmsg);
     munit_assert_int(rv, ==, 0);
     return MUNIT_OK;
@@ -387,7 +387,7 @@ TEST(UvFsMakeFile, exists, DirSetUp, DirTearDown, 0, NULL)
     const char *dir = data;
     int rv;
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
-    struct raft_buffer bufs[2] = {{0},{0}};
+    struct raft_buffer bufs[2] = {{0}, {0}};
     rv = UvFsMakeFile(dir, "foo", bufs, 2, errmsg);
     munit_assert_int(rv, ==, 0);
     rv = UvFsMakeFile(dir, "foo", bufs, 2, errmsg);
@@ -408,7 +408,7 @@ TEST(UvFsRenameFile, rename, DirSetUp, DirTearDown, 0, NULL)
     const char *dir = data;
     int rv;
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
-    struct raft_buffer bufs[2] = {{0},{0}};
+    struct raft_buffer bufs[2] = {{0}, {0}};
     rv = UvFsMakeFile(dir, "foo", bufs, 2, errmsg);
     munit_assert_int(rv, ==, 0);
     rv = UvFsRenameFile(dir, "foo", "bar", errmsg);
@@ -424,7 +424,7 @@ TEST(UvFsRenameFile, same, DirSetUp, DirTearDown, 0, NULL)
     const char *dir = data;
     int rv;
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
-    struct raft_buffer bufs[2] = {{0},{0}};
+    struct raft_buffer bufs[2] = {{0}, {0}};
     rv = UvFsMakeFile(dir, "foo", bufs, 2, errmsg);
     munit_assert_int(rv, ==, 0);
     rv = UvFsRenameFile(dir, "foo", "foo", errmsg);

@@ -37,8 +37,7 @@
                 atoi(munit_parameters_get(params, CLUSTER_PRE_VOTE_PARAM));    \
         }                                                                      \
         if (munit_parameters_get(params, CLUSTER_HEARTBEAT_PARAM) != NULL) {   \
-            _hb =                                                              \
-                atoi(munit_parameters_get(params, CLUSTER_HEARTBEAT_PARAM));   \
+            _hb = atoi(munit_parameters_get(params, CLUSTER_HEARTBEAT_PARAM)); \
         }                                                                      \
         if (munit_parameters_get(params, CLUSTER_SS_ASYNC_PARAM) != NULL) {    \
             _ss_async =                                                        \

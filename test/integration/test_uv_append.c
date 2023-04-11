@@ -1,8 +1,8 @@
-#include "append_helpers.h"
+#include "../../src/uv.h"
+#include "../lib/aio.h"
 #include "../lib/runner.h"
 #include "../lib/uv.h"
-#include "../lib/aio.h"
-#include "../../src/uv.h"
+#include "append_helpers.h"
 
 #include <unistd.h>
 
@@ -27,7 +27,6 @@ struct fixture
     FIXTURE_UV;
     int count; /* To generate deterministic entry data */
 };
-
 
 /******************************************************************************
  *
@@ -149,9 +148,11 @@ TEST(append, unaligned, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     APPEND_SUBMIT_CB_DATA(0, 1, 9, NULL, NULL, RAFT_INVALID);
-    munit_assert_string_equal(f->io.errmsg, "entry buffers must be 8-byte aligned");
+    munit_assert_string_equal(f->io.errmsg,
+                              "entry buffers must be 8-byte aligned");
     APPEND_SUBMIT_CB_DATA(1, 3, 63, NULL, NULL, RAFT_INVALID);
-    munit_assert_string_equal(f->io.errmsg, "entry buffers must be 8-byte aligned");
+    munit_assert_string_equal(f->io.errmsg,
+                              "entry buffers must be 8-byte aligned");
     return MUNIT_OK;
 }
 
@@ -189,8 +190,7 @@ TEST(append, finalizeSegment, setUp, tearDown, 0, NULL)
     while (!DirHasFile(f->dir, "open-4")) {
         LOOP_RUN(1);
     }
-    munit_assert_true(
-        DirHasFile(f->dir, "0000000000000001-0000000000000004"));
+    munit_assert_true(DirHasFile(f->dir, "0000000000000001-0000000000000004"));
     munit_assert_false(DirHasFile(f->dir, "open-1"));
     munit_assert_true(DirHasFile(f->dir, "open-4"));
     return MUNIT_OK;
@@ -405,10 +405,8 @@ TEST(append, counter, setUp, tearDown, 0, NULL)
     for (i = 0; i < 10; i++) {
         APPEND(1, size);
     }
-    munit_assert_true(
-        DirHasFile(f->dir, "0000000000000001-0000000000000003"));
-    munit_assert_true(
-        DirHasFile(f->dir, "0000000000000004-0000000000000006"));
+    munit_assert_true(DirHasFile(f->dir, "0000000000000001-0000000000000003"));
+    munit_assert_true(DirHasFile(f->dir, "0000000000000004-0000000000000006"));
     munit_assert_true(DirHasFile(f->dir, "open-4"));
     return MUNIT_OK;
 }
@@ -583,8 +581,7 @@ TEST(append, currentSegment, setUp, tearDownDeps, 0, NULL)
 
     TEAR_DOWN_UV;
 
-    munit_assert_true(
-        DirHasFile(f->dir, "0000000000000001-0000000000000001"));
+    munit_assert_true(DirHasFile(f->dir, "0000000000000001-0000000000000001"));
 
     return MUNIT_OK;
 }
@@ -610,12 +607,12 @@ TEST(append, ioSetupError, setUp, tearDown, 0, NULL)
 
 struct barrierData
 {
-   int current;     /* Count the number of finished AppendEntries RPCs  */
-   int expected;    /* Expected number of finished AppendEntries RPCs   */
-   bool done;       /* @true if the Barrier CB has fired                */
-   bool expectDone; /* Expect the Barrier CB to have fired or not       */
-   char** files;    /* Expected files in the directory, NULL terminated */
-   struct uv *uv;
+    int current;     /* Count the number of finished AppendEntries RPCs  */
+    int expected;    /* Expected number of finished AppendEntries RPCs   */
+    bool done;       /* @true if the Barrier CB has fired                */
+    bool expectDone; /* Expect the Barrier CB to have fired or not       */
+    char **files;    /* Expected files in the directory, NULL terminated */
+    struct uv *uv;
 };
 
 static void barrierCbCompareCounter(struct UvBarrier *barrier)
@@ -646,10 +643,10 @@ static void appendCbIncreaseCounterAssertResult(struct raft_io_append *req,
     bd->current += 1;
 }
 
-static char* bools[] = { "0", "1", NULL };
+static char *bools[] = {"0", "1", NULL};
 static MunitParameterEnum blocking_bool_params[] = {
-    { "bool", bools },
-    { NULL, NULL },
+    {"bool", bools},
+    {NULL, NULL},
 };
 
 /* Fill up 3 segments worth of AppendEntries RPC's.
@@ -665,17 +662,22 @@ TEST(append, barrierOpenSegments, setUp, tearDown, 0, blocking_bool_params)
     bd.done = false;
     bd.expectDone = false;
     bd.uv = f->io.impl;
-    char* files[] = {"0000000000000001-0000000000000004", "0000000000000005-0000000000000008",
-		     "0000000000000009-0000000000000012", NULL};
+    char *files[] = {"0000000000000001-0000000000000004",
+                     "0000000000000005-0000000000000008",
+                     "0000000000000009-0000000000000012", NULL};
     bd.files = files;
 
-    APPEND_SUBMIT_CB_DATA(0, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd, 0);
-    APPEND_SUBMIT_CB_DATA(1, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd, 0);
-    APPEND_SUBMIT_CB_DATA(2, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd, 0);
+    APPEND_SUBMIT_CB_DATA(0, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE,
+                          appendCbIncreaseCounterAssertResult, &bd, 0);
+    APPEND_SUBMIT_CB_DATA(1, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE,
+                          appendCbIncreaseCounterAssertResult, &bd, 0);
+    APPEND_SUBMIT_CB_DATA(2, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE,
+                          appendCbIncreaseCounterAssertResult, &bd, 0);
 
     struct UvBarrier barrier = {0};
-    barrier.data = (void*) &bd;
-    barrier.blocking = (bool)strtoul(munit_parameters_get(params, "bool"), NULL, 0);
+    barrier.data = (void *)&bd;
+    barrier.blocking =
+        (bool)strtoul(munit_parameters_get(params, "bool"), NULL, 0);
     UvBarrier(f->io.impl, 1, &barrier, barrierCbCompareCounter);
 
     /* Make sure every callback fired */
@@ -686,9 +688,8 @@ TEST(append, barrierOpenSegments, setUp, tearDown, 0, blocking_bool_params)
     return MUNIT_OK;
 }
 
-
-/* Request a blocking Barrier and expect that the no AppendEntries RPC's are finished before
- * the Barrier callback is fired.
+/* Request a blocking Barrier and expect that the no AppendEntries RPC's are
+ * finished before the Barrier callback is fired.
  */
 TEST(append, blockingBarrierNoOpenSegments, setUp, tearDown, 0, NULL)
 {
@@ -701,13 +702,16 @@ TEST(append, blockingBarrierNoOpenSegments, setUp, tearDown, 0, NULL)
     bd.uv = f->io.impl;
 
     struct UvBarrier barrier = {0};
-    barrier.data = (void*) &bd;
+    barrier.data = (void *)&bd;
     barrier.blocking = true;
     UvBarrier(f->io.impl, 1, &barrier, barrierCbCompareCounter);
 
-    APPEND_SUBMIT_CB_DATA(0, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd, 0);
-    APPEND_SUBMIT_CB_DATA(1, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd, 0);
-    APPEND_SUBMIT_CB_DATA(2, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd, 0);
+    APPEND_SUBMIT_CB_DATA(0, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE,
+                          appendCbIncreaseCounterAssertResult, &bd, 0);
+    APPEND_SUBMIT_CB_DATA(1, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE,
+                          appendCbIncreaseCounterAssertResult, &bd, 0);
+    APPEND_SUBMIT_CB_DATA(2, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE,
+                          appendCbIncreaseCounterAssertResult, &bd, 0);
 
     /* Make sure every callback fired */
     LOOP_RUN_UNTIL(&bd.done);
@@ -717,8 +721,8 @@ TEST(append, blockingBarrierNoOpenSegments, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-/* Request a blocking Barrier and expect that the no AppendEntries RPC's are finished before
- * the Barrier callback is fired. */
+/* Request a blocking Barrier and expect that the no AppendEntries RPC's are
+ * finished before the Barrier callback is fired. */
 TEST(append, blockingBarrierSingleOpenSegment, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
@@ -728,7 +732,7 @@ TEST(append, blockingBarrierSingleOpenSegment, setUp, tearDown, 0, NULL)
     bd.done = false;
     bd.expectDone = true;
     bd.uv = f->io.impl;
-    char* files[] = { "0000000000000001-0000000000000001", NULL };
+    char *files[] = {"0000000000000001-0000000000000001", NULL};
     bd.files = files;
 
     /* Wait until there is at least 1 open segment otherwise
@@ -739,13 +743,16 @@ TEST(append, blockingBarrierSingleOpenSegment, setUp, tearDown, 0, NULL)
     }
 
     struct UvBarrier barrier = {0};
-    barrier.data = (void*) &bd;
+    barrier.data = (void *)&bd;
     barrier.blocking = true;
     UvBarrier(f->io.impl, 1, &barrier, barrierCbCompareCounter);
 
-    APPEND_SUBMIT_CB_DATA(0, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd, 0);
-    APPEND_SUBMIT_CB_DATA(1, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd, 0);
-    APPEND_SUBMIT_CB_DATA(2, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE, appendCbIncreaseCounterAssertResult, &bd, 0);
+    APPEND_SUBMIT_CB_DATA(0, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE,
+                          appendCbIncreaseCounterAssertResult, &bd, 0);
+    APPEND_SUBMIT_CB_DATA(1, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE,
+                          appendCbIncreaseCounterAssertResult, &bd, 0);
+    APPEND_SUBMIT_CB_DATA(2, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE,
+                          appendCbIncreaseCounterAssertResult, &bd, 0);
 
     /* Make sure every callback fired */
     LOOP_RUN_UNTIL(&bd.done);
@@ -757,7 +764,7 @@ TEST(append, blockingBarrierSingleOpenSegment, setUp, tearDown, 0, NULL)
 
 static void longWorkCb(uv_work_t *work)
 {
-    (void) work;
+    (void)work;
     sleep(1);
 }
 
@@ -803,10 +810,12 @@ TEST(append, nonBlockingBarrierLongBlockingTask, setUp, tearDown, 0, NULL)
     bd.uv = f->io.impl;
 
     struct UvBarrier barrier = {0};
-    barrier.data = (void*) &bd;
+    barrier.data = (void *)&bd;
     barrier.blocking = false;
-    UvBarrier(f->io.impl, bd.uv->append_next_index, &barrier, barrierCbLongWork);
-    APPEND_SUBMIT_CB_DATA(0, 1, 64, appendCbIncreaseCounterAssertResult, &bd, 0);
+    UvBarrier(f->io.impl, bd.uv->append_next_index, &barrier,
+              barrierCbLongWork);
+    APPEND_SUBMIT_CB_DATA(0, 1, 64, appendCbIncreaseCounterAssertResult, &bd,
+                          0);
 
     /* Make sure every callback fired */
     LOOP_RUN_UNTIL(&bd.done);
@@ -815,8 +824,9 @@ TEST(append, nonBlockingBarrierLongBlockingTask, setUp, tearDown, 0, NULL)
 }
 
 /* Request a blocking Barrier that triggers a long-running task, the barrier
- * is unblocked and removed when the long running task completes. This simulates a large
- * snapshot install. Ensure Append requests complete after the work completes.*/
+ * is unblocked and removed when the long running task completes. This simulates
+ * a large snapshot install. Ensure Append requests complete after the work
+ * completes.*/
 TEST(append, blockingBarrierLongBlockingTask, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
@@ -828,10 +838,12 @@ TEST(append, blockingBarrierLongBlockingTask, setUp, tearDown, 0, NULL)
     bd.uv = f->io.impl;
 
     struct UvBarrier barrier = {0};
-    barrier.data = (void*) &bd;
+    barrier.data = (void *)&bd;
     barrier.blocking = true;
-    UvBarrier(f->io.impl, bd.uv->append_next_index, &barrier, barrierCbLongWork);
-    APPEND_SUBMIT_CB_DATA(0, 1, 64, appendCbIncreaseCounterAssertResult, &bd, 0);
+    UvBarrier(f->io.impl, bd.uv->append_next_index, &barrier,
+              barrierCbLongWork);
+    APPEND_SUBMIT_CB_DATA(0, 1, 64, appendCbIncreaseCounterAssertResult, &bd,
+                          0);
 
     /* Make sure every callback fired */
     LOOP_RUN_UNTIL(&bd.done);

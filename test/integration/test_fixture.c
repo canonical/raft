@@ -107,8 +107,7 @@ static void tearDown(void *data)
 
 /* Assert that the x field of the FSM with the given index matches the given
  * value. */
-#define ASSERT_FSM_X(I, VALUE) \
-    munit_assert_int(FsmGetX(&f->fsms[I]), ==, VALUE)
+#define ASSERT_FSM_X(I, VALUE) munit_assert_int(FsmGetX(&f->fsms[I]), ==, VALUE)
 
 /******************************************************************************
  *

@@ -53,7 +53,8 @@ RAFT_API int raft_fixture_event_type(struct raft_fixture_event *event)
     return event->type;
 }
 
-RAFT_API unsigned raft_fixture_event_server_index(struct raft_fixture_event *event)
+RAFT_API unsigned raft_fixture_event_server_index(
+    struct raft_fixture_event *event)
 {
     assert(event != NULL);
     return event->server_index;
@@ -168,7 +169,7 @@ struct io
     unsigned randomized_election_timeout; /* Value returned by io->random() */
     unsigned network_latency;             /* Milliseconds to deliver RPCs */
     unsigned disk_latency;                /* Milliseconds to perform disk I/O */
-    unsigned work_duration;               /* Milliseconds to long running work */
+    unsigned work_duration; /* Milliseconds to long running work */
 
     struct
     {
@@ -326,7 +327,7 @@ static void ioFlushSnapshotGet(struct io *s, struct snapshot_get *r)
 /* Flush an async work request */
 static void ioFlushAsyncWork(struct io *s, struct async_work *r)
 {
-    (void) s;
+    (void)s;
     int rv;
     rv = r->req->work(r->req);
     r->req->cb(r->req, rv);
@@ -725,7 +726,6 @@ static int ioMethodAsyncWork(struct raft_io *raft_io,
     QUEUE_PUSH(&io->requests, &r->queue);
     return 0;
 }
-
 
 static int ioMethodSnapshotGet(struct raft_io *raft_io,
                                struct raft_io_snapshot_get *req,

@@ -29,15 +29,15 @@ struct fixture
 #define GET(INDEX) logGet(f->log, INDEX)
 
 /* Append one command entry with the given term and a hard-coded payload. */
-#define APPEND(TERM)                                               \
-    {                                                              \
-        struct raft_buffer buf_;                                   \
-        int rv_;                                                   \
-        buf_.base = raft_malloc(8);                                \
-        buf_.len = 8;                                              \
-        strcpy(buf_.base, "hello");                                \
+#define APPEND(TERM)                                              \
+    {                                                             \
+        struct raft_buffer buf_;                                  \
+        int rv_;                                                  \
+        buf_.base = raft_malloc(8);                               \
+        buf_.len = 8;                                             \
+        strcpy(buf_.base, "hello");                               \
         rv_ = logAppend(f->log, TERM, RAFT_COMMAND, &buf_, NULL); \
-        munit_assert_int(rv_, ==, 0);                              \
+        munit_assert_int(rv_, ==, 0);                             \
     }
 
 /* Same as APPEND, but repeated N times. */
@@ -50,44 +50,44 @@ struct fixture
     }
 
 /* Invoke append and assert that it returns the given error. */
-#define APPEND_ERROR(TERM, RV)                                     \
-    {                                                              \
-        struct raft_buffer buf_;                                   \
-        int rv_;                                                   \
-        buf_.base = raft_malloc(8);                                \
-        buf_.len = 8;                                              \
+#define APPEND_ERROR(TERM, RV)                                    \
+    {                                                             \
+        struct raft_buffer buf_;                                  \
+        int rv_;                                                  \
+        buf_.base = raft_malloc(8);                               \
+        buf_.len = 8;                                             \
         rv_ = logAppend(f->log, TERM, RAFT_COMMAND, &buf_, NULL); \
-        munit_assert_int(rv_, ==, RV);                             \
-        raft_free(buf_.base);                                      \
+        munit_assert_int(rv_, ==, RV);                            \
+        raft_free(buf_.base);                                     \
     }
 
 /* Append N entries all belonging to the same batch. Each entry will have 64-bit
  * payload set to i * 1000, where i is the index of the entry in the batch. */
-#define APPEND_BATCH(N)                                            \
-    {                                                              \
-        void *batch;                                               \
-        size_t offset;                                             \
-        int i;                                                     \
-        batch = raft_malloc(8 * N);                                \
-        munit_assert_ptr_not_null(batch);                          \
-        offset = 0;                                                \
-        for (i = 0; i < N; i++) {                                  \
-            struct raft_buffer buf;                                \
-            int rv;                                                \
-            buf.base = (uint8_t *)batch + offset;                  \
-            buf.len = 8;                                           \
-            *(uint64_t *)buf.base = i * 1000;                      \
+#define APPEND_BATCH(N)                                           \
+    {                                                             \
+        void *batch;                                              \
+        size_t offset;                                            \
+        int i;                                                    \
+        batch = raft_malloc(8 * N);                               \
+        munit_assert_ptr_not_null(batch);                         \
+        offset = 0;                                               \
+        for (i = 0; i < N; i++) {                                 \
+            struct raft_buffer buf;                               \
+            int rv;                                               \
+            buf.base = (uint8_t *)batch + offset;                 \
+            buf.len = 8;                                          \
+            *(uint64_t *)buf.base = i * 1000;                     \
             rv = logAppend(f->log, 1, RAFT_COMMAND, &buf, batch); \
-            munit_assert_int(rv, ==, 0);                           \
-            offset += 8;                                           \
-        }                                                          \
+            munit_assert_int(rv, ==, 0);                          \
+            offset += 8;                                          \
+        }                                                         \
     }
 
-#define ACQUIRE(INDEX)                                  \
-    {                                                   \
-        int rv2;                                        \
+#define ACQUIRE(INDEX)                                 \
+    {                                                  \
+        int rv2;                                       \
         rv2 = logAcquire(f->log, INDEX, &entries, &n); \
-        munit_assert_int(rv2, ==, 0);                   \
+        munit_assert_int(rv2, ==, 0);                  \
     }
 
 #define RELEASE(INDEX) logRelease(f->log, INDEX, entries, n);
@@ -129,7 +129,7 @@ static void tearDown(void *data)
 
 /* Assert the state of the fixture's log in terms of size, front/back indexes,
  * offset and number of entries. */
-#define ASSERT(SIZE, FRONT, BACK, OFFSET, N)     \
+#define ASSERT(SIZE, FRONT, BACK, OFFSET, N)      \
     munit_assert_int(f->log->size, ==, SIZE);     \
     munit_assert_int(f->log->front, ==, FRONT);   \
     munit_assert_int(f->log->back, ==, BACK);     \
@@ -137,7 +137,7 @@ static void tearDown(void *data)
     munit_assert_int(logNumEntries(f->log), ==, N)
 
 /* Assert the last index and term of the most recent snapshot. */
-#define ASSERT_SNAPSHOT(INDEX, TERM)                         \
+#define ASSERT_SNAPSHOT(INDEX, TERM)                          \
     munit_assert_int(f->log->snapshot.last_index, ==, INDEX); \
     munit_assert_int(f->log->snapshot.last_term, ==, TERM)
 
@@ -145,7 +145,7 @@ static void tearDown(void *data)
 #define ASSERT_TERM_OF(INDEX, TERM)              \
     {                                            \
         const struct raft_entry *entry;          \
-        entry = logGet(f->log, INDEX);          \
+        entry = logGet(f->log, INDEX);           \
         munit_assert_ptr_not_null(entry);        \
         munit_assert_int(entry->term, ==, TERM); \
     }
@@ -155,14 +155,14 @@ static void tearDown(void *data)
 #define ASSERT_REFCOUNT(INDEX, COUNT)                                 \
     {                                                                 \
         size_t i;                                                     \
-        munit_assert_ptr_not_null(f->log->refs);                       \
-        for (i = 0; i < f->log->refs_size; i++) {                      \
-            if (f->log->refs[i].index == INDEX) {                      \
-                munit_assert_int(f->log->refs[i].count, ==, COUNT);    \
+        munit_assert_ptr_not_null(f->log->refs);                      \
+        for (i = 0; i < f->log->refs_size; i++) {                     \
+            if (f->log->refs[i].index == INDEX) {                     \
+                munit_assert_int(f->log->refs[i].count, ==, COUNT);   \
                 break;                                                \
             }                                                         \
         }                                                             \
-        if (i == f->log->refs_size) {                                  \
+        if (i == f->log->refs_size) {                                 \
             munit_errorf("no refcount found for entry with index %d", \
                          (int)INDEX);                                 \
         }                                                             \

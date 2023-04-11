@@ -30,10 +30,12 @@ int recvRequestVote(struct raft *r,
     assert(id > 0);
     assert(args != NULL);
 
-    tracef("self:%llu from:%llu@%s candidate_id:%llu disrupt_leader:%d last_log_index:%llu "
-           "last_log_term:%llu pre_vote:%d term:%llu",
-           r->id, id, address, args->candidate_id, args->disrupt_leader, args->last_log_index,
-           args->last_log_term, args->pre_vote, args->term);
+    tracef(
+        "self:%llu from:%llu@%s candidate_id:%llu disrupt_leader:%d "
+        "last_log_index:%llu "
+        "last_log_term:%llu pre_vote:%d term:%llu",
+        r->id, id, address, args->candidate_id, args->disrupt_leader,
+        args->last_log_index, args->last_log_term, args->pre_vote, args->term);
     result->vote_granted = false;
     result->pre_vote = args->pre_vote;
     result->version = RAFT_REQUEST_VOTE_RESULT_VERSION;
@@ -78,11 +80,12 @@ int recvRequestVote(struct raft *r,
 
     /* Reject the request if we are installing a snapshot.
      *
-     * This condition should only be reachable if the disrupt_leader flag is set,
-     * since otherwise we wouldn't have passed the have_leader check above (follower
-     * state is not cleared while a snapshot is being installed). */
+     * This condition should only be reachable if the disrupt_leader flag is
+     * set, since otherwise we wouldn't have passed the have_leader check above
+     * (follower state is not cleared while a snapshot is being installed). */
     if (replicationInstallSnapshotBusy(r)) {
-        tracef("installing snapshot -> reject (disrupt_leader:%d)", (int)args->disrupt_leader);
+        tracef("installing snapshot -> reject (disrupt_leader:%d)",
+               (int)args->disrupt_leader);
         goto reply;
     }
 
@@ -101,7 +104,8 @@ int recvRequestVote(struct raft *r,
      * same as the request term (otherwise we would have rejected the request or
      * bumped our term). */
     if (!args->pre_vote) {
-        tracef("no pre_vote: current_term:%llu term:%llu", r->current_term, args->term);
+        tracef("no pre_vote: current_term:%llu term:%llu", r->current_term,
+               args->term);
         assert(r->current_term == args->term);
     }
 
@@ -113,13 +117,13 @@ int recvRequestVote(struct raft *r,
 reply:
     result->term = r->current_term;
     /* Nodes don't update their term when seeing a Pre-Vote RequestVote RPC.
-     * To prevent the candidate from ignoring the response of this node if it has
-     * a smaller term than the candidate, we include the term of the request.
-     * The smaller term can occur if this node was partitioned from the cluster
-     * and has reestablished connectivity. This prevents a cluster deadlock
-     * when a majority of the nodes is online, but they fail to establish quorum
-     * because the vote of a former partitioned node with a smaller term is
-     * needed for majority.*/
+     * To prevent the candidate from ignoring the response of this node if it
+     * has a smaller term than the candidate, we include the term of the
+     * request. The smaller term can occur if this node was partitioned from the
+     * cluster and has reestablished connectivity. This prevents a cluster
+     * deadlock when a majority of the nodes is online, but they fail to
+     * establish quorum because the vote of a former partitioned node with a
+     * smaller term is needed for majority.*/
     if (args->pre_vote) {
         result->term = args->term;
     }

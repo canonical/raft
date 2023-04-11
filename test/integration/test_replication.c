@@ -255,8 +255,9 @@ TEST(replication, sendProbe, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-static bool indices_updated(struct raft_fixture *f, void* data) {
-    (void) f;
+static bool indices_updated(struct raft_fixture *f, void *data)
+{
+    (void)f;
     const struct raft *r = data;
     return r->last_stored == 4 && r->leader_state.progress[1].match_index == 3;
 }
@@ -526,7 +527,8 @@ TEST(replication, recvPrevLogTermMismatch, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-static void assert_config(struct raft* raft, struct raft_configuration *expected)
+static void assert_config(struct raft *raft,
+                          struct raft_configuration *expected)
 {
     struct raft_configuration *actual;
     actual = &raft->configuration;
@@ -534,8 +536,7 @@ static void assert_config(struct raft* raft, struct raft_configuration *expected
     munit_assert_uint(actual->n, ==, expected->n);
     for (unsigned i = 0; i < actual->n; i++) {
         munit_assert_ulong(actual->servers[i].id, ==, expected->servers[i].id);
-        munit_assert_int(actual->servers[i].role,
-                         ==,
+        munit_assert_int(actual->servers[i].role, ==,
                          expected->servers[i].role);
         munit_assert_string_equal(actual->servers[i].address,
                                   expected->servers[i].address);
@@ -546,7 +547,12 @@ static void assert_config(struct raft* raft, struct raft_configuration *expected
  * prevLogTerm, and value of prevLogIndex is greater than server's commit
  * index (i.e. this is a normal inconsistency), we reject the request. This time
  * it's a configuration entry. */
-TEST(replication, recvPrevLogTermMismatchConfiguration, setUp, tearDown, 0, NULL)
+TEST(replication,
+     recvPrevLogTermMismatchConfiguration,
+     setUp,
+     tearDown,
+     0,
+     NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry1;
@@ -590,7 +596,12 @@ TEST(replication, recvPrevLogTermMismatchConfiguration, setUp, tearDown, 0, NULL
  * index (i.e. this is a normal inconsistency), we reject the request. This time
  * it's a configuration entry, there's also an older configuration entry
  * present.  */
-TEST(replication, recvPrevLogTermMismatchConfigurationWithPrevious, setUp, tearDown, 0, NULL)
+TEST(replication,
+     recvPrevLogTermMismatchConfigurationWithPrevious,
+     setUp,
+     tearDown,
+     0,
+     NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry1;
@@ -646,7 +657,12 @@ TEST(replication, recvPrevLogTermMismatchConfigurationWithPrevious, setUp, tearD
  * index (i.e. this is a normal inconsistency), we reject the request. This time
  * it's a configuration entry and there is a snapshot, there's no previous
  * configuration entry in the log. */
-TEST(replication, recvPrevLogTermMismatchConfigurationSnapshotNoPrev, setUp, tearDown, 0, NULL)
+TEST(replication,
+     recvPrevLogTermMismatchConfigurationSnapshotNoPrev,
+     setUp,
+     tearDown,
+     0,
+     NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry1;
@@ -667,7 +683,7 @@ TEST(replication, recvPrevLogTermMismatchConfigurationSnapshotNoPrev, setUp, tea
                          1 /* conf index                                    */,
                          5 /* x                                             */,
                          0 /* y                                             */);
-    CLUSTER_SET_TERM(1,1);
+    CLUSTER_SET_TERM(1, 1);
 
     /* The servers have an entry with a conflicting term. */
     entry1.type = RAFT_COMMAND;

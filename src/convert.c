@@ -182,7 +182,7 @@ int convertToCandidate(struct raft *r, bool disrupt_leader)
 
 void convertInitialBarrierCb(struct raft_barrier *req, int status)
 {
-    (void) status;
+    (void)status;
     raft_free(req);
 }
 
@@ -213,26 +213,31 @@ int convertToLeader(struct raft *r)
     r->leader_state.round_index = 0;
     r->leader_state.round_start = 0;
 
-    /* By definition, all entries until the last_stored entry will be committed if
-     * we are the only voter around. */
+    /* By definition, all entries until the last_stored entry will be committed
+     * if we are the only voter around. */
     size_t n_voters = configurationVoterCount(&r->configuration);
     if (n_voters == 1 && (r->last_stored > r->commit_index)) {
-        tracef("apply log entries after self election %llu %llu", r->last_stored, r->commit_index);
+        tracef("apply log entries after self election %llu %llu",
+               r->last_stored, r->commit_index);
         r->commit_index = r->last_stored;
         rv = replicationApply(r);
     } else if (n_voters > 1) {
         /* Raft Dissertation, paragraph 6.4:
-         * The Leader Completeness Property guarantees that a leader has all committed
-         * entries, but at the start of its term, it may not know which those are.
-         * To find out, it needs to commit an entry from its term. Raft handles this by having
-         * each leader commit a blank no-op entry into the log at the start of its term. */
+         * The Leader Completeness Property guarantees that a leader has all
+         * committed entries, but at the start of its term, it may not know
+         * which those are. To find out, it needs to commit an entry from its
+         * term. Raft handles this by having each leader commit a blank no-op
+         * entry into the log at the start of its term. */
         struct raft_barrier *req = raft_malloc(sizeof(*req));
         if (req == NULL) {
             return RAFT_NOMEM;
         }
         rv = raft_barrier(r, req, convertInitialBarrierCb);
         if (rv != 0) {
-            tracef("failed to send no-op barrier entry after leader conversion: %d", rv);
+            tracef(
+                "failed to send no-op barrier entry after leader conversion: "
+                "%d",
+                rv);
         }
     }
 

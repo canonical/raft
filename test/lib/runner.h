@@ -89,14 +89,15 @@ extern int _main_suites_n;
     }
 
 /* Add a test case to the MunitTest[] array of suite S. */
-#define TEST__ADD_TO_SUITE(S, C, SETUP, TEAR_DOWN, OPTIONS, PARAMS)             \
-    __attribute__((constructor(103))) static void _##S##_tests_##C##_init(void) \
-    {                                                                           \
-        MunitTest *tests = _##S##_tests;                                        \
-        int n = _##S##_tests_n;                                                 \
-        TEST__SET_IN_ARRAY(tests, n, "/" #C, test_##S##_##C, SETUP, TEAR_DOWN,  \
-                           OPTIONS, PARAMS);                                    \
-        _##S##_tests_n = n + 1;                                                 \
+#define TEST__ADD_TO_SUITE(S, C, SETUP, TEAR_DOWN, OPTIONS, PARAMS)            \
+    __attribute__((constructor(103))) static void _##S##_tests_##C##_init(     \
+        void)                                                                  \
+    {                                                                          \
+        MunitTest *tests = _##S##_tests;                                       \
+        int n = _##S##_tests_n;                                                \
+        TEST__SET_IN_ARRAY(tests, n, "/" #C, test_##S##_##C, SETUP, TEAR_DOWN, \
+                           OPTIONS, PARAMS);                                   \
+        _##S##_tests_n = n + 1;                                                \
     }
 
 /* Set the values of the I'th test case slot in the given test array */

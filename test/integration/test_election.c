@@ -595,7 +595,7 @@ TEST(election, preVote, setUp, tearDown, 0, NULL)
 
     CLUSTER_STEP; /* Server 0 completes sending a pre-vote RequestVote RPC */
     CLUSTER_STEP; /* Server 1 receives the pre-vote RequestVote RPC */
-    ASSERT_TERM(1, 1); /* Server 1 does increment its term */
+    ASSERT_TERM(1, 1);      /* Server 1 does increment its term */
     ASSERT_VOTED_FOR(1, 0); /* Server 1 does not persist its vote */
     ASSERT_TIME(1015);
 
@@ -607,7 +607,7 @@ TEST(election, preVote, setUp, tearDown, 0, NULL)
 
     CLUSTER_STEP; /* Server 1 completes sending an actual RequestVote RPC */
     CLUSTER_STEP; /* Server 1 receives the actual RequestVote RPC */
-    ASSERT_TERM(1, 2); /* Server 1 does increment its term. */
+    ASSERT_TERM(1, 2);      /* Server 1 does increment its term. */
     ASSERT_VOTED_FOR(1, 1); /* Server 1 does persists its vote */
 
     CLUSTER_STEP; /* Server 1 completes sending actual RequestVote result */
@@ -632,25 +632,25 @@ TEST(election, preVoteWithcandidateCrash, setUp, tearDown, 0, cluster_3_params)
     ASSERT_TIME(1000);
     ASSERT_TERM(0, 1);
 
-     /* Server 1 and 2 ticks */
+    /* Server 1 and 2 ticks */
     CLUSTER_STEP_N(2);
     ASSERT_FOLLOWER(1);
     ASSERT_FOLLOWER(2);
 
-     /* Server 0 completes sending a pre-vote RequestVote RPCs */
+    /* Server 0 completes sending a pre-vote RequestVote RPCs */
     CLUSTER_STEP_N(2);
 
-    CLUSTER_STEP; /* Server 1 receives the pre-vote RequestVote RPC */
-    ASSERT_TERM(1, 1); /* Server 1 does not increment its term */
+    CLUSTER_STEP;           /* Server 1 receives the pre-vote RequestVote RPC */
+    ASSERT_TERM(1, 1);      /* Server 1 does not increment its term */
     ASSERT_VOTED_FOR(1, 0); /* Server 1 does not persist its vote */
     ASSERT_TIME(1015);
 
-    CLUSTER_STEP; /* Server 2 receives the pre-vote RequestVote RPC */
-    ASSERT_TERM(2, 1); /* Server 2 does not increment its term */
+    CLUSTER_STEP;           /* Server 2 receives the pre-vote RequestVote RPC */
+    ASSERT_TERM(2, 1);      /* Server 2 does not increment its term */
     ASSERT_VOTED_FOR(2, 0); /* Server 1 does not persist its vote */
     ASSERT_TIME(1015);
 
-     /* Server 1 and 2 complete sending pre-vote RequestVote results */
+    /* Server 1 and 2 complete sending pre-vote RequestVote results */
     CLUSTER_STEP_N(2);
 
     /* Server 0 receives the pre-vote RequestVote results */
@@ -659,15 +659,15 @@ TEST(election, preVoteWithcandidateCrash, setUp, tearDown, 0, cluster_3_params)
     ASSERT_TERM(0, 2); /* Server 0 has now incremented its term. */
     ASSERT_TIME(1030);
 
-     /* Server 0 completes sending actual RequestVote RPCs */
+    /* Server 0 completes sending actual RequestVote RPCs */
     CLUSTER_STEP_N(2);
 
-    CLUSTER_STEP; /* Server 1 receives the actual RequestVote RPC */
-    ASSERT_TERM(1, 2); /* Server 1 does increment its term. */
+    CLUSTER_STEP;           /* Server 1 receives the actual RequestVote RPC */
+    ASSERT_TERM(1, 2);      /* Server 1 does increment its term. */
     ASSERT_VOTED_FOR(1, 1); /* Server 1 does persists its vote */
 
-    CLUSTER_STEP; /* Server 2 receives the actual RequestVote RPC */
-    ASSERT_TERM(2, 2); /* Server 2 does increment its term. */
+    CLUSTER_STEP;           /* Server 2 receives the actual RequestVote RPC */
+    ASSERT_TERM(2, 2);      /* Server 2 does increment its term. */
     ASSERT_VOTED_FOR(2, 1); /* Server 2 does persists its vote */
 
     /* Server 0 crashes. */
@@ -691,7 +691,7 @@ TEST(election, preVoteWithcandidateCrash, setUp, tearDown, 0, cluster_3_params)
     /* Server 1 receives the pre-vote RequestVote Result */
     CLUSTER_STEP_N(2);
     /* Server 1 increments it's term to start a non pre-vote election */
-    ASSERT_TERM(1, 3); /* Server 1 has now incremented its term. */
+    ASSERT_TERM(1, 3);      /* Server 1 has now incremented its term. */
     ASSERT_VOTED_FOR(1, 2); /* Server 1 has persisted its vote */
     ASSERT_TIME(2230);
 
@@ -716,8 +716,8 @@ TEST(election, preVoteNoStaleVotes, setUp, tearDown, 0, cluster_3_params)
     raft_set_pre_vote(CLUSTER_RAFT(1), true);
     raft_set_pre_vote(CLUSTER_RAFT(2), true);
 
-    /* Server 2 is 1 term ahead of the other servers, this will allow it to send stale
-     * pre-vote responses that pass the term checks. */
+    /* Server 2 is 1 term ahead of the other servers, this will allow it to send
+     * stale pre-vote responses that pass the term checks. */
     CLUSTER_SET_TERM(2, 2);
     CLUSTER_START;
 
@@ -727,21 +727,21 @@ TEST(election, preVoteNoStaleVotes, setUp, tearDown, 0, cluster_3_params)
     ASSERT_TIME(1000);
     ASSERT_TERM(0, 1);
 
-     /* Server 1 and 2 ticks */
+    /* Server 1 and 2 ticks */
     CLUSTER_STEP_N(2);
     ASSERT_FOLLOWER(1);
     ASSERT_FOLLOWER(2);
 
-     /* Server 0 completes sending a pre-vote RequestVote RPCs */
+    /* Server 0 completes sending a pre-vote RequestVote RPCs */
     CLUSTER_STEP_N(2);
 
-    CLUSTER_STEP; /* Server 1 receives the pre-vote RequestVote RPC */
-    ASSERT_TERM(1, 1); /* Server 1 does not increment its term */
+    CLUSTER_STEP;           /* Server 1 receives the pre-vote RequestVote RPC */
+    ASSERT_TERM(1, 1);      /* Server 1 does not increment its term */
     ASSERT_VOTED_FOR(1, 0); /* Server 1 does not persist its vote */
     ASSERT_TIME(1015);
 
-    CLUSTER_STEP; /* Server 2 receives the pre-vote RequestVote RPC */
-    ASSERT_TERM(2, 2); /* Server 2 does not increment its term */
+    CLUSTER_STEP;           /* Server 2 receives the pre-vote RequestVote RPC */
+    ASSERT_TERM(2, 2);      /* Server 2 does not increment its term */
     ASSERT_VOTED_FOR(2, 0); /* Server 1 does not persist its vote */
     ASSERT_TIME(1015);
 
@@ -757,7 +757,8 @@ TEST(election, preVoteNoStaleVotes, setUp, tearDown, 0, cluster_3_params)
     ASSERT_TERM(0, 2); /* Server 0 has now incremented its term. */
     ASSERT_TIME(1030);
 
-    /* Don't send messages from 0, this ensures no real RequestVote RPCs are sent */
+    /* Don't send messages from 0, this ensures no real RequestVote RPCs are
+     * sent */
     CLUSTER_SATURATE(0, 1);
     CLUSTER_SATURATE(0, 2);
 

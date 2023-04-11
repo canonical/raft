@@ -35,9 +35,9 @@ struct uvTcpHandshake
 /* Hold handshake data for a new connection being established. */
 struct uvTcpIncoming
 {
-    struct UvTcp *t;                 /* Transport implementation */
-    struct uv_tcp_s *listener;      /* The tcp handle, which accepted this socket */
-    struct uv_tcp_s *tcp;            /* TCP connection socket handle */
+    struct UvTcp *t;           /* Transport implementation */
+    struct uv_tcp_s *listener; /* The tcp handle, which accepted this socket */
+    struct uv_tcp_s *tcp;      /* TCP connection socket handle */
     struct uvTcpHandshake handshake; /* Handshake data */
     queue queue;                     /* Pending accept queue */
 };

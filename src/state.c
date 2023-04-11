@@ -45,9 +45,10 @@ raft_index raft_last_applied(struct raft *r)
 
 int raft_role(struct raft *r)
 {
-    const struct raft_server *local = configurationGet(&r->configuration, r->id);
+    const struct raft_server *local =
+        configurationGet(&r->configuration, r->id);
     if (local == NULL) {
-	    return -1;
+        return -1;
     }
     return local->role;
 }

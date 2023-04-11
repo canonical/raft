@@ -282,7 +282,7 @@ int UvFsMakeFile(const char *dir,
                  char *errmsg)
 {
     int rv;
-    char tmp_filename[UV__FILENAME_LEN+1] = {0};
+    char tmp_filename[UV__FILENAME_LEN + 1] = {0};
     char path[UV__PATH_SZ] = {0};
     char tmp_path[UV__PATH_SZ] = {0};
 
@@ -290,7 +290,7 @@ int UvFsMakeFile(const char *dir,
      * TODO as of libuv 1.34.0, use `uv_fs_mkstemp` */
     size_t sz = sizeof(tmp_filename);
     rv = snprintf(tmp_filename, sz, TMP_FILE_FMT, filename);
-    if (rv < 0 || rv >= (int) sz) {
+    if (rv < 0 || rv >= (int)sz) {
         return rv;
     }
     int flags = UV_FS_O_WRONLY | UV_FS_O_CREAT | UV_FS_O_EXCL;
@@ -422,7 +422,7 @@ int UvFsReadInto(uv_file fd, struct raft_buffer *buf, char *errmsg)
 
     /* TODO: use uv_fs_read() */
     while (offset < buf->len) {
-        rv = read(fd, (char*)buf->base + offset, buf->len - offset);
+        rv = read(fd, (char *)buf->base + offset, buf->len - offset);
         if (rv == -1) {
             UvOsErrMsg(errmsg, "read", -errno);
             return RAFT_IOERR;
@@ -546,9 +546,9 @@ int UvFsRemoveFile(const char *dir, const char *filename, char *errmsg)
 }
 
 int UvFsRenameFile(const char *dir,
-		   const char *filename1,
-		   const char *filename2,
-		   char *errmsg)
+                   const char *filename1,
+                   const char *filename2,
+                   char *errmsg)
 {
     char path1[UV__PATH_SZ];
     char path2[UV__PATH_SZ];

@@ -18,21 +18,22 @@ typedef void (*UvWriterCloseCb)(struct UvWriter *w);
 
 struct UvWriter
 {
-    void *data;                    /* User data */
-    struct uv_loop_s *loop;        /* Event loop */
-    uv_file fd;                    /* File handle */
-    bool async;                    /* Whether fully async I/O is supported */
-    aio_context_t ctx;             /* KAIO handle */
-    struct io_event *events;       /* Array of KAIO response objects */
-    unsigned n_events;             /* Length of the events array */
-    int event_fd;                  /* Poll'ed to check if write is finished */
-    struct uv_poll_s event_poller; /* Poll event_fd for completed poll requests */
-    struct uv_check_s check;       /* Check for completed threadpool requests */
-    UvWriterCloseCb close_cb;      /* Close callback */
-    queue poll_queue;              /* Pollable write requests */
-    queue work_queue;              /* Threadpool write requests */
-    bool closing;                  /* Whether we're closing or closed */
-    char *errmsg;                  /* Description of last error */
+    void *data;              /* User data */
+    struct uv_loop_s *loop;  /* Event loop */
+    uv_file fd;              /* File handle */
+    bool async;              /* Whether fully async I/O is supported */
+    aio_context_t ctx;       /* KAIO handle */
+    struct io_event *events; /* Array of KAIO response objects */
+    unsigned n_events;       /* Length of the events array */
+    int event_fd;            /* Poll'ed to check if write is finished */
+    struct uv_poll_s
+        event_poller;         /* Poll event_fd for completed poll requests */
+    struct uv_check_s check;  /* Check for completed threadpool requests */
+    UvWriterCloseCb close_cb; /* Close callback */
+    queue poll_queue;         /* Pollable write requests */
+    queue work_queue;         /* Threadpool write requests */
+    bool closing;             /* Whether we're closing or closed */
+    char *errmsg;             /* Description of last error */
 };
 
 /* Initialize a file writer. */

@@ -40,7 +40,7 @@ struct result
     int status;
     bool done;
     raft_index prev_applied;
-    struct raft* raft;
+    struct raft *raft;
 };
 
 static void applyCbAssertResult(struct raft_apply *req, int status, void *_)

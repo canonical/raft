@@ -29,7 +29,7 @@
 #define CONNECT_RETRY_DELAY 1000
 
 /* Cleans up files that are no longer used by the system */
-static int uvMaintenance(const char *dir, char* errmsg)
+static int uvMaintenance(const char *dir, char *errmsg)
 {
     struct uv_fs_s req;
     struct uv_dirent_s entry;
@@ -454,8 +454,9 @@ err:
      * might have cleaned up corrupt data. Most of the arguments are already
      * reset after the `err` label, except for `start_index`. */
     if (rv == RAFT_CORRUPT && uv->auto_recovery && depth == 0) {
-	*start_index = 1;
-    	return uvLoadSnapshotAndEntries(uv, snapshot, start_index, entries, n, depth + 1);
+        *start_index = 1;
+        return uvLoadSnapshotAndEntries(uv, snapshot, start_index, entries, n,
+                                        depth + 1);
     }
     return rv;
 }
@@ -477,8 +478,8 @@ static int uvLoad(struct raft_io *io,
     *voted_for = uv->metadata.voted_for;
     *snapshot = NULL;
 
-    rv =
-        uvLoadSnapshotAndEntries(uv, snapshot, start_index, entries, n_entries, 0);
+    rv = uvLoadSnapshotAndEntries(uv, snapshot, start_index, entries, n_entries,
+                                  0);
     if (rv != 0) {
         return rv;
     }
@@ -602,7 +603,7 @@ static raft_time uvTime(struct raft_io *io)
 /* Implementation of raft_io->random. */
 static int uvRandom(struct raft_io *io, int min, int max)
 {
-    (void) io;
+    (void)io;
     return min + (abs(rand()) % (max - min));
 }
 
@@ -613,8 +614,8 @@ static void uvSeedRand(struct uv *uv)
 
     sz = getrandom(&seed, sizeof seed, GRND_NONBLOCK);
     if (sz == -1 || sz < ((ssize_t)sizeof seed)) {
-        /* Fall back to an inferior random seed when `getrandom` would have blocked or
-         * when not enough randomness was returned. */
+        /* Fall back to an inferior random seed when `getrandom` would have
+         * blocked or when not enough randomness was returned. */
         seed ^= (unsigned)uv->id;
         seed ^= (unsigned)uv_now(uv->loop);
         struct timeval time = {0};
@@ -665,8 +666,8 @@ int raft_uv_init(struct raft_io *io,
 
     uv->io = io;
     uv->loop = loop;
-    strncpy(uv->dir, dir, sizeof(uv->dir)-1);
-    uv->dir[sizeof(uv->dir)-1] = '\0';
+    strncpy(uv->dir, dir, sizeof(uv->dir) - 1);
+    uv->dir[sizeof(uv->dir) - 1] = '\0';
     uv->transport = transport;
     uv->transport->data = NULL;
     uv->tracer = &StderrTracer;

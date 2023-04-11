@@ -83,14 +83,14 @@ struct result
 };
 
 /* Submit an apply request. */
-#define APPLY_SUBMIT(I)                                                      \
-    struct raft_buffer _buf;                                                 \
-    struct raft_apply _req;                                                  \
-    struct result _result = {0, false};                                      \
-    int _rv;                                                                 \
-    FsmEncodeSetX(123, &_buf);                                               \
-    _req.data = &_result;                                                    \
-    _rv = raft_apply(CLUSTER_RAFT(I), &_req, &_buf, 1, NULL);                \
+#define APPLY_SUBMIT(I)                                       \
+    struct raft_buffer _buf;                                  \
+    struct raft_apply _req;                                   \
+    struct result _result = {0, false};                       \
+    int _rv;                                                  \
+    FsmEncodeSetX(123, &_buf);                                \
+    _req.data = &_result;                                     \
+    _rv = raft_apply(CLUSTER_RAFT(I), &_req, &_buf, 1, NULL); \
     munit_assert_int(_rv, ==, 0);
 
 /******************************************************************************
