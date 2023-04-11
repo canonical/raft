@@ -179,7 +179,6 @@ err:
 
 int membershipRollback(struct raft *r)
 {
-    const struct raft_entry *entry;
     int rv;
 
     assert(r != NULL);
@@ -191,21 +190,10 @@ int membershipRollback(struct raft *r)
     assert(r->configuration_index != 0);
 
     /* Replace the current configuration with the last committed one. */
-    entry = logGet(r->log, r->configuration_index);
-    if (entry != NULL) {
-        raft_configuration_close(&r->configuration);
-        raft_configuration_init(&r->configuration);
-
-        rv = configurationDecode(&entry->buf, &r->configuration);
-        if (rv != 0) {
-            return rv;
-        }
-    } else {
-        /* Configuration was truncated from log. */
-        rv = configurationRestorePrevious(r);
-        if (rv != 0) {
-            return rv;
-        }
+    configurationClose(&r->configuration);
+    rv = membershipFetchLastCommittedConfiguration(r, &r->configuration);
+    if (rv != 0) {
+        return rv;
     }
 
     configurationTrace(r, &r->configuration, "roll back config");

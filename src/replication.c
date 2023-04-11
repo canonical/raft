@@ -1575,25 +1575,6 @@ static int takeSnapshotAsync(struct raft_io_async_work *take)
     return r->fsm->snapshot_async(r->fsm, &snapshot->bufs, &snapshot->n_bufs);
 }
 
-static int copyLastCommittedConfiguration(const struct raft *r,
-                                          struct raft_configuration *dst)
-{
-    const struct raft_entry *entry;
-    int rv;
-
-    entry = logGet(r->log, r->configuration_index);
-    if (entry != NULL) {
-        tracef("entry != NULL index:%llu", r->configuration_index);
-        rv = configurationDecode(&entry->buf, dst);
-    } else {
-        tracef("entry == NULL index:%llu", r->configuration_index);
-        rv = configurationCopy(&r->configuration_previous, dst);
-    }
-
-    assert(dst->n != 0);
-    return rv;
-}
-
 static int takeSnapshot(struct raft *r)
 {
     struct raft_snapshot *snapshot;
@@ -1607,8 +1588,7 @@ static int takeSnapshot(struct raft *r)
     snapshot->bufs = NULL;
     snapshot->n_bufs = 0;
 
-    configurationInit(&snapshot->configuration);
-    rv = copyLastCommittedConfiguration(r, &snapshot->configuration);
+    rv = membershipFetchLastCommittedConfiguration(r, &snapshot->configuration);
     if (rv != 0) {
         goto abort;
     }
