@@ -55,6 +55,32 @@ err:
     return rv;
 }
 
+int membershipFetchLastCommittedConfiguration(struct raft *r,
+                                              struct raft_configuration *conf)
+{
+    const struct raft_entry *entry;
+    int rv;
+
+    /* Try to get the entry at r->configuration_index from the log. If the entry
+     * is not present in the log anymore because the log was truncated after a
+     * snapshot, we can just use configuration_previous, which we cached when we
+     * took or restored the snapshot and is guaranteed to match the content that
+     * the entry at r->configuration_index had. */
+    entry = logGet(r->log, r->configuration_index);
+    if (entry != NULL) {
+        configurationInit(conf);
+        rv = configurationDecode(&entry->buf, conf);
+    } else {
+        assert(r->configuration_previous.n > 0);
+        rv = configurationCopy(&r->configuration_previous, conf);
+    }
+    if (rv != 0) {
+        return rv;
+    }
+
+    return 0;
+}
+
 bool membershipUpdateCatchUpRound(struct raft *r)
 {
     unsigned server_index;
