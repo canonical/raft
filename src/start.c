@@ -26,10 +26,6 @@ static int restoreConfigurations(struct raft *r,
         assert(prev_index == 0);
         return 0;
     } else {
-        /* There is a latest configuration, we can't know if it's
-         * committed or not. Backup the configuration restored from the snapshot
-         * or noop in case there was no snapshot. */
-        configurationBackup(r, &r->configuration);
         raft_configuration_init(&last_conf);
         rv = configurationDecode(&last->buf, &last_conf);
         if (rv != 0) {
