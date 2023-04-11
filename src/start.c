@@ -12,43 +12,33 @@
 
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
 
-/* Restore the most recent configurations. */
-static int restoreConfigurations(struct raft *r,
-                                 raft_index prev_index,
-                                 raft_index last_index,
-                                 struct raft_entry *last)
+/* Restore the most recent configuration entry found in the log. */
+static int restoreMostRecentConfigurationEntry(struct raft *r,
+                                               struct raft_entry *entry,
+                                               raft_index index)
 {
-    struct raft_configuration last_conf;
+    struct raft_configuration configuration;
     int rv;
 
-    /* No configuration entry loaded, nothing to do */
-    if (last == NULL) {
-        assert(prev_index == 0);
-        return 0;
+    configurationInit(&configuration);
+    rv = configurationDecode(&entry->buf, &configuration);
+    if (rv != 0) {
+        configurationClose(&configuration);
+        return rv;
+    }
+
+    configurationClose(&r->configuration);
+    r->configuration = configuration;
+
+    /* If the configuration comes from entry at index 1 in the log, we know it's
+     * the bootstrap configuration and it's committed by default. Otherwise we
+     * we can't know if it's committed or not and treat it as uncommitted. */
+    if (index == 1) {
+        assert(r->configuration_uncommitted_index == 0);
+        r->configuration_index = 1;
     } else {
-        raft_configuration_init(&last_conf);
-        rv = configurationDecode(&last->buf, &last_conf);
-        if (rv != 0) {
-            raft_configuration_close(&last_conf);
-            return rv;
-        }
-        configurationClose(&r->configuration);
-        r->configuration = last_conf;
-        r->configuration_uncommitted_index = last_index;
-
-        /* If the last configuration is the first entry in the log, we know it's
-         * the bootstrap configuration and it's committed by default. */
-        if (last_index == 1) {
-            assert(prev_index == 0);
-            r->configuration_index = 1;
-            r->configuration_uncommitted_index = 0;
-        }
-
-        /* If there is a previous configuration it must have been committed as
-         * we don't allow multiple uncommitted configurations. */
-        if (prev_index != 0) {
-            r->configuration_index = prev_index;
-        }
+        assert(r->configuration_index < index);
+        r->configuration_uncommitted_index = index;
     }
 
     configurationTrace(r, &r->configuration,
@@ -59,11 +49,15 @@ static int restoreConfigurations(struct raft *r,
 /* Restore the entries that were loaded from persistent storage. The most recent
  * configuration entry will be restored as well, if any.
  *
- * Note that we cannot know if the last configuration in the log was committed
- * or not, therefore we also need to track the second-to-last configuration
- * entry. This second-to-last entry is committed by default as raft doesn't
- * allow multipled uncommitted configuration entries and is used in case of
- * configuration rollback scenarios. */
+ * Note that if the last configuration entry in the log has index greater than
+ * one we cannot know if it is committed or not. Therefore we also need to track
+ * the second-to-last configuration entry. This second-to-last entry is
+ * committed by default as raft doesn't allow multiple uncommitted configuration
+ * entries. That entry is used in case of configuration rollback scenarios. If
+ * we don't find the second-to-last configuration entry in the log, it means
+ * that the log was truncated after a snapshot and second-to-last configuration
+ * is available in r->configuration_previous, which we popolated earlier when
+ * the snapshot was restored. */
 static int restoreEntries(struct raft *r,
                           raft_index snapshot_index,
                           raft_term snapshot_term,
@@ -71,9 +65,8 @@ static int restoreEntries(struct raft *r,
                           struct raft_entry *entries,
                           size_t n)
 {
-    struct raft_entry *last_conf = NULL;
-    raft_index last_conf_index = 0;
-    raft_index prev_conf_index = 0;
+    struct raft_entry *conf = NULL;
+    raft_index conf_index = 0;
     size_t i;
     int rv;
     logStart(r->log, snapshot_index, snapshot_term, start_index);
@@ -86,19 +79,28 @@ static int restoreEntries(struct raft *r,
             goto err;
         }
         r->last_stored++;
-        /* Only take configurations into account that are newer than the
+
+        /* Only take into account configurations that are newer than the
          * configuration restored from the snapshot. */
         if (entry->type == RAFT_CHANGE &&
             r->last_stored > r->configuration_index) {
-            prev_conf_index = last_conf_index;
-            last_conf = entry;
-            last_conf_index = r->last_stored;
+            /* If there is a previous configuration it must have been committed
+             * as we don't allow multiple uncommitted configurations. At the end
+             * of the loop r->configuration_index will point to the second to
+             * last configuration entry, if any. */
+            if (conf_index != 0) {
+                r->configuration_index = conf_index;
+            }
+            conf = entry;
+            conf_index = r->last_stored;
         }
     }
 
-    rv = restoreConfigurations(r, prev_conf_index, last_conf_index, last_conf);
-    if (rv != 0) {
-        goto err;
+    if (conf != NULL) {
+        rv = restoreMostRecentConfigurationEntry(r, conf, conf_index);
+        if (rv != 0) {
+            goto err;
+        }
     }
 
     raft_free(entries);
