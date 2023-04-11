@@ -56,8 +56,8 @@ static int restoreMostRecentConfigurationEntry(struct raft *r,
  * entries. That entry is used in case of configuration rollback scenarios. If
  * we don't find the second-to-last configuration entry in the log, it means
  * that the log was truncated after a snapshot and second-to-last configuration
- * is available in r->configuration_previous, which we popolated earlier when
- * the snapshot was restored. */
+ * is available in r->configuration_last_snapshot, which we popolated earlier
+ * when the snapshot was restored. */
 static int restoreEntries(struct raft *r,
                           raft_index snapshot_index,
                           raft_term snapshot_term,

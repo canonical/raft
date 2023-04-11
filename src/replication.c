@@ -1501,9 +1501,9 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
      * written, new configuration changes could have been committed, these
      * changes will not be purged from the log by this snapshot. However
      * we still cache the configuration for consistency. */
-    configurationClose(&r->configuration_previous);
-    rv =
-        configurationCopy(&snapshot->configuration, &r->configuration_previous);
+    configurationClose(&r->configuration_last_snapshot);
+    rv = configurationCopy(&snapshot->configuration,
+                           &r->configuration_last_snapshot);
     if (rv != 0) {
         /* TODO: make this a hard fault, because if we have no backup and the
          * log was truncated it will be impossible to rollback an aborted

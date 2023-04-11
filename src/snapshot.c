@@ -49,8 +49,8 @@ int snapshotRestore(struct raft *r, struct raft_snapshot *snapshot)
      * r->configuration gets overriden with an uncommitted configuration and we
      * then need to rollback, but the log does not contain anymore the entry at
      * r->configuration_index because it was truncated. */
-    configurationClose(&r->configuration_previous);
-    rv = configurationCopy(&r->configuration, &r->configuration_previous);
+    configurationClose(&r->configuration_last_snapshot);
+    rv = configurationCopy(&r->configuration, &r->configuration_last_snapshot);
     if (rv != 0) {
         return rv;
     }

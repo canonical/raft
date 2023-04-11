@@ -73,7 +73,7 @@ int raft_init(struct raft *r,
     }
 
     raft_configuration_init(&r->configuration);
-    raft_configuration_init(&r->configuration_previous);
+    raft_configuration_init(&r->configuration_last_snapshot);
     r->configuration_index = 0;
     r->configuration_uncommitted_index = 0;
     r->election_timeout = DEFAULT_ELECTION_TIMEOUT;
@@ -114,7 +114,7 @@ static void ioCloseCb(struct raft_io *io)
     raft_free(r->address);
     logClose(r->log);
     raft_configuration_close(&r->configuration);
-    raft_configuration_close(&r->configuration_previous);
+    raft_configuration_close(&r->configuration_last_snapshot);
     if (r->close_cb != NULL) {
         r->close_cb(r);
     }
