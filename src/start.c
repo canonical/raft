@@ -180,14 +180,6 @@ int raft_start(struct raft *r)
         snapshot_index = snapshot->index;
         snapshot_term = snapshot->term;
         raft_free(snapshot);
-
-        /* Enable configuration rollback if the next configuration after
-         * installing this snapshot needs to be rolled back. */
-        rv = configurationBackup(r, &r->configuration);
-        if (rv != 0) {
-            tracef("failed to backup current configuration.");
-            return rv;
-        }
     } else if (n_entries > 0) {
         /* If we don't have a snapshot and the on-disk log is not empty, then
          * the first entry must be a configuration entry. */

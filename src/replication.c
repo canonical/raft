@@ -1255,15 +1255,6 @@ static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
         goto discard;
     }
 
-    /* Enable configuration rollback if the next configuration after installing
-     * this snapshot needs to be rolled back. */
-    rv = configurationBackup(r, &r->configuration);
-    if (rv != 0) {
-        /* Don't make this a hard fault, configuration rollback is a low
-         * probability event. */
-        tracef("failed to backup current configuration.");
-    }
-
     tracef("restored snapshot with last index %llu", snapshot->index);
 
     goto respond;
