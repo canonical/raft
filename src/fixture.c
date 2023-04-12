@@ -169,7 +169,7 @@ struct io
     unsigned randomized_election_timeout; /* Value returned by io->random() */
     unsigned network_latency;             /* Milliseconds to deliver RPCs */
     unsigned disk_latency;                /* Milliseconds to perform disk I/O */
-    unsigned work_duration; /* Milliseconds to long running work */
+    unsigned work_duration;               /* Milliseconds to run async work */
 
     struct
     {
