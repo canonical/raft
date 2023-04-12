@@ -435,6 +435,9 @@ struct raft_io_async_work
     raft_io_async_work_cb cb;   /* Request callback */
 };
 
+#define RAFT_TRACER_EMIT_V2 \
+    ((void (*)(struct raft_tracer *, const char *, int, const char *))1)
+
 /**
  * Customizable tracer, for debugging purposes.
  */
@@ -442,22 +445,61 @@ struct raft_tracer
 {
     /**
      * Implementation-defined state object.
+     *
+     * If this is embedded in raft_tracer_v2, this pointer is copied into
+     * raft_trace_info->impl before calling raft_tracer_v2->emit.
      */
     void *impl;
 
     /**
      * Whether this tracer should emit messages.
+     *
+     * Unless this is true, raft_tracer->emit (or raft_tracer_v2->emit, if this
+     * object is embedded) will not be called.
      */
     bool enabled;
 
     /**
      * Emit the given trace message, possibly decorating it with the provided
      * metadata.
+     *
+     * If this member is set to the special value RAFT_TRACER_EMIT_V2, the raft
+     * implementation will not treat it as a function pointer, and instead will
+     * cast its `struct raft_tracer *` to `struct raft_tracer_v2 *`, then invoke
+     * that object's own emit method with an appropriate `struct
+     * raft_trace_info` pointer. New applications should prefer to use the
+     * `raft_tracer_v2` interface.
      */
     void (*emit)(struct raft_tracer *t,
                  const char *file,
                  int line,
                  const char *message);
+};
+
+/**
+ * Information that is passed to raft_trace_v2->emit.
+ *
+ * This struct may gain new members in minor releases, and does not support
+ * embedding: it should only be used behind indirection. An implementation of
+ * raft_tracer_v2->emit can read the version field to determine which fields are
+ * valid to read.
+ */
+struct raft_trace_info
+{
+    /* Since version 0 */
+    int version;
+    void *impl; /* copied from raft_tracer->impl */
+    const char *message;
+    int level;
+    const char *file;
+    int line;
+    /* Since version 1 */
+};
+
+struct raft_tracer_v2
+{
+    struct raft_tracer base;
+    void (*emit)(struct raft_trace_info *info);
 };
 
 struct raft_io; /* Forward declaration. */

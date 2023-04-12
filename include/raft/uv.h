@@ -124,6 +124,8 @@ RAFT_API void raft_uv_set_connect_retry_delay(struct raft_io *io, unsigned msecs
 
 /**
  * Emit low-level debug messages using the given tracer.
+ *
+ * The considerations around raft_tracer_v2 described in raft.h also apply here.
  */
 RAFT_API void raft_uv_set_tracer(struct raft_io *io,
                                  struct raft_tracer *tracer);
