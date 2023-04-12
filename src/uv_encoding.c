@@ -36,7 +36,8 @@ static size_t sizeofRequestVoteResultV1(void)
 
 static size_t sizeofRequestVoteResult(void)
 {
-    return sizeofRequestVoteResultV1() + sizeof(uint64_t) /* Flags. */;
+    return sizeofRequestVoteResultV1() + /* Size of older version 1 message */
+           sizeof(uint64_t) /* Flags. */;
 }
 
 static size_t sizeofAppendEntries(const struct raft_append_entries *p)
