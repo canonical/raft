@@ -1388,8 +1388,7 @@ static void getLowestRequestCompletionTime(struct raft_fixture *f,
     for (j = 0; j < f->n; j++) {
         struct io *io = f->servers[j]->io.impl;
         queue *head;
-        QUEUE_FOREACH(head, &io->requests)
-        {
+        QUEUE_FOREACH (head, &io->requests) {
             struct ioRequest *r = QUEUE_DATA(head, struct ioRequest, queue);
             if (r->completion_time < *t) {
                 *t = r->completion_time;
@@ -1421,8 +1420,7 @@ static void completeRequest(struct raft_fixture *f, unsigned i, raft_time t)
     bool found = false;
     f->time = t;
     f->event->server_index = i;
-    QUEUE_FOREACH(head, &io->requests)
-    {
+    QUEUE_FOREACH (head, &io->requests) {
         r = QUEUE_DATA(head, struct ioRequest, queue);
         if (r->completion_time == t) {
             found = true;
@@ -1788,8 +1786,7 @@ static bool hasDelivered(struct raft_fixture *f, void *arg)
     queue *head;
     raft = raft_fixture_get(f, target->i);
     io = raft->io->impl;
-    QUEUE_FOREACH(head, &io->requests)
-    {
+    QUEUE_FOREACH (head, &io->requests) {
         struct ioRequest *r;
         r = QUEUE_DATA(head, struct ioRequest, queue);
         message = NULL;

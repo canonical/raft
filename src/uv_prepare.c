@@ -132,8 +132,7 @@ static unsigned uvPrepareCount(struct uv *uv)
     queue *head;
     unsigned n;
     n = 0;
-    QUEUE_FOREACH(head, &uv->prepare_pool)
-    {
+    QUEUE_FOREACH (head, &uv->prepare_pool) {
         n++;
     }
     return n;

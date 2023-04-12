@@ -715,8 +715,7 @@ static void uvFinalizeCurrentAliveSegmentOnceIdle(struct uv *uv)
     /* Check if there are pending append requests targeted to the current
      * segment. */
     has_pending_reqs = false;
-    QUEUE_FOREACH(head, &uv->append_pending_reqs)
-    {
+    QUEUE_FOREACH (head, &uv->append_pending_reqs) {
         struct uvAppend *r = QUEUE_DATA(head, struct uvAppend, queue);
         if (r->segment == s) {
             has_pending_reqs = true;
@@ -745,8 +744,7 @@ bool UvBarrierReady(struct uv *uv)
     }
 
     queue *head;
-    QUEUE_FOREACH(head, &uv->append_segments)
-    {
+    QUEUE_FOREACH (head, &uv->append_segments) {
         struct uvAliveSegment *segment;
         segment = QUEUE_DATA(head, struct uvAliveSegment, queue);
         if (segment->barrier == uv->barrier) {
@@ -771,8 +769,7 @@ int UvBarrier(struct uv *uv,
     /* Arrange for all open segments not already involved in other barriers to
      * be finalized as soon as their append requests get completed and mark them
      * as involved in this specific barrier request.  */
-    QUEUE_FOREACH(head, &uv->append_segments)
-    {
+    QUEUE_FOREACH (head, &uv->append_segments) {
         struct uvAliveSegment *segment;
         segment = QUEUE_DATA(head, struct uvAliveSegment, queue);
         if (segment->barrier != NULL) {
@@ -830,8 +827,7 @@ static void uvBarrierClose(struct uv *uv)
     struct UvBarrier *barrier = NULL;
     queue *head;
     assert(uv->closing);
-    QUEUE_FOREACH(head, &uv->append_segments)
-    {
+    QUEUE_FOREACH (head, &uv->append_segments) {
         struct uvAliveSegment *segment;
         segment = QUEUE_DATA(head, struct uvAliveSegment, queue);
         if (segment->barrier != NULL && segment->barrier != barrier) {

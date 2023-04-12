@@ -450,8 +450,7 @@ static struct request *getRequest(struct raft *r,
     if (r->state != RAFT_LEADER) {
         return NULL;
     }
-    QUEUE_FOREACH(head, &r->leader_state.requests)
-    {
+    QUEUE_FOREACH (head, &r->leader_state.requests) {
         req = QUEUE_DATA(head, struct request, queue);
         if (req->index == index) {
             assert(req->type == type);
