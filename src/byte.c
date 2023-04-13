@@ -300,7 +300,8 @@ void byteSha1Init(struct byteSha1 *s)
 }
 
 /* Run your data through this. */
-void __attribute__((noinline)) byteSha1Update(struct byteSha1 *s, const uint8_t *data, uint32_t len)
+void __attribute__((noinline))
+byteSha1Update(struct byteSha1 *s, const uint8_t *data, uint32_t len)
 {
     uint32_t i;
     uint32_t j;

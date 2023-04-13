@@ -48,22 +48,21 @@ static void appendCbAssertResult(struct raft_io_append *req, int status)
  * size ENTRY_SIZE. When the append request completes, CB will be called
  * and DATA will be available in result->data. f->io.append is expected to
  * return RV. */
-#define APPEND_SUBMIT_CB_DATA(I, N_ENTRIES, ENTRY_SIZE, CB, DATA, RV) \
-    struct raft_io_append _req##I;                                    \
-    struct result _result##I = {0, false, DATA};                      \
-    int _rv##I;                                                       \
-    ENTRIES(I, N_ENTRIES, ENTRY_SIZE);                                \
-    _req##I.data = &_result##I;                                       \
-    _rv##I = f->io.append(&f->io, &_req##I, _entries##I, N_ENTRIES,   \
-                          CB);                                        \
+#define APPEND_SUBMIT_CB_DATA(I, N_ENTRIES, ENTRY_SIZE, CB, DATA, RV)    \
+    struct raft_io_append _req##I;                                       \
+    struct result _result##I = {0, false, DATA};                         \
+    int _rv##I;                                                          \
+    ENTRIES(I, N_ENTRIES, ENTRY_SIZE);                                   \
+    _req##I.data = &_result##I;                                          \
+    _rv##I = f->io.append(&f->io, &_req##I, _entries##I, N_ENTRIES, CB); \
     munit_assert_int(_rv##I, ==, RV)
 
 /* Submit an append request identified by I, with N_ENTRIES entries, each one of
  * size ENTRY_SIZE. The default expectation is for the operation to succeed. A
  * custom STATUS can be set with APPEND_EXPECT. */
-#define APPEND_SUBMIT(I, N_ENTRIES, ENTRY_SIZE)                       \
-        APPEND_SUBMIT_CB_DATA(I, N_ENTRIES, ENTRY_SIZE,               \
-                              appendCbAssertResult, NULL, 0)          \
+#define APPEND_SUBMIT(I, N_ENTRIES, ENTRY_SIZE)                           \
+    APPEND_SUBMIT_CB_DATA(I, N_ENTRIES, ENTRY_SIZE, appendCbAssertResult, \
+                          NULL, 0)
 
 /* Try to submit an append request and assert that the given error code and
  * message are returned. */

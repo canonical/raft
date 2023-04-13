@@ -31,7 +31,8 @@
 
 /* Template string for snapshot metadata filenames: snapshot term,  snapshot
  * index, creation timestamp (milliseconds since epoch). */
-#define UV__SNAPSHOT_META_TEMPLATE UV__SNAPSHOT_TEMPLATE UV__SNAPSHOT_META_SUFFIX
+#define UV__SNAPSHOT_META_TEMPLATE \
+    UV__SNAPSHOT_TEMPLATE UV__SNAPSHOT_META_SUFFIX
 
 /* State codes. */
 enum {
@@ -92,7 +93,7 @@ struct uv
     queue aborting;                      /* Cleanups upon errors or shutdown */
     bool closing;                        /* True if we are closing */
     raft_io_close_cb close_cb;           /* Invoked when finishing closing */
-    bool auto_recovery;                  /* Try to recover from corrupt segments */
+    bool auto_recovery; /* Try to recover from corrupt segments */
 };
 
 /* Implementation of raft_io->truncate. */
@@ -274,7 +275,6 @@ int UvSnapshotGet(struct raft_io *io,
                   struct raft_io_snapshot_get *req,
                   raft_io_snapshot_get_cb cb);
 
-
 /* Implementation of raft_io->async_work (defined in uv_work.c). */
 int UvAsyncWork(struct raft_io *io,
                 struct raft_io_async_work *req,
@@ -318,8 +318,9 @@ int UvPrepare(struct uv *uv,
  * and then remove it immediately. */
 void UvPrepareClose(struct uv *uv);
 
-/* Implementation of raft_io->append. All the raft_buffers of the raft_entry structs
- * in the entries array are required to have a len that is a multiple of 8. */
+/* Implementation of raft_io->append. All the raft_buffers of the raft_entry
+ * structs in the entries array are required to have a len that is a multiple
+ * of 8. */
 int UvAppend(struct raft_io *io,
              struct raft_io_append *req,
              const struct raft_entry entries[],

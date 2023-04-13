@@ -61,7 +61,7 @@ static void acceptCb(struct raft_uv_transport *t,
 #define INIT                                                                  \
     do {                                                                      \
         int _rv;                                                              \
-        f->transport.version = 1;                                    \
+        f->transport.version = 1;                                             \
         _rv = raft_uv_tcp_init(&f->transport, &f->loop);                      \
         munit_assert_int(_rv, ==, 0);                                         \
         const char *bind_addr = munit_parameters_get(params, "bind-address"); \

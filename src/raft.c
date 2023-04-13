@@ -13,8 +13,8 @@
 #include "membership.h"
 #include "tracing.h"
 
-#define DEFAULT_ELECTION_TIMEOUT 1000 /* One second */
-#define DEFAULT_HEARTBEAT_TIMEOUT 100 /* One tenth of a second */
+#define DEFAULT_ELECTION_TIMEOUT 1000          /* One second */
+#define DEFAULT_HEARTBEAT_TIMEOUT 100          /* One tenth of a second */
 #define DEFAULT_INSTALL_SNAPSHOT_TIMEOUT 30000 /* 30 seconds */
 #define DEFAULT_SNAPSHOT_THRESHOLD 1024
 #define DEFAULT_SNAPSHOT_TRAILING 2048
@@ -26,7 +26,7 @@
 
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
 
-int raft_version_number (void)
+int raft_version_number(void)
 {
     return RAFT_VERSION_NUMBER;
 }
@@ -46,7 +46,7 @@ int raft_init(struct raft *r,
 
     rv = ioFsmVersionCheck(r, io, fsm);
     if (rv != 0) {
-	goto err;
+        goto err;
     }
 
     r->io = io;
@@ -267,13 +267,13 @@ static int ioFsmVersionCheck(struct raft *r,
         return -1;
     }
 
-    if ((fsm->version > 2 && fsm->snapshot_async != NULL)
-        && ((io->version < 2) || (io->async_work == NULL))) {
-        ErrMsgPrintf(r->errmsg,
+    if ((fsm->version > 2 && fsm->snapshot_async != NULL) &&
+        ((io->version < 2) || (io->async_work == NULL))) {
+        ErrMsgPrintf(
+            r->errmsg,
             "async snapshot requires io->version > 1 and async_work method.");
         return -1;
     }
 
     return 0;
 }
-

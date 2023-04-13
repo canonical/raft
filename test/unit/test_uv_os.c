@@ -20,9 +20,9 @@ TEST(UvOsJoin, dirTooLong, NULL, NULL, 0, NULL)
 {
     int rv;
     char path[UV__PATH_SZ];
-    char dir[UV__DIR_LEN+2]; /* Room for '\0' and then 1 char over limit. */
-    memset((char*)dir, '/', sizeof(dir));
-    dir[sizeof(dir)-1] = '\0';
+    char dir[UV__DIR_LEN + 2]; /* Room for '\0' and then 1 char over limit. */
+    memset((char *)dir, '/', sizeof(dir));
+    dir[sizeof(dir) - 1] = '\0';
     const char *filename = "testfile";
 
     rv = UvOsJoin(dir, filename, path);
@@ -35,9 +35,9 @@ TEST(UvOsJoin, filenameTooLong, NULL, NULL, 0, NULL)
     int rv;
     char path[UV__PATH_SZ];
     const char *dir = "testdir";
-    char filename[UV__FILENAME_LEN+2];
-    memset((char*)filename, 'a', sizeof(filename));
-    filename[sizeof(filename)-1] = '\0';
+    char filename[UV__FILENAME_LEN + 2];
+    memset((char *)filename, 'a', sizeof(filename));
+    filename[sizeof(filename) - 1] = '\0';
 
     rv = UvOsJoin(dir, filename, path);
     munit_assert_int(rv, !=, 0);
@@ -48,13 +48,13 @@ TEST(UvOsJoin, dirAndFilenameTooLong, NULL, NULL, 0, NULL)
 {
     int rv;
     char path[UV__PATH_SZ];
-    char dir[UV__DIR_LEN+2];
-    memset((char*)dir, '/', sizeof(dir));
-    dir[sizeof(dir)-1] = '\0';
+    char dir[UV__DIR_LEN + 2];
+    memset((char *)dir, '/', sizeof(dir));
+    dir[sizeof(dir) - 1] = '\0';
 
-    char filename[UV__FILENAME_LEN+2];
-    memset((char*)filename, 'a', sizeof(filename));
-    filename[sizeof(filename)-1] = '\0';
+    char filename[UV__FILENAME_LEN + 2];
+    memset((char *)filename, 'a', sizeof(filename));
+    filename[sizeof(filename) - 1] = '\0';
 
     rv = UvOsJoin(dir, filename, path);
     munit_assert_int(rv, !=, 0);
@@ -65,18 +65,19 @@ TEST(UvOsJoin, dirAndFilenameMax, NULL, NULL, 0, NULL)
 {
     int rv;
     char path[UV__PATH_SZ];
-    char dir[UV__DIR_LEN+1];
-    memset((char*)dir, '/', sizeof(dir));
-    dir[sizeof(dir)-1] = '\0';
+    char dir[UV__DIR_LEN + 1];
+    memset((char *)dir, '/', sizeof(dir));
+    dir[sizeof(dir) - 1] = '\0';
 
-    char filename[UV__FILENAME_LEN+1];
-    memset((char*)filename, 'a', sizeof(filename));
-    filename[sizeof(filename)-1] = '\0';
+    char filename[UV__FILENAME_LEN + 1];
+    memset((char *)filename, 'a', sizeof(filename));
+    filename[sizeof(filename) - 1] = '\0';
 
     rv = UvOsJoin(dir, filename, path);
     munit_assert_int(rv, ==, 0);
     char cmp_path[UV__DIR_LEN + UV__FILENAME_LEN + 1 + 1];
-    snprintf(cmp_path, UV__DIR_LEN + UV__FILENAME_LEN + 1 + 1, "%s/%s", dir, filename);
+    snprintf(cmp_path, UV__DIR_LEN + UV__FILENAME_LEN + 1 + 1, "%s/%s", dir,
+             filename);
     munit_assert_string_equal(path, cmp_path);
     return MUNIT_OK;
 }

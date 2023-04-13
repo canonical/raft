@@ -164,7 +164,7 @@ TEST(replication, partitioned, setup, tear_down, 0, _params)
         raft_fixture_desaturate(&f->cluster, leader_id - 1, raft->id - 1);
     }
 
-    //TODO this fails with seed 0x3914306f
+    // TODO this fails with seed 0x3914306f
     CLUSTER_STEP_UNTIL_HAS_LEADER(30000);
 
     /* Re-try now to append the entry. */

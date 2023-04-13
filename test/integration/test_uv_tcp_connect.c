@@ -60,9 +60,9 @@ static void connectCbAssertResult(struct raft_uv_connect *req,
         f->closed = false;                                           \
     } while (0)
 
-#define CLOSE_SUBMIT                            \
-    munit_assert_false(f->closed);              \
-    f->transport.close(&f->transport, closeCb); 
+#define CLOSE_SUBMIT               \
+    munit_assert_false(f->closed); \
+    f->transport.close(&f->transport, closeCb);
 
 #define CLOSE_WAIT LOOP_RUN_UNTIL(&f->closed)
 #define CLOSE     \

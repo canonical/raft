@@ -36,7 +36,7 @@ static size_t sizeofRequestVoteResultV1(void)
 
 static size_t sizeofRequestVoteResult(void)
 {
-    return sizeofRequestVoteResultV1() +
+    return sizeofRequestVoteResultV1() + /* Size of older version 1 message */
            sizeof(uint64_t) /* Flags. */;
 }
 

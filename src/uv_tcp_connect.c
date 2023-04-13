@@ -39,13 +39,13 @@ struct uvTcpConnect
     uv_buf_t handshake;                  /* Handshake data */
     struct uv_tcp_s *tcp;                /* TCP connection socket handle */
     struct uv_getaddrinfo_s getaddrinfo; /* DNS resolve request */
-    const struct addrinfo* ai_current;   /* The current sockaddr to connect to */
-    struct uv_connect_s connect;         /* TCP connection request */
-    struct uv_write_s write;             /* TCP handshake request */
-    int status;                          /* Returned to the request callback */
-    bool resolving;                      /* Indicate name resolving in progress */
-    bool retry;                          /* Indicate tcp connect failure handling */
-    queue queue;                         /* Pending connect queue */
+    const struct addrinfo *ai_current; /* The current sockaddr to connect to */
+    struct uv_connect_s connect;       /* TCP connection request */
+    struct uv_write_s write;           /* TCP handshake request */
+    int status;                        /* Returned to the request callback */
+    bool resolving;                    /* Indicate name resolving in progress */
+    bool retry;  /* Indicate tcp connect failure handling */
+    queue queue; /* Pending connect queue */
 };
 
 /* Encode an handshake message into the given buffer. */
@@ -150,7 +150,8 @@ static void uvTcpTryNextConnectCb(struct uv_handle_s *handle)
 
     if (t->closing) {
         connect->status = RAFT_CANCELED;
-        /* We are already in close cb for the tcp handle, simply invoke final cb */
+        /* We are already in close cb for the tcp handle, simply invoke final cb
+         */
         uvTcpConnectUvCloseCb(handle);
         return;
     }

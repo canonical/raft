@@ -23,7 +23,7 @@ struct raft_progress
     raft_index snapshot_index;    /* Last index of most recent snapshot sent. */
     raft_time last_send;          /* Timestamp of last AppendEntries RPC. */
     raft_time snapshot_last_send; /* Timestamp of last InstallSnaphot RPC. */
-    bool recent_recv;             /* A msg was received within election timeout. */
+    bool recent_recv; /* A msg was received within election timeout. */
 };
 
 /* Create and initialize the array of progress objects used by the leader to *

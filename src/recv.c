@@ -160,7 +160,8 @@ int recvEnsureMatchingTerms(struct raft *r, raft_term term, int *match)
     recvCheckMatchingTerms(r, term, match);
 
     if (*match == -1) {
-        tracef("old term - current_term:%llu other_term:%llu", r->current_term, term);
+        tracef("old term - current_term:%llu other_term:%llu", r->current_term,
+               term);
         return 0;
     }
 
@@ -205,7 +206,8 @@ int recvUpdateLeader(struct raft *r, const raft_id id, const char *address)
     if (r->follower_state.current_leader.address != NULL) {
         RaftHeapFree(r->follower_state.current_leader.address);
     }
-    r->follower_state.current_leader.address = RaftHeapMalloc(strlen(address) + 1);
+    r->follower_state.current_leader.address =
+        RaftHeapMalloc(strlen(address) + 1);
     if (r->follower_state.current_leader.address == NULL) {
         return RAFT_NOMEM;
     }

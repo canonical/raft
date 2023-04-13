@@ -32,11 +32,11 @@ static bool uvSnapshotParseFilename(const char *filename,
     size_t filename_len = strlen(filename);
     assert(filename_len < UV__FILENAME_LEN);
     if (meta) {
-        matched = sscanf(filename, UV__SNAPSHOT_META_TEMPLATE "%n",
-                         term, index, timestamp, &consumed);
+        matched = sscanf(filename, UV__SNAPSHOT_META_TEMPLATE "%n", term, index,
+                         timestamp, &consumed);
     } else {
-        matched = sscanf(filename, UV__SNAPSHOT_TEMPLATE "%n",
-                         term, index, timestamp, &consumed);
+        matched = sscanf(filename, UV__SNAPSHOT_TEMPLATE "%n", term, index,
+                         timestamp, &consumed);
     }
     if (matched != 3 || consumed != (int)filename_len) {
         return false;
@@ -53,7 +53,8 @@ static bool uvSnapshotParseFilename(const char *filename,
 static bool uvSnapshotInfoMatch(const char *filename,
                                 struct uvSnapshotInfo *info)
 {
-    if (!uvSnapshotParseFilename(filename, true, &info->term, &info->index, &info->timestamp)) {
+    if (!uvSnapshotParseFilename(filename, true, &info->term, &info->index,
+                                 &info->timestamp)) {
         return false;
     }
     /* Allow room for '\0' terminator */
@@ -132,7 +133,10 @@ int UvSnapshotInfoAppendIfMatch(struct uv *uv,
     return 0;
 }
 
-static int uvSnapshotIsOrphanInternal(const char *dir, const char *filename, bool meta, bool *orphan)
+static int uvSnapshotIsOrphanInternal(const char *dir,
+                                      const char *filename,
+                                      bool meta,
+                                      bool *orphan)
 {
     int rv;
     *orphan = false;
@@ -144,14 +148,15 @@ static int uvSnapshotIsOrphanInternal(const char *dir, const char *filename, boo
         return 0;
     }
 
-    /* filename is a well-formed snapshot filename, check if the sibling file exists. */
+    /* filename is a well-formed snapshot filename, check if the sibling file
+     * exists. */
     char sibling_filename[UV__FILENAME_LEN];
     if (meta) {
         rv = snprintf(sibling_filename, UV__FILENAME_LEN, UV__SNAPSHOT_TEMPLATE,
                       term, index, timestamp);
     } else {
-        rv = snprintf(sibling_filename, UV__FILENAME_LEN, UV__SNAPSHOT_META_TEMPLATE,
-                      term, index, timestamp);
+        rv = snprintf(sibling_filename, UV__FILENAME_LEN,
+                      UV__SNAPSHOT_META_TEMPLATE, term, index, timestamp);
     }
 
     if (rv >= UV__FILENAME_LEN) {
@@ -477,10 +482,10 @@ out:
 }
 
 static int makeFileCompressed(const char *dir,
-                           const char *filename,
-                           struct raft_buffer *bufs,
-                           unsigned n_bufs,
-                           char *errmsg)
+                              const char *filename,
+                              struct raft_buffer *bufs,
+                              unsigned n_bufs,
+                              char *errmsg)
 {
     int rv;
 
@@ -687,7 +692,8 @@ int UvSnapshotPut(struct raft_io *io,
      * all current open segments. New writes can continue on newly opened
      * segments that will only contain entries that are newer than the snapshot,
      * and we don't change append_next_index. */
-    next_index = (trailing == 0) ? (snapshot->index + 1) : uv->append_next_index;
+    next_index =
+        (trailing == 0) ? (snapshot->index + 1) : uv->append_next_index;
     rv = UvBarrier(uv, next_index, &put->barrier, uvSnapshotPutBarrierCb);
     if (rv != 0) {
         goto err_after_configuration_encode;

@@ -1,9 +1,9 @@
 #include <unistd.h>
 
-#include "append_helpers.h"
 #include "../lib/runner.h"
 #include "../lib/tcp.h"
 #include "../lib/uv.h"
+#include "append_helpers.h"
 
 /******************************************************************************
  *
@@ -260,8 +260,14 @@ TEST(snapshot_put, installWithoutPreviousEntries, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-/* Request to install a couple of snapshots in a row, no previous entry is present. */
-TEST(snapshot_put, installMultipleWithoutPreviousEntries, setUp, tearDown, 0, NULL)
+/* Request to install a couple of snapshots in a row, no previous entry is
+ * present. */
+TEST(snapshot_put,
+     installMultipleWithoutPreviousEntries,
+     setUp,
+     tearDown,
+     0,
+     NULL)
 {
     struct fixture *f = data;
     SNAPSHOT_PUT(0, /* trailing */
@@ -270,15 +276,20 @@ TEST(snapshot_put, installMultipleWithoutPreviousEntries, setUp, tearDown, 0, NU
     SNAPSHOT_PUT(0, /* trailing */
                  3  /* index */
     );
-    SNAPSHOT_PUT(0,    /* trailing */
-                 1337  /* index */
+    SNAPSHOT_PUT(0,   /* trailing */
+                 1337 /* index */
     );
     return MUNIT_OK;
 }
 
 /* Request to install a couple of snapshots in a row, AppendEntries Requests
  * happen before, meanwhile and after */
-TEST(snapshot_put, installMultipleAppendEntriesInBetween, setUp, tearDown, 0, NULL)
+TEST(snapshot_put,
+     installMultipleAppendEntriesInBetween,
+     setUp,
+     tearDown,
+     0,
+     NULL)
 {
     struct fixture *f = data;
 
@@ -291,8 +302,8 @@ TEST(snapshot_put, installMultipleAppendEntriesInBetween, setUp, tearDown, 0, NU
     APPEND_WAIT(1);
     APPEND_SUBMIT(2, 256, 8);
     APPEND_SUBMIT(3, 256, 8);
-    SNAPSHOT_PUT(0, /* trailing */
-                 100  /* index */
+    SNAPSHOT_PUT(0,  /* trailing */
+                 100 /* index */
     );
     APPEND_WAIT(2);
     APPEND_WAIT(3);

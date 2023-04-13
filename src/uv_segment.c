@@ -595,7 +595,8 @@ done:
 
         /* At least one entry was loaded */
         assert(end_index >= first_index);
-        int nb = snprintf(filename, sizeof(filename), UV__CLOSED_TEMPLATE, first_index, end_index);
+        int nb = snprintf(filename, sizeof(filename), UV__CLOSED_TEMPLATE,
+                          first_index, end_index);
         if ((nb < 0) || ((size_t)nb >= sizeof(filename))) {
             tracef("snprintf failed: %d", nb);
             rv = RAFT_IOERR;
@@ -616,7 +617,8 @@ done:
         info->first_index = first_index;
         info->end_index = end_index;
         memset(info->filename, '\0', sizeof(info->filename));
-        _Static_assert(sizeof(info->filename) >= sizeof(filename), "Destination buffer too small");
+        _Static_assert(sizeof(info->filename) >= sizeof(filename),
+                       "Destination buffer too small");
         /* info->filename is zeroed out, info->filename is at least as large as
          * filename and we checked that nb < sizeof(filename) -> we won't
          * overflow and the result will be zero terminated. */
@@ -806,11 +808,11 @@ void uvSegmentBufferReset(struct uvSegmentBuffer *b, unsigned retain)
  * Upon a restart, raft will not detect the segment anymore and will try
  * to start without it.
  * */
-#define CORRUPT_FILE_FMT "corrupt-%"PRId64"-%s"
+#define CORRUPT_FILE_FMT "corrupt-%" PRId64 "-%s"
 static void uvMoveCorruptSegment(struct uv *uv, struct uvSegmentInfo *info)
 {
     char errmsg[RAFT_ERRMSG_BUF_SIZE] = {0};
-    char new_filename[UV__FILENAME_LEN+1] = {0};
+    char new_filename[UV__FILENAME_LEN + 1] = {0};
     size_t sz = sizeof(new_filename);
     int rv;
 
@@ -834,12 +836,13 @@ static void uvMoveCorruptSegment(struct uv *uv, struct uvSegmentInfo *info)
 /*
  * On startup, raft will try to recover when a corrupt segment is detected.
  *
- * When a corrupt open segment is encountered, it, and all subsequent open segments,
- * are renamed. Not renaming newer, possible non-corrupt, open segments could lead
- * to loading inconsistent data.
+ * When a corrupt open segment is encountered, it, and all subsequent open
+ * segments, are renamed. Not renaming newer, possible non-corrupt, open
+ * segments could lead to loading inconsistent data.
  *
  * When a corrupt closed segment is encountered, it will be renamed when
- * it is the last closed segment, in that case all open-segments are renamed too.
+ * it is the last closed segment, in that case all open-segments are renamed
+ * too.
  */
 static void uvRecoverFromCorruptSegment(struct uv *uv,
                                         size_t i_corrupt,

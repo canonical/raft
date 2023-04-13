@@ -7,7 +7,6 @@
 /* Current encoding format version. */
 #define ENCODING_FORMAT 1
 
-
 void configurationInit(struct raft_configuration *c)
 {
     c->servers = NULL;
@@ -333,9 +332,11 @@ int configurationDecode(const struct raft_buffer *buf,
 }
 
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-void configurationTrace(const struct raft *r, struct raft_configuration *c, const char *msg)
+void configurationTrace(const struct raft *r,
+                        struct raft_configuration *c,
+                        const char *msg)
 {
-    if (r == NULL || c == NULL || !r->tracer->enabled ) {
+    if (r == NULL || c == NULL || !r->tracer->enabled) {
         return;
     }
 
@@ -356,7 +357,8 @@ int configurationBackup(struct raft *r, struct raft_configuration *src)
     struct raft_configuration dst;
 
     /* Copy the configuration to an intermediate configuration because the copy
-     * can fail and we don't want to be left without the previous configuration. */
+     * can fail and we don't want to be left without the previous configuration.
+     */
     configurationInit(&dst);
     rv = configurationCopy(src, &dst);
     if (rv != 0) {

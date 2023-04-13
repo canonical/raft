@@ -10,17 +10,19 @@
 #include "byte.h"
 #include "err.h"
 
-#define min(a,b) ((a) < (b) ? (a) : (b))
-#define max(a,b) ((a) > (b) ? (a) : (b))
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#define max(a, b) ((a) > (b) ? (a) : (b))
 #define MEGABYTE 1048576
 
-int Compress(struct raft_buffer bufs[], unsigned n_bufs,
-             struct raft_buffer *compressed, char *errmsg)
+int Compress(struct raft_buffer bufs[],
+             unsigned n_bufs,
+             struct raft_buffer *compressed,
+             char *errmsg)
 {
 #ifndef LZ4_AVAILABLE
-    (void) bufs;
-    (void) n_bufs;
-    (void) compressed;
+    (void)bufs;
+    (void)n_bufs;
+    (void)compressed;
     ErrMsgPrintf(errmsg, "LZ4 not available");
     return RAFT_INVALID;
 #else
@@ -35,7 +37,7 @@ int Compress(struct raft_buffer bufs[], unsigned n_bufs,
     size_t src_offset = 0;
     size_t dst_offset = 0;
     size_t dst_size_needed = 0; /* Store minimal dst_size */
-    size_t ret = 0; /* Return value of LZ4F_XXX functions */
+    size_t ret = 0;             /* Return value of LZ4F_XXX functions */
     compressed->base = NULL;
     compressed->len = 0;
 
@@ -75,7 +77,7 @@ int Compress(struct raft_buffer bufs[], unsigned n_bufs,
     /* Guestimate of eventual compressed size, mainly not to allocate a huge
      * buffer as `LZ4F_compressBound` calculates the worst case scenario. */
     dst_size = LZ4F_compressBound(
-            max(MEGABYTE, (size_t)lz4_pref.frameInfo.contentSize / 10), &lz4_pref);
+        max(MEGABYTE, (size_t)lz4_pref.frameInfo.contentSize / 10), &lz4_pref);
     dst_size += LZ4F_HEADER_SIZE_MAX_RAFT;
     compressed->base = raft_malloc(dst_size);
     if (compressed->base == NULL) {
@@ -88,7 +90,7 @@ int Compress(struct raft_buffer bufs[], unsigned n_bufs,
     dst_offset = LZ4F_compressBegin(ctx, compressed->base, dst_size, &lz4_pref);
     if (LZ4F_isError(dst_offset)) {
         ErrMsgPrintf(errmsg, "LZ4F_compressBegin %s",
-                LZ4F_getErrorName(dst_offset));
+                     LZ4F_getErrorName(dst_offset));
         rv = RAFT_IOERR;
         goto err_after_buff_alloc;
     }
@@ -102,7 +104,8 @@ int Compress(struct raft_buffer bufs[], unsigned n_bufs,
             src_size = min(bufs[i].len - src_offset, (size_t)MEGABYTE);
             dst_size_needed = LZ4F_compressBound(src_size, &lz4_pref);
             if (dst_size - dst_offset < dst_size_needed) {
-                dst_size += max(dst_size_needed, (size_t)lz4_pref.frameInfo.contentSize / 10);
+                dst_size += max(dst_size_needed,
+                                (size_t)lz4_pref.frameInfo.contentSize / 10);
                 compressed->base = raft_realloc(compressed->base, dst_size);
                 if (compressed->base == NULL) {
                     rv = RAFT_NOMEM;
@@ -111,9 +114,10 @@ int Compress(struct raft_buffer bufs[], unsigned n_bufs,
             }
             /* There is guaranteed enough room in `dst` to perform the
              * compression */
-            ret = LZ4F_compressUpdate(ctx, (char*)compressed->base + dst_offset,
-                                      dst_size - dst_offset, (char*)bufs[i].base + src_offset,
-                                      src_size, NULL);
+            ret = LZ4F_compressUpdate(
+                ctx, (char *)compressed->base + dst_offset,
+                dst_size - dst_offset, (char *)bufs[i].base + src_offset,
+                src_size, NULL);
             if (LZ4F_isError(ret)) {
                 ErrMsgPrintf(errmsg, "LZ4F_compressUpdate %s",
                              LZ4F_getErrorName(ret));
@@ -137,7 +141,7 @@ int Compress(struct raft_buffer bufs[], unsigned n_bufs,
     }
 
     /* Finalize compression */
-    ret = LZ4F_compressEnd(ctx, (char*)compressed->base + dst_offset,
+    ret = LZ4F_compressEnd(ctx, (char *)compressed->base + dst_offset,
                            dst_size - dst_offset, NULL);
     if (LZ4F_isError(ret)) {
         ErrMsgPrintf(errmsg, "LZ4F_compressEnd %s", LZ4F_getErrorName(ret));
@@ -161,12 +165,13 @@ err:
 #endif /* LZ4_AVAILABLE */
 }
 
-int Decompress(struct raft_buffer buf, struct raft_buffer *decompressed,
+int Decompress(struct raft_buffer buf,
+               struct raft_buffer *decompressed,
                char *errmsg)
 {
 #ifndef LZ4_AVAILABLE
-    (void) buf;
-    (void) decompressed;
+    (void)buf;
+    (void)decompressed;
     ErrMsgPrintf(errmsg, "LZ4 not available");
     return RAFT_INVALID;
 #else
@@ -213,11 +218,12 @@ int Decompress(struct raft_buffer buf, struct raft_buffer *decompressed,
          * `size_t` dst_size parameter would overflow an `int`.
          * !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! */
         dst_size = min(decompressed->len - dst_offset, (size_t)INT_MAX);
-        /* `dst_size` will contain the number of bytes written to decompressed->base,
-         * while `src_size` will contain the number of bytes consumed from
-         * buf.base */
-        ret = LZ4F_decompress(ctx, (char*)decompressed->base + dst_offset, &dst_size,
-                              (char*)buf.base + src_offset, &src_size, NULL);
+        /* `dst_size` will contain the number of bytes written to
+         * decompressed->base, while `src_size` will contain the number of bytes
+         * consumed from buf.base */
+        ret = LZ4F_decompress(ctx, (char *)decompressed->base + dst_offset,
+                              &dst_size, (char *)buf.base + src_offset,
+                              &src_size, NULL);
         if (LZ4F_isError(ret)) {
             ErrMsgPrintf(errmsg, "LZ4F_decompress %s", LZ4F_getErrorName(ret));
             rv = RAFT_IOERR;

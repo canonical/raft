@@ -8,7 +8,7 @@
 /* Append item I of type T to array A which currently has N items.
  *
  * A and N must both by pointers. Set RV to -1 in case of failure. */
-#define ARRAY__APPEND(T, I, A, N, RV)			     \
+#define ARRAY__APPEND(T, I, A, N, RV)                        \
     {                                                        \
         T *tmp_array;                                        \
         tmp_array = raft_realloc(*A, (*N + 1) * sizeof **A); \

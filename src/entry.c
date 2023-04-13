@@ -1,5 +1,5 @@
-#include <string.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "assert.h"
 #include "entry.h"

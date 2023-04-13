@@ -44,7 +44,8 @@ int snapshotRestore(struct raft *r, struct raft_snapshot *snapshot)
     r->configuration = snapshot->configuration;
     r->configuration_index = snapshot->configuration_index;
     r->configuration_uncommitted_index = 0;
-    configurationTrace(r, &r->configuration, "configuration restore from snapshot");
+    configurationTrace(r, &r->configuration,
+                       "configuration restore from snapshot");
 
     r->commit_index = snapshot->index;
     r->last_applied = snapshot->index;

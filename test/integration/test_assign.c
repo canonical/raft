@@ -440,7 +440,7 @@ TEST(raft_assign, demoteLeader, setUp, tearDown, 0, NULL)
     munit_assert_int(CLUSTER_LEADER, ==, 0);
     ASSIGN_WAIT;
     CLUSTER_STEP_UNTIL_HAS_LEADER(5000);
-    munit_assert_int(CLUSTER_LEADER, =!, 0);
+    munit_assert_int(CLUSTER_LEADER, !=, 0);
     return MUNIT_OK;
 }
 
@@ -452,6 +452,6 @@ TEST(raft_assign, demoteLeaderToSpare, setUp, tearDown, 0, NULL)
     munit_assert_int(CLUSTER_LEADER, ==, 0);
     ASSIGN_WAIT;
     CLUSTER_STEP_UNTIL_HAS_LEADER(5000);
-    munit_assert_int(CLUSTER_LEADER, =!, 0);
+    munit_assert_int(CLUSTER_LEADER, !=, 0);
     return MUNIT_OK;
 }

@@ -249,14 +249,14 @@ struct snapshot
         DirGrowFile(f->dir, _filename2, SEGMENT_SIZE);        \
     } while (0)
 
-#define LOAD_VARS                           \
-        int _rv;                            \
-        raft_term _term;                    \
-        raft_id _voted_for;                 \
-        struct raft_snapshot *_snapshot;    \
-        raft_index _start_index;            \
-        struct raft_entry *_entries;        \
-        size_t _n;
+#define LOAD_VARS                    \
+    int _rv;                         \
+    raft_term _term;                 \
+    raft_id _voted_for;              \
+    struct raft_snapshot *_snapshot; \
+    raft_index _start_index;         \
+    struct raft_entry *_entries;     \
+    size_t _n;
 
 /* Initialize the raft_io instance, then call raft_io->load() and assert that it
  * returns the given error code and message. */
@@ -290,43 +290,43 @@ struct snapshot
         munit_assert_string_equal(f->io.errmsg, ERRMSG);          \
     } while (0)
 
-#define _LOAD(TERM, VOTED_FOR, SNAPSHOT, START_INDEX, N_ENTRIES)              \
-        _rv = f->io.load(&f->io, &_term, &_voted_for, &_snapshot,             \
-                         &_start_index, &_entries, &_n);                      \
-        munit_assert_int(_rv, ==, 0);                                         \
-        munit_assert_int(_term, ==, TERM);                                    \
-        munit_assert_int(_voted_for, ==, VOTED_FOR);                          \
-        munit_assert_int(_start_index, ==, START_INDEX);                      \
-        if (_snapshot != NULL) {                                              \
-            struct snapshot *_expected = (struct snapshot *)(SNAPSHOT);       \
-            munit_assert_ptr_not_null(_snapshot);                             \
-            munit_assert_int(_snapshot->term, ==, _expected->term);           \
-            munit_assert_int(_snapshot->index, ==, _expected->index);         \
-            munit_assert_int(_snapshot->n_bufs, ==, 1);                       \
-            munit_assert_int(*(uint64_t *)_snapshot->bufs[0].base, ==,        \
-                             _expected->data);                                \
-            raft_configuration_close(&_snapshot->configuration);              \
-            raft_free(_snapshot->bufs[0].base);                               \
-            raft_free(_snapshot->bufs);                                       \
-            raft_free(_snapshot);                                             \
-        }                                                                     \
-        if (_n != 0) {                                                        \
-            munit_assert_int(_n, ==, N_ENTRIES);                              \
-            for (_i = 0; _i < _n; _i++) {                                     \
-                struct raft_entry *_entry = &_entries[_i];                    \
-                uint64_t _value = *(uint64_t *)_entry->buf.base;              \
-                munit_assert_int(_value, ==, _data);                          \
-                _data++;                                                      \
-            }                                                                 \
-            for (_i = 0; _i < _n; _i++) {                                     \
-                struct raft_entry *_entry = &_entries[_i];                    \
-                if (_entry->batch != _batch) {                                \
-                    _batch = _entry->batch;                                   \
-                    raft_free(_batch);                                        \
-                }                                                             \
-            }                                                                 \
-            raft_free(_entries);                                              \
-        }                                                                     \
+#define _LOAD(TERM, VOTED_FOR, SNAPSHOT, START_INDEX, N_ENTRIES)             \
+    _rv = f->io.load(&f->io, &_term, &_voted_for, &_snapshot, &_start_index, \
+                     &_entries, &_n);                                        \
+    munit_assert_int(_rv, ==, 0);                                            \
+    munit_assert_int(_term, ==, TERM);                                       \
+    munit_assert_int(_voted_for, ==, VOTED_FOR);                             \
+    munit_assert_int(_start_index, ==, START_INDEX);                         \
+    if (_snapshot != NULL) {                                                 \
+        struct snapshot *_expected = (struct snapshot *)(SNAPSHOT);          \
+        munit_assert_ptr_not_null(_snapshot);                                \
+        munit_assert_int(_snapshot->term, ==, _expected->term);              \
+        munit_assert_int(_snapshot->index, ==, _expected->index);            \
+        munit_assert_int(_snapshot->n_bufs, ==, 1);                          \
+        munit_assert_int(*(uint64_t *)_snapshot->bufs[0].base, ==,           \
+                         _expected->data);                                   \
+        raft_configuration_close(&_snapshot->configuration);                 \
+        raft_free(_snapshot->bufs[0].base);                                  \
+        raft_free(_snapshot->bufs);                                          \
+        raft_free(_snapshot);                                                \
+    }                                                                        \
+    if (_n != 0) {                                                           \
+        munit_assert_int(_n, ==, N_ENTRIES);                                 \
+        for (_i = 0; _i < _n; _i++) {                                        \
+            struct raft_entry *_entry = &_entries[_i];                       \
+            uint64_t _value = *(uint64_t *)_entry->buf.base;                 \
+            munit_assert_int(_value, ==, _data);                             \
+            _data++;                                                         \
+        }                                                                    \
+        for (_i = 0; _i < _n; _i++) {                                        \
+            struct raft_entry *_entry = &_entries[_i];                       \
+            if (_entry->batch != _batch) {                                   \
+                _batch = _entry->batch;                                      \
+                raft_free(_batch);                                           \
+            }                                                                \
+        }                                                                    \
+        raft_free(_entries);                                                 \
+    }
 
 /* Initialize the raft_io instance, then invoke raft_io->load() and assert that
  * it returns the given state. If non-NULL, SNAPSHOT points to a struct snapshot
@@ -343,25 +343,27 @@ struct snapshot
     } while (0)
 
 /* Same as LOAD but with auto_recovery set to false */
-#define LOAD_NO_RECOVER(TERM, VOTED_FOR, SNAPSHOT, START_INDEX, ENTRIES_DATA, N_ENTRIES) \
-    do {                                                                                 \
-        LOAD_VARS;                                                                       \
-        void *_batch = NULL;                                                             \
-        uint64_t _data = ENTRIES_DATA;                                                   \
-        unsigned _i;                                                                     \
-        SETUP_UV;                                                                        \
-        raft_uv_set_auto_recovery(&f->io, false);                                        \
-        _LOAD(TERM, VOTED_FOR, SNAPSHOT, START_INDEX, N_ENTRIES)                         \
+#define LOAD_NO_RECOVER(TERM, VOTED_FOR, SNAPSHOT, START_INDEX, ENTRIES_DATA, \
+                        N_ENTRIES)                                            \
+    do {                                                                      \
+        LOAD_VARS;                                                            \
+        void *_batch = NULL;                                                  \
+        uint64_t _data = ENTRIES_DATA;                                        \
+        unsigned _i;                                                          \
+        SETUP_UV;                                                             \
+        raft_uv_set_auto_recovery(&f->io, false);                             \
+        _LOAD(TERM, VOTED_FOR, SNAPSHOT, START_INDEX, N_ENTRIES)              \
     } while (0)
 
 /* Same as LOAD without SETUP_UV */
-#define LOAD_NO_SETUP(TERM, VOTED_FOR, SNAPSHOT, START_INDEX, ENTRIES_DATA, N_ENTRIES) \
-    do {                                                                               \
-    	LOAD_VARS;                                                                     \
-        void *_batch = NULL;                                                           \
-        uint64_t _data = ENTRIES_DATA;                                                 \
-        unsigned _i;                                                                   \
-        _LOAD(TERM, VOTED_FOR, SNAPSHOT, START_INDEX, N_ENTRIES)                       \
+#define LOAD_NO_SETUP(TERM, VOTED_FOR, SNAPSHOT, START_INDEX, ENTRIES_DATA, \
+                      N_ENTRIES)                                            \
+    do {                                                                    \
+        LOAD_VARS;                                                          \
+        void *_batch = NULL;                                                \
+        uint64_t _data = ENTRIES_DATA;                                      \
+        unsigned _i;                                                        \
+        _LOAD(TERM, VOTED_FOR, SNAPSHOT, START_INDEX, N_ENTRIES)            \
     } while (0)
 
 /******************************************************************************
@@ -435,23 +437,21 @@ TEST(load, ignoreUnknownFiles, setUp, tearDown, 0, unknownFilesParams)
     return MUNIT_OK;
 }
 
-static char *unusableFiles[] = {
-    "tmp-0000000001221212-0000000001221217",
-    "tmp-snapshot-15-8260687-512469866",
-    "snapshot-525-43326736-880259052",
-    "snapshot-999-13371337-880259052.meta",
-    "snapshot-20-8260687-512469866",
-    "snapshot-88-8260687-512469866.meta",
-    "snapshot-88-8260999-512469866.meta",
-    "tmp-snapshot-88-8260999-512469866.meta",
-    "tmp-snapshot-33-8260687-512469866",
-    "snapshot-33-8260687-512469866.meta",
-    "tmp-metadata1",
-    "tmp-metadata2",
-    "tmp-open1",
-    "tmp-open13",
-    NULL
-};
+static char *unusableFiles[] = {"tmp-0000000001221212-0000000001221217",
+                                "tmp-snapshot-15-8260687-512469866",
+                                "snapshot-525-43326736-880259052",
+                                "snapshot-999-13371337-880259052.meta",
+                                "snapshot-20-8260687-512469866",
+                                "snapshot-88-8260687-512469866.meta",
+                                "snapshot-88-8260999-512469866.meta",
+                                "tmp-snapshot-88-8260999-512469866.meta",
+                                "tmp-snapshot-33-8260687-512469866",
+                                "snapshot-33-8260687-512469866.meta",
+                                "tmp-metadata1",
+                                "tmp-metadata2",
+                                "tmp-open1",
+                                "tmp-open13",
+                                NULL};
 
 static MunitParameterEnum unusableFilesParams[] = {
     {"filename", unusableFiles},
@@ -651,7 +651,8 @@ TEST(load, secondOpenSegmentIsAllZeros, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-/* The data directory has two open segments, the first one has a corrupt header. */
+/* The data directory has two open segments, the first one has a corrupt header.
+ */
 TEST(load, twoOpenSegmentsFirstCorrupt, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
@@ -664,11 +665,11 @@ TEST(load, twoOpenSegmentsFirstCorrupt, setUp, tearDown, 0, NULL)
     DirOverwriteFile(f->dir, "open-1", &version, sizeof version, 0);
     /* Load is successful and equals pristine condition. */
     LOAD(0,    /* term                           */
-	 0,    /* voted for                      */
-	 NULL, /* snapshot                       */
-	 1,    /* start index                    */
-	 0,    /* data for first loaded entry    */
-	 0     /* n entries                      */
+         0,    /* voted for                      */
+         NULL, /* snapshot                       */
+         1,    /* start index                    */
+         0,    /* data for first loaded entry    */
+         0     /* n entries                      */
     );
 
     /* The open segments are renamed, and there is no closed segment. */
@@ -679,7 +680,8 @@ TEST(load, twoOpenSegmentsFirstCorrupt, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-/* The data directory has two open segments, the first one has a corrupt header. */
+/* The data directory has two open segments, the first one has a corrupt header.
+ */
 TEST(load, twoOpenSegmentsFirstCorruptNoRecovery, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
@@ -690,8 +692,8 @@ TEST(load, twoOpenSegmentsFirstCorruptNoRecovery, setUp, tearDown, 0, NULL)
     /* Corrupt open segment */
     uint64_t version = 0 /* Format version */;
     DirOverwriteFile(f->dir, "open-1", &version, sizeof version, 0);
-    LOAD_ERROR_NO_RECOVER(RAFT_CORRUPT,
-               "load open segment open-1: unexpected format version 0");
+    LOAD_ERROR_NO_RECOVER(
+        RAFT_CORRUPT, "load open segment open-1: unexpected format version 0");
 
     /* The open segments are renamed, and there is no closed segment. */
     munit_assert_true(HAS_OPEN_SEGMENT_FILE(1));
@@ -770,7 +772,7 @@ TEST(load, manySnapshots, setUp, tearDown, 0, NULL)
     /* The orphaned .meta file is removed */
     char meta_filename[128];
     sprintf(meta_filename, "%s%s", filename, UV__SNAPSHOT_META_SUFFIX);
-    munit_assert_false(DirHasFile(f->dir,meta_filename));
+    munit_assert_false(DirHasFile(f->dir, meta_filename));
 
     return MUNIT_OK;
 }
@@ -818,9 +820,9 @@ TEST(load, orphanedSnapshotFiles, setUp, tearDown, 0, NULL)
     uint64_t now = uv_now(&f->loop);
 
     struct snapshot expected_snapshot = {
-        2, /* term */
+        2,  /* term */
         16, /* index */
-        4  /* data */
+        4   /* data */
     };
 
     char filename1_removed[64];
@@ -831,7 +833,8 @@ TEST(load, orphanedSnapshotFiles, setUp, tearDown, 0, NULL)
     /* Take a snapshot but then remove the data file, as if the server crashed
      * before it could complete writing it. */
     sprintf(filename1_removed, "snapshot-2-18-%ju", now);
-    sprintf(metafilename1_removed, "snapshot-2-18-%ju%s", now, UV__SNAPSHOT_META_SUFFIX);
+    sprintf(metafilename1_removed, "snapshot-2-18-%ju%s", now,
+            UV__SNAPSHOT_META_SUFFIX);
     SNAPSHOT_PUT(2, 18, 1);
     munit_assert_true(DirHasFile(f->dir, filename1_removed));
     munit_assert_true(DirHasFile(f->dir, metafilename1_removed));
@@ -840,7 +843,8 @@ TEST(load, orphanedSnapshotFiles, setUp, tearDown, 0, NULL)
     /* Take a snapshot but then remove the .meta file */
     now = uv_now(&f->loop);
     sprintf(filename2_removed, "snapshot-2-19-%ju", now);
-    sprintf(metafilename2_removed, "snapshot-2-19-%ju%s", now, UV__SNAPSHOT_META_SUFFIX);
+    sprintf(metafilename2_removed, "snapshot-2-19-%ju%s", now,
+            UV__SNAPSHOT_META_SUFFIX);
     SNAPSHOT_PUT(2, 19, 2);
     munit_assert_true(DirHasFile(f->dir, filename2_removed));
     munit_assert_true(DirHasFile(f->dir, metafilename2_removed));
@@ -848,12 +852,12 @@ TEST(load, orphanedSnapshotFiles, setUp, tearDown, 0, NULL)
 
     /* Take a valid snapshot and make sure it's loaded */
     SNAPSHOT_PUT(2, 16, 4);
-    LOAD(0,                     /* term */
-         0,                     /* voted for */
-         &expected_snapshot,    /* snapshot */
-         17,                    /* start index */
-         0,                     /* data for first loaded entry */
-         0                      /* n entries */
+    LOAD(0,                  /* term */
+         0,                  /* voted for */
+         &expected_snapshot, /* snapshot */
+         17,                 /* start index */
+         0,                  /* data for first loaded entry */
+         0                   /* n entries */
     );
 
     /* The orphaned files are removed */
@@ -913,15 +917,21 @@ TEST(load, openSegmentWithEntriesPastSnapshot, setUp, tearDown, 0, NULL)
 
 /* The data directory has a closed segment whose filename encodes a number of
  * entries which is different then ones it actually contains. */
-TEST(load, closedSegmentWithInconsistentFilenameNoRecover, setUp, tearDown, 0, NULL)
+TEST(load,
+     closedSegmentWithInconsistentFilenameNoRecover,
+     setUp,
+     tearDown,
+     0,
+     NULL)
 {
     struct fixture *f = data;
     APPEND(3, 1);
     DirRenameFile(f->dir, "0000000000000001-0000000000000003",
                   "0000000000000001-0000000000000004");
-    LOAD_ERROR_NO_RECOVER(RAFT_CORRUPT,
-               "load closed segment 0000000000000001-0000000000000004: found 3 "
-               "entries (expected 4)");
+    LOAD_ERROR_NO_RECOVER(
+        RAFT_CORRUPT,
+        "load closed segment 0000000000000001-0000000000000004: found 3 "
+        "entries (expected 4)");
     return MUNIT_OK;
 }
 
@@ -934,12 +944,12 @@ TEST(load, closedSegmentWithInconsistentFilename, setUp, tearDown, 0, NULL)
     DirRenameFile(f->dir, "0000000000000001-0000000000000003",
                   "0000000000000001-0000000000000004");
     /* Load in pristine condition */
-    LOAD(0,         /* term */
-         0,         /* voted for */
+    LOAD(0,    /* term */
+         0,    /* voted for */
          NULL, /* snapshot */
-         1,         /* start index */
-         0,         /* data for first loaded entry */
-         0          /* n entries */
+         1,    /* start index */
+         0,    /* data for first loaded entry */
+         0     /* n entries */
     );
     return MUNIT_OK;
 }
@@ -948,16 +958,22 @@ TEST(load, closedSegmentWithInconsistentFilename, setUp, tearDown, 0, NULL)
  * needed, since they are included in a snapshot. It also has an open segment,
  * however that does not have enough entries to reach the snapshot last
  * index. */
-TEST(load, openSegmentWithEntriesBehindSnapshotNoRecover, setUp, tearDown, 0, NULL)
+TEST(load,
+     openSegmentWithEntriesBehindSnapshotNoRecover,
+     setUp,
+     tearDown,
+     0,
+     NULL)
 {
     struct fixture *f = data;
     APPEND(1, 1);
     APPEND(1, 2);
     SNAPSHOT_PUT(1, 3, 1);
     UNFINALIZE(2, 2, 1);
-    LOAD_ERROR_NO_RECOVER(RAFT_CORRUPT,
-               "last entry on disk has index 2, which is behind last "
-               "snapshot's index 3");
+    LOAD_ERROR_NO_RECOVER(
+        RAFT_CORRUPT,
+        "last entry on disk has index 2, which is behind last "
+        "snapshot's index 3");
     return MUNIT_OK;
 }
 
@@ -1012,7 +1028,12 @@ TEST(load, openSegmentNoClosedSegmentsSnapshotPresent, setUp, tearDown, 0, NULL)
 
 /* The data directory contains a snapshot and an open segment with a corrupt
  * format header and no closed segments. */
-TEST(load, corruptOpenSegmentNoClosedSegmentsSnapshotPresentNoRecover, setUp, tearDown, 0, NULL)
+TEST(load,
+     corruptOpenSegmentNoClosedSegmentsSnapshotPresentNoRecover,
+     setUp,
+     tearDown,
+     0,
+     NULL)
 {
     struct fixture *f = data;
     SNAPSHOT_PUT(1, 3, 1);
@@ -1022,14 +1043,19 @@ TEST(load, corruptOpenSegmentNoClosedSegmentsSnapshotPresentNoRecover, setUp, te
     /* Corrupt open segment */
     uint64_t version = 0 /* Format version */;
     DirOverwriteFile(f->dir, "open-1", &version, sizeof version, 0);
-    LOAD_ERROR_NO_RECOVER(RAFT_CORRUPT,
-               "load open segment open-1: unexpected format version 0");
+    LOAD_ERROR_NO_RECOVER(
+        RAFT_CORRUPT, "load open segment open-1: unexpected format version 0");
     return MUNIT_OK;
 }
 
 /* The data directory contains a snapshot and an open segment with a corrupt
  * format header and no closed segments. */
-TEST(load, corruptOpenSegmentNoClosedSegmentsSnapshotPresent, setUp, tearDown, 0, NULL)
+TEST(load,
+     corruptOpenSegmentNoClosedSegmentsSnapshotPresent,
+     setUp,
+     tearDown,
+     0,
+     NULL)
 {
     struct fixture *f = data;
     struct snapshot snapshot = {
@@ -1057,7 +1083,12 @@ TEST(load, corruptOpenSegmentNoClosedSegmentsSnapshotPresent, setUp, tearDown, 0
 
 /* The data directory contains a snapshot and an open segment with a corrupt
  * format header and a closed segment. */
-TEST(load, corruptOpenSegmentClosedSegmentSnapshotPresentNoRecover, setUp, tearDown, 0, NULL)
+TEST(load,
+     corruptOpenSegmentClosedSegmentSnapshotPresentNoRecover,
+     setUp,
+     tearDown,
+     0,
+     NULL)
 {
     struct fixture *f = data;
     SNAPSHOT_PUT(1, 3, 1);
@@ -1068,14 +1099,19 @@ TEST(load, corruptOpenSegmentClosedSegmentSnapshotPresentNoRecover, setUp, tearD
     /* Corrupt open segment */
     uint64_t version = 0 /* Format version */;
     DirOverwriteFile(f->dir, "open-1", &version, sizeof version, 0);
-    LOAD_ERROR_NO_RECOVER(RAFT_CORRUPT,
-               "load open segment open-1: unexpected format version 0");
+    LOAD_ERROR_NO_RECOVER(
+        RAFT_CORRUPT, "load open segment open-1: unexpected format version 0");
     return MUNIT_OK;
 }
 
 /* The data directory contains a snapshot and an open segment with a corrupt
  * format header and a closed segment. */
-TEST(load, corruptOpenSegmentClosedSegmentSnapshotPresent, setUp, tearDown, 0, NULL)
+TEST(load,
+     corruptOpenSegmentClosedSegmentSnapshotPresent,
+     setUp,
+     tearDown,
+     0,
+     NULL)
 {
     struct fixture *f = data;
     struct snapshot snapshot = {
@@ -1108,7 +1144,12 @@ TEST(load, corruptOpenSegmentClosedSegmentSnapshotPresent, setUp, tearDown, 0, N
 
 /* The data directory contains a snapshot and an open segment with a corrupt
  * format header and multiple closed segment. */
-TEST(load, corruptOpenSegmentClosedSegmentsSnapshotPresent, setUp, tearDown, 0, NULL)
+TEST(load,
+     corruptOpenSegmentClosedSegmentsSnapshotPresent,
+     setUp,
+     tearDown,
+     0,
+     NULL)
 {
     struct fixture *f = data;
     struct snapshot snapshot = {
@@ -1140,7 +1181,12 @@ TEST(load, corruptOpenSegmentClosedSegmentsSnapshotPresent, setUp, tearDown, 0, 
 
 /* The data directory contains a snapshot and an open segment with a corrupt
  * format header and multiple closed segment. */
-TEST(load, corruptOpenSegmentClosedSegmentsSnapshotPresentNoRecover, setUp, tearDown, 0, NULL)
+TEST(load,
+     corruptOpenSegmentClosedSegmentsSnapshotPresentNoRecover,
+     setUp,
+     tearDown,
+     0,
+     NULL)
 {
     struct fixture *f = data;
     SNAPSHOT_PUT(1, 3, 1);
@@ -1152,13 +1198,13 @@ TEST(load, corruptOpenSegmentClosedSegmentsSnapshotPresentNoRecover, setUp, tear
     /* Corrupt open segment */
     uint64_t version = 0 /* Format version */;
     DirOverwriteFile(f->dir, "open-1", &version, sizeof version, 0);
-    LOAD_ERROR_NO_RECOVER(RAFT_CORRUPT,
-               "load open segment open-1: unexpected format version 0");
+    LOAD_ERROR_NO_RECOVER(
+        RAFT_CORRUPT, "load open segment open-1: unexpected format version 0");
     return MUNIT_OK;
 }
 
-/* The data directory contains a closed segment and an open segment with a corrupt
- * format header and no snapshot. */
+/* The data directory contains a closed segment and an open segment with a
+ * corrupt format header and no snapshot. */
 TEST(load, corruptOpenSegmentClosedSegmentsNoRecover, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
@@ -1169,13 +1215,13 @@ TEST(load, corruptOpenSegmentClosedSegmentsNoRecover, setUp, tearDown, 0, NULL)
     /* Corrupt open segment */
     uint64_t version = 0 /* Format version */;
     DirOverwriteFile(f->dir, "open-1", &version, sizeof version, 0);
-    LOAD_ERROR_NO_RECOVER(RAFT_CORRUPT,
-               "load open segment open-1: unexpected format version 0");
+    LOAD_ERROR_NO_RECOVER(
+        RAFT_CORRUPT, "load open segment open-1: unexpected format version 0");
     return MUNIT_OK;
 }
 
-/* The data directory contains a closed segment and an open segment with a corrupt
- * format header and no snapshot. */
+/* The data directory contains a closed segment and an open segment with a
+ * corrupt format header and no snapshot. */
 TEST(load, corruptOpenSegmentClosedSegments, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
@@ -1187,12 +1233,12 @@ TEST(load, corruptOpenSegmentClosedSegments, setUp, tearDown, 0, NULL)
     uint64_t version = 0 /* Format version */;
     DirOverwriteFile(f->dir, "open-1", &version, sizeof version, 0);
     /* load is successful. */
-    LOAD(0,         /* term */
-         0,         /* voted for */
-         NULL,      /* snapshot */
-         1,         /* start index */
-         1,         /* data for first loaded entry */
-         4          /* n entries */
+    LOAD(0,    /* term */
+         0,    /* voted for */
+         NULL, /* snapshot */
+         1,    /* start index */
+         1,    /* data for first loaded entry */
+         4     /* n entries */
     );
     /* Open segment has been renamed */
     munit_assert_false(DirHasFile(f->dir, "open-1"));
@@ -1213,8 +1259,8 @@ TEST(load, corruptOpenSegmentsClosedSegmentsNoRecover, setUp, tearDown, 0, NULL)
     /* Corrupt open segment */
     uint64_t version = 0 /* Format version */;
     DirOverwriteFile(f->dir, "open-1", &version, sizeof version, 0);
-    LOAD_ERROR_NO_RECOVER(RAFT_CORRUPT,
-               "load open segment open-1: unexpected format version 0");
+    LOAD_ERROR_NO_RECOVER(
+        RAFT_CORRUPT, "load open segment open-1: unexpected format version 0");
 
     return MUNIT_OK;
 }
@@ -1234,12 +1280,12 @@ TEST(load, corruptOpenSegmentsClosedSegments, setUp, tearDown, 0, NULL)
     uint64_t version = 0 /* Format version */;
     DirOverwriteFile(f->dir, "open-1", &version, sizeof version, 0);
 
-    LOAD(0,         /* term */
-         0,         /* voted for */
-         NULL,      /* snapshot */
-         1,         /* start index */
-         1,         /* data for first loaded entry */
-         3          /* n entries */
+    LOAD(0,    /* term */
+         0,    /* voted for */
+         NULL, /* snapshot */
+         1,    /* start index */
+         1,    /* data for first loaded entry */
+         3     /* n entries */
     );
 
     /* Open segments have been renamed */
@@ -1250,7 +1296,12 @@ TEST(load, corruptOpenSegmentsClosedSegments, setUp, tearDown, 0, NULL)
 
 /* The data directory contains a closed segment and two open segments.
  * The second open segment has a corrupt header. */
-TEST(load, corruptLastOpenSegmentClosedSegmentsNoRecover, setUp, tearDown, 0, NULL)
+TEST(load,
+     corruptLastOpenSegmentClosedSegmentsNoRecover,
+     setUp,
+     tearDown,
+     0,
+     NULL)
 {
     struct fixture *f = data;
     APPEND(3, 1);
@@ -1262,8 +1313,8 @@ TEST(load, corruptLastOpenSegmentClosedSegmentsNoRecover, setUp, tearDown, 0, NU
     /* Corrupt open segment */
     uint64_t version = 0 /* Format version */;
     DirOverwriteFile(f->dir, "open-2", &version, sizeof version, 0);
-    LOAD_ERROR_NO_RECOVER(RAFT_CORRUPT,
-               "load open segment open-2: unexpected format version 0");
+    LOAD_ERROR_NO_RECOVER(
+        RAFT_CORRUPT, "load open segment open-2: unexpected format version 0");
 
     return MUNIT_OK;
 }
@@ -1283,12 +1334,12 @@ TEST(load, corruptLastOpenSegmentClosedSegments, setUp, tearDown, 0, NULL)
     uint64_t version = 0 /* Format version */;
     DirOverwriteFile(f->dir, "open-2", &version, sizeof version, 0);
 
-    LOAD(0,         /* term */
-         0,         /* voted for */
-         NULL,      /* snapshot */
-         1,         /* start index */
-         1,         /* data for first loaded entry */
-         4          /* n entries */
+    LOAD(0,    /* term */
+         0,    /* voted for */
+         NULL, /* snapshot */
+         1,    /* start index */
+         1,    /* data for first loaded entry */
+         4     /* n entries */
     );
     /* Open segment has been renamed during the first load */
     munit_assert_false(DirHasFile(f->dir, "open-2"));
@@ -1321,7 +1372,12 @@ TEST(load, closedSegmentsOverlappingWithSnapshot, setUp, tearDown, 0, NULL)
 
 /* The data directory has several closed segments, the last of which is corrupt.
  * There is a snapshot. */
-TEST(load, closedSegmentsWithSnapshotLastSegmentCorruptNoRecover, setUp, tearDown, 0, NULL)
+TEST(load,
+     closedSegmentsWithSnapshotLastSegmentCorruptNoRecover,
+     setUp,
+     tearDown,
+     0,
+     NULL)
 {
     struct fixture *f = data;
     SNAPSHOT_PUT(1, 4, 1);
@@ -1335,15 +1391,21 @@ TEST(load, closedSegmentsWithSnapshotLastSegmentCorruptNoRecover, setUp, tearDow
     uint32_t corrupted = 123456789;
     DirOverwriteFile(f->dir, CLOSED_SEGMENT_FILENAME(8, 9), &corrupted,
                      sizeof corrupted, offset);
-    LOAD_ERROR_NO_RECOVER(RAFT_CORRUPT,
-               "load closed segment 0000000000000008-0000000000000009: entries "
-               "batch 1 starting at byte 8: data checksum mismatch");
+    LOAD_ERROR_NO_RECOVER(
+        RAFT_CORRUPT,
+        "load closed segment 0000000000000008-0000000000000009: entries "
+        "batch 1 starting at byte 8: data checksum mismatch");
     return MUNIT_OK;
 }
 
 /* The data directory has several closed segments, the last of which is corrupt.
  * There is a snapshot. */
-TEST(load, closedSegmentsWithSnapshotLastSegmentCorrupt, setUp, tearDown, 0, NULL)
+TEST(load,
+     closedSegmentsWithSnapshotLastSegmentCorrupt,
+     setUp,
+     tearDown,
+     0,
+     NULL)
 {
     struct fixture *f = data;
     struct snapshot snapshot = {
@@ -1374,7 +1436,12 @@ TEST(load, closedSegmentsWithSnapshotLastSegmentCorrupt, setUp, tearDown, 0, NUL
 
 /* The data directory has several closed segments, the last of which is corrupt.
  * There is an open segment and a snapshot. */
-TEST(load, closedSegmentsWithSnapshotLastSegmentCorruptOpenSegment, setUp, tearDown, 0, NULL)
+TEST(load,
+     closedSegmentsWithSnapshotLastSegmentCorruptOpenSegment,
+     setUp,
+     tearDown,
+     0,
+     NULL)
 {
     struct fixture *f = data;
     struct snapshot snapshot = {
@@ -1410,7 +1477,12 @@ TEST(load, closedSegmentsWithSnapshotLastSegmentCorruptOpenSegment, setUp, tearD
 
 /* The data directory has several closed segments, the last of which is corrupt.
  * There is an open segment and a snapshot. */
-TEST(load, closedSegmentsWithSnapshotLastSegmentCorruptOpenSegmentNoRecover, setUp, tearDown, 0, NULL)
+TEST(load,
+     closedSegmentsWithSnapshotLastSegmentCorruptOpenSegmentNoRecover,
+     setUp,
+     tearDown,
+     0,
+     NULL)
 {
     struct fixture *f = data;
     SNAPSHOT_PUT(1, 4, 1);
@@ -1427,15 +1499,21 @@ TEST(load, closedSegmentsWithSnapshotLastSegmentCorruptOpenSegmentNoRecover, set
     DirOverwriteFile(f->dir, CLOSED_SEGMENT_FILENAME(8, 8), &corrupted,
                      sizeof corrupted, offset);
     munit_assert_true(HAS_OPEN_SEGMENT_FILE(1));
-    LOAD_ERROR_NO_RECOVER(RAFT_CORRUPT,
-               "load closed segment 0000000000000008-0000000000000008: entries "
-               "batch 1 starting at byte 8: data checksum mismatch");
+    LOAD_ERROR_NO_RECOVER(
+        RAFT_CORRUPT,
+        "load closed segment 0000000000000008-0000000000000008: entries "
+        "batch 1 starting at byte 8: data checksum mismatch");
     return MUNIT_OK;
 }
 
-/* The data directory has several closed segments, the second to last one of which is corrupt.
- * There is a snapshot. */
-TEST(load, closedSegmentsWithSnapshotSecondLastSegmentCorrupt, setUp, tearDown, 0, NULL)
+/* The data directory has several closed segments, the second to last one of
+ * which is corrupt. There is a snapshot. */
+TEST(load,
+     closedSegmentsWithSnapshotSecondLastSegmentCorrupt,
+     setUp,
+     tearDown,
+     0,
+     NULL)
 {
     struct fixture *f = data;
     SNAPSHOT_PUT(1, 4, 1);
@@ -1454,9 +1532,10 @@ TEST(load, closedSegmentsWithSnapshotSecondLastSegmentCorrupt, setUp, tearDown, 
                "batch 1 starting at byte 8: data checksum mismatch");
 
     /* Second load still fails. */
-    LOAD_ERROR_NO_SETUP(RAFT_CORRUPT,
-                        "load closed segment 0000000000000006-0000000000000007: entries "
-                        "batch 1 starting at byte 8: data checksum mismatch");
+    LOAD_ERROR_NO_SETUP(
+        RAFT_CORRUPT,
+        "load closed segment 0000000000000006-0000000000000007: entries "
+        "batch 1 starting at byte 8: data checksum mismatch");
 
     return MUNIT_OK;
 }
@@ -1578,9 +1657,10 @@ TEST(load, closedSegmentWithCorruptedBatchHeader, setUp, tearDown, 0, NULL)
     APPEND(1, 1);
     DirOverwriteFile(f->dir, CLOSED_SEGMENT_FILENAME(1, 1), &corrupted,
                      sizeof corrupted, offset);
-    LOAD_ERROR_NO_RECOVER(RAFT_CORRUPT,
-               "load closed segment 0000000000000001-0000000000000001: entries "
-               "batch 1 starting at byte 8: header checksum mismatch");
+    LOAD_ERROR_NO_RECOVER(
+        RAFT_CORRUPT,
+        "load closed segment 0000000000000001-0000000000000001: entries "
+        "batch 1 starting at byte 8: header checksum mismatch");
     return MUNIT_OK;
 }
 
@@ -1594,9 +1674,10 @@ TEST(load, closedSegmentWithCorruptedBatchData, setUp, tearDown, 0, NULL)
     APPEND(1, 1);
     DirOverwriteFile(f->dir, CLOSED_SEGMENT_FILENAME(1, 1), &corrupted,
                      sizeof corrupted, offset);
-    LOAD_ERROR_NO_RECOVER(RAFT_CORRUPT,
-               "load closed segment 0000000000000001-0000000000000001: entries "
-               "batch 1 starting at byte 8: data checksum mismatch");
+    LOAD_ERROR_NO_RECOVER(
+        RAFT_CORRUPT,
+        "load closed segment 0000000000000001-0000000000000001: entries "
+        "batch 1 starting at byte 8: data checksum mismatch");
     return MUNIT_OK;
 }
 
@@ -1608,9 +1689,10 @@ TEST(load, closedSegmentWithBadIndex, setUp, tearDown, 0, NULL)
     APPEND(1, 1);
     APPEND(1, 2);
     DirRemoveFile(f->dir, CLOSED_SEGMENT_FILENAME(1, 1));
-    LOAD_ERROR_NO_RECOVER(RAFT_CORRUPT,
-               "unexpected closed segment 0000000000000002-0000000000000002: "
-               "first index should have been 1");
+    LOAD_ERROR_NO_RECOVER(
+        RAFT_CORRUPT,
+        "unexpected closed segment 0000000000000002-0000000000000002: "
+        "first index should have been 1");
     return MUNIT_OK;
 }
 
@@ -1631,9 +1713,10 @@ TEST(load, closedSegmentWithBadFormat, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
     uint8_t buf[8] = {2, 0, 0, 0, 0, 0, 0, 0};
     DirWriteFile(f->dir, CLOSED_SEGMENT_FILENAME(1, 1), buf, sizeof buf);
-    LOAD_ERROR_NO_RECOVER(RAFT_CORRUPT,
-               "load closed segment 0000000000000001-0000000000000001: "
-               "unexpected format version 2");
+    LOAD_ERROR_NO_RECOVER(
+        RAFT_CORRUPT,
+        "load closed segment 0000000000000001-0000000000000001: "
+        "unexpected format version 2");
     return MUNIT_OK;
 }
 
@@ -1658,8 +1741,8 @@ TEST(load, openSegmentWithZeroFormatAndThenData, setUp, tearDown, 0, NULL)
     APPEND(1, 1);
     UNFINALIZE(1, 1, 1);
     DirOverwriteFile(f->dir, "open-1", &version, sizeof version, 0);
-    LOAD_ERROR_NO_RECOVER(RAFT_CORRUPT,
-               "load open segment open-1: unexpected format version 0");
+    LOAD_ERROR_NO_RECOVER(
+        RAFT_CORRUPT, "load open segment open-1: unexpected format version 0");
     return MUNIT_OK;
 }
 
@@ -1671,7 +1754,7 @@ TEST(load, openSegmentWithBadFormat, setUp, tearDown, 0, NULL)
     APPEND(1, 1);
     UNFINALIZE(1, 1, 1);
     DirOverwriteFile(f->dir, "open-1", version, sizeof version, 0);
-    LOAD_ERROR_NO_RECOVER(RAFT_CORRUPT,
-               "load open segment open-1: unexpected format version 2");
+    LOAD_ERROR_NO_RECOVER(
+        RAFT_CORRUPT, "load open segment open-1: unexpected format version 2");
     return MUNIT_OK;
 }

@@ -329,8 +329,8 @@ int replicationProgress(struct raft *r, unsigned i)
          * next_index - 1. */
         prev_index = next_index - 1;
         prev_term = logTermOf(r->log, prev_index);
-        /* If the entry is not anymore in our log, send the last snapshot if we're
-         * not doing so already. */
+        /* If the entry is not anymore in our log, send the last snapshot if
+         * we're not doing so already. */
         if (prev_term == 0 && !progress_state_is_snapshot) {
             assert(prev_index < snapshot_index);
             tracef("missing entry at index %lld -> send snapshot", prev_index);
@@ -450,8 +450,7 @@ static struct request *getRequest(struct raft *r,
     if (r->state != RAFT_LEADER) {
         return NULL;
     }
-    QUEUE_FOREACH(head, &r->leader_state.requests)
-    {
+    QUEUE_FOREACH (head, &r->leader_state.requests) {
         req = QUEUE_DATA(head, struct request, queue);
         if (req->index == index) {
             assert(req->type == type);
@@ -1101,8 +1100,8 @@ int replicationAppend(struct raft *r,
      *   entry).
      */
     if (n == 0) {
-        if ((args->leader_commit > r->commit_index)
-             && !replicationInstallSnapshotBusy(r)) {
+        if ((args->leader_commit > r->commit_index) &&
+            !replicationInstallSnapshotBusy(r)) {
             r->commit_index = min(args->leader_commit, r->last_stored);
             rv = replicationApply(r);
             if (rv != 0) {
@@ -1131,11 +1130,11 @@ int replicationAppend(struct raft *r,
      * that we issue below actually completes.  */
     for (j = 0; j < n; j++) {
         struct raft_entry *entry = &args->entries[i + j];
-         /* TODO This copy should not strictly be necessary, as the batch logic will
-          * take care of freeing the batch buffer in which the entries are received.
-          * However, this would lead to memory spikes in certain edge cases.
-          * https://github.com/canonical/dqlite/issues/276
-          */
+        /* TODO This copy should not strictly be necessary, as the batch logic
+         * will take care of freeing the batch buffer in which the entries are
+         * received. However, this would lead to memory spikes in certain edge
+         * cases. https://github.com/canonical/dqlite/issues/276
+         */
         struct raft_entry copy = {0};
         rv = entryCopy(entry, &copy);
         if (rv != 0) {
@@ -1158,7 +1157,8 @@ int replicationAppend(struct raft *r,
     assert(request->args.n_entries == n);
     if (request->args.n_entries == 0) {
         tracef("No log entries found at index %llu", request->index);
-        ErrMsgPrintf(r->errmsg, "No log entries found at index %llu", request->index);
+        ErrMsgPrintf(r->errmsg, "No log entries found at index %llu",
+                     request->index);
         rv = RAFT_SHUTDOWN;
         goto err_after_acquire_entries;
     }
@@ -1226,17 +1226,19 @@ static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
         goto discard;
     }
     /* If the request is from a previous term, it means that someone else became
-     * a candidate while we were installing the snapshot. In that case, we want to
-     * install the snapshot anyway, but our "current leader" may no longer be the
-     * same as the server that sent the install request, so we shouldn't send a
-     * response to that server. */
+     * a candidate while we were installing the snapshot. In that case, we want
+     * to install the snapshot anyway, but our "current leader" may no longer be
+     * the same as the server that sent the install request, so we shouldn't
+     * send a response to that server. */
     if (request->term != r->current_term) {
-        tracef("new term since receiving snapshot -> install but don't respond");
+        tracef(
+            "new term since receiving snapshot -> install but don't respond");
         should_respond = false;
     }
 
     if (status != 0) {
-        tracef("save snapshot %llu: %s", snapshot->index, raft_strerror(status));
+        tracef("save snapshot %llu: %s", snapshot->index,
+               raft_strerror(status));
         goto discard;
     }
 
@@ -1248,7 +1250,8 @@ static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
      */
     rv = snapshotRestore(r, snapshot);
     if (rv != 0) {
-        tracef("restore snapshot %llu: %s", snapshot->index, raft_strerror(status));
+        tracef("restore snapshot %llu: %s", snapshot->index,
+               raft_strerror(status));
         goto discard;
     }
 
@@ -1440,7 +1443,8 @@ static void applyChange(struct raft *r, const raft_index index)
          */
         server = configurationGet(&r->configuration, r->id);
         if (server == NULL || server->role != RAFT_VOTER) {
-            tracef("leader removed from config or no longer voter server: %p", (void*)server);
+            tracef("leader removed from config or no longer voter server: %p",
+                   (void *)server);
             convertToFollower(r);
         }
 
@@ -1507,7 +1511,8 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
      * write. Therefore, we only need to backup a configuration in case
      * configuration_index == snapshot->configuration_index, i.e. the last
      * committed configuration is the configuration in the snapshot. (for
-     * simplicity this doesn't take into account the snapshot trailing parameter)*/
+     * simplicity this doesn't take into account the snapshot trailing
+     * parameter)*/
     if (r->configuration_index == snapshot->configuration_index) {
         rv = configurationBackup(r, &snapshot->configuration);
         if (rv != 0) {
@@ -1522,7 +1527,8 @@ out:
     r->snapshot.pending.term = 0;
 }
 
-static int putSnapshot(struct raft *r, struct raft_snapshot *snapshot,
+static int putSnapshot(struct raft *r,
+                       struct raft_snapshot *snapshot,
                        raft_io_snapshot_put_cb cb)
 {
     int rv;
@@ -1539,8 +1545,8 @@ static int putSnapshot(struct raft *r, struct raft_snapshot *snapshot,
     return rv;
 }
 
-static void takeSnapshotDoneCb(struct raft_io_async_work *take,
-                               int status) {
+static void takeSnapshotDoneCb(struct raft_io_async_work *take, int status)
+{
     struct raft *r = take->data;
     struct raft_snapshot *snapshot = &r->snapshot.pending;
     int rv;
@@ -1569,7 +1575,8 @@ static int takeSnapshotAsync(struct raft_io_async_work *take)
     return r->fsm->snapshot_async(r->fsm, &snapshot->bufs, &snapshot->n_bufs);
 }
 
-static int copyLastCommittedConfiguration(const struct raft *r, struct raft_configuration *dst)
+static int copyLastCommittedConfiguration(const struct raft *r,
+                                          struct raft_configuration *dst)
 {
     const struct raft_entry *entry;
     int rv;

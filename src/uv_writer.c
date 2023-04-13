@@ -149,8 +149,8 @@ static void uvWriterPollCb(uv_poll_t *poller, int status, int events)
     assert(w->event_fd >= 0);
     assert(status == 0);
     if (status != 0) {
-        /* UNTESTED libuv docs: If an error happens while polling, status will be < 0 and
-         * corresponds with one of the UV_E* error codes. */
+        /* UNTESTED libuv docs: If an error happens while polling, status will
+         * be < 0 and corresponds with one of the UV_E* error codes. */
         goto fail_requests;
     }
 
@@ -173,7 +173,8 @@ static void uvWriterPollCb(uv_poll_t *poller, int status, int events)
      *
      * If we got here at least one write should have completed and io_events
      * should return immediately without blocking. */
-    n_events = UvOsIoGetevents(w->ctx, 1, (long int)w->n_events, w->events, NULL);
+    n_events =
+        UvOsIoGetevents(w->ctx, 1, (long int)w->n_events, w->events, NULL);
     assert(n_events >= 1);
     if (n_events < 1) {
         /* UNTESTED */

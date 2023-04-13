@@ -56,5 +56,4 @@ void uvEncodeBatchHeader(const struct raft_entry *entries,
                          unsigned n,
                          void *buf);
 
-
 #endif /* UV_ENCODING_H_ */

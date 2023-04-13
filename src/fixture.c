@@ -53,7 +53,8 @@ RAFT_API int raft_fixture_event_type(struct raft_fixture_event *event)
     return event->type;
 }
 
-RAFT_API unsigned raft_fixture_event_server_index(struct raft_fixture_event *event)
+RAFT_API unsigned raft_fixture_event_server_index(
+    struct raft_fixture_event *event)
 {
     assert(event != NULL);
     return event->server_index;
@@ -168,7 +169,7 @@ struct io
     unsigned randomized_election_timeout; /* Value returned by io->random() */
     unsigned network_latency;             /* Milliseconds to deliver RPCs */
     unsigned disk_latency;                /* Milliseconds to perform disk I/O */
-    unsigned work_duration;               /* Milliseconds to long running work */
+    unsigned work_duration;               /* Milliseconds to run async work */
 
     struct
     {
@@ -326,7 +327,7 @@ static void ioFlushSnapshotGet(struct io *s, struct snapshot_get *r)
 /* Flush an async work request */
 static void ioFlushAsyncWork(struct io *s, struct async_work *r)
 {
-    (void) s;
+    (void)s;
     int rv;
     rv = r->req->work(r->req);
     r->req->cb(r->req, rv);
@@ -725,7 +726,6 @@ static int ioMethodAsyncWork(struct raft_io *raft_io,
     QUEUE_PUSH(&io->requests, &r->queue);
     return 0;
 }
-
 
 static int ioMethodSnapshotGet(struct raft_io *raft_io,
                                struct raft_io_snapshot_get *req,
@@ -1388,8 +1388,7 @@ static void getLowestRequestCompletionTime(struct raft_fixture *f,
     for (j = 0; j < f->n; j++) {
         struct io *io = f->servers[j]->io.impl;
         queue *head;
-        QUEUE_FOREACH(head, &io->requests)
-        {
+        QUEUE_FOREACH (head, &io->requests) {
             struct ioRequest *r = QUEUE_DATA(head, struct ioRequest, queue);
             if (r->completion_time < *t) {
                 *t = r->completion_time;
@@ -1421,8 +1420,7 @@ static void completeRequest(struct raft_fixture *f, unsigned i, raft_time t)
     bool found = false;
     f->time = t;
     f->event->server_index = i;
-    QUEUE_FOREACH(head, &io->requests)
-    {
+    QUEUE_FOREACH (head, &io->requests) {
         r = QUEUE_DATA(head, struct ioRequest, queue);
         if (r->completion_time == t) {
             found = true;
@@ -1788,8 +1786,7 @@ static bool hasDelivered(struct raft_fixture *f, void *arg)
     queue *head;
     raft = raft_fixture_get(f, target->i);
     io = raft->io->impl;
-    QUEUE_FOREACH(head, &io->requests)
-    {
+    QUEUE_FOREACH (head, &io->requests) {
         struct ioRequest *r;
         r = QUEUE_DATA(head, struct ioRequest, queue);
         message = NULL;

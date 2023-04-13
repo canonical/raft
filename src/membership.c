@@ -22,7 +22,8 @@ int membershipCanChangeConfiguration(struct raft *r)
     }
 
     if (r->configuration_uncommitted_index != 0) {
-        tracef("r->configuration_uncommitted_index %llu", r->configuration_uncommitted_index);
+        tracef("r->configuration_uncommitted_index %llu",
+               r->configuration_uncommitted_index);
         rv = RAFT_CANTCHANGE;
         goto err;
     }
@@ -76,8 +77,10 @@ bool membershipUpdateCatchUpRound(struct raft *r)
     /* If the server did not reach the target index for this round, it did not
      * catch up. */
     if (match_index < r->leader_state.round_index) {
-        tracef("member (index: %u) not yet caught up match_index:%llu round_index:%llu",
-                server_index, match_index, r->leader_state.round_index);
+        tracef(
+            "member (index: %u) not yet caught up match_index:%llu "
+            "round_index:%llu",
+            server_index, match_index, r->leader_state.round_index);
         return false;
     }
 
@@ -87,8 +90,8 @@ bool membershipUpdateCatchUpRound(struct raft *r)
     is_up_to_date = match_index == last_index;
     is_fast_enough = round_duration < r->election_timeout;
 
-    tracef("member is_up_to_date:%d is_fast_enough:%d",
-            is_up_to_date, is_fast_enough);
+    tracef("member is_up_to_date:%d is_fast_enough:%d", is_up_to_date,
+           is_fast_enough);
 
     /* If the server's log is fully up-to-date or the round that just terminated
      * was fast enough, then the server as caught up. */
@@ -132,7 +135,8 @@ int membershipUncommittedChange(struct raft *r,
     }
 
     /* ignore errors */
-    snprintf(msg, sizeof(msg), "uncommitted config change at index:%llu", index);
+    snprintf(msg, sizeof(msg), "uncommitted config change at index:%llu",
+             index);
     configurationTrace(r, &configuration, msg);
 
     raft_configuration_close(&r->configuration);
@@ -195,7 +199,8 @@ void membershipLeadershipTransferInit(struct raft *r,
     r->transfer = req;
 }
 
-static void membershipLeadershipSendCb(struct raft_io_send *send, int status) {
+static void membershipLeadershipSendCb(struct raft_io_send *send, int status)
+{
     (void)status;
     RaftHeapFree(send);
 }

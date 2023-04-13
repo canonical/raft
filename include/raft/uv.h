@@ -113,14 +113,16 @@ RAFT_API void raft_uv_set_segment_size(struct raft_io *io, size_t size);
  *
  * By default snapshots are compressed if the appropriate libraries are found.
  */
-RAFT_API int raft_uv_set_snapshot_compression(struct raft_io *io, bool compressed);
+RAFT_API int raft_uv_set_snapshot_compression(struct raft_io *io,
+                                              bool compressed);
 
 /**
  * Set how many milliseconds to wait between subsequent retries when
  * establishing a connection with another server. The default is 1000
  * milliseconds.
  */
-RAFT_API void raft_uv_set_connect_retry_delay(struct raft_io *io, unsigned msecs);
+RAFT_API void raft_uv_set_connect_retry_delay(struct raft_io *io,
+                                              unsigned msecs);
 
 /**
  * Emit low-level debug messages using the given tracer.
@@ -131,8 +133,7 @@ RAFT_API void raft_uv_set_tracer(struct raft_io *io,
 /**
  * Enable or disable auto-recovery on startup. Default enabled.
  */
-RAFT_API void raft_uv_set_auto_recovery(struct raft_io *io,
-                                        bool flag);
+RAFT_API void raft_uv_set_auto_recovery(struct raft_io *io, bool flag);
 
 /**
  * Callback invoked by the transport implementation when a new incoming
@@ -271,6 +272,7 @@ RAFT_API void raft_uv_tcp_close(struct raft_uv_transport *t);
  *
  * Must be called before raft_init().
  */
-RAFT_API int raft_uv_tcp_set_bind_address(struct raft_uv_transport *t, const char *address);
+RAFT_API int raft_uv_tcp_set_bind_address(struct raft_uv_transport *t,
+                                          const char *address);
 
 #endif /* RAFT_UV_H */

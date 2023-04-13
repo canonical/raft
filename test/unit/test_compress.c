@@ -21,8 +21,8 @@ struct raft_buffer getBufWithRandom(size_t len)
 
     size_t offset = 0;
     /* Write as many random ints in buf as possible */
-    for(size_t n = buf.len / sizeof(int); n > 0; n--) {
-        *((int*)(buf.base) + offset) = rand();
+    for (size_t n = buf.len / sizeof(int); n > 0; n--) {
+        *((int *)(buf.base) + offset) = rand();
         offset += 1;
     }
 
@@ -33,7 +33,7 @@ struct raft_buffer getBufWithRandom(size_t len)
     if (rem) {
         int r_int = rand();
         for (unsigned i = 0; i < rem; i++) {
-            *((char*)buf.base + offset) = *((char*)&r_int + i);
+            *((char *)buf.base + offset) = *((char *)&r_int + i);
             offset++;
         }
     }
@@ -62,7 +62,8 @@ static void sha1(struct raft_buffer bufs[], unsigned n_bufs, uint8_t value[20])
     struct byteSha1 sha;
     byteSha1Init(&sha);
     for (unsigned i = 0; i < n_bufs; i++) {
-        byteSha1Update(&sha, (const uint8_t *)bufs[i].base, (uint32_t)bufs[i].len);
+        byteSha1Update(&sha, (const uint8_t *)bufs[i].base,
+                       (uint32_t)bufs[i].len);
     }
     byteSha1Digest(&sha, value);
 }
@@ -70,34 +71,35 @@ static void sha1(struct raft_buffer bufs[], unsigned n_bufs, uint8_t value[20])
 TEST(Compress, compressDecompressZeroLength, NULL, NULL, 0, NULL)
 {
     char errmsg[RAFT_ERRMSG_BUF_SIZE] = {0};
-    struct raft_buffer bufs1[2] = {{NULL, 0},{(void*)0xDEADBEEF, 0}}; /* 0 length */
-    struct raft_buffer bufs2[2] = {{(void*)0xDEADBEEF, 0},{NULL, 0}}; /* 0 length */
+    struct raft_buffer bufs1[2] = {{NULL, 0},
+                                   {(void *)0xDEADBEEF, 0}}; /* 0 length */
+    struct raft_buffer bufs2[2] = {{(void *)0xDEADBEEF, 0},
+                                   {NULL, 0}}; /* 0 length */
     struct raft_buffer compressed = {0};
-    munit_assert_int(Compress(&bufs1[0], 1, &compressed, errmsg), ==, RAFT_INVALID);
-    munit_assert_int(Compress(&bufs1[1], 1, &compressed, errmsg), ==, RAFT_INVALID);
+    munit_assert_int(Compress(&bufs1[0], 1, &compressed, errmsg), ==,
+                     RAFT_INVALID);
+    munit_assert_int(Compress(&bufs1[1], 1, &compressed, errmsg), ==,
+                     RAFT_INVALID);
     munit_assert_int(Compress(bufs1, 2, &compressed, errmsg), ==, RAFT_INVALID);
     munit_assert_int(Compress(bufs2, 2, &compressed, errmsg), ==, RAFT_INVALID);
     return MUNIT_OK;
 }
 
-static char* len_one_params[] = {
-/*    16B   1KB     64KB     4MB        128MB */
-      "16", "1024", "65536", "4194304", "134217728",
-/*    Around Blocksize*/
-      "65516", "65517", "65518", "65521", "65535",
-      "65537", "65551", "65555", "65556",
-/*    Ugly lengths */
-      "0", "1", "9", "123450", "1337", "6655111",
-      NULL
-};
+static char *len_one_params[] = {
+    /*    16B   1KB     64KB     4MB        128MB */
+    "16", "1024", "65536", "4194304", "134217728",
+    /*    Around Blocksize*/
+    "65516", "65517", "65518", "65521", "65535", "65537", "65551", "65555",
+    "65556",
+    /*    Ugly lengths */
+    "0", "1", "9", "123450", "1337", "6655111", NULL};
 
 static MunitParameterEnum random_one_params[] = {
-    { "len_one", len_one_params },
-    { NULL, NULL },
+    {"len_one", len_one_params},
+    {NULL, NULL},
 };
 
-TEST(Compress, compressDecompressRandomOne, NULL, NULL, 0,
-     random_one_params)
+TEST(Compress, compressDecompressRandomOne, NULL, NULL, 0, random_one_params)
 {
     char errmsg[RAFT_ERRMSG_BUF_SIZE] = {0};
     struct raft_buffer compressed = {0};
@@ -127,28 +129,32 @@ TEST(Compress, compressDecompressRandomOne, NULL, NULL, 0,
     return MUNIT_OK;
 }
 
-static char* len_nonrandom_one_params[] = {
-#if !defined(__LP64__) && (defined(__arm__) || defined(__i386__) || defined(__mips__))
-/*    4KB     64KB     4MB        1GB           INT_MAX (larger allocations fail on 32-bit archs */
-      "4096", "65536", "4194304", "1073741824", "2147483647",
+static char *len_nonrandom_one_params[] = {
+#if !defined(__LP64__) && \
+    (defined(__arm__) || defined(__i386__) || defined(__mips__))
+    /*    4KB     64KB     4MB        1GB           INT_MAX (larger allocations
+       fail on 32-bit archs */
+    "4096", "65536", "4194304", "1073741824", "2147483647",
 #else
-/*    4KB     64KB     4MB        1GB           2GB + 200MB */
-      "4096", "65536", "4194304", "1073741824", "2357198848",
+    /*    4KB     64KB     4MB        1GB           2GB + 200MB */
+    "4096", "65536", "4194304", "1073741824", "2357198848",
 #endif
-/*    Around Blocksize*/
-      "65516", "65517", "65518", "65521", "65535",
-      "65537", "65551", "65555", "65556",
-/*    Ugly lengths */
-      "0", "993450", "31337", "83883825",
-      NULL
-};
+    /*    Around Blocksize*/
+    "65516", "65517", "65518", "65521", "65535", "65537", "65551", "65555",
+    "65556",
+    /*    Ugly lengths */
+    "0", "993450", "31337", "83883825", NULL};
 
 static MunitParameterEnum nonrandom_one_params[] = {
-    { "len_one", len_nonrandom_one_params },
-    { NULL, NULL },
+    {"len_one", len_nonrandom_one_params},
+    {NULL, NULL},
 };
 
-TEST(Compress, compressDecompressNonRandomOne, NULL, NULL, 0,
+TEST(Compress,
+     compressDecompressNonRandomOne,
+     NULL,
+     NULL,
+     0,
      nonrandom_one_params)
 {
     char errmsg[RAFT_ERRMSG_BUF_SIZE] = {0};
@@ -183,19 +189,15 @@ TEST(Compress, compressDecompressNonRandomOne, NULL, NULL, 0,
     return MUNIT_OK;
 }
 
-static char* len_two_params[] = {
-      "4194304", "13373", "66", "0",
-      NULL
-};
+static char *len_two_params[] = {"4194304", "13373", "66", "0", NULL};
 
 static MunitParameterEnum random_two_params[] = {
-    { "len_one", len_one_params },
-    { "len_two", len_two_params },
-    { NULL, NULL },
+    {"len_one", len_one_params},
+    {"len_two", len_two_params},
+    {NULL, NULL},
 };
 
-TEST(Compress, compressDecompressRandomTwo, NULL, NULL, 0,
-     random_two_params)
+TEST(Compress, compressDecompressRandomTwo, NULL, NULL, 0, random_two_params)
 {
     char errmsg[RAFT_ERRMSG_BUF_SIZE] = {0};
     struct raft_buffer compressed = {0};
@@ -212,7 +214,7 @@ TEST(Compress, compressDecompressRandomTwo, NULL, NULL, 0,
     }
     struct raft_buffer buf1 = getBufWithRandom(len1);
     struct raft_buffer buf2 = getBufWithRandom(len2);
-    struct raft_buffer bufs[2] = { buf1, buf2 };
+    struct raft_buffer bufs[2] = {buf1, buf2};
 
     /* If one of the buffers is empty ensure data is identical to single buffer
      * case. */
@@ -258,10 +260,11 @@ TEST(Compress, compressDecompressCorruption, NULL, NULL, 0, NULL)
 
     /* Corrupt the a data byte after the header */
     munit_assert_ulong(LZ4F_HEADER_SIZE_MAX_RAFT, <, compressed.len);
-    ((char*)compressed.base)[LZ4F_HEADER_SIZE_MAX_RAFT] += 1;
+    ((char *)compressed.base)[LZ4F_HEADER_SIZE_MAX_RAFT] += 1;
 
     munit_assert_int(Decompress(compressed, &decompressed, errmsg), !=, 0);
-    munit_assert_string_equal(errmsg, "LZ4F_decompress ERROR_contentChecksum_invalid");
+    munit_assert_string_equal(errmsg,
+                              "LZ4F_decompress ERROR_contentChecksum_invalid");
     munit_assert_ptr_null(decompressed.base);
 
     raft_free(compressed.base);
@@ -292,7 +295,7 @@ TEST(Compress, lz4Disabled, NULL, NULL, 0, NULL)
 static const char LZ4_MAGIC[4] = {0x04, 0x22, 0x4d, 0x18};
 TEST(Compress, isCompressedTooSmall, NULL, NULL, 0, NULL)
 {
-    munit_assert_false(IsCompressed(&LZ4_MAGIC[1], sizeof(LZ4_MAGIC)-1));
+    munit_assert_false(IsCompressed(&LZ4_MAGIC[1], sizeof(LZ4_MAGIC) - 1));
     return MUNIT_OK;
 }
 

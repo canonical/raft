@@ -264,7 +264,9 @@ static unsigned uvClientPendingCount(struct uvClient *c)
 {
     queue *head;
     unsigned n = 0;
-    QUEUE_FOREACH(head, &c->pending) { n++; }
+    QUEUE_FOREACH (head, &c->pending) {
+        n++;
+    }
     return n;
 }
 
@@ -410,8 +412,7 @@ static int uvGetClient(struct uv *uv,
     int rv;
 
     /* Check if we already have a client object for this peer server. */
-    QUEUE_FOREACH(head, &uv->clients)
-    {
+    QUEUE_FOREACH (head, &uv->clients) {
         *client = QUEUE_DATA(head, struct uvClient, queue);
         if ((*client)->id != id) {
             continue;

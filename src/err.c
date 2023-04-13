@@ -6,7 +6,7 @@
 #include "assert.h"
 
 #define WRAP_SEP ": "
-#define WRAP_SEP_LEN (size_t)strlen(WRAP_SEP)
+#define WRAP_SEP_LEN ((size_t)strlen(WRAP_SEP))
 
 void errMsgWrap(char *e, const char *format)
 {

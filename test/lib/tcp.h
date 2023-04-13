@@ -28,7 +28,7 @@
 
 struct TcpServer
 {
-    int socket;        /* Socket listening to incoming connections */
+    int socket; /* Socket listening to incoming connections */
     int port;
     char address[128]; /* IPv4 address of the server, with port */
 };

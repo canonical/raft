@@ -114,8 +114,8 @@ int electionStart(struct raft *r)
      * configuration (meaning that we are a voting server). */
     assert(voting_index < r->configuration.n);
 
-    /* Coherence check that configurationVoterCount and configurationIndexOfVoter
-     * have returned something that makes sense. */
+    /* Coherence check that configurationVoterCount and
+     * configurationIndexOfVoter have returned something that makes sense. */
     assert(n_voters <= r->configuration.n);
     assert(voting_index < n_voters);
 
@@ -202,8 +202,8 @@ int electionVote(struct raft *r,
 
     is_transferee =
         r->transfer != NULL && r->transfer->id == args->candidate_id;
-    if (!args->pre_vote && r->voted_for != 0 && r->voted_for != args->candidate_id &&
-        !is_transferee) {
+    if (!args->pre_vote && r->voted_for != 0 &&
+        r->voted_for != args->candidate_id && !is_transferee) {
         tracef("local server already voted -> not granting vote");
         return 0;
     }
@@ -214,13 +214,13 @@ int electionVote(struct raft *r,
      * > cluster that they would be willing
      * > to grant the candidate their votes (if the candidate's log is
      * > sufficiently up-to-date, and the voters
-     * > have not received heartbeats from a valid leader for at least a baseline
-     * > election timeout)
-     * Arriving here means that in a pre-vote phase, we will cast our vote
-     * if the candidate's log is sufficiently up-to-date, no matter what the
-     * candidate's term is. We have already checked if we currently have a leader
-     * upon reception of the RequestVote RPC, meaning the 2 conditions will be
-     * satisfied if the candidate's log is up-to-date.
+     * > have not received heartbeats from a valid leader for at least a
+     * baseline > election timeout) Arriving here means that in a pre-vote
+     * phase, we will cast our vote if the candidate's log is sufficiently
+     * up-to-date, no matter what the candidate's term is. We have already
+     * checked if we currently have a leader upon reception of the RequestVote
+     * RPC, meaning the 2 conditions will be satisfied if the candidate's log is
+     * up-to-date.
      * */
     local_last_index = logLastIndex(r->log);
 

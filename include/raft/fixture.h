@@ -72,7 +72,7 @@ struct raft_fixture
     struct raft_fixture_event *event; /* Last event occurred. */
     raft_fixture_event_cb hook;       /* Event callback. */
     struct raft_fixture_server *servers[RAFT_FIXTURE_MAX_SERVERS];
-    uint64_t reserved[16];            /* For future expansion of struct. */
+    uint64_t reserved[16]; /* For future expansion of struct. */
 };
 
 /**
@@ -437,7 +437,6 @@ RAFT_API unsigned raft_fixture_n_recv(struct raft_fixture *f,
 /**
  * Force the @i'th server into the UNAVAILABLE state.
  */
-RAFT_API void raft_fixture_make_unavailable(struct raft_fixture *f,
-                                            unsigned i);
+RAFT_API void raft_fixture_make_unavailable(struct raft_fixture *f, unsigned i);
 
 #endif /* RAFT_FIXTURE_H */

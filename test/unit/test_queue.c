@@ -218,7 +218,9 @@ TEST(QUEUE_FOREACH, zero, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
     queue *head;
     int count = 0;
-    QUEUE_FOREACH(head, &f->queue) { count++; }
+    QUEUE_FOREACH (head, &f->queue) {
+        count++;
+    }
     munit_assert_int(count, ==, 0);
     return MUNIT_OK;
 }
@@ -230,7 +232,9 @@ TEST(QUEUE_FOREACH, one, setUp, tearDown, 0, NULL)
     queue *head;
     int count = 0;
     PUSH(1);
-    QUEUE_FOREACH(head, &f->queue) { count++; }
+    QUEUE_FOREACH (head, &f->queue) {
+        count++;
+    }
     munit_assert_int(count, ==, 1);
     return MUNIT_OK;
 }
@@ -244,8 +248,7 @@ TEST(QUEUE_FOREACH, two, setUp, tearDown, 0, NULL)
     int values[2] = {0, 0};
     int i = 0;
     PUSH(2);
-    QUEUE_FOREACH(head, &f->queue)
-    {
+    QUEUE_FOREACH (head, &f->queue) {
         struct item *item;
         item = QUEUE_DATA(head, struct item, queue);
         values[i] = item->value;

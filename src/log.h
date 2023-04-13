@@ -8,7 +8,6 @@
 /* Initial size of the entry reference count hash table. */
 #define LOG__REFS_INITIAL_SIZE 256
 
-
 /**
  * Counter for outstanding references to a log entry.
  *
@@ -54,7 +53,7 @@ struct raft_log
 };
 
 /* Initialize an empty in-memory log of raft entries. */
-struct raft_log* logInit(void);
+struct raft_log *logInit(void);
 
 /* Release all memory used by the given log object. */
 void logClose(struct raft_log *l);

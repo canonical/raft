@@ -100,8 +100,8 @@ static int fsmEncodeSnapshot(int x,
 
 /* For use with fsm->version 1 */
 static int fsmSnapshot_v1(struct raft_fsm *fsm,
-                       struct raft_buffer *bufs[],
-                       unsigned *n_bufs)
+                          struct raft_buffer *bufs[],
+                          unsigned *n_bufs)
 {
     struct fsm *f = fsm->data;
     return fsmEncodeSnapshot(f->x, f->y, bufs, n_bufs);
@@ -109,8 +109,8 @@ static int fsmSnapshot_v1(struct raft_fsm *fsm,
 
 /* For use with fsmSnapshotFinalize and fsm->version >= 2 */
 static int fsmSnapshot_v2(struct raft_fsm *fsm,
-                       struct raft_buffer *bufs[],
-                       unsigned *n_bufs)
+                          struct raft_buffer *bufs[],
+                          unsigned *n_bufs)
 {
     struct fsm *f = fsm->data;
     munit_assert_int(f->lock, ==, 0);
@@ -121,11 +121,11 @@ static int fsmSnapshot_v2(struct raft_fsm *fsm,
 }
 
 static int fsmSnapshotInitialize(struct raft_fsm *fsm,
-	                         struct raft_buffer *bufs[],
-	                         unsigned *n_bufs)
+                                 struct raft_buffer *bufs[],
+                                 unsigned *n_bufs)
 {
-    (void) bufs;
-    (void) n_bufs;
+    (void)bufs;
+    (void)n_bufs;
     struct fsm *f = fsm->data;
     munit_assert_int(f->lock, ==, 0);
     f->lock = 1;
@@ -136,19 +136,19 @@ static int fsmSnapshotInitialize(struct raft_fsm *fsm,
 }
 
 static int fsmSnapshotAsync(struct raft_fsm *fsm,
-	                    struct raft_buffer *bufs[],
-	                    unsigned *n_bufs)
+                            struct raft_buffer *bufs[],
+                            unsigned *n_bufs)
 {
     struct fsm *f = fsm->data;
     return fsmEncodeSnapshot(f->x, f->y, bufs, n_bufs);
 }
 
 static int fsmSnapshotFinalize(struct raft_fsm *fsm,
-	                         struct raft_buffer *bufs[],
-	                         unsigned *n_bufs)
+                               struct raft_buffer *bufs[],
+                               unsigned *n_bufs)
 {
-    (void) bufs;
-    (void) n_bufs;
+    (void)bufs;
+    (void)n_bufs;
     struct fsm *f = fsm->data;
     if (*bufs != NULL) {
         for (unsigned i = 0; i < *n_bufs; ++i) {

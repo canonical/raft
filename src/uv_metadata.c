@@ -101,8 +101,8 @@ static int uvMetadataLoadN(const char *dir,
             }
             return 0;
         }
-        ErrMsgPrintf(errmsg, "%s has size %jd instead of %zu", filename, (intmax_t)size,
-                     sizeof content);
+        ErrMsgPrintf(errmsg, "%s has size %jd instead of %zu", filename,
+                     (intmax_t)size, sizeof content);
         return RAFT_CORRUPT;
     }
 
