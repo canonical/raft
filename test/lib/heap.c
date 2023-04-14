@@ -22,15 +22,11 @@ static void heapInit(struct heap *h)
 static void *heapMalloc(void *data, size_t size)
 {
     struct heap *h = data;
-    void *ptr = NULL;
     if (FaultTick(&h->fault)) {
         return NULL;
     }
-    ptr = munit_malloc(size);
-    if (ptr != NULL) {
-        h->n++;
-    }
-    return ptr;
+    h->n++;
+    return munit_malloc(size);
 }
 
 static void heapFree(void *data, void *ptr)
