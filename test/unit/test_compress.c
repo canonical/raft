@@ -4,7 +4,7 @@
 #include "../lib/runner.h"
 
 #include <sys/random.h>
-#ifdef LZ4_AVAILABLE
+#if defined(LZ4_AVAILABLE) && defined(LZ4_ENABLED)
 #include <lz4frame.h>
 #endif
 
@@ -55,7 +55,7 @@ struct raft_buffer getBufWithNonRandom(size_t len)
     return buf;
 }
 
-#ifdef LZ4_AVAILABLE
+#if defined(LZ4_AVAILABLE) && defined(LZ4_ENABLED)
 
 static void sha1(struct raft_buffer bufs[], unsigned n_bufs, uint8_t value[20])
 {

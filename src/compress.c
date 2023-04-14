@@ -19,7 +19,7 @@ int Compress(struct raft_buffer bufs[],
              struct raft_buffer *compressed,
              char *errmsg)
 {
-#ifndef LZ4_AVAILABLE
+#if !defined(LZ4_AVAILABLE) || !defined(LZ4_ENABLED)
     (void)bufs;
     (void)n_bufs;
     (void)compressed;
@@ -169,7 +169,7 @@ int Decompress(struct raft_buffer buf,
                struct raft_buffer *decompressed,
                char *errmsg)
 {
-#ifndef LZ4_AVAILABLE
+#if !defined(LZ4_AVAILABLE) || !defined(LZ4_ENABLED)
     (void)buf;
     (void)decompressed;
     ErrMsgPrintf(errmsg, "LZ4 not available");
