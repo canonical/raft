@@ -66,6 +66,23 @@ static void tearDown(void *data)
 /* Assert that the fixture time matches the given value */
 #define ASSERT_TIME(TIME) munit_assert_int(CLUSTER_TIME, ==, TIME)
 
+/* Assert that the configuration of the I'th server matches the given one */
+#define ASSERT_CONFIGURATION(I, EXPECTED)                                    \
+    do {                                                                     \
+        struct raft *_raft = CLUSTER_RAFT(I);                                \
+        struct raft_configuration *_actual = &_raft->configuration;          \
+        unsigned _i;                                                         \
+                                                                             \
+        munit_assert_uint(_actual->n, ==, (EXPECTED)->n);                    \
+        for (_i = 0; _i < _actual->n; _i++) {                                \
+            struct raft_server *_server1 = &_actual->servers[_i];            \
+            struct raft_server *_server2 = &(EXPECTED)->servers[_i];         \
+            munit_assert_ulong(_server1->id, ==, _server2->id);              \
+            munit_assert_int(_server1->role, ==, _server2->role);            \
+            munit_assert_string_equal(_server1->address, _server2->address); \
+        }                                                                    \
+    } while (0)
+
 /******************************************************************************
  *
  * Log replication.
@@ -527,22 +544,6 @@ TEST(replication, recvPrevLogTermMismatch, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-static void assert_config(struct raft *raft,
-                          struct raft_configuration *expected)
-{
-    struct raft_configuration *actual;
-    actual = &raft->configuration;
-
-    munit_assert_uint(actual->n, ==, expected->n);
-    for (unsigned i = 0; i < actual->n; i++) {
-        munit_assert_ulong(actual->servers[i].id, ==, expected->servers[i].id);
-        munit_assert_int(actual->servers[i].role, ==,
-                         expected->servers[i].role);
-        munit_assert_string_equal(actual->servers[i].address,
-                                  expected->servers[i].address);
-    }
-}
-
 /* If the term of the last log entry on the server is different from the one
  * prevLogTerm, and value of prevLogIndex is greater than server's commit
  * index (i.e. this is a normal inconsistency), we reject the request. This time
@@ -585,8 +586,8 @@ TEST(replication,
     CLUSTER_STEP_UNTIL_APPLIED(1, 2, 3000);
 
     /* Ensure config is rolled back. */
-    assert_config(CLUSTER_RAFT(0), &base);
-    assert_config(CLUSTER_RAFT(1), &base);
+    ASSERT_CONFIGURATION(0, &base);
+    ASSERT_CONFIGURATION(1, &base);
     raft_configuration_close(&base);
     return MUNIT_OK;
 }
@@ -646,8 +647,8 @@ TEST(replication,
     CLUSTER_STEP_UNTIL_APPLIED(1, 3, 3000);
 
     /* Ensure config is rolled back. */
-    assert_config(CLUSTER_RAFT(0), &base);
-    assert_config(CLUSTER_RAFT(1), &base);
+    ASSERT_CONFIGURATION(0, &base);
+    ASSERT_CONFIGURATION(1, &base);
     raft_configuration_close(&base);
     return MUNIT_OK;
 }
@@ -706,8 +707,8 @@ TEST(replication,
     CLUSTER_STEP_UNTIL_APPLIED(1, 3, 3000);
 
     /* Ensure config is rolled back. */
-    assert_config(CLUSTER_RAFT(0), &base);
-    assert_config(CLUSTER_RAFT(1), &base);
+    ASSERT_CONFIGURATION(0, &base);
+    ASSERT_CONFIGURATION(1, &base);
     raft_configuration_close(&base);
     return MUNIT_OK;
 }
