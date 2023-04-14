@@ -544,26 +544,23 @@ TEST(replication, recvPrevLogTermMismatch, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-/* If the term of the last log entry on the server is different from the one
- * prevLogTerm, and value of prevLogIndex is greater than server's commit
- * index (i.e. this is a normal inconsistency), we reject the request. This time
- * it's a configuration entry. */
-TEST(replication,
-     recvPrevLogTermMismatchConfiguration,
-     setUp,
-     tearDown,
-     0,
-     NULL)
+/* The follower has an uncommitted log entry that conflicts with a new one sent
+ * by the leader (same index but different term). The follower's conflicting log
+ * entry happens to be a configuration change. In that case the follower
+ * discards the conflicting entry from its log and rolls back its configuration
+ * to the initial one contained in the log entry at index 1. */
+TEST(replication, recvRollbackConfigurationToInitial, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry1;
     struct raft_entry entry2;
-    struct raft_configuration base; /* For assertion purposes. */
-    struct raft_configuration conf;
+    struct raft_configuration base; /* Committed configuration at index 1 */
+    struct raft_configuration conf; /* Uncommitted configuration at index 2 */
     CLUSTER_BOOTSTRAP;
     CLUSTER_CONFIGURATION(&base);
 
-    /* The servers have an entry with a conflicting term. */
+    /* Both servers have an entry at index 2, but with conflicting terms. The
+     * entry of the second server is a configuration change. */
     entry1.type = RAFT_COMMAND;
     entry1.term = 2;
     FsmEncodeSetX(1, &entry1.buf);
@@ -571,53 +568,57 @@ TEST(replication,
 
     entry2.type = RAFT_CHANGE;
     entry2.term = 1;
-
-    /* Add a different config to the log that will be rolled back. */
     CLUSTER_CONFIGURATION(&conf);
     raft_configuration_add(&conf, 3, "3", 2);
     raft_configuration_encode(&conf, &entry2.buf);
-    raft_configuration_close(&conf);
     CLUSTER_ADD_ENTRY(1, &entry2);
 
+    /* At startup the second server uses the most recent configuration, i.e. the
+     * one contained in the entry that we just added. The server can't know yet
+     * if it's committed or not, and regards it as pending configuration
+     * change. */
     CLUSTER_START;
+    ASSERT_CONFIGURATION(1, &conf);
+
+    /* The first server gets elected. */
     CLUSTER_ELECT(0);
 
-    /* The follower eventually replicates the entry */
+    /* The second server eventually replicates the first server's log entry at
+     * index 2, truncating its own log and rolling back to the configuration
+     * contained in the log entry at index 1. */
     CLUSTER_STEP_UNTIL_APPLIED(1, 2, 3000);
-
-    /* Ensure config is rolled back. */
     ASSERT_CONFIGURATION(0, &base);
     ASSERT_CONFIGURATION(1, &base);
+
     raft_configuration_close(&base);
+    raft_configuration_close(&conf);
+
     return MUNIT_OK;
 }
 
-/* If the term of the last log entry on the server is different from the one
- * prevLogTerm, and value of prevLogIndex is greater than server's commit
- * index (i.e. this is a normal inconsistency), we reject the request. This time
- * it's a configuration entry, there's also an older configuration entry
- * present.  */
-TEST(replication,
-     recvPrevLogTermMismatchConfigurationWithPrevious,
-     setUp,
-     tearDown,
-     0,
-     NULL)
+/* The follower has an uncommitted log entry that conflicts with a new one sent
+ * by the leader (same index but different term). The follower's conflicting log
+ * entry happens to be a configuration change. There's also an older committed
+ * configuration entry present. In that case the follower discards the
+ * conflicting entry from its log and rolls back its configuration to the
+ * committed one in the older configuration entry. */
+TEST(replication, recvRollbackConfigurationToPrevious, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry1;
     struct raft_entry entry2;
     struct raft_entry entry3;
     struct raft_entry entry4;
-    struct raft_configuration base; /* For assertion purposes. */
-    struct raft_configuration conf;
+    struct raft_configuration base; /* Committed configuration at index 2 */
+    struct raft_configuration conf; /* Uncommitted configuration at index 3 */
     CLUSTER_BOOTSTRAP;
     CLUSTER_CONFIGURATION(&base);
 
-    /* The servers have a matching configuration entry. */
+    /* Both servers have a matching configuration entry at index 2. */
+    CLUSTER_CONFIGURATION(&conf);
+
     entry1.type = RAFT_CHANGE;
     entry1.term = 1;
-    CLUSTER_CONFIGURATION(&conf);
     raft_configuration_encode(&conf, &entry1.buf);
     CLUSTER_ADD_ENTRY(0, &entry1);
 
@@ -626,7 +627,8 @@ TEST(replication,
     raft_configuration_encode(&conf, &entry2.buf);
     CLUSTER_ADD_ENTRY(1, &entry2);
 
-    /* The servers have an entry with a conflicting term. */
+    /* Both servers have an entry at index 3, but with conflicting terms. The
+     * entry of the second server is a configuration change. */
     entry3.type = RAFT_COMMAND;
     entry3.term = 2;
     FsmEncodeSetX(1, &entry3.buf);
@@ -634,50 +636,58 @@ TEST(replication,
 
     entry4.type = RAFT_CHANGE;
     entry4.term = 1;
-    /* Add a different config to the log that will be rolled back. */
     raft_configuration_add(&conf, 3, "3", 2);
     raft_configuration_encode(&conf, &entry4.buf);
-    raft_configuration_close(&conf);
     CLUSTER_ADD_ENTRY(1, &entry4);
 
+    /* At startup the second server uses the most recent configuration, i.e. the
+     * one contained in the log entry at index 3. The server can't know yet if
+     * it's committed or not, and regards it as pending configuration change. */
     CLUSTER_START;
+    ASSERT_CONFIGURATION(1, &conf);
+
+    /* The first server gets elected. */
     CLUSTER_ELECT(0);
 
-    /* The follower eventually replicates the entry */
+    /* The second server eventually replicates the first server's log entry at
+     * index 3, truncating its own log and rolling back to the configuration
+     * contained in the log entry at index 2. */
     CLUSTER_STEP_UNTIL_APPLIED(1, 3, 3000);
-
-    /* Ensure config is rolled back. */
     ASSERT_CONFIGURATION(0, &base);
     ASSERT_CONFIGURATION(1, &base);
+
     raft_configuration_close(&base);
+    raft_configuration_close(&conf);
+
     return MUNIT_OK;
 }
 
-/* If the term of the last log entry on the server is different from the one
- * prevLogTerm, and value of prevLogIndex is greater than server's commit
- * index (i.e. this is a normal inconsistency), we reject the request. This time
- * it's a configuration entry and there is a snapshot, there's no previous
- * configuration entry in the log. */
-TEST(replication,
-     recvPrevLogTermMismatchConfigurationSnapshotNoPrev,
-     setUp,
-     tearDown,
-     0,
-     NULL)
+/* The follower has an uncommitted log entry that conflicts with a new one sent
+ * by the leader (same index but different term). The follower's conflicting log
+ * entry happens to be a configuration change. The follower's log has been
+ * truncated after a snashot and does not contain the previous committed
+ * configuration anymore. In that case the follower discards the conflicting
+ * entry from its log and rolls back its configuration to the previous committed
+ * one, which was cached when the snapshot was restored. */
+TEST(replication, recvRollbackConfigurationToSnapshot, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry entry1;
     struct raft_entry entry2;
-    struct raft_configuration conf;
-    struct raft_configuration base; /* For assertion purposes. */
+    struct raft_configuration base; /* Committed configuration at index 1 */
+    struct raft_configuration conf; /* Uncommitted configuration at index 2 */
     int rv;
 
     CLUSTER_CONFIGURATION(&conf);
     CLUSTER_CONFIGURATION(&base);
+
+    /* Bootstrap the first server. This creates a log entry at index 1
+     * containing the initial configuration. */
     rv = raft_bootstrap(CLUSTER_RAFT(0), &conf);
     munit_assert_int(rv, ==, 0);
 
-    /* The second server has a snapshot up to entry 1 */
+    /* The second server has a snapshot up to entry 1. Entry 1 is not present in
+     * the log. */
     CLUSTER_SET_SNAPSHOT(1 /*                                               */,
                          1 /* last index                                    */,
                          1 /* last term                                     */,
@@ -686,30 +696,39 @@ TEST(replication,
                          0 /* y                                             */);
     CLUSTER_SET_TERM(1, 1);
 
-    /* The servers have an entry with a conflicting term. */
+    /* Both servers have an entry at index 2, but with conflicting terms. The
+     * entry of the second server is a configuration change and gets appended to
+     * the truncated log. */
     entry1.type = RAFT_COMMAND;
     entry1.term = 3;
     FsmEncodeSetX(1, &entry1.buf);
     CLUSTER_ADD_ENTRY(0, &entry1);
 
-    /* Add a different config to the log that will be rolled back. */
     entry2.type = RAFT_CHANGE;
     entry2.term = 2;
     raft_configuration_add(&conf, 3, "3", 2);
     raft_configuration_encode(&conf, &entry2.buf);
-    raft_configuration_close(&conf);
     CLUSTER_ADD_ENTRY(1, &entry2);
 
+    /* At startup the second server uses the most recent configuration, i.e. the
+     * one contained in the log entry at index 2. The server can't know yet if
+     * it's committed or not, and regards it as pending configuration change. */
     CLUSTER_START;
+    ASSERT_CONFIGURATION(1, &conf);
+
     CLUSTER_ELECT(0);
 
-    /* The follower eventually replicates the entry */
+    /* The second server eventually replicates the first server's log entry at
+     * index 3, truncating its own log and rolling back to the configuration
+     * contained in the snapshot, which is not present in the log anymore but
+     * was cached at startup. */
     CLUSTER_STEP_UNTIL_APPLIED(1, 3, 3000);
-
-    /* Ensure config is rolled back. */
     ASSERT_CONFIGURATION(0, &base);
     ASSERT_CONFIGURATION(1, &base);
+
     raft_configuration_close(&base);
+    raft_configuration_close(&conf);
+
     return MUNIT_OK;
 }
 
