@@ -630,6 +630,16 @@ struct raft
      * If a server is voting, the log entry with index 1 must always contain the
      * first committed configuration.
      *
+     * At all times #configuration_index is either zero or is the index of the
+     * most recent log entry of type #RAFT_CHANGE that we know to be
+     * committed. That means #configuration_index is always equal or lower than
+     * #commit_index.
+     *
+     * At all times #configuration_uncommitted_index is either zero or is the
+     * index of an uncommitted log entry of type #RAFT_CHANGE. There can be at
+     * most one uncommitted entry of type #RAFT_CHANGE because we allow only one
+     * configuration change at a time.
+     *
      * The possible scenarios are:
      *
      * 1. #configuration_index and #configuration_uncommitted_index are both
@@ -639,13 +649,15 @@ struct raft
      *    must be empty and have no servers.
      *
      * 2. #configuration_index is non-zero and #configuration_uncommitted_index
-     *    is zero. In this case the content of #configuration must match the one
-     *    of the log entry at #configuration_index.
+     *    is zero. This means that #configuration is committed and there is no
+     *    pending configuration change. The content of #configuration must match
+     *    the one of the log entry at #configuration_index.
      *
      * 3. #configuration_index and #configuration_uncommitted_index are both
-     *    non-zero, with the latter being greater than the former. In this case
-     *    the content of #configuration must match the one of the log entry at
-     *    #configuration_uncommitted_index.
+     *    non-zero, with the latter being greater than the former. This means
+     *    that #configuration is uncommitted and represents a pending
+     *    configuration change. The content of #configuration must match the one
+     *    of the log entry at #configuration_uncommitted_index.
      *
      * 4. In case the previous - committed - configuration can no longer be
      *    found in the log e.g. after truncating the log when taking or
