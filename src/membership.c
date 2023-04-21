@@ -55,6 +55,32 @@ err:
     return rv;
 }
 
+int membershipFetchLastCommittedConfiguration(struct raft *r,
+                                              struct raft_configuration *conf)
+{
+    const struct raft_entry *entry;
+    int rv;
+
+    /* Try to get the entry at r->configuration_index from the log. If the entry
+     * is not present in the log anymore because the log was truncated after a
+     * snapshot, we can just use configuration_last_snapshot, which we cached
+     * when we took or restored the snapshot and is guaranteed to match the
+     * content that the entry at r->configuration_index had. */
+    entry = logGet(r->log, r->configuration_index);
+    if (entry != NULL) {
+        configurationInit(conf);
+        rv = configurationDecode(&entry->buf, conf);
+    } else {
+        assert(r->configuration_last_snapshot.n > 0);
+        rv = configurationCopy(&r->configuration_last_snapshot, conf);
+    }
+    if (rv != 0) {
+        return rv;
+    }
+
+    return 0;
+}
+
 bool membershipUpdateCatchUpRound(struct raft *r)
 {
     unsigned server_index;
@@ -153,7 +179,6 @@ err:
 
 int membershipRollback(struct raft *r)
 {
-    const struct raft_entry *entry;
     int rv;
 
     assert(r != NULL);
@@ -165,21 +190,10 @@ int membershipRollback(struct raft *r)
     assert(r->configuration_index != 0);
 
     /* Replace the current configuration with the last committed one. */
-    entry = logGet(r->log, r->configuration_index);
-    if (entry != NULL) {
-        raft_configuration_close(&r->configuration);
-        raft_configuration_init(&r->configuration);
-
-        rv = configurationDecode(&entry->buf, &r->configuration);
-        if (rv != 0) {
-            return rv;
-        }
-    } else {
-        /* Configuration was truncated from log. */
-        rv = configurationRestorePrevious(r);
-        if (rv != 0) {
-            return rv;
-        }
+    configurationClose(&r->configuration);
+    rv = membershipFetchLastCommittedConfiguration(r, &r->configuration);
+    if (rv != 0) {
+        return rv;
     }
 
     configurationTrace(r, &r->configuration, "roll back config");

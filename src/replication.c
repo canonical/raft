@@ -1255,15 +1255,6 @@ static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
         goto discard;
     }
 
-    /* Enable configuration rollback if the next configuration after installing
-     * this snapshot needs to be rolled back. */
-    rv = configurationBackup(r, &r->configuration);
-    if (rv != 0) {
-        /* Don't make this a hard fault, configuration rollback is a low
-         * probability event. */
-        tracef("failed to backup current configuration.");
-    }
-
     tracef("restored snapshot with last index %llu", snapshot->index);
 
     goto respond;
@@ -1506,20 +1497,18 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
         goto out;
     }
 
-    /* While the snapshot was written, configuration changes could have
-     * occurred, these changes will not be purged from the log by this snapshot
-     * write. Therefore, we only need to backup a configuration in case
-     * configuration_index == snapshot->configuration_index, i.e. the last
-     * committed configuration is the configuration in the snapshot. (for
-     * simplicity this doesn't take into account the snapshot trailing
-     * parameter)*/
-    if (r->configuration_index == snapshot->configuration_index) {
-        rv = configurationBackup(r, &snapshot->configuration);
-        if (rv != 0) {
-            /* Don't make this a hard fault, configuration rollback is a low
-             * probability event. */
-            tracef("failed to backup last committed configuration.");
-        }
+    /* Cache the configuration contained in the snapshot. While the snapshot was
+     * written, new configuration changes could have been committed, these
+     * changes will not be purged from the log by this snapshot. However
+     * we still cache the configuration for consistency. */
+    configurationClose(&r->configuration_last_snapshot);
+    rv = configurationCopy(&snapshot->configuration,
+                           &r->configuration_last_snapshot);
+    if (rv != 0) {
+        /* TODO: make this a hard fault, because if we have no backup and the
+         * log was truncated it will be impossible to rollback an aborted
+         * configuration change. */
+        tracef("failed to backup last committed configuration.");
     }
     logSnapshot(r->log, snapshot->index, r->snapshot.trailing);
 out:
@@ -1575,25 +1564,6 @@ static int takeSnapshotAsync(struct raft_io_async_work *take)
     return r->fsm->snapshot_async(r->fsm, &snapshot->bufs, &snapshot->n_bufs);
 }
 
-static int copyLastCommittedConfiguration(const struct raft *r,
-                                          struct raft_configuration *dst)
-{
-    const struct raft_entry *entry;
-    int rv;
-
-    entry = logGet(r->log, r->configuration_index);
-    if (entry != NULL) {
-        tracef("entry != NULL index:%llu", r->configuration_index);
-        rv = configurationDecode(&entry->buf, dst);
-    } else {
-        tracef("entry == NULL index:%llu", r->configuration_index);
-        rv = configurationCopy(&r->configuration_previous, dst);
-    }
-
-    assert(dst->n != 0);
-    return rv;
-}
-
 static int takeSnapshot(struct raft *r)
 {
     struct raft_snapshot *snapshot;
@@ -1607,8 +1577,7 @@ static int takeSnapshot(struct raft *r)
     snapshot->bufs = NULL;
     snapshot->n_bufs = 0;
 
-    configurationInit(&snapshot->configuration);
-    rv = copyLastCommittedConfiguration(r, &snapshot->configuration);
+    rv = membershipFetchLastCommittedConfiguration(r, &snapshot->configuration);
     if (rv != 0) {
         goto abort;
     }

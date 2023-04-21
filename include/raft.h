@@ -640,12 +640,15 @@ struct raft
      * most one uncommitted entry of type #RAFT_CHANGE because we allow only one
      * configuration change at a time.
      *
+     * At all times #configuration_last_snapshot is a copy of the configuration
+     * contained the most recent snapshot, if any.
+     *
      * The possible scenarios are:
      *
      * 1. #configuration_index and #configuration_uncommitted_index are both
      *    zero. This should only happen when a brand new server starts joining a
      *    cluster and is waiting to receive log entries from the current
-     *    leader. In this case #configuration and #configuration_previous
+     *    leader. In this case #configuration and #configuration_last_snapshot
      *    must be empty and have no servers.
      *
      * 2. #configuration_index is non-zero and #configuration_uncommitted_index
@@ -659,13 +662,16 @@ struct raft
      *    configuration change. The content of #configuration must match the one
      *    of the log entry at #configuration_uncommitted_index.
      *
-     * 4. In case the previous - committed - configuration can no longer be
-     *    found in the log e.g. after truncating the log when taking or
-     *    installing a snapshot, `configuration_previous` will contain a copy
-     *    of it.
+     * When a snapshot is taken, a copy of the most recent configuration known
+     * to be committed (i.e. the configuration contained in the log entry at
+     * #configuration_index) is saved in #configuration_last_snapshot, so it can
+     * be easily retrieved in case the log gets truncated because of compaction
+     * and does not contain the entry at #configuration_index anymore. Likewise,
+     * if a snapshot is restored its associated configuration is saved in
+     * #configuration_last_snapshot.
      */
     struct raft_configuration configuration;
-    struct raft_configuration configuration_previous;
+    struct raft_configuration configuration_last_snapshot;
     raft_index configuration_index;
     raft_index configuration_uncommitted_index;
 

@@ -10,6 +10,11 @@
  * already in progress. */
 int membershipCanChangeConfiguration(struct raft *r);
 
+/* Populate the given configuration object with the most recent committed
+ * configuration, the one contained in the entry at r->configuration_index. */
+int membershipFetchLastCommittedConfiguration(struct raft *r,
+                                              struct raft_configuration *conf);
+
 /* Update the information about the progress that the non-voting server
  * currently being promoted is making in catching with logs.
  *
