@@ -630,10 +630,10 @@ struct raft
      * If a server is voting, the log entry with index 1 must always contain the
      * first committed configuration.
      *
-     * At all times #configuration_index is either zero or is the index of the
-     * most recent log entry of type #RAFT_CHANGE that we know to be
-     * committed. That means #configuration_index is always equal or lower than
-     * #commit_index.
+     * At all times #configuration_committed_index is either zero or is the
+     * index of the most recent log entry of type #RAFT_CHANGE that we know to
+     * be committed. That means #configuration_committed_index is always equal
+     * or lower than #commit_index.
      *
      * At all times #configuration_uncommitted_index is either zero or is the
      * index of an uncommitted log entry of type #RAFT_CHANGE. There can be at
@@ -645,34 +645,36 @@ struct raft
      *
      * The possible scenarios are:
      *
-     * 1. #configuration_index and #configuration_uncommitted_index are both
-     *    zero. This should only happen when a brand new server starts joining a
-     *    cluster and is waiting to receive log entries from the current
-     *    leader. In this case #configuration and #configuration_last_snapshot
-     *    must be empty and have no servers.
+     * 1. #configuration_committed_index and #configuration_uncommitted_index
+     *    are both zero. This should only happen when a brand new server starts
+     *    joining a cluster and is waiting to receive log entries from the
+     *    current leader. In this case #configuration and
+     *    #configuration_last_snapshot must be empty and have no servers.
      *
-     * 2. #configuration_index is non-zero and #configuration_uncommitted_index
-     *    is zero. This means that #configuration is committed and there is no
-     *    pending configuration change. The content of #configuration must match
-     *    the one of the log entry at #configuration_index.
+     * 2. #configuration_committed_index is non-zero and
+     *    #configuration_uncommitted_index is zero. This means that
+     *    #configuration is committed and there is no pending configuration
+     *    change. The content of #configuration must match the one of the log
+     *    entry at #configuration_committed_index.
      *
-     * 3. #configuration_index and #configuration_uncommitted_index are both
-     *    non-zero, with the latter being greater than the former. This means
-     *    that #configuration is uncommitted and represents a pending
+     * 3. #configuration_committed_index and #configuration_uncommitted_index
+     *    are both non-zero, with the latter being greater than the former. This
+     *    means that #configuration is uncommitted and represents a pending
      *    configuration change. The content of #configuration must match the one
      *    of the log entry at #configuration_uncommitted_index.
      *
      * When a snapshot is taken, a copy of the most recent configuration known
      * to be committed (i.e. the configuration contained in the log entry at
-     * #configuration_index) is saved in #configuration_last_snapshot, so it can
-     * be easily retrieved in case the log gets truncated because of compaction
-     * and does not contain the entry at #configuration_index anymore. Likewise,
-     * if a snapshot is restored its associated configuration is saved in
+     * #configuration_committed_index) is saved in #configuration_last_snapshot,
+     * so it can be easily retrieved in case the log gets truncated because of
+     * compaction and does not contain the entry at
+     * #configuration_committed_index anymore. Likewise, if a snapshot is
+     * restored its associated configuration is saved in
      * #configuration_last_snapshot.
      */
     struct raft_configuration configuration;
     struct raft_configuration configuration_last_snapshot;
-    raft_index configuration_index;
+    raft_index configuration_committed_index;
     raft_index configuration_uncommitted_index;
 
     /*

@@ -35,9 +35,9 @@ static int restoreMostRecentConfigurationEntry(struct raft *r,
      * we can't know if it's committed or not and treat it as uncommitted. */
     if (index == 1) {
         assert(r->configuration_uncommitted_index == 0);
-        r->configuration_index = 1;
+        r->configuration_committed_index = 1;
     } else {
-        assert(r->configuration_index < index);
+        assert(r->configuration_committed_index < index);
         r->configuration_uncommitted_index = index;
     }
 
@@ -83,13 +83,13 @@ static int restoreEntries(struct raft *r,
         /* Only take into account configurations that are newer than the
          * configuration restored from the snapshot. */
         if (entry->type == RAFT_CHANGE &&
-            r->last_stored > r->configuration_index) {
+            r->last_stored > r->configuration_committed_index) {
             /* If there is a previous configuration it must have been committed
              * as we don't allow multiple uncommitted configurations. At the end
-             * of the loop r->configuration_index will point to the second to
-             * last configuration entry, if any. */
+             * of the loop r->configuration_committed_index will point to the
+             * second to last configuration entry, if any. */
             if (conf_index != 0) {
-                r->configuration_index = conf_index;
+                r->configuration_committed_index = conf_index;
             }
             conf = entry;
             conf_index = r->last_stored;

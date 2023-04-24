@@ -36,11 +36,11 @@ int membershipCanChangeConfiguration(struct raft *r)
 
     /* In order to become leader at all we are supposed to have committed at
      * least the initial configuration at index 1. */
-    assert(r->configuration_index > 0);
+    assert(r->configuration_committed_index > 0);
 
     /* The index of the last committed configuration can't be greater than the
      * last log index. */
-    assert(logLastIndex(r->log) >= r->configuration_index);
+    assert(logLastIndex(r->log) >= r->configuration_committed_index);
 
     /* No catch-up round should be in progress. */
     assert(r->leader_state.round_number == 0);
@@ -61,12 +61,12 @@ int membershipFetchLastCommittedConfiguration(struct raft *r,
     const struct raft_entry *entry;
     int rv;
 
-    /* Try to get the entry at r->configuration_index from the log. If the entry
-     * is not present in the log anymore because the log was truncated after a
-     * snapshot, we can just use configuration_last_snapshot, which we cached
-     * when we took or restored the snapshot and is guaranteed to match the
-     * content that the entry at r->configuration_index had. */
-    entry = logGet(r->log, r->configuration_index);
+    /* Try to get the entry at r->configuration_committed_index from the log. If
+     * the entry is not present in the log anymore because the log was truncated
+     * after a snapshot, we can just use configuration_last_snapshot, which we
+     * cached when we took or restored the snapshot and is guaranteed to match
+     * the content that the entry at r->configuration_committed_index had. */
+    entry = logGet(r->log, r->configuration_committed_index);
     if (entry != NULL) {
         configurationInit(conf);
         rv = configurationDecode(&entry->buf, conf);
@@ -187,7 +187,7 @@ int membershipRollback(struct raft *r)
     tracef("roll back membership");
 
     /* Fetch the last committed configuration entry. */
-    assert(r->configuration_index != 0);
+    assert(r->configuration_committed_index != 0);
 
     /* Replace the current configuration with the last committed one. */
     configurationClose(&r->configuration);
