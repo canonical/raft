@@ -11,7 +11,8 @@
 int membershipCanChangeConfiguration(struct raft *r);
 
 /* Populate the given configuration object with the most recent committed
- * configuration, the one contained in the entry at r->configuration_index. */
+ * configuration, the one contained in the entry at
+ * r->configuration_committed_index. */
 int membershipFetchLastCommittedConfiguration(struct raft *r,
                                               struct raft_configuration *conf);
 

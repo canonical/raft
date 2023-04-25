@@ -74,7 +74,7 @@ int raft_init(struct raft *r,
 
     raft_configuration_init(&r->configuration);
     raft_configuration_init(&r->configuration_last_snapshot);
-    r->configuration_index = 0;
+    r->configuration_committed_index = 0;
     r->configuration_uncommitted_index = 0;
     r->election_timeout = DEFAULT_ELECTION_TIMEOUT;
     r->heartbeat_timeout = DEFAULT_HEARTBEAT_TIMEOUT;

@@ -1416,7 +1416,7 @@ static void applyChange(struct raft *r, const raft_index index)
         r->configuration_uncommitted_index = 0;
     }
 
-    r->configuration_index = index;
+    r->configuration_committed_index = index;
     r->last_applied = index;
 
     if (r->state == RAFT_LEADER) {
@@ -1581,7 +1581,7 @@ static int takeSnapshot(struct raft *r)
     if (rv != 0) {
         goto abort;
     }
-    snapshot->configuration_index = r->configuration_index;
+    snapshot->configuration_index = r->configuration_committed_index;
 
     rv = r->fsm->snapshot(r->fsm, &snapshot->bufs, &snapshot->n_bufs);
     if (rv != 0) {

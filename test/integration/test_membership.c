@@ -101,12 +101,12 @@ struct result
 
 /* Assert the values of the committed and uncommitted configuration indexes on
  * the raft instance with the given index. */
-#define ASSERT_CONFIGURATION_INDEXES(I, COMMITTED, UNCOMMITTED)      \
-    {                                                                \
-        struct raft *raft_ = CLUSTER_RAFT(I);                        \
-        munit_assert_int(raft_->configuration_index, ==, COMMITTED); \
-        munit_assert_int(raft_->configuration_uncommitted_index, ==, \
-                         UNCOMMITTED);                               \
+#define ASSERT_CONFIGURATION_INDEXES(I, COMMITTED, UNCOMMITTED)                \
+    {                                                                          \
+        struct raft *raft_ = CLUSTER_RAFT(I);                                  \
+        munit_assert_int(raft_->configuration_committed_index, ==, COMMITTED); \
+        munit_assert_int(raft_->configuration_uncommitted_index, ==,           \
+                         UNCOMMITTED);                                         \
     }
 
 /******************************************************************************
