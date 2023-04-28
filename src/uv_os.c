@@ -8,7 +8,6 @@
 #include <string.h>
 #include <sys/eventfd.h>
 #include <sys/types.h>
-#include <sys/uio.h>
 #include <sys/vfs.h>
 #include <unistd.h>
 #include <uv.h>
