@@ -7,7 +7,9 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#ifndef RAFT_API
 #define RAFT_API __attribute__((visibility("default")))
+#endif
 
 /**
  * Version.
