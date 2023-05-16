@@ -711,7 +711,6 @@ static int ioMethodAsyncWork(struct raft_io *raft_io,
                              raft_io_async_work_cb cb)
 {
     struct io *io = raft_io->impl;
-    struct raft *raft = raft_io->data;
     struct async_work *r;
 
     r = raft_malloc(sizeof *r);
@@ -720,7 +719,6 @@ static int ioMethodAsyncWork(struct raft_io *raft_io,
     r->type = ASYNC_WORK;
     r->req = req;
     r->req->cb = cb;
-    r->req->data = raft;
     r->completion_time = *io->time + io->work_duration;
 
     QUEUE_PUSH(&io->requests, &r->queue);
