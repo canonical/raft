@@ -112,6 +112,7 @@ int configurationCopy(const struct raft_configuration *src,
     return 0;
 
 err:
+    configurationClose(dst);
     assert(rv == RAFT_NOMEM);
     return rv;
 }
