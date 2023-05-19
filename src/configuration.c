@@ -348,6 +348,12 @@ int configurationDecode(const struct raft_buffer *buf,
 
         rv = configurationAdd(c, id, address, role);
         if (rv != 0) {
+            /* Only valid configurations should be ever be encoded, so in case
+             * configurationAdd() fails because of invalid data we return
+             * RAFT_MALFORMED. */
+            if (rv != RAFT_NOMEM) {
+                rv = RAFT_MALFORMED;
+            }
             goto err;
         }
     }
@@ -355,6 +361,7 @@ int configurationDecode(const struct raft_buffer *buf,
     return 0;
 
 err:
+    assert(rv == RAFT_MALFORMED || rv == RAFT_NOMEM);
     configurationClose(c);
     return rv;
 }

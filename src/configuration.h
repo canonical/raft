@@ -91,7 +91,18 @@ int configurationEncode(const struct raft_configuration *c,
 
 /* Populate a configuration object by decoding the given serialized payload.
  *
- * The @c configuration object must be uninitialized or empty. */
+ * The @c configuration object must be uninitialized or empty.
+ *
+ * In case of error, @c will be left empty.
+ *
+ * Errors:
+ *
+ * RAFT_MALFORMED
+ *     The given buffer does not contain a valid encoded configuration.
+ *
+ * RAFT_NOMEM
+ *     Memory to populate the given configuration could not be allocated.
+ */
 int configurationDecode(const struct raft_buffer *buf,
                         struct raft_configuration *c);
 

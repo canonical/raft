@@ -616,3 +616,23 @@ TEST(configurationDecode, badAddress, setUp, tearDownNoClose, 0, NULL)
     DECODE_ERROR(RAFT_MALFORMED, &buf);
     return MUNIT_OK;
 }
+
+/* The encoded configuration is invalid because it has a duplicated server
+ * ID. In that case RAFT_MALFORMED is returned. */
+TEST(configurationDecode, duplicatedID, setUp, tearDownNoClose, 0, NULL)
+{
+    struct fixture *f = data;
+    uint8_t bytes[] = {1,                            /* Version */
+                       2,   0,   0,   0, 0, 0, 0, 0, /* Number of servers */
+                       5,   0,   0,   0, 0, 0, 0, 0, /* Server ID */
+                       'x', '.', 'y', 0,             /* Server address */
+                       1,                            /* Role code */
+                       5,   0,   0,   0, 0, 0, 0, 0, /* Server ID */
+                       'z', '.', 'w', 0,             /* Server address */
+                       0};                           /* Role code */
+    struct raft_buffer buf;
+    buf.base = bytes;
+    buf.len = sizeof bytes;
+    DECODE_ERROR(RAFT_MALFORMED, &buf);
+    return MUNIT_OK;
+}
