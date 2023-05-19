@@ -519,13 +519,11 @@ TEST(configurationDecode, one_server, setUp, tearDown, 0, NULL)
                        'x', '.', 'y', 0,             /* Server address */
                        1};                           /* Role code */
     struct raft_buffer buf;
-    int rv;
 
     buf.base = bytes;
     buf.len = sizeof bytes;
 
-    rv = configurationDecode(&buf, &f->configuration);
-    munit_assert_int(rv, ==, 0);
+    DECODE(&buf);
 
     ASSERT_N(1);
     ASSERT_SERVER(0, 5, "x.y", RAFT_VOTER);
