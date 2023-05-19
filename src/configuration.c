@@ -281,6 +281,8 @@ void configurationEncodeToBuf(const struct raft_configuration *c, void *buf)
 int configurationEncode(const struct raft_configuration *c,
                         struct raft_buffer *buf)
 {
+    int rv;
+
     assert(c != NULL);
     assert(buf != NULL);
 
@@ -290,12 +292,17 @@ int configurationEncode(const struct raft_configuration *c,
     buf->len = configurationEncodedSize(c);
     buf->base = raft_malloc(buf->len);
     if (buf->base == NULL) {
-        return RAFT_NOMEM;
+        rv = RAFT_NOMEM;
+        goto err;
     }
 
     configurationEncodeToBuf(c, buf->base);
 
     return 0;
+
+err:
+    assert(rv == RAFT_NOMEM);
+    return rv;
 }
 
 int configurationDecode(const struct raft_buffer *buf,

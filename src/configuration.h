@@ -85,7 +85,13 @@ void configurationEncodeToBuf(const struct raft_configuration *c, void *buf);
 
 /* Encode the given configuration object. The memory of the returned buffer is
  * allocated using raft_malloc(), and client code is responsible for releasing
- * it when no longer needed. */
+ * it when no longer needed.
+ *
+ * Errors:
+ *
+ * RAFT_NOMEM
+ *     Memory for the encoded buffer could not be allocated.
+ */
 int configurationEncode(const struct raft_configuration *c,
                         struct raft_buffer *buf);
 
