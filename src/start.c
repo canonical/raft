@@ -20,7 +20,6 @@ static int restoreMostRecentConfigurationEntry(struct raft *r,
     struct raft_configuration configuration;
     int rv;
 
-    configurationInit(&configuration);
     rv = configurationDecode(&entry->buf, &configuration);
     if (rv != 0) {
         configurationClose(&configuration);

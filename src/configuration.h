@@ -89,7 +89,9 @@ void configurationEncodeToBuf(const struct raft_configuration *c, void *buf);
 int configurationEncode(const struct raft_configuration *c,
                         struct raft_buffer *buf);
 
-/* Populate a configuration object by decoding the given serialized payload. */
+/* Populate a configuration object by decoding the given serialized payload.
+ *
+ * The @c configuration object must be uninitialized or empty. */
 int configurationDecode(const struct raft_buffer *buf,
                         struct raft_configuration *c);
 

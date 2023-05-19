@@ -311,9 +311,7 @@ int configurationDecode(const struct raft_buffer *buf,
     /* TODO: use 'if' instead of assert for checking buffer boundaries */
     assert(buf->len > 0);
 
-    /* Check that the target configuration is empty. */
-    assert(c->n == 0);
-    assert(c->servers == NULL);
+    configurationInit(c);
 
     cursor = buf->base;
 

@@ -292,7 +292,6 @@ static int uvSnapshotLoadMeta(struct uv *uv,
         goto err_after_buf_malloc;
     }
 
-    configurationInit(&snapshot->configuration);
     rv = configurationDecode(&buf, &snapshot->configuration);
     if (rv != 0) {
         goto err_after_buf_malloc;

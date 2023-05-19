@@ -68,7 +68,6 @@ int membershipFetchLastCommittedConfiguration(struct raft *r,
      * the content that the entry at r->configuration_committed_index had. */
     entry = logGet(r->log, r->configuration_committed_index);
     if (entry != NULL) {
-        configurationInit(conf);
         rv = configurationDecode(&entry->buf, conf);
     } else {
         assert(r->configuration_last_snapshot.n > 0);
@@ -151,8 +150,6 @@ int membershipUncommittedChange(struct raft *r,
     assert(r->state == RAFT_FOLLOWER);
     assert(entry != NULL);
     assert(entry->type == RAFT_CHANGE);
-
-    raft_configuration_init(&configuration);
 
     rv = configurationDecode(&entry->buf, &configuration);
     if (rv != 0) {
