@@ -331,6 +331,7 @@ TEST(configurationAdd, oom, setUp, tearDown, 0, add_oom_params)
     struct fixture *f = data;
     HeapFaultEnable(&f->heap);
     ADD_ERROR(RAFT_NOMEM, 1, "127.0.0.1:666", RAFT_VOTER);
+    munit_assert_null(f->configuration.servers);
     return MUNIT_OK;
 }
 
