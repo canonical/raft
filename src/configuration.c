@@ -99,15 +99,21 @@ int configurationCopy(const struct raft_configuration *src,
 {
     size_t i;
     int rv;
+
     configurationInit(dst);
     for (i = 0; i < src->n; i++) {
         struct raft_server *server = &src->servers[i];
         rv = configurationAdd(dst, server->id, server->address, server->role);
         if (rv != 0) {
-            return rv;
+            goto err;
         }
     }
+
     return 0;
+
+err:
+    assert(rv == RAFT_NOMEM);
+    return rv;
 }
 
 int configurationAdd(struct raft_configuration *c,

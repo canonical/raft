@@ -59,7 +59,20 @@ const struct raft_server *configurationGet(const struct raft_configuration *c,
  * an existing server in the configuration. */
 int configurationRemove(struct raft_configuration *c, raft_id id);
 
-/* Add all servers in c1 to c2 (which must be empty). */
+/* Deep copy @src to @dst.
+ *
+ * The configuration @src is assumed to be valid (i.e. each of its servers has a
+ * valid ID, address and role).
+ *
+ * The @dst configuration object must be uninitialized or empty.
+ *
+ * In case of error, both @src and @dst are left unchanged.
+ *
+ * Errors:
+ *
+ * RAFT_NOMEM
+ *     Memory to copy all the servers could not be allocated.
+ */
 int configurationCopy(const struct raft_configuration *src,
                       struct raft_configuration *dst);
 
