@@ -118,28 +118,33 @@ int configurationAdd(struct raft_configuration *c,
     struct raft_server *servers;
     struct raft_server *server;
     size_t i;
+    int rv;
     assert(c != NULL);
     assert(id != 0);
 
     if (role != RAFT_STANDBY && role != RAFT_VOTER && role != RAFT_SPARE) {
-        return RAFT_BADROLE;
+        rv = RAFT_BADROLE;
+        goto err;
     }
 
     /* Check that neither the given id or address is already in use */
     for (i = 0; i < c->n; i++) {
         server = &c->servers[i];
         if (server->id == id) {
-            return RAFT_DUPLICATEID;
+            rv = RAFT_DUPLICATEID;
+            goto err;
         }
         if (strcmp(server->address, address) == 0) {
-            return RAFT_DUPLICATEADDRESS;
+            rv = RAFT_DUPLICATEADDRESS;
+            goto err;
         }
     }
 
     /* Grow the servers array.. */
     servers = raft_realloc(c->servers, (c->n + 1) * sizeof *server);
     if (servers == NULL) {
-        return RAFT_NOMEM;
+        rv = RAFT_NOMEM;
+        goto err;
     }
     c->servers = servers;
 
@@ -148,7 +153,8 @@ int configurationAdd(struct raft_configuration *c,
     server->id = id;
     server->address = raft_malloc(strlen(address) + 1);
     if (server->address == NULL) {
-        return RAFT_NOMEM;
+        rv = RAFT_NOMEM;
+        goto err;
     }
     strcpy(server->address, address);
     server->role = role;
@@ -156,6 +162,11 @@ int configurationAdd(struct raft_configuration *c,
     c->n++;
 
     return 0;
+
+err:
+    assert(rv == RAFT_BADROLE || rv == RAFT_DUPLICATEID ||
+           rv == RAFT_DUPLICATEADDRESS || rv == RAFT_NOMEM);
+    return rv;
 }
 
 int configurationRemove(struct raft_configuration *c, const raft_id id)
