@@ -117,6 +117,7 @@ int configurationAdd(struct raft_configuration *c,
 {
     struct raft_server *servers;
     struct raft_server *server;
+    char *address_copy;
     size_t i;
     int rv;
     assert(c != NULL);
@@ -140,29 +141,34 @@ int configurationAdd(struct raft_configuration *c,
         }
     }
 
+    /* Make a copy of the given address */
+    address_copy = raft_malloc(strlen(address) + 1);
+    if (address_copy == NULL) {
+        rv = RAFT_NOMEM;
+        goto err;
+    }
+    strcpy(address_copy, address);
+
     /* Grow the servers array.. */
     servers = raft_realloc(c->servers, (c->n + 1) * sizeof *server);
     if (servers == NULL) {
         rv = RAFT_NOMEM;
-        goto err;
+        goto err_after_address_copy;
     }
     c->servers = servers;
 
     /* Fill the newly allocated slot (the last one) with the given details. */
     server = &servers[c->n];
     server->id = id;
-    server->address = raft_malloc(strlen(address) + 1);
-    if (server->address == NULL) {
-        rv = RAFT_NOMEM;
-        goto err;
-    }
-    strcpy(server->address, address);
+    server->address = address_copy;
     server->role = role;
 
     c->n++;
 
     return 0;
 
+err_after_address_copy:
+    raft_free(address_copy);
 err:
     assert(rv == RAFT_BADROLE || rv == RAFT_DUPLICATEID ||
            rv == RAFT_DUPLICATEADDRESS || rv == RAFT_NOMEM);
