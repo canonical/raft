@@ -187,28 +187,30 @@ int configurationRemove(struct raft_configuration *c, const raft_id id)
     unsigned i;
     unsigned j;
     struct raft_server *servers;
+    int rv;
+
     assert(c != NULL);
 
     i = configurationIndexOf(c, id);
     if (i == c->n) {
-        return RAFT_BADID;
+        rv = RAFT_BADID;
+        goto err;
     }
 
     assert(i < c->n);
 
     /* If this is the last server in the configuration, reset everything. */
     if (c->n - 1 == 0) {
-        raft_free(c->servers[0].address);
-        raft_free(c->servers);
-        c->n = 0;
-        c->servers = NULL;
-        return 0;
+        assert(i == 0);
+        servers = NULL;
+        goto out;
     }
 
     /* Create a new servers array. */
     servers = raft_calloc(c->n - 1, sizeof *servers);
     if (servers == NULL) {
-        return RAFT_NOMEM;
+        rv = RAFT_NOMEM;
+        goto err;
     }
 
     /* Copy the first part of the servers array into a new array, excluding the
@@ -222,6 +224,7 @@ int configurationRemove(struct raft_configuration *c, const raft_id id)
         servers[j - 1] = c->servers[j];
     }
 
+out:
     /* Release the address of the server that was deleted. */
     raft_free(c->servers[i].address);
 
@@ -232,6 +235,10 @@ int configurationRemove(struct raft_configuration *c, const raft_id id)
     c->n--;
 
     return 0;
+
+err:
+    assert(rv == RAFT_BADID || rv == RAFT_NOMEM);
+    return rv;
 }
 
 size_t configurationEncodedSize(const struct raft_configuration *c)

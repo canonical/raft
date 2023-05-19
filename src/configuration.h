@@ -56,7 +56,18 @@ const struct raft_server *configurationGet(const struct raft_configuration *c,
                                            raft_id id);
 
 /* Remove a server from a raft configuration. The given ID must match the one of
- * an existing server in the configuration. */
+ * an existing server in the configuration.
+ *
+ * In case of error @c is left unchanged.
+ *
+ * Errors:
+ *
+ * RAFT_BADID
+ *     @c does not contain any server with the given @id
+ *
+ * RAFT_NOMEM
+ *     Memory to hold the new set of servers could not be allocated.
+ */
 int configurationRemove(struct raft_configuration *c, raft_id id);
 
 /* Deep copy @src to @dst.
