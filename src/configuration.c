@@ -304,6 +304,7 @@ int configurationDecode(const struct raft_buffer *buf,
     const void *cursor;
     size_t i;
     size_t n;
+    int rv;
 
     assert(c != NULL);
     assert(buf != NULL);
@@ -317,7 +318,8 @@ int configurationDecode(const struct raft_buffer *buf,
 
     /* Check the encoding format version */
     if (byteGet8(&cursor) != ENCODING_FORMAT) {
-        return RAFT_MALFORMED;
+        rv = RAFT_MALFORMED;
+        goto err;
     }
 
     /* Read the number of servers. */
@@ -328,7 +330,6 @@ int configurationDecode(const struct raft_buffer *buf,
         raft_id id;
         const char *address;
         int role;
-        int rv;
 
         /* Server ID. */
         id = byteGet64(&cursor);
@@ -338,7 +339,8 @@ int configurationDecode(const struct raft_buffer *buf,
             &cursor,
             buf->len - (size_t)((uint8_t *)cursor - (uint8_t *)buf->base));
         if (address == NULL) {
-            return RAFT_MALFORMED;
+            rv = RAFT_MALFORMED;
+            goto err;
         }
 
         /* Role code. */
@@ -346,11 +348,15 @@ int configurationDecode(const struct raft_buffer *buf,
 
         rv = configurationAdd(c, id, address, role);
         if (rv != 0) {
-            return rv;
+            goto err;
         }
     }
 
     return 0;
+
+err:
+    configurationClose(c);
+    return rv;
 }
 
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
