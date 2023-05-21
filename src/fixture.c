@@ -1040,6 +1040,7 @@ static void serverConnectToAll(struct raft_fixture *f, unsigned i)
 int raft_fixture_init(struct raft_fixture *f)
 {
     f->time = 0;
+    f->n = 0;
     f->log = logInit();
     if (f->log == NULL) {
         return RAFT_NOMEM;
