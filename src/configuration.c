@@ -99,15 +99,22 @@ int configurationCopy(const struct raft_configuration *src,
 {
     size_t i;
     int rv;
+
     configurationInit(dst);
     for (i = 0; i < src->n; i++) {
         struct raft_server *server = &src->servers[i];
         rv = configurationAdd(dst, server->id, server->address, server->role);
         if (rv != 0) {
-            return rv;
+            goto err;
         }
     }
+
     return 0;
+
+err:
+    configurationClose(dst);
+    assert(rv == RAFT_NOMEM);
+    return rv;
 }
 
 int configurationAdd(struct raft_configuration *c,
@@ -117,45 +124,62 @@ int configurationAdd(struct raft_configuration *c,
 {
     struct raft_server *servers;
     struct raft_server *server;
+    char *address_copy;
     size_t i;
+    int rv;
     assert(c != NULL);
     assert(id != 0);
 
     if (role != RAFT_STANDBY && role != RAFT_VOTER && role != RAFT_SPARE) {
-        return RAFT_BADROLE;
+        rv = RAFT_BADROLE;
+        goto err;
     }
 
     /* Check that neither the given id or address is already in use */
     for (i = 0; i < c->n; i++) {
         server = &c->servers[i];
         if (server->id == id) {
-            return RAFT_DUPLICATEID;
+            rv = RAFT_DUPLICATEID;
+            goto err;
         }
         if (strcmp(server->address, address) == 0) {
-            return RAFT_DUPLICATEADDRESS;
+            rv = RAFT_DUPLICATEADDRESS;
+            goto err;
         }
     }
+
+    /* Make a copy of the given address */
+    address_copy = raft_malloc(strlen(address) + 1);
+    if (address_copy == NULL) {
+        rv = RAFT_NOMEM;
+        goto err;
+    }
+    strcpy(address_copy, address);
 
     /* Grow the servers array.. */
     servers = raft_realloc(c->servers, (c->n + 1) * sizeof *server);
     if (servers == NULL) {
-        return RAFT_NOMEM;
+        rv = RAFT_NOMEM;
+        goto err_after_address_copy;
     }
     c->servers = servers;
 
     /* Fill the newly allocated slot (the last one) with the given details. */
     server = &servers[c->n];
     server->id = id;
-    server->address = raft_malloc(strlen(address) + 1);
-    if (server->address == NULL) {
-        return RAFT_NOMEM;
-    }
-    strcpy(server->address, address);
+    server->address = address_copy;
     server->role = role;
 
     c->n++;
 
     return 0;
+
+err_after_address_copy:
+    raft_free(address_copy);
+err:
+    assert(rv == RAFT_BADROLE || rv == RAFT_DUPLICATEID ||
+           rv == RAFT_DUPLICATEADDRESS || rv == RAFT_NOMEM);
+    return rv;
 }
 
 int configurationRemove(struct raft_configuration *c, const raft_id id)

@@ -248,14 +248,23 @@ TEST(configurationCopy, two, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
+static char *copy_oom_heap_fault_delay[] = {"0", "1", "2", NULL};
+static char *copy_oom_heap_fault_repeat[] = {"1", NULL};
+
+static MunitParameterEnum copy_oom_params[] = {
+    {TEST_HEAP_FAULT_DELAY, copy_oom_heap_fault_delay},
+    {TEST_HEAP_FAULT_REPEAT, copy_oom_heap_fault_repeat},
+    {NULL, NULL},
+};
+
 /* Out of memory */
-TEST(configurationCopy, oom, setUp, tearDown, 0, NULL)
+TEST(configurationCopy, oom, setUp, tearDown, 0, copy_oom_params)
 {
     struct fixture *f = data;
     struct raft_configuration configuration;
     ADD(1, "192.168.1.1:666", RAFT_STANDBY);
-    HeapFaultConfig(&f->heap, 0, 1);
-    HeapFaultEnable(&f->heap);
+    ADD(2, "192.168.1.2:666", RAFT_VOTER);
+    HEAP_FAULT_ENABLE;
     COPY_ERROR(RAFT_NOMEM, &configuration);
     return MUNIT_OK;
 }
@@ -331,6 +340,7 @@ TEST(configurationAdd, oom, setUp, tearDown, 0, add_oom_params)
     struct fixture *f = data;
     HeapFaultEnable(&f->heap);
     ADD_ERROR(RAFT_NOMEM, 1, "127.0.0.1:666", RAFT_VOTER);
+    munit_assert_null(f->configuration.servers);
     return MUNIT_OK;
 }
 

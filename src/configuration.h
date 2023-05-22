@@ -11,7 +11,26 @@ void configurationInit(struct raft_configuration *c);
 /* Release all memory used by the given configuration. */
 void configurationClose(struct raft_configuration *c);
 
-/* Add a server to the given configuration. */
+/* Add a server to the given configuration.
+ *
+ * The given @address is copied and no reference to it is kept. In case of
+ * error, @c is left unchanged.
+ *
+ * Errors:
+ *
+ * RAFT_DUPLICATEID
+ *     @c already has a server with the given id.
+ *
+ * RAFT_DUPLICATEADDRESS
+ *     @c already has a server with the given @address.
+ *
+ * RAFT_BADROLE
+ *     @role is not one of ROLE_STANDBY, ROLE_VOTER or ROLE_SPARE.
+ *
+ * RAFT_NOMEM
+ *     A copy of @address could not me made or the @c->servers could not
+ *     be extended
+ */
 int configurationAdd(struct raft_configuration *c,
                      raft_id id,
                      const char *address,
@@ -40,7 +59,20 @@ const struct raft_server *configurationGet(const struct raft_configuration *c,
  * an existing server in the configuration. */
 int configurationRemove(struct raft_configuration *c, raft_id id);
 
-/* Add all servers in c1 to c2 (which must be empty). */
+/* Deep copy @src to @dst.
+ *
+ * The configuration @src is assumed to be valid (i.e. each of its servers has a
+ * valid ID, address and role).
+ *
+ * The @dst configuration object must be uninitialized or empty.
+ *
+ * In case of error, both @src and @dst are left unchanged.
+ *
+ * Errors:
+ *
+ * RAFT_NOMEM
+ *     Memory to copy all the servers could not be allocated.
+ */
 int configurationCopy(const struct raft_configuration *src,
                       struct raft_configuration *dst);
 
