@@ -56,7 +56,18 @@ const struct raft_server *configurationGet(const struct raft_configuration *c,
                                            raft_id id);
 
 /* Remove a server from a raft configuration. The given ID must match the one of
- * an existing server in the configuration. */
+ * an existing server in the configuration.
+ *
+ * In case of error @c is left unchanged.
+ *
+ * Errors:
+ *
+ * RAFT_BADID
+ *     @c does not contain any server with the given @id
+ *
+ * RAFT_NOMEM
+ *     Memory to hold the new set of servers could not be allocated.
+ */
 int configurationRemove(struct raft_configuration *c, raft_id id);
 
 /* Deep copy @src to @dst.
@@ -85,11 +96,30 @@ void configurationEncodeToBuf(const struct raft_configuration *c, void *buf);
 
 /* Encode the given configuration object. The memory of the returned buffer is
  * allocated using raft_malloc(), and client code is responsible for releasing
- * it when no longer needed. */
+ * it when no longer needed.
+ *
+ * Errors:
+ *
+ * RAFT_NOMEM
+ *     Memory for the encoded buffer could not be allocated.
+ */
 int configurationEncode(const struct raft_configuration *c,
                         struct raft_buffer *buf);
 
-/* Populate a configuration object by decoding the given serialized payload. */
+/* Populate a configuration object by decoding the given serialized payload.
+ *
+ * The @c configuration object must be uninitialized or empty.
+ *
+ * In case of error, @c will be left empty.
+ *
+ * Errors:
+ *
+ * RAFT_MALFORMED
+ *     The given buffer does not contain a valid encoded configuration.
+ *
+ * RAFT_NOMEM
+ *     Memory to populate the given configuration could not be allocated.
+ */
 int configurationDecode(const struct raft_buffer *buf,
                         struct raft_configuration *c);
 

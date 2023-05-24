@@ -23,12 +23,18 @@ static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
     return f;
 }
 
+static void tearDownNoClose(void *data)
+{
+    struct fixture *f = data;
+    TEAR_DOWN_HEAP;
+    free(f);
+}
+
 static void tearDown(void *data)
 {
     struct fixture *f = data;
     configurationClose(&f->configuration);
-    TEAR_DOWN_HEAP;
-    free(f);
+    tearDownNoClose(data);
 }
 
 /******************************************************************************
@@ -519,13 +525,11 @@ TEST(configurationDecode, one_server, setUp, tearDown, 0, NULL)
                        'x', '.', 'y', 0,             /* Server address */
                        1};                           /* Role code */
     struct raft_buffer buf;
-    int rv;
 
     buf.base = bytes;
     buf.len = sizeof bytes;
 
-    rv = configurationDecode(&buf, &f->configuration);
-    munit_assert_int(rv, ==, 0);
+    DECODE(&buf);
 
     ASSERT_N(1);
     ASSERT_SERVER(0, 5, "x.y", RAFT_VOTER);
@@ -556,18 +560,29 @@ TEST(configurationDecode, two_servers, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-/* Not enough memory of the servers array. */
-TEST(configurationDecode, oom, setUp, tearDown, 0, NULL)
+static char *decode_oom_heap_fault_delay[] = {"0", "1", "2", "3", NULL};
+static char *decode_oom_heap_fault_repeat[] = {"1", NULL};
+
+static MunitParameterEnum decode_oom_params[] = {
+    {TEST_HEAP_FAULT_DELAY, decode_oom_heap_fault_delay},
+    {TEST_HEAP_FAULT_REPEAT, decode_oom_heap_fault_repeat},
+    {NULL, NULL},
+};
+
+/* Not enough memory for creating the decoded configuration object. */
+TEST(configurationDecode, oom, setUp, tearDownNoClose, 0, decode_oom_params)
 {
     struct fixture *f = data;
     uint8_t bytes[] = {1,                            /* Version */
-                       1,   0,   0,   0, 0, 0, 0, 0, /* Number of servers */
+                       2,   0,   0,   0, 0, 0, 0, 0, /* Number of servers */
                        5,   0,   0,   0, 0, 0, 0, 0, /* Server ID */
                        'x', '.', 'y', 0,             /* Server address */
-                       1};                           /* Voting flag */
+                       1,                            /* Role code */
+                       3,   0,   0,   0, 0, 0, 0, 0, /* Server ID */
+                       'z', '.', 'w', 0,             /* Server address */
+                       0};                           /* Role code */
     struct raft_buffer buf;
-    HeapFaultConfig(&f->heap, 0, 1);
-    HeapFaultEnable(&f->heap);
+    HEAP_FAULT_ENABLE;
     buf.base = bytes;
     buf.len = sizeof bytes;
     DECODE_ERROR(RAFT_NOMEM, &buf);
@@ -575,7 +590,7 @@ TEST(configurationDecode, oom, setUp, tearDown, 0, NULL)
 }
 
 /* If the encoding version is wrong, an error is returned. */
-TEST(configurationDecode, badVersion, setUp, tearDown, 0, NULL)
+TEST(configurationDecode, badVersion, setUp, tearDownNoClose, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t bytes = 127;
@@ -587,7 +602,7 @@ TEST(configurationDecode, badVersion, setUp, tearDown, 0, NULL)
 }
 
 /* The address of a server is not a nul-terminated string. */
-TEST(configurationDecode, badAddress, setUp, tearDown, 0, NULL)
+TEST(configurationDecode, badAddress, setUp, tearDownNoClose, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t bytes[] = {1,                            /* Version */
@@ -595,6 +610,26 @@ TEST(configurationDecode, badAddress, setUp, tearDown, 0, NULL)
                        5,   0,   0,   0, 0, 0, 0, 0, /* Server ID */
                        'x', '.', 'y',                /* Server address */
                        1};                           /* Voting flag */
+    struct raft_buffer buf;
+    buf.base = bytes;
+    buf.len = sizeof bytes;
+    DECODE_ERROR(RAFT_MALFORMED, &buf);
+    return MUNIT_OK;
+}
+
+/* The encoded configuration is invalid because it has a duplicated server
+ * ID. In that case RAFT_MALFORMED is returned. */
+TEST(configurationDecode, duplicatedID, setUp, tearDownNoClose, 0, NULL)
+{
+    struct fixture *f = data;
+    uint8_t bytes[] = {1,                            /* Version */
+                       2,   0,   0,   0, 0, 0, 0, 0, /* Number of servers */
+                       5,   0,   0,   0, 0, 0, 0, 0, /* Server ID */
+                       'x', '.', 'y', 0,             /* Server address */
+                       1,                            /* Role code */
+                       5,   0,   0,   0, 0, 0, 0, 0, /* Server ID */
+                       'z', '.', 'w', 0,             /* Server address */
+                       0};                           /* Role code */
     struct raft_buffer buf;
     buf.base = bytes;
     buf.len = sizeof bytes;

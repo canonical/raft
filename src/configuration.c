@@ -187,28 +187,30 @@ int configurationRemove(struct raft_configuration *c, const raft_id id)
     unsigned i;
     unsigned j;
     struct raft_server *servers;
+    int rv;
+
     assert(c != NULL);
 
     i = configurationIndexOf(c, id);
     if (i == c->n) {
-        return RAFT_BADID;
+        rv = RAFT_BADID;
+        goto err;
     }
 
     assert(i < c->n);
 
     /* If this is the last server in the configuration, reset everything. */
     if (c->n - 1 == 0) {
-        raft_free(c->servers[0].address);
-        raft_free(c->servers);
-        c->n = 0;
-        c->servers = NULL;
-        return 0;
+        assert(i == 0);
+        servers = NULL;
+        goto out;
     }
 
     /* Create a new servers array. */
     servers = raft_calloc(c->n - 1, sizeof *servers);
     if (servers == NULL) {
-        return RAFT_NOMEM;
+        rv = RAFT_NOMEM;
+        goto err;
     }
 
     /* Copy the first part of the servers array into a new array, excluding the
@@ -222,6 +224,7 @@ int configurationRemove(struct raft_configuration *c, const raft_id id)
         servers[j - 1] = c->servers[j];
     }
 
+out:
     /* Release the address of the server that was deleted. */
     raft_free(c->servers[i].address);
 
@@ -232,6 +235,10 @@ int configurationRemove(struct raft_configuration *c, const raft_id id)
     c->n--;
 
     return 0;
+
+err:
+    assert(rv == RAFT_BADID || rv == RAFT_NOMEM);
+    return rv;
 }
 
 size_t configurationEncodedSize(const struct raft_configuration *c)
@@ -281,6 +288,8 @@ void configurationEncodeToBuf(const struct raft_configuration *c, void *buf)
 int configurationEncode(const struct raft_configuration *c,
                         struct raft_buffer *buf)
 {
+    int rv;
+
     assert(c != NULL);
     assert(buf != NULL);
 
@@ -290,12 +299,17 @@ int configurationEncode(const struct raft_configuration *c,
     buf->len = configurationEncodedSize(c);
     buf->base = raft_malloc(buf->len);
     if (buf->base == NULL) {
-        return RAFT_NOMEM;
+        rv = RAFT_NOMEM;
+        goto err;
     }
 
     configurationEncodeToBuf(c, buf->base);
 
     return 0;
+
+err:
+    assert(rv == RAFT_NOMEM);
+    return rv;
 }
 
 int configurationDecode(const struct raft_buffer *buf,
@@ -304,6 +318,7 @@ int configurationDecode(const struct raft_buffer *buf,
     const void *cursor;
     size_t i;
     size_t n;
+    int rv;
 
     assert(c != NULL);
     assert(buf != NULL);
@@ -311,15 +326,14 @@ int configurationDecode(const struct raft_buffer *buf,
     /* TODO: use 'if' instead of assert for checking buffer boundaries */
     assert(buf->len > 0);
 
-    /* Check that the target configuration is empty. */
-    assert(c->n == 0);
-    assert(c->servers == NULL);
+    configurationInit(c);
 
     cursor = buf->base;
 
     /* Check the encoding format version */
     if (byteGet8(&cursor) != ENCODING_FORMAT) {
-        return RAFT_MALFORMED;
+        rv = RAFT_MALFORMED;
+        goto err;
     }
 
     /* Read the number of servers. */
@@ -330,7 +344,6 @@ int configurationDecode(const struct raft_buffer *buf,
         raft_id id;
         const char *address;
         int role;
-        int rv;
 
         /* Server ID. */
         id = byteGet64(&cursor);
@@ -340,7 +353,8 @@ int configurationDecode(const struct raft_buffer *buf,
             &cursor,
             buf->len - (size_t)((uint8_t *)cursor - (uint8_t *)buf->base));
         if (address == NULL) {
-            return RAFT_MALFORMED;
+            rv = RAFT_MALFORMED;
+            goto err;
         }
 
         /* Role code. */
@@ -348,11 +362,22 @@ int configurationDecode(const struct raft_buffer *buf,
 
         rv = configurationAdd(c, id, address, role);
         if (rv != 0) {
-            return rv;
+            /* Only valid configurations should be ever be encoded, so in case
+             * configurationAdd() fails because of invalid data we return
+             * RAFT_MALFORMED. */
+            if (rv != RAFT_NOMEM) {
+                rv = RAFT_MALFORMED;
+            }
+            goto err;
         }
     }
 
     return 0;
+
+err:
+    assert(rv == RAFT_MALFORMED || rv == RAFT_NOMEM);
+    configurationClose(c);
+    return rv;
 }
 
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
