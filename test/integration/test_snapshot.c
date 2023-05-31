@@ -831,6 +831,7 @@ TEST(snapshot, unavailableDiscardsSnapshot, setUp, tearDown, 0, NULL)
 TEST(snapshot, newTermWhileInstalling, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
+    raft_term term;
     (void)params;
 
     /* Set very low threshold and trailing entries number */
@@ -845,16 +846,36 @@ TEST(snapshot, newTermWhileInstalling, setUp, tearDown, 0, NULL)
     CLUSTER_MAKE_PROGRESS;
     CLUSTER_MAKE_PROGRESS;
 
-    /* Reconnect both servers */
+    /* Set a very high disk latency so server 2 will take a lot of time to
+     * install the snapshot and the leader will have stepped down in the
+     * meantime. */
     CLUSTER_SET_DISK_LATENCY(2, 3000);
+
+    /* Reconnect both servers, so server 2 will receive a snapshot. */
     CLUSTER_DESATURATE_BOTHWAYS(0, 2);
+
     /* Wait a while and check that the leader has sent a snapshot */
     CLUSTER_STEP_UNTIL_ELAPSED(500);
     munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_INSTALL_SNAPSHOT), ==, 1);
     munit_assert_int(CLUSTER_N_RECV(2, RAFT_IO_INSTALL_SNAPSHOT), ==, 1);
+
+    /* Save the current term of server 2, we'll check later that it has
+     * changed. */
+    term = CLUSTER_TERM(2);
+
     /* Force a new term to start */
     CLUSTER_DEPOSE;
     CLUSTER_ELECT(1);
+
+    /* Server 2's last applied is still behind, meaning it's still persisting
+     * the snapshot, however its term has been updated in the meantime. */
+    munit_assert_int(CLUSTER_LAST_APPLIED(2), ==, 1);
+    munit_assert_int(CLUSTER_TERM(2), ==, term + 1);
+
     CLUSTER_STEP_UNTIL_ELAPSED(1000);
+
+    /* Server 2 has finished installing the snapshot. */
+    munit_assert_int(CLUSTER_LAST_APPLIED(2), ==, 3);
+
     return MUNIT_OK;
 }
