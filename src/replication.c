@@ -839,6 +839,23 @@ static void sendAppendEntriesResult(
     int rv;
 
     assert(r->state == RAFT_FOLLOWER);
+
+    /* There are two cases in which a follower can have no leader:
+     *
+     * - If it never had a leader before (e.g. it just started)
+     *
+     * - If has become a follower after stepping down from leader because
+     *   it could not contact a majority of servers.
+     *
+     * In the first case we can't reach this function because no entries have
+     * been received.
+     *
+     * In the second case we don't call this function because we don't send
+     * AppendEntries result when completing a raft_io->append() request
+     * initiated by a leader.
+     */
+    assert(r->follower_state.current_leader.address != NULL);
+
     message.type = RAFT_IO_APPEND_ENTRIES_RESULT;
     message.server_id = r->follower_state.current_leader.id;
     message.server_address = r->follower_state.current_leader.address;
