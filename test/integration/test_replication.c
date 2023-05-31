@@ -1210,3 +1210,42 @@ TEST(replication, failPersistBarrier, setUp, tearDown, 0, NULL)
 
     return MUNIT_OK;
 }
+
+/* A follower finds that is has no leader anymore after it completes persisting
+ * entries. No AppendEntries RPC result is sent in that case. */
+TEST(replication, noLeaderAfterAppending, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    struct raft_apply *req = munit_malloc(sizeof(*req));
+
+    /* Make sure that persisting entries on server 0 will take a long time. */
+    CLUSTER_SET_DISK_LATENCY(0, 1100);
+
+    /* Server 0 becomes the leader. */
+    BOOTSTRAP_START_AND_ELECT;
+    munit_assert_int(CLUSTER_STATE(0), ==, RAFT_LEADER);
+
+    /* Submit a new entry, which server 0 will start to persist. */
+    CLUSTER_APPLY_ADD_X(0, req, 1, NULL);
+
+    /* Disconnect server 0, so it will step down and become follower. */
+    CLUSTER_DISCONNECT(0, 1);
+    CLUSTER_DISCONNECT(1, 0);
+    CLUSTER_STEP_UNTIL_HAS_NO_LEADER(1500);
+
+    /* Server 0 has stepped down and is now a follower, however its hasn't
+     * persisted the new entry yet. */
+    munit_assert_int(CLUSTER_STATE(0), ==, RAFT_FOLLOWER);
+    munit_assert_int(CLUSTER_RAFT(0)->last_stored, ==, 1);
+
+    /* Wait for the long disk write to complete */
+    CLUSTER_STEP_UNTIL_ELAPSED(200);
+
+    /* The writes have now completed, one for the barrier entry at the start of
+     * the term and one for the command entry we submitted. */
+    munit_assert_int(CLUSTER_RAFT(0)->last_stored, ==, 3);
+
+    free(req);
+
+    return MUNIT_OK;
+}
