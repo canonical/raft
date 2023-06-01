@@ -902,7 +902,8 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
      *   commitIndex, set commitIndex = min(leaderCommit, index of last new
      *   entry).
      */
-    if (args->leader_commit > r->commit_index) {
+    if (args->leader_commit > r->commit_index &&
+        r->last_stored >= r->commit_index) {
         r->commit_index = min(args->leader_commit, r->last_stored);
         rv = replicationApply(r);
         if (rv != 0) {
@@ -1101,6 +1102,7 @@ int replicationAppend(struct raft *r,
      */
     if (n == 0) {
         if ((args->leader_commit > r->commit_index) &&
+            r->last_stored >= r->commit_index &&
             !replicationInstallSnapshotBusy(r)) {
             r->commit_index = min(args->leader_commit, r->last_stored);
             rv = replicationApply(r);
