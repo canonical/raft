@@ -13,10 +13,10 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Setup dependencies
-      run: |
-          sudo dpkg --add-architecture i386
-          sudo apt-get update -qq
-          sudo apt-get install -qq liblz4-dev:i386 libuv1-dev:i386 gcc-multilib
+    - run: sudo dpkg --add-architecture i386
+    - run: sudo apt-get update -qq
+    - run: sudo apt-get install -qq liblz4-dev:i386 libuv1-dev:i386 gcc-multilib || true
+    - run: sudo apt-cache policy libgcc-s1:i386
 
     - name: Build
       run: |
