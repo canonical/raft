@@ -1086,3 +1086,61 @@ TEST(replication, newTermWhileAppending, setUp, tearDown, 0, NULL)
 
     return MUNIT_OK;
 }
+
+/* A leader with slow disk commits an entry that it hasn't persisted yet,
+ * because enough followers to have a majority have aknowledged that they have
+ * appended the entry. The leader's last_stored field hence lags behind its
+ * commit_index. A new leader gets elected, with a higher commit index and sends
+ * first a new entry than a heartbeat to the old leader, that needs to update
+ * its commit_index taking into account its lagging last_stored. */
+TEST(replication, lastStoredLaggingBehindCommitIndex, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    CLUSTER_GROW;
+
+    /* Server 0 takes a long time to persist entry 2 (the barrier) */
+    CLUSTER_SET_DISK_LATENCY(0, 10000);
+
+    /* Server 0 gets elected and creates a barrier entry at index 2 */
+    BOOTSTRAP_START_AND_ELECT;
+
+    /* Server 0 commits and applies barrier entry 2 even if it not persist it
+     * yet. */
+    CLUSTER_STEP_UNTIL_APPLIED(0, 2, 2000);
+
+    munit_assert_int(CLUSTER_RAFT(0)->last_stored, ==, 1);
+    munit_assert_int(CLUSTER_RAFT(0)->commit_index, ==, 2);
+    munit_assert_int(CLUSTER_RAFT(0)->last_applied, ==, 2);
+
+    /* Server 1 stored barrier entry 2, but did not yet receive a notification
+     * from server 0 about the new commit index. */
+    munit_assert_int(CLUSTER_RAFT(1)->last_stored, ==, 2);
+    munit_assert_int(CLUSTER_RAFT(1)->commit_index, ==, 1);
+    munit_assert_int(CLUSTER_RAFT(1)->last_applied, ==, 1);
+
+    /* Disconnect server 0 from server 1 and 2. */
+    CLUSTER_DISCONNECT(0, 1);
+    CLUSTER_DISCONNECT(0, 2);
+
+    /* Set a very high election timeout on server 0, so it won't step down for a
+     * while, even if disconnected. */
+    raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 10000);
+    raft_set_election_timeout(CLUSTER_RAFT(0), 10000);
+
+    /* Server 1 and 2 eventually timeout and start an election, server 1
+     * wins. */
+    CLUSTER_STEP_UNTIL_HAS_NO_LEADER(4000);
+    CLUSTER_STEP_UNTIL_HAS_LEADER(2000);
+    munit_assert_int(CLUSTER_LEADER, ==, 1);
+
+    /* Server 1 commits the barrier entry at index 3 that it created at the
+     * start of its term. */
+    CLUSTER_STEP_UNTIL_APPLIED(1, 3, 2000);
+
+    /* Reconnect server 0 to server 1, which will start replicating entry 3 to
+     * it. */
+    CLUSTER_RECONNECT(0, 1);
+    CLUSTER_STEP_UNTIL_APPLIED(0, 3, 20000);
+
+    return MUNIT_OK;
+}
