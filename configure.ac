@@ -23,6 +23,9 @@ AM_CONDITIONAL(UV_ENABLED, test "x$have_uv" = "xyes")
 # explicitly disabled.
 AC_ARG_ENABLE(lz4, AS_HELP_STRING([--disable-lz4], [do not use lz4 compression]))
 
+# Allow not linking to liblz4 even if it's present.
+AC_ARG_WITH([lz4], AS_HELP_STRING([--without-lz4], [never link to liblz4]))
+
 # Thanks to the OpenVPN configure.ac file for this part.
 # If this fails, we will do another test next.
 # We also add set LZ4_LIBS otherwise linker will not know about the lz4 library
@@ -60,10 +63,10 @@ AS_IF([test "x$enable_lz4" != "xno" -a "x$have_lz4" != "xyes"],
       [AC_MSG_ERROR([liblz4 required but not found])], [])
 # LZ4 Can be available without being enabled, this allows a user to activate
 # it at a later stage through an API call.
-AM_CONDITIONAL(LZ4_AVAILABLE, test "x$have_lz4" = "xyes")
+AM_CONDITIONAL(LZ4_AVAILABLE, test "x$have_lz4" = "xyes" -a "x$with_lz4" != "xno")
 # `LZ4_ENABLED` will cause the libuv snapshot implementation to use lz4
 # compression by default.
-AM_CONDITIONAL(LZ4_ENABLED, test "x$enable_lz4" != "xno" -a "x$have_lz4" = "xyes")
+AM_CONDITIONAL(LZ4_ENABLED, test "x$enable_lz4" != "xno" -a "x$have_lz4" = "xyes" -a "x$with_lz4" != "xno")
 
 AC_ARG_ENABLE(backtrace, AS_HELP_STRING([--enable-backtrace[=ARG]], [print backtrace on assertion failure [default=no]]))
 AM_CONDITIONAL(BACKTRACE_ENABLED, test "x$enable_backtrace" = "xyes")
