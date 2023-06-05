@@ -21,6 +21,7 @@ libraft_la_SOURCES = \
   src/election.c \
   src/entry.c \
   src/err.c \
+  src/flags.c \
   src/heap.c \
   src/lifecycle.c \
   src/log.c \
@@ -65,6 +66,7 @@ test_unit_core_SOURCES = \
   src/compress.c \
   src/configuration.c \
   src/err.c \
+  src/flags.c \
   src/heap.c \
   src/log.c \
   test/unit/main_core.c \
@@ -72,6 +74,7 @@ test_unit_core_SOURCES = \
   test/unit/test_compress.c \
   test/unit/test_configuration.c \
   test/unit/test_err.c \
+  test/unit/test_flags.c \
   test/unit/test_log.c \
   test/unit/test_queue.c
 test_unit_core_CFLAGS = $(AM_CFLAGS) -Wno-conversion

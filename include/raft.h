@@ -80,6 +80,11 @@ typedef unsigned long long raft_index;
 typedef unsigned long long raft_time;
 
 /**
+ * Hold the features a raft node is capable of.
+ */
+typedef uint64_t raft_flags;
+
+/**
  * A data buffer.
  */
 struct raft_buffer
