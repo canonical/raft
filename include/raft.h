@@ -269,8 +269,9 @@ struct raft_append_entries_result
     raft_term term;            /* Receiver's current_term. */
     raft_index rejected;       /* If non-zero, the index that was rejected. */
     raft_index last_log_index; /* Receiver's last log entry index, as hint. */
+    raft_flags features;       /* Feature flags. */
 };
-#define RAFT_APPEND_ENTRIES_RESULT_VERSION 0
+#define RAFT_APPEND_ENTRIES_RESULT_VERSION 1
 
 /**
  * Hold the arguments of an InstallSnapshot RPC (figure 5.3).

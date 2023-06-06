@@ -8,6 +8,7 @@
 #include "error.h"
 #endif
 #include "err.h"
+#include "flags.h"
 #include "heap.h"
 #include "lifecycle.h"
 #include "log.h"
@@ -685,6 +686,8 @@ int replicationUpdate(struct raft *r,
 
     progressMarkRecentRecv(r, i);
 
+    progressSetFeatures(r, i, result->features);
+
     /* If the RPC failed because of a log mismatch, retry.
      *
      * From Figure 3.1:
@@ -850,6 +853,7 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
 
     result.term = r->current_term;
     result.version = RAFT_APPEND_ENTRIES_RESULT_VERSION;
+    result.features = RAFT_DEFAULT_FEATURE_FLAGS;
     if (status != 0) {
         if (r->state != RAFT_FOLLOWER) {
             tracef("local server is not follower -> ignore I/O failure");
@@ -1219,6 +1223,7 @@ static void installSnapshotCb(struct raft_io_snapshot_put *req, int status)
 
     result.term = r->current_term;
     result.version = RAFT_APPEND_ENTRIES_RESULT_VERSION;
+    result.features = RAFT_DEFAULT_FEATURE_FLAGS;
     result.rejected = 0;
 
     /* If we are shutting down, let's discard the result. */

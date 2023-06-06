@@ -1,4 +1,5 @@
 #include "../../src/configuration.h"
+#include "../../src/flags.h"
 #include "../../src/progress.h"
 #include "../lib/cluster.h"
 #include "../lib/runner.h"
@@ -122,6 +123,40 @@ TEST(replication, sendInitialHeartbeat, setUp, tearDown, 0, NULL)
 
     munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_APPEND_ENTRIES), ==, 1);
     munit_assert_int(CLUSTER_N_RECV(1, RAFT_IO_APPEND_ENTRIES), ==, 1);
+
+    return MUNIT_OK;
+}
+
+/* After receiving an AppendEntriesResult, a leader has set the feature flags of
+ * a node. */
+TEST(replication, receiveFlags, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    struct raft *raft;
+    CLUSTER_BOOTSTRAP;
+    CLUSTER_START;
+
+    /* Server 0 becomes leader and sends the initial heartbeat. */
+    CLUSTER_STEP_N(24);
+    ASSERT_LEADER(0);
+    ASSERT_TIME(1030);
+
+    /* Flags is empty */
+    raft = CLUSTER_RAFT(0);
+    munit_assert_ullong(raft->leader_state.progress[1].features, ==, 0);
+
+    raft = CLUSTER_RAFT(1);
+    /* Server 1 receives the first heartbeat. */
+    CLUSTER_STEP_N(4);
+    munit_assert_int(raft->election_timer_start, ==, 1045);
+    munit_assert_int(CLUSTER_N_RECV(1, RAFT_IO_APPEND_ENTRIES), ==, 1);
+
+    /* Server 0 receives the reply to the heartbeat. */
+    CLUSTER_STEP_N(2);
+    munit_assert_int(CLUSTER_N_RECV(0, RAFT_IO_APPEND_ENTRIES_RESULT), ==, 1);
+    raft = CLUSTER_RAFT(0);
+    munit_assert_ullong(raft->leader_state.progress[1].features, ==,
+                        RAFT_DEFAULT_FEATURE_FLAGS);
 
     return MUNIT_OK;
 }

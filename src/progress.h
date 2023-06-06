@@ -23,7 +23,8 @@ struct raft_progress
     raft_index snapshot_index;    /* Last index of most recent snapshot sent. */
     raft_time last_send;          /* Timestamp of last AppendEntries RPC. */
     raft_time snapshot_last_send; /* Timestamp of last InstallSnaphot RPC. */
-    bool recent_recv; /* A msg was received within election timeout. */
+    bool recent_recv;    /* A msg was received within election timeout. */
+    raft_flags features; /* What the server is capable of. */
 };
 
 /* Create and initialize the array of progress objects used by the leader to *
@@ -121,5 +122,11 @@ bool progressMaybeDecrement(struct raft *r,
 
 /* Return true if match_index is equal or higher than the snapshot_index. */
 bool progressSnapshotDone(struct raft *r, unsigned i);
+
+/* Sets the feature flags of a node. */
+void progressSetFeatures(struct raft *r, const unsigned i, raft_flags features);
+
+/* Gets the feature flags of a node. */
+raft_flags progressGetFeatures(struct raft *r, const unsigned i);
 
 #endif /* PROGRESS_H_ */

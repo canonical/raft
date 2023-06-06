@@ -8,6 +8,7 @@
 #include "convert.h"
 #include "election.h"
 #include "err.h"
+#include "flags.h"
 #include "heap.h"
 #include "log.h"
 #include "membership.h"
