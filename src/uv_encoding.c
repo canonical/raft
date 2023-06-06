@@ -51,11 +51,16 @@ static size_t sizeofAppendEntries(const struct raft_append_entries *p)
            16 * p->n_entries /* One header per entry */;
 }
 
-static size_t sizeofAppendEntriesResult(void)
+static size_t sizeofAppendEntriesResultV0(void)
 {
     return sizeof(uint64_t) + /* Term. */
            sizeof(uint64_t) + /* Success. */
            sizeof(uint64_t) /* Last log index. */;
+}
+
+static size_t sizeofAppendEntriesResult(void)
+{
+    return sizeofAppendEntriesResultV0() + sizeof(uint64_t) /* 64 bit Flags. */;
 }
 
 static size_t sizeofInstallSnapshot(const struct raft_install_snapshot *p)
@@ -141,6 +146,7 @@ static void encodeAppendEntriesResult(
     bytePut64(&cursor, p->term);
     bytePut64(&cursor, p->rejected);
     bytePut64(&cursor, p->last_log_index);
+    bytePut64(&cursor, p->features);
 }
 
 static void encodeInstallSnapshot(const struct raft_install_snapshot *p,
@@ -435,6 +441,11 @@ static void decodeAppendEntriesResult(const uv_buf_t *buf,
     p->term = byteGet64(&cursor);
     p->rejected = byteGet64(&cursor);
     p->last_log_index = byteGet64(&cursor);
+    p->features = 0;
+    if (buf->len > sizeofAppendEntriesResultV0()) {
+        p->version = 1;
+        p->features = byteGet64(&cursor);
+    }
 }
 
 static int decodeInstallSnapshot(const uv_buf_t *buf,

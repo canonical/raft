@@ -25,6 +25,7 @@ static void initProgress(struct raft_progress *p, raft_index last_index)
     p->snapshot_last_send = 0;
     p->recent_recv = false;
     p->state = PROGRESS__PROBE;
+    p->features = 0;
 }
 
 int progressBuildArray(struct raft *r)
@@ -172,6 +173,18 @@ bool progressResetRecentRecv(struct raft *r, const unsigned i)
 void progressMarkRecentRecv(struct raft *r, const unsigned i)
 {
     r->leader_state.progress[i].recent_recv = true;
+}
+
+inline void progressSetFeatures(struct raft *r,
+                                const unsigned i,
+                                raft_flags features)
+{
+    r->leader_state.progress[i].features = features;
+}
+
+inline raft_flags progressGetFeatures(struct raft *r, const unsigned i)
+{
+    return r->leader_state.progress[i].features;
 }
 
 bool progressGetRecentRecv(const struct raft *r, const unsigned i)
