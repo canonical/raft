@@ -71,11 +71,25 @@ static int electionSend(struct raft *r, const struct raft_server *server)
         term++;
     }
 
+    /* Fill the RequestVote message.
+     *
+     * Note that we set last_log_index and last_log_term to the index and term
+     * of the last persisted entry, to the last entry in our in-memory log
+     * cache, because we must advertise only log entries that can't be lost at
+     * restart.
+     *
+     * Also note that, for a similar reason, we apply pending configuration
+     * changes only once they are persisted. When running an election we then
+     * use only persisted information, which is safe (while using unpersisted
+     * information for the log and persisted information for the configuration
+     * or viceversa would lead to inconsistencies and violations of Raft
+     * invariants).
+     */
     message.type = RAFT_IO_REQUEST_VOTE;
     message.request_vote.term = term;
     message.request_vote.candidate_id = r->id;
-    message.request_vote.last_log_index = logLastIndex(r->log);
-    message.request_vote.last_log_term = logLastTerm(r->log);
+    message.request_vote.last_log_index = r->last_stored;
+    message.request_vote.last_log_term = logTermOf(r->log, r->last_stored);
     message.request_vote.disrupt_leader = r->candidate_state.disrupt_leader;
     message.request_vote.pre_vote = r->candidate_state.in_pre_vote;
     message.server_id = server->id;
