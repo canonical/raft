@@ -115,9 +115,6 @@ AC_TYPE_UINT16_T
 AC_TYPE_UINT32_T
 AC_TYPE_UINT64_T
 
-# Checks for library functions and definitions.
-AC_CHECK_DECLS([UV_FS_O_CREAT], [], [], [[#include <uv.h>]])
-
 # Enable large file support. This is mandatory in order to interoperate with
 # libuv, which enables large file support by default, making the size of 'off_t'
 # on 32-bit architecture be 8 bytes instead of the normal 4.
