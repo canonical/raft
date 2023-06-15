@@ -379,8 +379,6 @@ TEST(UvWriterClose, threadpool, setUp, tearDownDeps, 0, DirNoAioParams)
     return MUNIT_OK;
 }
 
-#if defined(RWF_NOWAIT)
-
 /* Close with an inflight AIO write . */
 TEST(UvWriterClose, aio, setUp, tearDownDeps, 0, DirAioParams)
 {
@@ -395,5 +393,3 @@ TEST(UvWriterClose, aio, setUp, tearDownDeps, 0, DirAioParams)
     WRITE_CLOSE(1, 0, 0, RAFT_CANCELED);
     return MUNIT_OK;
 }
-
-#endif

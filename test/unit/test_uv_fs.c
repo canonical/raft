@@ -291,8 +291,6 @@ TEST(UvFsProbeCapabilities, zfsDirectIO, DirZfsSetUp, DirTearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-#if defined(RWF_NOWAIT)
-
 /* File systems that fully support DIO. */
 TEST(UvFsProbeCapabilities, aio, DirSetUp, DirTearDown, 0, DirAioParams)
 {
@@ -308,8 +306,6 @@ TEST(UvFsProbeCapabilities, aio, DirSetUp, DirTearDown, 0, DirAioParams)
     PROBE_CAPABILITIES(dir, 4096, true);
     return MUNIT_OK;
 }
-
-#endif /* RWF_NOWAIT */
 
 /* If the given path is not executable, the block size of the underlying file
  * system can't be determined and an error is returned. */
@@ -337,8 +333,6 @@ TEST(UvFsProbeCapabilities, noSpace, DirTmpfsSetUp, DirTearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-#if defined(RWF_NOWAIT)
-
 /* The uvIoSetup() call fails with EAGAIN. */
 TEST(UvFsProbeCapabilities, noResources, DirBtrfsSetUp, DirTearDown, 0, NULL)
 {
@@ -358,8 +352,6 @@ TEST(UvFsProbeCapabilities, noResources, DirBtrfsSetUp, DirTearDown, 0, NULL)
     AioDestroy(ctx);
     return MUNIT_OK;
 }
-
-#endif /* RWF_NOWAIT */
 
 /******************************************************************************
  *

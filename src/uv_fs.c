@@ -703,7 +703,6 @@ static int probeDirectIO(int fd, size_t *size, char *errmsg)
     return 0;
 }
 
-#if defined(RWF_NOWAIT)
 /* Check if fully non-blocking async I/O is possible on the given fd. */
 static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
 {
@@ -789,7 +788,6 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
 
     return 0;
 }
-#endif /* RWF_NOWAIT */
 
 #define UV__FS_PROBE_FILE ".probe"
 #define UV__FS_PROBE_FILE_SIZE 4096
@@ -820,11 +818,6 @@ int UvFsProbeCapabilities(const char *dir,
         goto err_after_file_open;
     }
 
-#if !defined(RWF_NOWAIT)
-    /* We can't have fully async I/O, since io_submit might potentially block.
-     */
-    *async = false;
-#else
     /* If direct I/O is not possible, we can't perform fully asynchronous
      * I/O, because io_submit might potentially block. */
     if (*direct == 0) {
@@ -836,11 +829,8 @@ int UvFsProbeCapabilities(const char *dir,
         ErrMsgWrapf(errmsg, "probe Async I/O");
         goto err_after_file_open;
     }
-#endif /* RWF_NOWAIT */
 
-#if defined(RWF_NOWAIT)
 out:
-#endif /* RWF_NOWAIT */
     close(fd);
     return 0;
 
