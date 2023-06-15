@@ -9,43 +9,6 @@
 #include <sys/types.h>
 #include <uv.h>
 
-/* For backward compat with older libuv */
-#if !defined(UV_FS_O_RDONLY)
-#define UV_FS_O_RDONLY O_RDONLY
-#endif
-
-#if !defined(UV_FS_O_DIRECTORY)
-#define UV_FS_O_DIRECTORY O_DIRECTORY
-#endif
-
-#if !defined(UV_FS_O_WRONLY)
-#define UV_FS_O_WRONLY O_WRONLY
-#endif
-
-#if !defined(UV_FS_O_RDWR)
-#define UV_FS_O_RDWR O_RDWR
-#endif
-
-#if !defined(UV_FS_O_CREAT)
-#define UV_FS_O_CREAT O_CREAT
-#endif
-
-#if !defined(UV_FS_O_TRUNC)
-#define UV_FS_O_TRUNC O_TRUNC
-#endif
-
-#if !defined(UV_FS_O_EXCL)
-#define UV_FS_O_EXCL O_EXCL
-#endif
-
-#if !defined(UV_FS_O_DIRECT)
-#define UV_FS_O_DIRECT O_DIRECT
-#endif
-
-#if !defined(UV_FS_O_NONBLOCK)
-#define UV_FS_O_NONBLOCK O_NONBLOCK
-#endif
-
 /* Maximum size of a full file system path string. */
 #define UV__PATH_SZ 1024
 
