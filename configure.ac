@@ -99,6 +99,9 @@ AX_CODE_COVERAGE
 # Checks for header files.
 AC_CHECK_HEADERS([stdlib.h string.h stdio.h assert.h unistd.h linux/io_uring.h linux/aio_abi.h])
 
+# Checks for library functions and definitions.
+AC_CHECK_DECLS(RWF_NOWAIT, [], [AC_MSG_ERROR(Linux kernel >= 4.14 required.)], [#include <linux/aio_abi.h>])
+
 # Check if zfs >= 0.8.0 is available (for direct I/O support).
 AC_CHECK_PROG(have_zfs, zfs, yes)
 AS_IF([test x"$have_zfs" = x"yes"],

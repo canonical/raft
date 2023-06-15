@@ -186,7 +186,6 @@ static void uvWriterPollCb(uv_poll_t *poller, int status, int events)
         struct io_event *event = &w->events[i];
         struct UvWriterReq *req = *((void **)&event->data);
 
-#if defined(RWF_NOWAIT)
         /* If we got EAGAIN, it means it was not possible to perform the write
          * asynchronously, so let's fall back to the threadpool. */
         if (event->res == -EAGAIN) {
@@ -206,13 +205,10 @@ static void uvWriterPollCb(uv_poll_t *poller, int status, int events)
             }
             return;
         }
-#endif /* RWF_NOWAIT */
 
         uvWriterReqSetStatus(req, (int)event->res);
 
-#if defined(RWF_NOWAIT)
     finish:
-#endif /* RWF_NOWAIT */
         uvWriterReqFinish(req);
     }
 
@@ -433,9 +429,7 @@ int UvWriterSubmit(struct UvWriter *w,
                    UvWriterReqCb cb)
 {
     int rv = 0;
-#if defined(RWF_NOWAIT)
     struct iocb *iocbs = &req->iocb;
-#endif /* RWF_NOWAIT */
     assert(!w->closing);
 
     /* TODO: at the moment we are not leveraging the support for concurrent
@@ -482,7 +476,6 @@ int UvWriterSubmit(struct UvWriter *w,
     /* req->iocb.aio_rw_flags |= RWF_DSYNC; */
 #endif
 
-#if defined(RWF_NOWAIT)
     /* If io_submit can be run in a 100% non-blocking way, we'll try to write
      * without using the threadpool. */
     if (w->async) {
@@ -490,13 +483,7 @@ int UvWriterSubmit(struct UvWriter *w,
         req->iocb.aio_resfd = (uint32_t)w->event_fd;
         req->iocb.aio_rw_flags |= RWF_NOWAIT;
     }
-#else
-    /* Since there's no support for NOWAIT, io_submit might occasionally block
-     * and we need to run it in the threadpool. */
-    assert(w->async == false);
-#endif /* RWF_NOWAIT */
 
-#if defined(RWF_NOWAIT)
     /* Try to submit the write request asynchronously */
     if (w->async) {
         QUEUE_PUSH(&w->poll_queue, &req->queue);
@@ -527,7 +514,6 @@ int UvWriterSubmit(struct UvWriter *w,
         req->iocb.aio_resfd = 0;
         req->iocb.aio_rw_flags &= ~RWF_NOWAIT;
     }
-#endif /* RWF_NOWAIT */
 
     /* If we got here it means we need to run io_submit in the threadpool. */
     QUEUE_PUSH(&w->work_queue, &req->queue);
@@ -543,9 +529,7 @@ int UvWriterSubmit(struct UvWriter *w,
         goto err;
     }
 
-#if defined(RWF_NOWAIT)
 done:
-#endif /* RWF_NOWAIT */
     return 0;
 
 err:

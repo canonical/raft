@@ -130,21 +130,8 @@ TEST(init, dirTooLong, setUp, tearDown, 0, NULL)
     return 0;
 }
 
-#if defined(RWF_NOWAIT)
-static char *oomHeapFaultDelay[] = {"1", "2", NULL};
-#else
-static char *oomHeapFaultDelay[] = {"1", NULL};
-#endif
-static char *oomHeapFaultRepeat[] = {"1", NULL};
-
-static MunitParameterEnum oomParams[] = {
-    {TEST_HEAP_FAULT_DELAY, oomHeapFaultDelay},
-    {TEST_HEAP_FAULT_REPEAT, oomHeapFaultRepeat},
-    {NULL, NULL},
-};
-
-/* Out of memory conditions. */
-TEST(init, oom, setUp, tearDown, 0, oomParams)
+/* Out of memory conditions upon probing for direct I/O. */
+TEST(init, probeDirectIoOom, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     /* XXX: tmpfs seems to not support O_DIRECT */
@@ -159,8 +146,31 @@ TEST(init, oom, setUp, tearDown, 0, oomParams)
     /* XXX: fails on ppc64el */
     return MUNIT_SKIP;
 #endif
+    HeapFaultConfig(&f->heap, 1 /* delay */, 1 /* repeat */);
     HEAP_FAULT_ENABLE;
     INIT_ERROR(f->dir, RAFT_NOMEM, "probe Direct I/O: out of memory");
+    return 0;
+}
+
+/* Out of memory conditions upon probing for async I/O. */
+TEST(init, probeAsyncIoOom, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    /* XXX: tmpfs seems to not support O_DIRECT */
+    struct statfs info;
+    int rv;
+    rv = statfs(f->dir, &info);
+    munit_assert_int(rv, ==, 0);
+    if (info.f_type == TMPFS_MAGIC) {
+        return MUNIT_SKIP;
+    }
+#if defined(__powerpc64__)
+    /* XXX: fails on ppc64el */
+    return MUNIT_SKIP;
+#endif
+    HeapFaultConfig(&f->heap, 2 /* delay */, 1 /* repeat */);
+    HEAP_FAULT_ENABLE;
+    INIT_ERROR(f->dir, RAFT_NOMEM, "probe Async I/O: out of memory");
     return 0;
 }
 
