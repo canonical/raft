@@ -24,9 +24,15 @@ AM_CONDITIONAL(UV_ENABLED, test "x$have_uv" = "xyes")
 AC_ARG_ENABLE(lz4, AS_HELP_STRING([--disable-lz4], [do not use lz4 compression]))
 
 # Allow not linking to liblz4 even if it's present.
+#
+# We try to detect if lz4 is installed only if the libuv raft_io implementation
+# is enabled, since that's the only place where we use lz4.
 AC_ARG_WITH([lz4], AS_HELP_STRING([--without-lz4], [never link to liblz4]))
-
-PKG_CHECK_MODULES(LZ4, [liblz4 >= 1.7.1], [have_lz4="yes"], [have_lz4="no"])
+AS_IF([test "x$have_uv" = "xyes"],
+      [AS_IF([test "x$with_lz4" != "xno"],
+             [PKG_CHECK_MODULES(LZ4, [liblz4 >= 1.7.1], [have_lz4=yes], [have_lz4=no])],
+             [have_lz4=no])],
+      [have_lz4=no])
 
 AS_IF([test "x$enable_lz4" != "xno" -a "x$have_lz4" != "xyes"],
       [AC_MSG_ERROR([liblz4 required but not found])], [])
