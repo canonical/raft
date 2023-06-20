@@ -1,3 +1,5 @@
+#include <unistd.h>
+
 #include "../../src/byte.h"
 #include "../../src/uv.h"
 #include "../lib/runner.h"
@@ -1724,6 +1726,14 @@ TEST(load, closedSegmentWithBadFormat, setUp, tearDown, 0, NULL)
 TEST(load, openSegmentWithNoAccessPermission, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
+
+    /* Skip the test when running as root, since EACCES would not be triggered
+     * in that case. */
+    if (getuid() == 0) {
+        SETUP_UV; /* Setup the uv object since teardown expects it. */
+        return MUNIT_SKIP;
+    }
+
     APPEND(1, 1);
     UNFINALIZE(1, 1, 1);
     DirMakeFileUnreadable(f->dir, "open-1");

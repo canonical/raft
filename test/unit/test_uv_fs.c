@@ -1,3 +1,5 @@
+#include <unistd.h>
+
 #include "../../src/uv_fs.h"
 #include "../../src/uv_os.h"
 #include "../lib/aio.h"
@@ -312,6 +314,13 @@ TEST(UvFsProbeCapabilities, aio, DirSetUp, DirTearDown, 0, DirAioParams)
 TEST(UvFsProbeCapabilities, noAccess, DirSetUp, DirTearDown, 0, NULL)
 {
     const char *dir = data;
+
+    /* Skip the test when running as root, since EACCES would not be triggered
+     * in that case. */
+    if (getuid() == 0) {
+        return MUNIT_SKIP;
+    }
+
     DirMakeUnexecutable(dir);
     PROBE_CAPABILITIES_ERROR(
         dir, RAFT_IOERR,
