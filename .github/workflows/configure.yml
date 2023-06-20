@@ -32,6 +32,12 @@ jobs:
       run: |
         sudo apt-get install -qq linux-libc-dev libuv1-dev
 
+    - name: Run ./configure
+      run: |
+        # Fail if no flags are passed, since libuv is installed but liblz4 is not.
+        ! ./configure 2>errors
+        tail -1 errors | grep -q "liblz4 required but not found" || (cat errors && false)
+
     - name: Install liblz4
       run: |
         sudo apt-get install -qq liblz4-dev
