@@ -47,10 +47,10 @@ AS_IF([test "x$enable_lz4" != "x" -a "x$have_lz4" = "xno"],
       [])
 # LZ4 Can be available without being enabled, this allows a user to activate
 # it at a later stage through an API call.
-AM_CONDITIONAL(LZ4_AVAILABLE, test "x$have_lz4" = "xyes" -a "x$with_lz4" != "xno")
+AM_CONDITIONAL(LZ4_AVAILABLE, test "x$have_lz4" = "xyes")
 # `LZ4_ENABLED` will cause the libuv snapshot implementation to use lz4
 # compression by default.
-AM_CONDITIONAL(LZ4_ENABLED, test "x$enable_lz4" != "xno" -a "x$have_lz4" = "xyes" -a "x$with_lz4" != "xno")
+AM_CONDITIONAL(LZ4_ENABLED, test "x$enable_lz4" != "xno" -a "x$have_lz4" = "xyes")
 
 AC_ARG_ENABLE(backtrace, AS_HELP_STRING([--enable-backtrace[=ARG]], [print backtrace on assertion failure [default=no]]))
 AM_CONDITIONAL(BACKTRACE_ENABLED, test "x$enable_backtrace" = "xyes")
