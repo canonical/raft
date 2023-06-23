@@ -1,0 +1,43 @@
+# Check that the ./configure script behaves as expected in various scenarios
+name: Configure
+
+on:
+  - push
+  - pull_request
+
+jobs:
+  check:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v3
+    - name: Check that no optional dependency is installed
+      run: |
+        # Remove liblz4-dev which is installed by default on the runner
+        sudo apt-get remove liblz4-dev
+        # Check that there are no dependencies installed
+        ! pkg-config --exists libuv
+        ! pkg-config --exists liblz4
+
+    - name: Run autoreconf
+      run: |
+        autoreconf -i
+
+    - name: Run ./configure --enable-uv
+      run: |
+        # Fail if --enable-uv is passed, since libuv is not installed.
+        ! ./configure --enable-uv 2>errors
+        tail -1 errors | grep -q "libuv required but not found" || (cat errors && false)
+
+    - name: Install libuv
+      run: |
+        sudo apt-get install -qq linux-libc-dev libuv1-dev
+
+    - name: Run ./configure
+      run: |
+        # Fail if no flags are passed, since libuv is installed but liblz4 is not.
+        ! ./configure 2>errors
+        tail -1 errors | grep -q "liblz4 required but not found" || (cat errors && false)
+
+    - name: Install liblz4
+      run: |
+        sudo apt-get install -qq liblz4-dev

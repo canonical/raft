@@ -104,23 +104,3 @@ jobs:
       uses: codecov/codecov-action@v3
       with:
         verbose: true
-
-  build-nolz4-fail:
-    runs-on: ubuntu-20.04
-    steps:
-    - uses: actions/checkout@v3
-    - name: Setup dependencies
-      run: |
-          sudo apt-get update -qq
-          # make sure liblz4 is not there
-          sudo apt-get remove liblz4-dev || true
-          sudo apt-get install -qq lcov linux-libc-dev libuv1-dev btrfs-progs xfsprogs zfsutils-linux
-          sudo ldconfig
-
-    # Expect the configure step to fail
-    - name: Build
-      env:
-        CC: gcc
-      run: |
-          autoreconf -i
-          ! ./configure --enable-example --enable-debug --enable-code-coverage --enable-sanitize
