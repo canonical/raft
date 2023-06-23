@@ -21,7 +21,7 @@ AM_CONDITIONAL(UV_ENABLED, test "x$have_uv" = "xyes")
 
 # The libuv raft_io implementation is built by default to compress snapshots if liblz4 is found, unless
 # explicitly disabled.
-AC_ARG_ENABLE(lz4, AS_HELP_STRING([--disable-lz4], [do not use lz4 compression]))
+AC_ARG_ENABLE(lz4, AS_HELP_STRING([--disable-lz4], [when building with lz4, do not compress snapshots by default]))
 
 # Allow not linking to liblz4 even if it's present.
 #
