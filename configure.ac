@@ -42,8 +42,9 @@ AS_IF([test "x$have_uv" = "xyes"],
              [])
        have_lz4=no])
 
-AS_IF([test "x$enable_lz4" != "xno" -a "x$have_lz4" != "xyes"],
-      [AC_MSG_ERROR([liblz4 required but not found])], [])
+AS_IF([test "x$enable_lz4" != "x" -a "x$have_lz4" = "xno"],
+      [AC_MSG_ERROR([snapshot compression (either by default or not) requires liblz4])],
+      [])
 # LZ4 Can be available without being enabled, this allows a user to activate
 # it at a later stage through an API call.
 AM_CONDITIONAL(LZ4_AVAILABLE, test "x$have_lz4" = "xyes" -a "x$with_lz4" != "xno")
