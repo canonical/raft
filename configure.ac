@@ -37,18 +37,18 @@ AS_IF([test "x$have_uv" = "xyes"],
              [AC_MSG_ERROR([liblz4 can be used only if libuv is used too])],
              [])
        have_lz4=no])
+AM_CONDITIONAL(LZ4_AVAILABLE, test "x$have_lz4" = "xyes")
 
 # When libuv is present, and liblz4 is used, the libuv raft_io implementation is
 # built to compress snapshots by default, unless --disable-lz4 is passed.
+#
+# In other words LZ4 can be available without snapshot compression being on by
+# default, this allows a user to activate it at a later stage through an API
+# call.
 AC_ARG_ENABLE(lz4, AS_HELP_STRING([--disable-lz4], [when building with lz4, do not compress snapshots by default]))
 AS_IF([test "x$enable_lz4" != "x" -a "x$have_lz4" = "xno"],
       [AC_MSG_ERROR([snapshot compression (either by default or not) requires liblz4])],
       [])
-# LZ4 Can be available without being enabled, this allows a user to activate
-# it at a later stage through an API call.
-AM_CONDITIONAL(LZ4_AVAILABLE, test "x$have_lz4" = "xyes")
-# `LZ4_ENABLED` will cause the libuv snapshot implementation to use lz4
-# compression by default.
 AM_CONDITIONAL(LZ4_ENABLED, test "x$enable_lz4" != "xno" -a "x$have_lz4" = "xyes")
 
 AC_ARG_ENABLE(backtrace, AS_HELP_STRING([--enable-backtrace[=ARG]], [print backtrace on assertion failure [default=no]]))
