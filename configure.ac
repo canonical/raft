@@ -19,8 +19,8 @@ AS_IF([test "x$enable_uv" != "xno"],
 AS_IF([test "x$enable_uv" = "xyes" -a "x$have_uv" = "xno"], [AC_MSG_ERROR([libuv required but not found])], [])
 AM_CONDITIONAL(UV_ENABLED, test "x$have_uv" = "xyes")
 
-# The libuv raft_io implementation is built by default to compress snapshots if liblz4 is found, unless
-# explicitly disabled.
+# When libuv is present, and liblz4 is used, the libuv raft_io implementation is
+# built to compress snapshots by default, unless --disable-lz4 is passed.
 AC_ARG_ENABLE(lz4, AS_HELP_STRING([--disable-lz4], [when building with lz4, do not compress snapshots by default]))
 
 # Allow not linking to liblz4 even if it's present.
