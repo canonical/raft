@@ -331,13 +331,9 @@ start:
         return 0;
     }
 
-    /* If there's a blocking barrier in progress, and it's not waiting for this
-     * segment to be finalized, let's wait.
-     *
-     * FIXME shouldn't we wait even if segment->barrier == uv->barrier, if there
-     * are other open segments associated with the same barrier? */
-    if (uv->barrier != NULL && segment->barrier != uv->barrier &&
-        uv->barrier->blocking) {
+    /* If there's a barrier in progress, and it's not waiting for this
+     * segment to be finalized, let's wait. */
+    if (uv->barrier != NULL && segment->barrier != uv->barrier) {
         return 0;
     }
 
@@ -803,8 +799,7 @@ int UvBarrier(struct uv *uv,
 
 void UvUnblock(struct uv *uv)
 {
-    tracef("uv unblock");
-    tracef("clear uv barrier");
+    tracef("uv unblock - clear uv->barrier");
     uv->barrier = NULL;
     if (uv->closing) {
         uvMaybeFireCloseCb(uv);

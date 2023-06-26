@@ -643,17 +643,11 @@ static void appendCbIncreaseCounterAssertResult(struct raft_io_append *req,
     bd->current += 1;
 }
 
-static char *bools[] = {"0", "1", NULL};
-static MunitParameterEnum blocking_bool_params[] = {
-    {"bool", bools},
-    {NULL, NULL},
-};
-
 /* Fill up 3 segments worth of AppendEntries RPC's.
  * Request a Barrier and expect that the AppendEntries RPC's are finished before
  * the Barrier callback is fired.
  */
-TEST(append, barrierOpenSegments, setUp, tearDown, 0, blocking_bool_params)
+TEST(append, barrierOpenSegments, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct barrierData bd = {0};
@@ -676,8 +670,6 @@ TEST(append, barrierOpenSegments, setUp, tearDown, 0, blocking_bool_params)
 
     struct UvBarrier barrier = {0};
     barrier.data = (void *)&bd;
-    barrier.blocking =
-        (bool)strtoul(munit_parameters_get(params, "bool"), NULL, 0);
     UvBarrier(f->io.impl, 1, &barrier, barrierCbCompareCounter);
 
     /* Make sure every callback fired */
@@ -691,7 +683,7 @@ TEST(append, barrierOpenSegments, setUp, tearDown, 0, blocking_bool_params)
 /* Request a blocking Barrier and expect that the no AppendEntries RPC's are
  * finished before the Barrier callback is fired.
  */
-TEST(append, blockingBarrierNoOpenSegments, setUp, tearDown, 0, NULL)
+TEST(append, barrierNoOpenSegments, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct barrierData bd = {0};
@@ -703,7 +695,6 @@ TEST(append, blockingBarrierNoOpenSegments, setUp, tearDown, 0, NULL)
 
     struct UvBarrier barrier = {0};
     barrier.data = (void *)&bd;
-    barrier.blocking = true;
     UvBarrier(f->io.impl, 1, &barrier, barrierCbCompareCounter);
 
     APPEND_SUBMIT_CB_DATA(0, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE,
@@ -721,9 +712,9 @@ TEST(append, blockingBarrierNoOpenSegments, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-/* Request a blocking Barrier and expect that the no AppendEntries RPC's are
+/* Request a barrier and expect that the no AppendEntries RPC's are
  * finished before the Barrier callback is fired. */
-TEST(append, blockingBarrierSingleOpenSegment, setUp, tearDown, 0, NULL)
+TEST(append, barrierSingleOpenSegment, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct barrierData bd = {0};
@@ -744,7 +735,6 @@ TEST(append, blockingBarrierSingleOpenSegment, setUp, tearDown, 0, NULL)
 
     struct UvBarrier barrier = {0};
     barrier.data = (void *)&bd;
-    barrier.blocking = true;
     UvBarrier(f->io.impl, 1, &barrier, barrierCbCompareCounter);
 
     APPEND_SUBMIT_CB_DATA(0, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE,
@@ -795,39 +785,11 @@ static void barrierCbLongWork(struct UvBarrier *barrier)
     munit_assert_int(rv, ==, 0);
 }
 
-/* Request a non-blocking Barrier that triggers a long-running task, the barrier
+/* Request a barrier that triggers a long-running task, the barrier
  * is removed when the long running task completes. This simulates a large
  * snapshot write. Ensure Append requests complete before the long running task
  * completes.*/
-TEST(append, nonBlockingBarrierLongBlockingTask, setUp, tearDown, 0, NULL)
-{
-    struct fixture *f = data;
-    struct barrierData bd = {0};
-    bd.current = 0;
-    bd.expected = 1;
-    bd.done = false;
-    bd.expectDone = false;
-    bd.uv = f->io.impl;
-
-    struct UvBarrier barrier = {0};
-    barrier.data = (void *)&bd;
-    barrier.blocking = false;
-    UvBarrier(f->io.impl, bd.uv->append_next_index, &barrier,
-              barrierCbLongWork);
-    APPEND_SUBMIT_CB_DATA(0, 1, 64, appendCbIncreaseCounterAssertResult, &bd,
-                          0);
-
-    /* Make sure every callback fired */
-    LOOP_RUN_UNTIL(&bd.done);
-    APPEND_WAIT(0);
-    return MUNIT_OK;
-}
-
-/* Request a blocking Barrier that triggers a long-running task, the barrier
- * is unblocked and removed when the long running task completes. This simulates
- * a large snapshot install. Ensure Append requests complete after the work
- * completes.*/
-TEST(append, blockingBarrierLongBlockingTask, setUp, tearDown, 0, NULL)
+TEST(append, barrierLongBlockingTask, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct barrierData bd = {0};
@@ -839,7 +801,6 @@ TEST(append, blockingBarrierLongBlockingTask, setUp, tearDown, 0, NULL)
 
     struct UvBarrier barrier = {0};
     barrier.data = (void *)&bd;
-    barrier.blocking = true;
     UvBarrier(f->io.impl, bd.uv->append_next_index, &barrier,
               barrierCbLongWork);
     APPEND_SUBMIT_CB_DATA(0, 1, 64, appendCbIncreaseCounterAssertResult, &bd,
