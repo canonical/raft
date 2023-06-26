@@ -21,15 +21,30 @@ AM_CONDITIONAL(UV_ENABLED, test "x$have_uv" = "xyes")
 
 # The libuv raft_io implementation is built by default to compress snapshots if liblz4 is found, unless
 # explicitly disabled.
-AC_ARG_ENABLE(lz4, AS_HELP_STRING([--disable-lz4], [do not use lz4 compression]))
+AC_ARG_ENABLE(lz4, AS_HELP_STRING([--disable-lz4], [when building with lz4, do not compress snapshots by default]))
 
 # Allow not linking to liblz4 even if it's present.
+#
+# We try to detect if lz4 is installed only if the libuv raft_io implementation
+# is enabled, since that's the only place where we use lz4.
 AC_ARG_WITH([lz4], AS_HELP_STRING([--without-lz4], [never link to liblz4]))
+AS_IF([test "x$have_uv" = "xyes"],
+      # libuv is used
+      [AS_IF([test "x$with_lz4" != "xno"],
+             [PKG_CHECK_MODULES(LZ4, [liblz4 >= 1.7.1], [have_lz4=yes], [have_lz4=no])],
+             [have_lz4=no])
+       AS_IF([test "x$with_lz4" != "xno" -a "x$have_lz4" = "xno"],
+             [AC_MSG_ERROR([liblz4 required but not found])],
+             [])],
+      # libuv is not used
+      [AS_IF([test "x$with_lz4" = "xyes"],
+             [AC_MSG_ERROR([liblz4 can be used only if libuv is used too])],
+             [])
+       have_lz4=no])
 
-PKG_CHECK_MODULES(LZ4, [liblz4 >= 1.7.1], [have_lz4="yes"], [have_lz4="no"])
-
-AS_IF([test "x$enable_lz4" != "xno" -a "x$have_lz4" != "xyes"],
-      [AC_MSG_ERROR([liblz4 required but not found])], [])
+AS_IF([test "x$enable_lz4" != "x" -a "x$have_lz4" = "xno"],
+      [AC_MSG_ERROR([snapshot compression (either by default or not) requires liblz4])],
+      [])
 # LZ4 Can be available without being enabled, this allows a user to activate
 # it at a later stage through an API call.
 AM_CONDITIONAL(LZ4_AVAILABLE, test "x$have_lz4" = "xyes" -a "x$with_lz4" != "xno")
