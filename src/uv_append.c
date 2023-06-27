@@ -60,6 +60,7 @@ struct uvAliveSegment
     queue queue;                    /* Segment queue */
     struct UvBarrier *barrier;      /* Barrier waiting on this segment */
     bool finalize;                  /* Finalize the segment after writing */
+    bool ready;                     /* Segment is ready for writing */
 };
 
 struct uvAppend
@@ -86,6 +87,7 @@ static void uvAliveSegmentFinalize(struct uvAliveSegment *s)
     struct uv *uv = s->uv;
     int rv;
 
+    assert(s->ready);
     rv = UvFinalize(uv, s->counter, s->written, s->first_index, s->last_index);
     if (rv != 0) {
         uv->errored = true;
@@ -289,8 +291,8 @@ out:
 static int uvAliveSegmentWrite(struct uvAliveSegment *s)
 {
     int rv;
-    assert(s->counter != 0);
     assert(s->pending.n > 0);
+    assert(s->ready);
     uvSegmentBufferFinalize(&s->pending, &s->buf);
     rv = UvWriterSubmit(&s->writer, &s->write, &s->buf, 1,
                         s->next_block * s->uv->block_size,
@@ -327,7 +329,7 @@ start:
     segment = uvGetCurrentAliveSegment(uv);
     assert(segment != NULL);
     /* If the preparer isn't done yet, let's wait. */
-    if (segment->counter == 0) {
+    if (!segment->ready) {
         return 0;
     }
 
@@ -416,6 +418,7 @@ static int uvAliveSegmentReady(struct uv *uv,
         return rv;
     }
     segment->counter = counter;
+    segment->ready = true;
     return 0;
 }
 
@@ -425,7 +428,7 @@ static void uvAliveSegmentPrepareCb(struct uvPrepare *req, int status)
     struct uv *uv = segment->uv;
     int rv;
 
-    assert(segment->counter == 0);
+    assert(!segment->ready);
     assert(segment->written == 0);
 
     /* If we have been closed, let's discard the segment. */
@@ -442,7 +445,6 @@ static void uvAliveSegmentPrepareCb(struct uvPrepare *req, int status)
         goto err;
     }
 
-    assert(req->counter > 0);
     assert(req->fd >= 0);
 
     /* There must be pending appends that were waiting for this prepare
@@ -485,6 +487,7 @@ static void uvAliveSegmentInit(struct uvAliveSegment *s, struct uv *uv)
     s->written = 0;
     s->barrier = NULL;
     s->finalize = false;
+    s->ready = false;
 }
 
 /* Add a new active open segment, since the append request being submitted does

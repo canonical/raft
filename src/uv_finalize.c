@@ -117,7 +117,6 @@ static int uvFinalizeStart(struct uvDyingSegment *segment)
     int rv;
 
     assert(uv->finalize_work.data == NULL);
-    assert(segment->counter > 0);
 
     uv->finalize_work.data = segment;
 

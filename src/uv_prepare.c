@@ -265,7 +265,6 @@ static void uvPrepareDiscard(struct uv *uv, uv_file fd, uvCounter counter)
 {
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
     char filename[UV__FILENAME_LEN];
-    assert(counter > 0);
     assert(fd >= 0);
     sprintf(filename, UV__OPEN_TEMPLATE, counter);
     UvOsClose(fd);
