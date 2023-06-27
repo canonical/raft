@@ -333,7 +333,6 @@ typedef void (*UvBarrierCb)(struct UvBarrier *req);
 struct UvBarrier
 {
     void *data;     /* User data */
-    bool blocking;  /* Whether this barrier should block future writes */
     UvBarrierCb cb; /* Completion callback */
 };
 

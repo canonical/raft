@@ -574,12 +574,16 @@ static void uvSnapshotPutFinish(struct uvSnapshotPut *put)
 
 static void uvSnapshotPutAfterWorkCb(uv_work_t *work, int status)
 {
+    assert(status == 0);
     struct uvSnapshotPut *put = work->data;
     struct uv *uv = put->uv;
-    assert(status == 0);
+    bool is_install = put->trailing == 0;
     uv->snapshot_put_work.data = NULL;
     uvSnapshotPutFinish(put);
-    UvUnblock(uv);
+    if (is_install) {
+        UvUnblock(uv);
+    }
+    uvMaybeFireCloseCb(uv);
 }
 
 /* Start processing the given put request. */
@@ -611,9 +615,9 @@ static void uvSnapshotPutBarrierCb(struct UvBarrier *barrier)
     if (put == NULL) {
         return;
     }
+    assert(put->trailing == 0);
 
     struct uv *uv = put->uv;
-    assert((barrier->blocking && put->trailing == 0) || !barrier->blocking);
     put->barrier.data = NULL;
     /* If we're closing, abort the request. */
     if (uv->closing) {
@@ -636,7 +640,6 @@ int UvSnapshotPut(struct raft_io *io,
     void *cursor;
     unsigned crc;
     int rv;
-    raft_index next_index;
 
     uv = io->impl;
     if (uv->closing) {
@@ -658,7 +661,6 @@ int UvSnapshotPut(struct raft_io *io,
     put->meta.timestamp = uv_now(uv->loop);
     put->trailing = trailing;
     put->barrier.data = put;
-    put->barrier.blocking = trailing == 0;
 
     req->cb = cb;
 
@@ -683,18 +685,17 @@ int UvSnapshotPut(struct raft_io *io,
     cursor = &put->meta.header[1];
     bytePut64(&cursor, crc);
 
-    /* - If the trailing parameter is set to 0, it means that we're restoring a
+    /* If the trailing parameter is set to 0, it means that we're restoring a
      * snapshot. Submit a barrier request setting the next append index to the
-     * snapshot's last index + 1.
-     * - When we are only writing a snapshot during normal operation, we close
-     * all current open segments. New writes can continue on newly opened
-     * segments that will only contain entries that are newer than the snapshot,
-     * and we don't change append_next_index. */
-    next_index =
-        (trailing == 0) ? (snapshot->index + 1) : uv->append_next_index;
-    rv = UvBarrier(uv, next_index, &put->barrier, uvSnapshotPutBarrierCb);
-    if (rv != 0) {
-        goto err_after_configuration_encode;
+     * snapshot's last index + 1. */
+    if (trailing == 0) {
+        rv = UvBarrier(uv, snapshot->index + 1, &put->barrier,
+                       uvSnapshotPutBarrierCb);
+        if (rv != 0) {
+            goto err_after_configuration_encode;
+        }
+    } else {
+        uvSnapshotPutStart(put);
     }
 
     return 0;

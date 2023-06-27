@@ -175,7 +175,6 @@ int UvTruncate(struct raft_io *io, raft_index index)
     truncate->uv = uv;
     truncate->index = index;
     truncate->barrier.data = truncate;
-    truncate->barrier.blocking = true;
 
     /* Make sure that we wait for any inflight writes to finish and then close
      * the current segment. */
