@@ -495,11 +495,45 @@ TEST(load, emptyOpenSegment, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
+/* The data directory has an empty open segment. */
+TEST(load, emptyOpenSegmentZero, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    DirWriteFile(f->dir, "open-0", NULL, 0);
+    LOAD(0,    /* term                                              */
+         0,    /* voted for                                         */
+         NULL, /* snapshot                                          */
+         1,    /* start index                                       */
+         0,    /* data for first loaded entry    */
+         0     /* n entries                                         */
+    );
+    /* The empty segment has been removed. */
+    munit_assert_false(HAS_OPEN_SEGMENT_FILE(1));
+    return MUNIT_OK;
+}
+
 /* The data directory has a freshly allocated open segment filled with zeros. */
 TEST(load, openSegmentWithTrailingZeros, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     DirWriteFileWithZeros(f->dir, "open-1", 256);
+    LOAD(0,    /* term                                              */
+         0,    /* voted for                                         */
+         NULL, /* snapshot                                          */
+         1,    /* start index                                       */
+         0,    /* data for first loaded entry    */
+         0     /* n entries                                         */
+    );
+    /* The empty segment has been removed. */
+    munit_assert_false(HAS_OPEN_SEGMENT_FILE(1));
+    return MUNIT_OK;
+}
+
+/* The data directory has a freshly allocated open segment filled with zeros. */
+TEST(load, openSegmentZeroWithTrailingZeros, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    DirWriteFileWithZeros(f->dir, "open-0", 256);
     LOAD(0,    /* term                                              */
          0,    /* voted for                                         */
          NULL, /* snapshot                                          */
@@ -709,6 +743,22 @@ TEST(load, openSegment, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
     APPEND(1, 1);
     UNFINALIZE(1, 1, 1);
+    LOAD(0,    /* term                                              */
+         0,    /* voted for                                         */
+         NULL, /* snapshot                                          */
+         1,    /* start index                                       */
+         1,    /* data for first loaded entry    */
+         1     /* n entries                                         */
+    );
+    return MUNIT_OK;
+}
+
+/* The data directory has a valid open-0 segment. */
+TEST(load, openSegmentZero, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    APPEND(1, 1);
+    UNFINALIZE(1, 1, 0);
     LOAD(0,    /* term                                              */
          0,    /* voted for                                         */
          NULL, /* snapshot                                          */
@@ -1028,6 +1078,74 @@ TEST(load, openSegmentNoClosedSegmentsSnapshotPresent, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
+/* The data directory contains a snapshot and an open segment containing 4 valid
+ * entries, after the snapshot, and no closed segments. */
+TEST(load, openSegmentMultipleNoClosedSegmentsSnapshotPresent, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    struct snapshot snapshot = {
+        1, /* term */
+        3, /* index */
+        1  /* data */
+    };
+    SNAPSHOT_PUT(1, 3, 1);
+    APPEND(5, 4);
+    UNFINALIZE(4, 8, 1);
+    LOAD(0,         /* term */
+         0,         /* voted for */
+         &snapshot, /* snapshot */
+         4,         /* start index */
+         4,         /* data for first loaded entry */
+         5          /* n entries */
+    );
+    return MUNIT_OK;
+}
+
+/* The data directory contains a snapshot and an open-0 segment containing a valid
+ * entry before the snapshot, and no closed segments. */
+TEST(load, openSegmentZeroNoClosedSegmentsSnapshotPresent, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    struct snapshot snapshot = {
+        1, /* term */
+        3, /* index */
+        1  /* data */
+    };
+    SNAPSHOT_PUT(1, 3, 1);
+    APPEND(1, 4);
+    UNFINALIZE(4, 4, 0);
+    LOAD(0,         /* term */
+         0,         /* voted for */
+         &snapshot, /* snapshot */
+         4,         /* start index */
+         4,         /* data for first loaded entry */
+         0          /* n entries */
+    );
+    return MUNIT_OK;
+}
+
+/* The data directory contains a snapshot and an open-0 segment containing 5 valid
+ * entries before and after the snapshot, and no closed segments. */
+TEST(load, openSegmentZeroMultipleNoClosedSegmentsSnapshotPresent, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    struct snapshot snapshot = {
+        1, /* term */
+        3, /* index */
+        1  /* data */
+    };
+    SNAPSHOT_PUT(1, 3, 1);
+    APPEND(5, 1);
+    UNFINALIZE(4, 8, 0);
+    LOAD(0,         /* term */
+         0,         /* voted for */
+         &snapshot, /* snapshot */
+         1,         /* start index */
+         1,         /* data for first loaded entry */
+         5          /* n entries */
+    );
+    return MUNIT_OK;
+}
 /* The data directory contains a snapshot and an open segment with a corrupt
  * format header and no closed segments. */
 TEST(load,

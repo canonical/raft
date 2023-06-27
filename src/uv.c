@@ -364,6 +364,13 @@ static int uvLoadSnapshotAndEntries(struct uv *uv,
         goto err;
     }
 
+    /* Pristine server, see discussion in
+     * https://github.com/canonical/raft/pull/444#issuecomment-1608412517 */
+    if (!snapshots && !segments) {
+        uv->prepare_next_counter = 0;
+        return 0;
+    }
+
     /* Load the most recent snapshot, if any. */
     if (snapshots != NULL) {
         char snapshot_filename[UV__FILENAME_LEN];
@@ -395,7 +402,16 @@ static int uvLoadSnapshotAndEntries(struct uv *uv,
         }
         if (segments != NULL) {
             if (segments[0].is_open) {
-                *start_index = (*snapshot)->index + 1;
+                if (segments[0].counter == 0) {
+                    /* The snapshot is the result of normal operations and was
+                     * taken while the first open segment was not yet closed. */
+                    *start_index = 1;
+                } else {
+                    /* The snapshot is the result of a InstallSnapshotRPC that
+                     * has truncated the log. The open segments contains newer
+                     * entries than the snapshot. */
+                    *start_index = (*snapshot)->index + 1;
+                }
             } else {
                 *start_index = segments[0].first_index;
             }

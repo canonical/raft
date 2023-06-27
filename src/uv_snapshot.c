@@ -579,6 +579,11 @@ static void uvSnapshotPutAfterWorkCb(uv_work_t *work, int status)
     struct uv *uv = put->uv;
     bool is_install = put->trailing == 0;
     uv->snapshot_put_work.data = NULL;
+    /* The next entry in the first open segment will come after the snapshot
+     * entries. */
+    if (put->trailing == 0 && uv->prepare_next_counter == 0) {
+        uv->prepare_next_counter = 1;
+    }
     uvSnapshotPutFinish(put);
     if (is_install) {
         UvUnblock(uv);
