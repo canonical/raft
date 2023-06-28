@@ -155,6 +155,7 @@ static int clientChangeConfiguration(
         goto err_after_log_append;
     }
 
+    tracef("set configuration_uncommitted_index to %llu", index);
     r->configuration_uncommitted_index = index;
 
     return 0;

@@ -169,6 +169,7 @@ int membershipUncommittedChange(struct raft *r,
 
     r->configuration = configuration;
     r->configuration_uncommitted_index = index;
+    tracef("set configuration_uncommitted_index to %llu", index);
 
     return 0;
 

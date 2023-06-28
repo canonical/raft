@@ -657,6 +657,7 @@ static int triggerActualPromotion(struct raft *r)
 
     r->leader_state.promotee_id = 0;
     r->configuration_uncommitted_index = logLastIndex(r->log);
+    tracef("configuration_uncommitted_index is %llu", r->configuration_uncommitted_index);
 
     return 0;
 
@@ -1019,6 +1020,7 @@ static int deleteConflictingEntries(struct raft *r,
 
             /* Possibly discard uncommitted configuration changes. */
             if (r->configuration_uncommitted_index >= entry_index) {
+                tracef("pre rollback: %llu >= %llu", r->configuration_uncommitted_index, entry_index);
                 rv = membershipRollback(r);
                 if (rv != 0) {
                     return rv;

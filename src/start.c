@@ -93,6 +93,7 @@ static int restoreEntries(struct raft *r,
             }
             conf = entry;
             conf_index = r->last_stored;
+            tracef("another configuration at index %llu", conf_index);
         }
     }
 
