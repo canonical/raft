@@ -66,10 +66,13 @@ int membershipFetchLastCommittedConfiguration(struct raft *r,
      * after a snapshot, we can just use configuration_last_snapshot, which we
      * cached when we took or restored the snapshot and is guaranteed to match
      * the content that the entry at r->configuration_committed_index had. */
+    tracef("fetch committed configuration at %lld", r->configuration_committed_index);
     entry = logGet(r->log, r->configuration_committed_index);
     if (entry != NULL) {
+        tracef("configuration found in log.");
         rv = configurationDecode(&entry->buf, conf);
     } else {
+        tracef("configuration not found in log.");
         assert(r->configuration_last_snapshot.n > 0);
         rv = configurationCopy(&r->configuration_last_snapshot, conf);
     }
