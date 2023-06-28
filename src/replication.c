@@ -1423,6 +1423,7 @@ static void applyChange(struct raft *r, const raft_index index)
         r->configuration_uncommitted_index = 0;
     }
 
+    tracef("set configuration_committed_index to %llu", index);
     r->configuration_committed_index = index;
     r->last_applied = index;
 

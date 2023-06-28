@@ -88,6 +88,7 @@ static int restoreEntries(struct raft *r,
              * of the loop r->configuration_committed_index will point to the
              * second to last configuration entry, if any. */
             if (conf_index != 0) {
+                tracef("r->configuration_committed_index = %llu", conf_index);
                 r->configuration_committed_index = conf_index;
             }
             conf = entry;
