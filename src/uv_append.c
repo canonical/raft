@@ -759,6 +759,7 @@ int UvBarrier(struct uv *uv,
               UvBarrierCb cb)
 {
     queue *head;
+    bool attached = false;
 
     assert(!uv->closing);
 
@@ -775,6 +776,7 @@ int UvBarrier(struct uv *uv,
             continue;
         }
         segment->barrier = barrier;
+        attached = true;
         if (segment == uvGetCurrentAliveSegment(uv)) {
             uvFinalizeCurrentAliveSegmentOnceIdle(uv);
             continue;
@@ -786,6 +788,7 @@ int UvBarrier(struct uv *uv,
 
     if (uv->barrier == NULL) {
         uv->barrier = barrier;
+        attached = true;
         /* If there's no pending append-related activity, we can fire the
          * callback immediately.
          *
@@ -796,6 +799,8 @@ int UvBarrier(struct uv *uv,
             barrier->cb(barrier);
         }
     }
+
+    assert(attached);
 
     return 0;
 }
