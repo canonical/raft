@@ -4,10 +4,9 @@ on:
   issue_comment:
     types: [created, edited]
 
-if: ${{ github.event.issue.pull_request && contains(github.event.comment.body, 'please test downstream') }}
-
 jobs:
   dqlite:
+    if: ${{ github.event.issue.pull_request && contains(github.event.comment.body, 'please test downstream') }}
     runs-on: ubuntu-22.04
     steps:
       - name: Install apt deps
@@ -82,6 +81,7 @@ jobs:
           VERBOSE=1 DISK=1 ./test/recover.sh
 
   jepsen:
+    if: ${{ github.event.issue.pull_request && contains(github.event.comment.body, 'please test downstream') }}
     uses: canonical/jepsen.dqlite/.github/workflows/test-build-run.yml@master
     with:
       raft-ref: refs/pull/${{ github.event.issue.number }}/head
