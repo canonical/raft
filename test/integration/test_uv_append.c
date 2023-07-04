@@ -688,6 +688,53 @@ TEST(append, barrierOpenSegments, setUp, tearDown, 0, blocking_bool_params)
     return MUNIT_OK;
 }
 
+/* Fill up 3 segments worth of AppendEntries RPC's.
+ * Request a 2 barriers and expect their callbacks to fire.
+ */
+TEST(append, twoBarriersOpenSegments, setUp, tearDown, 0, blocking_bool_params)
+{
+    struct fixture *f = data;
+    struct barrierData bd1 = {0};
+    bd1.current = 0;
+    bd1.expected = 3;
+    bd1.done = false;
+    bd1.expectDone = false;
+    bd1.uv = f->io.impl;
+    char *files[] = {"0000000000000001-0000000000000004",
+                     "0000000000000005-0000000000000008",
+                     "0000000000000009-0000000000000012", NULL};
+    bd1.files = files;
+    /* Only expect the callback to eventually fire. */
+    struct barrierData bd2 = {0};
+    bd2.uv = f->io.impl;
+
+    APPEND_SUBMIT_CB_DATA(0, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE,
+                          appendCbIncreaseCounterAssertResult, &bd1, 0);
+    APPEND_SUBMIT_CB_DATA(1, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE,
+                          appendCbIncreaseCounterAssertResult, &bd1, 0);
+    APPEND_SUBMIT_CB_DATA(2, MAX_SEGMENT_BLOCKS, SEGMENT_BLOCK_SIZE,
+                          appendCbIncreaseCounterAssertResult, &bd1, 0);
+
+    struct UvBarrier barrier1 = {0};
+    barrier1.data = (void *)&bd1;
+    barrier1.blocking =
+        (bool)strtoul(munit_parameters_get(params, "bool"), NULL, 0);
+    UvBarrier(f->io.impl, 1, &barrier1, barrierCbCompareCounter);
+    struct UvBarrier barrier2 = {0};
+    barrier2.data = (void *)&bd2;
+    barrier2.blocking =
+        (bool)strtoul(munit_parameters_get(params, "bool"), NULL, 0);
+    UvBarrier(f->io.impl, 1, &barrier2, barrierCbCompareCounter);
+
+    /* Make sure every callback fired */
+    LOOP_RUN_UNTIL(&bd1.done);
+    LOOP_RUN_UNTIL(&bd2.done);
+    APPEND_WAIT(0);
+    APPEND_WAIT(1);
+    APPEND_WAIT(2);
+    return MUNIT_OK;
+}
+
 /* Request a blocking Barrier and expect that the no AppendEntries RPC's are
  * finished before the Barrier callback is fired.
  */
