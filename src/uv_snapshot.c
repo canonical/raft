@@ -613,7 +613,6 @@ static void uvSnapshotPutBarrierCb(struct UvBarrier *barrier)
     }
 
     struct uv *uv = put->uv;
-    assert((barrier->blocking && put->trailing == 0) || !barrier->blocking);
     put->barrier.data = NULL;
     /* If we're closing, abort the request. */
     if (uv->closing) {

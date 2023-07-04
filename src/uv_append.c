@@ -768,11 +768,16 @@ int UvBarrier(struct uv *uv,
 
     /* Arrange for all open segments not already involved in other barriers to
      * be finalized as soon as their append requests get completed and mark them
-     * as involved in this specific barrier request.  */
+     * as involved in this specific barrier request. */
     QUEUE_FOREACH (head, &uv->append_segments) {
         struct uvAliveSegment *segment;
         segment = QUEUE_DATA(head, struct uvAliveSegment, queue);
         if (segment->barrier != NULL) {
+            /* If a non-blocking barrier precedes this blocking barrier, we want
+             * to also block all future writes. */
+            if (barrier->blocking) {
+                segment->barrier->blocking = true;
+            }
             continue;
         }
         segment->barrier = barrier;
@@ -784,6 +789,12 @@ int UvBarrier(struct uv *uv,
     }
 
     barrier->cb = cb;
+
+    /* Let's not continue writing new entries if something down the line
+     * asked us to stop writing. */
+    if (uv->barrier != NULL && barrier->blocking) {
+        uv->barrier->blocking = true;
+    }
 
     if (uv->barrier == NULL) {
         uv->barrier = barrier;
