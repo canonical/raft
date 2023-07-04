@@ -754,6 +754,17 @@ bool UvBarrierReady(struct uv *uv)
     return true;
 }
 
+void UvBarrierTrigger(struct UvBarrier *barrier)
+{
+    if (!barrier) {
+        return;
+    }
+
+    if (barrier->cb) {
+        barrier->cb(barrier);
+    }
+}
+
 int UvBarrier(struct uv *uv,
               raft_index next_index,
               struct UvBarrier *barrier,
@@ -805,7 +816,7 @@ int UvBarrier(struct uv *uv,
         if (QUEUE_IS_EMPTY(&uv->append_segments) &&
             QUEUE_IS_EMPTY(&uv->finalize_reqs) &&
             uv->finalize_work.data == NULL) {
-            barrier->cb(barrier);
+            UvBarrierTrigger(barrier);
         }
     }
 
@@ -843,9 +854,7 @@ static void uvBarrierClose(struct uv *uv)
         segment = QUEUE_DATA(head, struct uvAliveSegment, queue);
         if (segment->barrier != NULL && segment->barrier != barrier) {
             barrier = segment->barrier;
-            if (barrier->cb != NULL) {
-                barrier->cb(barrier);
-            }
+            UvBarrierTrigger(barrier);
             if (segment->barrier == uv->barrier) {
                 uv->barrier = NULL;
             }
@@ -872,8 +881,8 @@ static void uvBarrierClose(struct uv *uv)
      * that the open segment it was associated with has started to be finalized
      * and is not anymore in the append_segments queue. Let's cancel that
      * too. */
-    if (uv->barrier != NULL && uv->barrier->cb != NULL) {
-        uv->barrier->cb(uv->barrier);
+    if (uv->barrier != NULL) {
+        UvBarrierTrigger(uv->barrier);
         uv->barrier = NULL;
     }
 }

@@ -90,9 +90,9 @@ static void uvFinalizeAfterWorkCb(uv_work_t *work, int status)
      * barrier to unblock or if we are done closing. */
     if (QUEUE_IS_EMPTY(&uv->finalize_reqs)) {
         tracef("unblock barrier or close");
-        if (uv->barrier != NULL && UvBarrierReady(uv) &&
-            uv->barrier->cb != NULL) {
-            uv->barrier->cb(uv->barrier);
+        if (uv->barrier != NULL && UvBarrierReady(uv)) {
+            UvBarrierTrigger(uv->barrier);
+            /* TODO set barrier to NULL here? */
         }
         uvMaybeFireCloseCb(uv);
         return;

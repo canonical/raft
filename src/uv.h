@@ -360,6 +360,9 @@ int UvBarrier(struct uv *uv,
               struct UvBarrier *barrier,
               UvBarrierCb cb);
 
+/* Trigger all associated callbacks for this @barrier. */
+void UvBarrierTrigger(struct UvBarrier *barrier);
+
 /* Returns @true if there are no more segments referencing uv->barrier */
 bool UvBarrierReady(struct uv *uv);
 
