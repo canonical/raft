@@ -328,13 +328,24 @@ int UvAppend(struct raft_io *io,
              raft_io_append_cb cb);
 
 /* Pause request object and callback. */
-struct UvBarrier;
-typedef void (*UvBarrierCb)(struct UvBarrier *req);
+struct UvBarrierReq;
+
+/* A barrier cb that plans to perform work on the threadpool MUST exit early
+ * and cleanup resources when it detects uv->closing, this is to allow forced
+ * closing on shutdown. */
+typedef void (*UvBarrierCb)(struct UvBarrierReq *req);
+struct UvBarrierReq
+{
+    bool blocking;  /* Whether this barrier should block future writes */
+    void *data;     /* User data */
+    UvBarrierCb cb; /* Completion callback */
+    queue queue;    /* Queue of reqs triggered by a UvBarrier */
+};
+
 struct UvBarrier
 {
-    void *data;     /* User data */
-    bool blocking;  /* Whether this barrier should block future writes */
-    UvBarrierCb cb; /* Completion callback */
+    bool blocking; /* Whether this barrier should block future writes */
+    queue reqs;    /* Queue of UvBarrierReq */
 };
 
 /* Submit a barrier request to interrupt the normal flow of append
@@ -355,13 +366,16 @@ struct UvBarrier
  * This API is used to implement truncate and snapshot install operations, which
  * need to wait until all pending writes have settled and modify the log state,
  * changing the next index. */
-int UvBarrier(struct uv *uv,
-              raft_index next_index,
-              struct UvBarrier *barrier,
-              UvBarrierCb cb);
+int UvBarrier(struct uv *uv, raft_index next_index, struct UvBarrierReq *req);
 
-/* Trigger all associated callbacks for this @barrier. */
-void UvBarrierTrigger(struct UvBarrier *barrier);
+/* Trigger a callback for a barrier request in this @barrier. Returns true if a
+ * callback was triggered, false if there are no more requests to trigger.
+ * A barrier callback will call UvUnblock, which in turn will try to run the
+ * next callback, if any, from a barrier request in this barrier. */
+bool UvBarrierMaybeTrigger(struct UvBarrier *barrier);
+
+/* Add a Barrier @req to an existing @barrier. */
+void UvBarrierAddReq(struct UvBarrier *barrier, struct UvBarrierReq *req);
 
 /* Returns @true if there are no more segments referencing uv->barrier */
 bool UvBarrierReady(struct uv *uv);

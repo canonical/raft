@@ -75,7 +75,8 @@ static void uvFinalizeAfterWorkCb(uv_work_t *work, int status)
 {
     struct uvDyingSegment *segment = work->data;
     struct uv *uv = segment->uv;
-    tracef("uv finalize after work cb status:%d", status);
+    tracef("uv finalize after work segment %p cb status:%d", (void *)segment,
+           status);
     queue *head;
     int rv;
 
@@ -91,8 +92,7 @@ static void uvFinalizeAfterWorkCb(uv_work_t *work, int status)
     if (QUEUE_IS_EMPTY(&uv->finalize_reqs)) {
         tracef("unblock barrier or close");
         if (uv->barrier != NULL && UvBarrierReady(uv)) {
-            UvBarrierTrigger(uv->barrier);
-            /* TODO set barrier to NULL here? */
+            UvBarrierMaybeTrigger(uv->barrier);
         }
         uvMaybeFireCloseCb(uv);
         return;
