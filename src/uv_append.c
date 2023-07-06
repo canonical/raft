@@ -924,15 +924,13 @@ static void uvBarrierClose(struct uv *uv)
     QUEUE_FOREACH (head, &uv->append_segments) {
         struct uvAliveSegment *segment;
         segment = QUEUE_DATA(head, struct uvAliveSegment, queue);
-        if (segment->barrier != NULL && segment->barrier != barrier) {
+        if (segment->barrier != NULL && segment->barrier != barrier &&
+            segment->barrier != uv->barrier) {
             barrier = segment->barrier;
             /* Fire all barrier cb's, this is safe because the barrier cb exits
              * early when uv->closing is true. */
             uvBarrierTriggerAll(barrier);
             RaftHeapFree(barrier);
-            if (segment->barrier == uv->barrier) {
-                uv->barrier = NULL;
-            }
         }
         /* The segment->barrier field is used:
          *
@@ -952,13 +950,22 @@ static void uvBarrierClose(struct uv *uv)
         segment->barrier = NULL;
     }
 
-    /* There might still still be a current barrier set on uv->barrier, meaning
+    /* There might still be a current barrier set on uv->barrier, meaning
      * that the open segment it was associated with has started to be finalized
-     * and is not anymore in the append_segments queue. Let's cancel that
-     * too. */
+     * and is not anymore in the append_segments queue. Let's cancel all
+     * untriggered barrier request callbacks too. */
     if (uv->barrier != NULL) {
         uvBarrierTriggerAll(uv->barrier);
-        uv->barrier = NULL;
+        /* Clear uv->barrier if there's no active work on the thread pool. When
+         * the work on the threadpool finishes, UvUnblock will notice
+         * we're closing, clear and free uv->barrier and call
+         * uvMaybeFireCloseCb. UnUnblock will not try to fire anymore barrier
+         * request callbacks because they were triggered in the line above. */
+        if (uv->snapshot_put_work.data == NULL &&
+            uv->truncate_work.data == NULL) {
+            RaftHeapFree(uv->barrier);
+            uv->barrier = NULL;
+        }
     }
 }
 
