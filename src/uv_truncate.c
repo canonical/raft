@@ -132,6 +132,7 @@ static void uvTruncateBarrierCb(struct UvBarrierReq *barrier)
     if (uv->closing) {
         tracef("closing => don't truncate");
         RaftHeapFree(truncate);
+        uvMaybeFireCloseCb(uv);
         return;
     }
 
