@@ -13,7 +13,7 @@
 struct uvTruncate
 {
     struct uv *uv;
-    struct UvBarrier barrier;
+    struct UvBarrierReq barrier;
     raft_index index;
     int status;
 };
@@ -118,7 +118,7 @@ static void uvTruncateAfterWorkCb(uv_work_t *work, int status)
     UvUnblock(uv);
 }
 
-static void uvTruncateBarrierCb(struct UvBarrier *barrier)
+static void uvTruncateBarrierCb(struct UvBarrierReq *barrier)
 {
     struct uvTruncate *truncate = barrier->data;
     struct uv *uv = truncate->uv;
@@ -132,6 +132,7 @@ static void uvTruncateBarrierCb(struct UvBarrier *barrier)
     if (uv->closing) {
         tracef("closing => don't truncate");
         RaftHeapFree(truncate);
+        uvMaybeFireCloseCb(uv);
         return;
     }
 
@@ -176,10 +177,11 @@ int UvTruncate(struct raft_io *io, raft_index index)
     truncate->index = index;
     truncate->barrier.data = truncate;
     truncate->barrier.blocking = true;
+    truncate->barrier.cb = uvTruncateBarrierCb;
 
     /* Make sure that we wait for any inflight writes to finish and then close
      * the current segment. */
-    rv = UvBarrier(uv, index, &truncate->barrier, uvTruncateBarrierCb);
+    rv = UvBarrier(uv, index, &truncate->barrier);
     if (rv != 0) {
         goto err_after_req_alloc;
     }

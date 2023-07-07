@@ -393,7 +393,7 @@ struct uvSnapshotPut
     } meta;
     char errmsg[RAFT_ERRMSG_BUF_SIZE];
     int status;
-    struct UvBarrier barrier;
+    struct UvBarrierReq barrier;
 };
 
 struct uvSnapshotGet
@@ -603,7 +603,7 @@ static void uvSnapshotPutStart(struct uvSnapshotPut *put)
     }
 }
 
-static void uvSnapshotPutBarrierCb(struct UvBarrier *barrier)
+static void uvSnapshotPutBarrierCb(struct UvBarrierReq *barrier)
 {
     /* Ensure that we don't invoke this callback more than once. */
     barrier->cb = NULL;
@@ -613,7 +613,6 @@ static void uvSnapshotPutBarrierCb(struct UvBarrier *barrier)
     }
 
     struct uv *uv = put->uv;
-    assert((barrier->blocking && put->trailing == 0) || !barrier->blocking);
     put->barrier.data = NULL;
     /* If we're closing, abort the request. */
     if (uv->closing) {
@@ -659,6 +658,7 @@ int UvSnapshotPut(struct raft_io *io,
     put->trailing = trailing;
     put->barrier.data = put;
     put->barrier.blocking = trailing == 0;
+    put->barrier.cb = uvSnapshotPutBarrierCb;
 
     req->cb = cb;
 
@@ -692,7 +692,7 @@ int UvSnapshotPut(struct raft_io *io,
      * and we don't change append_next_index. */
     next_index =
         (trailing == 0) ? (snapshot->index + 1) : uv->append_next_index;
-    rv = UvBarrier(uv, next_index, &put->barrier, uvSnapshotPutBarrierCb);
+    rv = UvBarrier(uv, next_index, &put->barrier);
     if (rv != 0) {
         goto err_after_configuration_encode;
     }

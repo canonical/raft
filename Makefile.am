@@ -208,6 +208,7 @@ test_integration_uv_SOURCES = \
   test/integration/test_uv_tcp_listen.c \
   test/integration/test_uv_snapshot_put.c \
   test/integration/test_uv_truncate.c \
+  test/integration/test_uv_truncate_snapshot.c \
   test/integration/test_uv_work.c
 test_integration_uv_CFLAGS = $(AM_CFLAGS) -Wno-type-limits -Wno-conversion
 test_integration_uv_LDFLAGS = -no-install

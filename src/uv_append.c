@@ -754,11 +754,49 @@ bool UvBarrierReady(struct uv *uv)
     return true;
 }
 
-int UvBarrier(struct uv *uv,
-              raft_index next_index,
-              struct UvBarrier *barrier,
-              UvBarrierCb cb)
+bool UvBarrierMaybeTrigger(struct UvBarrier *barrier)
 {
+    if (!barrier) {
+        return false;
+    }
+
+    if (!QUEUE_IS_EMPTY(&barrier->reqs)) {
+        queue *head;
+        struct UvBarrierReq *r;
+        head = QUEUE_HEAD(&barrier->reqs);
+        QUEUE_REMOVE(head);
+        r = QUEUE_DATA(head, struct UvBarrierReq, queue);
+        r->cb(r);
+        return true;
+    }
+
+    return false;
+}
+
+/* Used during cleanup. */
+static void uvBarrierTriggerAll(struct UvBarrier *barrier)
+{
+    while (UvBarrierMaybeTrigger(barrier)) {
+        ;
+    }
+}
+
+struct UvBarrier *uvBarrierAlloc(void)
+{
+    struct UvBarrier *barrier;
+    barrier = RaftHeapMalloc(sizeof(*barrier));
+    if (!barrier) {
+        return NULL;
+    }
+    QUEUE_INIT(&barrier->reqs);
+    return barrier;
+}
+
+int UvBarrier(struct uv *uv, raft_index next_index, struct UvBarrierReq *req)
+{
+    /* The barrier to attach to. */
+    struct UvBarrier *barrier = NULL;
+    struct uvAliveSegment *segment = NULL;
     queue *head;
 
     assert(!uv->closing);
@@ -768,14 +806,28 @@ int UvBarrier(struct uv *uv,
 
     /* Arrange for all open segments not already involved in other barriers to
      * be finalized as soon as their append requests get completed and mark them
-     * as involved in this specific barrier request.  */
+     * as involved in this specific barrier request. */
     QUEUE_FOREACH (head, &uv->append_segments) {
-        struct uvAliveSegment *segment;
         segment = QUEUE_DATA(head, struct uvAliveSegment, queue);
         if (segment->barrier != NULL) {
+            /* If a non-blocking barrier precedes this blocking request, we want
+             * to also block all future writes. */
+            if (req->blocking) {
+                segment->barrier->blocking = true;
+            }
             continue;
         }
+
+        if (!barrier) {
+            barrier = uvBarrierAlloc();
+            if (!barrier) {
+                return RAFT_NOMEM;
+            }
+            /* And add the request to the barrier. */
+            UvBarrierAddReq(barrier, req);
+        }
         segment->barrier = barrier;
+
         if (segment == uvGetCurrentAliveSegment(uv)) {
             uvFinalizeCurrentAliveSegmentOnceIdle(uv);
             continue;
@@ -783,8 +835,32 @@ int UvBarrier(struct uv *uv,
         segment->finalize = true;
     }
 
-    barrier->cb = cb;
+    /* Unable to attach to a segment, because all segments are involved in a
+     * barrier, or there are no segments. */
+    if (barrier == NULL) {
+        /* Attach req to last segment barrier. */
+        if (segment != NULL) {
+            barrier = segment->barrier;
+            /* There is no segment, attach to uv->barrier. */
+        } else if (uv->barrier != NULL) {
+            barrier = uv->barrier;
+            /* There is no uv->barrier, make new one. */
+        } else {
+            barrier = uvBarrierAlloc();
+            if (!barrier) {
+                return RAFT_NOMEM;
+            }
+        }
+        UvBarrierAddReq(barrier, req);
+    }
 
+    /* Let's not continue writing new entries if something down the line
+     * asked us to stop writing. */
+    if (uv->barrier != NULL && req->blocking) {
+        uv->barrier->blocking = true;
+    }
+
+    assert(barrier != NULL);
     if (uv->barrier == NULL) {
         uv->barrier = barrier;
         /* If there's no pending append-related activity, we can fire the
@@ -794,7 +870,8 @@ int UvBarrier(struct uv *uv,
         if (QUEUE_IS_EMPTY(&uv->append_segments) &&
             QUEUE_IS_EMPTY(&uv->finalize_reqs) &&
             uv->finalize_work.data == NULL) {
-            barrier->cb(barrier);
+            /* Not interested in return value. */
+            UvBarrierMaybeTrigger(barrier);
         }
     }
 
@@ -803,8 +880,16 @@ int UvBarrier(struct uv *uv,
 
 void UvUnblock(struct uv *uv)
 {
-    tracef("uv unblock");
-    tracef("clear uv barrier");
+    /* First fire all pending barrier requests. Unblock will be called again
+     * when that request's callback is fired.  */
+    if (UvBarrierMaybeTrigger(uv->barrier)) {
+        tracef("UvUnblock triggered barrier request callback.");
+        return;
+    }
+
+    /* All requests in barrier are finished. */
+    tracef("UvUnblock queue empty");
+    RaftHeapFree(uv->barrier);
     uv->barrier = NULL;
     if (uv->closing) {
         uvMaybeFireCloseCb(uv);
@@ -819,6 +904,15 @@ void UvUnblock(struct uv *uv)
     }
 }
 
+void UvBarrierAddReq(struct UvBarrier *barrier, struct UvBarrierReq *req)
+{
+    assert(barrier != NULL);
+    assert(req != NULL);
+    /* Once there's a blocking req, this barrier becomes blocking. */
+    barrier->blocking |= req->blocking;
+    QUEUE_PUSH(&barrier->reqs, &req->queue);
+}
+
 /* Fire all pending barrier requests, the barrier callback will notice that
  * we're closing and abort there. */
 static void uvBarrierClose(struct uv *uv)
@@ -830,14 +924,13 @@ static void uvBarrierClose(struct uv *uv)
     QUEUE_FOREACH (head, &uv->append_segments) {
         struct uvAliveSegment *segment;
         segment = QUEUE_DATA(head, struct uvAliveSegment, queue);
-        if (segment->barrier != NULL && segment->barrier != barrier) {
+        if (segment->barrier != NULL && segment->barrier != barrier &&
+            segment->barrier != uv->barrier) {
             barrier = segment->barrier;
-            if (barrier->cb != NULL) {
-                barrier->cb(barrier);
-            }
-            if (segment->barrier == uv->barrier) {
-                uv->barrier = NULL;
-            }
+            /* Fire all barrier cb's, this is safe because the barrier cb exits
+             * early when uv->closing is true. */
+            uvBarrierTriggerAll(barrier);
+            RaftHeapFree(barrier);
         }
         /* The segment->barrier field is used:
          *
@@ -857,13 +950,22 @@ static void uvBarrierClose(struct uv *uv)
         segment->barrier = NULL;
     }
 
-    /* There might still still be a current barrier set on uv->barrier, meaning
+    /* There might still be a current barrier set on uv->barrier, meaning
      * that the open segment it was associated with has started to be finalized
-     * and is not anymore in the append_segments queue. Let's cancel that
-     * too. */
-    if (uv->barrier != NULL && uv->barrier->cb != NULL) {
-        uv->barrier->cb(uv->barrier);
-        uv->barrier = NULL;
+     * and is not anymore in the append_segments queue. Let's cancel all
+     * untriggered barrier request callbacks too. */
+    if (uv->barrier != NULL) {
+        uvBarrierTriggerAll(uv->barrier);
+        /* Clear uv->barrier if there's no active work on the thread pool. When
+         * the work on the threadpool finishes, UvUnblock will notice
+         * we're closing, clear and free uv->barrier and call
+         * uvMaybeFireCloseCb. UnUnblock will not try to fire anymore barrier
+         * request callbacks because they were triggered in the line above. */
+        if (uv->snapshot_put_work.data == NULL &&
+            uv->truncate_work.data == NULL) {
+            RaftHeapFree(uv->barrier);
+            uv->barrier = NULL;
+        }
     }
 }
 
