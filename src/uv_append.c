@@ -110,7 +110,11 @@ static void uvAppendFinishRequestsInQueue(struct uv *uv, queue *q, int status)
         append = QUEUE_DATA(head, struct uvAppend, queue);
         /* Rollback the append next index if the result was unsuccessful. */
         if (status != 0) {
+            tracef("rollback uv->append_next_index was:%llu",
+                   uv->append_next_index);
             uv->append_next_index -= append->n;
+            tracef("rollback uv->append_next_index now:%llu",
+                   uv->append_next_index);
         }
         QUEUE_REMOVE(head);
         QUEUE_PUSH(&queue_copy, head);
@@ -589,6 +593,7 @@ static int uvAppendEnqueueRequest(struct uv *uv, struct uvAppend *append)
     assert(append->entries != NULL);
     assert(append->n > 0);
     assert(uv->append_next_index > 0);
+    tracef("enqueue %u entries", append->n);
 
     size = uvAppendSize(append);
 
@@ -620,6 +625,7 @@ static int uvAppendEnqueueRequest(struct uv *uv, struct uvAppend *append)
     append->segment = segment;
     QUEUE_PUSH(&uv->append_pending_reqs, &append->queue);
     uv->append_next_index += append->n;
+    tracef("set uv->append_next_index %llu", uv->append_next_index);
 
     return 0;
 
@@ -803,6 +809,7 @@ int UvBarrier(struct uv *uv, raft_index next_index, struct UvBarrierReq *req)
 
     /* The next entry will be appended at this index. */
     uv->append_next_index = next_index;
+    tracef("UvBarrier uv->append_next_index:%llu", uv->append_next_index);
 
     /* Arrange for all open segments not already involved in other barriers to
      * be finalized as soon as their append requests get completed and mark them
