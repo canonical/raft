@@ -446,6 +446,7 @@ static void uvAliveSegmentPrepareCb(struct uvPrepare *req, int status)
     }
 
     if (status != 0) {
+        tracef("prepare segment failed (%d)", status);
         rv = status;
         goto err;
     }
@@ -459,11 +460,13 @@ static void uvAliveSegmentPrepareCb(struct uvPrepare *req, int status)
 
     rv = uvAliveSegmentReady(uv, req->fd, req->counter, segment);
     if (rv != 0) {
+        tracef("prepare segment ready failed (%d)", rv);
         goto err;
     }
 
     rv = uvAppendMaybeStart(uv);
     if (rv != 0) {
+        tracef("prepare segment start failed (%d)", rv);
         goto err;
     }
 
