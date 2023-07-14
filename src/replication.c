@@ -463,9 +463,9 @@ static struct request *getRequest(struct raft *r,
 }
 
 /* Invoked once a disk write request for new entries has been completed. */
-static void appendLeaderCb(struct raft_io_append *req, int status)
+static void appendLeaderCb(struct raft_io_append *append, int status)
 {
-    struct appendLeader *request = req->data;
+    struct appendLeader *request = append->data;
     struct raft *r = request->raft;
     size_t server_index;
     raft_index index;
@@ -476,19 +476,55 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
 
     /* In case of a failed disk write, if we were the leader creating these
      * entries in the first place, truncate our log too (since we have appended
-     * these entries to it) and fire the request callback.
+     * these entries to it) and fire the request callbacks.
      *
      * Afterward, convert immediately to follower state, giving the cluster a
      * chance to elect another leader that doesn't have a full disk (or whatever
      * caused our write error). */
     if (status != 0) {
-        struct raft_apply *apply;
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
-        apply =
-            (struct raft_apply *)getRequest(r, request->index, RAFT_COMMAND);
-        if (apply != NULL) {
-            if (apply->cb != NULL) {
-                apply->cb(apply, status, NULL);
+        const struct raft_entry *entry;
+        for (unsigned i = 0; i < request->n; i++) {
+            entry = logGet(r->log, request->index + i);
+            assert(entry != NULL);
+            switch (entry->type) {
+                case RAFT_COMMAND: {
+                    struct raft_apply *apply;
+                    apply = (struct raft_apply *)getRequest(r, request->index,
+                                                            RAFT_COMMAND);
+                    if (apply != NULL) {
+                        if (apply->cb != NULL) {
+                            apply->cb(apply, status, NULL);
+                        }
+                    }
+                    break;
+                }
+                case RAFT_BARRIER: {
+                    struct raft_barrier *barrier;
+                    barrier = (struct raft_barrier *)getRequest(
+                        r, request->index, RAFT_BARRIER);
+                    if (barrier != NULL) {
+                        if (barrier->cb != NULL) {
+                            barrier->cb(barrier, status);
+                        }
+                    }
+                    break;
+                }
+                case RAFT_CHANGE: {
+                    struct raft_change *change;
+                    change = (struct raft_change *)getRequest(r, request->index,
+                                                              RAFT_CHANGE);
+                    if (change != NULL) {
+                        if (change->cb != NULL) {
+                            change->cb(change, status);
+                        }
+                    }
+                    break;
+                }
+                default:
+                    tracef("unknown request type, shutdown.");
+                    assert(false);
+                    break;
             }
         }
         goto out;

@@ -1615,7 +1615,7 @@ void raft_fixture_hook(struct raft_fixture *f, raft_fixture_event_cb hook)
     f->hook = hook;
 }
 
-void raft_fixture_elect(struct raft_fixture *f, unsigned i)
+void raft_fixture_start_elect(struct raft_fixture *f, unsigned i)
 {
     struct raft *raft = raft_fixture_get(f, i);
     unsigned j;
@@ -1637,7 +1637,12 @@ void raft_fixture_elect(struct raft_fixture *f, unsigned i)
      * the minimum possible value compatible with its current state. */
     minimizeRandomizedElectionTimeout(f, i);
     maximizeAllRandomizedElectionTimeoutsExcept(f, i);
+}
 
+void raft_fixture_elect(struct raft_fixture *f, unsigned i)
+{
+    struct raft *raft = raft_fixture_get(f, i);
+    raft_fixture_start_elect(f, i);
     raft_fixture_step_until_has_leader(f, ELECTION_TIMEOUT * 20);
     assert(f->leader_id == raft->id);
 }

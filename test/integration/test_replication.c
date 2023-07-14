@@ -1179,3 +1179,24 @@ TEST(replication, lastStoredLaggingBehindCommitIndex, setUp, tearDown, 0, NULL)
 
     return MUNIT_OK;
 }
+
+/* A leader with faulty disk fails to persist the barrier entry upon election.
+ */
+TEST(replication, failPersistBarrier, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    CLUSTER_GROW;
+
+    /* Server 0 will fail to persist entry 2, a barrier */
+    CLUSTER_IO_FAULT(0, 10, 1);
+
+    /* Server 0 gets elected and creates a barrier entry at index 2 */
+    CLUSTER_BOOTSTRAP;
+    CLUSTER_START;
+    CLUSTER_START_ELECT(0);
+
+    /* Cluster recovers. */
+    CLUSTER_STEP_UNTIL_HAS_LEADER(20000);
+
+    return MUNIT_OK;
+}
