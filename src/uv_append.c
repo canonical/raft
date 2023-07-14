@@ -202,7 +202,7 @@ static void uvAliveSegmentWriteCb(struct UvWriterReq *write, const int status)
     if (status != 0) {
         Tracef(uv->tracer, "write: %s", uv->io->errmsg);
         uv->errored = true;
-        goto out;
+        goto err;
     }
 
     s->written = s->next_block * uv->block_size + s->pending.n;
@@ -256,7 +256,6 @@ static void uvAliveSegmentWriteCb(struct UvWriterReq *write, const int status)
         }
     }
 
-out:
     /* Fire the callbacks of all requests that were fulfilled with this
      * write. */
     uvAppendFinishWritingRequests(uv, status);
@@ -284,6 +283,30 @@ out:
          * causing the BarrierCb to never fire), but check that the callbacks
          * that fired after completion of this write didn't already close the
          * segment. */
+        uvAliveSegmentFinalize(s);
+    }
+
+    return;
+
+err:
+    /* Cancel all append related activity. */
+    uvAppendFinishWritingRequests(uv, status);
+    uvAppendFinishPendingRequests(uv, status);
+
+    /* The 2 above calls will have reset uv->append_next_index, we have to
+     * ensure:
+     * a) That the raft log has been truncated as from the first index that
+     * failed writing.
+     * b) All log entries prior to s->first_index are safely on disk.
+     * c) None of the log entries as of s->first_index are written or in the
+     * process of being written.
+     * */
+
+    /* During the closing sequence we should have already canceled all pending
+     * request. */
+    if (uv->closing) {
+        assert(QUEUE_IS_EMPTY(&uv->append_pending_reqs));
+        assert(s->finalize);
         uvAliveSegmentFinalize(s);
     }
 }
