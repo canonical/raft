@@ -47,6 +47,7 @@
         rv_ = raft_uv_init(&f->io, &f->loop, f->dir, &f->transport); \
         munit_assert_int(rv_, ==, 0);                                \
         raft_uv_set_tracer(&f->io, &f->tracer);                      \
+        raft_uv_set_auto_recovery(&f->io, false);                    \
         rv_ = f->io.init(&f->io, 1, "127.0.0.1:9001");               \
         munit_assert_int(rv_, ==, 0);                                \
     } while (0)
