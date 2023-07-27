@@ -138,15 +138,21 @@ RAFT_API unsigned raft_fixture_leader_index(struct raft_fixture *f);
 RAFT_API raft_id raft_fixture_voted_for(struct raft_fixture *f, unsigned i);
 
 /**
- * Drive the cluster so the @i'th server gets elected as leader.
+ * Drive the cluster so the @i'th server starts an election but doesn't
+ * necessarily win it.
  *
  * This is achieved by bumping the randomized election timeout of all other
- * servers to a very high value, letting the one of the @i'th server expire and
- * then stepping the cluster until the election is won.
+ * servers to a very high value, letting the one of the @i'th server expire.
  *
  * There must currently be no leader and no candidate and the given server must
  * be a voting one. Also, the @i'th server must be connected to a majority of
  * voting servers.
+ */
+RAFT_API void raft_fixture_start_elect(struct raft_fixture *f, unsigned i);
+
+/**
+ * Calls raft_fixture_start_elect, but waits and asserts that the @i'th server
+ * has become the leader.
  */
 RAFT_API void raft_fixture_elect(struct raft_fixture *f, unsigned i);
 

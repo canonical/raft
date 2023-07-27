@@ -356,6 +356,9 @@
 /* Elect the I'th server. */
 #define CLUSTER_ELECT(I) raft_fixture_elect(&f->cluster, I)
 
+/* Start to elect the I'th server. */
+#define CLUSTER_START_ELECT(I) raft_fixture_start_elect(&f->cluster, I)
+
 /* Depose the current leader */
 #define CLUSTER_DEPOSE raft_fixture_depose(&f->cluster)
 
