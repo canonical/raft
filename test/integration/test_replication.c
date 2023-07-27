@@ -1073,15 +1073,25 @@ TEST(replication, resultRetry, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
+static void applyAssertStatusCb(struct raft_apply *req,
+                                int status,
+                                void *result)
+{
+    (void)result;
+    int status_expected = (int)(intptr_t)(req->data);
+    munit_assert_int(status_expected, ==, status);
+}
+
 /* When the leader fails to write some new entries to disk, it steps down. */
 TEST(replication, diskWriteFailure, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_apply *req = munit_malloc(sizeof(*req));
+    req->data = (void *)(intptr_t)RAFT_IOERR;
     BOOTSTRAP_START_AND_ELECT;
 
     CLUSTER_IO_FAULT(0, 1, 1);
-    CLUSTER_APPLY_ADD_X(0, req, 1, NULL);
+    CLUSTER_APPLY_ADD_X(0, req, 1, applyAssertStatusCb);
     /* The leader steps down when its disk write fails. */
     CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_FOLLOWER, 2000);
     free(req);
@@ -1176,6 +1186,27 @@ TEST(replication, lastStoredLaggingBehindCommitIndex, setUp, tearDown, 0, NULL)
      * it. */
     CLUSTER_RECONNECT(0, 1);
     CLUSTER_STEP_UNTIL_APPLIED(0, 3, 20000);
+
+    return MUNIT_OK;
+}
+
+/* A leader with faulty disk fails to persist the barrier entry upon election.
+ */
+TEST(replication, failPersistBarrier, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    CLUSTER_GROW;
+
+    /* Server 0 will fail to persist entry 2, a barrier */
+    CLUSTER_IO_FAULT(0, 10, 1);
+
+    /* Server 0 gets elected and creates a barrier entry at index 2 */
+    CLUSTER_BOOTSTRAP;
+    CLUSTER_START;
+    CLUSTER_START_ELECT(0);
+
+    /* Cluster recovers. */
+    CLUSTER_STEP_UNTIL_HAS_LEADER(20000);
 
     return MUNIT_OK;
 }
