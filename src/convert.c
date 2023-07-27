@@ -190,6 +190,8 @@ int convertToLeader(struct raft *r)
 {
     int rv;
 
+    tracef("become leader for term %llu", r->current_term);
+
     convertClear(r);
     convertSetState(r, RAFT_LEADER);
 
