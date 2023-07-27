@@ -145,6 +145,7 @@ int electionStart(struct raft *r)
             tracef("set_term failed %d", rv);
             goto err;
         }
+        tracef("beginning of term %llu", term);
 
         /* Vote for self */
         rv = r->io->set_vote(r->io, r->id);
