@@ -790,13 +790,14 @@ static void uvBarrierTriggerAll(struct UvBarrier *barrier)
     }
 }
 
-struct UvBarrier *uvBarrierAlloc(void)
+static struct UvBarrier *uvBarrierCreate(void)
 {
     struct UvBarrier *barrier;
-    barrier = RaftHeapMalloc(sizeof(*barrier));
+    barrier = RaftHeapCalloc(1, sizeof(*barrier));
     if (!barrier) {
         return NULL;
     }
+    barrier->blocking = false;
     QUEUE_INIT(&barrier->reqs);
     return barrier;
 }
@@ -829,7 +830,7 @@ int UvBarrier(struct uv *uv, raft_index next_index, struct UvBarrierReq *req)
         }
 
         if (!barrier) {
-            barrier = uvBarrierAlloc();
+            barrier = uvBarrierCreate();
             if (!barrier) {
                 return RAFT_NOMEM;
             }
@@ -856,7 +857,7 @@ int UvBarrier(struct uv *uv, raft_index next_index, struct UvBarrierReq *req)
             barrier = uv->barrier;
             /* There is no uv->barrier, make new one. */
         } else {
-            barrier = uvBarrierAlloc();
+            barrier = uvBarrierCreate();
             if (!barrier) {
                 return RAFT_NOMEM;
             }
