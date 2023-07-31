@@ -770,113 +770,37 @@ TEST(election, preVoteNoStaleVotes, setUp, tearDown, 0, cluster_3_params)
     return MUNIT_OK;
 }
 
-static char *unpersisted_entries_n[] = {"4", NULL};
-static char *unpersisted_entries_n_voting[] = {"3", NULL};
-
-static MunitParameterEnum unpersisted_entries_params[] = {
-    {CLUSTER_N_PARAM, unpersisted_entries_n},
-    {CLUSTER_N_VOTING_PARAM, unpersisted_entries_n_voting},
-    {NULL, NULL},
-};
-
-/* When starting an election and sending RequestVote messages, the candidate
- * node reports the index and term of its last persisted entry, not of the last
- * entry in its in-memory cache of the log, which might contain entries that are
- * still being persisted.
- *
- * In particular, this test exercises the case where the candidate has a not yet
- * persisted a configuration change entry in which the candidate is actually not
- * a voter anymore. Since we apply new pending configuration entries only once
- * persisted, the node is still using the old configuration, where it is a voter
- * and this is the reason why it converted to candidate despite having in its
- * in-memory log also an entry where it's not a voter anymore. That is all fine,
- * however if this candidate reported the index of the last entry in its
- * in-memory log cache as opposed to the last persisted one two bad things would
- * happen.
- */
-TEST(election,
-     startElectionWithUnpersistedEntries,
-     setUp,
-     tearDown,
-     0,
-     unpersisted_entries_params)
+/* A follower doesn't convert to candidate while waiting for log entries to be
+ * persisted. */
+TEST(election, inFlightAppendBlocksCandidacy, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    struct raft_change req;
-    int rv;
+    struct raft_apply req;
 
-    /* Server 1 takes a very long time to persist entries. */
+    /* Server 1 takes a long time to persist entries. */
     CLUSTER_SET_DISK_LATENCY(1, 10000);
-
-    /* Disconnect server 1 from server 0, so it won't vote for it. */
-    CLUSTER_SATURATE(0, 1);
-    CLUSTER_SATURATE(1, 0);
 
     CLUSTER_START;
 
-    /* Server 0 wins elections for term 2, with vote from server 2. */
-    CLUSTER_STEP_UNTIL_HAS_LEADER(1500);
-    munit_assert_int(CLUSTER_LEADER, ==, 0);
+    /* Server 0 is the leader. It replicates a log entry. */
+    CLUSTER_ELECT(0);
+    CLUSTER_APPLY_ADD_X(0, &req, 1, NULL);
 
-    /* Demote server 1 to stand-by. */
-    rv = raft_assign(CLUSTER_RAFT(0), &req, 2 /* ID */, RAFT_STANDBY, NULL);
-    munit_assert_int(rv, ==, 0);
-    CLUSTER_STEP_UNTIL_APPLIED(0, 3 /* entry index */, 1000);
+    /* Server 1 receives the entry. */
+    CLUSTER_STEP_UNTIL_DELIVERED(0, 1, 1000);
 
-    /* Promote server 3 to voter. */
-    rv = raft_assign(CLUSTER_RAFT(0), &req, 4, RAFT_VOTER, NULL);
-    munit_assert_int(rv, ==, 0);
-
-    /* Wait for server 3 to become aware that it's a voter. */
-    CLUSTER_STEP_UNTIL_APPLIED(3, 4 /* entry index */, 1000);
-
-    /* In the meantime server 1 has timeout and has started an (unsuccessful)
-     * election. */
-    munit_assert_int(CLUSTER_STATE(1), ==, RAFT_CANDIDATE);
-
-    /* Reconnect server 1 to server 0, so it will receive up to index 4,
-     * although it won't persist it since it has a high disk latency. */
-    CLUSTER_DESATURATE(0, 1);
-    CLUSTER_DESATURATE(1, 0);
-
-    /* Wait for server 1 to get contacted by server 0, steps down receive
-     * entries from it */
-    CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_FOLLOWER, 500);
-    munit_assert_int(raft_last_index(CLUSTER_RAFT(1)), ==, 4);
-
-    /* Create a network partition, with server 0 and 3 in one partition and
-     * server 1 and 2 in another partition. */
+    /* Contact is lost between servers 0 and 1. */
     CLUSTER_SATURATE(0, 1);
     CLUSTER_SATURATE(1, 0);
-    CLUSTER_SATURATE(0, 2);
-    CLUSTER_SATURATE(2, 0);
-    CLUSTER_SATURATE(3, 1);
-    CLUSTER_SATURATE(1, 3);
-    CLUSTER_SATURATE(3, 2);
-    CLUSTER_SATURATE(2, 3);
 
-    /* Eventually both server 1 and server 2 time out and start elections,
-     * because they have been disconnected from the leader.
-     *
-     * Server 1 is not a voter in the latest configuration at index 4, but it
-     * nevertheless converts to candidate as it's still using the original
-     * configuration at index 3, because it did receive the configuration at
-     * index 4, but hasn't persisted it yet. */
-    CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_CANDIDATE, 1500);
-    CLUSTER_STEP_UNTIL_STATE_IS(2, RAFT_CANDIDATE, 1500);
+    /* Several election timeouts lapse, but server 1 does not become a
+     * candidate, because it's waiting for the entry to be persisted. */
+    CLUSTER_STEP_UNTIL_ELAPSED(5000);
+    munit_assert_int(CLUSTER_STATE(1), ==, RAFT_FOLLOWER);
 
-    /* Server 2 can't win the election, because it does not consider server 1 a
-     * voter, according to the configuration at index 4.
-     *
-     * Server 1 also can't win the election, because the last index it sends is
-     * the index of its last persisted entry (entry 1), and so server 2 doesn't
-     * grant its vote. */
-    CLUSTER_STEP_UNTIL_ELAPSED(3000);
-    CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_CANDIDATE, 1500);
-    CLUSTER_STEP_UNTIL_STATE_IS(2, RAFT_CANDIDATE, 1500);
-
-    /* Server 0 is still leader, since it can contact server 3. */
-    munit_assert_int(CLUSTER_STATE(0), ==, RAFT_LEADER);
+    /* Eventually, server 1 finishes persisting the entry and becomes a
+     * candidate. */
+    CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_CANDIDATE, 10000);
 
     return MUNIT_OK;
 }
