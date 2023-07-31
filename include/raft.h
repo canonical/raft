@@ -749,7 +749,8 @@ struct raft
                 raft_id id;
                 char *address;
             } current_leader;
-            uint64_t reserved[8]; /* Future use */
+            uint64_t append_in_flight_count;
+            uint64_t reserved[7]; /* Future use */
         } follower_state;
         struct
         {
