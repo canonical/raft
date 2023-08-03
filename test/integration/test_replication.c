@@ -1207,6 +1207,74 @@ TEST(replication, failPersistBarrier, setUp, tearDown, 0, NULL)
 
     /* Cluster recovers. */
     CLUSTER_STEP_UNTIL_HAS_LEADER(20000);
+    return MUNIT_OK;
+}
 
+/* This test checks that a node that converts from follower to candidate
+ * while persisting a config change entry does not use its previous
+ * configuration for election accounting, which would be unsound. */
+TEST(replication,
+     convertToCandidateWhilePersistingConfigChange,
+     setUp,
+     tearDown,
+     0,
+     NULL)
+{
+    struct fixture *f = data;
+    struct raft_change adds[5];
+    struct raft_change assigns[5];
+    int rv;
+
+    /* We start with servers 0 and 1. Server 1's disk is slowish. */
+    CLUSTER_SET_DISK_LATENCY(1, 5000);
+
+    /* Servers 0 and 1 are both voters. 0 wins the first election. */
+    BOOTSTRAP_START_AND_ELECT;
+    /* Three nodes join as spares. The corresponding log entries are
+     * replicated and committed. */
+    CLUSTER_ADD(&adds[2]);
+    CLUSTER_STEP_UNTIL_APPLIED(1, 3, 6000);
+    CLUSTER_ADD(&adds[3]);
+    CLUSTER_STEP_UNTIL_APPLIED(1, 4, 6000);
+    CLUSTER_ADD(&adds[4]);
+    CLUSTER_STEP_UNTIL_APPLIED(1, 5, 6000);
+    /* Now we try to promote each of the new nodes to voter, without
+     * waiting for server 1 to apply them. Server 0 is able to commit
+     * these changes with the help of the new nodes, and doesn't need
+     * to wait for server 1. */
+    rv = raft_assign(CLUSTER_RAFT(0), &assigns[2], 3, RAFT_VOTER, NULL);
+    munit_assert_int(rv, ==, 0);
+    CLUSTER_STEP_UNTIL_APPLIED(0, 6, 1000);
+    rv = raft_assign(CLUSTER_RAFT(0), &assigns[3], 4, RAFT_VOTER, NULL);
+    munit_assert_int(rv, ==, 0);
+    CLUSTER_STEP_UNTIL_APPLIED(0, 7, 1000);
+    rv = raft_assign(CLUSTER_RAFT(0), &assigns[4], 5, RAFT_VOTER, NULL);
+    munit_assert_int(rv, ==, 0);
+    CLUSTER_STEP_UNTIL_APPLIED(0, 8, 1000);
+    /* Server 1 is partitioned from the new nodes. */
+    CLUSTER_SATURATE_BOTHWAYS(1, 2);
+    CLUSTER_SATURATE_BOTHWAYS(1, 3);
+    CLUSTER_SATURATE_BOTHWAYS(1, 4);
+    /* Server 0 loses leadership. */
+    CLUSTER_DEPOSE;
+    /* Server 1 times out before anyone else and becomes a candidate. */
+    raft_fixture_start_elect2(&f->cluster, 1, 50);
+    CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_CANDIDATE, 1500);
+    /* Server 1 still hasn't finished persisting the promotion entries. It
+     * can't win an election because its last_stored index is too low. */
+    munit_assert_ullong(CLUSTER_RAFT(1)->last_stored, ==, 5);
+    /* Time passes. Eventually, server 1 finishes persisting the entries.
+     * But it can't win an election, because by the time its last_stored
+     * index has caught up with server 0, it is using a configuration that
+     * includes the new nodes as voters, and it can't win a majority in this
+     * expanded cluster. */
+    CLUSTER_STEP_UNTIL_ELAPSED(10000);
+    munit_assert_int(CLUSTER_STATE(1), ==, RAFT_CANDIDATE);
+    munit_assert_ullong(CLUSTER_RAFT(1)->last_stored, ==, 8);
+    /* More time passes. The cluster doesn't have a leader because server 0
+     * and the new nodes haven't timed out, and server 1 can't win for the
+     * reasons just described. */
+    CLUSTER_STEP_UNTIL_ELAPSED(10000);
+    munit_assert_uint(CLUSTER_LEADER, ==, 5);
     return MUNIT_OK;
 }

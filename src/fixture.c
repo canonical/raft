@@ -1596,12 +1596,13 @@ static void minimizeRandomizedElectionTimeout(struct raft_fixture *f,
 /* Set the randomized election timeout to the maximum value on all servers
  * except the given one. */
 static void maximizeAllRandomizedElectionTimeoutsExcept(struct raft_fixture *f,
-                                                        unsigned i)
+                                                        unsigned i,
+                                                        unsigned mul)
 {
     unsigned j;
     for (j = 0; j < f->n; j++) {
         struct raft *raft = &f->servers[j]->raft;
-        unsigned timeout = raft->election_timeout * 2;
+        unsigned timeout = raft->election_timeout * mul;
         if (j == i) {
             continue;
         }
@@ -1616,6 +1617,11 @@ void raft_fixture_hook(struct raft_fixture *f, raft_fixture_event_cb hook)
 }
 
 void raft_fixture_start_elect(struct raft_fixture *f, unsigned i)
+{
+    raft_fixture_start_elect2(f, i, 2);
+}
+
+void raft_fixture_start_elect2(struct raft_fixture *f, unsigned i, unsigned mul)
 {
     struct raft *raft = raft_fixture_get(f, i);
     unsigned j;
@@ -1636,7 +1642,7 @@ void raft_fixture_start_elect(struct raft_fixture *f, unsigned i)
      * value on all server expect the one to be elected, which is instead set to
      * the minimum possible value compatible with its current state. */
     minimizeRandomizedElectionTimeout(f, i);
-    maximizeAllRandomizedElectionTimeoutsExcept(f, i);
+    maximizeAllRandomizedElectionTimeoutsExcept(f, i, mul);
 }
 
 void raft_fixture_elect(struct raft_fixture *f, unsigned i)
@@ -1658,7 +1664,7 @@ void raft_fixture_depose(struct raft_fixture *f)
 
     /* Set a very large election timeout on all followers, to prevent them from
      * starting an election. */
-    maximizeAllRandomizedElectionTimeoutsExcept(f, leader_i);
+    maximizeAllRandomizedElectionTimeoutsExcept(f, leader_i, 2);
 
     /* Prevent all servers from sending append entries results, so the leader
      * will eventually step down. */

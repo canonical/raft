@@ -151,6 +151,12 @@ RAFT_API raft_id raft_fixture_voted_for(struct raft_fixture *f, unsigned i);
 RAFT_API void raft_fixture_start_elect(struct raft_fixture *f, unsigned i);
 
 /**
+ * Like raft_fixture_start_elect, but takes a custom multiplier for increasing
+ * the election timeout on the non-designated nodes.
+ */
+RAFT_API void raft_fixture_start_elect2(struct raft_fixture *f, unsigned i, unsigned mul);
+
+/**
  * Calls raft_fixture_start_elect, but waits and asserts that the @i'th server
  * has become the leader.
  */
