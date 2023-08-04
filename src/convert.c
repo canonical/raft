@@ -223,6 +223,10 @@ int convertToLeader(struct raft *r)
                r->last_stored, r->commit_index);
         r->commit_index = r->last_stored;
         rv = replicationApply(r);
+        if (rv != 0) {
+            return rv;
+        }
+        rv = replicationMaybeTakeSnapshot(r);
     } else if (n_voters > 1) {
         /* Raft Dissertation, paragraph 6.4:
          * The Leader Completeness Property guarantees that a leader has all

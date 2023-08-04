@@ -95,4 +95,7 @@ int replicationApply(struct raft *r);
  *   matchIndex[i] >= N, and log[N].term == currentTerm: set commitIndex = N */
 void replicationQuorum(struct raft *r, const raft_index index);
 
+/* Kick off a snapshot locally if the time is ripe. */
+int replicationMaybeTakeSnapshot(struct raft *r);
+
 #endif /* REPLICATION_H_ */

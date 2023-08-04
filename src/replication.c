@@ -553,6 +553,10 @@ static void appendLeaderCb(struct raft_io_append *append, int status)
     if (rv != 0) {
         /* TODO: just log the error? */
     }
+    rv = replicationMaybeTakeSnapshot(r);
+    if (rv != 0) {
+        /* TODO: just log the error? */
+    }
 
 out:
     /* Tell the log that we're done referencing these entries. */
@@ -789,6 +793,10 @@ int replicationUpdate(struct raft *r,
     replicationQuorum(r, last_index);
 
     rv = replicationApply(r);
+    if (rv != 0) {
+        /* TODO: just log the error? */
+    }
+    rv = replicationMaybeTakeSnapshot(r);
     if (rv != 0) {
         /* TODO: just log the error? */
     }
@@ -1481,27 +1489,6 @@ static void applyChange(struct raft *r, const raft_index index)
     }
 }
 
-static bool shouldTakeSnapshot(struct raft *r)
-{
-    /* If we are shutting down, let's not do anything. */
-    if (r->state == RAFT_UNAVAILABLE) {
-        return false;
-    }
-
-    /* If a snapshot is already in progress or we're installing a snapshot, we
-     * don't want to start another one. */
-    if (r->snapshot.pending.term != 0 || r->snapshot.put.data != NULL) {
-        return false;
-    };
-
-    /* If we didn't reach the threshold yet, do nothing. */
-    if (r->last_applied - r->log->snapshot.last_index < r->snapshot.threshold) {
-        return false;
-    }
-
-    return true;
-}
-
 /*
  * When taking a snapshot, ownership of the snapshot data is with raft if
  * `snapshot_finalize` is NULL.
@@ -1600,10 +1587,26 @@ static int takeSnapshotAsync(struct raft_io_async_work *take)
     return r->fsm->snapshot_async(r->fsm, &snapshot->bufs, &snapshot->n_bufs);
 }
 
-static int takeSnapshot(struct raft *r)
+int replicationMaybeTakeSnapshot(struct raft *r)
 {
     struct raft_snapshot *snapshot;
     int rv;
+
+    /* If we are shutting down, let's not do anything. */
+    if (r->state == RAFT_UNAVAILABLE) {
+        return 0;
+    }
+
+    /* If a snapshot is already in progress or we're installing a snapshot, we
+     * don't want to start another one. */
+    if (r->snapshot.pending.term != 0 || r->snapshot.put.data != NULL) {
+        return 0;
+    }
+
+    /* If we didn't reach the threshold yet, do nothing. */
+    if (r->last_applied - r->log->snapshot.last_index < r->snapshot.threshold) {
+        return 0;
+    }
 
     tracef("take snapshot at %lld", r->last_applied);
 
@@ -1702,10 +1705,6 @@ int replicationApply(struct raft *r)
         if (rv != 0) {
             break;
         }
-    }
-
-    if (shouldTakeSnapshot(r)) {
-        rv = takeSnapshot(r);
     }
 
     return rv;
