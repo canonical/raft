@@ -783,16 +783,6 @@ static MunitParameterEnum unpersisted_entries_params[] = {
  * node reports the index and term of its last persisted entry, not of the last
  * entry in its in-memory cache of the log, which might contain entries that are
  * still being persisted.
- *
- * In particular, this test exercises the case where the candidate has a not yet
- * persisted a configuration change entry in which the candidate is actually not
- * a voter anymore. Since we apply new pending configuration entries only once
- * persisted, the node is still using the old configuration, where it is a voter
- * and this is the reason why it converted to candidate despite having in its
- * in-memory log also an entry where it's not a voter anymore. That is all fine,
- * however if this candidate reported the index of the last entry in its
- * in-memory log cache as opposed to the last persisted one two bad things would
- * happen.
  */
 TEST(election,
      startElectionWithUnpersistedEntries,
@@ -855,15 +845,13 @@ TEST(election,
     CLUSTER_SATURATE(3, 2);
     CLUSTER_SATURATE(2, 3);
 
-    /* Eventually both server 1 and server 2 time out and start elections,
-     * because they have been disconnected from the leader.
-     *
-     * Server 1 is not a voter in the latest configuration at index 4, but it
-     * nevertheless converts to candidate as it's still using the original
-     * configuration at index 3, because it did receive the configuration at
-     * index 4, but hasn't persisted it yet. */
-    CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_CANDIDATE, 1500);
+    /* Eventually server 2 times out and starts an election, because it has been
+     * disconnected from the leader. Even though server 1 hasn't yet persisted
+     * the config change that demoted it, it still applied that change as soon
+     * as it learned from the leader that it was committed. */
     CLUSTER_STEP_UNTIL_STATE_IS(2, RAFT_CANDIDATE, 1500);
+    munit_assert_int(CLUSTER_RAFT(1)->configuration.servers[1].role, ==,
+                     RAFT_STANDBY);
 
     /* Server 2 can't win the election, because it does not consider server 1 a
      * voter, according to the configuration at index 4.
@@ -872,8 +860,9 @@ TEST(election,
      * the index of its last persisted entry (entry 1), and so server 2 doesn't
      * grant its vote. */
     CLUSTER_STEP_UNTIL_ELAPSED(3000);
-    CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_CANDIDATE, 1500);
     CLUSTER_STEP_UNTIL_STATE_IS(2, RAFT_CANDIDATE, 1500);
+    munit_assert_int(CLUSTER_RAFT(1)->configuration.servers[1].role, ==,
+                     RAFT_STANDBY);
 
     /* Server 0 is still leader, since it can contact server 3. */
     munit_assert_int(CLUSTER_STATE(0), ==, RAFT_LEADER);
