@@ -880,7 +880,6 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
     struct raft_append_entries *args = &request->args;
     struct raft_append_entries_result result;
     size_t i;
-    size_t j;
     int rv;
 
     tracef("I/O completed on follower: status %d", status);
@@ -921,35 +920,11 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
         goto out;
     }
 
-    /* Possibly apply configuration changes as uncommitted. */
-    for (j = 0; j < i; j++) {
-        struct raft_entry *entry = &args->entries[j];
-        raft_index index = request->index + j;
-        raft_term local_term = logTermOf(r->log, index);
-
-        assert(local_term != 0 && local_term == entry->term);
-
-        if (entry->type == RAFT_CHANGE) {
-            rv = membershipUncommittedChange(r, index, entry);
-            if (rv != 0) {
-                goto out;
-            }
-        }
-    }
-
-    /* From Figure 3.1:
-     *
-     *   AppendEntries RPC: Receiver implementation: If leaderCommit >
-     *   commitIndex, set commitIndex = min(leaderCommit, index of last new
-     *   entry).
-     */
-    if (args->leader_commit > r->commit_index &&
-        r->last_stored >= r->commit_index) {
-        r->commit_index = min(args->leader_commit, r->last_stored);
-        rv = replicationApply(r);
-        if (rv != 0) {
-            goto out;
-        }
+    /* Now that the new entries are persisted, check whether it's time to take
+     * a snapshot, unless one is already being installed. */
+    rv = replicationMaybeTakeSnapshot(r);
+    if (rv != 0) {
+        goto out;
     }
 
     /* If our state or term number has changed since receiving these entries,
@@ -1142,17 +1117,17 @@ int replicationAppend(struct raft *r,
      *   entry).
      */
     if (n == 0) {
-        if ((args->leader_commit > r->commit_index) &&
-            r->last_stored >= r->commit_index &&
-            !replicationInstallSnapshotBusy(r)) {
-            r->commit_index = min(args->leader_commit, r->last_stored);
-            rv = replicationApply(r);
-            if (rv != 0) {
-                return rv;
-            }
+        if (replicationInstallSnapshotBusy(r) ||
+            args->leader_commit <= r->commit_index) {
+            return 0;
         }
-
-        return 0;
+        r->commit_index = min(args->leader_commit, logLastIndex(r->log));
+        rv = replicationApply(r);
+        if (rv != 0) {
+            return rv;
+        }
+        rv = replicationMaybeTakeSnapshot(r);
+        return rv;
     }
 
     *async = true;
@@ -1214,7 +1189,34 @@ int replicationAppend(struct raft *r,
         goto err_after_acquire_entries;
     }
 
+    /* Possibly apply configuration changes as uncommitted. */
+    for (j = i; j < args->n_entries; j++) {
+        struct raft_entry *entry = &args->entries[j];
+        raft_index index = args->prev_log_index + 1 + j;
+        raft_term local_term = logTermOf(r->log, index);
+
+        assert(local_term != 0 && local_term == entry->term);
+
+        if (entry->type == RAFT_CHANGE) {
+            rv = membershipUncommittedChange(r, index, entry);
+            if (rv != 0) {
+                tracef("membershipUncommittedChange");
+                goto err_after_acquire_entries;
+            }
+        }
+    }
+
+    if (args->leader_commit > r->commit_index) {
+        r->commit_index = min(args->leader_commit, logLastIndex(r->log));
+        rv = replicationApply(r);
+        if (rv != 0) {
+            goto err_after_acquire_entries;
+        }
+        /* Don't try to take a snapshot while holding onto log entries. */
+    }
+
     entryBatchesDestroy(args->entries, args->n_entries);
+
     return 0;
 
 err_after_acquire_entries:
