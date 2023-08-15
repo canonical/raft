@@ -891,6 +891,7 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
     result.version = RAFT_APPEND_ENTRIES_RESULT_VERSION;
     result.features = RAFT_DEFAULT_FEATURE_FLAGS;
     if (status != 0) {
+        ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
         result.rejected = args->prev_log_index + 1;
         goto respond;
     }
@@ -958,6 +959,13 @@ respond:
 out:
     logRelease(r->log, request->index, request->args.entries,
                request->args.n_entries);
+
+    /* If the write failed, we need to truncate the log. */
+    if (status != 0) {
+        if (request->index <= logLastIndex(r->log)) {
+            logTruncate(r->log, request->index);
+        }
+    }
 
     raft_free(request);
 }
