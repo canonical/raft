@@ -41,6 +41,7 @@ static void uvFinalizeWorkCb(uv_work_t *work)
     /* If the segment hasn't actually been used (because the writer has been
      * closed or aborted before making any write), just remove it. */
     if (segment->used == 0) {
+        tracef("remove unused segment file: %s", filename1);
         rv = UvFsRemoveFile(uv->dir, filename1, errmsg);
         if (rv != 0) {
             goto err;

@@ -97,5 +97,6 @@ static void appendCbAssertResult(struct raft_io_append *req, int status)
         APPEND_SUBMIT(0, N_ENTRIES, ENTRY_SIZE);              \
         APPEND_EXPECT(0, STATUS);                             \
         APPEND_WAIT(0);                                       \
+        f->count--;                                           \
         munit_assert_string_equal(f->io.errmsg, ERRMSG);      \
     }
