@@ -1210,3 +1210,27 @@ TEST(replication, failPersistBarrier, setUp, tearDown, 0, NULL)
 
     return MUNIT_OK;
 }
+
+/* All servers fail to persist the barrier entry upon election of the first
+ * leader. Ensure the cluster is able to make progress afterwards.
+ */
+TEST(replication, failPersistBarrierFollower, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    CLUSTER_GROW;
+
+    /* The servers will fail to persist entry 2, a barrier */
+    CLUSTER_IO_FAULT(1, 7, 1);
+    CLUSTER_IO_FAULT(2, 7, 1);
+
+    /* Server 0 gets elected and creates a barrier entry at index 2 */
+    CLUSTER_BOOTSTRAP;
+    CLUSTER_START;
+    CLUSTER_START_ELECT(0);
+
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+
+    return MUNIT_OK;
+}
