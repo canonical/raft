@@ -46,6 +46,11 @@ static int tickFollower(struct raft *r)
             electionResetTimer(r);
             return 0;
         }
+        if (r->follower_state.append_in_flight_count > 0) {
+            tracef("append in progress -> don't convert to candidate");
+            electionResetTimer(r);
+            return 0;
+        }
         tracef("convert to candidate and start new election");
         rv = convertToCandidate(r, false /* disrupt leader */);
         if (rv != 0) {

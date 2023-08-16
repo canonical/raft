@@ -137,6 +137,7 @@ void convertToFollower(struct raft *r)
 
     r->follower_state.current_leader.id = 0;
     r->follower_state.current_leader.address = NULL;
+    r->follower_state.append_in_flight_count = 0;
 }
 
 int convertToCandidate(struct raft *r, bool disrupt_leader)

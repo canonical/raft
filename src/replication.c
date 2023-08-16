@@ -880,22 +880,19 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
     assert(args->entries != NULL);
     assert(args->n_entries > 0);
 
+    assert(r->state == RAFT_FOLLOWER || r->state == RAFT_UNAVAILABLE);
+    if (r->state == RAFT_UNAVAILABLE) {
+        goto out;
+    }
+    assert(r->follower_state.append_in_flight_count > 0);
+    r->follower_state.append_in_flight_count -= 1;
+
     result.term = r->current_term;
     result.version = RAFT_APPEND_ENTRIES_RESULT_VERSION;
     result.features = RAFT_DEFAULT_FEATURE_FLAGS;
     if (status != 0) {
-        if (r->state != RAFT_FOLLOWER) {
-            tracef("local server is not follower -> ignore I/O failure");
-            goto out;
-        }
         result.rejected = args->prev_log_index + 1;
         goto respond;
-    }
-
-    /* If we're shutting down or have errored, ignore the result. */
-    if (r->state == RAFT_UNAVAILABLE) {
-        tracef("local server is unavailable -> ignore I/O result");
-        goto out;
     }
 
     /* We received an InstallSnapshot RPC while these entries were being
@@ -909,7 +906,7 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
     /* If none of the entries that we persisted is present anymore in our
      * in-memory log, there's nothing to report or to do. We just discard
      * them. */
-    if (i == 0 || r->state != RAFT_FOLLOWER) {
+    if (i == 0) {
         goto out;
     }
 
@@ -944,10 +941,10 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
         }
     }
 
-    /* If our state or term number has changed since receiving these entries,
+    /* If our term number has changed since receiving these entries,
      * our current_leader may have changed as well, so don't send a response
      * to that server. */
-    if (r->state != RAFT_FOLLOWER || r->current_term != args->term) {
+    if (r->current_term != args->term) {
         tracef("new role or term since receiving entries -> don't respond");
         goto out;
     }
@@ -1205,6 +1202,7 @@ int replicationAppend(struct raft *r,
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
         goto err_after_acquire_entries;
     }
+    r->follower_state.append_in_flight_count += 1;
 
     entryBatchesDestroy(args->entries, args->n_entries);
     return 0;

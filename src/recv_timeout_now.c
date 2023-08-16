@@ -65,6 +65,12 @@ int recvTimeoutNow(struct raft *r,
         return 0;
     }
 
+    /* Finally, ignore the request if we're working on persisting some
+     * entries. */
+    if (r->follower_state.append_in_flight_count > 0) {
+        return 0;
+    }
+
     /* Convert to candidate and start a new election. */
     rv = convertToCandidate(r, true /* disrupt leader */);
     if (rv != 0) {
