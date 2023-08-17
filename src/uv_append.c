@@ -260,6 +260,21 @@ out:
     /* Fire the callbacks of all requests that were fulfilled with this
      * write. */
     uvAppendFinishWritingRequests(uv, status);
+    if (status != 0) {
+        /* When the write has failed additionally cancel all future append
+         * related activity. This will also rewind uv->append_next_index. All
+         * append requests need to be canceled because raft assumes all appends
+         * happen in order and if an append fails (and is not retried), we would
+         * be missing a sequence of log entries on disk. The implementation
+         * can't handle that + the accounting of the append index would be off.
+         */
+        uvAppendFinishPendingRequests(uv, status);
+        /* Allow this segment to be finalized further down. Don't bother
+         * rewinding state to possibly reuse the segment for writing, it's too
+         * bug-prone. */
+        s->pending_last_index = s->last_index;
+        s->finalize = true;
+    }
 
     /* During the closing sequence we should have already canceled all pending
      * request. */
