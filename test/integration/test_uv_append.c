@@ -467,6 +467,7 @@ TEST(append, noSpaceUponWrite, setUp, tearDownDeps, 0, DirTmpfsParams)
     APPEND_FAILURE(1, (SEGMENT_BLOCK_SIZE + 128), RAFT_NOSPACE,
                    "short write: 4096 bytes instead of 8192");
     DirRemoveFile(f->dir, ".fill");
+    LOOP_RUN(50);
     APPEND(5, 64);
     ASSERT_ENTRIES(6, 384);
     return MUNIT_OK;
