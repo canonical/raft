@@ -4,6 +4,9 @@ AM_CFLAGS += $(CODE_COVERAGE_CFLAGS)
 # Not clobbering the base pointer helps bpftrace construct backtraces
 AM_CFLAGS += -fno-omit-frame-pointer
 
+# Define a macro that contains the git revision
+AM_CFLAGS += -DRAFT_REVISION=\"$(shell git rev-parse HEAD)\"
+
 include_HEADERS = include/raft.h
 
 raftincludedir = $(includedir)/raft
