@@ -14,7 +14,7 @@
 /**
  * Version.
  */
-#define RAFT_VERSION_MAJOR 1
+#define RAFT_VERSION_MAJOR 0
 #define RAFT_VERSION_MINOR 17
 #define RAFT_VERSION_RELEASE 1
 #define RAFT_VERSION_NUMBER                                      \
