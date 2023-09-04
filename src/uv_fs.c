@@ -183,6 +183,7 @@ int UvFsAllocateFile(const char *dir,
                      const char *filename,
                      size_t size,
                      uv_file *fd,
+                     bool fallocate,
                      char *errmsg)
 {
     char path[UV__PATH_SZ];
@@ -194,35 +195,70 @@ int UvFsAllocateFile(const char *dir,
         return RAFT_INVALID;
     }
 
-    /* TODO: use RWF_DSYNC instead, if available. */
-    flags |= O_DSYNC;
-
-    rv = uvFsOpenFile(dir, filename, flags, S_IRUSR | S_IWUSR, fd, errmsg);
-    if (rv != 0) {
-        goto err;
-    }
-
     /* Allocate the desired size. */
-    rv = UvOsFallocate(*fd, 0, (off_t)size);
-    if (rv != 0) {
-        switch (rv) {
-            case UV_ENOSPC:
-                ErrMsgPrintf(errmsg, "not enough space to allocate %zu bytes",
-                             size);
-                rv = RAFT_NOSPACE;
-                break;
-            default:
-                UvOsErrMsg(errmsg, "posix_allocate", rv);
-                rv = RAFT_IOERR;
-                break;
+    if (fallocate) {
+        /* TODO: use RWF_DSYNC instead, if available. */
+        flags |= O_DSYNC;
+        rv = uvFsOpenFile(dir, filename, flags, S_IRUSR | S_IWUSR, fd, errmsg);
+        if (rv != 0) {
+            goto err;
         }
-        goto err_after_open;
+        rv = UvOsFallocate(*fd, 0, (off_t)size);
+        if (rv == 0) {
+            return 0;
+        } else if (rv == UV_ENOSPC) {
+            ErrMsgPrintf(errmsg, "not enough space to allocate %zu bytes",
+                         size);
+            rv = RAFT_NOSPACE;
+            goto err_after_open;
+        } else {
+            UvOsErrMsg(errmsg, "posix_allocate", rv);
+            rv = RAFT_IOERR;
+            goto err_after_open;
+        }
+    } else {
+        /* Emulate fallocate, open without O_DSYNC, because we risk doing a lot
+         * of synced writes. */
+        rv = uvFsOpenFile(dir, filename, flags, S_IRUSR | S_IWUSR, fd, errmsg);
+        if (rv != 0) {
+            goto err;
+        }
+        rv = UvOsFallocateEmulation(*fd, 0, (off_t)size);
+        if (rv == UV_ENOSPC) {
+            ErrMsgPrintf(errmsg, "not enough space to allocate %zu bytes",
+                         size);
+            rv = RAFT_NOSPACE;
+            goto err_after_open;
+        } else if (rv != 0) {
+            ErrMsgPrintf(errmsg, "fallocate emulation %d", rv);
+            rv = RAFT_IOERR;
+            goto err_after_open;
+        }
+        rv = UvOsFsync(*fd);
+        if (rv != 0) {
+            ErrMsgPrintf(errmsg, "fsync %d", rv);
+            rv = RAFT_IOERR;
+            goto err_after_open;
+        }
+        /* Now close and reopen the file with O_DSYNC */
+        rv = UvOsClose(*fd);
+        if (rv != 0) {
+            ErrMsgPrintf(errmsg, "close %d", rv);
+            goto err_unlink;
+        }
+        /* TODO: use RWF_DSYNC instead, if available. */
+        flags = O_WRONLY | O_DSYNC;
+        rv = uvFsOpenFile(dir, filename, flags, S_IRUSR | S_IWUSR, fd, errmsg);
+        if (rv != 0) {
+            goto err_unlink;
+        }
     }
 
     return 0;
 
 err_after_open:
     UvOsClose(*fd);
+err_unlink:
     UvOsUnlink(path);
 err:
     assert(rv != 0);
@@ -789,22 +825,50 @@ static int probeAsyncIO(int fd, size_t size, bool *ok, char *errmsg)
     return 0;
 }
 
+#define UV__FS_PROBE_FALLOCATE_FILE ".probe_fallocate"
+/* Leave detection of other error conditions to other probe* functions, only
+ * bother checking if posix_fallocate returns success. */
+static void probeFallocate(const char *dir, bool *fallocate)
+{
+    int flags = O_WRONLY | O_CREAT | O_EXCL; /* Common open flags */
+    char ignored[RAFT_ERRMSG_BUF_SIZE];
+    int rv = 0;
+    int fd = -1;
+
+    *fallocate = false;
+    UvFsRemoveFile(dir, UV__FS_PROBE_FALLOCATE_FILE, ignored);
+    rv = uvFsOpenFile(dir, UV__FS_PROBE_FALLOCATE_FILE, flags,
+                      S_IRUSR | S_IWUSR, &fd, ignored);
+    if (rv != 0) {
+        goto out;
+    }
+    rv = UvOsFallocate(fd, 0, (off_t)4096);
+    if (rv == 0) {
+        *fallocate = true;
+    }
+
+out:
+    UvFsRemoveFile(dir, UV__FS_PROBE_FALLOCATE_FILE, ignored);
+}
+
 #define UV__FS_PROBE_FILE ".probe"
 #define UV__FS_PROBE_FILE_SIZE 4096
-
 int UvFsProbeCapabilities(const char *dir,
                           size_t *direct,
                           bool *async,
+                          bool *fallocate,
                           char *errmsg)
 {
     int fd; /* File descriptor of the probe file */
     int rv;
     char ignored[RAFT_ERRMSG_BUF_SIZE];
 
+    probeFallocate(dir, fallocate);
+
     /* Create a temporary probe file. */
     UvFsRemoveFile(dir, UV__FS_PROBE_FILE, ignored);
     rv = UvFsAllocateFile(dir, UV__FS_PROBE_FILE, UV__FS_PROBE_FILE_SIZE, &fd,
-                          errmsg);
+                          *fallocate, errmsg);
     if (rv != 0) {
         ErrMsgWrapf(errmsg, "create I/O capabilities probe file");
         goto err;

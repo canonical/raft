@@ -18,6 +18,7 @@ struct fixture
     int fd;
     size_t block_size;
     size_t direct_io;
+    bool fallocate;
     bool async_io;
     char errmsg[256];
     struct UvWriter writer;
@@ -191,7 +192,8 @@ static void *setUpDeps(const MunitParameter params[], void *user_data)
     int rv;
     SET_UP_DIR;
     SETUP_LOOP;
-    rv = UvFsProbeCapabilities(f->dir, &f->direct_io, &f->async_io, errmsg);
+    rv = UvFsProbeCapabilities(f->dir, &f->direct_io, &f->async_io,
+                               &f->fallocate, errmsg);
     munit_assert_int(rv, ==, 0);
     f->block_size = f->direct_io != 0 ? f->direct_io : 4096;
     rv = UvOsJoin(f->dir, "foo", path);
