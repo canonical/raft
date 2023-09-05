@@ -153,7 +153,11 @@ int raft_start(struct raft *r)
     assert(logSnapshotIndex(r->log) == 0);
     assert(r->last_stored == 0);
 
-    tracef("starting");
+#ifndef RAFT_REVISION
+#define RAFT_REVISION "unknown"
+#endif
+    tracef("starting version:%d revision:%s", raft_version_number(),
+           RAFT_REVISION);
     rv = r->io->load(r->io, &r->current_term, &r->voted_for, &snapshot,
                      &start_index, &entries, &n_entries);
     if (rv != 0) {
