@@ -435,7 +435,7 @@ int raft_transfer(struct raft *r,
 
     membershipLeadershipTransferInit(r, req, id, cb);
 
-    if (progressIsUpToDate(r, i)) {
+    if (progressPersistedIsUpToDate(r, i)) {
         rv = membershipLeadershipTransferStart(r);
         if (rv != 0) {
             r->transfer = NULL;
