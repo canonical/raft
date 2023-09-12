@@ -40,6 +40,12 @@ int UvOsClose(uv_file fd);
 /* TODO: figure a portable abstraction. */
 int UvOsFallocate(uv_file fd, off_t offset, off_t len);
 
+/* Emulation to use in case UvOsFallocate fails with -EONOTSUPP.
+ * This might happen with a libc implementation (e.g. musl) that
+ * doesn't implement a transparent fallback if fallocate() is
+ * not supported by the underlying file system. */
+int UvOsFallocateEmulation(int fd, off_t offset, off_t len);
+
 /* Portable truncate() */
 int UvOsTruncate(uv_file fd, off_t offset);
 

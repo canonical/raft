@@ -54,7 +54,7 @@ static void uvPrepareWorkCb(uv_work_t *work)
     int rv;
 
     rv = UvFsAllocateFile(uv->dir, segment->filename, segment->size,
-                          &segment->fd, segment->errmsg);
+                          &segment->fd, uv->fallocate, segment->errmsg);
     if (rv != 0) {
         goto err;
     }

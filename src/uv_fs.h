@@ -41,6 +41,7 @@ int UvFsAllocateFile(const char *dir,
                      const char *filename,
                      size_t size,
                      uv_file *fd,
+                     bool fallocate,
                      char *errmsg);
 
 /* Create a file and write the given content into it. */
@@ -114,6 +115,7 @@ int UvFsRenameFile(const char *dir,
 int UvFsProbeCapabilities(const char *dir,
                           size_t *direct,
                           bool *async,
+                          bool *fallocate,
                           char *errmsg);
 
 #endif /* UV_FS_H_ */

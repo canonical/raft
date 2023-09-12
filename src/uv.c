@@ -91,7 +91,8 @@ static int uvInit(struct raft_io *io, raft_id id, const char *address)
     }
 
     /* Probe file system capabilities */
-    rv = UvFsProbeCapabilities(uv->dir, &direct_io, &uv->async_io, io->errmsg);
+    rv = UvFsProbeCapabilities(uv->dir, &direct_io, &uv->async_io,
+                               &uv->fallocate, io->errmsg);
     if (rv != 0) {
         return rv;
     }
@@ -676,6 +677,7 @@ int raft_uv_init(struct raft_io *io,
     uv->errored = false;
     uv->direct_io = false;
     uv->async_io = false;
+    uv->fallocate = false;
 #ifdef LZ4_ENABLED
     uv->snapshot_compression = true;
 #else

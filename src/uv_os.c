@@ -38,7 +38,7 @@ int UvOsClose(uv_file fd)
 }
 
 /* Emulate fallocate(). Mostly taken from glibc's implementation. */
-static int uvOsFallocateEmulation(int fd, off_t offset, off_t len)
+int UvOsFallocateEmulation(int fd, off_t offset, off_t len)
 {
     ssize_t increment;
     struct statfs f;
@@ -46,7 +46,7 @@ static int uvOsFallocateEmulation(int fd, off_t offset, off_t len)
 
     rv = fstatfs(fd, &f);
     if (rv != 0) {
-        return errno;
+        return -errno;
     }
 
     if (f.f_bsize == 0) {
@@ -60,8 +60,9 @@ static int uvOsFallocateEmulation(int fd, off_t offset, off_t len)
     for (offset += (len - 1) % increment; len > 0; offset += increment) {
         len -= increment;
         rv = (int)pwrite(fd, "", 1, offset);
-        if (rv != 1)
-            return errno;
+        if (rv != 1) {
+            return -errno;
+        }
     }
 
     return 0;
@@ -77,16 +78,7 @@ int UvOsFallocate(uv_file fd, off_t offset, off_t len)
          *   posix_fallocate() returns zero on success, or an error number on
          *   failure.  Note that errno is not set.
          */
-        if (rv != EOPNOTSUPP) {
-            return -rv;
-        }
-        /* This might be a libc implementation (e.g. musl) that doesn't
-         * implement a transparent fallback if fallocate() is not supported
-         * by the underlying file system. */
-        rv = uvOsFallocateEmulation(fd, offset, len);
-        if (rv != 0) {
-            return -EOPNOTSUPP;
-        }
+        return -rv;
     }
     return 0;
 }

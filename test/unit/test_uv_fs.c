@@ -151,34 +151,53 @@ TEST(UvFsOpenFileForReading, noExists, DirSetUp, DirTearDown, 0, NULL)
  *
  *****************************************************************************/
 
+#define FALLOCATE_PARAM "fallocate"
+static char *fallocate_params[] = {"1", "0", NULL};
+MunitParameterEnum fallocateParams[] = {
+    {FALLOCATE_PARAM, fallocate_params},
+    {NULL, NULL},
+};
+
 /* Allocate a file with the given parameters and assert that no error occurred.
  */
-#define ALLOCATE_FILE(DIR, FILENAME, SIZE)                           \
-    {                                                                \
-        uv_file fd_;                                                 \
-        char errmsg_;                                                \
-        int rv_;                                                     \
-        rv_ = UvFsAllocateFile(DIR, FILENAME, SIZE, &fd_, &errmsg_); \
-        munit_assert_int(rv_, ==, 0);                                \
-        munit_assert_int(UvOsClose(fd_), ==, 0);                     \
+#define ALLOCATE_FILE(DIR, FILENAME, SIZE)                                     \
+    {                                                                          \
+        uv_file fd_;                                                           \
+        char errmsg_;                                                          \
+        int rv_;                                                               \
+        bool fallocate_ = true;                                                \
+        const char *f = munit_parameters_get(params, FALLOCATE_PARAM);         \
+        if (f != NULL) {                                                       \
+            fallocate_ = atoi(f);                                              \
+        }                                                                      \
+        rv_ =                                                                  \
+            UvFsAllocateFile(DIR, FILENAME, SIZE, &fd_, fallocate_, &errmsg_); \
+        munit_assert_int(rv_, ==, 0);                                          \
+        munit_assert_int(UvOsClose(fd_), ==, 0);                               \
     }
 
 /* Assert that creating a file with the given parameters fails with the given
  * code and error message. */
-#define ALLOCATE_FILE_ERROR(DIR, FILENAME, SIZE, RV, ERRMSG)        \
-    {                                                               \
-        uv_file fd_;                                                \
-        char errmsg_[RAFT_ERRMSG_BUF_SIZE];                         \
-        int rv_;                                                    \
-        rv_ = UvFsAllocateFile(DIR, FILENAME, SIZE, &fd_, errmsg_); \
-        munit_assert_int(rv_, ==, RV);                              \
-        munit_assert_string_equal(errmsg_, ERRMSG);                 \
+#define ALLOCATE_FILE_ERROR(DIR, FILENAME, SIZE, RV, ERRMSG)                  \
+    {                                                                         \
+        uv_file fd_;                                                          \
+        char errmsg_[RAFT_ERRMSG_BUF_SIZE];                                   \
+        int rv_;                                                              \
+        bool fallocate_ = true;                                               \
+        const char *f = munit_parameters_get(params, FALLOCATE_PARAM);        \
+        if (f != NULL) {                                                      \
+            fallocate_ = atoi(f);                                             \
+        }                                                                     \
+        rv_ =                                                                 \
+            UvFsAllocateFile(DIR, FILENAME, SIZE, &fd_, fallocate_, errmsg_); \
+        munit_assert_int(rv_, ==, RV);                                        \
+        munit_assert_string_equal(errmsg_, ERRMSG);                           \
     }
 
 SUITE(UvFsAllocateFile)
 
 /* If the given path is valid, the file gets created. */
-TEST(UvFsAllocateFile, success, DirSetUp, DirTearDown, 0, NULL)
+TEST(UvFsAllocateFile, success, DirSetUp, DirTearDown, 0, fallocateParams)
 {
     const char *dir = data;
     ALLOCATE_FILE(dir,   /* dir */
@@ -189,7 +208,7 @@ TEST(UvFsAllocateFile, success, DirSetUp, DirTearDown, 0, NULL)
 }
 
 /* The directory of given path does not exist, an error is returned. */
-TEST(UvFsAllocateFile, dirNoExists, NULL, NULL, 0, NULL)
+TEST(UvFsAllocateFile, dirNoExists, NULL, NULL, 0, fallocateParams)
 {
     ALLOCATE_FILE_ERROR("/non/existing/dir", /* dir */
                         "foo",               /* filename */
@@ -200,7 +219,12 @@ TEST(UvFsAllocateFile, dirNoExists, NULL, NULL, 0, NULL)
 }
 
 /* If the given path already exists, an error is returned. */
-TEST(UvFsAllocateFile, fileAlreadyExists, DirSetUp, DirTearDown, 0, NULL)
+TEST(UvFsAllocateFile,
+     fileAlreadyExists,
+     DirSetUp,
+     DirTearDown,
+     0,
+     fallocateParams)
 {
     const char *dir = data;
     char buf[8] = {0};
@@ -213,8 +237,16 @@ TEST(UvFsAllocateFile, fileAlreadyExists, DirSetUp, DirTearDown, 0, NULL)
     return MUNIT_OK;
 }
 
+static char *dirTmpfs_params[] = {"tmpfs", NULL};
+
+MunitParameterEnum noSpaceParams[] = {
+    {DIR_FS_PARAM, dirTmpfs_params},
+    {"fallocate", fallocate_params},
+    {NULL, NULL},
+};
+
 /* The file system has run out of space. */
-TEST(UvFsAllocateFile, noSpace, DirSetUp, DirTearDown, 0, DirTmpfsParams)
+TEST(UvFsAllocateFile, noSpace, DirSetUp, DirTearDown, 0, noSpaceParams)
 {
     const char *dir = data;
     if (dir == NULL) {
@@ -237,32 +269,37 @@ TEST(UvFsAllocateFile, noSpace, DirSetUp, DirTearDown, 0, DirTmpfsParams)
 
 /* Invoke UvFsProbeCapabilities against the given dir and assert that it returns
  * the given values for direct I/O and async I/O. */
-#define PROBE_CAPABILITIES(DIR, DIRECT_IO, ASYNC_IO)                         \
-    {                                                                        \
-        size_t direct_io_;                                                   \
-        bool async_io_;                                                      \
-        char errmsg_;                                                        \
-        int rv_;                                                             \
-        rv_ = UvFsProbeCapabilities(DIR, &direct_io_, &async_io_, &errmsg_); \
-        munit_assert_int(rv_, ==, 0);                                        \
-        munit_assert_int(direct_io_, ==, DIRECT_IO);                         \
-        if (ASYNC_IO) {                                                      \
-            munit_assert_true(async_io_);                                    \
-        } else {                                                             \
-            munit_assert_false(async_io_);                                   \
-        }                                                                    \
+#define PROBE_CAPABILITIES(DIR, DIRECT_IO, ASYNC_IO, FALLOCATE)                \
+    {                                                                          \
+        size_t direct_io_;                                                     \
+        bool async_io_;                                                        \
+        bool fallocate_;                                                       \
+        char errmsg_[RAFT_ERRMSG_BUF_SIZE];                                    \
+        int rv_;                                                               \
+        rv_ = UvFsProbeCapabilities(DIR, &direct_io_, &async_io_, &fallocate_, \
+                                    errmsg_);                                  \
+        munit_assert_int(rv_, ==, 0);                                          \
+        munit_assert_size(direct_io_, ==, DIRECT_IO);                          \
+        munit_assert_int(fallocate_, ==, FALLOCATE);                           \
+        if (ASYNC_IO) {                                                        \
+            munit_assert_true(async_io_);                                      \
+        } else {                                                               \
+            munit_assert_false(async_io_);                                     \
+        }                                                                      \
     }
 
 /* Invoke UvFsProbeCapabilities and check that the given error occurs. */
-#define PROBE_CAPABILITIES_ERROR(DIR, RV, ERRMSG)                           \
-    {                                                                       \
-        size_t direct_io_;                                                  \
-        bool async_io_;                                                     \
-        char errmsg_[RAFT_ERRMSG_BUF_SIZE];                                 \
-        int rv_;                                                            \
-        rv_ = UvFsProbeCapabilities(DIR, &direct_io_, &async_io_, errmsg_); \
-        munit_assert_int(rv_, ==, RV);                                      \
-        munit_assert_string_equal(errmsg_, ERRMSG);                         \
+#define PROBE_CAPABILITIES_ERROR(DIR, RV, ERRMSG)                              \
+    {                                                                          \
+        size_t direct_io_;                                                     \
+        bool async_io_;                                                        \
+        bool fallocate_;                                                       \
+        char errmsg_[RAFT_ERRMSG_BUF_SIZE];                                    \
+        int rv_;                                                               \
+        rv_ = UvFsProbeCapabilities(DIR, &direct_io_, &async_io_, &fallocate_, \
+                                    errmsg_);                                  \
+        munit_assert_int(rv_, ==, RV);                                         \
+        munit_assert_string_equal(errmsg_, ERRMSG);                            \
     }
 
 SUITE(UvFsProbeCapabilities)
@@ -273,7 +310,7 @@ TEST(UvFsProbeCapabilities, tmpfs, DirTmpfsSetUp, DirTearDown, 0, NULL)
     if (dir == NULL) {
         return MUNIT_SKIP;
     }
-    PROBE_CAPABILITIES(dir, 0, false);
+    PROBE_CAPABILITIES(dir, 0, false, true);
     return MUNIT_OK;
 }
 
@@ -289,7 +326,7 @@ TEST(UvFsProbeCapabilities, zfsDirectIO, DirZfsSetUp, DirTearDown, 0, NULL)
     if (dir == NULL) {
         return MUNIT_SKIP;
     }
-    PROBE_CAPABILITIES(dir, direct_io, false);
+    PROBE_CAPABILITIES(dir, direct_io, false, true);
     return MUNIT_OK;
 }
 
@@ -305,7 +342,7 @@ TEST(UvFsProbeCapabilities, aio, DirSetUp, DirTearDown, 0, DirAioParams)
     if (strcmp(munit_parameters_get(params, DIR_FS_PARAM), "btrfs") == 0) {
         return MUNIT_SKIP;
     }
-    PROBE_CAPABILITIES(dir, 4096, true);
+    PROBE_CAPABILITIES(dir, 4096, true, true);
     return MUNIT_OK;
 }
 
@@ -325,6 +362,7 @@ TEST(UvFsProbeCapabilities, noAccess, DirSetUp, DirTearDown, 0, NULL)
     PROBE_CAPABILITIES_ERROR(
         dir, RAFT_IOERR,
         "create I/O capabilities probe file: open: permission denied");
+
     return MUNIT_OK;
 }
 
