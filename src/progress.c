@@ -102,6 +102,13 @@ bool progressIsUpToDate(struct raft *r, unsigned i)
     return p->next_index == last_index + 1;
 }
 
+bool progressPersistedIsUpToDate(struct raft *r, unsigned i)
+{
+    struct raft_progress *p = &r->leader_state.progress[i];
+    raft_index last_index = logLastIndex(r->log);
+    return p->match_index == last_index;
+}
+
 bool progressShouldReplicate(struct raft *r, unsigned i)
 {
     struct raft_progress *p = &r->leader_state.progress[i];

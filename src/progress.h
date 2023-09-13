@@ -42,9 +42,13 @@ int progressBuildArray(struct raft *r);
 int progressRebuildArray(struct raft *r,
                          const struct raft_configuration *configuration);
 
-/* Whether the log of the i'th server in the configuration up-to-date with
- * ours. */
+/* Whether the i'th server in the configuration has been sent all the log
+ * entries. */
 bool progressIsUpToDate(struct raft *r, unsigned i);
+
+/* Whether the persisted log of the i'th server in the configuration up-to-date
+ * with ours. */
+bool progressPersistedIsUpToDate(struct raft *r, unsigned i);
 
 /* Whether a new AppendEntries or InstallSnapshot message should be sent to the
  * i'th server at this time.

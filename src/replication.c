@@ -807,7 +807,8 @@ int replicationUpdate(struct raft *r,
          * is now up-to-date and, if so, send it a TimeoutNow RPC (unless we
          * already did). */
         if (r->transfer != NULL && r->transfer->id == server->id) {
-            if (progressIsUpToDate(r, i) && r->transfer->send.data == NULL) {
+            if (progressPersistedIsUpToDate(r, i) &&
+                r->transfer->send.data == NULL) {
                 rv = membershipLeadershipTransferStart(r);
                 if (rv != 0) {
                     membershipLeadershipTransferClose(r);
