@@ -9,7 +9,7 @@ jobs:
         target:
           - focal
           - jammy
-          - kinetic
+          - lunar
     runs-on: ubuntu-20.04
     steps:
     - name: Clone the repositories
