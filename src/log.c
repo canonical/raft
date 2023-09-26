@@ -36,6 +36,8 @@ static int refsTryInsert(struct raft_entry_ref *table,
                          const raft_term term,
                          const raft_index index,
                          const unsigned short count,
+                         struct raft_buffer buf,
+                         void *batch,
                          bool *collision)
 {
     struct raft_entry_ref *bucket;    /* Bucket associated with this index. */
@@ -103,6 +105,8 @@ fill:
     slot->term = term;
     slot->index = index;
     slot->count = count;
+    slot->buf = buf;
+    slot->batch = batch;
     slot->next = NULL;
 
     *collision = false;
@@ -138,7 +142,7 @@ static int refsMove(struct raft_entry_ref *bucket,
 
         /* Insert the reference count for this entry into the new table. */
         rv = refsTryInsert(table, size, slot->term, slot->index, slot->count,
-                           &collision);
+                           slot->buf, slot->batch, &collision);
 
         next_slot = slot->next;
 
@@ -205,7 +209,9 @@ static int refsGrow(struct raft_log *l)
  * to 1. */
 static int refsInit(struct raft_log *l,
                     const raft_term term,
-                    const raft_index index)
+                    const raft_index index,
+                    struct raft_buffer buf,
+                    void *batch)
 {
     int i;
 
@@ -233,7 +239,8 @@ static int refsInit(struct raft_log *l,
         bool collision;
         int rc;
 
-        rc = refsTryInsert(l->refs, l->refs_size, term, index, 1, &collision);
+        rc = refsTryInsert(l->refs, l->refs_size, term, index, 1, buf, batch,
+                           &collision);
         if (rc != 0) {
             return RAFT_NOMEM;
         }
@@ -480,6 +487,53 @@ static int ensureCapacity(struct raft_log *l)
     return 0;
 }
 
+int logReinstate(struct raft_log *l,
+                 raft_term term,
+                 unsigned short type,
+                 bool *reinstated)
+{
+    raft_index index;
+    size_t key;
+    struct raft_entry_ref *bucket;
+    struct raft_entry_ref *slot;
+    struct raft_entry *entry;
+    int rv;
+
+    *reinstated = false;
+
+    if (l->refs_size == 0) {
+        return 0;
+    }
+
+    index = logLastIndex(l) + 1;
+    key = refsKey(index, l->refs_size);
+    bucket = &l->refs[key];
+    if (bucket->count == 0 || bucket->index != index) {
+        return 0;
+    }
+
+    for (slot = bucket; slot != NULL; slot = slot->next) {
+        if (slot->term == term) {
+            rv = ensureCapacity(l);
+            if (rv != 0) {
+                return rv;
+            }
+            slot->count++;
+            l->back++;
+            l->back %= l->size;
+            entry = &l->entries[l->back];
+            entry->term = term;
+            entry->type = type;
+            entry->buf = slot->buf;
+            entry->batch = slot->batch;
+            *reinstated = true;
+            break;
+        }
+    }
+
+    return 0;
+}
+
 int logAppend(struct raft_log *l,
               const raft_term term,
               const unsigned short type,
@@ -502,7 +556,7 @@ int logAppend(struct raft_log *l,
 
     index = logLastIndex(l) + 1;
 
-    rv = refsInit(l, term, index);
+    rv = refsInit(l, term, index, *buf, batch);
     if (rv != 0) {
         return rv;
     }
