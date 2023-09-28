@@ -92,7 +92,7 @@ raft_term logTermOf(struct raft_log *l, raft_index index);
  * there are no snapshots. */
 raft_index logSnapshotIndex(struct raft_log *l);
 
-/* Get the entry with the given index. * The returned pointer remains valid only
+/* Get the entry with the given index. The returned pointer remains valid only
  * as long as no API that might delete the entry with the given index is
  * invoked. Return #NULL if there is no such entry. */
 const struct raft_entry *logGet(struct raft_log *l, const raft_index index);
@@ -124,7 +124,7 @@ int logAppendConfiguration(struct raft_log *l,
                            const raft_term term,
                            const struct raft_configuration *configuration);
 
-/* Acquire an array of entries from the given index onwards. * The payload
+/* Acquire an array of entries from the given index onwards. The payload
  * memory referenced by the @buf attribute of the returned entries is guaranteed
  * to be valid until logRelease() is called. */
 int logAcquire(struct raft_log *l,
