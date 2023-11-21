@@ -386,12 +386,6 @@ TEST(UvWriterClose, aio, setUp, tearDownDeps, 0, DirAioParams)
 {
     struct fixture *f = data;
     SKIP_IF_NO_FIXTURE;
-    /* FIXME: btrfs doesn't like that we perform a first write to the probe file
-     * to detect the direct I/O buffer size. */
-    if (strcmp(munit_parameters_get(params, DIR_FS_PARAM), "btrfs") == 0) {
-        WRITE_CLOSE(1, 0, 0, 0);
-        return MUNIT_OK;
-    }
     WRITE_CLOSE(1, 0, 0, RAFT_CANCELED);
     return MUNIT_OK;
 }
