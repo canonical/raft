@@ -706,11 +706,15 @@ static raft_time ioMethodTime(struct raft_io *raft_io)
 
 static int ioMethodRandom(struct raft_io *raft_io, int min, int max)
 {
-    struct io *io;
-    (void)min;
-    (void)max;
-    io = raft_io->impl;
-    return (int)io->randomized_election_timeout;
+    struct io *io = raft_io->impl;
+    int t = (int)io->randomized_election_timeout;
+    if (t < min) {
+        return min;
+    } else if (t > max) {
+        return max;
+    } else {
+        return t;
+    }
 }
 
 /* Queue up a request which will be processed later, when io_stub_flush()
