@@ -456,14 +456,13 @@ TEST(replication, sendOom, setUp, tearDown, 0, send_oom_params)
 }
 
 /* A failure occurs upon submitting the I/O request. */
-TEST(replication, sendIoError, setUp, tearDown, 0, NULL)
+TEST(replication, persistError, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    return MUNIT_SKIP;
     struct raft_apply req;
     BOOTSTRAP_START_AND_ELECT;
 
-    CLUSTER_IO_FAULT(0, 1, 1);
+    raft_fixture_append_fault(&f->cluster, 0, 0);
 
     CLUSTER_APPLY_ADD_X(0, &req, 1, NULL);
     CLUSTER_STEP;
@@ -1090,7 +1089,7 @@ TEST(replication, diskWriteFailure, setUp, tearDown, 0, NULL)
     req->data = (void *)(intptr_t)RAFT_IOERR;
     BOOTSTRAP_START_AND_ELECT;
 
-    CLUSTER_IO_FAULT(0, 1, 1);
+    raft_fixture_append_fault(&f->cluster, 0, 0);
     CLUSTER_APPLY_ADD_X(0, req, 1, applyAssertStatusCb);
     /* The leader steps down when its disk write fails. */
     CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_FOLLOWER, 2000);
@@ -1198,7 +1197,7 @@ TEST(replication, failPersistBarrier, setUp, tearDown, 0, NULL)
     CLUSTER_GROW;
 
     /* Server 0 will fail to persist entry 2, a barrier */
-    CLUSTER_IO_FAULT(0, 10, 1);
+    raft_fixture_append_fault(&f->cluster, 0, 0);
 
     /* Server 0 gets elected and creates a barrier entry at index 2 */
     CLUSTER_BOOTSTRAP;
@@ -1220,8 +1219,8 @@ TEST(replication, failPersistBarrierFollower, setUp, tearDown, 0, NULL)
     CLUSTER_GROW;
 
     /* The servers will fail to persist entry 2, a barrier */
-    CLUSTER_IO_FAULT(1, 7, 1);
-    CLUSTER_IO_FAULT(2, 7, 1);
+    raft_fixture_append_fault(&f->cluster, 1, 0);
+    raft_fixture_append_fault(&f->cluster, 2, 0);
 
     /* Server 0 gets elected and creates a barrier entry at index 2 */
     CLUSTER_BOOTSTRAP;
@@ -1232,5 +1231,50 @@ TEST(replication, failPersistBarrierFollower, setUp, tearDown, 0, NULL)
     CLUSTER_MAKE_PROGRESS;
     CLUSTER_MAKE_PROGRESS;
 
+    return MUNIT_OK;
+}
+
+/* A leader originates a log entry, fails to persist it, and steps down.
+ * A follower that received the entry wins the ensuing election and sends
+ * the same entry back to the original leader, while the original leader
+ * still has an outgoing pending message that references its copy of the
+ * entry. This triggers the original leader to reinstate the entry in its
+ * log. */
+TEST(replication, receiveSameWithPendingSend, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    struct raft_apply req;
+
+    /* Three voters. */
+    CLUSTER_GROW;
+    /* Server 0 is the leader. */
+    BOOTSTRAP_START_AND_ELECT;
+
+    /* Server 1 never gets the entry. */
+    raft_fixture_set_send_latency(&f->cluster, 0, 1, 10000);
+
+    /* Disk write fails, but not before the entry gets to server 2. */
+    CLUSTER_SET_DISK_LATENCY(0, 1000);
+    raft_fixture_append_fault(&f->cluster, 0, 0);
+    req.data = (void *)(intptr_t)RAFT_IOERR;
+    CLUSTER_APPLY_ADD_X(0, &req, 1, NULL);
+    /* Server 0 steps down. */
+    CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_FOLLOWER, 1500);
+    munit_assert_ullong(CLUSTER_RAFT(0)->current_term, ==, 2);
+    ASSERT_FOLLOWER(1);
+    ASSERT_FOLLOWER(2);
+    /* Only server 2 has the new entry. */
+    munit_assert_ullong(CLUSTER_RAFT(0)->last_stored, ==, 2);
+    munit_assert_ullong(CLUSTER_RAFT(1)->last_stored, ==, 2);
+    munit_assert_ullong(CLUSTER_RAFT(2)->last_stored, ==, 3);
+
+    /* Server 2 times out first and wins the election. */
+    raft_set_election_timeout(CLUSTER_RAFT(2), 500);
+    raft_fixture_start_elect(&f->cluster, 2);
+    CLUSTER_STEP_UNTIL_STATE_IS(2, RAFT_LEADER, 1000);
+    munit_assert_ullong(CLUSTER_RAFT(2)->current_term, ==, 3);
+
+    /* Server 0 gets the same entry back from server 2. */
+    CLUSTER_STEP_UNTIL_APPLIED(2, 3, 1000);
     return MUNIT_OK;
 }

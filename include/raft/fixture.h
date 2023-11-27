@@ -395,6 +395,15 @@ RAFT_API void raft_fixture_set_disk_latency(struct raft_fixture *f,
                                             unsigned msecs);
 
 /**
+ * Send the send latency in milliseconds. Each message send will take this many
+ * milliseconds before the send callback is invoked.
+ */
+RAFT_API void raft_fixture_set_send_latency(struct raft_fixture *f,
+                                            unsigned i,
+                                            unsigned j,
+                                            unsigned msecs);
+
+/**
  * Set the persisted term of the @i'th server.
  */
 RAFT_API void raft_fixture_set_term(struct raft_fixture *f,
@@ -415,14 +424,13 @@ RAFT_API void raft_fixture_add_entry(struct raft_fixture *f,
                                      unsigned i,
                                      struct raft_entry *entry);
 
-/**
- * Inject an I/O failure that will be triggered on the @i'th server after @delay
- * I/O requests and occur @repeat times.
- */
-RAFT_API void raft_fixture_io_fault(struct raft_fixture *f,
-                                    unsigned i,
-                                    int delay,
-                                    int repeat);
+RAFT_API void raft_fixture_append_fault(struct raft_fixture *f, unsigned i, int delay);
+
+RAFT_API void raft_fixture_vote_fault(struct raft_fixture *f, unsigned i, int delay);
+
+RAFT_API void raft_fixture_term_fault(struct raft_fixture *f, unsigned i, int delay);
+
+RAFT_API void raft_fixture_send_fault(struct raft_fixture *f, unsigned i, int delay);
 
 /**
  * Return the number of messages of the given type that the @i'th server has

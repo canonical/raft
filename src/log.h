@@ -24,9 +24,16 @@
  */
 struct raft_entry_ref
 {
-    raft_term term;              /* Term of the entry being ref-counted. */
-    raft_index index;            /* Index of the entry being ref-counted. */
-    unsigned short count;        /* Number of references. */
+    raft_term term;       /* Term of the entry being ref-counted. */
+    raft_index index;     /* Index of the entry being ref-counted. */
+    unsigned short count; /* Number of references. */
+    /* The next two fields are copied from the corresponding fields of the
+     * raft_entry pointed to by this reference. We store them here as well,
+     * so that logReinstate can retrieve them when it finds a raft_entry_ref
+     * with the same index and term as it was passed, and create a full
+     * raft_entry using them. */
+    struct raft_buffer buf;
+    void *batch;
     struct raft_entry_ref *next; /* Next item in the bucket (for collisions). */
 };
 
@@ -85,10 +92,19 @@ raft_term logTermOf(struct raft_log *l, raft_index index);
  * there are no snapshots. */
 raft_index logSnapshotIndex(struct raft_log *l);
 
-/* Get the entry with the given index. * The returned pointer remains valid only
+/* Get the entry with the given index. The returned pointer remains valid only
  * as long as no API that might delete the entry with the given index is
  * invoked. Return #NULL if there is no such entry. */
 const struct raft_entry *logGet(struct raft_log *l, const raft_index index);
+
+/* Check whether the hash map is already tracking an entry with the given
+ * @term and @index (that is not part of the "logical" log). If so, increment
+ * the refcount of that entry and set @reinstated to true; otherwise, set
+ * @reinstated to false. */
+int logReinstate(struct raft_log *l,
+                 raft_term term,
+                 unsigned short type,
+                 bool *reinstated);
 
 /* Append a new entry to the log. */
 int logAppend(struct raft_log *l,
@@ -108,7 +124,7 @@ int logAppendConfiguration(struct raft_log *l,
                            const raft_term term,
                            const struct raft_configuration *configuration);
 
-/* Acquire an array of entries from the given index onwards. * The payload
+/* Acquire an array of entries from the given index onwards. The payload
  * memory referenced by the @buf attribute of the returned entries is guaranteed
  * to be valid until logRelease() is called. */
 int logAcquire(struct raft_log *l,

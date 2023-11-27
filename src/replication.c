@@ -1099,6 +1099,7 @@ int replicationAppend(struct raft *r,
     size_t n;
     size_t i;
     size_t j;
+    bool reinstated;
     int rv;
 
     assert(r != NULL);
@@ -1171,6 +1172,23 @@ int replicationAppend(struct raft *r,
      * that we issue below actually completes.  */
     for (j = 0; j < n; j++) {
         struct raft_entry *entry = &args->entries[i + j];
+
+        /* We are trying to append an entry at index X with term T to our
+         * in-memory log. If we've gotten this far, we know that the log
+         * *logically* has no entry at this index. However, it's possible that
+         * we're still hanging on to such an entry, because we previously tried
+         * to append and replicate it, and the associated disk write failed, but
+         * some send requests are still pending that refer to it. Since the log
+         * is not capable of tracking multiple independent entries that share an
+         * index and term, we just piggyback on the already-stored entry in this
+         * case. */
+        rv = logReinstate(r->log, entry->term, entry->type, &reinstated);
+        if (rv != 0) {
+            goto err_after_request_alloc;
+        } else if (reinstated) {
+            continue;
+        }
+
         /* TODO This copy should not strictly be necessary, as the batch logic
          * will take care of freeing the batch buffer in which the entries are
          * received. However, this would lead to memory spikes in certain edge
