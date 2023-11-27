@@ -395,6 +395,15 @@ RAFT_API void raft_fixture_set_disk_latency(struct raft_fixture *f,
                                             unsigned msecs);
 
 /**
+ * Send the send latency in milliseconds. Each message send will take this many
+ * milliseconds before the send callback is invoked.
+ */
+RAFT_API void raft_fixture_set_send_latency(struct raft_fixture *f,
+                                            unsigned i,
+                                            unsigned j,
+                                            unsigned msecs);
+
+/**
  * Set the persisted term of the @i'th server.
  */
 RAFT_API void raft_fixture_set_term(struct raft_fixture *f,

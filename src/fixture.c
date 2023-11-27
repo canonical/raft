@@ -23,6 +23,7 @@
 #define NETWORK_LATENCY 15
 #define DISK_LATENCY 10
 #define WORK_DURATION 200
+#define SEND_LATENCY 0
 
 /* To keep in sync with raft.h */
 #define N_MESSAGE_TYPES 6
@@ -132,6 +133,7 @@ struct peer
     struct io *io;  /* The peer's I/O backend. */
     bool connected; /* Whether a connection is established. */
     bool saturated; /* Whether the established connection is saturated. */
+    unsigned send_latency;
 };
 
 /* Stub I/O implementation implementing all operations in-memory. */
@@ -720,6 +722,7 @@ static int ioMethodSend(struct raft_io *raft_io,
 {
     struct io *io = raft_io->impl;
     struct send *r;
+    struct peer *peer;
 
     if (faultTick(&io->send_fault_countdown)) {
         return RAFT_IOERR;
@@ -733,9 +736,8 @@ static int ioMethodSend(struct raft_io *raft_io,
     r->message = *message;
     r->req->cb = cb;
 
-    /* TODO: simulate the presence of an OS send buffer, whose available size
-     * might delay the completion of send requests */
-    r->completion_time = *io->time;
+    peer = ioGetPeer(io, message->server_id);
+    r->completion_time = *io->time + peer->send_latency;
 
     QUEUE_PUSH(&io->requests, &r->queue);
 
@@ -787,6 +789,7 @@ static void ioConnect(struct raft_io *raft_io, struct raft_io *other)
     io->peers[io->n_peers].io = io_other;
     io->peers[io->n_peers].connected = true;
     io->peers[io->n_peers].saturated = false;
+    io->peers[io->n_peers].send_latency = SEND_LATENCY;
     io->n_peers++;
 }
 
@@ -1886,6 +1889,16 @@ void raft_fixture_set_disk_latency(struct raft_fixture *f,
 {
     struct io *io = f->servers[i]->io.impl;
     io->disk_latency = msecs;
+}
+
+void raft_fixture_set_send_latency(struct raft_fixture *f,
+                                   unsigned i,
+                                   unsigned j,
+                                   unsigned msecs)
+{
+    struct io *io = f->servers[i]->io.impl;
+    struct peer *peer = ioGetPeer(io, f->servers[j]->id);
+    peer->send_latency = msecs;
 }
 
 void raft_fixture_set_term(struct raft_fixture *f, unsigned i, raft_term term)
