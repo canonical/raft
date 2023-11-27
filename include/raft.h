@@ -459,12 +459,19 @@ struct raft_tracer
     bool enabled;
 
     /**
+     * Trace level.
+     */
+    unsigned level;
+
+    /**
      * Emit the given trace message, possibly decorating it with the provided
      * metadata.
      */
     void (*emit)(struct raft_tracer *t,
                  const char *file,
-                 int line,
+                 unsigned int line,
+                 const char *func,
+                 unsigned int level,
                  const char *message);
 };
 

@@ -979,10 +979,14 @@ void ioClose(struct raft_io *raft_io)
 /* Custom emit tracer function which include the server ID. */
 static void emit(struct raft_tracer *t,
                  const char *file,
-                 int line,
+                 unsigned int line,
+                 const char *func,
+                 unsigned int level,
                  const char *message)
 {
     unsigned id = *(unsigned *)t->impl;
+    (void)func;
+    (void)level;
     fprintf(stderr, "%d: %30s:%*d - %s\n", id, file, 3, line, message);
 }
 
