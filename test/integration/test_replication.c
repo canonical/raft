@@ -456,14 +456,13 @@ TEST(replication, sendOom, setUp, tearDown, 0, send_oom_params)
 }
 
 /* A failure occurs upon submitting the I/O request. */
-TEST(replication, sendIoError, setUp, tearDown, 0, NULL)
+TEST(replication, persistError, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    return MUNIT_SKIP;
     struct raft_apply req;
     BOOTSTRAP_START_AND_ELECT;
 
-    CLUSTER_IO_FAULT(0, 1, 1);
+    raft_fixture_append_fault(&f->cluster, 0, 0);
 
     CLUSTER_APPLY_ADD_X(0, &req, 1, NULL);
     CLUSTER_STEP;
@@ -1090,7 +1089,7 @@ TEST(replication, diskWriteFailure, setUp, tearDown, 0, NULL)
     req->data = (void *)(intptr_t)RAFT_IOERR;
     BOOTSTRAP_START_AND_ELECT;
 
-    CLUSTER_IO_FAULT(0, 1, 1);
+    raft_fixture_append_fault(&f->cluster, 0, 0);
     CLUSTER_APPLY_ADD_X(0, req, 1, applyAssertStatusCb);
     /* The leader steps down when its disk write fails. */
     CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_FOLLOWER, 2000);
@@ -1198,7 +1197,7 @@ TEST(replication, failPersistBarrier, setUp, tearDown, 0, NULL)
     CLUSTER_GROW;
 
     /* Server 0 will fail to persist entry 2, a barrier */
-    CLUSTER_IO_FAULT(0, 10, 1);
+    raft_fixture_append_fault(&f->cluster, 0, 0);
 
     /* Server 0 gets elected and creates a barrier entry at index 2 */
     CLUSTER_BOOTSTRAP;
@@ -1220,8 +1219,8 @@ TEST(replication, failPersistBarrierFollower, setUp, tearDown, 0, NULL)
     CLUSTER_GROW;
 
     /* The servers will fail to persist entry 2, a barrier */
-    CLUSTER_IO_FAULT(1, 7, 1);
-    CLUSTER_IO_FAULT(2, 7, 1);
+    raft_fixture_append_fault(&f->cluster, 1, 0);
+    raft_fixture_append_fault(&f->cluster, 2, 0);
 
     /* Server 0 gets elected and creates a barrier entry at index 2 */
     CLUSTER_BOOTSTRAP;

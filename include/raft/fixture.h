@@ -415,14 +415,13 @@ RAFT_API void raft_fixture_add_entry(struct raft_fixture *f,
                                      unsigned i,
                                      struct raft_entry *entry);
 
-/**
- * Inject an I/O failure that will be triggered on the @i'th server after @delay
- * I/O requests and occur @repeat times.
- */
-RAFT_API void raft_fixture_io_fault(struct raft_fixture *f,
-                                    unsigned i,
-                                    int delay,
-                                    int repeat);
+RAFT_API void raft_fixture_append_fault(struct raft_fixture *f, unsigned i, int delay);
+
+RAFT_API void raft_fixture_vote_fault(struct raft_fixture *f, unsigned i, int delay);
+
+RAFT_API void raft_fixture_term_fault(struct raft_fixture *f, unsigned i, int delay);
+
+RAFT_API void raft_fixture_send_fault(struct raft_fixture *f, unsigned i, int delay);
 
 /**
  * Return the number of messages of the given type that the @i'th server has

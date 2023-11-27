@@ -516,24 +516,26 @@ TEST(election, receiveRejectResult, setUp, tearDown, 0, cluster_5_params)
     return MUNIT_OK;
 }
 
-static char *ioErrorConvertDelay[] = {"0", "1", NULL};
-static MunitParameterEnum ioErrorConvert[] = {
-    {"delay", ioErrorConvertDelay},
-    {NULL, NULL},
-};
-
 /* An I/O error occurs when converting to candidate. */
-TEST(election, ioErrorConvert, setUp, tearDown, 0, ioErrorConvert)
+TEST(election, ioErrorConvertTerm, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    const char *delay = munit_parameters_get(params, "delay");
-    return MUNIT_SKIP;
     CLUSTER_START;
 
-    /* The first server fails to convert to candidate. */
-    CLUSTER_IO_FAULT(0, atoi(delay), 1);
-    CLUSTER_STEP;
-    ASSERT_UNAVAILABLE(0);
+    raft_fixture_term_fault(&f->cluster, 0, 0);
+    CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_UNAVAILABLE, 2000);
+
+    return MUNIT_OK;
+}
+
+/* An I/O error occurs when converting to candidate. */
+TEST(election, ioErrorConvertVote, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    CLUSTER_START;
+
+    raft_fixture_vote_fault(&f->cluster, 0, 0);
+    CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_UNAVAILABLE, 2000);
 
     return MUNIT_OK;
 }
@@ -542,16 +544,11 @@ TEST(election, ioErrorConvert, setUp, tearDown, 0, ioErrorConvert)
 TEST(election, ioErrorSendVoteRequest, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    return MUNIT_SKIP;
     CLUSTER_START;
 
     /* The first server fails to send a RequestVote RPC. */
-    CLUSTER_IO_FAULT(0, 2, 1);
-    CLUSTER_STEP;
-
-    /* The first server is still candidate. */
-    CLUSTER_STEP;
-    ASSERT_CANDIDATE(0);
+    raft_fixture_send_fault(&f->cluster, 0, 0);
+    CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 5000);
 
     return MUNIT_OK;
 }
@@ -560,18 +557,15 @@ TEST(election, ioErrorSendVoteRequest, setUp, tearDown, 0, NULL)
 TEST(election, ioErrorPersistVote, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    return MUNIT_SKIP;
     CLUSTER_START;
 
     /* The first server becomes candidate. */
-    CLUSTER_STEP;
-    ASSERT_CANDIDATE(0);
+    CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_CANDIDATE, 2000);
 
     /* The second server receives a RequestVote RPC but fails to persist its
      * vote. */
-    CLUSTER_IO_FAULT(1, 0, 1);
-    CLUSTER_STEP;
-    ASSERT_UNAVAILABLE(1);
+    raft_fixture_vote_fault(&f->cluster, 1, 0);
+    CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_UNAVAILABLE, 1000);
 
     return MUNIT_OK;
 }
