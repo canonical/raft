@@ -13,7 +13,9 @@
 
 void TracerEmit(struct raft_tracer *t,
                 const char *file,
-                int line,
+                unsigned int line,
+                const char *func,
+                unsigned int level,
                 const char *message);
 
 #endif /* TEST_TRACER_H */

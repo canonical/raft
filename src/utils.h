@@ -10,4 +10,8 @@
 
 #define DBG() fprintf(stderr, "%s:%d\n", __func__, __LINE__)
 
+#define UNUSED __attribute__((unused))
+
+#define ARRAY_SIZE(a) ((sizeof(a)) / (sizeof(a)[0]))
+
 #endif /* RAFT_UTILS_H_ */
