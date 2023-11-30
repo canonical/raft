@@ -84,6 +84,7 @@ int raft_init(struct raft *r,
     r->last_applied = 0;
     r->last_stored = 0;
     r->state = RAFT_UNAVAILABLE;
+    r->state_cb = 0;
     r->transfer = NULL;
     r->snapshot.pending.term = 0;
     r->snapshot.threshold = DEFAULT_SNAPSHOT_THRESHOLD;
@@ -129,6 +130,14 @@ void raft_close(struct raft *r, void (*cb)(struct raft *r))
     }
     r->close_cb = cb;
     r->io->close(r->io, ioCloseCb);
+}
+
+int raft_register_state_cb(struct raft *r, raft_state_cb cb)
+{
+    _Static_assert(sizeof(uint64_t) >= sizeof(cb),
+                   "Can't save raft_state_cb in struct raft.");
+    r->state_cb = (uint64_t)cb;
+    return 0;
 }
 
 void raft_set_election_timeout(struct raft *r, const unsigned msecs)

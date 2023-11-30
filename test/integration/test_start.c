@@ -201,3 +201,23 @@ TEST(raft_start, singleVotingNotUs, setUp, tearDown, 0, NULL)
     CLUSTER_MAKE_PROGRESS;
     return MUNIT_OK;
 }
+
+static void state_cb(struct raft *r, unsigned short old, unsigned short new)
+{
+    munit_assert_true(old != new);
+    r->data = (void *)(uintptr_t)0xFEEDBEEF;
+}
+
+/* There is a single voting server in the cluster, register a state_cb and
+ * assert that it's called because the node will progress to leader.  */
+TEST(raft_start, singleVotingWithStateCb, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    CLUSTER_BOOTSTRAP;
+    struct raft *r = CLUSTER_RAFT(0);
+    r->data = (void *)(uintptr_t)0;
+    raft_register_state_cb(r, state_cb);
+    CLUSTER_START;
+    munit_assert_uint((uintptr_t)r->data, ==, 0xFEEDBEEF);
+    return MUNIT_OK;
+}
