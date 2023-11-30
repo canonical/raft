@@ -1,6 +1,7 @@
 #include "convert.h"
 
 #include "assert.h"
+#include "callbacks.h"
 #include "configuration.h"
 #include "election.h"
 #include "log.h"
@@ -20,7 +21,8 @@ static void convertSetState(struct raft *r, unsigned short new_state)
     /* Check that the transition is legal, see Figure 3.3. Note that with
      * respect to the paper we have an additional "unavailable" state, which is
      * the initial or final state. */
-    tracef("old_state:%u new_state:%u", r->state, new_state);
+    unsigned short old_state = r->state;
+    tracef("old_state:%u new_state:%u", old_state, new_state);
     assert((r->state == RAFT_UNAVAILABLE && new_state == RAFT_FOLLOWER) ||
            (r->state == RAFT_FOLLOWER && new_state == RAFT_CANDIDATE) ||
            (r->state == RAFT_CANDIDATE && new_state == RAFT_FOLLOWER) ||
@@ -30,6 +32,11 @@ static void convertSetState(struct raft *r, unsigned short new_state)
            (r->state == RAFT_CANDIDATE && new_state == RAFT_UNAVAILABLE) ||
            (r->state == RAFT_LEADER && new_state == RAFT_UNAVAILABLE));
     r->state = new_state;
+
+    struct raft_callbacks *cbs = raftGetCallbacks(r);
+    if (cbs != NULL && cbs->state_cb != NULL) {
+        cbs->state_cb(r, old_state, new_state);
+    }
 }
 
 /* Clear follower state. */

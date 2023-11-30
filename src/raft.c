@@ -4,6 +4,7 @@
 
 #include "assert.h"
 #include "byte.h"
+#include "callbacks.h"
 #include "configuration.h"
 #include "convert.h"
 #include "election.h"
@@ -84,6 +85,10 @@ int raft_init(struct raft *r,
     r->last_applied = 0;
     r->last_stored = 0;
     r->state = RAFT_UNAVAILABLE;
+    rv = raftInitCallbacks(r);
+    if (rv != 0) {
+        goto err_after_address_alloc;
+    }
     r->transfer = NULL;
     r->snapshot.pending.term = 0;
     r->snapshot.threshold = DEFAULT_SNAPSHOT_THRESHOLD;
@@ -97,10 +102,12 @@ int raft_init(struct raft *r,
     rv = r->io->init(r->io, r->id, r->address);
     if (rv != 0) {
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
-        goto err_after_address_alloc;
+        goto err_after_callbacks_alloc;
     }
     return 0;
 
+err_after_callbacks_alloc:
+    raftDestroyCallbacks(r);
 err_after_address_alloc:
     RaftHeapFree(r->address);
 err:
@@ -112,6 +119,7 @@ static void ioCloseCb(struct raft_io *io)
 {
     struct raft *r = io->data;
     tracef("io close cb");
+    raftDestroyCallbacks(r);
     raft_free(r->address);
     logClose(r->log);
     raft_configuration_close(&r->configuration);
@@ -129,6 +137,13 @@ void raft_close(struct raft *r, void (*cb)(struct raft *r))
     }
     r->close_cb = cb;
     r->io->close(r->io, ioCloseCb);
+}
+
+void raft_register_state_cb(struct raft *r, raft_state_cb cb)
+{
+    struct raft_callbacks *cbs = raftGetCallbacks(r);
+    assert(cbs != NULL);
+    cbs->state_cb = cb;
 }
 
 void raft_set_election_timeout(struct raft *r, const unsigned msecs)
