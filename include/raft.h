@@ -592,14 +592,21 @@ struct raft_fsm
                           unsigned *n_bufs);
 };
 
+struct raft; /* Forward declaration. */
+
 /**
  * State codes.
  */
 enum { RAFT_UNAVAILABLE, RAFT_FOLLOWER, RAFT_CANDIDATE, RAFT_LEADER };
 
-struct raft_progress;
+/**
+ * State callback to invoke if raft's state changes.
+ */
+typedef void (*raft_state_cb)(struct raft *raft,
+                              unsigned short old_state,
+                              unsigned short new_state);
 
-struct raft; /* Forward declaration. */
+struct raft_progress;
 
 /**
  * Close callback.
@@ -825,8 +832,13 @@ struct raft
     unsigned max_catch_up_rounds;
     unsigned max_catch_up_round_duration;
 
+    /* uint64_t because we used a reserved field. In reality this a pointer to a
+     * `struct raft_callbacks` that can be used to store e.g. various
+     * user-supplied callbacks. */
+    uint64_t callbacks;
+
     /* Future extensions */
-    uint64_t reserved[32];
+    uint64_t reserved[31];
 };
 
 RAFT_API int raft_init(struct raft *r,
@@ -836,6 +848,12 @@ RAFT_API int raft_init(struct raft *r,
                        const char *address);
 
 RAFT_API void raft_close(struct raft *r, raft_close_cb cb);
+
+/**
+ * This function MUST be called after raft_init and before raft_start.
+ * @cb will be called every time the raft state changes.
+ */
+RAFT_API void raft_register_state_cb(struct raft *r, raft_state_cb cb);
 
 /**
  * Bootstrap this raft instance using the given configuration. The instance must

@@ -17,6 +17,7 @@ libraft_la_CFLAGS = $(AM_CFLAGS) -fvisibility=hidden
 libraft_la_LDFLAGS = -version-info 3:0:0
 libraft_la_SOURCES = \
   src/byte.c \
+  src/callbacks.c \
   src/client.c \
   src/compress.c \
   src/configuration.c \
