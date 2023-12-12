@@ -47,7 +47,9 @@ TEST(UvOsJoin, filenameTooLong, NULL, NULL, 0, NULL)
 TEST(UvOsJoin, dirAndFilenameTooLong, NULL, NULL, 0, NULL)
 {
     int rv;
-    char path[UV__PATH_SZ];
+    /* +2 to silence compilers that complain that dir & filename would overflow
+     * path, but it's strictly not needed and doesn't influence the test. */
+    char path[UV__PATH_SZ + 2];
     char dir[UV__DIR_LEN + 2];
     memset((char *)dir, '/', sizeof(dir));
     dir[sizeof(dir) - 1] = '\0';
