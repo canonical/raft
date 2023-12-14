@@ -63,11 +63,11 @@ static inline void tracerEmit(const char *file,
 
     /*
       Example:
-      LIBRAFT[182942] 2023-11-27T14:46:24.912050507 001132 INFO
+      LIBRAFT  [182942] 2023-11-27T14:46:24.912050507 001132 INFO
       uvClientSend  src/uv_send.c:218 connection available...
     */
     fprintf(stderr,
-            "LIBRAFT[%6.6u] %04d-%02d-%02dT%02d:%02d:%02d.%09lu "
+            "LIBRAFT  [%6.6u] %04d-%02d-%02dT%02d:%02d:%02d.%09lu "
             "%6.6u %-7s %-20s %s:%-3i %s\n",
             tracerPidCached,
 
