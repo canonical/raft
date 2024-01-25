@@ -783,7 +783,9 @@ struct raft
             raft_index round_index;         /* Target of the current round. */
             raft_time round_start;          /* Start of current round. */
             void *requests[2];              /* Outstanding client requests. */
-            uint64_t reserved[8];           /* Future use */
+            uint32_t voter_contacts;        /* Current number of voting nodes we are in contact with */
+            uint32_t reserved2;             /* Future use */
+            uint64_t reserved[7];           /* Future use */
         } leader_state;
     };
 
@@ -980,6 +982,20 @@ RAFT_API raft_index raft_last_index(struct raft *r);
  * Return the index of the last entry that was applied to the local FSM.
  */
 RAFT_API raft_index raft_last_applied(struct raft *r);
+
+/**
+ * Return the number of voting servers that the leader has recently been in
+ * contact with. This can be used to help determine whether the cluster may be
+ * in a degraded/at risk state.
+ *
+ * Returns valid values >= 1, because a leader is always in contact with
+ * itself.
+ * Returns -1 if called on a follower.
+ *
+ * Note that the value returned may be out of date, and so should not be relied
+ * upon for absolute correctness.
+ */
+RAFT_API int raft_voter_contacts(struct raft *r);
 
 /**
  * Common fields across client request types.
