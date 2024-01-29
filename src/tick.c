@@ -107,6 +107,7 @@ static bool checkContactQuorum(struct raft *r)
             contacts++;
         }
     }
+    r->leader_state.voter_contacts = contacts;
 
     return contacts > configurationVoterCount(&r->configuration) / 2;
 }
