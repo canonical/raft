@@ -80,7 +80,7 @@ static void *heapAlignedAlloc(void *data, size_t alignment, size_t size)
 static void heapAlignedFree(void *data, size_t alignment, void *ptr)
 {
     struct heap *h = data;
-    munit_assert_int(alignment, ==, h->alignment);
+    munit_assert_ulong(alignment, ==, h->alignment);
     heapFree(data, ptr);
 }
 
