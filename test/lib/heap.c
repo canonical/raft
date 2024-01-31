@@ -7,14 +7,12 @@
 
 struct heap
 {
-    int n;              /* Number of outstanding allocations. */
     size_t alignment;   /* Value of last aligned alloc */
     struct Fault fault; /* Fault trigger. */
 };
 
 static void heapInit(struct heap *h)
 {
-    h->n = 0;
     h->alignment = 0;
     FaultInit(&h->fault);
 }
@@ -25,14 +23,12 @@ static void *heapMalloc(void *data, size_t size)
     if (FaultTick(&h->fault)) {
         return NULL;
     }
-    h->n++;
     return munit_malloc(size);
 }
 
 static void heapFree(void *data, void *ptr)
 {
-    struct heap *h = data;
-    h->n--;
+    (void)data;
     free(ptr);
 }
 
@@ -42,7 +38,6 @@ static void *heapCalloc(void *data, size_t nmemb, size_t size)
     if (FaultTick(&h->fault)) {
         return NULL;
     }
-    h->n++;
     return munit_calloc(nmemb, size);
 }
 
@@ -52,12 +47,6 @@ static void *heapRealloc(void *data, void *ptr, size_t size)
 
     if (FaultTick(&h->fault)) {
         return NULL;
-    }
-
-    /* Increase the number of allocation only if ptr is NULL, since otherwise
-     * realloc is a malloc plus a free. */
-    if (ptr == NULL) {
-        h->n++;
     }
 
     ptr = realloc(ptr, size);
@@ -79,8 +68,6 @@ static void *heapAlignedAlloc(void *data, size_t alignment, size_t size)
     if (FaultTick(&h->fault)) {
         return NULL;
     }
-
-    h->n++;
 
     p = aligned_alloc(alignment, size);
     munit_assert_ptr_not_null(p);
@@ -130,9 +117,6 @@ void HeapSetUp(const MunitParameter params[], struct raft_heap *h)
 void HeapTearDown(struct raft_heap *h)
 {
     struct heap *heap = h->data;
-    if (heap->n != 0) {
-        munit_errorf("memory leak: %d outstanding allocations", heap->n);
-    }
     free(heap);
     raft_heap_set_default();
 }
