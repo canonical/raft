@@ -1,6 +1,26 @@
-[![CI Tests](https://github.com/canonical/raft/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/canonical/raft/actions/workflows/build-and-test.yml) [![codecov](https://codecov.io/gh/canonical/raft/branch/master/graph/badge.svg)](https://codecov.io/gh/canonical/raft) [![Documentation Status](https://readthedocs.org/projects/raft/badge/?version=latest)](https://raft.readthedocs.io/en/latest/?badge=latest)
+This project is unmaintained
+============================
 
 [English](./README.md)|[简体中文](./README_CH.md)
+
+The dqlite team is no longer maintaining our raft implementation as an
+independent project.  Instead, the raft source code has been incorporated into
+[canonical/dqlite](https://github.com/canonical/dqlite) as a private
+implementation detail. v0.18.1 is the last release of dqlite's libraft.  We
+regret any inconvenience caused by this change.
+
+If you depend on dqlite but not on raft directly, see
+[canonical/dqlite](https://github.com/canonical/dqlite) for up-to-date
+instructions on how to use dqlite's bundled raft build configuration. If you
+formerly depended on dqlite's libraft, you should switch to the maintained fork
+[cowsql/raft](https://github.com/cowsql/raft).
+
+[A discussion thread](https://github.com/canonical/dqlite/discussions/620) is
+open on the dqlite repository for any questions about this change.
+
+The remainder of this README is of historical interest only.
+
+-----
 
 Fully asynchronous C implementation of the Raft consensus protocol.
 
