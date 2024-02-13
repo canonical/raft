@@ -24,7 +24,7 @@ License
 This raft C library is released under a slightly modified version of LGPLv3,
 that includes a copyright exception letting users to statically link the library
 code in their project and release the final work under their own terms. See the
-full [license](https://github.com/canonical/raft/blob/LICENSE) text.
+full [license](LICENSE) text.
 
 Features
 --------
